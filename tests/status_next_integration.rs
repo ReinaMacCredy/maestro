@@ -895,10 +895,24 @@ fn manual_and_root_verify_pass_use_context_aware_handoff() {
     assert!(task_verify.contains("next: maestro status"));
     assert!(task_verify.contains(&format!("inspect: maestro task show {id}")));
 
-    let root_verify = run(repo, &["verify", &id]);
-    assert!(root_verify.contains(&format!("verification passed for {id}")));
-    assert!(root_verify.contains(&format!("task verified: {id}")));
-    assert!(root_verify.contains("next: maestro status"));
+    let before_root_verify = fs::read_to_string(card_record_path(repo, &id))
+        .expect("invariant: verified task record should be readable");
+    let root_verify = maestro(repo, &["verify", &id]);
+    assert_failure(&root_verify, &["verify", &id]);
+    let root_verify_err = stderr(&root_verify);
+    assert!(
+        root_verify_err.contains(&format!("cannot verify task {id}")),
+        "{root_verify_err}"
+    );
+    assert!(
+        root_verify_err.contains("expected needs_verification"),
+        "{root_verify_err}"
+    );
+    assert_eq!(
+        fs::read_to_string(card_record_path(repo, &id))
+            .expect("invariant: verified task record should remain readable"),
+        before_root_verify
+    );
 }
 
 #[test]

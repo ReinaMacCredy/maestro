@@ -27,7 +27,12 @@ pub fn run(args: HarnessArgs) -> Result<()> {
     }
 }
 
-fn propose(paths: &MaestroPaths, title: &str, evidence: &str, topic: Option<&str>) -> Result<()> {
+fn propose(
+    paths: &MaestroPaths,
+    title: &str,
+    evidence: &[String],
+    topic: Option<&str>,
+) -> Result<()> {
     let item = harness::propose_agent_audit(paths, title, evidence, topic, &super::cli_run_id())?;
     println!("proposed {} ({})", item.id, item.title);
     println!(

@@ -710,6 +710,14 @@ pub fn update_task_history(
         );
     }
     let (mut task, snapshot, _) = lookup::load_task_with_snapshot(tasks_dir, id)?;
+    if !task.state.is_live() {
+        bail!(
+            "cannot update task {} — done (state: {}); use `maestro task note {}` for historical context",
+            task.id,
+            task.state.as_str(),
+            task.id
+        );
+    }
     lifecycle::append_history(&mut task, actor, updated_at, details);
     template::save_task_with_snapshot(&task, &snapshot)?;
     Ok(task)

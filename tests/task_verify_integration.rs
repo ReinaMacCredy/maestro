@@ -736,7 +736,7 @@ fn concurrent_verify_does_not_overwrite_applied_canonical_report_with_stale_atte
 }
 
 #[test]
-fn failed_verification_demotes_previously_verified_task_through_task_verify() {
+fn task_verify_refuses_a_previously_verified_task_without_demoting_it() {
     let temp = setup_repo();
     let repo = temp.path();
     create_completed_task(repo, "implemented verified regression");
@@ -747,6 +747,9 @@ fn failed_verification_demotes_previously_verified_task_through_task_verify() {
         task_yaml(repo, "task-001")["state"],
         YamlValue::String("verified".to_string())
     );
+    let before = fs::read_to_string(card_record_path(repo, "task-001"))
+        .expect("invariant: verified task card should be readable");
+
     let update = maestro(
         repo,
         &[
@@ -757,50 +760,36 @@ fn failed_verification_demotes_previously_verified_task_through_task_verify() {
             "new unproved regression claim",
         ],
     );
-    assert_success(&update, &["task", "update", "task-001", "--claim"]);
+    assert_failure(&update, &["task", "update", "task-001", "--claim"]);
+    assert!(stderr(&update).contains("cannot update task task-001"));
+    assert_eq!(
+        fs::read_to_string(card_record_path(repo, "task-001"))
+            .expect("invariant: verified task card should remain readable"),
+        before
+    );
 
     let second = maestro(repo, &["task", "verify", "task-001"]);
 
     assert_failure(&second, &["task", "verify", "task-001"]);
-    assert!(stderr(&second).contains("claim not backed by events/proof"));
+    assert!(stderr(&second).contains("state is verified"));
+    assert!(stderr(&second).contains("expected needs_verification"));
     assert_eq!(
         task_yaml(repo, "task-001")["state"],
-        YamlValue::String("needs_verification".to_string())
+        YamlValue::String("verified".to_string())
     );
-    let task_after_failed_verify = task_yaml(repo, "task-001");
     assert_eq!(
-        task_after_failed_verify["verification"]["status"],
-        YamlValue::String("failed".to_string())
+        fs::read_to_string(card_record_path(repo, "task-001"))
+            .expect("invariant: verified task card should remain readable"),
+        before
     );
-    assert!(
-        task_after_failed_verify["verification"]["verified_at"]
-            .as_str()
-            .is_some()
-    );
-    assert!(
-        task_after_failed_verify["verification"]["verified_commit"]
-            .as_str()
-            .is_none()
-    );
-    assert_eq!(verification_json(repo, "task-001")["status"], "failed");
-    let mut task = task_after_failed_verify;
-    let history = task["state_history"]
-        .as_sequence_mut()
-        .expect("invariant: state_history should be editable");
-    let latest = history
-        .last_mut()
-        .expect("invariant: failed verification should append history");
-    latest["summary"] = YamlValue::String("unrelated history summary".to_string());
-    latest["open_items"] = YamlValue::Sequence(Vec::new());
-    write_task_yaml(repo, "task-001", &task);
 
     let proof = maestro(repo, &["query", "proof", "task-001"]);
     assert_success(&proof, &["query", "proof", "task-001"]);
-    assert!(stdout(&proof).contains("proof task-001: failed"));
+    assert!(stdout(&proof).contains("proof task-001: accepted"));
 }
 
 #[test]
-fn task_show_flags_a_claim_added_after_verification_as_unverified() {
+fn task_update_refuses_a_claim_added_after_verification() {
     let temp = setup_repo();
     let repo = temp.path();
     create_completed_task(repo, "implemented CSV export");
@@ -817,20 +806,10 @@ fn task_show_flags_a_claim_added_after_verification_as_unverified() {
     assert!(before_out.contains("- implemented CSV export"));
     assert!(!before_out.contains("(unverified)"));
 
-    // Recording a new claim on a verified task is still allowed (it is the
-    // re-verification path), but `task show` must not let it masquerade as
-    // proven while the task still reads `verified`.
-    assert_success(
-        &maestro(
-            repo,
-            &[
-                "task",
-                "update",
-                "task-001",
-                "--claim",
-                "unproven follow-up",
-            ],
-        ),
+    let before_card = fs::read_to_string(card_record_path(repo, "task-001"))
+        .expect("invariant: verified task card should be readable");
+    let update = maestro(
+        repo,
         &[
             "task",
             "update",
@@ -839,14 +818,28 @@ fn task_show_flags_a_claim_added_after_verification_as_unverified() {
             "unproven follow-up",
         ],
     );
+    assert_failure(
+        &update,
+        &[
+            "task",
+            "update",
+            "task-001",
+            "--claim",
+            "unproven follow-up",
+        ],
+    );
+    assert!(stderr(&update).contains("cannot update task task-001"));
+    assert_eq!(
+        fs::read_to_string(card_record_path(repo, "task-001"))
+            .expect("invariant: verified task card should remain readable"),
+        before_card
+    );
     let after = maestro(repo, &["task", "show", "task-001"]);
     assert_success(&after, &["task", "show", "task-001"]);
     let after_out = stdout(&after);
     assert!(after_out.contains("state: verified"));
-    assert!(after_out.contains("- unproven follow-up (unverified)"));
-    // The verified claim must not vanish when a later claim is added: a reader
-    // still needs to see what verification actually proved.
     assert!(after_out.contains("- implemented CSV export"));
+    assert!(!after_out.contains("unproven follow-up"));
     assert!(!after_out.contains("- implemented CSV export (unverified)"));
 }
 
@@ -1544,26 +1537,15 @@ fn query_proof_reports_stale_when_claims_change_after_pass() {
         &["task", "verify", "task-001"],
     );
 
-    let update = maestro(
-        repo,
-        &[
-            "task",
-            "update",
-            "task-001",
-            "--claim",
-            "unproven follow-up",
-        ],
-    );
-    assert_success(
-        &update,
-        &[
-            "task",
-            "update",
-            "task-001",
-            "--claim",
-            "unproven follow-up",
-        ],
-    );
+    let mut task = task_yaml(repo, "task-001");
+    task["state_history"]
+        .as_sequence_mut()
+        .expect("invariant: state history should be editable")
+        .iter_mut()
+        .find_map(|entry| entry["claims"].as_sequence_mut())
+        .expect("invariant: completion claims should be editable")
+        .push(YamlValue::String("unproven follow-up".to_string()));
+    write_task_yaml(repo, "task-001", &task);
 
     let stale = maestro(repo, &["query", "proof", "task-001"]);
     assert_success(&stale, &["query", "proof", "task-001"]);

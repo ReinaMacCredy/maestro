@@ -138,7 +138,6 @@ fn feature_verify_sweeps_acceptance_contract() {
             "--proof",
             "first behavior works",
         ],
-        vec!["task", "verify", &task_id],
     ] {
         stdout(maestro(&args, temp_dir.path()), &args);
     }
@@ -463,7 +462,6 @@ fn verify_task_claim(root: &Path, id: &str, claim: &str) {
             "--proof",
             claim,
         ],
-        vec!["task", "verify", id],
     ] {
         stdout(maestro(&args, root), &args);
     }
@@ -851,6 +849,74 @@ fn feature_new_existing_slug_fails_without_clobbering_record() {
 }
 
 #[test]
+fn feature_verify_rejects_unstarted_features_without_recording_proof() {
+    let temp_dir = TestTempDir::new("maestro-feature-proposed-verify-test");
+    let root = temp_dir.path();
+    init_git_marker(root);
+    stdout(maestro(&["init", "--yes"], root), &["init", "--yes"]);
+
+    stdout(
+        maestro(&["feature", "new", "Proposed Verify"], root),
+        &["feature", "new", "Proposed Verify"],
+    );
+    let set_args = [
+        "feature",
+        "set",
+        "proposed-verify",
+        "--acceptance",
+        "first behavior works",
+        "--area",
+        "feature workflow",
+    ];
+    stdout(maestro(&set_args, root), &set_args);
+    let original = feature_record(root, "proposed-verify");
+
+    let proof_args = [
+        "feature",
+        "verify",
+        "proposed-verify",
+        "--prove",
+        "ac-1",
+        "--evidence",
+        "first proof",
+    ];
+    let proof_error = assert_failure(maestro(&proof_args, root), &proof_args);
+    assert!(proof_error.contains("not accepted"), "{proof_error}");
+    assert_eq!(feature_record(root, "proposed-verify"), original);
+
+    let sweep_args = ["feature", "verify", "proposed-verify"];
+    let sweep_error = assert_failure(maestro(&sweep_args, root), &sweep_args);
+    assert!(sweep_error.contains("not accepted"), "{sweep_error}");
+    assert_eq!(feature_record(root, "proposed-verify"), original);
+
+    let accept_args = [
+        "feature",
+        "accept",
+        "proposed-verify",
+        "--qa",
+        "none",
+        "--reason",
+        "no runtime surface",
+    ];
+    stdout(maestro(&accept_args, root), &accept_args);
+    let ready = feature_record(root, "proposed-verify");
+
+    let ready_proof_error = assert_failure(maestro(&proof_args, root), &proof_args);
+    assert!(
+        ready_proof_error.contains("not started"),
+        "{ready_proof_error}"
+    );
+    assert_eq!(feature_record(root, "proposed-verify"), ready);
+
+    let ready_sweep_error = assert_failure(maestro(&sweep_args, root), &sweep_args);
+    assert!(
+        ready_sweep_error.contains("not started"),
+        "{ready_sweep_error}"
+    );
+    assert_eq!(feature_record(root, "proposed-verify"), ready);
+}
+
+#[test]
 fn feature_verify_records_repeatable_paired_proofs_atomically() {
     let temp_dir = TestTempDir::new("maestro-feature-batch-prove");
     let root = temp_dir.path();
@@ -885,6 +951,10 @@ fn feature_verify_records_repeatable_paired_proofs_atomically() {
         "covered by acceptance evidence",
     ];
     stdout(maestro(&accept_args, root), &accept_args);
+    stdout(
+        maestro(&["feature", "start", "batch-proof"], root),
+        &["feature", "start", "batch-proof"],
+    );
 
     let batch_args = [
         "feature",
@@ -978,16 +1048,36 @@ fn feature_verify_green_sweep_prints_state_appropriate_next_hint() {
     stdout(maestro(&["init", "--yes"], root), &["init", "--yes"]);
 
     create_qa_none_feature(root, "Ready Hint", "ready-hint");
-    record_feature_evidence(root, "ready-hint");
-    let ready_sweep = stdout(
-        maestro(&["feature", "verify", "ready-hint"], root),
-        &["feature", "verify", "ready-hint"],
+    let before_ready = feature_record(root, "ready-hint");
+    let ready_error = assert_failure(
+        maestro(
+            &[
+                "feature",
+                "verify",
+                "ready-hint",
+                "--prove",
+                "ac-1",
+                "--evidence",
+                "observed in integration test",
+            ],
+            root,
+        ),
+        &[
+            "feature",
+            "verify",
+            "ready-hint",
+            "--prove",
+            "ac-1",
+            "--evidence",
+            "observed in integration test",
+        ],
     );
-    assert!(ready_sweep.contains("ok: every acceptance item has evidence"));
+    assert!(ready_error.contains("not started"), "{ready_error}");
     assert!(
-        ready_sweep.contains("next: maestro feature start ready-hint"),
-        "{ready_sweep}"
+        ready_error.contains("maestro feature start ready-hint"),
+        "{ready_error}"
     );
+    assert_eq!(feature_record(root, "ready-hint"), before_ready);
 
     create_qa_none_feature(root, "Ship Hint", "ship-hint");
     stdout(

@@ -7,7 +7,7 @@ use crate::domain::feature::qa;
 use crate::domain::feature::registry;
 use crate::domain::feature::schema::{
     AcceptanceEvidenceEntry, AcceptanceEvidenceKind, AcceptanceSweepRun, FeatureRecord,
-    normalize_acceptance_id,
+    FeatureStatus, normalize_acceptance_id,
 };
 use crate::domain::task::{self, TaskEntry, TaskRecord, TaskState, VerificationStatus};
 use crate::foundation::core::paths::MaestroPaths;
@@ -94,6 +94,24 @@ pub fn verify_feature(
     updates: Vec<FeatureProofUpdate>,
 ) -> Result<FeatureVerifyReport> {
     let (mut record, write) = registry::load_record_for_update(paths, feature_id)?;
+    match record.status {
+        FeatureStatus::InProgress => {}
+        FeatureStatus::Proposed => bail!(
+            "cannot verify feature {} — not accepted; run `maestro feature accept {}` first",
+            record.id,
+            record.id
+        ),
+        FeatureStatus::Ready => bail!(
+            "cannot verify feature {} — not started; run `maestro feature start {}` first",
+            record.id,
+            record.id
+        ),
+        FeatureStatus::Shipped | FeatureStatus::Cancelled => bail!(
+            "cannot verify feature {} — terminal (status: {})",
+            record.id,
+            record.status.as_str()
+        ),
+    }
     if !updates.is_empty() {
         let mut entries = Vec::new();
         let mut recorded = Vec::new();

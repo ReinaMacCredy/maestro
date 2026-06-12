@@ -135,14 +135,17 @@ pub fn over_threshold_items(paths: &MaestroPaths) -> Result<Vec<OverThresholdIte
 pub fn propose_agent_audit(
     paths: &MaestroPaths,
     title: &str,
-    evidence: &str,
+    evidence: &[String],
     topic: Option<&str>,
     session_id: &str,
 ) -> Result<BacklogItem> {
     if title.trim().is_empty() {
         bail!("--title must not be empty");
     }
-    if evidence.trim().is_empty() {
+    if evidence.is_empty() {
+        bail!("--evidence is required");
+    }
+    if evidence.iter().any(|line| line.trim().is_empty()) {
         bail!("--evidence must not be empty");
     }
     if topic.is_some_and(|topic| topic.trim().is_empty()) {
@@ -173,7 +176,10 @@ pub fn propose_agent_audit(
         "agent_audit",
         &topic,
         title.trim(),
-        vec![format!("{session_id}: {}", evidence.trim())],
+        evidence
+            .iter()
+            .map(|line| format!("{session_id}: {}", line.trim()))
+            .collect(),
         sessions_hit.clone(),
         "agent-audit",
     );
@@ -317,7 +323,9 @@ pub fn apply(paths: &MaestroPaths, id: &str, checks: Vec<String>) -> Result<Appl
 
     let item = snapshot.backlog.find_mut(id)?;
     match item.status.as_str() {
+        "proposed" => {}
         "accepted" => bail!("{id} is already accepted; its task is already linked"),
+        "dismissed" => bail!("{id} is already dismissed"),
         // detect_and_merge above reopens a measured state detector to `proposed`
         // whenever its friction is live (reopen_if_regressed), so reaching this
         // state-detector arm means the friction is already gone -- it reopens on
@@ -330,7 +338,7 @@ pub fn apply(paths: &MaestroPaths, id: &str, checks: Vec<String>) -> Result<Appl
             "{id} is already measured; a measured {} item is closed and re-detection will not reopen it",
             item.item_type
         ),
-        _ => {}
+        other => bail!("{id} is {other}; only proposed harness items can be applied"),
     }
 
     let title = item.title.clone();
@@ -418,6 +426,15 @@ pub fn dismiss(paths: &MaestroPaths, id: &str, reason: &str) -> Result<BacklogIt
     let (mut snapshot, _, escalation) = detect_and_merge(paths)?;
     let now = utc_now_timestamp();
     let item = snapshot.backlog.find_mut(id)?;
+    match item.status.as_str() {
+        "proposed" => {}
+        "accepted" => {
+            bail!("{id} is accepted; run `maestro harness unapply {id}` before dismissing it")
+        }
+        "dismissed" => bail!("{id} is already dismissed"),
+        "measured" => bail!("{id} is already measured"),
+        other => bail!("{id} is {other}; only proposed harness items can be dismissed"),
+    }
     item.status = "dismissed".to_string();
     item.dismissal_reason = Some(reason.trim().to_string());
     item.history.push(HistoryEntry {

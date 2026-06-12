@@ -55,7 +55,7 @@ pub fn run(args: TaskArgs) -> Result<()> {
             claim,
             proof,
         } => {
-            if claim.trim().is_empty() {
+            if claim.iter().any(|claim| claim.trim().is_empty()) {
                 bail!(
                     "`--claim` must not be empty; pass the proof to verify against, e.g. --claim \"cargo test passes\""
                 );
@@ -427,10 +427,16 @@ fn complete_task(
     paths: &MaestroPaths,
     id: &str,
     summary: String,
-    claim: String,
-    proof_text: Option<String>,
+    claims: Vec<String>,
+    proof_texts: Vec<String>,
     actor: &str,
 ) -> Result<()> {
+    if proof_texts
+        .iter()
+        .any(|proof_text| proof_text.trim().is_empty())
+    {
+        bail!("`--proof` must not be empty; pass observed evidence text");
+    }
     let task = transition_task_record(
         paths,
         id,
@@ -438,15 +444,13 @@ fn complete_task(
         actor,
         TransitionDetails {
             summary: Some(summary),
-            claims: vec![claim],
+            claims,
             ..TransitionDetails::default()
         },
     )?;
     println!("completed {} -> {}", task.id, task.state.as_str());
-    if let Some(proof_text) = proof_text {
-        if proof_text.trim().is_empty() {
-            bail!("`--proof` must not be empty; pass observed evidence text");
-        }
+    if !proof_texts.is_empty() {
+        let proof_text = proof_texts.join("\n");
         proof::record_claim(
             paths,
             &super::cli_run_id(),

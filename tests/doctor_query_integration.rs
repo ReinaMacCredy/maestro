@@ -885,7 +885,6 @@ fn query_proof_reads_an_archived_task_through_the_archive_fallback() {
     // `query proof` must read it through the archive fallback.
     let task_id = create_verified_task_with_proof(repo);
     for args in [
-        vec!["task", "verify", &task_id],
         vec!["close", &task_id],
         vec![
             "feature",

@@ -431,14 +431,15 @@ pub enum TaskCommand {
         summary: String,
         #[arg(
             long,
-            help = "Completion claim; hook-backed tool proof uses '<tool> <tool_input_hash>'"
+            required = true,
+            help = "Completion claim (repeatable); hook-backed tool proof uses '<tool> <tool_input_hash>'"
         )]
-        claim: String,
+        claim: Vec<String>,
         #[arg(
             long,
-            help = "Observed proof text to record before automatic verification"
+            help = "Observed proof text to record before automatic verification (repeatable)"
         )]
-        proof: Option<String>,
+        proof: Vec<String>,
     },
     #[command(about = "Run the evidence gate; on pass marks the task verified")]
     Verify { id: Option<String> },
@@ -454,7 +455,7 @@ pub enum TaskCommand {
         id: String,
         #[arg(long)]
         summary: Option<String>,
-        #[arg(long)]
+        #[arg(long, help = "Progress claim (repeatable)")]
         claim: Vec<String>,
     },
     #[command(about = "Add a blocker to a task")]
@@ -1004,8 +1005,12 @@ pub enum HarnessCommand {
     Propose {
         #[arg(long, help = "Proposal title")]
         title: String,
-        #[arg(long, help = "Evidence supporting the proposal")]
-        evidence: String,
+        #[arg(
+            long,
+            required = true,
+            help = "Evidence supporting the proposal (repeatable)"
+        )]
+        evidence: Vec<String>,
         #[arg(long, help = "Stable topic slug for merging repeated audit findings")]
         topic: Option<String>,
     },

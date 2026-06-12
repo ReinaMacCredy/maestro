@@ -183,6 +183,8 @@ fn agent_audit_proposals_merge_and_surface_overdue_hint() {
         "Document build gate",
         "--evidence",
         "README.md:1 lacks build gate",
+        "--evidence",
+        "TESTING.md lacks build gate",
         "--topic",
         "build-gate",
     ];
@@ -209,7 +211,15 @@ fn agent_audit_proposals_merge_and_surface_overdue_hint() {
         "{show}"
     );
     assert!(
+        show.contains("audit-a: TESTING.md lacks build gate"),
+        "{show}"
+    );
+    assert!(
         show.contains("audit-b: README.md:1 lacks build gate"),
+        "{show}"
+    );
+    assert!(
+        show.contains("audit-b: TESTING.md lacks build gate"),
         "{show}"
     );
 
@@ -564,23 +574,7 @@ fn harness_detects_all_rule_based_backlog_proposals_and_applies_one() {
     // because a done task cannot take a blocker, and keeping them unverified
     // leaves the verification-duration medians that drive missing_skill untouched.
 
-    fs::write(
-        repo.join(".maestro/harness/harness.yml"),
-        concat!(
-            "schema_version: maestro.harness.v1\n",
-            "stack:\n",
-            "  kind: generic\n",
-            "  detected_by: []\n",
-            "  verify:\n",
-            "    - api_key='top secret' true\n"
-        ),
-    )
-    .expect("invariant: harness should be writable");
-    let verify = maestro(repo, &["task", "verify", &tasks[2]]);
-    assert!(
-        !verify.status.success(),
-        "task verify should fail for missing proof but still embed verification outcome"
-    );
+    write_embedded_failed_verification(repo, &tasks[2], "100", "api_key='top secret' true");
     fs::write(
         repo.join(".maestro/harness/harness.yml"),
         concat!(
@@ -1922,6 +1916,68 @@ fn harness_apply_spawns_task_and_rejects_reaccept() {
     let reapply = maestro(repo, &["harness", "apply", &note]);
     assert!(!reapply.status.success());
     assert!(stderr(&reapply).contains("already accepted"));
+}
+
+#[test]
+fn harness_apply_refuses_dismissed_items_without_mutation() {
+    let (temp, note) = setup_missing_verification_note("maestro-harness-apply-dismissed");
+    let repo = temp.path();
+
+    let dismiss = run_success(repo, &["harness", "dismiss", &note, "--reason", "noise"]);
+    assert!(dismiss.contains(&format!("dismissed {note}")), "{dismiss}");
+
+    let before = idea_record(repo, &note);
+    let apply = maestro(repo, &["harness", "apply", &note]);
+    assert!(!apply.status.success());
+    let err = stderr(&apply);
+    assert!(err.contains("already dismissed"), "{err}");
+    assert_eq!(idea_record(repo, &note), before);
+}
+
+#[test]
+fn harness_dismiss_refuses_accepted_and_measured_items_without_mutation() {
+    let (accepted_temp, accepted_note) =
+        setup_missing_verification_note("maestro-harness-dismiss-accepted");
+    let accepted_repo = accepted_temp.path();
+
+    let apply = run_success(accepted_repo, &["harness", "apply", &accepted_note]);
+    assert!(
+        apply.contains(&format!("accepted {accepted_note}")),
+        "{apply}"
+    );
+    let before_accepted = idea_record(accepted_repo, &accepted_note);
+    let dismiss_accepted = maestro(
+        accepted_repo,
+        &["harness", "dismiss", &accepted_note, "--reason", "skip it"],
+    );
+    assert!(!dismiss_accepted.status.success());
+    let err = stderr(&dismiss_accepted);
+    assert!(err.contains("is accepted"), "{err}");
+    assert!(err.contains("harness unapply"), "{err}");
+    assert_eq!(idea_record(accepted_repo, &accepted_note), before_accepted);
+
+    let (measured_temp, measured_note) =
+        setup_missing_verification_note("maestro-harness-dismiss-measured");
+    let measured_repo = measured_temp.path();
+    let apply = run_success(measured_repo, &["harness", "apply", &measured_note]);
+    let spawned = spawned_task_id(&apply);
+    mark_verified(measured_repo, &spawned, "general", "0", "100");
+    write_harness_verify(measured_repo, &["cargo clippy"]);
+    let measure = run_success(measured_repo, &["harness", "measure", &measured_note]);
+    assert!(
+        measure.contains(&format!("{measured_note} is now measured")),
+        "{measure}"
+    );
+
+    let before_measured = idea_record(measured_repo, &measured_note);
+    let dismiss_measured = maestro(
+        measured_repo,
+        &["harness", "dismiss", &measured_note, "--reason", "skip it"],
+    );
+    assert!(!dismiss_measured.status.success());
+    let err = stderr(&dismiss_measured);
+    assert!(err.contains("already measured"), "{err}");
+    assert_eq!(idea_record(measured_repo, &measured_note), before_measured);
 }
 
 #[test]

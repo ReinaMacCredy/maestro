@@ -171,6 +171,65 @@ fn create_explore_accept_claim_complete_flow_updates_task_record() {
 }
 
 #[test]
+fn task_complete_accepts_repeated_claims_and_proofs() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    assert_success(
+        &maestro(repo, &["task", "create", "Multi-claim closeout"]),
+        &["task", "create", "Multi-claim closeout"],
+    );
+    let id = id_by_title(repo, "Multi-claim closeout");
+    for args in [
+        vec!["task", "explore", id.as_str()],
+        vec![
+            "task",
+            "set",
+            id.as_str(),
+            "--check",
+            "evidence is complete",
+        ],
+        vec!["task", "accept", id.as_str()],
+        vec!["task", "claim", id.as_str()],
+    ] {
+        assert_success(&maestro(repo, &args), &args);
+    }
+
+    let args = &[
+        "task",
+        "complete",
+        id.as_str(),
+        "--summary",
+        "closed with separate evidence lines",
+        "--claim",
+        "routing line appears exactly once",
+        "--proof",
+        "routing line appears exactly once",
+        "--claim",
+        "resource guard tests passed",
+        "--proof",
+        "resource guard tests passed",
+    ];
+    let complete = maestro(repo, args);
+    assert_success(&complete, args);
+    assert!(
+        stdout(&complete).contains(&format!("verification passed for {id}")),
+        "repeatable claims must still auto-verify: {}",
+        stdout(&complete)
+    );
+
+    let doc = task_record(repo, &id);
+    assert_eq!(doc["state"], Value::String("verified".to_string()));
+    assert_eq!(
+        doc["claims"],
+        Value::Sequence(vec![
+            Value::String("routing line appears exactly once".to_string()),
+            Value::String("resource guard tests passed".to_string()),
+        ])
+    );
+}
+
+#[test]
 fn claim_from_draft_is_blocked_with_the_explicit_ready_path() {
     let temp = setup_repo();
     let repo = temp.path();
@@ -1169,6 +1228,125 @@ fn task_update_rejects_an_empty_claim_so_no_blank_proof_is_recorded() {
 
     // The refused update appended no history entry.
     assert_eq!(history_len(repo), before);
+}
+
+#[test]
+fn task_update_and_verify_refuse_terminal_tasks_without_mutation() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    assert_success(
+        &maestro(repo, &["task", "create", "Verified terminal probe"]),
+        &["task", "create", "Verified terminal probe"],
+    );
+    let verified_id = id_by_title(repo, "Verified terminal probe");
+    for args in [
+        vec![
+            "task",
+            "set",
+            verified_id.as_str(),
+            "--check",
+            "done proof exists",
+        ],
+        vec!["task", "explore", verified_id.as_str()],
+        vec!["task", "accept", verified_id.as_str()],
+        vec!["task", "claim", verified_id.as_str()],
+    ] {
+        assert_success(&maestro(repo, &args), &args);
+    }
+    let complete_args = &[
+        "task",
+        "complete",
+        verified_id.as_str(),
+        "--summary",
+        "done",
+        "--claim",
+        "done proof exists",
+        "--proof",
+        "done proof exists",
+    ];
+    assert_success(&maestro(repo, complete_args), complete_args);
+
+    assert_success(
+        &maestro(repo, &["task", "create", "Rejected terminal probe"]),
+        &["task", "create", "Rejected terminal probe"],
+    );
+    let rejected_id = id_by_title(repo, "Rejected terminal probe");
+    assert_success(
+        &maestro(
+            repo,
+            &[
+                "task",
+                "reject",
+                rejected_id.as_str(),
+                "--reason",
+                "not worth doing",
+            ],
+        ),
+        &[
+            "task",
+            "reject",
+            rejected_id.as_str(),
+            "--reason",
+            "not worth doing",
+        ],
+    );
+
+    for (id, state) in [
+        (verified_id.as_str(), "verified"),
+        (rejected_id.as_str(), "rejected"),
+    ] {
+        let before = fs::read_to_string(card_record_path(repo, id))
+            .expect("invariant: task card should be readable before refused commands");
+
+        let update_args = &[
+            "task",
+            "update",
+            id,
+            "--summary",
+            "late summary",
+            "--claim",
+            "late claim",
+        ];
+        let update = maestro(repo, update_args);
+        assert_failure(&update, update_args);
+        let update_err = stderr(&update);
+        assert!(
+            update_err.contains(&format!("cannot update task {id}")),
+            "{update_err}"
+        );
+        assert!(
+            update_err.contains(&format!("done (state: {state})")),
+            "{update_err}"
+        );
+        assert_eq!(
+            fs::read_to_string(card_record_path(repo, id))
+                .expect("invariant: task card should remain readable"),
+            before
+        );
+
+        let verify_args = &["task", "verify", id];
+        let verify = maestro(repo, verify_args);
+        assert_failure(&verify, verify_args);
+        let verify_err = stderr(&verify);
+        assert!(
+            verify_err.contains(&format!("cannot verify task {id}")),
+            "{verify_err}"
+        );
+        assert!(
+            verify_err.contains(&format!("state is {state}")),
+            "{verify_err}"
+        );
+        assert!(
+            verify_err.contains("expected needs_verification"),
+            "{verify_err}"
+        );
+        assert_eq!(
+            fs::read_to_string(card_record_path(repo, id))
+                .expect("invariant: task card should remain readable"),
+            before
+        );
+    }
 }
 
 #[test]

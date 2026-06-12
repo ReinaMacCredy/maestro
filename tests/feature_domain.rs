@@ -229,6 +229,9 @@ fn verify_rejects_unknown_acceptance_evidence_kind() {
         },
     )
     .expect("invariant: set should succeed");
+    feature::accept_with_qa_none(&paths, "billing-csv", "domain test", false)
+        .expect("invariant: feature may be accepted");
+    feature::start(&paths, "billing-csv").expect("invariant: started features may be verified");
 
     let path = paths.cards_dir().join("billing-csv").join("card.yaml");
     let mut raw: serde_yaml::Value = serde_yaml::from_str(

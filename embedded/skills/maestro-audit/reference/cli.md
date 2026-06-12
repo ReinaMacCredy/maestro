@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.0.0 -->
-<!-- maestro:cli-reference-sha256: 1fa305ddb58cea5bf68cd54250dda42b774d0c332d26ca410902433dbd016e40 -->
+<!-- maestro:cli-reference-sha256: 593ad21877b2cbeb12425dbf2980300606005ada7b610800b1db49718d8c7173 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -58,7 +58,7 @@ Every verb and flag is listed; a spelling not found here does not exist.
 - `maestro task explore <ID>` -- Move a draft into exploring (-> exploring)
 - `maestro task accept <ID>` -- Lock acceptance and mark the task ready (-> ready)
 - `maestro task claim [ID] [--next]` -- Claim a ready, unblocked task to work on it (-> in_progress)
-- `maestro task complete <ID> --summary <SUMMARY> --claim <CLAIM> [--proof <PROOF>]` -- Submit work for verification (-> needs_verification)
+- `maestro task complete <ID> --summary <SUMMARY> --claim <CLAIM>... [--proof <PROOF>]...` -- Submit work for verification (-> needs_verification)
 - `maestro task verify [ID]` -- Run the evidence gate; on pass marks the task verified
 - `maestro task next [--json]` -- Print the next task action for the current repo
 - `maestro task note <ID> <TEXT>` -- Append a dated note to a task's notes.md
@@ -232,7 +232,7 @@ Every verb and flag is listed; a spelling not found here does not exist.
 - `maestro harness list [--all]` -- List proposals (proposed + accepted; --all adds the terminal ledger)
 - `maestro harness show <ID>` -- Show a proposal's detail and history
 - `maestro harness set [--claims-only]` -- Set harness policy flags
-- `maestro harness propose --title <TITLE> --evidence <EVIDENCE> [--topic <TOPIC>]` -- File an agent-authored repo audit proposal
+- `maestro harness propose --title <TITLE> --evidence <EVIDENCE>... [--topic <TOPIC>]` -- File an agent-authored repo audit proposal
 - `maestro harness apply <ID> [--check <CHECK>]...` -- Accept a proposal and spawn a linked task (-> accepted)
 - `maestro harness unapply <ID> [--reason <REASON>]` -- Undo an accepted proposal before its linked task is claimed
 - `maestro harness dismiss <ID> --reason <REASON>` -- Dismiss a noisy proposal and suppress its fingerprint
