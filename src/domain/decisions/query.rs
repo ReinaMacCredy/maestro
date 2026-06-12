@@ -5,8 +5,10 @@ use std::path::{Component, Path, PathBuf};
 use anyhow::{Context, Result, bail};
 
 use crate::domain::card::schema::Card;
+use crate::domain::card::suggest;
 use crate::domain::decisions::cards;
 use crate::domain::decisions::schema::DecisionRecord;
+use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::fs::read_to_string_if_exists;
 use crate::foundation::core::paths::MaestroPaths;
 
@@ -190,9 +192,24 @@ pub fn decisions_for_feature(
 pub fn show(paths: &MaestroPaths, id: &str) -> Result<DecisionContent> {
     let id = normalize_decision_id(id)?;
     let Some(content) = find_decision_content(paths, &id)? else {
-        bail!("decision not found: {id}");
+        return Err(not_found(paths, &id));
     };
     Ok(content)
+}
+
+/// The decision id-not-found error: carries the nearest known decision id so
+/// the main.rs funnel prints a did-you-mean hint (a hint only -- the lookup is
+/// never fuzzy-resolved).
+pub(crate) fn not_found(paths: &MaestroPaths, id: &str) -> anyhow::Error {
+    let nearest = known_decision_ids(paths)
+        .ok()
+        .and_then(|ids| suggest::did_you_mean(id, ids.iter().map(String::as_str)));
+    MaestroError::IdNotFound {
+        kind: "decision",
+        id: id.to_string(),
+        nearest,
+    }
+    .into()
 }
 
 fn find_decision_content(paths: &MaestroPaths, id: &str) -> Result<Option<DecisionContent>> {

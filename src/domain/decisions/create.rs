@@ -5,7 +5,9 @@ use anyhow::{Context, Result, bail};
 use crate::domain::card::schema::CardType;
 use crate::domain::card::store as card_store;
 use crate::domain::decisions::cards;
-use crate::domain::decisions::query::{DecisionSource, decision_exists, normalize_decision_id};
+use crate::domain::decisions::query::{
+    DecisionSource, decision_exists, normalize_decision_id, not_found,
+};
 use crate::domain::decisions::schema::{DecisionRecord, DecisionStatus, DecisionStore};
 use crate::domain::feature;
 use crate::foundation::core::paths::MaestroPaths;
@@ -125,7 +127,7 @@ fn lock_card(
         if decision_exists(paths, id)? {
             bail!("{id} is a frozen legacy decision; create a new decision that supersedes it");
         }
-        bail!("decision not found: {id}");
+        return Err(not_found(paths, id));
     };
     if record.status != DecisionStatus::Open {
         bail!(
@@ -225,7 +227,7 @@ fn ensure_decision_exists(paths: &MaestroPaths, id: &str) -> Result<()> {
     if decision_exists(paths, id)? {
         Ok(())
     } else {
-        bail!("decision not found: {id}")
+        Err(not_found(paths, id))
     }
 }
 

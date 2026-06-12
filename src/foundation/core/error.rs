@@ -81,6 +81,18 @@ pub enum MaestroError {
     /// A JSON mirror file did not contain a top-level JSON object.
     #[error("managed JSON mirror must be a top-level object")]
     InvalidJsonMirror,
+
+    /// An id lookup failed. `nearest` carries an existing card id close enough
+    /// to be a plausible typo, surfaced as a hint only -- never auto-resolved.
+    #[error("{kind} not found: {id}")]
+    IdNotFound {
+        /// The lookup's noun, e.g. "decision" or "task".
+        kind: &'static str,
+        /// The id that failed to resolve.
+        id: String,
+        /// A near-match existing id, if one is plausible.
+        nearest: Option<String>,
+    },
 }
 
 impl MaestroError {
@@ -99,6 +111,9 @@ impl MaestroError {
                 Some(route) => format!("run {route}"),
                 None => "run maestro doctor".to_string(),
             }),
+            Self::IdNotFound { nearest, .. } => nearest
+                .as_ref()
+                .map(|nearest| format!("did you mean {nearest}?")),
             Self::OutsideRepository { .. }
             | Self::BackupPathContainsSymlink { .. }
             | Self::ManagedPathContainsSymlink { .. }

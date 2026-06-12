@@ -2,8 +2,10 @@ use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
+use crate::domain::card::suggest;
 use crate::domain::task::cards;
 use crate::domain::task::template::{TaskRecord, TaskSnapshot};
+use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::paths::MaestroPaths;
 
 /// Reconstruct the repo's [`MaestroPaths`] from a tasks directory so the task
@@ -50,7 +52,16 @@ pub fn load_task_with_snapshot(
         paths_for_tasks_dir(tasks_dir).context("cannot resolve maestro paths from tasks dir")?;
     validate_task_lookup_id(id)?;
     let Some((task, resolved)) = cards::load_one(&paths, id)? else {
-        bail!("task not found: {id}");
+        // Hint-only near-match for the main.rs funnel; ids never fuzzy-resolve.
+        let nearest = cards::scan(&paths).ok().and_then(|tasks| {
+            suggest::did_you_mean(id, tasks.iter().map(|(task, _)| task.id.as_str()))
+        });
+        return Err(MaestroError::IdNotFound {
+            kind: "task",
+            id: id.to_string(),
+            nearest,
+        }
+        .into());
     };
     let task_dir = resolved
         .path()
