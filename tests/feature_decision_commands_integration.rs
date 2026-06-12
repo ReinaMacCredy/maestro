@@ -332,7 +332,15 @@ fn feature_contract_display_warnings_waivers_and_stale_sweep() {
         "--reason",
         "not applicable in fixture",
     ];
-    stdout(maestro(&waive_args, temp_dir.path()), &waive_args);
+    let waived = stdout(maestro(&waive_args, temp_dir.path()), &waive_args);
+    assert!(
+        waived.contains("recorded waived ac-1 (25 bytes)"),
+        "{waived}"
+    );
+    assert!(
+        !waived.contains("not applicable in fixture"),
+        "feature verify must not echo full waiver reasons:\n{waived}"
+    );
     let prove_args = [
         "feature",
         "verify",
@@ -893,8 +901,12 @@ fn feature_verify_records_repeatable_paired_proofs_atomically() {
     ];
     let batch = stdout(maestro(&batch_args, root), &batch_args);
     assert!(
-        batch.contains("recorded explicit ac-1: first proof; explicit ac-3: third proof"),
+        batch.contains("recorded explicit ac-1 (11 bytes); explicit ac-3 (11 bytes)"),
         "{batch}"
+    );
+    assert!(
+        !batch.contains("first proof") && !batch.contains("third proof"),
+        "feature verify must not echo full evidence bodies:\n{batch}"
     );
 
     let before_count_mismatch = feature_record(root, "batch-proof");

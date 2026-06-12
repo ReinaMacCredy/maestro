@@ -116,7 +116,7 @@ pub fn verify_feature(
                 bail!("feature acceptance evidence must not be empty");
             }
             let kind_label = kind.as_str();
-            recorded.push(format!("{kind_label} {ac_id}: {text}"));
+            recorded.push(format!("{kind_label} {ac_id} ({} bytes)", text.len()));
             entries.push(AcceptanceEvidenceEntry {
                 ac_id,
                 kind,

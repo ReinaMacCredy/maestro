@@ -995,6 +995,11 @@ fn complete_with_proof_records_proof_and_auto_verifies() {
     );
 
     assert!(complete.contains("auto: recorded task_proof event"));
+    assert!(complete.contains("recorded proof (17 bytes)"));
+    assert!(
+        !complete.contains("proof: cargo test passes"),
+        "task complete must not echo the full proof body:\n{complete}"
+    );
     assert!(complete.contains(&format!("auto: maestro task verify {id}")));
     assert!(complete.contains(&format!("verification passed for {id}")));
     assert_eq!(

@@ -250,7 +250,15 @@ pub fn create(args: CreateArgs) -> Result<()> {
 /// Execute `maestro show <id>`: the card's header, parent, edges, and body (DN9).
 /// `--json` prints the raw card; a missing card exits 0 with a guiding line.
 pub fn show(args: ShowArgs) -> Result<()> {
-    let Some(paths) = card_paths()? else {
+    let paths = if args.compact_json {
+        card_paths_json()?
+    } else {
+        card_paths()?
+    };
+    let Some(paths) = paths else {
+        if args.compact_json {
+            println!("null");
+        }
         return Ok(());
     };
     card::store::validate_card_id(&args.id)?;
@@ -265,11 +273,18 @@ pub fn show(args: ShowArgs) -> Result<()> {
     };
     let from_archive = archived.is_some();
     let Some(c) = live.or(archived) else {
-        println!("no card {} in the card store (.maestro/cards)", args.id);
+        if args.compact_json {
+            eprintln!("no card {} in the card store (.maestro/cards)", args.id);
+            println!("null");
+        } else {
+            println!("no card {} in the card store (.maestro/cards)", args.id);
+        }
         return Ok(());
     };
     if args.json {
         println!("{}", serde_json::to_string_pretty(&c)?);
+    } else if args.compact_json {
+        render_compact_card_json(&c)?;
     } else {
         // The alias names same-parent siblings, so a parentless card never
         // has one -- skip the store scan that exists only to compute it.
@@ -294,16 +309,42 @@ pub fn show(args: ShowArgs) -> Result<()> {
 /// silently clobber the other. A bare `update` (no id) or an update with no
 /// flags exits 0 with usage.
 pub fn update(args: UpdateArgs) -> Result<()> {
-    let Some(paths) = card_paths()? else {
+    let paths = if args.json {
+        card_paths_json()?
+    } else {
+        card_paths()?
+    };
+    let Some(paths) = paths else {
+        if args.json {
+            render_update_json(&[])?;
+        }
         return Ok(());
     };
     let Some(id) = args.id.as_deref() else {
-        println!("usage: maestro update <id> [--status S] [--title T] [--description D] [--claim]");
+        if args.json {
+            eprintln!(
+                "usage: maestro update <id> [--status S] [--title T] [--description D] [--claim] [--json]"
+            );
+            render_update_json(&[])?;
+        } else {
+            println!(
+                "usage: maestro update <id> [--status S] [--title T] [--description D] [--claim] [--json]"
+            );
+        }
         return Ok(());
     };
     let has_fields = args.status.is_some() || args.title.is_some() || args.description.is_some();
     if !has_fields && !args.claim {
-        println!("nothing to update for {id}; pass --status, --title, --description, or --claim");
+        if args.json {
+            eprintln!(
+                "nothing to update for {id}; pass --status, --title, --description, or --claim"
+            );
+            render_update_json(&[])?;
+        } else {
+            println!(
+                "nothing to update for {id}; pass --status, --title, --description, or --claim"
+            );
+        }
         return Ok(());
     }
     if args.claim && args.status.is_some() {
@@ -314,7 +355,12 @@ pub fn update(args: UpdateArgs) -> Result<()> {
     card::store::validate_card_id(id)?;
     let now = utc_now_timestamp();
     let Some(resolved) = card::store::resolve(&paths, id)? else {
-        println!("no card {id} in the card store (.maestro/cards)");
+        if args.json {
+            eprintln!("no card {id} in the card store (.maestro/cards)");
+            render_update_json(&[])?;
+        } else {
+            println!("no card {id} in the card store (.maestro/cards)");
+        }
         return Ok(());
     };
     let mut c = resolved.card.clone();
@@ -355,6 +401,10 @@ pub fn update(args: UpdateArgs) -> Result<()> {
     };
     if c != resolved.card {
         card::store::save_resolved(&c, &resolved)?;
+    }
+    if args.json {
+        render_update_json(&[&c])?;
+        return Ok(());
     }
     if has_fields {
         println!("updated {id}");
@@ -559,6 +609,23 @@ fn render_list_json(rows: &[(&card::schema::Card, bool)]) -> Result<()> {
     Ok(())
 }
 
+fn render_update_json(cards: &[&card::schema::Card]) -> Result<()> {
+    let cards: Vec<CompactCardJson<'_>> = cards
+        .iter()
+        .map(|card| CompactCardJson::new(card))
+        .collect();
+    println!("{}", serde_json::to_string_pretty(&cards)?);
+    Ok(())
+}
+
+fn render_compact_card_json(card: &card::schema::Card) -> Result<()> {
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&CompactCardJson::new(card))?
+    );
+    Ok(())
+}
+
 /// Render `show <id>` (SPEC DN9): header line + parent + edges grouped by kind +
 /// body (timestamps and description). Emoji-free.
 fn render_show(c: &card::schema::Card, alias: Option<&str>) {
@@ -677,6 +744,32 @@ impl<'a> ListCardJson<'a> {
             claimed_by: card.claimed_by.as_deref(),
             claimed_at: card.claimed_at.as_deref(),
             archived,
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct CompactCardJson<'a> {
+    id: &'a str,
+    title: &'a str,
+    status: &'a str,
+    #[serde(rename = "type")]
+    card_type: &'static str,
+    parent: Option<&'a str>,
+    claimed_by: Option<&'a str>,
+    claimed_at: Option<&'a str>,
+}
+
+impl<'a> CompactCardJson<'a> {
+    fn new(card: &'a card::schema::Card) -> Self {
+        Self {
+            id: &card.id,
+            title: &card.title,
+            status: &card.status,
+            card_type: card.card_type.as_str(),
+            parent: card.parent.as_deref(),
+            claimed_by: card.claimed_by.as_deref(),
+            claimed_at: card.claimed_at.as_deref(),
         }
     }
 }

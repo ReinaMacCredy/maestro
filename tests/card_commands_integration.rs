@@ -526,6 +526,146 @@ fn update_composes_claim_with_field_edits_in_one_write() {
 }
 
 #[test]
+fn update_json_emits_compact_beads_style_array() {
+    let temp = cards_repo("s2-update-json");
+    let repo = temp.path();
+
+    run(repo, &["create", "-t", "feature", "Auth"]);
+    run(
+        repo,
+        &["create", "-t", "task", "Fix auth bug", "--parent", "auth"],
+    );
+    let id = id_by_title(repo, "Fix auth bug");
+
+    let json = run(
+        repo,
+        &[
+            "update",
+            &id,
+            "--title",
+            "Fix auth bug now",
+            "--claim",
+            "--json",
+        ],
+    );
+    let value: serde_json::Value =
+        serde_json::from_str(&json).expect("update --json emits valid JSON");
+    let cards = value
+        .as_array()
+        .expect("update --json emits a Beads-style array");
+    assert_eq!(cards.len(), 1, "one updated card is returned");
+    let card = &cards[0];
+    assert_eq!(card["id"], serde_json::json!(id), "json carries the id");
+    assert_eq!(
+        card["title"],
+        serde_json::json!("Fix auth bug now"),
+        "json carries the updated title"
+    );
+    assert_eq!(
+        card["status"],
+        serde_json::json!("in_progress"),
+        "claim moves the card in_progress"
+    );
+    assert_eq!(
+        card["type"],
+        serde_json::json!("task"),
+        "json uses the public type field"
+    );
+    assert_eq!(
+        card["parent"],
+        serde_json::json!("auth"),
+        "json carries the parent"
+    );
+    assert_eq!(
+        card["claimed_by"],
+        serde_json::json!("codex#s1"),
+        "json uses Maestro's claimed_by field"
+    );
+    assert!(
+        card["claimed_at"]
+            .as_str()
+            .is_some_and(|value| !value.is_empty()),
+        "json carries the claim timestamp"
+    );
+    assert!(
+        card.get("assignee").is_none(),
+        "json does not introduce Beads-only assignee naming"
+    );
+    assert!(
+        card.get("extra").is_none() && card.get("state_history").is_none(),
+        "json stays compact and omits raw card carrier fields: {card:?}"
+    );
+}
+
+#[test]
+fn show_compact_json_keeps_raw_show_json_unchanged() {
+    let temp = cards_repo("s2-show-compact-json");
+    let repo = temp.path();
+
+    run(repo, &["create", "-t", "feature", "Auth"]);
+    run(
+        repo,
+        &["create", "-t", "task", "Fix auth bug", "--parent", "auth"],
+    );
+    let id = id_by_title(repo, "Fix auth bug");
+    run(repo, &["update", &id, "--claim"]);
+
+    let compact = run(repo, &["show", &id, "--compact-json"]);
+    let compact: serde_json::Value =
+        serde_json::from_str(&compact).expect("show --compact-json emits valid JSON");
+    let card = compact
+        .as_object()
+        .expect("show --compact-json emits one compact card object");
+    assert_eq!(card["id"], serde_json::json!(id), "compact json carries id");
+    assert_eq!(
+        card["title"],
+        serde_json::json!("Fix auth bug"),
+        "compact json carries title"
+    );
+    assert_eq!(
+        card["status"],
+        serde_json::json!("in_progress"),
+        "compact json carries status after claim"
+    );
+    assert_eq!(
+        card["type"],
+        serde_json::json!("task"),
+        "compact json carries public type"
+    );
+    assert_eq!(
+        card["parent"],
+        serde_json::json!("auth"),
+        "compact json carries parent"
+    );
+    assert_eq!(
+        card["claimed_by"],
+        serde_json::json!("codex#s1"),
+        "compact json carries claim owner"
+    );
+    assert!(
+        card["claimed_at"]
+            .as_str()
+            .is_some_and(|value| !value.is_empty()),
+        "compact json carries claim timestamp"
+    );
+    assert!(
+        card.get("schema_version").is_none()
+            && card.get("extra").is_none()
+            && card.get("state_history").is_none(),
+        "compact json omits raw carrier fields: {card:?}"
+    );
+
+    let raw = run(repo, &["show", &id, "--json"]);
+    let raw: serde_json::Value =
+        serde_json::from_str(&raw).expect("show --json keeps raw JSON valid");
+    assert_eq!(
+        raw["schema_version"],
+        serde_json::json!("maestro.card.v1"),
+        "raw show --json remains the raw card contract"
+    );
+}
+
+#[test]
 fn ready_and_list_render_the_beads_structure() {
     let temp = cards_repo("s2-beads-output");
     let repo = temp.path();

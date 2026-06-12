@@ -920,6 +920,9 @@ pub struct ShowArgs {
     /// Print the card as JSON.
     #[arg(long)]
     pub json: bool,
+    /// Print the compact agent-facing card JSON.
+    #[arg(long = "compact-json", conflicts_with = "json")]
+    pub compact_json: bool,
 }
 
 #[derive(Debug, Args)]
@@ -939,6 +942,9 @@ pub struct UpdateArgs {
     /// Claim the card for this session (same seam as `maestro claim`).
     #[arg(long)]
     pub claim: bool,
+    /// Print the updated card as compact JSON.
+    #[arg(long)]
+    pub json: bool,
 }
 
 #[derive(Debug, Args)]

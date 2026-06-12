@@ -456,7 +456,7 @@ fn complete_task(
             Vec::new(),
         )?;
         println!("auto: recorded task_proof event");
-        println!("  proof: {proof_text}");
+        println!("recorded proof ({} bytes)", proof_text.len());
     }
     println!("auto: maestro task verify {}", task.id);
     match verify::run_for_task(paths, &task.id, actor) {
