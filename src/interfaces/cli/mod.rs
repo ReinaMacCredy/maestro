@@ -122,6 +122,11 @@ pub enum RootCommand {
     #[command(about = "Create, show, and list decision cards in the card store")]
     Decision(DecisionArgs),
     #[command(
+        about = "Card-store verbs under one namespace (same output as the flat spellings)",
+        after_help = "Examples:\n  maestro card show task-0a1b2c   # identical to `maestro show task-0a1b2c`\n  maestro card ready"
+    )]
+    Card(CardArgs),
+    #[command(
         about = "List workable cards with no open blockers (card store)",
         after_help = "Examples:\n  maestro ready                # every unblocked task/bug/chore\n  maestro ready --json\n  maestro ready agent-cli-ux   # only those parented to a feature"
     )]
@@ -271,6 +276,38 @@ pub struct TaskArgs {
 pub struct StatusArgs {
     #[arg(long, help = "Print machine-readable status JSON")]
     pub json: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct CardArgs {
+    #[command(subcommand)]
+    pub command: CardCommand,
+}
+
+/// The flat card-store verbs again under `maestro card <verb>`, sharing the
+/// flat spellings' arg structs and handlers so output stays byte-identical.
+#[derive(Debug, Subcommand)]
+pub enum CardCommand {
+    #[command(about = "List workable cards with no open blockers")]
+    Ready(ReadyArgs),
+    #[command(about = "List cards filtered by parent, type, assignee, or coarse status")]
+    List(ListArgs),
+    #[command(about = "Author dependency edges between cards")]
+    Dep(DepArgs),
+    #[command(about = "Archive a feature card and its child cards")]
+    Archive(ArchiveArgs),
+    #[command(about = "Claim a workable card for this session")]
+    Claim(ClaimArgs),
+    #[command(about = "Append a dated note to a card's notes.md")]
+    Note(NoteArgs),
+    #[command(about = "Create a card of any type")]
+    Create(CreateArgs),
+    #[command(about = "Show a card's header, edges, and body")]
+    Show(ShowArgs),
+    #[command(about = "Update a card's status, title, description, or claim")]
+    Update(UpdateArgs),
+    #[command(about = "Close a card: status -> closed")]
+    Close(CloseArgs),
 }
 
 #[derive(Debug, Args)]
@@ -1074,6 +1111,18 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Event(args) => event::run(args),
         RootCommand::Feature(args) => feature::run(args),
         RootCommand::Decision(args) => decision::run(args),
+        RootCommand::Card(args) => match args.command {
+            CardCommand::Ready(args) => card::ready(args),
+            CardCommand::List(args) => card::list(args),
+            CardCommand::Dep(args) => card::dep(args),
+            CardCommand::Archive(args) => card::archive(args),
+            CardCommand::Claim(args) => card::claim(args),
+            CardCommand::Note(args) => card::note(args),
+            CardCommand::Create(args) => card::create(args),
+            CardCommand::Show(args) => card::show(args),
+            CardCommand::Update(args) => card::update(args),
+            CardCommand::Close(args) => card::close(args),
+        },
         RootCommand::Ready(args) => card::ready(args),
         RootCommand::List(args) => card::list(args),
         RootCommand::Dep(args) => card::dep(args),
