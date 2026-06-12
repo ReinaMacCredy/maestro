@@ -1,0 +1,28 @@
+# Schema contract for the install/ownership lock family (WS5 / D6.2-B).
+# src/domain/schema_contracts validates this pack against the Rust constants;
+# any edit trips tests/resources_version_guard.rs so it is acknowledged.
+family: install
+contracts:
+  - name: install-lock
+    schema_version: maestro.install_lock.v1
+    stamp: file
+    carrier: file
+    format: yaml
+    home: .maestro/install-lock.yaml
+    model: src/domain/install/lock.rs::InstallLock
+    fields:
+      - schema_version
+      - agents
+  - name: global-skills-lock
+    schema_version: maestro.global_skills_lock.v1
+    stamp: file
+    carrier: file
+    format: yaml
+    home: ~/.maestro/skills-lock.yaml
+    model: src/domain/skills/global.rs::GlobalSkillsLock
+    fields:
+      - schema_version
+      - cache_dir
+      - skills
+      - roots
+      - links

@@ -1,0 +1,28 @@
+# Schema contract for the run event family (WS5 / D6.2-B).
+# src/domain/schema_contracts validates this pack against the Rust constants;
+# any edit trips tests/resources_version_guard.rs so it is acknowledged.
+family: run-event
+contracts:
+  - name: run-event
+    schema_version: maestro.event.v1
+    stamp: line               # every JSONL line stamps its own version
+    carrier: line
+    format: jsonl
+    home: .maestro/runs/<session>/events.jsonl
+    model: src/domain/run/record.rs::normalize_event (append-only JSON lines)
+    fields:
+      - schema_version
+      - ts
+      - event_type
+      - session_id
+      - agent
+      - task_id
+      - feature_id
+      - tool_name
+      - status
+      - permission_decision
+      - skill_name
+      - activation_mode
+      - duration_ms
+      - tool_input_hash
+      - commit

@@ -1,0 +1,8 @@
+family: backlog
+read:
+  - maestro.card.v1
+write: maestro.card.v1
+legacy:
+  # The standalone harness/backlog.yaml roster predates the card fold.
+  - version: maestro.backlog.v1
+    route: maestro migrate (card fold, src/operations/card_migrate.rs)

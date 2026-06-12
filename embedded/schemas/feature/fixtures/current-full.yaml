@@ -1,0 +1,42 @@
+schema_version: maestro.card.v1
+id: feature-full-fixture-1c2d
+type: feature
+title: Full feature fixture
+status: shipped
+created_at: 2026-06-12T00:00:00.000Z
+updated_at: 2026-06-12T01:00:00.000Z
+description: A feature exercising every persisted payload field.
+extra:
+  schema_version: maestro.feature.v2
+  raw_request: exercise every persisted feature field
+  input_type: refactor
+  affected_areas:
+    - src/domain/feature
+  open_questions:
+    - none remaining
+  acceptance:
+    - the fixture parses through the production fold bridge
+  acceptance_evidence:
+    - ac_id: ac-1
+      kind: explicit
+      text: round-trip test passed
+      at: 2026-06-12T00:30:00.000Z
+  acceptance_sweeps:
+    - at: 2026-06-12T00:40:00.000Z
+      resolved:
+        - ac-1
+      unresolved: []
+      invalidated_by: []
+  amends:
+    - at: 2026-06-12T00:20:00.000Z
+      reason: scope grew during review
+      added:
+        acceptance:
+          - the fixture parses through the production fold bridge
+  qa:
+    surface: none
+    reason: contract-only fixture
+    amend_log_position: 1
+  non_goals:
+    - no behavior change
+  outcome: schema pack fixture shipped

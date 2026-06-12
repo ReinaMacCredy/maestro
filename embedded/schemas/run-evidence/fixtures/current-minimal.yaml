@@ -1,0 +1,11 @@
+schema_version: maestro.run_evidence.v1
+session_id: cli-2026-06-12
+agent: null
+task_id: null
+start_at: null
+end_at: null
+start_commit: null
+end_commit: null
+tools_used: {}
+human_interventions: 0
+duration_seconds: null

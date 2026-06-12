@@ -1,0 +1,32 @@
+# Schema contract for the feature payload family (WS5 / D6.2-B).
+# src/domain/schema_contracts validates this pack against the Rust constants;
+# any edit trips tests/resources_version_guard.rs so it is acknowledged.
+family: feature
+contracts:
+  - name: feature
+    schema_version: maestro.feature.v2
+    stamp: payload            # the version stamp lives inside card `extra`
+    carrier: card-extra       # on disk: card envelope with the payload under `extra`
+    format: yaml
+    home: .maestro/cards/<feature>/card.yaml
+    model: src/domain/feature/schema.rs::FeatureRecord
+    fields:
+      - schema_version
+      - id
+      - title
+      - description
+      - status
+      - created_at
+      - updated_at
+      - raw_request
+      - input_type
+      - affected_areas
+      - open_questions
+      - acceptance
+      - acceptance_evidence
+      - acceptance_sweeps
+      - amends
+      - qa
+      - non_goals
+      - outcome
+      - cancel_reason

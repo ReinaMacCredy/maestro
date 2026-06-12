@@ -1,0 +1,8 @@
+family: install
+read:
+  - maestro.install_lock.v1
+  - maestro.global_skills_lock.v1
+write: maestro.install_lock.v1
+legacy: []
+# Ownership locks gate uninstall/repair safety: a non-current stamp hard-fails
+# (strict gate) and the lock is never silently rewritten.

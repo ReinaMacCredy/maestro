@@ -1,0 +1,25 @@
+# Schema contract for the decision entry family (WS5 / D6.2-B).
+# src/domain/schema_contracts validates this pack against the Rust constants;
+# any edit trips tests/resources_version_guard.rs so it is acknowledged.
+family: decision
+contracts:
+  - name: decision
+    schema_version: maestro.card.v1
+    stamp: envelope           # entries stamp only the card envelope; the payload has no version of its own
+    carrier: card-entry       # on disk: one entry in a roster sequence, payload under `extra`
+    format: yaml
+    home: .maestro/cards/<feature>/decisions.yaml and .maestro/cards/decisions.yaml
+    model: src/domain/decisions/schema.rs::DecisionRecord
+    fields:
+      - id
+      - title
+      - status
+      - feature
+      - context
+      - decision
+      - rejected
+      - preview
+      - supersedes
+      - superseded_by
+      - created_at
+      - locked_at

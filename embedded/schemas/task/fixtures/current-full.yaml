@@ -1,0 +1,65 @@
+schema_version: maestro.card.v1
+id: card-dd44ee
+type: task
+title: Full task fixture
+status: verified
+claimed_by: maestro
+claimed_at: 2026-06-12T00:10:00.000Z
+created_at: 2026-06-12T00:00:00.000Z
+updated_at: 2026-06-12T00:20:00.000Z
+extra:
+  schema_version: maestro.task.v2
+  id: card-dd44ee
+  covers:
+    - T1
+  title: Full task fixture
+  lane: normal
+  risk: medium
+  raw_request: exercise every persisted task field
+  state: verified
+  acceptance_locked: true
+  acceptance:
+    checks:
+      - the fixture parses through the production fold bridge
+    locked_by: maestro-harness
+    locked_at: 2026-06-12T00:00:00.000Z
+  claims:
+    - every field round-trips into TaskRecord
+  claimed_by: maestro
+  claimed_at: 2026-06-12T00:10:00.000Z
+  blockers:
+    - id: blocker-1
+      kind: external
+      title: waiting on upstream fix
+      reason: upstream release pending
+      source: command
+      created_at: 2026-06-12T00:05:00.000Z
+      resolved_at: 2026-06-12T00:15:00.000Z
+  state_history:
+    - state: draft
+      at: 2026-06-12T00:00:00.000Z
+      by: maestro
+    - state: verified
+      at: 2026-06-12T00:20:00.000Z
+      by: maestro
+      summary: 'verification passed: 1 claim(s), 1 proof source(s)'
+  verification:
+    status: passed
+    verified_at: 2026-06-12T00:20:00.000Z
+    verified_commit: 0000000000000000000000000000000000000000
+    verified_by_run: .maestro/runs/cli-2026-06-12/events.jsonl
+    contract_hash: 1111111111111111111111111111111111111111111111111111111111111111
+    claim_checks:
+      - claim: every field round-trips into TaskRecord
+        matched: true
+        source: .maestro/runs/cli-2026-06-12/events.jsonl
+    commands:
+      - cmd: cargo test
+        exit_code: 0
+        duration_ms: 1000
+    proof_sources:
+      - kind: event
+        path: .maestro/runs/cli-2026-06-12/events.jsonl
+        hash: 2222222222222222222222222222222222222222222222222222222222222222
+  created_at: 2026-06-12T00:00:00.000Z
+  updated_at: 2026-06-12T00:20:00.000Z

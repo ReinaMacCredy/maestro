@@ -1,0 +1,5 @@
+schema_version: maestro.harness.v1
+stack:
+  kind: generic
+  detected_by: []
+  verify: []

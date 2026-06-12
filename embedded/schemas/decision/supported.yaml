@@ -1,0 +1,8 @@
+family: decision
+read:
+  - maestro.card.v1
+write: maestro.card.v1
+legacy:
+  # The standalone decision store predates the card fold.
+  - version: maestro.decisions.v1
+    route: maestro migrate (card fold, src/operations/card_migrate.rs)

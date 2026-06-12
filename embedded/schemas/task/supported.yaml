@@ -1,0 +1,12 @@
+family: task
+read:
+  - maestro.task.v2
+write: maestro.task.v2
+legacy:
+  # The v1-to-v2 transition folded acceptance.yaml/verification.json sidecars,
+  # promoted claims, and capped history - layout + shape changes the locked
+  # D6.1 policy forbids normalizing in memory.
+  - version: maestro.task.v1
+    route: maestro migrate-v2
+  - version: unversioned pre-v1 task dirs
+    route: maestro migrate-v2

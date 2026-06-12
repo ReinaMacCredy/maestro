@@ -1,0 +1,5 @@
+family: harness
+read:
+  - maestro.harness.v1
+write: maestro.harness.v1
+legacy: []

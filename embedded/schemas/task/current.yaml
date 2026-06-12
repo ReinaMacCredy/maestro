@@ -1,0 +1,31 @@
+# Schema contract for the task payload family (WS5 / D6.2-B).
+# src/domain/schema_contracts validates this pack against the Rust constants;
+# any edit trips tests/resources_version_guard.rs so it is acknowledged.
+family: task
+contracts:
+  - name: task
+    schema_version: maestro.task.v2
+    stamp: payload            # the version stamp lives inside card `extra`
+    carrier: card-extra       # on disk: card envelope with the payload under `extra`
+    format: yaml
+    home: .maestro/cards/<feature>/tasks/<task>/task.yaml and .maestro/cards/tasks/<task>/task.yaml
+    model: src/domain/task/template.rs::TaskRecord
+    fields:
+      - schema_version
+      - id
+      - covers
+      - title
+      - lane
+      - risk
+      - raw_request
+      - state
+      - acceptance_locked
+      - acceptance
+      - claims
+      - claimed_by
+      - claimed_at
+      - blockers
+      - state_history
+      - verification
+      - created_at
+      - updated_at
