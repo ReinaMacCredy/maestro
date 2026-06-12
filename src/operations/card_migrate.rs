@@ -1223,7 +1223,9 @@ mod tests {
             Some(hash_id("task-001").as_str())
         );
 
-        // Backup is a restorable snapshot of the pre-fold trees, minus backups/.
+        // Backup is a restorable snapshot of every pre-fold legacy durable,
+        // minus backups/: feature tree (with nested tasks), standalone task
+        // tree, decisions store, and harness backlog.
         assert!(
             backup
                 .join("features")
@@ -1231,6 +1233,32 @@ mod tests {
                 .join("feature.yaml")
                 .is_file(),
             "backup snapshots the feature tree"
+        );
+        assert!(
+            backup
+                .join("features")
+                .join("csv-export")
+                .join("tasks")
+                .join("task-001-implement-writer")
+                .join("task.yaml")
+                .is_file(),
+            "backup snapshots feature-nested tasks"
+        );
+        assert!(
+            backup
+                .join("tasks")
+                .join("task-002-add-tests")
+                .join("task.yaml")
+                .is_file(),
+            "backup snapshots the standalone task tree"
+        );
+        assert!(
+            backup.join("decisions.yaml").is_file(),
+            "backup snapshots the global decisions store"
+        );
+        assert!(
+            backup.join("harness").join("backlog.yaml").is_file(),
+            "backup snapshots the harness backlog"
         );
         assert!(
             !backup.join("backups").exists(),
