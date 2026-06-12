@@ -17,7 +17,15 @@ const CARD_QUERY_JSON_VERSION: u8 = 1;
 
 /// Execute `maestro ready`: workable cards with no open blockers.
 pub fn ready(args: ReadyArgs) -> Result<()> {
-    let Some(paths) = card_paths()? else {
+    let paths = if args.json {
+        card_paths_json()?
+    } else {
+        card_paths()?
+    };
+    let Some(paths) = paths else {
+        if args.json {
+            render_ready_json(&[])?;
+        }
         return Ok(());
     };
     let cards = card::query::scan(&paths)?;
@@ -37,7 +45,15 @@ pub fn ready(args: ReadyArgs) -> Result<()> {
 /// status, or a `--grep` substring; `--archived` extends the same query into
 /// the archive tree (SPEC-archive-memory A1).
 pub fn list(args: ListArgs) -> Result<()> {
-    let Some(paths) = card_paths()? else {
+    let paths = if args.json {
+        card_paths_json()?
+    } else {
+        card_paths()?
+    };
+    let Some(paths) = paths else {
+        if args.json {
+            render_list_json(&[])?;
+        }
         return Ok(());
     };
 
@@ -424,12 +440,23 @@ fn card_paths() -> Result<Option<MaestroPaths>> {
     Ok(Some(paths))
 }
 
+/// [`card_paths`] for the agent-facing JSON contract: the guiding line moves
+/// to stderr so stdout stays parseable JSON even without a card store.
+fn card_paths_json() -> Result<Option<MaestroPaths>> {
+    let paths = repo_paths()?;
+    if !paths.cards_dir().is_dir() {
+        eprintln!("{LEGACY_NOTICE}");
+        return Ok(None);
+    }
+    Ok(Some(paths))
+}
+
+const LEGACY_NOTICE: &str = "this repo has no card store yet (.maestro/cards/); the card verbs apply once it is migrated to the card model";
+
 /// The card verbs read `.maestro/cards/`; an unmigrated repo has none. Exit 0
 /// with one guiding line rather than a dead-end error: no cards is a state.
 fn legacy_notice() {
-    println!(
-        "this repo has no card store yet (.maestro/cards/); the card verbs apply once it is migrated to the card model"
-    );
+    println!("{LEGACY_NOTICE}");
 }
 
 /// Render `ready` in the beads structure (SPEC DN9): a count header plus numbered

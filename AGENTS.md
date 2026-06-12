@@ -81,7 +81,9 @@ maestro/
   `version`, `schema`, and `cards` with stable `id`, `type`, `title`, `status`,
   `parent`, `claimed_by`, `claimed_at`, and `archived`. These fields are
   additive-only: new fields may appear, but existing meanings are not silently
-  renamed or reinterpreted.
+  renamed or reinterpreted. In a repo without a card store the JSON verbs
+  still emit a valid envelope with zero cards (exit 0); the guiding notice
+  goes to stderr so stdout stays parseable.
 
 ## ANTI-PATTERNS (THIS PROJECT)
 

@@ -165,7 +165,7 @@ fn walk(root: &Path, strict: bool) -> Result<StoreScan> {
     collect_entry_file(&root.join(IDEAS_FILE), root, strict, &mut scan)?;
     collect_task_pool(&root.join(TASKS_DIR), strict, &mut scan)?;
     for dir in sorted_child_dirs(root)? {
-        if dir.file_name().is_some_and(|name| name == TASKS_DIR) {
+        if dir.file_name().is_some_and(|name| name == TASKS_DIR) || is_dot_dir(&dir) {
             continue;
         }
         collect_record(&dir.join(CARD_FILE), strict, &mut scan)?;
@@ -228,9 +228,21 @@ fn collect_task_pool(pool: &Path, strict: bool, scan: &mut StoreScan) -> Result<
         return Ok(());
     }
     for dir in sorted_child_dirs(pool)? {
+        if is_dot_dir(&dir) {
+            continue;
+        }
         collect_record(&dir.join(TASK_FILE), strict, scan)?;
     }
     Ok(())
+}
+
+/// Dot-prefixed dirs are store plumbing, never cards: write-lock markers,
+/// `.alloc-` id reservations, and crash-leaked `.<id>.removing` tombstones
+/// (which still hold the record they were deleting).
+fn is_dot_dir(dir: &Path) -> bool {
+    dir.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.starts_with('.'))
 }
 
 /// Store-shape warnings for the doctor, each naming its repair: an id living
@@ -804,6 +816,53 @@ mod tests {
             ids,
             vec!["agent-cli-ux", "decision-001", "task-002"],
             "every card.yaml-bearing dir, sorted by id; the marker dir is skipped"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A crash between the tombstone rename and the delete leaves
+    /// `.<id>.removing` still holding the record it was deleting. The scan
+    /// must not resurrect it as a live card -- in containers or task pools.
+    #[test]
+    fn scan_skips_crash_leaked_removal_tombstones() {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("invariant: test clock after Unix epoch")
+            .as_nanos();
+        let root =
+            std::env::temp_dir().join(format!("maestro-scan-tomb-{}-{nanos}", process::id()));
+        let paths = MaestroPaths::new(&root);
+        ensure_dir(paths.cards_dir()).expect("create cards dir");
+
+        let typed = |id: &str, card_type: CardType| {
+            Card::new(id, card_type, id, "open", "2026-06-10T00:00:00Z")
+        };
+        let create = |card: &Card| {
+            crate::domain::card::store::create_card(&paths, card).expect("create card")
+        };
+        create(&typed("task-keep-0001", CardType::Task));
+        create(&typed("task-gone-0001", CardType::Task));
+        create(&typed("feat-gone-0001", CardType::Feature));
+
+        let pool = paths.cards_dir().join(TASKS_DIR);
+        std::fs::rename(
+            pool.join("task-gone-0001"),
+            pool.join(".task-gone-0001.removing"),
+        )
+        .expect("simulate a crash mid-removal in the pool");
+        std::fs::rename(
+            paths.cards_dir().join("feat-gone-0001"),
+            paths.cards_dir().join(".feat-gone-0001.removing"),
+        )
+        .expect("simulate a crash mid-removal at the store root");
+
+        let scanned = scan(&paths).expect("scan");
+        let ids: Vec<&str> = scanned.iter().map(|c| c.id.as_str()).collect();
+        assert_eq!(
+            ids,
+            vec!["task-keep-0001"],
+            "tombstoned records never come back as live cards"
         );
 
         let _ = std::fs::remove_dir_all(&root);

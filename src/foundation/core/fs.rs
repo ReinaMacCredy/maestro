@@ -165,7 +165,26 @@ pub fn remove_dir_if_file_unchanged(
             record_path.display()
         );
     }
-    fs::remove_dir_all(dir).with_context(|| format!("failed to remove {}", dir.display()))
+    // remove_dir_all would delete the held lock marker mid-walk, letting a
+    // racing writer re-acquire it while the deletion is still in flight.
+    // Rename to a dot-prefixed tombstone first: the rename is atomic, so
+    // racers see either the locked dir or a missing one, and card scans skip
+    // dot-prefixed dirs so a crash-leaked tombstone cannot resurrect.
+    let dir_name = dir
+        .file_name()
+        .and_then(|name| name.to_str())
+        .with_context(|| format!("path has no valid directory name: {}", dir.display()))?;
+    let tombstone = dir
+        .parent()
+        .unwrap_or_else(|| Path::new(""))
+        .join(format!(".{dir_name}.removing"));
+    if tombstone.exists() {
+        fs::remove_dir_all(&tombstone)
+            .with_context(|| format!("failed to clear tombstone {}", tombstone.display()))?;
+    }
+    fs::rename(dir, &tombstone).with_context(|| format!("failed to remove {}", dir.display()))?;
+    fs::remove_dir_all(&tombstone)
+        .with_context(|| format!("failed to remove {}", tombstone.display()))
 }
 
 fn reserve_store_write_marker(
@@ -174,10 +193,26 @@ fn reserve_store_write_marker(
     target: &Path,
 ) -> Result<DirReservation> {
     for _ in 0..2 {
-        if let Some(reservation) = try_reserve_marker_dir(parent, lock_name)? {
-            return Ok(reservation);
-        }
         let lock_path = parent.join(lock_name);
+        // fs::create_dir, not try_reserve_marker_dir: the CAS seam must never
+        // create the parent. A missing parent means the record's home was
+        // removed by a concurrent writer, and recreating it would leave an
+        // empty husk dir behind every stale retry.
+        match fs::create_dir(&lock_path) {
+            Ok(()) => return Ok(DirReservation { path: lock_path }),
+            Err(error) if error.kind() == ErrorKind::AlreadyExists => {}
+            Err(error) if error.kind() == ErrorKind::NotFound => {
+                bail!(
+                    "{} changed since it was read; re-run the command so Maestro can merge from the latest store",
+                    target.display()
+                );
+            }
+            Err(error) => {
+                return Err(error).with_context(|| {
+                    format!("failed to create reservation {}", lock_path.display())
+                });
+            }
+        }
         if !stale_write_lock(&lock_path)? {
             bail!(
                 "{} is being written by another Maestro process; re-run the command",

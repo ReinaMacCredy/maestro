@@ -51,14 +51,18 @@ pub fn validate_card_id(id: &str) -> Result<()> {
 /// Sorted ids of the card-bearing child directories of `cards_dir` -- the one
 /// walk every per-type scan shares. Symlink-safe via `child_dirs`; skips dirs
 /// without a `card.yaml` (the `.alloc-` id-reservation markers are
-/// `card.yaml`-less by design). A missing store yields no ids.
+/// `card.yaml`-less by design) and dot-prefixed dirs (a crash-leaked
+/// `.<id>.removing` tombstone still holds the record it was deleting). A
+/// missing store yields no ids.
 pub(crate) fn card_dir_ids(cards_dir: &Path) -> Result<Vec<String>> {
     let mut ids = Vec::new();
     for (dir, _modified) in child_dirs(cards_dir)? {
         if !dir.join("card.yaml").is_file() {
             continue;
         }
-        if let Some(name) = dir.file_name().and_then(|name| name.to_str()) {
+        if let Some(name) = dir.file_name().and_then(|name| name.to_str())
+            && !name.starts_with('.')
+        {
             ids.push(name.to_string());
         }
     }
@@ -279,10 +283,13 @@ fn carry_card_only_fields(card: &mut Card, existing: &Card) {
 }
 
 /// Write a card, but only when its file still matches the snapshot it was read
-/// from (SPEC D1, the single save-CAS seam). Creates the card directory first
-/// so the write-lock marker lands inside it.
+/// from (SPEC D1, the single save-CAS seam). Creates the card directory only
+/// on first save: for an existing card a missing dir means a concurrent
+/// removal, and the CAS seam rejects the stale write without resurrecting it.
 pub fn save_with_snapshot(path: &Path, card: &Card, snapshot: &CardSnapshot) -> Result<()> {
-    if let Some(parent) = path.parent() {
+    if snapshot.raw.is_none()
+        && let Some(parent) = path.parent()
+    {
         ensure_dir(parent)?;
     }
     let contents = serde_yaml::to_string(card).context("failed to serialize card")?;
@@ -549,7 +556,9 @@ pub fn load_entries(file: &Path) -> Result<EntriesSnapshot> {
 /// still matches the snapshot it was read from -- the whole file is the CAS
 /// unit (the S2/S4 contention rider).
 pub fn save_entries(file: &Path, cards: &[Card], snapshot: &EntriesSnapshot) -> Result<()> {
-    if let Some(parent) = file.parent() {
+    if snapshot.raw.is_none()
+        && let Some(parent) = file.parent()
+    {
         ensure_dir(parent)?;
     }
     let contents = serde_yaml::to_string(cards).context("failed to serialize card entries")?;
@@ -1320,6 +1329,65 @@ mod tests {
                 .expect("resolve after stale remove")
                 .is_some(),
             "stale removal must not delete the edited card"
+        );
+
+        let _ = std::fs::remove_dir_all(paths.cards_dir());
+    }
+
+    /// The CAS seam must reject a stale writer after a removal WITHOUT
+    /// recreating the deleted card dir as an empty husk (the lock reservation
+    /// used to `ensure_dir` the vanished parent on every retry).
+    #[test]
+    fn stale_save_after_removal_leaves_no_husk() {
+        let paths = temp_cards_repo("remove-then-stale-save");
+        create_card(&paths, &typed_card("card-t00001", CardType::Task, None))
+            .expect("create a pooled task");
+        let resolved = resolve(&paths, "card-t00001")
+            .expect("resolve")
+            .expect("present");
+        let path = resolved.path().to_path_buf();
+        let stale = load_with_snapshot(&path).expect("snapshot before removal");
+        remove_resolved(&resolved).expect("remove the card");
+        let dir = path.parent().expect("card dir").to_path_buf();
+        assert!(!dir.exists(), "removal deletes the dir");
+
+        let card = stale.card.clone().expect("card existed before removal");
+        let error = save_with_snapshot(&path, &card, &stale).expect_err("stale save must fail");
+        let message = format!("{error:#}");
+        assert!(
+            message.contains("changed since it was read"),
+            "stale save gets the retryable CAS error:\n{message}"
+        );
+        assert!(
+            !dir.exists(),
+            "a stale retry must not resurrect the card dir as an empty husk"
+        );
+
+        let _ = std::fs::remove_dir_all(paths.cards_dir());
+    }
+
+    /// A crash between the tombstone rename and the delete leaves the
+    /// tombstone behind; the next removal of the same id clears it instead of
+    /// failing the rename.
+    #[test]
+    fn remove_resolved_clears_a_stale_tombstone_from_a_crashed_removal() {
+        let paths = temp_cards_repo("tombstone-clear");
+        create_card(&paths, &typed_card("card-t00001", CardType::Task, None))
+            .expect("create a pooled task");
+        let pool = paths.cards_dir().join(TASKS_DIR);
+        std::fs::rename(pool.join("card-t00001"), pool.join(".card-t00001.removing"))
+            .expect("simulate a crash mid-removal");
+        create_card(&paths, &typed_card("card-t00001", CardType::Task, None))
+            .expect("recreate the card");
+
+        let resolved = resolve(&paths, "card-t00001")
+            .expect("resolve")
+            .expect("present");
+        remove_resolved(&resolved).expect("removal clears the stale tombstone and succeeds");
+        assert!(!pool.join("card-t00001").exists(), "the card dir is gone");
+        assert!(
+            !pool.join(".card-t00001.removing").exists(),
+            "the stale tombstone is gone too"
         );
 
         let _ = std::fs::remove_dir_all(paths.cards_dir());
