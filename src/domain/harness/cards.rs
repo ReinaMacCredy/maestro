@@ -9,10 +9,9 @@
 //! store (D7), with no metadata file beside it. The detect-skip evidence stamp
 //! lives in `.maestro/harness/detect-stamp` (a cache, not a store).
 
-use std::fs;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 
 use crate::domain::card::fold;
 use crate::domain::card::schema::{Card, CardType};
@@ -138,15 +137,11 @@ pub(crate) fn save_at(path: &Path, item: &BacklogItem, snapshot: &CardSnapshot) 
     card_store::save_folded_with_snapshot(path, card, snapshot)
 }
 
-/// Remove the card for a backlog item dropped by the merge (D4 ephemeral
-/// reconciliation). Absence is fine: a prior partial save may have removed it.
-pub(crate) fn remove(paths: &MaestroPaths, id: &str) -> Result<()> {
-    let dir = paths.cards_dir().join(id);
-    match fs::remove_dir_all(&dir) {
-        Ok(()) => Ok(()),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(error).with_context(|| format!("failed to remove {}", dir.display())),
-    }
+/// Remove a scanned flat-dir idea against its load-time snapshot. The caller
+/// passes the exact path `scan` returned so a divergent envelope id cannot
+/// redirect the delete.
+pub(crate) fn remove_at(path: &Path, snapshot: &CardSnapshot) -> Result<()> {
+    card_store::remove_dir_with_snapshot(path, snapshot)
 }
 
 #[cfg(test)]

@@ -37,7 +37,9 @@ use crate::domain::card::store::{
 };
 use crate::domain::decisions::normalize_decision_id;
 use crate::domain::run::managed_event_logs;
-use crate::foundation::core::fs::{ensure_dir, read_yaml_mapping, sorted_child_dirs};
+use crate::foundation::core::fs::{
+    ensure_dir, read_yaml_mapping, sorted_child_dirs, write_string_if_unchanged,
+};
 use crate::foundation::core::paths::MaestroPaths;
 
 /// Per-type tally of a card-fold run.
@@ -553,21 +555,34 @@ fn rewrite_run_events(
     }
     for log in managed_event_logs(paths)? {
         let path = log.path();
-        let original = fs::read_to_string(path)
-            .with_context(|| format!("failed to read {}", path.display()))?;
-        let mut content = original.clone();
-        for (old, new) in &active {
-            let needle = format!("\"task_id\":\"{old}\"");
-            if content.contains(&needle) {
-                content = content.replace(&needle, &format!("\"task_id\":\"{new}\""));
-            }
-        }
-        if content != original {
-            fs::write(path, content)
-                .with_context(|| format!("failed to write {}", path.display()))?;
-        }
+        rewrite_run_event_log(path, &active)?;
     }
     Ok(())
+}
+
+fn rewrite_run_event_log(path: &Path, active: &[(&str, &str)]) -> Result<()> {
+    let original =
+        fs::read_to_string(path).with_context(|| format!("failed to read {}", path.display()))?;
+    let Some(content) = rewritten_run_event_log(&original, active) else {
+        return Ok(());
+    };
+    write_rewritten_run_event_log(path, &original, &content)
+}
+
+fn rewritten_run_event_log(original: &str, active: &[(&str, &str)]) -> Option<String> {
+    let mut content = original.to_string();
+    for (old, new) in active {
+        let needle = format!("\"task_id\":\"{old}\"");
+        if content.contains(&needle) {
+            content = content.replace(&needle, &format!("\"task_id\":\"{new}\""));
+        }
+    }
+    (content != original).then_some(content)
+}
+
+fn write_rewritten_run_event_log(path: &Path, original: &str, content: &str) -> Result<()> {
+    write_string_if_unchanged(path, Some(original), content)
+        .with_context(|| format!("failed to write {}", path.display()))
 }
 
 /// Fail loud when any captured reference does not resolve after the remint (SPEC
@@ -1673,6 +1688,37 @@ mod tests {
             attributed,
             vec!["exports a header row".to_string()],
             "proof attributes to the reminted id"
+        );
+
+        cleanup(&root);
+    }
+
+    #[test]
+    fn run_event_rewrite_rejects_a_stale_log_snapshot() {
+        let root = temp_repo("event-stale-snapshot");
+        let events = root
+            .join(".maestro")
+            .join("runs")
+            .join("cli-1")
+            .join("events.jsonl");
+        append_event(&events, "task-001", "first proof");
+
+        let original = read_text(&events);
+        let rewritten = rewritten_run_event_log(&original, &[("task-001", "card-reminted")])
+            .expect("rewrite needed");
+        append_event(&events, "task-002", "racing append");
+
+        let error = write_rewritten_run_event_log(&events, &original, &rewritten)
+            .expect_err("stale rewrite must be rejected");
+        assert!(
+            format!("{error:#}").contains("changed since it was read"),
+            "{error:#}"
+        );
+        let after = read_text(&events);
+        assert!(
+            after.contains("\"task_id\":\"task-001\"")
+                && after.contains("\"task_id\":\"task-002\""),
+            "CAS rejection leaves the current append-only log intact: {after}"
         );
 
         cleanup(&root);

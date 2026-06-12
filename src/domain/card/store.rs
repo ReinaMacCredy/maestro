@@ -774,12 +774,7 @@ pub(crate) fn save_folded_resolved_releasing(
 /// its entry rewritten out of the container file under whole-file CAS.
 pub fn remove_resolved(basis: &ResolvedCard) -> Result<()> {
     match &basis.basis {
-        ResolvedBasis::Dir { yaml, snapshot } => {
-            let dir = yaml
-                .parent()
-                .with_context(|| format!("card path missing parent: {}", yaml.display()))?;
-            remove_dir_if_file_unchanged(yaml, snapshot.raw.as_deref(), dir)
-        }
+        ResolvedBasis::Dir { yaml, snapshot } => remove_dir_with_snapshot(yaml, snapshot),
         ResolvedBasis::Entry { file, snapshot } => {
             let cards: Vec<Card> = snapshot
                 .cards
@@ -790,6 +785,15 @@ pub fn remove_resolved(basis: &ResolvedCard) -> Result<()> {
             save_entries(file, &cards, snapshot)
         }
     }
+}
+
+/// Remove a dir-backed card at the exact record path a caller scanned, only
+/// when the record still matches that scan-time snapshot.
+pub(crate) fn remove_dir_with_snapshot(path: &Path, snapshot: &CardSnapshot) -> Result<()> {
+    let dir = path
+        .parent()
+        .with_context(|| format!("card path missing parent: {}", path.display()))?;
+    remove_dir_if_file_unchanged(path, snapshot.raw.as_deref(), dir)
 }
 
 #[cfg(test)]

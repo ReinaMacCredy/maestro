@@ -27,8 +27,8 @@ use anyhow::{Context, Result, bail};
 
 use crate::domain::card::schema::{Card, CardType};
 use crate::domain::card::store::{
-    CARD_FILE, CardHome, EntriesSnapshot, card_dir_ids, home_for_new, load, load_entries,
-    load_with_snapshot, save_entries, save_with_snapshot,
+    CARD_FILE, CardHome, CardSnapshot, EntriesSnapshot, card_dir_ids, home_for_new, load,
+    load_entries, load_with_snapshot, remove_dir_with_snapshot, save_entries, save_with_snapshot,
 };
 use crate::foundation::core::fs::{append_text_file, ensure_dir};
 use crate::foundation::core::paths::MaestroPaths;
@@ -46,9 +46,17 @@ pub struct ContainerMigrateReport {
 
 /// One pooled-task move collected in pass 1.
 struct TaskMove {
-    flat_dir: PathBuf,
+    flat: FlatRemoval,
     target_yaml: PathBuf,
     card: Card,
+}
+
+/// A flat card dir queued for removal after the container write lands.
+#[derive(Clone)]
+struct FlatRemoval {
+    flat_dir: PathBuf,
+    record_path: PathBuf,
+    snapshot: CardSnapshot,
 }
 
 /// One flat decision/idea `notes.md` queued to fold into its container's
@@ -69,23 +77,30 @@ pub fn run(paths: &MaestroPaths) -> Result<ContainerMigrateReport> {
     let mut task_moves: Vec<TaskMove> = Vec::new();
     let mut notes_folds: Vec<NotesFold> = Vec::new();
     let mut sidecar_syncs: Vec<(PathBuf, PathBuf)> = Vec::new();
-    let mut leftover_dirs: Vec<PathBuf> = Vec::new();
+    let mut leftover_dirs: Vec<FlatRemoval> = Vec::new();
 
     for id in card_dir_ids(&cards_dir)? {
         let flat_dir = cards_dir.join(&id);
-        let Some(card) = load(&flat_dir.join(CARD_FILE))? else {
+        let record_path = flat_dir.join(CARD_FILE);
+        let snapshot = load_with_snapshot(&record_path)?;
+        let Some(card) = snapshot.card.clone() else {
             continue;
         };
         if card.card_type == CardType::Feature {
             continue;
         }
+        let flat = FlatRemoval {
+            flat_dir,
+            record_path,
+            snapshot,
+        };
         match home_for_new(paths, &card)? {
             CardHome::Entry(file) => {
                 // An entry carries only the record. A `notes.md` (the one
                 // sidecar the legacy note verb wrote on every card type)
                 // folds into the container's shared log; anything else (an
                 // evidence dir, a stale lock) has nowhere to go and aborts.
-                if let Some(flat_notes) = foldable_notes(&flat_dir)? {
+                if let Some(flat_notes) = foldable_notes(&flat.flat_dir)? {
                     notes_folds.push(NotesFold {
                         card_id: card.id.clone(),
                         flat_notes,
@@ -106,13 +121,13 @@ pub fn run(paths: &MaestroPaths) -> Result<ContainerMigrateReport> {
                 match snapshot.cards.iter().find(|entry| entry.id == card.id) {
                     Some(entry) if *entry == card => {
                         report.finished += 1;
-                        leftover_dirs.push(flat_dir);
+                        leftover_dirs.push(flat);
                     }
-                    Some(_) => bail!(divergent_copies(&card.id, &flat_dir, &file)),
+                    Some(_) => bail!(divergent_copies(&card.id, &flat.flat_dir, &file)),
                     None => {
                         tally(&mut report, card.card_type);
                         append.push(card);
-                        leftover_dirs.push(flat_dir);
+                        leftover_dirs.push(flat);
                     }
                 }
             }
@@ -121,14 +136,14 @@ pub fn run(paths: &MaestroPaths) -> Result<ContainerMigrateReport> {
                     // The record landed but the crash may have stranded
                     // sidecars flat; carry them before the dir is removed.
                     report.finished += 1;
-                    sidecar_syncs.push((flat_dir.clone(), pooled_dir(&target_yaml)?));
-                    leftover_dirs.push(flat_dir);
+                    sidecar_syncs.push((flat.flat_dir.clone(), pooled_dir(&target_yaml)?));
+                    leftover_dirs.push(flat);
                 }
-                Some(_) => bail!(divergent_copies(&card.id, &flat_dir, &target_yaml)),
+                Some(_) => bail!(divergent_copies(&card.id, &flat.flat_dir, &target_yaml)),
                 None => {
                     tally(&mut report, card.card_type);
                     task_moves.push(TaskMove {
-                        flat_dir,
+                        flat,
                         target_yaml,
                         card,
                     });
@@ -152,15 +167,15 @@ pub fn run(paths: &MaestroPaths) -> Result<ContainerMigrateReport> {
     }
     for fold in &task_moves {
         copy_task_dir(fold)?;
-        leftover_dirs.push(fold.flat_dir.clone());
+        leftover_dirs.push(fold.flat.clone());
     }
     for (flat_dir, target_dir) in &sidecar_syncs {
         merge_sidecars(flat_dir, target_dir)?;
     }
 
     // Pass 3: the flat dirs go only after every write landed.
-    for dir in leftover_dirs {
-        fs::remove_dir_all(&dir).with_context(|| format!("failed to remove {}", dir.display()))?;
+    for flat in &leftover_dirs {
+        remove_flat_dir(flat)?;
     }
 
     Ok(report)
@@ -182,7 +197,12 @@ fn copy_task_dir(fold: &TaskMove) -> Result<()> {
     let snapshot = load_with_snapshot(&fold.target_yaml)?;
     save_with_snapshot(&fold.target_yaml, &fold.card, &snapshot)
         .with_context(|| format!("failed to write pooled card {}", fold.card.id))?;
-    merge_sidecars(&fold.flat_dir, &pooled_dir(&fold.target_yaml)?)
+    merge_sidecars(&fold.flat.flat_dir, &pooled_dir(&fold.target_yaml)?)
+}
+
+fn remove_flat_dir(flat: &FlatRemoval) -> Result<()> {
+    remove_dir_with_snapshot(&flat.record_path, &flat.snapshot)
+        .with_context(|| format!("failed to remove {}", flat.flat_dir.display()))
 }
 
 /// The pooled dir a `tasks/<id>/task.yaml` record lives in.
@@ -553,6 +573,48 @@ mod tests {
             fs::read_to_string(pooled.join("notes.md")).expect("kept"),
             "edited at home\n",
             "the landed copy is never overwritten"
+        );
+
+        cleanup(&root);
+    }
+
+    #[test]
+    fn flat_dir_removal_rejects_a_stale_record_snapshot() {
+        let root = temp_repo("stale-remove");
+        let paths = flat_store(&root);
+        let flat_dir = paths.cards_dir().join("card-i1");
+        let record_path = flat_dir.join(CARD_FILE);
+        let snapshot = load_with_snapshot(&record_path).expect("load flat snapshot");
+        let flat = FlatRemoval {
+            flat_dir: flat_dir.clone(),
+            record_path: record_path.clone(),
+            snapshot,
+        };
+
+        let mut edited = typed_card("card-i1", CardType::Idea, None);
+        edited.title = "Edited while migration was running".to_string();
+        fs::write(
+            &record_path,
+            serde_yaml::to_string(&edited).expect("serialize edited card"),
+        )
+        .expect("write racing edit");
+
+        let error = remove_flat_dir(&flat).expect_err("stale removal must be rejected");
+        assert!(
+            format!("{error:#}").contains("changed since it was read"),
+            "{error:#}"
+        );
+        assert!(
+            flat_dir.join(CARD_FILE).is_file(),
+            "the edited flat card remains for the retry"
+        );
+        assert_eq!(
+            resolve(&paths, "card-i1")
+                .expect("resolve")
+                .expect("flat card present")
+                .card
+                .title,
+            "Edited while migration was running"
         );
 
         cleanup(&root);

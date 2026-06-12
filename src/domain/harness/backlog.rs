@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 
 use crate::domain::card::schema::{Card, CardType};
-use crate::domain::card::store::{self as card_store, CardSnapshot, EntriesSnapshot, card_path};
+use crate::domain::card::store::{self as card_store, CardSnapshot, EntriesSnapshot};
 use crate::domain::harness::cards;
 use crate::domain::harness::schema::{
     BacklogConfig, BacklogItem, EscalationPolicy, HistoryEntry, is_state_detector,
@@ -40,7 +40,7 @@ pub fn items_in_cards(cards: &[(Card, PathBuf)]) -> Result<BacklogConfig> {
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct BacklogSnapshot {
     pub backlog: BacklogConfig,
-    dirs: Vec<(String, CardSnapshot)>,
+    dirs: Vec<(String, PathBuf, CardSnapshot)>,
     entries: EntriesSnapshot,
 }
 
@@ -50,8 +50,8 @@ pub(crate) struct BacklogSnapshot {
 pub(crate) fn load_with_snapshot(paths: &MaestroPaths) -> Result<BacklogSnapshot> {
     let mut items = Vec::new();
     let mut dirs = Vec::new();
-    for (item, snapshot, _) in cards::scan(paths)? {
-        dirs.push((item.id.clone(), snapshot));
+    for (item, snapshot, path) in cards::scan(paths)? {
+        dirs.push((item.id.clone(), path, snapshot));
         items.push(item);
     }
     let ideas_file = paths.cards_dir().join(card_store::IDEAS_FILE);
@@ -64,7 +64,7 @@ pub(crate) fn load_with_snapshot(paths: &MaestroPaths) -> Result<BacklogSnapshot
         // guaranteed CAS self-conflict after a partial write -- while the
         // entry copy never reaches the ideas.yaml rewrite. The shadowed entry
         // drops on the next save, converging the id back to one home.
-        if dirs.iter().any(|(id, _)| *id == card.id) {
+        if dirs.iter().any(|(id, _, _)| *id == card.id) {
             continue;
         }
         let artifact = format!("{}#{}", ideas_file.display(), card.id);
@@ -106,12 +106,11 @@ fn save_cards(
     backlog: &BacklogConfig,
     snapshot: &BacklogSnapshot,
 ) -> Result<()> {
-    let dir_ids: BTreeSet<&str> = snapshot.dirs.iter().map(|(id, _)| id.as_str()).collect();
     let mut entry_cards = Vec::new();
     for item in &backlog.items {
-        match snapshot.dirs.iter().find(|(id, _)| id == &item.id) {
-            Some((_, dir_snapshot)) => {
-                cards::save_at(&card_path(paths, &item.id), item, dir_snapshot)?;
+        match snapshot.dirs.iter().find(|(id, _, _)| id == &item.id) {
+            Some((_, path, dir_snapshot)) => {
+                cards::save_at(path, item, dir_snapshot)?;
             }
             None => entry_cards.push(cards::card_for(item)?),
         }
@@ -123,9 +122,9 @@ fn save_cards(
         card_store::save_entries(&ideas_file, &entry_cards, &snapshot.entries)?;
     }
     let kept: BTreeSet<&str> = backlog.items.iter().map(|item| item.id.as_str()).collect();
-    for id in dir_ids {
-        if !kept.contains(id) {
-            cards::remove(paths, id)?;
+    for (id, path, dir_snapshot) in &snapshot.dirs {
+        if !kept.contains(id.as_str()) {
+            cards::remove_at(path, dir_snapshot)?;
         }
     }
     Ok(())
@@ -512,6 +511,76 @@ mod tests {
         assert!(
             format!("{error:#}").contains("changed since it was read"),
             "{error:#}"
+        );
+    }
+
+    #[test]
+    fn card_mode_drop_rejects_a_stale_flat_dir_delete() {
+        let (_root, paths) = card_mode_paths("backlog-card-stale-delete");
+        let yaml = paths.cards_dir().join("hb-001").join("card.yaml");
+        fs::create_dir_all(yaml.parent().expect("flat dir")).expect("create flat dir");
+        fs::write(
+            &yaml,
+            serde_yaml::to_string(
+                &crate::domain::harness::cards::card_for(&item("hb-001", "seed")).expect("card"),
+            )
+            .expect("serialize"),
+        )
+        .expect("seed flat card");
+
+        let mut snapshot = backlog::load_with_snapshot(&paths).expect("load snapshot");
+        snapshot.backlog.items.clear();
+
+        fs::write(
+            &yaml,
+            serde_yaml::to_string(
+                &crate::domain::harness::cards::card_for(&item("hb-001", "racing edit"))
+                    .expect("card"),
+            )
+            .expect("serialize"),
+        )
+        .expect("racing edit");
+
+        let error = backlog::save_with_snapshot(&paths, &snapshot.backlog, &snapshot)
+            .expect_err("stale delete must be rejected");
+        assert!(
+            format!("{error:#}").contains("changed since it was read"),
+            "{error:#}"
+        );
+        assert!(yaml.is_file(), "the racing writer's card is not deleted");
+        let reloaded = backlog::load(&paths).expect("reload after rejected delete");
+        assert_eq!(reloaded.find("hb-001").expect("item").title, "racing edit");
+    }
+
+    #[test]
+    fn card_mode_flat_save_uses_the_scanned_path_not_the_envelope_id() {
+        let (_root, paths) = card_mode_paths("backlog-card-scanned-path");
+        let scanned_yaml = paths.cards_dir().join("legacy-home").join("card.yaml");
+        fs::create_dir_all(scanned_yaml.parent().expect("flat dir")).expect("create flat dir");
+        fs::write(
+            &scanned_yaml,
+            serde_yaml::to_string(
+                &crate::domain::harness::cards::card_for(&item("hb-001", "seed")).expect("card"),
+            )
+            .expect("serialize"),
+        )
+        .expect("seed flat card");
+
+        let mut snapshot = backlog::load_with_snapshot(&paths).expect("load snapshot");
+        snapshot.backlog.find_mut("hb-001").expect("item").title = "edited".to_string();
+
+        backlog::save_with_snapshot(&paths, &snapshot.backlog, &snapshot)
+            .expect("save updates the scanned flat dir");
+
+        assert!(
+            !paths.cards_dir().join("hb-001").exists(),
+            "save must not create a second dir from the envelope id"
+        );
+        let reloaded = backlog::load(&paths).expect("reload");
+        assert_eq!(reloaded.find("hb-001").expect("item").title, "edited");
+        assert!(
+            scanned_yaml.is_file(),
+            "the original scanned home stays the card home"
         );
     }
 
