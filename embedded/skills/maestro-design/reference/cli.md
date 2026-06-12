@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.0.0 -->
-<!-- maestro:cli-reference-sha256: 1605dd38ea28704abf913104719bf16f3ae9ad27e716e615813c41a02eaed0e8 -->
+<!-- maestro:cli-reference-sha256: 1fa305ddb58cea5bf68cd54250dda42b774d0c332d26ca410902433dbd016e40 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -162,7 +162,7 @@ Every verb and flag is listed; a spelling not found here does not exist.
 - `maestro card claim <ID>` -- Claim a workable card for this session
 - `maestro card note <ID> <TEXT>` -- Append a dated note to a card's notes.md
 - `maestro card create <TITLE> -t|--type <TYPE> [--parent <PARENT>] [--description <TEXT>] [--id-only]` -- Create a card of any type
-- `maestro card show <ID> [--json]` -- Show a card's header, edges, and body
+- `maestro card show <ID> [--json] [--compact-json]` -- Show a card's header, edges, and body
 - `maestro card update [ID] [--status <STATUS>] [--title <TITLE>] [--description <TEXT>] [--claim] [--json]` -- Update a card's status, title, description, or claim
 - `maestro card close <ID>` -- Close a card: status -> closed
 - `maestro card help ready` -- List workable cards with no open blockers
@@ -217,7 +217,7 @@ Every verb and flag is listed; a spelling not found here does not exist.
 
 ## maestro show
 
-- `maestro show <ID> [--json]` -- Show a card's header, edges, and body (card store)
+- `maestro show <ID> [--json] [--compact-json]` -- Show a card's header, edges, and body (card store)
 
 ## maestro update
 

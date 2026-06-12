@@ -68,7 +68,7 @@ pub fn verify_self_check(content: &str) -> Result<(), String> {
     let body_start = content
         .find(BODY_HEADING)
         .ok_or_else(|| format!("missing body heading {BODY_HEADING:?}"))?;
-    let digest = sha256_hex(content[body_start..].as_bytes());
+    let digest = sha256_hex(&content.as_bytes()[body_start..]);
     if stamp == digest {
         Ok(())
     } else {
