@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-version: 1.9.0
+version: 1.10.0
 description: "Use for design or brainstorming in a Maestro repo before implementation starts. Map current behavior, decide one fork at a time, record decisions and notes, then hand the approved contract to maestro-card."
 ---
 
@@ -18,6 +18,8 @@ generated from the binary. A verb or flag not listed there does not exist;
 read it instead of probing `--help`. Never chain a guessed id: use only ids
 read from verb output, and when a lookup misses, re-list instead of retrying
 spelling variations.
+
+Routing: external PRD with open forks -> decide forks in design, then intake per maestro-card.
 
 ## Do
 
