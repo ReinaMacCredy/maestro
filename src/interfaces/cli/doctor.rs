@@ -8,6 +8,7 @@ use crate::domain::decisions;
 use crate::domain::feature;
 use crate::domain::harness::HarnessConfig;
 use crate::domain::install::{InstallLock, InstallState, MirrorKind};
+use crate::domain::skills;
 use crate::domain::task;
 use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::fs::{ALLOC_MARKER_PREFIX, child_dirs};
@@ -133,6 +134,7 @@ fn doctor_report(paths: &MaestroPaths) -> Result<DoctorReport> {
         warnings.extend(card::query::unknown_field_warnings(paths, &scan.cards));
     }
     check_install(paths, &mut checks, &mut errors);
+    check_global_skills(&mut checks, &mut warnings, &mut errors);
 
     match recordless_task_dir_warnings(paths) {
         Ok(found) => warnings.extend(found),
@@ -406,6 +408,49 @@ fn check_install(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &m
             name: "install",
             detail: format!("{} agent(s) intact", committed.len()),
         });
+    }
+}
+
+/// Compare the user-level global skill cache against the skills embedded in
+/// this binary. Silent when the user never adopted global skills (no lock);
+/// drift is a warning rather than an error because agents resolve repo-local
+/// skills first, so a stale cache degrades discovery without breaking it.
+fn check_global_skills(
+    checks: &mut Vec<DoctorCheck>,
+    warnings: &mut Vec<String>,
+    errors: &mut Vec<String>,
+) {
+    let status = match skills::global_skills_status() {
+        Ok(Some(status)) => status,
+        Ok(None) => return,
+        Err(error) => {
+            errors.push(format!("{error:#}"));
+            return;
+        }
+    };
+
+    if status.stale.is_empty() && status.retired.is_empty() {
+        checks.push(DoctorCheck {
+            name: "skills",
+            detail: format!("{} global skill(s) match binary", status.matched),
+        });
+        return;
+    }
+
+    for drift in &status.stale {
+        let installed = drift.installed.as_deref().unwrap_or("missing");
+        let embedded = drift.embedded.as_deref().unwrap_or("unversioned");
+        warnings.push(format!(
+            "global skill {} is {installed} in the cache, binary ships {embedded}; run `maestro sync --global-skills`",
+            drift.name
+        ));
+    }
+    if !status.retired.is_empty() {
+        warnings.push(format!(
+            "{} retired global skill(s) linger in the cache ({}); run `maestro sync --global-skills`",
+            status.retired.len(),
+            status.retired.join(", ")
+        ));
     }
 }
 

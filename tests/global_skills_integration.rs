@@ -86,7 +86,7 @@ fn assert_symlink_target(path: &Path, target: &Path) {
 }
 
 #[test]
-fn install_points_to_explicit_sync_which_creates_global_cache_lock_and_supported_agent_links() {
+fn install_syncs_global_cache_lock_and_supported_agent_links() {
     let temp = TestTempDir::new("maestro-global-skills-test");
     let repo = temp.path().join("repo");
     let home = temp.path().join("home");
@@ -104,42 +104,36 @@ fn install_points_to_explicit_sync_which_creates_global_cache_lock_and_supported
     assert_success(&output);
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("installed maestro codex integration (repo only)"),
+        stdout.contains("installed maestro codex integration"),
         "{stdout}"
     );
-    assert!(stdout.contains("global skills not synced"), "{stdout}");
+    assert!(!stdout.contains("global skills not synced"), "{stdout}");
     assert!(
-        stdout.contains("next: maestro sync --global-skills"),
+        !stdout.contains("next: maestro sync --global-skills"),
         "{stdout}"
     );
     assert!(
-        !home.join(".maestro/skills/maestro-card/SKILL.md").exists(),
-        "install must not write global skill cache"
+        stdout.contains("global Maestro skills synced for all supported agents:"),
+        "{stdout}"
     );
-
-    let sync = maestro(&["sync", "--global-skills"], &repo, &home);
-    assert_success(&sync);
-    let sync_stdout = String::from_utf8_lossy(&sync.stdout);
-    assert!(
-        sync_stdout.contains("global Maestro skills synced for all supported agents:"),
-        "{sync_stdout}"
-    );
-    assert!(sync_stdout.contains(&format!(
+    assert!(stdout.contains(&format!(
         "cache: {}",
         home.join(".maestro/skills").display()
     )));
-    assert!(sync_stdout.contains(&format!(
+    assert!(stdout.contains(&format!(
         "codex root: {}",
         home.join(".agents/skills").display()
     )));
-    assert!(sync_stdout.contains(&format!(
+    assert!(stdout.contains(&format!(
         "claude root: {}",
         home.join(".claude/skills").display()
     )));
+    assert!(stdout.contains("~/.codex/skills skipped"), "{stdout}");
     assert!(
-        sync_stdout.contains("~/.codex/skills skipped"),
-        "{sync_stdout}"
+        stdout.contains("resynced global cache to binary versions:"),
+        "{stdout}"
     );
+    assert!(stdout.contains("maestro-card  (new)"), "{stdout}");
 
     assert_eq!(
         fs::read_to_string(home.join(".maestro/skills/maestro-card/SKILL.md"))
@@ -176,7 +170,7 @@ fn install_points_to_explicit_sync_which_creates_global_cache_lock_and_supported
 }
 
 #[test]
-fn install_leaves_global_collision_for_explicit_sync() {
+fn install_succeeds_with_a_warning_when_global_sync_hits_a_collision() {
     let temp = TestTempDir::new("maestro-global-skills-test");
     let repo = temp.path().join("repo");
     let home = temp.path().join("home");
@@ -193,17 +187,30 @@ fn install_leaves_global_collision_for_explicit_sync() {
     assert_success(&output);
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("installed maestro codex integration (repo only)"),
+        stdout.contains("installed maestro codex integration"),
         "{stdout}"
     );
     assert!(
-        stdout.contains("next: maestro sync --global-skills"),
+        stdout.contains("warning: global skill sync failed"),
+        "{stdout}"
+    );
+    assert!(stdout.contains("refusing global skill install"), "{stdout}");
+    assert!(
+        stdout.contains("rerun `maestro sync --global-skills`"),
         "{stdout}"
     );
     assert!(repo.join(".maestro/install-lock.yaml").exists());
     assert!(repo.join(".codex/config.toml").exists());
     assert!(repo.join(".codex/skills").is_symlink());
-    assert!(!home.join(".maestro/skills/maestro-card/SKILL.md").exists());
+    assert!(
+        !home.join(".maestro/skills/maestro-card/SKILL.md").exists(),
+        "failed global sync must not leave cache writes behind"
+    );
+    assert_eq!(
+        fs::read_to_string(home.join(".agents/skills/maestro-card"))
+            .expect("invariant: collision should survive install"),
+        "user skill\n"
+    );
 
     let sync = maestro(&["sync", "--global-skills"], &repo, &home);
 
@@ -263,6 +270,12 @@ fn update_check_does_not_mutate_global_skills_but_update_refreshes_existing_glob
     assert_success(&maestro(&["sync", "--global-skills"], &repo, &home));
     let global_task = home.join(".maestro/skills/maestro-card/SKILL.md");
     fs::remove_file(&global_task).expect("invariant: global skill should be removable");
+    let retired_dir = home.join(".maestro/skills/maestro-retired");
+    fs::create_dir_all(&retired_dir).expect("invariant: retired dir should be creatable");
+    fs::write(retired_dir.join("SKILL.md"), "retired\n")
+        .expect("invariant: retired skill should be writable");
+    std::os::unix::fs::symlink(&retired_dir, home.join(".agents/skills/maestro-retired"))
+        .expect("invariant: stale link should be creatable");
 
     let check = maestro(&["upgrade", "--check"], &repo, &home);
 
@@ -270,6 +283,10 @@ fn update_check_does_not_mutate_global_skills_but_update_refreshes_existing_glob
     assert!(
         !global_task.exists(),
         "update --check must not restore or mutate global skills"
+    );
+    assert!(
+        retired_dir.exists(),
+        "update --check must not prune retired skills"
     );
 
     let update = maestro(&["upgrade"], &repo, &home);
@@ -279,9 +296,22 @@ fn update_check_does_not_mutate_global_skills_but_update_refreshes_existing_glob
         fs::read_to_string(&global_task).expect("invariant: global task skill should be readable"),
         bundled_task_skill_md()
     );
+    let update_stdout = String::from_utf8_lossy(&update.stdout);
     assert!(
-        String::from_utf8_lossy(&update.stdout)
-            .contains("global Maestro skills synced for all supported agents:"),
-        "update should report the global refresh"
+        update_stdout.contains("global Maestro skills synced for all supported agents:"),
+        "update should report the global refresh\n{update_stdout}"
+    );
+    assert!(
+        update_stdout.contains("pruned 1 retired skill(s): maestro-retired"),
+        "{update_stdout}"
+    );
+    assert!(
+        update_stdout.contains("pruned 1 stale skill link(s)"),
+        "{update_stdout}"
+    );
+    assert!(!retired_dir.exists(), "upgrade should prune retired skills");
+    assert!(
+        fs::symlink_metadata(home.join(".agents/skills/maestro-retired")).is_err(),
+        "upgrade should prune stale links"
     );
 }
