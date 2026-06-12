@@ -100,7 +100,7 @@ pub fn run(args: FeatureArgs) -> Result<()> {
         FeatureCommand::Start { id } => {
             let report = feature::start(&paths, &id)?;
             print_note(report.note)?;
-            print_uncovered_acceptance_warning(&paths, &id)
+            print_uncovered_acceptance_warning(&paths, &id, CoverageFix::Locked)
         }
         FeatureCommand::Verify {
             id,
@@ -192,7 +192,7 @@ fn prepare_feature(
             } else {
                 println!("draft exists: {}", report.path.display());
             }
-            print_uncovered_acceptance_warning(paths, id)?;
+            print_uncovered_acceptance_warning(paths, id, CoverageFix::Plan)?;
             println!("review and run:");
             println!(
                 "  maestro feature prepare {id} --from {}",
@@ -235,7 +235,7 @@ fn prepare_feature(
                     report.feature_id
                 );
             }
-            print_uncovered_acceptance_warning(paths, id)?;
+            print_uncovered_acceptance_warning(paths, id, CoverageFix::Locked)?;
             Ok(())
         }
     }
@@ -1102,15 +1102,42 @@ fn print_acceptance(
     Ok(())
 }
 
-fn print_uncovered_acceptance_warning(paths: &MaestroPaths, id: &str) -> Result<()> {
+/// What can still close an uncovered acceptance item at this point: prepared
+/// tasks are accepted on creation, so `task set --covers` never works right
+/// after prepare/start; the fix is the plan file or new work, never a locked task.
+enum CoverageFix {
+    /// Tasks come from the plan file; coverage is authored as `covers:` lines.
+    Plan,
+    /// Existing tasks are acceptance-locked; cover with new work or evidence.
+    Locked,
+}
+
+fn print_uncovered_acceptance_warning(
+    paths: &MaestroPaths,
+    id: &str,
+    fix: CoverageFix,
+) -> Result<()> {
     let uncovered = feature::uncovered_acceptance(paths, id)?;
-    if !uncovered.is_empty() {
-        println!(
-            "warning: {} acceptance item(s) have no covering task: {}",
-            uncovered.len(),
-            uncovered.join(", ")
-        );
-        println!("fix: maestro task set <task-id> --covers <ac-id>");
+    if uncovered.is_empty() {
+        return Ok(());
+    }
+    println!(
+        "warning: {} acceptance item(s) have no covering task: {}",
+        uncovered.len(),
+        uncovered.join(", ")
+    );
+    match fix {
+        CoverageFix::Plan => {
+            println!(
+                "fix: add `covers: <ac-id>` to task lines in the plan before `prepare --from`"
+            );
+        }
+        CoverageFix::Locked => {
+            println!("fix: maestro task create \"<title>\" --feature {id} --covers <ac-id>");
+            println!(
+                "     or prove directly: maestro feature verify {id} --prove <ac-id> --evidence \"<proof>\""
+            );
+        }
     }
     Ok(())
 }

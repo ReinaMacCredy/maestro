@@ -298,7 +298,7 @@ fn feature_contract_display_warnings_waivers_and_stale_sweep() {
     assert!(draft.contains("warning: 2 acceptance item(s)"), "{draft}");
     assert!(draft.contains("ac-1, ac-3"), "{draft}");
     assert!(
-        draft.contains("maestro task set <task-id> --covers <ac-id>"),
+        draft.contains("add `covers: <ac-id>` to task lines in the plan"),
         "{draft}"
     );
 
@@ -308,6 +308,19 @@ fn feature_contract_display_warnings_waivers_and_stale_sweep() {
     );
     assert!(start.contains("warning: 2 acceptance item(s)"), "{start}");
     assert!(start.contains("ac-1, ac-3"), "{start}");
+    // Post-start the prepared tasks are acceptance-locked, so the fix must
+    // point at paths that still work, never `task set --covers`.
+    assert!(
+        start.contains(
+            "maestro task create \"<title>\" --feature coverage-display --covers <ac-id>"
+        ),
+        "{start}"
+    );
+    assert!(
+        start.contains("maestro feature verify coverage-display --prove <ac-id> --evidence"),
+        "{start}"
+    );
+    assert!(!start.contains("task set"), "{start}");
 
     verify_task_claim(temp_dir.path(), &impl_id, "second behavior works");
     let waive_args = [

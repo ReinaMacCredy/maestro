@@ -1156,6 +1156,37 @@ fn feature_prepare_builds_sequenced_queue_and_claim_next_shows_chain() {
         "{prepare}"
     );
 
+    // The plan declared no covers, and prepare accepts every task on creation,
+    // so the uncovered warning must never point at `task set --covers`; that
+    // verb is refused for every task prepare just made.
+    assert!(prepare.contains("have no covering task: ac-1"), "{prepare}");
+    assert!(
+        prepare.contains(
+            "maestro task create \"<title>\" --feature serverless-news-backend --covers <ac-id>"
+        ),
+        "{prepare}"
+    );
+    assert!(
+        prepare
+            .contains("maestro feature verify serverless-news-backend --prove <ac-id> --evidence"),
+        "{prepare}"
+    );
+    assert!(!prepare.contains("task set"), "{prepare}");
+
+    let covers_args = ["task", "set", t1.as_str(), "--covers", "ac-1"];
+    let locked = maestro(repo, &covers_args);
+    assert_failure(&locked, &covers_args);
+    let locked_stderr = stderr(&locked);
+    assert!(
+        locked_stderr.contains("covers links cannot be changed after accept"),
+        "{locked_stderr}"
+    );
+    assert!(
+        locked_stderr
+            .contains("maestro feature verify serverless-news-backend --prove <ac-id> --evidence"),
+        "{locked_stderr}"
+    );
+
     let task_002 = task_yaml(repo, &t2);
     assert_eq!(task_002["state"], YamlValue::String("ready".to_string()));
     assert_eq!(

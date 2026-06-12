@@ -507,8 +507,13 @@ pub fn set_covers(tasks_dir: &Path, id: &str, covers: Vec<String>) -> Result<(Ta
         );
     }
     if handle.task().acceptance_locked || handle.task().acceptance.locked_by.is_some() {
+        let feature = handle
+            .task()
+            .feature_id
+            .as_deref()
+            .unwrap_or("<feature-id>");
         bail!(
-            "task {} acceptance is locked; covers links cannot be changed after accept",
+            "task {} acceptance is locked; covers links cannot be changed after accept; cover the item with feature evidence instead: `maestro feature verify {feature} --prove <ac-id> --evidence \"<proof>\"`",
             handle.task().id
         );
     }
