@@ -458,6 +458,61 @@ mod tests {
         let _ = std::fs::remove_dir_all(paths.cards_dir());
     }
 
+    /// D6.6 passthrough: the typed save rebuilds `extra` from the record, so a
+    /// foreign key (a newer writer's field) and the top-level unknown bag must
+    /// be carried -- while a pack-known field the fold intentionally dropped
+    /// (the cleared `claims` list) must NOT resurrect from the old copy.
+    #[test]
+    fn typed_save_carries_foreign_payload_without_resurrecting_cleared_fields() {
+        let paths = card_mode_repo("carry-foreign");
+        let mut draft = parented_draft();
+        draft.claims = vec!["touched src/export.rs".to_string()];
+        create(&paths, &draft).expect("create the task card");
+
+        let resolved = card_store::resolve(&paths, "task-001")
+            .expect("resolve the card")
+            .expect("card exists");
+        let mut card = resolved.card.clone();
+        card.extra.insert(
+            serde_yaml::Value::String("future_extra".to_string()),
+            serde_yaml::Value::String("from-a-newer-maestro".to_string()),
+        );
+        card.unknown.insert(
+            serde_yaml::Value::String("future_top".to_string()),
+            serde_yaml::Value::String("kept".to_string()),
+        );
+        card_store::save_resolved(&card, &resolved).expect("seed the foreign fields");
+
+        let (mut record, resolved) = load_one(&paths, "task-001")
+            .expect("typed read")
+            .expect("card exists");
+        record.claims.clear();
+        save(&record, &resolved).expect("typed save");
+
+        let saved = card_store::resolve(&paths, "task-001")
+            .expect("reload the card")
+            .expect("card present")
+            .card;
+        let key = |name: &str| serde_yaml::Value::String(name.to_string());
+        assert_eq!(
+            saved.extra.get(key("future_extra")),
+            Some(&key("from-a-newer-maestro")),
+            "a foreign extra key survives the typed save"
+        );
+        assert_eq!(
+            saved.unknown.get(key("future_top")),
+            Some(&key("kept")),
+            "the top-level unknown bag survives the typed save"
+        );
+        assert!(
+            !saved.extra.contains_key(key("claims")),
+            "the cleared pack-known claims list must not resurrect: {:?}",
+            saved.extra
+        );
+
+        let _ = std::fs::remove_dir_all(paths.cards_dir());
+    }
+
     /// The fold derives a `blocks` dep from every open blocker that names an
     /// in-store ref; resolved blockers and ref-less External/Human blockers
     /// derive nothing. Without this, `ready` (which consults only `card.deps`)

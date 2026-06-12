@@ -1522,6 +1522,66 @@ fn task_verb_on_a_below_floor_payload_points_at_migrate_v2() {
     );
 }
 
+#[test]
+fn unknown_fields_survive_a_typed_verb_and_surface_in_doctor() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    // A current-version task card carrying two fields this binary does not
+    // declare: one top-level (`future_top`) and one inside the extra payload
+    // (`future_extra`). D6.6: a typed verb's save must round-trip both instead
+    // of silently dropping them, and `doctor` must name them.
+    let dir = repo.join(".maestro/cards/task-future");
+    fs::create_dir_all(&dir).expect("invariant: card dir should be creatable");
+    fs::write(
+        dir.join("card.yaml"),
+        concat!(
+            "schema_version: maestro.card.v1\n",
+            "id: task-future\n",
+            "type: task\n",
+            "title: Future payload\n",
+            "status: draft\n",
+            "created_at: \"1\"\n",
+            "updated_at: \"1\"\n",
+            "future_top: kept\n",
+            "extra:\n",
+            "  schema_version: maestro.task.v2\n",
+            "  state: draft\n",
+            "  acceptance_locked: false\n",
+            "  verification: {}\n",
+            "  future_extra: from-a-newer-maestro\n",
+        ),
+    )
+    .expect("invariant: card should be writable");
+
+    let doctor = maestro(repo, &["doctor"]);
+    assert_success(&doctor, &["doctor"]);
+    let report = stdout(&doctor);
+    assert!(
+        report.contains("future_top") && report.contains("extra.future_extra"),
+        "doctor must name the unknown fields: {report}"
+    );
+
+    assert_success(
+        &maestro(repo, &["task", "explore", "task-future"]),
+        &["task", "explore", "task-future"],
+    );
+    let saved = fs::read_to_string(dir.join("card.yaml"))
+        .expect("invariant: card should be readable after the verb");
+    assert!(
+        saved.contains("future_top: kept"),
+        "the unknown top-level key must survive the typed save: {saved}"
+    );
+    assert!(
+        saved.contains("future_extra: from-a-newer-maestro"),
+        "the unknown extra key must survive the typed save: {saved}"
+    );
+    assert!(
+        saved.contains("state: exploring"),
+        "the verb itself must have taken effect: {saved}"
+    );
+}
+
 /// Collapse aligned-table padding (runs of 2+ spaces) back to tabs so cell
 /// assertions stay width-independent.
 fn untabify(output: &str) -> String {

@@ -48,6 +48,7 @@ pub fn feature_card(id: String, source: Mapping, now: &str) -> Card {
                 "description",
             ],
         ),
+        unknown: Mapping::new(),
     }
 }
 
@@ -91,6 +92,7 @@ pub fn task_card(id: String, source: Mapping, parent: Option<String>, now: &str)
                 "claimed_at",
             ],
         ),
+        unknown: Mapping::new(),
     }
 }
 
@@ -127,6 +129,7 @@ pub fn decision_card(
             source,
             &["id", "title", "status", "feature", "context", "created_at"],
         ),
+        unknown: Mapping::new(),
     }
 }
 
@@ -156,6 +159,7 @@ pub fn idea_card(id: String, source: Mapping, now: &str) -> Card {
         description: None,
         id,
         extra: without_envelope_fields(source, &["id", "title", "status"]),
+        unknown: Mapping::new(),
     }
 }
 
@@ -220,6 +224,29 @@ pub(crate) fn ensure_supported_schema(extra: &Mapping, artifact: &str, family: &
         route,
     }
     .into())
+}
+
+/// The declared field set of the schema-pack family describing a card type's
+/// `extra` payload: the boundary between an intentionally-cleared known field
+/// and a foreign key D6.6 tolerance must carry. Bug/chore cards ride the task
+/// record like everywhere else (`domain/task/mod.rs` groups them with `Task`).
+pub(crate) fn payload_pack_fields(
+    card_type: CardType,
+) -> Option<std::collections::BTreeSet<&'static str>> {
+    let family = match card_type {
+        CardType::Feature => "feature",
+        CardType::Task | CardType::Bug | CardType::Chore => "task",
+        CardType::Idea => "backlog",
+        CardType::Decision => "decision",
+    };
+    let pack = pack(family)?;
+    Some(
+        pack.current
+            .contracts
+            .iter()
+            .flat_map(|contract| contract.fields.iter().map(String::as_str))
+            .collect(),
+    )
 }
 
 pub(crate) fn title_or_id(record: &Mapping, id: &str) -> String {

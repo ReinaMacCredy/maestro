@@ -60,6 +60,12 @@ pub struct Card {
     /// deserializing records. Empty for cards minted natively by the card model.
     #[serde(default, skip_serializing_if = "serde_yaml::Mapping::is_empty")]
     pub extra: serde_yaml::Mapping,
+    /// Catch-all for top-level keys this binary does not declare (D6.6
+    /// forward tolerance): a newer writer's field survives a load/save
+    /// round-trip here instead of being silently dropped. `doctor` surfaces
+    /// the keys; nothing else interprets them.
+    #[serde(flatten, skip_serializing_if = "serde_yaml::Mapping::is_empty")]
+    pub unknown: serde_yaml::Mapping,
 }
 
 impl Card {
@@ -80,6 +86,7 @@ impl Card {
             updated_at: now.to_string(),
             description: None,
             extra: serde_yaml::Mapping::new(),
+            unknown: serde_yaml::Mapping::new(),
         }
     }
 }

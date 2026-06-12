@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use anyhow::{Context, Result, bail};
 
+use crate::domain::card::fold;
 use crate::domain::card::schema::{Card, CardType};
 use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::fs::{
@@ -279,6 +280,32 @@ fn carry_card_only_fields(card: &mut Card, existing: &Card) {
     }
     if card.description.is_none() {
         card.description = existing.description.clone();
+    }
+    carry_unknown_payload(card, existing);
+}
+
+/// D6.6 passthrough at the typed-fold seam: a fold rebuilds the card from its
+/// record, so a top-level key or extra key this binary does not declare would
+/// be destroyed on save. The top-level `unknown` bag is carried whole (a fold
+/// never produces one); an extra key is carried only when it is OUTSIDE the
+/// family's pack field list -- a pack-known field absent from the fold output
+/// is an intentional clear (a released claim, an emptied list) and must not
+/// resurrect.
+fn carry_unknown_payload(card: &mut Card, existing: &Card) {
+    if card.unknown.is_empty() {
+        card.unknown = existing.unknown.clone();
+    }
+    if existing.extra.is_empty() {
+        return;
+    }
+    let Some(known) = fold::payload_pack_fields(card.card_type) else {
+        return;
+    };
+    for (key, value) in &existing.extra {
+        let foreign = key.as_str().is_none_or(|name| !known.contains(name));
+        if foreign && !card.extra.contains_key(key) {
+            card.extra.insert(key.clone(), value.clone());
+        }
     }
 }
 
@@ -830,6 +857,8 @@ mod tests {
                 "legacy_field: kept\nstate_history:\n  - draft\n  - ready\n",
             )
             .expect("invariant: fixture extra parses"),
+            unknown: serde_yaml::from_str("future_field: preserved\n")
+                .expect("invariant: fixture unknown bag parses"),
         }
     }
 

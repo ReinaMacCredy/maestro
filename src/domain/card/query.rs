@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
+use crate::domain::card::fold;
 use crate::domain::card::schema::{Card, CardType};
 use crate::domain::card::store::{
     CARD_FILE, DECISIONS_FILE, IDEAS_FILE, TASK_FILE, TASKS_DIR, is_dir_backed, is_symlink, load,
@@ -302,6 +303,43 @@ pub fn integrity_warnings(paths: &MaestroPaths, cards: &[(Card, PathBuf)]) -> Ve
 
     warnings.sort();
     warnings
+}
+
+/// Surface the fields D6.6 tolerance carries but nothing interprets: a card's
+/// top-level `unknown` bag and the extra keys outside its family's pack field
+/// list. Informational -- a newer writer's fields are preserved, not errors --
+/// but an agent hand-editing a typo'd key finds it here.
+pub fn unknown_field_warnings(paths: &MaestroPaths, cards: &[(Card, PathBuf)]) -> Vec<String> {
+    let repo_root = paths.repo_root();
+    let mut warnings = Vec::new();
+    for (card, path) in cards {
+        let mut foreign: Vec<String> = card.unknown.keys().map(render_yaml_key).collect();
+        if let Some(known) = fold::payload_pack_fields(card.card_type) {
+            foreign.extend(
+                card.extra
+                    .keys()
+                    .filter(|key| key.as_str().is_none_or(|name| !known.contains(name)))
+                    .map(|key| format!("extra.{}", render_yaml_key(key))),
+            );
+        }
+        if foreign.is_empty() {
+            continue;
+        }
+        foreign.sort();
+        warnings.push(format!(
+            "card {} ({}) carries fields this version does not know: {}; they are preserved on save, remove them only if they are typos",
+            card.id,
+            path.strip_prefix(repo_root).unwrap_or(path).display(),
+            foreign.join(", ")
+        ));
+    }
+    warnings.sort();
+    warnings
+}
+
+fn render_yaml_key(key: &serde_yaml::Value) -> String {
+    key.as_str()
+        .map_or_else(|| format!("{key:?}"), str::to_string)
 }
 
 /// The `ready` rule (SPEC E3/E8): a card is ready when it is a workable type,
