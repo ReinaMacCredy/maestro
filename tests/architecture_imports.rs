@@ -52,6 +52,10 @@ const RESOURCE_EMBED_ALLOWLIST: &[(&str, &[&str])] = &[
         &["embedded/hooks/record.sh"],
     ),
     ("src/domain/skills/catalog.rs", &["embedded/skills"]),
+    (
+        "src/domain/schema_contracts/catalog.rs",
+        &["embedded/schemas"],
+    ),
     ("src/interfaces/shell/mod.rs", &["embedded/shell/"]),
 ];
 
@@ -1219,6 +1223,7 @@ fn transitional_public_surfaces_match_phase_policy() {
             "install",
             "proof",
             "run",
+            "schema_contracts",
             "skills",
             "task",
         ],

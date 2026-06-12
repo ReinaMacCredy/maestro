@@ -8,5 +8,6 @@ pub mod harness;
 pub mod install;
 pub mod proof;
 pub mod run;
+pub mod schema_contracts;
 pub mod skills;
 pub mod task;
