@@ -30,7 +30,8 @@ pub fn run(args: TaskArgs) -> Result<()> {
             lane,
             risk,
             check,
-        } => create_task(&paths, &title, feature, covers, lane, risk, check),
+            id_only,
+        } => create_task(&paths, &title, feature, covers, lane, risk, check, id_only),
         TaskCommand::Set {
             id,
             check,
@@ -147,6 +148,7 @@ pub fn run(args: TaskArgs) -> Result<()> {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn create_task(
     paths: &MaestroPaths,
     title: &str,
@@ -155,6 +157,7 @@ fn create_task(
     lane: Option<String>,
     risk: Option<String>,
     checks: Vec<String>,
+    id_only: bool,
 ) -> Result<()> {
     if let Some(target) = feature.as_deref() {
         guard_feature_target(paths, target)?;
@@ -173,6 +176,10 @@ fn create_task(
         },
     )?;
 
+    if id_only {
+        println!("{}", task.id);
+        return Ok(());
+    }
     let checks = task::load_task_checks(&paths.tasks_dir(), &task)?;
     print_task_create_handoff(&task, &checks);
     Ok(())

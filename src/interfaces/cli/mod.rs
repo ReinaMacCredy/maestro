@@ -388,6 +388,8 @@ pub enum TaskCommand {
             help = "Feature acceptance id this task covers, e.g. ac-1 (repeatable)"
         )]
         covers: Vec<String>,
+        #[arg(long, help = "Print only the new card id on stdout")]
+        id_only: bool,
     },
     #[command(about = "Author task checks or change its feature link")]
     Set {
@@ -577,6 +579,8 @@ pub enum FeatureCommand {
         description: Option<String>,
         #[arg(long = "question", help = "Initial open question (repeatable)")]
         question: Vec<String>,
+        #[arg(long, help = "Print only the new card id on stdout")]
+        id_only: bool,
     },
     #[command(about = "Author a proposed feature's contract (replace or append fields)")]
     Set {
@@ -796,13 +800,44 @@ pub struct DecisionArgs {
 
 #[derive(Debug, Subcommand)]
 pub enum DecisionCommand {
-    #[command(about = "Open a structured decision fork (mints a decision card)")]
+    #[command(
+        about = "Open a structured decision fork (mints a decision card)",
+        after_help = "Examples:\n  maestro decision new \"Adopt X for Y\" --feature csv-export\n  maestro decision new \"Adopt X for Y\" --feature csv-export --lock --decision \"X\" --rejected \"Z: slower\"   # pre-decided fork, one call"
+    )]
     New {
         title: String,
         #[arg(long, help = "Why this fork exists")]
         context: Option<String>,
         #[arg(long, help = "Owning feature id; omit for a global decision")]
         feature: Option<String>,
+        #[arg(
+            long,
+            help = "Lock in the same call (requires --decision)",
+            requires = "decision"
+        )]
+        lock: bool,
+        #[arg(long, help = "Chosen decision text (with --lock)", requires = "lock")]
+        decision: Option<String>,
+        #[arg(
+            long = "rejected",
+            help = "Rejected option and reason (repeatable, with --lock)",
+            requires = "lock"
+        )]
+        rejected: Vec<String>,
+        #[arg(
+            long,
+            help = "Preview or concrete example (with --lock)",
+            requires = "lock"
+        )]
+        preview: Option<String>,
+        #[arg(
+            long = "supersedes",
+            help = "Decision id superseded by this lock (repeatable, with --lock)",
+            requires = "lock"
+        )]
+        supersedes: Vec<String>,
+        #[arg(long, help = "Print only the new card id on stdout")]
+        id_only: bool,
     },
     #[command(about = "Lock an open decision with the chosen answer")]
     Lock {
@@ -871,6 +906,9 @@ pub struct CreateArgs {
     /// Longer description stored on the card.
     #[arg(long, value_name = "TEXT")]
     pub description: Option<String>,
+    /// Print only the new card id on stdout.
+    #[arg(long)]
+    pub id_only: bool,
 }
 
 #[derive(Debug, Args)]

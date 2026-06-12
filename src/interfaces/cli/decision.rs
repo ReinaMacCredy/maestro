@@ -15,7 +15,38 @@ pub fn run(args: DecisionArgs) -> Result<()> {
             title,
             context,
             feature,
-        } => new_decision(&paths, &title, context.as_deref(), feature.as_deref()),
+            lock,
+            decision,
+            rejected,
+            preview,
+            supersedes,
+            id_only,
+        } => {
+            if lock {
+                let decision = decision.expect("clap invariant: --lock requires --decision");
+                new_locked_decision(
+                    &paths,
+                    &title,
+                    context.as_deref(),
+                    feature.as_deref(),
+                    decisions::LockInputs {
+                        decision: &decision,
+                        rejected: &rejected,
+                        preview: preview.as_deref(),
+                        supersedes: &supersedes,
+                    },
+                    id_only,
+                )
+            } else {
+                new_decision(
+                    &paths,
+                    &title,
+                    context.as_deref(),
+                    feature.as_deref(),
+                    id_only,
+                )
+            }
+        }
         DecisionCommand::Lock {
             id,
             decision,
@@ -40,14 +71,42 @@ fn new_decision(
     title: &str,
     context: Option<&str>,
     feature: Option<&str>,
+    id_only: bool,
 ) -> Result<()> {
     if title.trim().is_empty() {
         bail!("decision title cannot be empty; e.g. `maestro decision new \"Adopt X for Y\"`");
     }
     let report = decisions::create_open(paths, title, context, feature)?;
+    if id_only {
+        println!("{}", report.record.id);
+        return Ok(());
+    }
     println!("opened {} (status: open)", report.record.id);
     println!("store: {}", report.path.display());
     println!("{}", decisions::query::render_record(&report.record));
+    Ok(())
+}
+
+/// One-shot open+lock for a pre-decided fork. Unlike the standalone lock,
+/// `--rejected` stays optional: a fork the user already settled often has no
+/// enumerated alternatives worth recording.
+fn new_locked_decision(
+    paths: &MaestroPaths,
+    title: &str,
+    context: Option<&str>,
+    feature: Option<&str>,
+    inputs: decisions::LockInputs<'_>,
+    id_only: bool,
+) -> Result<()> {
+    if title.trim().is_empty() {
+        bail!("decision title cannot be empty; e.g. `maestro decision new \"Adopt X for Y\"`");
+    }
+    let report = decisions::create_locked(paths, title, context, feature, inputs)?;
+    if id_only {
+        println!("{}", report.record.id);
+        return Ok(());
+    }
+    print_lock_report(&report);
     Ok(())
 }
 
@@ -63,14 +122,18 @@ fn lock_decision(
         bail!("decision lock requires at least one --rejected \"<option: why>\"");
     }
     let report = decisions::lock(paths, id, decision, rejected, preview, supersedes)?;
+    print_lock_report(&report);
+    Ok(())
+}
+
+fn print_lock_report(report: &decisions::DecisionLockReport) {
     println!("locked {}", report.record.id);
     println!("store: {}", report.path.display());
     println!("{}", decisions::query::render_record(&report.record));
-    if let Some(line) = report.note_line {
+    if let Some(line) = &report.note_line {
         println!("note:");
         println!("  {line}");
     }
-    Ok(())
 }
 
 fn show_decision(paths: &MaestroPaths, id: &str) -> Result<()> {

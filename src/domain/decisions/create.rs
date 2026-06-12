@@ -94,6 +94,49 @@ fn open_record(
     }
 }
 
+/// Inputs for the lock half of a one-shot open+lock.
+#[derive(Clone, Copy, Debug)]
+pub struct LockInputs<'a> {
+    pub decision: &'a str,
+    pub rejected: &'a [String],
+    pub preview: Option<&'a str>,
+    pub supersedes: &'a [String],
+}
+
+/// One-shot open+lock for pre-decided forks. The lock inputs are validated
+/// before the card exists so a bad flag cannot strand a half-finished
+/// decision; a lock failure after the create (e.g. a missing supersede
+/// target) names the opened id and the finishing command.
+pub fn create_locked(
+    paths: &MaestroPaths,
+    title: &str,
+    context: Option<&str>,
+    feature: Option<&str>,
+    inputs: LockInputs<'_>,
+) -> Result<DecisionLockReport> {
+    if inputs.decision.trim().is_empty() {
+        bail!("--decision must not be empty");
+    }
+    if inputs.rejected.iter().any(|value| value.trim().is_empty()) {
+        bail!("--rejected values must not be empty");
+    }
+    let report = create_open(paths, title, context, feature)?;
+    let id = report.record.id;
+    lock_card(
+        paths,
+        &id,
+        inputs.decision,
+        inputs.rejected,
+        inputs.preview,
+        inputs.supersedes,
+    )
+    .with_context(|| {
+        format!(
+            "decision {id} was opened but the lock failed; finish with `maestro decision lock {id}`"
+        )
+    })
+}
+
 pub fn lock(
     paths: &MaestroPaths,
     id: &str,

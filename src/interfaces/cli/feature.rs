@@ -22,7 +22,8 @@ pub fn run(args: FeatureArgs) -> Result<()> {
             title,
             description,
             question,
-        } => new_feature(&paths, &title, description, question),
+            id_only,
+        } => new_feature(&paths, &title, description, question, id_only),
         FeatureCommand::Set {
             id,
             acceptance,
@@ -433,6 +434,7 @@ fn new_feature(
     title: &str,
     description: Option<String>,
     questions: Vec<String>,
+    id_only: bool,
 ) -> Result<()> {
     let id = feature::create(paths, title)?;
     let initialized = description.is_some() || !questions.is_empty();
@@ -446,6 +448,10 @@ fn new_feature(
                 ..Default::default()
             },
         )?;
+    }
+    if id_only {
+        println!("{id}");
+        return Ok(());
     }
     println!("created feature {id} (proposed)");
     println!("spec: .maestro/cards/{id}/spec.md");

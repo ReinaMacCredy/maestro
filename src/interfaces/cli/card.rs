@@ -239,7 +239,11 @@ pub fn create(args: CreateArgs) -> Result<()> {
     }
     new_card.description = args.description;
     card::store::create_card(&paths, &new_card)?;
-    println!("created {id} ({}): {}", card_type.as_str(), args.title);
+    if args.id_only {
+        println!("{id}");
+    } else {
+        println!("created {id} ({}): {}", card_type.as_str(), args.title);
+    }
     Ok(())
 }
 

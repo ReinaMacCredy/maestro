@@ -2716,3 +2716,176 @@ fn untabify(output: &str) -> String {
         .collect::<Vec<_>>()
         .join("\n")
 }
+
+#[test]
+fn decision_new_lock_creates_and_locks_in_one_call() {
+    let temp_dir = TestTempDir::new("maestro-decision-oneshot");
+    init_git_marker(temp_dir.path());
+    stdout(
+        maestro(&["init", "--yes"], temp_dir.path()),
+        &["init", "--yes"],
+    );
+    stdout(
+        maestro(&["feature", "new", "Csv Export"], temp_dir.path()),
+        &["feature", "new", "Csv Export"],
+    );
+
+    let args = [
+        "decision",
+        "new",
+        "Adopt X for Y",
+        "--feature",
+        "csv-export",
+        "--context",
+        "why this fork exists",
+        "--lock",
+        "--decision",
+        "X wins",
+        "--rejected",
+        "Z: slower",
+        "--preview",
+        "x --flag",
+    ];
+    let output = stdout(maestro(&args, temp_dir.path()), &args);
+
+    let decision_id = id_by_title(temp_dir.path(), "Adopt X for Y");
+    assert!(
+        output.contains(&format!("locked {decision_id}")),
+        "{output}"
+    );
+    assert!(output.contains("X wins"), "{output}");
+    assert!(output.contains("Z: slower"), "{output}");
+    assert!(output.contains("note:"), "{output}");
+    assert!(
+        output.contains(&format!("{decision_id} locked -- Adopt X for Y")),
+        "{output}"
+    );
+
+    let card = card_doc(temp_dir.path(), &decision_id);
+    assert_eq!(
+        card["status"],
+        YamlValue::String("locked".into()),
+        "{card:?}"
+    );
+}
+
+#[test]
+fn decision_new_lock_accepts_a_predecided_fork_without_rejected() {
+    let temp_dir = TestTempDir::new("maestro-decision-oneshot-norej");
+    init_git_marker(temp_dir.path());
+    stdout(
+        maestro(&["init", "--yes"], temp_dir.path()),
+        &["init", "--yes"],
+    );
+
+    let args = [
+        "decision",
+        "new",
+        "User already chose",
+        "--lock",
+        "--decision",
+        "the chosen way",
+    ];
+    let output = stdout(maestro(&args, temp_dir.path()), &args);
+
+    let decision_id = id_by_title(temp_dir.path(), "User already chose");
+    assert!(
+        output.contains(&format!("locked {decision_id}")),
+        "{output}"
+    );
+    let card = card_doc(temp_dir.path(), &decision_id);
+    assert_eq!(
+        card["status"],
+        YamlValue::String("locked".into()),
+        "{card:?}"
+    );
+}
+
+#[test]
+fn decision_new_lock_flag_pairing_is_enforced_before_any_write() {
+    let temp_dir = TestTempDir::new("maestro-decision-oneshot-pairing");
+    init_git_marker(temp_dir.path());
+    stdout(
+        maestro(&["init", "--yes"], temp_dir.path()),
+        &["init", "--yes"],
+    );
+
+    let lock_only = ["decision", "new", "Orphan Flag", "--lock"];
+    let stderr = assert_failure(maestro(&lock_only, temp_dir.path()), &lock_only);
+    assert!(stderr.contains("--decision"), "{stderr}");
+
+    let decision_only = ["decision", "new", "Orphan Flag", "--decision", "x"];
+    let stderr = assert_failure(maestro(&decision_only, temp_dir.path()), &decision_only);
+    assert!(stderr.contains("--lock"), "{stderr}");
+
+    let empty_decision = [
+        "decision",
+        "new",
+        "Strand Guard",
+        "--lock",
+        "--decision",
+        "",
+    ];
+    let stderr = assert_failure(maestro(&empty_decision, temp_dir.path()), &empty_decision);
+    assert!(stderr.contains("--decision must not be empty"), "{stderr}");
+
+    let list = stdout(
+        maestro(&["decision", "list"], temp_dir.path()),
+        &["decision", "list"],
+    );
+    assert!(
+        !list.contains("Orphan Flag") && !list.contains("Strand Guard"),
+        "rejected one-shots must not strand opened decisions: {list}"
+    );
+}
+
+#[test]
+fn decision_new_lock_failure_after_create_names_the_opened_id() {
+    let temp_dir = TestTempDir::new("maestro-decision-oneshot-recovery");
+    init_git_marker(temp_dir.path());
+    stdout(
+        maestro(&["init", "--yes"], temp_dir.path()),
+        &["init", "--yes"],
+    );
+
+    let args = [
+        "decision",
+        "new",
+        "Half Fork",
+        "--lock",
+        "--decision",
+        "x",
+        "--supersedes",
+        "dec-missing",
+    ];
+    let stderr = assert_failure(maestro(&args, temp_dir.path()), &args);
+
+    let decision_id = id_by_title(temp_dir.path(), "Half Fork");
+    assert!(
+        stderr.contains(&format!(
+            "decision {decision_id} was opened but the lock failed"
+        )),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains(&format!("maestro decision lock {decision_id}")),
+        "{stderr}"
+    );
+    let card = card_doc(temp_dir.path(), &decision_id);
+    assert_eq!(card["status"], YamlValue::String("open".into()), "{card:?}");
+
+    let finish = [
+        "decision",
+        "lock",
+        decision_id.as_str(),
+        "--decision",
+        "x",
+        "--rejected",
+        "y: because",
+    ];
+    let output = stdout(maestro(&finish, temp_dir.path()), &finish);
+    assert!(
+        output.contains(&format!("locked {decision_id}")),
+        "{output}"
+    );
+}
