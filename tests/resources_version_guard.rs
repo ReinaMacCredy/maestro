@@ -76,7 +76,7 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 16] = [
         "schema",
         "card",
         "maestro.card.v1",
-        "30cbb23cbaaab2b730f6295ffef33fb62bbb6612891845fd279fb6d8cca6f2f3",
+        "0d4e24fb3a74575dfa585be641c076ee6de50c3d3b12b7c24f655acd91e7aa14",
     ),
     (
         "schema",
@@ -124,7 +124,7 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 16] = [
         "schema",
         "task",
         "maestro.task.v2",
-        "e29507e145e82aeeda1d535b9d5b2cc13511611a952b82ccdb6a75997fd92913",
+        "f54c6a3bf2da78aeb855189ac1e79a59e003725845a43cacce0cf08d2d389cbc",
     ),
 ];
 

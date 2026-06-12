@@ -46,9 +46,9 @@ extra:
   verification:
     status: passed
     verified_at: 2026-06-12T00:20:00.000Z
-    verified_commit: 0000000000000000000000000000000000000000
+    verified_commit: '0000000000000000000000000000000000000000'
     verified_by_run: .maestro/runs/cli-2026-06-12/events.jsonl
-    contract_hash: 1111111111111111111111111111111111111111111111111111111111111111
+    contract_hash: '1111111111111111111111111111111111111111111111111111111111111111'
     claim_checks:
       - claim: every field round-trips into TaskRecord
         matched: true
@@ -60,6 +60,6 @@ extra:
     proof_sources:
       - kind: event
         path: .maestro/runs/cli-2026-06-12/events.jsonl
-        hash: 2222222222222222222222222222222222222222222222222222222222222222
+        hash: '2222222222222222222222222222222222222222222222222222222222222222'
   created_at: 2026-06-12T00:00:00.000Z
   updated_at: 2026-06-12T00:20:00.000Z
