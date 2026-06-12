@@ -21,6 +21,7 @@ fn maestro(args: &[&str], cwd: &Path) -> std::process::Output {
         .args(args)
         .current_dir(cwd)
         .env("HOME", cwd.join("home"))
+        .env("MAESTRO_INSTALL_METHOD", "local")
         .output()
         .expect("invariant: maestro binary should run")
 }
