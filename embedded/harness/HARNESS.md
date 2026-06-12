@@ -1,5 +1,5 @@
 ---
-version: 1.11.0
+version: 1.12.0
 ---
 
 # Maestro Harness Protocol
@@ -85,6 +85,7 @@ independent. The recipes live in the skills; this is the menu:
     taste-based design fork (naming, UX)     -> generate-and-filter  (maestro-design)
     unstructured backlog to triage           -> intake triage        (maestro-card)
     unknown amount of work                   -> loop until done      (maestro-card)
+    user away/asleep, backlog to work        -> unattended loop      (maestro-card)
 
 Results land through the verbs (task / decision / event), never only in conversation.
 Claude Code: author a Workflow script. Codex: parallel sub-agents directly (worktree

@@ -72,7 +72,7 @@ fn extract_bundled_skills_writes_each_skill_without_index() {
     }
     // maestro-card is the first shipped multi-file skill; its reference tree
     // extracts alongside SKILL.md.
-    for reference in ["work", "feature", "verify", "qa-baseline", "qa-slice"] {
+    for reference in ["work", "loop", "feature", "verify", "qa-baseline", "qa-slice"] {
         assert!(
             paths
                 .skills_dir()
@@ -175,7 +175,7 @@ fn thin_bundled_skills_include_operational_runbooks() {
         .find(|skill| skill.name == "maestro-card")
         .expect("invariant: maestro-card should be bundled");
     let router = card.skill_md();
-    assert!(router.contains("version: 1.2.0"));
+    assert!(router.contains("version: 1.4.0"));
     assert!(router.contains("reference/work.md"));
     assert!(router.contains("maestro ready"));
 

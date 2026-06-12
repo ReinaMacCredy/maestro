@@ -1,6 +1,6 @@
 ---
 name: maestro-card
-version: 1.2.0
+version: 1.4.0
 description: "Use for active Maestro card work: pick up and deliver work cards (claim, update, complete, verify), run the feature-card lifecycle (accept, prepare, amend, ship), and capture qa-baseline/qa-slice gate evidence."
 ---
 
@@ -23,6 +23,8 @@ Read the reference for the job at hand; they share the ground rules below.
   [reference/work.md](reference/work.md)
 - Implement a work card test-first (red-green-refactor):
   [reference/tdd.md](reference/tdd.md)
+- Work the backlog unattended while the user is away or asleep:
+  [reference/loop.md](reference/loop.md)
 - Author, accept, prepare, amend, ship, or archive a feature card:
   [reference/feature.md](reference/feature.md)
 - Prove a claim, repair failed proof, or verify adversarially:
@@ -44,6 +46,14 @@ Read the reference for the job at hand; they share the ground rules below.
   with it.
 - Do not hand-edit `card.yaml` or the verb-guarded sidecars (`qa.md`,
   state history). Use verbs so gates and audit trails stay intact.
+- Terminal words are per type — feature `shipped`/`cancelled`, work
+  `verified`/`rejected`/`abandoned`/`superseded`, decision
+  `locked`/`superseded`, loose task/bug/chore `closed` — and all of them read
+  as coarse `closed` on the board. `maestro close` fits only task/bug/chore;
+  when the user says "close" a feature, that means `feature ship` or
+  `feature cancel`. `maestro archive` moves an already-terminal feature's
+  records to `.maestro/archive/`; it is a location move, never an implied
+  side effect of closing — archive only on explicit user intent.
 - When the user corrects your behavior, record it:
   `maestro event intervention --note "<what was wrong>" [--topic <slug>]`.
 
