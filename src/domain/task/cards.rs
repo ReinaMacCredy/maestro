@@ -20,12 +20,11 @@ use crate::domain::card::store::{self as card_store, CardHome, ResolvedCard};
 use crate::domain::task::lookup;
 use crate::domain::task::template::{TaskRecord, TaskState};
 use crate::foundation::core::paths::MaestroPaths;
-use crate::foundation::core::schema::TASK_SCHEMA_VERSION;
 use crate::foundation::core::time::utc_now_timestamp;
 
 /// Reconstruct a [`TaskRecord`] from a task card's slim `extra` payload plus the
-/// envelope fields it omits, re-checking the task schema the same way the legacy
-/// read does, then recovering the path-derived `feature_id` from `card.parent`
+/// envelope fields it omits, gating the payload's schema version against the
+/// task schema pack, then recovering the path-derived `feature_id` from `card.parent`
 /// (the field is `#[serde(skip)]`, so it is never in the mapping).
 pub(crate) fn record_from_card(card: Card, artifact: String) -> Result<TaskRecord> {
     // A card minted natively by the card model (DN9 `maestro create`) carries no
@@ -57,8 +56,8 @@ pub(crate) fn record_from_card(card: Card, artifact: String) -> Result<TaskRecor
     fold::seed_optional_string_if_absent(&mut extra, "claimed_at", claimed_at.as_deref());
     fold::seed_string_if_absent(&mut extra, "created_at", &created_at);
     fold::seed_string_if_absent(&mut extra, "updated_at", &updated_at);
+    fold::ensure_supported_schema(&extra, &artifact, "task")?;
     let mut record: TaskRecord = fold::record_from_extra(extra, &artifact)?;
-    fold::ensure_exact_schema(&artifact, &record.schema_version, TASK_SCHEMA_VERSION)?;
     // Identity is the envelope's, never the payload's: a divergent `extra.id`
     // would route later saves and lookups at a different logical record.
     record.id = id;
@@ -361,6 +360,53 @@ mod tests {
         closed.status = "closed".to_string();
         let reconstructed = record_from_card(closed, "test".to_string()).expect("reconstruct");
         assert_eq!(reconstructed.state, TaskState::Verified);
+    }
+
+    /// A below-floor payload (`maestro.task.v1`) must refuse with the pack's
+    /// migrate route BEFORE the typed parse: the v1 shape misses required v2
+    /// fields, so a post-parse gate would die as a serde error instead.
+    #[test]
+    fn below_floor_payload_refuses_with_the_pack_migrate_route() {
+        let mut card = Card::new("task-001", CardType::Task, "Legacy task", "draft", "1");
+        card.extra.insert(
+            serde_yaml::Value::String("schema_version".to_string()),
+            serde_yaml::Value::String("maestro.task.v1".to_string()),
+        );
+
+        let error = record_from_card(card, "card task-001".to_string())
+            .expect_err("a v1 payload must refuse, not parse");
+        assert!(
+            format!("{error:#}").contains("schema mismatch"),
+            "{error:#}"
+        );
+        let hint = error
+            .downcast_ref::<crate::foundation::core::error::MaestroError>()
+            .and_then(|typed| typed.hint());
+        assert_eq!(hint.as_deref(), Some("run maestro migrate-v2"));
+    }
+
+    /// An undeclared payload version (neither current nor a named legacy one)
+    /// must refuse naming the read set, with the generic doctor hint.
+    #[test]
+    fn unknown_payload_version_refuses_naming_the_read_set() {
+        let mut card = Card::new("task-002", CardType::Task, "Foreign task", "draft", "1");
+        card.extra.insert(
+            serde_yaml::Value::String("schema_version".to_string()),
+            serde_yaml::Value::String("maestro.galaxy.v9".to_string()),
+        );
+
+        let error = record_from_card(card, "card task-002".to_string())
+            .expect_err("an unknown payload version must refuse");
+        let rendered = format!("{error:#}");
+        assert!(rendered.contains("schema mismatch"), "{rendered}");
+        assert!(
+            rendered.contains("this binary reads maestro.task.v2"),
+            "{rendered}"
+        );
+        let hint = error
+            .downcast_ref::<crate::foundation::core::error::MaestroError>()
+            .and_then(|typed| typed.hint());
+        assert_eq!(hint.as_deref(), Some("run maestro doctor"));
     }
 
     /// A typed save must not destroy the card-only fields -- dep edges

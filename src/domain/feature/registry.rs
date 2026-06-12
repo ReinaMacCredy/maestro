@@ -1554,8 +1554,8 @@ fn record_from_card(card: Card, artifact: String) -> Result<FeatureRecord> {
     fold::seed_optional_string_if_absent(&mut extra, "description", description.as_deref());
     fold::seed_string_if_absent(&mut extra, "created_at", &created_at);
     fold::seed_string_if_absent(&mut extra, "updated_at", &updated_at);
+    fold::ensure_supported_schema(&extra, &artifact, "feature")?;
     let mut record: FeatureRecord = fold::record_from_extra(extra, &artifact)?;
-    fold::ensure_exact_schema(&artifact, &record.schema_version, FEATURE_SCHEMA_VERSION)?;
     // The card verbs (`update`) write only the top-level copy fields, so they
     // are the freshest source for what they own (SPEC DN3: the card status is
     // the single source of truth). The overlay is conservative: an unrecognized

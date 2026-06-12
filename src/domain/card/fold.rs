@@ -12,8 +12,9 @@ use serde::de::DeserializeOwned;
 use serde_yaml::{Mapping, Value};
 
 use crate::domain::card::schema::{Card, CardType, Dep, DepKind};
+use crate::domain::schema_contracts::{VersionClass, pack};
 use crate::foundation::core::error::MaestroError;
-use crate::foundation::core::schema::{CARD_SCHEMA_VERSION, Compat, classify};
+use crate::foundation::core::schema::CARD_SCHEMA_VERSION;
 
 /// Build a feature card. A feature is a container, so `parent` is always `None`.
 pub fn feature_card(id: String, source: Mapping, now: &str) -> Card {
@@ -196,18 +197,27 @@ where
     }
 }
 
-pub(crate) fn ensure_exact_schema(
-    artifact: &str,
-    found: &str,
-    expected: &'static str,
-) -> Result<()> {
-    if classify(found, expected) == Compat::Exact {
+/// Gate a card payload's raw `schema_version` against its family's schema
+/// pack BEFORE the typed parse: a below-floor payload must refuse with the
+/// pack's migrate route, not die as a serde error on a missing v2 field. An
+/// absent or non-string stamp falls through so serde keeps today's parse
+/// error.
+pub(crate) fn ensure_supported_schema(extra: &Mapping, artifact: &str, family: &str) -> Result<()> {
+    let Some(found) = string_field(extra, "schema_version") else {
         return Ok(());
-    }
-    Err(MaestroError::SchemaMismatch {
+    };
+    let pack = pack(family)
+        .unwrap_or_else(|| panic!("invariant: schema pack {family} ships with the binary"));
+    let route = match pack.classify(&found) {
+        VersionClass::Supported => return Ok(()),
+        VersionClass::Legacy { route } => Some(route.to_string()),
+        VersionClass::Unknown => None,
+    };
+    Err(MaestroError::UnsupportedSchemaVersion {
         artifact: artifact.to_string(),
-        expected,
-        found: found.to_string(),
+        found,
+        read: pack.supported.read.join(", "),
+        route,
     }
     .into())
 }

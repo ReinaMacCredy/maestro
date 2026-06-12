@@ -25,6 +25,22 @@ pub enum MaestroError {
         found: String,
     },
 
+    /// An artifact schema version is outside this binary's declared read set
+    /// (its family's schema pack). A named legacy version carries the pack's
+    /// explicit migrate route; an undeclared version carries none.
+    #[error("schema mismatch for {artifact}: found {found}, this binary reads {read}")]
+    UnsupportedSchemaVersion {
+        /// Human-readable artifact name or path.
+        artifact: String,
+        /// Actual schema version found on disk.
+        found: String,
+        /// The family's declared read set, rendered for display.
+        read: String,
+        /// Bare migrate command from the pack's legacy route, if the version
+        /// is a named legacy one.
+        route: Option<String>,
+    },
+
     /// An operation would write outside the discovered repository root.
     #[error("operation would write outside repository root: {path}")]
     OutsideRepository {
@@ -79,6 +95,10 @@ impl MaestroError {
                 Some("run maestro migrate-v2".to_string())
             }
             Self::SchemaMismatch { .. } => Some("run maestro doctor".to_string()),
+            Self::UnsupportedSchemaVersion { route, .. } => Some(match route {
+                Some(route) => format!("run {route}"),
+                None => "run maestro doctor".to_string(),
+            }),
             Self::OutsideRepository { .. }
             | Self::BackupPathContainsSymlink { .. }
             | Self::ManagedPathContainsSymlink { .. }

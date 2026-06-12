@@ -1478,6 +1478,50 @@ fn task_archive_and_unarchive_redirect_to_the_feature_cascade() {
     }
 }
 
+#[test]
+fn task_verb_on_a_below_floor_payload_points_at_migrate_v2() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    // A valid card envelope whose folded `extra` carries the legacy
+    // `maestro.task.v1` stamp AND a v1 shape (no `acceptance_locked` /
+    // `verification`, which v2 requires). The schema gate must classify the
+    // stamp BEFORE the typed parse: the agent gets the explicit migrate route
+    // from the task schema pack, never a raw YAML parse error.
+    let dir = repo.join(".maestro/cards/task-legacy");
+    fs::create_dir_all(&dir).expect("invariant: legacy card dir should be creatable");
+    fs::write(
+        dir.join("card.yaml"),
+        concat!(
+            "schema_version: maestro.card.v1\n",
+            "id: task-legacy\n",
+            "type: task\n",
+            "title: Legacy payload\n",
+            "status: ready\n",
+            "created_at: \"1\"\n",
+            "updated_at: \"1\"\n",
+            "extra:\n",
+            "  schema_version: maestro.task.v1\n",
+            "  slug: legacy-payload\n",
+        ),
+    )
+    .expect("invariant: legacy card should be writable");
+
+    let explore = maestro(repo, &["task", "explore", "task-legacy"]);
+    assert_failure(&explore, &["task", "explore", "task-legacy"]);
+    let message = stderr(&explore);
+    assert!(message.contains("schema mismatch"), "{message}");
+    assert!(message.contains("maestro.task.v1"), "{message}");
+    assert!(
+        message.contains("fix: run maestro migrate-v2"),
+        "the refusal must carry the pack's migrate route: {message}"
+    );
+    assert!(
+        !message.contains("failed to parse"),
+        "the gate must fire before the typed parse: {message}"
+    );
+}
+
 /// Collapse aligned-table padding (runs of 2+ spaces) back to tabs so cell
 /// assertions stay width-independent.
 fn untabify(output: &str) -> String {
