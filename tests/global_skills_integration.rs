@@ -14,6 +14,7 @@ fn maestro(args: &[&str], cwd: &Path, home: &Path) -> std::process::Output {
         .args(args)
         .current_dir(cwd)
         .env("HOME", home)
+        .env("MAESTRO_INSTALL_METHOD", "local")
         .output()
         .expect("invariant: compiled maestro binary should be runnable in global skill tests")
 }
