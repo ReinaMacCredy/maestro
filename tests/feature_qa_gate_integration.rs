@@ -345,6 +345,15 @@ fn qa_none_accept_skips_gates_until_a_behavioral_amend_requires_a_fresh_declarat
         shipped.contains("qa: none (still config-only after amend review)"),
         "{shipped}"
     );
+    assert!(
+        shipped.contains("retro: anything to make a permanent rule?"),
+        "{shipped}"
+    );
+    assert!(
+        shipped
+            .contains("record it: maestro harness propose --title \"<rule>\" --evidence \"<why>\""),
+        "{shipped}"
+    );
 }
 
 #[test]

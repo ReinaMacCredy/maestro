@@ -661,6 +661,8 @@ fn ship_feature(
         }
         println!("inspect: maestro feature show {}", report.id);
         println!("next: maestro archive {}", report.id);
+        println!("retro: anything to make a permanent rule?");
+        println!("  record it: maestro harness propose --title \"<rule>\" --evidence \"<why>\"");
     } else {
         println!("inspect: maestro feature show {}", report.id);
         println!("next: maestro status");
