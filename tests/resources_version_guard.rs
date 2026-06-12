@@ -189,6 +189,10 @@ fn shipped_resource_trees_and_versions_match_the_recorded_guard() {
                 let files: Vec<(&str, &[u8])> = skill
                     .files
                     .iter()
+                    // The generated reference/cli.md regenerates on any CLI
+                    // change and has its own freshness gate; hashing it here
+                    // would force a version bump for every flag edit.
+                    .filter(|file| file.relative_path != "reference/cli.md")
                     .map(|file| (file.relative_path, file.contents))
                     .collect();
                 (

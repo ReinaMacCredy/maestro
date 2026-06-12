@@ -72,7 +72,14 @@ fn extract_bundled_skills_writes_each_skill_without_index() {
     }
     // maestro-card is the first shipped multi-file skill; its reference tree
     // extracts alongside SKILL.md.
-    for reference in ["work", "loop", "feature", "verify", "qa-baseline", "qa-slice"] {
+    for reference in [
+        "work",
+        "loop",
+        "feature",
+        "verify",
+        "qa-baseline",
+        "qa-slice",
+    ] {
         assert!(
             paths
                 .skills_dir()
@@ -417,7 +424,9 @@ fn extract_skills_update_refreshes_and_backs_up_when_version_differs() {
         shipped.skill_md(),
         "a differing version must refresh to the shipped contents"
     );
-    assert_eq!(report.backups.len(), 1);
+    // SKILL.md plus the generated reference/cli.md: a refresh backs up every
+    // installed tree file.
+    assert_eq!(report.backups.len(), 2);
     let backup = paths
         .backups_dir()
         .join(format!("{backup_timestamp}-update"))
@@ -507,7 +516,9 @@ fn extract_skills_update_refreshes_a_pre_version_install() {
         shipped.skill_md(),
         "a missing installed version must refresh to the shipped contents"
     );
-    assert_eq!(report.backups.len(), 1);
+    // SKILL.md plus the generated reference/cli.md: a refresh backs up every
+    // installed tree file.
+    assert_eq!(report.backups.len(), 2);
 }
 
 const SYNTHETIC_SKILL_MD: &[u8] =

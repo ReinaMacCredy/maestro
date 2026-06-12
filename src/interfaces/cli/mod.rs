@@ -19,6 +19,7 @@ pub mod install;
 pub mod mcp;
 pub mod migrate;
 pub mod query;
+pub mod reference;
 pub mod resume;
 pub mod shell_init;
 pub mod status;
