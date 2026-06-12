@@ -79,6 +79,8 @@ site to be reviewed by the compiler.
   .maestro/cards/<feature>/{spec.md,notes.md,qa.md}     # feature prose + QA
   .maestro/cards/<feature>/tasks/<task>/task.yaml       # task/bug/chore cards
   .maestro/cards/<feature>/decisions.yaml               # decision entries
+  .maestro/cards/tasks/<task>/task.yaml                 # parentless task/bug/chore cards
+  .maestro/cards/decisions.yaml                         # parentless decision entries
   .maestro/cards/ideas.yaml                             # harness idea entries
   .maestro/harness/harness.yml                          # config only
   .maestro/archive/cards/

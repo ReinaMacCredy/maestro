@@ -26,9 +26,10 @@ pub fn cards_repo(name: &str) -> TestTempDir {
     temp
 }
 
-/// Recover a freshly created card's content-hash id by its unique title --
-/// content-hash ids do not sort by creation order, so a test that creates a card
-/// then drives later verbs against it looks the id up by the title it chose.
+/// Recover a freshly created card's minted id by its unique title -- typed slug
+/// ids (`<type>-<slug>-<hex4>`) end in a nonce-hashed tail that does not sort
+/// by creation order, so a test that creates a card then drives later verbs
+/// against it looks the id up by the title it chose.
 pub fn id_by_title(repo: &Path, title: &str) -> String {
     let paths = MaestroPaths::new(repo);
     query::scan(&paths)

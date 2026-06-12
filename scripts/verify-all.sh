@@ -310,6 +310,8 @@ green-query-backlog
 green-task-doctor
 green-feature-archive
 green-feature-unarchive
+green-task-archive-retired
+green-task-unarchive-retired
 green-uninstall-codex
 green-uninstall-claude
 harness-init
@@ -539,6 +541,11 @@ run_greenfield_workflow() {
   contains green-feature-archive "restore: maestro feature unarchive greenfield-export"
   run_in green-feature-unarchive "$work" 0 "$BIN" feature unarchive greenfield-export
   contains green-feature-unarchive "restore receipt:"
+  run_in green-task-archive-retired "$work" fail "$BIN" task archive "$green_task_id"
+  contains green-task-archive-retired "per-task archive removed"
+  contains green-task-archive-retired "archive a feature and its tasks: maestro archive <feature>"
+  run_in green-task-unarchive-retired "$work" fail "$BIN" task unarchive "$green_task_id"
+  contains green-task-unarchive-retired "per-task archive removed"
   run_in green-uninstall-codex "$work" 0 "$BIN" uninstall --agent codex
   run_in green-uninstall-claude "$work" 0 "$BIN" uninstall --agent claude
 }
