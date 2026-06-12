@@ -208,23 +208,27 @@
   id: card-942982
   type: idea
   title: Guard concurrent Maestro file writes
-  status: proposed
+  status: dismissed
   created_at: 2026-06-07T20:03:31.038Z
   updated_at: 2026-06-07T20:03:31.038Z
   extra:
-    evidence:
-    - 'cli-2026-06-07: SPEC-maestro-ux-backlog.md §hb-011 implemented by c0a48988; atomic ID reservations, snapshot store saves, append-safe notes, retryable stale/write-busy errors, and apply rollback verified in VERIFY-maestro-ux-backlog.md V9.'
+    history:
+    - result: dismissed
+      at: 2026-06-12T10:32:06.934Z
     fingerprint: agent_audit:concurrent-writer-safety
     source: cli-2026-06-07
     provenance: agent-audit
     topic: concurrent-writer-safety
     type: agent_audit
-    last_seen: 2026-06-07T20:03:31.038Z
+    dismissal_reason: Already addressed and branch gaps closed by fb59f7b8; no new task needed.
     priority: medium
     occurrences: 1
     sessions_hit:
     - cli-2026-06-07
     first_seen: 2026-06-07T20:03:31.038Z
+    last_seen: 2026-06-07T20:03:31.038Z
+    evidence:
+    - 'cli-2026-06-07: SPEC-maestro-ux-backlog.md §hb-011 implemented by c0a48988; atomic ID reservations, snapshot store saves, append-safe notes, retryable stale/write-busy errors, and apply rollback verified in VERIFY-maestro-ux-backlog.md V9.'
 - schema_version: maestro.card.v1
   id: card-ab7ad6
   type: idea
@@ -323,27 +327,6 @@
     - 'cli-2026-06-07: session 2026-06-07: closing 7 retro records took 47 separate feature verify calls because --prove/--evidence accept exactly one ac per invocation; reduce-maestro-artifact-surface alone was 11 round trips. Repeatable --prove ac-N --evidence <e> pairs (clap requires equal counts) would collapse each closure to one call'
     - 'rollback-hb002: rollback re-propose 2026-06-07: hb-002 was applied before the user ruled; re-proposing the topic so measure reverts the item to proposed; design walk ruling still pending'
 - schema_version: maestro.card.v1
-  id: idea-dependency-hygiene-policy-for-third-780c
-  type: idea
-  title: Dependency hygiene policy for third-party crates
-  status: proposed
-  created_at: 2026-06-11T20:02:45.238Z
-  updated_at: 2026-06-11T20:02:45.238Z
-  extra:
-    evidence:
-    - 'cli-2026-06-11: 2026-06-12 roadmap gap review: the maintainability roadmap (D12 walk) found no policy anywhere for third-party crate growth, version updates, or audit cadence. Routed to backlog per D10 owner-first rule: no workstream owns dependency hygiene.'
-    fingerprint: agent_audit:dependency-hygiene
-    source: cli-2026-06-11
-    provenance: agent-audit
-    topic: dependency-hygiene
-    type: agent_audit
-    last_seen: 2026-06-11T20:02:45.238Z
-    priority: medium
-    occurrences: 1
-    sessions_hit:
-    - cli-2026-06-11
-    first_seen: 2026-06-11T20:02:45.238Z
-- schema_version: maestro.card.v1
   id: idea-cli-verb-governance-when-a-new-command-0f06
   type: idea
   title: 'CLI verb governance: when a new command is justified and how one retires'
@@ -364,3 +347,24 @@
     sessions_hit:
     - cli-2026-06-11
     first_seen: 2026-06-11T20:02:45.273Z
+- schema_version: maestro.card.v1
+  id: idea-dependency-hygiene-policy-for-third-780c
+  type: idea
+  title: Dependency hygiene policy for third-party crates
+  status: proposed
+  created_at: 2026-06-11T20:02:45.238Z
+  updated_at: 2026-06-11T20:02:45.238Z
+  extra:
+    evidence:
+    - 'cli-2026-06-11: 2026-06-12 roadmap gap review: the maintainability roadmap (D12 walk) found no policy anywhere for third-party crate growth, version updates, or audit cadence. Routed to backlog per D10 owner-first rule: no workstream owns dependency hygiene.'
+    fingerprint: agent_audit:dependency-hygiene
+    source: cli-2026-06-11
+    provenance: agent-audit
+    topic: dependency-hygiene
+    type: agent_audit
+    last_seen: 2026-06-11T20:02:45.238Z
+    priority: medium
+    occurrences: 1
+    sessions_hit:
+    - cli-2026-06-11
+    first_seen: 2026-06-11T20:02:45.238Z
