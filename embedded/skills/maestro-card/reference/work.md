@@ -37,6 +37,11 @@ work; extend the vocabulary only by team convention. Existing states still own
 workflow meaning: exploring is a task state, brainstorm/design work belongs in
 a feature card or SPEC, and planning usually happens before `feature prepare`.
 
+Implement-lane cards whose `--check` names observable behavior are worked
+test-first per [tdd.md](tdd.md): one failing test, minimal code to green,
+repeat, then refactor. Skip for explore/spike or non-testable work and say
+why in a `maestro note`.
+
 ## Evidence Gate
 
 `complete --proof` records proof text and auto-runs verification. Verification
