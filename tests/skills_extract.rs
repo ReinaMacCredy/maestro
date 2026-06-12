@@ -182,7 +182,7 @@ fn thin_bundled_skills_include_operational_runbooks() {
         .find(|skill| skill.name == "maestro-card")
         .expect("invariant: maestro-card should be bundled");
     let router = card.skill_md();
-    assert!(router.contains("version: 1.4.0"));
+    assert!(router.contains("version: 1.5.0"));
     assert!(router.contains("reference/work.md"));
     assert!(router.contains("maestro ready"));
 
@@ -203,9 +203,9 @@ fn thin_bundled_skills_include_operational_runbooks() {
     assert!(verify.contains("qa-slice"));
 
     let feature = reference("reference/feature.md");
-    assert!(feature.contains("Use append flags while proposed"));
+    assert!(feature.contains("spellings append to an existing list"));
     assert!(feature.contains("feature spec <id>"));
-    assert!(feature.contains("feature prepare <id> --from <plan-file>"));
+    assert!(feature.contains("maestro feature prepare --from"));
     assert!(feature.contains("--add-acceptance"));
 }
 

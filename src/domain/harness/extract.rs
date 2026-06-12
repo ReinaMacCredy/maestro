@@ -131,6 +131,6 @@ mod tests {
 
     #[test]
     fn bundled_harness_declares_a_frontmatter_version() {
-        assert_eq!(frontmatter_version(HARNESS_MD).as_deref(), Some("1.12.0"));
+        assert_eq!(frontmatter_version(HARNESS_MD).as_deref(), Some("1.13.0"));
     }
 }

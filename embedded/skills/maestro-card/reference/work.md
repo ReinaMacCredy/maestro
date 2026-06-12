@@ -5,7 +5,7 @@ implementation; a feature card is the product contract it may deliver against.
 
 ## Use
 
-- Find work: `maestro ready [<feature>]`, `maestro list --parent <feature>`.
+- Find work: `maestro ready`, `maestro list --parent <feature>`.
 - Create or prepare work: `task create`, `task explore`, `task accept`.
 - Pick up work: `task claim --next` (sequenced queue with dependency context)
   or `maestro claim <id>` (any ready card).
@@ -19,14 +19,16 @@ implementation; a feature card is the product contract it may deliver against.
 
 ## Do
 
+The loop, in order (signatures: [cli.md](cli.md)):
+
 ```sh
-maestro task create "<title>" [--feature F --lane L --risk R --check "<observable result>"]
-maestro task explore <id>
-maestro task accept <id>                 # locks acceptance, except tiny lane may skip
-maestro task claim --next                # prints feature and dependency context
-maestro task update <id> --summary "<note>" --claim "<evidence claim>"
-maestro task complete <id> --summary "<what changed>" --claim "<claim>" --proof "<observed evidence>"
-maestro task verify <id>
+maestro task create        # mint the card; seed --check with the observable result
+maestro task explore
+maestro task accept        # locks acceptance, except tiny lane may skip
+maestro task claim --next  # prints feature and dependency context
+maestro task update        # record progress: summary and/or evidence claim
+maestro task complete      # summary + claim + proof; auto-verifies
+maestro task verify
 ```
 
 `verify` and `show` can omit `<id>` when `MAESTRO_CURRENT_TASK` is set.
@@ -70,14 +72,14 @@ add manual evidence after the default proof path is insufficient.
 ## Blockers And Terminal Verbs
 
 ```sh
-maestro dep add <child> <blocker>        # child waits on blocker (card edge)
-maestro task block <id> --reason "<why>" [--by <card id|external>]
-maestro task unblock <id> --blocker blk-NN
-maestro task reject <id> --reason "<why>"
-maestro task abandon <id> --reason "<why>"
-maestro task supersede <id> --by <ref> --reason "<why>"
+maestro dep add <child> <blocker>   # child waits on blocker (card edge)
+maestro task block                  # --reason why; --by names the blocking card
+maestro task unblock                # pass the blocker's own blk- id, not the target
+maestro task reject                 # terminal; --reason required
+maestro task abandon                # terminal; --reason required
+maestro task supersede              # terminal; --by names the replacement
 maestro task doctor
-maestro task watch [<id>] [--interval N]
+maestro task watch
 ```
 
 Open blockers stop both `claim` and `complete`. `reject`, `abandon`, and
@@ -107,11 +109,11 @@ When Maestro surfaces recurring friction, act before unrelated work unless the
 proposal is noise.
 
 ```sh
-maestro harness list [--all]
+maestro harness list
 maestro harness show <id>
-maestro harness apply <id>                 # spawns an accepted standalone task
-maestro harness measure <id>               # requires linked task verified
-maestro harness dismiss <id> --reason "<why>"
+maestro harness apply <id>      # spawns an accepted standalone task
+maestro harness measure <id>    # requires linked task verified
+maestro harness dismiss <id>    # --reason required
 ```
 
 If measurement still finds friction, the proposal reopens; if a measured

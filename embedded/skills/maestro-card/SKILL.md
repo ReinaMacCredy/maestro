@@ -1,6 +1,6 @@
 ---
 name: maestro-card
-version: 1.4.0
+version: 1.5.0
 description: "Use for active Maestro card work: pick up and deliver work cards (claim, update, complete, verify), run the feature-card lifecycle (accept, prepare, amend, ship), and capture qa-baseline/qa-slice gate evidence."
 ---
 
@@ -36,14 +36,18 @@ Read the reference for the job at hand; they share the ground rules below.
 
 ## Shared Ground
 
-- Discover work with the flat card verbs: `maestro ready [<feature>]`,
-  `maestro list --parent <feature> [--type T --assignee A --status S]`,
-  `maestro show <id>`.
-- Take and annotate work with `maestro claim <id>`, `maestro note <id>
-  "<text>"`, and `maestro dep add <child> <blocker>`.
+- Exact command signatures live in [reference/cli.md](reference/cli.md),
+  generated from the binary. A verb or flag not listed there does not exist;
+  read it instead of probing `--help`.
+- Discover work with the flat card verbs: `maestro ready`, `maestro list`,
+  `maestro show`. Take and annotate work with `maestro claim`,
+  `maestro note`, and `maestro dep add`.
 - Ids are stable and opaque (`card-<hash>`; features keep their creation
   slug). The dotted alias `show` prints is display-only; never address a card
   with it.
+- Never chain a guessed id: use only ids read from verb output (`create
+  --id-only`, `ready`, `list`, `show`). When a lookup misses, re-list and
+  read the real id; do not retry spelling variations.
 - Do not hand-edit `card.yaml` or the verb-guarded sidecars (`qa.md`,
   state history). Use verbs so gates and audit trails stay intact.
 - Terminal words are per type — feature `shipped`/`cancelled`, work

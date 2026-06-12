@@ -13,24 +13,21 @@ the QA baseline and slice evidence in `qa.md` prove the feature gates.
 
 ## Do
 
+The lifecycle, in order (signatures: [cli.md](cli.md)):
+
 ```sh
-maestro feature new "<title>" --description "<d>"     # -> proposed
-maestro feature set <id> --acceptance "<check>" --area "<surface>"
-maestro feature accept <id>                           # -> ready, requires qa-baseline
-maestro feature prepare <id> --draft                  # reviewable child-task plan
-maestro feature prepare <id> --from <plan-file>       # create/explore/accept tasks
-maestro feature ship <id> --outcome "<one line>"      # -> shipped, requires qa-slice
-maestro archive <id>                                  # terminal features only; archives children too
+maestro feature new               # -> proposed
+maestro feature set               # author acceptance and affected areas
+maestro feature accept            # -> ready, requires qa-baseline
+maestro feature prepare --draft   # reviewable child-task plan
+maestro feature prepare --from    # create/explore/accept tasks from a plan file
+maestro feature ship              # -> shipped, requires qa-slice; --outcome required
+maestro archive <id>              # terminal features only; archives children too
 ```
 
-`set` works only while `proposed`. Repeated base fields replace their full
-list:
-`--acceptance`, `--area`, `--non-goal`, `--question`, `--clear-questions`,
-`--description`, `--request`, `--type`.
-
-Use append flags while proposed when adding to an existing list without
-resending it: `--add-acceptance`, `--add-area`, `--add-non-goal`,
-`--add-question`. After accept, use `feature amend`.
+`set` works only while `proposed`. Repeating a base field replaces its full
+list; the `--add-*` spellings append to an existing list without resending
+it. After accept, use `feature amend`.
 
 Use `feature show <id>` for the everyday lifecycle summary. Use
 `feature spec <id>` when the agent needs the narrative spec, open decisions,

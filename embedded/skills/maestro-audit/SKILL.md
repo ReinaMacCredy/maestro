@@ -1,6 +1,6 @@
 ---
 name: maestro-audit
-version: 1.2.0
+version: 1.3.0
 description: "Use for read-only Maestro repo audits that propose harness backlog improvements without implementing them."
 ---
 
@@ -30,12 +30,11 @@ Produce proposals only.
    (re-read the code, re-run the command). Drop findings that do not survive.
 4. Cross-check findings against Maestro state so you do not propose work already
    accepted, dismissed, measured, or covered by active tasks.
-5. Re-propose every finding still seen. Use one stable topic per finding so the
-   verb merges repeats, and end the evidence with a leverage estimate:
-
-```sh
-maestro harness propose --title "<finding>" --evidence "<file:line evidence and why it matters>; impact/effort/confidence: <H|M|L>/<H|M|L>/<H|M|L>" --topic <stable-topic>
-```
+5. Re-propose every finding still seen with `maestro harness propose`
+   (signatures: [reference/cli.md](reference/cli.md)). Use one stable
+   `--topic` per finding so the verb merges repeats, and end the `--evidence`
+   text with a leverage estimate:
+   `impact/effort/confidence: <H|M|L>/<H|M|L>/<H|M|L>`.
 
 ## Evidence
 

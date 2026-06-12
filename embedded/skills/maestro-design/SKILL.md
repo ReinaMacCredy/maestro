@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-version: 1.8.0
+version: 1.9.0
 description: "Use for design or brainstorming in a Maestro repo before implementation starts. Map current behavior, decide one fork at a time, record decisions and notes, then hand the approved contract to maestro-card."
 ---
 
@@ -13,10 +13,16 @@ design and freezes the contract.
 Activate:
 `maestro hook record --event skill_activation --skill maestro-design`
 
+Exact command signatures live in [reference/cli.md](reference/cli.md),
+generated from the binary. A verb or flag not listed there does not exist;
+read it instead of probing `--help`. Never chain a guessed id: use only ids
+read from verb output, and when a lookup misses, re-list instead of retrying
+spelling variations.
+
 ## Do
 
-1. Open one feature for the topic:
-   `maestro feature new "<topic>" --description "<problem>" --question "<loose question>"`.
+1. Open one feature for the topic: `maestro feature new "<topic>"`,
+   seeding `--description` with the problem.
 2. Map the current state from real evidence before options:
    files, commands, outputs, screenshots, or repo artifacts with `file:line`
    where code is involved. Write what you map into the spec as you go:
@@ -28,13 +34,14 @@ Activate:
 4. Decide one fork at a time. For each fork, give the concrete example, the
    options, the tradeoff, and the chosen answer. Sketch every option inline as
    ASCII before asking, so the preview is readable in the terminal.
-5. Lock each decision durably:
-   `maestro decision new "<decision title>" --feature <id> --context "<why>"`
-   opens the fork; `maestro decision lock <decision-id> --decision "<chosen>"
-   --rejected "<option: why>" [--preview "<example>"] [--supersedes <id>]`
-   fills and locks it. Put the chosen ASCII sketch into `--preview` as
-   multiline text. The lock echoes the entry and appends the dated feature-note
-   pointer automatically; do not add a manual duplicate note.
+5. Lock each decision durably: `maestro decision new` (with `--feature` and
+   `--context`) opens the fork; `maestro decision lock` records the chosen
+   answer, the rejected options, and optionally a preview and superseded
+   decisions. A fork the user already settled opens and locks in one call:
+   `maestro decision new --lock --decision "<chosen>"`. Put the chosen ASCII
+   sketch into `--preview` as multiline text. The lock echoes the entry and
+   appends the dated feature-note pointer automatically; do not add a manual
+   duplicate note.
 6. If a chosen answer removes a field, file, command, behavior, or workflow,
    enumerate consumers before locking the removal.
 7. Before locking a material or hard-to-reverse fork, get an independent
