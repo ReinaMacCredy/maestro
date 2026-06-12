@@ -1,9 +1,23 @@
 use std::process;
 
 use clap::Parser;
+use clap::error::ErrorKind;
 
 fn main() {
-    let cli = maestro::interfaces::cli::Cli::parse();
+    let cli = match maestro::interfaces::cli::Cli::try_parse() {
+        Ok(cli) => cli,
+        Err(error) => {
+            // Keep clap's own rendering and exit codes (help/version exit 0,
+            // parse errors exit 2); unknown subcommands additionally get the
+            // no-dead-end recovery hint that clap's early exit used to skip.
+            if error.kind() == ErrorKind::InvalidSubcommand {
+                let _ = error.print();
+                eprintln!("fix: pick a verb from the skill's reference/cli.md or maestro --help");
+                process::exit(error.exit_code());
+            }
+            error.exit();
+        }
+    };
     let auto_check = should_auto_check_after(&cli.command);
     if let Err(error) = maestro::interfaces::cli::run(cli) {
         if !error.is::<maestro::interfaces::cli::update::ReportedError>() {
