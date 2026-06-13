@@ -420,6 +420,7 @@ fn run_domain_facade_does_not_publish_leaf_modules() {
     assert_eq!(
         public_reexport_item_names(&run_facade),
         BTreeSet::from([
+            "active_sessions".to_string(),
             "hook_event_contract".to_string(),
             "load_run_evidence".to_string(),
             "managed_event_logs".to_string(),
@@ -427,11 +428,13 @@ fn run_domain_facade_does_not_publish_leaf_modules() {
             "visit_managed_events".to_string(),
             "write_evidence_for_session".to_string(),
             "HookEventContract".to_string(),
+            "Presence".to_string(),
             "RunEvent".to_string(),
             "RunEventLog".to_string(),
             "RunEventRecord".to_string(),
             "RunEvidenceLoad".to_string(),
             "RunEvidenceRecord".to_string(),
+            "SessionActivity".to_string(),
         ]),
         "src/domain/run/mod.rs should expose only the deliberate Run contract surface"
     );

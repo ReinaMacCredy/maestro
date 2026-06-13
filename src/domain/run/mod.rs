@@ -1,5 +1,6 @@
 //! Run aggregate facade.
 
+mod active;
 mod append;
 mod discovery;
 mod event;
@@ -7,6 +8,7 @@ mod evidence;
 mod reader;
 mod record;
 
+pub use active::{Presence, SessionActivity, active_sessions};
 pub(crate) use append::append_manual_event;
 pub use discovery::{RunEventLog, managed_event_logs};
 #[cfg(test)]

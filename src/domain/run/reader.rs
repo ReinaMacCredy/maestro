@@ -41,6 +41,16 @@ impl RunEvent {
         self.string("task_id")
     }
 
+    /// Card id bound by a `card_touch` event, when present.
+    pub fn card_id(&self) -> Option<&str> {
+        self.string("card_id")
+    }
+
+    /// Skill name recorded by a `skill_activation` event, when present.
+    pub fn skill_name(&self) -> Option<&str> {
+        self.string("skill_name")
+    }
+
     /// Agent name embedded in the event, when present.
     pub fn agent(&self) -> Option<&str> {
         self.string("agent")
