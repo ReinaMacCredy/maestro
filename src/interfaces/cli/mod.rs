@@ -8,6 +8,7 @@ use crate::domain::feature::{FeatureStatus, FeatureView};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::interfaces::hooks::record;
 
+pub mod active;
 pub mod card;
 pub mod decision;
 pub mod doctor;
@@ -141,6 +142,11 @@ pub enum RootCommand {
     List(ListArgs),
     #[command(about = "Author dependency edges between cards (card store)")]
     Dep(DepArgs),
+    #[command(
+        about = "Show what other live sessions are doing (cross-session awareness)",
+        after_help = "Examples:\n  maestro active               # live sessions, newest first\n  maestro active --all         # include stale sessions beyond the window"
+    )]
+    Active(ActiveArgs),
     #[command(
         about = "Author non-blocking related links between cards (card store)",
         after_help = "Examples:\n  maestro link add task-a task-b\n  maestro link remove task-b task-a"
@@ -284,6 +290,13 @@ pub struct TaskArgs {
 pub struct StatusArgs {
     #[arg(long, help = "Print machine-readable status JSON")]
     pub json: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct ActiveArgs {
+    /// Include stale sessions (last event beyond the live window), hidden by default.
+    #[arg(long)]
+    pub all: bool,
 }
 
 #[derive(Debug, Args)]
@@ -1229,6 +1242,7 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Ready(args) => card::ready(args),
         RootCommand::List(args) => card::list(args),
         RootCommand::Dep(args) => card::dep(args),
+        RootCommand::Active(args) => active::run(args),
         RootCommand::Link(args) => card::link(args),
         RootCommand::Archive(args) => card::archive(args),
         RootCommand::Claim(args) => card::claim(args),

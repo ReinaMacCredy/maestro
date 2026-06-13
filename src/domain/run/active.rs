@@ -64,13 +64,21 @@ struct Accumulator {
 
 impl Accumulator {
     fn observe_overall(&mut self, ts_nanos: i128, event_type: &str, ts: &str) {
-        if self.overall.as_ref().is_none_or(|(seen, ..)| ts_nanos >= *seen) {
+        if self
+            .overall
+            .as_ref()
+            .is_none_or(|(seen, ..)| ts_nanos >= *seen)
+        {
             self.overall = Some((ts_nanos, event_type.to_string(), ts.to_string()));
         }
     }
 
     fn observe_skill(&mut self, ts_nanos: i128, skill: &str) {
-        if self.skill.as_ref().is_none_or(|(seen, _)| ts_nanos >= *seen) {
+        if self
+            .skill
+            .as_ref()
+            .is_none_or(|(seen, _)| ts_nanos >= *seen)
+        {
             self.skill = Some((ts_nanos, skill.to_string()));
         }
     }
@@ -181,8 +189,11 @@ mod tests {
     fn seed(root: &Path, session: &str, lines: &[&str]) {
         let run_dir = root.join(".maestro/runs").join(session);
         fs::create_dir_all(&run_dir).expect("invariant: run dir should be creatable");
-        fs::write(run_dir.join("events.jsonl"), format!("{}\n", lines.join("\n")))
-            .expect("invariant: event log fixture should be writable");
+        fs::write(
+            run_dir.join("events.jsonl"),
+            format!("{}\n", lines.join("\n")),
+        )
+        .expect("invariant: event log fixture should be writable");
     }
 
     fn row<'a>(rows: &'a [SessionActivity], session: &str) -> &'a SessionActivity {
@@ -297,7 +308,9 @@ mod tests {
         seed(
             root,
             "s-no-ts",
-            &[r#"{"event_type":"skill_activation","session_id":"s-no-ts","skill_name":"maestro-card"}"#],
+            &[
+                r#"{"event_type":"skill_activation","session_id":"s-no-ts","skill_name":"maestro-card"}"#,
+            ],
         );
 
         let rows = active_sessions(&MaestroPaths::new(root.to_path_buf()), NOW)
@@ -326,10 +339,20 @@ mod tests {
             .expect("active_sessions should read the merged bucket");
 
         let merged = row(&rows, "cli-2026-06-14");
-        assert_eq!(merged.mode.as_deref(), Some("maestro-card"), "latest skill wins");
-        assert_eq!(merged.presence, Presence::Stale, "120m old ages out of the window");
         assert_eq!(
-            rows.iter().filter(|row| row.session_id == "cli-2026-06-14").count(),
+            merged.mode.as_deref(),
+            Some("maestro-card"),
+            "latest skill wins"
+        );
+        assert_eq!(
+            merged.presence,
+            Presence::Stale,
+            "120m old ages out of the window"
+        );
+        assert_eq!(
+            rows.iter()
+                .filter(|row| row.session_id == "cli-2026-06-14")
+                .count(),
             1,
             "the merged bucket collapses to exactly one row"
         );

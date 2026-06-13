@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.0.0 -->
-<!-- maestro:cli-reference-sha256: 6c09d624d9baee91a0218eca3cae8e93acc5c15d66da8740ea44700a87be92ad -->
+<!-- maestro:cli-reference-sha256: 679da629a382207ca2458c64670c7ed5d2ee8a2048406860d9e0a0cbc00173c0 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -196,6 +196,10 @@ Every verb and flag is listed; a spelling not found here does not exist.
 - `maestro dep help remove` -- Remove a blocking edge so CHILD no longer waits on PARENT
 - `maestro dep help help` -- Print this message or the help of the given subcommand(s)
 
+## maestro active
+
+- `maestro active [--all]` -- Show what other live sessions are doing (cross-session awareness)
+
 ## maestro link
 
 - `maestro link add <FROM> <TO>` -- Add a non-blocking related link between two live cards
@@ -376,6 +380,7 @@ Every verb and flag is listed; a spelling not found here does not exist.
 - `maestro help list` -- List cards filtered by parent, type, assignee, or coarse status (card store)
 - `maestro help dep add` -- Add a blocking edge: CHILD waits until PARENT closes
 - `maestro help dep remove` -- Remove a blocking edge so CHILD no longer waits on PARENT
+- `maestro help active` -- Show what other live sessions are doing (cross-session awareness)
 - `maestro help link add` -- Add a non-blocking related link between two live cards
 - `maestro help link remove` -- Remove a related link between two live cards
 - `maestro help archive` -- Archive a feature card and its child cards (card store)

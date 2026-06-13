@@ -53,6 +53,7 @@ fn root_help_lists_top_level_commands() {
             "ready",
             "list",
             "dep",
+            "active",
             "link",
             "archive",
             "claim",
@@ -235,6 +236,10 @@ fn nested_help_lists_section_38_command_tree() {
         ],
     );
     assert_contains_all(&maestro(&["dep", "--help"]), &["add", "remove"]);
+    assert_contains_all(
+        &maestro(&["active", "--help"]),
+        &["--all", "Examples:", "maestro active"],
+    );
     let link_help = maestro(&["link", "--help"]);
     assert_contains_all(&link_help, &["add", "remove"]);
     assert!(
