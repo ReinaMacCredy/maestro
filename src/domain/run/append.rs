@@ -47,15 +47,24 @@ fn append_event_to_session_dir(
     event: &Value,
 ) -> Result<()> {
     let relative_path = format!(".maestro/runs/{session_dir}/events.jsonl");
-    let path = managed_path(paths, &relative_path, SymlinkPolicy::RejectAllComponents)?;
-    let mut file = open_event_file(paths, &relative_path, &path)
-        .with_context(|| format!("failed to open {}", path.display()))?;
-    ensure_opened_event_path_is_managed(paths, &relative_path, &path, &file)?;
+    let mut file = open_managed_appendable(paths, &relative_path)?;
     append_jsonl_line(&mut file, event)
-        .with_context(|| format!("failed to append {}", path.display()))
+        .with_context(|| format!("failed to append {relative_path}"))
 }
 
-fn append_jsonl_line(file: &mut File, event: &Value) -> Result<()> {
+/// Open a managed append-only file under the repo, creating parent dirs, applying
+/// the same symlink-hardened `openat` path the Run event log uses (O_APPEND |
+/// O_NOFOLLOW, dev/ino recheck). Shared by the Run event log and the channel
+/// store so both reuse one hardened append rather than duplicating the FFI.
+pub(crate) fn open_managed_appendable(paths: &MaestroPaths, relative_path: &str) -> Result<File> {
+    let path = managed_path(paths, relative_path, SymlinkPolicy::RejectAllComponents)?;
+    let file = open_event_file(paths, relative_path, &path)
+        .with_context(|| format!("failed to open {}", path.display()))?;
+    ensure_opened_event_path_is_managed(paths, relative_path, &path, &file)?;
+    Ok(file)
+}
+
+pub(crate) fn append_jsonl_line(file: &mut File, event: &Value) -> Result<()> {
     let mut line = Vec::new();
     if event_file_needs_leading_newline(file)? {
         line.push(b'\n');
