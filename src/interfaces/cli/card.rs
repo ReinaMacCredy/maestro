@@ -200,6 +200,7 @@ pub fn claim(args: ClaimArgs) -> Result<()> {
     };
     let identity = claim_identity();
     let outcome = card::edit::claim(&paths, &args.id, &identity, &utc_now_timestamp())?;
+    super::emit_card_touch(&paths, &args.id);
     print_claim_outcome(&args.id, &identity, &outcome);
     Ok(())
 }
@@ -224,6 +225,7 @@ pub fn note(args: NoteArgs) -> Result<()> {
         return Ok(());
     };
     let created = card::edit::append_note(&paths, &args.id, &args.text, &utc_now_timestamp())?;
+    super::emit_card_touch(&paths, &args.id);
     if created {
         println!("noted {} (notes.md created)", args.id);
     } else {
@@ -276,6 +278,7 @@ pub fn create(args: CreateArgs) -> Result<()> {
     }
     new_card.description = args.description;
     card::store::create_card(&paths, &new_card)?;
+    super::emit_card_touch(&paths, &id);
     if args.id_only {
         println!("{id}");
     } else {
@@ -448,6 +451,7 @@ pub fn update(args: UpdateArgs) -> Result<()> {
     if c != resolved.card {
         card::store::save_resolved(&c, &resolved)?;
     }
+    super::emit_card_touch(&paths, id);
     if args.json {
         render_update_json(&[&c])?;
         return Ok(());

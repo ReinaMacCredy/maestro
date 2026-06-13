@@ -12,6 +12,7 @@ use std::path::Path;
 use std::process::{Command, Output};
 
 use card_support::{card_doc, cards_repo, id_by_title};
+use serde_json::Value;
 use support::TestTempDir;
 
 fn maestro(cwd: &Path, args: &[&str]) -> Output {
@@ -1110,4 +1111,94 @@ fn text_index_accelerates_grep_transparently_with_silent_fallback() {
         "the receipt counts both trees:\n{receipt}"
     );
     assert!(receipt.contains("next: maestro list --grep"), "{receipt}");
+}
+
+/// Drive a verb under a fixed session id. `MAESTRO_SESSION_ID` is the first key
+/// `cli_run_id()` reads, so it wins over any ambient agent-runtime var and the
+/// `card_touch` run event lands in a deterministic `runs/<session>/` bucket.
+fn maestro_in_session(cwd: &Path, session: &str, args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_maestro"))
+        .args(args)
+        .current_dir(cwd)
+        .env("MAESTRO_AGENT", "codex")
+        .env("MAESTRO_SESSION_ID", session)
+        .output()
+        .expect("invariant: compiled maestro binary should run in integration tests")
+}
+
+/// The parsed `card_touch` run events recorded in a session bucket, in append
+/// order. Missing bucket -> no events.
+fn card_touch_events(repo: &Path, session: &str) -> Vec<Value> {
+    let path = repo.join(".maestro/runs").join(session).join("events.jsonl");
+    let raw = fs::read_to_string(path).unwrap_or_default();
+    raw.lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| serde_json::from_str::<Value>(line).expect("event line should be valid JSON"))
+        .filter(|event| event["event_type"] == "card_touch")
+        .collect()
+}
+
+#[test]
+fn card_mutating_verbs_auto_emit_card_touch_tagged_session_and_card() {
+    let temp = cards_repo("t3-card-touch");
+    let repo = temp.path();
+    let session = "t3sess";
+
+    maestro_in_session(repo, session, &["create", "-t", "chore", "First chore"]);
+    let first = id_by_title(repo, "First chore");
+    maestro_in_session(repo, session, &["create", "-t", "chore", "Second chore"]);
+    let second = id_by_title(repo, "Second chore");
+    // A non-create mutation (update) also binds: it is the most recent touch.
+    let updated = maestro_in_session(repo, session, &["update", &first, "--description", "touched"]);
+    assert!(
+        updated.status.success(),
+        "update exits 0\nstderr:\n{}",
+        String::from_utf8_lossy(&updated.stderr)
+    );
+
+    let touches = card_touch_events(repo, session);
+    assert_eq!(
+        touches.len(),
+        3,
+        "each of create/create/update emits one card_touch: {touches:#?}"
+    );
+    assert!(
+        touches.iter().all(|event| event["session_id"] == session),
+        "every card_touch carries the resolved session id: {touches:#?}"
+    );
+    assert!(
+        touches
+            .iter()
+            .any(|event| event["card_id"] == Value::String(second.clone())),
+        "the second card's id is bound: {touches:#?}"
+    );
+    // latest-touch-wins (D3): the running session's current card is the most
+    // recent card_touch, here the `update` of the first card.
+    assert_eq!(
+        touches.last().expect("at least one touch")["card_id"],
+        Value::String(first.clone()),
+        "current card resolves to the most recent touch: {touches:#?}"
+    );
+}
+
+#[test]
+fn card_touch_emit_is_non_fatal_when_the_run_log_cannot_be_written() {
+    let temp = cards_repo("t3-nonfatal");
+    let repo = temp.path();
+    // A regular file where the runs tree belongs makes the event append fail; the
+    // mutating verb must still succeed (emit is best-effort, mirrors hook record).
+    fs::write(repo.join(".maestro/runs"), b"not a directory")
+        .expect("invariant: runs sentinel file should be writable");
+
+    let created = maestro_in_session(repo, "t3x", &["create", "-t", "chore", "Still works"]);
+    assert!(
+        created.status.success(),
+        "create exits 0 even when the card_touch append fails\nstderr:\n{}",
+        String::from_utf8_lossy(&created.stderr)
+    );
+    let id = id_by_title(repo, "Still works");
+    assert!(
+        id.starts_with("chore-"),
+        "the card was still created despite the failed emit: {id}"
+    );
 }

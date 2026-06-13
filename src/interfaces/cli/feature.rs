@@ -449,6 +449,7 @@ fn new_feature(
             },
         )?;
     }
+    super::emit_card_touch(paths, &id);
     if id_only {
         println!("{id}");
         return Ok(());
@@ -470,6 +471,7 @@ fn set_feature(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> Result<(
         );
     }
     let report = feature::set_with_report(paths, id, edits)?;
+    super::emit_card_touch(paths, id);
     print_set_report(id, &report);
     println!("next: maestro-card skill (qa-baseline) -> .maestro/cards/{id}/qa.md");
     println!("or: maestro feature accept {id} --qa none --reason \"<why no behavior>\"");
@@ -896,6 +898,7 @@ fn write_feature_spec(
     replace: bool,
 ) -> Result<()> {
     let report = feature::write_spec_section(paths, id, section, text, replace)?;
+    super::emit_card_touch(paths, id);
     let verb = if replace { "replaced" } else { "appended to" };
     let created = if report.created_section {
         " (new section)"

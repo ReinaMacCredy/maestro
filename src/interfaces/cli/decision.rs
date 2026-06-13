@@ -77,6 +77,7 @@ fn new_decision(
         bail!("decision title cannot be empty; e.g. `maestro decision new \"Adopt X for Y\"`");
     }
     let report = decisions::create_open(paths, title, context, feature)?;
+    emit_feature_touch(paths, &report.record);
     if id_only {
         println!("{}", report.record.id);
         return Ok(());
@@ -102,6 +103,7 @@ fn new_locked_decision(
         bail!("decision title cannot be empty; e.g. `maestro decision new \"Adopt X for Y\"`");
     }
     let report = decisions::create_locked(paths, title, context, feature, inputs)?;
+    emit_feature_touch(paths, &report.record);
     if id_only {
         println!("{}", report.record.id);
         return Ok(());
@@ -122,8 +124,18 @@ fn lock_decision(
         bail!("decision lock requires at least one --rejected \"<option: why>\"");
     }
     let report = decisions::lock(paths, id, decision, rejected, preview, supersedes)?;
+    emit_feature_touch(paths, &report.record);
     print_lock_report(&report);
     Ok(())
+}
+
+/// Bind the session to the decision's parent feature (D3 preview: a decision
+/// verb touches the feature the design work belongs to, not the decision card).
+/// A global decision has no feature, so nothing is bound.
+fn emit_feature_touch(paths: &MaestroPaths, record: &decisions::schema::DecisionRecord) {
+    if let Some(feature_id) = record.feature.as_deref() {
+        super::emit_card_touch(paths, feature_id);
+    }
 }
 
 fn print_lock_report(report: &decisions::DecisionLockReport) {

@@ -5,6 +5,8 @@ use anyhow::Result;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use crate::domain::feature::{FeatureStatus, FeatureView};
+use crate::foundation::core::paths::MaestroPaths;
+use crate::interfaces::hooks::record;
 
 pub mod card;
 pub mod decision;
@@ -1274,6 +1276,23 @@ pub(super) fn cli_run_id() -> String {
         .map(|(date, _)| date.to_string())
         .unwrap_or_else(|| "1970-01-01".to_string());
     format!("cli-{date}")
+}
+
+/// Best-effort: bind this session to a card it just mutated by recording a
+/// `card_touch` run event (D3), so a parallel session's `maestro active` can see
+/// the binding without anyone declaring it. Awareness rides on normal work, so a
+/// failed append must never abort the verb: the error is swallowed with a
+/// warning, mirroring `maestro hook record`'s warn-and-continue.
+pub(super) fn emit_card_touch(paths: &MaestroPaths, card_id: &str) {
+    let payload = serde_json::json!({
+        "event": "card_touch",
+        "session_id": cli_run_id(),
+        "card_id": card_id,
+        "agent": actor(),
+    });
+    if let Err(error) = record::record_value(paths, &payload) {
+        eprintln!("maestro: card_touch run-event note failed: {error:#}");
+    }
 }
 
 /// The `<session>` half of a card claim identity (SPEC E6): `MAESTRO_SESSION` if

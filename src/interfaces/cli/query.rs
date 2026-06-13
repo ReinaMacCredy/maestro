@@ -434,12 +434,18 @@ fn query_friction(paths: &MaestroPaths) -> Result<()> {
 
     run::visit_managed_event_logs(&logs, |record| {
         let event = record.event();
-        events += 1;
         let kind = event
             .event_type()
             .or_else(|| event.alias_kind())
             .unwrap_or("<unknown>")
             .to_string();
+        // card_touch is the session->card binding auto-emitted for `maestro
+        // active` (D3), not a session-friction signal; counting it would inflate
+        // the telemetry in step with routine work, so it stays out of every tally.
+        if kind == "card_touch" {
+            return Ok(());
+        }
+        events += 1;
         *kinds.entry(kind.clone()).or_default() += 1;
         if kind == "UserPromptSubmit" {
             user_prompts += 1;
