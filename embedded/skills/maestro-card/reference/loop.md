@@ -17,9 +17,10 @@ Start from the store, not from memory: `maestro status`, then `maestro ready`.
 ## Loop
 
 1. `maestro ready` -> `maestro claim <id>` -> work the card per
-   [work.md](work.md). The test-first rule applies unchanged; a TDD skip
-   needs its usual one-line noted reason and is surfaced in the morning
-   report.
+   [work.md](work.md). The test-first rule applies unchanged: an observable
+   `--check` is worked test-first; a skip is valid only for a non-behavioral
+   check or an explore/spike lane, and the skip note names which. Skips are
+   surfaced in the morning report.
 2. Finish with `task complete --summary --claim --proof`, then
    `maestro task verify <id>`.
 3. Commit each verified slice locally on the feature branch. Never push.

@@ -105,9 +105,17 @@ After all tests pass, look for [refactor candidates](tdd/refactoring.md):
 
 ## Evidence
 
-The red→green record is the card's proof: name the tracer test that failed
-RED and the suite result that went GREEN in `task complete --claim/--proof`
-([work.md](work.md) owns the verbs).
+The red→green record is the card's proof, recorded as two claims in
+`task complete --claim/--proof` ([work.md](work.md) owns the verbs):
+
+- one names the tracer test that failed RED before implementation
+  (`RED: test_checkout_rejects_empty_cart failed before impl`)
+- one names the GREEN suite result that followed
+  (`GREEN: cargo test 41 passed, 0 failed`)
+
+Both carry matching proof text per the evidence gate, so the proof shows
+test-first on its face. A card that took the skip records one claim naming the
+locked skip reason instead.
 
 ## Hand-off
 

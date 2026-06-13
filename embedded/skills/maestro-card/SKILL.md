@@ -1,6 +1,6 @@
 ---
 name: maestro-card
-version: 1.5.0
+version: 1.6.0
 description: "Use for active Maestro card work: pick up and deliver work cards (claim, update, complete, verify), run the feature-card lifecycle (accept, prepare, amend, ship), and capture qa-baseline/qa-slice gate evidence."
 ---
 
@@ -20,9 +20,9 @@ Activate:
 Read the reference for the job at hand; they share the ground rules below.
 
 - Pick up, progress, finish, or unblock a work card (task/bug/chore):
-  [reference/work.md](reference/work.md)
-- Implement a work card test-first (red-green-refactor):
-  [reference/tdd.md](reference/tdd.md)
+  [reference/work.md](reference/work.md). Its implement step is test-first
+  (red-green-refactor) whenever the card's `--check` names observable
+  behavior: [reference/tdd.md](reference/tdd.md).
 - Work the backlog unattended while the user is away or asleep:
   [reference/loop.md](reference/loop.md)
 - Author, accept, prepare, amend, ship, or archive a feature card:

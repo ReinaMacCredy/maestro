@@ -39,10 +39,13 @@ work; extend the vocabulary only by team convention. Existing states still own
 workflow meaning: exploring is a task state, brainstorm/design work belongs in
 a feature card or SPEC, and planning usually happens before `feature prepare`.
 
-Implement-lane cards whose `--check` names observable behavior are worked
-test-first per [tdd.md](tdd.md): one failing test, minimal code to green,
-repeat, then refactor. Skip for explore/spike or non-testable work and say
-why in a `maestro note`.
+When a card's locked `--check` names observable behavior, that check is the
+test: STOP and work it test-first per [tdd.md](tdd.md) — one failing test,
+minimal code to green, repeat, then refactor — before writing implementation
+code. The skip is valid only when the `--check` is non-behavioral
+(docs/markdown/config-only) or the lane is explore/spike; the skip note must
+name which of those two cases applies. "Non-testable" is not a free judgment
+call: a locked observable `--check` is, by definition, testable.
 
 ## Evidence Gate
 
@@ -56,14 +59,20 @@ passes only when:
   normalization
 - every configured verify command exits 0
 
-Reliable closeout:
+Reliable closeout. A test-first card records the red→green pair as two claims,
+each with matching proof:
 
 ```sh
 maestro task complete <id> \
   --summary "<what changed>" \
-  --claim "cargo test: 40 passed, 0 failed" \
-  --proof "cargo test: 40 passed, 0 failed"
+  --claim "RED: test_<behavior> failed before impl" \
+  --claim "GREEN: cargo test: 41 passed, 0 failed" \
+  --proof "RED: test_<behavior> failed before impl" \
+  --proof "GREEN: cargo test: 41 passed, 0 failed"
 ```
+
+A card that took the test-first skip records a single claim naming the locked
+skip reason instead.
 
 Use concrete observed claims. A vague claim fails even when the work is real.
 Use `maestro event create --task-id <id> --claim "<claim>"` only to repair or
