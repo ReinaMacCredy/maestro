@@ -16,7 +16,12 @@ use crate::foundation::core::time::utc_now_timestamp;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum RecordOutcome {
     /// The payload was a recognized hook event and was appended.
-    Recorded { event_type: String, run_dir: String },
+    Recorded {
+        event_type: String,
+        run_dir: String,
+        /// The event's session id, or `None` when unattributed.
+        session_id: Option<String>,
+    },
     /// The payload was not a recognized hook event; nothing was recorded.
     Ignored { event_type: Option<String> },
 }
@@ -34,9 +39,12 @@ pub fn record_hook_event(paths: &MaestroPaths, payload: &Value) -> Result<Record
         .and_then(Value::as_str)
         .unwrap_or("unknown")
         .to_string();
-    let run_dir = event
+    let session_id = event
         .get("session_id")
         .and_then(Value::as_str)
+        .map(str::to_string);
+    let run_dir = session_id
+        .as_deref()
         .map(run_dir_name)
         .unwrap_or_else(|| UNATTRIBUTED_SESSION.to_string());
     append_normalized_event(paths, &event)?;
@@ -56,6 +64,7 @@ pub fn record_hook_event(paths: &MaestroPaths, payload: &Value) -> Result<Record
     Ok(RecordOutcome::Recorded {
         event_type,
         run_dir,
+        session_id,
     })
 }
 

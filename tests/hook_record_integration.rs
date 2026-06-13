@@ -458,8 +458,12 @@ fn hook_record_flags_print_ack_and_use_session_or_cli_run_dirs() {
     );
     let explicit_out = String::from_utf8_lossy(&explicit.stdout);
     assert!(
-        explicit_out.contains("recorded skill_activation (qa-baseline) -> runs/session-flags"),
-        "{explicit_out}"
+        explicit_out.contains("recorded: skill_activation")
+            && explicit_out.contains("qa-baseline")
+            && explicit_out.contains("session: session-flags")
+            && explicit_out.contains("runs/session-flags")
+            && explicit_out.contains("maestro active"),
+        "skill_activation should echo the D8 verbose block:\n{explicit_out}"
     );
     let explicit_events = read_events(repo.path(), "session-flags");
     assert_eq!(explicit_events[0]["event_type"], "skill_activation");
@@ -514,6 +518,81 @@ fn card_touch_event_carries_card_id_and_normalizes() {
     assert_eq!(events[0]["card_id"], "card-abc123");
     assert_eq!(events[0]["session_id"], "session-touch");
     assert_eq!(events[0]["schema_version"], "maestro.event.v1");
+}
+
+#[test]
+fn record_echo_is_verbose_for_low_frequency_events_and_terse_for_the_firehose() {
+    // bl-006 (D8): low-frequency meaningful events (card_touch, skill_activation,
+    // SessionStart) echo a multi-line block carrying session, bound card, run dir,
+    // and a `maestro active` tip; the high-frequency tool firehose
+    // (PreToolUse/PostToolUse/PermissionRequest/Stop) echoes a single terse line.
+    let repo = init_repo();
+
+    // A card_touch block names the touched card.
+    let touch = maestro_record(
+        repo.path(),
+        r#"{"session_id":"session-d8","event_type":"card_touch","card_id":"card-xyz789"}"#,
+    );
+    assert!(touch.status.success());
+    let touch_out = String::from_utf8_lossy(&touch.stdout);
+    assert!(
+        touch_out.contains("recorded: card_touch")
+            && touch_out.contains("card-xyz789")
+            && touch_out.contains("maestro active"),
+        "card_touch should echo the verbose block with its card:\n{touch_out}"
+    );
+
+    // A skill_activation block carries the session's bound card (the prior
+    // card_touch) and the skill.
+    let skill = maestro(
+        repo.path(),
+        &[
+            "hook",
+            "record",
+            "--event",
+            "skill_activation",
+            "--skill",
+            "maestro-card",
+            "--session",
+            "session-d8",
+        ],
+    );
+    assert!(skill.status.success());
+    let skill_out = String::from_utf8_lossy(&skill.stdout);
+    assert!(skill_out.lines().count() > 1, "block is multi-line:\n{skill_out}");
+    assert!(
+        skill_out.contains("recorded: skill_activation")
+            && skill_out.contains("maestro-card")
+            && skill_out.contains("session: session-d8")
+            && skill_out.contains("card-xyz789")
+            && skill_out.contains("maestro active"),
+        "skill_activation block should show skill + bound card + tip:\n{skill_out}"
+    );
+
+    // A PostToolUse firehose event stays a single terse line: no block, no tip.
+    let firehose = maestro(
+        repo.path(),
+        &[
+            "hook",
+            "record",
+            "--event",
+            "PostToolUse",
+            "--session",
+            "session-d8",
+        ],
+    );
+    assert!(firehose.status.success());
+    let firehose_out = String::from_utf8_lossy(&firehose.stdout);
+    assert_eq!(
+        firehose_out.trim().lines().count(),
+        1,
+        "firehose echo is a single line:\n{firehose_out}"
+    );
+    assert!(
+        firehose_out.contains("recorded PostToolUse -> runs/session-d8")
+            && !firehose_out.contains("tip:"),
+        "PostToolUse should echo one terse line, no verbose block:\n{firehose_out}"
+    );
 }
 
 #[test]
