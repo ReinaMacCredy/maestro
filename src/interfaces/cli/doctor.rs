@@ -8,6 +8,7 @@ use crate::domain::decisions;
 use crate::domain::feature;
 use crate::domain::harness::HarnessConfig;
 use crate::domain::install::{InstallLock, InstallState, MirrorKind};
+use crate::domain::run;
 use crate::domain::skills;
 use crate::domain::task;
 use crate::foundation::core::error::MaestroError;
@@ -372,6 +373,7 @@ fn check_install(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &m
     }
 
     let root = paths.repo_root();
+    let recorder_script = run::hook_event_contract().script();
     let mut missing = 0_usize;
     for (agent, install) in &committed {
         for (relative, ownership) in &install.files {
@@ -385,6 +387,21 @@ fn check_install(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &m
             if !intact {
                 errors.push(format!(
                     "{agent} mirror is missing or broken: {relative}; run `maestro install --agent {agent}` to repair"
+                ));
+                missing += 1;
+                continue;
+            }
+            // A present settings file is not enough: its maestro-managed hook
+            // entries can be stripped while the file lives on (e.g. a user edit
+            // that drops the `hooks` key), which silently darkens run-event
+            // recording. For the JSON mirror that owns `hooks`, confirm the
+            // recorder script is still wired into the file's hook entries.
+            if ownership.kind == MirrorKind::JsonManagedKeys
+                && ownership.managed_keys.iter().any(|key| key == "hooks")
+                && !hook_entries_wired(&path, recorder_script)
+            {
+                errors.push(format!(
+                    "{agent} hook entries are missing from {relative} (run-event recording is off); run `maestro install --agent {agent}` to repair"
                 ));
                 missing += 1;
             }
@@ -409,6 +426,25 @@ fn check_install(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &m
             detail: format!("{} agent(s) intact", committed.len()),
         });
     }
+}
+
+/// True when the agent's settings file still wires the recorder script into its
+/// hook entries. Reads the `hooks` value as opaque JSON and looks for a
+/// reference to the script name (e.g. the `record.sh` in the installed
+/// `sh "$CLAUDE_PROJECT_DIR/.maestro/hooks/record.sh"` command). A file that no
+/// longer parses, has no `hooks`, or whose `hooks` never names the recorder is
+/// treated as not wired -- run-event recording would be dark either way.
+fn hook_entries_wired(path: &Path, recorder_script: &str) -> bool {
+    let Ok(contents) = std::fs::read_to_string(path) else {
+        return false;
+    };
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(&contents) else {
+        return false;
+    };
+    value
+        .get("hooks")
+        .map(|hooks| hooks.to_string().contains(recorder_script))
+        .unwrap_or(false)
 }
 
 /// Compare the user-level global skill cache against the skills embedded in

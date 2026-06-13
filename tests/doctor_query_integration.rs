@@ -490,6 +490,60 @@ fn doctor_flags_a_deleted_installed_mirror() {
 }
 
 #[test]
+fn doctor_flags_stripped_hook_entries_in_installed_settings() {
+    let temp = setup_repo("maestro-doctor-stripped-hooks");
+    let repo = temp.path();
+    let home = TestTempDir::new("maestro-doctor-stripped-hooks-home");
+    let home_var = home.path().to_string_lossy().into_owned();
+    let envs = [("HOME", home_var.as_str())];
+
+    assert_success(
+        &maestro_with_env(repo, &["install", "--agent", "claude"], &envs),
+        &["install", "--agent", "claude"],
+    );
+    let installed = maestro_with_env(repo, &["doctor"], &envs);
+    assert_success(&installed, &["doctor"]);
+    assert!(stdout(&installed).contains("check install: ok"));
+
+    // The settings file still exists with other keys, but its maestro-managed
+    // hook entries (the record.sh wiring) are gone -- run-event recording is
+    // silently dark. The file-existence check alone would miss this.
+    let settings = repo.join(".claude/settings.local.json");
+    fs::write(
+        &settings,
+        "{\n  \"permissions\": { \"allow\": [] },\n  \"outputStyle\": \"default\"\n}\n",
+    )
+    .expect("invariant: settings file should be rewritable");
+
+    let broken = maestro_with_env(repo, &["doctor"], &envs);
+    assert_failure(&broken, &["doctor"]);
+    // The file is still on disk, so the missing-mirror branch cannot fire; assert
+    // the distinct wiring-failure message plus the repair hint so a future reword
+    // cannot collapse this into the generic "mirror is missing or broken" error.
+    assert!(
+        stderr(&broken).contains("hook entries are missing")
+            && stderr(&broken).contains("maestro install --agent claude"),
+        "stderr should carry the hook-wiring failure and repair hint:\n{}",
+        stderr(&broken)
+    );
+    // A content failure must suppress the "install: ok" line, not print both.
+    assert!(
+        !stdout(&broken).contains("check install: ok"),
+        "stripped hooks must not still report install ok:\n{}",
+        stdout(&broken)
+    );
+
+    // Re-installing rewires the hook entries and doctor returns to ok.
+    assert_success(
+        &maestro_with_env(repo, &["install", "--agent", "claude"], &envs),
+        &["install", "--agent", "claude"],
+    );
+    let repaired = maestro_with_env(repo, &["doctor"], &envs);
+    assert_success(&repaired, &["doctor"]);
+    assert!(stdout(&repaired).contains("check install: ok"));
+}
+
+#[test]
 fn doctor_counts_real_decisions_and_skips_symlinked_entries() {
     let temp = setup_repo("maestro-doctor-decision-symlink");
     let repo = temp.path();
