@@ -1268,6 +1268,16 @@ pub enum HookCommand {
 }
 
 pub fn run(cli: Cli) -> Result<()> {
+    // The ambient inbox banner rides on every command (STDERR, best-effort) so a
+    // linked peer's message is impossible to miss -- except `hook`/`mcp`, whose
+    // high-frequency / protocol-stream output the banner must not pollute, and
+    // `version`, which clap treats as a help-class query.
+    if !matches!(
+        cli.command,
+        RootCommand::Hook(_) | RootCommand::Mcp(_) | RootCommand::Version
+    ) {
+        let _ = msg::inbox_banner();
+    }
     match cli.command {
         RootCommand::Init(args) => init::run(args),
         RootCommand::Install(args) => install::run(args),

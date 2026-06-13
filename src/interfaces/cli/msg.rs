@@ -136,6 +136,46 @@ fn read_channel(paths: &MaestroPaths, me: &str, channel: &Channel) -> Result<()>
     Ok(())
 }
 
+/// The ambient inbox banner: a one-line STDERR summary of unread messages on
+/// the running card's visible channels, printed before any command runs so a
+/// waiting message is impossible to miss. Silent unless in a repo with a
+/// current card that has unread on a still-linked channel
+/// (`dec-channel-visibility-hide-on-unlink-6091`). STDERR only, so JSON stdout
+/// stays clean. Best-effort: the caller ignores any error.
+pub(super) fn inbox_banner() -> Result<()> {
+    let Ok(root) = discover_repo_root() else {
+        return Ok(());
+    };
+    let paths = MaestroPaths::new(root);
+    let Some(me) = super::current_card(&paths) else {
+        return Ok(());
+    };
+    let Some(me_card) = card::store::resolve(&paths, &me)? else {
+        return Ok(());
+    };
+
+    let mut counts: Vec<(String, usize)> = Vec::new();
+    for channel in visible_channels(&paths, &me_card.card)? {
+        let unread = channel.unread(&me, cursor(&paths, &channel, &me)?).len();
+        if unread > 0 {
+            counts.push((channel.partner(&me).to_string(), unread));
+        }
+    }
+    if counts.is_empty() {
+        return Ok(());
+    }
+    counts.sort();
+
+    let total: usize = counts.iter().map(|(_, unread)| unread).sum();
+    let breakdown = counts
+        .iter()
+        .map(|(partner, unread)| format!("{unread} {partner}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    eprintln!("[inbox] {total} new ({breakdown}) -> maestro msg read");
+    Ok(())
+}
+
 /// Every channel `me` participates in that is currently visible: enumerated from
 /// `.maestro/channels/` headers, kept only while the pair is still linked
 /// (archive-aware, so a boxed partner stays visible until `link remove`).
