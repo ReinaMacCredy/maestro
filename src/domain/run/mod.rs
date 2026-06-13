@@ -9,7 +9,7 @@ mod reader;
 mod record;
 
 pub use active::{Presence, SessionActivity, active_sessions};
-pub(crate) use append::append_manual_event;
+pub(crate) use append::{append_jsonl_line, append_manual_event, open_managed_appendable};
 pub use discovery::{RunEventLog, managed_event_logs};
 #[cfg(test)]
 pub(crate) use event::is_accepted_event;

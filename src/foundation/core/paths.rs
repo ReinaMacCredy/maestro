@@ -126,6 +126,14 @@ impl MaestroPaths {
     pub fn install_lock_file(&self) -> PathBuf {
         self.maestro_dir().join("install-lock.yaml")
     }
+
+    /// Return the linked-card messaging directory (`.maestro/channels`).
+    ///
+    /// Machine-local conversation state (gitignored, like `runs/`): created on
+    /// demand by the first `msg send`, never by `init`.
+    pub fn channels_dir(&self) -> PathBuf {
+        self.maestro_dir().join("channels")
+    }
 }
 
 /// Discover the repository root from the current working directory.

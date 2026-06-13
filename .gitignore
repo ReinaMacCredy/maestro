@@ -1,6 +1,7 @@
 # >>> maestro >>>
 # Maestro local-only paths
 .maestro/runs/
+.maestro/channels/
 .maestro/backups/
 .maestro/install-lock.yaml
 .maestro/tasks/*/evidence/

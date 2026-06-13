@@ -876,7 +876,7 @@ fn agents_md_block() -> &'static str {
 }
 
 fn gitignore_block() -> &'static str {
-    "# Maestro local-only paths\n.maestro/runs/\n.maestro/backups/\n.maestro/index/\n.maestro/install-lock.yaml\n.maestro/tasks/*/evidence/\n.maestro/tasks/*/local/\n.maestro/archive/**/evidence/\n.maestro/archive/**/local/\n.maestro/archive/**/runs/\n\n# Local agent settings\n.claude/settings.local.json\n.codex/hooks.json"
+    "# Maestro local-only paths\n.maestro/runs/\n.maestro/channels/\n.maestro/backups/\n.maestro/index/\n.maestro/install-lock.yaml\n.maestro/tasks/*/evidence/\n.maestro/tasks/*/local/\n.maestro/archive/**/evidence/\n.maestro/archive/**/local/\n.maestro/archive/**/runs/\n\n# Local agent settings\n.claude/settings.local.json\n.codex/hooks.json"
 }
 
 fn codex_config_block() -> &'static str {
