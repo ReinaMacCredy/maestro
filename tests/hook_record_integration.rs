@@ -496,6 +496,27 @@ fn hook_record_flags_print_ack_and_use_session_or_cli_run_dirs() {
 }
 
 #[test]
+fn card_touch_event_carries_card_id_and_normalizes() {
+    let repo = init_repo();
+    let output = maestro_record(
+        repo.path(),
+        r#"{"session_id":"session-touch","event_type":"card_touch","card_id":"card-abc123"}"#,
+    );
+
+    assert!(
+        output.status.success(),
+        "hook record failed for card_touch\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let events = read_events(repo.path(), "session-touch");
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0]["event_type"], "card_touch");
+    assert_eq!(events[0]["card_id"], "card-abc123");
+    assert_eq!(events[0]["session_id"], "session-touch");
+    assert_eq!(events[0]["schema_version"], "maestro.event.v1");
+}
+
+#[test]
 fn cli_run_id_resolves_claude_code_session_id_into_distinct_buckets() {
     let repo = init_repo();
 

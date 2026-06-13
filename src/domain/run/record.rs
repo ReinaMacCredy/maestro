@@ -80,6 +80,7 @@ fn normalize_event(payload: &Value) -> Option<Value> {
     copy_string(payload, &mut event, "agent");
     copy_string(payload, &mut event, "task_id");
     copy_string(payload, &mut event, "feature_id");
+    copy_string(payload, &mut event, "card_id");
     copy_string(payload, &mut event, "tool_name");
     copy_string(payload, &mut event, "status");
     copy_string(payload, &mut event, "permission_decision");
