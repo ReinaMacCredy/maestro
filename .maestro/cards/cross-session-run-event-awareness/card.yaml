@@ -2,18 +2,37 @@ schema_version: maestro.card.v1
 id: cross-session-run-event-awareness
 type: feature
 title: Cross-session run-event awareness
-status: ready
+status: shipped
 created_at: 2026-06-13T15:43:42.330Z
-updated_at: 2026-06-13T16:54:20.870Z
+updated_at: 2026-06-13T18:58:16.060Z
 description: A starting session needs to see what other LIVE sessions are doing (which card, how far along) without manually reading each card, so it can orient and -- when another session is on a related card -- run 'maestro link' to connect them. Delivered as an explicit read verb the agent runs as its first step (pull-only). May require 'hook record' to carry which card/feature a session is bound to.
 extra:
   schema_version: maestro.feature.v2
+  outcome: 'Cross-session awareness shipped: pull-only ''maestro active'' digest of live sessions (card/mode/progress/presence + you marker), card_touch auto-emit binding sessions to cards (D9 per-session identity), D8 verbose/terse record echo, copy-pasteable link-add hint, and both work-entry skills teaching the active->link first step. 7/7 tasks verified; 8/8 acceptance items proven; qa-slice replayed bl-001..bl-008 via integration tests + a real two-session e2e flow.'
   non_goals:
   - No daemon/watcher/auto-refresh; pull-only one-shot (maestro passivity).
   - No automatic linking and no relatedness heuristic; the agent judges relatedness and runs maestro link.
   - No new SessionEnd hook added to the contract.
   - No streaming/tail/live-follow mode.
   - Changing claim_session() (mod.rs:1280) session identity -- out of scope; D9 edits cli_run_id() only, leaving the per-process claim-collision invariant (mod.rs:1276-1279) intact. Flagged as an adjacent finding, not part of this contract.
+  affected_areas:
+  - 'src/interfaces/cli: new ''active'' subcommand + --all flag; enriched verbose record echo in hook.rs (print site doctor noted at hook.rs:58)'
+  - 'src/domain/run/reader.rs: cross-session merge by ts, recency-based liveness, presence-state ([working]/[waiting]/[idle]/[stale]) + last-action + age derivation'
+  - 'src/domain/run/record.rs + event.rs: card_touch event kind/tagging and verbose-vs-terse echo formatting'
+  - card-verb call sites (feature/decision/card/claim) to auto-emit a card_touch run event tagged session+card
+  - 'skills (maestro-design/maestro-card): teach running maestro active as a session''s first step (downstream doc change)'
+  - src/interfaces/cli/mod.rs:1253 cli_run_id() -- add CLAUDE_CODE_SESSION_ID ahead of the cli-<date> fallback (D9) so CLI-path (card-touch, skill_activation) and hook-stdin-path events for one session share one per-session bucket
+  acceptance_sweeps:
+  - at: 2026-06-13T18:57:51.009Z
+    resolved:
+    - ac-1
+    - ac-2
+    - ac-3
+    - ac-4
+    - ac-5
+    - ac-6
+    - ac-7
+    - ac-8
   acceptance:
   - maestro active lists each session whose latest run event is within the recency window, one row per session, showing session id, mode (from latest skill_activation), bound card title, card status, a type-aware progress metric, last action, last-activity age, and presence state ([working]/[waiting]/[idle Nm]); the running session is marked 'you'.
   - Sessions whose latest event is older than the window are hidden by default; maestro active --all includes them tagged [stale Nm].
@@ -23,13 +42,6 @@ extra:
   - maestro hook record echoes a verbose block (event, skill, session, bound card, run dir, 'maestro active' tip) for low-frequency events (skill_activation, SessionStart, card_touch), and a terse single line on high-frequency tool events.
   - Nothing fires at session start automatically; maestro active is run deliberately by the agent (pull-only).
   - Two parallel real Claude Code sessions, each running maestro card/decision/skill verbs, produce two DISTINCT rows in maestro active -- not one merged cli-<date> row (D9)
-  affected_areas:
-  - 'src/interfaces/cli: new ''active'' subcommand + --all flag; enriched verbose record echo in hook.rs (print site doctor noted at hook.rs:58)'
-  - 'src/domain/run/reader.rs: cross-session merge by ts, recency-based liveness, presence-state ([working]/[waiting]/[idle]/[stale]) + last-action + age derivation'
-  - 'src/domain/run/record.rs + event.rs: card_touch event kind/tagging and verbose-vs-terse echo formatting'
-  - card-verb call sites (feature/decision/card/claim) to auto-emit a card_touch run event tagged session+card
-  - 'skills (maestro-design/maestro-card): teach running maestro active as a session''s first step (downstream doc change)'
-  - src/interfaces/cli/mod.rs:1253 cli_run_id() -- add CLAUDE_CODE_SESSION_ID ahead of the cli-<date> fallback (D9) so CLI-path (card-touch, skill_activation) and hook-stdin-path events for one session share one per-session bucket
   open_questions:
   - 'Recency window + live-threshold default values (D4 left tunable: live ~5m, window ~30m).'
   - Exact column widths / truncation lengths for the digest row (D5 tunable).

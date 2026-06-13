@@ -141,3 +141,29 @@ amend_log_position: 0
     exercised until hooks are routed to `record.sh` (Preconditions section) ->
     Proposed probe: feed a synthetic PostToolUse payload to `record` on stdin,
     bypassing the unwired hook.
+
+```yaml
+slices:
+  - at: "2026-06-14T00:00:00Z"
+    scenarios: ["bl-001", "bl-002", "bl-003", "bl-004", "bl-005", "bl-006", "bl-007", "bl-008"]
+    probes:
+      - "cargo test --test active_integration"
+      - "cargo test --test card_commands_integration card_touch"
+      - "cargo test --test hook_record_integration"
+    result: pass
+    evidence:
+      - "active_integration: 4 passed; 0 failed -- active_lists_live_sessions_with_enriched_rows_and_you_marker (bl-001), all_reveals_stale_sessions_hidden_by_default (bl-002), recent_stop_reads_as_waiting_not_excluded (bl-003), prints_copy_pasteable_link_hint_and_creates_no_edge (bl-005)"
+      - "card_commands_integration: 2 passed; 0 failed -- card_mutating_verbs_auto_emit_card_touch_tagged_session_and_card + card_touch_emit_is_non_fatal_when_the_run_log_cannot_be_written (bl-004; auto-emit is best-effort, verb still exits 0)"
+      - "hook_record_integration: 18 passed; 0 failed -- record_echo_is_verbose_for_low_frequency_events_and_terse_for_the_firehose (bl-006), cli_run_id_resolves_claude_code_session_id_into_distinct_buckets (bl-008)"
+  - at: "2026-06-14T00:00:00Z"
+    scenarios: ["bl-001", "bl-004", "bl-005", "bl-006", "bl-007", "bl-008"]
+    probes:
+      - "manual e2e on installed binary gf3a810c9: two sessions under distinct CLAUDE_CODE_SESSION_ID in a temp .maestro repo"
+    result: pass
+    evidence:
+      - "bl-004/bl-008: `CLAUDE_CODE_SESSION_ID=sessionA maestro create ...` minted task-peer-topic and its events.jsonl carried {event_type:card_touch, card_id:task-peer-topic, session_id:sessionA}; bucket dir was `runs/sessionA`, NOT a cli-<date> merge"
+      - "bl-001: `CLAUDE_CODE_SESSION_ID=sessionB maestro active` printed `1 active session:` with the full digest row `sessionA  card  Peer topic  open  -  0m  [working]  skill_activation` (the `you` marker for a running session that has its own bucket is covered by active_integration::...you_marker)"
+      - "bl-005: same active output printed `maestro link add <your-card> task-peer-topic-502a` (B has no card yet so <your-card> stays literal per D7); `maestro show` of A's card showed no related/link edge -- active created none"
+      - "bl-006: `maestro hook record --event skill_activation` printed the multi-line block (event, skill, session, card, run dir, `maestro active` tip); a PostToolUse stdin payload printed the single terse line `recorded PostToolUse -> runs/sessionA`"
+      - "bl-007: `maestro hook record --event SessionStart` printed only the record echo block, no `active session(s):` listing -- active is pull-only, nothing auto-fires at session start"
+```
