@@ -433,6 +433,17 @@ pub enum TaskCommand {
             help = "Feature acceptance id this task covers, e.g. ac-1 (repeatable)"
         )]
         covers: Vec<String>,
+        #[arg(
+            long = "verify-command",
+            help = "Per-task narrow falsifier; when set, `task verify` runs ONLY this instead of the repo-global stack.verify"
+        )]
+        verify_command: Option<String>,
+        #[arg(
+            long = "clear-verify-command",
+            conflicts_with = "verify_command",
+            help = "Clear the per-task verify command (revert to the repo-global stack.verify)"
+        )]
+        clear_verify_command: bool,
     },
     #[command(about = "Move a draft into exploring (-> exploring)")]
     Explore { id: String },

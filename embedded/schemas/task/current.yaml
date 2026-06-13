@@ -27,5 +27,6 @@ contracts:
       - blockers
       - state_history
       - verification
+      - verify_command
       - created_at
       - updated_at

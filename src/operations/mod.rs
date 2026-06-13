@@ -6,6 +6,7 @@
 pub mod card_migrate;
 pub mod container_migrate;
 pub mod feature_prepare;
+pub mod feature_ship;
 pub mod harness;
 pub mod init;
 pub mod migrate;

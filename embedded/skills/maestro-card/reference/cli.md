@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.0.0 -->
-<!-- maestro:cli-reference-sha256: 679da629a382207ca2458c64670c7ed5d2ee8a2048406860d9e0a0cbc00173c0 -->
+<!-- maestro:cli-reference-sha256: c96775eed21f6f924d2c33e18fc3247865ba06f0795ea202dbb9393a5f5cbbf5 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -54,7 +54,7 @@ Every verb and flag is listed; a spelling not found here does not exist.
 ## maestro task
 
 - `maestro task create <TITLE> [--feature <FEATURE>] [--lane <LANE>] [--risk <RISK>] [--check <CHECK>]... [--covers <COVERS>]... [--id-only]` -- Create a task (-> draft)
-- `maestro task set <ID> [--check <CHECK>]... [--feature <FEATURE>] [--no-feature] [--covers <COVERS>]...` -- Author task checks or change its feature link
+- `maestro task set <ID> [--check <CHECK>]... [--feature <FEATURE>] [--no-feature] [--covers <COVERS>]... [--verify-command <VERIFY_COMMAND>] [--clear-verify-command]` -- Author task checks or change its feature link
 - `maestro task explore <ID>` -- Move a draft into exploring (-> exploring)
 - `maestro task accept <ID>` -- Lock acceptance and mark the task ready (-> ready)
 - `maestro task claim [ID] [--next]` -- Claim a ready, unblocked task to work on it (-> in_progress)

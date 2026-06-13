@@ -38,7 +38,19 @@ pub fn run(args: TaskArgs) -> Result<()> {
             feature,
             no_feature,
             covers,
-        } => set_task(&paths, &id, check, covers, feature, no_feature, &actor),
+            verify_command,
+            clear_verify_command,
+        } => set_task(
+            &paths,
+            &id,
+            check,
+            covers,
+            feature,
+            no_feature,
+            verify_command,
+            clear_verify_command,
+            &actor,
+        ),
         TaskCommand::Explore { id } => explore_task(&paths, &id, &actor),
         TaskCommand::Accept { id } => accept_task(&paths, &id, &actor),
         TaskCommand::Claim { id, next } => match (id, next) {
@@ -185,6 +197,7 @@ fn create_task(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn set_task(
     paths: &MaestroPaths,
     id: &str,
@@ -192,12 +205,15 @@ fn set_task(
     covers: Vec<String>,
     feature: Option<String>,
     no_feature: bool,
+    verify_command: Option<String>,
+    clear_verify_command: bool,
     actor: &str,
 ) -> Result<()> {
     let changing_feature = feature.is_some() || no_feature;
-    if checks.is_empty() && covers.is_empty() && !changing_feature {
+    let changing_verify_command = verify_command.is_some() || clear_verify_command;
+    if checks.is_empty() && covers.is_empty() && !changing_feature && !changing_verify_command {
         bail!(
-            "task set requires --check, --covers, --feature, or --no-feature\n  maestro task set {id} --check \"...\"\n  maestro task set {id} --covers ac-1\n  maestro task set {id} --feature <feature-id>\n  maestro task set {id} --no-feature"
+            "task set requires --check, --covers, --feature, --no-feature, --verify-command, or --clear-verify-command\n  maestro task set {id} --check \"...\"\n  maestro task set {id} --covers ac-1\n  maestro task set {id} --feature <feature-id>\n  maestro task set {id} --no-feature\n  maestro task set {id} --verify-command \"cargo test --test foo\"\n  maestro task set {id} --clear-verify-command"
         );
     }
 
@@ -238,6 +254,25 @@ fn set_task(
         match &task.feature_id {
             Some(feature_id) => println!("updated {} -> feature {feature_id}", task.id),
             None => println!("updated {} -> no feature", task.id),
+        }
+    }
+
+    if changing_verify_command {
+        let target = if clear_verify_command {
+            None
+        } else {
+            verify_command
+        };
+        let task = task::set_verify_command(&paths.tasks_dir(), id, target)?;
+        match &task.verify_command {
+            Some(command) => println!(
+                "updated {} -> verify command `{command}` (task verify runs only this, not stack.verify)",
+                task.id
+            ),
+            None => println!(
+                "updated {} -> verify command cleared (task verify runs the repo-global stack.verify)",
+                task.id
+            ),
         }
     }
     Ok(())

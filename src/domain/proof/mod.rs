@@ -7,6 +7,7 @@ mod proof_status;
 mod stale;
 mod verify_task;
 
+pub(crate) use commands::run_stack_verify;
 pub use events::{managed_event_files, record_claim};
 pub use proof_status::{
     ProofStaleReason, ProofStatus, ProofStatusKind, ProofStatusSource,

@@ -79,6 +79,12 @@ pub struct TaskRecord {
     pub acceptance: AcceptanceFile,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub claims: Vec<String>,
+    /// Optional per-task narrow falsifier. When set, `task verify` runs ONLY this
+    /// command for the slice instead of the repo-global `stack.verify`. It is
+    /// authored config (not a verification result), so it lives here on the task
+    /// rather than in the rebuilt-every-verify `verification` binding.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verify_command: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub claimed_by: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -246,6 +252,7 @@ impl TaskRecord {
             acceptance_locked: false,
             acceptance: AcceptanceFile::new(id, Vec::new()),
             claims: Vec::new(),
+            verify_command: None,
             claimed_by: None,
             claimed_at: None,
             blockers: Vec::new(),

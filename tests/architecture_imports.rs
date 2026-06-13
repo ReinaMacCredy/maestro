@@ -1244,6 +1244,7 @@ fn transitional_public_surfaces_match_phase_policy() {
             "card_migrate",
             "container_migrate",
             "feature_prepare",
+            "feature_ship",
             "harness",
             "init",
             "migrate",

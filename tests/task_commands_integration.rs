@@ -1775,3 +1775,84 @@ fn untabify(output: &str) -> String {
         .collect::<Vec<_>>()
         .join("\n")
 }
+
+#[test]
+fn set_verify_command_persists_then_clears_on_a_live_task() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    assert_success(
+        &maestro(repo, &["task", "create", "Slice with narrow falsifier"]),
+        &["task", "create", "Slice with narrow falsifier"],
+    );
+    let id = id_by_title(repo, "Slice with narrow falsifier");
+
+    let set = maestro(
+        repo,
+        &[
+            "task",
+            "set",
+            id.as_str(),
+            "--verify-command",
+            "cargo test --test resources_version_guard",
+        ],
+    );
+    assert_success(
+        &set,
+        &["task", "set", id.as_str(), "--verify-command", "..."],
+    );
+    assert!(
+        stdout(&set).contains("not stack.verify"),
+        "set should explain the falsifier replaces stack.verify: {}",
+        stdout(&set)
+    );
+    let task = task_record(repo, &id);
+    assert_eq!(
+        task["verify_command"],
+        Value::String("cargo test --test resources_version_guard".to_string()),
+        "the per-task verify command must persist into the task record"
+    );
+
+    let clear = maestro(
+        repo,
+        &["task", "set", id.as_str(), "--clear-verify-command"],
+    );
+    assert_success(
+        &clear,
+        &["task", "set", id.as_str(), "--clear-verify-command"],
+    );
+    let raw = fs::read_to_string(card_record_path(repo, &id))
+        .expect("invariant: the card record should be readable");
+    assert!(
+        !raw.contains("verify_command"),
+        "a cleared verify command must be omitted from the record (skip_serializing_if None): {raw}"
+    );
+}
+
+#[test]
+fn set_verify_command_refuses_on_a_settled_task() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    assert_success(
+        &maestro(repo, &["task", "create", "Settled slice"]),
+        &["task", "create", "Settled slice"],
+    );
+    let id = id_by_title(repo, "Settled slice");
+    assert_success(
+        &maestro(
+            repo,
+            &["task", "abandon", id.as_str(), "--reason", "scrapped"],
+        ),
+        &["task", "abandon", id.as_str(), "--reason", "scrapped"],
+    );
+
+    let args = &["task", "set", id.as_str(), "--verify-command", "cargo test"];
+    let set = maestro(repo, args);
+    assert_failure(&set, args);
+    assert!(
+        stderr(&set).contains("settled history"),
+        "a settled task must refuse a verify-command change: {}",
+        stderr(&set)
+    );
+}

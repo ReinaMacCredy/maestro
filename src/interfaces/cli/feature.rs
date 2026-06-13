@@ -10,7 +10,7 @@ use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::table;
 use crate::foundation::core::time::render_timestamp;
 use crate::interfaces::cli::{FeatureArgs, FeatureCommand, feature_next_label, recovery_label};
-use crate::operations::feature_prepare;
+use crate::operations::{feature_prepare, feature_ship};
 
 /// Execute `maestro feature`.
 pub fn run(args: FeatureArgs) -> Result<()> {
@@ -637,12 +637,13 @@ fn ship_feature(
     outcome: Option<String>,
     dry_run: bool,
 ) -> Result<()> {
-    let report = feature::ship(paths, id, outcome, dry_run)?;
+    let report = feature_ship::ship(paths, id, outcome, dry_run)?;
     println!("{}", report.note);
     if dry_run {
         println!("ship preview:");
         println!("  feature: {}", report.id);
         println!("  target: shipped");
+        println!("  full verify suite would run before shipping");
         println!("writes: none");
         println!(
             "retry: maestro feature ship {} --outcome \"<outcome>\"",
@@ -652,6 +653,7 @@ fn ship_feature(
         println!("ship receipt:");
         println!("  feature: {}", report.id);
         println!("  status: shipped");
+        println!("  full verify suite passed");
         if let Ok(view) = feature::show(paths, &report.id)
             && let Some(reason) = view.qa_none_reason.as_deref()
         {

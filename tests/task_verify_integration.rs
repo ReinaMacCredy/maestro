@@ -446,6 +446,88 @@ fn task_verify_fails_closed_when_no_verify_commands_are_configured() {
     );
 }
 
+fn set_task_verify_command(repo: &Path, id: &str, command: &str) {
+    let mut task = task_yaml(repo, id);
+    task["verify_command"] = YamlValue::String(command.to_string());
+    write_task_yaml(repo, id, &task);
+}
+
+#[test]
+fn task_verify_runs_only_the_per_task_falsifier_and_passes_when_the_global_stack_would_fail() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    // Repo-global stack.verify would FAIL the slice: `false` exits non-zero.
+    write_harness_verify_command(repo, "false");
+    create_completed_task(repo, "implemented CSV export");
+    write_event(repo, "task-001", "implemented CSV export");
+    // The slice authors a narrow falsifier that passes (`true`).
+    set_task_verify_command(repo, "task-001", "true");
+
+    let verify = maestro(repo, &["task", "verify", "task-001"]);
+    assert_success(&verify, &["task", "verify", "task-001"]);
+    assert!(stdout(&verify).contains("verification passed for task-001"));
+
+    let task = task_yaml(repo, "task-001");
+    assert_eq!(task["state"], YamlValue::String("verified".to_string()));
+    let commands = task["verification"]["commands"]
+        .as_sequence()
+        .expect("invariant: commands should be recorded");
+    assert_eq!(
+        commands.len(),
+        1,
+        "only the per-task falsifier should run, not the global stack"
+    );
+    assert_eq!(commands[0]["cmd"], YamlValue::String("true".to_string()));
+    assert_eq!(commands[0]["exit_code"], YamlValue::Number(0.into()));
+}
+
+#[test]
+fn task_with_no_falsifier_still_runs_the_repo_global_stack_verify() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    write_harness_verify_command(repo, "true");
+    create_completed_task(repo, "implemented CSV export");
+    write_event(repo, "task-001", "implemented CSV export");
+
+    let verify = maestro(repo, &["task", "verify", "task-001"]);
+    assert_success(&verify, &["task", "verify", "task-001"]);
+
+    let task = task_yaml(repo, "task-001");
+    let commands = task["verification"]["commands"]
+        .as_sequence()
+        .expect("invariant: commands should be recorded");
+    assert_eq!(commands.len(), 1, "the repo-global stack.verify should run");
+    assert_eq!(
+        commands[0]["cmd"],
+        YamlValue::String("true".to_string()),
+        "default behavior unchanged: stack.verify command runs"
+    );
+}
+
+#[test]
+fn the_per_task_falsifier_wins_over_claims_only_and_can_fail_the_slice() {
+    // setup_repo() writes a claims-only harness with an empty stack.verify; a task
+    // with no falsifier would verify on claims alone. A falsifier must override
+    // that skip and actually run — here a failing one (`false`) fails the slice.
+    let temp = setup_repo();
+    let repo = temp.path();
+    create_completed_task(repo, "implemented CSV export");
+    write_event(repo, "task-001", "implemented CSV export");
+    set_task_verify_command(repo, "task-001", "false");
+
+    let verify = maestro(repo, &["task", "verify", "task-001"]);
+    assert_failure(&verify, &["task", "verify", "task-001"]);
+    assert!(
+        stderr(&verify).contains("verify command failed: false"),
+        "the falsifier must run and fail despite claims_only: {}",
+        stderr(&verify)
+    );
+    assert_eq!(
+        task_yaml(repo, "task-001")["state"],
+        YamlValue::String("needs_verification".to_string())
+    );
+}
+
 #[test]
 fn task_verify_warns_when_after_dependency_cleanup_fails_after_apply() {
     let temp = setup_repo();

@@ -531,6 +531,49 @@ pub fn set_covers(tasks_dir: &Path, id: &str, covers: Vec<String>) -> Result<(Ta
     Ok((task, replaced))
 }
 
+/// Author (or clear) a task's optional per-task narrow falsifier command.
+///
+/// When set, `task verify` runs ONLY this command for the slice instead of the
+/// repo-global `stack.verify`. The command joins the task contract hash, so it
+/// is frozen once the task is verified or terminal: changing how a settled task
+/// was verified would silently invalidate its recorded proof. `None` clears it.
+/// A no-op (already equal) returns without writing.
+pub fn set_verify_command(
+    tasks_dir: &Path,
+    id: &str,
+    command: Option<String>,
+) -> Result<TaskRecord> {
+    let handle = load_task_for_update(tasks_dir, id)?;
+    if lifecycle::is_terminal(&handle.task().state) || handle.task().state == TaskState::Verified {
+        bail!(
+            "task {} is {}; its verify command is settled history and cannot change",
+            handle.task().id,
+            handle.task().state.as_str()
+        );
+    }
+    let command = match command {
+        Some(command) => {
+            let trimmed = command.trim();
+            if trimmed.is_empty() {
+                bail!(
+                    "task {} verify command cannot be empty; pass a command, e.g. `maestro task set {} --verify-command \"cargo test --test foo\"`, or clear it with `--clear-verify-command`",
+                    handle.task().id,
+                    handle.task().id
+                );
+            }
+            Some(trimmed.to_string())
+        }
+        None => None,
+    };
+    if handle.task().verify_command == command {
+        return Ok(handle.task().clone());
+    }
+    let mut task = handle.task().clone();
+    task.verify_command = command;
+    template::save_task_with_snapshot(&task, &handle.snapshot)?;
+    Ok(task)
+}
+
 /// Attach, move, or detach a task's `feature_id` (Theme II Q-II-2/3).
 ///
 /// Editing the link is working-state, not a contract edit, so it is allowed
