@@ -1,0 +1,64 @@
+schema_version: maestro.card.v1
+id: build-flow-runs-prepare-without-a-stop
+type: feature
+title: Build flow runs prepare without a stop
+status: shipped
+created_at: 2026-06-13T17:22:48.123Z
+updated_at: 2026-06-13T19:19:32.292Z
+description: 'When the user authorizes building a feature (approving the design->card handoff, or saying go), the agent improvises an ''implement now or stop at the handoff'' confirmation and treats prepare as a separate gate. This double-asks (the user already chose to hand off / build) and the wording overloads ''handoff'' (already done at skill entry) while hiding that the next step is prepare = decompose the frozen contract into work cards. Desired: when the user signals build, the lifecycle flows accept -> prepare -> work in one motion, with the agent doing real task decomposition (not a single mega-task); ready and the prepare verb stay available only for explicit freeze-and-park.'
+extra:
+  schema_version: maestro.feature.v2
+  outcome: Build authorization now flows accept->prepare->work in one motion (no improvised implement-now/stop confirmation); prepare mints work cards in one motion then reports (D2); ready+prepare stay for explicit freeze-and-park; both maestro-card and maestro-design pipeline one-liners name prepare. Skills bumped maestro-card 1.8.0, maestro-design 1.12.0.
+  non_goals:
+  - 'No CLI behavior change: accept already prints the correct next hint (src/interfaces/cli/feature.rs:75-77). This contract removes agent-improvised behavior in skill guidance, not Rust.'
+  acceptance:
+  - When build is authorized (design-to-card handoff approved, or the user says go/build), the agent asks NO implement-now/stop-at-handoff confirmation; the lifecycle proceeds accept -> prepare -> work without an extra yes/no.
+  - On the build path, prepare mints the work cards and starts the feature in one motion, and the agent reports the resulting breakdown AFTER; there is no pause to pre-approve the plan.
+  - The decomposition fed to prepare --from is dependency-ordered task cards, not the single mega-task the auto-draft produces.
+  - 'The ready state and the prepare verb stay usable for explicit freeze-and-park: a user can accept a contract, stop, and decompose/build later when asked.'
+  - 'Skill guidance stops overloading ''handoff'': it names only the design-to-card skill boundary (not a lifecycle gate), and the maestro-card pipeline one-liner names prepare in its order.'
+  qa:
+    surface: none
+    reason: skill-guidance/docs only; no runtime behavior to baseline (see non-goal)
+    amend_log_position: 0
+  acceptance_sweeps:
+  - at: 2026-06-13T19:18:53.654Z
+    unresolved:
+    - ac-1
+    - ac-2
+    - ac-3
+    - ac-4
+    - ac-5
+  - at: 2026-06-13T19:19:24.872Z
+    resolved:
+    - ac-1
+    - ac-2
+    - ac-3
+    - ac-4
+    - ac-5
+  acceptance_evidence:
+  - ac_id: ac-1
+    kind: explicit
+    text: embedded/skills/maestro-card/reference/feature.md:59-61 'When the user authorizes building, flow straight through -- accept, then prepare --from, then work -- with no implement-now/stop confirmation between steps'; embedded/skills/maestro-design/SKILL.md:93-95 'do not re-ask -- flow straight through accept -> prepare -> work'.
+    at: 2026-06-13T19:19:05.658Z
+  - ac_id: ac-2
+    kind: explicit
+    text: 'embedded/skills/maestro-card/reference/feature.md:62-63 ''mint them in one prepare --from, then report the split'' (D2). Demonstrated live this session: prepare --from minted 3 cards + started the feature in one command, breakdown reported after.'
+    at: 2026-06-13T19:19:05.658Z
+  - ac_id: ac-3
+    kind: explicit
+    text: 'embedded/skills/maestro-card/reference/feature.md:61-62 ''Decompose the contract into dependency-ordered tasks yourself (the auto --draft lumps every criterion into one)''. Live: the 3 minted tasks carry after: dependencies (T2 after T1, T3 after T2), not one mega-task.'
+    at: 2026-06-13T19:19:05.658Z
+  - ac_id: ac-4
+    kind: explicit
+    text: 'embedded/skills/maestro-card/reference/feature.md:63-65 ''ready and the prepare verb stay for the explicit freeze-and-park path: accept a contract, stop, and decompose later when asked''.'
+    at: 2026-06-13T19:19:05.658Z
+  - ac_id: ac-5
+    kind: explicit
+    text: embedded/skills/maestro-card/SKILL.md:87 and embedded/skills/maestro-design/SKILL.md:89 pipeline one-liners now name prepare in order; maestro-design SKILL.md:92-93 'the hand-off is this skill boundary, crossed once here; it is not a lifecycle gate'.
+    at: 2026-06-13T19:19:05.658Z
+  affected_areas:
+  - embedded/skills/maestro-card/SKILL.md -- Pipeline one-liner (line ~87) must name prepare in its order
+  - 'embedded/skills/maestro-card/reference/feature.md -- build-flow framing: on build, accept->prepare->work flows straight through; freeze-and-park is the explicit exception'
+  - 'embedded/skills/maestro-design/SKILL.md -- Hand-off section (line ~87): ''handoff'' is the skill boundary, not a lifecycle gate; build flows straight through'
+  - tests/resources_version_guard.rs -- re-record (version, tree-hash) for maestro-card and maestro-design after the edits + version bumps

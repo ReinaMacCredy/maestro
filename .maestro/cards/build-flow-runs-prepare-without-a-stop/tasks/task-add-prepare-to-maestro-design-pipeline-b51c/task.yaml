@@ -1,0 +1,85 @@
+schema_version: maestro.card.v1
+id: task-add-prepare-to-maestro-design-pipeline-b51c
+type: task
+title: Add prepare to maestro-design pipeline + handoff clarity
+status: verified
+parent: build-flow-runs-prepare-without-a-stop
+claimed_by: claude#s82221-1781378125166611000
+claimed_at: 2026-06-13T19:15:25.166Z
+created_at: 2026-06-13T19:01:32.713Z
+updated_at: 2026-06-13T19:15:33.803Z
+extra:
+  schema_version: maestro.task.v2
+  blockers:
+  - id: blk-001
+    kind: task
+    blocked_ref:
+      kind: task
+      id: task-add-prepare-to-maestro-card-pipeline-b010
+    title: Blocked by task-add-prepare-to-maestro-card-pipeline-b010
+    reason: 'after dependency: T1 (task-add-prepare-to-maestro-card-pipeline-b010) verified'
+    source: command
+    created_at: 2026-06-13T19:01:32.769Z
+    resolved_at: 2026-06-13T19:14:12.582Z
+  state_history:
+  - state: draft
+    at: 2026-06-13T19:01:32.713Z
+    by: maestro
+  - state: exploring
+    at: 2026-06-13T19:01:32.732Z
+    by: maestro
+  - state: exploring
+    at: 2026-06-13T19:01:32.769Z
+    by: maestro
+    summary: 'blocker added: blk-001'
+  - state: ready
+    at: 2026-06-13T19:01:32.798Z
+    by: maestro
+  - state: ready
+    at: 2026-06-13T19:14:12.582Z
+    by: maestro
+    summary: 'blocker resolved: blk-001'
+  - state: needs_verification
+    at: 2026-06-13T19:15:33.788Z
+    by: maestro
+    summary: maestro-design SKILL.md pipeline one-liner now names prepare; Hand-off section clarifies the hand-off is the design->card skill boundary (crossed once at skill entry), not a lifecycle gate, and that on authorized build you flow straight through accept->prepare->work without re-asking. version 1.11.0 -> 1.12.0.
+    claims:
+    - embedded/skills/maestro-design/SKILL.md:89 pipeline names prepare; :3 version 1.12.0; :92-95 handoff = skill boundary not a lifecycle gate, build flows straight through
+  - state: verified
+    at: 2026-06-13T19:15:33.803Z
+    by: maestro
+    summary: 'verification passed: 1 claim(s), 1 proof source(s)'
+  lane: normal
+  risk: medium
+  verification:
+    status: passed
+    verified_at: 2026-06-13T19:15:33.803Z
+    verified_commit: 278fb828d7ccc837512e80db76fe4b3a70325fe7
+    verified_by_run: .maestro/runs/d7764a32-6ea3-4c17-b3c2-30ba0d37050e/events.jsonl
+    contract_hash: 73fad703430e2bea6499dc1294b330a9de3147652d4740bd45e1e30a55c8e11e
+    claim_checks:
+    - claim: embedded/skills/maestro-design/SKILL.md:89 pipeline names prepare; :3 version 1.12.0; :92-95 handoff = skill boundary not a lifecycle gate, build flows straight through
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/d7764a32-6ea3-4c17-b3c2-30ba0d37050e/events.jsonl
+    commands:
+    - cmd: cargo build
+      exit_code: 0
+      duration_ms: 241
+    - cmd: cargo test
+      exit_code: 0
+      duration_ms: 74400
+    - cmd: cargo clippy -- -D warnings
+      exit_code: 0
+      duration_ms: 302
+    proof_sources:
+    - kind: event
+      path: .maestro/runs/d7764a32-6ea3-4c17-b3c2-30ba0d37050e/events.jsonl
+      hash: 7d479d3a69367bb14de47eb7f7b103d30deae4c35956717243975a94e5057749
+  acceptance_locked: true
+  acceptance:
+    checks:
+    - embedded/skills/maestro-design/SKILL.md Hand-off pipeline names prepare in its order, and the section states handoff is only the design->card skill boundary (done at skill entry) not a lifecycle gate, so an authorized build flows straight through; version bumped 1.11.0 -> 1.12.0
+    locked_by: maestro
+    locked_at: 2026-06-13T19:01:32.798Z
+  claims:
+  - embedded/skills/maestro-design/SKILL.md:89 pipeline names prepare; :3 version 1.12.0; :92-95 handoff = skill boundary not a lifecycle gate, build flows straight through
