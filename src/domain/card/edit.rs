@@ -106,6 +106,9 @@ pub fn add_related_link(paths: &MaestroPaths, from: &str, to: &str, now: &str) -
         bail!("no live card {to} to link to");
     };
 
+    guard_linkable(&from_resolved.card)?;
+    guard_linkable(&to_resolved.card)?;
+
     let mut from_card = from_resolved.card.clone();
     if has_related_edge(&from_card, to) || has_related_edge(&to_resolved.card, from) {
         return Ok(false);
@@ -147,6 +150,22 @@ pub fn remove_related_link(paths: &MaestroPaths, from: &str, to: &str, now: &str
     }
 
     Ok(false)
+}
+
+/// Refuse to link a terminal card. A related link is a live-coordination
+/// signal -- and the seam a linked-card channel rides on -- so a closed/shipped
+/// card has nothing actionable to coordinate (bl-012). Archived cards are
+/// already rejected upstream: `resolve` finds only live cards, so this catches
+/// the done-but-not-yet-archived case the resolver still returns.
+fn guard_linkable(card: &Card) -> Result<()> {
+    if coarse_of(&card.status) == Some(Coarse::Closed) {
+        bail!(
+            "{} is {} (terminal); link only live cards",
+            card.id,
+            card.status
+        );
+    }
+    Ok(())
 }
 
 fn validate_related_pair(from: &str, to: &str) -> Result<()> {
@@ -540,6 +559,32 @@ mod tests {
             remove_related_link(&paths, "task-404", "task-001", NOW).is_err(),
             "the source must exist"
         );
+    }
+
+    #[test]
+    fn add_related_link_rejects_a_terminal_card_and_writes_no_edge() {
+        let paths = repo("edit-related-terminal");
+        seed(&paths, "task-001");
+        seed_full(
+            &paths,
+            "task-002",
+            CardType::Task,
+            "verified",
+            None,
+            None,
+        );
+
+        let err = add_related_link(&paths, "task-001", "task-002", LATER)
+            .expect_err("a terminal partner is not linkable");
+        assert!(
+            err.to_string().contains("terminal"),
+            "reason names the terminal state: {err}"
+        );
+        // the live side is untouched -- no half-written edge
+        let live = load(&card_path(&paths, "task-001"))
+            .expect("load")
+            .expect("task-001 exists");
+        assert!(live.deps.is_empty(), "no edge written when the gate trips");
     }
 
     /// Seed a card of `ty`/`status`, optionally already claimed, and save it.

@@ -21,6 +21,7 @@ pub mod init;
 pub mod install;
 pub mod mcp;
 pub mod migrate;
+pub mod msg;
 pub mod query;
 pub mod reference;
 pub mod resume;
@@ -152,6 +153,11 @@ pub enum RootCommand {
         after_help = "Examples:\n  maestro link add task-a task-b\n  maestro link remove task-b task-a"
     )]
     Link(LinkArgs),
+    #[command(
+        about = "Send and read messages on a linked-card channel (pull-only)",
+        after_help = "Examples:\n  maestro msg send task-b \"ready for review\"\n  maestro msg read              # unread across every linked partner\n  maestro msg read task-b       # one partner\n  maestro msg list              # channel overview"
+    )]
+    Msg(MsgArgs),
     #[command(
         about = "Archive a feature card and its child cards (card store)",
         after_help = "Examples:\n  maestro archive csv-export   # archives the feature card + every parent=csv-export card\n  maestro archive --loose      # sweeps closed loose tasks/ideas + superseded decisions"
@@ -1055,6 +1061,46 @@ pub enum LinkCommand {
 }
 
 #[derive(Debug, Args)]
+pub struct MsgArgs {
+    #[command(subcommand)]
+    pub command: MsgCommand,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum MsgCommand {
+    #[command(
+        about = "Send a message to a linked card (sender is your current card)",
+        after_help = "Examples:\n  maestro msg send task-b \"ready for review\""
+    )]
+    Send {
+        /// The linked partner card to message.
+        #[arg(value_name = "TO")]
+        to: String,
+        /// The message text.
+        #[arg(value_name = "TEXT")]
+        text: String,
+    },
+    #[command(
+        about = "Read unread messages; with no card, aggregate every linked partner",
+        after_help = "Examples:\n  maestro msg read\n  maestro msg read task-b"
+    )]
+    Read {
+        /// Scope to one partner card; omit to read every visible channel.
+        #[arg(value_name = "CARD")]
+        card: Option<String>,
+    },
+    #[command(
+        about = "Channel overview, or one partner's full timeline",
+        after_help = "Examples:\n  maestro msg list\n  maestro msg list task-b"
+    )]
+    List {
+        /// Scope to one partner's full timeline; omit for the overview.
+        #[arg(value_name = "CARD")]
+        card: Option<String>,
+    },
+}
+
+#[derive(Debug, Args)]
 pub struct HarnessArgs {
     #[command(subcommand)]
     pub command: HarnessCommand,
@@ -1255,6 +1301,7 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Dep(args) => card::dep(args),
         RootCommand::Active(args) => active::run(args),
         RootCommand::Link(args) => card::link(args),
+        RootCommand::Msg(args) => msg::run(args),
         RootCommand::Archive(args) => card::archive(args),
         RootCommand::Claim(args) => card::claim(args),
         RootCommand::Note(args) => card::note(args),
@@ -1321,6 +1368,17 @@ pub(super) fn emit_card_touch(paths: &MaestroPaths, card_id: &str) {
     if let Err(error) = record::record_value(paths, &payload) {
         eprintln!("maestro: card_touch run-event note failed: {error:#}");
     }
+}
+
+/// The card the running session is currently working: the `card_id` of the last
+/// `card_touch` in this session's OWN run log (D3). Best-effort and read-only --
+/// the `msg` verbs and the inbox banner use it to resolve "my card" without the
+/// user naming it. `None` when the session has touched no card (or the log is
+/// unreadable); callers treat that as "no current card", never an error.
+pub(super) fn current_card(paths: &MaestroPaths) -> Option<String> {
+    crate::domain::run::current_bound_card(paths, &cli_run_id())
+        .ok()
+        .flatten()
 }
 
 /// The `<session>` half of a card claim identity (SPEC E6): `MAESTRO_SESSION` if

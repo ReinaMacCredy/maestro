@@ -138,10 +138,10 @@ pub fn channels_for(paths: &MaestroPaths, card: &str) -> Result<Vec<Channel>> {
         let Some(key) = name.to_str().and_then(|name| name.strip_suffix(".jsonl")) else {
             continue;
         };
-        if let Some(channel) = load_by_key(paths, key)? {
-            if channel.pair.iter().any(|id| *id == needle) {
-                channels.push(channel);
-            }
+        if let Some(channel) = load_by_key(paths, key)?
+            && channel.pair.contains(&needle)
+        {
+            channels.push(channel);
         }
     }
     Ok(channels)

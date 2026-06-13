@@ -14,7 +14,8 @@ use anyhow::Result;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::time::timestamp_nanos;
 
-use super::reader::visit_managed_events;
+use super::event::run_dir_name;
+use super::reader::{visit_event_log, visit_managed_events};
 
 /// Minutes within which the last event marks a session live. Tunable default
 /// (the decision leaves thresholds to the implementation), not a locked value.
@@ -149,6 +150,29 @@ pub fn active_sessions(paths: &MaestroPaths, now: &str) -> Result<Vec<SessionAct
 
     rows.sort_by_key(|(last_nanos, _)| Reverse(*last_nanos));
     Ok(rows.into_iter().map(|(_, row)| row).collect())
+}
+
+/// The card this single session is currently bound to: the `card_id` of the
+/// last `card_touch` in its OWN run log. Reads one `events.jsonl` (not the full
+/// run tree like [`active_sessions`]) so the inbox banner and `msg` verbs can
+/// resolve "my current card" cheaply on every command. `None` when the session
+/// has touched no card or its log is unreadable.
+pub fn current_bound_card(paths: &MaestroPaths, session_id: &str) -> Result<Option<String>> {
+    let path = paths
+        .runs_dir()
+        .join(run_dir_name(session_id))
+        .join("events.jsonl");
+    let mut latest: Option<String> = None;
+    visit_event_log(&path, |record| {
+        let event = record.event();
+        if event.is_event_type("card_touch")
+            && let Some(card) = event.card_id()
+        {
+            latest = Some(card.to_string());
+        }
+        Ok(())
+    })?;
+    Ok(latest)
 }
 
 fn age_minutes_between(then_nanos: i128, now_nanos: i128) -> u64 {

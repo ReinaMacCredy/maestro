@@ -71,18 +71,16 @@ pub fn run(args: ActiveArgs) -> Result<()> {
     Ok(())
 }
 
-/// Whether cards `a` and `b` share a `related` edge in either direction. Link
-/// storage is one-sided (`link add A B` writes the edge on A only), so a link
-/// check must read BOTH cards' deps.
+/// Whether the live cards `a` and `b` share a `related` edge in either
+/// direction, delegating to the domain predicate so the LINK column and the
+/// `msg`/banner gate read relatedness the same way. Both must be in the live
+/// scan; a peer absent from it (e.g. archived) reads as not-linked here -- the
+/// archive-aware check lives in `card::query::pair_linked` for the verbs.
 fn related_pair(by_id: &HashMap<&str, &card::schema::Card>, a: &str, b: &str) -> bool {
-    let has = |from: &str, to: &str| {
-        by_id.get(from).is_some_and(|card| {
-            card.deps
-                .iter()
-                .any(|dep| dep.kind == card::schema::DepKind::Related && dep.target == to)
-        })
-    };
-    has(a, b) || has(b, a)
+    match (by_id.get(a), by_id.get(b)) {
+        (Some(a_card), Some(b_card)) => card::query::cards_related(a_card, b_card),
+        _ => false,
+    }
 }
 
 /// The display cells for one session row, in column order.

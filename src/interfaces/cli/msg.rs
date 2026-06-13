@@ -1,0 +1,195 @@
+//! `maestro msg`: pull-only messaging on a linked-card channel. `send` is
+//! link-gated and validated; `read` consumes unread (advancing the viewer's
+//! cursor); `list` shows the channel overview or one partner's full timeline.
+//! The sender is always the running session's current card -- the card it last
+//! touched -- never a named argument, so messaging rides on normal work.
+//!
+//! Visibility is the live link: a channel shows in `read`/`list` (and the
+//! banner) only while the pair currently shares a `related` edge. Unlinking
+//! hides it without deleting; relinking restores history and prior unread
+//! (`dec-channel-visibility-hide-on-unlink-6091`).
+
+use anyhow::{Result, anyhow, bail};
+
+use crate::domain::card;
+use crate::domain::channel::{self, Channel};
+use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
+use crate::interfaces::cli::{MsgArgs, MsgCommand};
+
+/// How many already-seen partner messages a read prints as context above the
+/// unread block (`dec-msg-verbs-read-model-send-link-gated-52f6`).
+const CONTEXT_LIMIT: usize = 5;
+
+pub fn run(args: MsgArgs) -> Result<()> {
+    match args.command {
+        MsgCommand::Send { to, text } => send(&to, &text),
+        MsgCommand::Read { card } => read(card.as_deref()),
+        MsgCommand::List { card } => list(card.as_deref()),
+    }
+}
+
+/// `maestro msg send <to> <text>`: append a message to the channel between the
+/// running card and `<to>`. Link-gated (bidirectional, archive-aware) and
+/// validated; emits no card_touch and no run event -- a send is not work state.
+fn send(to: &str, text: &str) -> Result<()> {
+    let paths = MaestroPaths::new(discover_repo_root()?);
+    let me = current_card(&paths)?;
+    let me_card = resolve_card(&paths, &me)?;
+
+    if !card_exists(&paths, to)? {
+        let ids = card::query::scan(&paths).unwrap_or_default();
+        return match card::suggest::did_you_mean(to, ids.iter().map(|card| card.id.as_str())) {
+            Some(near) => Err(anyhow!("no card {to}; did you mean {near}?")),
+            None => Err(anyhow!("no card {to} to message")),
+        };
+    }
+    if !card::query::pair_linked(&paths, &me_card, to)? {
+        bail!("{me} and {to} are not linked; run `maestro link add {me} {to}` before messaging");
+    }
+
+    channel::send(&paths, &me, to, &super::cli_run_id(), text)?;
+    println!("sent to {to}");
+    Ok(())
+}
+
+/// `maestro msg read [card]`: print each visible channel's seen context plus all
+/// unread (oldest-to-newest), then advance the viewer's cursor past what was
+/// shown. No arg aggregates every visible channel; `<card>` scopes to one.
+fn read(scope: Option<&str>) -> Result<()> {
+    let paths = MaestroPaths::new(discover_repo_root()?);
+    let me = current_card(&paths)?;
+    let me_card = resolve_card(&paths, &me)?;
+    let channels = visible_channels(&paths, &me_card)?;
+    let selected = select(&channels, &me, scope);
+
+    if selected.is_empty() {
+        println!("{}", empty_note(scope));
+        return Ok(());
+    }
+    for channel in selected {
+        read_channel(&paths, &me, channel)?;
+    }
+    Ok(())
+}
+
+/// `maestro msg list [card]`: no arg prints the channel overview (one line per
+/// visible partner with its unread count and last activity); `<card>` prints
+/// that partner's full timeline oldest-to-newest and marks shown unread seen.
+fn list(scope: Option<&str>) -> Result<()> {
+    let paths = MaestroPaths::new(discover_repo_root()?);
+    let me = current_card(&paths)?;
+    let me_card = resolve_card(&paths, &me)?;
+    let mut channels = visible_channels(&paths, &me_card)?;
+    channels.sort_by(|a, b| a.partner(&me).cmp(b.partner(&me)));
+
+    match scope {
+        None => {
+            if channels.is_empty() {
+                println!("no linked channels");
+                return Ok(());
+            }
+            for channel in &channels {
+                let unread = channel.unread(&me, cursor(&paths, channel, &me)?).len();
+                let last = channel
+                    .messages
+                    .last()
+                    .map_or("-", |message| message.ts.as_str());
+                println!("{}  {unread} unread  last {last}", channel.partner(&me));
+            }
+        }
+        Some(target) => {
+            let Some(channel) = channels.iter().find(|c| c.partner(&me) == target) else {
+                println!("{}", empty_note(scope));
+                return Ok(());
+            };
+            println!("{target}:");
+            for message in &channel.messages {
+                let who = if message.from_card == me { "you" } else { target };
+                println!("  {who}  {}  {}", message.ts, message.text);
+            }
+            channel::set_cursor(&paths, &channel.key, &me, channel.len)?;
+        }
+    }
+    Ok(())
+}
+
+/// Print one channel's context + unread block for `read`, then advance the
+/// cursor to EOF. Always shows context and a `(no new messages)` line when
+/// nothing is unread, so a repeat read still surfaces the recent conversation.
+fn read_channel(paths: &MaestroPaths, me: &str, channel: &Channel) -> Result<()> {
+    let at = cursor(paths, channel, me)?;
+    let unread = channel.unread(me, at);
+    let seen = channel.seen_context(me, at, CONTEXT_LIMIT);
+
+    println!("{}:", channel.partner(me));
+    for message in &seen {
+        println!("  . {}  {}", message.ts, message.text);
+    }
+    if unread.is_empty() {
+        println!("  (no new messages)");
+    } else {
+        for message in &unread {
+            println!("  * {}  {}", message.ts, message.text);
+        }
+    }
+    channel::set_cursor(paths, &channel.key, me, channel.len)?;
+    Ok(())
+}
+
+/// Every channel `me` participates in that is currently visible: enumerated from
+/// `.maestro/channels/` headers, kept only while the pair is still linked
+/// (archive-aware, so a boxed partner stays visible until `link remove`).
+fn visible_channels(paths: &MaestroPaths, me: &card::schema::Card) -> Result<Vec<Channel>> {
+    let mut visible = Vec::new();
+    for channel in channel::channels_for(paths, &me.id)? {
+        let partner = channel.partner(&me.id).to_string();
+        if card::query::pair_linked(paths, me, &partner)? {
+            visible.push(channel);
+        }
+    }
+    Ok(visible)
+}
+
+/// Filter the visible channels down to the read selection: all of them when no
+/// scope, or just the one matching `<card>`.
+fn select<'a>(channels: &'a [Channel], me: &str, scope: Option<&str>) -> Vec<&'a Channel> {
+    channels
+        .iter()
+        .filter(|channel| scope.is_none_or(|target| channel.partner(me) == target))
+        .collect()
+}
+
+fn cursor(paths: &MaestroPaths, channel: &Channel, me: &str) -> Result<u64> {
+    channel::cursor(paths, &channel.key, me)
+}
+
+fn empty_note(scope: Option<&str>) -> String {
+    match scope {
+        Some(target) => format!("no visible channel with {target}"),
+        None => "no linked channels".to_string(),
+    }
+}
+
+/// The running session's current card, or an actionable error naming how to get
+/// one (`msg` is meaningless without a card to send from / read for).
+fn current_card(paths: &MaestroPaths) -> Result<String> {
+    super::current_card(paths).ok_or_else(|| {
+        anyhow!("no current card in this session; claim or touch a card first, then run `maestro msg`")
+    })
+}
+
+fn resolve_card(paths: &MaestroPaths, id: &str) -> Result<card::schema::Card> {
+    Ok(card::store::resolve(paths, id)?
+        .ok_or_else(|| anyhow!("current card {id} is no longer in the store"))?
+        .card)
+}
+
+/// Whether `id` names a real card, live OR archived. A send to a still-linked
+/// partner that was archived after linking stays valid (link/unlink gates, not
+/// lifecycle); only a genuinely unknown id earns the did-you-mean.
+fn card_exists(paths: &MaestroPaths, id: &str) -> Result<bool> {
+    if card::store::resolve(paths, id)?.is_some() {
+        return Ok(true);
+    }
+    Ok(card::store::resolve_in(&paths.archive_cards_dir(), id)?.is_some())
+}

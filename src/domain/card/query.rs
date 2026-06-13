@@ -9,10 +9,10 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 
 use crate::domain::card::fold;
-use crate::domain::card::schema::{Card, CardType};
+use crate::domain::card::schema::{Card, CardType, DepKind};
 use crate::domain::card::store::{
     CARD_FILE, DECISIONS_FILE, IDEAS_FILE, TASK_FILE, TASKS_DIR, is_dir_backed, is_symlink, load,
-    load_entries,
+    load_entries, resolve, resolve_in,
 };
 use crate::foundation::core::fs::sorted_child_dirs;
 use crate::foundation::core::paths::MaestroPaths;
@@ -484,13 +484,46 @@ pub fn display_alias(cards: &[Card], card: &Card) -> Option<String> {
     Some(format!("{parent}.{}", position + 1))
 }
 
+/// Whether `card` stores a `related` edge pointing at `target`. Related storage
+/// is one-sided (`link add A B` writes the edge on A only), so a full link check
+/// must read both cards -- see [`cards_related`] / [`pair_linked`].
+pub fn has_related_to(card: &Card, target: &str) -> bool {
+    card.deps
+        .iter()
+        .any(|dep| dep.kind == DepKind::Related && dep.target == target)
+}
+
+/// Whether two already-loaded cards share a `related` edge in either direction.
+/// The pure predicate behind the `active` LINK column.
+pub fn cards_related(a: &Card, b: &Card) -> bool {
+    has_related_to(a, &b.id) || has_related_to(b, &a.id)
+}
+
+/// Whether the pair (`me`, `partner_id`) is currently linked, reading the
+/// partner from the live store OR the archive tree so a link to an archived
+/// partner still counts. Archiving a card never hides its channel -- only
+/// `link remove` does (`dec-channel-visibility-hide-on-unlink-6091`), so the
+/// gate must see the edge even after the partner is boxed. The me-side edge is
+/// checked first (the running card is always loaded); only on a miss is the
+/// partner loaded, since the one stored edge may live on it.
+pub fn pair_linked(paths: &MaestroPaths, me: &Card, partner_id: &str) -> Result<bool> {
+    if has_related_to(me, partner_id) {
+        return Ok(true);
+    }
+    let partner = match resolve(paths, partner_id)? {
+        Some(found) => Some(found),
+        None => resolve_in(&paths.archive_cards_dir(), partner_id)?,
+    };
+    Ok(partner.is_some_and(|resolved| has_related_to(&resolved.card, &me.id)))
+}
+
 #[cfg(test)]
 mod tests {
     use std::process;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use super::*;
-    use crate::domain::card::schema::{Dep, DepKind};
+    use crate::domain::card::schema::Dep;
     use crate::domain::card::store::{card_path, load_with_snapshot, save_with_snapshot};
     use crate::foundation::core::fs::ensure_dir;
 
@@ -1154,6 +1187,62 @@ mod tests {
             "{warnings:?}"
         );
         assert_eq!(warnings.len(), 3, "{warnings:?}");
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn cards_related_reads_a_one_sided_edge_in_either_argument_order() {
+        let mut a = card("task-001", CardType::Task, "ready");
+        let b = card("task-002", CardType::Task, "ready");
+        assert!(!cards_related(&a, &b), "no edge yet");
+        a.deps.push(Dep {
+            kind: DepKind::Related,
+            target: "task-002".to_string(),
+        });
+        assert!(cards_related(&a, &b), "the edge stored on a is found");
+        assert!(
+            cards_related(&b, &a),
+            "and read regardless of argument order (one-sided storage)"
+        );
+    }
+
+    /// Archiving a partner must not hide its channel: the link gate has to find
+    /// the one-sided `related` edge even when the partner lives in the archive
+    /// tree, not the live store (bl-010).
+    #[test]
+    fn pair_linked_sees_an_edge_stored_on_an_archived_partner() {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("invariant: test clock after Unix epoch")
+            .as_nanos();
+        let root =
+            std::env::temp_dir().join(format!("maestro-pairlinked-{}-{nanos}", process::id()));
+        let paths = MaestroPaths::new(&root);
+        ensure_dir(paths.cards_dir()).expect("create cards dir");
+
+        // Live me, carrying no edge of its own.
+        let me = card("task-001", CardType::Task, "in_progress");
+        crate::domain::card::store::create_card(&paths, &me).expect("create me");
+
+        // Partner archived AFTER linking, so it still holds the one-sided edge.
+        let mut partner = card("task-002", CardType::Task, "verified");
+        partner.deps.push(Dep {
+            kind: DepKind::Related,
+            target: "task-001".to_string(),
+        });
+        let archived_yaml = paths.archive_cards_dir().join("task-002").join(CARD_FILE);
+        let snap = load_with_snapshot(&archived_yaml).expect("absent loads None");
+        save_with_snapshot(&archived_yaml, &partner, &snap).expect("seed archived partner");
+
+        assert!(
+            pair_linked(&paths, &me, "task-002").expect("pair_linked"),
+            "the edge on the archived partner keeps the pair linked"
+        );
+        assert!(
+            !pair_linked(&paths, &me, "task-404").expect("pair_linked"),
+            "an unknown partner is not linked"
+        );
 
         let _ = std::fs::remove_dir_all(&root);
     }

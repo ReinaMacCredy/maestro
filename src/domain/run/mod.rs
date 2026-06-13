@@ -8,7 +8,7 @@ mod evidence;
 mod reader;
 mod record;
 
-pub use active::{Presence, SessionActivity, active_sessions};
+pub use active::{Presence, SessionActivity, active_sessions, current_bound_card};
 pub(crate) use append::{append_jsonl_line, append_manual_event, open_managed_appendable};
 pub use discovery::{RunEventLog, managed_event_logs};
 #[cfg(test)]
