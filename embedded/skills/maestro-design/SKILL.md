@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-version: 1.10.0
+version: 1.11.0
 description: "Use for design or brainstorming in a Maestro repo before implementation starts. Map current behavior, decide one fork at a time, record decisions and notes, then hand the approved contract to maestro-card."
 ---
 
@@ -20,6 +20,12 @@ read from verb output, and when a lookup misses, re-list instead of retrying
 spelling variations.
 
 Routing: external PRD with open forks -> decide forks in design, then intake per maestro-card.
+
+First step in a session: run `maestro active` (pull-only) to see what other
+live sessions are working on -- their card, mode, and progress -- before you
+open anything. If a peer session is on a related card, connect yours with
+`maestro link add <your-card> <their-card>` once you have created it; maestro
+never auto-links.
 
 ## Do
 

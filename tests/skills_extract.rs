@@ -164,6 +164,31 @@ fn bundled_skill_contents_include_activation_logging_instruction() {
 }
 
 #[test]
+fn design_and_card_skills_teach_maestro_active_first_step_and_link_followup() {
+    // ac-7: a session's first step is the pull-only awareness verb, with the
+    // related-card link as its follow-up. Both work-entry skills must say so.
+    for name in ["maestro-design", "maestro-card"] {
+        let skill_md = skills()
+            .iter()
+            .find(|skill| skill.name == name)
+            .unwrap_or_else(|| panic!("invariant: {name} should ship"))
+            .skill_md();
+        assert!(
+            skill_md.contains("maestro active"),
+            "{name} must teach the maestro active first step"
+        );
+        assert!(
+            skill_md.contains("pull-only"),
+            "{name} must mark maestro active as pull-only"
+        );
+        assert!(
+            skill_md.contains("maestro link"),
+            "{name} must point to the maestro link follow-up"
+        );
+    }
+}
+
+#[test]
 fn thin_bundled_skills_include_operational_runbooks() {
     let setup = skills()
         .iter()
@@ -182,7 +207,7 @@ fn thin_bundled_skills_include_operational_runbooks() {
         .find(|skill| skill.name == "maestro-card")
         .expect("invariant: maestro-card should be bundled");
     let router = card.skill_md();
-    assert!(router.contains("version: 1.6.0"));
+    assert!(router.contains("version: 1.7.0"));
     assert!(router.contains("reference/work.md"));
     assert!(router.contains("maestro ready"));
 

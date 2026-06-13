@@ -1,6 +1,6 @@
 ---
 name: maestro-card
-version: 1.6.0
+version: 1.7.0
 description: "Use for active Maestro card work: pick up and deliver work cards (claim, update, complete, verify), run the feature-card lifecycle (accept, prepare, amend, ship), and capture qa-baseline/qa-slice gate evidence."
 ---
 
@@ -14,6 +14,11 @@ feature lifecycle, proof, and the QA gates. Design (`maestro-design`), audit
 
 Activate:
 `maestro hook record --event skill_activation --skill maestro-card`
+
+First step in a session: run `maestro active` (pull-only) to see what other
+live sessions are working on before you claim. If a peer is on a related card,
+connect yours with `maestro link add <your-card> <their-card>`; maestro never
+auto-links.
 
 ## Route
 
