@@ -443,7 +443,7 @@ fn hook_entries_wired(path: &Path, recorder_script: &str) -> bool {
     };
     value
         .get("hooks")
-        .map(|hooks| hooks.to_string().contains(recorder_script))
+        .map(|entry| entry.to_string().contains(recorder_script))
         .unwrap_or(false)
 }
 
