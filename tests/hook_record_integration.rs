@@ -51,9 +51,10 @@ fn maestro_with_env(cwd: &Path, args: &[&str], envs: &[(&str, &str)]) -> std::pr
         .expect("invariant: compiled maestro binary should be runnable in hook tests")
 }
 
-const SESSION_ENV_KEYS: [&str; 6] = [
+const SESSION_ENV_KEYS: [&str; 7] = [
     "MAESTRO_SESSION_ID",
     "MAESTRO_RUN_ID",
+    "CODEX_THREAD_ID",
     "CODEX_SESSION_ID",
     "CLAUDE_SESSION_ID",
     "CLAUDECODE_SESSION_ID",
@@ -642,6 +643,60 @@ fn cli_run_id_resolves_claude_code_session_id_into_distinct_buckets() {
         .expect("invariant: ack should include run dir")
         .trim();
     assert!(run_dir.starts_with("cli-"), "{fallback_out}");
+}
+
+#[test]
+fn cli_run_id_resolves_codex_thread_id_and_ignores_dead_codex_session_id() {
+    let repo = init_repo();
+
+    // A real Codex per-session id buckets under itself, never cli-<date>.
+    let codex = maestro_clean_env_with(
+        repo.path(),
+        &["hook", "record", "--event", "UserPromptSubmit"],
+        &[("CODEX_THREAD_ID", "codex-thread-xyz")],
+    );
+    assert!(
+        codex.status.success(),
+        "hook record failed for codex thread\nstderr:\n{}",
+        String::from_utf8_lossy(&codex.stderr)
+    );
+    assert_eq!(read_events(repo.path(), "codex-thread-xyz").len(), 1);
+
+    // CODEX_THREAD_ID is ordered ahead of the CLAUDE keys, so it wins.
+    let precedence = maestro_clean_env_with(
+        repo.path(),
+        &["hook", "record", "--event", "UserPromptSubmit"],
+        &[
+            ("CODEX_THREAD_ID", "codex-wins"),
+            ("CLAUDE_SESSION_ID", "claude-loses"),
+        ],
+    );
+    assert!(precedence.status.success());
+    assert_eq!(read_events(repo.path(), "codex-wins").len(), 1);
+    assert!(
+        !repo.path().join(".maestro/runs/claude-loses").exists(),
+        "CLAUDE_SESSION_ID must not win over CODEX_THREAD_ID"
+    );
+
+    // The retired CODEX_SESSION_ID is no longer consulted by cli_run_id: with
+    // only it set, the run event falls back to the cli-<date> bucket.
+    let dead = maestro_clean_env_with(
+        repo.path(),
+        &["hook", "record", "--event", "UserPromptSubmit"],
+        &[("CODEX_SESSION_ID", "codex-dead")],
+    );
+    assert!(dead.status.success());
+    assert!(
+        !repo.path().join(".maestro/runs/codex-dead").exists(),
+        "retired CODEX_SESSION_ID must not produce its own bucket"
+    );
+    let dead_out = String::from_utf8_lossy(&dead.stdout);
+    let run_dir = dead_out
+        .split("runs/")
+        .nth(1)
+        .expect("invariant: ack should include run dir")
+        .trim();
+    assert!(run_dir.starts_with("cli-"), "{dead_out}");
 }
 
 #[test]

@@ -1281,7 +1281,10 @@ pub(super) fn cli_run_id() -> String {
     for key in [
         "MAESTRO_SESSION_ID",
         "MAESTRO_RUN_ID",
-        "CODEX_SESSION_ID",
+        // Codex CLI's real per-session id (the verified var is CODEX_THREAD_ID,
+        // not the never-set CODEX_SESSION_ID it replaces); ordered ahead of the
+        // CLAUDE keys so a Codex run buckets under its thread.
+        "CODEX_THREAD_ID",
         "CLAUDE_SESSION_ID",
         "CLAUDECODE_SESSION_ID",
         // Claude Code's real per-session id; without it every CLI-path event in a
