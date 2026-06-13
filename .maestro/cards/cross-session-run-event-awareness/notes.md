@@ -1,0 +1,14 @@
+# Cross-session run-event awareness
+
+2026-06-13  dec-awareness-view-is-an-explicit-verb-not-3092 locked -- Awareness view is an explicit verb, not auto at session start
+2026-06-13  dec-awareness-verb-indexed-by-run-event-11cb locked -- Awareness verb indexed by run-event liveness, card store enriches
+2026-06-13  dec-session-card-binding-rides-on-card-verb-e68c locked -- Session-card binding rides on card-verb run events (auto-emit)
+2026-06-13  dec-liveness-recency-of-last-event-activity-b77b locked -- Liveness = recency of last event (activity-aware), not Stop
+2026-06-13  dec-maestro-active-row-full-digest-shape-3-a917 locked -- maestro active row = full digest (Shape 3, subsumes Shape 2)
+2026-06-13  D6 verb-name rubric: (1) reads as 'show other LIVE sessions + progress'; (2) no collision with existing top-level verbs (confirmed: active/sessions/who/live all free); (3) short one-word first-step command; (4) distinct from watch (tasks), status/resume (own handoff), event (writes), query friction (counts). Candidates by angle -- literal noun: sessions; presence/now: active, live; unix-idiom: who.
+2026-06-13  dec-awareness-verb-is-named-maestro-active-5b92 locked -- Awareness verb is named 'maestro active'
+2026-06-13  dec-link-follow-up-copy-pasteable-hint-5b33 locked -- Link follow-up = copy-pasteable hint, agent runs it
+2026-06-13  dec-record-output-verbose-block-grounded-1042 locked -- record output = verbose block (grounded: fires once per action here)
+2026-06-13  DEPENDENCY (from bug finding): maestro active's [working]/[waiting] states + last-action field rely on Pre/PostToolUse/Stop events actually being recorded. In this repo record.sh is NOT wired in .claude/settings.local.json (hooks were stripped; only skill_activation flows), and maestro doctor's check_install (doctor.rs:377-404) only checks file existence so it falsely reports 'install ok'. A background Opus agent is fixing the doctor blind-spot (code only). Restoring live recording additionally needs the user to run 'maestro install --agent claude'. This feature is sound regardless (it consumes whatever events exist) but its richness depends on full-event recording being wired.
+2026-06-13  dec-session-identity-for-run-events-must-6368 locked -- Session identity for run events must read the populated runtime var
+2026-06-13  Adjacent finding (out of scope for this contract, surfaced for later): claim_session() (mod.rs:1280) also omits CLAUDE_CODE_SESSION_ID, so it falls back to s<pid>-<nanos> -- a fresh identity every CLI invocation. A session therefore can't recognize its own prior claim across commands. Pre-existing, touches the parked coordination-maturity thread. Decide separately whether to align it with D9; not bundled because it perturbs the claim-collision invariant at mod.rs:1276-1279.
