@@ -282,3 +282,52 @@ fn prints_copy_pasteable_link_hint_and_creates_no_edge() {
         "active must not auto-create a related edge\n{show}"
     );
 }
+
+#[test]
+fn link_column_and_footer_reflect_existing_related_edges() {
+    // Thread 2: the LINK column reads (you)/linked/-, computed from BOTH cards'
+    // deps; the footer suggests `link add` only for unlinked peers and names
+    // already-linked ones instead of re-suggesting them.
+    let temp = cards_repo("active-link-column");
+    let repo = temp.path();
+
+    let a = create_id(repo, &["-t", "chore", "Card A"]);
+    let b = create_id(repo, &["-t", "chore", "Card B"]);
+    let c = create_id(repo, &["-t", "chore", "Card C"]);
+    run(repo, &[], &["link", "add", &a, &b]);
+    clear_runs(repo);
+
+    let recent = ts_minutes_ago(1);
+    seed_run(repo, "you-sess", &[card_touch_event("you-sess", &a, &recent)]);
+    seed_run(repo, "peer-b", &[card_touch_event("peer-b", &b, &recent)]);
+    seed_run(repo, "peer-c", &[card_touch_event("peer-c", &c, &recent)]);
+
+    let out = run(repo, &[("MAESTRO_SESSION_ID", "you-sess")], &["active"]);
+
+    assert!(
+        line_with(&out, "you-sess").contains("(you)"),
+        "own row LINK cell reads (you)\n{out}"
+    );
+    assert!(
+        line_with(&out, "peer-b").contains("linked"),
+        "linked peer row reads linked\n{out}"
+    );
+    assert!(
+        !line_with(&out, "peer-c").contains("linked"),
+        "unlinked peer row does not read linked\n{out}"
+    );
+
+    // Footer: suggest the unlinked peer only, name the linked one.
+    assert!(
+        out.contains(format!("maestro link add {a} {c}").as_str()),
+        "footer suggests linking the unlinked peer\n{out}"
+    );
+    assert!(
+        !out.contains(format!("maestro link add {a} {b}").as_str()),
+        "footer must not re-suggest an already-linked peer\n{out}"
+    );
+    assert!(
+        out.contains("already linked") && out.contains(b.as_str()),
+        "footer names the already-linked peer\n{out}"
+    );
+}

@@ -35,6 +35,10 @@ pub fn run(args: ActiveArgs) -> Result<()> {
         cards.iter().map(|card| (card.id.as_str(), card)).collect();
 
     let me = super::cli_run_id();
+    let your_card = rows
+        .iter()
+        .find(|row| row.session_id == me)
+        .and_then(|row| row.bound_card.as_deref());
 
     let shown: Vec<&SessionActivity> = rows
         .iter()
@@ -56,15 +60,29 @@ pub fn run(args: ActiveArgs) -> Result<()> {
         if shown.len() == 1 { "" } else { "s" }
     );
     println!();
-    render_table(&shown, &by_id, &cards, &me);
+    render_table(&shown, &by_id, &cards, &me, your_card);
 
     if hidden_stale > 0 {
         println!();
         println!("({hidden_stale} stale hidden; --all to show)");
     }
 
-    render_link_hint(&rows, &shown, &me);
+    render_link_hint(&shown, &by_id, &me, your_card);
     Ok(())
+}
+
+/// Whether cards `a` and `b` share a `related` edge in either direction. Link
+/// storage is one-sided (`link add A B` writes the edge on A only), so a link
+/// check must read BOTH cards' deps.
+fn related_pair(by_id: &HashMap<&str, &card::schema::Card>, a: &str, b: &str) -> bool {
+    let has = |from: &str, to: &str| {
+        by_id.get(from).is_some_and(|card| {
+            card.deps
+                .iter()
+                .any(|dep| dep.kind == card::schema::DepKind::Related && dep.target == to)
+        })
+    };
+    has(a, b) || has(b, a)
 }
 
 /// The display cells for one session row, in column order.
@@ -72,12 +90,12 @@ struct Cells {
     session: String,
     mode: String,
     card: String,
+    link: String,
     status: String,
     progress: String,
     age: String,
     state: String,
     last_action: String,
-    you: bool,
 }
 
 fn render_table(
@@ -85,16 +103,18 @@ fn render_table(
     by_id: &HashMap<&str, &card::schema::Card>,
     cards: &[card::schema::Card],
     me: &str,
+    your_card: Option<&str>,
 ) {
     let rows: Vec<Cells> = shown
         .iter()
-        .map(|row| cells_for(row, by_id, cards, me))
+        .map(|row| cells_for(row, by_id, cards, me, your_card))
         .collect();
 
     let headers = [
         "SESSION",
         "MODE",
         "CARD",
+        "LINK",
         "STATUS",
         "PROGRESS",
         "AGE",
@@ -111,21 +131,17 @@ fn render_table(
     print_columns(&headers, &widths);
     for cell in &rows {
         let columns = cell.columns();
-        let line = render_columns(&columns, &widths);
-        if cell.you {
-            println!("{line}  <- you");
-        } else {
-            println!("{line}");
-        }
+        println!("{}", render_columns(&columns, &widths));
     }
 }
 
 impl Cells {
-    fn columns(&self) -> [&str; 8] {
+    fn columns(&self) -> [&str; 9] {
         [
             &self.session,
             &self.mode,
             &self.card,
+            &self.link,
             &self.status,
             &self.progress,
             &self.age,
@@ -135,7 +151,7 @@ impl Cells {
     }
 }
 
-fn print_columns(values: &[&str; 8], widths: &[usize]) {
+fn print_columns(values: &[&str; 9], widths: &[usize]) {
     println!("{}", render_columns(values, widths));
 }
 
@@ -155,6 +171,7 @@ fn cells_for(
     by_id: &HashMap<&str, &card::schema::Card>,
     cards: &[card::schema::Card],
     me: &str,
+    your_card: Option<&str>,
 ) -> Cells {
     let (card, status, progress) = match &row.bound_card {
         Some(id) => match by_id.get(id.as_str()) {
@@ -168,10 +185,20 @@ fn cells_for(
         None => (dash(), dash(), String::new()),
     };
 
+    let link = if row.session_id == me {
+        "(you)".to_string()
+    } else {
+        match (your_card, row.bound_card.as_deref()) {
+            (Some(mine), Some(peer)) if related_pair(by_id, mine, peer) => "linked".to_string(),
+            _ => dash(),
+        }
+    };
+
     Cells {
         session: row.session_id.clone(),
         mode: row.mode.as_deref().map(mode_label).unwrap_or_else(dash),
         card,
+        link,
         status: if status.is_empty() { dash() } else { status },
         progress: if progress.is_empty() {
             dash()
@@ -181,7 +208,6 @@ fn cells_for(
         age: format!("{}m", row.age_minutes),
         state: presence_label(row.presence, row.age_minutes),
         last_action: row.last_action.clone(),
-        you: row.session_id == me,
     }
 }
 
@@ -242,30 +268,46 @@ fn dash() -> String {
     "-".to_string()
 }
 
-/// Print the copy-pasteable link hint (D7): one `maestro link add` line per shown
-/// peer that has a bound card, referencing the peer's real card id. `<your-card>`
-/// is filled with the running session's bound card when it has one, else stays a
-/// literal placeholder (the verb run as a first step has no card yet). maestro
-/// never auto-links and never guesses relatedness -- the agent judges and runs.
-fn render_link_hint(all_rows: &[SessionActivity], shown: &[&SessionActivity], me: &str) {
+/// Print the copy-pasteable link hint (D7), now link-aware: peers already sharing
+/// a `related` edge with the running card are named (not re-suggested), and only
+/// unlinked peers get a `maestro link add` line referencing the peer's real card
+/// id. `<your-card>` is filled with the running session's bound card when it has
+/// one, else stays a literal placeholder (the verb run as a first step has no
+/// card yet). maestro never auto-links and never guesses relatedness.
+fn render_link_hint(
+    shown: &[&SessionActivity],
+    by_id: &HashMap<&str, &card::schema::Card>,
+    me: &str,
+    your_card: Option<&str>,
+) {
     let peers: Vec<&str> = shown
         .iter()
         .filter(|row| row.session_id != me)
         .filter_map(|row| row.bound_card.as_deref())
+        .filter(|peer| your_card != Some(*peer))
         .collect();
     if peers.is_empty() {
         return;
     }
 
-    let your_card = all_rows
+    // Without a bound card the running session cannot be linked to anyone, so
+    // every peer reads as a suggestion against the <your-card> placeholder.
+    let (linked, unlinked): (Vec<&str>, Vec<&str>) = peers
         .iter()
-        .find(|row| row.session_id == me)
-        .and_then(|row| row.bound_card.as_deref())
-        .unwrap_or("<your-card>");
+        .copied()
+        .partition(|peer| your_card.is_some_and(|mine| related_pair(by_id, mine, peer)));
 
-    println!();
-    println!("related? link your card to theirs:");
-    for their_card in peers {
-        println!("  maestro link add {your_card} {their_card}");
+    if !linked.is_empty() {
+        println!();
+        println!("already linked: {}", linked.join(", "));
+    }
+
+    if !unlinked.is_empty() {
+        let your = your_card.unwrap_or("<your-card>");
+        println!();
+        println!("related? link your card to theirs:");
+        for their_card in unlinked {
+            println!("  maestro link add {your} {their_card}");
+        }
     }
 }
