@@ -51,17 +51,40 @@ fn maestro_with_env(cwd: &Path, args: &[&str], envs: &[(&str, &str)]) -> std::pr
         .expect("invariant: compiled maestro binary should be runnable in hook tests")
 }
 
+const SESSION_ENV_KEYS: [&str; 6] = [
+    "MAESTRO_SESSION_ID",
+    "MAESTRO_RUN_ID",
+    "CODEX_SESSION_ID",
+    "CLAUDE_SESSION_ID",
+    "CLAUDECODE_SESSION_ID",
+    "CLAUDE_CODE_SESSION_ID",
+];
+
 fn maestro_without_session_env(cwd: &Path, args: &[&str]) -> std::process::Output {
     let mut command = Command::new(env!("CARGO_BIN_EXE_maestro"));
     command.args(args).current_dir(cwd);
-    for key in [
-        "MAESTRO_SESSION_ID",
-        "MAESTRO_RUN_ID",
-        "CODEX_SESSION_ID",
-        "CLAUDE_SESSION_ID",
-        "CLAUDECODE_SESSION_ID",
-    ] {
+    for key in SESSION_ENV_KEYS {
         command.env_remove(key);
+    }
+    command
+        .output()
+        .expect("invariant: compiled maestro binary should be runnable in hook tests")
+}
+
+/// Clears every session-id env var, then applies the given overrides, so a test
+/// resolves a deterministic session id regardless of the ambient agent runtime.
+fn maestro_clean_env_with(
+    cwd: &Path,
+    args: &[&str],
+    envs: &[(&str, &str)],
+) -> std::process::Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_maestro"));
+    command.args(args).current_dir(cwd);
+    for key in SESSION_ENV_KEYS {
+        command.env_remove(key);
+    }
+    for (key, value) in envs {
+        command.env(key, value);
     }
     command
         .output()
@@ -470,6 +493,55 @@ fn hook_record_flags_print_ack_and_use_session_or_cli_run_dirs() {
     let cli_events = read_events(repo.path(), run_dir);
     assert_eq!(cli_events[0]["event_type"], "UserPromptSubmit");
     assert!(!repo.path().join(".maestro/runs/unattributed").exists());
+}
+
+#[test]
+fn cli_run_id_resolves_claude_code_session_id_into_distinct_buckets() {
+    let repo = init_repo();
+
+    let first = maestro_clean_env_with(
+        repo.path(),
+        &["hook", "record", "--event", "UserPromptSubmit"],
+        &[("CLAUDE_CODE_SESSION_ID", "claude-code-aaa")],
+    );
+    assert!(
+        first.status.success(),
+        "hook record failed for first claude session\nstderr:\n{}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+    let second = maestro_clean_env_with(
+        repo.path(),
+        &["hook", "record", "--event", "UserPromptSubmit"],
+        &[("CLAUDE_CODE_SESSION_ID", "claude-code-bbb")],
+    );
+    assert!(second.status.success());
+
+    // Each id buckets under its own session, never the colliding cli-<date>.
+    assert_eq!(read_events(repo.path(), "claude-code-aaa").len(), 1);
+    assert_eq!(read_events(repo.path(), "claude-code-bbb").len(), 1);
+    let runs = repo.path().join(".maestro/runs");
+    let cli_bucket = fs::read_dir(&runs)
+        .expect("invariant: runs dir should be readable")
+        .filter_map(Result::ok)
+        .any(|entry| entry.file_name().to_string_lossy().starts_with("cli-"));
+    assert!(
+        !cli_bucket,
+        "a real CLAUDE_CODE_SESSION_ID must not fall back to a cli-<date> bucket"
+    );
+
+    // With the var absent, the cli-<date> fallback still holds.
+    let fallback = maestro_without_session_env(
+        repo.path(),
+        &["hook", "record", "--event", "UserPromptSubmit"],
+    );
+    assert!(fallback.status.success());
+    let fallback_out = String::from_utf8_lossy(&fallback.stdout);
+    let run_dir = fallback_out
+        .split("runs/")
+        .nth(1)
+        .expect("invariant: ack should include run dir")
+        .trim();
+    assert!(run_dir.starts_with("cli-"), "{fallback_out}");
 }
 
 #[test]

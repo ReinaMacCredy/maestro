@@ -1257,6 +1257,9 @@ pub(super) fn cli_run_id() -> String {
         "CODEX_SESSION_ID",
         "CLAUDE_SESSION_ID",
         "CLAUDECODE_SESSION_ID",
+        // Claude Code's real per-session id; without it every CLI-path event in a
+        // Claude session collapses into one cli-<date> bucket (D9).
+        "CLAUDE_CODE_SESSION_ID",
     ] {
         if let Ok(value) = env::var(key)
             && !value.trim().is_empty()
