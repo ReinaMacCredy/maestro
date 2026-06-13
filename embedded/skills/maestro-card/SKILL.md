@@ -1,6 +1,6 @@
 ---
 name: maestro-card
-version: 1.8.0
+version: 1.9.0
 description: "Use for active Maestro card work: pick up and deliver work cards (claim, update, complete, verify), run the feature-card lifecycle (accept, prepare, amend, ship), and capture qa-baseline/qa-slice gate evidence."
 ---
 
@@ -58,11 +58,14 @@ Read the reference for the job at hand; they share the ground rules below.
 - Terminal words are per type — feature `shipped`/`cancelled`, work
   `verified`/`rejected`/`abandoned`/`superseded`, decision
   `locked`/`superseded`, loose task/bug/chore `closed` — and all of them read
-  as coarse `closed` on the board. `maestro close` fits only task/bug/chore;
-  when the user says "close" a feature, that means `feature ship` or
-  `feature cancel`. `maestro archive` moves an already-terminal feature's
-  records to `.maestro/archive/`; it is a location move, never an implied
-  side effect of closing — archive only on explicit user intent.
+  as coarse `closed` on the board. `maestro close` fits only task/bug/chore.
+  When the user says "close" a feature, branch on its state: a live feature
+  means `feature ship` or `feature cancel`; a feature already terminal
+  (shipped/cancelled) means archive it — run `maestro archive <id>` directly,
+  do not re-ask. `maestro archive` moves a terminal feature's records to
+  `.maestro/archive/`; the user's word "close" on a terminal card is the
+  explicit intent to archive, but archive is never an automatic side effect of
+  ship/cancel, and a non-terminal feature is never archived.
 - When the user corrects your behavior, record it:
   `maestro event intervention --note "<what was wrong>" [--topic <slug>]`.
 
