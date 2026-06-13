@@ -56,6 +56,14 @@ check: GET /articles satisfies the API contract
 Prepare starts the feature only when at least one child task is accepted and
 unblocked.
 
+When the user authorizes building, flow straight through -- `accept`, then
+`prepare --from`, then work -- with no implement-now/stop confirmation between
+steps; the authorization already chose to build. Decompose the contract into
+dependency-ordered tasks yourself (the auto `--draft` lumps every criterion
+into one), mint them in one `prepare --from`, then report the split. `ready`
+and the `prepare` verb stay for the explicit freeze-and-park path: accept a
+contract, stop, and decompose later when asked.
+
 ## Gates
 
 Accept passes only when the feature has:

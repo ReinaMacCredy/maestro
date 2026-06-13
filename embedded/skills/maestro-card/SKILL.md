@@ -1,6 +1,6 @@
 ---
 name: maestro-card
-version: 1.7.0
+version: 1.8.0
 description: "Use for active Maestro card work: pick up and deliver work cards (claim, update, complete, verify), run the feature-card lifecycle (accept, prepare, amend, ship), and capture qa-baseline/qa-slice gate evidence."
 ---
 
@@ -84,5 +84,5 @@ the conversion; there is no CLI parser for external documents.
 
 ## Pipeline
 
-`maestro-design -> [maestro-card: qa-baseline -> feature accept -> work ->
-verify -> qa-slice -> feature ship]`
+`maestro-design -> [maestro-card: qa-baseline -> feature accept -> prepare ->
+work -> verify -> qa-slice -> feature ship]`
