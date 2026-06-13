@@ -1,8 +1,8 @@
 //! `maestro sync` -- resync bundled resources to this binary's shipped versions.
 //!
 //! Where `maestro upgrade` upgrades the binary *and* refreshes content, `sync`
-//! only resyncs content (skills, the hook recorder script, the harness protocol)
-//! to whatever this binary ships. It runs the shared version-gated extraction
+//! only resyncs content (the hook recorder script and the harness protocol) to
+//! whatever this binary ships. It runs the shared version-gated extraction
 //! core ([`extract_all`] in `ExtractMode::Update`) directly, so it is purely
 //! filesystem-bound: no network, no GitHub release lookup. Version-gated and
 //! edit-preserving -- a folder whose installed version already matches is left

@@ -1,8 +1,6 @@
-//! Skill catalog and extraction helpers.
+//! Skill catalog and the global `~/.maestro/skills` cache.
 
 pub mod catalog;
-pub mod extract;
-pub mod symlink;
 
 mod global;
 

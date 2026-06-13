@@ -349,8 +349,7 @@ fn check_decisions(
 /// Verify that the files an installed agent owns still exist on disk. A bare
 /// `init` with no integration installed has no committed agents, so this is a
 /// no-op there and `doctor` stays ok; once an agent is installed, a deleted
-/// CLAUDE.md / codex hook config / skill symlink / record.sh is reported as an
-/// error (T4).
+/// CLAUDE.md / codex hook config / record.sh is reported as an error (T4).
 fn check_install(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &mut Vec<String>) {
     let lock = match InstallLock::load(&paths.install_lock_file()) {
         Ok(lock) => lock,

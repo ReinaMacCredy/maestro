@@ -170,7 +170,7 @@ impl InitPlan {
         let harness_config = HarnessConfig::detect(paths.repo_root());
 
         Ok(Self {
-            directories: vec![paths.harness_dir(), paths.cards_dir(), paths.skills_dir()],
+            directories: vec![paths.harness_dir(), paths.cards_dir()],
             files: vec![InitFile {
                 path: paths.harness_dir().join("harness.yml"),
                 contents: harness_yml(&harness_config)?,
@@ -180,7 +180,7 @@ impl InitPlan {
 }
 
 /// Render the dry-run artifact tree, then the bundled-resource extraction
-/// preview (skills, the hook script, the harness) the same run would apply.
+/// preview (the hook script, the harness) the same run would apply.
 pub fn render_dry_run(plan: &InitPlan, preview: &[FolderPreview]) -> String {
     let mut out = String::from("maestro init would create:\n");
     for directory in &plan.directories {

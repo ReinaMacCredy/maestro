@@ -4,7 +4,6 @@ use anyhow::{Context, Result, bail};
 
 use crate::domain::extraction;
 use crate::domain::harness;
-use crate::domain::skills::symlink::{SKILLS_SYMLINK_TARGET, SkillSymlink};
 use crate::foundation::core::paths::MaestroPaths;
 
 mod hooks;
@@ -13,6 +12,8 @@ mod mirrors;
 
 pub use lock::{AgentInstall, FileOwnership, InstallLock, InstallState, MirrorKind};
 pub use mirrors::{MirrorPlan, mirror_plan};
+
+pub(crate) use mirrors::prune_legacy_skill_symlinks;
 
 use lock::remove_lock_file;
 use mirrors::{prepare_mirrors, write_prepared_mirrors};
@@ -57,6 +58,7 @@ where
         &mirrors::PreparedMirrors,
     ) -> std::result::Result<(), mirrors::MirrorWriteFailure>,
 {
+    warn_legacy_skill_symlinks(paths);
     harness::ensure_harness_protocol_exists(paths)?;
     extraction::ensure_hook_script_exists(paths)?;
     let lock_path = paths.install_lock_file();
@@ -186,6 +188,24 @@ fn rollback_uninstall_after_lock_failure(
     bail!("{}; additionally {}", error, rollback_errors.join("; "))
 }
 
+/// Best-effort migration off the retired per-repo skills symlink, shared by
+/// `install` and `update`. Skills are global-only now; any maestro-owned
+/// `.claude/skills` / `.codex/skills` symlink the install lock still records is
+/// pruned so it stops shadowing the global cache. A failure is reported to stderr
+/// and never blocks the caller.
+pub(crate) fn warn_legacy_skill_symlinks(paths: &MaestroPaths) {
+    match prune_legacy_skill_symlinks(paths) {
+        Ok(warnings) => {
+            for warning in warnings {
+                eprintln!("warning: {warning}");
+            }
+        }
+        Err(error) => {
+            eprintln!("warning: legacy skills symlink migration skipped: {error}");
+        }
+    }
+}
+
 pub(crate) fn ensure_uninstallable_install(
     agent: InstallAgent,
     install: &AgentInstall,
@@ -198,19 +218,6 @@ pub(crate) fn ensure_uninstallable_install(
     }
 
     Ok(())
-}
-
-pub(crate) fn skill_symlink_for_agent(agent: InstallAgent) -> SkillSymlink {
-    match agent {
-        InstallAgent::Claude => SkillSymlink {
-            relative_path: ".claude/skills",
-            target: SKILLS_SYMLINK_TARGET,
-        },
-        InstallAgent::Codex => SkillSymlink {
-            relative_path: ".codex/skills",
-            target: SKILLS_SYMLINK_TARGET,
-        },
-    }
 }
 
 fn restore_install_lock(
@@ -349,11 +356,6 @@ mod tests {
                 .expect("invariant: Claude settings mirror should be restored"),
             claude_settings_before
         );
-        assert_eq!(
-            fs::read_link(root.join(".claude/skills"))
-                .expect("invariant: Claude skill symlink should be restored"),
-            Path::new("../.maestro/skills")
-        );
 
         fs::remove_dir_all(root).expect("invariant: temp repo should be removable");
     }
@@ -396,40 +398,6 @@ mod tests {
             fs::read_to_string(&codex_config_path)
                 .expect("invariant: Codex config mirror should be restored"),
             codex_config_before
-        );
-        assert_eq!(
-            fs::read_link(root.join(".codex/skills"))
-                .expect("invariant: Codex skill symlink should be restored"),
-            Path::new("../.maestro/skills")
-        );
-
-        fs::remove_dir_all(root).expect("invariant: temp repo should be removable");
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn final_lock_failure_restores_file_mirrors_even_when_symlink_rollback_fails() {
-        let root = temp_repo("maestro-install-independent-rollback-test");
-        let paths = MaestroPaths::new(root.clone());
-        install_agent(&paths, InstallAgent::Codex).expect("invariant: Codex install should pass");
-        let agents_path = root.join("AGENTS.md");
-        let agents_before =
-            fs::read_to_string(&agents_path).expect("invariant: AGENTS.md should be readable");
-
-        let error = uninstall_agent_with_finalizer(&paths, InstallAgent::Codex, |_path, _lock| {
-            fs::create_dir(root.join(".codex/skills"))
-                .expect("invariant: symlink rollback conflict should be creatable");
-            Err(anyhow!("simulated final lock remove failure"))
-        })
-        .expect_err("invariant: simulated final lock remove failure should fail uninstall");
-
-        let message = error.to_string();
-        assert!(message.contains("simulated final lock remove failure"));
-        assert!(message.contains("failed to roll back symlinks"));
-        assert_eq!(
-            fs::read_to_string(&agents_path)
-                .expect("invariant: AGENTS.md mirror should be restored"),
-            agents_before
         );
 
         fs::remove_dir_all(root).expect("invariant: temp repo should be removable");

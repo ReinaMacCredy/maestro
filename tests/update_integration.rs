@@ -7,7 +7,7 @@ use std::process::Command;
 use std::{env, fs};
 
 use anyhow::{Result, bail};
-use maestro::domain::skills::{catalog::skills, sync_global_skills_at};
+use maestro::domain::skills::sync_global_skills_at;
 use maestro::foundation::core::paths::MaestroPaths;
 use maestro::operations::update::{
     AtomicBinaryReplacer, BinaryReplacer, BinaryStatus, ChecksumVerifier, DownloadedBinary,
@@ -36,19 +36,18 @@ fn assert_success(output: &std::process::Output) {
 }
 
 #[test]
-fn update_reextracts_bundled_skills_and_backs_up_edited_skill() {
+fn update_reextracts_bundled_resources_and_backs_up_edited_resource() {
     let temp_dir = TestTempDir::new("maestro-update-test");
     init_git_marker(temp_dir.path());
     let paths = MaestroPaths::new(temp_dir.path());
     assert_success(&maestro(&["init", "--yes"], temp_dir.path()));
 
-    let skill = skills()
-        .iter()
-        .find(|skill| skill.name == "maestro-card")
-        .expect("invariant: maestro-card should be bundled");
-    let skill_path = paths.skills_dir().join(skill.name).join("SKILL.md");
-    fs::write(&skill_path, "edited bundled skill\n")
-        .expect("invariant: bundled skill should be editable");
+    // The freshly extracted script is the bundled content update restores to (the
+    // binary path is already pinned in, so a re-extract reproduces it exactly).
+    let record_path = paths.hooks_dir().join("record.sh");
+    let bundled = fs::read_to_string(&record_path).expect("invariant: hook script should exist");
+    fs::write(&record_path, "edited hook script\n")
+        .expect("invariant: hook script should be editable");
 
     let update = maestro(&["upgrade"], temp_dir.path());
 
@@ -58,14 +57,14 @@ fn update_reextracts_bundled_skills_and_backs_up_edited_skill() {
     assert!(stdout.contains("Update unavailable for this build"));
     assert!(stdout.contains("edited files backed up"));
     assert_eq!(
-        fs::read_to_string(&skill_path).expect("invariant: skill should be readable"),
-        skill.skill_md()
+        fs::read_to_string(&record_path).expect("invariant: hook script should be readable"),
+        bundled
     );
 
-    let backup = update_backup_for(&paths, skill.name);
+    let backup = update_backup_for_hook(&paths);
     assert_eq!(
         fs::read_to_string(backup).expect("invariant: backup should be readable"),
-        "edited bundled skill\n"
+        "edited hook script\n"
     );
     assert!(!paths.maestro_dir().join("update").exists());
 }
@@ -80,12 +79,9 @@ fn update_reports_restored_missing_bundled_resources() {
     let paths = MaestroPaths::new(temp_dir.path());
     assert_success(&maestro(&["init", "--yes"], temp_dir.path()));
 
-    let skill = skills()
-        .iter()
-        .find(|skill| skill.name == "maestro-card")
-        .expect("invariant: maestro-card should be bundled");
-    let skill_path = paths.skills_dir().join(skill.name).join("SKILL.md");
-    fs::remove_file(&skill_path).expect("invariant: bundled skill should be removable");
+    let record_path = paths.hooks_dir().join("record.sh");
+    let bundled = fs::read_to_string(&record_path).expect("invariant: hook script should exist");
+    fs::remove_file(&record_path).expect("invariant: bundled hook script should be removable");
 
     let update = maestro(&["upgrade"], temp_dir.path());
 
@@ -97,13 +93,13 @@ fn update_reports_restored_missing_bundled_resources() {
         "a silently re-created bundled file must be reported:\n{stdout}"
     );
     assert!(
-        stdout.contains(skill.name),
+        stdout.contains("record.sh"),
         "the restored file should be named:\n{stdout}"
     );
     // The restore actually happened, and a created file produces no backup noise.
     assert_eq!(
-        fs::read_to_string(&skill_path).expect("invariant: skill should be restored"),
-        skill.skill_md()
+        fs::read_to_string(&record_path).expect("invariant: hook script should be restored"),
+        bundled
     );
     assert!(!stdout.contains("edited files backed up"));
 }
@@ -346,7 +342,7 @@ fn simulated_download_failure_preserves_existing_binary_file() {
 }
 
 #[test]
-fn simulated_download_failure_preserves_edited_bundled_skills_and_cleans_stage() {
+fn simulated_download_failure_preserves_edited_bundled_resources_and_cleans_stage() {
     let temp_dir = TestTempDir::new("maestro-update-test");
     let paths = MaestroPaths::new(temp_dir.path());
     let executable_path = temp_dir.path().join("bin").join("maestro");
@@ -358,19 +354,15 @@ fn simulated_download_failure_preserves_edited_bundled_skills_and_cleans_stage()
     .expect("invariant: executable parent should be creatable");
     fs::write(&executable_path, "current binary\n")
         .expect("invariant: current binary should be writable");
-    let skill = skills()
-        .iter()
-        .find(|skill| skill.name == "maestro-card")
-        .expect("invariant: maestro-card should be bundled");
-    let skill_path = paths.skills_dir().join(skill.name).join("SKILL.md");
+    let record_path = paths.hooks_dir().join("record.sh");
     fs::create_dir_all(
-        skill_path
+        record_path
             .parent()
-            .expect("invariant: skill path should have a parent"),
+            .expect("invariant: hook path should have a parent"),
     )
-    .expect("invariant: skill parent should be creatable");
-    fs::write(&skill_path, "edited bundled skill\n")
-        .expect("invariant: edited skill should be writable");
+    .expect("invariant: hooks dir should be creatable");
+    fs::write(&record_path, "edited hook script\n")
+        .expect("invariant: edited hook script should be writable");
 
     let error = run_update_with_seams(
         &UpdateOptions {
@@ -390,8 +382,9 @@ fn simulated_download_failure_preserves_edited_bundled_skills_and_cleans_stage()
 
     assert!(error.to_string().contains("download failed after staging"));
     assert_eq!(
-        fs::read_to_string(skill_path).expect("invariant: edited skill should remain readable"),
-        "edited bundled skill\n"
+        fs::read_to_string(record_path)
+            .expect("invariant: edited hook script should remain readable"),
+        "edited hook script\n"
     );
     assert!(!paths.maestro_dir().join("update").exists());
 }
@@ -506,7 +499,7 @@ fn simulated_replace_failure_preserves_existing_binary_file() {
 }
 
 #[test]
-fn simulated_replace_failure_rolls_back_bundled_skill_writes() {
+fn simulated_replace_failure_rolls_back_bundled_resource_writes() {
     let temp_dir = TestTempDir::new("maestro-update-test");
     let paths = MaestroPaths::new(temp_dir.path());
     let executable_path = temp_dir.path().join("bin").join("maestro");
@@ -518,19 +511,15 @@ fn simulated_replace_failure_rolls_back_bundled_skill_writes() {
     .expect("invariant: executable parent should be creatable");
     fs::write(&executable_path, "current binary\n")
         .expect("invariant: current binary should be writable");
-    let skill = skills()
-        .iter()
-        .find(|skill| skill.name == "maestro-card")
-        .expect("invariant: maestro-card should be bundled");
-    let skill_path = paths.skills_dir().join(skill.name).join("SKILL.md");
+    let record_path = paths.hooks_dir().join("record.sh");
     fs::create_dir_all(
-        skill_path
+        record_path
             .parent()
-            .expect("invariant: skill path should have a parent"),
+            .expect("invariant: hook path should have a parent"),
     )
-    .expect("invariant: skill parent should be creatable");
-    fs::write(&skill_path, "edited bundled skill\n")
-        .expect("invariant: edited skill should be writable");
+    .expect("invariant: hooks dir should be creatable");
+    fs::write(&record_path, "edited hook script\n")
+        .expect("invariant: edited hook script should be writable");
 
     let error = run_update_with_seams(
         &UpdateOptions {
@@ -554,8 +543,9 @@ fn simulated_replace_failure_rolls_back_bundled_skill_writes() {
             .contains("could not replace the current binary")
     );
     assert_eq!(
-        fs::read_to_string(skill_path).expect("invariant: edited skill should remain readable"),
-        "edited bundled skill\n"
+        fs::read_to_string(record_path)
+            .expect("invariant: edited hook script should remain readable"),
+        "edited hook script\n"
     );
     assert!(!paths.maestro_dir().join("update").exists());
 }
@@ -964,7 +954,7 @@ fn assert_files_unchanged(snapshot: &[(PathBuf, String)]) {
     }
 }
 
-fn update_backup_for(paths: &MaestroPaths, skill_name: &str) -> PathBuf {
+fn update_backup_for_hook(paths: &MaestroPaths) -> PathBuf {
     for entry in fs::read_dir(paths.backups_dir()).expect("invariant: backups dir should exist") {
         let entry = entry.expect("invariant: backup entry should be readable");
         let file_name = entry.file_name();
@@ -978,15 +968,14 @@ fn update_backup_for(paths: &MaestroPaths, skill_name: &str) -> PathBuf {
         let candidate = entry
             .path()
             .join(".maestro")
-            .join("skills")
-            .join(skill_name)
-            .join("SKILL.md");
+            .join("hooks")
+            .join("record.sh");
         if candidate.exists() {
             return candidate;
         }
     }
 
-    panic!("expected update backup for {skill_name}");
+    panic!("expected update backup for record.sh");
 }
 
 struct FailingDownloader;

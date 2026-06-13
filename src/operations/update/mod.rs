@@ -488,6 +488,11 @@ pub fn run_update_with_seams(
         }
         _ => ExtractReport::default(),
     };
+    if let Some(paths) = options.paths {
+        if !repo_uninitialized {
+            crate::domain::install::warn_legacy_skill_symlinks(paths);
+        }
+    }
     let prepared_release = prepared_release(&binary_candidate);
     let binary_status = match replace_prepared_binary(options, replacer, binary_candidate) {
         Ok(status) => status,

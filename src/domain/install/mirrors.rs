@@ -5,9 +5,6 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Error, Result, bail};
 use serde_json::{Map, Value};
 
-use crate::domain::skills::symlink::{
-    SkillSymlink, create_skill_symlink, validate_skill_symlink_destination,
-};
 use crate::foundation::core::backup::{backup_file_with_timestamp, backup_operation_timestamp};
 use crate::foundation::core::diff::unified_diff;
 use crate::foundation::core::fs::{
@@ -23,8 +20,8 @@ use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::safe_write::{restore_or_remove, write_string_atomic};
 
 use super::hooks::ManagedHookConfig;
-use super::lock::{AgentInstall, FileOwnership, MirrorKind};
-use super::{InstallAgent, ensure_uninstallable_install, skill_symlink_for_agent};
+use super::lock::{AgentInstall, FileOwnership, InstallLock, MirrorKind};
+use super::{InstallAgent, ensure_uninstallable_install};
 
 const JSON_PREVIOUS_VALUE_HASHES: &str = "_maestro_previous_value_hashes";
 
@@ -83,7 +80,6 @@ impl MirrorWriteFailure {
 pub(crate) struct PreparedMirrors {
     pub(crate) install: AgentInstall,
     updates: Vec<MirrorUpdate>,
-    skill_symlink: SkillSymlink,
     backup_timestamp: String,
 }
 
@@ -206,17 +202,10 @@ pub(crate) fn prepare_mirrors(
             contents,
         });
     }
-    let skill_symlink = skill_symlink_for_agent(agent);
-    validate_skill_symlink_destination(paths, skill_symlink)?;
-    install.insert(
-        skill_symlink.relative_path,
-        FileOwnership::symlink(skill_symlink.target),
-    );
 
     Ok(PreparedMirrors {
         install,
         updates,
-        skill_symlink,
         backup_timestamp,
     })
 }
@@ -244,9 +233,6 @@ fn write_prepared_mirrors_with_effects(
             written.push(update);
         }
     }
-    if let Err(error) = effects.create_skill_symlink(paths, prepared.skill_symlink) {
-        return Err(rollback_write_failure(effects, error, &written));
-    }
 
     Ok(())
 }
@@ -270,8 +256,6 @@ trait MirrorEffects {
         update: &MirrorUpdate,
     ) -> Result<()>;
 
-    fn create_skill_symlink(&mut self, paths: &MaestroPaths, symlink: SkillSymlink) -> Result<()>;
-
     fn rollback_mirror_updates(&mut self, written: &[&MirrorUpdate]) -> Result<()>;
 }
 
@@ -285,10 +269,6 @@ impl MirrorEffects for FilesystemMirrorEffects {
         update: &MirrorUpdate,
     ) -> Result<()> {
         write_mirror_update(paths, prepared, update)
-    }
-
-    fn create_skill_symlink(&mut self, paths: &MaestroPaths, symlink: SkillSymlink) -> Result<()> {
-        create_skill_symlink(paths, symlink)
     }
 
     fn rollback_mirror_updates(&mut self, written: &[&MirrorUpdate]) -> Result<()> {
@@ -563,6 +543,52 @@ fn rollback_removed_symlinks(symlinks: &[RemovedSymlink]) -> Result<()> {
     Ok(())
 }
 
+/// Migrate a repo off the retired per-repo skills symlink. Older maestro versions
+/// created `.claude/skills` / `.codex/skills -> ../.maestro/skills` and recorded
+/// it in the install lock; skills are global-only now, so any maestro-owned
+/// symlink the lock still carries is removed and its lock entry dropped, so it no
+/// longer shadows the global `~/.maestro/skills` cache. The `.maestro/skills`
+/// directory itself is left in place -- maestro no longer manages it, so the user
+/// or git removes its contents. Best-effort: a symlink that cannot be pruned is
+/// returned as a warning and left in place rather than failing install/update.
+pub(crate) fn prune_legacy_skill_symlinks(paths: &MaestroPaths) -> Result<Vec<String>> {
+    let lock_path = paths.install_lock_file();
+    let mut lock = InstallLock::load(&lock_path)?;
+    let mut warnings = Vec::new();
+    let mut changed = false;
+
+    for install in lock.agents.values_mut() {
+        let symlink_paths = install
+            .files
+            .iter()
+            .filter(|(_, ownership)| ownership.kind == MirrorKind::Symlink)
+            .map(|(relative_path, _)| relative_path.clone())
+            .collect::<Vec<_>>();
+        for relative_path in symlink_paths {
+            let Some(ownership) = install.files.get(&relative_path).cloned() else {
+                continue;
+            };
+            match managed_symlink_path(paths, &relative_path)
+                .and_then(|path| remove_symlink_if_owned(&path, &ownership))
+            {
+                Ok(_) => {
+                    install.files.remove(&relative_path);
+                    changed = true;
+                }
+                Err(error) => warnings.push(format!(
+                    "could not prune legacy skills symlink {relative_path}: {error}"
+                )),
+            }
+        }
+    }
+
+    if changed {
+        lock.save(&lock_path)?;
+    }
+
+    Ok(warnings)
+}
+
 fn write_mirror_removals(
     paths: &MaestroPaths,
     removals: &[MirrorRemoval],
@@ -651,11 +677,27 @@ fn validate_install_ownership(
 ) -> Result<()> {
     ensure_uninstallable_install(agent, install)?;
 
-    let skill_symlink = skill_symlink_for_agent(agent);
-    let owned_paths = install.files.keys().cloned().collect::<BTreeSet<_>>();
-    let mut expected_paths = allowed.keys().cloned().collect::<BTreeSet<_>>();
-    expected_paths.insert(skill_symlink.relative_path.to_string());
-    if owned_paths != expected_paths && !is_legacy_symlink_only_install(install, skill_symlink) {
+    // A lock written by an older maestro may still carry a per-repo skills
+    // symlink entry (`.claude/skills` / `.codex/skills`). Skills are global-only
+    // now, so tolerate any such legacy `Symlink` entry: exclude it from the
+    // expected-mirror equality check here and skip it in the per-entry loop;
+    // `remove_mirrors` and `prune_legacy_skill_symlinks` are what clean it up.
+    let owned_paths = install
+        .files
+        .iter()
+        .filter(|(_, ownership)| ownership.kind != MirrorKind::Symlink)
+        .map(|(relative_path, _)| relative_path.clone())
+        .collect::<BTreeSet<_>>();
+    let expected_paths = allowed.keys().cloned().collect::<BTreeSet<_>>();
+    // A lock whose only entries are legacy skill symlinks (no real mirrors left)
+    // predates a real install; tolerate it so uninstall/migration can still strip
+    // the symlink and drop the lock instead of dead-ending on a mirror mismatch.
+    let legacy_symlink_only = owned_paths.is_empty()
+        && install
+            .files
+            .values()
+            .any(|ownership| ownership.kind == MirrorKind::Symlink);
+    if owned_paths != expected_paths && !legacy_symlink_only {
         bail!(
             "install lock for {} does not match the expected mirror set",
             agent.key()
@@ -663,16 +705,7 @@ fn validate_install_ownership(
     }
 
     for (relative_path, ownership) in &install.files {
-        if relative_path == skill_symlink.relative_path {
-            if ownership.kind != MirrorKind::Symlink
-                || ownership.target.as_deref() != Some(skill_symlink.target)
-            {
-                bail!(
-                    "install lock entry is not an expected mirror for {}: {}",
-                    agent.key(),
-                    relative_path
-                );
-            }
+        if ownership.kind == MirrorKind::Symlink {
             continue;
         }
 
@@ -705,20 +738,6 @@ fn validate_install_ownership(
     }
 
     Ok(())
-}
-
-fn is_legacy_symlink_only_install(
-    install: &AgentInstall,
-    skill_symlink: crate::domain::skills::symlink::SkillSymlink,
-) -> bool {
-    install.files.len() == 1
-        && install
-            .files
-            .get(skill_symlink.relative_path)
-            .is_some_and(|ownership| {
-                ownership.kind == MirrorKind::Symlink
-                    && ownership.target.as_deref() == Some(skill_symlink.target)
-            })
 }
 
 fn verify_text_content_ownership(
@@ -857,7 +876,7 @@ fn agents_md_block() -> &'static str {
 }
 
 fn gitignore_block() -> &'static str {
-    "# Maestro local-only paths\n.maestro/runs/\n.maestro/backups/\n.maestro/index/\n.maestro/install-lock.yaml\n.maestro/tasks/*/evidence/\n.maestro/tasks/*/local/\n.maestro/archive/**/evidence/\n.maestro/archive/**/local/\n.maestro/archive/**/runs/\n\n# Local agent settings\n.claude/settings.local.json\n.claude/skills\n.codex/hooks.json\n.codex/skills"
+    "# Maestro local-only paths\n.maestro/runs/\n.maestro/backups/\n.maestro/index/\n.maestro/install-lock.yaml\n.maestro/tasks/*/evidence/\n.maestro/tasks/*/local/\n.maestro/archive/**/evidence/\n.maestro/archive/**/local/\n.maestro/archive/**/runs/\n\n# Local agent settings\n.claude/settings.local.json\n.codex/hooks.json"
 }
 
 fn codex_config_block() -> &'static str {
@@ -1008,7 +1027,6 @@ mod tests {
         write_prepared_mirrors_with_effects,
     };
     use crate::domain::install::AgentInstall;
-    use crate::domain::skills::symlink::SkillSymlink;
     use crate::foundation::core::paths::MaestroPaths;
 
     #[test]
@@ -1056,10 +1074,6 @@ mod tests {
                     contents: "later\n".to_string(),
                 },
             ],
-            skill_symlink: SkillSymlink {
-                relative_path: ".codex/skills",
-                target: "../.maestro/skills",
-            },
             backup_timestamp: "test".to_string(),
         };
         let mut effects = FailingRollbackEffects::default();
@@ -1092,14 +1106,6 @@ mod tests {
             if self.write_attempts == 2 {
                 bail!("write failed");
             }
-            Ok(())
-        }
-
-        fn create_skill_symlink(
-            &mut self,
-            _paths: &MaestroPaths,
-            _symlink: SkillSymlink,
-        ) -> Result<()> {
             Ok(())
         }
 

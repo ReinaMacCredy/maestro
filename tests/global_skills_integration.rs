@@ -94,11 +94,6 @@ fn install_syncs_global_cache_lock_and_supported_agent_links() {
     fs::create_dir(&repo).expect("invariant: repo should be creatable");
     fs::create_dir(&home).expect("invariant: home should be creatable");
     init_repo(&repo, &home);
-    fs::write(
-        repo.join(".maestro/skills/maestro-card/SKILL.md"),
-        "repo-local edit must not feed global cache\n",
-    )
-    .expect("invariant: repo-local skill should be editable");
 
     let output = maestro(&["install", "--agent", "codex"], &repo, &home);
 
@@ -159,7 +154,8 @@ fn install_syncs_global_cache_lock_and_supported_agent_links() {
     assert!(lock.contains("resolved_path:"));
 
     assert!(repo.join(".codex/config.toml").is_file());
-    assert!(repo.join(".codex/skills").is_symlink());
+    // ac-2: skills are global-only; install creates no per-repo skills symlink.
+    assert!(!repo.join(".codex/skills").exists());
     assert!(!repo.join(".claude/settings.local.json").exists());
 
     let uninstall = maestro(&["uninstall", "--agent", "codex"], &repo, &home);
@@ -202,7 +198,8 @@ fn install_succeeds_with_a_warning_when_global_sync_hits_a_collision() {
     );
     assert!(repo.join(".maestro/install-lock.yaml").exists());
     assert!(repo.join(".codex/config.toml").exists());
-    assert!(repo.join(".codex/skills").is_symlink());
+    // ac-2: skills are global-only; install creates no per-repo skills symlink.
+    assert!(!repo.join(".codex/skills").exists());
     assert!(
         !home.join(".maestro/skills/maestro-card/SKILL.md").exists(),
         "failed global sync must not leave cache writes behind"
@@ -229,18 +226,13 @@ fn install_succeeds_with_a_warning_when_global_sync_hits_a_collision() {
 }
 
 #[test]
-fn sync_global_skills_refreshes_global_cache_without_touching_repo_local_skills() {
+fn sync_global_skills_refreshes_the_global_cache() {
     let temp = TestTempDir::new("maestro-global-skills-test");
     let repo = temp.path().join("repo");
     let home = temp.path().join("home");
     fs::create_dir(&repo).expect("invariant: repo should be creatable");
     fs::create_dir(&home).expect("invariant: home should be creatable");
     init_repo(&repo, &home);
-    fs::write(
-        repo.join(".maestro/skills/maestro-card/SKILL.md"),
-        "repo-local edit must remain\n",
-    )
-    .expect("invariant: repo-local skill should be editable");
     assert_success(&maestro(&["sync", "--global-skills"], &repo, &home));
     fs::remove_file(home.join(".maestro/skills/maestro-card/SKILL.md"))
         .expect("invariant: global skill should be removable");
@@ -252,11 +244,6 @@ fn sync_global_skills_refreshes_global_cache_without_touching_repo_local_skills(
         fs::read_to_string(home.join(".maestro/skills/maestro-card/SKILL.md"))
             .expect("invariant: global task skill should be readable"),
         bundled_task_skill_md()
-    );
-    assert_eq!(
-        fs::read_to_string(repo.join(".maestro/skills/maestro-card/SKILL.md"))
-            .expect("invariant: repo-local task skill should be readable"),
-        "repo-local edit must remain\n"
     );
 }
 

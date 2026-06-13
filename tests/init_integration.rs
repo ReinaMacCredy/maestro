@@ -7,13 +7,6 @@ use std::process::Command;
 
 use support::TestTempDir;
 
-const BUNDLED_SKILLS: [&str; 4] = [
-    "maestro-card",
-    "maestro-setup",
-    "maestro-design",
-    "maestro-audit",
-];
-
 fn maestro(args: &[&str], cwd: &std::path::Path) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_maestro"))
         .args(args)
@@ -92,8 +85,8 @@ fn init_dry_run_previews_bundled_extraction() {
     assert!(output.status.success());
     let stdout = String::from_utf8(output.stdout).expect("invariant: stdout should be UTF-8");
     // The dry-run reuses the extraction-preview machinery, so every bundled
-    // folder is enumerated with its `create` verb (the tree is empty here).
-    assert!(stdout.contains("create   maestro-card"), "{stdout}");
+    // resource is enumerated with its `create` verb (the tree is empty here).
+    // Skills are global-only (ac-1), so they no longer appear here.
     assert!(stdout.contains("create   HARNESS.md"), "{stdout}");
     assert!(stdout.contains("create   RECOVERY.md"), "{stdout}");
     assert!(stdout.contains("create   record.sh"), "{stdout}");
@@ -142,12 +135,10 @@ fn init_merge_hints_sync_when_a_folder_is_behind() {
         String::from_utf8_lossy(&first.stderr)
     );
 
-    // Drift a managed skill into a versionless state: merge preserves it, but
+    // Drift a managed resource into a versionless state: merge preserves it, but
     // it is now behind the binary's shipped version.
-    let skill = temp_dir
-        .path()
-        .join(".maestro/skills/maestro-card/SKILL.md");
-    fs::write(&skill, "edited bundled skill\n").expect("invariant: skill should be writable");
+    let record = temp_dir.path().join(".maestro/hooks/record.sh");
+    fs::write(&record, "edited hook script\n").expect("invariant: hook script should be writable");
 
     let output = maestro(&["init", "--merge"], temp_dir.path());
 
@@ -161,8 +152,8 @@ fn init_merge_hints_sync_when_a_folder_is_behind() {
     assert!(stdout.contains("maestro sync"), "{stdout}");
     // Merge keeps the local edit; the hint just points at `sync` to refresh it.
     assert_eq!(
-        fs::read_to_string(&skill).expect("invariant: skill should be readable"),
-        "edited bundled skill\n"
+        fs::read_to_string(&record).expect("invariant: hook script should be readable"),
+        "edited hook script\n"
     );
 }
 
@@ -208,24 +199,12 @@ fn init_creates_minimal_artifact_tree() {
         "the backlog has no file of its own; items live as idea cards (D7)"
     );
     assert!(temp_dir.path().join(".maestro/cards").is_dir());
-    assert!(temp_dir.path().join(".maestro/skills").is_dir());
-    for skill in BUNDLED_SKILLS {
-        assert!(
-            temp_dir
-                .path()
-                .join(".maestro/skills")
-                .join(skill)
-                .join("SKILL.md")
-                .is_file()
-        );
-    }
-    assert!(!temp_dir.path().join(".maestro/skill-index.yaml").exists());
+    // ac-1: skills are global-only; init extracts no per-repo skills directory.
     assert!(
-        !temp_dir
-            .path()
-            .join(".maestro/skills/skill-index.yaml")
-            .exists()
+        !temp_dir.path().join(".maestro/skills").exists(),
+        "init must not create a per-repo .maestro/skills directory"
     );
+    assert!(!temp_dir.path().join(".maestro/skill-index.yaml").exists());
     let stdout = String::from_utf8(output.stdout).expect("invariant: stdout should be UTF-8");
     assert!(stdout.contains("next:"), "{stdout}");
     assert!(stdout.contains("check setup: maestro doctor"), "{stdout}");
@@ -306,11 +285,9 @@ fn init_yes_is_idempotent_keeps_edits_and_restores_missing() {
         String::from_utf8_lossy(&first.stderr)
     );
 
-    // Locally customize a managed skill file, and delete a managed init file.
-    let skill = temp_dir
-        .path()
-        .join(".maestro/skills/maestro-card/SKILL.md");
-    fs::write(&skill, "custom skill\n").expect("invariant: skill should be writable");
+    // Locally customize a managed resource file, and delete a managed init file.
+    let record = temp_dir.path().join(".maestro/hooks/record.sh");
+    fs::write(&record, "custom hook script\n").expect("invariant: hook script should be writable");
     let harness_yml = temp_dir.path().join(".maestro/harness/harness.yml");
     fs::remove_file(&harness_yml).expect("invariant: harness.yml should be removable");
 
@@ -323,8 +300,8 @@ fn init_yes_is_idempotent_keeps_edits_and_restores_missing() {
         String::from_utf8_lossy(&second.stderr)
     );
     assert_eq!(
-        fs::read_to_string(&skill).expect("invariant: skill should remain readable"),
-        "custom skill\n",
+        fs::read_to_string(&record).expect("invariant: hook script should remain readable"),
+        "custom hook script\n",
         "merge must preserve the local edit"
     );
     assert!(
@@ -469,22 +446,20 @@ fn init_bootstraps_empty_directory_without_git_marker() {
 }
 
 #[test]
-fn init_preflights_bundled_skill_conflicts_before_writing_harness() {
+fn init_preflights_bundled_resource_conflicts_before_writing_harness() {
     let temp_dir = TestTempDir::new("maestro-init-test");
     init_git_marker(temp_dir.path());
-    let skill = temp_dir
-        .path()
-        .join(".maestro/skills/maestro-card/SKILL.md");
+    let record = temp_dir.path().join(".maestro/hooks/record.sh");
     fs::create_dir_all(
-        skill
+        record
             .parent()
-            .expect("invariant: skill path should have a parent"),
+            .expect("invariant: hook path should have a parent"),
     )
-    .expect("invariant: skill parent should be writable");
-    fs::write(&skill, "custom skill\n").expect("invariant: skill should be writable");
+    .expect("invariant: hooks dir should be writable");
+    fs::write(&record, "custom hook script\n").expect("invariant: hook script should be writable");
 
     // Bare `init` (Create mode) preflights the conflict; `--yes`/`--merge` would
-    // instead keep the existing skill and succeed (see the idempotency test).
+    // instead keep the existing file and succeed (see the idempotency test).
     let output = maestro(&["init"], temp_dir.path());
 
     assert!(!output.status.success());
@@ -496,7 +471,7 @@ fn init_preflights_bundled_skill_conflicts_before_writing_harness() {
             .exists()
     );
     assert_eq!(
-        fs::read_to_string(skill).expect("invariant: skill should remain readable"),
-        "custom skill\n"
+        fs::read_to_string(record).expect("invariant: hook script should remain readable"),
+        "custom hook script\n"
     );
 }

@@ -30,8 +30,10 @@ fn mirror_plan_writes_managed_content_for_claude() {
         .iter()
         .find(|plan| plan.relative_path == ".gitignore")
         .expect("invariant: gitignore plan should exist");
-    assert!(gitignore_plan.contents.contains(".claude/skills"));
-    assert!(gitignore_plan.contents.contains(".codex/skills"));
+    // Skills are global-only now: the gitignore no longer ignores the retired
+    // per-repo skills symlink paths.
+    assert!(!gitignore_plan.contents.contains(".claude/skills"));
+    assert!(!gitignore_plan.contents.contains(".codex/skills"));
     assert!(plans.iter().any(|plan| {
         plan.relative_path == ".claude/settings.local.json"
             && plan.contents.contains("\"_maestro_managed_keys\"")
@@ -108,7 +110,7 @@ fn apply_mirrors_preserves_user_content_and_records_ownership() {
 
 #[cfg(unix)]
 #[test]
-fn apply_mirrors_creates_skill_symlink_and_records_ownership() {
+fn apply_mirrors_creates_no_skill_symlink_and_records_no_symlink_ownership() {
     let temp_dir = TestTempDir::new("maestro-install-test");
     init_repo(temp_dir.path());
     let paths = MaestroPaths::new(temp_dir.path().to_path_buf());
@@ -118,36 +120,15 @@ fn apply_mirrors_creates_skill_symlink_and_records_ownership() {
         InstallLock::load(&paths.install_lock_file()).expect("invariant: install lock should load");
     let install = &lock.agents["claude"];
 
-    let target = fs::read_link(temp_dir.path().join(".claude/skills"))
-        .expect("invariant: Claude skills mirror should be a symlink");
-    assert_eq!(target, std::path::Path::new("../.maestro/skills"));
-    let ownership = install
-        .files
-        .get(".claude/skills")
-        .expect("invariant: skill symlink ownership should be recorded");
-    assert!(matches!(ownership.kind, MirrorKind::Symlink));
-    assert_eq!(ownership.target.as_deref(), Some("../.maestro/skills"));
-}
-
-#[cfg(unix)]
-#[test]
-fn apply_mirrors_refuses_existing_user_skill_tree() {
-    let temp_dir = TestTempDir::new("maestro-install-test");
-    init_repo(temp_dir.path());
-    fs::create_dir_all(temp_dir.path().join(".codex/skills"))
-        .expect("invariant: user skill tree should be writable");
-    let paths = MaestroPaths::new(temp_dir.path().to_path_buf());
-
-    let error = install_agent(&paths, InstallAgent::Codex)
-        .expect_err("existing user skill tree should make install fail");
-
+    // Skills are global-only: no per-repo symlink, no Symlink-kind ownership.
+    assert!(fs::symlink_metadata(temp_dir.path().join(".claude/skills")).is_err());
+    assert!(!install.files.contains_key(".claude/skills"));
     assert!(
-        error
-            .to_string()
-            .contains("refusing to overwrite existing .codex/skills")
+        install
+            .files
+            .values()
+            .all(|ownership| !matches!(ownership.kind, MirrorKind::Symlink))
     );
-    assert!(temp_dir.path().join(".codex/skills").is_dir());
-    assert!(!temp_dir.path().join("AGENTS.md").exists());
 }
 
 #[test]
