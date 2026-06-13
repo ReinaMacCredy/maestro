@@ -13,8 +13,6 @@ mod mirrors;
 pub use lock::{AgentInstall, FileOwnership, InstallLock, InstallState, MirrorKind};
 pub use mirrors::{MirrorPlan, mirror_plan};
 
-pub(crate) use mirrors::prune_legacy_skill_symlinks;
-
 use lock::remove_lock_file;
 use mirrors::{prepare_mirrors, write_prepared_mirrors};
 
@@ -194,7 +192,7 @@ fn rollback_uninstall_after_lock_failure(
 /// pruned so it stops shadowing the global cache. A failure is reported to stderr
 /// and never blocks the caller.
 pub(crate) fn warn_legacy_skill_symlinks(paths: &MaestroPaths) {
-    match prune_legacy_skill_symlinks(paths) {
+    match mirrors::prune_legacy_skill_symlinks(paths) {
         Ok(warnings) => {
             for warning in warnings {
                 eprintln!("warning: {warning}");
