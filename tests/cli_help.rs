@@ -53,6 +53,7 @@ fn root_help_lists_top_level_commands() {
             "ready",
             "list",
             "dep",
+            "link",
             "archive",
             "claim",
             "note",
@@ -102,6 +103,7 @@ fn root_about_strings_name_every_subcommand() {
         &maestro(&["--help"]),
         &[
             "Create, show, and list decision cards in the card store",
+            "Author non-blocking related links between cards",
             "List, show, apply, unapply, dismiss, and measure harness improvement suggestions",
             "Query computed read models (matrix, friction, decisions, proof, backlog)",
             "Run or inspect the MCP server (serve, stdin, tools, list)",
@@ -233,6 +235,20 @@ fn nested_help_lists_section_38_command_tree() {
         ],
     );
     assert_contains_all(&maestro(&["dep", "--help"]), &["add"]);
+    let link_help = maestro(&["link", "--help"]);
+    assert_contains_all(&link_help, &["add", "remove"]);
+    assert!(
+        !link_help.contains("list"),
+        "link v1 exposes add/remove only, not list:\n{link_help}"
+    );
+    assert_contains_all(
+        &maestro(&["link", "add", "--help"]),
+        &["FROM", "TO", "Examples:", "maestro link add"],
+    );
+    assert_contains_all(
+        &maestro(&["link", "remove", "--help"]),
+        &["FROM", "TO", "Examples:", "maestro link remove"],
+    );
     assert_contains_all(
         &maestro(&["archive", "--help"]),
         &["FEATURE", "Examples:", "maestro archive"],

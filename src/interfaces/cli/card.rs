@@ -7,8 +7,8 @@ use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::slug::slugify_ascii;
 use crate::foundation::core::time::utc_now_timestamp;
 use crate::interfaces::cli::{
-    ArchiveArgs, ClaimArgs, CloseArgs, CreateArgs, DepArgs, DepCommand, ListArgs, NoteArgs,
-    ReadyArgs, ShowArgs, UpdateArgs,
+    ArchiveArgs, ClaimArgs, CloseArgs, CreateArgs, DepArgs, DepCommand, LinkArgs, LinkCommand,
+    ListArgs, NoteArgs, ReadyArgs, ShowArgs, UpdateArgs,
 };
 
 const READY_JSON_SCHEMA: &str = "maestro.ready.v1";
@@ -117,6 +117,34 @@ pub fn dep(args: DepArgs) -> Result<()> {
                 println!("{child} is now blocked by {parent}");
             } else {
                 println!("{child} is already blocked by {parent}");
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Execute `maestro link add/remove <from> <to>`: author or remove a non-blocking
+/// related edge. The user-facing relation is unordered; storage remains one edge.
+pub fn link(args: LinkArgs) -> Result<()> {
+    let Some(paths) = card_paths()? else {
+        return Ok(());
+    };
+    match args.command {
+        LinkCommand::Add { from, to } => {
+            let added = card::edit::add_related_link(&paths, &from, &to, &utc_now_timestamp())?;
+            if added {
+                println!("{from} is now related to {to}");
+            } else {
+                println!("{from} is already related to {to}");
+            }
+        }
+        LinkCommand::Remove { from, to } => {
+            let removed =
+                card::edit::remove_related_link(&paths, &from, &to, &utc_now_timestamp())?;
+            if removed {
+                println!("removed related link between {from} and {to}");
+            } else {
+                println!("{from} is not related to {to}");
             }
         }
     }
@@ -286,14 +314,23 @@ pub fn show(args: ShowArgs) -> Result<()> {
     } else if args.compact_json {
         render_compact_card_json(&c)?;
     } else {
-        // The alias names same-parent siblings, so a parentless card never
-        // has one -- skip the store scan that exists only to compute it.
-        let alias = if c.parent.is_some() && !from_archive {
-            card::query::display_alias(&card::query::scan(&paths)?, &c)
-        } else {
+        let live_cards = if from_archive {
             None
+        } else {
+            Some(card::query::scan(&paths)?)
         };
-        render_show(&c, alias.as_deref());
+        let alias = live_cards.as_ref().and_then(|cards| {
+            // The alias names same-parent siblings, so a parentless card
+            // never has one.
+            c.parent
+                .as_ref()
+                .and_then(|_| card::query::display_alias(cards, &c))
+        });
+        let related_by = live_cards
+            .as_ref()
+            .map(|cards| incoming_related(cards, &c.id))
+            .unwrap_or_default();
+        render_show(&c, alias.as_deref(), &related_by);
         if from_archive {
             println!("archived: read-only (lives in .maestro/archive/cards/)");
         }
@@ -628,7 +665,7 @@ fn render_compact_card_json(card: &card::schema::Card) -> Result<()> {
 
 /// Render `show <id>` (SPEC DN9): header line + parent + edges grouped by kind +
 /// body (timestamps and description). Emoji-free.
-fn render_show(c: &card::schema::Card, alias: Option<&str>) {
+fn render_show(c: &card::schema::Card, alias: Option<&str>, related_by: &[String]) {
     println!(
         "{}  {}  {}  {}  {}",
         c.id,
@@ -647,12 +684,30 @@ fn render_show(c: &card::schema::Card, alias: Option<&str>) {
     }
     render_edges(c, card::schema::DepKind::Blocks, "blocked by");
     render_edges(c, card::schema::DepKind::Related, "related");
+    render_edge_ids(related_by, "related by");
     render_edges(c, card::schema::DepKind::Supersedes, "supersedes");
     println!("created: {}  updated: {}", c.created_at, c.updated_at);
     if let Some(description) = card::query::body_of(c) {
         println!();
         println!("{description}");
     }
+}
+
+fn incoming_related(cards: &[card::schema::Card], id: &str) -> Vec<String> {
+    let mut sources: Vec<String> = cards
+        .iter()
+        .filter(|candidate| candidate.id != id)
+        .filter(|candidate| {
+            candidate
+                .deps
+                .iter()
+                .any(|dep| dep.kind == card::schema::DepKind::Related && dep.target == id)
+        })
+        .map(|candidate| candidate.id.clone())
+        .collect();
+    sources.sort();
+    sources.dedup();
+    sources
 }
 
 /// Print the card's edges of one kind as a single `label: a, b, c` line, or
@@ -666,6 +721,12 @@ fn render_edges(c: &card::schema::Card, kind: card::schema::DepKind, label: &str
         .collect();
     if !targets.is_empty() {
         println!("{label}: {}", targets.join(", "));
+    }
+}
+
+fn render_edge_ids(ids: &[String], label: &str) {
+    if !ids.is_empty() {
+        println!("{label}: {}", ids.join(", "));
     }
 }
 

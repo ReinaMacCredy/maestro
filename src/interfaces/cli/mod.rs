@@ -140,6 +140,11 @@ pub enum RootCommand {
     #[command(about = "Author dependency edges between cards (card store)")]
     Dep(DepArgs),
     #[command(
+        about = "Author non-blocking related links between cards (card store)",
+        after_help = "Examples:\n  maestro link add task-a task-b\n  maestro link remove task-b task-a"
+    )]
+    Link(LinkArgs),
+    #[command(
         about = "Archive a feature card and its child cards (card store)",
         after_help = "Examples:\n  maestro archive csv-export   # archives the feature card + every parent=csv-export card\n  maestro archive --loose      # sweeps closed loose tasks/ideas + superseded decisions"
     )]
@@ -978,6 +983,40 @@ pub enum DepCommand {
 }
 
 #[derive(Debug, Args)]
+pub struct LinkArgs {
+    #[command(subcommand)]
+    pub command: LinkCommand,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum LinkCommand {
+    #[command(
+        about = "Add a non-blocking related link between two live cards",
+        after_help = "Examples:\n  maestro link add task-a task-b   # task-a is related to task-b"
+    )]
+    Add {
+        /// First live card; the edge is stored here on first add.
+        #[arg(value_name = "FROM")]
+        from: String,
+        /// Second live card.
+        #[arg(value_name = "TO")]
+        to: String,
+    },
+    #[command(
+        about = "Remove a related link between two live cards",
+        after_help = "Examples:\n  maestro link remove task-b task-a   # argument order does not matter"
+    )]
+    Remove {
+        /// First live card.
+        #[arg(value_name = "FROM")]
+        from: String,
+        /// Second live card.
+        #[arg(value_name = "TO")]
+        to: String,
+    },
+}
+
+#[derive(Debug, Args)]
 pub struct HarnessArgs {
     #[command(subcommand)]
     pub command: HarnessCommand,
@@ -1176,6 +1215,7 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Ready(args) => card::ready(args),
         RootCommand::List(args) => card::list(args),
         RootCommand::Dep(args) => card::dep(args),
+        RootCommand::Link(args) => card::link(args),
         RootCommand::Archive(args) => card::archive(args),
         RootCommand::Claim(args) => card::claim(args),
         RootCommand::Note(args) => card::note(args),

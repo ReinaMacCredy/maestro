@@ -58,6 +58,83 @@ pub fn add_blocks_dep(paths: &MaestroPaths, child: &str, parent: &str, now: &str
     Ok(true)
 }
 
+/// Add a non-blocking `related` edge between two live cards. The relation is
+/// user-facing unordered, but storage stays one-edge: the first successful add
+/// writes the edge to `from`; a later reverse add is a no-op.
+pub fn add_related_link(paths: &MaestroPaths, from: &str, to: &str, now: &str) -> Result<bool> {
+    validate_related_pair(from, to)?;
+    let Some(from_resolved) = resolve(paths, from)? else {
+        bail!("no live card {from} to link to");
+    };
+    let Some(to_resolved) = resolve(paths, to)? else {
+        bail!("no live card {to} to link to");
+    };
+
+    let mut from_card = from_resolved.card.clone();
+    if has_related_edge(&from_card, to) || has_related_edge(&to_resolved.card, from) {
+        return Ok(false);
+    }
+
+    from_card.deps.push(Dep {
+        kind: DepKind::Related,
+        target: to.to_string(),
+    });
+    from_card.updated_at = now.to_string();
+    save_resolved(&from_card, &from_resolved)?;
+    Ok(true)
+}
+
+/// Remove a non-blocking `related` edge between two live cards. Because related
+/// links are unordered at the CLI, either argument order removes the one stored
+/// edge.
+pub fn remove_related_link(paths: &MaestroPaths, from: &str, to: &str, now: &str) -> Result<bool> {
+    validate_related_pair(from, to)?;
+    let Some(from_resolved) = resolve(paths, from)? else {
+        bail!("no live card {from} to link to");
+    };
+    let Some(to_resolved) = resolve(paths, to)? else {
+        bail!("no live card {to} to link to");
+    };
+
+    let mut from_card = from_resolved.card.clone();
+    if remove_related_edge(&mut from_card, to) {
+        from_card.updated_at = now.to_string();
+        save_resolved(&from_card, &from_resolved)?;
+        return Ok(true);
+    }
+
+    let mut to_card = to_resolved.card.clone();
+    if remove_related_edge(&mut to_card, from) {
+        to_card.updated_at = now.to_string();
+        save_resolved(&to_card, &to_resolved)?;
+        return Ok(true);
+    }
+
+    Ok(false)
+}
+
+fn validate_related_pair(from: &str, to: &str) -> Result<()> {
+    validate_card_id(from)?;
+    validate_card_id(to)?;
+    if from == to {
+        bail!("a card cannot link to itself: {from}");
+    }
+    Ok(())
+}
+
+fn has_related_edge(card: &Card, target: &str) -> bool {
+    card.deps
+        .iter()
+        .any(|dep| dep.kind == DepKind::Related && dep.target == target)
+}
+
+fn remove_related_edge(card: &mut Card, target: &str) -> bool {
+    let before = card.deps.len();
+    card.deps
+        .retain(|dep| dep.kind != DepKind::Related || dep.target != target);
+    card.deps.len() != before
+}
+
 /// What `claim` did to a card, so the CLI can phrase the right line.
 #[derive(Debug, Eq, PartialEq)]
 pub enum ClaimOutcome {
@@ -282,6 +359,83 @@ mod tests {
         assert!(
             add_blocks_dep(&paths, "task-404", "task-001", NOW).is_err(),
             "the dependent must exist"
+        );
+    }
+
+    #[test]
+    fn add_related_link_writes_one_edge_and_reverse_add_is_idempotent() {
+        let paths = repo("edit-related-add");
+        seed(&paths, "task-001");
+        seed(&paths, "task-002");
+
+        assert!(
+            add_related_link(&paths, "task-001", "task-002", LATER).expect("first add"),
+            "a fresh related link writes"
+        );
+        assert!(
+            !add_related_link(&paths, "task-002", "task-001", LATER).expect("reverse add"),
+            "the reverse relation is already present"
+        );
+
+        let first = load(&card_path(&paths, "task-001"))
+            .expect("load")
+            .expect("first exists");
+        assert_eq!(first.deps.len(), 1);
+        assert_eq!(first.deps[0].kind, DepKind::Related);
+        assert_eq!(first.deps[0].target, "task-002");
+        assert_eq!(first.updated_at, LATER);
+
+        let second = load(&card_path(&paths, "task-002"))
+            .expect("load")
+            .expect("second exists");
+        assert!(
+            second.deps.is_empty(),
+            "reverse add does not write a reciprocal edge"
+        );
+    }
+
+    #[test]
+    fn remove_related_link_accepts_reverse_order() {
+        let paths = repo("edit-related-remove");
+        seed(&paths, "task-001");
+        seed(&paths, "task-002");
+        add_related_link(&paths, "task-001", "task-002", NOW).expect("add");
+
+        assert!(
+            remove_related_link(&paths, "task-002", "task-001", LATER).expect("reverse remove"),
+            "the stored edge is removed through reverse arguments"
+        );
+        let first = load(&card_path(&paths, "task-001"))
+            .expect("load")
+            .expect("first exists");
+        assert!(first.deps.is_empty(), "the related edge is gone");
+        assert_eq!(first.updated_at, LATER, "removal bumps the stored side");
+        assert!(
+            !remove_related_link(&paths, "task-001", "task-002", LATER).expect("second remove"),
+            "a missing relation is a no-op"
+        );
+    }
+
+    #[test]
+    fn related_links_reject_self_and_missing_cards() {
+        let paths = repo("edit-related-reject");
+        seed(&paths, "task-001");
+
+        assert!(
+            add_related_link(&paths, "task-001", "task-001", NOW).is_err(),
+            "a card cannot relate to itself"
+        );
+        assert!(
+            remove_related_link(&paths, "task-001", "task-001", NOW).is_err(),
+            "removing a self-link is also refused"
+        );
+        assert!(
+            add_related_link(&paths, "task-001", "task-404", NOW).is_err(),
+            "the target must exist"
+        );
+        assert!(
+            remove_related_link(&paths, "task-404", "task-001", NOW).is_err(),
+            "the source must exist"
         );
     }
 

@@ -11,7 +11,7 @@ use std::fs;
 use std::path::Path;
 use std::process::{Command, Output};
 
-use card_support::{cards_repo, id_by_title};
+use card_support::{card_doc, cards_repo, id_by_title};
 use support::TestTempDir;
 
 fn maestro(cwd: &Path, args: &[&str]) -> Output {
@@ -698,6 +698,133 @@ fn ready_and_list_render_the_beads_structure() {
     );
 }
 
+#[test]
+fn link_add_show_graph_and_reverse_remove_round_trip() {
+    let temp = cards_repo("s2-card-links-round-trip");
+    let repo = temp.path();
+
+    run(repo, &["create", "-t", "task", "Draft the loop"]);
+    run(repo, &["create", "-t", "task", "Route the skill"]);
+    let first = id_by_title(repo, "Draft the loop");
+    let second = id_by_title(repo, "Route the skill");
+    let ready_before: serde_json::Value =
+        serde_json::from_str(&run(repo, &["ready", "--json"])).expect("ready json before");
+    let list_before: serde_json::Value =
+        serde_json::from_str(&run(repo, &["list", "--json"])).expect("list json before");
+
+    let added = run(repo, &["link", "add", &first, &second]);
+    assert!(
+        added.contains(&format!("{first} is now related to {second}")),
+        "link add confirms the relation:\n{added}"
+    );
+    let duplicate = run(repo, &["link", "add", &first, &second]);
+    assert!(
+        duplicate.contains("already related"),
+        "forward duplicate add is idempotent:\n{duplicate}"
+    );
+    let reverse_duplicate = run(repo, &["link", "add", &second, &first]);
+    assert!(
+        reverse_duplicate.contains("already related"),
+        "reverse duplicate add is idempotent:\n{reverse_duplicate}"
+    );
+
+    let first_doc = card_doc(repo, &first);
+    let deps = first_doc["deps"]
+        .as_sequence()
+        .expect("deps should be a YAML sequence");
+    assert_eq!(deps.len(), 1, "only one related edge is stored");
+    assert_eq!(deps[0]["kind"].as_str(), Some("related"));
+    assert_eq!(deps[0]["target"].as_str(), Some(second.as_str()));
+    let second_doc = card_doc(repo, &second);
+    assert!(
+        second_doc["deps"].as_sequence().is_none_or(Vec::is_empty),
+        "reverse add does not write a reciprocal edge: {second_doc:?}"
+    );
+
+    let ready_after: serde_json::Value =
+        serde_json::from_str(&run(repo, &["ready", "--json"])).expect("ready json after");
+    let list_after: serde_json::Value =
+        serde_json::from_str(&run(repo, &["list", "--json"])).expect("list json after");
+    assert_eq!(
+        ready_before, ready_after,
+        "related links do not change the ready JSON contract"
+    );
+    assert_eq!(
+        list_before, list_after,
+        "related links do not change the list JSON contract"
+    );
+
+    let first_show = run(repo, &["show", &first]);
+    assert!(
+        first_show.contains(&format!("related: {second}")),
+        "show renders the local related edge:\n{first_show}"
+    );
+    let second_show = run(repo, &["show", &second]);
+    assert!(
+        second_show.contains(&format!("related by: {first}")),
+        "show renders the reverse related edge:\n{second_show}"
+    );
+    let graph = run(repo, &["query", "graph", &first]);
+    assert!(
+        graph.contains(&format!("- related: {second}")),
+        "query graph still sees the relation:\n{graph}"
+    );
+
+    let removed = run(repo, &["link", "remove", &second, &first]);
+    assert!(
+        removed.contains(&format!(
+            "removed related link between {second} and {first}"
+        )),
+        "reverse remove confirms the deleted relation:\n{removed}"
+    );
+    let first_doc = card_doc(repo, &first);
+    assert!(
+        first_doc["deps"].as_sequence().is_none_or(Vec::is_empty),
+        "reverse remove deletes the one stored edge: {first_doc:?}"
+    );
+}
+
+#[test]
+fn link_rejects_self_missing_archived_and_traversal_ids() {
+    let temp = cards_repo("s2-card-links-guards");
+    let repo = temp.path();
+
+    run(repo, &["create", "-t", "task", "Primary"]);
+    run(repo, &["create", "-t", "task", "Archive me"]);
+    let primary = id_by_title(repo, "Primary");
+    let archived = id_by_title(repo, "Archive me");
+
+    let self_link = run_err(repo, &["link", "add", &primary, &primary]);
+    assert!(
+        self_link.contains("cannot link to itself"),
+        "self-link is rejected:\n{self_link}"
+    );
+    let missing = run_err(repo, &["link", "add", &primary, "missing-card"]);
+    assert!(
+        missing.contains("no live card missing-card"),
+        "missing live id is rejected:\n{missing}"
+    );
+
+    run(repo, &["update", &archived, "--status", "abandoned"]);
+    run(repo, &["archive", "--loose"]);
+    let archived_link = run_err(repo, &["link", "add", &primary, &archived]);
+    assert!(
+        archived_link.contains(&format!("no live card {archived}")),
+        "archived-only id is rejected:\n{archived_link}"
+    );
+
+    for args in [
+        vec!["link", "add", "../../outside", &primary],
+        vec!["link", "remove", &primary, "../../outside"],
+    ] {
+        let refused = run_err(repo, &args);
+        assert!(
+            refused.contains("invalid card id"),
+            "{args:?} refuses traversal-shaped ids:\n{refused}"
+        );
+    }
+}
+
 /// SPEC E3: `close` and `update --status` are workable-card verbs. A decision
 /// or feature keeps its per-type lifecycle (the generic write would bypass its
 /// gates), and a typo'd status word is rejected loudly instead of silently
@@ -794,6 +921,8 @@ fn traversal_shaped_ids_are_refused() {
         vec!["close", "../../outside"],
         vec!["note", "../../outside", "text"],
         vec!["claim", "../../outside"],
+        vec!["link", "add", "../../outside", "task-001"],
+        vec!["link", "remove", "task-001", "../../outside"],
     ] {
         let refused = run_err(repo, &args);
         assert!(
@@ -831,11 +960,12 @@ fn the_new_verbs_on_a_legacy_repo_print_the_guiding_notice() {
     let repo = temp.path();
     fs::create_dir(repo.join(".git")).expect("invariant: .git marker should be creatable");
 
-    let cases: [Vec<&str>; 4] = [
+    let cases: [Vec<&str>; 5] = [
         vec!["create", "-t", "task", "X"],
         vec!["show", "anything"],
         vec!["update", "anything", "--status", "closed"],
         vec!["close", "anything"],
+        vec!["link", "add", "anything", "other"],
     ];
     for args in cases {
         let out = run(repo, &args);
