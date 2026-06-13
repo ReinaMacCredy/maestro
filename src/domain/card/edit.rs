@@ -58,6 +58,42 @@ pub fn add_blocks_dep(paths: &MaestroPaths, child: &str, parent: &str, now: &str
     Ok(true)
 }
 
+/// Remove the `blocks` edge that makes `child` wait on `parent` -- the inverse
+/// of `add_blocks_dep`. The edge is directional and stored on the dependent, so
+/// argument order matters here (unlike `link remove`): `remove parent child`
+/// finds no edge on `parent` and is a no-op. Validates the same input boundary
+/// as `add` (no self-edge; both cards exist). Idempotent: removing an absent
+/// edge is a no-op. Returns whether an edge was removed.
+pub fn remove_blocks_dep(
+    paths: &MaestroPaths,
+    child: &str,
+    parent: &str,
+    now: &str,
+) -> Result<bool> {
+    validate_card_id(child)?;
+    validate_card_id(parent)?;
+    if child == parent {
+        bail!("a card cannot block itself: {child}");
+    }
+    if locate(paths, parent)?.is_none() {
+        bail!("no card {parent} to depend on");
+    }
+
+    let Some(resolved) = resolve(paths, child)? else {
+        bail!("no card {child} to remove a dependency from");
+    };
+    let mut card = resolved.card.clone();
+    let before = card.deps.len();
+    card.deps
+        .retain(|dep| dep.kind != DepKind::Blocks || dep.target != parent);
+    if card.deps.len() == before {
+        return Ok(false);
+    }
+    card.updated_at = now.to_string();
+    save_resolved(&card, &resolved)?;
+    Ok(true)
+}
+
 /// Add a non-blocking `related` edge between two live cards. The relation is
 /// user-facing unordered, but storage stays one-edge: the first successful add
 /// writes the edge to `from`; a later reverse add is a no-op.
@@ -358,6 +394,73 @@ mod tests {
         );
         assert!(
             add_blocks_dep(&paths, "task-404", "task-001", NOW).is_err(),
+            "the dependent must exist"
+        );
+    }
+
+    #[test]
+    fn remove_deletes_the_childs_blocks_edge() {
+        let paths = repo("edit-remove");
+        seed(&paths, "task-001");
+        seed(&paths, "task-002");
+        add_blocks_dep(&paths, "task-002", "task-001", NOW).expect("add");
+
+        assert!(
+            remove_blocks_dep(&paths, "task-002", "task-001", LATER).expect("remove"),
+            "the stored edge is removed"
+        );
+        let child = load(&card_path(&paths, "task-002"))
+            .expect("load")
+            .expect("child exists");
+        assert!(child.deps.is_empty(), "the blocks edge is gone");
+        assert_eq!(child.updated_at, LATER, "removal bumps updated_at");
+    }
+
+    #[test]
+    fn remove_is_directional_and_idempotent() {
+        let paths = repo("edit-remove-directional");
+        seed(&paths, "task-001");
+        seed(&paths, "task-002");
+        add_blocks_dep(&paths, "task-002", "task-001", NOW).expect("add");
+
+        assert!(
+            !remove_blocks_dep(&paths, "task-001", "task-002", LATER).expect("reverse remove"),
+            "reverse argument order finds no edge on the blocker (directional)"
+        );
+        let child = load(&card_path(&paths, "task-002"))
+            .expect("load")
+            .expect("child exists");
+        assert_eq!(
+            child.deps.len(),
+            1,
+            "the real edge survives a reverse-order remove"
+        );
+
+        assert!(
+            remove_blocks_dep(&paths, "task-002", "task-001", LATER).expect("forward remove"),
+            "the correctly-ordered remove deletes the edge"
+        );
+        assert!(
+            !remove_blocks_dep(&paths, "task-002", "task-001", LATER).expect("second remove"),
+            "removing an absent edge is a no-op"
+        );
+    }
+
+    #[test]
+    fn remove_rejects_self_block_and_missing_cards() {
+        let paths = repo("edit-remove-reject");
+        seed(&paths, "task-001");
+
+        assert!(
+            remove_blocks_dep(&paths, "task-001", "task-001", NOW).is_err(),
+            "a card cannot block itself"
+        );
+        assert!(
+            remove_blocks_dep(&paths, "task-001", "task-404", NOW).is_err(),
+            "the blocker must exist"
+        );
+        assert!(
+            remove_blocks_dep(&paths, "task-404", "task-001", NOW).is_err(),
             "the dependent must exist"
         );
     }

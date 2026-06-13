@@ -119,6 +119,15 @@ pub fn dep(args: DepArgs) -> Result<()> {
                 println!("{child} is already blocked by {parent}");
             }
         }
+        DepCommand::Remove { child, parent } => {
+            let removed =
+                card::edit::remove_blocks_dep(&paths, &child, &parent, &utc_now_timestamp())?;
+            if removed {
+                println!("{child} is no longer blocked by {parent}");
+            } else {
+                println!("{child} is not blocked by {parent}");
+            }
+        }
     }
     Ok(())
 }

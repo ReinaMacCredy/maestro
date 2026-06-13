@@ -785,6 +785,63 @@ fn link_add_show_graph_and_reverse_remove_round_trip() {
 }
 
 #[test]
+fn dep_remove_unblocks_the_child_and_is_directional() {
+    let temp = cards_repo("s2-card-dep-remove");
+    let repo = temp.path();
+
+    run(repo, &["create", "-t", "task", "Blocked work"]);
+    run(repo, &["create", "-t", "task", "The blocker"]);
+    let child = id_by_title(repo, "Blocked work");
+    let parent = id_by_title(repo, "The blocker");
+
+    run(repo, &["dep", "add", &child, &parent]);
+    let blocked_ready = run(repo, &["ready", "--json"]);
+    assert!(
+        !blocked_ready.contains(&child),
+        "the dependent is not ready while blocked:\n{blocked_ready}"
+    );
+    let child_show = run(repo, &["show", &child]);
+    assert!(
+        child_show.contains(&format!("blocked by: {parent}")),
+        "show renders the blocking edge:\n{child_show}"
+    );
+
+    // The edge lives on the child, not the parent, so reverse-order remove is a no-op.
+    let reverse = run(repo, &["dep", "remove", &parent, &child]);
+    assert!(
+        reverse.contains(&format!("{parent} is not blocked by {child}")),
+        "reverse-order remove is a no-op:\n{reverse}"
+    );
+    let still_show = run(repo, &["show", &child]);
+    assert!(
+        still_show.contains(&format!("blocked by: {parent}")),
+        "the real edge survives a reverse-order remove:\n{still_show}"
+    );
+
+    let removed = run(repo, &["dep", "remove", &child, &parent]);
+    assert!(
+        removed.contains(&format!("{child} is no longer blocked by {parent}")),
+        "the correctly-ordered remove confirms:\n{removed}"
+    );
+    let child_doc = card_doc(repo, &child);
+    assert!(
+        child_doc["deps"].as_sequence().is_none_or(Vec::is_empty),
+        "the blocks edge is deleted: {child_doc:?}"
+    );
+    let unblocked_ready = run(repo, &["ready", "--json"]);
+    assert!(
+        unblocked_ready.contains(&child),
+        "the dependent is ready once unblocked:\n{unblocked_ready}"
+    );
+
+    let again = run(repo, &["dep", "remove", &child, &parent]);
+    assert!(
+        again.contains(&format!("{child} is not blocked by {parent}")),
+        "removing an absent edge is an idempotent no-op:\n{again}"
+    );
+}
+
+#[test]
 fn link_rejects_self_missing_archived_and_traversal_ids() {
     let temp = cards_repo("s2-card-links-guards");
     let repo = temp.path();

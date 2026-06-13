@@ -980,6 +980,18 @@ pub enum DepCommand {
         #[arg(value_name = "PARENT")]
         parent: String,
     },
+    #[command(
+        about = "Remove a blocking edge so CHILD no longer waits on PARENT",
+        after_help = "Examples:\n  maestro dep remove task-002 task-001   # task-002 no longer blocked by task-001"
+    )]
+    Remove {
+        /// The dependent card the edge is stored on.
+        #[arg(value_name = "CHILD")]
+        child: String,
+        /// The blocker card it waited on.
+        #[arg(value_name = "PARENT")]
+        parent: String,
+    },
 }
 
 #[derive(Debug, Args)]

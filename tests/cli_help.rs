@@ -234,7 +234,7 @@ fn nested_help_lists_section_38_command_tree() {
             "--archived",
         ],
     );
-    assert_contains_all(&maestro(&["dep", "--help"]), &["add"]);
+    assert_contains_all(&maestro(&["dep", "--help"]), &["add", "remove"]);
     let link_help = maestro(&["link", "--help"]);
     assert_contains_all(&link_help, &["add", "remove"]);
     assert!(
@@ -264,6 +264,10 @@ fn nested_help_lists_section_38_command_tree() {
     assert_contains_all(
         &maestro(&["dep", "add", "--help"]),
         &["CHILD", "PARENT", "Examples:", "maestro dep add"],
+    );
+    assert_contains_all(
+        &maestro(&["dep", "remove", "--help"]),
+        &["CHILD", "PARENT", "Examples:", "maestro dep remove"],
     );
     assert_contains_all(
         &maestro(&["harness", "--help"]),
