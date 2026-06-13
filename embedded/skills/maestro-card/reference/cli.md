@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.0.0 -->
-<!-- maestro:cli-reference-sha256: 593ad21877b2cbeb12425dbf2980300606005ada7b610800b1db49718d8c7173 -->
+<!-- maestro:cli-reference-sha256: 6c09d624d9baee91a0218eca3cae8e93acc5c15d66da8740ea44700a87be92ad -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -156,7 +156,9 @@ Every verb and flag is listed; a spelling not found here does not exist.
 - `maestro card ready [FEATURE] [--json]` -- List workable cards with no open blockers
 - `maestro card list [--parent <PARENT>] [--type <TYPE>] [--assignee <ASSIGNEE>] [--status <STATUS>] [--grep <TERM>] [--archived] [--json]` -- List cards filtered by parent, type, assignee, or coarse status
 - `maestro card dep add <CHILD> <PARENT>` -- Add a blocking edge: CHILD waits until PARENT closes
+- `maestro card dep remove <CHILD> <PARENT>` -- Remove a blocking edge so CHILD no longer waits on PARENT
 - `maestro card dep help add` -- Add a blocking edge: CHILD waits until PARENT closes
+- `maestro card dep help remove` -- Remove a blocking edge so CHILD no longer waits on PARENT
 - `maestro card dep help help` -- Print this message or the help of the given subcommand(s)
 - `maestro card archive [FEATURE] [--loose]` -- Archive a feature card and its child cards
 - `maestro card claim <ID>` -- Claim a workable card for this session
@@ -168,6 +170,7 @@ Every verb and flag is listed; a spelling not found here does not exist.
 - `maestro card help ready` -- List workable cards with no open blockers
 - `maestro card help list` -- List cards filtered by parent, type, assignee, or coarse status
 - `maestro card help dep add` -- Add a blocking edge: CHILD waits until PARENT closes
+- `maestro card help dep remove` -- Remove a blocking edge so CHILD no longer waits on PARENT
 - `maestro card help archive` -- Archive a feature card and its child cards
 - `maestro card help claim` -- Claim a workable card for this session
 - `maestro card help note` -- Append a dated note to a card's notes.md
@@ -188,7 +191,9 @@ Every verb and flag is listed; a spelling not found here does not exist.
 ## maestro dep
 
 - `maestro dep add <CHILD> <PARENT>` -- Add a blocking edge: CHILD waits until PARENT closes
+- `maestro dep remove <CHILD> <PARENT>` -- Remove a blocking edge so CHILD no longer waits on PARENT
 - `maestro dep help add` -- Add a blocking edge: CHILD waits until PARENT closes
+- `maestro dep help remove` -- Remove a blocking edge so CHILD no longer waits on PARENT
 - `maestro dep help help` -- Print this message or the help of the given subcommand(s)
 
 ## maestro link
@@ -359,6 +364,7 @@ Every verb and flag is listed; a spelling not found here does not exist.
 - `maestro help card ready` -- List workable cards with no open blockers
 - `maestro help card list` -- List cards filtered by parent, type, assignee, or coarse status
 - `maestro help card dep add` -- Add a blocking edge: CHILD waits until PARENT closes
+- `maestro help card dep remove` -- Remove a blocking edge so CHILD no longer waits on PARENT
 - `maestro help card archive` -- Archive a feature card and its child cards
 - `maestro help card claim` -- Claim a workable card for this session
 - `maestro help card note` -- Append a dated note to a card's notes.md
@@ -369,6 +375,7 @@ Every verb and flag is listed; a spelling not found here does not exist.
 - `maestro help ready` -- List workable cards with no open blockers (card store)
 - `maestro help list` -- List cards filtered by parent, type, assignee, or coarse status (card store)
 - `maestro help dep add` -- Add a blocking edge: CHILD waits until PARENT closes
+- `maestro help dep remove` -- Remove a blocking edge so CHILD no longer waits on PARENT
 - `maestro help link add` -- Add a non-blocking related link between two live cards
 - `maestro help link remove` -- Remove a related link between two live cards
 - `maestro help archive` -- Archive a feature card and its child cards (card store)
