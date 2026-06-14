@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.0.0 -->
-<!-- maestro:cli-reference-sha256: 98f912660dd75301402f8692953ed3687a40d2ebb156be2743fbe426b7bc8239 -->
+<!-- maestro:cli-reference-sha256: 756f20add351997bb9fc6c587cd01b93c992437dec576cb74f5f799dd8a9a12d -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -144,17 +144,17 @@ Every verb and flag is listed; a spelling not found here does not exist.
 - `maestro decision new <TITLE> [--context <CONTEXT>] [--feature <FEATURE>] [--lock] [--decision <DECISION>] [--rejected <REJECTED>]... [--preview <PREVIEW>] [--supersedes <SUPERSEDES>]... [--id-only]` -- Open a structured decision fork (mints a decision card)
 - `maestro decision lock <ID> --decision <DECISION> [--rejected <REJECTED>]... [--preview <PREVIEW>] [--supersedes <SUPERSEDES>]...` -- Lock an open decision with the chosen answer
 - `maestro decision show <ID>` -- Show a decision card by id
-- `maestro decision list` -- List decision cards
+- `maestro decision list [--all] [--feature <FEATURE>]` -- List decision cards (recent 20 by activity unless --all)
 - `maestro decision help new` -- Open a structured decision fork (mints a decision card)
 - `maestro decision help lock` -- Lock an open decision with the chosen answer
 - `maestro decision help show` -- Show a decision card by id
-- `maestro decision help list` -- List decision cards
+- `maestro decision help list` -- List decision cards (recent 20 by activity unless --all)
 - `maestro decision help help` -- Print this message or the help of the given subcommand(s)
 
 ## maestro card
 
 - `maestro card ready [FEATURE] [--json]` -- List workable cards with no open blockers
-- `maestro card list [--parent <PARENT>] [--type <TYPE>] [--assignee <ASSIGNEE>] [--status <STATUS>] [--grep <TERM>] [--archived] [--json]` -- List cards filtered by parent, type, assignee, or coarse status
+- `maestro card list [--parent <PARENT>] [--type <TYPE>] [--assignee <ASSIGNEE>] [--status <STATUS>] [--grep <TERM>] [--archived] [--all] [--json]` -- List cards filtered by parent, type, assignee, or coarse status
 - `maestro card dep add <CHILD> <PARENT>` -- Add a blocking edge: CHILD waits until PARENT closes
 - `maestro card dep remove <CHILD> <PARENT>` -- Remove a blocking edge so CHILD no longer waits on PARENT
 - `maestro card dep help add` -- Add a blocking edge: CHILD waits until PARENT closes
@@ -186,7 +186,7 @@ Every verb and flag is listed; a spelling not found here does not exist.
 
 ## maestro list
 
-- `maestro list [--parent <PARENT>] [--type <TYPE>] [--assignee <ASSIGNEE>] [--status <STATUS>] [--grep <TERM>] [--archived] [--json]` -- List cards filtered by parent, type, assignee, or coarse status (card store)
+- `maestro list [--parent <PARENT>] [--type <TYPE>] [--assignee <ASSIGNEE>] [--status <STATUS>] [--grep <TERM>] [--archived] [--all] [--json]` -- List cards filtered by parent, type, assignee, or coarse status (card store)
 
 ## maestro dep
 
@@ -270,13 +270,13 @@ Every verb and flag is listed; a spelling not found here does not exist.
 
 - `maestro query matrix` -- Show the feature x task matrix (FEATURE/TASK/STATE/PROOF/TITLE)
 - `maestro query friction` -- Summarize recorded run friction (events, prompts, corrections)
-- `maestro query decisions` -- List decision cards (ID/STATUS/HOME/TITLE)
+- `maestro query decisions [--all] [--feature <FEATURE>]` -- List decision cards (ID/STATUS/HOME/TITLE; recent 20 unless --all)
 - `maestro query backlog` -- List improvement backlog items (ID/TITLE)
 - `maestro query proof [TASK_ID] [--task-id <TASK_ID>]` -- Show a task's proof status
 - `maestro query graph [ID] [--dot]` -- Walk a card's typed edges (parent/blocks/related/supersedes)
 - `maestro query help matrix` -- Show the feature x task matrix (FEATURE/TASK/STATE/PROOF/TITLE)
 - `maestro query help friction` -- Summarize recorded run friction (events, prompts, corrections)
-- `maestro query help decisions` -- List decision cards (ID/STATUS/HOME/TITLE)
+- `maestro query help decisions` -- List decision cards (ID/STATUS/HOME/TITLE; recent 20 unless --all)
 - `maestro query help backlog` -- List improvement backlog items (ID/TITLE)
 - `maestro query help proof` -- Show a task's proof status
 - `maestro query help graph` -- Walk a card's typed edges (parent/blocks/related/supersedes)
@@ -374,7 +374,7 @@ Every verb and flag is listed; a spelling not found here does not exist.
 - `maestro help decision new` -- Open a structured decision fork (mints a decision card)
 - `maestro help decision lock` -- Lock an open decision with the chosen answer
 - `maestro help decision show` -- Show a decision card by id
-- `maestro help decision list` -- List decision cards
+- `maestro help decision list` -- List decision cards (recent 20 by activity unless --all)
 - `maestro help card ready` -- List workable cards with no open blockers
 - `maestro help card list` -- List cards filtered by parent, type, assignee, or coarse status
 - `maestro help card dep add` -- Add a blocking edge: CHILD waits until PARENT closes
@@ -413,7 +413,7 @@ Every verb and flag is listed; a spelling not found here does not exist.
 - `maestro help harness measure` -- Re-run the detector to close or revert a proposal (-> measured)
 - `maestro help query matrix` -- Show the feature x task matrix (FEATURE/TASK/STATE/PROOF/TITLE)
 - `maestro help query friction` -- Summarize recorded run friction (events, prompts, corrections)
-- `maestro help query decisions` -- List decision cards (ID/STATUS/HOME/TITLE)
+- `maestro help query decisions` -- List decision cards (ID/STATUS/HOME/TITLE; recent 20 unless --all)
 - `maestro help query backlog` -- List improvement backlog items (ID/TITLE)
 - `maestro help query proof` -- Show a task's proof status
 - `maestro help query graph` -- Walk a card's typed edges (parent/blocks/related/supersedes)
