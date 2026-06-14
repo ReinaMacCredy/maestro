@@ -95,12 +95,21 @@ fn list(scope: Option<&str>) -> Result<()> {
                 return Ok(());
             }
             for channel in &channels {
+                let partner = channel.partner(&me);
                 let unread = channel.unread(&me, cursor(&paths, channel, &me)?).len();
                 let last = channel
                     .messages
                     .last()
                     .map_or("-", |message| message.ts.as_str());
-                println!("{}  {unread} unread  last {last}", channel.partner(&me));
+                // The partner's read-through is derived from their stored cursor,
+                // omitted when absent (peer hasn't read / cross-machine no cursor).
+                let peer_cursor = channel::cursor(&paths, &channel.key, partner)?;
+                match channel.read_through(peer_cursor) {
+                    Some(through) => println!(
+                        "{partner}  your unread: {unread}  peer read through {through}  last {last}"
+                    ),
+                    None => println!("{partner}  your unread: {unread}  last {last}"),
+                }
             }
         }
         Some(target) => {

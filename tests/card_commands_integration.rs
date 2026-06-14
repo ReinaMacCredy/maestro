@@ -1012,6 +1012,51 @@ fn terminal_partner_refuses_new_link_and_channel_but_keeps_existing() {
     );
 }
 
+/// ac-4: `msg list` labels the viewer count `your unread: N` and shows a partner
+/// read-through indicator derived from the partner's cursor -- absent until the
+/// partner actually reads, present (a ts) afterwards.
+#[test]
+fn msg_list_relabels_unread_and_shows_partner_read_through_after_they_read() {
+    let temp = cards_repo("s2-msg-readthrough");
+    let repo = temp.path();
+
+    maestro_in_session(repo, "setup", &["create", "-t", "chore", "Sender"]);
+    let sender = id_by_title(repo, "Sender");
+    maestro_in_session(repo, "setup", &["create", "-t", "chore", "Peer"]);
+    let peer = id_by_title(repo, "Peer");
+    maestro_in_session(repo, "setup", &["link", "add", &sender, &peer]);
+
+    // Bind the running session to the sender and send a message to the peer.
+    maestro_in_session(repo, "asess", &["note", &sender, "bind"]);
+    let sent = maestro_in_session(repo, "asess", &["msg", "send", &peer, "deal?"]);
+    assert!(sent.status.success(), "send should succeed");
+
+    // Before the peer reads: viewer count relabeled, NO read-through indicator.
+    let before = maestro_in_session(repo, "asess", &["msg", "list"]);
+    let before_out = String::from_utf8_lossy(&before.stdout);
+    assert!(
+        before_out.contains("your unread: 0"),
+        "the viewer count is relabeled 'your unread: N':\n{before_out}"
+    );
+    assert!(
+        !before_out.contains("peer read through"),
+        "no read-through until the peer reads:\n{before_out}"
+    );
+
+    // Peer binds and reads, advancing its cursor.
+    maestro_in_session(repo, "bsess", &["note", &peer, "bind"]);
+    maestro_in_session(repo, "bsess", &["msg", "read"]);
+
+    // After the peer reads: the read-through indicator appears, adjacent to the
+    // relabeled count, derived from the peer's cursor.
+    let after = maestro_in_session(repo, "asess", &["msg", "list"]);
+    let after_out = String::from_utf8_lossy(&after.stdout);
+    assert!(
+        after_out.contains("your unread: 0") && after_out.contains("peer read through "),
+        "after the peer reads, msg list shows the read-through ts:\n{after_out}"
+    );
+}
+
 /// SPEC E3: `close` and `update --status` are workable-card verbs. A decision
 /// or feature keeps its per-type lifecycle (the generic write would bypass its
 /// gates), and a typo'd status word is rejected loudly instead of silently

@@ -72,6 +72,23 @@ impl Channel {
         seen.split_off(start)
     }
 
+    /// The ts through which `peer` has read this channel, derived solely from the
+    /// peer's stored byte-offset cursor: the latest message the cursor has passed.
+    /// `None` when the cursor is at the start -- which covers both "peer hasn't
+    /// read" and a missing cursor file. Channels are gitignored/machine-local, so
+    /// a peer on another machine has no cursor here and reads as `None` (blank),
+    /// never a wrong timestamp (`dec-msg-read-signal-partner-read-through-2035`).
+    pub fn read_through(&self, peer_cursor: u64) -> Option<&str> {
+        if peer_cursor == 0 {
+            return None;
+        }
+        self.messages
+            .iter()
+            .rev()
+            .find(|message| message.offset < peer_cursor)
+            .map(|message| message.ts.as_str())
+    }
+
     /// The partner card id for `viewer` (the other half of the header pair).
     pub fn partner(&self, viewer: &str) -> &str {
         if self.pair[0] == viewer {
@@ -337,6 +354,32 @@ mod tests {
             channel.unread("card-a", after).is_empty(),
             "after reading to EOF nothing is unread"
         );
+    }
+
+    #[test]
+    fn read_through_maps_partner_cursor_to_the_last_passed_message_and_blanks_at_zero() {
+        let temp = TestTempDir::new("maestro-channel-readthrough");
+        let paths = MaestroPaths::new(temp.path());
+
+        send(&paths, "card-a", "card-b", "sess-a", "one").expect("a's first send");
+        send(&paths, "card-a", "card-b", "sess-a", "two").expect("a's second send");
+
+        let channel = load(&paths, "card-a", "card-b")
+            .expect("load should succeed")
+            .expect("channel should exist after sends");
+        let first = &channel.messages[0];
+        let second = &channel.messages[1];
+
+        // A zero cursor (peer never read, or no cursor file -> cross-machine)
+        // yields no read-through: blank, never a wrong timestamp.
+        assert_eq!(channel.read_through(0), None);
+        // A cursor exactly at the first message's start has passed nothing yet:
+        // strict offset comparison, so still None (rules out "always last").
+        assert_eq!(channel.read_through(first.offset), None);
+        // A cursor at the second message's start has passed only the first.
+        assert_eq!(channel.read_through(second.offset), Some(first.ts.as_str()));
+        // A cursor at EOF (the value a read sets) has passed both -> the last ts.
+        assert_eq!(channel.read_through(channel.len), Some(second.ts.as_str()));
     }
 
     #[test]
