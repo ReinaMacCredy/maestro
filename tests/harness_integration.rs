@@ -1589,6 +1589,72 @@ fn mcp_serve_lists_tools_and_calls_status_over_stdio() {
 }
 
 #[test]
+fn mcp_decision_list_windows_by_default_and_all_reaches_full() {
+    let temp = setup_repo("maestro-mcp-decision-all");
+    let repo = temp.path();
+    for i in 1..=21 {
+        run_success(repo, &["decision", "new", &format!("MCP decision {i:02}")]);
+    }
+
+    let mut child = Command::new(env!("CARGO_BIN_EXE_maestro"))
+        .args(["mcp", "serve"])
+        .current_dir(repo)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("invariant: compiled maestro binary should run mcp serve");
+    let stdin = child
+        .stdin
+        .as_mut()
+        .expect("invariant: mcp stdin should be piped");
+    stdin
+        .write_all(&mcp_frames(&[
+            r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"#,
+            r#"{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}"#,
+            r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"maestro_decision_list","arguments":{}}}"#,
+            r#"{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"maestro_decision_list","arguments":{"all":true}}}"#,
+        ]))
+        .expect("invariant: MCP requests should be writable");
+    drop(child.stdin.take());
+
+    let output = child
+        .wait_with_output()
+        .expect("invariant: mcp serve should return after stdin closes");
+    assert_success(&output, &["mcp", "serve"]);
+    let lines = parse_mcp_frames(&output.stdout);
+
+    // ac-5: the tool advertises the `all` boolean param.
+    let tools = lines[1]["result"]["tools"]
+        .as_array()
+        .expect("invariant: tools/list should return an array");
+    let decision_tool = tools
+        .iter()
+        .find(|tool| tool["name"] == "maestro_decision_list")
+        .expect("invariant: maestro_decision_list should be listed");
+    assert!(
+        !decision_tool["inputSchema"]["properties"]["all"].is_null(),
+        "maestro_decision_list advertises the all param:\n{decision_tool}"
+    );
+
+    let default_text = lines[2]["result"]["content"][0]["text"]
+        .as_str()
+        .expect("invariant: default call returns text");
+    assert!(
+        default_text.contains("20 of 21 recent"),
+        "default MCP decision_list inherits the recent-20 window:\n{default_text}"
+    );
+
+    let all_text = lines[3]["result"]["content"][0]["text"]
+        .as_str()
+        .expect("invariant: all call returns text");
+    assert!(
+        !all_text.contains("recent") && all_text.matches("open").count() == 21,
+        "all=true reaches the full decision history:\n{all_text}"
+    );
+}
+
+#[test]
 fn mcp_tool_aliases_list_available_tools() {
     let temp = setup_repo("maestro-mcp-aliases");
     let repo = temp.path();

@@ -76,8 +76,8 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
         ),
         tool(
             "maestro_decision_list",
-            "Lists all decisions in .maestro/decisions/.",
-            json!({"type":"object","properties":{}}),
+            "Lists decision cards (recent 20 by activity hidden behind all=true, mirroring maestro_task_list).",
+            json!({"type":"object","properties":{"all":{"type":"boolean"}}}),
         ),
         tool(
             "maestro_decision_new",
@@ -116,7 +116,7 @@ pub fn call_tool(paths: &MaestroPaths, name: &str, arguments: &Value) -> Result<
         "maestro_feature_show" => cli(required_args(arguments, &["feature", "show"], &["id"])?),
         "maestro_feature_start" => cli(required_args(arguments, &["feature", "start"], &["id"])?),
         "maestro_feature_ship" => cli(required_args(arguments, &["feature", "ship"], &["id"])?),
-        "maestro_decision_list" => cli(vec!["decision".to_string(), "list".to_string()]),
+        "maestro_decision_list" => decision_list(arguments),
         "maestro_decision_new" => cli(required_args(arguments, &["decision", "new"], &["title"])?),
         "maestro_verify" => cli(required_args(arguments, &["task", "verify"], &["id"])?),
         "maestro_query_matrix" => cli(vec!["query".to_string(), "matrix".to_string()]),
@@ -229,6 +229,14 @@ fn sync_tool(arguments: &Value) -> Result<String> {
 
 fn feature_list(arguments: &Value) -> Result<String> {
     let mut argv = vec!["feature".to_string(), "list".to_string()];
+    if bool_arg(arguments, "all") {
+        argv.push("--all".to_string());
+    }
+    cli(argv)
+}
+
+fn decision_list(arguments: &Value) -> Result<String> {
+    let mut argv = vec!["decision".to_string(), "list".to_string()];
     if bool_arg(arguments, "all") {
         argv.push("--all".to_string());
     }
