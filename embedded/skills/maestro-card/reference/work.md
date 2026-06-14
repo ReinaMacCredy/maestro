@@ -137,6 +137,7 @@ unrelated work -- run `maestro msg read` to consume the unread and advance your
 cursor (no arg aggregates every linked partner; `<their-card>` scopes to one).
 Coordinate or reply with `maestro msg send <their-card> "<text>"`: the sender
 is your current card, and a send is rejected unless the pair is still linked.
+Reply when the message poses a question or needs a decision; an FYI needs no reply.
 Messaging is pull-only -- nothing reaches the peer until that agent reads.
 
 ## Stop

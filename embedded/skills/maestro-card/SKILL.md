@@ -1,6 +1,6 @@
 ---
 name: maestro-card
-version: 1.10.0
+version: 1.11.0
 description: "Use for active Maestro card work: pick up and deliver work cards (claim, update, complete, verify), run the feature-card lifecycle (accept, prepare, amend, ship), and capture qa-baseline/qa-slice gate evidence."
 ---
 
@@ -22,6 +22,7 @@ auto-links. Once linked, coordinate through the channel: `maestro msg send
 <their-card> "<text>"` and `maestro msg read`. An `[inbox] N new (...) ->
 maestro msg read` line on STDERR before any command means a linked peer is
 waiting -- clear it with `maestro msg read` (see [reference/work.md](reference/work.md)).
+Reply when the message poses a question or needs a decision; an FYI needs no reply.
 
 ## Route
 
