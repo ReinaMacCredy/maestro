@@ -43,7 +43,9 @@ the harness and decision flows.
 
 The flat query verbs give agents a Beads-style operating surface:
 `maestro ready`, `maestro list`, `maestro show`, `maestro claim`,
-`maestro note`, `maestro dep`, and `maestro archive`.
+`maestro note`, `maestro dep`, and `maestro archive`. When several sessions are
+working at once, `maestro active`, `maestro link`, and `maestro msg` add the
+cross-agent coordination layer on top of the same cards.
 
 ## How It Works
 
@@ -85,8 +87,8 @@ The card type controls which verbs are valid:
 | `decision` | Durable reasoning record | `decision new`, `decision lock`, `decision show` |
 
 `parent` is hierarchy, not a blocker. A card appears in `ready` only when it is workable
-and every `blocks` dependency is closed. `related` and `supersedes` carry context without
-blocking the board.
+and every `blocks` dependency is closed. `related` carries context without blocking the
+board and also gates linked-card messaging; `supersedes` records replacement history.
 
 ## Install
 
@@ -209,6 +211,42 @@ maestro harness measure <proposal-id>         # close the loop once that task is
 `harness apply` spawns the fix task with a `--check` already set from the proposal title, so you
 can claim it straight away. `harness measure` will not mark the improvement `measured` until that
 linked task is verified (pass `--force` to close it anyway).
+
+### Cross-agent coordination
+
+When multiple agents are working in the same checkout, `maestro active` reads the run logs and
+shows live sessions, bound cards, skill mode, link state, status, progress, age, and last action.
+It is a read verb: it can print copy-paste commands, but it never creates a link by itself.
+
+```
+maestro active
+maestro link add <your-card> <their-card>
+maestro msg send <their-card> "ready for review"
+maestro msg read
+maestro msg list
+```
+
+`maestro link add` writes a non-blocking `related` edge between two live cards. The relation is
+unordered for users: either side can see it, and `maestro link remove <a> <b>` removes it no
+matter which side stored the edge. Removing the link hides the message channel without deleting
+its history; relinking the same pair restores the visible channel. New links to finished cards
+are refused because there is no live coordination left to open.
+
+Messages are pull-only and card-scoped. The sender is the running session's current card, so claim
+or touch a card before sending. `msg send` confirms the route as
+`sent to <their-card> (from <your-card>)`. `msg read [card]` prints recent seen context plus unread
+partner messages and advances this card's cursor. `msg list [card]` shows either a channel overview
+(`your unread`, peer read-through when known, and last-message direction) or one partner's full
+timeline.
+
+Channels live under `.maestro/channels/` as gitignored machine-local state: a JSONL file per linked
+pair plus per-card cursor files. If your current card has unread messages on still-linked channels,
+maestro prints a best-effort inbox hint on stderr before ordinary commands, keeping JSON stdout
+clean:
+
+```
+[inbox] 2 new (card-a 1, card-b 1) -> maestro msg read
+```
 
 ### Suggested workflow
 
@@ -595,6 +633,7 @@ edits. `maestro sync --global-skills` refreshes only the user-level global skill
 | `upgrade` | Upgrade the binary and refresh resources |
 | `doctor` | Diagnose the installation |
 | `status` / `resume` | Print the current handoff, next action, or clean-session resume packet |
+| `active` | Show other live sessions, their bound cards, link state, progress, and copy-paste link/message hints |
 | `migrate-v2` | Fold old v1 artifacts into the reduced v2 layout |
 | `migrate` | Snapshot `.maestro/` and fold legacy feature/task/decision/harness trees into `.maestro/cards/` |
 | `feature` | Manage the product contract and its lifecycle |
@@ -605,6 +644,8 @@ edits. `maestro sync --global-skills` refreshes only the user-level global skill
 | `create` / `update` / `close` | Create generic cards, mutate workable-card fields, or close workable cards |
 | `ready` / `list` / `show` | Discover and inspect cards in the flat store (`--parent`, `--type`, `--assignee`, `--status`, `--grep`) |
 | `claim` / `note` / `dep` / `archive` | Claim a workable card, append a note, add a blocking edge, or archive a closed feature tree (`--loose` sweeps loose closed cards) |
+| `link` | Add or remove non-blocking `related` edges between live cards; linked cards can use `msg` |
+| `msg` | Send, read, and list pull-only messages on linked-card channels |
 | `event` / `query` | Record harness events and inspect computed read models, including `query graph` for a card's dependency web |
 | `index` | Maintain the local text index that accelerates `list --grep` |
 | `mcp` / `hook` / `watch` | Advanced integrations for MCP, agent hooks, and task snapshots |
