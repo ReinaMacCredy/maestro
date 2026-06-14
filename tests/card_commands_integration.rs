@@ -946,6 +946,72 @@ fn link_rejects_self_missing_archived_and_traversal_ids() {
     }
 }
 
+/// dec-terminal-card-link-msg-keep-the-live-5878: a terminal partner refuses a
+/// NEW link/channel with an honest dead-end (never the circular "run link add"),
+/// but a partner you were ALREADY linked to before it finished stays messageable.
+#[test]
+fn terminal_partner_refuses_new_link_and_channel_but_keeps_existing() {
+    let temp = cards_repo("s2-terminal-link-msg");
+    let repo = temp.path();
+
+    maestro_in_session(repo, "setup", &["create", "-t", "chore", "Sender"]);
+    let sender = id_by_title(repo, "Sender");
+    maestro_in_session(repo, "setup", &["create", "-t", "chore", "Finished"]);
+    let finished = id_by_title(repo, "Finished");
+    maestro_in_session(repo, "setup", &["close", &finished]);
+    maestro_in_session(repo, "setup", &["create", "-t", "chore", "Ally"]);
+    let ally = id_by_title(repo, "Ally");
+    maestro_in_session(repo, "setup", &["link", "add", &sender, &ally]);
+    maestro_in_session(repo, "setup", &["close", &ally]);
+
+    // link add to a terminal card: honest, names the finished card.
+    let link_err = run_err(repo, &["link", "add", &sender, &finished]);
+    assert!(
+        link_err.contains(&format!("{finished} is finished")),
+        "link add to terminal names the finished card:\n{link_err}"
+    );
+    assert!(
+        link_err.contains("you can't open a new conversation"),
+        "link add terminal wording is honest:\n{link_err}"
+    );
+
+    // Bind the running session to the live sender, then exercise msg send.
+    maestro_in_session(repo, "msgsess", &["note", &sender, "bind"]);
+
+    // msg send to a terminal UNLINKED partner: finished / no channel, NEVER link add.
+    let send_terminal = maestro_in_session(repo, "msgsess", &["msg", "send", &finished, "closing?"]);
+    assert!(
+        !send_terminal.status.success(),
+        "send to a terminal unlinked partner fails"
+    );
+    let send_terminal_err = String::from_utf8_lossy(&send_terminal.stderr);
+    assert!(
+        send_terminal_err.contains(&format!("{finished} is finished")),
+        "send terminal names the finished partner:\n{send_terminal_err}"
+    );
+    assert!(
+        send_terminal_err.contains("no channel can be opened"),
+        "send terminal states no channel:\n{send_terminal_err}"
+    );
+    assert!(
+        !send_terminal_err.contains("link add"),
+        "send terminal must NOT point back at link add:\n{send_terminal_err}"
+    );
+
+    // Messaging an already-linked terminal partner still works.
+    let send_ally = maestro_in_session(repo, "msgsess", &["msg", "send", &ally, "thanks"]);
+    assert!(
+        send_ally.status.success(),
+        "send to an already-linked terminal partner still works\nstderr:\n{}",
+        String::from_utf8_lossy(&send_ally.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&send_ally.stdout).contains(&format!("sent to {ally}")),
+        "send to an already-linked terminal partner confirms\nstdout:\n{}",
+        String::from_utf8_lossy(&send_ally.stdout)
+    );
+}
+
 /// SPEC E3: `close` and `update --status` are workable-card verbs. A decision
 /// or feature keeps its per-type lifecycle (the generic write would bypass its
 /// gates), and a typo'd status word is rejected loudly instead of silently

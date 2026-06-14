@@ -83,6 +83,15 @@ fn related_pair(by_id: &HashMap<&str, &card::schema::Card>, a: &str, b: &str) ->
     }
 }
 
+/// Whether a peer's bound card is terminal (coarse-Closed) in the live scan, so
+/// `active`'s link hint must not suggest opening a link the guard would refuse
+/// (`dec-terminal-card-link-msg-keep-the-live-5878`).
+fn peer_terminal(by_id: &HashMap<&str, &card::schema::Card>, peer: &str) -> bool {
+    by_id.get(peer).is_some_and(|card| {
+        card::query::coarse_of(&card.status) == Some(card::query::Coarse::Closed)
+    })
+}
+
 /// The display cells for one session row, in column order.
 struct Cells {
     session: String,
@@ -294,6 +303,15 @@ fn render_link_hint(
         .iter()
         .copied()
         .partition(|peer| your_card.is_some_and(|mine| related_pair(by_id, mine, peer)));
+
+    // Never suggest opening a link the guard will refuse: a peer bound to a
+    // terminal (coarse-Closed) card is dropped from the suggestion list. An
+    // already-linked terminal peer is unaffected -- it stays in `linked` and
+    // still renders 'linked' (`dec-terminal-card-link-msg-keep-the-live-5878`).
+    let unlinked: Vec<&str> = unlinked
+        .into_iter()
+        .filter(|peer| !peer_terminal(by_id, peer))
+        .collect();
 
     if !linked.is_empty() {
         println!();

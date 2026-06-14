@@ -44,6 +44,9 @@ fn send(to: &str, text: &str) -> Result<()> {
         };
     }
     if !card::query::pair_linked(&paths, &me_card, to)? {
+        if let Some(status) = partner_terminal_status(&paths, to)? {
+            bail!("{to} is finished ({status}); no channel can be opened with a finished card");
+        }
         bail!("{me} and {to} are not linked; run `maestro link add {me} {to}` before messaging");
     }
 
@@ -229,4 +232,20 @@ fn card_exists(paths: &MaestroPaths, id: &str) -> Result<bool> {
         return Ok(true);
     }
     Ok(card::store::resolve_in(&paths.archive_cards_dir(), id)?.is_some())
+}
+
+/// The partner's status word when it is terminal -- coarse-Closed in the live
+/// store, or present only in the archive (archived implies done). Drives msg
+/// send's honest dead-end for a finished partner instead of pointing at a
+/// `link add` the guard would refuse (`dec-terminal-card-link-msg-keep-the-live-5878`).
+/// Only reached on the not-linked branch; an already-linked terminal partner
+/// passes `pair_linked` and keeps messaging.
+fn partner_terminal_status(paths: &MaestroPaths, id: &str) -> Result<Option<String>> {
+    if let Some(resolved) = card::store::resolve(paths, id)? {
+        if card::query::coarse_of(&resolved.card.status) == Some(card::query::Coarse::Closed) {
+            return Ok(Some(resolved.card.status));
+        }
+        return Ok(None);
+    }
+    Ok(card::store::resolve_in(&paths.archive_cards_dir(), id)?.map(|resolved| resolved.card.status))
 }

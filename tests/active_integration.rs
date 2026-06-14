@@ -331,3 +331,54 @@ fn link_column_and_footer_reflect_existing_related_edges() {
         "footer names the already-linked peer\n{out}"
     );
 }
+
+#[test]
+fn link_hint_drops_terminal_peers_but_keeps_already_linked() {
+    // dec-terminal-card-link-msg-keep-the-live-5878: active must not suggest a
+    // `link add` to a peer whose bound card is terminal (the guard would refuse
+    // it); the peer's row + STATUS still show, and an already-linked terminal
+    // peer still renders 'linked'.
+    let temp = cards_repo("active-terminal-hint");
+    let repo = temp.path();
+
+    let a = create_id(repo, &["-t", "chore", "Card A"]); // running card, live
+    let term = create_id(repo, &["-t", "chore", "Doomed"]); // unlinked terminal peer
+    let ally = create_id(repo, &["-t", "chore", "Ally"]); // already-linked terminal peer
+    run(repo, &[], &["link", "add", &a, &ally]);
+    run(repo, &[], &["close", &term]);
+    run(repo, &[], &["close", &ally]);
+    clear_runs(repo);
+
+    let recent = ts_minutes_ago(1);
+    seed_run(repo, "you-sess", &[card_touch_event("you-sess", &a, &recent)]);
+    seed_run(repo, "peer-term", &[card_touch_event("peer-term", &term, &recent)]);
+    seed_run(repo, "peer-ally", &[card_touch_event("peer-ally", &ally, &recent)]);
+
+    let out = run(repo, &[("MAESTRO_SESSION_ID", "you-sess")], &["active"]);
+
+    // The terminal unlinked peer is shown (row + status) but never suggested.
+    assert!(out.contains("peer-term"), "terminal peer row still shown\n{out}");
+    assert!(
+        line_with(&out, "peer-term").contains("closed"),
+        "terminal peer status still rendered\n{out}"
+    );
+    assert!(
+        !out.contains(format!("maestro link add {a} {term}").as_str()),
+        "no link-add suggestion for a terminal peer\n{out}"
+    );
+
+    // The already-linked terminal peer still reads 'linked' and is named.
+    assert!(
+        line_with(&out, "peer-ally").contains("linked"),
+        "already-linked terminal peer still reads linked\n{out}"
+    );
+    assert!(
+        out.contains("already linked") && out.contains(ally.as_str()),
+        "already-linked terminal peer named in footer\n{out}"
+    );
+    // Every unlinked peer is terminal, so the suggestion section is absent.
+    assert!(
+        !out.contains("related? link your card to theirs"),
+        "no link suggestion section when every unlinked peer is terminal\n{out}"
+    );
+}

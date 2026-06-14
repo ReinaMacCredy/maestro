@@ -160,7 +160,7 @@ pub fn remove_related_link(paths: &MaestroPaths, from: &str, to: &str, now: &str
 fn guard_linkable(card: &Card) -> Result<()> {
     if coarse_of(&card.status) == Some(Coarse::Closed) {
         bail!(
-            "{} is {} (terminal); link only live cards",
+            "{} is finished ({}); you can't open a new conversation with a finished card",
             card.id,
             card.status
         );
@@ -570,9 +570,10 @@ mod tests {
 
         let err = add_related_link(&paths, "task-001", "task-002", LATER)
             .expect_err("a terminal partner is not linkable");
+        let reason = err.to_string();
         assert!(
-            err.to_string().contains("terminal"),
-            "reason names the terminal state: {err}"
+            reason.contains("task-002 is finished") && reason.contains("you can't open a new conversation"),
+            "reason names the finished card honestly: {reason}"
         );
         // the live side is untouched -- no half-written edge
         let live = load(&card_path(&paths, "task-001"))
