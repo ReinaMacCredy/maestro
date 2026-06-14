@@ -1,5 +1,5 @@
 ---
-version: 1.14.0
+version: 1.15.0
 ---
 
 # Maestro Harness Protocol
@@ -38,6 +38,11 @@ conventions live in this repo AGENTS.md, not here.
 - Match the surrounding file style, idioms, and comment density.
 - Comment the non-obvious why, sparingly; names carry the what.
 - Every changed line traces to the task; no drive-by edits.
+
+Per-language styleguides live in `.maestro/playbook/<lang>.md` (Rust, Python,
+Go, TypeScript, JavaScript, C++, C#, Dart, HTML/CSS, plus `general.md`). Before
+writing or changing code, read the one file for the language you are editing;
+do not load the rest.
 
 ## Where to look
 

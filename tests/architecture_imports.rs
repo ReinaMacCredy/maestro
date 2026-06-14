@@ -51,6 +51,7 @@ const RESOURCE_EMBED_ALLOWLIST: &[(&str, &[&str])] = &[
         "src/domain/extraction/hook_script.rs",
         &["embedded/hooks/record.sh"],
     ),
+    ("src/domain/extraction/playbook.rs", &["embedded/playbook"]),
     ("src/domain/skills/catalog.rs", &["embedded/skills"]),
     (
         "src/domain/schema_contracts/catalog.rs",
