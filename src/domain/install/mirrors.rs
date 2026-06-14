@@ -551,23 +551,20 @@ fn rollback_removed_symlinks(symlinks: &[RemovedSymlink]) -> Result<()> {
 /// directory itself is left in place -- maestro no longer manages it, so the user
 /// or git removes its contents. Best-effort: a symlink that cannot be pruned is
 /// returned as a warning and left in place rather than failing install/update.
-pub(crate) fn prune_legacy_skill_symlinks(paths: &MaestroPaths) -> Result<Vec<String>> {
+pub(super) fn prune_legacy_skill_symlinks(paths: &MaestroPaths) -> Result<Vec<String>> {
     let lock_path = paths.install_lock_file();
     let mut lock = InstallLock::load(&lock_path)?;
     let mut warnings = Vec::new();
     let mut changed = false;
 
     for install in lock.agents.values_mut() {
-        let symlink_paths = install
+        let symlink_entries = install
             .files
             .iter()
             .filter(|(_, ownership)| ownership.kind == MirrorKind::Symlink)
-            .map(|(relative_path, _)| relative_path.clone())
+            .map(|(relative_path, ownership)| (relative_path.clone(), ownership.clone()))
             .collect::<Vec<_>>();
-        for relative_path in symlink_paths {
-            let Some(ownership) = install.files.get(&relative_path).cloned() else {
-                continue;
-            };
+        for (relative_path, ownership) in symlink_entries {
             match managed_symlink_path(paths, &relative_path)
                 .and_then(|path| remove_symlink_if_owned(&path, &ownership))
             {
