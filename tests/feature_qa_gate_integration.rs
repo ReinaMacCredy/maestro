@@ -156,6 +156,11 @@ fn feature_qa_gates_via_cli() {
         stderr.contains("retry: maestro feature accept report-builder"),
         "{stderr}"
     );
+    assert!(
+        stderr
+            .contains("skip (no behavioral surface): maestro feature accept report-builder --qa none --reason"),
+        "accept should surface the --qa none skip path: {stderr}"
+    );
 
     write_baseline(repo, "report-builder", 0, &["bl-001"]);
     let accepted = stdout(maestro(&accept, repo), &accept);

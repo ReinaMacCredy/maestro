@@ -505,7 +505,7 @@ fn accept_inner(
     let feat_dir = feature_sidecar_dir(paths, id);
     if qa_none_reason.is_none() && !qa::baseline_present(&feat_dir)? {
         gaps.push(format!(
-                  "qa-baseline (.maestro/cards/{id}/qa.md {})\n    skill: maestro-card (qa-baseline)\n    target: .maestro/cards/{id}/qa.md\n    retry: maestro feature accept {id}",
+                  "qa-baseline (.maestro/cards/{id}/qa.md {})\n    skill: maestro-card (qa-baseline)\n    target: .maestro/cards/{id}/qa.md\n    retry: maestro feature accept {id}\n    skip (no behavioral surface): maestro feature accept {id} --qa none --reason \"<why>\"",
                 qa::baseline_absence(&feat_dir)
             ));
     }
