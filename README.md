@@ -226,6 +226,8 @@ maestro msg read
 maestro msg list
 ```
 
+![Maestro cross-agent coordination](docs/readme/maestro-cross-agent-coordination.png)
+
 `maestro link add` writes a non-blocking `related` edge between two live cards. The relation is
 unordered for users: either side can see it, and `maestro link remove <a> <b>` removes it no
 matter which side stored the edge. Removing the link hides the message channel without deleting
