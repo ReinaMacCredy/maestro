@@ -1,0 +1,73 @@
+schema_version: maestro.card.v1
+id: task-regression-test-that-init-writes-both-8880
+type: task
+title: regression test that init writes both managed mirror blocks (ac-1)
+status: verified
+parent: code-playbook-styleguides-surfaced-to-agents
+claimed_by: claude#s14551-1781447378097746000
+claimed_at: 2026-06-14T14:29:38.097Z
+created_at: 2026-06-14T14:11:01.862Z
+updated_at: 2026-06-14T14:29:43.347Z
+extra:
+  schema_version: maestro.task.v2
+  claims:
+  - mirror_plan writes a marker-wrapped maestro-managed block into both CLAUDE.md (@-import of HARNESS.md) and AGENTS.md (Read-first line) for either agent
+  - the install_mirrors ac-1 regression test passes
+  covers:
+  - ac-1
+  state_history:
+  - state: draft
+    at: 2026-06-14T14:11:01.862Z
+    by: maestro
+  - state: exploring
+    at: 2026-06-14T14:11:01.882Z
+    by: maestro
+  - state: ready
+    at: 2026-06-14T14:11:01.908Z
+    by: maestro
+  - state: needs_verification
+    at: 2026-06-14T14:29:43.330Z
+    by: maestro
+    summary: Added a plan-level ac-1 regression test (mirror_plan_wraps_both_markdown_mirrors_in_maestro_markers) asserting both agents write a marker-wrapped managed block into CLAUDE.md (@-import) and AGENTS.md (Read-first line). Locks the install contract that D2's sync resync depends on.
+    claims:
+    - mirror_plan writes a marker-wrapped maestro-managed block into both CLAUDE.md (@-import of HARNESS.md) and AGENTS.md (Read-first line) for either agent
+    - the install_mirrors ac-1 regression test passes
+  - state: verified
+    at: 2026-06-14T14:29:43.347Z
+    by: maestro
+    summary: 'verification passed: 2 claim(s), 1 proof source(s)'
+  lane: normal
+  risk: medium
+  verification:
+    status: passed
+    verified_at: 2026-06-14T14:29:43.347Z
+    verified_commit: 57c6449eb9b7b8c3f56eb9deeb07b6ebaef790dc
+    verified_by_run: .maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
+    contract_hash: 10fd46ab737a3959eb62c3d42370cbe7c07fe3e0a7bd3a0f51ade019b906c519
+    claim_checks:
+    - claim: mirror_plan writes a marker-wrapped maestro-managed block into both CLAUDE.md (@-import of HARNESS.md) and AGENTS.md (Read-first line) for either agent
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
+    - claim: the install_mirrors ac-1 regression test passes
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
+    commands:
+    - cmd: cargo build
+      exit_code: 0
+      duration_ms: 233
+    - cmd: cargo test
+      exit_code: 0
+      duration_ms: 48066
+    - cmd: cargo clippy -- -D warnings
+      exit_code: 0
+      duration_ms: 304
+    proof_sources:
+    - kind: event
+      path: .maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
+      hash: 636ad9ec69049e3814ea9639df3bd4ed5ec628ab2291b8287fa1a532a7104a59
+  acceptance_locked: true
+  acceptance:
+    checks:
+    - a test runs the install mirror plan / init for both agents and asserts CLAUDE.md and AGENTS.md each contain a `<!-- maestro:start -->`/`<!-- maestro:end -->` block, CLAUDE.md @-imports HARNESS.md, AGENTS.md uses the Read-first line. (Code already writes these; this locks ac-1 against regression.)
+    locked_by: maestro
+    locked_at: 2026-06-14T14:11:01.908Z
