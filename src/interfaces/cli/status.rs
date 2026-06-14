@@ -160,7 +160,7 @@ fn build_task_next_report(paths: &MaestroPaths) -> Result<StatusReport> {
 
 fn print_status(report: StatusReport, json: bool) -> Result<()> {
     if json {
-        println!("{}", serde_json::to_string_pretty(&report)?);
+        println!("{}", serde_json::to_string(&report)?);
         return Ok(());
     }
     if report.status == "not_initialized" {

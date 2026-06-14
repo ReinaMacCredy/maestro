@@ -1202,3 +1202,46 @@ fn card_touch_emit_is_non_fatal_when_the_run_log_cannot_be_written() {
         "the card was still created despite the failed emit: {id}"
     );
 }
+
+/// Dense JSON encoding: multi-item read verbs emit a single compact line while
+/// single-item verbs stay pretty-printed. The envelope and fields are unchanged,
+/// so every `from_str`-into-one-document consumer keeps working.
+#[test]
+fn multi_item_json_verbs_emit_single_compact_line() {
+    let temp = cards_repo("s2-dense-json-encoding");
+    let repo = temp.path();
+
+    run(repo, &["create", "-t", "task", "Alpha card"]);
+    run(repo, &["create", "-t", "task", "Beta card"]);
+
+    for verb in ["list", "ready", "status"] {
+        let out = run(repo, &[verb, "--json"]);
+        let trimmed = out.trim_end_matches('\n');
+        assert!(
+            !trimmed.contains('\n'),
+            "{verb} --json must be a single compact line, got:\n{out}"
+        );
+        let value: Value = serde_json::from_str(trimmed).unwrap_or_else(|e| {
+            panic!("{verb} --json must parse as one JSON document: {e}\n{out}")
+        });
+        assert!(value.is_object(), "{verb} --json stays an envelope object");
+    }
+
+    let list_out = run(repo, &["list", "--json"]);
+    let list_value: Value =
+        serde_json::from_str(list_out.trim_end()).expect("list --json parses as one document");
+    assert_eq!(list_value["schema"], Value::from("maestro.list.v1"));
+    assert!(
+        list_value["cards"]
+            .as_array()
+            .is_some_and(|cards| cards.len() >= 2),
+        "list --json keeps the {{version,schema,cards}} envelope:\n{list_out}"
+    );
+
+    let first = id_by_title(repo, "Alpha card");
+    let show = run(repo, &["show", &first, "--json"]);
+    assert!(
+        show.trim_end().contains('\n'),
+        "single-item show --json stays pretty-printed (multi-line):\n{show}"
+    );
+}

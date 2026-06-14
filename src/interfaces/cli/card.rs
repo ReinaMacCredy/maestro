@@ -602,7 +602,7 @@ fn render_ready_json(cards: &[&card::schema::Card]) -> Result<()> {
         schema: READY_JSON_SCHEMA,
         cards,
     };
-    println!("{}", serde_json::to_string_pretty(&report)?);
+    println!("{}", serde_json::to_string(&report)?);
     Ok(())
 }
 
@@ -655,7 +655,7 @@ fn render_list_json(rows: &[(&card::schema::Card, bool)]) -> Result<()> {
         schema: LIST_JSON_SCHEMA,
         cards,
     };
-    println!("{}", serde_json::to_string_pretty(&report)?);
+    println!("{}", serde_json::to_string(&report)?);
     Ok(())
 }
 
