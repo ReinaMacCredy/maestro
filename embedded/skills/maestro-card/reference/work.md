@@ -128,6 +128,17 @@ maestro harness dismiss <id>    # --reason required
 If measurement still finds friction, the proposal reopens; if a measured
 proposal regresses, it reopens.
 
+## Inbox
+
+Messaging rides on the work loop. When you and a peer hold linked cards
+(`maestro link add`), an `[inbox] N new (...) -> maestro msg read` line prints
+to STDERR before every command: a linked peer is waiting. Act on it before
+unrelated work -- run `maestro msg read` to consume the unread and advance your
+cursor (no arg aggregates every linked partner; `<their-card>` scopes to one).
+Coordinate or reply with `maestro msg send <their-card> "<text>"`: the sender
+is your current card, and a send is rejected unless the pair is still linked.
+Messaging is pull-only -- nothing reaches the peer until that agent reads.
+
 ## Stop
 
 - Do not hand-edit `.maestro/cards/<id>/card.yaml` or state history.

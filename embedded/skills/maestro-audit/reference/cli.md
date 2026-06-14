@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.0.0 -->
-<!-- maestro:cli-reference-sha256: c96775eed21f6f924d2c33e18fc3247865ba06f0795ea202dbb9393a5f5cbbf5 -->
+<!-- maestro:cli-reference-sha256: 98f912660dd75301402f8692953ed3687a40d2ebb156be2743fbe426b7bc8239 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -208,6 +208,16 @@ Every verb and flag is listed; a spelling not found here does not exist.
 - `maestro link help remove` -- Remove a related link between two live cards
 - `maestro link help help` -- Print this message or the help of the given subcommand(s)
 
+## maestro msg
+
+- `maestro msg send <TO> <TEXT>` -- Send a message to a linked card (sender is your current card)
+- `maestro msg read [CARD]` -- Read unread messages; with no card, aggregate every linked partner
+- `maestro msg list [CARD]` -- Channel overview, or one partner's full timeline
+- `maestro msg help send` -- Send a message to a linked card (sender is your current card)
+- `maestro msg help read` -- Read unread messages; with no card, aggregate every linked partner
+- `maestro msg help list` -- Channel overview, or one partner's full timeline
+- `maestro msg help help` -- Print this message or the help of the given subcommand(s)
+
 ## maestro archive
 
 - `maestro archive [FEATURE] [--loose]` -- Archive a feature card and its child cards (card store)
@@ -383,6 +393,9 @@ Every verb and flag is listed; a spelling not found here does not exist.
 - `maestro help active` -- Show what other live sessions are doing (cross-session awareness)
 - `maestro help link add` -- Add a non-blocking related link between two live cards
 - `maestro help link remove` -- Remove a related link between two live cards
+- `maestro help msg send` -- Send a message to a linked card (sender is your current card)
+- `maestro help msg read` -- Read unread messages; with no card, aggregate every linked partner
+- `maestro help msg list` -- Channel overview, or one partner's full timeline
 - `maestro help archive` -- Archive a feature card and its child cards (card store)
 - `maestro help claim` -- Claim a workable card for this session (card store)
 - `maestro help note` -- Append a dated note to a card's notes.md (card store)

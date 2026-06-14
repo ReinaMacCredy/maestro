@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-version: 1.12.0
+version: 1.13.0
 description: "Use for design or brainstorming in a Maestro repo before implementation starts. Map current behavior, decide one fork at a time, record decisions and notes, then hand the approved contract to maestro-card."
 ---
 
@@ -25,7 +25,9 @@ First step in a session: run `maestro active` (pull-only) to see what other
 live sessions are working on -- their card, mode, and progress -- before you
 open anything. If a peer session is on a related card, connect yours with
 `maestro link add <your-card> <their-card>` once you have created it; maestro
-never auto-links.
+never auto-links. Linked cards exchange messages with `maestro msg send
+<their-card> "<text>"` and `maestro msg read`; an `[inbox] N new` line on
+STDERR before any command means a linked peer is waiting.
 
 ## Do
 

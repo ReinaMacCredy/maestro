@@ -1,6 +1,6 @@
 ---
 name: maestro-card
-version: 1.9.0
+version: 1.10.0
 description: "Use for active Maestro card work: pick up and deliver work cards (claim, update, complete, verify), run the feature-card lifecycle (accept, prepare, amend, ship), and capture qa-baseline/qa-slice gate evidence."
 ---
 
@@ -18,7 +18,10 @@ Activate:
 First step in a session: run `maestro active` (pull-only) to see what other
 live sessions are working on before you claim. If a peer is on a related card,
 connect yours with `maestro link add <your-card> <their-card>`; maestro never
-auto-links.
+auto-links. Once linked, coordinate through the channel: `maestro msg send
+<their-card> "<text>"` and `maestro msg read`. An `[inbox] N new (...) ->
+maestro msg read` line on STDERR before any command means a linked peer is
+waiting -- clear it with `maestro msg read` (see [reference/work.md](reference/work.md)).
 
 ## Route
 
