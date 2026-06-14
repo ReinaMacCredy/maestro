@@ -4,7 +4,7 @@
 
 use anyhow::{Context, Result, bail};
 
-use crate::domain::card::query::{Coarse, coarse_of};
+use crate::domain::card::query::{Coarse, coarse_of, has_related_to};
 use crate::domain::card::schema::{Card, Dep, DepKind};
 use crate::domain::card::store::{
     CARD_FILE, load, locate, resolve, save_resolved, validate_card_id,
@@ -110,7 +110,7 @@ pub fn add_related_link(paths: &MaestroPaths, from: &str, to: &str, now: &str) -
     guard_linkable(&to_resolved.card)?;
 
     let mut from_card = from_resolved.card.clone();
-    if has_related_edge(&from_card, to) || has_related_edge(&to_resolved.card, from) {
+    if has_related_to(&from_card, to) || has_related_to(&to_resolved.card, from) {
         return Ok(false);
     }
 
@@ -175,12 +175,6 @@ fn validate_related_pair(from: &str, to: &str) -> Result<()> {
         bail!("a card cannot link to itself: {from}");
     }
     Ok(())
-}
-
-fn has_related_edge(card: &Card, target: &str) -> bool {
-    card.deps
-        .iter()
-        .any(|dep| dep.kind == DepKind::Related && dep.target == target)
 }
 
 fn remove_related_edge(card: &mut Card, target: &str) -> bool {

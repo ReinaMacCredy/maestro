@@ -60,7 +60,10 @@ fn read(scope: Option<&str>) -> Result<()> {
     let me = current_card(&paths)?;
     let me_card = resolve_card(&paths, &me)?;
     let channels = visible_channels(&paths, &me_card)?;
-    let selected = select(&channels, &me, scope);
+    let selected: Vec<&Channel> = channels
+        .iter()
+        .filter(|channel| scope.is_none_or(|target| channel.partner(&me) == target))
+        .collect();
 
     if selected.is_empty() {
         println!("{}", empty_note(scope));
@@ -85,7 +88,7 @@ fn list(scope: Option<&str>) -> Result<()> {
     match scope {
         None => {
             if channels.is_empty() {
-                println!("no linked channels");
+                println!("{}", empty_note(None));
                 return Ok(());
             }
             for channel in &channels {
@@ -147,6 +150,9 @@ pub(super) fn inbox_banner() -> Result<()> {
         return Ok(());
     };
     let paths = MaestroPaths::new(root);
+    if !paths.channels_dir().exists() {
+        return Ok(());
+    }
     let Some(me) = super::current_card(&paths) else {
         return Ok(());
     };
@@ -188,15 +194,6 @@ fn visible_channels(paths: &MaestroPaths, me: &card::schema::Card) -> Result<Vec
         }
     }
     Ok(visible)
-}
-
-/// Filter the visible channels down to the read selection: all of them when no
-/// scope, or just the one matching `<card>`.
-fn select<'a>(channels: &'a [Channel], me: &str, scope: Option<&str>) -> Vec<&'a Channel> {
-    channels
-        .iter()
-        .filter(|channel| scope.is_none_or(|target| channel.partner(me) == target))
-        .collect()
 }
 
 fn cursor(paths: &MaestroPaths, channel: &Channel, me: &str) -> Result<u64> {

@@ -421,6 +421,7 @@ fn run_domain_facade_does_not_publish_leaf_modules() {
         public_reexport_item_names(&run_facade),
         BTreeSet::from([
             "active_sessions".to_string(),
+            "current_bound_card".to_string(),
             "hook_event_contract".to_string(),
             "load_run_evidence".to_string(),
             "managed_event_logs".to_string(),
@@ -1219,6 +1220,7 @@ fn transitional_public_surfaces_match_phase_policy() {
         Path::new("src/domain/mod.rs"),
         &[
             "card",
+            "channel",
             "decisions",
             "extraction",
             "feature",

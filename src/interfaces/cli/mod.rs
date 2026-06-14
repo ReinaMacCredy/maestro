@@ -5,6 +5,7 @@ use anyhow::Result;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use crate::domain::feature::{FeatureStatus, FeatureView};
+use crate::domain::run;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::interfaces::hooks::record;
 
@@ -1386,9 +1387,7 @@ pub(super) fn emit_card_touch(paths: &MaestroPaths, card_id: &str) {
 /// user naming it. `None` when the session has touched no card (or the log is
 /// unreadable); callers treat that as "no current card", never an error.
 pub(super) fn current_card(paths: &MaestroPaths) -> Option<String> {
-    crate::domain::run::current_bound_card(paths, &cli_run_id())
-        .ok()
-        .flatten()
+    run::current_bound_card(paths, &cli_run_id()).ok().flatten()
 }
 
 /// The `<session>` half of a card claim identity (SPEC E6): `MAESTRO_SESSION` if
