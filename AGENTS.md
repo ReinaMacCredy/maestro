@@ -64,6 +64,11 @@ maestro/
   one next-step pointer. Never re-print the agent's own input or a standing
   multi-line footer; the full record stays one read verb away (e.g.
   `maestro decision show <id>`).
+- Read verbs bound their default output to the live/relevant slice so routine
+  orientation does not re-ingest the whole store: `list` hides coarse-closed
+  cards, `decision list`/`query decisions` show only the recent window. The full
+  set is one `--all` away, and `--feature <id>` scopes decisions; the count
+  header names what was hidden and how to widen.
 
 ## CONCURRENT AGENT CONTRACT
 
