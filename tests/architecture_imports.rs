@@ -484,9 +484,13 @@ fn install_domain_facade_does_not_publish_leaf_modules() {
             "FileOwnership".to_string(),
             "InstallLock".to_string(),
             "InstallState".to_string(),
+            "MirrorBlockFate".to_string(),
+            "MirrorBlockSync".to_string(),
             "MirrorKind".to_string(),
             "MirrorPlan".to_string(),
             "mirror_plan".to_string(),
+            "preview_mirror_block_resync".to_string(),
+            "resync_mirror_blocks".to_string(),
         ]),
         "src/domain/install/mod.rs should expose only deliberate Install contract re-exports"
     );
