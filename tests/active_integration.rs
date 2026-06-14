@@ -317,7 +317,8 @@ fn link_column_and_footer_reflect_existing_related_edges() {
         "unlinked peer row does not read linked\n{out}"
     );
 
-    // Footer: suggest the unlinked peer only, name the linked one.
+    // Footer: link the unlinked peer (not the linked one), and offer a ready
+    // `msg send` template addressing each peer by full card id.
     assert!(
         out.contains(format!("maestro link add {a} {c}").as_str()),
         "footer suggests linking the unlinked peer\n{out}"
@@ -327,8 +328,12 @@ fn link_column_and_footer_reflect_existing_related_edges() {
         "footer must not re-suggest an already-linked peer\n{out}"
     );
     assert!(
-        out.contains("already linked") && out.contains(b.as_str()),
-        "footer names the already-linked peer\n{out}"
+        out.contains(format!("maestro msg send {b} \"<text>\"").as_str()),
+        "footer offers a msg-send template addressing the already-linked peer by id\n{out}"
+    );
+    assert!(
+        out.contains(format!("maestro msg send {c} \"<text>\"").as_str()),
+        "footer offers a msg-send template for the unlinked peer too (link, then message)\n{out}"
     );
 }
 
@@ -367,18 +372,18 @@ fn link_hint_drops_terminal_peers_but_keeps_already_linked() {
         "no link-add suggestion for a terminal peer\n{out}"
     );
 
-    // The already-linked terminal peer still reads 'linked' and is named.
+    // The already-linked terminal peer still reads 'linked' and stays messageable.
     assert!(
         line_with(&out, "peer-ally").contains("linked"),
         "already-linked terminal peer still reads linked\n{out}"
     );
     assert!(
-        out.contains("already linked") && out.contains(ally.as_str()),
-        "already-linked terminal peer named in footer\n{out}"
+        out.contains(format!("maestro msg send {ally} \"<text>\"").as_str()),
+        "already-linked terminal peer still offers a msg-send template\n{out}"
     );
-    // Every unlinked peer is terminal, so the suggestion section is absent.
+    // Every unlinked peer is terminal, so the link suggestion section is absent.
     assert!(
-        !out.contains("related? link your card to theirs"),
+        !out.contains("related? link"),
         "no link suggestion section when every unlinked peer is terminal\n{out}"
     );
 }

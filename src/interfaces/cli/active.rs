@@ -275,12 +275,15 @@ fn dash() -> String {
     "-".to_string()
 }
 
-/// Print the copy-pasteable link hint (D7), now link-aware: peers already sharing
-/// a `related` edge with the running card are named (not re-suggested), and only
-/// unlinked peers get a `maestro link add` line referencing the peer's real card
-/// id. `<your-card>` is filled with the running session's bound card when it has
-/// one, else stays a literal placeholder (the verb run as a first step has no
-/// card yet). maestro never auto-links and never guesses relatedness.
+/// Print the copy-pasteable addressing footer (D7), link-aware and now
+/// addressing-complete (`dec-active-addressing-surface-the-peer-s-b739`): every
+/// peer's full card id is reachable in a ready-to-paste command, never just the
+/// truncated CARD title. Linked peers get a `maestro msg send <their-card>`
+/// template (they are already messageable); unlinked live peers get the
+/// `maestro link add` line followed by the same send template (link, then
+/// message). `<your-card>` is filled with the running session's bound card when
+/// it has one, else stays a literal placeholder (the verb run as a first step
+/// has no card yet). maestro never auto-links and never guesses relatedness.
 fn render_link_hint(
     shown: &[&SessionActivity],
     by_id: &HashMap<&str, &card::schema::Card>,
@@ -315,15 +318,19 @@ fn render_link_hint(
 
     if !linked.is_empty() {
         println!();
-        println!("already linked: {}", linked.join(", "));
+        println!("linked -- message them:");
+        for their_card in &linked {
+            println!("  maestro msg send {their_card} \"<text>\"");
+        }
     }
 
     if !unlinked.is_empty() {
         let your = your_card.unwrap_or("<your-card>");
         println!();
-        println!("related? link your card to theirs:");
-        for their_card in unlinked {
+        println!("related? link, then message:");
+        for their_card in &unlinked {
             println!("  maestro link add {your} {their_card}");
+            println!("  maestro msg send {their_card} \"<text>\"");
         }
     }
 }
