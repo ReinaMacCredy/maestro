@@ -7,7 +7,7 @@ use anyhow::{Context, Result, bail};
 use crate::domain::card::query::{Coarse, coarse_of, has_related_to};
 use crate::domain::card::schema::{Card, Dep, DepKind};
 use crate::domain::card::store::{
-    CARD_FILE, load, locate, resolve, save_resolved, validate_card_id,
+    CARD_FILE, ResolvedCard, load, locate, resolve, save_resolved, validate_card_id,
 };
 use crate::foundation::core::fs::append_text_file;
 use crate::foundation::core::paths::MaestroPaths;
@@ -28,18 +28,7 @@ const STALE_CLAIM_AGE_NANOS: i128 = 15 * 60 * 1_000_000_000;
 /// at all). Idempotent: a second identical edge is a no-op. Returns whether a
 /// new edge was written.
 pub fn add_blocks_dep(paths: &MaestroPaths, child: &str, parent: &str, now: &str) -> Result<bool> {
-    validate_card_id(child)?;
-    validate_card_id(parent)?;
-    if child == parent {
-        bail!("a card cannot block itself: {child}");
-    }
-    if locate(paths, parent)?.is_none() {
-        bail!("no card {parent} to depend on");
-    }
-
-    let Some(resolved) = resolve(paths, child)? else {
-        bail!("no card {child} to add a dependency to");
-    };
+    let resolved = resolve_dep_child(paths, child, parent, "add a dependency to")?;
     let mut card = resolved.card.clone();
     if card
         .deps
@@ -70,18 +59,7 @@ pub fn remove_blocks_dep(
     parent: &str,
     now: &str,
 ) -> Result<bool> {
-    validate_card_id(child)?;
-    validate_card_id(parent)?;
-    if child == parent {
-        bail!("a card cannot block itself: {child}");
-    }
-    if locate(paths, parent)?.is_none() {
-        bail!("no card {parent} to depend on");
-    }
-
-    let Some(resolved) = resolve(paths, child)? else {
-        bail!("no card {child} to remove a dependency from");
-    };
+    let resolved = resolve_dep_child(paths, child, parent, "remove a dependency from")?;
     let mut card = resolved.card.clone();
     let before = card.deps.len();
     card.deps
@@ -92,6 +70,29 @@ pub fn remove_blocks_dep(
     card.updated_at = now.to_string();
     save_resolved(&card, &resolved)?;
     Ok(true)
+}
+
+/// Resolve `child` for a `blocks`-dep edit after the shared input-boundary
+/// checks both `add` and `remove` enforce: well-formed ids, no self-edge, and an
+/// existing `parent`. `action` names the edit in the not-found message.
+fn resolve_dep_child(
+    paths: &MaestroPaths,
+    child: &str,
+    parent: &str,
+    action: &str,
+) -> Result<ResolvedCard> {
+    validate_card_id(child)?;
+    validate_card_id(parent)?;
+    if child == parent {
+        bail!("a card cannot block itself: {child}");
+    }
+    if locate(paths, parent)?.is_none() {
+        bail!("no card {parent} to depend on");
+    }
+    match resolve(paths, child)? {
+        Some(resolved) => Ok(resolved),
+        None => bail!("no card {child} to {action}"),
+    }
 }
 
 /// Add a non-blocking `related` edge between two live cards. The relation is

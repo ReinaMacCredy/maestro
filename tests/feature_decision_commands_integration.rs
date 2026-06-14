@@ -6,7 +6,7 @@ use std::os::unix::fs as unix_fs;
 use std::path::Path;
 use std::process::Command;
 
-use card_support::{card_dir, card_doc, id_by_title};
+use card_support::{card_dir, card_doc, id_by_title, seed_optional_string, seed_string};
 use maestro::domain::decisions::template::decision_markdown;
 use maestro::foundation::core::fs::ensure_dir;
 use serde_yaml::Value as YamlValue;
@@ -2318,19 +2318,6 @@ fn feature_record(root: &Path, slug: &str) -> YamlValue {
         seed_string(map, "updated_at", &card["updated_at"]);
     }
     record
-}
-
-fn seed_string(map: &mut serde_yaml::Mapping, key: &str, value: &YamlValue) {
-    let key = YamlValue::String(key.to_string());
-    if !map.contains_key(&key) {
-        map.insert(key, value.clone());
-    }
-}
-
-fn seed_optional_string(map: &mut serde_yaml::Mapping, key: &str, value: &YamlValue) {
-    if !value.is_null() {
-        seed_string(map, key, value);
-    }
 }
 
 fn feature_acceptance(root: &Path, slug: &str) -> Vec<String> {

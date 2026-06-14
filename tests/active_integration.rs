@@ -6,23 +6,15 @@
 //! re-tested here.
 
 mod support;
+pub mod card_support;
 
 use std::fs;
 use std::path::Path;
 use std::process::{Command, Output};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use card_support::cards_repo;
 use maestro::foundation::core::time::format_utc_seconds_rfc3339_millis;
-use support::TestTempDir;
-
-/// A repo already in card mode: `.maestro/cards/` exists so `discover_repo_root`
-/// finds `.maestro/` and the card verbs apply.
-fn cards_repo(name: &str) -> TestTempDir {
-    let temp = TestTempDir::new(name);
-    fs::create_dir_all(temp.path().join(".maestro/cards"))
-        .expect("invariant: cards dir should be creatable");
-    temp
-}
 
 /// Mint a card and return its id, captured from `create --id-only`.
 fn create_id(repo: &Path, args: &[&str]) -> String {
