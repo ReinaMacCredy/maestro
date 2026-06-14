@@ -248,7 +248,7 @@ fn nested_help_lists_section_38_command_tree() {
     );
     assert_contains_all(
         &maestro(&["link", "add", "--help"]),
-        &["FROM", "TO", "Examples:", "maestro link add"],
+        &["CARD-A", "CARD-B", "Examples:", "maestro link add"],
     );
     assert_contains_all(
         &maestro(&["link", "remove", "--help"]),

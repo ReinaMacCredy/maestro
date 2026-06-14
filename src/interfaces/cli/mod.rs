@@ -1047,14 +1047,14 @@ pub struct LinkArgs {
 pub enum LinkCommand {
     #[command(
         about = "Add a non-blocking related link between two live cards",
-        after_help = "Examples:\n  maestro link add task-a task-b   # task-a is related to task-b"
+        after_help = "Examples:\n  maestro link add task-a task-b   # links task-a and task-b (order does not matter)"
     )]
     Add {
-        /// First live card; the edge is stored here on first add.
-        #[arg(value_name = "FROM")]
+        /// One of the two cards to link (order does not matter).
+        #[arg(value_name = "CARD-A")]
         from: String,
-        /// Second live card.
-        #[arg(value_name = "TO")]
+        /// The other card to link.
+        #[arg(value_name = "CARD-B")]
         to: String,
     },
     #[command(

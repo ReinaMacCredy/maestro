@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.0.0 -->
-<!-- maestro:cli-reference-sha256: 756f20add351997bb9fc6c587cd01b93c992437dec576cb74f5f799dd8a9a12d -->
+<!-- maestro:cli-reference-sha256: 8c5731f129844fa4210c1ca312661968245d0345e64558f695fb3c6403460393 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -202,7 +202,7 @@ Every verb and flag is listed; a spelling not found here does not exist.
 
 ## maestro link
 
-- `maestro link add <FROM> <TO>` -- Add a non-blocking related link between two live cards
+- `maestro link add <CARD-A> <CARD-B>` -- Add a non-blocking related link between two live cards
 - `maestro link remove <FROM> <TO>` -- Remove a related link between two live cards
 - `maestro link help add` -- Add a non-blocking related link between two live cards
 - `maestro link help remove` -- Remove a related link between two live cards

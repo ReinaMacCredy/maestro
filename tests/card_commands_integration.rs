@@ -778,8 +778,10 @@ fn link_add_show_graph_and_reverse_remove_round_trip() {
 
     let added = run(repo, &["link", "add", &first, &second]);
     assert!(
-        added.contains(&format!("{first} is now related to {second}")),
-        "link add confirms the relation:\n{added}"
+        added.contains(&format!(
+            "{first} and {second} are now linked (messaging works both ways)"
+        )),
+        "link add confirms the bidirectional relation:\n{added}"
     );
     let duplicate = run(repo, &["link", "add", &first, &second]);
     assert!(
@@ -1054,6 +1056,47 @@ fn msg_list_relabels_unread_and_shows_partner_read_through_after_they_read() {
     assert!(
         after_out.contains("your unread: 0") && after_out.contains("peer read through "),
         "after the peer reads, msg list shows the read-through ts:\n{after_out}"
+    );
+}
+
+/// ac-5: `msg send` echoes the acting/sender card, and the `msg list` overview
+/// shows the last message's direction (whose turn it is to reply).
+#[test]
+fn msg_send_echoes_sender_and_list_shows_direction() {
+    let temp = cards_repo("s2-msg-direction");
+    let repo = temp.path();
+
+    maestro_in_session(repo, "setup", &["create", "-t", "chore", "Alpha"]);
+    let alpha = id_by_title(repo, "Alpha");
+    maestro_in_session(repo, "setup", &["create", "-t", "chore", "Bravo"]);
+    let bravo = id_by_title(repo, "Bravo");
+    maestro_in_session(repo, "setup", &["link", "add", &alpha, &bravo]);
+
+    // Alpha sends: the confirmation names the acting/sender card.
+    maestro_in_session(repo, "asess", &["note", &alpha, "bind"]);
+    let sent = maestro_in_session(repo, "asess", &["msg", "send", &bravo, "your move"]);
+    let sent_out = String::from_utf8_lossy(&sent.stdout);
+    assert!(
+        sent_out.contains(&format!("sent to {bravo} (from {alpha})")),
+        "send echoes the sender card:\n{sent_out}"
+    );
+
+    // Alpha spoke last -> Alpha's overview reads 'from you' (Bravo's turn).
+    let alpha_view = maestro_in_session(repo, "asess", &["msg", "list"]);
+    let alpha_out = String::from_utf8_lossy(&alpha_view.stdout);
+    assert!(
+        alpha_out.contains("(from you)"),
+        "the sender's overview shows the last message was from them:\n{alpha_out}"
+    );
+
+    // Bravo replies; now Bravo spoke last -> Alpha's overview reads 'from them'.
+    maestro_in_session(repo, "bsess", &["note", &bravo, "bind"]);
+    maestro_in_session(repo, "bsess", &["msg", "send", &alpha, "on it"]);
+    let alpha_after = maestro_in_session(repo, "asess", &["msg", "list"]);
+    let alpha_after_out = String::from_utf8_lossy(&alpha_after.stdout);
+    assert!(
+        alpha_after_out.contains("(from them)"),
+        "after the partner replies the overview shows the last was from them:\n{alpha_after_out}"
     );
 }
 

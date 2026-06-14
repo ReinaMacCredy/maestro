@@ -51,7 +51,7 @@ fn send(to: &str, text: &str) -> Result<()> {
     }
 
     channel::send(&paths, &me, to, &super::cli_run_id(), text)?;
-    println!("sent to {to}");
+    println!("sent to {to} (from {me})");
     Ok(())
 }
 
@@ -97,19 +97,24 @@ fn list(scope: Option<&str>) -> Result<()> {
             for channel in &channels {
                 let partner = channel.partner(&me);
                 let unread = channel.unread(&me, cursor(&paths, channel, &me)?).len();
-                let last = channel
-                    .messages
-                    .last()
-                    .map_or("-", |message| message.ts.as_str());
+                let last_message = channel.messages.last();
+                let last = last_message.map_or("-", |message| message.ts.as_str());
+                // Direction of the last message -> whose turn it is to reply.
+                let direction = match last_message {
+                    Some(message) if message.from_card == me => "from you",
+                    Some(_) => "from them",
+                    None => "-",
+                };
                 // The partner's read-through is derived from their stored cursor,
                 // omitted when absent (peer hasn't read / cross-machine no cursor).
                 let peer_cursor = channel::cursor(&paths, &channel.key, partner)?;
-                match channel.read_through(peer_cursor) {
-                    Some(through) => println!(
-                        "{partner}  your unread: {unread}  peer read through {through}  last {last}"
-                    ),
-                    None => println!("{partner}  your unread: {unread}  last {last}"),
-                }
+                let read_through = match channel.read_through(peer_cursor) {
+                    Some(through) => format!("  peer read through {through}"),
+                    None => String::new(),
+                };
+                println!(
+                    "{partner}  your unread: {unread}{read_through}  last {last} ({direction})"
+                );
             }
         }
         Some(target) => {

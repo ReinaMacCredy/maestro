@@ -165,7 +165,7 @@ pub fn link(args: LinkArgs) -> Result<()> {
         LinkCommand::Add { from, to } => {
             let added = card::edit::add_related_link(&paths, &from, &to, &utc_now_timestamp())?;
             if added {
-                println!("{from} is now related to {to}");
+                println!("{from} and {to} are now linked (messaging works both ways)");
             } else {
                 println!("{from} is already related to {to}");
             }
