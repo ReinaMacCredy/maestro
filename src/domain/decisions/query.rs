@@ -33,6 +33,17 @@ pub struct DecisionListEntry {
     pub status: String,
     pub source: DecisionSource,
     pub path: PathBuf,
+    pub created_at: String,
+    pub locked_at: Option<String>,
+}
+
+impl DecisionListEntry {
+    /// The timestamp the recent-N list windows on: when the fork was locked,
+    /// else when it was opened. ISO-8601 strings sort chronologically; a legacy
+    /// markdown decision carries neither and sorts oldest (empty string).
+    pub fn activity(&self) -> &str {
+        self.locked_at.as_deref().unwrap_or(&self.created_at)
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -141,6 +152,8 @@ fn decision_list_entry(
         status: record.status.as_str().to_string(),
         source,
         path,
+        created_at: record.created_at,
+        locked_at: record.locked_at,
     }
 }
 
@@ -163,6 +176,8 @@ fn legacy_decision_entry(legacy: DecisionEntry, title: String) -> DecisionListEn
         status: "legacy".to_string(),
         source: DecisionSource::Legacy,
         path: legacy.path,
+        created_at: String::new(),
+        locked_at: None,
     }
 }
 

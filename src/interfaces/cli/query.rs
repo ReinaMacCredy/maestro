@@ -48,7 +48,9 @@ pub fn run(args: QueryArgs) -> Result<()> {
         }
         QueryCommand::Matrix => query_matrix(&paths),
         QueryCommand::Friction => query_friction(&paths),
-        QueryCommand::Decisions => query_decisions(&paths),
+        QueryCommand::Decisions { all, feature } => {
+            query_decisions(&paths, all, feature.as_deref())
+        }
         QueryCommand::Backlog => query_backlog(&paths),
         QueryCommand::Graph { id, dot } => query_graph(&paths, id, dot),
     }
@@ -473,37 +475,8 @@ fn query_friction(paths: &MaestroPaths) -> Result<()> {
     Ok(())
 }
 
-fn query_decisions(paths: &MaestroPaths) -> Result<()> {
-    let entries = decisions::list(paths)?;
-    if entries.is_empty() {
-        println!("no decisions found");
-        return Ok(());
-    }
-
-    let rows: Vec<Vec<String>> = entries
-        .iter()
-        .map(|entry| {
-            vec![
-                entry.id.clone(),
-                entry.status.clone(),
-                decision_home(&entry.source),
-                entry.title.clone(),
-            ]
-        })
-        .collect();
-    print!(
-        "{}",
-        table::render_table(&["ID", "STATUS", "HOME", "TITLE"], &rows)
-    );
-    Ok(())
-}
-
-fn decision_home(source: &decisions::DecisionSource) -> String {
-    match source {
-        decisions::DecisionSource::Global => "global".to_string(),
-        decisions::DecisionSource::Feature { feature_id } => format!("feature:{feature_id}"),
-        decisions::DecisionSource::Legacy => "legacy-md".to_string(),
-    }
+fn query_decisions(paths: &MaestroPaths, all: bool, feature: Option<&str>) -> Result<()> {
+    super::decision::render_decision_list(decisions::list(paths)?, all, feature)
 }
 
 fn query_backlog(paths: &MaestroPaths) -> Result<()> {

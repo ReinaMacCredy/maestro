@@ -2,17 +2,16 @@ schema_version: maestro.card.v1
 id: task-decision-list-recent-n-window-all-226c
 type: task
 title: Decision list recent-N window + --all + --feature
-status: ready
+status: needs_verification
 parent: read-output-budget-for-agent-facing-read-verbs
+claimed_by: maestro
+claimed_at: 2026-06-14T10:09:03.966Z
 created_at: 2026-06-14T09:52:00.159Z
-updated_at: 2026-06-14T09:52:00.311Z
+updated_at: 2026-06-14T10:14:40.358Z
 extra:
   schema_version: maestro.task.v2
-  acceptance:
-    checks:
-    - 'real run: bare `maestro decision list` and `maestro query decisions` show <=20 most-recent by activity date with header ''N of M recent (--all for full; --feature <id> to scope)''; `--all` lists all; `--feature <id>` scopes to one feature.'
-    locked_by: maestro
-    locked_at: 2026-06-14T09:52:00.311Z
+  claims:
+  - DecisionListEntry carries created_at+locked_at and an activity() key (locked_at else created_at); shared render_decision_list windows to 20 unless --all and prints 'N of M recent (--all for full; --feature <id> to scope)' only when windowed; --feature retains one feature's decisions; query decisions delegates to the same renderer (strict scan), decision list uses tolerant scan
   covers:
   - ac-4
   state_history:
@@ -25,7 +24,54 @@ extra:
   - state: ready
     at: 2026-06-14T09:52:00.311Z
     by: maestro
+  - state: in_progress
+    at: 2026-06-14T10:09:03.966Z
+    by: maestro
+  - state: needs_verification
+    at: 2026-06-14T10:14:40.343Z
+    by: maestro
+    summary: decision list / query decisions window to the 20 most-recent decisions by activity with a count header; --all restores full, --feature scopes to one feature; shared renderer across both verbs
+    claims:
+    - DecisionListEntry carries created_at+locked_at and an activity() key (locked_at else created_at); shared render_decision_list windows to 20 unless --all and prints 'N of M recent (--all for full; --feature <id> to scope)' only when windowed; --feature retains one feature's decisions; query decisions delegates to the same renderer (strict scan), decision list uses tolerant scan
+  - state: needs_verification
+    at: 2026-06-14T10:14:40.358Z
+    by: maestro
+    summary: 'verification failed: verify command failed: cargo test (exit 101)'
+    open_items:
+    - 'verify command failed: cargo test (exit 101)'
+    - 'verify command failed: cargo clippy -- -D warnings (exit 101)'
   lane: normal
   risk: medium
-  verification: {}
+  verification:
+    status: failed
+    verified_at: 2026-06-14T10:14:40.358Z
+    verified_commit: fc87bb8f715e8009697fb16ba99bc5b20596cc7e
+    verified_by_run: .maestro/runs/6ef6f1c0-d4d9-41c5-9c86-d0fcaf53a2ba/events.jsonl
+    contract_hash: f0ed14f1b4c74b2e961bd8ea32eb7c6c5840869144352e34f6ce0a6090bbbcdc
+    claim_checks:
+    - claim: DecisionListEntry carries created_at+locked_at and an activity() key (locked_at else created_at); shared render_decision_list windows to 20 unless --all and prints 'N of M recent (--all for full; --feature <id> to scope)' only when windowed; --feature retains one feature's decisions; query decisions delegates to the same renderer (strict scan), decision list uses tolerant scan
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/6ef6f1c0-d4d9-41c5-9c86-d0fcaf53a2ba/events.jsonl
+    commands:
+    - cmd: cargo build
+      exit_code: 0
+      duration_ms: 232
+    - cmd: cargo test
+      exit_code: 101
+      duration_ms: 18471
+    - cmd: cargo clippy -- -D warnings
+      exit_code: 101
+      duration_ms: 441
+    proof_sources:
+    - kind: event
+      path: .maestro/runs/6ef6f1c0-d4d9-41c5-9c86-d0fcaf53a2ba/events.jsonl
+      hash: 48dd4fb141b9aacba6ab7028331440f4956777f046935a8c8986f1da3982dd93
+    failures:
+    - 'verify command failed: cargo test (exit 101)'
+    - 'verify command failed: cargo clippy -- -D warnings (exit 101)'
   acceptance_locked: true
+  acceptance:
+    checks:
+    - 'real run: bare `maestro decision list` and `maestro query decisions` show <=20 most-recent by activity date with header ''N of M recent (--all for full; --feature <id> to scope)''; `--all` lists all; `--feature <id>` scopes to one feature.'
+    locked_by: maestro
+    locked_at: 2026-06-14T09:52:00.311Z

@@ -1296,6 +1296,96 @@ fn decision_new_list_show_mint_card_ids_and_preserve_template() {
     );
 }
 
+/// ac-4: bare `decision list` / `query decisions` window to the 20 most-recent
+/// decisions with a count header; `--all` restores the full set; `--feature`
+/// scopes to one feature (and a small scope keeps the unwindowed table).
+#[test]
+fn decision_list_windows_to_recent_and_all_feature_restore() {
+    let temp_dir = TestTempDir::new("maestro-decision-recent-window");
+    init_git_marker(temp_dir.path());
+    stdout(
+        maestro(&["init", "--yes"], temp_dir.path()),
+        &["init", "--yes"],
+    );
+    stdout(
+        maestro(&["feature", "new", "Billing CSV export"], temp_dir.path()),
+        &["feature", "new"],
+    );
+
+    // 21 decisions total, two of them scoped to the feature -> the window hides one.
+    for i in 1..=19 {
+        let title = format!("Global decision {i:02}");
+        stdout(
+            maestro(&["decision", "new", &title], temp_dir.path()),
+            &["decision", "new"],
+        );
+    }
+    for i in 1..=2 {
+        let title = format!("Feature decision {i:02}");
+        stdout(
+            maestro(
+                &[
+                    "decision",
+                    "new",
+                    &title,
+                    "--feature",
+                    "billing-csv-export",
+                ],
+                temp_dir.path(),
+            ),
+            &["decision", "new", "--feature"],
+        );
+    }
+
+    // The status column is the only "open" token per data row, so it counts rows.
+    let count_rows = |out: &str| out.matches("open").count();
+
+    let bare = stdout(
+        maestro(&["decision", "list"], temp_dir.path()),
+        &["decision", "list"],
+    );
+    assert!(
+        bare.contains("20 of 21 recent (--all for full; --feature <id> to scope)"),
+        "bare decision list windows with the count header:\n{bare}"
+    );
+    assert_eq!(count_rows(&bare), 20, "bare list shows the recent 20:\n{bare}");
+
+    let all = stdout(
+        maestro(&["decision", "list", "--all"], temp_dir.path()),
+        &["decision", "list", "--all"],
+    );
+    assert!(
+        !all.contains("recent"),
+        "--all drops the recent-window header:\n{all}"
+    );
+    assert_eq!(count_rows(&all), 21, "--all restores every decision:\n{all}");
+
+    let scoped = stdout(
+        maestro(
+            &["decision", "list", "--feature", "billing-csv-export"],
+            temp_dir.path(),
+        ),
+        &["decision", "list", "--feature"],
+    );
+    assert!(
+        !scoped.contains("recent")
+            && scoped.contains("Feature decision 01")
+            && scoped.contains("Feature decision 02")
+            && !scoped.contains("Global decision"),
+        "--feature scopes to one feature's decisions, unwindowed:\n{scoped}"
+    );
+
+    // `query decisions` shares the renderer, so it windows identically.
+    let query = stdout(
+        maestro(&["query", "decisions"], temp_dir.path()),
+        &["query", "decisions"],
+    );
+    assert!(
+        query.contains("20 of 21 recent (--all for full; --feature <id> to scope)"),
+        "query decisions mirrors the window header:\n{query}"
+    );
+}
+
 /// S3d: `feature new` scaffolds `spec.md` beside the card and every spec
 /// surface (receipt, `feature spec` read, subsequent edits) resolves through
 /// `.maestro/cards/<id>/` -- with no legacy `features/` tree ever created.

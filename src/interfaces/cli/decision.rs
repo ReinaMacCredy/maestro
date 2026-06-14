@@ -62,7 +62,9 @@ pub fn run(args: DecisionArgs) -> Result<()> {
             &supersedes,
         ),
         DecisionCommand::Show { id } => show_decision(&paths, &id),
-        DecisionCommand::List => list_decisions(&paths),
+        DecisionCommand::List { all, feature } => {
+            render_decision_list(decisions::list_tolerant(&paths), all, feature.as_deref())
+        }
     }
 }
 
@@ -164,11 +166,50 @@ fn show_decision(paths: &MaestroPaths, id: &str) -> Result<()> {
     Ok(())
 }
 
-fn list_decisions(paths: &MaestroPaths) -> Result<()> {
-    let entries = decisions::list_tolerant(paths);
-    if entries.is_empty() {
+/// How many decisions the bare `decision list` / `query decisions` shows before
+/// `--all` is needed: design history grows without bound, but an agent orienting
+/// only needs the recent forks, so the default bounds output to this window.
+const RECENT_DECISIONS: usize = 20;
+
+/// Shared renderer for `decision list` and `query decisions` (ac-4): scope to one
+/// feature when asked, window to the most recent decisions by activity unless
+/// `--all`, and render the ID/STATUS/HOME/TITLE table. Both call sites pass their
+/// already-scanned entries (tolerant vs strict scan), so the windowing stays
+/// identical across the two verbs.
+pub(crate) fn render_decision_list(
+    mut entries: Vec<decisions::DecisionListEntry>,
+    all: bool,
+    feature: Option<&str>,
+) -> Result<()> {
+    if let Some(feature_id) = feature {
+        entries.retain(|entry| {
+            matches!(&entry.source, decisions::DecisionSource::Feature { feature_id: id } if id == feature_id)
+        });
+        if entries.is_empty() {
+            println!("no decisions for feature {feature_id}");
+            return Ok(());
+        }
+    } else if entries.is_empty() {
         println!("no decisions found");
         return Ok(());
+    }
+
+    // Most-recent-first by activity (locked_at else created_at). Ties and legacy
+    // rows (empty activity) fall back to a stable id order so output is deterministic.
+    entries.sort_by(|left, right| {
+        right
+            .activity()
+            .cmp(left.activity())
+            .then_with(|| left.id.cmp(&right.id))
+    });
+
+    let total = entries.len();
+    if !all && total > RECENT_DECISIONS {
+        entries.truncate(RECENT_DECISIONS);
+        println!(
+            "{} of {total} recent (--all for full; --feature <id> to scope)",
+            entries.len()
+        );
     }
 
     let rows: Vec<Vec<String>> = entries

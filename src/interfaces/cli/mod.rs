@@ -899,8 +899,15 @@ pub enum DecisionCommand {
     },
     #[command(about = "Show a decision card by id")]
     Show { id: String },
-    #[command(about = "List decision cards")]
-    List,
+    #[command(about = "List decision cards (recent 20 by activity unless --all)")]
+    List {
+        /// List all decisions, not just the recent window.
+        #[arg(long)]
+        all: bool,
+        /// Scope to one feature's decisions.
+        #[arg(long, value_name = "FEATURE")]
+        feature: Option<String>,
+    },
 }
 
 #[derive(Debug, Args)]
@@ -1183,8 +1190,15 @@ pub enum QueryCommand {
     Matrix,
     #[command(about = "Summarize recorded run friction (events, prompts, corrections)")]
     Friction,
-    #[command(about = "List decision cards (ID/STATUS/HOME/TITLE)")]
-    Decisions,
+    #[command(about = "List decision cards (ID/STATUS/HOME/TITLE; recent 20 unless --all)")]
+    Decisions {
+        /// List all decisions, not just the recent window.
+        #[arg(long)]
+        all: bool,
+        /// Scope to one feature's decisions.
+        #[arg(long, value_name = "FEATURE")]
+        feature: Option<String>,
+    },
     #[command(about = "List improvement backlog items (ID/TITLE)")]
     Backlog,
     #[command(about = "Show a task's proof status")]
