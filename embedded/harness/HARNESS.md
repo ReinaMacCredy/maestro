@@ -1,5 +1,5 @@
 ---
-version: 1.13.0
+version: 1.14.0
 ---
 
 # Maestro Harness Protocol
@@ -24,6 +24,20 @@ uses Maestro. Follow these rules.
 8. When the user corrects your behavior, record it with
    `maestro event intervention --note "<what was wrong>"`.
 9. Before proposing an idea or re-opening a settled question, run `maestro list --grep <topic> --archived` and cite any precedent card in the proposal.
+
+## Code style
+
+Universal principles for code written here. Project-specific
+conventions live in this repo AGENTS.md, not here.
+
+- Simplest thing that works; no speculative abstraction or
+  one-caller indirection.
+- Names state intent (what/why), not type or mechanism.
+- Validate at trust boundaries only; do not guard impossible states.
+- Errors fail loud and early with actionable context; no silent catch.
+- Match the surrounding file style, idioms, and comment density.
+- Comment the non-obvious why, sparingly; names carry the what.
+- Every changed line traces to the task; no drive-by edits.
 
 ## Where to look
 
