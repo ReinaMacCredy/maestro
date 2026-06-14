@@ -95,6 +95,19 @@ pub fn run_auto_check() -> Result<()> {
         return Ok(());
     }
 
+    // Out-of-band binary advances (a dev rebuild + cp to ~/.local/bin, a
+    // side-load) never reach the curl-gated GitHub check below, so the global
+    // skill cache agents load could silently lag the binary. Resync it here --
+    // ahead of the curl gate so non-curl installs are covered, un-throttled so
+    // it fires on the first command after a binary jump, and under the kill
+    // switch above. A resync failure must not suppress the GitHub nag, so warn
+    // and keep going.
+    match skills::resync_global_skills_if_drifted() {
+        Ok(Some(outcome)) => eprint!("{}", skills::render_global_skills_resync_notice(&outcome)),
+        Ok(None) => {}
+        Err(error) => eprintln!("warning: global skill resync failed: {error:#}"),
+    }
+
     let executable_path = env::current_exe()?;
     if update::detect_install_method(&executable_path) != update::InstallMethod::Curl {
         return Ok(());

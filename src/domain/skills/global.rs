@@ -253,6 +253,31 @@ pub fn prepare_global_skills_if_locked(
     prepare_global_skills_at(&home_dir).map(Some)
 }
 
+/// Resync the global skill cache to this binary, but only when it has drifted.
+/// `None` means nothing was written: the user never adopted global skills (no
+/// lock or no resolvable home), or the cache already matches the binary. A
+/// matched cache never writes, so repeated calls between binary changes are
+/// no-ops.
+pub fn resync_global_skills_if_drifted() -> Result<Option<GlobalSkillsOutcome>> {
+    let Ok(home_dir) = home_dir() else {
+        return Ok(None);
+    };
+    resync_global_skills_if_drifted_at(&home_dir)
+}
+
+/// Resync the global skill cache under an explicit home directory, only when it
+/// has drifted from this binary. The read-only status check runs first so a
+/// matched cache returns `None` without any write.
+pub fn resync_global_skills_if_drifted_at(home_dir: &Path) -> Result<Option<GlobalSkillsOutcome>> {
+    let Some(status) = global_skills_status_at(home_dir)? else {
+        return Ok(None);
+    };
+    if status.stale.is_empty() && status.retired.is_empty() {
+        return Ok(None);
+    }
+    sync_global_skills_at(home_dir).map(Some)
+}
+
 /// Report global skill cache health for the current user. `None` means the
 /// user never adopted global skills (no lock, or no resolvable home), so
 /// there is nothing to report on.
@@ -372,6 +397,30 @@ pub fn render_global_skills_outcome(outcome: &GlobalSkillsOutcome) -> String {
         out.push_str(&format!(
             "pruned {} stale skill link(s)\n",
             outcome.pruned_link_count
+        ));
+    }
+    out
+}
+
+/// Render a compact notice for a passive after-command resync. Unlike
+/// `render_global_skills_outcome` it omits the cache/lock/root paths and skill
+/// inventory -- a drifted command already ran, so this is just a one-glance
+/// note of what the cache caught up to.
+pub fn render_global_skills_resync_notice(outcome: &GlobalSkillsOutcome) -> String {
+    let mut out = String::from("global skills resynced to this maestro");
+    if outcome.changes.is_empty() {
+        out.push('\n');
+    } else {
+        out.push_str(":\n");
+        for change in &outcome.changes {
+            out.push_str(&format!("  {}\n", render_version_change(change)));
+        }
+    }
+    if !outcome.pruned_skills.is_empty() {
+        out.push_str(&format!(
+            "  pruned {} retired skill(s): {}\n",
+            outcome.pruned_skills.len(),
+            outcome.pruned_skills.join(", ")
         ));
     }
     out
@@ -1452,6 +1501,143 @@ mod tests {
                 .expect("target should canonicalize")
         );
         assert!(home.join(".claude/skills/maestro-card").is_symlink());
+    }
+
+    #[test]
+    fn resync_does_nothing_when_global_skills_not_adopted() {
+        let home = temp_home("global-skills-resync-noadopt");
+
+        let result =
+            resync_global_skills_if_drifted_at(&home).expect("resync check should succeed");
+
+        assert!(
+            result.is_none(),
+            "no lock means not adopted; nothing to resync"
+        );
+        assert!(
+            !lock_path(&home).exists(),
+            "the check must not create a lock for a non-adopter"
+        );
+    }
+
+    #[test]
+    fn resync_returns_none_and_writes_nothing_when_cache_matches_binary() {
+        let home = temp_home("global-skills-resync-matched");
+        sync_global_skills_at(&home).expect("initial sync should succeed");
+        let lock_before =
+            fs::read_to_string(lock_path(&home)).expect("lock should exist after sync");
+
+        let result =
+            resync_global_skills_if_drifted_at(&home).expect("resync check should succeed");
+
+        assert!(result.is_none(), "a matched cache must not resync");
+        let lock_after = fs::read_to_string(lock_path(&home)).expect("lock should still exist");
+        assert_eq!(
+            lock_before, lock_after,
+            "a matched cache must not rewrite the lock (no churn)"
+        );
+    }
+
+    #[test]
+    fn resync_updates_stale_cache_to_binary_and_reports_a_compact_notice() {
+        let home = temp_home("global-skills-resync-stale");
+        sync_global_skills_at(&home).expect("initial sync should succeed");
+
+        // Simulate the binary having advanced past the cache: downgrade one
+        // cached SKILL.md and record that older file in the lock so it stays
+        // Maestro-managed -- the real out-of-band-advance shape (cache+lock at
+        // the old version, binary embedded at the new one).
+        let card_md = home.join(".maestro/skills/maestro-card/SKILL.md");
+        let current = fs::read_to_string(&card_md).expect("card skill should exist");
+        let current_version =
+            frontmatter_version(&current).expect("card skill should carry a version");
+        let stale_contents =
+            current.replace(&format!("version: {current_version}"), "version: 0.0.1");
+        assert_ne!(
+            stale_contents, current,
+            "downgrade should change the SKILL.md"
+        );
+        fs::write(&card_md, &stale_contents).expect("stale skill should be writable");
+
+        let lock_path = lock_path(&home);
+        let mut lock = load_lock_if_exists(&lock_path)
+            .expect("lock should load")
+            .expect("lock should exist");
+        let record = lock
+            .skills
+            .get_mut("maestro-card")
+            .expect("maestro-card should be locked");
+        record.version = Some("0.0.1".to_string());
+        record.files.insert(
+            "SKILL.md".to_string(),
+            sha256_prefixed(stale_contents.as_bytes()),
+        );
+        fs::write(
+            &lock_path,
+            serde_yaml::to_string(&lock).expect("lock should serialize"),
+        )
+        .expect("lock should be writable");
+
+        let outcome = resync_global_skills_if_drifted_at(&home)
+            .expect("resync should succeed")
+            .expect("a stale cache must trigger a resync");
+
+        let embedded = skills()
+            .iter()
+            .find(|skill| skill.name == "maestro-card")
+            .and_then(|skill| frontmatter_version(skill.skill_md()))
+            .expect("maestro-card should carry a version");
+        let after = fs::read_to_string(&card_md).expect("card skill should exist after resync");
+        assert_eq!(
+            frontmatter_version(&after).as_deref(),
+            Some(embedded.as_str()),
+            "the cache must catch up to the binary version"
+        );
+        let change = outcome
+            .changes
+            .iter()
+            .find(|change| change.name == "maestro-card")
+            .expect("maestro-card change should be reported");
+        assert_eq!(change.from.as_deref(), Some("0.0.1"));
+        assert_eq!(change.to.as_deref(), Some(embedded.as_str()));
+
+        let notice = render_global_skills_resync_notice(&outcome);
+        assert!(
+            notice.contains("global skills resynced to this maestro:"),
+            "{notice}"
+        );
+        assert!(
+            notice.contains(&format!("maestro-card  0.0.1 -> {embedded}")),
+            "{notice}"
+        );
+        for noise in ["cache:", "lock:", " root:"] {
+            assert!(
+                !notice.contains(noise),
+                "compact notice should omit `{noise}`: {notice}"
+            );
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn resync_triggers_on_retired_only_drift_and_prunes() {
+        let home = temp_home("global-skills-resync-retired");
+        sync_global_skills_at(&home).expect("initial sync should succeed");
+        let retired_dir = home.join(".maestro/skills/maestro-retired");
+        fs::create_dir_all(&retired_dir).expect("retired dir should be creatable");
+        fs::write(retired_dir.join("SKILL.md"), "retired\n").expect("retired skill writable");
+
+        let outcome = resync_global_skills_if_drifted_at(&home)
+            .expect("resync should succeed")
+            .expect("retired-only drift must still trigger a resync");
+
+        assert_eq!(outcome.pruned_skills, vec!["maestro-retired".to_string()]);
+        assert!(!retired_dir.exists(), "retired cache dir should be pruned");
+        let notice = render_global_skills_resync_notice(&outcome);
+        assert!(
+            notice.contains("pruned 1 retired skill(s): maestro-retired"),
+            "{notice}"
+        );
     }
 
     fn temp_home(prefix: &str) -> PathBuf {
