@@ -590,11 +590,7 @@ fn print_verify_block(task: &TaskRecord, checks: &[String]) {
         return;
     }
 
-    if task.feature_id.is_some() {
-        println!("verify+ inherited from feature:");
-        println!("  task check: optional for feature-linked tasks");
-        println!("  feature gate: qa-baseline + qa-slice at feature accept/ship");
-    } else {
+    if task.feature_id.is_none() {
         println!("verify+ missing:");
         println!(
             "  next: maestro task set {} --check \"<observable result>\"",

@@ -958,6 +958,33 @@ fn task_create_check_handoff_and_list_columns_are_actionable() {
 }
 
 #[test]
+fn feature_linked_task_create_drops_inherited_verify_explainer() {
+    let temp = setup_repo("maestro-create-feature-linked-handoff");
+    let repo = temp.path();
+
+    run(repo, &["feature", "new", "CSV export"]);
+    let create = run(
+        repo,
+        &["task", "create", "Implement CSV writer", "--feature", "csv-export"],
+    );
+    let id = id_by_title(repo, "Implement CSV writer");
+
+    // Computed delta stays: created line, feature binding, one next: pointer.
+    assert!(create.contains(&format!("created {id} (draft)")), "{create}");
+    assert!(create.contains("feature: csv-export"), "{create}");
+    assert!(create.contains("next:"), "{create}");
+    // The standing inherited-verify explainer is gone.
+    assert!(
+        !create.contains("verify+ inherited from feature:"),
+        "{create}"
+    );
+    assert!(
+        !create.contains("task check: optional for feature-linked tasks"),
+        "{create}"
+    );
+}
+
+#[test]
 fn task_list_next_column_uses_verify_contract_state_not_only_lifecycle_state() {
     let temp = setup_repo("maestro-list-missing-check");
     let repo = temp.path();

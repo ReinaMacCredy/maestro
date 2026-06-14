@@ -83,8 +83,9 @@ fn new_decision(
         return Ok(());
     }
     println!("opened {} (status: open)", report.record.id);
-    println!("store: {}", report.path.display());
-    println!("{}", decisions::query::render_record(&report.record));
+    if let Some(feature_id) = &report.record.feature {
+        println!("feature: {feature_id}");
+    }
     Ok(())
 }
 
@@ -140,8 +141,9 @@ fn emit_feature_touch(paths: &MaestroPaths, record: &decisions::schema::Decision
 
 fn print_lock_report(report: &decisions::DecisionLockReport) {
     println!("locked {}", report.record.id);
-    println!("store: {}", report.path.display());
-    println!("{}", decisions::query::render_record(&report.record));
+    for superseded in &report.record.supersedes {
+        println!("  supersedes {superseded}");
+    }
     if let Some(line) = &report.note_line {
         println!("note:");
         println!("  {line}");

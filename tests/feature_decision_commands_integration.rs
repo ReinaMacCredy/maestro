@@ -528,6 +528,23 @@ fn feature_guarded_lifecycle_via_cli() {
     let set_output = stdout(maestro(&set_args, temp_dir.path()), &set_args);
     assert!(set_output.contains("acceptance=1"));
     assert!(set_output.contains("areas=1"));
+    // Footer is a single next: pointer, not the old next:/or:/then: trio.
+    assert!(
+        set_output.contains("next: maestro feature accept billing-csv-export"),
+        "{set_output}"
+    );
+    assert!(
+        !set_output.contains("maestro-card skill (qa-baseline)"),
+        "feature set dropped the standing qa-baseline footer: {set_output}"
+    );
+    assert!(
+        !set_output.contains("--qa none --reason"),
+        "feature set dropped the --qa none escape footer: {set_output}"
+    );
+    assert!(
+        !set_output.contains("then: maestro feature accept"),
+        "feature set dropped the then: footer line: {set_output}"
+    );
 
     let question_args = [
         "feature",
@@ -1872,6 +1889,13 @@ fn decision_new_and_lock_write_structured_feature_record() {
         "{out}"
     );
     assert!(out.contains("feature: agent-cli-ux"), "{out}");
+    // Write-confirm echoes only the computed delta: no store path, no re-print
+    // of the agent's own typed context.
+    assert!(!out.contains("store:"), "open echo dropped the store path: {out}");
+    assert!(
+        !out.contains("nanosecond epochs are hard to inspect"),
+        "open echo must not re-print the typed context: {out}"
+    );
 
     let lock_args = [
         "decision",
@@ -1889,6 +1913,21 @@ fn decision_new_and_lock_write_structured_feature_record() {
     let out = stdout(maestro(&lock_args, temp_dir.path()), &lock_args);
     assert!(out.contains(&format!("locked {first_id}")), "{out}");
     assert!(out.contains("note:"), "{out}");
+    // The lock confirm drops the full render: no store path, no echoed
+    // decision / rejected / preview body (those stay in the record on disk).
+    assert!(!out.contains("store:"), "lock echo dropped the store path: {out}");
+    assert!(
+        !out.contains("render RFC3339 UTC with milliseconds"),
+        "lock echo must not re-print the typed decision: {out}"
+    );
+    assert!(
+        !out.contains("unix seconds: too lossy"),
+        "lock echo must not re-print rejected options: {out}"
+    );
+    assert!(
+        !out.contains("preview:"),
+        "lock echo must drop the preview block: {out}"
+    );
 
     // The structured decision record is now folded under the decision card's `extra`.
     let record = decision_record_yaml(temp_dir.path(), &first_id);
@@ -1939,7 +1978,11 @@ fn decision_new_and_lock_write_structured_feature_record() {
         "--supersedes",
         &first_id,
     ];
-    stdout(maestro(&second_lock, temp_dir.path()), &second_lock);
+    let superseding = stdout(maestro(&second_lock, temp_dir.path()), &second_lock);
+    assert!(
+        superseding.contains(&format!("  supersedes {first_id}")),
+        "lock echo names each superseded id: {superseding}"
+    );
     let record = decision_record_yaml(temp_dir.path(), &first_id);
     assert!(record.contains("status: superseded"), "{record}");
     assert!(
@@ -2855,8 +2898,12 @@ fn decision_new_lock_creates_and_locks_in_one_call() {
         output.contains(&format!("locked {decision_id}")),
         "{output}"
     );
-    assert!(output.contains("X wins"), "{output}");
-    assert!(output.contains("Z: slower"), "{output}");
+    // The one-shot lock echoes only the computed delta; the typed decision,
+    // rejected, and preview stay in the record on disk, not stdout.
+    assert!(!output.contains("X wins"), "{output}");
+    assert!(!output.contains("Z: slower"), "{output}");
+    assert!(!output.contains("store:"), "{output}");
+    assert!(!output.contains("preview:"), "{output}");
     assert!(output.contains("note:"), "{output}");
     assert!(
         output.contains(&format!("{decision_id} locked -- Adopt X for Y")),

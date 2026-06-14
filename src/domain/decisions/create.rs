@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use anyhow::{Context, Result, bail};
 
 use crate::domain::card::schema::CardType;
@@ -17,14 +15,12 @@ use crate::foundation::core::time::utc_now_timestamp;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DecisionWriteReport {
     pub record: DecisionRecord,
-    pub path: PathBuf,
     pub source: DecisionSource,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DecisionLockReport {
     pub record: DecisionRecord,
-    pub path: PathBuf,
     pub source: DecisionSource,
     pub note_line: Option<String>,
 }
@@ -59,10 +55,9 @@ fn create_open_card(
     // O3'), no reservation marker -- the create-time CAS (D1) guards collisions.
     let id = card_store::mint_card_id(paths, CardType::Decision, title);
     let record = open_record(id, title, context, feature);
-    let home = cards::create(paths, &record)?;
+    cards::create(paths, &record)?;
     Ok(DecisionWriteReport {
         record,
-        path: home.path().to_path_buf(),
         source: cards::source_from_parent(feature),
     })
 }
@@ -198,7 +193,6 @@ fn lock_card(
     let note_line = note_locked_feature(paths, &record)?;
     Ok(DecisionLockReport {
         record,
-        path: resolved.path().to_path_buf(),
         source,
         note_line,
     })

@@ -59,6 +59,11 @@ maestro/
 - Generated or installed agent-facing files are user-owned once written.
   Template refresh needs an explicit mutation path, visible diff, backup, or
   force/apply story.
+- Write verbs echo only the computed delta the agent could not derive from its
+  own flags (minted id, bindings, supersession, the appended note), plus at most
+  one next-step pointer. Never re-print the agent's own input or a standing
+  multi-line footer; the full record stays one read verb away (e.g.
+  `maestro decision show <id>`).
 
 ## CONCURRENT AGENT CONTRACT
 

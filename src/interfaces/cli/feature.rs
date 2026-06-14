@@ -473,9 +473,7 @@ fn set_feature(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> Result<(
     let report = feature::set_with_report(paths, id, edits)?;
     super::emit_card_touch(paths, id);
     print_set_report(id, &report);
-    println!("next: maestro-card skill (qa-baseline) -> .maestro/cards/{id}/qa.md");
-    println!("or: maestro feature accept {id} --qa none --reason \"<why no behavior>\"");
-    println!("then: maestro feature accept {id}");
+    println!("next: maestro feature accept {id}");
     if !report.view.open_questions.is_empty() {
         println!(
             "fork hint: open real forks with `maestro decision new \"<title>\" --feature {id} --context \"<why>\"`; keep --question for loose questions"
