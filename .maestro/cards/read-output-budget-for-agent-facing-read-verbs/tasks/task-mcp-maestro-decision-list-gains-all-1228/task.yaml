@@ -2,12 +2,12 @@ schema_version: maestro.card.v1
 id: task-mcp-maestro-decision-list-gains-all-1228
 type: task
 title: MCP maestro_decision_list gains 'all' param
-status: needs_verification
+status: verified
 parent: read-output-budget-for-agent-facing-read-verbs
 claimed_by: maestro
 claimed_at: 2026-06-14T10:15:16.734Z
 created_at: 2026-06-14T09:52:00.188Z
-updated_at: 2026-06-14T10:18:06.364Z
+updated_at: 2026-06-14T10:30:15.112Z
 extra:
   schema_version: maestro.task.v2
   claims:
@@ -40,12 +40,16 @@ extra:
     open_items:
     - 'verify command failed: cargo test (exit 101)'
     - 'verify command failed: cargo clippy -- -D warnings (exit 101)'
+  - state: verified
+    at: 2026-06-14T10:30:15.112Z
+    by: maestro
+    summary: 'verification passed: 1 claim(s), 1 proof source(s)'
   lane: normal
   risk: medium
   verification:
-    status: failed
-    verified_at: 2026-06-14T10:18:06.364Z
-    verified_commit: 2583cba4044cc7e5f7cc373c78f22cbc47ef31ee
+    status: passed
+    verified_at: 2026-06-14T10:30:15.112Z
+    verified_commit: 73e5d1fb6663627cff8544171b298d2148bd29fb
     verified_by_run: .maestro/runs/6ef6f1c0-d4d9-41c5-9c86-d0fcaf53a2ba/events.jsonl
     contract_hash: 431a222a1ebe5b48b24590737861553c9b168f1424139a9f8a3172d0602dadb9
     claim_checks:
@@ -55,20 +59,17 @@ extra:
     commands:
     - cmd: cargo build
       exit_code: 0
-      duration_ms: 90
+      duration_ms: 222
     - cmd: cargo test
-      exit_code: 101
-      duration_ms: 10657
+      exit_code: 0
+      duration_ms: 41711
     - cmd: cargo clippy -- -D warnings
-      exit_code: 101
-      duration_ms: 284
+      exit_code: 0
+      duration_ms: 283
     proof_sources:
     - kind: event
       path: .maestro/runs/6ef6f1c0-d4d9-41c5-9c86-d0fcaf53a2ba/events.jsonl
       hash: 123b51aa69eec33a5d188ee0ddc33a830a35451025a7777941edf73c60ecb3b4
-    failures:
-    - 'verify command failed: cargo test (exit 101)'
-    - 'verify command failed: cargo clippy -- -D warnings (exit 101)'
   acceptance_locked: true
   acceptance:
     checks:

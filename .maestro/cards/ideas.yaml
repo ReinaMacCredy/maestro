@@ -368,3 +368,44 @@
     sessions_hit:
     - cli-2026-06-11
     first_seen: 2026-06-11T20:02:45.238Z
+- schema_version: maestro.card.v1
+  id: idea-prepare-coverage-warning-suggests-an-c3a3
+  type: idea
+  title: prepare coverage warning suggests an impossible fix
+  status: open
+  created_at: 2026-06-12T11:51:46.535Z
+  updated_at: 2026-06-12T11:51:46.535Z
+  extra:
+    first_seen: 2026-06-12T11:51:46.535Z
+    last_seen: 2026-06-12T11:51:46.535Z
+    priority: medium
+- schema_version: maestro.card.v1
+  id: idea-reduce-recurring-blocker-dependency-7f8d
+  type: idea
+  title: 'Reduce recurring blocker: dependency task implement lock shot f330'
+  status: proposed
+  created_at: 2026-06-12T17:20:30.578Z
+  updated_at: 2026-06-12T19:45:17.968Z
+  extra:
+    evidence:
+    - 'same blocker pattern appeared in 2 tasks: task-add-id-only-to-card-creating-verbs-0b9a, task-build-the-cli-md-generator-freshness-27af'
+    fingerprint: recurring_blocker:dependency task implement lock shot f330
+    source: blockers
+    provenance: detector
+    topic: dependency task implement lock shot f330
+    type: recurring_blocker
+    last_seen: 2026-06-12T19:45:17.968Z
+    priority: medium
+    occurrences: 2
+    sessions_hit:
+    - task-add-id-only-to-card-creating-verbs-0b9a
+    - task-build-the-cli-md-generator-freshness-27af
+    first_seen: 2026-06-12T17:20:30.578Z
+- schema_version: maestro.card.v1
+  id: idea-link-msg-active-toctou-on-terminal-cards-39a9
+  type: idea
+  title: link/msg + active TOCTOU on terminal cards
+  status: open
+  created_at: 2026-06-14T09:17:50.194Z
+  updated_at: 2026-06-14T09:17:50.194Z
+  description: 'maestro active surfaces a peer card and suggests ''link your card to theirs'', but ''link add'' and ''msg send'' hard-error when the target is terminal (shipped/closed): ''is shipped (terminal); link only live cards''. A peer can ship between the active snapshot and the link attempt (TOCTOU), so active''s own suggested command fails with a dead-end error and no recovery path. Coordinating with a just-finished peer (read their shipped decisions, send a follow-up) is legitimate. Relates to no-dead-end-errors. Observed live 2026-06-14 during the agent-ux brainstorm.'

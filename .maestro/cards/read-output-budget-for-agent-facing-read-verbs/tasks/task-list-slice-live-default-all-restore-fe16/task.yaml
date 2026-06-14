@@ -2,12 +2,12 @@ schema_version: maestro.card.v1
 id: task-list-slice-live-default-all-restore-fe16
 type: task
 title: List slice — live-default, --all restore, --json element set
-status: needs_verification
+status: verified
 parent: read-output-budget-for-agent-facing-read-verbs
 claimed_by: maestro
 claimed_at: 2026-06-14T10:02:12.412Z
 created_at: 2026-06-14T09:52:00.124Z
-updated_at: 2026-06-14T10:06:21.915Z
+updated_at: 2026-06-14T10:28:50.346Z
 extra:
   schema_version: maestro.task.v2
   claims:
@@ -42,12 +42,16 @@ extra:
     open_items:
     - 'verify command failed: cargo test (exit 101)'
     - 'verify command failed: cargo clippy -- -D warnings (exit 101)'
+  - state: verified
+    at: 2026-06-14T10:28:50.346Z
+    by: maestro
+    summary: 'verification passed: 1 claim(s), 1 proof source(s)'
   lane: normal
   risk: medium
   verification:
-    status: failed
-    verified_at: 2026-06-14T10:06:21.915Z
-    verified_commit: 8b973ce10ce68770efd4629094932ab9de06a0ae
+    status: passed
+    verified_at: 2026-06-14T10:28:50.346Z
+    verified_commit: 73e5d1fb6663627cff8544171b298d2148bd29fb
     verified_by_run: .maestro/runs/6ef6f1c0-d4d9-41c5-9c86-d0fcaf53a2ba/events.jsonl
     contract_hash: a2f63425ad7040c49559a2a2c4bcf09c7bca7a83f1161697540636b3c30c4b4b
     claim_checks:
@@ -57,20 +61,17 @@ extra:
     commands:
     - cmd: cargo build
       exit_code: 0
-      duration_ms: 94
+      duration_ms: 236
     - cmd: cargo test
-      exit_code: 101
-      duration_ms: 12863
+      exit_code: 0
+      duration_ms: 41635
     - cmd: cargo clippy -- -D warnings
-      exit_code: 101
-      duration_ms: 296
+      exit_code: 0
+      duration_ms: 292
     proof_sources:
     - kind: event
       path: .maestro/runs/6ef6f1c0-d4d9-41c5-9c86-d0fcaf53a2ba/events.jsonl
       hash: 50c82dd06a728a672aa5ec86ae6540699902f6a5e2ee38c777e5d4c03ff4ee42
-    failures:
-    - 'verify command failed: cargo test (exit 101)'
-    - 'verify command failed: cargo clippy -- -D warnings (exit 101)'
   acceptance_locked: true
   acceptance:
     checks:
