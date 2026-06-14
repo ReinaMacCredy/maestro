@@ -1,49 +1,36 @@
 //! Task aggregate facade.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
-use crate::foundation::core::fs::{
-    ALLOC_MARKER_PREFIX, DirReservation, append_text_file, child_dirs, ensure_dir,
-    try_reserve_marker_dir,
-};
-use crate::foundation::core::safe_write::write_string_atomic;
+use crate::domain::card::schema::CardType;
+use crate::domain::card::store as card_store;
+use crate::foundation::core::fs::append_text_file;
+use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::time::{parse_utc_timestamp, utc_now_timestamp};
 
-pub(crate) mod archive;
 pub(crate) mod blockers;
+pub(crate) mod cards;
 pub(crate) mod display;
 pub(crate) mod doctor;
 pub(crate) mod lifecycle;
 pub(crate) mod lookup;
 pub(crate) mod template;
 
-pub use archive::{archive_task, unarchive_task};
 pub use blockers::has_unresolved_blockers;
 pub use display::{render_task, render_task_list, render_task_list_with_missing_checks};
 pub use doctor::{
-    TaskDoctorReport, TaskEntry, check_blocker_graph, load_task_entries, load_task_records,
-    render_report,
+    TaskDoctorReport, TaskEntry, check_blocker_graph, check_blocker_graph_in_cards,
+    load_archived_task_entries, load_task_entries, load_task_records, render_report,
 };
 pub use lifecycle::TransitionDetails;
-pub(crate) use lookup::task_roots;
-pub(crate) use template::TaskSaveError;
 pub use template::{
     AcceptanceFile, Blocker, BlockerKind, BlockerRef, BlockerSource, ClaimCheckReceipt,
     ProofSourceReceipt, TaskRecord, TaskState, VerificationBinding, VerificationCommandReceipt,
     VerificationStatus, task_markdown,
 };
-
-/// Minimal Task projection for feature rollups.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct FeatureTaskProjection {
-    pub id: String,
-    pub feature_id: Option<String>,
-    pub state: Option<TaskState>,
-}
 
 /// Result of appending a task note.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -65,7 +52,11 @@ pub struct CreateTaskOptions {
 }
 
 /// Task aggregate loaded with its Task-owned optimistic save context.
-#[derive(Clone, Debug, Eq, PartialEq)]
+///
+/// `Eq` is intentionally absent: the card-mode snapshot carries a
+/// [`serde_yaml::Mapping`] (via `CardSnapshot`), whose values may be floats, so
+/// only `PartialEq` is derivable -- matching [`crate::domain::card::schema::Card`].
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct TaskHandle {
     task: TaskRecord,
     task_dir: PathBuf,
@@ -93,6 +84,48 @@ pub enum BlockerTarget {
     Human,
 }
 
+impl BlockerTarget {
+    /// Classify an optional `--by` reference into a typed blocker target. A
+    /// content-addressed `card-<hash>` id no longer encodes its type, so in card
+    /// mode the referenced card's own `card_type` decides the routing; the
+    /// id-prefix parse is the fallback for an absent card or legacy mode. `None`
+    /// is a manual/human block. A `--by` naming a feature or idea card errors:
+    /// silently filing it as External would hide a graph edge the card store
+    /// can track.
+    pub fn from_ref(paths: &MaestroPaths, by: Option<String>) -> Result<Self> {
+        let Some(by) = by else {
+            return Ok(Self::Human);
+        };
+        // A ref that cannot be a card id (a URL, a path) is free-form external;
+        // only id-shaped refs consult the store, where a failure is a real
+        // unreadable-card error, not absence -- swallowing it would misfile a
+        // tracked card ref as External.
+        if card_store::validate_card_id(&by).is_err() {
+            return Ok(Self::from_prefix(by));
+        }
+        let card = card_store::resolve(paths, &by)?.map(|resolved| resolved.card);
+        match card.map(|card| card.card_type) {
+            Some(CardType::Task | CardType::Bug | CardType::Chore) => Ok(Self::Task(by)),
+            Some(CardType::Decision) => Ok(Self::Decision(by)),
+            Some(kind @ (CardType::Feature | CardType::Idea)) => bail!(
+                "cannot block on {by}: it is a {} card, not a task or decision\n  record the dependency as a card edge instead: maestro dep add <task> {by}",
+                kind.as_str()
+            ),
+            None => Ok(Self::from_prefix(by)),
+        }
+    }
+
+    fn from_prefix(by: String) -> Self {
+        if by.starts_with("task-") {
+            Self::Task(by)
+        } else if by.starts_with("decision-") {
+            Self::Decision(by)
+        } else {
+            Self::External(by)
+        }
+    }
+}
+
 /// Create a draft task and write its task artifacts.
 pub fn create_task(
     tasks_dir: &Path,
@@ -108,8 +141,13 @@ pub fn create_task(
     if options.covers.iter().any(|cover| cover.trim().is_empty()) {
         bail!("task cover cannot be empty; pass an acceptance id such as ac-1");
     }
-    let reserved = reserve_next_task_id(tasks_dir)?;
-    let id = reserved.id.clone();
+    // Mint a typed slug id `task-<slug>-<hex4>` from the title plus a process
+    // nonce (SPEC O3'); the create-time CAS (D1) is the collision belt, so two
+    // creators racing on the same hash both attempt the write and the loser
+    // fails loud rather than silently bumping.
+    let paths = lookup::paths_for_tasks_dir(tasks_dir)
+        .context("cannot resolve maestro paths from tasks dir")?;
+    let id = card_store::mint_card_id(&paths, CardType::Task, title);
     let mut task = TaskRecord::draft(&id, title, &options.created_at);
     task.feature_id = options.feature;
     task.covers = options.covers;
@@ -119,10 +157,8 @@ pub fn create_task(
     if let Some(risk) = options.risk {
         task.risk = Some(risk);
     }
-    let acceptance = AcceptanceFile::new(&id, options.checks);
-    task.acceptance = acceptance.clone();
-    let task_root = task_root_for_feature(tasks_dir, task.feature_id.as_deref())?;
-    template::write_task_artifacts(&task_root, &task, &acceptance)?;
+    task.acceptance = AcceptanceFile::new(&id, options.checks);
+    cards::create(&paths, &task)?;
     Ok(task)
 }
 
@@ -132,15 +168,60 @@ pub fn load_task_record(tasks_dir: &Path, id: &str) -> Result<TaskRecord> {
     Ok(task)
 }
 
-/// Resolve a task's current `task.yaml` path by id or id prefix.
+/// [`load_task_record`] with true absence as `Ok(None)` instead of an error,
+/// so fallbacks (archive probes) never swallow a real read failure.
+pub fn try_load_task_record(tasks_dir: &Path, id: &str) -> Result<Option<TaskRecord>> {
+    lookup::try_load_task_record(tasks_dir, id)
+}
+
+/// Read an archived task card (`archive/cards/<id>/card.yaml`) with its card
+/// directory. Read-only: archived tasks stay immutable, so no save snapshot is
+/// exposed. `None` when no Task-typed card holds the id in the archive.
+pub fn load_archived_task_record(
+    paths: &MaestroPaths,
+    id: &str,
+) -> Result<Option<(TaskRecord, PathBuf)>> {
+    cards::load_one_archived(paths, id)
+}
+
+/// Resolve a task's on-disk record path by canonical id, probing every home
+/// the resolver covers (a `tasks/` pool dir or a pre-migration flat dir).
+/// Bails a clean not-found when no home holds the id. Callers take
+/// `.parent()` to reach the card directory.
 pub fn task_yaml_path(tasks_dir: &Path, id: &str) -> Result<PathBuf> {
-    lookup::resolve_task_yaml_path(tasks_dir, id)
+    let paths = lookup::paths_for_tasks_dir(tasks_dir)
+        .context("cannot resolve maestro paths from tasks dir")?;
+    let Some(home) = card_store::locate(&paths, id)? else {
+        bail!("task not found: {id}");
+    };
+    Ok(home.path().to_path_buf())
 }
 
 /// Read a task's inline acceptance checks for display.
 pub fn load_task_checks(tasks_dir: &Path, task: &TaskRecord) -> Result<Vec<String>> {
     let _ = tasks_dir;
     Ok(task.acceptance.checks.clone())
+}
+
+/// Of `tasks`, the unlinked Draft/Exploring ids that carry no verify-contract
+/// checks yet. The CLI and MCP list surfaces both annotate these, so the rule
+/// lives here once instead of being duplicated across the two adapters.
+pub fn missing_verify_contract_ids(
+    paths: &MaestroPaths,
+    tasks: &[TaskRecord],
+) -> Result<BTreeSet<String>> {
+    let mut missing = BTreeSet::new();
+    for task in tasks {
+        if task.feature_id.is_some()
+            || !matches!(task.state, TaskState::Draft | TaskState::Exploring)
+        {
+            continue;
+        }
+        if load_task_checks(&paths.tasks_dir(), task)?.is_empty() {
+            missing.insert(task.id.clone());
+        }
+    }
+    Ok(missing)
 }
 
 /// Filters applied to a task listing by the CLI and MCP surfaces.
@@ -211,18 +292,6 @@ pub fn filter_tasks(mut tasks: Vec<TaskRecord>, filter: &TaskFilter) -> Vec<Task
 
     tasks.sort_by(|left, right| left.id.cmp(&right.id));
     tasks
-}
-
-/// Load minimal task projections for feature read models without full record sorting.
-pub fn load_feature_task_projections(tasks_dir: &Path) -> Result<Vec<FeatureTaskProjection>> {
-    Ok(load_task_entries(tasks_dir)?
-        .into_iter()
-        .map(|entry| FeatureTaskProjection {
-            id: entry.task.id,
-            feature_id: entry.task.feature_id,
-            state: Some(entry.task.state),
-        })
-        .collect())
 }
 
 /// Return per-task verification durations for loaded task entries.
@@ -438,8 +507,13 @@ pub fn set_covers(tasks_dir: &Path, id: &str, covers: Vec<String>) -> Result<(Ta
         );
     }
     if handle.task().acceptance_locked || handle.task().acceptance.locked_by.is_some() {
+        let feature = handle
+            .task()
+            .feature_id
+            .as_deref()
+            .unwrap_or("<feature-id>");
         bail!(
-            "task {} acceptance is locked; covers links cannot be changed after accept",
+            "task {} acceptance is locked; covers links cannot be changed after accept; cover the item with feature evidence instead: `maestro feature verify {feature} --prove <ac-id> --evidence \"<proof>\"`",
             handle.task().id
         );
     }
@@ -457,6 +531,49 @@ pub fn set_covers(tasks_dir: &Path, id: &str, covers: Vec<String>) -> Result<(Ta
     Ok((task, replaced))
 }
 
+/// Author (or clear) a task's optional per-task narrow falsifier command.
+///
+/// When set, `task verify` runs ONLY this command for the slice instead of the
+/// repo-global `stack.verify`. The command joins the task contract hash, so it
+/// is frozen once the task is verified or terminal: changing how a settled task
+/// was verified would silently invalidate its recorded proof. `None` clears it.
+/// A no-op (already equal) returns without writing.
+pub fn set_verify_command(
+    tasks_dir: &Path,
+    id: &str,
+    command: Option<String>,
+) -> Result<TaskRecord> {
+    let handle = load_task_for_update(tasks_dir, id)?;
+    if lifecycle::is_terminal(&handle.task().state) || handle.task().state == TaskState::Verified {
+        bail!(
+            "task {} is {}; its verify command is settled history and cannot change",
+            handle.task().id,
+            handle.task().state.as_str()
+        );
+    }
+    let command = match command {
+        Some(command) => {
+            let trimmed = command.trim();
+            if trimmed.is_empty() {
+                bail!(
+                    "task {} verify command cannot be empty; pass a command, e.g. `maestro task set {} --verify-command \"cargo test --test foo\"`, or clear it with `--clear-verify-command`",
+                    handle.task().id,
+                    handle.task().id
+                );
+            }
+            Some(trimmed.to_string())
+        }
+        None => None,
+    };
+    if handle.task().verify_command == command {
+        return Ok(handle.task().clone());
+    }
+    let mut task = handle.task().clone();
+    task.verify_command = command;
+    template::save_task_with_snapshot(&task, &handle.snapshot)?;
+    Ok(task)
+}
+
 /// Attach, move, or detach a task's `feature_id` (Theme II Q-II-2/3).
 ///
 /// Editing the link is working-state, not a contract edit, so it is allowed
@@ -470,9 +587,7 @@ pub fn set_feature(
     actor: &str,
     at: &str,
 ) -> Result<TaskRecord> {
-    let (loaded_task, snapshot, current_dir) = lookup::load_task_with_snapshot(tasks_dir, id)?;
-    let original_task = loaded_task.clone();
-    let mut task = loaded_task;
+    let (mut task, snapshot, _) = lookup::load_task_with_snapshot(tasks_dir, id)?;
     if feature_link_is_settled(&task.state) {
         bail!(
             "task {} is {}; its feature link is settled history and cannot change",
@@ -489,20 +604,7 @@ pub fn set_feature(
         (Some(previous), None) => format!("feature link cleared (was {previous})"),
         (None, None) => unreachable!("equal links are returned as a no-op above"),
     };
-    let target_root = task_root_for_feature(tasks_dir, feature.as_deref())?;
-    let target_dir = target_root.join(task.directory_name());
-    let should_move = target_dir != current_dir;
-    if should_move && target_dir.exists() {
-        bail!(
-            "cannot move task {} — target already exists at {}",
-            task.id,
-            target_dir.display()
-        );
-    }
-    if should_move {
-        ensure_dir(&target_root)?;
-    }
-
+    // The parent is just a card field -- retarget, audit, and save in place.
     task.feature_id = feature;
     lifecycle::append_history(
         &mut task,
@@ -514,31 +616,6 @@ pub fn set_feature(
         },
     );
     template::save_task_with_snapshot(&task, &snapshot)?;
-    if should_move && let Err(error) = fs::rename(&current_dir, &target_dir) {
-        let rollback =
-            serde_yaml::to_string(&original_task).context("failed to serialize task rollback")?;
-        if let Err(rollback_error) = write_string_atomic(&snapshot.path, &rollback) {
-            return Err(error)
-                .with_context(|| {
-                    format!(
-                        "failed to move {} to {}",
-                        current_dir.display(),
-                        target_dir.display()
-                    )
-                })
-                .context(format!(
-                    "failed to restore {} after move failure: {rollback_error}",
-                    snapshot.path.display()
-                ));
-        }
-        return Err(error).with_context(|| {
-            format!(
-                "failed to move {} to {}",
-                current_dir.display(),
-                target_dir.display()
-            )
-        });
-    }
     Ok(task)
 }
 
@@ -676,6 +753,14 @@ pub fn update_task_history(
         );
     }
     let (mut task, snapshot, _) = lookup::load_task_with_snapshot(tasks_dir, id)?;
+    if !task.state.is_live() {
+        bail!(
+            "cannot update task {} — done (state: {}); use `maestro task note {}` for historical context",
+            task.id,
+            task.state.as_str(),
+            task.id
+        );
+    }
     lifecycle::append_history(&mut task, actor, updated_at, details);
     template::save_task_with_snapshot(&task, &snapshot)?;
     Ok(task)
@@ -781,138 +866,6 @@ fn feature_link_is_settled(state: &TaskState) -> bool {
     )
 }
 
-#[derive(Debug)]
-struct ReservedTaskId {
-    id: String,
-    _marker: DirReservation,
-}
-
-fn reserve_next_task_id(tasks_dir: &Path) -> Result<ReservedTaskId> {
-    // L6a: an archived `task-NNN` still owns its id, so allocate above the max
-    // of the union of live + archived tasks — never reissue a freed id.
-    let mut max = max_task_number(tasks_dir)?;
-    if let Some(archive_tasks_dir) = archive_tasks_sibling(tasks_dir) {
-        max = max.max(max_task_number(&archive_tasks_dir)?);
-    }
-    max = max.max(max_reserved_task_number(tasks_dir)?);
-    let mut candidate = max + 1;
-    loop {
-        let marker_name = format!("{ALLOC_MARKER_PREFIX}task-{candidate:03}");
-        let Some(marker) = try_reserve_marker_dir(tasks_dir, &marker_name)? else {
-            candidate += 1;
-            continue;
-        };
-        if task_number_exists(tasks_dir, candidate)? {
-            drop(marker);
-            candidate += 1;
-            continue;
-        }
-        return Ok(ReservedTaskId {
-            id: format!("task-{candidate:03}"),
-            _marker: marker,
-        });
-    }
-}
-
-/// Highest `task-NNN` number among the directory's entries (0 if dir absent).
-fn max_task_number(tasks_dir: &Path) -> Result<u32> {
-    let mut max = 0_u32;
-    for root in lookup::task_roots(tasks_dir)? {
-        if !root.is_dir() {
-            continue;
-        }
-        for entry in
-            fs::read_dir(&root).with_context(|| format!("failed to read {}", root.display()))?
-        {
-            let entry = entry.with_context(|| format!("failed to list {}", root.display()))?;
-            let file_type = entry
-                .file_type()
-                .with_context(|| format!("failed to inspect {}", entry.path().display()))?;
-            if !file_type.is_dir() || file_type.is_symlink() {
-                continue;
-            }
-            let Some(name) = entry.file_name().to_str().map(str::to_string) else {
-                continue;
-            };
-            if let Some(num) = name
-                .strip_prefix("task-")
-                .and_then(|rest| rest.split('-').next())
-                .and_then(|value| value.parse::<u32>().ok())
-            {
-                max = max.max(num);
-            }
-        }
-    }
-    Ok(max)
-}
-
-fn max_reserved_task_number(tasks_dir: &Path) -> Result<u32> {
-    let mut max = 0_u32;
-    for (path, _) in child_dirs(tasks_dir)? {
-        if let Some(num) = path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .and_then(|name| name.strip_prefix(ALLOC_MARKER_PREFIX))
-            .and_then(|rest| rest.strip_prefix("task-"))
-            .and_then(|value| value.parse::<u32>().ok())
-        {
-            max = max.max(num);
-        }
-    }
-    Ok(max)
-}
-
-fn task_number_exists(tasks_dir: &Path, number: u32) -> Result<bool> {
-    if task_number_exists_in(tasks_dir, number)? {
-        return Ok(true);
-    }
-    if let Some(archive_tasks_dir) = archive_tasks_sibling(tasks_dir)
-        && task_number_exists_in(&archive_tasks_dir, number)?
-    {
-        return Ok(true);
-    }
-    Ok(false)
-}
-
-fn task_number_exists_in(tasks_dir: &Path, number: u32) -> Result<bool> {
-    for root in lookup::task_roots(tasks_dir)? {
-        for (path, _) in child_dirs(&root)? {
-            if path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .and_then(|name| name.strip_prefix("task-"))
-                .and_then(|rest| rest.split('-').next())
-                .and_then(|value| value.parse::<u32>().ok())
-                == Some(number)
-            {
-                return Ok(true);
-            }
-        }
-    }
-    Ok(false)
-}
-
-fn task_root_for_feature(tasks_dir: &Path, feature_id: Option<&str>) -> Result<PathBuf> {
-    let Some(feature_id) = feature_id else {
-        return Ok(tasks_dir.to_path_buf());
-    };
-    let maestro_dir = tasks_dir.parent().with_context(|| {
-        format!(
-            "cannot derive feature task root from {}",
-            tasks_dir.display()
-        )
-    })?;
-    Ok(maestro_dir.join("features").join(feature_id).join("tasks"))
-}
-
-/// `.maestro/tasks` → `.maestro/archive/tasks` (the archive sibling tree, §5.3).
-/// Derived from `tasks_dir` to keep `create_task`'s signature stable (D-P4-5).
-fn archive_tasks_sibling(tasks_dir: &Path) -> Option<PathBuf> {
-    tasks_dir
-        .parent()
-        .map(|maestro_dir| maestro_dir.join("archive").join("tasks"))
-}
-
 fn next_blocker_id(task: &TaskRecord) -> String {
     let max = task
         .blockers
@@ -949,10 +902,128 @@ fn blocker_descriptor(target: BlockerTarget) -> (BlockerKind, Option<BlockerRef>
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+    use std::path::Path;
+
     use super::{
-        TaskRecord, TaskState, VerificationBinding, VerificationOutcome, VerificationPassed,
-        VerificationStatus, apply_verification_outcome,
+        BlockerTarget, CreateTaskOptions, MaestroPaths, TaskRecord, TaskState, VerificationBinding,
+        VerificationOutcome, VerificationPassed, VerificationStatus, apply_verification_outcome,
+        create_task, missing_verify_contract_ids, set_feature,
     };
+
+    #[test]
+    fn blocker_target_from_ref_falls_back_to_prefix_when_no_card() {
+        // No card store resolves these ids, so classification falls through to
+        // the legacy id-prefix parse -- the card-type lookup is exercised e2e.
+        let paths = MaestroPaths::new(Path::new("/nonexistent-maestro-from-ref"));
+        assert_eq!(
+            BlockerTarget::from_ref(&paths, Some("task-001".to_string())).expect("task ref"),
+            BlockerTarget::Task("task-001".to_string())
+        );
+        assert_eq!(
+            BlockerTarget::from_ref(&paths, Some("decision-007".to_string()))
+                .expect("decision ref"),
+            BlockerTarget::Decision("decision-007".to_string())
+        );
+        assert_eq!(
+            BlockerTarget::from_ref(&paths, Some("PR #42".to_string())).expect("external ref"),
+            BlockerTarget::External("PR #42".to_string())
+        );
+        assert_eq!(
+            BlockerTarget::from_ref(&paths, None).expect("human ref"),
+            BlockerTarget::Human
+        );
+    }
+
+    /// A `--by` naming a feature card must error toward `dep add`, not silently
+    /// classify as an External blocker the card graph can never resolve.
+    #[test]
+    fn blocker_target_refuses_a_feature_card_ref() {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("invariant: test clock after Unix epoch")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "maestro-from-ref-feature-{}-{nanos}",
+            std::process::id()
+        ));
+        let paths = MaestroPaths::new(&root);
+        let path = crate::domain::card::store::card_path(&paths, "csv-export");
+        let snapshot = crate::domain::card::store::load_with_snapshot(&path).expect("snapshot");
+        let card = crate::domain::card::schema::Card::new(
+            "csv-export",
+            crate::domain::card::schema::CardType::Feature,
+            "CSV export",
+            "open",
+            "2026-06-10T00:00:00Z",
+        );
+        crate::domain::card::store::save_with_snapshot(&path, &card, &snapshot).expect("save");
+
+        let error = BlockerTarget::from_ref(&paths, Some("csv-export".to_string()))
+            .expect_err("a feature ref is not a blocker target");
+        let message = format!("{error:#}");
+        assert!(
+            message.contains("maestro dep add") && message.contains("feature"),
+            "error routes to the dep edge: {message}"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A store read failure propagates instead of silently misfiling a tracked
+    /// card ref as External; a ref that cannot be a card id (a URL) never
+    /// consults the store and stays free-form external.
+    #[test]
+    fn blocker_target_propagates_store_errors_and_keeps_freeform_refs() {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("invariant: test clock after Unix epoch")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "maestro-from-ref-error-{}-{nanos}",
+            std::process::id()
+        ));
+        let paths = MaestroPaths::new(&root);
+        let path = crate::domain::card::store::card_path(&paths, "card-bad001");
+        std::fs::create_dir_all(path.parent().expect("card path has a dir"))
+            .expect("create the card dir");
+        std::fs::write(&path, "title: [unclosed").expect("plant the corrupt card");
+
+        let error = BlockerTarget::from_ref(&paths, Some("card-bad001".to_string()))
+            .expect_err("an unreadable card must surface, not misfile as External");
+        assert!(
+            format!("{error:#}").contains("failed to parse"),
+            "{error:#}"
+        );
+
+        assert_eq!(
+            BlockerTarget::from_ref(&paths, Some("https://github.com/acme/pull/42".to_string()))
+                .expect("free-form ref"),
+            BlockerTarget::External("https://github.com/acme/pull/42".to_string())
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn missing_verify_contract_ids_flags_only_unlinked_unchecked_drafts() {
+        let paths = MaestroPaths::new(Path::new("/nonexistent-missing-verify-test"));
+
+        let mut unchecked = TaskRecord::draft("task-001", "no checks yet", "t0");
+        unchecked.state = TaskState::Exploring;
+
+        let mut checked = TaskRecord::draft("task-002", "has a check", "t0");
+        checked.acceptance.checks = vec!["ac-1".to_string()];
+
+        let mut linked = TaskRecord::draft("task-003", "linked to a feature", "t0");
+        linked.feature_id = Some("agent-cli-ux".to_string());
+
+        let mut settled = TaskRecord::draft("task-004", "already ready", "t0");
+        settled.state = TaskState::Ready;
+
+        let missing = missing_verify_contract_ids(&paths, &[unchecked, checked, linked, settled])
+            .expect("missing-verify scan should not error");
+
+        assert_eq!(missing, BTreeSet::from(["task-001".to_string()]));
+    }
 
     #[test]
     fn verification_outcome_pass_sets_binding_and_history() {
@@ -1033,5 +1104,83 @@ mod tests {
         assert_eq!(latest.open_items, vec!["missing evidence"]);
         assert_eq!(task.verification.status, Some(VerificationStatus::Failed));
         assert_eq!(task.verification.failures, vec!["missing evidence"]);
+    }
+
+    fn card_mode_repo(label: &str) -> MaestroPaths {
+        use std::process;
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("invariant: test clock after Unix epoch")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "maestro-task-setfeat-{label}-{}-{nanos}",
+            process::id()
+        ));
+        let paths = MaestroPaths::new(&root);
+        crate::foundation::core::fs::ensure_dir(paths.cards_dir()).expect("create cards dir");
+        paths
+    }
+
+    /// In card mode `set_feature` retargets `card.parent` in place -- no directory
+    /// move (the legacy carrier of the feature link). Detaching to `None` clears
+    /// the persisted parent and drops the task from the feature's on-demand count.
+    /// (Ported from the deleted task_card_cutover: the legacy directory-move
+    /// collision tests in task_commands cover a path that no longer exists.)
+    #[test]
+    fn card_mode_set_feature_retargets_parent_in_place_and_drops_the_count() {
+        let paths = card_mode_repo("detach");
+        let tasks_dir = paths.tasks_dir();
+
+        let feature_id =
+            crate::domain::feature::create(&paths, "Csv export").expect("create feature card");
+        let task = create_task(
+            &tasks_dir,
+            "Add CSV export",
+            CreateTaskOptions {
+                feature: Some(feature_id.clone()),
+                covers: Vec::new(),
+                lane: None,
+                risk: None,
+                checks: Vec::new(),
+                created_at: "2026-06-09T12:00:00Z".to_string(),
+            },
+        )
+        .expect("create task card with a feature parent");
+        assert!(
+            task.id.starts_with("task-add-csv-export-"),
+            "card-mode id: {}",
+            task.id
+        );
+
+        let counts =
+            crate::domain::feature::query::count_tasks_by_feature(&tasks_dir).expect("count");
+        assert_eq!(counts.get(&feature_id).map(|c| c.total), Some(1));
+
+        set_feature(
+            &tasks_dir,
+            &task.id,
+            None,
+            "maestro",
+            "2026-06-09T12:00:00Z",
+        )
+        .expect("detach the feature");
+
+        let card = crate::domain::card::store::resolve(&paths, &task.id)
+            .expect("card resolvable")
+            .expect("card present")
+            .card;
+        assert_eq!(card.parent, None, "the parent field is cleared in place");
+
+        let counts =
+            crate::domain::feature::query::count_tasks_by_feature(&tasks_dir).expect("recount");
+        assert_eq!(
+            counts.get(&feature_id),
+            None,
+            "the detached task no longer counts toward the feature"
+        );
+
+        let _ = std::fs::remove_dir_all(paths.maestro_dir());
     }
 }

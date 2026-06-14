@@ -141,16 +141,78 @@ pub fn write_string_if_unchanged(
     crate::foundation::core::safe_write::write_string_atomic(path, contents)
 }
 
+/// Remove `dir` only when `record_path` still matches the snapshot the caller
+/// read. This gives dir-backed stores the same stale-writer rejection as
+/// [`write_string_if_unchanged`] before deleting record sidecars with the dir.
+pub fn remove_dir_if_file_unchanged(
+    record_path: impl AsRef<Path>,
+    expected: Option<&str>,
+    dir: impl AsRef<Path>,
+) -> Result<()> {
+    let record_path = record_path.as_ref();
+    let dir = dir.as_ref();
+    let parent = record_path.parent().unwrap_or_else(|| Path::new(""));
+    let name = record_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .with_context(|| format!("path has no valid file name: {}", record_path.display()))?;
+    let lock_name = format!(".{name}.write-lock");
+    let _reservation = reserve_store_write_marker(parent, &lock_name, record_path)?;
+    let current = read_to_string_if_exists(record_path)?;
+    if current.as_deref() != expected {
+        bail!(
+            "{} changed since it was read; re-run the command so Maestro can merge from the latest store",
+            record_path.display()
+        );
+    }
+    // remove_dir_all would delete the held lock marker mid-walk, letting a
+    // racing writer re-acquire it while the deletion is still in flight.
+    // Rename to a dot-prefixed tombstone first: the rename is atomic, so
+    // racers see either the locked dir or a missing one, and card scans skip
+    // dot-prefixed dirs so a crash-leaked tombstone cannot resurrect.
+    let dir_name = dir
+        .file_name()
+        .and_then(|name| name.to_str())
+        .with_context(|| format!("path has no valid directory name: {}", dir.display()))?;
+    let tombstone = dir
+        .parent()
+        .unwrap_or_else(|| Path::new(""))
+        .join(format!(".{dir_name}.removing"));
+    if tombstone.exists() {
+        fs::remove_dir_all(&tombstone)
+            .with_context(|| format!("failed to clear tombstone {}", tombstone.display()))?;
+    }
+    fs::rename(dir, &tombstone).with_context(|| format!("failed to remove {}", dir.display()))?;
+    fs::remove_dir_all(&tombstone)
+        .with_context(|| format!("failed to remove {}", tombstone.display()))
+}
+
 fn reserve_store_write_marker(
     parent: &Path,
     lock_name: &str,
     target: &Path,
 ) -> Result<DirReservation> {
     for _ in 0..2 {
-        if let Some(reservation) = try_reserve_marker_dir(parent, lock_name)? {
-            return Ok(reservation);
-        }
         let lock_path = parent.join(lock_name);
+        // fs::create_dir, not try_reserve_marker_dir: the CAS seam must never
+        // create the parent. A missing parent means the record's home was
+        // removed by a concurrent writer, and recreating it would leave an
+        // empty husk dir behind every stale retry.
+        match fs::create_dir(&lock_path) {
+            Ok(()) => return Ok(DirReservation { path: lock_path }),
+            Err(error) if error.kind() == ErrorKind::AlreadyExists => {}
+            Err(error) if error.kind() == ErrorKind::NotFound => {
+                bail!(
+                    "{} changed since it was read; re-run the command so Maestro can merge from the latest store",
+                    target.display()
+                );
+            }
+            Err(error) => {
+                return Err(error).with_context(|| {
+                    format!("failed to create reservation {}", lock_path.display())
+                });
+            }
+        }
         if !stale_write_lock(&lock_path)? {
             bail!(
                 "{} is being written by another Maestro process; re-run the command",
@@ -322,12 +384,8 @@ pub(crate) fn create_directory_symlink(target: &Path, link: &Path) -> std::io::R
 /// times. A missing `parent` yields an empty list; an unreadable modification
 /// time falls back to the Unix epoch.
 pub(crate) fn child_dirs(parent: &Path) -> Result<Vec<(PathBuf, SystemTime)>> {
-    let entries = match fs::read_dir(parent) {
-        Ok(entries) => entries,
-        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(error) => {
-            return Err(error).with_context(|| format!("failed to read {}", parent.display()));
-        }
+    let Some(entries) = read_child_entries(parent)? else {
+        return Ok(Vec::new());
     };
     let mut dirs = Vec::new();
     for entry in entries {
@@ -345,6 +403,52 @@ pub(crate) fn child_dirs(parent: &Path) -> Result<Vec<(PathBuf, SystemTime)>> {
         dirs.push((entry.path(), modified));
     }
     Ok(dirs)
+}
+
+fn child_dir_paths(parent: &Path) -> Result<Vec<PathBuf>> {
+    let Some(entries) = read_child_entries(parent)? else {
+        return Ok(Vec::new());
+    };
+    let mut dirs = Vec::new();
+    for entry in entries {
+        let entry = entry.with_context(|| format!("failed to list {}", parent.display()))?;
+        let file_type = entry
+            .file_type()
+            .with_context(|| format!("failed to inspect {}", entry.path().display()))?;
+        if !file_type.is_dir() || file_type.is_symlink() {
+            continue;
+        }
+        dirs.push(entry.path());
+    }
+    Ok(dirs)
+}
+
+fn read_child_entries(parent: &Path) -> Result<Option<fs::ReadDir>> {
+    match fs::read_dir(parent) {
+        Ok(entries) => Ok(Some(entries)),
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error).with_context(|| format!("failed to read {}", parent.display())),
+    }
+}
+
+/// List non-symlink child directories of `parent`, sorted by path. A missing
+/// `parent` yields an empty list.
+pub(crate) fn sorted_child_dirs(parent: &Path) -> Result<Vec<PathBuf>> {
+    let mut dirs = child_dir_paths(parent)?;
+    dirs.sort();
+    Ok(dirs)
+}
+
+/// Read a YAML file and require a top-level mapping.
+pub(crate) fn read_yaml_mapping(path: &Path) -> Result<serde_yaml::Mapping> {
+    let raw =
+        fs::read_to_string(path).with_context(|| format!("failed to read {}", path.display()))?;
+    let value: serde_yaml::Value = serde_yaml::from_str(&raw)
+        .with_context(|| format!("failed to parse {}", path.display()))?;
+    value
+        .as_mapping()
+        .cloned()
+        .with_context(|| format!("expected mapping in {}", path.display()))
 }
 
 /// Read a UTF-8 file if it exists.

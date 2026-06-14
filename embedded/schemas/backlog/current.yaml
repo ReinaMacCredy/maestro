@@ -1,0 +1,30 @@
+# Schema contract for the harness backlog/idea entry family (WS5 / D6.2-B).
+# src/domain/schema_contracts validates this pack against the Rust constants;
+# any edit trips tests/resources_version_guard.rs so it is acknowledged.
+family: backlog
+contracts:
+  - name: idea
+    schema_version: maestro.card.v1
+    stamp: envelope           # entries stamp only the card envelope; the payload has no version of its own
+    carrier: card-entry       # on disk: one entry in the ideas roster, payload under `extra`
+    format: yaml
+    home: .maestro/cards/ideas.yaml
+    model: src/domain/harness/schema.rs::BacklogItem
+    fields:
+      - id
+      - fingerprint
+      - source
+      - provenance
+      - topic
+      - type
+      - title
+      - priority
+      - occurrences
+      - sessions_hit
+      - first_seen
+      - last_seen
+      - status
+      - evidence
+      - spawned_task
+      - dismissal_reason
+      - history

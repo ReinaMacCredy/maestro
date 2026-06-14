@@ -3,7 +3,7 @@ use anyhow::{Context, Result, bail};
 use crate::domain::feature;
 use crate::domain::proof;
 use crate::domain::task;
-use crate::domain::task::{BlockerTarget, TaskRecord, TaskState, TransitionDetails};
+use crate::domain::task::{BlockerKind, BlockerTarget, TaskRecord, TaskState, TransitionDetails};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::time::utc_now_timestamp;
 use crate::interfaces::cli::status;
@@ -18,8 +18,8 @@ pub fn run(args: TaskArgs) -> Result<()> {
     let paths = MaestroPaths::new(repo_root);
     // Read verbs (list/show/doctor) must not scaffold: a pure inspect should leave
     // disk untouched, matching feature/decision/query. The sole first-write mutator,
-    // `create`, ensures `.maestro/tasks` itself via write_task_artifacts; every other
-    // mutator loads an existing task, and archive/unarchive ensure their own targets.
+    // `create`, mints its card via the card store; every other mutator loads an
+    // existing task.
     let actor = super::actor();
 
     match args.command {
@@ -30,14 +30,27 @@ pub fn run(args: TaskArgs) -> Result<()> {
             lane,
             risk,
             check,
-        } => create_task(&paths, &title, feature, covers, lane, risk, check),
+            id_only,
+        } => create_task(&paths, &title, feature, covers, lane, risk, check, id_only),
         TaskCommand::Set {
             id,
             check,
             feature,
             no_feature,
             covers,
-        } => set_task(&paths, &id, check, covers, feature, no_feature, &actor),
+            verify_command,
+            clear_verify_command,
+        } => set_task(
+            &paths,
+            &id,
+            check,
+            covers,
+            feature,
+            no_feature,
+            verify_command,
+            clear_verify_command,
+            &actor,
+        ),
         TaskCommand::Explore { id } => explore_task(&paths, &id, &actor),
         TaskCommand::Accept { id } => accept_task(&paths, &id, &actor),
         TaskCommand::Claim { id, next } => match (id, next) {
@@ -54,7 +67,7 @@ pub fn run(args: TaskArgs) -> Result<()> {
             claim,
             proof,
         } => {
-            if claim.trim().is_empty() {
+            if claim.iter().any(|claim| claim.trim().is_empty()) {
                 bail!(
                     "`--claim` must not be empty; pass the proof to verify against, e.g. --claim \"cargo test passes\""
                 );
@@ -138,33 +151,16 @@ pub fn run(args: TaskArgs) -> Result<()> {
         ),
         TaskCommand::Watch { id, interval } => watch_tasks(&paths, id, interval),
         TaskCommand::Doctor => doctor_tasks(&paths),
-        TaskCommand::Archive { id, dry_run } => {
-            let note = match task::archive_task(
-                &paths.tasks_dir(),
-                &paths.archive_tasks_dir(),
-                &id,
-                dry_run,
-            ) {
-                Ok(note) => note,
-                Err(error) => bail!("{}", task_archive_error_message(&id, &error.to_string())),
-            };
-            print_task_archive_note(&id, &note);
-            Ok(())
+        TaskCommand::Archive { id, dry_run: _ } => {
+            bail!("{}", per_task_archive_retired(&id))
         }
         TaskCommand::Unarchive { id } => {
-            let note =
-                match task::unarchive_task(&paths.tasks_dir(), &paths.archive_tasks_dir(), &id) {
-                    Ok(note) => note,
-                    Err(error) => {
-                        bail!("{}", task_unarchive_error_message(&id, &error.to_string()))
-                    }
-                };
-            print_task_unarchive_note(&id, &note);
-            Ok(())
+            bail!("{}", per_task_archive_retired(&id))
         }
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn create_task(
     paths: &MaestroPaths,
     title: &str,
@@ -173,6 +169,7 @@ fn create_task(
     lane: Option<String>,
     risk: Option<String>,
     checks: Vec<String>,
+    id_only: bool,
 ) -> Result<()> {
     if let Some(target) = feature.as_deref() {
         guard_feature_target(paths, target)?;
@@ -191,11 +188,16 @@ fn create_task(
         },
     )?;
 
+    if id_only {
+        println!("{}", task.id);
+        return Ok(());
+    }
     let checks = task::load_task_checks(&paths.tasks_dir(), &task)?;
     print_task_create_handoff(&task, &checks);
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn set_task(
     paths: &MaestroPaths,
     id: &str,
@@ -203,12 +205,15 @@ fn set_task(
     covers: Vec<String>,
     feature: Option<String>,
     no_feature: bool,
+    verify_command: Option<String>,
+    clear_verify_command: bool,
     actor: &str,
 ) -> Result<()> {
     let changing_feature = feature.is_some() || no_feature;
-    if checks.is_empty() && covers.is_empty() && !changing_feature {
+    let changing_verify_command = verify_command.is_some() || clear_verify_command;
+    if checks.is_empty() && covers.is_empty() && !changing_feature && !changing_verify_command {
         bail!(
-            "task set requires --check, --covers, --feature, or --no-feature\n  maestro task set {id} --check \"...\"\n  maestro task set {id} --covers ac-1\n  maestro task set {id} --feature <feature-id>\n  maestro task set {id} --no-feature"
+            "task set requires --check, --covers, --feature, --no-feature, --verify-command, or --clear-verify-command\n  maestro task set {id} --check \"...\"\n  maestro task set {id} --covers ac-1\n  maestro task set {id} --feature <feature-id>\n  maestro task set {id} --no-feature\n  maestro task set {id} --verify-command \"cargo test --test foo\"\n  maestro task set {id} --clear-verify-command"
         );
     }
 
@@ -249,6 +254,25 @@ fn set_task(
         match &task.feature_id {
             Some(feature_id) => println!("updated {} -> feature {feature_id}", task.id),
             None => println!("updated {} -> no feature", task.id),
+        }
+    }
+
+    if changing_verify_command {
+        let target = if clear_verify_command {
+            None
+        } else {
+            verify_command
+        };
+        let task = task::set_verify_command(&paths.tasks_dir(), id, target)?;
+        match &task.verify_command {
+            Some(command) => println!(
+                "updated {} -> verify command `{command}` (task verify runs only this, not stack.verify)",
+                task.id
+            ),
+            None => println!(
+                "updated {} -> verify command cleared (task verify runs the repo-global stack.verify)",
+                task.id
+            ),
         }
     }
     Ok(())
@@ -361,29 +385,39 @@ fn print_claim_next_context(paths: &MaestroPaths, task: &TaskRecord) -> Result<(
         return Ok(());
     };
     println!("feature: {feature_id}");
-    let mut feature_tasks: Vec<TaskRecord> = task::load_task_records(&paths.tasks_dir())?
+    let feature_tasks: Vec<TaskRecord> = task::load_task_records(&paths.tasks_dir())?
         .into_iter()
         .filter(|candidate| candidate.feature_id.as_deref() == Some(feature_id))
         .collect();
-    feature_tasks.sort_by(|left, right| left.id.cmp(&right.id));
-    let Some(index) = feature_tasks
+    // Opaque card ids don't sort in plan order, so the chain follows the
+    // dependency edges instead of id adjacency: the task this one waits on and
+    // the first task waiting on this one.
+    let prev = task
+        .blockers
         .iter()
-        .position(|candidate| candidate.id == task.id)
-    else {
+        .filter_map(|blocker| blocker.blocked_ref.as_ref())
+        .filter(|target| target.kind == BlockerKind::Task)
+        .find_map(|target| feature_tasks.iter().find(|c| c.id == target.id));
+    let next = feature_tasks.iter().find(|candidate| {
+        candidate.id != task.id
+            && candidate.blockers.iter().any(|blocker| {
+                blocker
+                    .blocked_ref
+                    .as_ref()
+                    .is_some_and(|target| target.kind == BlockerKind::Task && target.id == task.id)
+            })
+    });
+    if prev.is_none() && next.is_none() {
         return Ok(());
-    };
-    let start = index.saturating_sub(1);
-    let end = (index + 2).min(feature_tasks.len());
-    if end > start {
-        println!("chain:");
-        for candidate in &feature_tasks[start..end] {
-            println!(
-                "  {} {:<8} {}",
-                candidate.id,
-                task_chain_state(candidate, &task.id),
-                candidate.title
-            );
-        }
+    }
+    println!("chain:");
+    for candidate in [prev, Some(task), next].into_iter().flatten() {
+        println!(
+            "  {} {:<8} {}",
+            candidate.id,
+            task_chain_state(candidate, &task.id),
+            candidate.title
+        );
     }
     Ok(())
 }
@@ -428,10 +462,16 @@ fn complete_task(
     paths: &MaestroPaths,
     id: &str,
     summary: String,
-    claim: String,
-    proof_text: Option<String>,
+    claims: Vec<String>,
+    proof_texts: Vec<String>,
     actor: &str,
 ) -> Result<()> {
+    if proof_texts
+        .iter()
+        .any(|proof_text| proof_text.trim().is_empty())
+    {
+        bail!("`--proof` must not be empty; pass observed evidence text");
+    }
     let task = transition_task_record(
         paths,
         id,
@@ -439,15 +479,13 @@ fn complete_task(
         actor,
         TransitionDetails {
             summary: Some(summary),
-            claims: vec![claim],
+            claims,
             ..TransitionDetails::default()
         },
     )?;
     println!("completed {} -> {}", task.id, task.state.as_str());
-    if let Some(proof_text) = proof_text {
-        if proof_text.trim().is_empty() {
-            bail!("`--proof` must not be empty; pass observed evidence text");
-        }
+    if !proof_texts.is_empty() {
+        let proof_text = proof_texts.join("\n");
         proof::record_claim(
             paths,
             &super::cli_run_id(),
@@ -457,7 +495,7 @@ fn complete_task(
             Vec::new(),
         )?;
         println!("auto: recorded task_proof event");
-        println!("  proof: {proof_text}");
+        println!("recorded proof ({} bytes)", proof_text.len());
     }
     println!("auto: maestro task verify {}", task.id);
     match verify::run_for_task(paths, &task.id, actor) {
@@ -552,11 +590,7 @@ fn print_verify_block(task: &TaskRecord, checks: &[String]) {
         return;
     }
 
-    if task.feature_id.is_some() {
-        println!("verify+ inherited from feature:");
-        println!("  task check: optional for feature-linked tasks");
-        println!("  feature gate: qa-baseline + qa-slice at feature accept/ship");
-    } else {
+    if task.feature_id.is_none() {
         println!("verify+ missing:");
         println!(
             "  next: maestro task set {} --check \"<observable result>\"",
@@ -633,7 +667,7 @@ fn task_terminal_reason_required(id: &str, verb: &str, state: &str) -> String {
 fn task_terminal_error_message(id: &str, replacement: Option<&str>, error: &str) -> String {
     if error.contains("terminal state") {
         return format!(
-            "blocked: {id} is already terminal\nstate: {}\ninspect: maestro task show {id}\nnext: maestro status\noptional: maestro task archive {id}",
+            "blocked: {id} is already terminal\nstate: {}\ninspect: maestro task show {id}\nnext: maestro status",
             parse_terminal_state(error).unwrap_or("unknown")
         );
     }
@@ -675,7 +709,6 @@ fn print_terminal_receipt(task: &TaskRecord, reason: &str, replacement: Option<&
     }
     println!("inspect: maestro task show {}", task.id);
     println!("next: maestro status");
-    println!("optional: maestro task archive {}", task.id);
 }
 
 fn terminal_verb(task: &TaskRecord) -> &'static str {
@@ -687,106 +720,18 @@ fn terminal_verb(task: &TaskRecord) -> &'static str {
     }
 }
 
-fn print_task_archive_note(id: &str, note: &str) {
-    if note.starts_with("would archive ") {
-        println!("dry-run: would archive {id} (live -> archive)");
-        println!("archive receipt preview:");
-        println!("  live path: .maestro/tasks/<task-dir>");
-        println!("  archive path: .maestro/archive/tasks/<task-dir>");
-        println!("writes: none");
-        println!("run: maestro task archive {id}");
-    } else if note.starts_with("already archived: ") {
-        println!("unchanged: {id} already archived");
-        println!("inspect: maestro task show {id}");
-        println!("next: maestro status");
-        println!("restore: maestro task unarchive {id}");
-    } else if note.starts_with("archived ") {
-        println!("archived {id} (live -> archive)");
-        println!("archive receipt:");
-        println!("  archive path: .maestro/archive/tasks/<task-dir>");
-        println!("inspect: maestro task show {id}");
-        println!("next: maestro status");
-        println!("restore: maestro task unarchive {id}");
-    } else {
-        println!("{note}");
-    }
-}
-
-fn print_task_unarchive_note(id: &str, note: &str) {
-    if note.starts_with("already live: ") {
-        println!("unchanged: {id} already live");
-        println!("inspect: maestro task show {id}");
-        println!("next: maestro status");
-        println!("archive: maestro task archive {id}");
-    } else if note.starts_with("unarchived ") {
-        println!("unarchived {id} (archive -> live)");
-        println!("restore receipt:");
-        println!("  live path: .maestro/tasks/<task-dir>");
-        println!("inspect: maestro task show {id}");
-        println!("next: maestro status");
-        println!("archive again: maestro task archive {id}");
-    } else {
-        println!("{note}");
-    }
-}
-
-fn task_archive_error_message(id: &str, error: &str) -> String {
-    if error.contains("not done") {
-        return format!(
-            "blocked: task is not done\n\
-             task: {id}\n\
-             reason: {error}\n\
-             inspect: maestro task show {id}\n\
-             finish first: maestro task complete {id} --summary \"<summary>\" --claim \"<claim>\" --proof \"<observed evidence>\"\n\
-             or close: maestro task reject {id} --reason \"<reason>\""
-        );
-    }
-    if error.contains("blocked by it") {
-        return format!(
-            "blocked: live task still references this task\n\
-             task: {id}\n\
-             reason: {error}\n\
-             inspect: maestro task show {id}\n\
-             fix: clear the live blocker named above\n\
-             retry: maestro task archive {id}"
-        );
-    }
-    if error.contains("task not found") {
-        return format!(
-            "blocked: task not found\n\
-             task: {id}\n\
-             next: maestro task list --all"
-        );
-    }
-    if error.contains("archived copy already exists") {
-        return format!(
-            "blocked: archived copy already exists\n\
-             task: {id}\n\
-             inspect: maestro task show {id}\n\
-             next: maestro task list --all"
-        );
-    }
-    error.to_string()
-}
-
-fn task_unarchive_error_message(id: &str, error: &str) -> String {
-    if error.contains("archived task not found") {
-        return format!(
-            "blocked: archived task not found\n\
-             task: {id}\n\
-             next: maestro task list --all"
-        );
-    }
-    if error.contains("live task already occupies") {
-        return format!(
-            "blocked: live task already occupies this id\n\
-             task: {id}\n\
-             inspect live: maestro task show {id}\n\
-             archive live first: maestro task archive {id}\n\
-             retry: maestro task unarchive {id}"
-        );
-    }
-    error.to_string()
+/// Per-task archive was retired (SPEC E4: archive is a feature-cascade only).
+/// A finished task stays as closed history; a whole feature and its child tasks
+/// archive together. Redirect rather than leave the legacy "task not found"
+/// dead-end on an existing card.
+fn per_task_archive_retired(id: &str) -> String {
+    format!(
+        "blocked: per-task archive removed\n\
+         task: {id}\n\
+         why: archive is now a feature-level cascade; a finished task stays as closed history\n\
+         close instead: maestro close {id}\n\
+         archive a feature and its tasks: maestro archive <feature>"
+    )
 }
 
 fn block_task(
@@ -797,7 +742,7 @@ fn block_task(
     actor: &str,
 ) -> Result<()> {
     let now = utc_now_timestamp();
-    let target = blocker_target(by);
+    let target = BlockerTarget::from_ref(paths, by)?;
     let (task, blocker_id) = task::block_task(&paths.tasks_dir(), id, reason, target, actor, &now)?;
 
     println!("blocked {} ({blocker_id})", task.id);
@@ -850,18 +795,16 @@ fn show_task(paths: &MaestroPaths, id: Option<String>) -> Result<()> {
             _ => bail!("task id is required or set MAESTRO_CURRENT_TASK for `maestro task show`"),
         },
     };
-    // L6b: reads cross the boundary — fall through to the archive so a
-    // historical reference to an archived task still renders. Track which tree
-    // resolved so the acceptance checks load from the same place.
-    let (task, tasks_dir, archived) = match task::load_task_record(&paths.tasks_dir(), &task_id) {
-        Ok(task) => (task, paths.tasks_dir(), false),
-        Err(live_err) => {
-            let archive_dir = paths.archive_tasks_dir();
-            let task = task::load_task_record(&archive_dir, &task_id).map_err(|_| live_err)?;
-            (task, archive_dir, true)
-        }
+    // L6b: reads cross the boundary — fall through to the archived card tree so
+    // a historical reference to an archived task still renders.
+    let (task, archived) = match task::load_task_record(&paths.tasks_dir(), &task_id) {
+        Ok(task) => (task, false),
+        Err(live_err) => match task::load_archived_task_record(paths, &task_id) {
+            Ok(Some((task, _))) => (task, true),
+            _ => return Err(live_err),
+        },
     };
-    let checks = task::load_task_checks(&tasks_dir, &task)?;
+    let checks = task::load_task_checks(&paths.tasks_dir(), &task)?;
     print!("{}", task::render_task(&task, &checks));
     // Disclose an archive-resolved view so a user cannot mistake an archived task
     // for a live one (mirrors `feature show`'s `archived: true` marker).
@@ -894,7 +837,10 @@ fn list_tasks(paths: &MaestroPaths, filters: TaskListFilters) -> Result<()> {
     let mut all_tasks = task::load_task_records(&paths.tasks_dir())?;
     let mut archived_ids = std::collections::BTreeSet::new();
     if filters.all {
-        let archived = task::load_task_records(&paths.archive_tasks_dir())?;
+        let archived: Vec<TaskRecord> = task::load_archived_task_entries(paths)?
+            .into_iter()
+            .map(|entry| entry.task)
+            .collect();
         archived_ids.extend(archived.iter().map(|t| t.id.clone()));
         all_tasks.extend(archived);
     }
@@ -904,8 +850,7 @@ fn list_tasks(paths: &MaestroPaths, filters: TaskListFilters) -> Result<()> {
         // instead of leaving a bare header (T8).
         println!("no tasks found");
     } else {
-        let missing_verify_contract_ids =
-            missing_verify_contract_ids(paths, &shown, &archived_ids)?;
+        let missing_verify_contract_ids = task::missing_verify_contract_ids(paths, &shown)?;
         print!(
             "{}",
             task::render_task_list_with_missing_checks(
@@ -923,30 +868,6 @@ fn list_tasks(paths: &MaestroPaths, filters: TaskListFilters) -> Result<()> {
         }
     }
     Ok(())
-}
-
-fn missing_verify_contract_ids(
-    paths: &MaestroPaths,
-    tasks: &[TaskRecord],
-    archived_ids: &std::collections::BTreeSet<String>,
-) -> Result<std::collections::BTreeSet<String>> {
-    let mut missing = std::collections::BTreeSet::new();
-    for task in tasks {
-        if task.feature_id.is_some()
-            || !matches!(task.state, TaskState::Draft | TaskState::Exploring)
-        {
-            continue;
-        }
-        let tasks_dir = if archived_ids.contains(&task.id) {
-            paths.archive_tasks_dir()
-        } else {
-            paths.tasks_dir()
-        };
-        if task::load_task_checks(&tasks_dir, task)?.is_empty() {
-            missing.insert(task.id.clone());
-        }
-    }
-    Ok(missing)
 }
 
 /// Build a [`task::TaskFilter`] from the CLI flags, choosing whether terminal
@@ -993,13 +914,4 @@ fn doctor_tasks(paths: &MaestroPaths) -> Result<()> {
         eprintln!("{line}");
     }
     bail!("task doctor found {} error(s)", report.errors.len())
-}
-
-fn blocker_target(by: Option<String>) -> BlockerTarget {
-    match by {
-        Some(by) if by.starts_with("task-") => BlockerTarget::Task(by),
-        Some(by) if by.starts_with("decision-") => BlockerTarget::Decision(by),
-        Some(by) => BlockerTarget::External(by),
-        None => BlockerTarget::Human,
-    }
 }

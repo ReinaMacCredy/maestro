@@ -1,5 +1,0 @@
-schema_version: maestro.acceptance.v1
-task: task-001
-checks: []
-locked_by: maestro
-locked_at: '1779758770571109000'

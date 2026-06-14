@@ -1,0 +1,21 @@
+schema_version: maestro.install_lock.v1
+agents:
+  claude:
+    installed_at: 2026-06-12T00:00:00.000Z
+    state: committed
+    files:
+      .claude/CLAUDE.md:
+        kind: markdown_managed_block
+        content_hash: '4444444444444444444444444444444444444444444444444444444444444444'
+        created_fresh: true
+      .claude/settings.json:
+        kind: json_managed_keys
+        managed_keys:
+          - hooks
+        previous_values:
+          hooks: null
+      .gitignore:
+        kind: gitignore_section
+      skills/maestro-card:
+        kind: symlink
+        target: ../.maestro/skills/maestro-card

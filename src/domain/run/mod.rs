@@ -1,5 +1,6 @@
 //! Run aggregate facade.
 
+mod active;
 mod append;
 mod discovery;
 mod event;
@@ -7,7 +8,8 @@ mod evidence;
 mod reader;
 mod record;
 
-pub(crate) use append::append_manual_event;
+pub use active::{Presence, SessionActivity, active_sessions, current_bound_card};
+pub(crate) use append::{append_jsonl_line, append_manual_event, open_managed_appendable};
 pub use discovery::{RunEventLog, managed_event_logs};
 #[cfg(test)]
 pub(crate) use event::is_accepted_event;
@@ -16,5 +18,5 @@ pub use event::{HookEventContract, hook_event_contract};
 pub use evidence::{
     RunEvidenceLoad, RunEvidenceRecord, load_run_evidence, write_evidence_for_session,
 };
-pub use reader::{RunEvent, RunEventRecord, visit_managed_events};
+pub use reader::{RunEvent, RunEventRecord, visit_managed_event_logs, visit_managed_events};
 pub(crate) use record::{RecordOutcome, record_hook_event};

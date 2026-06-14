@@ -1,0 +1,18 @@
+# Schema contract for the harness config family (WS5 / D6.2-B).
+# src/domain/schema_contracts validates this pack against the Rust constants;
+# any edit trips tests/resources_version_guard.rs so it is acknowledged.
+family: harness
+contracts:
+  - name: harness
+    schema_version: maestro.harness.v1
+    stamp: file
+    carrier: file
+    format: yaml
+    home: .maestro/harness/harness.yml
+    model: src/domain/harness/schema.rs::HarnessConfig
+    fields:
+      - schema_version
+      - stack
+      - escalation
+      - audit
+      - claims_only_verification

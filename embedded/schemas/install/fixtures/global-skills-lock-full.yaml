@@ -1,0 +1,18 @@
+schema_version: maestro.global_skills_lock.v1
+cache_dir: /home/user/.maestro/skills
+skills:
+  maestro-card:
+    version: 1.0.0
+    files:
+      SKILL.md: '5555555555555555555555555555555555555555555555555555555555555555'
+roots:
+  codex:
+    display_path: /home/user/.agents/skills
+    resolved_path: /home/user/.agents/skills
+links:
+  codex:maestro-card:
+    agent: codex
+    skill: maestro-card
+    display_path: /home/user/.agents/skills/maestro-card
+    target_path: /home/user/.maestro/skills/maestro-card
+    resolved_root: /home/user/.agents/skills

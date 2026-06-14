@@ -49,7 +49,15 @@ if [[ -n "${MAESTRO_VERIFY_ROOT:-}" ]]; then
   ARTIFACT_ROOT="$MAESTRO_VERIFY_ROOT"
   mkdir -p "$ARTIFACT_ROOT"
 else
-  ARTIFACT_ROOT="$(mktemp -d /private/tmp/maestro-verify-all.XXXXXX)"
+  if ! ARTIFACT_ROOT="$(mktemp -d)"; then
+    echo "FAIL: could not create artifact root" >&2
+    exit 1
+  fi
+fi
+
+if ! ARTIFACT_ROOT="$(cd "$ARTIFACT_ROOT" && pwd -P)"; then
+  echo "FAIL: could not canonicalize artifact root" >&2
+  exit 1
 fi
 
 LOG="$ARTIFACT_ROOT/logs"
@@ -174,7 +182,7 @@ write_qa_baseline() {
   local feature="$2"
   local scenario_id="$3"
   local scenario="$4"
-  mkdir -p "$dir/.maestro/features/$feature"
+  mkdir -p "$dir/.maestro/cards/$feature"
   {
     printf '%s\n' '---'
     printf 'amend_log_position: 0\n'
@@ -182,7 +190,7 @@ write_qa_baseline() {
     printf '### QA Baseline Contract\n\n'
     printf '%s\n' '- Scenario Matrix:'
     printf '  - [%s] %s\n' "$scenario_id" "$scenario"
-  } > "$dir/.maestro/features/$feature/qa.md"
+  } > "$dir/.maestro/cards/$feature/qa.md"
 }
 
 write_qa_slices() {
@@ -196,7 +204,7 @@ write_qa_slices() {
     printf '  - scenarios: ["%s"]\n' "$scenario_id"
     printf '    evidence: ["manual: %s"]\n' "$evidence"
     printf '```\n'
-  } >> "$dir/.maestro/features/$feature/qa.md"
+  } >> "$dir/.maestro/cards/$feature/qa.md"
 }
 
 write_harness_correction_sessions() {
@@ -220,6 +228,15 @@ parse_first_blocker_id() {
   printf '%s\n' "$blocker"
 }
 
+parse_first_card_id() {
+  local label="$1"
+  local prefix="$2"
+  local id
+  id="$(grep -Eo "${prefix}-[A-Za-z0-9][A-Za-z0-9_-]*" "$LOG/$label.out" | head -n 1 || true)"
+  [[ -n "$id" ]] || fail "$label did not expose a ${prefix} id"
+  printf '%s\n' "$id"
+}
+
 seed_required_passes() {
   if [[ "$RUN_GATES" -eq 1 ]]; then
     cat >> "$REQUIRED_FILE" <<'EOF'
@@ -238,7 +255,7 @@ EOF
 cargo-build
 green-version
 green-root-help
-green-update-help
+green-upgrade-help
 green-uninstall-help
 green-hook-record-help
 green-init-dry
@@ -291,10 +308,10 @@ green-query-matrix
 green-harness-list
 green-query-backlog
 green-task-doctor
-green-task-archive
-green-task-unarchive
 green-feature-archive
 green-feature-unarchive
+green-task-archive-retired
+green-task-unarchive-retired
 green-uninstall-codex
 green-uninstall-claude
 harness-init
@@ -326,8 +343,6 @@ brown-task-claim
 brown-task-complete
 brown-reject-create
 brown-reject
-brown-reject-archive
-brown-reject-unarchive
 brown-replacement-create
 brown-old-create
 brown-supersede
@@ -416,8 +431,8 @@ run_greenfield_workflow() {
   contains green-version "binary:"
   run_in green-root-help "$work" 0 "$BIN" --help
   contains green-root-help "Commands:"
-  run_in green-update-help "$work" 0 "$BIN" update --help
-  contains green-update-help "--check"
+  run_in green-upgrade-help "$work" 0 "$BIN" upgrade --help
+  contains green-upgrade-help "--check"
   run_in green-uninstall-help "$work" 0 "$BIN" uninstall --help
   contains green-uninstall-help "Remove maestro hooks"
   run_in green-hook-record-help "$work" 0 "$BIN" hook record --help
@@ -430,7 +445,7 @@ run_greenfield_workflow() {
   run_in green-init "$work" 0 "$BIN" init --yes
   contains green-init "initialized maestro"
   assert_path_exists "$work/.maestro/harness/HARNESS.md"
-  assert_path_exists "$work/.maestro/skills/maestro-task/SKILL.md"
+  assert_path_exists "$work/.maestro/skills/maestro-card/SKILL.md"
   run_in green-harness-claims-only "$work" 0 "$BIN" harness set --claims-only
   contains green-harness-claims-only "claims-only verification accepted"
 
@@ -449,56 +464,64 @@ run_greenfield_workflow() {
   run_in green-watch-snapshot "$work" 0 "$BIN" watch snapshot
 
   run_in green-task-create "$work" 0 "$BIN" task create "Greenfield README proof" --check "README mentions Maestro verify-all"
-  contains green-task-create "created task-001"
+  local green_task_id
+  green_task_id="$(parse_first_card_id green-task-create task)" || exit 1
+  contains green-task-create "created $green_task_id"
   run_in green-task-next-json "$work" 0 "$BIN" task next --json
-  json_assert green-task-next-json 'data["next_action"]["task_id"] == "task-001"'
-  run_in green-task-explore "$work" 0 "$BIN" task explore task-001
-  run_in green-task-accept "$work" 0 "$BIN" task accept task-001
-  run_in green-task-claim "$work" 0 "$BIN" task claim task-001
+  json_assert green-task-next-json "data[\"next_action\"][\"task_id\"] == \"$green_task_id\""
+  run_in green-task-explore "$work" 0 "$BIN" task explore "$green_task_id"
+  run_in green-task-accept "$work" 0 "$BIN" task accept "$green_task_id"
+  run_in green-task-claim "$work" 0 "$BIN" task claim "$green_task_id"
   printf '%s\n' '# Greenfield' 'README mentions Maestro verify-all.' > "$work/README.md"
-  run_in green-task-update "$work" 0 "$BIN" task update task-001 --summary "updated README" --claim "README mentions Maestro verify-all"
-  run_in green-task-complete "$work" 0 "$BIN" task complete task-001 --summary "updated README" --claim "README mentions Maestro verify-all" --proof "observed: README mentions Maestro verify-all"
-  contains green-task-complete "verification passed for task-001"
-  run_in green-task-verify "$work" 0 "$BIN" task verify task-001
-  contains green-task-verify "verification passed for task-001"
-  run_in green-query-proof "$work" 0 "$BIN" query proof task-001
-  contains green-query-proof "proof task-001:"
+  run_in green-task-update "$work" 0 "$BIN" task update "$green_task_id" --summary "updated README" --claim "README mentions Maestro verify-all"
+  run_in green-task-complete "$work" 0 "$BIN" task complete "$green_task_id" --summary "updated README" --claim "README mentions Maestro verify-all" --proof "observed: README mentions Maestro verify-all"
+  contains green-task-complete "verification passed for $green_task_id"
+  run_in green-task-verify "$work" 0 "$BIN" task verify "$green_task_id"
+  contains green-task-verify "verification passed for $green_task_id"
+  run_in green-query-proof "$work" 0 "$BIN" query proof "$green_task_id"
+  contains green-query-proof "proof $green_task_id:"
   contains green-query-proof "claims: 1/1"
 
   run_in green-manual-create "$work" 0 "$BIN" task create "Manual event proof" --check "manual event proof observed"
-  run_in green-manual-explore "$work" 0 "$BIN" task explore task-002
-  run_in green-manual-accept "$work" 0 "$BIN" task accept task-002
-  run_in green-manual-claim "$work" 0 "$BIN" task claim task-002
-  run_in green-manual-complete-fail "$work" fail "$BIN" task complete task-002 --summary "done" --claim "manual event proof observed"
+  local green_manual_id
+  green_manual_id="$(parse_first_card_id green-manual-create task)" || exit 1
+  run_in green-manual-explore "$work" 0 "$BIN" task explore "$green_manual_id"
+  run_in green-manual-accept "$work" 0 "$BIN" task accept "$green_manual_id"
+  run_in green-manual-claim "$work" 0 "$BIN" task claim "$green_manual_id"
+  run_in green-manual-complete-fail "$work" fail "$BIN" task complete "$green_manual_id" --summary "done" --claim "manual event proof observed"
   contains green-manual-complete-fail "task remains: needs_verification"
-  run_in green-event-create "$work" 0 "$BIN" event create --task-id task-002 --message "manual proof" --claim "manual event proof observed" --payload '{"ok":true}'
-  run_in green-manual-verify "$work" 0 "$BIN" task verify task-002
-  contains green-manual-verify "verification passed for task-002"
+  run_in green-event-create "$work" 0 "$BIN" event create --task-id "$green_manual_id" --message "manual proof" --claim "manual event proof observed" --payload '{"ok":true}'
+  run_in green-manual-verify "$work" 0 "$BIN" task verify "$green_manual_id"
+  contains green-manual-verify "verification passed for $green_manual_id"
   run_in green-query-friction "$work" 0 "$BIN" query friction
 
   run_in green-decision-new "$work" 0 "$BIN" decision new "Use verify-all harness"
-  contains green-decision-new "decision-001"
-  run_in green-decision-show "$work" 0 "$BIN" decision show decision-001
+  local green_decision_id
+  green_decision_id="$(parse_first_card_id green-decision-new dec)" || exit 1
+  contains green-decision-new "$green_decision_id"
+  run_in green-decision-show "$work" 0 "$BIN" decision show "$green_decision_id"
   contains green-decision-show "Use verify-all harness"
   run_in green-query-decisions "$work" 0 "$BIN" query decisions
-  contains green-query-decisions "decision-001"
+  contains green-query-decisions "$green_decision_id"
 
   run_in green-feature-new "$work" 0 "$BIN" feature new "Greenfield Export"
   run_in green-feature-set "$work" 0 "$BIN" feature set greenfield-export --acceptance "Greenfield export ships" --area "export CLI"
   run_in green-feature-accept-block "$work" fail "$BIN" feature accept greenfield-export
-  contains green-feature-accept-block "skill: qa-baseline"
+  contains green-feature-accept-block "skill: maestro-card (qa-baseline)"
   write_qa_baseline "$work" greenfield-export bl-001 "Greenfield export ships"
   run_in green-feature-accept "$work" 0 "$BIN" feature accept greenfield-export
   run_in green-feature-start "$work" 0 "$BIN" feature start greenfield-export
   run_in green-feature-task-create "$work" 0 "$BIN" task create "Wire greenfield export" --feature greenfield-export
-  run_in green-feature-task-explore "$work" 0 "$BIN" task explore task-003
-  run_in green-feature-task-accept "$work" 0 "$BIN" task accept task-003
+  local green_feature_task_id
+  green_feature_task_id="$(parse_first_card_id green-feature-task-create task)" || exit 1
+  run_in green-feature-task-explore "$work" 0 "$BIN" task explore "$green_feature_task_id"
+  run_in green-feature-task-accept "$work" 0 "$BIN" task accept "$green_feature_task_id"
   contains green-feature-task-accept "verify+ inherited from feature"
-  run_in green-feature-task-claim "$work" 0 "$BIN" task claim task-003
-  run_in green-feature-task-complete "$work" 0 "$BIN" task complete task-003 --summary "wired export" --claim "Greenfield export ships" --proof "observed: Greenfield export ships"
+  run_in green-feature-task-claim "$work" 0 "$BIN" task claim "$green_feature_task_id"
+  run_in green-feature-task-complete "$work" 0 "$BIN" task complete "$green_feature_task_id" --summary "wired export" --claim "Greenfield export ships" --proof "observed: Greenfield export ships"
   contains green-feature-task-complete "feature ready:"
   run_in green-feature-ship-block "$work" fail "$BIN" feature ship greenfield-export --outcome "Greenfield export shipped"
-  contains green-feature-ship-block "skill: qa-slice"
+  contains green-feature-ship-block "skill: maestro-card (qa-slice)"
   write_qa_slices "$work" greenfield-export bl-001 "Greenfield export ships"
   run_in green-feature-ship-dry "$work" 0 "$BIN" feature ship greenfield-export --outcome "Greenfield export shipped" --dry-run
   contains green-feature-ship-dry "writes: none"
@@ -514,14 +537,15 @@ run_greenfield_workflow() {
   run_in green-harness-list "$work" 0 "$BIN" harness list --all
   run_in green-query-backlog "$work" 0 "$BIN" query backlog
   run_in green-task-doctor "$work" 0 "$BIN" task doctor
-  run_in green-task-archive "$work" 0 "$BIN" task archive task-001
-  contains green-task-archive "restore: maestro task unarchive task-001"
-  run_in green-task-unarchive "$work" 0 "$BIN" task unarchive task-001
-  contains green-task-unarchive "restore receipt:"
   run_in green-feature-archive "$work" 0 "$BIN" feature archive greenfield-export
   contains green-feature-archive "restore: maestro feature unarchive greenfield-export"
   run_in green-feature-unarchive "$work" 0 "$BIN" feature unarchive greenfield-export
   contains green-feature-unarchive "restore receipt:"
+  run_in green-task-archive-retired "$work" fail "$BIN" task archive "$green_task_id"
+  contains green-task-archive-retired "per-task archive removed"
+  contains green-task-archive-retired "archive a feature and its tasks: maestro archive <feature>"
+  run_in green-task-unarchive-retired "$work" fail "$BIN" task unarchive "$green_task_id"
+  contains green-task-unarchive-retired "per-task archive removed"
   run_in green-uninstall-codex "$work" 0 "$BIN" uninstall --agent codex
   run_in green-uninstall-claude "$work" 0 "$BIN" uninstall --agent claude
 }
@@ -533,35 +557,39 @@ run_harness_escalation_workflow() {
 
   run_in harness-init "$work" 0 "$BIN" init --yes
   run_in harness-task-create "$work" 0 "$BIN" task create "Harness regular work" --check "regular work proof"
-  run_in harness-task-explore "$work" 0 "$BIN" task explore task-001
-  run_in harness-task-accept "$work" 0 "$BIN" task accept task-001
+  local harness_task_id
+  harness_task_id="$(parse_first_card_id harness-task-create task)" || exit 1
+  run_in harness-task-explore "$work" 0 "$BIN" task explore "$harness_task_id"
+  run_in harness-task-accept "$work" 0 "$BIN" task accept "$harness_task_id"
   write_harness_correction_sessions "$work"
 
   run_in harness-status "$work" 0 "$BIN" status
   contains harness-status "HARNESS FRICTION"
   contains harness-status "seen: 9x/3s"
-  contains harness-status "run: maestro task claim task-001"
+  contains harness-status "run: maestro task claim $harness_task_id"
 
   run_in harness-task-next "$work" 0 "$BIN" task next
   contains harness-task-next "HARNESS FRICTION"
-  contains harness-task-next "run: maestro task claim task-001"
+  contains harness-task-next "run: maestro task claim $harness_task_id"
 
   run_in harness-status-json "$work" 0 "$BIN" status --json
-  json_assert harness-status-json 'data["harness_friction"][0]["id"] == "hb-001"'
+  local harness_item_id
+  harness_item_id="$(parse_first_card_id harness-status-json idea)" || exit 1
+  json_assert harness-status-json "data[\"harness_friction\"][0][\"id\"] == \"$harness_item_id\""
   json_assert harness-status-json 'data["harness_friction"][0]["sessions"] == 3'
-  json_assert harness-status-json 'data["next_action"]["task_id"] == "task-001"'
+  json_assert harness-status-json "data[\"next_action\"][\"task_id\"] == \"$harness_task_id\""
 
   run_in harness-list "$work" 0 "$BIN" harness list
   contains harness-list "SEEN"
   contains harness-list "recurring_intervention"
   contains harness-list "9x/3s"
 
-  run_in harness-show "$work" 0 "$BIN" harness show hb-001
+  run_in harness-show "$work" 0 "$BIN" harness show "$harness_item_id"
   contains harness-show "priority: high"
   contains harness-show "sessions_hit: session-a, session-b, session-c"
 
-  run_in harness-dismiss "$work" 0 "$BIN" harness dismiss hb-001 --reason "script fixture noise"
-  contains harness-dismiss "dismissed hb-001"
+  run_in harness-dismiss "$work" 0 "$BIN" harness dismiss "$harness_item_id" --reason "script fixture noise"
+  contains harness-dismiss "dismissed $harness_item_id"
 
   run_in harness-list-hidden "$work" 0 "$BIN" harness list
   contains harness-list-hidden "terminal proposal(s) hidden"
@@ -573,7 +601,7 @@ run_harness_escalation_workflow() {
 
   run_in harness-status-dismissed "$work" 0 "$BIN" status
   not_contains harness-status-dismissed "HARNESS FRICTION"
-  contains harness-status-dismissed "run: maestro task claim task-001"
+  contains harness-status-dismissed "run: maestro task claim $harness_task_id"
 }
 
 run_brownfield_workflow() {
@@ -591,30 +619,36 @@ run_brownfield_workflow() {
   assert_path_exists "$work/.maestro/skills/local-only/SKILL.md"
 
   run_in brown-task-create "$work" 0 "$BIN" task create "Brownfield resume task"
-  run_in brown-task-block "$work" 0 "$BIN" task block task-001 --reason "waiting on fixture"
-  run_in brown-task-show-blocked "$work" 0 "$BIN" task show task-001
+  local brown_task_id
+  brown_task_id="$(parse_first_card_id brown-task-create task)" || exit 1
+  run_in brown-task-block "$work" 0 "$BIN" task block "$brown_task_id" --reason "waiting on fixture"
+  run_in brown-task-show-blocked "$work" 0 "$BIN" task show "$brown_task_id"
   contains brown-task-show-blocked "waiting on fixture"
   local blocker_id
   blocker_id="$(parse_first_blocker_id brown-task-show-blocked)"
-  run_in brown-current-status "$work" 0 env MAESTRO_CURRENT_TASK=task-001 "$BIN" status
-  contains brown-current-status "task-001"
-  run_in brown-task-unblock "$work" 0 "$BIN" task unblock task-001 --blocker "$blocker_id"
-  run_in brown-task-set "$work" 0 "$BIN" task set task-001 --check "brownfield proof observed"
-  run_in brown-task-explore "$work" 0 "$BIN" task explore task-001
-  run_in brown-task-accept "$work" 0 "$BIN" task accept task-001
-  run_in brown-task-claim "$work" 0 "$BIN" task claim task-001
-  run_in brown-task-complete "$work" 0 "$BIN" task complete task-001 --summary "resumed existing project" --claim "brownfield proof observed" --proof "observed: brownfield proof observed"
-  contains brown-task-complete "verification passed for task-001"
+  run_in brown-current-status "$work" 0 env MAESTRO_CURRENT_TASK="$brown_task_id" "$BIN" status
+  contains brown-current-status "$brown_task_id"
+  run_in brown-task-unblock "$work" 0 "$BIN" task unblock "$brown_task_id" --blocker "$blocker_id"
+  run_in brown-task-set "$work" 0 "$BIN" task set "$brown_task_id" --check "brownfield proof observed"
+  run_in brown-task-explore "$work" 0 "$BIN" task explore "$brown_task_id"
+  run_in brown-task-accept "$work" 0 "$BIN" task accept "$brown_task_id"
+  run_in brown-task-claim "$work" 0 "$BIN" task claim "$brown_task_id"
+  run_in brown-task-complete "$work" 0 "$BIN" task complete "$brown_task_id" --summary "resumed existing project" --claim "brownfield proof observed" --proof "observed: brownfield proof observed"
+  contains brown-task-complete "verification passed for $brown_task_id"
 
   run_in brown-reject-create "$work" 0 "$BIN" task create "Brownfield rejected task" --check "not needed"
-  run_in brown-reject "$work" 0 "$BIN" task reject task-002 --reason "out of scope"
+  local brown_reject_id
+  brown_reject_id="$(parse_first_card_id brown-reject-create task)" || exit 1
+  run_in brown-reject "$work" 0 "$BIN" task reject "$brown_reject_id" --reason "out of scope"
   contains brown-reject "terminal receipt:"
-  run_in brown-reject-archive "$work" 0 "$BIN" task archive task-002
-  run_in brown-reject-unarchive "$work" 0 "$BIN" task unarchive task-002
 
   run_in brown-replacement-create "$work" 0 "$BIN" task create "Brownfield replacement" --check "replacement exists"
   run_in brown-old-create "$work" 0 "$BIN" task create "Brownfield old task" --check "old task replaced"
-  run_in brown-supersede "$work" 0 "$BIN" task supersede task-004 --by task-003 --reason "covered by replacement"
+  local brown_replacement_id
+  brown_replacement_id="$(parse_first_card_id brown-replacement-create task)" || exit 1
+  local brown_old_id
+  brown_old_id="$(parse_first_card_id brown-old-create task)" || exit 1
+  run_in brown-supersede "$work" 0 "$BIN" task supersede "$brown_old_id" --by "$brown_replacement_id" --reason "covered by replacement"
   contains brown-supersede "terminal receipt:"
 
   run_in brown-feature-new "$work" 0 "$BIN" feature new "Brownfield Cancel"
@@ -638,7 +672,7 @@ run_brownfield_workflow() {
   run_in brown-status-json "$work" 0 "$BIN" status --json
   json_assert brown-status-json 'data["schema"] == "maestro.status.v1"'
   run_in brown-task-list-all "$work" 0 "$BIN" task list --all
-  contains brown-task-list-all "task-001"
+  contains brown-task-list-all "$brown_task_id"
   run_in brown-feature-list-all "$work" 0 "$BIN" feature list --all
   contains brown-feature-list-all "brownfield-cancel"
   run_in brown-query-matrix "$work" 0 "$BIN" query matrix

@@ -3,17 +3,19 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
+use crate::domain::card;
 use crate::domain::decisions;
 use crate::domain::feature;
+use crate::domain::harness::HarnessConfig;
 use crate::domain::install::{InstallLock, InstallState, MirrorKind};
+use crate::domain::run;
+use crate::domain::skills;
 use crate::domain::task;
 use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::fs::{ALLOC_MARKER_PREFIX, child_dirs};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
-use crate::foundation::core::schema::{
-    BACKLOG_SCHEMA_VERSION, Compat, HARNESS_SCHEMA_VERSION, classify,
-};
-use crate::harness::schema::{BacklogConfig, HarnessConfig};
+use crate::foundation::core::schema::{Compat, HARNESS_SCHEMA_VERSION, classify};
+use crate::operations::harness;
 
 /// Execute `maestro doctor`.
 pub fn run() -> Result<()> {
@@ -106,25 +108,52 @@ fn doctor_report(paths: &MaestroPaths) -> Result<DoctorReport> {
     }
 
     check_harness(paths, &mut checks, &mut errors);
-    check_features(paths, &mut checks, &mut warnings, &mut errors);
-    check_backlog(paths, &mut checks, &mut errors);
-    check_decisions(paths, &mut checks, &mut warnings, &mut errors);
-    check_install(paths, &mut checks, &mut errors);
 
-    // Collect a corrupt-task error into the report rather than aborting via `?`: a
-    // single malformed task.yaml must not suppress every other doctor check, and
-    // its full cause should surface like the other corrupt-artifact diagnostics.
+    // One walk of the card store backs every card-typed check below (features,
+    // backlog, decisions, task blockers). A card that fails to load has an
+    // unknowable type, so it is reported here exactly once instead of once per
+    // per-type scan; the typed checks then see only the loadable cards.
+    let scan = match card::query::scan_with_failures(paths) {
+        Ok(scan) => {
+            for failure in &scan.failures {
+                errors.push(failure.error.clone());
+            }
+            Some(scan)
+        }
+        Err(error) => {
+            errors.push(format!("{error:#}"));
+            None
+        }
+    };
+
+    if let Some(scan) = &scan {
+        check_features(paths, &scan.cards, &mut checks, &mut warnings, &mut errors);
+        check_archive_backlog(&scan.cards, &mut checks, &mut warnings);
+        check_backlog(&scan.cards, &mut checks, &mut errors);
+        check_decisions(paths, &scan.cards, &mut checks, &mut warnings, &mut errors);
+        warnings.extend(card::query::integrity_warnings(paths, &scan.cards));
+        warnings.extend(card::query::unknown_field_warnings(paths, &scan.cards));
+    }
+    check_install(paths, &mut checks, &mut errors);
+    check_global_skills(&mut checks, &mut warnings, &mut errors);
+
     match recordless_task_dir_warnings(paths) {
         Ok(found) => warnings.extend(found),
         Err(error) => errors.push(format!("{error:#}")),
     }
-    match task::check_blocker_graph(&paths.tasks_dir()) {
-        Ok(task_report) if task_report.is_ok() => checks.push(DoctorCheck {
-            name: "task-blockers",
-            detail: format!("{} tasks scanned", task_report.tasks_scanned),
-        }),
-        Ok(task_report) => errors.extend(task_report.errors),
-        Err(error) => errors.push(format!("{error:#}")),
+    if let Some(scan) = &scan {
+        // Collect a corrupt-task error into the report rather than aborting via
+        // `?`: a single malformed task record must not suppress every other
+        // doctor check, and its full cause should surface like the other
+        // corrupt-artifact diagnostics.
+        match task::check_blocker_graph_in_cards(paths, &scan.cards) {
+            Ok(task_report) if task_report.is_ok() => checks.push(DoctorCheck {
+                name: "task-blockers",
+                detail: format!("{} tasks scanned", task_report.tasks_scanned),
+            }),
+            Ok(task_report) => errors.extend(task_report.errors),
+            Err(error) => errors.push(format!("{error:#}")),
+        }
     }
 
     Ok(DoctorReport {
@@ -137,8 +166,8 @@ fn doctor_report(paths: &MaestroPaths) -> Result<DoctorReport> {
 /// One vocabulary for every "a scaffolded resource is gone" error: the `{path}
 /// is missing` phrasing the directory checks already use, plus the repair the
 /// recorder check already names. `init --merge` restores any deleted piece
-/// (verified: harness.yml, backlog.yaml, the features/decisions dirs, and a
-/// fully-removed `.maestro`), so the hint is honest at every site.
+/// (verified: harness.yml and a fully-removed `.maestro`), so the hint is
+/// honest at every site.
 fn missing_resource(path: &std::path::Path) -> String {
     format!(
         "{} is missing; run `maestro init --merge` to repair",
@@ -170,24 +199,20 @@ fn check_harness(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &m
 
 fn check_features(
     paths: &MaestroPaths,
+    cards: &[(card::schema::Card, PathBuf)],
     checks: &mut Vec<DoctorCheck>,
     warnings: &mut Vec<String>,
     errors: &mut Vec<String>,
 ) {
-    // diagnose returns "{dir} is missing" for an absent dir and a scan error for a
-    // present-but-corrupt one; only the former is `init --merge`-repairable, so
-    // catch the missing dir here (mirroring check_decisions) and leave scan errors
-    // to surface unchanged.
-    let dir = paths.features_dir();
-    if !dir.is_dir() {
-        errors.push(missing_resource(&dir));
-        return;
-    }
-    match recordless_dir_warnings(paths.repo_root(), &dir, "feature.yaml") {
+    // Feature cards live in the flat card store, so there is no per-entity
+    // `features/` directory to require. The recordless-dir sweep still catches a
+    // legacy ghost dir left behind by a brownfield migration (it reads as empty
+    // when the dir is absent), and `diagnose` counts feature cards from the store.
+    match recordless_dir_warnings(paths.repo_root(), &paths.features_dir(), "feature.yaml") {
         Ok(found) => warnings.extend(found),
         Err(error) => errors.push(format!("{error:#}")),
     }
-    match feature::diagnose(paths).found {
+    match feature::diagnose(cards).found {
         Ok(count) => checks.push(DoctorCheck {
             name: "features",
             detail: format!("{count} feature(s)"),
@@ -196,17 +221,41 @@ fn check_features(
     }
 }
 
-fn recordless_task_dir_warnings(paths: &MaestroPaths) -> Result<Vec<String>> {
-    let mut warnings = Vec::new();
-    for root in task::task_roots(&paths.tasks_dir())? {
-        warnings.extend(recordless_dir_warnings(
-            paths.repo_root(),
-            &root,
-            "task.yaml",
-        )?);
+/// Closed features still in the live store are an archive backlog: the lid in
+/// `.maestro/archive/cards/INDEX.md` only remembers what gets archived, so the
+/// backlog is surfaced as an advisory (never an error -- nothing is broken).
+fn check_archive_backlog(
+    cards: &[(card::schema::Card, PathBuf)],
+    checks: &mut Vec<DoctorCheck>,
+    warnings: &mut Vec<String>,
+) {
+    let closed = cards
+        .iter()
+        .filter(|(card, _)| {
+            // The same predicate `feature archive --closed` sweeps with, so the
+            // advisory count and the sweep's reach cannot drift apart.
+            card.card_type == card::schema::CardType::Feature
+                && feature::FeatureStatus::parse(&card.status)
+                    .is_some_and(|status| status.is_terminal())
+        })
+        .count();
+    if closed == 0 {
+        checks.push(DoctorCheck {
+            name: "archive",
+            detail: "no closed features awaiting archive".to_string(),
+        });
+    } else {
+        warnings.push(format!(
+            "{closed} closed feature(s) not archived; sweep with `maestro feature archive --closed`"
+        ));
     }
-    warnings.sort();
-    Ok(warnings)
+}
+
+fn recordless_task_dir_warnings(paths: &MaestroPaths) -> Result<Vec<String>> {
+    // Task cards live in the flat card store; like the features sweep above,
+    // this only catches a legacy ghost `tasks/` dir left behind by a brownfield
+    // migration (it reads as empty when the dir is absent).
+    recordless_dir_warnings(paths.repo_root(), &paths.tasks_dir(), "task.yaml")
 }
 
 fn recordless_dir_warnings(
@@ -242,26 +291,20 @@ fn display_relative(repo_root: &Path, path: &Path) -> String {
         .to_string()
 }
 
-fn check_backlog(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &mut Vec<String>) {
-    let path = paths.harness_dir().join("backlog.yaml");
-    if !path.exists() {
-        errors.push(missing_resource(&path));
-        return;
-    }
-    match read_yaml::<BacklogConfig>(&path) {
-        Ok(backlog)
-            if classify(&backlog.schema_version, BACKLOG_SCHEMA_VERSION) == Compat::Exact =>
-        {
+fn check_backlog(
+    cards: &[(card::schema::Card, PathBuf)],
+    checks: &mut Vec<DoctorCheck>,
+    errors: &mut Vec<String>,
+) {
+    // The backlog has no file of its own (D7): items live as idea cards, so the
+    // check counts them through the same conversion every harness verb uses.
+    match harness::load_backlog_in_cards(cards) {
+        Ok(backlog) => {
             checks.push(DoctorCheck {
                 name: "backlog",
                 detail: format!("{} item(s)", backlog.items.len()),
             });
         }
-        Ok(backlog) => errors.push(schema_diagnostic(
-            &path,
-            BACKLOG_SCHEMA_VERSION,
-            &backlog.schema_version,
-        )),
         Err(error) => errors.push(format!("{error:#}")),
     }
 }
@@ -281,19 +324,18 @@ fn schema_diagnostic(path: &std::path::Path, expected: &str, found: &str) -> Str
 
 fn check_decisions(
     paths: &MaestroPaths,
+    cards: &[(card::schema::Card, PathBuf)],
     checks: &mut Vec<DoctorCheck>,
     warnings: &mut Vec<String>,
     errors: &mut Vec<String>,
 ) {
-    let dir = paths.decisions_dir();
-    if !dir.is_dir() {
-        errors.push(missing_resource(&dir));
-        return;
-    }
-
-    let report = decisions::diagnose(paths);
+    // Decisions are decision-typed cards in the flat store (plus any frozen
+    // legacy markdown), so there is no `decisions/` directory to require;
+    // `diagnose` and the dangling-ref scan both read an absent legacy dir as
+    // empty.
+    let report = decisions::diagnose(paths, cards);
     warnings.extend(report.warnings);
-    warnings.extend(decisions::dangling_reference_warnings(paths));
+    warnings.extend(decisions::dangling_reference_warnings(paths, cards));
     errors.extend(report.errors);
     checks.push(DoctorCheck {
         name: "decisions",
@@ -307,8 +349,7 @@ fn check_decisions(
 /// Verify that the files an installed agent owns still exist on disk. A bare
 /// `init` with no integration installed has no committed agents, so this is a
 /// no-op there and `doctor` stays ok; once an agent is installed, a deleted
-/// CLAUDE.md / codex hook config / skill symlink / record.sh is reported as an
-/// error (T4).
+/// CLAUDE.md / codex hook config / record.sh is reported as an error (T4).
 fn check_install(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &mut Vec<String>) {
     let lock = match InstallLock::load(&paths.install_lock_file()) {
         Ok(lock) => lock,
@@ -331,6 +372,7 @@ fn check_install(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &m
     }
 
     let root = paths.repo_root();
+    let recorder_script = run::hook_event_contract().script();
     let mut missing = 0_usize;
     for (agent, install) in &committed {
         for (relative, ownership) in &install.files {
@@ -344,6 +386,21 @@ fn check_install(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &m
             if !intact {
                 errors.push(format!(
                     "{agent} mirror is missing or broken: {relative}; run `maestro install --agent {agent}` to repair"
+                ));
+                missing += 1;
+                continue;
+            }
+            // A present settings file is not enough: its maestro-managed hook
+            // entries can be stripped while the file lives on (e.g. a user edit
+            // that drops the `hooks` key), which silently darkens run-event
+            // recording. For the JSON mirror that owns `hooks`, confirm the
+            // recorder script is still wired into the file's hook entries.
+            if ownership.kind == MirrorKind::JsonManagedKeys
+                && ownership.managed_keys.iter().any(|key| key == "hooks")
+                && !hook_entries_wired(&path, recorder_script)
+            {
+                errors.push(format!(
+                    "{agent} hook entries are missing from {relative} (run-event recording is off); run `maestro install --agent {agent}` to repair"
                 ));
                 missing += 1;
             }
@@ -367,6 +424,68 @@ fn check_install(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &m
             name: "install",
             detail: format!("{} agent(s) intact", committed.len()),
         });
+    }
+}
+
+/// True when the agent's settings file still wires the recorder script into its
+/// hook entries. Reads the `hooks` value as opaque JSON and looks for a
+/// reference to the script name (e.g. the `record.sh` in the installed
+/// `sh "$CLAUDE_PROJECT_DIR/.maestro/hooks/record.sh"` command). A file that no
+/// longer parses, has no `hooks`, or whose `hooks` never names the recorder is
+/// treated as not wired -- run-event recording would be dark either way.
+fn hook_entries_wired(path: &Path, recorder_script: &str) -> bool {
+    let Ok(contents) = std::fs::read_to_string(path) else {
+        return false;
+    };
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(&contents) else {
+        return false;
+    };
+    value
+        .get("hooks")
+        .map(|entry| entry.to_string().contains(recorder_script))
+        .unwrap_or(false)
+}
+
+/// Compare the user-level global skill cache against the skills embedded in
+/// this binary. Silent when the user never adopted global skills (no lock);
+/// drift is a warning rather than an error because agents resolve repo-local
+/// skills first, so a stale cache degrades discovery without breaking it.
+fn check_global_skills(
+    checks: &mut Vec<DoctorCheck>,
+    warnings: &mut Vec<String>,
+    errors: &mut Vec<String>,
+) {
+    let status = match skills::global_skills_status() {
+        Ok(Some(status)) => status,
+        Ok(None) => return,
+        Err(error) => {
+            errors.push(format!("{error:#}"));
+            return;
+        }
+    };
+
+    if status.stale.is_empty() && status.retired.is_empty() {
+        checks.push(DoctorCheck {
+            name: "skills",
+            detail: format!("{} global skill(s) match binary", status.matched),
+        });
+        return;
+    }
+
+    for drift in &status.stale {
+        let installed = drift.installed.as_deref().unwrap_or("missing");
+        let embedded = drift.embedded.as_deref().unwrap_or("unversioned");
+        warnings.push(format!(
+            "global skill {} is {installed} in the cache, binary ships {embedded}; run `maestro sync --global-skills`",
+            drift.name
+        ));
+    }
+    if !status.retired.is_empty() {
+        warnings.push(format!(
+            "{} retired global skill(s) linger in the cache ({}); run `maestro sync --global-skills`",
+            status.retired.len(),
+            status.retired.join(", ")
+        ));
     }
 }
 

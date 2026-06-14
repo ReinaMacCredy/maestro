@@ -159,7 +159,7 @@ pub(crate) fn evaluate_task_report(
     task_dir: &Path,
     verified_at: &str,
 ) -> Result<VerificationReport> {
-    let command_run = run_verify_commands(paths)?;
+    let command_run = run_verify_commands(paths, task.verify_command.as_deref())?;
     let inputs = freshness_inputs_for_task(task, git::head(paths.repo_root()).unwrap_or(None))?;
     let claims = completion_claims(task);
     let evidence = collect_evidence(paths, task_dir, &task.id)?;
@@ -237,17 +237,16 @@ impl TaskVerification {
 /// through here; the verify transition uses a separate path, so archived tasks
 /// stay immutable.
 pub fn load_task_by_id(paths: &MaestroPaths, task_id: &str) -> Result<LoadedTask> {
-    let handle = match task::load_task_for_update(&paths.tasks_dir(), task_id) {
-        Ok(handle) => handle,
-        Err(live_err) => {
-            task::load_task_for_update(&paths.archive_tasks_dir(), task_id).map_err(|_| live_err)?
-        }
-    };
-
-    Ok(LoadedTask {
-        task: handle.task().clone(),
-        task_dir: handle.task_dir().to_path_buf(),
-    })
+    match task::load_task_for_update(&paths.tasks_dir(), task_id) {
+        Ok(handle) => Ok(LoadedTask {
+            task: handle.task().clone(),
+            task_dir: handle.task_dir().to_path_buf(),
+        }),
+        Err(live_err) => match task::load_archived_task_record(paths, task_id) {
+            Ok(Some((task, task_dir))) => Ok(LoadedTask { task, task_dir }),
+            _ => Err(live_err),
+        },
+    }
 }
 
 /// Compute current proof freshness inputs for a task.
@@ -460,12 +459,18 @@ pub(super) struct EvidenceText {
 }
 
 fn task_contract_hash(task: &TaskRecord) -> String {
-    let contract = json!({
+    let mut contract = json!({
         "id": task.id,
         "title": task.title,
         "acceptance": task.acceptance,
         "claims": completion_claims(task),
     });
+    // Only fold the falsifier into the hash when one is set, so tasks verified
+    // before this field existed keep their original hash and are not re-staled
+    // on upgrade. Setting/clearing the command still changes the hash.
+    if let Some(command) = &task.verify_command {
+        contract["verify_command"] = json!(command);
+    }
     sha256_hex(contract.to_string().as_bytes())
 }
 
@@ -474,4 +479,50 @@ fn display_path(root: &Path, path: &Path) -> String {
         .unwrap_or(path)
         .display()
         .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn editing_the_per_task_verify_command_invalidates_freshness() {
+        let mut task = TaskRecord::draft("task-001", "Slice", "2026-06-13T00:00:00Z");
+        let before = freshness_inputs_for_task(&task, None)
+            .expect("invariant: freshness inputs should compute")
+            .contract_hash;
+
+        task.verify_command = Some("cargo test --test resources_version_guard".to_string());
+        let after = freshness_inputs_for_task(&task, None)
+            .expect("invariant: freshness inputs should compute")
+            .contract_hash;
+
+        assert_ne!(
+            before, after,
+            "the per-task verify command must be part of the contract hash so editing it invalidates freshness"
+        );
+    }
+
+    #[test]
+    fn a_task_with_no_falsifier_hashes_as_if_the_field_never_existed() {
+        // Guards against re-staling every pre-upgrade verified task: the hash for
+        // a task without a falsifier must omit the key entirely (not serialize a
+        // `verify_command: null`), so it equals the hash computed before the field
+        // was added.
+        let task = TaskRecord::draft("task-001", "Slice", "2026-06-13T00:00:00Z");
+        let with_skip = task_contract_hash(&task);
+
+        let legacy = json!({
+            "id": task.id,
+            "title": task.title,
+            "acceptance": task.acceptance,
+            "claims": completion_claims(&task),
+        });
+        let legacy_hash = sha256_hex(legacy.to_string().as_bytes());
+
+        assert_eq!(
+            with_skip, legacy_hash,
+            "a task without a falsifier must keep its pre-field contract hash"
+        );
+    }
 }

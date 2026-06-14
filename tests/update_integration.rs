@@ -7,7 +7,7 @@ use std::process::Command;
 use std::{env, fs};
 
 use anyhow::{Result, bail};
-use maestro::domain::skills::{catalog::skills, sync_global_skills_at};
+use maestro::domain::skills::sync_global_skills_at;
 use maestro::foundation::core::paths::MaestroPaths;
 use maestro::operations::update::{
     AtomicBinaryReplacer, BinaryReplacer, BinaryStatus, ChecksumVerifier, DownloadedBinary,
@@ -21,6 +21,7 @@ fn maestro(args: &[&str], cwd: &Path) -> std::process::Output {
         .args(args)
         .current_dir(cwd)
         .env("HOME", cwd.join("home"))
+        .env("MAESTRO_INSTALL_METHOD", "local")
         .output()
         .expect("invariant: maestro binary should run")
 }
@@ -35,21 +36,20 @@ fn assert_success(output: &std::process::Output) {
 }
 
 #[test]
-fn update_reextracts_bundled_skills_and_backs_up_edited_skill() {
+fn update_reextracts_bundled_resources_and_backs_up_edited_resource() {
     let temp_dir = TestTempDir::new("maestro-update-test");
     init_git_marker(temp_dir.path());
     let paths = MaestroPaths::new(temp_dir.path());
     assert_success(&maestro(&["init", "--yes"], temp_dir.path()));
 
-    let skill = skills()
-        .iter()
-        .find(|skill| skill.name == "maestro-task")
-        .expect("invariant: maestro-task should be bundled");
-    let skill_path = paths.skills_dir().join(skill.name).join("SKILL.md");
-    fs::write(&skill_path, "edited bundled skill\n")
-        .expect("invariant: bundled skill should be editable");
+    // The freshly extracted script is the bundled content update restores to (the
+    // binary path is already pinned in, so a re-extract reproduces it exactly).
+    let record_path = paths.hooks_dir().join("record.sh");
+    let bundled = fs::read_to_string(&record_path).expect("invariant: hook script should exist");
+    fs::write(&record_path, "edited hook script\n")
+        .expect("invariant: hook script should be editable");
 
-    let update = maestro(&["update"], temp_dir.path());
+    let update = maestro(&["upgrade"], temp_dir.path());
 
     assert_success(&update);
     let stdout = String::from_utf8_lossy(&update.stdout);
@@ -57,14 +57,14 @@ fn update_reextracts_bundled_skills_and_backs_up_edited_skill() {
     assert!(stdout.contains("Update unavailable for this build"));
     assert!(stdout.contains("edited files backed up"));
     assert_eq!(
-        fs::read_to_string(&skill_path).expect("invariant: skill should be readable"),
-        skill.skill_md()
+        fs::read_to_string(&record_path).expect("invariant: hook script should be readable"),
+        bundled
     );
 
-    let backup = update_backup_for(&paths, skill.name);
+    let backup = update_backup_for_hook(&paths);
     assert_eq!(
         fs::read_to_string(backup).expect("invariant: backup should be readable"),
-        "edited bundled skill\n"
+        "edited hook script\n"
     );
     assert!(!paths.maestro_dir().join("update").exists());
 }
@@ -79,14 +79,11 @@ fn update_reports_restored_missing_bundled_resources() {
     let paths = MaestroPaths::new(temp_dir.path());
     assert_success(&maestro(&["init", "--yes"], temp_dir.path()));
 
-    let skill = skills()
-        .iter()
-        .find(|skill| skill.name == "maestro-task")
-        .expect("invariant: maestro-task should be bundled");
-    let skill_path = paths.skills_dir().join(skill.name).join("SKILL.md");
-    fs::remove_file(&skill_path).expect("invariant: bundled skill should be removable");
+    let record_path = paths.hooks_dir().join("record.sh");
+    let bundled = fs::read_to_string(&record_path).expect("invariant: hook script should exist");
+    fs::remove_file(&record_path).expect("invariant: bundled hook script should be removable");
 
-    let update = maestro(&["update"], temp_dir.path());
+    let update = maestro(&["upgrade"], temp_dir.path());
 
     assert_success(&update);
     let stdout = String::from_utf8_lossy(&update.stdout);
@@ -96,13 +93,13 @@ fn update_reports_restored_missing_bundled_resources() {
         "a silently re-created bundled file must be reported:\n{stdout}"
     );
     assert!(
-        stdout.contains(skill.name),
+        stdout.contains("record.sh"),
         "the restored file should be named:\n{stdout}"
     );
     // The restore actually happened, and a created file produces no backup noise.
     assert_eq!(
-        fs::read_to_string(&skill_path).expect("invariant: skill should be restored"),
-        skill.skill_md()
+        fs::read_to_string(&record_path).expect("invariant: hook script should be restored"),
+        bundled
     );
     assert!(!stdout.contains("edited files backed up"));
 }
@@ -121,7 +118,7 @@ fn unavailable_update_cleans_stale_stage_directory() {
     )
     .expect("invariant: stale update file should be writable");
 
-    let update = maestro(&["update"], temp_dir.path());
+    let update = maestro(&["upgrade"], temp_dir.path());
 
     assert_success(&update);
     assert!(!paths.maestro_dir().join("update").exists());
@@ -142,7 +139,7 @@ fn update_accepts_check_verbose_and_force_flags_without_writing() {
     .expect("invariant: stale update file should be writable");
 
     let update = maestro(
-        &["update", "--check", "--verbose", "--force"],
+        &["upgrade", "--check", "--verbose", "--force"],
         temp_dir.path(),
     );
 
@@ -169,7 +166,7 @@ fn update_check_auto_check_and_update_preserve_user_owned_harness_artifacts() {
     mark_user_owned_harness_artifacts(&paths);
     let before = snapshot_files(&user_owned_harness_artifacts(&paths));
 
-    let check = maestro(&["update", "--check"], temp_dir.path());
+    let check = maestro(&["upgrade", "--check"], temp_dir.path());
 
     assert_success(&check);
     assert_files_unchanged(&before);
@@ -206,18 +203,18 @@ printf '{{"tag_name":"v{}","published_at":"2026-05-26T05:16:16.000Z","assets":[{
         ),
     );
     let curl_update = Command::new(env!("CARGO_BIN_EXE_maestro"))
-        .arg("update")
+        .arg("upgrade")
         .current_dir(temp_dir.path())
         .env("HOME", temp_dir.path().join("home"))
         .env("MAESTRO_INSTALL_METHOD", "curl")
         .env("PATH", curl_update_path)
         .output()
-        .expect("invariant: maestro update should run");
+        .expect("invariant: maestro upgrade should run");
 
     assert_success(&curl_update);
     assert_files_unchanged(&before);
 
-    let update = maestro(&["update"], temp_dir.path());
+    let update = maestro(&["upgrade"], temp_dir.path());
 
     assert_success(&update);
     assert_files_unchanged(&before);
@@ -241,13 +238,13 @@ printf '{{"tag_name":"v0.0.0.1-golder","published_at":"2026-05-26T05:16:16.000Z"
     );
 
     let update = Command::new(env!("CARGO_BIN_EXE_maestro"))
-        .arg("update")
+        .arg("upgrade")
         .current_dir(temp_dir.path())
         .env("HOME", temp_dir.path().join("home"))
         .env("MAESTRO_INSTALL_METHOD", "curl")
         .env("PATH", path)
         .output()
-        .expect("invariant: maestro update should run");
+        .expect("invariant: maestro upgrade should run");
 
     assert_success(&update);
     let stdout = String::from_utf8_lossy(&update.stdout);
@@ -268,12 +265,12 @@ fn update_reports_manager_commands_for_cargo_installs() {
     assert_success(&maestro(&["init", "--yes"], temp_dir.path()));
 
     let cargo = Command::new(env!("CARGO_BIN_EXE_maestro"))
-        .args(["update", "--check"])
+        .args(["upgrade", "--check"])
         .current_dir(temp_dir.path())
         .env("HOME", temp_dir.path().join("home"))
         .env("MAESTRO_INSTALL_METHOD", "cargo")
         .output()
-        .expect("invariant: maestro update should run");
+        .expect("invariant: maestro upgrade should run");
     assert_success(&cargo);
     let stdout = String::from_utf8_lossy(&cargo.stdout);
     assert!(stdout.contains("Update unavailable for this install"));
@@ -288,7 +285,7 @@ fn update_reports_manager_commands_for_cargo_installs() {
 fn update_runs_outside_maestro_or_git_root_without_scaffolding() {
     let temp_dir = TestTempDir::new("maestro-update-rootless-test");
 
-    let update = maestro(&["update"], temp_dir.path());
+    let update = maestro(&["upgrade"], temp_dir.path());
 
     assert_success(&update);
     let stdout = String::from_utf8_lossy(&update.stdout);
@@ -345,7 +342,7 @@ fn simulated_download_failure_preserves_existing_binary_file() {
 }
 
 #[test]
-fn simulated_download_failure_preserves_edited_bundled_skills_and_cleans_stage() {
+fn simulated_download_failure_preserves_edited_bundled_resources_and_cleans_stage() {
     let temp_dir = TestTempDir::new("maestro-update-test");
     let paths = MaestroPaths::new(temp_dir.path());
     let executable_path = temp_dir.path().join("bin").join("maestro");
@@ -357,19 +354,15 @@ fn simulated_download_failure_preserves_edited_bundled_skills_and_cleans_stage()
     .expect("invariant: executable parent should be creatable");
     fs::write(&executable_path, "current binary\n")
         .expect("invariant: current binary should be writable");
-    let skill = skills()
-        .iter()
-        .find(|skill| skill.name == "maestro-task")
-        .expect("invariant: maestro-task should be bundled");
-    let skill_path = paths.skills_dir().join(skill.name).join("SKILL.md");
+    let record_path = paths.hooks_dir().join("record.sh");
     fs::create_dir_all(
-        skill_path
+        record_path
             .parent()
-            .expect("invariant: skill path should have a parent"),
+            .expect("invariant: hook path should have a parent"),
     )
-    .expect("invariant: skill parent should be creatable");
-    fs::write(&skill_path, "edited bundled skill\n")
-        .expect("invariant: edited skill should be writable");
+    .expect("invariant: hooks dir should be creatable");
+    fs::write(&record_path, "edited hook script\n")
+        .expect("invariant: edited hook script should be writable");
 
     let error = run_update_with_seams(
         &UpdateOptions {
@@ -389,8 +382,9 @@ fn simulated_download_failure_preserves_edited_bundled_skills_and_cleans_stage()
 
     assert!(error.to_string().contains("download failed after staging"));
     assert_eq!(
-        fs::read_to_string(skill_path).expect("invariant: edited skill should remain readable"),
-        "edited bundled skill\n"
+        fs::read_to_string(record_path)
+            .expect("invariant: edited hook script should remain readable"),
+        "edited hook script\n"
     );
     assert!(!paths.maestro_dir().join("update").exists());
 }
@@ -505,7 +499,7 @@ fn simulated_replace_failure_preserves_existing_binary_file() {
 }
 
 #[test]
-fn simulated_replace_failure_rolls_back_bundled_skill_writes() {
+fn simulated_replace_failure_rolls_back_bundled_resource_writes() {
     let temp_dir = TestTempDir::new("maestro-update-test");
     let paths = MaestroPaths::new(temp_dir.path());
     let executable_path = temp_dir.path().join("bin").join("maestro");
@@ -517,19 +511,15 @@ fn simulated_replace_failure_rolls_back_bundled_skill_writes() {
     .expect("invariant: executable parent should be creatable");
     fs::write(&executable_path, "current binary\n")
         .expect("invariant: current binary should be writable");
-    let skill = skills()
-        .iter()
-        .find(|skill| skill.name == "maestro-task")
-        .expect("invariant: maestro-task should be bundled");
-    let skill_path = paths.skills_dir().join(skill.name).join("SKILL.md");
+    let record_path = paths.hooks_dir().join("record.sh");
     fs::create_dir_all(
-        skill_path
+        record_path
             .parent()
-            .expect("invariant: skill path should have a parent"),
+            .expect("invariant: hook path should have a parent"),
     )
-    .expect("invariant: skill parent should be creatable");
-    fs::write(&skill_path, "edited bundled skill\n")
-        .expect("invariant: edited skill should be writable");
+    .expect("invariant: hooks dir should be creatable");
+    fs::write(&record_path, "edited hook script\n")
+        .expect("invariant: edited hook script should be writable");
 
     let error = run_update_with_seams(
         &UpdateOptions {
@@ -553,8 +543,9 @@ fn simulated_replace_failure_rolls_back_bundled_skill_writes() {
             .contains("could not replace the current binary")
     );
     assert_eq!(
-        fs::read_to_string(skill_path).expect("invariant: edited skill should remain readable"),
-        "edited bundled skill\n"
+        fs::read_to_string(record_path)
+            .expect("invariant: edited hook script should remain readable"),
+        "edited hook script\n"
     );
     assert!(!paths.maestro_dir().join("update").exists());
 }
@@ -612,7 +603,7 @@ fn late_global_skill_sync_failure_warns_without_reverting_installed_update() {
         .as_deref()
         .expect("late global skill failure should be reported as a warning");
     assert!(warning.contains("global Maestro skill sync skipped"));
-    assert!(warning.contains("maestro-task"), "{warning}");
+    assert!(warning.contains("maestro-card"), "{warning}");
 }
 
 #[test]
@@ -630,7 +621,7 @@ fn schema_mismatch_reports_incompatible_and_does_not_mutate_harness_files() {
     .expect("invariant: harness schema should be writable");
     let before = snapshot_files(&user_owned_harness_artifacts(&paths));
 
-    let update = maestro(&["update"], temp_dir.path());
+    let update = maestro(&["upgrade"], temp_dir.path());
 
     assert_success(&update);
     let stdout = String::from_utf8_lossy(&update.stdout);
@@ -660,11 +651,8 @@ fn detect_schema_mismatches_reports_advisory_mismatches_without_erroring() {
     .expect("invariant: harness schema should be writable");
     // ... and an unknown version are both incompatible and must surface as
     // advisory mismatches; the detector classifies but never aborts.
-    fs::write(
-        paths.harness_dir().join("backlog.yaml"),
-        "schema_version: totally-bogus\nitems: []\n",
-    )
-    .expect("invariant: backlog schema should be writable");
+    fs::write(paths.install_lock_file(), "schema_version: totally-bogus\n")
+        .expect("invariant: install lock schema should be writable");
 
     let mismatches = detect_schema_mismatches(&paths)
         .expect("invariant: schema-mismatch detection stays advisory and never errors");
@@ -691,7 +679,7 @@ fn update_in_a_never_initialized_repo_does_not_scaffold_and_points_at_init() {
     let temp_dir = TestTempDir::new("maestro-update-test");
     init_git_marker(temp_dir.path());
 
-    let update = maestro(&["update"], temp_dir.path());
+    let update = maestro(&["upgrade"], temp_dir.path());
     assert_success(&update);
     let stdout = String::from_utf8_lossy(&update.stdout);
     assert!(
@@ -736,13 +724,13 @@ exit 18
         ),
     );
     let output = Command::new(env!("CARGO_BIN_EXE_maestro"))
-        .arg("update")
+        .arg("upgrade")
         .current_dir(temp_dir.path())
         .env("HOME", temp_dir.path().join("home"))
         .env("MAESTRO_INSTALL_METHOD", "curl")
         .env("PATH", path)
         .output()
-        .expect("invariant: maestro update should run");
+        .expect("invariant: maestro upgrade should run");
 
     assert!(!output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -783,7 +771,7 @@ printf '{{"tag_name":"v9.9.9-gfuture","published_at":"2026-05-26T05:16:16.000Z",
     let stderr = String::from_utf8_lossy(&first.stderr);
     assert!(!stdout.contains("Update available: 9.9.9-gfuture"));
     assert!(stderr.contains("Update available: 9.9.9-gfuture"));
-    assert!(stderr.contains("Run `maestro update` to install."));
+    assert!(stderr.contains("Run `maestro upgrade` to install."));
 
     let second = Command::new(env!("CARGO_BIN_EXE_maestro"))
         .arg("doctor")
@@ -917,14 +905,13 @@ fn fake_curl_path_env(temp_dir: &TestTempDir, script: impl AsRef<str>) -> String
 fn mark_user_owned_harness_artifacts(paths: &MaestroPaths) {
     // HARNESS.md is extraction-managed and version-gated: a local edit that keeps
     // the shipped frontmatter version survives update because the gate skips a
-    // matching version. harness.yml and backlog.yaml are user-owned config that
-    // update never rewrites. Editing each in place (rather than replacing
-    // HARNESS.md with version-less content) keeps every file's shipped version
-    // intact, so all three must stay byte-identical across update.
+    // matching version. harness.yml is user-owned config that update never
+    // rewrites. Editing each in place (rather than replacing HARNESS.md with
+    // version-less content) keeps every file's shipped version intact, so both
+    // must stay byte-identical across update.
     for path in [
         paths.harness_dir().join("HARNESS.md"),
         paths.harness_dir().join("harness.yml"),
-        paths.harness_dir().join("backlog.yaml"),
     ] {
         let contents =
             fs::read_to_string(&path).expect("invariant: initialized artifact should be readable");
@@ -940,7 +927,6 @@ fn user_owned_harness_artifacts(paths: &MaestroPaths) -> Vec<PathBuf> {
     vec![
         paths.harness_dir().join("HARNESS.md"),
         paths.harness_dir().join("harness.yml"),
-        paths.harness_dir().join("backlog.yaml"),
     ]
 }
 
@@ -968,7 +954,7 @@ fn assert_files_unchanged(snapshot: &[(PathBuf, String)]) {
     }
 }
 
-fn update_backup_for(paths: &MaestroPaths, skill_name: &str) -> PathBuf {
+fn update_backup_for_hook(paths: &MaestroPaths) -> PathBuf {
     for entry in fs::read_dir(paths.backups_dir()).expect("invariant: backups dir should exist") {
         let entry = entry.expect("invariant: backup entry should be readable");
         let file_name = entry.file_name();
@@ -982,15 +968,14 @@ fn update_backup_for(paths: &MaestroPaths, skill_name: &str) -> PathBuf {
         let candidate = entry
             .path()
             .join(".maestro")
-            .join("skills")
-            .join(skill_name)
-            .join("SKILL.md");
+            .join("hooks")
+            .join("record.sh");
         if candidate.exists() {
             return candidate;
         }
     }
 
-    panic!("expected update backup for {skill_name}");
+    panic!("expected update backup for record.sh");
 }
 
 struct FailingDownloader;
@@ -1078,7 +1063,7 @@ struct LateGlobalCollisionReplacer {
 impl BinaryReplacer for LateGlobalCollisionReplacer {
     fn replace(&self, current: &Path, candidate: &Path) -> Result<()> {
         fs::copy(candidate, current)?;
-        let global_skill_link = self.home.join(".claude/skills/maestro-task");
+        let global_skill_link = self.home.join(".claude/skills/maestro-card");
         if fs::symlink_metadata(&global_skill_link).is_ok() {
             fs::remove_file(&global_skill_link)?;
         }

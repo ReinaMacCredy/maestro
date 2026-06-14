@@ -16,7 +16,7 @@ use crate::domain::skills::{self, GlobalSkillsOutcome};
 use crate::foundation::core::hash::hex_digest;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::schema::{
-    BACKLOG_SCHEMA_VERSION, Compat, HARNESS_SCHEMA_VERSION, INSTALL_LOCK_SCHEMA_VERSION, classify,
+    Compat, HARNESS_SCHEMA_VERSION, INSTALL_LOCK_SCHEMA_VERSION, classify,
 };
 
 pub use github_release::GitHubCurlDownloader;
@@ -26,7 +26,7 @@ use replace::{
     cleanup_prepared_binary, prepare_binary_update, prepared_release, replace_prepared_binary,
 };
 
-/// Options for one `maestro update` operation.
+/// Options for one `maestro upgrade` operation.
 #[derive(Debug)]
 pub struct UpdateOptions<'a> {
     /// Repository-local Maestro paths, when the command runs inside a discovered repo.
@@ -488,6 +488,11 @@ pub fn run_update_with_seams(
         }
         _ => ExtractReport::default(),
     };
+    if let Some(paths) = options.paths
+        && !repo_uninitialized
+    {
+        crate::domain::install::warn_legacy_skill_symlinks(paths);
+    }
     let prepared_release = prepared_release(&binary_candidate);
     let binary_status = match replace_prepared_binary(options, replacer, binary_candidate) {
         Ok(status) => status,
@@ -569,10 +574,6 @@ pub fn detect_schema_mismatches(paths: &MaestroPaths) -> Result<Vec<SchemaMismat
         (
             paths.harness_dir().join("harness.yml"),
             HARNESS_SCHEMA_VERSION,
-        ),
-        (
-            paths.harness_dir().join("backlog.yaml"),
-            BACKLOG_SCHEMA_VERSION,
         ),
         (paths.install_lock_file(), INSTALL_LOCK_SCHEMA_VERSION),
     ];

@@ -1,0 +1,20 @@
+# Synthetic below-floor artifact for the bounded-version refusal path (VERIFY
+# V5.5): a payload stamped maestro.task.v1 must route to the explicit
+# migrate-v2 hint, never normalize in memory. The stamp is what matters; real
+# v1 tasks lived outside the card store entirely.
+schema_version: maestro.card.v1
+id: card-ee55ff
+type: task
+title: Legacy v1 task fixture
+status: draft
+created_at: 2026-04-01T00:00:00.000Z
+updated_at: 2026-04-01T00:00:00.000Z
+extra:
+  schema_version: maestro.task.v1
+  id: card-ee55ff
+  title: Legacy v1 task fixture
+  state: draft
+  acceptance_locked: false
+  verification: {}
+  created_at: 2026-04-01T00:00:00.000Z
+  updated_at: 2026-04-01T00:00:00.000Z

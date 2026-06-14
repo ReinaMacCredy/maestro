@@ -1,43 +1,42 @@
 mod support;
 
 use std::fs;
-use std::path::Path;
 
+use maestro::domain::card::schema::Card;
 use maestro::domain::feature::{self, ContractAdditions, ContractEdits};
 use maestro::foundation::core::fs::ensure_dir;
 use maestro::foundation::core::paths::MaestroPaths;
 use support::TestTempDir;
 
-/// Write a feature record directly into its per-feature directory.
+/// Write a feature card directly into the flat card store. `contents` is the raw
+/// `card.yaml` body; callers pass a well-formed card envelope (`BAD_RECORD`) or
+/// deliberate garbage to exercise the strict/tolerant/diagnose read paths.
 fn write_feature(paths: &MaestroPaths, id: &str, contents: &str) {
-    let dir = paths.features_dir().join(id);
-    ensure_dir(&dir).expect("invariant: feature dir should be creatable");
-    fs::write(dir.join("feature.yaml"), contents)
-        .expect("invariant: feature.yaml should be writable");
+    let dir = paths.cards_dir().join(id);
+    ensure_dir(&dir).expect("invariant: card dir should be creatable");
+    fs::write(dir.join("card.yaml"), contents).expect("invariant: card.yaml should be writable");
 }
 
-/// Write a minimal task.yaml carrying the fields the feature projection reads.
-fn write_task(tasks_dir: &Path, id: &str, feature_id: &str, state: &str) {
-    let dir = tasks_dir
-        .parent()
-        .expect("invariant: tasks dir should have parent")
-        .join("features")
-        .join(feature_id)
-        .join("tasks")
-        .join(format!("{id}-{id}"));
-    ensure_dir(&dir).expect("invariant: task directory should be creatable");
-    // A complete TaskRecord: the cancel cascade loads and transitions the child,
-    // so a projection-only stub (id/feature_id/state) fails to deserialize.
+/// Write a child task card into the flat card store. Feature ownership rides the
+/// card's top-level `parent` field (no per-feature directory); the cancel cascade
+/// loads and transitions the child, so `extra` carries a complete TaskRecord
+/// rather than a projection-only stub.
+fn write_task(paths: &MaestroPaths, id: &str, feature_id: &str, state: &str) {
+    let dir = paths.cards_dir().join(id);
+    ensure_dir(&dir).expect("invariant: card dir should be creatable");
     fs::write(
-        dir.join("task.yaml"),
+        dir.join("card.yaml"),
         format!(
-            "schema_version: maestro.task.v2\nid: {id}\ntitle: {id}\nstate: {state}\nacceptance_locked: false\nverification: {{}}\ncreated_at: \"2026-06-06T00:00:00.000Z\"\nupdated_at: \"2026-06-06T00:00:00.000Z\"\n"
+            "schema_version: maestro.card.v1\nid: {id}\ntype: task\ntitle: {id}\nstatus: {state}\nparent: {feature_id}\ncreated_at: \"2026-06-06T00:00:00.000Z\"\nupdated_at: \"2026-06-06T00:00:00.000Z\"\nextra:\n  schema_version: maestro.task.v2\n  id: {id}\n  title: {id}\n  state: {state}\n  acceptance_locked: false\n  verification: {{}}\n  created_at: \"2026-06-06T00:00:00.000Z\"\n  updated_at: \"2026-06-06T00:00:00.000Z\"\n"
         ),
     )
-    .expect("invariant: task.yaml should be writable");
+    .expect("invariant: card.yaml should be writable");
 }
 
-const BAD_RECORD: &str = "schema_version: maestro.galaxy.v9\nid: billing-csv\ntitle: Billing CSV\nstatus: proposed\ncreated_at: \"1\"\nupdated_at: \"1\"\n";
+/// A feature card whose folded record carries an incompatible schema version, so
+/// the strict reads surface a schema mismatch (the card envelope itself parses;
+/// the `extra` record is what classifies as incompatible).
+const BAD_RECORD: &str = "schema_version: maestro.card.v1\nid: billing-csv\ntype: feature\ntitle: Billing CSV\nstatus: proposed\ncreated_at: \"1\"\nupdated_at: \"1\"\nextra:\n  schema_version: maestro.galaxy.v9\n  id: billing-csv\n  title: Billing CSV\n  status: proposed\n  created_at: \"1\"\n  updated_at: \"1\"\n";
 
 /// Author a complete contract on a freshly-created Proposed feature, plus a
 /// present baseline with no `[bl-NNN]` scenarios. The empty Scenario Matrix
@@ -56,8 +55,8 @@ fn author_contract(paths: &MaestroPaths, id: &str) {
     )
     .expect("invariant: set should succeed on a proposed feature");
 
-    let dir = paths.features_dir().join(id);
-    ensure_dir(&dir).expect("invariant: feature dir should be creatable");
+    let dir = paths.cards_dir().join(id);
+    ensure_dir(&dir).expect("invariant: card dir should be creatable");
     fs::write(
         dir.join("qa.md"),
         "---\namend_log_position: 0\n---\n\n### QA Baseline Contract\n\n- Baseline gaps:\n  - none (no behavioral surface)\n",
@@ -230,37 +229,40 @@ fn verify_rejects_unknown_acceptance_evidence_kind() {
         },
     )
     .expect("invariant: set should succeed");
+    feature::accept_with_qa_none(&paths, "billing-csv", "domain test", false)
+        .expect("invariant: feature may be accepted");
+    feature::start(&paths, "billing-csv").expect("invariant: started features may be verified");
 
-    let path = paths
-        .features_dir()
-        .join("billing-csv")
-        .join("feature.yaml");
+    let path = paths.cards_dir().join("billing-csv").join("card.yaml");
     let mut raw: serde_yaml::Value = serde_yaml::from_str(
         &fs::read_to_string(&path).expect("invariant: feature should be readable"),
     )
     .expect("invariant: feature should parse");
-    raw["acceptance_evidence"] = serde_yaml::Value::Sequence(vec![serde_yaml::Value::Mapping(
-        [
-            (
-                serde_yaml::Value::String("ac_id".to_string()),
-                serde_yaml::Value::String("ac-1".to_string()),
-            ),
-            (
-                serde_yaml::Value::String("kind".to_string()),
-                serde_yaml::Value::String("typo".to_string()),
-            ),
-            (
-                serde_yaml::Value::String("text".to_string()),
-                serde_yaml::Value::String("must not count".to_string()),
-            ),
-            (
-                serde_yaml::Value::String("at".to_string()),
-                serde_yaml::Value::String("2026-06-06T00:00:00.000Z".to_string()),
-            ),
-        ]
-        .into_iter()
-        .collect(),
-    )]);
+    // The feature record rides under the card's `extra` carrier; inject the
+    // poisoned evidence there so the cutover read reconstructs it.
+    raw["extra"]["acceptance_evidence"] =
+        serde_yaml::Value::Sequence(vec![serde_yaml::Value::Mapping(
+            [
+                (
+                    serde_yaml::Value::String("ac_id".to_string()),
+                    serde_yaml::Value::String("ac-1".to_string()),
+                ),
+                (
+                    serde_yaml::Value::String("kind".to_string()),
+                    serde_yaml::Value::String("typo".to_string()),
+                ),
+                (
+                    serde_yaml::Value::String("text".to_string()),
+                    serde_yaml::Value::String("must not count".to_string()),
+                ),
+                (
+                    serde_yaml::Value::String("at".to_string()),
+                    serde_yaml::Value::String("2026-06-06T00:00:00.000Z".to_string()),
+                ),
+            ]
+            .into_iter()
+            .collect(),
+        )]);
     fs::write(
         &path,
         serde_yaml::to_string(&raw).expect("invariant: feature should serialize"),
@@ -366,13 +368,13 @@ fn ship_blocks_on_live_child_task() {
     feature::start(&paths, "billing-csv").expect("invariant: start should succeed");
     verify_contract(&paths, "billing-csv");
 
-    write_task(&paths.tasks_dir(), "task-001", "billing-csv", "in_progress");
+    write_task(&paths, "task-001", "billing-csv", "in_progress");
     let error =
         feature::ship(&paths, "billing-csv", None, false).expect_err("invariant: ship must block");
     assert!(error.to_string().contains("task-001"));
 
     // A verified child does not block ship.
-    write_task(&paths.tasks_dir(), "task-001", "billing-csv", "verified");
+    write_task(&paths, "task-001", "billing-csv", "verified");
     let shipped =
         feature::ship(&paths, "billing-csv", None, false).expect("invariant: ship succeeds");
     assert_eq!(shipped.status, feature::FeatureStatus::Shipped);
@@ -387,7 +389,7 @@ fn cancel_cascades_to_live_child_tasks() {
     author_contract(&paths, "billing-csv");
     feature::accept(&paths, "billing-csv", false).expect("invariant: accept should succeed");
     feature::start(&paths, "billing-csv").expect("invariant: start should succeed");
-    write_task(&paths.tasks_dir(), "task-001", "billing-csv", "in_progress");
+    write_task(&paths, "task-001", "billing-csv", "in_progress");
 
     // Dry-run previews the cascade without mutating the feature or its children.
     let preview = feature::cancel(&paths, "billing-csv", "scope dropped", true)
@@ -407,13 +409,11 @@ fn cancel_cascades_to_live_child_tasks() {
     assert_eq!(view.status, feature::FeatureStatus::Cancelled);
     // The audited reason is persisted on the feature record.
     assert_eq!(view.cancel_reason.as_deref(), Some("scope dropped"));
-    // The child task is now abandoned.
-    let task_raw = fs::read_to_string(
-        paths
-            .features_dir()
-            .join("billing-csv/tasks/task-001-task-001/task.yaml"),
-    )
-    .expect("invariant: child task should be readable");
+    // The child task is now abandoned. Feature ownership rides the card's
+    // `parent`, so the child lives at its own flat card dir, not under a feature
+    // subtree; the cascade transitions it in place.
+    let task_raw = fs::read_to_string(paths.cards_dir().join("task-001/card.yaml"))
+        .expect("invariant: child task should be readable");
     assert!(task_raw.contains("abandoned"));
 }
 
@@ -473,14 +473,9 @@ fn amend_is_append_only_with_value_dedup() {
     .expect("invariant: amend retry should succeed");
     assert!(!report.changed);
 
-    // the feature record embeds the one genuine amend
-    let feature_raw = fs::read_to_string(
-        paths
-            .features_dir()
-            .join("billing-csv")
-            .join("feature.yaml"),
-    )
-    .expect("invariant: feature.yaml should be readable");
+    // the feature record (folded under the card's `extra`) embeds the one genuine amend
+    let feature_raw = fs::read_to_string(paths.cards_dir().join("billing-csv").join("card.yaml"))
+        .expect("invariant: card.yaml should be readable");
     assert!(feature_raw.contains("widen scope"));
     assert!(!feature_raw.contains("retry"));
 }
@@ -510,9 +505,8 @@ fn list_joins_task_counts() {
     let paths = MaestroPaths::new(temp.path());
 
     feature::create(&paths, "Billing CSV").expect("invariant: create should succeed");
-    let tasks_dir = paths.tasks_dir();
-    write_task(&tasks_dir, "task-001", "billing-csv", "verified");
-    write_task(&tasks_dir, "task-002", "billing-csv", "ready");
+    write_task(&paths, "task-001", "billing-csv", "verified");
+    write_task(&paths, "task-002", "billing-csv", "ready");
 
     let views = feature::list(&paths).expect("invariant: list should succeed");
     assert_eq!(views.len(), 1);
@@ -598,6 +592,47 @@ fn tolerant_roster_marks_incompatible_record_without_dropping_healthy_rows() {
     );
 }
 
+/// A card.yaml that fails to even parse as a card must still surface on the
+/// roster (outer load error), while a corrupt non-feature card stays off the
+/// feature board -- its own surfaces report it.
+#[test]
+fn tolerant_roster_surfaces_a_card_that_fails_to_load() {
+    let temp = TestTempDir::new("maestro-feature-tolerant-load-err");
+    let paths = MaestroPaths::new(temp.path());
+
+    feature::create(&paths, "Healthy Feature").expect("invariant: create should succeed");
+    write_feature(&paths, "billing-csv", "type: feature\nbroken: [");
+    write_feature(&paths, "card-broken1", "type: task\nbroken: [");
+
+    let roster = feature::list_tolerant(&paths);
+    assert!(
+        roster
+            .iter()
+            .any(|entry| matches!(entry, feature::FeatureRosterEntry::Loaded(view) if view.id == "healthy-feature")),
+        "healthy rows must survive a sibling load failure: {roster:#?}"
+    );
+    assert!(
+        roster
+            .iter()
+            .any(|entry| matches!(entry, feature::FeatureRosterEntry::Unreadable { id, .. } if id == "billing-csv")),
+        "a feature card that fails to load is marked, not dropped: {roster:#?}"
+    );
+    assert!(
+        !roster
+            .iter()
+            .any(|entry| matches!(entry, feature::FeatureRosterEntry::Unreadable { id, .. } if id == "card-broken1")),
+        "a corrupt card declaring a non-feature type stays off the feature board: {roster:#?}"
+    );
+}
+
+/// Load the card set the way doctor does (one shared store walk), keeping only
+/// the loadable cards -- envelope failures are the walk's caller's to report.
+fn loaded_cards(paths: &MaestroPaths) -> Vec<(Card, std::path::PathBuf)> {
+    maestro::domain::card::query::scan_with_failures(paths)
+        .expect("invariant: card store should be walkable")
+        .cards
+}
+
 #[test]
 fn diagnose_reports_count_on_compatible_store() {
     let temp = TestTempDir::new("maestro-feature-diag-ok");
@@ -605,18 +640,18 @@ fn diagnose_reports_count_on_compatible_store() {
 
     feature::create(&paths, "Billing CSV").expect("invariant: create should succeed");
 
-    assert_eq!(feature::diagnose(&paths).found, Ok(1));
+    assert_eq!(feature::diagnose(&loaded_cards(&paths)).found, Ok(1));
 }
 
 #[test]
-fn diagnose_reports_absent_features_dir_as_error_data() {
+fn diagnose_reports_absent_card_store_as_zero_features() {
     let temp = TestTempDir::new("maestro-feature-diag-absent");
     let paths = MaestroPaths::new(temp.path());
 
-    assert!(
-        feature::diagnose(&paths).found.is_err(),
-        "an absent features dir must report as error data so doctor flags it"
-    );
+    // Feature cards live in the flat card store, not a per-entity directory, so an
+    // absent store reads as zero features rather than a missing-directory error
+    // (the directory-shaped diagnostic retired with the cutover).
+    assert_eq!(feature::diagnose(&loaded_cards(&paths)).found, Ok(0));
 }
 
 #[test]
@@ -626,21 +661,27 @@ fn diagnose_reports_incompatible_record_as_error_data() {
     write_feature(&paths, "billing-csv", BAD_RECORD);
 
     assert!(
-        feature::diagnose(&paths).found.is_err(),
+        feature::diagnose(&loaded_cards(&paths)).found.is_err(),
         "an incompatible record must report as error data"
     );
 }
 
 #[test]
-fn diagnose_reports_parse_error_as_error_data() {
+fn unparseable_envelope_is_the_shared_walks_failure_not_a_feature_error() {
     let temp = TestTempDir::new("maestro-feature-diag-parse");
     let paths = MaestroPaths::new(temp.path());
     write_feature(&paths, "billing-csv", "this: is: not: valid: yaml: [");
 
-    assert!(
-        feature::diagnose(&paths).found.is_err(),
-        "a parse failure must report as error data"
+    // An unparseable card.yaml has an unknowable type, so it surfaces once as
+    // the shared walk's failure; diagnose only sees the loadable cards.
+    let scan = maestro::domain::card::query::scan_with_failures(&paths)
+        .expect("invariant: card store should be walkable");
+    assert_eq!(
+        scan.failures.len(),
+        1,
+        "the corrupt envelope is the walk's failure"
     );
+    assert_eq!(feature::diagnose(&scan.cards).found, Ok(0));
 }
 
 #[test]

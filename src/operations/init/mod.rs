@@ -2,13 +2,12 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
 
-use crate::domain::decisions;
 use crate::domain::extraction::{
     ExtractMode, FolderDecision, FolderPreview, extract_all, preview_all, render_preview,
     validate_all,
 };
 use crate::domain::harness::schema::HarnessConfig;
-use crate::domain::harness::templates::{backlog_yaml, harness_yml};
+use crate::domain::harness::templates::harness_yml;
 use crate::foundation::core::backup::{backup_file_with_timestamp, backup_operation_timestamp};
 use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::fs::ensure_dir;
@@ -171,32 +170,17 @@ impl InitPlan {
         let harness_config = HarnessConfig::detect(paths.repo_root());
 
         Ok(Self {
-            directories: vec![
-                paths.harness_dir(),
-                paths.features_dir(),
-                paths.decisions_dir(),
-                paths.skills_dir(),
-            ],
-            files: vec![
-                InitFile {
-                    path: paths.harness_dir().join("harness.yml"),
-                    contents: harness_yml(&harness_config)?,
-                },
-                InitFile {
-                    path: paths.harness_dir().join("backlog.yaml"),
-                    contents: backlog_yaml()?,
-                },
-                InitFile {
-                    path: paths.decisions_file(),
-                    contents: decisions::empty_store_yaml()?,
-                },
-            ],
+            directories: vec![paths.harness_dir(), paths.cards_dir()],
+            files: vec![InitFile {
+                path: paths.harness_dir().join("harness.yml"),
+                contents: harness_yml(&harness_config)?,
+            }],
         })
     }
 }
 
 /// Render the dry-run artifact tree, then the bundled-resource extraction
-/// preview (skills, the hook script, the harness) the same run would apply.
+/// preview (the hook script, the harness) the same run would apply.
 pub fn render_dry_run(plan: &InitPlan, preview: &[FolderPreview]) -> String {
     let mut out = String::from("maestro init would create:\n");
     for directory in &plan.directories {

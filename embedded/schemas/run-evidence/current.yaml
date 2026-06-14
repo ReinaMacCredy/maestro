@@ -1,0 +1,24 @@
+# Schema contract for the run evidence family (WS5 / D6.2-B).
+# src/domain/schema_contracts validates this pack against the Rust constants;
+# any edit trips tests/resources_version_guard.rs so it is acknowledged.
+family: run-evidence
+contracts:
+  - name: run-evidence
+    schema_version: maestro.run_evidence.v1
+    stamp: file
+    carrier: file
+    format: yaml
+    home: .maestro/runs/<session>/run_evidence.yaml
+    model: src/domain/run/evidence.rs::RunEvidence (written shape; RunEvidenceRecord is the tolerant read subset)
+    fields:
+      - schema_version
+      - session_id
+      - agent
+      - task_id
+      - start_at
+      - end_at
+      - start_commit
+      - end_commit
+      - tools_used
+      - human_interventions
+      - duration_seconds

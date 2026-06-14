@@ -1,0 +1,85 @@
+- schema_version: maestro.card.v1
+  id: dec-drift-response-auto-resync-the-cache-4dac
+  type: decision
+  title: 'Drift response: auto-resync the cache inline, not just nudge'
+  status: locked
+  parent: skill-version-drift-detection-surface-sync-when-on-disk-skills-lag-the-binary
+  created_at: 2026-06-14T08:07:04.211Z
+  updated_at: 2026-06-14T08:07:04.238Z
+  description: 'When an ordinary command detects the global cache (~/.maestro/skills) is behind the binary after an out-of-band advance, maestro self-heals. Asymmetry weighed: nudge-only is passive-safe and matches prior art (dec-...0e62 auto-resyncs only on install/upgrade); auto-resync is a write triggered by an unrelated read. User chose auto-resync so the agent always loads fresh skills. Bounded: resync fires once per drift event (next command after the binary jump); later commands find matched and no-op, so it is not write-on-every-read. Coupling: this raises an auto-downgrade footgun when the running binary is OLDER than the cache. The existing primitive compares by equality (global.rs:290), so a naive resync-on-mismatch would silently downgrade the cache to an old binary. F-C must resolve the ahead-case with ordered comparison.'
+  extra:
+    locked_at: 2026-06-14T08:07:04.238Z
+    decision: Auto-resync ~/.maestro/skills to the binary embedded skills inline when a command detects the cache is behind. Reuse the sync primitive (prepare/write_prepared_global_skills). One write per drift event; silent no-op once matched.
+    preview: |-
+      $ maestro list
+      resynced global cache to binary versions:
+        maestro-design  1.10.0 -> 1.12.0
+      ... normal output ...
+      (one write per binary advance; no-op once matched)
+    rejected:
+    - 'Nudge-only (print the lag + ''maestro sync --global-skills'', write nothing): passive-safe and prior-art-consistent, but leaves the agent loading stale skills until someone runs sync.'
+- schema_version: maestro.card.v1
+  id: dec-cache-ahead-equality-compare-cache-a597
+  type: decision
+  title: 'Cache-ahead: equality compare, cache always mirrors the binary'
+  status: locked
+  parent: skill-version-drift-detection-surface-sync-when-on-disk-skills-lag-the-binary
+  created_at: 2026-06-14T08:09:36.622Z
+  updated_at: 2026-06-14T08:09:36.642Z
+  description: 'Resolves the auto-downgrade footgun raised by dec-drift-response-auto-resync-the-cache-4dac by ACCEPTING it under a projection model, not by preventing it. Reverses the earlier stated success criterion (''act only when cache behind; silent when ahead''), which assumed a monotonic cache. User chose: the cache is a pure projection of the running binary -- the skills you load always match the maestro you ran. Rationale: simplest possible (reuse global_skills_status_at, global.rs:290 installed != embedded, + the sync primitive; zero new comparison code, no semver crate, no ordered tuple parse). Cost accepted: running an older binary downgrades the cache, and alternating binaries churns; both rare and consistent with the projection model. Note: this supersedes the ''Directional, no dev-loop noise'' paragraph in Current state, which must be rewritten to the equality framing.'
+  extra:
+    locked_at: 2026-06-14T08:09:36.642Z
+    decision: 'Equality comparison: reuse global_skills_status_at (installed != embedded). On ANY mismatch the auto-resync (4dac) writes cache := running binary''s embedded skills, including downgrade when the binary is older. No ordered/semver comparison; cache is a pure projection of the binary.'
+    preview: |-
+      OLD binary (embeds 1.10.0), cache 1.13.0:
+      $ maestro list
+      resynced: maestro-design 1.13.0 -> 1.10.0   (downgrade; cache mirrors binary)
+      back to NEW binary:
+      $ maestro list
+      resynced: maestro-design 1.10.0 -> 1.13.0
+    rejected:
+    - 'Directional/ordered compare (resync only when cache behind; silent/untouched when ahead): ~15-line tuple compare, no crate, avoids downgrade+churn, but adds logic and a monotonic-cache model the user rejected in favor of strict binary mirroring.'
+- schema_version: maestro.card.v1
+  id: dec-placement-cache-resync-at-top-of-run-0509
+  type: decision
+  title: 'Placement: cache resync at top of run_auto_check, all methods, un-throttled, one kill switch'
+  status: locked
+  parent: skill-version-drift-detection-surface-sync-when-on-disk-skills-lag-the-binary
+  created_at: 2026-06-14T08:16:25.643Z
+  updated_at: 2026-06-14T08:16:25.663Z
+  description: 'Where the equality-check + auto-resync (4dac/a597) lives. It runs at the top of run_auto_check (main.rs:32), after every command, gated by should_auto_check_after (exclusion list main.rs:44 keeps the skill-mutating commands -- install/upgrade/sync -- from double-resyncing). It runs for ALL install methods (lifting the curl-only gate that caused the gap) and UN-throttled (a cheap offline lockfile + per-skill SKILL.md read), so it fires on the FIRST command after a binary jump rather than waiting for the auto_check_due window. The existing GitHub-release nag keeps its curl gate + throttle, untouched. Kill switch: user chose ONE switch -- the resync sits inside the function''s existing MAESTRO_AUTO_UPDATE=0 bail, so that single env var disables resync too; no new flag. Consequence: when resync is off, skills can go stale silently, so doctor reports drift as the fallback (F-E).'
+  extra:
+    locked_at: 2026-06-14T08:16:25.663Z
+    decision: Run the cache equality-check + auto-resync at the top of run_auto_check for all install methods, un-throttled, gated only by should_auto_check_after's exclusion list and the existing MAESTRO_AUTO_UPDATE=0 bail. Leave the GitHub-release nag's curl gate + auto_check_due throttle unchanged.
+    preview: |-
+      MAESTRO_AUTO_UPDATE unset (default):
+      $ maestro list          # first command after binary jump
+      resynced: maestro-design 1.10.0 -> 1.13.0
+      ... normal output ...
+
+      MAESTRO_AUTO_UPDATE=0:
+      $ maestro list          # no resync
+      $ maestro doctor        # fallback signal
+      warn: skill cache behind binary (resync off)
+    rejected:
+    - 'Keep the cache check behind the existing curl gate + throttle: recreates the out-of-band gap (non-curl bypassed) and delays resync to the throttle window. Separate resync-only kill switch: extra env-var surface for a rare case.'
+- schema_version: maestro.card.v1
+  id: dec-doctor-reports-cache-vs-binary-drift-as-6e95
+  type: decision
+  title: doctor reports cache-vs-binary drift as the fallback signal
+  status: locked
+  parent: skill-version-drift-detection-surface-sync-when-on-disk-skills-lag-the-binary
+  created_at: 2026-06-14T08:16:53.229Z
+  updated_at: 2026-06-14T08:16:53.249Z
+  description: 'Derived from dec-placement-...-0509: when MAESTRO_AUTO_UPDATE=0 disables auto-resync, skills can go stale with no inline signal, so doctor is the fallback diagnostic. doctor currently never compares cache to embedded. User endorsed this in the selected kill-switch preview (''maestro doctor / warn: skill cache behind binary''). Reuse global_skills_status_at (equality). Also surfaces drift transiently on the first command-after-jump when that command is doctor itself, since run_auto_check resyncs after doctor prints.'
+  extra:
+    locked_at: 2026-06-14T08:16:53.249Z
+    decision: 'maestro doctor adds a cache-health check via global_skills_status_at: warn per stale/missing skill (name + installed -> embedded version), ok when all match the binary. Reuse the equality primitive; no network, no new compare logic.'
+    preview: |-
+      $ maestro doctor
+      ...
+      skills: warn -- cache behind binary
+        maestro-design  1.10.0 -> 1.13.0
+      (ok when all skills match)
+    rejected:
+    - 'No doctor coverage: with auto-resync self-healing on every command doctor would usually show matched, but that leaves no signal when resync is disabled (MAESTRO_AUTO_UPDATE=0) -- exactly when a diagnostic is needed.'

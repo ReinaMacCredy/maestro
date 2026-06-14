@@ -1,14 +1,16 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use anyhow::{Result, bail};
 
-use crate::decisions;
+use crate::domain::card;
+use crate::domain::decisions;
 use crate::domain::feature;
 use crate::domain::proof;
 use crate::domain::run;
 use crate::domain::task;
 use crate::foundation::core::git;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
+use crate::foundation::core::table;
 use crate::interfaces::cli::{QueryArgs, QueryCommand};
 use crate::operations::harness;
 
@@ -46,15 +48,335 @@ pub fn run(args: QueryArgs) -> Result<()> {
         }
         QueryCommand::Matrix => query_matrix(&paths),
         QueryCommand::Friction => query_friction(&paths),
-        QueryCommand::Decisions => query_decisions(&paths),
+        QueryCommand::Decisions { all, feature } => {
+            query_decisions(&paths, all, feature.as_deref())
+        }
         QueryCommand::Backlog => query_backlog(&paths),
+        QueryCommand::Graph { id, dot } => query_graph(&paths, id, dot),
     }
 }
 
+/// How many hops `query graph <id>` walks from the root (SPEC R7 preview).
+/// `--dot` is the escape hatch for anything deeper: it exports the whole web.
+const GRAPH_TREE_HOPS: usize = 2;
+
+/// One directed edge as the data stores it: `from` owns the field.
+struct GraphEdge {
+    from: String,
+    to: String,
+    kind: EdgeKind,
+}
+
+/// The typed-edge taxonomy `query graph` walks. Forward and reverse labels
+/// live in one exhaustive pairing so a new kind cannot ship with a silently
+/// mislabeled reverse side.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+enum EdgeKind {
+    Parent,
+    BlockedBy,
+    Related,
+    Supersedes,
+}
+
+impl EdgeKind {
+    /// The holder's perspective word, as the tree and DOT print it.
+    fn label(self) -> &'static str {
+        match self {
+            Self::Parent => "parent",
+            Self::BlockedBy => "blocked-by",
+            Self::Related => "related",
+            Self::Supersedes => "supersedes",
+        }
+    }
+
+    /// The word the edge target's side sees: `parent` reads as `child` from
+    /// the parent, `blocked-by` as `blocks`, `supersedes` as `superseded-by`;
+    /// `related` is symmetric.
+    fn reverse_label(self) -> &'static str {
+        match self {
+            Self::Parent => "child",
+            Self::BlockedBy => "blocks",
+            Self::Related => "related",
+            Self::Supersedes => "superseded-by",
+        }
+    }
+}
+
+fn query_graph(paths: &MaestroPaths, id: Option<String>, dot: bool) -> Result<()> {
+    let cards = card::query::scan(paths)?;
+    let edges = graph_edges(&cards);
+    match (id, dot) {
+        (None, false) => bail!(
+            "provide a card id or --dot\n  tree: maestro query graph <id>\n  whole web: maestro query graph --dot"
+        ),
+        (Some(id), false) => print_graph_tree(paths, &cards, &edges, &id),
+        (None, true) => {
+            print!("{}", render_dot(&cards, &edges, None));
+            Ok(())
+        }
+        (Some(id), true) => {
+            let root = resolve_graph_root(paths, &id)?;
+            let members = component_members(&edges, &root);
+            print!("{}", render_dot(&cards, &edges, Some(&members)));
+            Ok(())
+        }
+    }
+}
+
+fn resolve_graph_root(paths: &MaestroPaths, id: &str) -> Result<String> {
+    let Some(resolved) = card::store::resolve(paths, id)? else {
+        bail!(
+            "no card {id} in the live store\n  list ids: maestro list\n  archived cards stay greppable: maestro list --grep <word> --archived"
+        );
+    };
+    Ok(resolved.card.id)
+}
+
+/// Collect every typed edge: the `parent` field, the `deps` list, and -- for
+/// decision cards -- the record's `supersedes` list, which the fold keeps in
+/// `extra` rather than as a dep (fold.rs writes decision cards with no deps).
+fn graph_edges(cards: &[card::schema::Card]) -> Vec<GraphEdge> {
+    let mut edges = Vec::new();
+    let mut seen = BTreeSet::new();
+    for c in cards {
+        if let Some(parent) = &c.parent {
+            push_edge(&mut edges, &mut seen, &c.id, parent, EdgeKind::Parent);
+        }
+        for dep in &c.deps {
+            // A Blocks dep points at the card BLOCKING the holder (`ready`
+            // waits on dep targets), so it reads "blocked-by", matching
+            // `show`'s "blocked by" rendering.
+            let kind = match dep.kind {
+                card::schema::DepKind::Blocks => EdgeKind::BlockedBy,
+                card::schema::DepKind::Related => EdgeKind::Related,
+                card::schema::DepKind::Supersedes => EdgeKind::Supersedes,
+            };
+            push_edge(&mut edges, &mut seen, &c.id, &dep.target, kind);
+        }
+        if c.card_type == card::schema::CardType::Decision
+            && let Some(serde_yaml::Value::Sequence(targets)) = c
+                .extra
+                .get(serde_yaml::Value::String("supersedes".to_string()))
+        {
+            for target in targets.iter().filter_map(serde_yaml::Value::as_str) {
+                push_edge(&mut edges, &mut seen, &c.id, target, EdgeKind::Supersedes);
+            }
+        }
+    }
+    edges
+}
+
+fn push_edge(
+    edges: &mut Vec<GraphEdge>,
+    seen: &mut BTreeSet<(String, String, EdgeKind)>,
+    from: &str,
+    to: &str,
+    kind: EdgeKind,
+) {
+    if seen.insert((from.to_string(), to.to_string(), kind)) {
+        edges.push(GraphEdge {
+            from: from.to_string(),
+            to: to.to_string(),
+            kind,
+        });
+    }
+}
+
+/// Undirected adjacency with the label each endpoint sees.
+fn adjacency(edges: &[GraphEdge]) -> BTreeMap<&str, Vec<(&'static str, &str)>> {
+    let mut adj: BTreeMap<&str, Vec<(&'static str, &str)>> = BTreeMap::new();
+    for edge in edges {
+        adj.entry(&edge.from)
+            .or_default()
+            .push((edge.kind.label(), &edge.to));
+        adj.entry(&edge.to)
+            .or_default()
+            .push((edge.kind.reverse_label(), &edge.from));
+    }
+    for neighbors in adj.values_mut() {
+        neighbors.sort();
+        neighbors.dedup();
+    }
+    adj
+}
+
+fn print_graph_tree(
+    paths: &MaestroPaths,
+    cards: &[card::schema::Card],
+    edges: &[GraphEdge],
+    id: &str,
+) -> Result<()> {
+    let root = resolve_graph_root(paths, id)?;
+    let by_id: BTreeMap<&str, &card::schema::Card> =
+        cards.iter().map(|c| (c.id.as_str(), c)).collect();
+    let adj = adjacency(edges);
+
+    // Pre-mark every edge target outside the live store: an archived card (the
+    // lid points at it) or a genuinely dangling ref. Sources are always live --
+    // edges are read off scanned cards. One archive scan classifies them all,
+    // and a malformed target reads as missing instead of failing the render.
+    let unknown: BTreeSet<&str> = edges
+        .iter()
+        .map(|edge| edge.to.as_str())
+        .filter(|target| !by_id.contains_key(target))
+        .collect();
+    let mut dangling: BTreeMap<&str, &'static str> = BTreeMap::new();
+    if !unknown.is_empty() {
+        let archived: BTreeSet<String> =
+            card::query::scan_dir_with_paths(&paths.archive_cards_dir())?
+                .into_iter()
+                .map(|(card, _)| card.id)
+                .collect();
+        for target in unknown {
+            let mark = if archived.contains(target) {
+                "[archived]"
+            } else {
+                "[missing]"
+            };
+            dangling.insert(target, mark);
+        }
+    }
+
+    println!(
+        "{}",
+        node_line(
+            by_id
+                .get(root.as_str())
+                .expect("resolved root is in the scan")
+        )
+    );
+    let mut visited = BTreeSet::from([root.clone()]);
+    let printed = print_tree_level(&adj, &by_id, &dangling, &mut visited, &root, "", 1);
+    if printed == 0 {
+        println!("no connected cards");
+    }
+    Ok(())
+}
+
+fn print_tree_level(
+    adj: &BTreeMap<&str, Vec<(&'static str, &str)>>,
+    by_id: &BTreeMap<&str, &card::schema::Card>,
+    dangling: &BTreeMap<&str, &'static str>,
+    visited: &mut BTreeSet<String>,
+    id: &str,
+    came_from: &str,
+    depth: usize,
+) -> usize {
+    let Some(neighbors) = adj.get(id) else {
+        return 0;
+    };
+    let indent = "  ".repeat(depth - 1);
+    let mut printed = 0;
+    for (label, neighbor) in neighbors {
+        // The immediate back-edge is the line that brought us here; reprinting
+        // it under every child is noise. Other revisits stay visible.
+        if *neighbor == came_from {
+            continue;
+        }
+        printed += 1;
+        match by_id.get(neighbor) {
+            Some(card) => {
+                if !visited.insert((*neighbor).to_string()) {
+                    println!("{indent}- {label}: {neighbor} (shown above)");
+                    continue;
+                }
+                println!("{indent}- {label}: {}", node_line(card));
+                if depth < GRAPH_TREE_HOPS {
+                    print_tree_level(adj, by_id, dangling, visited, neighbor, id, depth + 1);
+                }
+            }
+            None => {
+                let mark = dangling.get(neighbor).copied().unwrap_or("[missing]");
+                println!("{indent}- {label}: {neighbor} {mark}");
+            }
+        }
+    }
+    printed
+}
+
+fn node_line(card: &card::schema::Card) -> String {
+    format!(
+        "{} ({}, {}) {}",
+        card.id,
+        card.card_type.as_str(),
+        card.status,
+        card.title
+    )
+}
+
+/// Every id reachable from `root` over the undirected web, dangling targets
+/// included (they render as dashed nodes).
+fn component_members(edges: &[GraphEdge], root: &str) -> BTreeSet<String> {
+    let adj = adjacency(edges);
+    let mut members = BTreeSet::from([root.to_string()]);
+    let mut queue = VecDeque::from([root.to_string()]);
+    while let Some(id) = queue.pop_front() {
+        let Some(neighbors) = adj.get(id.as_str()) else {
+            continue;
+        };
+        for (_, neighbor) in neighbors {
+            if members.insert((*neighbor).to_string()) {
+                queue.push_back((*neighbor).to_string());
+            }
+        }
+    }
+    members
+}
+
+fn render_dot(
+    cards: &[card::schema::Card],
+    edges: &[GraphEdge],
+    members: Option<&BTreeSet<String>>,
+) -> String {
+    let in_scope = |id: &str| members.is_none_or(|set| set.contains(id));
+    let mut out = String::from("digraph cards {\n  rankdir=LR;\n");
+    let mut declared: BTreeSet<&str> = BTreeSet::new();
+    for card in cards.iter().filter(|card| in_scope(&card.id)) {
+        declared.insert(&card.id);
+        out.push_str(&format!(
+            "  \"{}\" [label=\"{}\\n{}:{}\\n{}\"];\n",
+            dot_escape(&card.id),
+            dot_escape(&card.id),
+            card.card_type.as_str(),
+            dot_escape(&card.status),
+            dot_escape(&card.title)
+        ));
+    }
+    // Targets outside the live store render as dashed placeholders so the
+    // picture stays honest about edges into the archive (or thin air).
+    for edge in edges.iter().filter(|edge| in_scope(&edge.to)) {
+        if in_scope(&edge.from) && !declared.contains(edge.to.as_str()) {
+            declared.insert(&edge.to);
+            out.push_str(&format!(
+                "  \"{}\" [label=\"{}\" style=dashed];\n",
+                dot_escape(&edge.to),
+                dot_escape(&edge.to)
+            ));
+        }
+    }
+    for edge in edges
+        .iter()
+        .filter(|edge| in_scope(&edge.from) && in_scope(&edge.to))
+    {
+        out.push_str(&format!(
+            "  \"{}\" -> \"{}\" [label=\"{}\"];\n",
+            dot_escape(&edge.from),
+            dot_escape(&edge.to),
+            edge.kind.label()
+        ));
+    }
+    out.push_str("}\n");
+    out
+}
+
+fn dot_escape(text: &str) -> String {
+    text.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
 fn query_matrix(paths: &MaestroPaths) -> Result<()> {
-    let features = feature::list(paths)?;
     let current_commit = git::head(paths.repo_root()).unwrap_or(None);
     let entries = task::load_task_entries(&paths.tasks_dir())?;
+    let features = feature::list_with_entries(paths, &entries)?;
     let mut task_rows = entries
         .iter()
         .map(|entry| matrix_row(&entry.task, current_commit.clone()))
@@ -70,42 +392,62 @@ fn query_matrix(paths: &MaestroPaths) -> Result<()> {
         return Ok(());
     }
 
-    println!("FEATURE\tTASK\tSTATE\tPROOF\tTITLE");
     let mut features_with_tasks = std::collections::HashSet::new();
+    let mut rows: Vec<Vec<String>> = Vec::new();
     for row in &task_rows {
         if row.feature_id != "<none>" {
             features_with_tasks.insert(row.feature_id.clone());
         }
-        println!(
-            "{}\t{}\t{}\t{}\t{}",
-            row.feature_id, row.id, row.state, row.proof, row.title
-        );
+        rows.push(vec![
+            row.feature_id.clone(),
+            row.id.clone(),
+            row.state.to_string(),
+            row.proof.to_string(),
+            row.title.clone(),
+        ]);
     }
 
     for view in features
         .iter()
         .filter(|view| !features_with_tasks.contains(&view.id))
     {
-        println!("{}\t<none>\t<none>\t<none>\t{}", view.id, view.title);
+        rows.push(vec![
+            view.id.clone(),
+            "<none>".to_string(),
+            "<none>".to_string(),
+            "<none>".to_string(),
+            view.title.clone(),
+        ]);
     }
+    print!(
+        "{}",
+        table::render_table(&["FEATURE", "TASK", "STATE", "PROOF", "TITLE"], &rows)
+    );
     Ok(())
 }
 
 fn query_friction(paths: &MaestroPaths) -> Result<()> {
-    let sessions = proof::managed_event_files(paths)?.len();
+    let logs = run::managed_event_logs(paths)?;
+    let sessions = logs.len();
     let mut events = 0_usize;
     let mut user_prompts = 0_usize;
     let mut corrections = 0_usize;
     let mut kinds = BTreeMap::<String, usize>::new();
 
-    run::visit_managed_events(paths, |record| {
+    run::visit_managed_event_logs(&logs, |record| {
         let event = record.event();
-        events += 1;
         let kind = event
             .event_type()
             .or_else(|| event.alias_kind())
             .unwrap_or("<unknown>")
             .to_string();
+        // card_touch is the session->card binding auto-emitted for `maestro
+        // active` (D3), not a session-friction signal; counting it would inflate
+        // the telemetry in step with routine work, so it stays out of every tally.
+        if kind == "card_touch" {
+            return Ok(());
+        }
+        events += 1;
         *kinds.entry(kind.clone()).or_default() += 1;
         if kind == "UserPromptSubmit" {
             user_prompts += 1;
@@ -133,32 +475,8 @@ fn query_friction(paths: &MaestroPaths) -> Result<()> {
     Ok(())
 }
 
-fn query_decisions(paths: &MaestroPaths) -> Result<()> {
-    let entries = decisions::list(paths)?;
-    if entries.is_empty() {
-        println!("no decisions found");
-        return Ok(());
-    }
-
-    println!("ID\tSTATUS\tHOME\tTITLE");
-    for entry in entries {
-        println!(
-            "{}\t{}\t{}\t{}",
-            entry.id,
-            entry.status,
-            decision_home(&entry.source),
-            entry.title
-        );
-    }
-    Ok(())
-}
-
-fn decision_home(source: &decisions::DecisionSource) -> String {
-    match source {
-        decisions::DecisionSource::Global => "global".to_string(),
-        decisions::DecisionSource::Feature { feature_id } => format!("feature:{feature_id}"),
-        decisions::DecisionSource::Legacy => "legacy-md".to_string(),
-    }
+fn query_decisions(paths: &MaestroPaths, all: bool, feature: Option<&str>) -> Result<()> {
+    super::decision::render_decision_list(decisions::list(paths)?, all, feature)
 }
 
 fn query_backlog(paths: &MaestroPaths) -> Result<()> {
@@ -168,10 +486,12 @@ fn query_backlog(paths: &MaestroPaths) -> Result<()> {
         return Ok(());
     }
 
-    println!("ID\tTITLE");
-    for item in backlog.items {
-        println!("{}\t{}", item.id, item.title);
-    }
+    let rows: Vec<Vec<String>> = backlog
+        .items
+        .iter()
+        .map(|item| vec![item.id.clone(), item.title.clone()])
+        .collect();
+    print!("{}", table::render_table(&["ID", "TITLE"], &rows));
     Ok(())
 }
 

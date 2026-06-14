@@ -3,7 +3,8 @@ mod support;
 #[cfg(unix)]
 mod unix {
     use std::fs;
-    use std::path::Path;
+    use std::os::unix::fs::symlink;
+    use std::path::{Path, PathBuf};
     use std::process::Command;
 
     use maestro::domain::install::{
@@ -39,169 +40,164 @@ mod unix {
         .expect("invariant: hook recorder script should be writable");
     }
 
-    fn assert_expected_symlink(repo: &Path, relative_path: &str) {
-        let path = repo.join(relative_path);
-        let metadata = fs::symlink_metadata(&path).expect("invariant: skill mirror should exist");
-        assert!(metadata.file_type().is_symlink());
-        let target = fs::read_link(path).expect("invariant: skill mirror should be readable");
-        assert_eq!(target, Path::new("../.maestro/skills"));
+    fn lock_path(repo: &Path) -> PathBuf {
+        repo.join(".maestro/install-lock.yaml")
     }
 
+    /// Seed an install lock that records a legacy per-repo skills symlink for
+    /// `agent`, the way an older maestro version wrote it, and materialize the
+    /// symlink on disk pointing at the now-removed `../.maestro/skills`.
+    fn seed_legacy_symlink(repo: &Path, agent: InstallAgent, relative_path: &str) {
+        let link = repo.join(relative_path);
+        fs::create_dir_all(link.parent().expect("invariant: symlink path has a parent"))
+            .expect("invariant: agent dir should be creatable");
+        symlink("../.maestro/skills", &link)
+            .expect("invariant: legacy skills symlink should be creatable");
+        let mut lock = InstallLock::empty();
+        let mut install = AgentInstall::new("legacy".to_string());
+        install.insert(relative_path, FileOwnership::symlink("../.maestro/skills"));
+        lock.set_agent(agent, install);
+        lock.save(&lock_path(repo))
+            .expect("invariant: synthetic lock should be writable");
+    }
+
+    fn no_symlink_entry(lock: &InstallLock, agent_key: &str) -> bool {
+        lock.agents[agent_key]
+            .files
+            .values()
+            .all(|ownership| ownership.kind != MirrorKind::Symlink)
+    }
+
+    /// ac-2: skills are global-only, so install creates no per-repo skills
+    /// symlink and records no Symlink-kind entry in the install lock.
     #[test]
-    fn install_creates_claude_and_codex_skill_symlinks_and_lock_records() {
+    fn install_creates_no_skill_symlink_and_records_no_symlink_lock_entry() {
         for (agent, relative_path) in [("claude", ".claude/skills"), ("codex", ".codex/skills")] {
             let temp_dir = TestTempDir::new("maestro-skills-symlink-test");
             init_repo(temp_dir.path());
 
             let output = maestro(&["install", "--agent", agent], temp_dir.path());
-
             assert!(
                 output.status.success(),
                 "stderr: {}",
                 String::from_utf8_lossy(&output.stderr)
             );
-            assert_expected_symlink(temp_dir.path(), relative_path);
 
-            let lock = InstallLock::load(&temp_dir.path().join(".maestro/install-lock.yaml"))
+            assert!(
+                fs::symlink_metadata(temp_dir.path().join(relative_path)).is_err(),
+                "install must not create a per-repo {relative_path} symlink"
+            );
+            let lock = InstallLock::load(&lock_path(temp_dir.path()))
                 .expect("invariant: install lock should load");
-            let ownership = lock.agents[agent]
-                .files
-                .get(relative_path)
-                .expect("invariant: skill symlink ownership should be recorded");
-            assert!(matches!(ownership.kind, MirrorKind::Symlink));
-            assert_eq!(ownership.target.as_deref(), Some("../.maestro/skills"));
+            assert!(
+                no_symlink_entry(&lock, agent),
+                "install lock must record no Symlink-kind entry"
+            );
+            assert!(
+                !lock.agents[agent].files.contains_key(relative_path),
+                "install lock must not record {relative_path}"
+            );
         }
     }
 
+    /// ac-3 (install entry point): a lock that still records a legacy per-repo
+    /// skills symlink has it pruned on install -- the symlink is removed, its lock
+    /// entry dropped, and `.maestro/skills` is not re-created.
     #[test]
-    fn install_refuses_to_overwrite_user_managed_skill_destinations() {
-        for (agent, relative_path, make_dir) in [
-            ("claude", ".claude/skills", true),
-            ("codex", ".codex/skills", false),
+    fn install_prunes_a_legacy_skill_symlink_recorded_in_the_lock() {
+        for (agent_key, agent, relative_path) in [
+            ("claude", InstallAgent::Claude, ".claude/skills"),
+            ("codex", InstallAgent::Codex, ".codex/skills"),
         ] {
             let temp_dir = TestTempDir::new("maestro-skills-symlink-test");
             init_repo(temp_dir.path());
-            let destination = temp_dir.path().join(relative_path);
-            fs::create_dir_all(
-                destination
-                    .parent()
-                    .expect("invariant: skill path should have parent"),
-            )
-            .expect("invariant: skill parent should be creatable");
-            if make_dir {
-                fs::create_dir(&destination)
-                    .expect("invariant: user skill directory should be creatable");
-            } else {
-                fs::write(&destination, "user skills\n")
-                    .expect("invariant: user skill file should be writable");
-            }
+            seed_legacy_symlink(temp_dir.path(), agent, relative_path);
 
-            let output = maestro(&["install", "--agent", agent], temp_dir.path());
-
-            assert!(!output.status.success());
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            assert!(stderr.contains("refusing to overwrite existing"));
-            assert!(!temp_dir.path().join(".maestro/install-lock.yaml").exists());
-            if make_dir {
-                assert!(destination.is_dir());
-            } else {
-                assert_eq!(
-                    fs::read_to_string(destination)
-                        .expect("invariant: user skill file should remain readable"),
-                    "user skills\n"
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn install_refuses_symlinked_canonical_skills_tree() {
-        let temp_dir = TestTempDir::new("maestro-skills-symlink-test");
-        let external = TestTempDir::new("maestro-skills-symlink-external");
-        init_repo(temp_dir.path());
-        fs::create_dir_all(temp_dir.path().join(".maestro"))
-            .expect("invariant: maestro dir should be creatable");
-        std::os::unix::fs::symlink(external.path(), temp_dir.path().join(".maestro/skills"))
-            .expect("invariant: symlinked canonical skills dir should be creatable");
-
-        let output = maestro(&["install", "--agent", "claude"], temp_dir.path());
-
-        assert!(!output.status.success());
-        assert!(String::from_utf8_lossy(&output.stderr).contains("symlink"));
-        assert!(!temp_dir.path().join(".claude/skills").exists());
-    }
-
-    #[test]
-    fn uninstall_removes_owned_expected_symlink() {
-        let temp_dir = TestTempDir::new("maestro-skills-symlink-test");
-        init_repo(temp_dir.path());
-        let install = maestro(&["install", "--agent", "claude"], temp_dir.path());
-        assert!(install.status.success());
-
-        let uninstall = maestro(&["uninstall", "--agent", "claude"], temp_dir.path());
-
-        assert!(
-            uninstall.status.success(),
-            "stderr: {}",
-            String::from_utf8_lossy(&uninstall.stderr)
-        );
-        assert!(fs::symlink_metadata(temp_dir.path().join(".claude/skills")).is_err());
-        assert!(!temp_dir.path().join(".maestro/install-lock.yaml").exists());
-    }
-
-    #[test]
-    fn uninstall_preserves_changed_symlink_and_user_managed_tree() {
-        let temp_dir = TestTempDir::new("maestro-skills-symlink-test");
-        init_repo(temp_dir.path());
-        let install = maestro(&["install", "--agent", "codex"], temp_dir.path());
-        assert!(install.status.success());
-        fs::remove_file(temp_dir.path().join(".codex/skills"))
-            .expect("invariant: installed skill symlink should be removable");
-        fs::create_dir_all(temp_dir.path().join("user-skills"))
-            .expect("invariant: changed skill target should be creatable");
-        std::os::unix::fs::symlink("../user-skills", temp_dir.path().join(".codex/skills"))
-            .expect("invariant: changed skill symlink should be creatable");
-
-        let uninstall = maestro(&["uninstall", "--agent", "codex"], temp_dir.path());
-
-        assert!(
-            uninstall.status.success(),
-            "stderr: {}",
-            String::from_utf8_lossy(&uninstall.stderr)
-        );
-        let changed_target = fs::read_link(temp_dir.path().join(".codex/skills"))
-            .expect("invariant: changed symlink should remain");
-        assert_eq!(changed_target, Path::new("../user-skills"));
-
-        fs::remove_file(temp_dir.path().join(".codex/skills"))
-            .expect("invariant: changed symlink should be removable");
-        fs::create_dir(temp_dir.path().join(".codex/skills"))
-            .expect("invariant: user skill tree should be creatable");
-        fs::write(temp_dir.path().join(".codex/skills/SKILL.md"), "user\n")
-            .expect("invariant: user skill file should be writable");
-        let mut lock = InstallLock::empty();
-        let previous_lock = InstallLock::load(&temp_dir.path().join(".maestro/install-lock.yaml"))
-            .unwrap_or_else(|_| InstallLock::empty());
-        if let Some(install) = previous_lock.agents.get("codex").cloned() {
-            lock.set_agent(InstallAgent::Codex, install);
-        } else {
-            let mut install = AgentInstall::new("test".to_string());
-            install.insert(
-                ".codex/skills",
-                FileOwnership::symlink("../.maestro/skills"),
+            let output = maestro(&["install", "--agent", agent_key], temp_dir.path());
+            assert!(
+                output.status.success(),
+                "stderr: {}",
+                String::from_utf8_lossy(&output.stderr)
             );
-            lock.set_agent(InstallAgent::Codex, install);
-        }
-        lock.save(&temp_dir.path().join(".maestro/install-lock.yaml"))
-            .expect("invariant: lock should be writable");
 
-        let second_uninstall = maestro(&["uninstall", "--agent", "codex"], temp_dir.path());
+            assert!(
+                fs::symlink_metadata(temp_dir.path().join(relative_path)).is_err(),
+                "install must prune the legacy {relative_path} symlink"
+            );
+            let lock = InstallLock::load(&lock_path(temp_dir.path()))
+                .expect("invariant: install lock should load");
+            assert!(
+                no_symlink_entry(&lock, agent_key),
+                "the legacy Symlink lock entry must be dropped"
+            );
+            assert!(
+                !temp_dir.path().join(".maestro/skills").exists(),
+                "install must not re-create .maestro/skills"
+            );
+        }
+    }
+
+    /// ac-3 (update entry point): `maestro upgrade` prunes the same legacy symlink.
+    /// `update` never rewrites the per-agent lock, so this exercises the
+    /// standalone migration the upgrade flow calls, not the install rewrite.
+    #[test]
+    fn upgrade_prunes_a_legacy_skill_symlink_recorded_in_the_lock() {
+        let temp_dir = TestTempDir::new("maestro-skills-symlink-test");
+        init_repo(temp_dir.path());
+        seed_legacy_symlink(temp_dir.path(), InstallAgent::Claude, ".claude/skills");
+
+        let output = maestro(&["upgrade"], temp_dir.path());
+        assert!(
+            output.status.success(),
+            "stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
 
         assert!(
-            second_uninstall.status.success(),
-            "stderr: {}",
-            String::from_utf8_lossy(&second_uninstall.stderr)
+            fs::symlink_metadata(temp_dir.path().join(".claude/skills")).is_err(),
+            "upgrade must prune the legacy .claude/skills symlink"
         );
-        assert!(temp_dir.path().join(".codex/skills/SKILL.md").is_file());
+        let lock = InstallLock::load(&lock_path(temp_dir.path()))
+            .expect("invariant: install lock should load");
+        assert!(
+            no_symlink_entry(&lock, "claude"),
+            "the legacy Symlink lock entry must be dropped on upgrade"
+        );
+        assert!(
+            !temp_dir.path().join(".maestro/skills").exists(),
+            "upgrade must not re-create .maestro/skills"
+        );
+    }
+
+    /// Migration ownership safety: the lock records a maestro symlink, but on disk
+    /// the user repointed it elsewhere. Ownership no longer matches, so migration
+    /// drops the stale lock entry but leaves the user's symlink in place.
+    #[test]
+    fn migration_preserves_a_user_repointed_symlink() {
+        let temp_dir = TestTempDir::new("maestro-skills-symlink-test");
+        init_repo(temp_dir.path());
+        fs::create_dir_all(temp_dir.path().join("user-skills"))
+            .expect("invariant: user skill target should be creatable");
+        fs::create_dir_all(temp_dir.path().join(".codex"))
+            .expect("invariant: codex dir should be creatable");
+        symlink("../user-skills", temp_dir.path().join(".codex/skills"))
+            .expect("invariant: user symlink should be creatable");
+        let mut lock = InstallLock::empty();
+        let mut install = AgentInstall::new("legacy".to_string());
+        install.insert(".codex/skills", FileOwnership::symlink("../.maestro/skills"));
+        lock.set_agent(InstallAgent::Codex, install);
+        lock.save(&lock_path(temp_dir.path()))
+            .expect("invariant: synthetic lock should be writable");
+
+        let output = maestro(&["install", "--agent", "codex"], temp_dir.path());
+        assert!(
+            output.status.success(),
+            "stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+
+        let target = fs::read_link(temp_dir.path().join(".codex/skills"))
+            .expect("invariant: user-repointed symlink should remain");
+        assert_eq!(target, Path::new("../user-skills"));
     }
 }

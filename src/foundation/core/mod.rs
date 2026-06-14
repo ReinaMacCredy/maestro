@@ -11,4 +11,5 @@ pub mod retention;
 pub mod safe_write;
 pub mod schema;
 pub mod slug;
+pub mod table;
 pub mod time;

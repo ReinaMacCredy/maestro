@@ -1,0 +1,27 @@
+# Schema contract for the card envelope family (WS5 / D6.2-B).
+# src/domain/schema_contracts validates this pack against the Rust constants;
+# any edit trips tests/resources_version_guard.rs so it is acknowledged.
+family: card
+contracts:
+  - name: card
+    schema_version: maestro.card.v1
+    stamp: file               # every card document/entry stamps its own envelope version
+    carrier: file
+    format: yaml
+    home: .maestro/cards/<id>/card.yaml, pooled task.yaml files, and roster entries
+    model: src/domain/card/schema.rs::Card
+    fields:
+      - schema_version
+      - id
+      - type
+      - title
+      - status
+      - parent
+      - deps
+      - lane
+      - claimed_by
+      - claimed_at
+      - created_at
+      - updated_at
+      - description
+      - extra

@@ -40,7 +40,7 @@ fn root_help_lists_top_level_commands() {
             "Usage: maestro",
             "init",
             "install",
-            "update",
+            "upgrade",
             "sync",
             "uninstall",
             "doctor",
@@ -50,6 +50,18 @@ fn root_help_lists_top_level_commands() {
             "event",
             "feature",
             "decision",
+            "ready",
+            "list",
+            "dep",
+            "active",
+            "link",
+            "archive",
+            "claim",
+            "note",
+            "create",
+            "show",
+            "update",
+            "close",
             "harness",
             "query",
             "mcp",
@@ -76,7 +88,7 @@ fn top_level_help_fills_descriptions_and_examples() {
     );
 
     // The refresh trio documents real invocations under an Examples block.
-    for command in ["init", "sync", "update"] {
+    for command in ["init", "sync", "upgrade"] {
         let help = maestro(&[command, "--help"]);
         assert!(
             help.contains("Examples:") && help.contains(&format!("maestro {command}")),
@@ -91,7 +103,8 @@ fn root_about_strings_name_every_subcommand() {
     assert_contains_all(
         &maestro(&["--help"]),
         &[
-            "Create, show, and list decision records in .maestro/decisions/",
+            "Create, show, and list decision cards in the card store",
+            "Author non-blocking related links between cards",
             "List, show, apply, unapply, dismiss, and measure harness improvement suggestions",
             "Query computed read models (matrix, friction, decisions, proof, backlog)",
             "Run or inspect the MCP server (serve, stdin, tools, list)",
@@ -207,6 +220,60 @@ fn nested_help_lists_section_38_command_tree() {
         ],
     );
     assert_contains_all(&maestro(&["decision", "--help"]), &["new", "show", "list"]);
+    assert_contains_all(
+        &maestro(&["ready", "--help"]),
+        &["Examples:", "maestro ready"],
+    );
+    assert_contains_all(
+        &maestro(&["list", "--help"]),
+        &[
+            "--parent",
+            "--type",
+            "--assignee",
+            "--status",
+            "--grep",
+            "--archived",
+        ],
+    );
+    assert_contains_all(&maestro(&["dep", "--help"]), &["add", "remove"]);
+    assert_contains_all(
+        &maestro(&["active", "--help"]),
+        &["--all", "Examples:", "maestro active"],
+    );
+    let link_help = maestro(&["link", "--help"]);
+    assert_contains_all(&link_help, &["add", "remove"]);
+    assert!(
+        !link_help.contains("list"),
+        "link v1 exposes add/remove only, not list:\n{link_help}"
+    );
+    assert_contains_all(
+        &maestro(&["link", "add", "--help"]),
+        &["CARD-A", "CARD-B", "Examples:", "maestro link add"],
+    );
+    assert_contains_all(
+        &maestro(&["link", "remove", "--help"]),
+        &["FROM", "TO", "Examples:", "maestro link remove"],
+    );
+    assert_contains_all(
+        &maestro(&["archive", "--help"]),
+        &["FEATURE", "Examples:", "maestro archive"],
+    );
+    assert_contains_all(
+        &maestro(&["claim", "--help"]),
+        &["ID", "Examples:", "maestro claim"],
+    );
+    assert_contains_all(
+        &maestro(&["note", "--help"]),
+        &["ID", "TEXT", "Examples:", "maestro note"],
+    );
+    assert_contains_all(
+        &maestro(&["dep", "add", "--help"]),
+        &["CHILD", "PARENT", "Examples:", "maestro dep add"],
+    );
+    assert_contains_all(
+        &maestro(&["dep", "remove", "--help"]),
+        &["CHILD", "PARENT", "Examples:", "maestro dep remove"],
+    );
     assert_contains_all(
         &maestro(&["harness", "--help"]),
         &["list", "show", "apply", "unapply", "measure"],

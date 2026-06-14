@@ -1,0 +1,108 @@
+- schema_version: maestro.card.v1
+  id: dec-bare-list-defaults-to-live-cards-hide-a25d
+  type: decision
+  title: Bare list defaults to live cards (hide coarse Closed); --all restores
+  status: locked
+  parent: read-output-budget-for-agent-facing-read-verbs
+  created_at: 2026-06-14T09:20:26.136Z
+  updated_at: 2026-06-14T09:20:26.155Z
+  description: 'Bare ''maestro list''/''card list'' (no filters) prints every non-archived card (145 in the live repo, 146 lines/28KB), ~130 of them terminal (shipped/locked/verified/rejected/dismissed). Agents re-ingest the full store on every orientation; cost grows with repo age. Hook: coarse_of() (src/domain/card/query.rs:56) already buckets status into Open/InProgress/Closed -- ''live'' = not Closed, no new classification. Precedent: MCP maestro_task_list already hides terminal unless all=true (tools.rs:29); feature list/task list already narrow. Consumer enumeration before changing the default: stdout consumers are tests (card_commands_integration.rs:714/748 list --json, card_query_e2e.rs:164 list --type task --json -- filtered/structural; card_commands_integration.rs:1113 asserts a ''next: maestro list --grep'' pointer string) plus CLI hint strings that all point to FILTERED list; no maestro_card_list MCP tool exists; embedded skills steer agents to ''maestro ready'' and filtered ''list --parent/--type'', never bare list. Adversarial review (advisor) endorsed this as the right keystone and required exactly this consumer + skill-orientation check, now done. Note: list has no --all flag today (only --archived); this adds one.'
+  extra:
+    locked_at: 2026-06-14T09:20:26.155Z
+    decision: 'Bare ''maestro list''/''card list'' defaults to coarse Open + InProgress cards only (proposed/draft/exploring/ready/open + in_progress/needs_verification/accepted), non-archived. Add a --all flag meaning ''include coarse Closed (terminal-status) cards too'', non-archived. --archived stays orthogonal (includes archived); --all --archived = everything. Existing --status/--type/--parent/--assignee/--grep filters unchanged and, when supplied, govern the result (an explicit --status closed shows closed without needing --all). Header line carries the computed delta + the single pointer, matching the shipped write-confirm convention: ''N live (M closed hidden; --all)''; when nothing is hidden, just ''N cards:''. Implementation reuses coarse_of(); the trim is in the list filter/render path (card/query.rs filter + card.rs render). ~146 lines/28KB -> ~15 lines/~3KB. NOT applied to ''decision list'' (separate fork A3: a decision''s resting state is locked=Closed, so listing locked decisions is that verb''s job; its bloat is global-scope, not terminal-junk).'
+    preview: |-
+      maestro list   (bare, AFTER)
+        15 live (130 closed hidden; --all to show)
+          read-output-budget  feat  in_progress
+          card-a177b3         task  ready
+          card-aa4fa7         dec   open
+          ... 12 more live ...
+        ~15 lines / ~3 KB   (was 146 / 28 KB)
+
+        --all          -> all statuses, non-archived (old default)
+        --archived     -> include archived (orthogonal)
+        --status closed-> explicit filter still works without --all
+        NOT applied to 'decision list' (fork A3: locked is content)
+    rejected:
+    - Cap first N rows + overflow pointer -- bounds size but mixes terminal cards into the default and the cutoff is arbitrary; live work can fall below the cut. With the liveness filter the live set is ~15, so no cap is needed (validates dropping a separate budget/cap fork).
+    - Header + counts only, keep printing all 145 rows -- non-breaking but barely reduces tokens; the 28KB dump is the bloat being removed.
+    - Status quo (no default narrowing) -- this IS the re-ingested bloat; defeats the goal.
+    - 'Apply hide-Closed uniformly to decision list too -- wrong there: locked decisions are the content that verb exists to show; handled as a distinct scope fork (A3).'
+- schema_version: maestro.card.v1
+  id: dec-list-json-emits-a-compact-single-line-de48
+  type: decision
+  title: list --json emits a compact single-line array
+  status: superseded
+  parent: read-output-budget-for-agent-facing-read-verbs
+  created_at: 2026-06-14T09:21:52.464Z
+  updated_at: 2026-06-14T09:21:52.490Z
+  description: 'list --json is pretty-printed (1456 lines/44KB for 145 cards), each card a multi-line object. It inherits A1''s live-only default (filter runs before serialization), so bare --json already drops to ~15 cards with --all to restore; this fork is purely the serialization shape. Consumer constraint: existing tests parse it with serde_json::from_str(stdout) (card_commands_integration.rs:714/748, card_query_e2e.rs:166) expecting ONE valid JSON document (an array) -- NDJSON (one object per line) would break from_str. Precedent: show --compact-json already emits compact JSON.'
+  extra:
+    locked_at: 2026-06-14T09:21:52.490Z
+    decision: list --json and card list --json serialize as a COMPACT single-line JSON array (no indentation/newlines between elements), inheriting A1's live-only default with --all to include Closed. This stays one valid JSON document so serde_json::from_str(stdout) keeps working unchanged, and matches the existing show --compact-json convention. The element set is governed by the same filters as A1 (bare = live; --all/--status/--type/etc. as supplied).
+    superseded_by: dec-list-json-element-set-follows-a1-slice-f9d2
+    preview: |-
+      list --json   (AFTER: compact array)
+      [{"id":"read-output-budget","type":"feature","status":"in_progress",...},{"id":"card-a177b3","status":"ready",...}, ...15 live... ]
+
+        1 line, ONE valid JSON array -> from_str(stdout) safe
+        consistent with show --compact-json
+        element set = A1 default (bare=live; --all restores)
+    rejected:
+    - NDJSON one-object-per-line -- most shell-ergonomic but not a single JSON document; breaks the from_str(stdout) parse the tests and any array-consuming caller rely on.
+    - Keep pretty-printed, just inherit A1's filter -- valid JSON but retains per-card indentation whitespace; A1 cuts the count but the shape stays verbose.
+- schema_version: maestro.card.v1
+  id: dec-list-json-element-set-follows-a1-slice-f9d2
+  type: decision
+  title: list --json element set follows A1 slice; encoding ceded to dense-json sibling
+  status: locked
+  parent: read-output-budget-for-agent-facing-read-verbs
+  created_at: 2026-06-14T09:26:58.151Z
+  updated_at: 2026-06-14T09:26:58.178Z
+  description: 'Cross-card reconciliation. Sibling card dense-json-encoding-for-multi-card-read-contracts (peer session, linked) owns the ENCODING axis for multi-card --json (list/ready/status, maybe resume): the serialization shape (to_string_pretty -> dense single-line/NDJSON). It explicitly cedes SLICE / which-cards-appear / default-filtering to THIS card. My earlier lock dec-list-json-emits-a-compact-single-line-de48 chose ''compact single-line array'' -- a SHAPE choice on the peer''s axis, i.e. overreach. Corrected here by axis: this card owns which cards the encoder receives; the peer owns how they are encoded. Passed the peer a consumer finding bearing on THEIR pick: tests parse list --json via serde_json::from_str(stdout) (card_commands_integration.rs:714/748, card_query_e2e.rs:166) expecting one JSON document, so a compact array keeps from_str working while NDJSON breaks it -- but the shape decision is now theirs.'
+  extra:
+    locked_at: 2026-06-14T09:26:58.178Z
+    decision: 'list --json (and ready/status --json) emit the SAME element set as the A1 live-slice default (dec-bare-list-defaults-to-live-cards-hide-a25d): bare = coarse Open+InProgress non-archived, --all includes Closed, explicit --status/--type/--parent/--assignee/--grep as supplied -- format-agnostic, applied before serialization. The serialization ENCODING (compact single-line array vs NDJSON vs pretty) is OWNED by sibling card dense-json-encoding-for-multi-card-read-contracts and is NOT decided on this card. Implementation boundary: this card''s slice work touches only the selection/filter that feeds the JSON encoder; it does NOT modify render_list_json''s encoding. Supersedes dec-list-json-emits-a-compact-single-line-de48, whose compact-array choice was on the peer''s encoding axis.'
+    supersedes:
+    - dec-list-json-emits-a-compact-single-line-de48
+    preview: |-
+      AXIS SPLIT on list --json (linked sibling cards)
+
+        THIS card (slice):       which cards reach the encoder
+          bare  -> live only (A1);  --all -> + Closed
+        PEER card (encoding):    how those cards serialize
+          to_string_pretty -> dense single-line / NDJSON
+
+        boundary: filter/selection (mine) runs BEFORE
+                  render_list_json encoder (theirs) -> compose, no collision
+        supersedes dec-list-json-emits-a-compact-single-line-de48 (encoding pick = peer's axis)
+    rejected:
+    - Keep dec-list-json-emits-a-compact-single-line-de48 (decide the encoding shape on this card) -- it sits on the peer card's encoding axis; the linked peer owns it. Splitting by fix-axis (slice here, encoding there) is the agreed coordination and keeps both fixes composable on one render path.
+- schema_version: maestro.card.v1
+  id: dec-decision-list-defaults-to-a-recent-n-4a70
+  type: decision
+  title: decision list defaults to a recent-N window; --all + --feature escapes
+  status: locked
+  parent: read-output-budget-for-agent-facing-read-verbs
+  created_at: 2026-06-14T09:29:58.009Z
+  updated_at: 2026-06-14T09:29:58.030Z
+  description: 'decision list / query decisions take no scope args and dump all decisions globally (80 in the live repo: 74 locked, 3 open, 4 superseded; 80 lines/14KB), growing with the project. Hide-terminal (A1) does NOT apply: a decision''s resting state is locked (=coarse Closed) and listing locked decisions is this verb''s job, so the lever is relevance scoping, not liveness. Shared render: both decision.rs:167 list_decisions (-> decisions::list_tolerant) and query.rs:477 render the same table. MCP coupling: maestro_decision_list shells to ''cli decision list'' (tools.rs:119), so it inherits this default -- the MCP tool will need an ''all'' param to reach full history, mirroring maestro_task_list''s existing ''all''. NOT in the linked peer''s encoding scope (decision list is a text table, not a multi-card --json contract). User picked recent-N (predictable, always non-empty, no session-context inference) over current-feature-default and global+filter-only.'
+  extra:
+    locked_at: 2026-06-14T09:29:58.030Z
+    decision: 'Bare decision list / query decisions default to the N=20 most-recent decisions, ordered by most-recent activity timestamp descending (locked_at for locked/superseded, else created_at). Add --all (full history, all decisions) and --feature <id> (scope to one feature''s decisions). Header carries the computed delta + the escapes: ''N of M recent (--all for full; --feature <id> to scope)'' when truncated; just ''M decisions:'' when M<=20. The shared renderer is reused so both verbs behave identically. MCP maestro_decision_list gains an ''all'' boolean param (mirroring maestro_task_list) to reach full history; its default inherits the recent-20 window.'
+    preview: |-
+      decision list  (AFTER: recent-20 window)
+        20 of 80 recent  (--all for full; --feature <id> to scope)
+          dec-yaml-to-sqlite-storage-pivot   locked
+          dec-which-bundled-skill-carries..  locked
+          ... 18 newest by activity date ...
+        ~21 lines (was 80 / 14 KB)
+
+        --all          -> all 80 decisions
+        --feature <id> -> that feature's decisions only
+        MCP maestro_decision_list gains an 'all' param (like task_list)
+        applies to query decisions too (shared render)
+    rejected:
+    - Current-feature default (scope to the session's bound card/feature, recent-N fallback when unbound) -- most relevant for a resuming agent, but two behaviors + an unbound fallback add complexity, and global/cross-feature decisions vanish from the default; recent-N is simpler and always useful.
+    - Global default + --feature filter + tighter HOME column only -- non-breaking but the count still grows unbounded with the project; trims bytes per row, not the re-ingested count.
+    - 'Apply A1 hide-Closed here -- wrong: locked is a decision''s content state, not terminal junk; would empty the list.'

@@ -1,0 +1,23 @@
+- schema_version: maestro.card.v1
+  id: card-27fd4a
+  type: decision
+  title: How strictly to check decision references
+  status: locked
+  parent: decision-ref-integrity
+  created_at: 2026-06-07T15:10:45.483Z
+  updated_at: 2026-06-07T15:10:45.503Z
+  description: Pre-v2 store deletion silently dropped ~22 locked decisions; v2 shrank the blast radius (per-feature stores travel with the feature dir) but dangling pointers in live artifacts still go unnoticed. Checking can be doctor-only, read-time-enforced, or skipped.
+  extra:
+    id: card-27fd4a
+    title: How strictly to check decision references
+    status: locked
+    feature: decision-ref-integrity
+    context: Pre-v2 store deletion silently dropped ~22 locked decisions; v2 shrank the blast radius (per-feature stores travel with the feature dir) but dangling pointers in live artifacts still go unnoticed. Checking can be doctor-only, read-time-enforced, or skipped.
+    decision: 'doctor-only warning over structured sources (notes.md pointer lines + supersedes: fields), warning severity with file + id + fix hint; same pattern as the shipped L6 ref integrity for tasks/features'
+    rejected:
+    - 'read/write-time enforcement in decision verbs: blocks workflows on historical text and adds per-verb cost'
+    - 'prose-wide decision-NN regex over spec.md/qa.md: false-positive prone (hypothetical mentions, examples)'
+    - 'not building: the class already bit once (22 decisions vanished unnoticed)'
+    preview: 'doctor -> warning: .maestro/features/x/notes.md references decision-012 which resolves in no decision store; fix: restore the store from backup or correct the pointer'
+    created_at: 2026-06-07T15:10:45.483Z
+    locked_at: 2026-06-07T15:10:45.503Z

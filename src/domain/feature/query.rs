@@ -40,9 +40,18 @@ pub fn count_tasks_for_feature_in_entries(
 
 /// Count tasks for every feature by scanning standalone and feature-owned task roots once.
 pub fn count_tasks_by_feature(tasks_dir: &Path) -> Result<HashMap<String, FeatureTaskCounts>> {
+    Ok(count_tasks_by_feature_in_entries(&task::load_task_entries(
+        tasks_dir,
+    )?))
+}
+
+/// Count tasks for every feature from an already-loaded task entry set.
+pub fn count_tasks_by_feature_in_entries(
+    entries: &[TaskEntry],
+) -> HashMap<String, FeatureTaskCounts> {
     let mut counts: HashMap<String, FeatureTaskCounts> = HashMap::new();
 
-    for task_entry in task::load_task_entries(tasks_dir)? {
+    for task_entry in entries {
         if let Some(feature_id) = task_entry.task.feature_id.as_deref() {
             let counts_entry = counts.entry(feature_id.to_string()).or_default();
             counts_entry.total += 1;
@@ -52,7 +61,7 @@ pub fn count_tasks_by_feature(tasks_dir: &Path) -> Result<HashMap<String, Featur
         }
     }
 
-    Ok(counts)
+    counts
 }
 
 /// Ids of the feature's child tasks that are still live, sorted.
@@ -61,15 +70,23 @@ pub fn count_tasks_by_feature(tasks_dir: &Path) -> Result<HashMap<String, Featur
 /// of cancel cascade) while it is `draft/exploring/ready/in_progress/
 /// needs_verification`. `verified` and the terminal-settled states do not.
 pub fn live_child_task_ids(tasks_dir: &Path, feature_id: &str) -> Result<Vec<String>> {
+    Ok(live_child_task_ids_in_entries(
+        &task::load_task_entries(tasks_dir)?,
+        feature_id,
+    ))
+}
+
+/// Ids of the feature's live child tasks from an already-loaded task entry set, sorted.
+pub fn live_child_task_ids_in_entries(entries: &[TaskEntry], feature_id: &str) -> Vec<String> {
     let mut ids = Vec::new();
-    for projection in task::load_feature_task_projections(tasks_dir)? {
-        if projection.feature_id.as_deref() != Some(feature_id) {
+    for task_entry in entries {
+        if task_entry.task.feature_id.as_deref() != Some(feature_id) {
             continue;
         }
-        if projection.state.as_ref().is_some_and(TaskState::is_live) {
-            ids.push(projection.id);
+        if task_entry.task.state.is_live() {
+            ids.push(task_entry.task.id.clone());
         }
     }
     ids.sort();
-    Ok(ids)
+    ids
 }

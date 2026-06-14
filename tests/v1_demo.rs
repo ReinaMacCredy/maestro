@@ -1,3 +1,4 @@
+pub mod card_support;
 mod support;
 
 use std::fs;
@@ -5,6 +6,7 @@ use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
+use card_support::id_by_title;
 use serde_json::Value;
 use support::TestTempDir;
 
@@ -67,20 +69,21 @@ fn v1_demo_runs_core_flow_watch_query_and_mcp() {
     run_with_env(repo, &["install", "--agent", "claude"], &envs);
     run_with_env(repo, &["install", "--agent", "codex"], &envs);
     run_with_env(repo, &["task", "create", "Demo task"], &envs);
+    let id = id_by_title(repo, "Demo task");
     run_with_env(
         repo,
-        &["task", "set", "task-001", "--check", "demo task verified"],
+        &["task", "set", &id, "--check", "demo task verified"],
         &envs,
     );
-    run_with_env(repo, &["task", "explore", "task-001"], &envs);
-    run_with_env(repo, &["task", "accept", "task-001"], &envs);
-    run_with_env(repo, &["task", "claim", "task-001"], &envs);
+    run_with_env(repo, &["task", "explore", &id], &envs);
+    run_with_env(repo, &["task", "accept", &id], &envs);
+    run_with_env(repo, &["task", "claim", &id], &envs);
     run_with_env(
         repo,
         &[
             "task",
             "complete",
-            "task-001",
+            &id,
             "--summary",
             "done",
             "--claim",
@@ -96,8 +99,8 @@ fn v1_demo_runs_core_flow_watch_query_and_mcp() {
     assert!(watch.contains("Demo task"));
     assert!(watch.contains("verified"));
 
-    let proof = run_with_env(repo, &["query", "proof", "task-001"], &envs);
-    assert!(proof.contains("proof task-001: accepted"));
+    let proof = run_with_env(repo, &["query", "proof", &id], &envs);
+    assert!(proof.contains(&format!("proof {id}: accepted")));
 
     let mut command = Command::new(env!("CARGO_BIN_EXE_maestro"));
     command

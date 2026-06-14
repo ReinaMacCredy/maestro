@@ -34,6 +34,16 @@ impl MaestroPaths {
         self.maestro_dir().join("harness")
     }
 
+    /// Return the code playbook directory (`.maestro/playbook`).
+    ///
+    /// Holds the per-language styleguides surfaced to agents on demand: a
+    /// `PLAYBOOK.md` anchor whose frontmatter `version:` gates the whole folder,
+    /// plus one `<lang>.md` per language. Extracted on init/install/sync like the
+    /// harness protocol.
+    pub fn playbook_dir(&self) -> PathBuf {
+        self.maestro_dir().join("playbook")
+    }
+
     /// Return the feature artifact directory.
     pub fn features_dir(&self) -> PathBuf {
         self.maestro_dir().join("features")
@@ -64,6 +74,16 @@ impl MaestroPaths {
         self.maestro_dir().join("tasks")
     }
 
+    /// Return the card artifact directory (`.maestro/cards`).
+    ///
+    /// Each card owns a directory `cards/<id>/` holding `card.yaml`; feature
+    /// cards carry `spec.md`/`notes.md` as sidecar prose. This is the single
+    /// flat store that the card model folds features/tasks/harness-backlog/
+    /// decisions into (SPEC-beads-model.md).
+    pub fn cards_dir(&self) -> PathBuf {
+        self.maestro_dir().join("cards")
+    }
+
     /// Return the run artifact directory.
     pub fn runs_dir(&self) -> PathBuf {
         self.maestro_dir().join("runs")
@@ -77,14 +97,20 @@ impl MaestroPaths {
         self.maestro_dir().join("archive")
     }
 
-    /// Return the archived-tasks directory (`.maestro/archive/tasks`).
-    pub fn archive_tasks_dir(&self) -> PathBuf {
-        self.archive_dir().join("tasks")
+    /// Return the archived-cards directory (`.maestro/archive/cards`).
+    ///
+    /// The card-model archive sibling of `cards/`; `archive <feature>` moves the
+    /// feature card and its `parent=<feature>` children here as whole directories
+    /// with digest entries recorded in `INDEX.md`.
+    pub fn archive_cards_dir(&self) -> PathBuf {
+        self.archive_dir().join("cards")
     }
 
-    /// Return the archived-features directory (`.maestro/archive/features`).
-    pub fn archive_features_dir(&self) -> PathBuf {
-        self.archive_dir().join("features")
+    /// Return the archive lid (`.maestro/archive/cards/INDEX.md`): one digest
+    /// line per archived card, appended by the archive writers and read back
+    /// by `resume`'s memory section.
+    pub fn archive_index_file(&self) -> PathBuf {
+        self.archive_cards_dir().join("INDEX.md")
     }
 
     /// Return the backup artifact directory.
@@ -92,9 +118,31 @@ impl MaestroPaths {
         self.maestro_dir().join("backups")
     }
 
+    /// Return the local index directory (`.maestro/index`).
+    ///
+    /// Machine-local derived state (gitignored, like `runs/`): created on
+    /// demand by the text index, never by `init`, and safe to delete --
+    /// `maestro index rebuild` or the next indexed read recreates it.
+    pub fn index_dir(&self) -> PathBuf {
+        self.maestro_dir().join("index")
+    }
+
+    /// Return the text index file behind `list --grep` (SPEC-archive-memory-2 R6).
+    pub fn text_index_file(&self) -> PathBuf {
+        self.index_dir().join("text.json")
+    }
+
     /// Return the install lockfile path.
     pub fn install_lock_file(&self) -> PathBuf {
         self.maestro_dir().join("install-lock.yaml")
+    }
+
+    /// Return the linked-card messaging directory (`.maestro/channels`).
+    ///
+    /// Machine-local conversation state (gitignored, like `runs/`): created on
+    /// demand by the first `msg send`, never by `init`.
+    pub fn channels_dir(&self) -> PathBuf {
+        self.maestro_dir().join("channels")
     }
 }
 

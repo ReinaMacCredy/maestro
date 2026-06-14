@@ -1,11 +1,11 @@
 use std::env;
-use std::fmt::Write as _;
+use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use serde::Serialize;
 
-use crate::domain::{decisions, feature, proof, task};
+use crate::domain::{card, decisions, feature, proof, task};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::safe_write::write_string_atomic;
 use crate::foundation::core::time::utc_now_timestamp;
@@ -99,6 +99,7 @@ fn build_resume_report(
         next,
         required_reads,
         guardrails,
+        memory: memory_lines(paths),
         source_refs,
         write_path,
         full,
@@ -311,13 +312,11 @@ fn source_refs(
         refs.push(display_repo_relative(paths, task_yaml));
     }
     if let Some(feature) = feature {
+        let card_yaml = card::store::card_path(paths, &feature.id);
+        refs.push(display_repo_relative(paths, &card_yaml));
         refs.push(display_repo_relative(
             paths,
-            &paths.features_dir().join(&feature.id).join("feature.yaml"),
-        ));
-        refs.push(display_repo_relative(
-            paths,
-            &paths.features_dir().join(&feature.id).join("notes.md"),
+            &card_yaml.with_file_name("notes.md"),
         ));
     }
     Ok(refs)
@@ -382,32 +381,55 @@ fn handoff_prompt(
     )
 }
 
+/// The last few archive lid lines (SPEC-archive-memory-2 R3): one file read,
+/// newest last, bullet prefix stripped for the renderer. No INDEX.md (nothing
+/// archived yet) is an empty section, never an error.
+fn memory_lines(paths: &MaestroPaths) -> Vec<String> {
+    let Ok(contents) = fs::read_to_string(paths.archive_index_file()) else {
+        return Vec::new();
+    };
+    let lid: Vec<&str> = contents
+        .lines()
+        .filter(|line| line.starts_with("- "))
+        .collect();
+    lid.iter()
+        .rev()
+        .take(3)
+        .rev()
+        .map(|line| line.trim_start_matches("- ").to_string())
+        .collect()
+}
+
 fn render_resume_report(report: &ResumeReport) -> String {
     let mut out = String::new();
-    writeln!(&mut out, "objective: {}", report.objective).unwrap();
-    writeln!(&mut out, "state: {}", report.state).unwrap();
+    push_line(&mut out, format!("objective: {}", report.objective));
+    push_line(&mut out, format!("state: {}", report.state));
     if report.blockers.is_empty() {
-        writeln!(&mut out, "blockers: none").unwrap();
+        push_line(&mut out, "blockers: none");
     } else {
-        writeln!(&mut out, "blockers:").unwrap();
+        push_line(&mut out, "blockers:");
         for blocker in &report.blockers {
-            writeln!(&mut out, "  - {blocker}").unwrap();
+            push_line(&mut out, format!("  - {blocker}"));
         }
     }
-    writeln!(&mut out, "next:").unwrap();
-    writeln!(&mut out, "  {}", report.next).unwrap();
+    push_line(&mut out, "next:");
+    push_line(&mut out, format!("  {}", report.next));
     write_list(&mut out, "required reads", &report.required_reads);
     write_list(&mut out, "guardrails", &report.guardrails);
+    if !report.memory.is_empty() {
+        write_list(&mut out, "memory", &report.memory);
+        push_line(&mut out, "  full lid: .maestro/archive/cards/INDEX.md");
+    }
     if let Some(full) = &report.full {
         write_list(&mut out, "prior decisions", &full.prior_decisions);
         write_list(&mut out, "last verified tasks", &full.last_verified_tasks);
         if let Some(proof) = &full.proof {
-            writeln!(&mut out, "proof: {proof}").unwrap();
+            push_line(&mut out, format!("proof: {proof}"));
         }
         write_list(&mut out, "file scope", &full.file_scope);
         if let Some(prompt) = &full.prompt {
-            writeln!(&mut out, "handoff prompt:").unwrap();
-            writeln!(&mut out, "  {prompt}").unwrap();
+            push_line(&mut out, "handoff prompt:");
+            push_line(&mut out, format!("  {prompt}"));
         }
         write_list(&mut out, "source references", &report.source_refs);
     }
@@ -418,25 +440,37 @@ fn write_list(out: &mut String, label: &str, values: &[String]) {
     if values.is_empty() {
         return;
     }
-    writeln!(out, "{label}:").unwrap();
+    push_line(out, format!("{label}:"));
     for value in values {
-        writeln!(out, "  - {value}").unwrap();
+        push_line(out, format!("  - {value}"));
     }
 }
 
 fn resume_write(report: &ResumeReport) -> Result<ResumeWrite> {
     let path = report.write_path.clone();
     let mut contents = String::new();
-    writeln!(&mut contents, "# Maestro Resume").unwrap();
-    writeln!(&mut contents).unwrap();
-    writeln!(&mut contents, "generated_at: {}", utc_now_timestamp()).unwrap();
-    writeln!(&mut contents, "mode: {}", report.mode.as_str()).unwrap();
-    writeln!(&mut contents).unwrap();
+    push_line(&mut contents, "# Maestro Resume");
+    push_blank_line(&mut contents);
+    push_line(
+        &mut contents,
+        format!("generated_at: {}", utc_now_timestamp()),
+    );
+    push_line(&mut contents, format!("mode: {}", report.mode.as_str()));
+    push_blank_line(&mut contents);
     contents.push_str(&render_resume_report(report));
     if report.full.is_none() {
         write_list(&mut contents, "source references", &report.source_refs);
     }
     Ok(ResumeWrite { path, contents })
+}
+
+fn push_line(out: &mut String, line: impl AsRef<str>) {
+    out.push_str(line.as_ref());
+    out.push('\n');
+}
+
+fn push_blank_line(out: &mut String) {
+    out.push('\n');
 }
 
 fn write_path(
@@ -451,7 +485,7 @@ fn write_path(
             .join("resume.md"));
     }
     if let Some(feature) = feature {
-        return Ok(paths.features_dir().join(&feature.id).join("resume.md"));
+        return Ok(feature::feature_sidecar_dir(paths, &feature.id).join("resume.md"));
     }
     Ok(paths.maestro_dir().join("resume.md"))
 }
@@ -502,6 +536,9 @@ struct ResumeReport {
     next: String,
     required_reads: Vec<String>,
     guardrails: Vec<String>,
+    /// Recent archive lid lines (SPEC-archive-memory-2 R3); empty when
+    /// nothing has been archived.
+    memory: Vec<String>,
     source_refs: Vec<String>,
     #[serde(skip_serializing)]
     write_path: PathBuf,

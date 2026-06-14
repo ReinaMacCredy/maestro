@@ -1,0 +1,8 @@
+family: run-evidence
+read:
+  - maestro.run_evidence.v1
+write: maestro.run_evidence.v1
+legacy: []
+# Regenerable from events.jsonl: rebuild/tolerant-read policy, no migrate
+# coverage (D6.5 lock condition 6). The reader already skips records with a
+# non-current stamp instead of failing the load.

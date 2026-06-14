@@ -7,7 +7,7 @@ use serde_json::Value;
 
 use crate::foundation::core::paths::MaestroPaths;
 
-use super::discovery::managed_event_logs;
+use super::discovery::{RunEventLog, managed_event_logs};
 use super::event::logical_session_id_from_run_path;
 
 /// Typed Run event read model.
@@ -39,6 +39,16 @@ impl RunEvent {
     /// Task id embedded in the event, when present.
     pub fn task_id(&self) -> Option<&str> {
         self.string("task_id")
+    }
+
+    /// Card id bound by a `card_touch` event, when present.
+    pub fn card_id(&self) -> Option<&str> {
+        self.string("card_id")
+    }
+
+    /// Skill name recorded by a `skill_activation` event, when present.
+    pub fn skill_name(&self) -> Option<&str> {
+        self.string("skill_name")
     }
 
     /// Agent name embedded in the event, when present.
@@ -162,7 +172,16 @@ pub fn visit_managed_events<F>(paths: &MaestroPaths, mut visitor: F) -> Result<(
 where
     F: for<'a> FnMut(RunEventRecord<'a>) -> Result<()>,
 {
-    for log in managed_event_logs(paths)? {
+    let logs = managed_event_logs(paths)?;
+    visit_managed_event_logs(&logs, &mut visitor)
+}
+
+/// Visit valid complete JSONL event records from a pre-enumerated managed log set.
+pub fn visit_managed_event_logs<F>(logs: &[RunEventLog], mut visitor: F) -> Result<()>
+where
+    F: for<'a> FnMut(RunEventRecord<'a>) -> Result<()>,
+{
+    for log in logs {
         visit_event_log(log.path(), &mut visitor)?;
     }
     Ok(())

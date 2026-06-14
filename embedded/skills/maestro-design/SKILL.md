@@ -1,7 +1,7 @@
 ---
 name: maestro-design
-version: 1.6.0
-description: "Use for design or brainstorming in a Maestro repo before implementation starts. Map current behavior, decide one fork at a time, record decisions and notes, then hand the approved contract to maestro-feature."
+version: 1.15.0
+description: "Use for design or brainstorming in a Maestro repo before implementation starts. Map current behavior, decide one fork at a time, record decisions and notes, then hand the approved contract to maestro-card."
 ---
 
 # Maestro Design
@@ -13,25 +13,48 @@ design and freezes the contract.
 Activate:
 `maestro hook record --event skill_activation --skill maestro-design`
 
+Exact command signatures live in [reference/cli.md](reference/cli.md),
+generated from the binary. A verb or flag not listed there does not exist;
+read it instead of probing `--help`. Never chain a guessed id: use only ids
+read from verb output, and when a lookup misses, re-list instead of retrying
+spelling variations.
+
+Routing: external PRD with open forks -> decide forks in design, then intake per maestro-card.
+
+First step in a session: run `maestro active` (pull-only) to see what other
+live sessions are working on -- their card, mode, and progress -- before you
+open anything. If a peer session is on a related card, connect yours with
+`maestro link add <your-card> <their-card>` once you have created it; maestro
+never auto-links. Linked cards exchange messages with `maestro msg send
+<their-card> "<text>"` and `maestro msg read`; an `[inbox] N new` line on
+STDERR before any command means a linked peer is waiting. Act on the banner
+before unrelated work and run `maestro msg read`, as maestro-card already does.
+Reply when the message poses a question or needs a decision; an FYI needs no reply.
+maestro never auto-reads or auto-replies; you do.
+
 ## Do
 
-1. Open one feature for the topic:
-   `maestro feature new "<topic>" --description "<problem>" --question "<loose question>"`.
+1. Open one feature for the topic: `maestro feature new "<topic>"`,
+   seeding `--description` with the problem.
 2. Map the current state from real evidence before options:
    files, commands, outputs, screenshots, or repo artifacts with `file:line`
-   where code is involved.
+   where code is involved. Write what you map into the spec as you go:
+   `maestro feature spec <id> --section "Current state" --append "<finding>"`.
+   The same verb fills `Problem` and creates any new section; `--replace`
+   rewrites a section wholesale.
 3. Put the problem and open questions on the feature:
    `maestro feature set <id> --description "<problem>" --question "<loose question>"`.
 4. Decide one fork at a time. For each fork, give the concrete example, the
    options, the tradeoff, and the chosen answer. Sketch every option inline as
    ASCII before asking, so the preview is readable in the terminal.
-5. Lock each decision durably:
-   `maestro decision new "<decision title>" --feature <id> --context "<why>"`
-   opens the fork; `maestro decision lock <decision-id> --decision "<chosen>"
-   --rejected "<option: why>" [--preview "<example>"] [--supersedes <id>]`
-   fills and locks it. Put the chosen ASCII sketch into `--preview` as
-   multiline text. The lock echoes the entry and appends the dated feature-note
-   pointer automatically; do not add a manual duplicate note.
+5. Lock each decision durably: `maestro decision new` (with `--feature` and
+   `--context`) opens the fork; `maestro decision lock` records the chosen
+   answer, the rejected options, and optionally a preview and superseded
+   decisions. A fork the user already settled opens and locks in one call:
+   `maestro decision new --lock --decision "<chosen>"`. Put the chosen ASCII
+   sketch into `--preview` as multiline text. The lock echoes the entry and
+   appends the dated feature-note pointer automatically; do not add a manual
+   duplicate note.
 6. If a chosen answer removes a field, file, command, behavior, or workflow,
    enumerate consumers before locking the removal.
 7. Before locking a material or hard-to-reverse fork, get an independent
@@ -64,11 +87,15 @@ structure, or other judgment-heavy forks.
 - Do not keep a contradicted decision silently. Reopen or supersede it in the
   Decision record.
 - Do not resume from chat memory. Resume from `maestro feature spec <id>`,
-  `.maestro/features/<id>/notes.md`, and `maestro decision list`.
+  `.maestro/cards/<id>/notes.md`, and `maestro decision list --feature <id>`
+  (the bare list windows to recent decisions, so scope it to your feature).
 
 ## Hand-off
 
-Pipeline: `[maestro-design] -> qa-baseline -> maestro-feature -> maestro-task -> maestro-verify -> qa-slice -> feature ship`
+Pipeline: `[maestro-design] -> maestro-card (qa-baseline -> feature accept -> prepare -> work -> verify -> qa-slice -> feature ship)`
 
-Next: decisions locked and contract authored -> `qa-baseline`, then
-`maestro-feature` for `feature accept`.
+Next: decisions locked and contract authored -> `maestro-card` (its
+qa-baseline reference, then `feature accept`). The hand-off is this skill
+boundary, crossed once here; it is not a lifecycle gate. When the user
+authorizes building, do not re-ask -- flow straight through accept -> prepare
+-> work.

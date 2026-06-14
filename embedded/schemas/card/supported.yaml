@@ -1,0 +1,7 @@
+family: card
+read:
+  - maestro.card.v1
+write: maestro.card.v1
+legacy: []
+# The store was born v1 at the 2026-06 card migration; unknown or newer
+# envelope versions hard-fail at the strict gate (no synthetic back-compat).

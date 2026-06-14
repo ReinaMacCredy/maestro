@@ -25,6 +25,22 @@ pub enum MaestroError {
         found: String,
     },
 
+    /// An artifact schema version is outside this binary's declared read set
+    /// (its family's schema pack). A named legacy version carries the pack's
+    /// explicit migrate route; an undeclared version carries none.
+    #[error("schema mismatch for {artifact}: found {found}, this binary reads {read}")]
+    UnsupportedSchemaVersion {
+        /// Human-readable artifact name or path.
+        artifact: String,
+        /// Actual schema version found on disk.
+        found: String,
+        /// The family's declared read set, rendered for display.
+        read: String,
+        /// Bare migrate command from the pack's legacy route, if the version
+        /// is a named legacy one.
+        route: Option<String>,
+    },
+
     /// An operation would write outside the discovered repository root.
     #[error("operation would write outside repository root: {path}")]
     OutsideRepository {
@@ -65,6 +81,18 @@ pub enum MaestroError {
     /// A JSON mirror file did not contain a top-level JSON object.
     #[error("managed JSON mirror must be a top-level object")]
     InvalidJsonMirror,
+
+    /// An id lookup failed. `nearest` carries an existing card id close enough
+    /// to be a plausible typo, surfaced as a hint only -- never auto-resolved.
+    #[error("{kind} not found: {id}")]
+    IdNotFound {
+        /// The lookup's noun, e.g. "decision" or "task".
+        kind: &'static str,
+        /// The id that failed to resolve.
+        id: String,
+        /// A near-match existing id, if one is plausible.
+        nearest: Option<String>,
+    },
 }
 
 impl MaestroError {
@@ -79,6 +107,13 @@ impl MaestroError {
                 Some("run maestro migrate-v2".to_string())
             }
             Self::SchemaMismatch { .. } => Some("run maestro doctor".to_string()),
+            Self::UnsupportedSchemaVersion { route, .. } => Some(match route {
+                Some(route) => format!("run {route}"),
+                None => "run maestro doctor".to_string(),
+            }),
+            Self::IdNotFound { nearest, .. } => nearest
+                .as_ref()
+                .map(|nearest| format!("did you mean {nearest}?")),
             Self::OutsideRepository { .. }
             | Self::BackupPathContainsSymlink { .. }
             | Self::ManagedPathContainsSymlink { .. }

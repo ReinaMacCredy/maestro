@@ -1,2 +1,256 @@
 schema_version: maestro.backlog.v1
-items: []
+items:
+- id: hb-001
+  fingerprint: agent_audit:graceful-list-degradation
+  source: cli-2026-06-07
+  provenance: agent-audit
+  topic: graceful-list-degradation
+  type: agent_audit
+  title: status and feature list must degrade gracefully on one bad artifact
+  priority: medium
+  occurrences: 1
+  sessions_hit:
+  - cli-2026-06-07
+  first_seen: 2026-06-07T15:22:45.520Z
+  last_seen: 2026-06-07T15:40:04.447Z
+  status: measured
+  evidence:
+  - 'cli-2026-06-07: session 2026-06-07: one v1 feature.yaml (agent-cli-ux) made maestro status AND feature list exit 1 wholesale (schema mismatch for .maestro/features/agent-cli-ux/feature.yaml); 7 healthy features and 2 live tasks became invisible until migrate-v2. The dashboard should render healthy entries and mark the broken one inline like doctor does'
+  - 'cli-2026-06-07: advisor widen 2026-06-07: roster degradation alone does not clear the bootstrapping hazard -- the design-reading path (feature spec <id>, decision list) must ALSO degrade per-record (render raw on-disk fields when schema parse fails) or a mid-design feature record stays unreadable exactly when its design context is needed; gate item for decision A-hardened on design-session-spec-workflow'
+  spawned_task: task-001
+  history:
+  - result: accepted
+    task: task-001
+    at: 2026-06-07T16:10:50.431Z
+  - result: measured
+    task: task-001
+    at: 2026-06-07T16:52:41.992Z
+- id: hb-002
+  fingerprint: agent_audit:batch-prove
+  source: cli-2026-06-07
+  provenance: agent-audit
+  topic: batch-prove
+  type: agent_audit
+  title: feature verify --prove should be repeatable in one invocation
+  priority: medium
+  occurrences: 2
+  sessions_hit:
+  - cli-2026-06-07
+  - rollback-hb002
+  first_seen: 2026-06-07T15:22:45.566Z
+  last_seen: 2026-06-07T16:16:10.615Z
+  status: accepted
+  evidence:
+  - 'cli-2026-06-07: session 2026-06-07: closing 7 retro records took 47 separate feature verify calls because --prove/--evidence accept exactly one ac per invocation; reduce-maestro-artifact-surface alone was 11 round trips. Repeatable --prove ac-N --evidence <e> pairs (clap requires equal counts) would collapse each closure to one call'
+  - 'rollback-hb002: rollback re-propose 2026-06-07: hb-002 was applied before the user ruled; re-proposing the topic so measure reverts the item to proposed; design walk ruling still pending'
+  spawned_task: task-004
+  history:
+  - result: accepted
+    task: task-002
+    at: 2026-06-07T16:14:16.637Z
+  - result: ineffective
+    task: task-002
+    at: 2026-06-07T16:16:10.640Z
+  - result: accepted
+    task: task-004
+    at: 2026-06-07T16:28:24.180Z
+- id: hb-003
+  fingerprint: agent_audit:targeted-acceptance-edit
+  source: cli-2026-06-07
+  provenance: agent-audit
+  topic: targeted-acceptance-edit
+  type: agent_audit
+  title: feature set needs a targeted single-item acceptance edit
+  priority: medium
+  occurrences: 1
+  sessions_hit:
+  - cli-2026-06-07
+  first_seen: 2026-06-07T15:22:45.606Z
+  last_seen: 2026-06-07T15:22:45.606Z
+  status: proposed
+  evidence:
+  - 'cli-2026-06-07: session 2026-06-07: amending one acceptance item (agent-cli-ux AC2 supersession note; whole-spec-verification task new -> task create typo) required re-passing the FULL list: 14 and 8 --acceptance flags respectively. A --edit-acceptance ac-N "<new text>" on proposed contracts would remove the replay risk of corrupting 13 untouched items to fix 1'
+- id: hb-004
+  fingerprint: agent_audit:status-next-hint-authored
+  source: cli-2026-06-07
+  provenance: agent-audit
+  topic: status-next-hint-authored
+  type: agent_audit
+  title: status NEXT hint ignores authored contracts on proposed features
+  priority: medium
+  occurrences: 1
+  sessions_hit:
+  - cli-2026-06-07
+  first_seen: 2026-06-07T15:22:45.629Z
+  last_seen: 2026-06-07T15:22:45.629Z
+  status: proposed
+  evidence:
+  - 'cli-2026-06-07: session 2026-06-07: all 8 proposed features showed NEXT template: set_contract in status even though every contract was fully authored (acceptance 4-15 items each); feature set itself prints the correct next (qa-baseline or accept --qa none). Status should hint accept-readiness once acceptance is non-empty'
+- id: hb-005
+  fingerprint: agent_audit:sweep-ship-hint
+  source: cli-2026-06-07
+  provenance: agent-audit
+  topic: sweep-ship-hint
+  type: agent_audit
+  title: green contract sweep should print the ship next-hint
+  priority: medium
+  occurrences: 1
+  sessions_hit:
+  - cli-2026-06-07
+  first_seen: 2026-06-07T15:23:03.460Z
+  last_seen: 2026-06-07T15:23:03.460Z
+  status: proposed
+  evidence:
+  - 'cli-2026-06-07: session 2026-06-07: after each fully-resolved sweep the output ended at ok: every acceptance item has evidence with no next: line; the obvious next action (feature ship <id> --outcome) had to be known from memory. Every other gate in the flow hands you the next verb'
+- id: hb-006
+  fingerprint: agent_audit:decision-oneshot-lock
+  source: cli-2026-06-07
+  provenance: agent-audit
+  topic: decision-oneshot-lock
+  type: agent_audit
+  title: decision open+lock one-shot for pre-decided forks
+  priority: medium
+  occurrences: 1
+  sessions_hit:
+  - cli-2026-06-07
+  first_seen: 2026-06-07T15:23:03.489Z
+  last_seen: 2026-06-07T15:23:03.489Z
+  status: proposed
+  evidence:
+  - 'cli-2026-06-07: session 2026-06-07: 6 of 6 decisions were locked immediately after new with full content already in hand (2 calls each, 12 total). SUPERSESSION-SENSITIVE: one-shot flags were deliberately removed by spec-first-feature-workflow (a070e1cf, agent-cli-ux AC2); this proposes new --lock --decision --rejected on decision new as an opt-in for pre-decided forks, not a return of the old default. Needs a user ruling against the existing lock before any build'
+- id: hb-007
+  fingerprint: agent_audit:migrate-doctor-clean
+  source: cli-2026-06-07
+  provenance: agent-audit
+  topic: migrate-doctor-clean
+  type: agent_audit
+  title: migrate-v2 should leave the repo doctor-clean
+  priority: medium
+  occurrences: 1
+  sessions_hit:
+  - cli-2026-06-07
+  first_seen: 2026-06-07T15:23:03.513Z
+  last_seen: 2026-06-07T15:23:03.513Z
+  status: measured
+  evidence:
+  - 'cli-2026-06-07: session 2026-06-07: after a successful migrate-v2 (8 features, 2 tasks) doctor still errored: .maestro/decisions is missing; run maestro init --merge to repair. The migration knows the v2 store layout; it should create the empty decisions.yaml store itself instead of requiring a second repair verb'
+  spawned_task: task-003
+  history:
+  - result: accepted
+    task: task-003
+    at: 2026-06-07T16:27:28.900Z
+  - result: measured
+    task: task-003
+    at: 2026-06-07T16:52:56.235Z
+- id: hb-008
+  fingerprint: agent_audit:doctor-empty-task-dirs
+  source: cli-2026-06-07
+  provenance: agent-audit
+  topic: doctor-empty-task-dirs
+  type: agent_audit
+  title: doctor should flag empty task dirs as junk
+  priority: medium
+  occurrences: 1
+  sessions_hit:
+  - cli-2026-06-07
+  first_seen: 2026-06-07T15:23:03.559Z
+  last_seen: 2026-06-07T15:23:03.559Z
+  status: proposed
+  evidence:
+  - 'cli-2026-06-07: session 2026-06-07: .maestro/tasks/task-003-add-export/ existed as an empty dir (aborted create leftover, dated Jun 6); status, doctor, and the task scan all silently ignored it; found only by accident during fixture deletion. Doctor junk-detection: warn on task/feature dirs without their record file'
+- id: hb-009
+  fingerprint: agent_audit:apply-spawned-task-locked
+  source: cli-2026-06-07
+  provenance: agent-audit
+  topic: apply-spawned-task-locked
+  type: agent_audit
+  title: harness apply spawns tasks with acceptance already locked, rejecting design refinements
+  priority: medium
+  occurrences: 1
+  sessions_hit:
+  - cli-2026-06-07
+  first_seen: 2026-06-07T16:12:13.399Z
+  last_seen: 2026-06-07T16:12:13.399Z
+  status: proposed
+  evidence:
+  - 'cli-2026-06-07: session 2026-06-07: harness apply hb-001 spawned task-001 pre-accepted with only the generic preset check; the design ruling produced in the same walk (sick-row rendering + exit-code semantics) could not become real checks -- task set task-001 --check errored "acceptance is locked; checks cannot be changed after accept" -- and had to ride task note, which the verify gate never reads. The natural moment to refine a spawned task is immediately after apply, but the lifecycle slams the acceptance lock first'
+- id: hb-010
+  fingerprint: agent_audit:harness-unapply
+  source: cli-2026-06-07
+  provenance: agent-audit
+  topic: harness-unapply
+  type: agent_audit
+  title: no clean unapply for an accepted backlog item
+  priority: medium
+  occurrences: 1
+  sessions_hit:
+  - cli-2026-06-07
+  first_seen: 2026-06-07T16:27:27.289Z
+  last_seen: 2026-06-07T16:27:27.289Z
+  status: proposed
+  evidence:
+  - 'cli-2026-06-07: session 2026-06-07: hb-002 was applied prematurely and rolling back required a 3-step hack (task reject + same-topic re-propose under a synthetic session id + measure --force) that left FALSE history: hb-002 now reads 2x/2s with reason "the improvement was ineffective (friction still detected)" although nothing was ever built. An accepted item with an unstarted task needs a first-class revert that restores proposed without fabricating seen-counts or failed-attempt reasons'
+- id: hb-011
+  fingerprint: agent_audit:concurrent-writer-safety
+  source: cli-2026-06-07
+  provenance: agent-audit
+  topic: concurrent-writer-safety
+  type: agent_audit
+  title: Guard concurrent Maestro file writes
+  priority: medium
+  occurrences: 1
+  sessions_hit:
+  - cli-2026-06-07
+  first_seen: 2026-06-07T20:03:31.038Z
+  last_seen: 2026-06-07T20:03:31.038Z
+  status: proposed
+  evidence:
+  - 'cli-2026-06-07: SPEC-maestro-ux-backlog.md §hb-011 implemented by c0a48988; atomic ID reservations, snapshot store saves, append-safe notes, retryable stale/write-busy errors, and apply rollback verified in VERIFY-maestro-ux-backlog.md V9.'
+- id: hb-012
+  fingerprint: agent_audit:proof-command-timeout
+  source: cli-2026-06-08
+  provenance: agent-audit
+  topic: proof-command-timeout
+  type: agent_audit
+  title: Proof command execution has no timeout; a hung verify command blocks task_verify forever
+  priority: medium
+  occurrences: 1
+  sessions_hit:
+  - cli-2026-06-08
+  first_seen: 2026-06-08T06:55:53.768Z
+  last_seen: 2026-06-08T06:55:53.768Z
+  status: proposed
+  evidence:
+  - 'cli-2026-06-08: src/domain/proof/commands.rs:94 spawns ''sh -c <cmd>'' and commands.rs:32 records exit_code (verify_task.rs:405 fails on non-zero), but no timeout/kill path exists anywhere in src/domain/proof/. A wedged check (watch process, stdin-waiting prompt, hung test runner) hangs ''maestro feature verify --prove'' / task_verify with no recovery. Idea source: oh-my-openagent comment-checker runner.ts:29-57 bounds each gate at 30s with SIGTERM then a 1s grace then SIGKILL. Fix: wrap the existing spawn in a bounded wait (config default a few minutes) that escalates SIGTERM->SIGKILL and records a ''timeout'' outcome distinct from exit!=0.'
+- id: hb-013
+  fingerprint: agent_audit:run-event-harness-attribution
+  source: cli-2026-06-08
+  provenance: agent-audit
+  topic: run-event-harness-attribution
+  type: agent_audit
+  title: Run events do not record which harness/agent fired them; the agent field is inconsistent and unsurfaced
+  priority: medium
+  occurrences: 1
+  sessions_hit:
+  - cli-2026-06-08
+  first_seen: 2026-06-08T06:55:53.795Z
+  last_seen: 2026-06-08T06:55:53.795Z
+  status: proposed
+  evidence:
+  - 'cli-2026-06-08: run events carry no harness identity (claude vs codex). The ''agent'' field is copied through at src/domain/run/record.rs:80 but the CLI sets it at src/interfaces/cli/hook.rs:40 to super::actor() -- it names the recording actor (e.g. ''maestro''), NOT the driving harness; it is present on CLI-issued events (.maestro/runs/cli-2026-06-07/events.jsonl line 1) and absent on hook-recorded task_proof events (lines 2-3) because the hook payload has no ''agent''. embedded/hooks/record.sh is a thin ''exec maestro hook record'' shim forwarding the raw stdin payload (the $CLAUDE_PROJECT_DIR vs git-rev-parse detail is per-agent INVOCATION wiring noted in events.yaml comments, not something record.sh stamps). Run dirs key on session_id only; ''unattributed'' (event.rs:42) means missing session, not missing agent. No reader/status/decision surfaces ''agent'' (zero consumers). Idea source: oh-my-openagent boulder session_origins ''direct''|''appended'' + codex:/opencode: prefixes (boulder-state types.ts:12,19). IMPLEMENTER FIRST STEP (falsify ''never encodes'' before coding): capture one real Claude and one real Codex hook payload side by side -- they may already differ (cwd, transcript_path, env). Then choose stamp-at-install (the harness is known when writing .claude/settings.local.json vs .codex/hooks.json) OR surface a discriminator already in the payload. Do not assume record.sh is the edit site.'
+- id: hb-014
+  fingerprint: agent_audit:forward-fed-task-learnings
+  source: cli-2026-06-08
+  provenance: agent-audit
+  topic: forward-fed-task-learnings
+  type: agent_audit
+  title: Discovered task learnings/gotchas are not carried to dependent tasks (decisions store covers rationale only)
+  priority: medium
+  occurrences: 1
+  sessions_hit:
+  - cli-2026-06-08
+  first_seen: 2026-06-08T06:55:53.816Z
+  last_seen: 2026-06-08T06:55:53.816Z
+  status: proposed
+  evidence:
+  - 'cli-2026-06-08: DecisionRecord {title, context} (src/domain/decisions/schema.rs:25-32) captures locked decisions/rationale, and the resume-prior-task-context feature (in design) adds per-task/feature resume.md + notes.md for resuming the SAME unit -- but nothing surfaces one task''s mid-implementation gotchas/conventions to its DEPENDENT/downstream tasks, so each task rediscovers them. Idea source: oh-my-openagent accumulates .omo/notepads/{plan}/ split into patterns | rationale | gotchas and feeds them to later subagents (docs/guide/orchestration.md). LEAN CAVEAT: do NOT build a notepad subsystem; lightest viable form is a freeform ''learned/gotchas'' note on task completion that the next dependent task''s brief surfaces. Evaluate as a thin extension of resume-prior-task-context''s notes.md before treating it as a new feature.'

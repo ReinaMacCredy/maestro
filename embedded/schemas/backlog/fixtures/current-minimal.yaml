@@ -1,0 +1,10 @@
+schema_version: maestro.card.v1
+id: card-cc88dd
+type: idea
+title: Minimal idea fixture
+status: proposed
+created_at: 2026-06-12T00:00:00.000Z
+updated_at: 2026-06-12T00:00:00.000Z
+extra:
+  id: card-cc88dd
+  title: Minimal idea fixture

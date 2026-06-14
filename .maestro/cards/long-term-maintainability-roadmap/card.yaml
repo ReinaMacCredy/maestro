@@ -1,0 +1,47 @@
+schema_version: maestro.card.v1
+id: long-term-maintainability-roadmap
+type: feature
+title: Long-term maintainability roadmap
+status: shipped
+created_at: 2026-06-11T17:59:38.092Z
+updated_at: 2026-06-12T09:29:34.849Z
+description: Turn the repo-wide audit, schema-evolution design, and 2026-06-12 review-swarm/simplify-code findings into a durable long-term Maestro roadmap with small approved implementation slices.
+extra:
+  schema_version: maestro.feature.v2
+  outcome: Nine workstreams + 7 review fixes + WS5 schema evolution shipped across 2ba92dad..23e581f2 (architecture truth, portable full gate, unwrap policy, alias retirement, schema packs/kernel/gates/passthrough/harness, runtime trust boundaries, hot-path reads, shim retirement, write safety + agent contracts); VERIFY all verified; merged locally into card-model at 23e581f2
+  qa:
+    surface: none
+    reason: roadmap meta-feature with no runtime behavioral surface of its own; every workstream slice shipped through the per-commit fmt/clippy/full-suite gate and the SPEC VERIFY file (all items verified with real-entry-point evidence)
+    amend_log_position: 0
+  affected_areas:
+  - src/domain
+  - src/foundation
+  - src/operations
+  - src/interfaces/cli
+  - embedded/schemas
+  - tests
+  - ARCHITECTURE.md + TESTING.md + AGENTS.md
+  - scripts/verify-all.sh
+  acceptance_sweeps:
+  - at: 2026-06-12T09:29:25.916Z
+    resolved:
+    - ac-1
+    - ac-2
+    - ac-3
+  acceptance_evidence:
+  - ac_id: ac-1
+    kind: explicit
+    text: WS1-WS9 all shipped on branch maintainability-roadmap (commits 2ba92dad..db9e1e86 per workstream + WS5 as b1a2690c/43285503/2e5a0422/22560369/b2d84144/23e581f2); the one park (WS5, notes entry 90) was superseded by the user directive (entry 93) and WS5 then shipped in full - no workstream remains open
+    at: 2026-06-12T09:29:06.190Z
+  - ac_id: ac-2
+    kind: explicit
+    text: 'Per-commit gate logged for every slice in IMPLEMENTATION_NOTES-maintainability-roadmap (entries 82-117, archived at ~/.agents/specs/maestro/maintainability-roadmap/): cargo fmt -- --check, cargo clippy --all-targets -D warnings, full cargo test CARGO_EXIT=0 at each of the 17 commits; final gate re-run at HEAD 23e581f2'
+    at: 2026-06-12T09:29:06.190Z
+  - ac_id: ac-3
+    kind: explicit
+    text: 'VERIFY-maintainability-roadmap.md (archived): every item [x] with evidence incl. G1-G3 and V5.1-V5.8; V5.1 recorded verified-vacuous per the condition-8 matrix; no [blocked]/[mismatch] items remain'
+    at: 2026-06-12T09:29:06.190Z
+  acceptance:
+  - All nine workstreams (WS1-WS9) are closed or explicitly parked with a recorded reason (D11 exit condition)
+  - Every shipped slice passed fmt, clippy, and the full cargo test suite at its commit
+  - VERIFY-maintainability-roadmap items are all verified with evidence or carry a recorded exception

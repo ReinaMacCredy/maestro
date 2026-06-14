@@ -1,0 +1,72 @@
+schema_version: maestro.card.v1
+id: task-add-prepare-to-maestro-card-pipeline-b010
+type: task
+title: Add prepare to maestro-card pipeline + build-flow framing
+status: verified
+parent: build-flow-runs-prepare-without-a-stop
+claimed_by: claude#s46221-1781377381354784000
+claimed_at: 2026-06-13T19:03:01.354Z
+created_at: 2026-06-13T19:01:32.683Z
+updated_at: 2026-06-13T19:12:59.086Z
+extra:
+  schema_version: maestro.task.v2
+  claims:
+  - embedded/skills/maestro-card/SKILL.md:87 pipeline names prepare; :3 version 1.8.0; reference/feature.md:59-64 states straight-through build + freeze-and-park
+  state_history:
+  - state: draft
+    at: 2026-06-13T19:01:32.683Z
+    by: maestro
+  - state: exploring
+    at: 2026-06-13T19:01:32.702Z
+    by: maestro
+  - state: ready
+    at: 2026-06-13T19:01:32.788Z
+    by: maestro
+  - state: needs_verification
+    at: 2026-06-13T19:03:09.948Z
+    by: maestro
+    summary: maestro-card SKILL.md pipeline one-liner now names prepare (accept -> prepare -> work); reference/feature.md gained the build-flow framing (authorized build flows accept->prepare->work straight through, no implement-now/stop confirmation, mint in one motion per D2; ready+prepare stay for explicit freeze-and-park); SKILL.md version 1.7.0 -> 1.8.0.
+    claims:
+    - embedded/skills/maestro-card/SKILL.md:87 pipeline names prepare; :3 version 1.8.0; reference/feature.md:59-64 states straight-through build + freeze-and-park
+  - state: needs_verification
+    at: 2026-06-13T19:03:09.965Z
+    by: maestro
+    summary: 'verification failed: verify command failed: cargo test (exit 101)'
+    open_items:
+    - 'verify command failed: cargo test (exit 101)'
+  - state: verified
+    at: 2026-06-13T19:12:59.086Z
+    by: maestro
+    summary: 'verification passed: 1 claim(s), 1 proof source(s)'
+  lane: normal
+  risk: medium
+  verification:
+    status: passed
+    verified_at: 2026-06-13T19:12:59.086Z
+    verified_commit: 278fb828d7ccc837512e80db76fe4b3a70325fe7
+    verified_by_run: .maestro/runs/d7764a32-6ea3-4c17-b3c2-30ba0d37050e/events.jsonl
+    contract_hash: 0c571e4ebaad9e722a8dc01e8ca2098828253b9240fae8815d228fc315f1e43b
+    claim_checks:
+    - claim: embedded/skills/maestro-card/SKILL.md:87 pipeline names prepare; :3 version 1.8.0; reference/feature.md:59-64 states straight-through build + freeze-and-park
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/d7764a32-6ea3-4c17-b3c2-30ba0d37050e/events.jsonl
+    commands:
+    - cmd: cargo build
+      exit_code: 0
+      duration_ms: 184
+    - cmd: cargo test
+      exit_code: 0
+      duration_ms: 69625
+    - cmd: cargo clippy -- -D warnings
+      exit_code: 0
+      duration_ms: 3641
+    proof_sources:
+    - kind: event
+      path: .maestro/runs/d7764a32-6ea3-4c17-b3c2-30ba0d37050e/events.jsonl
+      hash: 52214f0f93841b57ebe6f6b3ff1a12e56380f91eff51477add97987df74ca455
+  acceptance_locked: true
+  acceptance:
+    checks:
+    - embedded/skills/maestro-card/SKILL.md Pipeline line names prepare in its order; reference/feature.md states that on build authorization the lifecycle flows accept->prepare->work with no implement-now/stop confirmation, mints the work cards in one motion then reports (D2), and that ready + the prepare verb stay for explicit freeze-and-park; SKILL.md version bumped 1.7.0 -> 1.8.0
+    locked_by: maestro
+    locked_at: 2026-06-13T19:01:32.788Z

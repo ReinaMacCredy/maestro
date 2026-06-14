@@ -1,0 +1,7 @@
+family: proof
+read:
+  - maestro.verification.v1
+write: maestro.verification.v1
+legacy: []
+# Regenerable by re-running task verify: rebuild/tolerant-read policy, no
+# migrate coverage (D6.5 lock condition 6).

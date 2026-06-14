@@ -1,0 +1,9 @@
+family: feature
+read:
+  - maestro.feature.v2
+write: maestro.feature.v2
+legacy:
+  # The v1-to-v2 transition folded the amend log and merged QA - layout +
+  # shape changes the locked D6.1 policy forbids normalizing in memory.
+  - version: maestro.feature.v1
+    route: maestro migrate-v2

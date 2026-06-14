@@ -37,27 +37,63 @@ pub fn set_claims_only_verification(paths: &MaestroPaths) -> Result<()> {
     harness_domain::set_claims_only_verification(paths)
 }
 
+/// Metadata-only stamp over the detect evidence: run-event logs, the whole
+/// card store, and the harness config (its thresholds and policy shape what
+/// detect proposes, so an edit must invalidate the skip cache like any
+/// evidence change). Idea cards are NOT excluded -- detect's own writes are
+/// absorbed by persisting the stamp AFTER a merge saves (post-write stamping),
+/// so any later task/decision/feature/run mutation still mismatches.
 pub fn evidence_stamp(paths: &MaestroPaths) -> Result<String> {
     let runs = run_event_stamp(paths)?;
-    let tasks = tree_stamp(&managed_path(
+    let cards = tree_stamp(&managed_path(
         paths,
-        ".maestro/tasks",
+        ".maestro/cards",
         SymlinkPolicy::RejectAllComponents,
     )?)?;
-    let decisions = tree_stamp(&managed_path(
-        paths,
-        ".maestro/decisions",
-        SymlinkPolicy::RejectAllComponents,
-    )?)?;
+    let mut config = Stamp::default();
+    update_stamp_for_path(
+        &managed_path(
+            paths,
+            ".maestro/harness/harness.yml",
+            SymlinkPolicy::RejectAllComponents,
+        )?,
+        &mut config,
+    )?;
     Ok(format!(
-        "runs={}:{};tasks={}:{};decisions={}:{}",
+        "runs={}:{};cards={}:{};config={}:{}",
         runs.count,
         runs.max_modified_nanos,
-        tasks.count,
-        tasks.max_modified_nanos,
-        decisions.count,
-        decisions.max_modified_nanos
+        cards.count,
+        cards.max_modified_nanos,
+        config.count,
+        config.max_modified_nanos
     ))
+}
+
+/// Read the persisted detect-skip stamp. Absent reads as `None` (a fresh repo
+/// or a cleared cache simply re-detects).
+pub fn read_detect_stamp(paths: &MaestroPaths) -> Result<Option<String>> {
+    let path = detect_stamp_path(paths)?;
+    match fs::read_to_string(&path) {
+        Ok(raw) => Ok(Some(raw.trim().to_string())),
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error).with_context(|| format!("failed to read {}", path.display())),
+    }
+}
+
+/// Persist the detect-skip stamp. A plain overwrite: the stamp is a cache, not
+/// a store -- a lost or torn write costs one re-detect, never data.
+pub fn write_detect_stamp(paths: &MaestroPaths, stamp: &str) -> Result<()> {
+    let path = detect_stamp_path(paths)?;
+    fs::write(&path, stamp).with_context(|| format!("failed to write {}", path.display()))
+}
+
+fn detect_stamp_path(paths: &MaestroPaths) -> Result<std::path::PathBuf> {
+    managed_path(
+        paths,
+        ".maestro/harness/detect-stamp",
+        SymlinkPolicy::RejectAllComponents,
+    )
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]

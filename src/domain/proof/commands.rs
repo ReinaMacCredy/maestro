@@ -18,10 +18,56 @@ pub(super) struct VerificationCommandRun {
     pub stack_kind: String,
 }
 
-pub(super) fn run_verify_commands(paths: &MaestroPaths) -> Result<VerificationCommandRun> {
+/// Outcome of running the repo-global `stack.verify` suite at the feature ship gate.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StackVerifyOutcome {
+    /// The commands that ran (the configured `stack.verify`), in order, with exit codes.
+    pub commands: Vec<VerificationCommand>,
+    /// Detected stack kind, for messaging.
+    pub stack_kind: String,
+}
+
+impl StackVerifyOutcome {
+    /// Commands that exited non-zero. Empty means the suite passed.
+    pub fn failed(&self) -> Vec<&VerificationCommand> {
+        self.commands
+            .iter()
+            .filter(|command| command.exit_code != 0)
+            .collect()
+    }
+}
+
+/// Run the repo-global `stack.verify` suite from the repo root, ignoring any
+/// per-task falsifier and the `claims_only` policy. This is the full-suite
+/// backstop run at the feature ship gate (decision-002), the counterpart to the
+/// per-task narrow falsifier at task-verify. An empty `stack.verify` returns an
+/// empty (passing) outcome — the ship gate's other conditions still apply.
+pub(crate) fn run_stack_verify(paths: &MaestroPaths) -> Result<StackVerifyOutcome> {
+    let run = run_verify_commands(paths, None)?;
+    Ok(StackVerifyOutcome {
+        commands: run.commands,
+        stack_kind: run.stack_kind,
+    })
+}
+
+/// Run the verify commands for a task slice.
+///
+/// Precedence: a per-task narrow falsifier (`verify_command`) wins — when set,
+/// ONLY it runs and the repo-global `stack.verify` and `claims_only` policy are
+/// bypassed for this slice. Otherwise `claims_only` skips command execution, and
+/// otherwise the repo-global `stack.verify` runs as before.
+pub(super) fn run_verify_commands(
+    paths: &MaestroPaths,
+    verify_command: Option<&str>,
+) -> Result<VerificationCommandRun> {
     let config = harness_verify_config(paths)?;
+    let stack_kind = format!("{:?}", config.stack.kind).to_ascii_lowercase();
+    let (commands, claims_only) = match verify_command {
+        Some(command) => (vec![command.to_string()], false),
+        None => (config.stack.verify, config.claims_only_verification),
+    };
     let mut results = Vec::new();
-    for command in config.stack.verify {
+    for command in commands {
         let started = Instant::now();
         let status = shell_command(&command)
             .current_dir(paths.repo_root())
@@ -35,8 +81,8 @@ pub(super) fn run_verify_commands(paths: &MaestroPaths) -> Result<VerificationCo
     }
     Ok(VerificationCommandRun {
         commands: results,
-        claims_only: config.claims_only_verification,
-        stack_kind: format!("{:?}", config.stack.kind).to_ascii_lowercase(),
+        claims_only,
+        stack_kind,
     })
 }
 

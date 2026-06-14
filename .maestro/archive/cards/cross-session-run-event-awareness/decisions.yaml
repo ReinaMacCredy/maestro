@@ -1,0 +1,217 @@
+- schema_version: maestro.card.v1
+  id: dec-awareness-view-is-an-explicit-verb-not-3092
+  type: decision
+  title: Awareness view is an explicit verb, not auto at session start
+  status: locked
+  parent: cross-session-run-event-awareness
+  created_at: 2026-06-13T15:51:29.526Z
+  updated_at: 2026-06-13T15:51:29.541Z
+  description: 'New session at startup wants to know what other live sessions are doing. Options: auto-print via the existing SessionStart hook, an explicit verb the agent runs, or both. User chose the explicit verb: pull-only, agent decides when to look, keeps maestro passive (no daemon/auto-push).'
+  extra:
+    locked_at: 2026-06-13T15:51:29.541Z
+    decision: A new read verb (working name 'maestro active') that the agent runs deliberately as its first step. Nothing fires automatically; pull-only.
+    preview: |-
+      new session starts
+        agent's 1st step:
+        $ maestro active
+          "2 active sessions:
+           s1 card-foo ...
+           s2 card-bar ..."
+        pull-only, agent chooses when to look
+    rejected:
+    - Auto-print the digest from the SessionStart hook
+    - 'Both: auto digest at start plus an on-demand verb'
+- schema_version: maestro.card.v1
+  id: dec-awareness-verb-indexed-by-run-event-11cb
+  type: decision
+  title: Awareness verb indexed by run-event liveness, card store enriches
+  status: locked
+  parent: cross-session-run-event-awareness
+  created_at: 2026-06-13T15:55:27.587Z
+  updated_at: 2026-06-13T15:55:27.605Z
+  description: 'Where does ''session -> which card + progress'' come from? Claims-only is foreclosed by the locked scenario: two brainstorm sessions creating features never ''claim'', so a claims view shows neither. So run events are the spine (live sessions, mode/skill, last-activity), and the card store is a lookup for title/status wherever a card binding is known. Not asked as an open fork; recorded as the lean default per the scenario.'
+  extra:
+    locked_at: 2026-06-13T15:55:27.605Z
+    decision: Run events are the primary index (which sessions are live, their mode, last activity). The card store enriches each entry with card title/status when a binding exists. Not claims-only.
+    rejected:
+    - Card store only (list claimed/in_progress cards) -- misses brainstorm sessions that never claim
+    - Run events only with no card enrichment -- cannot show card title/progress
+- schema_version: maestro.card.v1
+  id: dec-session-card-binding-rides-on-card-verb-e68c
+  type: decision
+  title: Session-card binding rides on card-verb run events (auto-emit)
+  status: locked
+  parent: cross-session-run-event-awareness
+  created_at: 2026-06-13T16:05:40.925Z
+  updated_at: 2026-06-13T16:05:41.011Z
+  description: 'How a session->card binding gets stamped so a parallel session can read it via the awareness verb and run maestro link. Worked case: this session''s own maestro feature new already touched the card. Coupled with D2 (run events are the primary index).'
+  extra:
+    locked_at: 2026-06-13T16:05:41.011Z
+    decision: 'Card-mutating verbs (feature new/set/spec, decision new/lock, card create/update/note, claim) auto-emit a run event tagged with session id + touched card id. Binding is a side effect of normal work: no env to export, no manual declaration, fails-open. When a session has touched several cards its CURRENT card = the most recent card_touch (latest-touch-wins). Keeps liveness + current-card in one source, the run-event stream, consistent with D2.'
+    preview: |-
+      REAL LIFE: Google Doc presence bar
+        you edit -> avatar auto-appears up top
+        teammate opens doc -> sees you + section
+
+      IN MAESTRO:
+       S1  maestro feature new cross-...
+             auto-emits {sess:s1, card:cross-...}
+       S1  maestro decision lock ...
+             auto-emits {sess:s1, card:cross-...}
+       S2  maestro active -> sees s1 + its card
+       -> cost to S1: ZERO (binding falls out of work)
+    rejected:
+    - Env (MAESTRO_CURRENT_CARD) that hook record stamps -- a forgotten export binds nothing and fails SILENTLY (same cli-DATE bucket-collapse already in the verification note); presence you must remember to declare.
+    - Card assignee field -- leanest (reuses one field, no new event) but overloads ownership; D2's rationale was that brainstorm sessions don't claim, so a browse must not look like a claim.
+- schema_version: maestro.card.v1
+  id: dec-liveness-recency-of-last-event-activity-b77b
+  type: decision
+  title: Liveness = recency of last event (activity-aware), not Stop
+  status: locked
+  parent: cross-session-run-event-awareness
+  created_at: 2026-06-13T16:18:30.905Z
+  updated_at: 2026-06-13T16:18:30.924Z
+  description: 'How maestro active decides a session is active, given maestro is passive (no daemon). GATE finding: embedded/hooks/events.yaml records Stop but no SessionEnd; in Claude Code Stop fires per-TURN, so a live session waiting for its human has a recent Stop. Filtering on no-Stop would hide live sessions (incl. this one). Resolves D4.'
+  extra:
+    locked_at: 2026-06-13T16:18:30.924Z
+    decision: 'Liveness = recency of last event, NOT Stop. A recent Stop means the session just finished a turn and is waiting for its human = LIVE. Each row''s presence label is derived from age + last-event-kind: [working] = last event is Pre/PostToolUse within the live threshold (mid-task, do not interrupt); [waiting] = last event is Stop within the window (idling, good moment to coordinate/link); [idle Nm] = last event older than the live threshold but within the window; [stale Nm] = beyond the window, hidden unless --all. A ''you'' marker flags the running session. Pure timestamp + event-kind math at read time; no daemon, no new hook. Default thresholds (live ~5m, window ~30m) are TUNABLE implementation defaults, not locked here. Distinct from the existing 20-dir prune cap on runs/ (a count bound, not a time window).'
+    preview: |-
+      $ maestro active
+        s1 design cross-... last 0m  [waiting]  <- you
+        s2 impl   card-bar  last 1m  [working]
+        s3 design card-baz  last 22m [idle 22m]
+        (s4 silent 45m -> hidden)
+      $ maestro active --all
+        ...+ s4 design card-qux last 45m [stale 45m]
+
+      [working]=mid tool-use, don't interrupt
+      [waiting]=Stopped, idling -> good time to link
+      derived from age + last-event-kind; no new hook
+    rejected:
+    - 'Stop-aware filter (no Stop AND recent): INVERTED -- Stop is per-turn, so a healthy session waiting for input has a recent Stop and would be hidden, including this very design session. Real logs hold 0 Stop events anyway.'
+    - 'Add a SessionEnd hook for a true clean-close signal: widens the installed hook surface, and crashed/killed sessions never fire it so recency is still required for them. Recency alone covers every case.'
+    - 'Plain recency (binary live/idle, no [working]/[waiting]): cannot distinguish a heads-down session from one open to coordinate -- the exact signal S2 needs to time a maestro link.'
+- schema_version: maestro.card.v1
+  id: dec-maestro-active-row-full-digest-shape-3-a917
+  type: decision
+  title: maestro active row = full digest (Shape 3, subsumes Shape 2)
+  status: locked
+  parent: cross-session-run-event-awareness
+  created_at: 2026-06-13T16:22:25.934Z
+  updated_at: 2026-06-13T16:22:25.956Z
+  description: What each maestro active row shows and what 'progress' means. User chose Shape 3 + Shape 2; Shape 3 already subsumes Shape 2's last-action column. Builds on D2 (run spine + card enrichment), D3 (bound card = latest card_touch), D4 (presence state).
+  extra:
+    locked_at: 2026-06-13T16:22:25.956Z
+    decision: 'Each row carries: session id; mode (from the session''s latest skill_activation -- design/impl/etc.); bound card title (latest card_touch per D3); card status; a type-aware PROGRESS metric (decisions-locked count for design cards, tasks-done/total for impl cards); the LAST ACTION summary from the run stream (e.g. locked D4, edit reader.rs); last-activity age; the [working]/[waiting]/[idle Nm]/[stale Nm] presence state per D4; and a ''you'' marker on the running session. Run-derived fields (mode, last action, age, state) come from the event spine; card-derived fields (title, status, progress count) are D2 enrichment and require reading the bound card + its children. Row width: long card titles and last-action strings truncate to keep one scannable line per session (exact widths are a tunable implementation detail, not locked).'
+    preview: |-
+      $ maestro active
+      SESSION MODE   CARD            STATUS   PROGRESS    AGE STATE     LAST ACTION
+      s1      design cross-session-. proposed 4 decisions 0m  [waiting] locked D4   <- you
+      s2      impl   card-store-ux-. accepted 2/5 tasks   1m  [working] edit reader.rs
+      (s4 silent 45m -> hidden; --all reveals [stale])
+
+      progress = status + type-aware fraction + live last-action
+      run-derived: mode/last-action/age/state | card-derived: title/status/count
+      long titles + last-action truncate to one line
+    rejected:
+    - 'Shape 1 (lean: status + state only): too thin -- omits the live ''what are they doing now'' and the progress fraction, which together are the heart of the user''s ''see their progress without reading the card'' ask.'
+- schema_version: maestro.card.v1
+  id: dec-awareness-verb-is-named-maestro-active-5b92
+  type: decision
+  title: Awareness verb is named 'maestro active'
+  status: locked
+  parent: cross-session-run-event-awareness
+  created_at: 2026-06-13T16:23:55.372Z
+  updated_at: 2026-06-13T16:23:55.390Z
+  description: Naming the pull-only awareness verb (taste fork, rubric in notes.md). Collision check confirmed active/sessions/who/live all free. User picked 'active'.
+  extra:
+    locked_at: 2026-06-13T16:23:55.390Z
+    decision: The verb is 'maestro active' (with '--all' to reveal stale/hidden sessions). Reads as 'show the active sessions', short, pairs naturally with --all, no collision with existing verbs, distinct from watch/status/resume/event/query.
+    preview: |-
+      $ maestro active
+      $ maestro active --all
+      'show me the ACTIVE sessions' -- pull-only, one-shot
+    rejected:
+    - sessions -- most literal but longer to type and doesn't itself imply live/now.
+    - who -- unix-idiomatic and short but less obvious it also surfaces card + progress.
+    - live -- conveys liveness but hints at a streaming/tail mode, conflicting with the pull-only one-shot design.
+- schema_version: maestro.card.v1
+  id: dec-link-follow-up-copy-pasteable-hint-5b33
+  type: decision
+  title: Link follow-up = copy-pasteable hint, agent runs it
+  status: locked
+  parent: cross-session-run-event-awareness
+  created_at: 2026-06-13T16:26:49.801Z
+  updated_at: 2026-06-13T16:26:49.817Z
+  description: 'How the maestro link step is surfaced after maestro active shows a related peer session. Constraint: maestro stays passive -- it never runs link itself and never guesses relatedness; the agent judges + runs. Builds on D3 (running session''s bound card = latest card_touch).'
+  extra:
+    locked_at: 2026-06-13T16:26:49.817Z
+    decision: 'maestro active prints a copy-pasteable ''maestro link add <your-card> <their-card>'' hint for the shown peer sessions (default layout: a footer template referencing each peer''s card id; per-row vs footer is an impl detail). The agent judges relatedness and runs it; maestro never auto-links and never computes a relatedness guess. <your-card> is filled with the running session''s bound card when one exists (latest card_touch); when active is run as the session''s FIRST step it usually has no card yet, so <your-card> stays a literal placeholder until the session creates its card -- the link is run after that.'
+    preview: |-
+      $ maestro active
+        s1 cross-session-run-event-awareness [waiting] <- you
+        s2 link-spec-intake                  [working]
+
+      related? link your card to theirs:
+        maestro link add <your-card> link-spec-intake
+
+      agent decides + runs; maestro pre-composed the syntax
+      (passive: no auto-link, no relatedness guess)
+    rejected:
+    - A informational-only -- agent gets no syntax help; more friction re-typing link add and the long card ids each time.
+    - C auto-detect related + targeted suggestion -- maestro would own a fuzzy relatedness heuristic (shared tokens/files) that can misfire and adds complexity, cutting against the passive/dumb design; relatedness is the agent's call.
+- schema_version: maestro.card.v1
+  id: dec-record-output-verbose-block-grounded-1042
+  type: decision
+  title: 'record output = verbose block (grounded: fires once per action here)'
+  status: locked
+  parent: cross-session-run-event-awareness
+  created_at: 2026-06-13T16:31:19.161Z
+  updated_at: 2026-06-13T16:31:19.178Z
+  description: 'Enhancing the maestro hook record console echo (original spark: ''recorded skill_activation (maestro-design) -> runs/cli-2026-06-13'' is too thin). User chose C (verbose block), reasoning they only ever SEE record run once. Verified: .claude/settings.json wires hooks to agent-notify.sh NOT record.sh; record.sh is referenced only by the maestro-lifecycle-test skill. So hook record visibly fires only on skill Activate: lines + the D3 card-verb auto-emits -- not a per-event firehose here. Print site: src/interfaces/cli/hook.rs:58.'
+  extra:
+    locked_at: 2026-06-13T16:31:19.178Z
+    decision: 'maestro hook record echoes a VERBOSE multi-line block per recorded event: event kind, skill, session id, bound card (D3), run dir, and a ''maestro active'' tip. Justified by observed usage -- record is seen ~once per meaningful action in this setup, so the block is informative not spammy. SAFEGUARD for a full hook install (maestro installs record.sh on all 6 events per embedded/hooks/events.yaml): keep the verbose block on low-frequency meaningful events (skill_activation, SessionStart, card_touch) and fall back to a terse single line on the high-frequency tool firehose (PreToolUse/PostToolUse/PermissionRequest/Stop) so it never becomes a wall of text.'
+    preview: |-
+      recorded: skill_activation
+        skill:   maestro-design
+        session: cli-2026-06-13
+        card:    cross-session-run-event-awareness
+        -> runs/cli-2026-06-13
+        tip:     maestro active  (see other live sessions)
+
+      recorded: card_touch (feature new)
+        session: s1
+        card:    cross-session-run-event-awareness
+        -> runs/s1
+    rejected:
+    - A enriched single line -- too terse for the lived experience where record is seen once per skill activation; a richer block is the whole point of the enhance-record ask.
+    - B enriched line + SessionStart-only nudge -- the per-event spam it guards against does not occur in this setup (record is not wired to fire per tool event), so its terseness is unnecessary; nudge folds into the verbose block's tip line.
+- schema_version: maestro.card.v1
+  id: dec-session-identity-for-run-events-must-6368
+  type: decision
+  title: Session identity for run events must read the populated runtime var
+  status: locked
+  parent: cross-session-run-event-awareness
+  created_at: 2026-06-13T16:47:14.957Z
+  updated_at: 2026-06-13T16:47:14.980Z
+  description: 'D3 card-touch events and manual skill_activation events come through the plain CLI path, whose only identity source is cli_run_id() (src/interfaces/cli/mod.rs:1253). It reads MAESTRO_SESSION_ID/MAESTRO_RUN_ID/CODEX_SESSION_ID/CLAUDE_SESSION_ID/CLAUDECODE_SESSION_ID -- all empty in a real Claude Code session -- and falls back to cli-<date>. The populated per-session var is CLAUDE_CODE_SESSION_ID (verified via env). The hook stdin path (record.rs:68) reads payload session_id, which equals that same value: the transcript file is df536043-...jsonl and CLAUDE_CODE_SESSION_ID=df536043-..., and Claude Code names the transcript by session id. So pointing cli_run_id() at CLAUDE_CODE_SESSION_ID makes CLI-path and hook-stdin-path events for one session land in the SAME bucket. Without it, D5 ''one row per live session'' is impossible -- empirically all events today sit in cli-<date> with multiple sessions merged (32 in cli-2026-06-12).'
+  extra:
+    locked_at: 2026-06-13T16:47:14.980Z
+    decision: cli_run_id() (mod.rs:1253) gains CLAUDE_CODE_SESSION_ID ahead of the cli-<date> fallback, so every maestro-emitted event for one session -- hook firehose, manual skill_activation, and D3 card-touch -- shares one per-session bucket. Scope is cli_run_id() ONLY. The real Codex per-session var is added the same way once verified in a real Codex run (CODEX_SESSION_ID is already in the list; CODEX_COMPANION_SESSION_ID seen here is a Claude-companion artifact, not a Codex session id -- do not lock it).
+    preview: |-
+      session df536043  (real Claude id)
+      BEFORE (broken):
+        hook stdin path      -> session_id df536043     [tool firehose, when wired]
+        CLI path (D3 + skill) -> cli_run_id() -> cli-2026-06-13
+        => one session SPLITS across two buckets; cli-2026-06-13 also
+           MERGES every other same-day session. 'active' shows phantoms.
+
+      AFTER (cli_run_id() reads CLAUDE_CODE_SESSION_ID):
+        hook stdin path      -> df536043
+        CLI path (D3 + skill) -> df536043   (CLAUDE_CODE_SESSION_ID)
+        => one bucket per session; parallel sessions = distinct rows.
+    rejected:
+    - Leave cli_run_id() unchanged and accept the cli-<date> collapse -- directly breaks D5 (all same-day sessions become one row).
+    - Require the agent to export MAESTRO_SESSION_ID manually -- fragile per-session setup, same failure mode as D3's rejected env-stamp; must work with zero agent setup.
+    - 'Also add the var to claim_session() (mod.rs:1280) in the same change -- OUT OF SCOPE: changes claim identity from per-process s<pid>-<nanos> to per-session, perturbing the claim-collision invariant documented at mod.rs:1276-1279. Recorded as an adjacent finding for the user, not bundled into this contract.'

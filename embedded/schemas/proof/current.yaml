@@ -1,0 +1,31 @@
+# Schema contract for the proof report family (WS5 / D6.2-B).
+# src/domain/schema_contracts validates this pack against the Rust constants;
+# any edit trips tests/resources_version_guard.rs so it is acknowledged.
+family: proof
+contracts:
+  - name: verification-report
+    schema_version: maestro.verification.v1
+    stamp: file
+    carrier: file
+    format: json
+    # The report is built in memory at task verify; only its summary binding
+    # persists inside task.yaml today (task-dir verification.json is a legacy
+    # artifact). The contract documents the report shape so a future persisted
+    # report cannot drift silently. verified_commit/contract_hash sit at the
+    # top level (flattened freshness inputs).
+    home: built in memory at task verify (legacy home .maestro/tasks/<id>/verification.json)
+    model: src/domain/proof/verify_task.rs::VerificationReport
+    fields:
+      - schema_version
+      - task_id
+      - attempt_id
+      - task_snapshot
+      - status
+      - verified_at
+      - verified_commit
+      - contract_hash
+      - claims
+      - commands
+      - claims_only
+      - proof_sources
+      - failures

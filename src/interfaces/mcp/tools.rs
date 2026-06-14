@@ -76,8 +76,8 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
         ),
         tool(
             "maestro_decision_list",
-            "Lists all decisions in .maestro/decisions/.",
-            json!({"type":"object","properties":{}}),
+            "Lists decision cards (recent 20 by activity hidden behind all=true, mirroring maestro_task_list).",
+            json!({"type":"object","properties":{"all":{"type":"boolean"}}}),
         ),
         tool(
             "maestro_decision_new",
@@ -116,7 +116,7 @@ pub fn call_tool(paths: &MaestroPaths, name: &str, arguments: &Value) -> Result<
         "maestro_feature_show" => cli(required_args(arguments, &["feature", "show"], &["id"])?),
         "maestro_feature_start" => cli(required_args(arguments, &["feature", "start"], &["id"])?),
         "maestro_feature_ship" => cli(required_args(arguments, &["feature", "ship"], &["id"])?),
-        "maestro_decision_list" => cli(vec!["decision".to_string(), "list".to_string()]),
+        "maestro_decision_list" => decision_list(arguments),
         "maestro_decision_new" => cli(required_args(arguments, &["decision", "new"], &["title"])?),
         "maestro_verify" => cli(required_args(arguments, &["task", "verify"], &["id"])?),
         "maestro_query_matrix" => cli(vec!["query".to_string(), "matrix".to_string()]),
@@ -185,7 +185,10 @@ fn task_list(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
     let mut tasks = task::load_task_records(&paths.tasks_dir())?;
     let mut archived_ids = std::collections::BTreeSet::new();
     if all {
-        let archived = task::load_task_records(&paths.archive_tasks_dir())?;
+        let archived: Vec<_> = task::load_archived_task_entries(paths)?
+            .into_iter()
+            .map(|entry| entry.task)
+            .collect();
         archived_ids.extend(archived.iter().map(|t| t.id.clone()));
         tasks.extend(archived);
     }
@@ -199,7 +202,7 @@ fn task_list(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
         include_terminal,
     };
     let shown = task::filter_tasks(tasks.clone(), &filter(all));
-    let missing_verify_contract_ids = missing_verify_contract_ids(paths, &shown, &archived_ids)?;
+    let missing_verify_contract_ids = task::missing_verify_contract_ids(paths, &shown)?;
     let mut out = task::render_task_list_with_missing_checks(
         &shown,
         &archived_ids,
@@ -216,33 +219,6 @@ fn task_list(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
     Ok(out)
 }
 
-fn missing_verify_contract_ids(
-    paths: &MaestroPaths,
-    tasks: &[task::TaskRecord],
-    archived_ids: &std::collections::BTreeSet<String>,
-) -> Result<std::collections::BTreeSet<String>> {
-    let mut missing = std::collections::BTreeSet::new();
-    for task in tasks {
-        if task.feature_id.is_some()
-            || !matches!(
-                task.state,
-                task::TaskState::Draft | task::TaskState::Exploring
-            )
-        {
-            continue;
-        }
-        let tasks_dir = if archived_ids.contains(&task.id) {
-            paths.archive_tasks_dir()
-        } else {
-            paths.tasks_dir()
-        };
-        if task::load_task_checks(&tasks_dir, task)?.is_empty() {
-            missing.insert(task.id.clone());
-        }
-    }
-    Ok(missing)
-}
-
 fn sync_tool(arguments: &Value) -> Result<String> {
     let mut argv = vec!["sync".to_string()];
     if bool_arg(arguments, "dry_run") {
@@ -253,6 +229,14 @@ fn sync_tool(arguments: &Value) -> Result<String> {
 
 fn feature_list(arguments: &Value) -> Result<String> {
     let mut argv = vec!["feature".to_string(), "list".to_string()];
+    if bool_arg(arguments, "all") {
+        argv.push("--all".to_string());
+    }
+    cli(argv)
+}
+
+fn decision_list(arguments: &Value) -> Result<String> {
+    let mut argv = vec!["decision".to_string(), "list".to_string()];
     if bool_arg(arguments, "all") {
         argv.push("--all".to_string());
     }

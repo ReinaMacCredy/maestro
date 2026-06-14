@@ -1,0 +1,87 @@
+schema_version: maestro.card.v1
+id: task-record-playbook-in-resources-version-08da
+type: task
+title: Record playbook in resources_version_guard + architecture embed-allowlist
+status: verified
+parent: code-playbook-per-language-styleguides-surfaced-on-demand
+claimed_by: claude#s26804-1781450623143786000
+claimed_at: 2026-06-14T15:23:43.143Z
+created_at: 2026-06-14T15:05:11.291Z
+updated_at: 2026-06-14T15:28:23.012Z
+extra:
+  schema_version: maestro.task.v2
+  claims:
+  - tests/resources_version_guard.rs has a playbook row (PLAYBOOK.md, 1.0.0, tree-hash over all 11 files) + a playbook match arm + playbook in the mapping arm, count 16->17, and the harness hash re-recorded for 1.15.0
+  - tests/architecture_imports.rs RESOURCE_EMBED_ALLOWLIST permits src/domain/extraction/playbook.rs -> embedded/playbook; resource_embeds_stay_in_owning_modules passes
+  - cargo test full suite exit 0 with no failures; cargo clippy --all-targets exit 0; cargo fmt --check clean for the files this feature touched
+  covers:
+  - ac-5
+  state_history:
+  - state: draft
+    at: 2026-06-14T15:05:11.291Z
+    by: maestro
+  - state: exploring
+    at: 2026-06-14T15:05:11.309Z
+    by: maestro
+  - state: ready
+    at: 2026-06-14T15:05:11.350Z
+    by: maestro
+  - state: needs_verification
+    at: 2026-06-14T15:25:01.818Z
+    by: maestro
+    summary: Recorded the playbook in resources_version_guard (new row + match arm + mapping arm) and the architecture embed-allowlist; re-recorded the harness tree-hash after the 1.15.0 bump.
+    claims:
+    - tests/resources_version_guard.rs has a playbook row (PLAYBOOK.md, 1.0.0, tree-hash over all 11 files) + a playbook match arm + playbook in the mapping arm, count 16->17, and the harness hash re-recorded for 1.15.0
+    - tests/architecture_imports.rs RESOURCE_EMBED_ALLOWLIST permits src/domain/extraction/playbook.rs -> embedded/playbook; resource_embeds_stay_in_owning_modules passes
+    - cargo test full suite exit 0 with no failures; cargo clippy --all-targets exit 0; cargo fmt --check clean for the files this feature touched
+  - state: needs_verification
+    at: 2026-06-14T15:25:01.830Z
+    by: maestro
+    summary: 'verification failed: missing proof: no task events or proof artifacts found; hooks record proof during agent runs, or add one with `maestro event create --task-id task-record-playbook-in-resources-version-08da --claim "..."`'
+    open_items:
+    - 'missing proof: no task events or proof artifacts found; hooks record proof during agent runs, or add one with `maestro event create --task-id task-record-playbook-in-resources-version-08da --claim "..."`'
+    - 'claim not backed by events/proof: tests/resources_version_guard.rs has a playbook row (PLAYBOOK.md, 1.0.0, tree-hash over all 11 files) + a playbook match arm + playbook in the mapping arm, count 16->17, and the harness hash re-recorded for 1.15.0; record matching proof with `maestro event create --task-id task-record-playbook-in-resources-version-08da --claim "tests/resources_version_guard.rs has a playbook row (PLAYBOOK.md, 1.0.0, tree-hash over all 11 files) + a playbook match arm + playbook in the mapping arm, count 16->17, and the harness hash re-recorded for 1.15.0"`'
+    - 'claim not backed by events/proof: tests/architecture_imports.rs RESOURCE_EMBED_ALLOWLIST permits src/domain/extraction/playbook.rs -> embedded/playbook; resource_embeds_stay_in_owning_modules passes; record matching proof with `maestro event create --task-id task-record-playbook-in-resources-version-08da --claim "tests/architecture_imports.rs RESOURCE_EMBED_ALLOWLIST permits src/domain/extraction/playbook.rs -> embedded/playbook; resource_embeds_stay_in_owning_modules passes"`'
+    - 'claim not backed by events/proof: cargo test full suite exit 0 with no failures; cargo clippy --all-targets exit 0; cargo fmt --check clean for the files this feature touched; record matching proof with `maestro event create --task-id task-record-playbook-in-resources-version-08da --claim "cargo test full suite exit 0 with no failures; cargo clippy --all-targets exit 0; cargo fmt --check clean for the files this feature touched"`'
+  - state: verified
+    at: 2026-06-14T15:28:23.012Z
+    by: maestro
+    summary: 'verification passed: 3 claim(s), 1 proof source(s)'
+  lane: normal
+  risk: medium
+  verification:
+    status: passed
+    verified_at: 2026-06-14T15:28:23.012Z
+    verified_commit: 9e6562645fc4cf4fce388fcf88194f6b1de78411
+    verified_by_run: .maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
+    contract_hash: 1ee23071777460eb8c01a259dd2dad2784c697bdcf9761cdbb02a94e42007544
+    claim_checks:
+    - claim: tests/resources_version_guard.rs has a playbook row (PLAYBOOK.md, 1.0.0, tree-hash over all 11 files) + a playbook match arm + playbook in the mapping arm, count 16->17, and the harness hash re-recorded for 1.15.0
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
+    - claim: tests/architecture_imports.rs RESOURCE_EMBED_ALLOWLIST permits src/domain/extraction/playbook.rs -> embedded/playbook; resource_embeds_stay_in_owning_modules passes
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
+    - claim: cargo test full suite exit 0 with no failures; cargo clippy --all-targets exit 0; cargo fmt --check clean for the files this feature touched
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
+    commands:
+    - cmd: cargo build
+      exit_code: 0
+      duration_ms: 229
+    - cmd: cargo test
+      exit_code: 0
+      duration_ms: 58914
+    - cmd: cargo clippy -- -D warnings
+      exit_code: 0
+      duration_ms: 399
+    proof_sources:
+    - kind: event
+      path: .maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
+      hash: 67ba6d135f535aa01ebd8679e01340c112b097a49913c18d585ce55b64a00bf1
+  acceptance_locked: true
+  acceptance:
+    checks:
+    - cargo test --test resources_version_guard and --test architecture_imports pass with the new playbook row/arm and embed-allowlist entry; re-recorded harness hash; full clippy + fmt green
+    locked_by: maestro
+    locked_at: 2026-06-14T15:05:11.350Z

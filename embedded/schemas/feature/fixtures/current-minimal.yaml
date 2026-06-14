@@ -1,0 +1,9 @@
+schema_version: maestro.card.v1
+id: feature-minimal-fixture-0a1b
+type: feature
+title: Minimal feature fixture
+status: proposed
+created_at: 2026-06-12T00:00:00.000Z
+updated_at: 2026-06-12T00:00:00.000Z
+extra:
+  schema_version: maestro.feature.v2
