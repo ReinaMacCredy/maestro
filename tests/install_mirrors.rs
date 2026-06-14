@@ -52,6 +52,41 @@ fn mirror_plan_writes_managed_content_for_claude() {
 }
 
 #[test]
+fn mirror_plan_wraps_both_markdown_mirrors_in_maestro_markers() {
+    // ac-1: install writes a maestro-managed block into CLAUDE.md AND AGENTS.md
+    // for either agent -- CLAUDE.md @-imports HARNESS.md, AGENTS.md uses the
+    // Read-first line, both wrapped in the markdown markers so sync can find
+    // and refresh them later.
+    for agent in [InstallAgent::Claude, InstallAgent::Codex] {
+        let plans = mirror_plan(agent).expect("invariant: mirror plan should build");
+        let claude = plans
+            .iter()
+            .find(|plan| plan.relative_path == "CLAUDE.md")
+            .expect("invariant: CLAUDE.md mirror plan should exist");
+        let agents = plans
+            .iter()
+            .find(|plan| plan.relative_path == "AGENTS.md")
+            .expect("invariant: AGENTS.md mirror plan should exist");
+        for plan in [claude, agents] {
+            assert_eq!(plan.kind, MirrorKind::MarkdownManagedBlock);
+            assert!(
+                plan.contents.contains("<!-- maestro:start -->")
+                    && plan.contents.contains("<!-- maestro:end -->"),
+                "{} block is not marker-wrapped: {}",
+                plan.relative_path,
+                plan.contents
+            );
+        }
+        assert!(claude.contents.contains("@.maestro/harness/HARNESS.md"));
+        assert!(
+            agents
+                .contents
+                .contains("Read .maestro/harness/HARNESS.md first")
+        );
+    }
+}
+
+#[test]
 fn mirror_plan_writes_codex_hook_timeout_and_trust_related_files() {
     let plans = mirror_plan(InstallAgent::Codex).expect("invariant: mirror plan should build");
 
