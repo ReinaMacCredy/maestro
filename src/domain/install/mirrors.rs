@@ -158,6 +158,103 @@ pub fn mirror_plan(agent: InstallAgent) -> Result<Vec<MirrorPlan>> {
     Ok(plans)
 }
 
+/// What `maestro sync` would do to one markdown managed-block mirror.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MirrorBlockFate {
+    /// The file carries the maestro markers and its block already matches shipped content.
+    Current,
+    /// The file carries the maestro markers but the block differs; sync refreshes it.
+    Refresh,
+    /// The file is absent or has no maestro markers; sync leaves it untouched.
+    Unmanaged,
+}
+
+/// Outcome of resyncing one markdown managed-block mirror.
+#[derive(Clone, Debug)]
+pub struct MirrorBlockSync {
+    /// Repo-relative path of the mirror file.
+    pub relative_path: String,
+    /// What sync did (or, in a preview, would do) to the file.
+    pub fate: MirrorBlockFate,
+    /// Backup of the pre-sync copy, present only when the block was refreshed.
+    pub backup_path: Option<PathBuf>,
+}
+
+/// The markdown managed-block mirrors and their shipped bodies. Agent-independent:
+/// both files carry the same block regardless of which agent installed.
+fn markdown_mirror_bodies() -> [(&'static str, &'static str); 2] {
+    [
+        ("CLAUDE.md", claude_md_block()),
+        ("AGENTS.md", agents_md_block()),
+    ]
+}
+
+/// Decide a mirror file's fate against the shipped block body. A file with no
+/// maestro markers is left untouched -- sync only refreshes blocks that already
+/// exist, never re-adds one the user removed.
+fn mirror_block_fate(existing: Option<&str>, body: &str) -> MirrorBlockFate {
+    let Some(existing) = existing else {
+        return MirrorBlockFate::Unmanaged;
+    };
+    let (start, end) = ManagedBlockFormat::Markdown.markers();
+    if find_block(existing, start, end).is_none() {
+        return MirrorBlockFate::Unmanaged;
+    }
+    let updated = upsert_managed_block(Some(existing), ManagedBlockFormat::Markdown, body);
+    if updated == existing {
+        MirrorBlockFate::Current
+    } else {
+        MirrorBlockFate::Refresh
+    }
+}
+
+/// Compute, without writing, what `maestro sync` would do to each markdown
+/// managed-block mirror.
+pub fn preview_mirror_block_resync(paths: &MaestroPaths) -> Result<Vec<MirrorBlockSync>> {
+    let mut out = Vec::new();
+    for (relative_path, body) in markdown_mirror_bodies() {
+        let path = managed_mirror_path(paths, relative_path)?;
+        let existing = read_to_string_if_exists(&path)?;
+        out.push(MirrorBlockSync {
+            relative_path: relative_path.to_string(),
+            fate: mirror_block_fate(existing.as_deref(), body),
+            backup_path: None,
+        });
+    }
+    Ok(out)
+}
+
+/// Resync each markdown managed-block mirror to the binary's shipped block,
+/// backing up any drifted file first. Content outside the markers is preserved
+/// by [`upsert_managed_block`]; files without the markers are left untouched.
+pub fn resync_mirror_blocks(
+    paths: &MaestroPaths,
+    backup_timestamp: &str,
+) -> Result<Vec<MirrorBlockSync>> {
+    let mut out = Vec::new();
+    for (relative_path, body) in markdown_mirror_bodies() {
+        let path = managed_mirror_path(paths, relative_path)?;
+        let existing = read_to_string_if_exists(&path)?;
+        let fate = mirror_block_fate(existing.as_deref(), body);
+        let backup_path = if fate == MirrorBlockFate::Refresh {
+            let existing = existing.as_deref().unwrap_or_default();
+            let backup_path = backup_file_with_timestamp(paths, &path, "sync", backup_timestamp)?;
+            let updated = upsert_managed_block(Some(existing), ManagedBlockFormat::Markdown, body);
+            write_string_atomic(&path, &updated)
+                .with_context(|| format!("failed to resync mirror {}", path.display()))?;
+            Some(backup_path)
+        } else {
+            None
+        };
+        out.push(MirrorBlockSync {
+            relative_path: relative_path.to_string(),
+            fate,
+            backup_path,
+        });
+    }
+    Ok(out)
+}
+
 /// Prepare all mirror updates without mutating the repository.
 pub(crate) fn prepare_mirrors(
     paths: &MaestroPaths,

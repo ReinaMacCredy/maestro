@@ -29,6 +29,15 @@ fn init(repo: &Path) {
     );
 }
 
+fn install_claude(repo: &Path) {
+    let output = maestro(&["install", "--agent", "claude"], repo);
+    assert!(
+        output.status.success(),
+        "install --agent claude failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 fn record_sh(paths: &MaestroPaths) -> PathBuf {
     paths.hooks_dir().join("record.sh")
 }
@@ -167,6 +176,127 @@ fn sync_preserves_a_local_edit_when_the_version_matches() {
         fs::read_to_string(&record).expect("invariant: hook script should be readable"),
         edited,
         "sync must preserve an edit whose version still matches"
+    );
+}
+
+/// True when sync wrote a mirror-block backup (operation suffix `-sync`).
+fn sync_mirror_backup_exists(paths: &MaestroPaths, relative_path: &str) -> bool {
+    let Ok(entries) = fs::read_dir(paths.backups_dir()) else {
+        return false;
+    };
+    for entry in entries {
+        let entry = entry.expect("invariant: backup entry should be readable");
+        let name = entry.file_name();
+        let name = name
+            .to_str()
+            .expect("invariant: backup dir name should be UTF-8");
+        if name.ends_with("-sync") && entry.path().join(relative_path).exists() {
+            return true;
+        }
+    }
+    false
+}
+
+#[test]
+fn sync_resyncs_a_drifted_managed_mirror_block_and_preserves_user_content() {
+    let temp = TestTempDir::new("maestro-sync-test");
+    init_git_marker(temp.path());
+    init(temp.path());
+    install_claude(temp.path());
+    let claude = temp.path().join("CLAUDE.md");
+
+    // Drift the managed block body and wrap it in user-owned content on both sides.
+    fs::write(
+        &claude,
+        "# My notes\n\n<!-- maestro:start -->\nstale content\n<!-- maestro:end -->\n\nkeep me\n",
+    )
+    .expect("invariant: CLAUDE.md should be writable");
+
+    let output = maestro(&["sync"], temp.path());
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("mirror blocks resynced:"), "{stdout}");
+    assert!(stdout.contains("CLAUDE.md"), "{stdout}");
+
+    let restored = fs::read_to_string(&claude).expect("invariant: CLAUDE.md should be readable");
+    // The block is restored to shipped content...
+    assert!(
+        restored.contains("@.maestro/harness/HARNESS.md"),
+        "block restored: {restored}"
+    );
+    assert!(!restored.contains("stale content"), "drift gone: {restored}");
+    // ...and the user content outside the markers survives.
+    assert!(restored.starts_with("# My notes"), "{restored}");
+    assert!(restored.contains("keep me"), "{restored}");
+    // The pre-sync copy is backed up.
+    let paths = MaestroPaths::new(temp.path());
+    assert!(
+        sync_mirror_backup_exists(&paths, "CLAUDE.md"),
+        "a drifted mirror block should be backed up under .maestro/backups/<ts>-sync/"
+    );
+}
+
+#[test]
+fn sync_leaves_a_freshly_installed_mirror_block_untouched() {
+    let temp = TestTempDir::new("maestro-sync-test");
+    init_git_marker(temp.path());
+    init(temp.path());
+    install_claude(temp.path());
+    let claude = temp.path().join("CLAUDE.md");
+    let agents = temp.path().join("AGENTS.md");
+    let claude_before =
+        fs::read_to_string(&claude).expect("invariant: CLAUDE.md should be readable");
+    let agents_before =
+        fs::read_to_string(&agents).expect("invariant: AGENTS.md should be readable");
+
+    // This feature does not change the block bodies, only HARNESS.md, so on a
+    // freshly installed repo sync must be a pure no-op for the mirror blocks.
+    let output = maestro(&["sync"], temp.path());
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        !stdout.contains("mirror blocks resynced:"),
+        "a matching block must not be reported as resynced: {stdout}"
+    );
+
+    assert_eq!(
+        fs::read_to_string(&claude).expect("invariant: CLAUDE.md should be readable"),
+        claude_before,
+        "sync must not rewrite a matching CLAUDE.md block"
+    );
+    assert_eq!(
+        fs::read_to_string(&agents).expect("invariant: AGENTS.md should be readable"),
+        agents_before
+    );
+    let paths = MaestroPaths::new(temp.path());
+    assert!(
+        !sync_mirror_backup_exists(&paths, "CLAUDE.md"),
+        "a no-op sync must not back up the mirror block"
+    );
+}
+
+#[test]
+fn sync_skips_a_mirror_file_without_the_markers() {
+    let temp = TestTempDir::new("maestro-sync-test");
+    init_git_marker(temp.path());
+    init(temp.path());
+    install_claude(temp.path());
+    let claude = temp.path().join("CLAUDE.md");
+
+    // The user removed the managed block entirely; sync must not re-add it.
+    fs::write(&claude, "# Just my own notes, no maestro block\n")
+        .expect("invariant: CLAUDE.md should be writable");
+
+    let output = maestro(&["sync"], temp.path());
+    assert!(output.status.success());
+    assert_eq!(
+        fs::read_to_string(&claude).expect("invariant: CLAUDE.md should be readable"),
+        "# Just my own notes, no maestro block\n",
+        "sync only refreshes blocks that already exist"
     );
 }
 

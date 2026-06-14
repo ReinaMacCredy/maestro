@@ -11,7 +11,10 @@ mod lock;
 mod mirrors;
 
 pub use lock::{AgentInstall, FileOwnership, InstallLock, InstallState, MirrorKind};
-pub use mirrors::{MirrorPlan, mirror_plan};
+pub use mirrors::{
+    MirrorBlockFate, MirrorBlockSync, MirrorPlan, mirror_plan, preview_mirror_block_resync,
+    resync_mirror_blocks,
+};
 
 use lock::remove_lock_file;
 use mirrors::{prepare_mirrors, write_prepared_mirrors};
