@@ -86,7 +86,7 @@ pub fn list(args: ListArgs) -> Result<()> {
     } else {
         Vec::new()
     };
-    let rows: Vec<(&card::schema::Card, bool)> =
+    let mut rows: Vec<(&card::schema::Card, bool)> =
         card::query::query_scanned(&live, &filter, grep, candidates)
             .into_iter()
             .map(|c| (c, false))
@@ -96,10 +96,33 @@ pub fn list(args: ListArgs) -> Result<()> {
                     .map(|c| (c, true)),
             )
             .collect();
+    // Bare list (no --all and no explicit narrowing filter) bounds its default to
+    // the live slice: drop non-archived coarse-Closed rows so an agent's routine
+    // `list` doesn't re-ingest the whole terminal history every orientation. Any
+    // explicit filter or --all governs the result as-is; --archived stays
+    // orthogonal (it keeps its archived rows here). An unrecognized status maps to
+    // coarse None and is kept, never silently hidden.
+    let apply_live_slice = !args.all
+        && args.parent.is_none()
+        && args.card_type.is_none()
+        && args.assignee.is_none()
+        && args.status.is_none()
+        && args.grep.is_none();
+    let mut hidden = 0usize;
+    if apply_live_slice {
+        rows.retain(|(c, archived)| {
+            let drop = !*archived
+                && card::query::coarse_of(&c.status) == Some(card::query::Coarse::Closed);
+            if drop {
+                hidden += 1;
+            }
+            !drop
+        });
+    }
     if args.json {
         render_list_json(&rows)?;
     } else {
-        render_list(&rows);
+        render_list(&rows, hidden, args.archived);
     }
     Ok(())
 }
@@ -609,12 +632,16 @@ fn render_ready_json(cards: &[&card::schema::Card]) -> Result<()> {
 /// Render `list` in the beads structure (SPEC DN9): a count header plus numbered
 /// rows carrying the real per-type status and parent, emoji-free. Archived rows
 /// (SPEC-archive-memory A1) carry a trailing `(archived: <parent>)` marker.
-fn render_list(rows: &[(&card::schema::Card, bool)]) {
+fn render_list(rows: &[(&card::schema::Card, bool)], hidden: usize, archived: bool) {
     if rows.is_empty() {
         println!("no cards match");
         return;
     }
-    println!("{} {}:", rows.len(), plural(rows.len()));
+    if hidden > 0 && !archived {
+        println!("{} live ({hidden} closed hidden; --all)", rows.len());
+    } else {
+        println!("{} {}:", rows.len(), plural(rows.len()));
+    }
     let id_width = rows.iter().map(|(c, _)| c.id.len()).max().unwrap_or(0);
     let type_width = rows
         .iter()

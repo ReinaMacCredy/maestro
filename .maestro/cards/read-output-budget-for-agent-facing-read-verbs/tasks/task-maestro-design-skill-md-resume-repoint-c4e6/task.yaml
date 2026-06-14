@@ -1,0 +1,31 @@
+schema_version: maestro.card.v1
+id: task-maestro-design-skill-md-resume-repoint-c4e6
+type: task
+title: maestro-design SKILL.md resume repoint + version bump + tuple re-record
+status: ready
+parent: read-output-budget-for-agent-facing-read-verbs
+created_at: 2026-06-14T09:52:00.244Z
+updated_at: 2026-06-14T09:52:00.340Z
+extra:
+  schema_version: maestro.task.v2
+  acceptance:
+    checks:
+    - cargo test --test resources_version_guard passes — SKILL.md resume line points at `decision list --feature <id>`, maestro-design version bumped, (version, tree-hash) tuple re-recorded.
+    locked_by: maestro
+    locked_at: 2026-06-14T09:52:00.340Z
+  covers:
+  - ac-7
+  state_history:
+  - state: draft
+    at: 2026-06-14T09:52:00.244Z
+    by: maestro
+  - state: exploring
+    at: 2026-06-14T09:52:00.263Z
+    by: maestro
+  - state: ready
+    at: 2026-06-14T09:52:00.340Z
+    by: maestro
+  lane: normal
+  risk: medium
+  verification: {}
+  acceptance_locked: true

@@ -369,6 +369,9 @@ pub struct ListArgs {
     /// Include archived cards (rows marked archived).
     #[arg(long)]
     pub archived: bool,
+    /// Show all cards, including coarse-closed ones the bare list hides.
+    #[arg(long)]
+    pub all: bool,
     /// Print machine-readable list JSON.
     #[arg(long)]
     pub json: bool,

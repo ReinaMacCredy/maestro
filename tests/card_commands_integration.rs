@@ -392,8 +392,13 @@ fn archive_loose_sweeps_terminal_parentless_cards_but_keeps_rules() {
 
     let live = run(repo, &["list"]);
     assert!(
-        live.contains("Keep me open") && live.contains(&new_rule) && !live.contains(&swept_task),
-        "live list keeps current work + rules:\n{live}"
+        live.contains("Keep me open") && !live.contains(&swept_task) && !live.contains(&new_rule),
+        "bare list keeps current work, hides the swept task and the coarse-closed rule:\n{live}"
+    );
+    let all = run(repo, &["list", "--all"]);
+    assert!(
+        all.contains("Keep me open") && all.contains(&new_rule) && !all.contains(&swept_task),
+        "--all restores the live locked rule while archived sweeps stay gone:\n{all}"
     );
     let recall = run(repo, &["list", "--grep", "Sweep me", "--archived"]);
     assert!(
@@ -696,6 +701,64 @@ fn ready_and_list_render_the_beads_structure() {
     assert!(
         list.contains("1.") && list.contains("open"),
         "numbered rows carry the real status:\n{list}"
+    );
+}
+
+#[test]
+fn bare_list_bounds_to_the_live_slice_and_all_restores_closed() {
+    let temp = cards_repo("s2-list-live-slice");
+    let repo = temp.path();
+
+    run(repo, &["create", "-t", "task", "Live one"]);
+    run(repo, &["create", "-t", "task", "Live two"]);
+    run(repo, &["create", "-t", "task", "Done one"]);
+    let done = id_by_title(repo, "Done one");
+    run(repo, &["update", &done, "--status", "closed"]);
+
+    // ac-1: bare list hides the coarse-closed card and the header carries the delta.
+    let bare = run(repo, &["list"]);
+    assert!(
+        bare.contains("2 live (1 closed hidden; --all)"),
+        "bare list header shows the live count + hidden delta:\n{bare}"
+    );
+    assert!(
+        bare.contains("Live one") && bare.contains("Live two") && !bare.contains(&done),
+        "bare list shows open work, hides the closed card:\n{bare}"
+    );
+
+    // ac-2: --all restores the closed card and drops the slice header.
+    let all = run(repo, &["list", "--all"]);
+    assert!(
+        all.contains("3 cards:") && all.contains(&done),
+        "--all restores the closed card under the plain header:\n{all}"
+    );
+
+    // ac-2: an explicit --status filter governs without needing --all.
+    let closed_only = run(repo, &["list", "--status", "closed"]);
+    assert!(
+        closed_only.contains(&done) && !closed_only.contains("Live one"),
+        "an explicit --status filter governs the result on its own:\n{closed_only}"
+    );
+
+    // ac-3: bare --json emits the SAME sliced element set as bare list; --all restores.
+    let bare_json: Value =
+        serde_json::from_str(&run(repo, &["list", "--json"])).expect("bare list json");
+    let bare_ids: Vec<&str> = bare_json["cards"]
+        .as_array()
+        .expect("cards array")
+        .iter()
+        .map(|c| c["id"].as_str().expect("card id"))
+        .collect();
+    assert!(
+        bare_ids.len() == 2 && !bare_ids.contains(&done.as_str()),
+        "bare list --json carries the live slice, not the closed card:\n{bare_ids:?}"
+    );
+    let all_json: Value =
+        serde_json::from_str(&run(repo, &["list", "--all", "--json"])).expect("all list json");
+    assert_eq!(
+        all_json["cards"].as_array().expect("cards array").len(),
+        3,
+        "--all --json restores the full non-archived set"
     );
 }
 
@@ -1129,7 +1192,10 @@ fn maestro_in_session(cwd: &Path, session: &str, args: &[&str]) -> Output {
 /// The parsed `card_touch` run events recorded in a session bucket, in append
 /// order. Missing bucket -> no events.
 fn card_touch_events(repo: &Path, session: &str) -> Vec<Value> {
-    let path = repo.join(".maestro/runs").join(session).join("events.jsonl");
+    let path = repo
+        .join(".maestro/runs")
+        .join(session)
+        .join("events.jsonl");
     let raw = fs::read_to_string(path).unwrap_or_default();
     raw.lines()
         .filter(|line| !line.trim().is_empty())
@@ -1149,7 +1215,11 @@ fn card_mutating_verbs_auto_emit_card_touch_tagged_session_and_card() {
     maestro_in_session(repo, session, &["create", "-t", "chore", "Second chore"]);
     let second = id_by_title(repo, "Second chore");
     // A non-create mutation (update) also binds: it is the most recent touch.
-    let updated = maestro_in_session(repo, session, &["update", &first, "--description", "touched"]);
+    let updated = maestro_in_session(
+        repo,
+        session,
+        &["update", &first, "--description", "touched"],
+    );
     assert!(
         updated.status.success(),
         "update exits 0\nstderr:\n{}",

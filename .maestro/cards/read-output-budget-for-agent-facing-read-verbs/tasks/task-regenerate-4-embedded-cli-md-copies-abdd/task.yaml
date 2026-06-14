@@ -1,0 +1,31 @@
+schema_version: maestro.card.v1
+id: task-regenerate-4-embedded-cli-md-copies-abdd
+type: task
+title: Regenerate 4 embedded cli.md copies
+status: ready
+parent: read-output-budget-for-agent-facing-read-verbs
+created_at: 2026-06-14T09:52:00.273Z
+updated_at: 2026-06-14T09:52:00.350Z
+extra:
+  schema_version: maestro.task.v2
+  acceptance:
+    checks:
+    - cargo test --test cli_reference_freshness passes after `cargo test regenerate_cli_md -- --ignored`; all 4 copies byte-equal to the clap model.
+    locked_by: maestro
+    locked_at: 2026-06-14T09:52:00.350Z
+  covers:
+  - ac-8
+  state_history:
+  - state: draft
+    at: 2026-06-14T09:52:00.273Z
+    by: maestro
+  - state: exploring
+    at: 2026-06-14T09:52:00.292Z
+    by: maestro
+  - state: ready
+    at: 2026-06-14T09:52:00.350Z
+    by: maestro
+  lane: normal
+  risk: medium
+  verification: {}
+  acceptance_locked: true
