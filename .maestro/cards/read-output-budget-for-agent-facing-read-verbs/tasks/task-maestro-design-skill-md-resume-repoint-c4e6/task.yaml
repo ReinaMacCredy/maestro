@@ -2,17 +2,16 @@ schema_version: maestro.card.v1
 id: task-maestro-design-skill-md-resume-repoint-c4e6
 type: task
 title: maestro-design SKILL.md resume repoint + version bump + tuple re-record
-status: ready
+status: needs_verification
 parent: read-output-budget-for-agent-facing-read-verbs
+claimed_by: maestro
+claimed_at: 2026-06-14T10:19:51.740Z
 created_at: 2026-06-14T09:52:00.244Z
-updated_at: 2026-06-14T09:52:00.340Z
+updated_at: 2026-06-14T10:21:13.758Z
 extra:
   schema_version: maestro.task.v2
-  acceptance:
-    checks:
-    - cargo test --test resources_version_guard passes — SKILL.md resume line points at `decision list --feature <id>`, maestro-design version bumped, (version, tree-hash) tuple re-recorded.
-    locked_by: maestro
-    locked_at: 2026-06-14T09:52:00.340Z
+  claims:
+  - embedded/skills/maestro-design/SKILL.md Stop line now resumes from 'maestro decision list --feature <id>' (not bare list); version 1.13.0 -> 1.14.0; resources_version_guard maestro-design tuple re-recorded to the new tree-hash; resume.rs prior_decisions is unchanged (not a reopen of A3)
   covers:
   - ac-7
   state_history:
@@ -25,7 +24,54 @@ extra:
   - state: ready
     at: 2026-06-14T09:52:00.340Z
     by: maestro
+  - state: in_progress
+    at: 2026-06-14T10:19:51.740Z
+    by: maestro
+  - state: needs_verification
+    at: 2026-06-14T10:21:13.742Z
+    by: maestro
+    summary: maestro-design SKILL.md resume guidance repointed to 'decision list --feature <id>' so A3's recent window never strands a feature's decisions on resume; version bumped + guard tuple re-recorded
+    claims:
+    - embedded/skills/maestro-design/SKILL.md Stop line now resumes from 'maestro decision list --feature <id>' (not bare list); version 1.13.0 -> 1.14.0; resources_version_guard maestro-design tuple re-recorded to the new tree-hash; resume.rs prior_decisions is unchanged (not a reopen of A3)
+  - state: needs_verification
+    at: 2026-06-14T10:21:13.758Z
+    by: maestro
+    summary: 'verification failed: verify command failed: cargo test (exit 101)'
+    open_items:
+    - 'verify command failed: cargo test (exit 101)'
+    - 'verify command failed: cargo clippy -- -D warnings (exit 101)'
   lane: normal
   risk: medium
-  verification: {}
+  verification:
+    status: failed
+    verified_at: 2026-06-14T10:21:13.758Z
+    verified_commit: 9d90721aa9530374e57e4c374a8a823e21bd4198
+    verified_by_run: .maestro/runs/6ef6f1c0-d4d9-41c5-9c86-d0fcaf53a2ba/events.jsonl
+    contract_hash: 19e675775533cbdcb5de2d7a37098cf4b2000eb7800a3339b3258846f45e110b
+    claim_checks:
+    - claim: embedded/skills/maestro-design/SKILL.md Stop line now resumes from 'maestro decision list --feature <id>' (not bare list); version 1.13.0 -> 1.14.0; resources_version_guard maestro-design tuple re-recorded to the new tree-hash; resume.rs prior_decisions is unchanged (not a reopen of A3)
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/6ef6f1c0-d4d9-41c5-9c86-d0fcaf53a2ba/events.jsonl
+    commands:
+    - cmd: cargo build
+      exit_code: 0
+      duration_ms: 94
+    - cmd: cargo test
+      exit_code: 101
+      duration_ms: 108
+    - cmd: cargo clippy -- -D warnings
+      exit_code: 101
+      duration_ms: 288
+    proof_sources:
+    - kind: event
+      path: .maestro/runs/6ef6f1c0-d4d9-41c5-9c86-d0fcaf53a2ba/events.jsonl
+      hash: 38291c7d346ef4c65ab5bde8a35f17f6ccd715d321970b00d15b6c17430a7c9a
+    failures:
+    - 'verify command failed: cargo test (exit 101)'
+    - 'verify command failed: cargo clippy -- -D warnings (exit 101)'
   acceptance_locked: true
+  acceptance:
+    checks:
+    - cargo test --test resources_version_guard passes — SKILL.md resume line points at `decision list --feature <id>`, maestro-design version bumped, (version, tree-hash) tuple re-recorded.
+    locked_by: maestro
+    locked_at: 2026-06-14T09:52:00.340Z

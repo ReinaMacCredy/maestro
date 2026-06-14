@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-version: 1.13.0
+version: 1.14.0
 description: "Use for design or brainstorming in a Maestro repo before implementation starts. Map current behavior, decide one fork at a time, record decisions and notes, then hand the approved contract to maestro-card."
 ---
 
@@ -84,7 +84,8 @@ structure, or other judgment-heavy forks.
 - Do not keep a contradicted decision silently. Reopen or supersede it in the
   Decision record.
 - Do not resume from chat memory. Resume from `maestro feature spec <id>`,
-  `.maestro/cards/<id>/notes.md`, and `maestro decision list`.
+  `.maestro/cards/<id>/notes.md`, and `maestro decision list --feature <id>`
+  (the bare list windows to recent decisions, so scope it to your feature).
 
 ## Hand-off
 
