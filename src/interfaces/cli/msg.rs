@@ -124,7 +124,11 @@ fn list(scope: Option<&str>) -> Result<()> {
             };
             println!("{target}:");
             for message in &channel.messages {
-                let who = if message.from_card == me { "you" } else { target };
+                let who = if message.from_card == me {
+                    "you"
+                } else {
+                    target
+                };
                 println!("  {who}  {}  {}", message.ts, message.text);
             }
             channel::set_cursor(&paths, &channel.key, &me, channel.len)?;
@@ -228,7 +232,9 @@ fn empty_note(scope: Option<&str>) -> String {
 /// one (`msg` is meaningless without a card to send from / read for).
 fn current_card(paths: &MaestroPaths) -> Result<String> {
     super::current_card(paths).ok_or_else(|| {
-        anyhow!("no current card in this session; claim or touch a card first, then run `maestro msg`")
+        anyhow!(
+            "no current card in this session; claim or touch a card first, then run `maestro msg`"
+        )
     })
 }
 
@@ -261,5 +267,6 @@ fn partner_terminal_status(paths: &MaestroPaths, id: &str) -> Result<Option<Stri
         }
         return Ok(None);
     }
-    Ok(card::store::resolve_in(&paths.archive_cards_dir(), id)?.map(|resolved| resolved.card.status))
+    Ok(card::store::resolve_in(&paths.archive_cards_dir(), id)?
+        .map(|resolved| resolved.card.status))
 }

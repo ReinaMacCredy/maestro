@@ -965,12 +965,21 @@ fn feature_linked_task_create_drops_inherited_verify_explainer() {
     run(repo, &["feature", "new", "CSV export"]);
     let create = run(
         repo,
-        &["task", "create", "Implement CSV writer", "--feature", "csv-export"],
+        &[
+            "task",
+            "create",
+            "Implement CSV writer",
+            "--feature",
+            "csv-export",
+        ],
     );
     let id = id_by_title(repo, "Implement CSV writer");
 
     // Computed delta stays: created line, feature binding, one next: pointer.
-    assert!(create.contains(&format!("created {id} (draft)")), "{create}");
+    assert!(
+        create.contains(&format!("created {id} (draft)")),
+        "{create}"
+    );
     assert!(create.contains("feature: csv-export"), "{create}");
     assert!(create.contains("next:"), "{create}");
     // The standing inherited-verify explainer is gone.

@@ -228,7 +228,10 @@ fn sync_resyncs_a_drifted_managed_mirror_block_and_preserves_user_content() {
         restored.contains("@.maestro/harness/HARNESS.md"),
         "block restored: {restored}"
     );
-    assert!(!restored.contains("stale content"), "drift gone: {restored}");
+    assert!(
+        !restored.contains("stale content"),
+        "drift gone: {restored}"
+    );
     // ...and the user content outside the markers survives.
     assert!(restored.starts_with("# My notes"), "{restored}");
     assert!(restored.contains("keep me"), "{restored}");

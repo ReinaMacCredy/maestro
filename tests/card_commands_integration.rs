@@ -981,7 +981,8 @@ fn terminal_partner_refuses_new_link_and_channel_but_keeps_existing() {
     maestro_in_session(repo, "msgsess", &["note", &sender, "bind"]);
 
     // msg send to a terminal UNLINKED partner: finished / no channel, NEVER link add.
-    let send_terminal = maestro_in_session(repo, "msgsess", &["msg", "send", &finished, "closing?"]);
+    let send_terminal =
+        maestro_in_session(repo, "msgsess", &["msg", "send", &finished, "closing?"]);
     assert!(
         !send_terminal.status.success(),
         "send to a terminal unlinked partner fails"

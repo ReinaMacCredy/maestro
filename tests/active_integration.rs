@@ -5,8 +5,8 @@
 //! (`src/domain/run/active.rs`) is covered by its own unit tests and is not
 //! re-tested here.
 
-mod support;
 pub mod card_support;
+mod support;
 
 use std::fs;
 use std::path::Path;
@@ -290,7 +290,11 @@ fn link_column_and_footer_reflect_existing_related_edges() {
     clear_runs(repo);
 
     let recent = ts_minutes_ago(1);
-    seed_run(repo, "you-sess", &[card_touch_event("you-sess", &a, &recent)]);
+    seed_run(
+        repo,
+        "you-sess",
+        &[card_touch_event("you-sess", &a, &recent)],
+    );
     seed_run(repo, "peer-b", &[card_touch_event("peer-b", &b, &recent)]);
     seed_run(repo, "peer-c", &[card_touch_event("peer-c", &c, &recent)]);
 
@@ -347,14 +351,29 @@ fn link_hint_drops_terminal_peers_but_keeps_already_linked() {
     clear_runs(repo);
 
     let recent = ts_minutes_ago(1);
-    seed_run(repo, "you-sess", &[card_touch_event("you-sess", &a, &recent)]);
-    seed_run(repo, "peer-term", &[card_touch_event("peer-term", &term, &recent)]);
-    seed_run(repo, "peer-ally", &[card_touch_event("peer-ally", &ally, &recent)]);
+    seed_run(
+        repo,
+        "you-sess",
+        &[card_touch_event("you-sess", &a, &recent)],
+    );
+    seed_run(
+        repo,
+        "peer-term",
+        &[card_touch_event("peer-term", &term, &recent)],
+    );
+    seed_run(
+        repo,
+        "peer-ally",
+        &[card_touch_event("peer-ally", &ally, &recent)],
+    );
 
     let out = run(repo, &[("MAESTRO_SESSION_ID", "you-sess")], &["active"]);
 
     // The terminal unlinked peer is shown (row + status) but never suggested.
-    assert!(out.contains("peer-term"), "terminal peer row still shown\n{out}");
+    assert!(
+        out.contains("peer-term"),
+        "terminal peer row still shown\n{out}"
+    );
     assert!(
         line_with(&out, "peer-term").contains("closed"),
         "terminal peer status still rendered\n{out}"

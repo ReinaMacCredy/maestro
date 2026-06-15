@@ -1324,13 +1324,7 @@ fn decision_list_windows_to_recent_and_all_feature_restore() {
         let title = format!("Feature decision {i:02}");
         stdout(
             maestro(
-                &[
-                    "decision",
-                    "new",
-                    &title,
-                    "--feature",
-                    "billing-csv-export",
-                ],
+                &["decision", "new", &title, "--feature", "billing-csv-export"],
                 temp_dir.path(),
             ),
             &["decision", "new", "--feature"],
@@ -1348,7 +1342,11 @@ fn decision_list_windows_to_recent_and_all_feature_restore() {
         bare.contains("20 of 21 recent (--all for full; --feature <id> to scope)"),
         "bare decision list windows with the count header:\n{bare}"
     );
-    assert_eq!(count_rows(&bare), 20, "bare list shows the recent 20:\n{bare}");
+    assert_eq!(
+        count_rows(&bare),
+        20,
+        "bare list shows the recent 20:\n{bare}"
+    );
 
     let all = stdout(
         maestro(&["decision", "list", "--all"], temp_dir.path()),
@@ -1358,7 +1356,11 @@ fn decision_list_windows_to_recent_and_all_feature_restore() {
         !all.contains("recent"),
         "--all drops the recent-window header:\n{all}"
     );
-    assert_eq!(count_rows(&all), 21, "--all restores every decision:\n{all}");
+    assert_eq!(
+        count_rows(&all),
+        21,
+        "--all restores every decision:\n{all}"
+    );
 
     let scoped = stdout(
         maestro(
@@ -1981,7 +1983,10 @@ fn decision_new_and_lock_write_structured_feature_record() {
     assert!(out.contains("feature: agent-cli-ux"), "{out}");
     // Write-confirm echoes only the computed delta: no store path, no re-print
     // of the agent's own typed context.
-    assert!(!out.contains("store:"), "open echo dropped the store path: {out}");
+    assert!(
+        !out.contains("store:"),
+        "open echo dropped the store path: {out}"
+    );
     assert!(
         !out.contains("nanosecond epochs are hard to inspect"),
         "open echo must not re-print the typed context: {out}"
@@ -2005,7 +2010,10 @@ fn decision_new_and_lock_write_structured_feature_record() {
     assert!(out.contains("note:"), "{out}");
     // The lock confirm drops the full render: no store path, no echoed
     // decision / rejected / preview body (those stay in the record on disk).
-    assert!(!out.contains("store:"), "lock echo dropped the store path: {out}");
+    assert!(
+        !out.contains("store:"),
+        "lock echo dropped the store path: {out}"
+    );
     assert!(
         !out.contains("render RFC3339 UTC with milliseconds"),
         "lock echo must not re-print the typed decision: {out}"

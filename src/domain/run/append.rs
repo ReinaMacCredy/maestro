@@ -48,8 +48,7 @@ fn append_event_to_session_dir(
 ) -> Result<()> {
     let relative_path = format!(".maestro/runs/{session_dir}/events.jsonl");
     let mut file = open_managed_appendable(paths, &relative_path)?;
-    append_jsonl_line(&mut file, event)
-        .with_context(|| format!("failed to append {relative_path}"))
+    append_jsonl_line(&mut file, event).with_context(|| format!("failed to append {relative_path}"))
 }
 
 /// Open a managed append-only file under the repo, creating parent dirs, applying

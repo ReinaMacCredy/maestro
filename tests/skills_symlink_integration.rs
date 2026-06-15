@@ -184,7 +184,10 @@ mod unix {
             .expect("invariant: user symlink should be creatable");
         let mut lock = InstallLock::empty();
         let mut install = AgentInstall::new("legacy".to_string());
-        install.insert(".codex/skills", FileOwnership::symlink("../.maestro/skills"));
+        install.insert(
+            ".codex/skills",
+            FileOwnership::symlink("../.maestro/skills"),
+        );
         lock.set_agent(InstallAgent::Codex, install);
         lock.save(&lock_path(temp_dir.path()))
             .expect("invariant: synthetic lock should be writable");

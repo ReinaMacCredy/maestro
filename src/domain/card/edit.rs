@@ -560,20 +560,14 @@ mod tests {
     fn add_related_link_rejects_a_terminal_card_and_writes_no_edge() {
         let paths = repo("edit-related-terminal");
         seed(&paths, "task-001");
-        seed_full(
-            &paths,
-            "task-002",
-            CardType::Task,
-            "verified",
-            None,
-            None,
-        );
+        seed_full(&paths, "task-002", CardType::Task, "verified", None, None);
 
         let err = add_related_link(&paths, "task-001", "task-002", LATER)
             .expect_err("a terminal partner is not linkable");
         let reason = err.to_string();
         assert!(
-            reason.contains("task-002 is finished") && reason.contains("you can't open a new conversation"),
+            reason.contains("task-002 is finished")
+                && reason.contains("you can't open a new conversation"),
             "reason names the finished card honestly: {reason}"
         );
         // the live side is untouched -- no half-written edge

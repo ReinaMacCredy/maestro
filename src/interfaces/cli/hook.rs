@@ -59,7 +59,13 @@ fn record_hook(
     } = outcome
     {
         if VERBOSE_EVENTS.contains(&event_type.as_str()) {
-            print_verbose_block(paths, &event_type, skill_for_ack, session_id.as_deref(), &run_dir);
+            print_verbose_block(
+                paths,
+                &event_type,
+                skill_for_ack,
+                session_id.as_deref(),
+                &run_dir,
+            );
         } else {
             println!("recorded {event_type} -> runs/{run_dir}");
         }

@@ -560,7 +560,10 @@ fn record_echo_is_verbose_for_low_frequency_events_and_terse_for_the_firehose() 
     );
     assert!(skill.status.success());
     let skill_out = String::from_utf8_lossy(&skill.stdout);
-    assert!(skill_out.lines().count() > 1, "block is multi-line:\n{skill_out}");
+    assert!(
+        skill_out.lines().count() > 1,
+        "block is multi-line:\n{skill_out}"
+    );
     assert!(
         skill_out.contains("recorded: skill_activation")
             && skill_out.contains("maestro-card")

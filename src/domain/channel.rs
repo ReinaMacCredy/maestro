@@ -113,7 +113,12 @@ pub fn send(
     let (pair, key) = identity(from_card, to_card);
     let relative_path = channel_relative_path(&key);
     let mut file = open_managed_appendable(paths, &relative_path)?;
-    if file.metadata().context("failed to stat channel file")?.len() == 0 {
+    if file
+        .metadata()
+        .context("failed to stat channel file")?
+        .len()
+        == 0
+    {
         append_jsonl_line(&mut file, &json!({ "pair": pair }))
             .with_context(|| format!("failed to write header to {relative_path}"))?;
     } else {
@@ -219,8 +224,8 @@ fn load_by_key(paths: &MaestroPaths, key: &str) -> Result<Option<Channel>> {
 /// mismatch means two different id pairs hashed to the same key (a collision) --
 /// error rather than cross-write into the wrong conversation.
 fn verify_header(paths: &MaestroPaths, key: &str, expected: &[String; 2]) -> Result<()> {
-    let channel = load_by_key(paths, key)?
-        .context("channel file vanished between open and header check")?;
+    let channel =
+        load_by_key(paths, key)?.context("channel file vanished between open and header check")?;
     if &channel.pair != expected {
         bail!(
             "channel key {key} already holds {:?}; refusing to write {:?} (hash collision)",
@@ -339,11 +344,19 @@ mod tests {
             .expect("load should succeed")
             .expect("channel should exist after sends");
         assert_eq!(channel.pair, ["card-a".to_string(), "card-b".to_string()]);
-        assert_eq!(channel.messages.len(), 3, "three sends, three message lines");
+        assert_eq!(
+            channel.messages.len(),
+            3,
+            "three sends, three message lines"
+        );
 
         // A's unread from cursor 0 is only B's message, not A's own one/three.
         let unread_for_a = channel.unread("card-a", 0);
-        assert_eq!(unread_for_a.len(), 1, "only the partner's message is unread");
+        assert_eq!(
+            unread_for_a.len(),
+            1,
+            "only the partner's message is unread"
+        );
         assert_eq!(unread_for_a[0].text, "two");
 
         // Reading advances A's cursor to EOF; nothing unread remains afterwards.

@@ -157,8 +157,9 @@ fn feature_qa_gates_via_cli() {
         "{stderr}"
     );
     assert!(
-        stderr
-            .contains("skip (no behavioral surface): maestro feature accept report-builder --qa none --reason"),
+        stderr.contains(
+            "skip (no behavioral surface): maestro feature accept report-builder --qa none --reason"
+        ),
         "accept should surface the --qa none skip path: {stderr}"
     );
 

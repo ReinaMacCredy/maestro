@@ -222,7 +222,10 @@ fn render_applied(
         .collect();
     for mirror in &refreshed_mirrors {
         if let Some(backup_path) = &mirror.backup_path {
-            backups.push((mirror.relative_path.clone(), backup_path.display().to_string()));
+            backups.push((
+                mirror.relative_path.clone(),
+                backup_path.display().to_string(),
+            ));
         }
     }
     if !backups.is_empty() {
@@ -317,7 +320,9 @@ mod tests {
             mirrors: vec![MirrorBlockSync {
                 relative_path: "CLAUDE.md".to_string(),
                 fate: MirrorBlockFate::Refresh,
-                backup_path: Some(std::path::PathBuf::from(".maestro/backups/x-sync/CLAUDE.md")),
+                backup_path: Some(std::path::PathBuf::from(
+                    ".maestro/backups/x-sync/CLAUDE.md",
+                )),
             }],
         };
         let rendered = render(&outcome);
