@@ -1,0 +1,100 @@
+- schema_version: maestro.card.v1
+  id: dec-playbook-scope-general-agnostic-a3d8
+  type: decision
+  title: 'Playbook scope: general-agnostic principles, not per-language'
+  status: locked
+  parent: code-playbook-styleguides-surfaced-to-agents
+  created_at: 2026-06-14T13:34:45.804Z
+  updated_at: 2026-06-14T13:34:45.830Z
+  description: Conductor (the cited model) ships per-language files (python/go/ts...) consulted on demand. Our chosen slot is the always-loaded HARNESS.md. Those only cohere if scope is small + language-neutral. Project lean bias + harness backlog lean caveat cli-2026-06-08 both push away from a per-language subsystem. init-deep's per-area AGENTS.md hierarchy remains the home IF per-language is ever wanted later.
+  extra:
+    locked_at: 2026-06-14T13:34:45.830Z
+    decision: Playbook = a small set of language-neutral house coding principles (naming, error handling at trust boundaries, no speculative abstraction, match surrounding idioms). Kept small enough to always-load. Per-language style files are an explicit NON-GOAL; if ever needed they go to the init-deep per-area hierarchy, not here.
+    preview: |-
+      GENERAL-AGNOSTIC PRINCIPLES
+
+      .maestro/harness/HARNESS.md
+        ## Code style
+          - names say what, not how
+          - errors only at trust boundaries
+          - no speculative abstraction
+          - match the surrounding file idioms
+
+      ~15-25 lines, language-neutral, always loaded, small.
+      Non-goal: per-language style files.
+    rejected:
+    - 'Per-language Conductor-style files (9-language tree): would bloat every agent''s context on every card and force a per-area mechanism; rejected as over-scope for the proven need.'
+- schema_version: maestro.card.v1
+  id: dec-playbook-slot-a-code-style-section-6505
+  type: decision
+  title: 'Playbook slot: a Code style section inside HARNESS.md (W1)'
+  status: locked
+  parent: code-playbook-styleguides-surfaced-to-agents
+  created_at: 2026-06-14T13:34:45.868Z
+  updated_at: 2026-06-14T13:34:45.884Z
+  description: init writes a managed block into AGENTS.md/CLAUDE.md that already loads .maestro/harness/HARNESS.md (mirrors.rs:867-873); HARNESS.md is versioned + resynced by sync. Given general-agnostic scope, content is small enough to always-load, so no new file or pointer line is justified. W2 (dedicated file) and W3 (per-area init-deep) add wiring only per-language scope would need.
+  extra:
+    locked_at: 2026-06-14T13:34:45.884Z
+    decision: Add a '## Code style' section to the versioned .maestro/harness/HARNESS.md (bump its version). No new file, no new managed-block pointer line. Surfaces to every agent for free via the existing managed block.
+    preview: |-
+      W1: SECTION IN HARNESS.md
+
+      AGENTS.md  [managed block] Read .maestro/harness/HARNESS.md
+      CLAUDE.md  [managed block] @.maestro/harness/HARNESS.md
+
+      .maestro/harness/HARNESS.md  (v1.13 -> v1.14)
+        ## Shared protocol ...
+        ## Code style          <- NEW section
+
+      New wiring: none.
+    rejected:
+    - W2 dedicated .maestro/playbook.md + pointer line (extra file/wiring unjustified for small content); W3 per-area init-deep blocks (only needed for per-language, which is a non-goal).
+- schema_version: maestro.card.v1
+  id: dec-playbook-ownership-maestro-owned-b8dc
+  type: decision
+  title: 'Playbook ownership: maestro-owned principles; project style stays in AGENTS.md'
+  status: locked
+  parent: code-playbook-styleguides-surfaced-to-agents
+  created_at: 2026-06-14T13:36:56.807Z
+  updated_at: 2026-06-14T13:36:56.831Z
+  description: sync backs up + overwrites HARNESS.md on a version bump, so its content is maestro-owned, not a durable per-repo edit surface. AGENTS.md uses a marker-delimited managed block; user edits OUTSIDE the block are never touched.
+  extra:
+    locked_at: 2026-06-14T13:36:56.831Z
+    decision: The HARNESS.md Code-style section is maestro's opinionated UNIVERSAL coding principles - shipped, versioned, kept current by sync. Per-repo house style is the user's, authored in their AGENTS.md outside maestro's managed block; maestro does not own or sync it.
+    preview: |-
+      MAESTRO-OWNED UNIVERSAL PRINCIPLES
+
+      .maestro/harness/HARNESS.md   <- maestro owns + syncs
+        ## Code style  (universal principles)
+      AGENTS.md                     <- you own (outside block)
+        ## Our conventions  (project house style, never clobbered)
+    rejected:
+    - 'Playbook AS user-editable house style: would fight synced HARNESS.md (version bump clobbers edits) and reopen the slot to a dedicated non-synced .maestro/playbook.md (W2).'
+- schema_version: maestro.card.v1
+  id: dec-playbook-content-the-universal-code-ea9d
+  type: decision
+  title: 'Playbook content: the universal code-style principles'
+  status: locked
+  parent: code-playbook-styleguides-surfaced-to-agents
+  created_at: 2026-06-14T13:54:33.561Z
+  updated_at: 2026-06-14T13:54:33.584Z
+  description: Taste fork. A 5-generator swarm for ~7 bullets is overkill given the project's documented lean bias; distilled one strong draft from maestro's own values (lean/simplicity-first, surgical changes, why-comments, errors at trust boundaries). User chose to lock this draft. Wording is refinable during implementation; it is reversible text in the versioned HARNESS.md.
+  extra:
+    locked_at: 2026-06-14T13:54:33.584Z
+    decision: The HARNESS.md '## Code style' section ships these language-neutral principles (see preview). Opens by pointing project-specific conventions to the repo's own AGENTS.md, honoring the ownership decision.
+    preview: |-
+      ## Code style
+
+      Universal principles for code written here. Project-specific
+      conventions live in this repo AGENTS.md, not here.
+
+      - Simplest thing that works; no speculative abstraction or
+        one-caller indirection.
+      - Names state intent (what/why), not type or mechanism.
+      - Validate at trust boundaries only; do not guard impossible states.
+      - Errors fail loud and early with actionable context; no silent catch.
+      - Match the surrounding file style, idioms, and comment density.
+      - Comment the non-obvious why, sparingly; names carry the what.
+      - Every changed line traces to the task; no drive-by edits.
+    rejected:
+    - A multi-generator generate-and-filter pass (overkill for 7 bullets); per-language guidance (already a locked non-goal).

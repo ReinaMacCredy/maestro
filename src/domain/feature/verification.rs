@@ -7,7 +7,7 @@ use crate::domain::feature::qa;
 use crate::domain::feature::registry;
 use crate::domain::feature::schema::{
     AcceptanceEvidenceEntry, AcceptanceEvidenceKind, AcceptanceSweepRun, FeatureRecord,
-    normalize_acceptance_id,
+    FeatureStatus, normalize_acceptance_id,
 };
 use crate::domain::task::{self, TaskEntry, TaskRecord, TaskState, VerificationStatus};
 use crate::foundation::core::paths::MaestroPaths;
@@ -72,14 +72,12 @@ pub fn acceptance_coverage_archived(
     paths: &MaestroPaths,
     feature_id: &str,
 ) -> Result<Vec<AcceptanceCoverage>> {
-    let record = registry::load_record_at(
-        &paths
-            .archive_features_dir()
-            .join(feature_id)
-            .join("feature.yaml"),
-        feature_id,
-    )?;
-    acceptance_coverage_for_record_in_task_root(&record, &paths.archive_tasks_dir())
+    let record = registry::load_archived_record(paths, feature_id)?;
+    let task_entries = task::load_archived_task_entries(paths)?;
+    Ok(acceptance_coverage_for_record_in_entries(
+        &record,
+        &task_entries,
+    ))
 }
 
 pub fn uncovered_acceptance(paths: &MaestroPaths, feature_id: &str) -> Result<Vec<String>> {
@@ -95,7 +93,25 @@ pub fn verify_feature(
     feature_id: &str,
     updates: Vec<FeatureProofUpdate>,
 ) -> Result<FeatureVerifyReport> {
-    let mut record = registry::load_record(paths, feature_id)?;
+    let (mut record, write) = registry::load_record_for_update(paths, feature_id)?;
+    match record.status {
+        FeatureStatus::InProgress => {}
+        FeatureStatus::Proposed => bail!(
+            "cannot verify feature {} — not accepted; run `maestro feature accept {}` first",
+            record.id,
+            record.id
+        ),
+        FeatureStatus::Ready => bail!(
+            "cannot verify feature {} — not started; run `maestro feature start {}` first",
+            record.id,
+            record.id
+        ),
+        FeatureStatus::Shipped | FeatureStatus::Cancelled => bail!(
+            "cannot verify feature {} — terminal (status: {})",
+            record.id,
+            record.status.as_str()
+        ),
+    }
     if !updates.is_empty() {
         let mut entries = Vec::new();
         let mut recorded = Vec::new();
@@ -118,7 +134,7 @@ pub fn verify_feature(
                 bail!("feature acceptance evidence must not be empty");
             }
             let kind_label = kind.as_str();
-            recorded.push(format!("{kind_label} {ac_id}: {text}"));
+            recorded.push(format!("{kind_label} {ac_id} ({} bytes)", text.len()));
             entries.push(AcceptanceEvidenceEntry {
                 ac_id,
                 kind,
@@ -127,7 +143,7 @@ pub fn verify_feature(
             });
         }
         record.acceptance_evidence.extend(entries);
-        registry::save_record(paths, &record)?;
+        registry::save_record(paths, &record, &write)?;
         return Ok(FeatureVerifyReport {
             feature_id: record.id,
             recorded: Some(recorded.join("; ")),
@@ -156,7 +172,7 @@ pub fn verify_feature(
         unresolved,
         invalidated_by: report.invalidated_by.clone(),
     });
-    registry::save_record(paths, &record)?;
+    registry::save_record(paths, &record, &write)?;
     Ok(FeatureVerifyReport {
         feature_id: record.id,
         recorded: None,
@@ -165,8 +181,8 @@ pub fn verify_feature(
 }
 
 pub(crate) fn acceptance_ship_gap(
-    paths: &MaestroPaths,
     record: &FeatureRecord,
+    task_entries: &[TaskEntry],
 ) -> Result<Option<String>> {
     if record.acceptance.is_empty() {
         return Ok(None);
@@ -179,8 +195,7 @@ pub(crate) fn acceptance_ship_gap(
             record.id
         )));
     };
-    let task_entries = task::load_task_entries(&paths.tasks_dir())?;
-    let invalidated_by = invalidations_since(record, &latest.at, &task_entries);
+    let invalidated_by = invalidations_since(record, &latest.at, task_entries);
     if !invalidated_by.is_empty() {
         return Ok(Some(format!(
             "contract sweep stale — {}\n    fix: maestro feature verify {}\n    retry: maestro feature ship {} --outcome \"<outcome>\"",
@@ -210,8 +225,9 @@ fn sweep_acceptance(
 ) -> Result<AcceptanceSweepReport> {
     let explicit = latest_explicit_evidence(record);
     let task_proofs = task_proofs_by_acceptance_in_entries(task_entries, &record.id);
-    let qa_proofs =
-        qa::acceptance_ids_covered_by_counting_slices(&registry::feature_dir(paths, &record.id))?;
+    let qa_proofs = qa::acceptance_ids_covered_by_counting_slices(&registry::feature_sidecar_dir(
+        paths, &record.id,
+    ))?;
     let mut items = Vec::new();
     for (index, text) in record.acceptance.iter().enumerate() {
         let ac_id = acceptance_id(index);

@@ -2,14 +2,14 @@
 
 use std::fs;
 use std::io::ErrorKind;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use anyhow::{Context, Result, bail};
 use serde_json::json;
 use serde_yaml::{Mapping, Value};
 
 use crate::domain::{decisions, task};
-use crate::foundation::core::fs::{child_dirs as fs_child_dirs, ensure_dir};
+use crate::foundation::core::fs::{ensure_dir, read_yaml_mapping, sorted_child_dirs as child_dirs};
 use crate::foundation::core::hash::sha256_hex;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::retention::prune_child_dirs;
@@ -317,17 +317,6 @@ fn convert_timestamps(map: &mut Mapping) {
     }
 }
 
-fn read_yaml_mapping(path: &Path) -> Result<Mapping> {
-    let raw =
-        fs::read_to_string(path).with_context(|| format!("failed to read {}", path.display()))?;
-    let value: Value = serde_yaml::from_str(&raw)
-        .with_context(|| format!("failed to parse {}", path.display()))?;
-    value
-        .as_mapping()
-        .cloned()
-        .with_context(|| format!("expected mapping in {}", path.display()))
-}
-
 fn write_yaml_mapping(path: &Path, mapping: &Mapping) -> Result<()> {
     let contents = serde_yaml::to_string(mapping)?;
     write_string_atomic(path, &contents)
@@ -381,15 +370,6 @@ fn copy_json_value(
         );
     }
     Ok(())
-}
-
-fn child_dirs(parent: &Path) -> Result<Vec<PathBuf>> {
-    let mut dirs: Vec<PathBuf> = fs_child_dirs(parent)?
-        .into_iter()
-        .map(|(path, _)| path)
-        .collect();
-    dirs.sort();
-    Ok(dirs)
 }
 
 fn remove_if_exists(path: impl AsRef<Path>, report: &mut MigrateReport) -> Result<()> {

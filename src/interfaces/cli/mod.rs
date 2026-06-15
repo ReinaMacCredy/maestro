@@ -5,18 +5,26 @@ use anyhow::Result;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use crate::domain::feature::{FeatureStatus, FeatureView};
+use crate::domain::run;
+use crate::foundation::core::paths::MaestroPaths;
+use crate::interfaces::hooks::record;
 
+pub mod active;
+pub mod card;
 pub mod decision;
 pub mod doctor;
 pub mod event;
 pub mod feature;
 pub mod harness;
 pub mod hook;
+pub mod index;
 pub mod init;
 pub mod install;
 pub mod mcp;
 pub mod migrate;
+pub mod msg;
 pub mod query;
+pub mod reference;
 pub mod resume;
 pub mod shell_init;
 pub mod status;
@@ -80,9 +88,9 @@ pub enum RootCommand {
     Install(AgentArgs),
     #[command(
         about = "Upgrade the maestro binary and refresh bundled resources",
-        after_help = "Examples:\n  maestro update               # upgrade to the latest release and refresh resources\n  maestro update --check       # report whether an update is available, install nothing\n  maestro update --force       # reinstall the latest even when already up to date"
+        after_help = "Examples:\n  maestro upgrade               # upgrade to the latest release and refresh resources\n  maestro upgrade --check       # report whether an update is available, install nothing\n  maestro upgrade --force       # reinstall the latest even when already up to date"
     )]
-    Update(UpdateArgs),
+    Upgrade(UpgradeArgs),
     #[command(
         about = "Resync bundled resources to this binary's versions (offline)",
         after_help = "Examples:\n  maestro sync                 # resync repo bundled resources to this binary, preserving edits\n  maestro sync --global-skills # resync user-level Maestro skill cache and links\n  maestro sync --dry-run       # preview the resync, write nothing"
@@ -90,6 +98,11 @@ pub enum RootCommand {
     Sync(SyncArgs),
     #[command(about = "Migrate v1 Maestro artifacts to the reduced v2 layout")]
     MigrateV2,
+    #[command(
+        about = "Fold the legacy v2 trees (features/tasks/decisions/backlog) into the card store",
+        after_help = "Examples:\n  maestro migrate              # snapshot .maestro, then mint cards from the legacy trees"
+    )]
+    Migrate,
     #[command(about = "Remove maestro hooks and config for an agent")]
     Uninstall(AgentArgs),
     #[command(about = "Diagnose the maestro installation and report problems")]
@@ -112,14 +125,77 @@ pub enum RootCommand {
     Event(EventArgs),
     #[command(about = "Manage features: the product contract and its lifecycle")]
     Feature(FeatureArgs),
-    #[command(about = "Create, show, and list decision records in .maestro/decisions/")]
+    #[command(about = "Create, show, and list decision cards in the card store")]
     Decision(DecisionArgs),
+    #[command(
+        about = "Card-store verbs under one namespace (same output as the flat spellings)",
+        after_help = "Examples:\n  maestro card show task-0a1b2c   # identical to `maestro show task-0a1b2c`\n  maestro card ready"
+    )]
+    Card(CardArgs),
+    #[command(
+        about = "List workable cards with no open blockers (card store)",
+        after_help = "Examples:\n  maestro ready                # every unblocked task/bug/chore\n  maestro ready --json\n  maestro ready agent-cli-ux   # only those parented to a feature"
+    )]
+    Ready(ReadyArgs),
+    #[command(
+        about = "List cards filtered by parent, type, assignee, or coarse status (card store)",
+        after_help = "Examples:\n  maestro list --parent agent-cli-ux\n  maestro list --json --type bug --status open\n  maestro list --assignee claude#s1"
+    )]
+    List(ListArgs),
+    #[command(about = "Author dependency edges between cards (card store)")]
+    Dep(DepArgs),
+    #[command(
+        about = "Show what other live sessions are doing (cross-session awareness)",
+        after_help = "Examples:\n  maestro active               # live sessions, newest first\n  maestro active --all         # include stale sessions beyond the window"
+    )]
+    Active(ActiveArgs),
+    #[command(
+        about = "Author non-blocking related links between cards (card store)",
+        after_help = "Examples:\n  maestro link add task-a task-b\n  maestro link remove task-b task-a"
+    )]
+    Link(LinkArgs),
+    #[command(
+        about = "Send and read messages on a linked-card channel (pull-only)",
+        after_help = "Examples:\n  maestro msg send task-b \"ready for review\"\n  maestro msg read              # unread across every linked partner\n  maestro msg read task-b       # one partner\n  maestro msg list              # channel overview"
+    )]
+    Msg(MsgArgs),
+    #[command(
+        about = "Archive a feature card and its child cards (card store)",
+        after_help = "Examples:\n  maestro archive csv-export   # archives the feature card + every parent=csv-export card\n  maestro archive --loose      # sweeps closed loose tasks/ideas + superseded decisions"
+    )]
+    Archive(ArchiveArgs),
+    #[command(
+        about = "Claim a workable card for this session (card store)",
+        after_help = "Examples:\n  maestro claim task-0a1b2c   # take an unclaimed task/bug/chore\n  MAESTRO_SESSION=mine maestro claim task-0a1b2c"
+    )]
+    Claim(ClaimArgs),
+    #[command(
+        about = "Append a dated note to a card's notes.md (card store)",
+        after_help = "Examples:\n  maestro note task-0a1b2c \"chose option B; A breaks on reparent\""
+    )]
+    Note(NoteArgs),
+    #[command(
+        about = "Create a card of any type (card store)",
+        after_help = "Examples:\n  maestro create -t task \"Add CSV export\" --parent csv-export\n  maestro create -t bug \"Fix ordering race\"\n  maestro create -t feature \"CSV export\""
+    )]
+    Create(CreateArgs),
+    #[command(about = "Show a card's header, edges, and body (card store)")]
+    Show(ShowArgs),
+    #[command(
+        about = "Update a card's status, title, description, or claim (card store)",
+        after_help = "Examples:\n  maestro update task-add-csv-export-0a1b --status needs_verification\n  maestro update task-add-csv-export-0a1b --claim\n  maestro update task-add-csv-export-0a1b --title \"New title\""
+    )]
+    Update(UpdateArgs),
+    #[command(about = "Close a card: status -> closed (card store)")]
+    Close(CloseArgs),
     #[command(
         about = "List, show, apply, unapply, dismiss, and measure harness improvement suggestions"
     )]
     Harness(HarnessArgs),
     #[command(about = "Query computed read models (matrix, friction, decisions, proof, backlog)")]
     Query(QueryArgs),
+    #[command(about = "Maintain the local text index that accelerates list --grep")]
+    Index(IndexArgs),
     #[command(about = "Run or inspect the MCP server (serve, stdin, tools, list)")]
     Mcp(McpArgs),
     #[command(about = "Hook entry points invoked by the agent harness")]
@@ -183,7 +259,7 @@ impl AgentArgs {
 }
 
 #[derive(Debug, Args)]
-pub struct UpdateArgs {
+pub struct UpgradeArgs {
     #[arg(
         long,
         help = "Check for an update without downloading or installing it"
@@ -220,6 +296,84 @@ pub struct TaskArgs {
 #[derive(Debug, Args)]
 pub struct StatusArgs {
     #[arg(long, help = "Print machine-readable status JSON")]
+    pub json: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct ActiveArgs {
+    /// Include stale sessions (last event beyond the live window), hidden by default.
+    #[arg(long)]
+    pub all: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct CardArgs {
+    #[command(subcommand)]
+    pub command: CardCommand,
+}
+
+/// The flat card-store verbs again under `maestro card <verb>`, sharing the
+/// flat spellings' arg structs and handlers so output stays byte-identical.
+#[derive(Debug, Subcommand)]
+pub enum CardCommand {
+    #[command(about = "List workable cards with no open blockers")]
+    Ready(ReadyArgs),
+    #[command(about = "List cards filtered by parent, type, assignee, or coarse status")]
+    List(ListArgs),
+    #[command(about = "Author dependency edges between cards")]
+    Dep(DepArgs),
+    #[command(about = "Archive a feature card and its child cards")]
+    Archive(ArchiveArgs),
+    #[command(about = "Claim a workable card for this session")]
+    Claim(ClaimArgs),
+    #[command(about = "Append a dated note to a card's notes.md")]
+    Note(NoteArgs),
+    #[command(about = "Create a card of any type")]
+    Create(CreateArgs),
+    #[command(about = "Show a card's header, edges, and body")]
+    Show(ShowArgs),
+    #[command(about = "Update a card's status, title, description, or claim")]
+    Update(UpdateArgs),
+    #[command(about = "Close a card: status -> closed")]
+    Close(CloseArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct ReadyArgs {
+    /// Print machine-readable ready JSON.
+    #[arg(long)]
+    pub json: bool,
+    /// Restrict to cards parented to this feature id (one level).
+    #[arg(value_name = "FEATURE")]
+    pub feature: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct ListArgs {
+    /// Only cards whose parent is this card id.
+    #[arg(long, value_name = "PARENT")]
+    pub parent: Option<String>,
+    /// Only cards of this type (feature, task, bug, chore, idea, decision).
+    #[arg(long = "type", value_name = "TYPE")]
+    pub card_type: Option<String>,
+    /// Only cards claimed by this agent or full `<agent>#<session>` token.
+    #[arg(long, value_name = "ASSIGNEE")]
+    pub assignee: Option<String>,
+    /// Only cards in this coarse status (open, in_progress, closed).
+    #[arg(long, value_name = "STATUS")]
+    pub status: Option<String>,
+    /// Only cards whose title, description, or notes.md/spec.md sidecars
+    /// contain this case-insensitive substring.
+    #[arg(long, value_name = "TERM")]
+    pub grep: Option<String>,
+    /// Include archived cards (rows marked archived).
+    #[arg(long)]
+    pub archived: bool,
+    /// Show all cards, including coarse-closed ones the bare list hides.
+    #[arg(long)]
+    pub all: bool,
+    /// Print machine-readable list JSON.
+    #[arg(long)]
     pub json: bool,
 }
 
@@ -265,6 +419,8 @@ pub enum TaskCommand {
             help = "Feature acceptance id this task covers, e.g. ac-1 (repeatable)"
         )]
         covers: Vec<String>,
+        #[arg(long, help = "Print only the new card id on stdout")]
+        id_only: bool,
     },
     #[command(about = "Author task checks or change its feature link")]
     Set {
@@ -287,6 +443,17 @@ pub enum TaskCommand {
             help = "Feature acceptance id this task covers, e.g. ac-1 (repeatable)"
         )]
         covers: Vec<String>,
+        #[arg(
+            long = "verify-command",
+            help = "Per-task narrow falsifier; when set, `task verify` runs ONLY this instead of the repo-global stack.verify"
+        )]
+        verify_command: Option<String>,
+        #[arg(
+            long = "clear-verify-command",
+            conflicts_with = "verify_command",
+            help = "Clear the per-task verify command (revert to the repo-global stack.verify)"
+        )]
+        clear_verify_command: bool,
     },
     #[command(about = "Move a draft into exploring (-> exploring)")]
     Explore { id: String },
@@ -305,14 +472,15 @@ pub enum TaskCommand {
         summary: String,
         #[arg(
             long,
-            help = "Completion claim; hook-backed tool proof uses '<tool> <tool_input_hash>'"
+            required = true,
+            help = "Completion claim (repeatable); hook-backed tool proof uses '<tool> <tool_input_hash>'"
         )]
-        claim: String,
+        claim: Vec<String>,
         #[arg(
             long,
-            help = "Observed proof text to record before automatic verification"
+            help = "Observed proof text to record before automatic verification (repeatable)"
         )]
-        proof: Option<String>,
+        proof: Vec<String>,
     },
     #[command(about = "Run the evidence gate; on pass marks the task verified")]
     Verify { id: Option<String> },
@@ -328,7 +496,7 @@ pub enum TaskCommand {
         id: String,
         #[arg(long)]
         summary: Option<String>,
-        #[arg(long)]
+        #[arg(long, help = "Progress claim (repeatable)")]
         claim: Vec<String>,
     },
     #[command(about = "Add a blocker to a task")]
@@ -454,6 +622,8 @@ pub enum FeatureCommand {
         description: Option<String>,
         #[arg(long = "question", help = "Initial open question (repeatable)")]
         question: Vec<String>,
+        #[arg(long, help = "Print only the new card id on stdout")]
+        id_only: bool,
     },
     #[command(about = "Author a proposed feature's contract (replace or append fields)")]
     Set {
@@ -619,8 +789,23 @@ pub enum FeatureCommand {
     },
     #[command(about = "Show a feature's status, full contract, and task counts")]
     Show { id: String },
-    #[command(about = "Render a feature's spec-of-record with decisions and notes")]
-    Spec { id: String },
+    #[command(
+        about = "Render a feature's spec-of-record, or fill one section (--section with --append/--replace)"
+    )]
+    Spec {
+        id: String,
+        #[arg(long, help = "Spec section to write, e.g. \"Current state\"")]
+        section: Option<String>,
+        #[arg(long, help = "Append text to the section body", value_name = "TEXT")]
+        append: Option<String>,
+        #[arg(
+            long,
+            help = "Replace the section body with the text",
+            value_name = "TEXT",
+            conflicts_with = "append"
+        )]
+        replace: Option<String>,
+    },
     #[command(about = "List features with their statuses and task counts")]
     List {
         #[arg(
@@ -633,13 +818,13 @@ pub enum FeatureCommand {
         about = "Archive a terminal feature and its terminal child tasks (-> .maestro/archive/features)"
     )]
     Archive {
-        #[arg(help = "Feature id to archive (omit when using --shipped)")]
+        #[arg(help = "Feature id to archive (omit when using --closed)")]
         id: Option<String>,
         #[arg(
             long,
-            help = "Archive every shipped feature (mutually exclusive with <id>)"
+            help = "Archive every closed feature (shipped or cancelled; mutually exclusive with <id>)"
         )]
-        shipped: bool,
+        closed: bool,
         #[arg(
             long,
             help = "Preview the feature and child-task moves without archiving"
@@ -658,13 +843,44 @@ pub struct DecisionArgs {
 
 #[derive(Debug, Subcommand)]
 pub enum DecisionCommand {
-    #[command(about = "Open a structured decision fork (-> decision-NN)")]
+    #[command(
+        about = "Open a structured decision fork (mints a decision card)",
+        after_help = "Examples:\n  maestro decision new \"Adopt X for Y\" --feature csv-export\n  maestro decision new \"Adopt X for Y\" --feature csv-export --lock --decision \"X\" --rejected \"Z: slower\"   # pre-decided fork, one call"
+    )]
     New {
         title: String,
         #[arg(long, help = "Why this fork exists")]
         context: Option<String>,
         #[arg(long, help = "Owning feature id; omit for a global decision")]
         feature: Option<String>,
+        #[arg(
+            long,
+            help = "Lock in the same call (requires --decision)",
+            requires = "decision"
+        )]
+        lock: bool,
+        #[arg(long, help = "Chosen decision text (with --lock)", requires = "lock")]
+        decision: Option<String>,
+        #[arg(
+            long = "rejected",
+            help = "Rejected option and reason (repeatable, with --lock)",
+            requires = "lock"
+        )]
+        rejected: Vec<String>,
+        #[arg(
+            long,
+            help = "Preview or concrete example (with --lock)",
+            requires = "lock"
+        )]
+        preview: Option<String>,
+        #[arg(
+            long = "supersedes",
+            help = "Decision id superseded by this lock (repeatable, with --lock)",
+            requires = "lock"
+        )]
+        supersedes: Vec<String>,
+        #[arg(long, help = "Print only the new card id on stdout")]
+        id_only: bool,
     },
     #[command(about = "Lock an open decision with the chosen answer")]
     Lock {
@@ -681,10 +897,218 @@ pub enum DecisionCommand {
         )]
         supersedes: Vec<String>,
     },
-    #[command(about = "Show a decision record by id (decision-NN)")]
+    #[command(about = "Show a decision card by id")]
     Show { id: String },
-    #[command(about = "List decision records")]
-    List,
+    #[command(about = "List decision cards (recent 20 by activity unless --all)")]
+    List {
+        /// List all decisions, not just the recent window.
+        #[arg(long)]
+        all: bool,
+        /// Scope to one feature's decisions.
+        #[arg(long, value_name = "FEATURE")]
+        feature: Option<String>,
+    },
+}
+
+#[derive(Debug, Args)]
+pub struct ArchiveArgs {
+    /// The feature card to archive (its `parent=<feature>` children ride along).
+    #[arg(
+        value_name = "FEATURE",
+        required_unless_present = "loose",
+        conflicts_with = "loose"
+    )]
+    pub feature: Option<String>,
+    /// Sweep terminal parentless cards instead: closed loose tasks/ideas and
+    /// superseded decisions move to the archive; locked decisions stay live.
+    #[arg(long)]
+    pub loose: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct ClaimArgs {
+    /// The workable card (task/bug/chore) to claim for this session.
+    #[arg(value_name = "ID")]
+    pub id: String,
+}
+
+#[derive(Debug, Args)]
+pub struct NoteArgs {
+    /// The card to append a note to.
+    #[arg(value_name = "ID")]
+    pub id: String,
+    /// The note text; a dated line is appended to the card's notes.md.
+    #[arg(value_name = "TEXT")]
+    pub text: String,
+}
+
+#[derive(Debug, Args)]
+pub struct CreateArgs {
+    /// Card type: feature, task, bug, chore, idea, or decision.
+    #[arg(short = 't', long = "type", value_name = "TYPE")]
+    pub card_type: String,
+    /// Card title.
+    #[arg(value_name = "TITLE")]
+    pub title: String,
+    /// Parent card id; sets the new card's one-level `parent`.
+    #[arg(long, value_name = "PARENT")]
+    pub parent: Option<String>,
+    /// Longer description stored on the card.
+    #[arg(long, value_name = "TEXT")]
+    pub description: Option<String>,
+    /// Print only the new card id on stdout.
+    #[arg(long)]
+    pub id_only: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct ShowArgs {
+    /// The card to show.
+    #[arg(value_name = "ID")]
+    pub id: String,
+    /// Print the card as JSON.
+    #[arg(long)]
+    pub json: bool,
+    /// Print the compact agent-facing card JSON.
+    #[arg(long = "compact-json", conflicts_with = "json")]
+    pub compact_json: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct UpdateArgs {
+    /// The card to update; omit to print usage.
+    #[arg(value_name = "ID")]
+    pub id: Option<String>,
+    /// Set the card's status (free per-type word).
+    #[arg(long, value_name = "STATUS")]
+    pub status: Option<String>,
+    /// Set the card's title.
+    #[arg(long, value_name = "TITLE")]
+    pub title: Option<String>,
+    /// Set the card's description.
+    #[arg(long, value_name = "TEXT")]
+    pub description: Option<String>,
+    /// Claim the card for this session (same seam as `maestro claim`).
+    #[arg(long)]
+    pub claim: bool,
+    /// Print the updated card as compact JSON.
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct CloseArgs {
+    /// The card to close (status -> closed).
+    #[arg(value_name = "ID")]
+    pub id: String,
+}
+
+#[derive(Debug, Args)]
+pub struct DepArgs {
+    #[command(subcommand)]
+    pub command: DepCommand,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum DepCommand {
+    #[command(
+        about = "Add a blocking edge: CHILD waits until PARENT closes",
+        after_help = "Examples:\n  maestro dep add task-002 task-001   # task-002 is blocked by task-001"
+    )]
+    Add {
+        /// The dependent card; the edge is stored on it.
+        #[arg(value_name = "CHILD")]
+        child: String,
+        /// The blocker card the dependent waits on.
+        #[arg(value_name = "PARENT")]
+        parent: String,
+    },
+    #[command(
+        about = "Remove a blocking edge so CHILD no longer waits on PARENT",
+        after_help = "Examples:\n  maestro dep remove task-002 task-001   # task-002 no longer blocked by task-001"
+    )]
+    Remove {
+        /// The dependent card the edge is stored on.
+        #[arg(value_name = "CHILD")]
+        child: String,
+        /// The blocker card it waited on.
+        #[arg(value_name = "PARENT")]
+        parent: String,
+    },
+}
+
+#[derive(Debug, Args)]
+pub struct LinkArgs {
+    #[command(subcommand)]
+    pub command: LinkCommand,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum LinkCommand {
+    #[command(
+        about = "Add a non-blocking related link between two live cards",
+        after_help = "Examples:\n  maestro link add task-a task-b   # links task-a and task-b (order does not matter)"
+    )]
+    Add {
+        /// One of the two cards to link (order does not matter).
+        #[arg(value_name = "CARD-A")]
+        from: String,
+        /// The other card to link.
+        #[arg(value_name = "CARD-B")]
+        to: String,
+    },
+    #[command(
+        about = "Remove a related link between two live cards",
+        after_help = "Examples:\n  maestro link remove task-b task-a   # argument order does not matter"
+    )]
+    Remove {
+        /// First live card.
+        #[arg(value_name = "FROM")]
+        from: String,
+        /// Second live card.
+        #[arg(value_name = "TO")]
+        to: String,
+    },
+}
+
+#[derive(Debug, Args)]
+pub struct MsgArgs {
+    #[command(subcommand)]
+    pub command: MsgCommand,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum MsgCommand {
+    #[command(
+        about = "Send a message to a linked card (sender is your current card)",
+        after_help = "Examples:\n  maestro msg send task-b \"ready for review\""
+    )]
+    Send {
+        /// The linked partner card to message.
+        #[arg(value_name = "TO")]
+        to: String,
+        /// The message text.
+        #[arg(value_name = "TEXT")]
+        text: String,
+    },
+    #[command(
+        about = "Read unread messages; with no card, aggregate every linked partner",
+        after_help = "Examples:\n  maestro msg read\n  maestro msg read task-b"
+    )]
+    Read {
+        /// Scope to one partner card; omit to read every visible channel.
+        #[arg(value_name = "CARD")]
+        card: Option<String>,
+    },
+    #[command(
+        about = "Channel overview, or one partner's full timeline",
+        after_help = "Examples:\n  maestro msg list\n  maestro msg list task-b"
+    )]
+    List {
+        /// Scope to one partner's full timeline; omit for the overview.
+        #[arg(value_name = "CARD")]
+        card: Option<String>,
+    },
 }
 
 #[derive(Debug, Args)]
@@ -715,8 +1139,12 @@ pub enum HarnessCommand {
     Propose {
         #[arg(long, help = "Proposal title")]
         title: String,
-        #[arg(long, help = "Evidence supporting the proposal")]
-        evidence: String,
+        #[arg(
+            long,
+            required = true,
+            help = "Evidence supporting the proposal (repeatable)"
+        )]
+        evidence: Vec<String>,
         #[arg(long, help = "Stable topic slug for merging repeated audit findings")]
         topic: Option<String>,
     },
@@ -762,8 +1190,15 @@ pub enum QueryCommand {
     Matrix,
     #[command(about = "Summarize recorded run friction (events, prompts, corrections)")]
     Friction,
-    #[command(about = "List decision records (ID/FILE/TITLE)")]
-    Decisions,
+    #[command(about = "List decision cards (ID/STATUS/HOME/TITLE; recent 20 unless --all)")]
+    Decisions {
+        /// List all decisions, not just the recent window.
+        #[arg(long)]
+        all: bool,
+        /// Scope to one feature's decisions.
+        #[arg(long, value_name = "FEATURE")]
+        feature: Option<String>,
+    },
     #[command(about = "List improvement backlog items (ID/TITLE)")]
     Backlog,
     #[command(about = "Show a task's proof status")]
@@ -772,6 +1207,32 @@ pub enum QueryCommand {
         #[arg(long = "task-id", value_name = "TASK_ID")]
         task_id_flag: Option<String>,
     },
+    #[command(
+        about = "Walk a card's typed edges (parent/blocks/related/supersedes)",
+        after_help = "Examples:\n  maestro query graph task-0a1b2c        # connected cards, two hops\n  maestro query graph --dot > cards.dot  # the whole web as Graphviz DOT\n  maestro query graph task-0a1b2c --dot  # one card's connected component"
+    )]
+    Graph {
+        /// Card id to walk from; omit with --dot to export the whole web.
+        id: Option<String>,
+        /// Emit Graphviz DOT instead of a tree.
+        #[arg(long)]
+        dot: bool,
+    },
+}
+
+#[derive(Debug, Args)]
+pub struct IndexArgs {
+    #[command(subcommand)]
+    pub command: IndexCommand,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum IndexCommand {
+    #[command(
+        about = "Rebuild the text index over live + archived cards from scratch",
+        after_help = "The archive is maestro's memory: list --grep [--archived] searches it,\nand the index keeps that search fast as the store grows. The index is\nlocal derived state (.maestro/index/); reads fall back to a plain scan\nwhenever it is missing or stale, so rebuilding is recovery, not setup."
+    )]
+    Rebuild,
 }
 
 #[derive(Debug, Args)]
@@ -825,12 +1286,23 @@ pub enum HookCommand {
 }
 
 pub fn run(cli: Cli) -> Result<()> {
+    // The ambient inbox banner rides on every command (STDERR, best-effort) so a
+    // linked peer's message is impossible to miss -- except `hook`/`mcp`, whose
+    // high-frequency / protocol-stream output the banner must not pollute, and
+    // `version`, which clap treats as a help-class query.
+    if !matches!(
+        cli.command,
+        RootCommand::Hook(_) | RootCommand::Mcp(_) | RootCommand::Version
+    ) {
+        let _ = msg::inbox_banner();
+    }
     match cli.command {
         RootCommand::Init(args) => init::run(args),
         RootCommand::Install(args) => install::run(args),
-        RootCommand::Update(args) => update::run(args),
+        RootCommand::Upgrade(args) => update::run(args),
         RootCommand::Sync(args) => sync::run(args),
         RootCommand::MigrateV2 => migrate::run(),
+        RootCommand::Migrate => migrate::run_card_fold(),
         RootCommand::Uninstall(args) => uninstall::run(args),
         RootCommand::Doctor => doctor::run(),
         RootCommand::ShellInit => shell_init::run(),
@@ -840,8 +1312,34 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Event(args) => event::run(args),
         RootCommand::Feature(args) => feature::run(args),
         RootCommand::Decision(args) => decision::run(args),
+        RootCommand::Card(args) => match args.command {
+            CardCommand::Ready(args) => card::ready(args),
+            CardCommand::List(args) => card::list(args),
+            CardCommand::Dep(args) => card::dep(args),
+            CardCommand::Archive(args) => card::archive(args),
+            CardCommand::Claim(args) => card::claim(args),
+            CardCommand::Note(args) => card::note(args),
+            CardCommand::Create(args) => card::create(args),
+            CardCommand::Show(args) => card::show(args),
+            CardCommand::Update(args) => card::update(args),
+            CardCommand::Close(args) => card::close(args),
+        },
+        RootCommand::Ready(args) => card::ready(args),
+        RootCommand::List(args) => card::list(args),
+        RootCommand::Dep(args) => card::dep(args),
+        RootCommand::Active(args) => active::run(args),
+        RootCommand::Link(args) => card::link(args),
+        RootCommand::Msg(args) => msg::run(args),
+        RootCommand::Archive(args) => card::archive(args),
+        RootCommand::Claim(args) => card::claim(args),
+        RootCommand::Note(args) => card::note(args),
+        RootCommand::Create(args) => card::create(args),
+        RootCommand::Show(args) => card::show(args),
+        RootCommand::Update(args) => card::update(args),
+        RootCommand::Close(args) => card::close(args),
         RootCommand::Harness(args) => harness::run(args),
         RootCommand::Query(args) => query::run(args),
+        RootCommand::Index(args) => index::run(args),
         RootCommand::Mcp(args) => mcp::run(args),
         RootCommand::Hook(args) => hook::run(args),
         RootCommand::Watch(args) => watch::run(args),
@@ -858,14 +1356,22 @@ pub(super) fn cli_run_id() -> String {
     for key in [
         "MAESTRO_SESSION_ID",
         "MAESTRO_RUN_ID",
-        "CODEX_SESSION_ID",
+        // Codex CLI's real per-session id (the verified var is CODEX_THREAD_ID,
+        // not the never-set CODEX_SESSION_ID it replaces); ordered ahead of the
+        // CLAUDE keys so a Codex run buckets under its thread.
+        "CODEX_THREAD_ID",
         "CLAUDE_SESSION_ID",
         "CLAUDECODE_SESSION_ID",
+        // Claude Code's real per-session id; without it every CLI-path event in a
+        // Claude session collapses into one cli-<date> bucket (D9).
+        "CLAUDE_CODE_SESSION_ID",
     ] {
         if let Ok(value) = env::var(key)
             && !value.trim().is_empty()
         {
-            return value;
+            // Trimmed: the raw value becomes a claim/assignee token, and
+            // stray whitespace would break later equality lookups.
+            return value.trim().to_string();
         }
     }
     let date = crate::foundation::core::time::utc_now_timestamp()
@@ -873,6 +1379,60 @@ pub(super) fn cli_run_id() -> String {
         .map(|(date, _)| date.to_string())
         .unwrap_or_else(|| "1970-01-01".to_string());
     format!("cli-{date}")
+}
+
+/// Best-effort: bind this session to a card it just mutated by recording a
+/// `card_touch` run event (D3), so a parallel session's `maestro active` can see
+/// the binding without anyone declaring it. Awareness rides on normal work, so a
+/// failed append must never abort the verb: the error is swallowed with a
+/// warning, mirroring `maestro hook record`'s warn-and-continue.
+pub(super) fn emit_card_touch(paths: &MaestroPaths, card_id: &str) {
+    let payload = serde_json::json!({
+        "event": "card_touch",
+        "session_id": cli_run_id(),
+        "card_id": card_id,
+        "agent": actor(),
+    });
+    if let Err(error) = record::record_value(paths, &payload) {
+        eprintln!("maestro: card_touch run-event note failed: {error:#}");
+    }
+}
+
+/// The card the running session is currently working: the `card_id` of the last
+/// `card_touch` in this session's OWN run log (D3). Best-effort and read-only --
+/// the `msg` verbs and the inbox banner use it to resolve "my card" without the
+/// user naming it. `None` when the session has touched no card (or the log is
+/// unreadable); callers treat that as "no current card", never an error.
+pub(super) fn current_card(paths: &MaestroPaths) -> Option<String> {
+    run::current_bound_card(paths, &cli_run_id()).ok().flatten()
+}
+
+/// The `<session>` half of a card claim identity (SPEC E6): `MAESTRO_SESSION` if
+/// set, then any real per-session id the agent runtime exports, else a
+/// process-unique token. Never the colliding `cli-DATE` form `cli_run_id` falls
+/// back to -- a date is not a session, and would let two runs share one claim.
+pub(super) fn claim_session() -> String {
+    for key in [
+        "MAESTRO_SESSION",
+        "MAESTRO_SESSION_ID",
+        "MAESTRO_RUN_ID",
+        "CODEX_SESSION_ID",
+        "CLAUDE_SESSION_ID",
+        "CLAUDECODE_SESSION_ID",
+    ] {
+        if let Ok(value) = env::var(key)
+            && !value.trim().is_empty()
+        {
+            // Trimmed: the raw value becomes a claim/assignee token, and
+            // stray whitespace would break later equality lookups.
+            return value.trim().to_string();
+        }
+    }
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_nanos())
+        .unwrap_or(0);
+    format!("s{}-{nanos}", std::process::id())
 }
 
 pub(super) fn detected_agent_hint() -> &'static str {

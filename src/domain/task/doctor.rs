@@ -3,9 +3,12 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 
+use crate::domain::card::schema::Card;
 use crate::domain::decisions;
-use crate::domain::task::lookup::{feature_id_for_task_path, task_yaml_paths};
-use crate::domain::task::template::{BlockerKind, TaskRecord, load_task};
+use crate::domain::task::cards;
+use crate::domain::task::lookup::paths_for_tasks_dir;
+use crate::domain::task::template::{BlockerKind, TaskRecord};
+use crate::foundation::core::paths::MaestroPaths;
 
 /// Result of scanning task blocker references.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -30,37 +33,38 @@ impl TaskDoctorReport {
 
 /// Load all task records under standalone and feature-owned task roots.
 pub fn load_task_records(tasks_dir: &Path) -> Result<Vec<TaskRecord>> {
-    let mut tasks = load_task_entries(tasks_dir)?
+    Ok(load_task_entries(tasks_dir)?
         .into_iter()
         .map(|entry| entry.task)
-        .collect::<Vec<_>>();
-    tasks.sort_by(|left, right| left.id.cmp(&right.id));
-    Ok(tasks)
+        .collect())
 }
 
-/// Load all task records with their directories under standalone and feature-owned task roots.
+/// Load all task records with their directories. This is the single task scan
+/// seam -- every roster, count, and projection rides it: it reads `Task`-typed
+/// cards (with `feature_id` recovered from `card.parent`, the field the counts
+/// group by).
 pub fn load_task_entries(tasks_dir: &Path) -> Result<Vec<TaskEntry>> {
-    let mut entries = Vec::new();
-    for task_path in task_yaml_paths(tasks_dir)? {
-        let (mut task, _) = load_task(&task_path)?;
-        task.feature_id = feature_id_for_task_path(&task_path);
-        let task_dir = task_path
-            .parent()
-            .map(Path::to_path_buf)
-            .with_context(|| format!("task path is missing parent: {}", task_path.display()))?;
-        entries.push(TaskEntry { task, task_dir });
-    }
-    entries.sort_by(|left, right| left.task.id.cmp(&right.task.id));
-    Ok(entries)
+    let paths =
+        paths_for_tasks_dir(tasks_dir).context("cannot resolve maestro paths from tasks dir")?;
+    Ok(cards::scan(&paths)?
+        .into_iter()
+        .map(|(task, task_dir)| TaskEntry { task, task_dir })
+        .collect())
+}
+
+/// [`load_task_entries`] over the archived card tree (`archive/cards/`), for
+/// the archived feature reads -- the live loader above never sees an archived
+/// card, so archived task counts must scan the archive tree explicitly.
+pub fn load_archived_task_entries(paths: &MaestroPaths) -> Result<Vec<TaskEntry>> {
+    Ok(cards::scan_dir(&paths.archive_cards_dir())?
+        .into_iter()
+        .map(|(task, task_dir)| TaskEntry { task, task_dir })
+        .collect())
 }
 
 /// Check unresolved task blocker references for missing nodes, self-blocks, and cycles.
 pub fn check_blocker_graph(tasks_dir: &Path) -> Result<TaskDoctorReport> {
     let tasks = load_task_records(tasks_dir)?;
-    let task_ids: HashSet<String> = tasks.iter().map(|task| task.id.clone()).collect();
-    let mut edges: HashMap<String, Vec<String>> = HashMap::new();
-    let mut errors = Vec::new();
-
     // Decision blockers point at the Maestro decision stores under the sibling
     // `.maestro` dir; resolving refs through the domain facade surfaces a dangling
     // `--by decision-NNN` like a missing task ref (T4).
@@ -68,8 +72,30 @@ pub fn check_blocker_graph(tasks_dir: &Path) -> Result<TaskDoctorReport> {
         .parent()
         .and_then(|maestro| maestro.parent())
         .map(crate::foundation::core::paths::MaestroPaths::new);
+    graph_report(decision_paths.as_ref(), &tasks)
+}
 
-    for task in &tasks {
+/// [`check_blocker_graph`] from an already-loaded card set (the card-aware
+/// doctor's one store walk). Strict on conversion: a task card whose folded
+/// record fails to convert surfaces its error, same bucket as the path form.
+pub fn check_blocker_graph_in_cards(
+    paths: &MaestroPaths,
+    cards: &[(Card, std::path::PathBuf)],
+) -> Result<TaskDoctorReport> {
+    let tasks = cards::records_in_cards(cards)?;
+    graph_report(Some(paths), &tasks)
+}
+
+fn graph_report(
+    decision_paths: Option<&MaestroPaths>,
+    tasks: &[TaskRecord],
+) -> Result<TaskDoctorReport> {
+    let task_ids: HashSet<String> = tasks.iter().map(|task| task.id.clone()).collect();
+    let mut decision_ids = None;
+    let mut edges: HashMap<String, Vec<String>> = HashMap::new();
+    let mut errors = Vec::new();
+
+    for task in tasks {
         for blocker in task
             .blockers
             .iter()
@@ -82,13 +108,18 @@ pub fn check_blocker_graph(tasks_dir: &Path) -> Result<TaskDoctorReport> {
                 // External and human blockers are free-form by design and cannot be validated.
                 BlockerKind::External | BlockerKind::Human => continue,
                 BlockerKind::Decision => {
-                    if let Some(paths) = decision_paths.as_ref()
-                        && !decisions::decision_exists(paths, &blocked_ref.id)?
-                    {
-                        errors.push(format!(
-                            "{} has blocker {} referencing missing decision {}",
-                            task.id, blocker.id, blocked_ref.id
-                        ));
+                    if let Some(paths) = decision_paths {
+                        if decision_ids.is_none() {
+                            decision_ids = Some(decisions::known_decision_ids(paths)?);
+                        }
+                        if let Some(ids) = &decision_ids
+                            && !ids.contains(&decisions::normalize_decision_id(&blocked_ref.id)?)
+                        {
+                            errors.push(format!(
+                                "{} has blocker {} referencing missing decision {}",
+                                task.id, blocker.id, blocked_ref.id
+                            ));
+                        }
                     }
                     continue;
                 }

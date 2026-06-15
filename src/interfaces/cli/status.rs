@@ -7,6 +7,7 @@ use serde::Serialize;
 use crate::domain::feature::{self, FeatureRosterEntry, FeatureStatus};
 use crate::domain::task::{self, TaskRecord, TaskState};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
+use crate::foundation::core::table;
 use crate::interfaces::cli::{StatusArgs, feature_next_label, recovery_label};
 use crate::operations::harness;
 
@@ -35,7 +36,7 @@ pub fn run(args: StatusArgs) -> Result<()> {
 }
 
 pub fn run_task_next(paths: &MaestroPaths, json: bool) -> Result<()> {
-    let report = build_status_report(paths)?;
+    let report = build_task_next_report(paths)?;
     if json {
         println!(
             "{}",
@@ -50,9 +51,116 @@ pub fn run_task_next(paths: &MaestroPaths, json: bool) -> Result<()> {
     Ok(())
 }
 
+fn build_task_next_report(paths: &MaestroPaths) -> Result<StatusReport> {
+    let task_entries = task::load_task_entries(&paths.tasks_dir())?;
+    let mut features = Vec::new();
+    let mut unreadable_features = Vec::new();
+    for entry in feature::list_tolerant_with_entries(paths, &task_entries) {
+        match entry {
+            FeatureRosterEntry::Loaded(view) => features.push(*view),
+            FeatureRosterEntry::Unreadable {
+                id,
+                path,
+                error,
+                hint,
+                typed_error,
+            } => unreadable_features.push((id, path, error, hint, typed_error)),
+        }
+    }
+    if features.is_empty()
+        && let Some((_, _, error, _, typed_error)) = unreadable_features.first()
+    {
+        if let Some(typed_error) = typed_error.clone() {
+            return Err(typed_error.into());
+        }
+        bail!("{error}");
+    }
+
+    let tasks: Vec<TaskRecord> = task_entries.into_iter().map(|entry| entry.task).collect();
+    let live_tasks: Vec<TaskRecord> = tasks
+        .iter()
+        .filter(|task| task.state.is_live())
+        .cloned()
+        .collect();
+    let mut warnings = Vec::new();
+    let mut current_task = None;
+    let mut current_feature = None;
+
+    let current_task_action = match env::var("MAESTRO_CURRENT_TASK") {
+        Ok(id) if !id.trim().is_empty() => match task::load_task_record(&paths.tasks_dir(), &id) {
+            Ok(task) if task.state.is_live() => {
+                current_task = Some(task.id.clone());
+                current_feature = task.feature_id.clone();
+                task_action(paths, &task)?
+            }
+            Ok(task) => {
+                warnings.push(WarningJson {
+                    code: "current_task_terminal".to_string(),
+                    message: format!(
+                        "MAESTRO_CURRENT_TASK={} is {}; falling back to repo queue",
+                        task.id,
+                        task.state.as_str()
+                    ),
+                });
+                None
+            }
+            Err(_) => {
+                warnings.push(WarningJson {
+                    code: "current_task_missing".to_string(),
+                    message: format!("MAESTRO_CURRENT_TASK={id} was not found; falling back"),
+                });
+                None
+            }
+        },
+        _ => None,
+    };
+
+    let next_action = match current_task_action {
+        Some(action) => Some(action),
+        None => choose_next_task_action(paths, &live_tasks)?,
+    };
+    let ready_to_ship_features = ready_to_ship_features(&features);
+    for (_, path, error, _, _) in unreadable_features {
+        warnings.push(WarningJson {
+            code: "feature_unreadable".to_string(),
+            message: format!("{} is unreadable: {error}", path.display()),
+        });
+    }
+    let harness_friction = harness::over_threshold_items(paths)?
+        .into_iter()
+        .map(HarnessFrictionJson::from)
+        .collect::<Vec<_>>();
+    let audit_hint = harness::audit_overdue_hint(paths)?.map(AuditHintJson::from);
+    let sections = StatusSectionsJson {
+        ready_to_ship: ready_to_ship_features.clone(),
+    };
+
+    Ok(StatusReport {
+        schema: "maestro.status.v1".to_string(),
+        status: if next_action.is_some() || !harness_friction.is_empty() || audit_hint.is_some() {
+            "actionable".to_string()
+        } else {
+            "no_action".to_string()
+        },
+        repo: paths.repo_root().display().to_string(),
+        current_task,
+        current_feature,
+        warnings,
+        next_action,
+        tasks: TaskSummaryJson::default(),
+        features: FeatureSummaryJson::default(),
+        task_rows: Vec::new(),
+        active_features: Vec::new(),
+        harness_friction,
+        audit_hint,
+        sections,
+        ready_to_ship_features,
+    })
+}
+
 fn print_status(report: StatusReport, json: bool) -> Result<()> {
     if json {
-        println!("{}", serde_json::to_string_pretty(&report)?);
+        println!("{}", serde_json::to_string(&report)?);
         return Ok(());
     }
     if report.status == "not_initialized" {
@@ -97,13 +205,24 @@ fn print_status(report: StatusReport, json: bool) -> Result<()> {
     }
     if !report.task_rows.is_empty() {
         println!("ACTIONS");
-        println!("NEXT\tTASK\tSTATE\tINSPECT\tTITLE");
-        for row in report.task_rows.iter().take(STATUS_TASK_ROW_LIMIT) {
-            println!(
-                "{}\t{}\t{}\t{}\t{}",
-                row.next, row.id, row.state, row.inspect, row.title
-            );
-        }
+        let rows: Vec<Vec<String>> = report
+            .task_rows
+            .iter()
+            .take(STATUS_TASK_ROW_LIMIT)
+            .map(|row| {
+                vec![
+                    row.next.clone(),
+                    row.id.clone(),
+                    row.state.clone(),
+                    row.inspect.clone(),
+                    row.title.clone(),
+                ]
+            })
+            .collect();
+        print!(
+            "{}",
+            table::render_table(&["NEXT", "TASK", "STATE", "INSPECT", "TITLE"], &rows)
+        );
         if report.task_rows.len() > STATUS_TASK_ROW_LIMIT {
             println!(
                 "... {} more active task(s); run maestro task list",
@@ -113,22 +232,38 @@ fn print_status(report: StatusReport, json: bool) -> Result<()> {
     }
     if !report.active_features.is_empty() {
         println!("ACTIVE FEATURES");
-        println!("FEATURE\tSTATE\tNEXT\tINSPECT\tTITLE");
-        for row in &report.active_features {
-            println!(
-                "{}\t{}\t{}\t{}\t{}",
-                row.id, row.state, row.next, row.inspect, row.title
-            );
-        }
+        let rows: Vec<Vec<String>> = report
+            .active_features
+            .iter()
+            .map(|row| {
+                vec![
+                    row.id.clone(),
+                    row.state.clone(),
+                    row.next.clone(),
+                    row.inspect.clone(),
+                    row.title.clone(),
+                ]
+            })
+            .collect();
+        print!(
+            "{}",
+            table::render_table(&["FEATURE", "STATE", "NEXT", "INSPECT", "TITLE"], &rows)
+        );
     }
     if !report.ready_to_ship_features.is_empty() {
         println!("FEATURES READY TO SHIP");
-        for feature in &report.ready_to_ship_features {
-            println!(
-                "{}\tverified={}/{}\ttemplate: {}",
-                feature.id, feature.verified, feature.total, feature.next_action.command.display
-            );
-        }
+        let rows: Vec<Vec<String>> = report
+            .ready_to_ship_features
+            .iter()
+            .map(|feature| {
+                vec![
+                    feature.id.clone(),
+                    format!("verified={}/{}", feature.verified, feature.total),
+                    format!("template: {}", feature.next_action.command.display),
+                ]
+            })
+            .collect();
+        print!("{}", table::render_table(&[], &rows));
     }
     Ok(())
 }
@@ -222,10 +357,12 @@ fn print_next_action(action: &NextAction) {
 }
 
 fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
-    let tasks = task::load_task_records(&paths.tasks_dir())?;
+    // One task scan feeds both the report and the per-feature counts inside the
+    // roster (list_tolerant would otherwise re-scan the same cards).
+    let task_entries = task::load_task_entries(&paths.tasks_dir())?;
     let mut features = Vec::new();
     let mut unreadable_features = Vec::new();
-    for entry in feature::list_tolerant(paths) {
+    for entry in feature::list_tolerant_with_entries(paths, &task_entries) {
         match entry {
             FeatureRosterEntry::Loaded(view) => features.push(*view),
             FeatureRosterEntry::Unreadable {
@@ -249,12 +386,12 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
     let mut current_task = None;
     let mut current_feature = None;
 
-    let mut live_tasks: Vec<TaskRecord> = tasks
+    let tasks: Vec<TaskRecord> = task_entries.into_iter().map(|entry| entry.task).collect();
+    let live_tasks: Vec<TaskRecord> = tasks
         .iter()
         .filter(|task| task.state.is_live())
         .cloned()
         .collect();
-    live_tasks.sort_by(|left, right| left.id.cmp(&right.id));
 
     let current_task_action = match env::var("MAESTRO_CURRENT_TASK") {
         Ok(id) if !id.trim().is_empty() => match task::load_task_record(&paths.tasks_dir(), &id) {

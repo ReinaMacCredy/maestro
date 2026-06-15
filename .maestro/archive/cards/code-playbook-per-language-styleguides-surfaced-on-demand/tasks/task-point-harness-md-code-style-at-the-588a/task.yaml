@@ -1,0 +1,81 @@
+schema_version: maestro.card.v1
+id: task-point-harness-md-code-style-at-the-588a
+type: task
+title: 'Point HARNESS.md ## Code style at the playbook folder + bump 1.14.0 -> 1.15.0'
+status: verified
+parent: code-playbook-per-language-styleguides-surfaced-on-demand
+claimed_by: claude#s26802-1781450623114057000
+claimed_at: 2026-06-14T15:23:43.114Z
+created_at: 2026-06-14T15:05:11.263Z
+updated_at: 2026-06-14T15:27:21.597Z
+extra:
+  schema_version: maestro.task.v2
+  claims:
+  - HARNESS.md retains the 7 general bullets and adds a paragraph directing the agent to read .maestro/playbook/<lang>.md for the language being edited
+  - HARNESS.md frontmatter version is 1.15.0 and the src/domain/harness/extract.rs version assertion was updated to Some(1.15.0) to match
+  covers:
+  - ac-3
+  state_history:
+  - state: draft
+    at: 2026-06-14T15:05:11.263Z
+    by: maestro
+  - state: exploring
+    at: 2026-06-14T15:05:11.281Z
+    by: maestro
+  - state: ready
+    at: 2026-06-14T15:05:11.337Z
+    by: maestro
+  - state: needs_verification
+    at: 2026-06-14T15:23:51.806Z
+    by: maestro
+    summary: 'HARNESS.md ## Code style keeps the universal principles and adds a pointer to the per-language .maestro/playbook/<lang>.md guides; bumped frontmatter 1.14.0 -> 1.15.0.'
+    claims:
+    - HARNESS.md retains the 7 general bullets and adds a paragraph directing the agent to read .maestro/playbook/<lang>.md for the language being edited
+    - HARNESS.md frontmatter version is 1.15.0 and the src/domain/harness/extract.rs version assertion was updated to Some(1.15.0) to match
+  - state: needs_verification
+    at: 2026-06-14T15:23:51.819Z
+    by: maestro
+    summary: 'verification failed: missing proof: no task events or proof artifacts found; hooks record proof during agent runs, or add one with `maestro event create --task-id task-point-harness-md-code-style-at-the-588a --claim "..."`'
+    open_items:
+    - 'missing proof: no task events or proof artifacts found; hooks record proof during agent runs, or add one with `maestro event create --task-id task-point-harness-md-code-style-at-the-588a --claim "..."`'
+    - 'claim not backed by events/proof: HARNESS.md retains the 7 general bullets and adds a paragraph directing the agent to read .maestro/playbook/<lang>.md for the language being edited; record matching proof with `maestro event create --task-id task-point-harness-md-code-style-at-the-588a --claim "HARNESS.md retains the 7 general bullets and adds a paragraph directing the agent to read .maestro/playbook/<lang>.md for the language being edited"`'
+    - 'claim not backed by events/proof: HARNESS.md frontmatter version is 1.15.0 and the src/domain/harness/extract.rs version assertion was updated to Some(1.15.0) to match; record matching proof with `maestro event create --task-id task-point-harness-md-code-style-at-the-588a --claim "HARNESS.md frontmatter version is 1.15.0 and the src/domain/harness/extract.rs version assertion was updated to Some(1.15.0) to match"`'
+  - state: verified
+    at: 2026-06-14T15:27:21.597Z
+    by: maestro
+    summary: 'verification passed: 2 claim(s), 1 proof source(s)'
+  lane: normal
+  risk: medium
+  verification:
+    status: passed
+    verified_at: 2026-06-14T15:27:21.597Z
+    verified_commit: 9e6562645fc4cf4fce388fcf88194f6b1de78411
+    verified_by_run: .maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
+    contract_hash: a415a5d1025bdafa1794c0d424331b3929aec535aa350fa64f6260e52f5e46cd
+    claim_checks:
+    - claim: HARNESS.md retains the 7 general bullets and adds a paragraph directing the agent to read .maestro/playbook/<lang>.md for the language being edited
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
+    - claim: HARNESS.md frontmatter version is 1.15.0 and the src/domain/harness/extract.rs version assertion was updated to Some(1.15.0) to match
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
+    commands:
+    - cmd: cargo build
+      exit_code: 0
+      duration_ms: 223
+    - cmd: cargo test
+      exit_code: 0
+      duration_ms: 60825
+    - cmd: cargo clippy -- -D warnings
+      exit_code: 0
+      duration_ms: 297
+    proof_sources:
+    - kind: event
+      path: .maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
+      hash: 07589f788557b009c75a705e2da018f062ae9768106eb81d00bc816f892922cb
+  acceptance_locked: true
+  acceptance:
+    checks:
+    - HARNESS.md keeps the general principles and adds a line directing the agent to .maestro/playbook/<lang>.md; frontmatter version is 1.15.0; the harness extract.rs version assertion matches
+    locked_by: maestro
+    locked_at: 2026-06-14T15:05:11.337Z

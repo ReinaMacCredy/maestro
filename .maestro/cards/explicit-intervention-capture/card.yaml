@@ -1,0 +1,62 @@
+schema_version: maestro.card.v1
+id: explicit-intervention-capture
+type: feature
+title: Explicit intervention capture
+status: shipped
+created_at: 2026-06-06T12:24:05.898Z
+updated_at: 2026-06-07T15:00:32.232Z
+description: 'Human corrections are only keyword-guessed today (looks_like_correction heuristic over UserPromptSubmit events; recurring_intervention detector). User wants the moment of correction captured deliberately and precisely — ''when agent wrong i can tell them and it capture it'' — with a note of what was wrong, feeding the self-improvement loop so repeated failure modes change future behavior. DEPENDENCY: layers on the harness self-improvement v1 (mid-implementation, uncommitted); reopens none of its locks.'
+extra:
+  schema_version: maestro.feature.v2
+  id: explicit-intervention-capture
+  title: Explicit intervention capture
+  description: 'Human corrections are only keyword-guessed today (looks_like_correction heuristic over UserPromptSubmit events; recurring_intervention detector). User wants the moment of correction captured deliberately and precisely — ''when agent wrong i can tell them and it capture it'' — with a note of what was wrong, feeding the self-improvement loop so repeated failure modes change future behavior. DEPENDENCY: layers on the harness self-improvement v1 (mid-implementation, uncommitted); reopens none of its locks.'
+  status: shipped
+  created_at: 2026-06-06T12:24:05.898Z
+  updated_at: 2026-06-07T15:00:32.232Z
+  affected_areas:
+  - src/domain/run + src/interfaces/cli (event intervention verb, new event type)
+  - src/operations/harness (topic detector; heuristic untouched)
+  - embedded/harness/HARNESS.md + embedded skills (rule lines, version bumps)
+  acceptance:
+  - maestro event intervention --note '<what was wrong>' [--topic <slug>] records a first-class intervention event in the run log; agent-recorded only, never auto-fired
+  - 'HARNESS.md + relevant skill gain a <=3-line rule: when corrected, record an intervention event (version bumps + extraction guard re-record)'
+  - a new detector clusters explicit events per topic (--topic pin wins, note-text fingerprint fallback); each topic is its own backlog item with note texts as evidence, riding the v1 lifecycle (sessions_hit, thresholds, apply/dismiss, derived priority)
+  - the heuristic recurring_intervention detector keeps running unchanged underneath as the global backstop item
+  - 'harness apply on an intervention item spawns a task with a two-part preset check: guidance for the topic recorded in repo instructions AND no new events on that topic for N sessions'
+  acceptance_evidence:
+  - ac_id: ac-1
+    kind: explicit
+    text: 'sandbox g5af7f5a: event intervention --note ... --topic use-rg -> recorded intervention event for run sess-a; writer is CLI verb only (src/interfaces/cli/event.rs:43,53); empty note rejected exit 1'
+    at: 2026-06-07T15:00:24.884Z
+  - ac_id: ac-2
+    kind: explicit
+    text: embedded/harness/HARNESS.md:16 + embedded/skills/maestro-task/SKILL.md:26 carry the 1-line verb rule; 84ad96f1 touched both + tests/resources_version_guard.rs (version bumps + guard re-record)
+    at: 2026-06-07T15:00:24.920Z
+  - ac_id: ac-3
+    kind: explicit
+    text: 'sandbox: 2 events topic-pinned use-rg across sess-a/sess-b -> one hb-001 2x/2s provenance explicit-intervention with both notes as evidence; no-topic identical notes -> hb-002 via note-text fingerprint (src/operations/harness/detect.rs:60-65,93)'
+    at: 2026-06-07T15:00:24.942Z
+  - ac_id: ac-4
+    kind: explicit
+    text: heuristic recurring_intervention detector still wired at detect.rs:32, fires on >=3 correction-like prompts as global backstop item
+    at: 2026-06-07T15:00:24.961Z
+  - ac_id: ac-5
+    kind: explicit
+    text: 'sandbox: harness apply hb-001 -> accepted (spawned task-001) with two-part preset check (guidance recorded AND no new events on topic for next measured sessions) per src/operations/harness/propose.rs:450-455'
+    at: 2026-06-07T15:00:24.981Z
+  acceptance_sweeps:
+  - at: 2026-06-07T15:00:32.212Z
+    resolved:
+    - ac-1
+    - ac-2
+    - ac-3
+    - ac-4
+    - ac-5
+  qa:
+    surface: none
+    reason: 'retroactive record: implemented in 84ad96f1 and shipped before the record lifecycle; audited 2026-06-07 vs binary g5af7f5a'
+    amend_log_position: 0
+  non_goals:
+  - binary never writes or drafts protocol text; no auto-fired intervention events (C1 passive stance intact)
+  outcome: agent-recorded intervention events with topic clustering ride the harness backlog lifecycle; shipped in 84ad96f1, record closed retroactively after 5/5 audit 2026-06-07

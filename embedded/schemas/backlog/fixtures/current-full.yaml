@@ -1,0 +1,33 @@
+schema_version: maestro.card.v1
+id: card-dd99ee
+type: idea
+title: Full idea fixture
+status: measured
+created_at: 2026-06-12T00:00:00.000Z
+updated_at: 2026-06-12T00:30:00.000Z
+extra:
+  id: card-dd99ee
+  title: Full idea fixture
+  fingerprint: agent_audit:fixture-topic
+  source: cli-2026-06-12
+  provenance: agent-audit
+  topic: fixture-topic
+  type: agent_audit
+  priority: medium
+  occurrences: 2
+  sessions_hit:
+    - cli-2026-06-12
+  first_seen: 2026-06-12T00:00:00.000Z
+  last_seen: 2026-06-12T00:30:00.000Z
+  status: measured
+  evidence:
+    - 'cli-2026-06-12: the fixture exercises every persisted idea field'
+  spawned_task: card-dd44ee
+  dismissal_reason: null
+  history:
+    - result: accepted
+      task: card-dd44ee
+      at: 2026-06-12T00:10:00.000Z
+    - result: measured
+      task: card-dd44ee
+      at: 2026-06-12T00:30:00.000Z

@@ -1,0 +1,29 @@
+{
+  "schema_version": "maestro.verification.v1",
+  "task_id": "card-dd44ee",
+  "attempt_id": null,
+  "task_snapshot": { "updated_at": "2026-06-12T00:20:00.000Z" },
+  "status": "passed",
+  "verified_at": "2026-06-12T00:20:00.000Z",
+  "verified_commit": "0000000000000000000000000000000000000000",
+  "contract_hash": "1111111111111111111111111111111111111111111111111111111111111111",
+  "claims": [
+    {
+      "claim": "every field round-trips into VerificationReport",
+      "matched": true,
+      "source": ".maestro/runs/cli-2026-06-12/events.jsonl"
+    }
+  ],
+  "commands": [
+    { "cmd": "cargo test", "exit_code": 0, "duration_ms": 1000 }
+  ],
+  "claims_only": false,
+  "proof_sources": [
+    {
+      "kind": "event",
+      "path": ".maestro/runs/cli-2026-06-12/events.jsonl",
+      "hash": "2222222222222222222222222222222222222222222222222222222222222222"
+    }
+  ],
+  "failures": []
+}

@@ -59,6 +59,41 @@ maestro/
 - Generated or installed agent-facing files are user-owned once written.
   Template refresh needs an explicit mutation path, visible diff, backup, or
   force/apply story.
+- Write verbs echo only the computed delta the agent could not derive from its
+  own flags (minted id, bindings, supersession, the appended note), plus at most
+  one next-step pointer. Never re-print the agent's own input or a standing
+  multi-line footer; the full record stays one read verb away (e.g.
+  `maestro decision show <id>`).
+- Read verbs bound their default output to the live/relevant slice so routine
+  orientation does not re-ingest the whole store: `list` hides coarse-closed
+  cards, `decision list`/`query decisions` show only the recent window. The full
+  set is one `--all` away, and `--feature <id>` scopes decisions; the count
+  header names what was hidden and how to widen.
+
+## CONCURRENT AGENT CONTRACT
+
+- Multiple agents may run Maestro commands in the same repo. Durable card-store
+  writes use snapshot/CAS: the command writes only if the card or entry file
+  still matches the bytes it read.
+- A racing writer gets a retryable error containing
+  `changed since it was read; re-run the command`. Re-run the command so it
+  reads the newest store state and reapplies the intended change.
+- Dir-backed card deletion also compares the card file snapshot before removing
+  the directory and sidecars. Entry-backed card deletion rewrites the entry file
+  through whole-file CAS.
+- Append-only logs and notes use append-mode writes; they preserve complete
+  lines but do not provide a cross-file transaction. Multi-file commands can
+  interleave at file boundaries, so treat a failed command as partial unless its
+  operation documents rollback.
+- Agent-facing read contracts are JSON, not human text. `maestro ready --json`
+  emits `version`, `schema`, and `cards` with stable `rank`, `id`, `type`,
+  `title`, `status`, `parent`, and `claimed_by`. `maestro list --json` emits
+  `version`, `schema`, and `cards` with stable `id`, `type`, `title`, `status`,
+  `parent`, `claimed_by`, `claimed_at`, and `archived`. These fields are
+  additive-only: new fields may appear, but existing meanings are not silently
+  renamed or reinterpreted. In a repo without a card store the JSON verbs
+  still emit a valid envelope with zero cards (exit 0); the guiding notice
+  goes to stderr so stdout stays parseable.
 
 ## ANTI-PATTERNS (THIS PROJECT)
 
@@ -90,6 +125,15 @@ cargo fmt -- --check
 cargo clippy --all-targets -- -D warnings
 cargo test
 target/debug/maestro version
+```
+
+After committing, always release locally so manual testing runs the newest
+binary:
+
+```bash
+cargo build --release
+cp target/release/maestro ~/.local/bin/maestro
+maestro version   # g<short-sha> must match HEAD
 ```
 
 Do not tag, publish, push, or create GitHub releases without explicit approval.

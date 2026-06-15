@@ -2,6 +2,7 @@ use anyhow::Result;
 
 use crate::domain::harness::BacklogItem;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
+use crate::foundation::core::table;
 use crate::interfaces::cli::{HarnessArgs, HarnessCommand};
 use crate::operations::harness;
 
@@ -26,7 +27,12 @@ pub fn run(args: HarnessArgs) -> Result<()> {
     }
 }
 
-fn propose(paths: &MaestroPaths, title: &str, evidence: &str, topic: Option<&str>) -> Result<()> {
+fn propose(
+    paths: &MaestroPaths,
+    title: &str,
+    evidence: &[String],
+    topic: Option<&str>,
+) -> Result<()> {
     let item = harness::propose_agent_audit(paths, title, evidence, topic, &super::cli_run_id())?;
     println!("proposed {} ({})", item.id, item.title);
     println!(
@@ -74,28 +80,32 @@ fn list(paths: &MaestroPaths, all: bool) -> Result<()> {
         }
         return Ok(());
     }
-    println!("ID\t!\tSTATUS\tTYPE\tSEEN\tTITLE");
-    for item in visible {
-        let hint = if ready.contains(&item.id) {
-            "\t(ready to measure)"
-        } else {
-            ""
-        };
-        println!(
-            "{}\t{}\t{}\t{}\t{}\t{}{}",
-            item.id,
-            if over_threshold.contains(&item.id) {
-                "!"
+    let rows: Vec<Vec<String>> = visible
+        .iter()
+        .map(|item| {
+            let hint = if ready.contains(&item.id) {
+                "  (ready to measure)"
             } else {
                 ""
-            },
-            field_or_default(&item.status, "proposed"),
-            field_or_default(&item.item_type, "unknown"),
-            seen_label(item),
-            item.title,
-            hint
-        );
-    }
+            };
+            vec![
+                item.id.clone(),
+                if over_threshold.contains(&item.id) {
+                    "!".to_string()
+                } else {
+                    String::new()
+                },
+                field_or_default(&item.status, "proposed").to_string(),
+                field_or_default(&item.item_type, "unknown").to_string(),
+                seen_label(item),
+                format!("{}{hint}", item.title),
+            ]
+        })
+        .collect();
+    print!(
+        "{}",
+        table::render_table(&["ID", "!", "STATUS", "TYPE", "SEEN", "TITLE"], &rows)
+    );
     if !all && hidden > 0 {
         println!("# {hidden} terminal proposal(s) hidden; use --all to include");
     }

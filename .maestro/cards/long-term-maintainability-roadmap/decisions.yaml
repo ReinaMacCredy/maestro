@@ -1,0 +1,310 @@
+- schema_version: maestro.card.v1
+  id: dec-roadmap-shape-for-maintainability-work-d659
+  type: decision
+  title: Roadmap shape for maintainability work
+  status: locked
+  parent: long-term-maintainability-roadmap
+  created_at: 2026-06-11T18:01:38.703Z
+  updated_at: 2026-06-11T18:06:27.235Z
+  description: The audit findings need a long-term design record, but implementation should stay small and verifiable. Decide whether to keep one umbrella roadmap, split four independent SPECs now, or convert directly into tasks.
+  extra:
+    id: dec-roadmap-shape-for-maintainability-work-d659
+    title: Roadmap shape for maintainability work
+    status: locked
+    feature: long-term-maintainability-roadmap
+    context: The audit findings need a long-term design record, but implementation should stay small and verifiable. Decide whether to keep one umbrella roadmap, split four independent SPECs now, or convert directly into tasks.
+    decision: Use one umbrella maintainability roadmap SPEC, with schema evolution merged into it as a major workstream and future fixes cut as small approved implementation slices.
+    rejected:
+    - 'Four independent SPECs now: weaker shared memory for a long-running roadmap.'
+    - 'Convert ideas directly to tasks: too little design memory for long-term Maestro development.'
+    preview: SPEC-maintainability-roadmap owns WS1 architecture truth, WS2 portable verification, WS3 panic-free rendering, WS4 alias retirement, and WS5 schema evolution; each later implementation remains a small approved slice.
+    created_at: 2026-06-11T18:01:38.703Z
+    locked_at: 2026-06-11T18:06:27.235Z
+- schema_version: maestro.card.v1
+  id: dec-cardtype-dispatch-truth-for-ws1-38dd
+  type: decision
+  title: CardType dispatch truth for WS1
+  status: locked
+  parent: long-term-maintainability-roadmap
+  created_at: 2026-06-11T18:58:46.432Z
+  updated_at: 2026-06-11T18:58:54.695Z
+  description: ARCHITECTURE.md section 2 claims a per-type CardType trait seam, but the code implements pub enum CardType with four inherent methods and exhaustive match dispatch across ~12 files; per-type lifecycle logic lives in the owning domain modules. Decide whether docs change to the enum truth, code grows the promised trait, or the divergence stays with an exit note.
+  extra:
+    locked_at: 2026-06-11T18:58:54.695Z
+    decision: 'Option A: rewrite ARCHITECTURE.md section 2 to describe enum CardType + exhaustive match dispatch + per-domain lifecycle ownership as the intended design; no code change. The trait is kept only as a recorded revisit trigger: build it only if a 7th card type lands or per-type behavior multiplies after WS5.'
+    preview: 'ARCHITECTURE.md section 2 rewritten to: generic card core + enum CardType (closed set) + exhaustive match at the seams + per-domain modules own lifecycle. SPEC D2 record carries the revisit trigger.'
+    rejected:
+    - 'Build the promised trait now: the type set is closed (DN2), exhaustive match already gives compile-time completeness, and a behavior trait layered over the still-untyped extra payload would need rewriting when WS5 lands.'
+    - 'Keep docs aspirational with an exit note: institutionalizes drift; the note ages into permanent divergence.'
+- schema_version: maestro.card.v1
+  id: dec-verify-all-default-temp-root-portability-4f7a
+  type: decision
+  title: verify-all default temp root portability
+  status: locked
+  parent: long-term-maintainability-roadmap
+  created_at: 2026-06-11T19:03:30.462Z
+  updated_at: 2026-06-11T19:03:39.314Z
+  description: scripts/verify-all.sh defaults its artifact root to mktemp -d /private/tmp/... which only exists on macOS; the script is dev-machine-only (TESTING.md is its sole consumer, CI runs ubuntu-latest without it). /private/tmp was buying a symlink-free path on macOS, which matters because maestro rejects symlinked roots.
+  extra:
+    locked_at: 2026-06-11T19:03:39.314Z
+    decision: 'Portable default: ARTIFACT_ROOT=$(mktemp -d) followed by cd/pwd -P canonicalization, preserving the symlink-free property on every platform; MAESTRO_VERIFY_ROOT override unchanged. Serves developer machines and any future CI equally.'
+    preview: macOS resolves to /private/var/folders/..., Linux to /tmp/...; no new environment requirements.
+    rejected:
+    - 'Require MAESTRO_VERIFY_ROOT outside macOS: keeps the discoverability friction the WS2 pain names.'
+    - 'Document the gate as macOS-only: release surfaces include Linux assets, so the trap stays for Linux contributors.'
+- schema_version: maestro.card.v1
+  id: dec-production-unwrap-policy-for-rendering-8a9c
+  type: decision
+  title: production unwrap policy for rendering surfaces
+  status: locked
+  parent: long-term-maintainability-roadmap
+  created_at: 2026-06-11T19:06:18.252Z
+  updated_at: 2026-06-11T19:06:38.644Z
+  description: 'src/interfaces/cli/resume.rs renders into a String with 18 writeln!().unwrap() calls; infallible in practice but violating AGENTS.md:149 (.unwrap() only in tests/examples). Verified: resume.rs is the only production surface with direct unwraps; the other hits (card/edit.rs:429, feature/qa.rs:480) are inside cfg(test) modules. Decide cleanup-only vs cleanup plus an executable guard.'
+  extra:
+    locked_at: 2026-06-11T19:06:38.644Z
+    decision: 'Cleanup plus src-wide guard: replace the 18 resume.rs unwraps with an infallible rendering pattern, and add a scan test in the existing architecture-test idiom that fails on any .unwrap( in src/ outside cfg(test), starting with an empty allowlist; expect("invariant: ...") and unwrap_or* remain allowed.'
+    preview: tests/architecture_style.rs scans src/**/*.rs, skips cfg(test) regions, fails on .unwrap(, allowlist empty at adoption.
+    rejected:
+    - 'Cleanup only: leaves the no-unwrap rule prose-only; the implicit-exception drift the WS3 pain names stays possible.'
+    - 'Interfaces-only guard: weaker rule for no real cost savings; the tree is already clean everywhere after the cleanup.'
+- schema_version: maestro.card.v1
+  id: dec-cli-alias-import-retirement-mode-b905
+  type: decision
+  title: CLI alias import retirement mode
+  status: locked
+  parent: long-term-maintainability-roadmap
+  created_at: 2026-06-11T19:07:27.039Z
+  updated_at: 2026-06-11T19:07:36.337Z
+  description: Two CLI imports still use the lib.rs compatibility aliases (doctor.rs:15 crate::harness, query.rs:5 crate::decisions). Canonical domain paths exist (lib.rs:7-9 are plain re-exports), so there is no facade gap. tests/architecture_imports.rs is the existing enforcement vehicle. The aliases also serve 11 integration-test imports, so full alias retirement is a separate D9/WS8 question.
+  extra:
+    locked_at: 2026-06-11T19:07:36.337Z
+    decision: Re-point both CLI imports to crate::domain paths and tighten tests/architecture_imports.rs with an interfaces-must-not-import-aliases rule in the same slice; the rule adopts at zero violations. lib.rs aliases stay for integration tests; their full retirement folds into D9.
+    preview: doctor.rs:15 and query.rs:5 re-pointed; architecture_imports.rs gains the boundary rule with an empty allowlist.
+    rejected:
+    - 'Opportunistic retirement without a guard: new code can copy the old adapter examples until the last one disappears.'
+    - 'Guard now with a grandfathered allowlist: two-step where one cheap step suffices.'
+- schema_version: maestro.card.v1
+  id: dec-schema-compatibility-posture-b913
+  type: decision
+  title: schema compatibility posture
+  status: locked
+  parent: long-term-maintainability-roadmap
+  created_at: 2026-06-11T19:12:21.480Z
+  updated_at: 2026-06-11T19:12:31.313Z
+  description: foundation/core/schema.rs:77 classify() accepts only exact version matches, so any schema bump blocks every command in old repos until migration. Decide whether reading old supported versions should normalize in memory or keep refusing until explicit migrate.
+  extra:
+    locked_at: 2026-06-11T19:12:31.313Z
+    decision: 'Reading just works: old supported versions normalize in memory with declared defaults; disk rewrites happen only on a real write to that artifact or explicit maestro migrate (with backup). Unknown/newer/malformed versions are still refused with clear errors; destructive changes stay migrate-only. Long-term, card-envelope work keeps shrinking typed payloads so bumps get rarer.'
+    preview: maestro status renders a v2 repo untouched; task claim rewrites only the touched file as current; maestro migrate bulk-upgrades with backup.
+    rejected:
+    - 'Strict exact-match plus better migration tooling: keeps every schema bump a migration project blocking even read-only commands.'
+- schema_version: maestro.card.v1
+  id: dec-embedded-schema-packs-as-contract-source-9d42
+  type: decision
+  title: embedded schema packs as contract source
+  status: locked
+  parent: long-term-maintainability-roadmap
+  created_at: 2026-06-11T19:15:25.702Z
+  updated_at: 2026-06-11T19:15:35.780Z
+  description: 'Decide where version/default/rename knowledge lives for the 10-artifact-family compat rollout: reviewable embedded YAML schema packs guarded like other embedded resources with a small Rust kernel per artifact, or Rust-only compat modules with no shared inspectable contract.'
+  extra:
+    locked_at: 2026-06-11T19:15:35.780Z
+    decision: 'Option D6.2-B: embedded/schemas/<artifact>/ packs (current/compat/retired YAML plus fixtures) are the reviewable source of truth, guarded by the resources version guard; domain compat.rs modules remain the only executable conversion logic. Packs are contracts and fixtures, never a runtime rule engine.'
+    preview: Adding a field = edit one pack + one seed_default line + one fixture.
+    rejected:
+    - 'Rust-only compat: no reviewable contract or retired-names registry across ten artifact families; schema history readable only as Rust diffs.'
+    - 'Template-only packs: cannot read old user data (assessed in annex).'
+    - 'Codegen from packs: build complexity and debuggability cost for a small CLI (assessed in annex).'
+- schema_version: maestro.card.v1
+  id: dec-storage-hub-runtime-pattern-2019
+  type: decision
+  title: storage hub runtime pattern
+  status: locked
+  parent: long-term-maintainability-roadmap
+  created_at: 2026-06-11T19:18:24.400Z
+  updated_at: 2026-06-11T19:18:44.266Z
+  description: 'Formalizes the locked D6.1 reading posture and D6.2 schema packs into one runtime pattern per artifact family: one current storage version, a bounded list of supported read versions, a domain compat kernel, and the change-policy table separating no-migrate changes from explicit-migrate changes.'
+  extra:
+    locked_at: 2026-06-11T19:18:44.266Z
+    decision: 'Confirmed: per artifact family, one current storage version, a bounded supported-read-version list (not unlimited history), a domain-local compat kernel converting old to current in memory, and the change-policy table (add/default/rename/widen need no migrate; move/remint/reinterpret/drop/lifecycle-semantics need explicit migrate with backup). Read-only commands never rewrite disk. Retirement policy per version lands with the D6 artifact matrix.'
+    preview: Entailed by D6.1 + D6.2; adds bounded version support.
+    rejected:
+    - 'Unbounded historical version support: old versions would live forever without a retirement policy, the risk the annex names.'
+- schema_version: maestro.card.v1
+  id: dec-unknown-field-passthrough-rule-for-card-e0ef
+  type: decision
+  title: Unknown-field passthrough rule for card files
+  status: locked
+  parent: long-term-maintainability-roadmap
+  created_at: 2026-06-11T19:23:33.383Z
+  updated_at: 2026-06-11T19:23:44.351Z
+  description: 'WS5 annex sub-decision D6.6 (closes SRI-6): what happens to fields maestro does not recognize when it reads and rewrites a card file. Options: tolerate+preserve via raw bag with doctor visibility; drop on rewrite with warning; reject at parse (deny_unknown_fields).'
+  extra:
+    locked_at: 2026-06-11T19:23:44.351Z
+    decision: Unknown fields are tolerated on read and preserved byte-for-byte through rewrites via a raw/extra bag carried on the parsed card; maestro doctor lists unknown fields per card so they stay visible. No read-only or rewriting command may drop or reject a field it does not recognize.
+    preview: 'task done on a file with notes_url: <url> -> status flips, notes_url survives the rewrite; doctor: note: task-... has unknown field notes_url'
+    rejected:
+    - 'Drop unknown fields on rewrite with a warning: still destroys user/future-version data, just audibly'
+    - 'Reject at parse (deny_unknown_fields): turns forward-compatibility into a hard error and breaks reading-just-works (D6.1)'
+- schema_version: maestro.card.v1
+  id: dec-yaml-to-sqlite-storage-pivot-d75e
+  type: decision
+  title: YAML to SQLite storage pivot
+  status: locked
+  parent: long-term-maintainability-roadmap
+  created_at: 2026-06-11T19:30:09.924Z
+  updated_at: 2026-06-11T19:30:20.820Z
+  description: 'WS5 annex sub-decision D6.4: should durable YAML/Markdown/JSONL artifacts move into SQLite to ease schema evolution and querying? Options: full canonical SQLite store; hybrid with files canonical + disposable SQLite projection; SQLite only for append/high-volume surfaces; stay file-native.'
+  extra:
+    locked_at: 2026-06-11T19:30:20.820Z
+    decision: 'No pivot: YAML/Markdown/JSONL files remain the only durable truth (D6.4-D). Schema evolution is already covered by the locked D6.3 pattern. D6.4-B (disposable SQLite projection rebuilt from files) is recorded as the one sanctioned future shape if query speed ever hurts, owned by a WS7 read-model slice, never the WS5 compatibility rollout.'
+    preview: 'cat card.yaml stays readable; git diff stays line-level (-status: in_progress / +status: done); no .db file exists'
+    rejected:
+    - 'Canonical SQLite store: kills git diffs, hand edits, and agent-readable cards; breaks the file-native contract (ARCHITECTURE.md:64)'
+    - 'Hybrid projection built now: solves a query-speed problem maestro does not have at current card counts; freshness logic and rebuild-parity tests are dead weight today'
+    - 'SQLite for logs/search only: two storage styles without removing any schema-evolution work; revisit only if JSONL scanning becomes the bottleneck'
+- schema_version: maestro.card.v1
+  id: dec-schema-compatibility-rollout-strategy-7456
+  type: decision
+  title: Schema compatibility rollout strategy
+  status: locked
+  parent: long-term-maintainability-roadmap
+  created_at: 2026-06-11T19:36:02.703Z
+  updated_at: 2026-06-11T19:36:15.690Z
+  description: 'WS5 annex sub-decision D6.5: ship schema compatibility as phased per-artifact-family releases or one coordinated all-artifact rollout. Material scope decision; advisor review recorded 2026-06-12 before lock (verdict: all-together is lower risk because the default-deny classify kernel is shared by every family and releases are local single-machine installs).'
+  extra:
+    locked_at: 2026-06-11T19:36:15.690Z
+    decision: 'D6.5-B: one coordinated all-artifact rollout covering the 10 artifact-matrix families, executed under 11 advisor lock conditions: commit per checklist item with the suite green at every commit; shared classify/Compat kernel flip lands first and alone; one shared parameterized compatibility-matrix harness complete before merge; no public-model changes for families whose on-disk version is not changing; 10 matrix families only (unlisted schema constants out); regenerable families (run-evidence, proof) get rebuild/tolerant-read not migrate coverage; WS8 bridge-dedup precedes compat modules (D9/SRI-17 link); per-family supported-old-version matrix written into the SPEC before implementation; D6.6 passthrough pinned to the post-5f8788c1 extra carrier via one shared helper; branch off a green card-model tip with a days-not-months merge window; final gate = fmt+clippy+full suite+migrate integration+drift tests+embedded resource-guard re-record.'
+    preview: 'one effort, committed in steps: 1 shared kernel (green) -> 2 schema packs (green) -> 3 per-family compat (green) -> ... -> 9 final gate -> merge in days; no half-state, every family behaves the same on day one'
+    rejected:
+    - 'Phased per-artifact-family releases (D6.5-A): leaves the shared default-deny classify kernel serving two contradictory postures mid-window and buys nothing over phased commits, since releases are local single-machine installs with no fleet to stage'
+    - 'Defer the lock further: advisor review is recorded and the user direction was already all-together; remaining risk is implementation discipline, which the 11 conditions encode'
+- schema_version: maestro.card.v1
+  id: dec-passive-side-effect-policy-for-runtime-2a34
+  type: decision
+  title: Passive side-effect policy for runtime trust boundaries
+  status: locked
+  parent: long-term-maintainability-roadmap
+  created_at: 2026-06-11T19:40:49.203Z
+  updated_at: 2026-06-11T19:41:00.105Z
+  description: 'Roadmap decision D7 (WS6): which side effects are allowed from passive checks, installed hooks, installer repair, and global skill sync without an explicit apply step. First-party verification 2026-06-12: passive auto-check creates .maestro/ in git repos never initialized for maestro (paths.rs:137 + safe_write.rs:22), no failure backoff (update.rs:110-119), hooks resolve maestro via caller PATH (record.sh), installer and skill sync already follow preflight/refuse/report.'
+  extra:
+    locked_at: 2026-06-11T19:41:00.105Z
+    decision: 'Invited repos only: passive checks may read and report anywhere, but may only write (the auto-check stamp) where .maestro/ already exists - a .git-only repo is never touched and never triggers a network call. Failed checks also stamp, so offline means retry tomorrow, not on every command. The installed hook script pins the absolute path of the binary that installed it (script stays user-owned and editable as the override point). Installer shadower removal and global skill sync keep their verified preflight/refuse-or-warn/report pattern unchanged.'
+    preview: 'random git repo without .maestro/: maestro status -> no .maestro/ created, no network; maestro repo: daily check, offline stamps and retries tomorrow; hook: exec /abs/path/to/maestro (pinned, script editable)'
+    rejected:
+    - 'No passive checks at all: curl-install users stop hearing about new releases; the problem is surprise writes, not the check itself'
+    - 'Keep as-is and document: leaves .maestro/ creation in repos that never opted in and unbounded offline retries; documentation does not remove surprise state'
+- schema_version: maestro.card.v1
+  id: dec-hot-path-read-model-scope-and-freshness-8a65
+  type: decision
+  title: Hot-path read-model scope and freshness proof bar
+  status: locked
+  parent: long-term-maintainability-roadmap
+  created_at: 2026-06-11T19:44:40.933Z
+  updated_at: 2026-06-11T19:44:51.953Z
+  description: 'Roadmap decision D8 (WS7): which command paths justify shared read models and what freshness proof a skip/cache shortcut must carry. Spot-verification 2026-06-12: matrix double task-store scan (query.rs:374-377 + registry.rs:940-942), per-blocker decision_exists (doctor.rs:109-117), friction double traversal (query.rs:427-434), sorted_child_dirs paying then dropping metadata (fs.rs:324-359), count+max-mtime stamps foolable (policy.rs:101-158); list_archived claim refuted; grep index is the documented accelerator precedent (index.rs:6-14).'
+  extra:
+    locked_at: 2026-06-11T19:44:51.953Z
+    decision: 'Load once per command: read models are in-memory snapshots scoped to a single command run - each store (tasks, decisions, run logs, card dirs) is read at most once per invocation and shared; no new on-disk caches. Freshness proof bar: aggregate count+mtime stamps are allowed only where a fooled skip is harmless and self-heals on the next run; any persisted accelerator must follow the grep-index precedent (content-checked or rebuild-in-place, with the real scan staying the source of truth); every WS7 fix ships with a before/after observable measure (traversal or syscall count). Filesystem helpers split into path-only and metadata-bearing traversal so callers stop paying for data they drop.'
+    preview: 'query matrix: task store read 1x (was 2x); task doctor: decisions read 1x (was per-blocker); nothing new on disk; every fix shows a before/after scan count'
+    rejected:
+    - 'Persistent on-disk read models for status/matrix/friction: adds stale-cache failure modes and freshness machinery for cross-command wins no measurement demands yet; remains the future shape (with the D6.4-B SQLite projection) if profiling ever shows cross-command cost dominating'
+    - 'Profile first, fix only the worst offender: the verified offenders are all within-one-run duplications that one structural rule fixes; ranking them first adds measurement work without changing the fix'
+- schema_version: maestro.card.v1
+  id: dec-true-api-versus-retired-transition-60e3
+  type: decision
+  title: True API versus retired transition scaffolding
+  status: locked
+  parent: long-term-maintainability-roadmap
+  created_at: 2026-06-11T19:48:24.216Z
+  updated_at: 2026-06-11T19:48:37.321Z
+  description: 'Roadmap decision D9 (WS8): which compatibility shims and transition artifacts are true downstream API and which exist only for tests or finished-migration history. Verified inventory 2026-06-12: task shim (15 imports, 2 test files, exists because domain leaves are pub(crate)), lib.rs:7-9 aliases (11 imports, 5 test files, deletion scoped here from D5), four empty transition tables with live machinery, root MIGRATION-GUIDE-cards.md for a finished cutover, stale stage comments (P1/P4/''retires in S4'' though S4 shipped) vs load-bearing DN3 vocabulary, card_support file-wide allow(dead_code) with a zero-call-site helper.'
+  extra:
+    locked_at: 2026-06-11T19:48:37.321Z
+    decision: 'Retire it all: maestro is a CLI binary with no downstream library consumers, so none of the transition surfaces are true API. Itemized rulings: (1) src/task/mod.rs shim retired by moving its 15 test imports to in-crate domain tests or real facade paths, then deleting the shim; (2) lib.rs:7-9 domain aliases deleted after re-pointing their 11 test imports (completes the retirement D5 scoped here); (3) empty transition tables and their machinery removed where the scanned legacy paths no longer compile (tautological), kept as empty allowlists where regression remains possible; (4) MIGRATION-GUIDE-cards.md archived out of the repo root with the shipped bundle; (5) stage comments (P1/P4/S4/E4/D5 refs) rewritten in present-tense ownership terms while DN3 status vocabulary stays (load-bearing semantics); (6) card_support drops the file-wide allow(dead_code) and zero-call-site helpers. Typed-card bridge dedup is not re-decided here: it stays the WS8 slice sequenced ahead of WS5 by D6.5 condition 7.'
+    preview: task shim deleted; lib.rs aliases deleted; tautological guard tables removed; playbook archived; comments present-tense (DN3 stays); card_support dead code dropped; tests reach domains directly or live in-crate
+    rejected:
+    - 'Declare the shims public library API: commits every schema change to honor a contract with zero external consumers'
+    - 'Freeze and guard only: grandfathers the cleanup debt permanently and keeps comments narrating finished migrations'
+- schema_version: maestro.card.v1
+  id: dec-intake-routing-policy-for-future-audit-6d54
+  type: decision
+  title: Intake routing policy for future audit findings
+  status: locked
+  parent: long-term-maintainability-roadmap
+  created_at: 2026-06-11T19:50:40.915Z
+  updated_at: 2026-06-11T19:50:48.498Z
+  description: 'Roadmap decision D10: when future audits or swarm passes produce new findings, do they route into an existing workstream, a new workstream, or the harness backlog, and under what rule. Background: the 2026-06-12 swarm intake proved partially wrong under first-party verification (one WS7 claim refuted, SRI-2 partially refuted), validating the unverified-until-confirmed matrix rule.'
+  extra:
+    locked_at: 2026-06-11T19:50:48.498Z
+    decision: 'Owner-first routing: a new finding routes to the existing workstream whose evidence map owns that surface - it extends that workstream''s evidence block and continues the SRI number series, and stays unverified intake until the owning workstream confirms it first-party at its next design session. A finding no workstream owns becomes a harness-backlog idea card; it never silently mints a new workstream. Adding a workstream is a roadmap scope change that requires its own walked decision in this SPEC.'
+    preview: status.rs re-scan finding -> WS7 evidence, SRI-21, unverified; TUI flicker finding -> backlog idea card; 9th workstream only via a walked roadmap decision
+    rejected:
+    - 'Backlog-first single funnel: findings about owned surfaces sit in the pile instead of reaching their owner until someone opens a session'
+    - 'New SPEC per audit: recreates the scattered-findings problem the D1 umbrella lock exists to solve'
+- schema_version: maestro.card.v1
+  id: dec-roadmap-feature-exit-condition-29ef
+  type: decision
+  title: Roadmap feature exit condition
+  status: locked
+  parent: long-term-maintainability-roadmap
+  created_at: 2026-06-11T19:55:19.257Z
+  updated_at: 2026-06-11T19:55:28.531Z
+  description: 'Roadmap decision D11: what closes the long-term-maintainability-roadmap feature card so it does not become permanent unarchived-feature debt (the repo''s standing doctor warning is already 10 closed-unarchived features).'
+  extra:
+    locked_at: 2026-06-11T19:55:28.531Z
+    decision: 'All workstreams terminal: the feature card closes only when every workstream has reached a terminal ruling - closed (its slices shipped and verified) or explicitly parked with a recorded reason. Nothing closes silently; abandoning a workstream is allowed but must be written down. On close, the bundle (SPEC, notes, VERIFY, decision cards) archives per the artifact lifecycle, and future findings follow D10''s no-owner branch into the harness backlog.'
+    preview: 'WS1-WS6, WS8 done; WS7 ''parked: no measured need'' -> all 8 answered -> card closes, bundle archived, doctor stays clean'
+    rejected:
+    - 'Quarterly cadence close: a merely paused workstream gets swept shut with the rest when one busy quarter passes'
+    - 'Close at design-complete with 8 per-workstream cards: dissolves the D1 umbrella into eight pieces of follow-up debt to track and forget'
+- schema_version: maestro.card.v1
+  id: dec-add-ws9-multi-agent-scale-boundaries-to-a8cf
+  type: decision
+  title: Add WS9 Multi-Agent Scale Boundaries to the roadmap
+  status: locked
+  parent: long-term-maintainability-roadmap
+  created_at: 2026-06-11T20:02:57.183Z
+  updated_at: 2026-06-11T20:03:08.841Z
+  description: Roadmap decision D12, walked under the D10 rule that a new workstream requires its own decision. Pre-approval gap review found four growth gaps; the two scale-critical ones (concurrent multi-agent write safety; machine-readable output contract for agent-facing verbs) enter as WS9, while dependency hygiene and CLI verb governance went to the harness backlog (idea-dependency-hygiene-policy-for-third-780c, idea-cli-verb-governance-when-a-new-command-0f06).
+  extra:
+    locked_at: 2026-06-11T20:03:08.841Z
+    decision: 'WS9 Multi-Agent Scale Boundaries added to the roadmap, scoped to two surfaces: (1) concurrent multi-agent write safety - today there is no write locking anywhere in src (install-lock.yaml is a state file, not a mutex); safety is per-file atomic rename (safe_write.rs:20-38), so concurrent read-modify-write card edits race last-writer-wins with no cross-file coordination; (2) the machine-readable output contract - --json exists on ~5 surfaces while the agent-facing discovery verbs (maestro list, maestro ready) emit human text only. Design forks walked as D13 (write safety) and D14 (output contract) before approval.'
+    preview: roadmap gains WS9 (write-locking/race story + --json contract for ready/list), walked and locked before approval; deps hygiene + verb governance filed as backlog ideas
+    rejected:
+    - 'Backlog all four gaps: the two scale-critical ones sit unowned while agent swarms already drive maestro concurrently'
+    - 'Approve while ignoring the gaps: the swarm-intake lesson is that unrecorded findings get lost'
+- schema_version: maestro.card.v1
+  id: dec-concurrent-write-safety-scope-for-ws9-8928
+  type: decision
+  title: Concurrent write-safety scope for WS9
+  status: locked
+  parent: long-term-maintainability-roadmap
+  created_at: 2026-06-11T20:10:00.690Z
+  updated_at: 2026-06-11T20:10:09.537Z
+  description: 'Roadmap decision D13 (WS9): what remains for concurrent multi-agent write safety, given the verified baseline - snapshot CAS + write-lock reservation markers with retryable stale-writer rejection already shipped (hb-011, commit c0a48988, store.rs:283 + fs.rs:121-142). Unknowns: unaudited write paths possibly bypassing the machinery, multi-file operation interleaving, and an undocumented concurrency model.'
+  extra:
+    locked_at: 2026-06-11T20:10:09.537Z
+    decision: 'Audit + document, build only on evidence: (1) first-party audit of every file-write path in src confirming it routes through the snapshot/CAS machinery, locked in with an architecture-style guard test so future writes must too (same pattern as the D4 unwrap guard and D5 import guard, empty allowlist at adoption); (2) the concurrency model documented - what concurrent agents may assume, including the clean retryable conflict error; (3) multi-file coordination built ONLY if the audit demonstrates a real interleaving, never speculatively.'
+    preview: 'every save checked: protected? + guard test for future saves + doc: safe to run agents in parallel, conflicts give a clean retry error; new machinery only if a real hole turns up'
+    rejected:
+    - 'Global/store-wide lock or journal now: serializes all agents repo-wide to fix a problem never observed'
+    - 'Leave as-is: unaudited bypass paths, multi-file interleaving, and undocumented assumptions stay unknown'
+- schema_version: maestro.card.v1
+  id: dec-machine-readable-output-contract-for-a75c
+  type: decision
+  title: Machine-readable output contract for agent-facing verbs
+  status: locked
+  parent: long-term-maintainability-roadmap
+  created_at: 2026-06-11T20:11:58.655Z
+  updated_at: 2026-06-11T20:12:07.391Z
+  description: 'Roadmap decision D14 (WS9): how agents and external drivers read maestro''s discovery output. Verified 2026-06-12: --json exists on ~5 surfaces (status documented), while maestro list and maestro ready emit human text only; the maestro-as-external-tracker thread parked on exactly this gap.'
+  extra:
+    locked_at: 2026-06-11T20:12:07.391Z
+    decision: 'Agent-facing read verbs (maestro list, maestro ready, and sibling read surfaces) gain --json with stable, versioned fields following the card-schema philosophy: fields may be added, never silently renamed or reinterpreted (additive changes safe per the D6.3 change policy). The human text output stays and remains free to improve - the two audiences stop sharing one fragile format. Scope is read verbs; write verbs are not part of this contract.'
+    preview: 'maestro ready --json -> [{id: card-9f3c, type: task, title: Fix login, status: open}]; agents parse fields, never text; human output keeps improving'
+    rejected:
+    - 'Freeze the text layout: turns every future readability improvement into a breaking change'
+    - 'No contract: agents keep scraping human text and break silently on wording changes'

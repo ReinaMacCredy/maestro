@@ -1,0 +1,100 @@
+schema_version: maestro.card.v1
+id: reduce-maestro-artifact-surface
+type: feature
+title: reduce maestro artifact surface
+status: shipped
+created_at: 2026-06-06T07:13:24.836Z
+updated_at: 2026-06-07T15:09:29.424Z
+description: 'Maestro writes too many artifact files per lifecycle: 35+ artifact types across 11 areas, 12 schema versions. A single feature with 3 tasks can produce 25+ files (feature.yaml, notes.md, amend-log.yaml, baseline.md, qa-slices.yaml, prepare-draft.md, resume.md, per-task task.yaml/task.md/acceptance.yaml/verification.json/attempts/, decisions, runs, backups). Hard to manage in the repo and hard to maintain in src (every schema needs serializer + migration + tests). Goal: reduce artifact count and complexity without losing the gates that make maestro useful.'
+extra:
+  schema_version: maestro.feature.v2
+  id: reduce-maestro-artifact-surface
+  title: reduce maestro artifact surface
+  description: 'Maestro writes too many artifact files per lifecycle: 35+ artifact types across 11 areas, 12 schema versions. A single feature with 3 tasks can produce 25+ files (feature.yaml, notes.md, amend-log.yaml, baseline.md, qa-slices.yaml, prepare-draft.md, resume.md, per-task task.yaml/task.md/acceptance.yaml/verification.json/attempts/, decisions, runs, backups). Hard to manage in the repo and hard to maintain in src (every schema needs serializer + migration + tests). Goal: reduce artifact count and complexity without losing the gates that make maestro useful.'
+  status: shipped
+  created_at: 2026-06-06T07:13:24.836Z
+  updated_at: 2026-06-07T15:09:29.424Z
+  affected_areas:
+  - task domain + schemas
+  - feature domain + registry
+  - proof/verify + freshness gate
+  - qa gates + qa-baseline/qa-slice skills
+  - migrate verb
+  - retention (backups/runs)
+  - bundled skill docs
+  acceptance:
+  - task new creates exactly 2 files (task.yaml with inline acceptance+verification blocks, task.md); no acceptance.yaml, verification.json, or verification.attempts/ anywhere in the lifecycle
+  - tasks created for a feature land in .maestro/features/<id>/tasks/ with globally unique ids allocated across both roots; standalone tasks land in .maestro/tasks/; feature_id field absent
+  - 'feature new creates feature.yaml plus the spec-first scaffold (spec.md + decisions.yaml, added by the later spec-first-feature-workflow supersession, a070e1cf); feature amend appends to an amends: list inside feature.yaml; notes.md appears only on first write'
+  - prepare-draft.md is deleted on successful apply and present between prepare and apply
+  - QA is one qa.md per feature (scenario sections + fenced slices yaml block); accept and ship gates pass against it; baseline.md and qa-slices.yaml are never written
+  - every CLI-written timestamp is RFC3339 UTC with milliseconds
+  - 'task history keeps claims as a top-level field, collapses identical repeat entries with repeats: N, and never exceeds 10 entries'
+  - backups/ never exceeds 3 operation snapshots and runs/ never exceeds 20 session dirs, pruned automatically
+  - slug, input_type, task_type absent from new records and their CLI flags removed
+  - 'the migrate verb lifts an existing repo in one run: folds files into task.yaml/feature.yaml/qa.md, relocates feature tasks, converts timestamps, strips dead fields, deletes features.yaml index + scaffold-identical notes.md + consumed drafts, performs first prune'
+  - contract hash covers the frozen subset plus completion claims (id, title, acceptance, claims) so a verified task cannot gain unverified claims and stay verified (decision-004 supersedes the D6 frozen-subset-only lock); a passing verify does not invalidate its own freshness
+  acceptance_evidence:
+  - ac_id: ac-1
+    kind: explicit
+    text: 'sandbox full lifecycle (create->explore->accept->claim->update->complete->verify) left exactly task.yaml + task.md; find for acceptance.yaml/verification.json/attempts returned nothing; task.yaml carries inline acceptance: + verification: blocks'
+    at: 2026-06-07T15:09:29.194Z
+  - ac_id: ac-2
+    kind: explicit
+    text: 'sandbox: task create --feature demo-feature landed at .maestro/features/demo-feature/tasks/task-002-...; standalone at .maestro/tasks/task-001-...; ids globally unique across roots; no feature_id field in either task.yaml'
+    at: 2026-06-07T15:09:29.212Z
+  - ac_id: ac-3
+    kind: explicit
+    text: 'sandbox: feature new wrote feature.yaml + spec.md + decisions.yaml (scaffold_spec_file registry.rs:273,1142 from a070e1cf); feature amend appended inline amends: (at/reason/added) with no amend-log.yaml; notes.md absent until first feature note'
+    at: 2026-06-07T15:09:29.234Z
+  - ac_id: ac-4
+    kind: explicit
+    text: 'sandbox: prepare-draft.md present after feature prepare --draft, deleted after successful feature prepare --from (created task-003); survived a failed apply per rollback design (migrate.rs:60)'
+    at: 2026-06-07T15:09:29.252Z
+  - ac_id: ac-5
+    kind: explicit
+    text: 'sandbox: feature accept passed reading single qa.md (scenarios + fenced slices yaml); no baseline.md/qa-slices.yaml written; both gates read qa.md (qa.rs:13,58,81,89-90,112 baseline_present + ship_qa_gaps)'
+    at: 2026-06-07T15:09:29.272Z
+  - ac_id: ac-6
+    kind: explicit
+    text: 'sandbox: every written timestamp RFC3339 UTC with .NNN millis (e.g. 2026-06-07T14:32:53.808Z); migrate converted v1 string-epochs to 2024-05-29T16:26:40.000Z form; live repo .maestro all RFC3339'
+    at: 2026-06-07T15:09:29.291Z
+  - ac_id: ac-7
+    kind: explicit
+    text: 'lifecycle.rs:58-71 push_history: claims promoted top-level (:59), identical consecutive entries collapse via repeats (:64), drained to MAX_HISTORY_ENTRIES=10 (:6,69-71); sandbox task-003 showed top-level claims: + repeats: 3'
+    at: 2026-06-07T15:09:29.314Z
+  - ac_id: ac-8
+    kind: explicit
+    text: backup.rs:60 prune_child_dirs(backups,3) on each backup op; run/append.rs:26 prune_child_dirs(runs,20) on each append; migrate sandbox seeded 5 backups/22 runs -> pruned to 3/20
+    at: 2026-06-07T15:09:29.332Z
+  - ac_id: ac-9
+    kind: explicit
+    text: task create --help exposes only --feature/--lane/--risk/--check/--covers; no slug/input-type/task-type flags; new task.yaml carries none of those fields
+    at: 2026-06-07T15:09:29.352Z
+  - ac_id: ac-10
+    kind: explicit
+    text: 'sandbox one-run migrate-v2: folded baseline.md+qa-slices.yaml->qa.md, amend-log->amends:, acceptance.yaml+verification.json->task.yaml, relocated feature task, converted timestamps, stripped dead fields, deleted features.yaml + scaffold notes.md + consumed draft, pruned; corroborated by the real migration in THIS repo today (8 features+2 tasks, doctor clean)'
+    at: 2026-06-07T15:09:29.369Z
+  - ac_id: ac-11
+    kind: explicit
+    text: 'verify_task.rs:462-469 hashes id/title/acceptance/claims; sandbox: re-running verify on a passing task stayed passed (verify writes verification, not claims); task update --claim on a verified task -> stale, re-verify demands proof for new claim (decision-004 blessed fail-closed behavior)'
+    at: 2026-06-07T15:09:29.387Z
+  acceptance_sweeps:
+  - at: 2026-06-07T15:09:29.405Z
+    resolved:
+    - ac-1
+    - ac-2
+    - ac-3
+    - ac-4
+    - ac-5
+    - ac-6
+    - ac-7
+    - ac-8
+    - ac-9
+    - ac-10
+    - ac-11
+  qa:
+    surface: none
+    reason: 'retroactive record: implemented in ed194394 and shipped before the record lifecycle; audited 2026-06-07 vs binary g5af7f5a (9/11 + AC3/AC11 amended per decision-004 and a070e1cf supersession)'
+    amend_log_position: 0
+  outcome: task/feature artifact surface collapsed to the v2 layout (2-file tasks, feature-owned task dirs, single qa.md, inline amends, RFC3339, bounded history/backups/runs) with one-way migrate-v2; shipped in ed194394, record closed retroactively after 9/11 audit + AC3/AC11 amends (decision-004) 2026-06-07

@@ -3,6 +3,7 @@ use anyhow::Result;
 use crate::domain::extraction;
 use crate::domain::harness;
 use crate::domain::install;
+use crate::domain::skills;
 use crate::foundation::core::paths::{MaestroPaths, announce_repo_root, discover_repo_root};
 use crate::interfaces::cli::{Agent, AgentArgs};
 
@@ -17,9 +18,16 @@ pub fn run(args: AgentArgs) -> Result<()> {
     install::install_agent(&paths, agent)?;
     // The mirror writes above print their diffs; close with a uniform success
     // line plus the per-agent next step so both agents end the same way (T6.4).
-    println!("installed maestro {} integration (repo only)", agent.key());
-    println!("global skills not synced; agents resolve repo-local skills first");
-    println!("next: maestro sync --global-skills");
+    println!("installed maestro {} integration", agent.key());
+    // A failed global sync must not fail the repo install that already landed;
+    // warn and name the repair instead.
+    match skills::sync_global_skills() {
+        Ok(outcome) => print!("{}", skills::render_global_skills_outcome(&outcome)),
+        Err(error) => {
+            println!("warning: global skill sync failed: {error:#}");
+            println!("repair, then rerun `maestro sync --global-skills`");
+        }
+    }
     if agent.requires_manual_hook_approval() {
         println!("Run /hooks in Codex to approve the maestro hook.");
     } else {

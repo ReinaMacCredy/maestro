@@ -1,0 +1,32 @@
+- schema_version: maestro.card.v1
+  id: dec-skills-are-global-only-remove-per-repo-f9ef
+  type: decision
+  title: Skills are global-only; remove per-repo skill generation
+  status: locked
+  parent: skills-global-only-remove-per-repo-extraction-and-linking
+  created_at: 2026-06-13T20:16:44.218Z
+  updated_at: 2026-06-13T20:16:44.251Z
+  description: Per-repo skill extraction (.maestro/skills) + folder symlinks duplicate what the global installer already does, and create live drift (embedded 1.9.0 vs cache 1.8.0). global.rs SUPPORTED_ROOTS already links the ~/.maestro/skills cache into BOTH ~/.claude/skills (Claude) and ~/.agents/skills (Codex's unified root), verified on disk -- so per-repo copies add no discovery value and there is no Codex gap.
+  extra:
+    locked_at: 2026-06-13T20:16:44.251Z
+    decision: 'Remove per-repo skill generation entirely: pull extract_skills out of the per-repo extract_all pipeline (init/update) and delete the per-repo skill symlink path (skill_symlink_for_agent + symlink.rs). Skills are discovered only via the global ~/.maestro/skills cache, which the existing dual-root global installer links into ~/.claude/skills and ~/.agents/skills for both agents. No new Codex code. This repo: drop the committed dogfood symlinks and untrack .maestro/skills; resync the stale global cache once.'
+    supersedes:
+    - dec-per-repo-skill-linking-mode-eeb3
+    - dec-per-repo-link-enumeration-source-a9ba
+    - dec-per-repo-per-skill-link-ownership-and-82e8
+    - dec-commit-the-repo-dogfood-skill-links-864e
+    preview: |-
+      GLOBAL-ONLY (both agents, no per-repo skills)
+      ------------------------------------------------
+      SOURCE   embedded/skills/        (baked into binary)
+      CACHE    ~/.maestro/skills/      (extracted on install/upgrade)
+      LINKS    ~/.claude/skills/<s>  -> cache   (Claude)
+               ~/.agents/skills/<s>  -> cache   (Codex)   <- already exists
+      REPOS    (nothing)              per-repo .maestro/skills + symlinks REMOVED
+
+      removed: extract_skills from init/update ; skill_symlink_for_agent ; symlink.rs
+      kept:    global.rs dual-root linker (already serves both agents)
+      this repo: rm dogfood symlinks + untrack .maestro/skills + resync cache
+    rejected:
+    - 'Per-repo per-skill linking (the superseded feature): still duplicates global, still drifts, more installer complexity for zero discovery gain.'
+    - 'Keep the greedy per-repo folder symlink: refuses to coexist with a real .claude/skills and duplicates global.'

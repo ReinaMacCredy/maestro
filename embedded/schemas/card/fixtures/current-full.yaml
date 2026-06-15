@@ -1,0 +1,17 @@
+schema_version: maestro.card.v1
+id: card-bb22cc
+type: task
+title: Full envelope fixture
+status: in_progress
+parent: feature-search-engine-0f3a
+deps:
+  - kind: blocks
+    target: card-aa11bb
+lane: normal
+claimed_by: maestro
+claimed_at: 2026-06-12T00:10:00.000Z
+created_at: 2026-06-12T00:00:00.000Z
+updated_at: 2026-06-12T00:10:00.000Z
+description: A card exercising every envelope field.
+extra:
+  custom_payload_key: payload kept opaque by the envelope

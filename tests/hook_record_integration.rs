@@ -51,17 +51,41 @@ fn maestro_with_env(cwd: &Path, args: &[&str], envs: &[(&str, &str)]) -> std::pr
         .expect("invariant: compiled maestro binary should be runnable in hook tests")
 }
 
+const SESSION_ENV_KEYS: [&str; 7] = [
+    "MAESTRO_SESSION_ID",
+    "MAESTRO_RUN_ID",
+    "CODEX_THREAD_ID",
+    "CODEX_SESSION_ID",
+    "CLAUDE_SESSION_ID",
+    "CLAUDECODE_SESSION_ID",
+    "CLAUDE_CODE_SESSION_ID",
+];
+
 fn maestro_without_session_env(cwd: &Path, args: &[&str]) -> std::process::Output {
     let mut command = Command::new(env!("CARGO_BIN_EXE_maestro"));
     command.args(args).current_dir(cwd);
-    for key in [
-        "MAESTRO_SESSION_ID",
-        "MAESTRO_RUN_ID",
-        "CODEX_SESSION_ID",
-        "CLAUDE_SESSION_ID",
-        "CLAUDECODE_SESSION_ID",
-    ] {
+    for key in SESSION_ENV_KEYS {
         command.env_remove(key);
+    }
+    command
+        .output()
+        .expect("invariant: compiled maestro binary should be runnable in hook tests")
+}
+
+/// Clears every session-id env var, then applies the given overrides, so a test
+/// resolves a deterministic session id regardless of the ambient agent runtime.
+fn maestro_clean_env_with(
+    cwd: &Path,
+    args: &[&str],
+    envs: &[(&str, &str)],
+) -> std::process::Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_maestro"));
+    command.args(args).current_dir(cwd);
+    for key in SESSION_ENV_KEYS {
+        command.env_remove(key);
+    }
+    for (key, value) in envs {
+        command.env(key, value);
     }
     command
         .output()
@@ -435,8 +459,12 @@ fn hook_record_flags_print_ack_and_use_session_or_cli_run_dirs() {
     );
     let explicit_out = String::from_utf8_lossy(&explicit.stdout);
     assert!(
-        explicit_out.contains("recorded skill_activation (qa-baseline) -> runs/session-flags"),
-        "{explicit_out}"
+        explicit_out.contains("recorded: skill_activation")
+            && explicit_out.contains("qa-baseline")
+            && explicit_out.contains("session: session-flags")
+            && explicit_out.contains("runs/session-flags")
+            && explicit_out.contains("maestro active"),
+        "skill_activation should echo the D8 verbose block:\n{explicit_out}"
     );
     let explicit_events = read_events(repo.path(), "session-flags");
     assert_eq!(explicit_events[0]["event_type"], "skill_activation");
@@ -470,6 +498,208 @@ fn hook_record_flags_print_ack_and_use_session_or_cli_run_dirs() {
     let cli_events = read_events(repo.path(), run_dir);
     assert_eq!(cli_events[0]["event_type"], "UserPromptSubmit");
     assert!(!repo.path().join(".maestro/runs/unattributed").exists());
+}
+
+#[test]
+fn card_touch_event_carries_card_id_and_normalizes() {
+    let repo = init_repo();
+    let output = maestro_record(
+        repo.path(),
+        r#"{"session_id":"session-touch","event_type":"card_touch","card_id":"card-abc123"}"#,
+    );
+
+    assert!(
+        output.status.success(),
+        "hook record failed for card_touch\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let events = read_events(repo.path(), "session-touch");
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0]["event_type"], "card_touch");
+    assert_eq!(events[0]["card_id"], "card-abc123");
+    assert_eq!(events[0]["session_id"], "session-touch");
+    assert_eq!(events[0]["schema_version"], "maestro.event.v1");
+}
+
+#[test]
+fn record_echo_is_verbose_for_low_frequency_events_and_terse_for_the_firehose() {
+    // bl-006 (D8): low-frequency meaningful events (card_touch, skill_activation,
+    // SessionStart) echo a multi-line block carrying session, bound card, run dir,
+    // and a `maestro active` tip; the high-frequency tool firehose
+    // (PreToolUse/PostToolUse/PermissionRequest/Stop) echoes a single terse line.
+    let repo = init_repo();
+
+    // A card_touch block names the touched card.
+    let touch = maestro_record(
+        repo.path(),
+        r#"{"session_id":"session-d8","event_type":"card_touch","card_id":"card-xyz789"}"#,
+    );
+    assert!(touch.status.success());
+    let touch_out = String::from_utf8_lossy(&touch.stdout);
+    assert!(
+        touch_out.contains("recorded: card_touch")
+            && touch_out.contains("card-xyz789")
+            && touch_out.contains("maestro active"),
+        "card_touch should echo the verbose block with its card:\n{touch_out}"
+    );
+
+    // A skill_activation block carries the session's bound card (the prior
+    // card_touch) and the skill.
+    let skill = maestro(
+        repo.path(),
+        &[
+            "hook",
+            "record",
+            "--event",
+            "skill_activation",
+            "--skill",
+            "maestro-card",
+            "--session",
+            "session-d8",
+        ],
+    );
+    assert!(skill.status.success());
+    let skill_out = String::from_utf8_lossy(&skill.stdout);
+    assert!(
+        skill_out.lines().count() > 1,
+        "block is multi-line:\n{skill_out}"
+    );
+    assert!(
+        skill_out.contains("recorded: skill_activation")
+            && skill_out.contains("maestro-card")
+            && skill_out.contains("session: session-d8")
+            && skill_out.contains("card-xyz789")
+            && skill_out.contains("maestro active"),
+        "skill_activation block should show skill + bound card + tip:\n{skill_out}"
+    );
+
+    // A PostToolUse firehose event stays a single terse line: no block, no tip.
+    let firehose = maestro(
+        repo.path(),
+        &[
+            "hook",
+            "record",
+            "--event",
+            "PostToolUse",
+            "--session",
+            "session-d8",
+        ],
+    );
+    assert!(firehose.status.success());
+    let firehose_out = String::from_utf8_lossy(&firehose.stdout);
+    assert_eq!(
+        firehose_out.trim().lines().count(),
+        1,
+        "firehose echo is a single line:\n{firehose_out}"
+    );
+    assert!(
+        firehose_out.contains("recorded PostToolUse -> runs/session-d8")
+            && !firehose_out.contains("tip:"),
+        "PostToolUse should echo one terse line, no verbose block:\n{firehose_out}"
+    );
+}
+
+#[test]
+fn cli_run_id_resolves_claude_code_session_id_into_distinct_buckets() {
+    let repo = init_repo();
+
+    let first = maestro_clean_env_with(
+        repo.path(),
+        &["hook", "record", "--event", "UserPromptSubmit"],
+        &[("CLAUDE_CODE_SESSION_ID", "claude-code-aaa")],
+    );
+    assert!(
+        first.status.success(),
+        "hook record failed for first claude session\nstderr:\n{}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+    let second = maestro_clean_env_with(
+        repo.path(),
+        &["hook", "record", "--event", "UserPromptSubmit"],
+        &[("CLAUDE_CODE_SESSION_ID", "claude-code-bbb")],
+    );
+    assert!(second.status.success());
+
+    // Each id buckets under its own session, never the colliding cli-<date>.
+    assert_eq!(read_events(repo.path(), "claude-code-aaa").len(), 1);
+    assert_eq!(read_events(repo.path(), "claude-code-bbb").len(), 1);
+    let runs = repo.path().join(".maestro/runs");
+    let cli_bucket = fs::read_dir(&runs)
+        .expect("invariant: runs dir should be readable")
+        .filter_map(Result::ok)
+        .any(|entry| entry.file_name().to_string_lossy().starts_with("cli-"));
+    assert!(
+        !cli_bucket,
+        "a real CLAUDE_CODE_SESSION_ID must not fall back to a cli-<date> bucket"
+    );
+
+    // With the var absent, the cli-<date> fallback still holds.
+    let fallback = maestro_without_session_env(
+        repo.path(),
+        &["hook", "record", "--event", "UserPromptSubmit"],
+    );
+    assert!(fallback.status.success());
+    let fallback_out = String::from_utf8_lossy(&fallback.stdout);
+    let run_dir = fallback_out
+        .split("runs/")
+        .nth(1)
+        .expect("invariant: ack should include run dir")
+        .trim();
+    assert!(run_dir.starts_with("cli-"), "{fallback_out}");
+}
+
+#[test]
+fn cli_run_id_resolves_codex_thread_id_and_ignores_dead_codex_session_id() {
+    let repo = init_repo();
+
+    // A real Codex per-session id buckets under itself, never cli-<date>.
+    let codex = maestro_clean_env_with(
+        repo.path(),
+        &["hook", "record", "--event", "UserPromptSubmit"],
+        &[("CODEX_THREAD_ID", "codex-thread-xyz")],
+    );
+    assert!(
+        codex.status.success(),
+        "hook record failed for codex thread\nstderr:\n{}",
+        String::from_utf8_lossy(&codex.stderr)
+    );
+    assert_eq!(read_events(repo.path(), "codex-thread-xyz").len(), 1);
+
+    // CODEX_THREAD_ID is ordered ahead of the CLAUDE keys, so it wins.
+    let precedence = maestro_clean_env_with(
+        repo.path(),
+        &["hook", "record", "--event", "UserPromptSubmit"],
+        &[
+            ("CODEX_THREAD_ID", "codex-wins"),
+            ("CLAUDE_SESSION_ID", "claude-loses"),
+        ],
+    );
+    assert!(precedence.status.success());
+    assert_eq!(read_events(repo.path(), "codex-wins").len(), 1);
+    assert!(
+        !repo.path().join(".maestro/runs/claude-loses").exists(),
+        "CLAUDE_SESSION_ID must not win over CODEX_THREAD_ID"
+    );
+
+    // The retired CODEX_SESSION_ID is no longer consulted by cli_run_id: with
+    // only it set, the run event falls back to the cli-<date> bucket.
+    let dead = maestro_clean_env_with(
+        repo.path(),
+        &["hook", "record", "--event", "UserPromptSubmit"],
+        &[("CODEX_SESSION_ID", "codex-dead")],
+    );
+    assert!(dead.status.success());
+    assert!(
+        !repo.path().join(".maestro/runs/codex-dead").exists(),
+        "retired CODEX_SESSION_ID must not produce its own bucket"
+    );
+    let dead_out = String::from_utf8_lossy(&dead.stdout);
+    let run_dir = dead_out
+        .split("runs/")
+        .nth(1)
+        .expect("invariant: ack should include run dir")
+        .trim();
+    assert!(run_dir.starts_with("cli-"), "{dead_out}");
 }
 
 #[test]

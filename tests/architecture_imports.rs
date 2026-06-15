@@ -9,37 +9,22 @@ const TARGET_MODULE_ROOTS: &[&str] = &[
     "src/foundation/mod.rs",
 ];
 
-const LEGACY_COMPATIBILITY_ROOTS: &[&str] = &[
-    "decisions",
-    "feature",
-    "harness",
-    "task",
-    "hooks",
-    "mcp",
-    "tui",
-];
-
-const INTERFACE_COMPATIBILITY_REEXPORTS: &[(&str, &str)] = &[];
+const LEGACY_COMPATIBILITY_ROOTS: &[&str] = &["hooks", "mcp", "tui"];
 
 const INTERFACE_SCAN_ROOTS: &[&str] = &["src/interfaces"];
 const PRODUCTION_SCAN_ROOTS: &[&str] = &["src"];
 const CLI_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] = &[
-    ("src/interfaces/cli/doctor.rs", &["harness"]),
-    ("src/interfaces/cli/harness.rs", &["harness"]),
+    ("src/interfaces/cli/doctor.rs", &[]),
+    ("src/interfaces/cli/harness.rs", &[]),
     ("src/interfaces/cli/init.rs", &[]),
-    ("src/interfaces/cli/query.rs", &["decisions", "harness"]),
+    ("src/interfaces/cli/query.rs", &[]),
     ("src/interfaces/cli/task.rs", &[]),
     ("src/interfaces/cli/update.rs", &[]),
     ("src/interfaces/cli/watch.rs", &[]),
 ];
 
-const MCP_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] = &[];
-
-const HOOKS_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] = &[];
-
-const TUI_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] = &[];
-
 const DOMAIN_FACADES: &[&str] = &[
+    "card",
     "decisions",
     "extraction",
     "feature",
@@ -66,7 +51,12 @@ const RESOURCE_EMBED_ALLOWLIST: &[(&str, &[&str])] = &[
         "src/domain/extraction/hook_script.rs",
         &["embedded/hooks/record.sh"],
     ),
+    ("src/domain/extraction/playbook.rs", &["embedded/playbook"]),
     ("src/domain/skills/catalog.rs", &["embedded/skills"]),
+    (
+        "src/domain/schema_contracts/catalog.rs",
+        &["embedded/schemas"],
+    ),
     ("src/interfaces/shell/mod.rs", &["embedded/shell/"]),
 ];
 
@@ -97,50 +87,18 @@ fn target_module_roots_exist_and_legacy_roots_remain() {
 
 #[test]
 fn selected_compatibility_smoke_paths_resolve() {
-    assert_eq!(
-        std::any::type_name::<maestro::domain::harness::schema::HarnessConfig>(),
-        std::any::type_name::<maestro::harness::schema::HarnessConfig>()
-    );
-    assert_eq!(
-        std::any::type_name::<maestro::domain::feature::schema::FeatureRecord>(),
-        std::any::type_name::<maestro::feature::schema::FeatureRecord>()
-    );
-    let _legacy_decision_file_name: fn(u32, &str) -> String =
-        maestro::decisions::template::decision_file_name;
-    let _new_decision_file_name: fn(u32, &str) -> String =
+    let _decision_file_name: fn(u32, &str) -> String =
         maestro::domain::decisions::template::decision_file_name;
 
     let _ = std::any::type_name::<maestro::interfaces::cli::Cli>();
-    let _ = std::any::type_name::<maestro::task::template::TaskRecord>();
-    let _legacy_load_task = |path: &Path| maestro::task::template::load_task(path);
-    let _legacy_load_task_with_snapshot =
-        |tasks_dir: &Path, id: &str| maestro::task::lookup::load_task_with_snapshot(tasks_dir, id);
-    let _legacy_render_task: fn(&maestro::task::template::TaskRecord, &[String]) -> String =
-        maestro::task::display::render_task;
-    let _legacy_render_task_list: fn(
-        &[maestro::task::template::TaskRecord],
-        &std::collections::BTreeSet<String>,
-    ) -> String = maestro::task::display::render_task_list;
-    let _legacy_load_task_records =
-        |tasks_dir: &Path| maestro::task::doctor::load_task_records(tasks_dir);
-    let _legacy_load_task_entries =
-        |tasks_dir: &Path| maestro::task::doctor::load_task_entries(tasks_dir);
-    let _legacy_check_blocker_graph =
-        |tasks_dir: &Path| maestro::task::doctor::check_blocker_graph(tasks_dir);
-    let _legacy_render_task_doctor_report: fn(&maestro::task::doctor::TaskDoctorReport) -> String =
-        maestro::task::doctor::render_report;
-    let _legacy_resolve_task_yaml_path =
-        |tasks_dir: &Path, id: &str| maestro::task::lookup::resolve_task_yaml_path(tasks_dir, id);
-    let _legacy_task_yaml_path_for_entry =
-        |entry: &std::fs::DirEntry| maestro::task::lookup::task_yaml_path_for_entry(entry);
-    let _legacy_valid_task_yaml_path =
-        |path: &Path| maestro::task::lookup::valid_task_yaml_path(path);
+    let _ = std::any::type_name::<maestro::domain::harness::HarnessConfig>();
+    let _ = std::any::type_name::<maestro::domain::feature::schema::FeatureRecord>();
     let _ = std::any::type_name::<maestro::domain::task::TaskRecord>();
     let _ = std::any::type_name::<maestro::domain::proof::ProofStatusKind>();
 
     let _legacy_task_watch_render: fn(
         &maestro::foundation::core::paths::MaestroPaths,
-        &[maestro::task::template::TaskRecord],
+        &[maestro::domain::task::TaskRecord],
     ) -> anyhow::Result<String> = maestro::tui::task_list_watch::render_snapshot;
     let _new_task_watch_render: fn(
         &maestro::foundation::core::paths::MaestroPaths,
@@ -231,14 +189,9 @@ fn task_domain_facade_does_not_publish_leaf_modules() {
         }
     }
 
-    let legacy_shim = read_source_file(Path::new("src/task/mod.rs"));
     assert!(
-        !legacy_shim.contains("pub use crate::domain::task::*"),
-        "legacy crate::task shim should explicitly re-export the compatibility surface"
-    );
-    assert!(
-        !legacy_shim.contains("pub fn append_history"),
-        "legacy crate::task shim should not grow lifecycle helpers outside the old leaf surface"
+        !Path::new("src/task/mod.rs").exists(),
+        "legacy crate::task shim should stay retired; tests that need leaf access belong in-crate"
     );
 }
 
@@ -360,8 +313,10 @@ fn feature_domain_facade_exposes_the_deliberate_surface() {
             "FeatureStatus".to_string(),
             "FeatureVerifyReport".to_string(),
             "FeatureView".to_string(),
+            "LooseSweepReport".to_string(),
             "NoteReport".to_string(),
             "SetReport".to_string(),
+            "SpecSectionReport".to_string(),
             "TransitionReport".to_string(),
             "accept".to_string(),
             "accept_with_qa_none".to_string(),
@@ -370,13 +325,17 @@ fn feature_domain_facade_exposes_the_deliberate_surface() {
             "acceptance_id".to_string(),
             "amend".to_string(),
             "archive_feature".to_string(),
+            "archive_loose".to_string(),
             "cancel".to_string(),
             "create".to_string(),
             "diagnose".to_string(),
             "ensure_exists".to_string(),
+            "feature_sidecar_dir".to_string(),
             "list".to_string(),
             "list_archived".to_string(),
             "list_tolerant".to_string(),
+            "list_tolerant_with_entries".to_string(),
+            "list_with_entries".to_string(),
             "normalize_acceptance_id".to_string(),
             "note".to_string(),
             "set".to_string(),
@@ -392,6 +351,7 @@ fn feature_domain_facade_exposes_the_deliberate_surface() {
             "unarchive_feature".to_string(),
             "uncovered_acceptance".to_string(),
             "verify_feature".to_string(),
+            "write_spec_section".to_string(),
         ]),
         "src/domain/feature/mod.rs should expose only the deliberate feature facade surface"
     );
@@ -461,17 +421,22 @@ fn run_domain_facade_does_not_publish_leaf_modules() {
     assert_eq!(
         public_reexport_item_names(&run_facade),
         BTreeSet::from([
+            "active_sessions".to_string(),
+            "current_bound_card".to_string(),
             "hook_event_contract".to_string(),
             "load_run_evidence".to_string(),
             "managed_event_logs".to_string(),
+            "visit_managed_event_logs".to_string(),
             "visit_managed_events".to_string(),
             "write_evidence_for_session".to_string(),
             "HookEventContract".to_string(),
+            "Presence".to_string(),
             "RunEvent".to_string(),
             "RunEventLog".to_string(),
             "RunEventRecord".to_string(),
             "RunEvidenceLoad".to_string(),
             "RunEvidenceRecord".to_string(),
+            "SessionActivity".to_string(),
         ]),
         "src/domain/run/mod.rs should expose only the deliberate Run contract surface"
     );
@@ -520,9 +485,13 @@ fn install_domain_facade_does_not_publish_leaf_modules() {
             "FileOwnership".to_string(),
             "InstallLock".to_string(),
             "InstallState".to_string(),
+            "MirrorBlockFate".to_string(),
+            "MirrorBlockSync".to_string(),
             "MirrorKind".to_string(),
             "MirrorPlan".to_string(),
             "mirror_plan".to_string(),
+            "preview_mirror_block_resync".to_string(),
+            "resync_mirror_blocks".to_string(),
         ]),
         "src/domain/install/mod.rs should expose only deliberate Install contract re-exports"
     );
@@ -654,6 +623,7 @@ fn harness_operation_owns_implementation() {
             "dismiss".to_string(),
             "detect".to_string(),
             "load_backlog".to_string(),
+            "load_backlog_in_cards".to_string(),
             "looks_like_correction".to_string(),
             "measure".to_string(),
             "over_threshold_items".to_string(),
@@ -932,6 +902,7 @@ fn proof_domain_does_not_apply_or_mutate_task_directly() {
         "VerificationOutcome".to_string(),
         "VerificationPassed".to_string(),
         "VerificationStatus".to_string(),
+        "load_archived_task_record".to_string(),
         "load_task_for_update".to_string(),
         "load_task_record".to_string(),
     ]);
@@ -1253,6 +1224,8 @@ fn transitional_public_surfaces_match_phase_policy() {
     assert_public_modules(
         Path::new("src/domain/mod.rs"),
         &[
+            "card",
+            "channel",
             "decisions",
             "extraction",
             "feature",
@@ -1260,6 +1233,7 @@ fn transitional_public_surfaces_match_phase_policy() {
             "install",
             "proof",
             "run",
+            "schema_contracts",
             "skills",
             "task",
         ],
@@ -1274,7 +1248,10 @@ fn transitional_public_surfaces_match_phase_policy() {
     assert_public_modules(
         Path::new("src/operations/mod.rs"),
         &[
+            "card_migrate",
+            "container_migrate",
             "feature_prepare",
+            "feature_ship",
             "harness",
             "init",
             "migrate",
@@ -1300,15 +1277,6 @@ fn compatibility_reexport_exposes_root(line: &str, root: &str) -> bool {
             line == "pub use interfaces::hooks;" || line == "pub use crate::interfaces::hooks;"
         }
         "tui" => line == "pub use interfaces::tui;" || line == "pub use crate::interfaces::tui;",
-        "decisions" => {
-            line == "pub use domain::decisions;" || line == "pub use crate::domain::decisions;"
-        }
-        "feature" => {
-            line == "pub use domain::feature;" || line == "pub use crate::domain::feature;"
-        }
-        "harness" => {
-            line == "pub use domain::harness;" || line == "pub use crate::domain::harness;"
-        }
         _ => false,
     }
 }
@@ -1416,9 +1384,7 @@ fn moved_interface_sources_respect_facade_and_transition_policy() {
             }
 
             for (line_number, import_statement) in crate_import_statements(&source) {
-                if is_allowed_compatibility_reexport(&file, &import_statement)
-                    || is_allowed_transitional_interface_import(&file, &import_statement)
-                {
+                if is_allowed_transitional_interface_import(&file, &import_statement) {
                     continue;
                 }
 
@@ -1826,9 +1792,6 @@ fn is_allowed_transitional_interface_path_reference(file: &Path, path: &str) -> 
 fn transitional_interface_legacy_roots(file: &Path) -> Option<&'static [&'static str]> {
     CLI_TRANSITIONAL_LEGACY_IMPORTS
         .iter()
-        .chain(MCP_TRANSITIONAL_LEGACY_IMPORTS.iter())
-        .chain(HOOKS_TRANSITIONAL_LEGACY_IMPORTS.iter())
-        .chain(TUI_TRANSITIONAL_LEGACY_IMPORTS.iter())
         .find_map(|(allowed_file, roots)| (file == Path::new(allowed_file)).then_some(*roots))
 }
 
@@ -2529,14 +2492,6 @@ fn source_without_allowed_interfaces_hooks_reexport(file: &Path, source: &str) -
         .join("\n")
 }
 
-fn is_allowed_compatibility_reexport(file: &Path, line: &str) -> bool {
-    INTERFACE_COMPATIBILITY_REEXPORTS
-        .iter()
-        .any(|(allowed_file, root)| {
-            file == Path::new(allowed_file) && import_line_reexports_root_only(line, root)
-        })
-}
-
 fn import_line_reexports_root_only(line: &str, root: &str) -> bool {
     let trimmed = line.trim();
     let Some(suffix) = trimmed.strip_prefix(&format!("pub use {root}")) else {
@@ -2549,12 +2504,12 @@ fn import_line_reexports_root_only(line: &str, root: &str) -> bool {
 #[test]
 fn protected_import_parser_catches_grouped_imports_and_root_aliases() {
     assert_eq!(
-        protected_interface_import("use crate::task as legacy_task;"),
-        Some("legacy crate::task root import".to_string())
+        protected_interface_import("use crate::hooks as legacy_hooks;"),
+        Some("legacy crate::hooks root import".to_string())
     );
     assert_eq!(
-        protected_interface_import("use crate::{task as legacy_task};"),
-        Some("legacy crate::task root import".to_string())
+        protected_interface_import("use crate::{hooks as legacy_hooks};"),
+        Some("legacy crate::hooks root import".to_string())
     );
     assert_eq!(
         protected_interface_import("use crate::domain::task as task_domain;"),
@@ -2586,7 +2541,7 @@ fn protected_import_parser_catches_grouped_imports_and_root_aliases() {
         Some("domain::task::template".to_string())
     );
     assert_eq!(
-        protected_interface_import("use super::super::task::template::TaskRecord;"),
+        protected_interface_import("use super::super::domain::task::template::TaskRecord;"),
         Some("relative deep path under src/interfaces".to_string())
     );
     assert_eq!(protected_interface_import("use super::{render};"), None);
@@ -2598,7 +2553,7 @@ fn protected_import_parser_catches_grouped_imports_and_root_aliases() {
     );
     assert_eq!(
         protected_interface_path_reference(
-            "fn render() { super::super::task::template::render_task_body(); }"
+            "fn render() { super::super::domain::task::template::render_task_body(); }"
         ),
         Some("relative deep path under src/interfaces".to_string())
     );
@@ -2621,12 +2576,12 @@ fn protected_import_parser_catches_grouped_imports_and_root_aliases() {
         None
     );
     assert_eq!(
-        protected_interface_path_reference("fn run() { crate::feature::query::load(); }"),
-        Some("legacy crate::feature::".to_string())
+        protected_interface_path_reference("fn run() { crate::hooks::event::run_dir_name(); }"),
+        Some("legacy crate::hooks::".to_string())
     );
     assert_eq!(
         protected_interface_path_reference(
-            "fn render() { super::super::super::super::task::template::render_task_body(); }"
+            "fn render() { super::super::super::super::domain::task::template::render_task_body(); }"
         ),
         Some("relative deep path under src/interfaces".to_string())
     );
@@ -2702,10 +2657,6 @@ fn protected_import_parser_catches_grouped_imports_and_root_aliases() {
         ),
         Some("event")
     );
-    assert!(!is_allowed_compatibility_reexport(
-        Path::new("src/interfaces/mod.rs"),
-        "pub use crate::hooks;"
-    ));
 }
 
 #[test]

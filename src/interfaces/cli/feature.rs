@@ -1,14 +1,16 @@
 use anyhow::{Result, bail};
 
+use crate::domain::card;
 use crate::domain::decisions;
 use crate::domain::feature::{
     self, ContractAdditions, ContractChangeCounts, ContractEdits, FeatureStatus,
 };
 use crate::domain::task;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
+use crate::foundation::core::table;
 use crate::foundation::core::time::render_timestamp;
 use crate::interfaces::cli::{FeatureArgs, FeatureCommand, feature_next_label, recovery_label};
-use crate::operations::feature_prepare;
+use crate::operations::{feature_prepare, feature_ship};
 
 /// Execute `maestro feature`.
 pub fn run(args: FeatureArgs) -> Result<()> {
@@ -20,7 +22,8 @@ pub fn run(args: FeatureArgs) -> Result<()> {
             title,
             description,
             question,
-        } => new_feature(&paths, &title, description, question),
+            id_only,
+        } => new_feature(&paths, &title, description, question, id_only),
         FeatureCommand::Set {
             id,
             acceptance,
@@ -98,7 +101,7 @@ pub fn run(args: FeatureArgs) -> Result<()> {
         FeatureCommand::Start { id } => {
             let report = feature::start(&paths, &id)?;
             print_note(report.note)?;
-            print_uncovered_acceptance_warning(&paths, &id)
+            print_uncovered_acceptance_warning(&paths, &id, CoverageFix::Locked)
         }
         FeatureCommand::Verify {
             id,
@@ -128,13 +131,18 @@ pub fn run(args: FeatureArgs) -> Result<()> {
             dry_run,
         } => cancel_feature(&paths, &id, &reason, dry_run),
         FeatureCommand::Show { id } => show_feature(&paths, &id),
-        FeatureCommand::Spec { id } => show_feature_spec(&paths, &id),
+        FeatureCommand::Spec {
+            id,
+            section,
+            append,
+            replace,
+        } => feature_spec(&paths, &id, section, append, replace),
         FeatureCommand::List { all } => list_features(&paths, all),
         FeatureCommand::Archive {
             id,
-            shipped,
+            closed,
             dry_run,
-        } => archive_features(&paths, id, shipped, dry_run),
+        } => archive_features(&paths, id, closed, dry_run),
         FeatureCommand::Unarchive { id } => match feature::unarchive_feature(&paths, &id) {
             Ok(note) => {
                 print_feature_unarchive_note(&id, &note);
@@ -185,7 +193,7 @@ fn prepare_feature(
             } else {
                 println!("draft exists: {}", report.path.display());
             }
-            print_uncovered_acceptance_warning(paths, id)?;
+            print_uncovered_acceptance_warning(paths, id, CoverageFix::Plan)?;
             println!("review and run:");
             println!(
                 "  maestro feature prepare {id} --from {}",
@@ -228,7 +236,7 @@ fn prepare_feature(
                     report.feature_id
                 );
             }
-            print_uncovered_acceptance_warning(paths, id)?;
+            print_uncovered_acceptance_warning(paths, id, CoverageFix::Locked)?;
             Ok(())
         }
     }
@@ -330,14 +338,14 @@ fn print_green_sweep_next(paths: &MaestroPaths, feature_id: &str) -> Result<()> 
     Ok(())
 }
 
-/// Dispatch `feature archive`: exactly one of a single id or `--shipped`.
+/// Dispatch `feature archive`: exactly one of a single id or `--closed`.
 fn archive_features(
     paths: &MaestroPaths,
     id: Option<String>,
-    shipped: bool,
+    closed: bool,
     dry_run: bool,
 ) -> Result<()> {
-    match (id, shipped) {
+    match (id, closed) {
         (Some(id), false) => match feature::archive_feature(paths, &id, dry_run) {
             Ok(report) => {
                 print_feature_archive_note(&id, &report, dry_run);
@@ -345,35 +353,36 @@ fn archive_features(
             }
             Err(error) => bail!("{}", feature_archive_error_message(&id, &error.to_string())),
         },
-        (None, true) => archive_shipped(paths, dry_run),
+        (None, true) => archive_closed(paths, dry_run),
         (Some(_), true) => bail!(
-            "provide a feature id or --shipped, not both\n  maestro feature archive <id>\n  maestro feature archive --shipped"
+            "provide a feature id or --closed, not both\n  maestro feature archive <id>\n  maestro feature archive --closed"
         ),
         (None, false) => bail!(
-            "provide a feature id or --shipped\n  maestro feature archive <id>\n  maestro feature archive --shipped"
+            "provide a feature id or --closed\n  maestro feature archive <id>\n  maestro feature archive --closed"
         ),
     }
 }
 
-/// Bulk-archive every shipped feature (§5 L3). Collect-and-continue: one
-/// feature's failure never aborts the sweep; the summary exits non-zero iff any
-/// failed, so a re-run safely retries (archived features no-op, failures retry).
-fn archive_shipped(paths: &MaestroPaths, dry_run: bool) -> Result<()> {
-    let shipped: Vec<String> = feature::list(paths)?
+/// Bulk-archive every closed (terminal) feature (§5 L3). Collect-and-continue:
+/// one feature's failure never aborts the sweep; the summary exits non-zero iff
+/// any failed, so a re-run safely retries (archived features no-op, failures
+/// retry).
+fn archive_closed(paths: &MaestroPaths, dry_run: bool) -> Result<()> {
+    let closed: Vec<String> = feature::list(paths)?
         .into_iter()
-        .filter(|view| view.status == feature::FeatureStatus::Shipped)
+        .filter(|view| view.status.is_terminal())
         .map(|view| view.id)
         .collect();
 
-    if shipped.is_empty() {
-        println!("no shipped features to archive");
+    if closed.is_empty() {
+        println!("no closed features to archive");
         return Ok(());
     }
 
     let mut failures = Vec::new();
     let mut archived = 0usize;
     let mut child_tasks = 0usize;
-    for id in &shipped {
+    for id in &closed {
         match feature::archive_feature(paths, id, dry_run) {
             Ok(report) => {
                 archived += 1;
@@ -384,9 +393,9 @@ fn archive_shipped(paths: &MaestroPaths, dry_run: bool) -> Result<()> {
     }
 
     if dry_run {
-        println!("dry-run: would archive shipped features");
+        println!("dry-run: would archive closed features");
     } else {
-        println!("archived shipped features");
+        println!("archived closed features");
     }
     println!("archive summary:");
     let feature_verb = if dry_run { "would archive" } else { "archived" };
@@ -404,16 +413,16 @@ fn archive_shipped(paths: &MaestroPaths, dry_run: bool) -> Result<()> {
             println!("  - {failure}");
         }
         println!("next:");
-        println!("  retry: maestro feature archive --shipped");
+        println!("  retry: maestro feature archive --closed");
         bail!(
-            "{} shipped feature(s) failed to archive (re-run to retry):\n  {}",
+            "{} closed feature(s) failed to archive (re-run to retry):\n  {}",
             failures.len(),
             failures.join("\n  ")
         );
     }
     if dry_run {
         println!("writes: none");
-        println!("run: maestro feature archive --shipped");
+        println!("run: maestro feature archive --closed");
     } else {
         println!("next: maestro status");
     }
@@ -425,6 +434,7 @@ fn new_feature(
     title: &str,
     description: Option<String>,
     questions: Vec<String>,
+    id_only: bool,
 ) -> Result<()> {
     let id = feature::create(paths, title)?;
     let initialized = description.is_some() || !questions.is_empty();
@@ -439,9 +449,15 @@ fn new_feature(
             },
         )?;
     }
+    super::emit_card_touch(paths, &id);
+    if id_only {
+        println!("{id}");
+        return Ok(());
+    }
     println!("created feature {id} (proposed)");
-    println!("spec: .maestro/features/{id}/spec.md");
-    println!("decisions: .maestro/features/{id}/decisions.yaml");
+    println!("spec: .maestro/cards/{id}/spec.md");
+    println!("fill: maestro feature spec {id} --section \"Current state\" --append \"<text>\"");
+    println!("decisions: maestro decision new \"<title>\" --feature {id}");
     if initialized {
         println!("initialized contract fields");
     }
@@ -455,10 +471,9 @@ fn set_feature(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> Result<(
         );
     }
     let report = feature::set_with_report(paths, id, edits)?;
+    super::emit_card_touch(paths, id);
     print_set_report(id, &report);
-    println!("next: qa-baseline skill -> .maestro/features/{id}/qa.md");
-    println!("or: maestro feature accept {id} --qa none --reason \"<why no behavior>\"");
-    println!("then: maestro feature accept {id}");
+    println!("next: maestro feature accept {id}");
     if !report.view.open_questions.is_empty() {
         println!(
             "fork hint: open real forks with `maestro decision new \"<title>\" --feature {id} --context \"<why>\"`; keep --question for loose questions"
@@ -606,8 +621,7 @@ fn cancel_feature(paths: &MaestroPaths, id: &str, reason: &str, dry_run: bool) -
         println!("retry: maestro feature cancel {id} --reason \"<reason>\"");
     } else if report.changed {
         println!("inspect: maestro feature show {}", report.id);
-        println!("next: maestro status");
-        println!("optional: maestro feature archive {}", report.id);
+        println!("next: maestro archive {}", report.id);
     } else {
         println!("inspect: maestro feature show {}", report.id);
         println!("next: maestro status");
@@ -621,12 +635,13 @@ fn ship_feature(
     outcome: Option<String>,
     dry_run: bool,
 ) -> Result<()> {
-    let report = feature::ship(paths, id, outcome, dry_run)?;
+    let report = feature_ship::ship(paths, id, outcome, dry_run)?;
     println!("{}", report.note);
     if dry_run {
         println!("ship preview:");
         println!("  feature: {}", report.id);
         println!("  target: shipped");
+        println!("  full verify suite would run before shipping");
         println!("writes: none");
         println!(
             "retry: maestro feature ship {} --outcome \"<outcome>\"",
@@ -636,6 +651,7 @@ fn ship_feature(
         println!("ship receipt:");
         println!("  feature: {}", report.id);
         println!("  status: shipped");
+        println!("  full verify suite passed");
         if let Ok(view) = feature::show(paths, &report.id)
             && let Some(reason) = view.qa_none_reason.as_deref()
         {
@@ -646,8 +662,9 @@ fn ship_feature(
             println!("  verification: {claims_only} claims-only task(s)");
         }
         println!("inspect: maestro feature show {}", report.id);
-        println!("next: maestro status");
-        println!("optional: maestro feature archive {}", report.id);
+        println!("next: maestro archive {}", report.id);
+        println!("retro: anything to make a permanent rule?");
+        println!("  record it: maestro harness propose --title \"<rule>\" --evidence \"<why>\"");
     } else {
         println!("inspect: maestro feature show {}", report.id);
         println!("next: maestro status");
@@ -712,7 +729,7 @@ fn feature_archive_error_message(id: &str, error: &str) -> String {
     }
     if error.contains("archived copy already exists") {
         return format!(
-            "cannot archive {id}:\n  archived copy already exists\ninspect:\n  live: maestro feature show {id}\n  archived: .maestro/archive/features/{id}\nnext:\n  resolve the duplicate archive, then retry: maestro feature archive {id}"
+            "cannot archive {id}:\n  archived copy already exists\ninspect:\n  live: maestro feature show {id}\n  archived: .maestro/archive/cards/{id}\nnext:\n  resolve the duplicate archive, then retry: maestro feature archive {id}"
         );
     }
     error.to_string()
@@ -726,7 +743,13 @@ fn feature_unarchive_error_message(id: &str, error: &str) -> String {
     }
     if error.contains("live feature already occupies") {
         return format!(
-            "cannot unarchive {id}:\n  live feature already exists\ninspect:\n  live: maestro feature show {id}\n  archived: .maestro/archive/features/{id}\nnext:\n  resolve the live feature conflict, then retry: maestro feature unarchive {id}"
+            "cannot unarchive {id}:\n  live feature already exists\ninspect:\n  live: maestro feature show {id}\n  archived: .maestro/archive/cards/{id}\nnext:\n  resolve the live feature conflict, then retry: maestro feature unarchive {id}"
+        );
+    }
+    if error.contains("a live copy of") {
+        let detail = error.split(" — ").nth(1).unwrap_or(error);
+        return format!(
+            "cannot unarchive {id}:\n  {detail}\ninspect:\n  live: maestro feature show {id}\n  archived: .maestro/archive/cards/{id}\nnext:\n  resolve the live copy conflict, then retry: maestro feature unarchive {id}"
         );
     }
     error.to_string()
@@ -846,15 +869,83 @@ fn print_decision_summary(paths: &MaestroPaths, id: &str) -> Result<()> {
     Ok(())
 }
 
+fn feature_spec(
+    paths: &MaestroPaths,
+    id: &str,
+    section: Option<String>,
+    append: Option<String>,
+    replace: Option<String>,
+) -> Result<()> {
+    match (section, append, replace) {
+        (None, None, None) => show_feature_spec(paths, id),
+        (Some(section), Some(text), None) => write_feature_spec(paths, id, &section, &text, false),
+        (Some(section), None, Some(text)) => write_feature_spec(paths, id, &section, &text, true),
+        (Some(section), None, None) => bail!(
+            "--section needs the text to write\n  append: maestro feature spec {id} --section \"{section}\" --append \"<text>\"\n  replace: maestro feature spec {id} --section \"{section}\" --replace \"<text>\""
+        ),
+        (None, _, _) => bail!(
+            "--append/--replace need --section\n  maestro feature spec {id} --section \"<name>\" --append \"<text>\""
+        ),
+        (Some(_), Some(_), Some(_)) => unreachable!("clap rejects --append with --replace"),
+    }
+}
+
+fn write_feature_spec(
+    paths: &MaestroPaths,
+    id: &str,
+    section: &str,
+    text: &str,
+    replace: bool,
+) -> Result<()> {
+    let report = feature::write_spec_section(paths, id, section, text, replace)?;
+    super::emit_card_touch(paths, id);
+    let verb = if replace { "replaced" } else { "appended to" };
+    let created = if report.created_section {
+        " (new section)"
+    } else {
+        ""
+    };
+    println!("{verb} section \"{}\"{created}", section.trim());
+    // The section body runs to the next heading, so headings inside the
+    // written text become section boundaries a later --section edit stops at.
+    if text
+        .lines()
+        .any(|line| line.starts_with("## ") || line.starts_with("# "))
+    {
+        println!(
+            "note: the text contains markdown headings, which start new sections; a later --section \"{}\" edit stops at the first one",
+            section.trim()
+        );
+    }
+    println!("spec: .maestro/cards/{id}/spec.md");
+    println!("inspect: maestro feature spec {id}");
+    Ok(())
+}
+
 fn show_feature_spec(paths: &MaestroPaths, id: &str) -> Result<()> {
-    let view = match feature::show(paths, id) {
-        Ok(view) => view,
-        Err(error) => return show_unreadable_feature_spec(paths, id, error),
+    // L6b: reads cross the boundary -- mirror `show_feature`'s archive
+    // fallthrough so a historical spec still renders. Only when neither tree
+    // resolves does the unreadable-card recovery view take over, carrying the
+    // live error.
+    let (view, archived) = match feature::show(paths, id) {
+        Ok(view) => (view, false),
+        Err(live_err) => match feature::show_archived(paths, id) {
+            Ok(view) => (view, true),
+            Err(_) => return show_unreadable_feature_spec(paths, id, live_err),
+        },
     };
     println!("status: {}", feature::status_label(&view.status));
     println!("feature: {}", view.id);
+    if archived {
+        println!("archived: true");
+    }
     println!();
-    let spec_path = paths.features_dir().join(&view.id).join("spec.md");
+    let sidecar_dir = if archived {
+        paths.archive_cards_dir().join(&view.id)
+    } else {
+        feature::feature_sidecar_dir(paths, &view.id)
+    };
+    let spec_path = sidecar_dir.join("spec.md");
     match std::fs::read_to_string(&spec_path) {
         Ok(spec) => print!("{}", spec.trim_end()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
@@ -939,13 +1030,13 @@ fn show_unreadable_feature_spec(
     id: &str,
     error: anyhow::Error,
 ) -> Result<()> {
-    let path = paths.features_dir().join(id).join("feature.yaml");
+    let path = card::store::card_path(paths, id);
     println!("status: unreadable");
     println!("feature: {id}");
     println!("path: {}", path.display());
     println!("error: {error:#}");
     println!();
-    println!("## Raw feature.yaml");
+    println!("## Raw card.yaml");
     match std::fs::read_to_string(&path) {
         Ok(contents) => {
             println!("```yaml");
@@ -1022,15 +1113,42 @@ fn print_acceptance(
     Ok(())
 }
 
-fn print_uncovered_acceptance_warning(paths: &MaestroPaths, id: &str) -> Result<()> {
+/// What can still close an uncovered acceptance item at this point: prepared
+/// tasks are accepted on creation, so `task set --covers` never works right
+/// after prepare/start; the fix is the plan file or new work, never a locked task.
+enum CoverageFix {
+    /// Tasks come from the plan file; coverage is authored as `covers:` lines.
+    Plan,
+    /// Existing tasks are acceptance-locked; cover with new work or evidence.
+    Locked,
+}
+
+fn print_uncovered_acceptance_warning(
+    paths: &MaestroPaths,
+    id: &str,
+    fix: CoverageFix,
+) -> Result<()> {
     let uncovered = feature::uncovered_acceptance(paths, id)?;
-    if !uncovered.is_empty() {
-        println!(
-            "warning: {} acceptance item(s) have no covering task: {}",
-            uncovered.len(),
-            uncovered.join(", ")
-        );
-        println!("fix: maestro task set <task-id> --covers <ac-id>");
+    if uncovered.is_empty() {
+        return Ok(());
+    }
+    println!(
+        "warning: {} acceptance item(s) have no covering task: {}",
+        uncovered.len(),
+        uncovered.join(", ")
+    );
+    match fix {
+        CoverageFix::Plan => {
+            println!(
+                "fix: add `covers: <ac-id>` to task lines in the plan before `prepare --from`"
+            );
+        }
+        CoverageFix::Locked => {
+            println!("fix: maestro task create \"<title>\" --feature {id} --covers <ac-id>");
+            println!(
+                "     or prove directly: maestro feature verify {id} --prove <ac-id> --evidence \"<proof>\""
+            );
+        }
     }
     Ok(())
 }
@@ -1075,32 +1193,44 @@ fn list_features(paths: &MaestroPaths, all: bool) -> Result<()> {
     if shown.is_empty() && unreadable.is_empty() {
         println!("no features found");
     } else {
-        println!("ID\tSTATE\tNEXT\tINSPECT\tTASKS\tVERIFIED\tTITLE");
-        for view in &shown {
-            let title = match view.outcome.as_deref() {
-                Some(outcome) => format!("{} -- {outcome}", view.title),
-                None => view.title.clone(),
-            };
-            println!(
-                "{}\t{}\t{}\tmaestro feature show {}\t{}\t{}\t{}",
-                view.id,
-                feature::status_label(&view.status),
-                feature_next_label(view),
-                view.id,
-                view.counts.total,
-                view.counts.verified,
-                title
-            );
-        }
+        let mut rows: Vec<Vec<String>> = shown
+            .iter()
+            .map(|view| {
+                let title = match view.outcome.as_deref() {
+                    Some(outcome) => format!("{} -- {outcome}", view.title),
+                    None => view.title.clone(),
+                };
+                vec![
+                    view.id.clone(),
+                    feature::status_label(&view.status).to_string(),
+                    feature_next_label(view).to_string(),
+                    format!("maestro feature show {}", view.id),
+                    view.counts.total.to_string(),
+                    view.counts.verified.to_string(),
+                    title,
+                ]
+            })
+            .collect();
         for (id, error, hint) in &unreadable {
-            println!(
-                "{}\tunreadable\t{}\tmaestro feature spec {}\t0\t0\t{}",
-                id,
-                recovery_label(hint.as_deref()),
-                id,
-                error
-            );
+            rows.push(vec![
+                id.clone(),
+                "unreadable".to_string(),
+                recovery_label(hint.as_deref()).to_string(),
+                format!("maestro feature spec {id}"),
+                "0".to_string(),
+                "0".to_string(),
+                error.clone(),
+            ]);
         }
+        print!(
+            "{}",
+            table::render_table(
+                &[
+                    "ID", "STATE", "NEXT", "INSPECT", "TASKS", "VERIFIED", "TITLE"
+                ],
+                &rows
+            )
+        );
     }
 
     if !all && hidden > 0 {

@@ -1,0 +1,98 @@
+- schema_version: maestro.card.v1
+  id: dec-d1-compatibility-posture-for-future-94ba
+  type: decision
+  title: D1 compatibility posture for future schema changes
+  status: locked
+  parent: schema-evolution-without-migration-churn
+  created_at: 2026-06-11T17:17:33.468Z
+  updated_at: 2026-06-11T19:57:28.035Z
+  description: Future Maestro artifact changes should not automatically require a bespoke v1-to-v2 migration wave. Decide whether compatibility belongs in strict migrations, versioned reader normalization, or the card-envelope contract.
+  extra:
+    locked_at: 2026-06-11T19:57:28.035Z
+    decision: 'Superseded by the roadmap merge: locked 2026-06-12 as D6.1 in SPEC-maintainability-roadmap''s WS5 Design Annex (card dec-schema-compatibility-posture-b913, versioned readers with in-memory normalization; envelope-as-contract long term).'
+    rejected:
+    - 'Locking independently here: the schema SPEC was fully folded into the roadmap annex, a separate lock would fork the record'
+- schema_version: maestro.card.v1
+  id: dec-d2-schema-evolution-as-embedded-5b06
+  type: decision
+  title: D2 schema evolution as embedded resource pack
+  status: locked
+  parent: schema-evolution-without-migration-churn
+  created_at: 2026-06-11T17:21:35.798Z
+  updated_at: 2026-06-11T19:57:28.070Z
+  description: 'User proposed rewiring schema v2/v3 evolution to work more like embedded resources: edit templates/resource packs rather than touching many code and migration paths. Decide whether that is template-only, embedded schema pack plus Rust compatibility kernel, codegen, or deferred until the card envelope shrinks typed payloads.'
+  extra:
+    locked_at: 2026-06-11T19:57:28.070Z
+    decision: 'Superseded by the roadmap merge: locked 2026-06-12 as D6.2 in SPEC-maintainability-roadmap''s WS5 Design Annex (card dec-embedded-schema-packs-as-contract-source-9d42, embedded schema packs + Rust compat kernel).'
+    rejected:
+    - 'Locking independently here: the schema SPEC was fully folded into the roadmap annex, a separate lock would fork the record'
+- schema_version: maestro.card.v1
+  id: dec-d3-storage-hub-served-versions-schema-937f
+  type: decision
+  title: D3 storage hub served versions schema pack
+  status: locked
+  parent: schema-evolution-without-migration-churn
+  created_at: 2026-06-11T17:24:26.212Z
+  updated_at: 2026-06-11T19:57:28.102Z
+  description: 'Web research suggests the stronger pattern is not template-only: use one current storage version, supported served/read versions, schema-pack defaults/aliases/examples, reserved retired fields, in-memory conversion, unknown-field preservation, and explicit disk rewrite only on save or migrate.'
+  extra:
+    locked_at: 2026-06-11T19:57:28.102Z
+    decision: 'Superseded by the roadmap merge: locked 2026-06-12 as D6.3 in SPEC-maintainability-roadmap''s WS5 Design Annex (card dec-storage-hub-runtime-pattern-2019, storage hub + bounded served versions, read-only never rewrites).'
+    rejected:
+    - 'Locking independently here: the schema SPEC was fully folded into the roadmap annex, a separate lock would fork the record'
+- schema_version: maestro.card.v1
+  id: dec-d4-should-yaml-become-sqlite-826a
+  type: decision
+  title: D4 should YAML become SQLite
+  status: locked
+  parent: schema-evolution-without-migration-churn
+  created_at: 2026-06-11T17:28:29.347Z
+  updated_at: 2026-06-11T19:57:42.176Z
+  description: User proposed replacing YAML artifacts with SQLite. Decide whether Maestro should make SQLite canonical, use it as a generated projection/index, use it only for high-volume append surfaces, or stay file-native.
+  extra:
+    locked_at: 2026-06-11T19:57:42.176Z
+    decision: 'Superseded by the roadmap merge: locked 2026-06-12 as D6.4 in SPEC-maintainability-roadmap''s WS5 Design Annex (card dec-yaml-to-sqlite-storage-pivot-d75e, no pivot; disposable projection deferred to WS7).'
+    rejected:
+    - 'Locking independently here: the schema SPEC was fully folded into the roadmap annex, a separate lock would fork the record'
+- schema_version: maestro.card.v1
+  id: dec-d5-code-architecture-starts-at-task-3fd2
+  type: decision
+  title: D5 code architecture starts at task compat seam
+  status: locked
+  parent: schema-evolution-without-migration-churn
+  created_at: 2026-06-11T17:41:00.269Z
+  updated_at: 2026-06-11T19:57:42.218Z
+  description: 'The implementation architecture should start with task only: add embedded schema contracts plus src/domain/task/compat.rs, route task card payload reconstruction through the compat module, keep Rust typed models, avoid a dynamic runtime schema engine, and reserve operations/migrate for explicit bulk rewrites.'
+  extra:
+    locked_at: 2026-06-11T19:57:42.218Z
+    decision: 'Superseded by the roadmap merge: absorbed 2026-06-12 into the WS5 Design Annex''s Code Architecture Sketch and Full Artifact Architecture sections of SPEC-maintainability-roadmap; the task compat seam ordering now lives in D6.5 lock condition 7 (WS8 bridge-dedup precedes WS5 compat modules).'
+    rejected:
+    - 'Locking independently here: the schema SPEC was fully folded into the roadmap annex, a separate lock would fork the record'
+- schema_version: maestro.card.v1
+  id: dec-d6-all-artifact-schema-compatibility-67f0
+  type: decision
+  title: D6 all-artifact schema compatibility architecture
+  status: locked
+  parent: schema-evolution-without-migration-churn
+  created_at: 2026-06-11T17:42:59.306Z
+  updated_at: 2026-06-11T19:57:42.250Z
+  description: 'The schema-evolution architecture must cover every durable artifact family, not just tasks: card envelope, task, feature, decision, harness config/backlog, run events/evidence, proof reports, and install locks each get a domain-local compat boundary plus embedded schema contracts. Task is only the first rollout slice.'
+  extra:
+    locked_at: 2026-06-11T19:57:42.250Z
+    decision: 'Superseded by the roadmap merge: absorbed 2026-06-12 into the WS5 Design Annex''s Full Artifact Architecture (the artifact matrix) of SPEC-maintainability-roadmap; the per-family supported-old-version matrix is owed before implementation per D6.5 lock condition 8.'
+    rejected:
+    - 'Locking independently here: the schema SPEC was fully folded into the roadmap annex, a separate lock would fork the record'
+- schema_version: maestro.card.v1
+  id: dec-d7-all-artifact-coordinated-rollout-38d4
+  type: decision
+  title: D7 all-artifact coordinated rollout
+  status: locked
+  parent: schema-evolution-without-migration-churn
+  created_at: 2026-06-11T17:46:30.076Z
+  updated_at: 2026-06-11T19:57:42.282Z
+  description: 'User rejected phased rollout. Preferred direction: all durable artifact families receive schema packs, domain-local compat modules, no-mutation read tests, write-current tests, and migrate coverage in one coordinated release. Internal milestones are allowed, but the shipped design should not leave partial artifact-family support.'
+  extra:
+    locked_at: 2026-06-11T19:57:42.282Z
+    decision: 'Superseded by the roadmap merge: locked 2026-06-12 as D6.5 in SPEC-maintainability-roadmap''s WS5 Design Annex (card dec-schema-compatibility-rollout-strategy-7456, all-artifact coordinated rollout under 11 advisor lock conditions; advisor review recorded).'
+    rejected:
+    - 'Locking independently here: the schema SPEC was fully folded into the roadmap annex, a separate lock would fork the record'

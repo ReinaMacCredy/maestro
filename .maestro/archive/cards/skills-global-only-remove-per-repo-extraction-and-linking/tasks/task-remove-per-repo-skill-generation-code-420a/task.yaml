@@ -1,0 +1,97 @@
+schema_version: maestro.card.v1
+id: task-remove-per-repo-skill-generation-code-420a
+type: task
+title: Remove per-repo skill generation (code + tests)
+status: verified
+parent: skills-global-only-remove-per-repo-extraction-and-linking
+claimed_by: claude#s50617-1781382847485858000
+claimed_at: 2026-06-13T20:34:07.485Z
+created_at: 2026-06-13T20:33:59.329Z
+updated_at: 2026-06-13T22:56:23.852Z
+extra:
+  schema_version: maestro.task.v2
+  claims:
+  - init writes no .maestro/skills
+  - install creates no per-repo skills symlink and no Symlink lock entry
+  - legacy skills symlink pruned without recreating .maestro/skills
+  - global sync doctor and both-agent discovery pass
+  - cargo test full suite green
+  covers:
+  - ac-1
+  - ac-2
+  - ac-3
+  - ac-4
+  state_history:
+  - state: draft
+    at: 2026-06-13T20:33:59.329Z
+    by: maestro
+  - state: exploring
+    at: 2026-06-13T20:33:59.354Z
+    by: maestro
+  - state: ready
+    at: 2026-06-13T20:33:59.394Z
+    by: maestro
+  - state: needs_verification
+    at: 2026-06-13T22:53:35.091Z
+    by: maestro
+    summary: Removed per-repo skill extraction + symlinks; skills global-only. extract_into drops skills; deleted skills/{extract,symlink}.rs; install records no Symlink lock entry; legacy symlink pruned on install/update; global path unchanged. Commit a314efdb.
+    claims:
+    - init writes no .maestro/skills
+    - install creates no per-repo skills symlink and no Symlink lock entry
+    - legacy skills symlink pruned without recreating .maestro/skills
+    - global sync doctor and both-agent discovery pass
+    - cargo test full suite green
+  - state: needs_verification
+    at: 2026-06-13T22:53:35.111Z
+    by: maestro
+    summary: 'verification failed: verify command failed: cargo clippy -- -D warnings (exit 101)'
+    open_items:
+    - 'verify command failed: cargo clippy -- -D warnings (exit 101)'
+  - state: verified
+    at: 2026-06-13T22:56:23.852Z
+    by: maestro
+    summary: 'verification passed: 5 claim(s), 1 proof source(s)'
+  lane: normal
+  risk: medium
+  verification:
+    status: passed
+    verified_at: 2026-06-13T22:56:23.852Z
+    verified_commit: 74807c8994a6a73a1b2e3c7bb7f051a4cc399888
+    verified_by_run: .maestro/runs/1e7ed302-b661-4557-a1ea-abd5d3513548/events.jsonl
+    contract_hash: 437e2b4d12aa7101c34f014463ccd22866804812d9bcd57582e916565058aacd
+    claim_checks:
+    - claim: init writes no .maestro/skills
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/1e7ed302-b661-4557-a1ea-abd5d3513548/events.jsonl
+    - claim: install creates no per-repo skills symlink and no Symlink lock entry
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/1e7ed302-b661-4557-a1ea-abd5d3513548/events.jsonl
+    - claim: legacy skills symlink pruned without recreating .maestro/skills
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/1e7ed302-b661-4557-a1ea-abd5d3513548/events.jsonl
+    - claim: global sync doctor and both-agent discovery pass
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/1e7ed302-b661-4557-a1ea-abd5d3513548/events.jsonl
+    - claim: cargo test full suite green
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/1e7ed302-b661-4557-a1ea-abd5d3513548/events.jsonl
+    commands:
+    - cmd: cargo build
+      exit_code: 0
+      duration_ms: 2724
+    - cmd: cargo test
+      exit_code: 0
+      duration_ms: 101206
+    - cmd: cargo clippy -- -D warnings
+      exit_code: 0
+      duration_ms: 3299
+    proof_sources:
+    - kind: event
+      path: .maestro/runs/1e7ed302-b661-4557-a1ea-abd5d3513548/events.jsonl
+      hash: 66512ab1fd4b7bde12759d8a3b86490f1db5333a333dba73d87ddc69a3d14d97
+  acceptance_locked: true
+  acceptance:
+    checks:
+    - maestro init in a fresh repo writes .maestro/ with harness + hooks but NO .maestro/skills; install --agent claude/codex creates no per-repo skills symlink and no Symlink-kind skills lock entry; update/install on a repo with a legacy maestro-owned skills symlink prunes it without recreating .maestro/skills; global sync --global-skills + doctor + both-agent discovery still pass unchanged; cargo test full suite green.
+    locked_by: maestro
+    locked_at: 2026-06-13T20:33:59.394Z

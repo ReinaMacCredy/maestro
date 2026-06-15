@@ -1,0 +1,85 @@
+schema_version: maestro.card.v1
+id: task-re-record-version-guard-skill-version-30bc
+type: task
+title: Re-record version guard + skill version assertion
+status: verified
+parent: build-flow-runs-prepare-without-a-stop
+claimed_by: claude#s90667-1781378217108873000
+claimed_at: 2026-06-13T19:16:57.108Z
+created_at: 2026-06-13T19:01:32.742Z
+updated_at: 2026-06-13T19:17:03.798Z
+extra:
+  schema_version: maestro.task.v2
+  blockers:
+  - id: blk-001
+    kind: task
+    blocked_ref:
+      kind: task
+      id: task-add-prepare-to-maestro-design-pipeline-b51c
+    title: Blocked by task-add-prepare-to-maestro-design-pipeline-b51c
+    reason: 'after dependency: T2 (task-add-prepare-to-maestro-design-pipeline-b51c) verified'
+    source: command
+    created_at: 2026-06-13T19:01:32.779Z
+    resolved_at: 2026-06-13T19:16:48.784Z
+  state_history:
+  - state: draft
+    at: 2026-06-13T19:01:32.742Z
+    by: maestro
+  - state: exploring
+    at: 2026-06-13T19:01:32.760Z
+    by: maestro
+  - state: exploring
+    at: 2026-06-13T19:01:32.779Z
+    by: maestro
+    summary: 'blocker added: blk-001'
+  - state: ready
+    at: 2026-06-13T19:01:32.808Z
+    by: maestro
+  - state: ready
+    at: 2026-06-13T19:16:48.784Z
+    by: maestro
+    summary: 'blocker resolved: blk-001'
+  - state: needs_verification
+    at: 2026-06-13T19:17:03.776Z
+    by: maestro
+    summary: 'Re-recorded tests/resources_version_guard.rs: maestro-card 1.7.0->1.8.0 (hash bf903b2d), maestro-design 1.11.0->1.12.0 (hash 8e80469b); updated tests/skills_extract.rs router version assertion to 1.8.0. Full cargo test suite green.'
+    claims:
+    - 'guard table records maestro-card 1.8.0/bf903b2d and maestro-design 1.12.0/8e80469b; skills_extract.rs:210 asserts version: 1.8.0; cargo test passes'
+  - state: verified
+    at: 2026-06-13T19:17:03.798Z
+    by: maestro
+    summary: 'verification passed: 1 claim(s), 1 proof source(s)'
+  lane: normal
+  risk: medium
+  verification:
+    status: passed
+    verified_at: 2026-06-13T19:17:03.798Z
+    verified_commit: 278fb828d7ccc837512e80db76fe4b3a70325fe7
+    verified_by_run: .maestro/runs/d7764a32-6ea3-4c17-b3c2-30ba0d37050e/events.jsonl
+    contract_hash: 51b5effe329796e11bb2ab3a3f7beda40fff9c2206ef3dc80172a3103b788781
+    claim_checks:
+    - claim: 'guard table records maestro-card 1.8.0/bf903b2d and maestro-design 1.12.0/8e80469b; skills_extract.rs:210 asserts version: 1.8.0; cargo test passes'
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/d7764a32-6ea3-4c17-b3c2-30ba0d37050e/events.jsonl
+    commands:
+    - cmd: cargo build
+      exit_code: 0
+      duration_ms: 235
+    - cmd: cargo test
+      exit_code: 0
+      duration_ms: 69008
+    - cmd: cargo clippy -- -D warnings
+      exit_code: 0
+      duration_ms: 289
+    proof_sources:
+    - kind: event
+      path: .maestro/runs/d7764a32-6ea3-4c17-b3c2-30ba0d37050e/events.jsonl
+      hash: b283a71bc2fbbcebb89e913ec0af58c3484af62bef2d8e5d331710a60eea1041
+  acceptance_locked: true
+  acceptance:
+    checks:
+    - tests/resources_version_guard.rs records maestro-card 1.8.0 and maestro-design 1.12.0 with recomputed tree-hashes; tests/skills_extract.rs router assertion updated to 1.8.0; cargo test resources_version_guard and skills_extract pass
+    locked_by: maestro
+    locked_at: 2026-06-13T19:01:32.808Z
+  claims:
+  - 'guard table records maestro-card 1.8.0/bf903b2d and maestro-design 1.12.0/8e80469b; skills_extract.rs:210 asserts version: 1.8.0; cargo test passes'

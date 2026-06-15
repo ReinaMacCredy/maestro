@@ -3,7 +3,7 @@ use std::{fs, path::Path};
 use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
 
-use crate::foundation::core::schema::{BACKLOG_SCHEMA_VERSION, HARNESS_SCHEMA_VERSION};
+use crate::foundation::core::schema::HARNESS_SCHEMA_VERSION;
 
 /// Supported V1 project stack families.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -78,19 +78,16 @@ pub struct EscalationPolicy {
     pub act_after: usize,
 }
 
-/// `.maestro/harness/backlog.yaml` V1 configuration.
+/// In-memory aggregate of the harness `idea` cards. Not a persisted store of
+/// its own (D7): each item lives as `.maestro/cards/<id>/card.yaml`, so the
+/// aggregate carries no schema version or evidence stamp.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct BacklogConfig {
-    /// Backlog schema version.
-    pub schema_version: String,
-    /// Last evidence stamp used by guarded hot-verb refresh.
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub evidence_stamp: String,
     /// Rule-based improver proposals. Empty at init.
     pub items: Vec<BacklogItem>,
 }
 
-/// Harness improvement proposal tracked in `.maestro/harness/backlog.yaml`.
+/// Harness improvement proposal persisted as an `idea` card.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct BacklogItem {
     /// Stable proposal id.
@@ -187,13 +184,9 @@ impl HarnessConfig {
 }
 
 impl BacklogConfig {
-    /// Return an empty V1 backlog.
+    /// Return an empty backlog aggregate.
     pub fn empty() -> Self {
-        Self {
-            schema_version: BACKLOG_SCHEMA_VERSION.to_string(),
-            evidence_stamp: String::new(),
-            items: Vec::new(),
-        }
+        Self { items: Vec::new() }
     }
 
     /// Find a backlog item by id.

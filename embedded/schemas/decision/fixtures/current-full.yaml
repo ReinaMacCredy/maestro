@@ -1,0 +1,24 @@
+schema_version: maestro.card.v1
+id: card-bb77cc
+type: decision
+title: Full decision fixture
+status: locked
+created_at: 2026-06-12T00:00:00.000Z
+updated_at: 2026-06-12T00:10:00.000Z
+description: A decision exercising every persisted payload field.
+extra:
+  id: card-bb77cc
+  title: Full decision fixture
+  status: locked
+  feature: feature-full-fixture-1c2d
+  context: which option should the fixture lock
+  decision: lock the option that exercises every field
+  rejected:
+    - the option that leaves fields empty
+  preview: |
+    option A: every field populated
+  supersedes:
+    - card-aa66bb
+  superseded_by: null
+  created_at: 2026-06-12T00:00:00.000Z
+  locked_at: 2026-06-12T00:10:00.000Z

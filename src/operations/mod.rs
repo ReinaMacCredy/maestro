@@ -3,7 +3,10 @@
 //! Concrete operation modules own orchestration that crosses domain aggregates,
 //! while legacy operation-like roots stay re-exported during the migration.
 
+pub mod card_migrate;
+pub mod container_migrate;
 pub mod feature_prepare;
+pub mod feature_ship;
 pub mod harness;
 pub mod init;
 pub mod migrate;
@@ -16,7 +19,6 @@ use std::fmt;
 
 use anyhow::Result;
 
-use crate::domain::task;
 use crate::foundation::core::paths::MaestroPaths;
 
 /// Result of applying a written Proof report back to Task.
@@ -29,23 +31,18 @@ pub(crate) enum TaskVerifyApplication {
 /// Typed reason a written Proof report could not be applied to Task.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum TaskVerifyUnappliedReason {
-    TaskSave(task::TaskSaveError),
     Other(String),
 }
 
 impl TaskVerifyUnappliedReason {
     fn from_error(error: &anyhow::Error) -> Self {
-        match error.downcast_ref::<task::TaskSaveError>() {
-            Some(error) => Self::TaskSave(error.clone()),
-            None => Self::Other(error.to_string()),
-        }
+        Self::Other(error.to_string())
     }
 }
 
 impl fmt::Display for TaskVerifyUnappliedReason {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            TaskVerifyUnappliedReason::TaskSave(error) => write!(formatter, "{error}"),
             TaskVerifyUnappliedReason::Other(reason) => formatter.write_str(reason),
         }
     }

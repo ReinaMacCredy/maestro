@@ -1,8 +1,8 @@
 //! `maestro sync` -- resync bundled resources to this binary's shipped versions.
 //!
-//! Where `maestro update` upgrades the binary *and* refreshes content, `sync`
-//! only resyncs content (skills, the hook recorder script, the harness protocol)
-//! to whatever this binary ships. It runs the shared version-gated extraction
+//! Where `maestro upgrade` upgrades the binary *and* refreshes content, `sync`
+//! only resyncs content (the hook recorder script and the harness protocol) to
+//! whatever this binary ships. It runs the shared version-gated extraction
 //! core ([`extract_all`] in `ExtractMode::Update`) directly, so it is purely
 //! filesystem-bound: no network, no GitHub release lookup. Version-gated and
 //! edit-preserving -- a folder whose installed version already matches is left
@@ -13,6 +13,9 @@ use anyhow::{Result, bail};
 use crate::domain::extraction::{
     ExtractMode, ExtractReport, FolderDecision, FolderPreview, extract_all, preview_all,
     render_preview,
+};
+use crate::domain::install::{
+    MirrorBlockFate, MirrorBlockSync, preview_mirror_block_resync, resync_mirror_blocks,
 };
 use crate::domain::skills::{self, GlobalSkillsOutcome};
 use crate::foundation::core::backup::backup_operation_timestamp;
@@ -40,9 +43,16 @@ pub enum SyncOutcome {
         preview: Vec<FolderPreview>,
         /// The writes and backups sync performed.
         report: ExtractReport,
+        /// Per-file fate of the CLAUDE.md/AGENTS.md managed mirror blocks.
+        mirrors: Vec<MirrorBlockSync>,
     },
     /// Sync only previewed the resync (`--dry-run`).
-    DryRun(Vec<FolderPreview>),
+    DryRun {
+        /// Per-folder fate of the bundled resources.
+        folders: Vec<FolderPreview>,
+        /// Per-file fate of the CLAUDE.md/AGENTS.md managed mirror blocks.
+        mirrors: Vec<MirrorBlockSync>,
+    },
     /// Sync resynced the user-level global skill cache and links.
     GlobalSkills(GlobalSkillsOutcome),
     /// Sync only previewed global skills (`--dry-run --global-skills`).
@@ -67,13 +77,14 @@ pub fn run(options: &SyncOptions) -> Result<SyncOutcome> {
     announce_repo_root(paths.repo_root());
 
     if options.dry_run {
-        let preview = preview_all(
+        let folders = preview_all(
             &paths,
             ExtractMode::Update {
                 backup_timestamp: "",
             },
         )?;
-        return Ok(SyncOutcome::DryRun(preview));
+        let mirrors = preview_mirror_block_resync(&paths)?;
+        return Ok(SyncOutcome::DryRun { folders, mirrors });
     }
 
     let backup_timestamp = backup_operation_timestamp()?;
@@ -84,8 +95,15 @@ pub fn run(options: &SyncOptions) -> Result<SyncOutcome> {
     // writes change them, so the summary can report what sync did.
     let preview = preview_all(&paths, mode)?;
     let report = extract_all(&paths, mode)?;
+    // The managed mirror blocks carry no version, so they resync by content:
+    // a drifted block is refreshed (and backed up), a matching one untouched.
+    let mirrors = resync_mirror_blocks(&paths, &backup_timestamp)?;
 
-    Ok(SyncOutcome::Applied { preview, report })
+    Ok(SyncOutcome::Applied {
+        preview,
+        report,
+        mirrors,
+    })
 }
 
 /// Resolve the project paths, failing fast with the `maestro init` hint when no
@@ -115,16 +133,27 @@ fn sync_paths() -> Result<MaestroPaths> {
 /// Render a sync outcome as plain, machine-useful text.
 pub fn render(outcome: &SyncOutcome) -> String {
     match outcome {
-        SyncOutcome::DryRun(preview) => {
+        SyncOutcome::DryRun { folders, mirrors } => {
             let mut out = String::from("maestro sync would resync:\n");
-            out.push_str(&render_preview(preview));
+            out.push_str(&render_preview(folders));
+            let mirror_refresh = mirrors
+                .iter()
+                .any(|mirror| mirror.fate == MirrorBlockFate::Refresh);
+            for mirror in mirrors
+                .iter()
+                .filter(|mirror| mirror.fate == MirrorBlockFate::Refresh)
+            {
+                out.push_str(&format!("  {} (mirror block)\n", mirror.relative_path));
+            }
             // Pre-warn that a refresh replaces the on-disk copy (any local edits
             // included). The version gate skips matching folders, so an edited
             // but current folder is never touched; only a version-behind folder
-            // refreshes, and sync backs the current copy up first (T6.s).
-            if preview
+            // refreshes, and sync backs the current copy up first (T6.s). Mirror
+            // blocks resync by content, but the same back-up-first promise holds.
+            if folders
                 .iter()
                 .any(|folder| folder.decision == FolderDecision::Refresh)
+                || mirror_refresh
             {
                 out.push_str(
                     "note: refresh overwrites the folder's current contents; your copy is backed up under .maestro/backups/ first\n",
@@ -132,7 +161,11 @@ pub fn render(outcome: &SyncOutcome) -> String {
             }
             out
         }
-        SyncOutcome::Applied { preview, report } => render_applied(preview, report),
+        SyncOutcome::Applied {
+            preview,
+            report,
+            mirrors,
+        } => render_applied(preview, report, mirrors),
         SyncOutcome::GlobalSkills(outcome) => skills::render_global_skills_outcome(outcome),
         SyncOutcome::GlobalSkillsDryRun(rendered) => rendered.clone(),
     }
@@ -141,7 +174,11 @@ pub fn render(outcome: &SyncOutcome) -> String {
 /// Render the applied summary: the folders that changed (if any), then a
 /// one-line count, then any edited-file backups. The counts come from the
 /// folder-level preview, matching what `--dry-run` would have shown.
-fn render_applied(preview: &[FolderPreview], report: &ExtractReport) -> String {
+fn render_applied(
+    preview: &[FolderPreview],
+    report: &ExtractReport,
+    mirrors: &[MirrorBlockSync],
+) -> String {
     let refreshed = count_decision(preview, FolderDecision::Refresh);
     let created = count_decision(preview, FolderDecision::Create);
     let current = count_decision(preview, FolderDecision::Skip);
@@ -157,6 +194,11 @@ fn render_applied(preview: &[FolderPreview], report: &ExtractReport) -> String {
         .cloned()
         .collect();
 
+    let refreshed_mirrors: Vec<&MirrorBlockSync> = mirrors
+        .iter()
+        .filter(|mirror| mirror.fate == MirrorBlockFate::Refresh)
+        .collect();
+
     let mut out = String::new();
     if !changed.is_empty() {
         out.push_str("maestro sync resynced:\n");
@@ -166,10 +208,30 @@ fn render_applied(preview: &[FolderPreview], report: &ExtractReport) -> String {
         "synced: {refreshed} refreshed, {created} created, {current} already current\n"
     ));
 
-    if !report.backups.is_empty() {
+    if !refreshed_mirrors.is_empty() {
+        out.push_str("mirror blocks resynced:\n");
+        for mirror in &refreshed_mirrors {
+            out.push_str(&format!("  {}\n", mirror.relative_path));
+        }
+    }
+
+    let mut backups: Vec<(String, String)> = report
+        .backups
+        .iter()
+        .map(|backup| (backup.name.clone(), backup.path.display().to_string()))
+        .collect();
+    for mirror in &refreshed_mirrors {
+        if let Some(backup_path) = &mirror.backup_path {
+            backups.push((
+                mirror.relative_path.clone(),
+                backup_path.display().to_string(),
+            ));
+        }
+    }
+    if !backups.is_empty() {
         out.push_str("edited files backed up:\n");
-        for backup in &report.backups {
-            out.push_str(&format!("{} -> {}\n", backup.name, backup.path.display()));
+        for (name, path) in backups {
+            out.push_str(&format!("{name} -> {path}\n"));
         }
     }
 
@@ -196,12 +258,23 @@ mod tests {
         }
     }
 
+    fn mirror(relative_path: &str, fate: MirrorBlockFate) -> MirrorBlockSync {
+        MirrorBlockSync {
+            relative_path: relative_path.to_string(),
+            fate,
+            backup_path: None,
+        }
+    }
+
     #[test]
     fn dry_run_warns_before_a_refresh_overwrites() {
-        let outcome = SyncOutcome::DryRun(vec![
-            folder("a", FolderDecision::Skip),
-            folder("b", FolderDecision::Refresh),
-        ]);
+        let outcome = SyncOutcome::DryRun {
+            folders: vec![
+                folder("a", FolderDecision::Skip),
+                folder("b", FolderDecision::Refresh),
+            ],
+            mirrors: vec![],
+        };
         let rendered = render(&outcome);
         assert!(
             rendered.contains("backed up under .maestro/backups/"),
@@ -211,7 +284,53 @@ mod tests {
 
     #[test]
     fn dry_run_is_quiet_when_nothing_refreshes() {
-        let outcome = SyncOutcome::DryRun(vec![folder("a", FolderDecision::Skip)]);
+        let outcome = SyncOutcome::DryRun {
+            folders: vec![folder("a", FolderDecision::Skip)],
+            mirrors: vec![mirror("CLAUDE.md", MirrorBlockFate::Current)],
+        };
         assert!(!render(&outcome).contains("backed up under"));
+    }
+
+    #[test]
+    fn dry_run_lists_and_warns_for_a_drifted_mirror_block() {
+        let outcome = SyncOutcome::DryRun {
+            folders: vec![folder("a", FolderDecision::Skip)],
+            mirrors: vec![
+                mirror("CLAUDE.md", MirrorBlockFate::Refresh),
+                mirror("AGENTS.md", MirrorBlockFate::Unmanaged),
+            ],
+        };
+        let rendered = render(&outcome);
+        assert!(rendered.contains("CLAUDE.md (mirror block)"), "{rendered}");
+        assert!(
+            rendered.contains("backed up under .maestro/backups/"),
+            "a drifted mirror block alone should still pre-warn: {rendered}"
+        );
+        assert!(
+            !rendered.contains("AGENTS.md"),
+            "an unmanaged mirror file is never mentioned: {rendered}"
+        );
+    }
+
+    #[test]
+    fn applied_reports_refreshed_mirror_blocks_with_backup() {
+        let outcome = SyncOutcome::Applied {
+            preview: vec![folder("a", FolderDecision::Skip)],
+            report: ExtractReport::default(),
+            mirrors: vec![MirrorBlockSync {
+                relative_path: "CLAUDE.md".to_string(),
+                fate: MirrorBlockFate::Refresh,
+                backup_path: Some(std::path::PathBuf::from(
+                    ".maestro/backups/x-sync/CLAUDE.md",
+                )),
+            }],
+        };
+        let rendered = render(&outcome);
+        assert!(rendered.contains("mirror blocks resynced:"), "{rendered}");
+        assert!(rendered.contains("CLAUDE.md"), "{rendered}");
+        assert!(
+            rendered.contains("CLAUDE.md -> .maestro/backups/x-sync/CLAUDE.md"),
+            "the refreshed mirror's backup is listed: {rendered}"
+        );
     }
 }

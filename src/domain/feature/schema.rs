@@ -177,6 +177,21 @@ impl FeatureStatus {
     pub fn is_terminal(&self) -> bool {
         matches!(self, Self::Shipped | Self::Cancelled)
     }
+
+    /// Parse a canonical label back into a status -- the inverse of
+    /// [`Self::as_str`], so raw-status readers (e.g. the doctor walking card
+    /// envelopes) share this enum's predicates instead of re-deriving them.
+    pub fn parse(label: &str) -> Option<Self> {
+        [
+            Self::Proposed,
+            Self::Ready,
+            Self::InProgress,
+            Self::Shipped,
+            Self::Cancelled,
+        ]
+        .into_iter()
+        .find(|status| status.as_str() == label)
+    }
 }
 
 /// Legacy append-only audit trail shape used by migration.

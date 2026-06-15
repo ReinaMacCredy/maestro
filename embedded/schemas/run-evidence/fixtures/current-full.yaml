@@ -1,0 +1,13 @@
+schema_version: maestro.run_evidence.v1
+session_id: cli-2026-06-12
+agent: claude
+task_id: card-dd44ee
+start_at: 2026-06-12T00:00:00.000Z
+end_at: 2026-06-12T00:02:00.000Z
+start_commit: 0000000000000000000000000000000000000000
+end_commit: 0000000000000000000000000000000000000000
+tools_used:
+  Bash: 3
+  Edit: 1
+human_interventions: 1
+duration_seconds: 120

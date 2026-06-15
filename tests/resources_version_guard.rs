@@ -1,16 +1,24 @@
 //! CI bump guard for shipped, version-gated resources.
 //!
 //! A committed `(group, name, version, tree-hash)` table for every resource that
-//! extracts under the shared version gate: skills, the hook recorder script, and
-//! the harness protocol. The test recomputes a hash over each resource's files
+//! extracts under the shared version gate (skills, the hook recorder script, the
+//! harness protocol) plus the embedded schema contract packs, whose recorded
+//! version is the family's current schema stamp. The test recomputes a hash over
+//! each resource's files
 //! (every relative path and bytes, in canonical sorted order) and asserts it
 //! matches the recorded one. Editing any shipped resource turns this red, forcing
 //! you to *notice* the edit and re-record the table (and, when the change is
 //! user-visible, bump its version per `AGENTS.md`). It enforces acknowledgement,
 //! not a mechanical bump.
 
+use include_dir::{Dir, include_dir};
 use maestro::domain::skills::catalog::skills;
 use maestro::foundation::core::hash::sha256_hex;
+
+/// The shipped schema contract packs (WS5 / D6.2-B), one directory per artifact
+/// family. Included here directly, independent of the runtime catalog, so the
+/// guard never couples to kernel internals.
+static SCHEMAS_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/embedded/schemas");
 
 /// The shipped hook recorder script (its `# maestro:hook-version:` comment is
 /// the version marker the recorder and installer gate on).
@@ -20,31 +28,17 @@ const RECORD_SH: &str = include_str!("../embedded/hooks/record.sh");
 const HARNESS_MD: &str = include_str!("../embedded/harness/HARNESS.md");
 const RECOVERY_MD: &str = include_str!("../embedded/harness/RECOVERY.md");
 
+/// The shipped code playbook tree (its `PLAYBOOK.md` frontmatter `version:` is
+/// the single gate marker for the whole folder).
+static PLAYBOOK_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/embedded/playbook");
+
 /// `(group, name, shipped version, sha256 tree-hash of the resource files)`.
-const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 10] = [
+const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 17] = [
     (
         "skill",
-        "maestro-task",
-        "1.9.4",
-        "cadf11b9bf4361002715de92dbef53a5a0d1a2a3d1aba5e938703756813e46db",
-    ),
-    (
-        "skill",
-        "maestro-feature",
-        "1.8.0",
-        "85c3bbefb6e76ade9298389b29e4b943bc09b3a17eeb24764eb5361e93874466",
-    ),
-    (
-        "skill",
-        "qa-baseline",
-        "1.1.2",
-        "f2574e5cdb57e29986683dfd1a8329528b5849cb3b0815f0648dd00863cea21e",
-    ),
-    (
-        "skill",
-        "qa-slice",
-        "1.1.2",
-        "d8b41fd1aa14b4954e23e968a88ebfdf7f536ca64e3291cf1ee65379a7a03274",
+        "maestro-card",
+        "1.11.0",
+        "06f12c594d39e377493d8b42499ee48c7df1e5a9eaade4d0b133a527ab7def82",
     ),
     (
         "skill",
@@ -54,35 +48,125 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 10] = [
     ),
     (
         "skill",
-        "maestro-verify",
-        "1.5.2",
-        "f25e70497b8bc324edd1612aa2044a08a5a69feea316211d749f0cfbf79acf51",
-    ),
-    (
-        "skill",
         "maestro-design",
-        "1.6.0",
-        "49b6cbb569f613f1ad9499636d1ee3f2f2acd1248117d8e262693e72ca60f5a6",
+        "1.15.0",
+        "b62d17a29ab5bc1cacc9ab7e2e3747b45df2c1f77d2b497ad8402b5b76fe8e5b",
     ),
     (
         "skill",
         "maestro-audit",
-        "1.0.0",
-        "d41877a7cf852db156ee4cbec40f9104e60d2a7b58a3b3c3d66d82af89bb905a",
+        "1.3.0",
+        "5072f747b73c73d5deba6b754a216224f823fb59857e5351e4e7dbc46242fe17",
     ),
     (
         "hook",
         "record.sh",
-        "1.0.0",
-        "9f002dc8744763598966c99f9af7f5713535341aeca0935f63157a69986422b7",
+        "1.0.2",
+        "c1a75218747b8f58ffcd216aa8177d68fffd83376ff82dcf2eb32e40ea2d2fe7",
     ),
     (
         "harness",
         "HARNESS.md",
-        "1.8.2",
-        "83b12f3385e502e27e616d00c97803ddcd4cf8e0f08b429741f3539383043be4",
+        "1.15.0",
+        "ddb1ba240bdbf4552f15ed639afcb0d48233426586034c0467e03c49f3048cd5",
+    ),
+    (
+        "playbook",
+        "PLAYBOOK.md",
+        "1.0.0",
+        "4cbda4f6316dd076d0c8956ba436b7502c5d26d426392e8558efb3162a1a32ce",
+    ),
+    (
+        "schema",
+        "backlog",
+        "maestro.card.v1",
+        "fda5556f0f296a95d3e9b6213fa2f2dc72f79d59efb5326d6ff4c325abebd663",
+    ),
+    (
+        "schema",
+        "card",
+        "maestro.card.v1",
+        "0d4e24fb3a74575dfa585be641c076ee6de50c3d3b12b7c24f655acd91e7aa14",
+    ),
+    (
+        "schema",
+        "decision",
+        "maestro.card.v1",
+        "15bae87c3fd9b7200454078480e1f14cd06a79d3064e48c15eb12ce42de916f7",
+    ),
+    (
+        "schema",
+        "feature",
+        "maestro.feature.v2",
+        "aa696177f2727c94b339b8fcbb45ba3b10beec5b2552622570278149efea159d",
+    ),
+    (
+        "schema",
+        "harness",
+        "maestro.harness.v1",
+        "a570dbd3acad8e22ec644f17c0e5602e2440f0b0d247be73bd6125cd25415cf4",
+    ),
+    (
+        "schema",
+        "install",
+        "maestro.install_lock.v1",
+        "2f0f9979f49f39583250f5b37be1f6035394f24d02ac35a34489df0fab9954ef",
+    ),
+    (
+        "schema",
+        "proof",
+        "maestro.verification.v1",
+        "5122fac7ed7f4e40fcd122eb8e47da895d58a851fa62e47443414da64f799a6a",
+    ),
+    (
+        "schema",
+        "run-event",
+        "maestro.event.v1",
+        "3ff6c384434913f27635d4ed1419f13adca6d38253a88bb553548b7dd32ffddc",
+    ),
+    (
+        "schema",
+        "run-evidence",
+        "maestro.run_evidence.v1",
+        "66bae6cc9fe317881dc0dfa27793108b9ea0f37609462fe60b039e0328119d98",
+    ),
+    (
+        "schema",
+        "task",
+        "maestro.task.v2",
+        "4cd0e80ef00d83f69df3a266211cf316f1215e57f37f5a3a36057151f13df9a0",
     ),
 ];
+
+/// Collect every file under an embedded dir, with paths relative to `root`.
+fn collect_embedded_files(
+    dir: &'static Dir<'static>,
+    root: &'static Dir<'static>,
+) -> Vec<(&'static str, &'static [u8])> {
+    let mut files: Vec<(&'static str, &'static [u8])> = dir
+        .files()
+        .map(|file| {
+            let relative = file
+                .path()
+                .strip_prefix(root.path())
+                .ok()
+                .and_then(|path| path.to_str())
+                .expect("invariant: an embedded file lives under its root with a UTF-8 path");
+            (relative, file.contents())
+        })
+        .collect();
+    for subdir in dir.dirs() {
+        files.extend(collect_embedded_files(subdir, root));
+    }
+    files
+}
+
+/// The embedded schema pack directory for one artifact family.
+fn schema_pack_dir(family: &str) -> Option<&'static Dir<'static>> {
+    SCHEMAS_DIR
+        .dirs()
+        .find(|dir| dir.path().file_name().and_then(|name| name.to_str()) == Some(family))
+}
 
 /// Hash a resource's files: each `(relative path, bytes)`, sorted by path, each
 /// length-prefixed so no separator can be forged by a path or byte payload (it
@@ -115,6 +199,10 @@ fn shipped_resource_trees_and_versions_match_the_recorded_guard() {
                 let files: Vec<(&str, &[u8])> = skill
                     .files
                     .iter()
+                    // The generated reference/cli.md regenerates on any CLI
+                    // change and has its own freshness gate; hashing it here
+                    // would force a version bump for every flag edit.
+                    .filter(|file| file.relative_path != "reference/cli.md")
                     .map(|file| (file.relative_path, file.contents))
                     .collect();
                 (
@@ -133,6 +221,32 @@ fn shipped_resource_trees_and_versions_match_the_recorded_guard() {
                 ]),
                 HARNESS_MD.contains(&format!("version: {version}")),
             ),
+            "playbook" => {
+                let files = collect_embedded_files(&PLAYBOOK_DIR, &PLAYBOOK_DIR);
+                let anchor = files
+                    .iter()
+                    .find(|(path, _)| *path == name)
+                    .map(|(_, contents)| String::from_utf8_lossy(contents))
+                    .unwrap_or_else(|| panic!("playbook is missing {name}"));
+                (
+                    tree_hash(&files),
+                    anchor.contains(&format!("version: {version}")),
+                )
+            }
+            "schema" => {
+                let pack = schema_pack_dir(name)
+                    .unwrap_or_else(|| panic!("recorded schema pack {name} is no longer shipped"));
+                let files = collect_embedded_files(pack, pack);
+                let current = files
+                    .iter()
+                    .find(|(path, _)| *path == "current.yaml")
+                    .map(|(_, contents)| String::from_utf8_lossy(contents))
+                    .unwrap_or_else(|| panic!("schema pack {name} is missing current.yaml"));
+                (
+                    tree_hash(&files),
+                    current.contains(&format!("schema_version: {version}")),
+                )
+            }
             other => panic!("unknown resource group {other} in RESOURCE_VERSION_GUARD"),
         };
 
@@ -157,10 +271,32 @@ fn every_recorded_guard_entry_maps_to_a_shipped_resource() {
                 "RESOURCE_VERSION_GUARD lists skill {name}, which is no longer shipped"
             ),
             // The hook script and harness protocol are fixed single-file
-            // resources Maestro always ships.
-            "hook" | "harness" => {}
+            // resources Maestro always ships; the playbook is a fixed folder it
+            // always ships.
+            "hook" | "harness" | "playbook" => {}
+            "schema" => assert!(
+                schema_pack_dir(name).is_some(),
+                "RESOURCE_VERSION_GUARD lists schema pack {name}, which is no longer shipped"
+            ),
             other => panic!("unknown resource group {other} in RESOURCE_VERSION_GUARD"),
         }
+    }
+}
+
+#[test]
+fn every_shipped_schema_pack_is_recorded_in_the_guard() {
+    for dir in SCHEMAS_DIR.dirs() {
+        let family = dir
+            .path()
+            .file_name()
+            .and_then(|name| name.to_str())
+            .expect("invariant: an embedded schema pack directory has a UTF-8 name");
+        assert!(
+            RESOURCE_VERSION_GUARD
+                .iter()
+                .any(|(group, name, _, _)| *group == "schema" && *name == family),
+            "shipped schema pack {family} is missing from RESOURCE_VERSION_GUARD",
+        );
     }
 }
 

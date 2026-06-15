@@ -61,7 +61,7 @@ fn init_and_author(repo: &Path, id: &str, title: &str) {
 }
 
 fn feature_dir(repo: &Path, id: &str) -> std::path::PathBuf {
-    repo.join(".maestro/features").join(id)
+    repo.join(".maestro/cards").join(id)
 }
 
 fn write_baseline(repo: &Path, id: &str, position: usize, scenario_ids: &[&str]) {
@@ -144,14 +144,23 @@ fn feature_qa_gates_via_cli() {
         stderr.contains("qa-baseline"),
         "accept should name the missing baseline: {stderr}"
     );
-    assert!(stderr.contains("skill: qa-baseline"), "{stderr}");
     assert!(
-        stderr.contains("target: .maestro/features/report-builder/qa.md"),
+        stderr.contains("skill: maestro-card (qa-baseline)"),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains("target: .maestro/cards/report-builder/qa.md"),
         "{stderr}"
     );
     assert!(
         stderr.contains("retry: maestro feature accept report-builder"),
         "{stderr}"
+    );
+    assert!(
+        stderr.contains(
+            "skip (no behavioral surface): maestro feature accept report-builder --qa none --reason"
+        ),
+        "accept should surface the --qa none skip path: {stderr}"
     );
 
     write_baseline(repo, "report-builder", 0, &["bl-001"]);
@@ -170,9 +179,12 @@ fn feature_qa_gates_via_cli() {
         "ship should name the uncovered scenario: {stderr}"
     );
     assert!(stderr.contains("coverage incomplete"));
-    assert!(stderr.contains("skill: qa-slice"), "{stderr}");
     assert!(
-        stderr.contains("target: .maestro/features/report-builder/qa.md"),
+        stderr.contains("skill: maestro-card (qa-slice)"),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains("target: .maestro/cards/report-builder/qa.md"),
         "{stderr}"
     );
     assert!(
@@ -219,7 +231,10 @@ fn feature_qa_gates_via_cli() {
         stderr.contains("stale"),
         "behavioral amend should stale the baseline: {stderr}"
     );
-    assert!(stderr.contains("skill: qa-baseline"), "{stderr}");
+    assert!(
+        stderr.contains("skill: maestro-card (qa-baseline)"),
+        "{stderr}"
+    );
 
     // Refresh the baseline past the amend and add the new scenario; coverage now
     // demands a slice for [bl-002].
@@ -334,6 +349,15 @@ fn qa_none_accept_skips_gates_until_a_behavioral_amend_requires_a_fresh_declarat
     assert!(shipped.contains("shipped config-cleanup"), "{shipped}");
     assert!(
         shipped.contains("qa: none (still config-only after amend review)"),
+        "{shipped}"
+    );
+    assert!(
+        shipped.contains("retro: anything to make a permanent rule?"),
+        "{shipped}"
+    );
+    assert!(
+        shipped
+            .contains("record it: maestro harness propose --title \"<rule>\" --evidence \"<why>\""),
         "{shipped}"
     );
 }

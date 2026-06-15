@@ -4,7 +4,6 @@ use std::fs;
 
 use maestro::domain::harness::backlog;
 use maestro::domain::harness::schema::{BacklogConfig, BacklogItem, HistoryEntry};
-use maestro::foundation::core::error::MaestroError;
 use maestro::foundation::core::paths::MaestroPaths;
 use support::TestTempDir;
 
@@ -52,10 +51,14 @@ fn refresh_assigns_stable_ids_and_deduplicates_by_key() {
     .expect("invariant: backlog refresh should succeed");
 
     assert_eq!(backlog.items.len(), 2);
-    assert_eq!(backlog.items[0].id, "hb-001");
-    assert_eq!(backlog.items[0].source, "source-a");
-    assert_eq!(backlog.items[1].id, "hb-002");
-    assert_eq!(backlog.items[1].source, "source-b");
+    for item in &backlog.items {
+        assert!(
+            item.id.starts_with("idea-"),
+            "merge-minted ideas use typed slug ids: {}",
+            item.id
+        );
+    }
+    assert_ne!(backlog.items[0].id, backlog.items[1].id);
 
     let refreshed = backlog::refresh(
         &paths,
@@ -66,11 +69,20 @@ fn refresh_assigns_stable_ids_and_deduplicates_by_key() {
     )
     .expect("invariant: duplicate refresh should succeed");
 
-    assert_eq!(refreshed.items, backlog.items);
+    // The fingerprint match keeps each item's minted id stable across refreshes.
+    let ids = |items: &[BacklogItem]| {
+        let mut pairs: Vec<(String, String)> = items
+            .iter()
+            .map(|item| (item.source.clone(), item.id.clone()))
+            .collect();
+        pairs.sort();
+        pairs
+    };
+    assert_eq!(ids(&refreshed.items), ids(&backlog.items));
 }
 
 #[test]
-fn refresh_preserves_existing_ids_and_uses_next_number() {
+fn refresh_preserves_existing_ids_and_mints_typed_ids() {
     let temp = TestTempDir::new("maestro-harness-backlog");
     let paths = paths_for(&temp);
     let mut existing = BacklogConfig::empty();
@@ -87,8 +99,22 @@ fn refresh_preserves_existing_ids_and_uses_next_number() {
     )
     .expect("invariant: backlog refresh should succeed");
 
-    assert_eq!(refreshed.items[0].id, "hb-007");
-    assert_eq!(refreshed.items[1].id, "hb-008");
+    let existing = refreshed
+        .items
+        .iter()
+        .find(|item| item.source == "existing")
+        .expect("invariant: existing item survives the refresh");
+    assert_eq!(existing.id, "hb-007", "a pre-minted id is never rewritten");
+    let minted = refreshed
+        .items
+        .iter()
+        .find(|item| item.source == "new")
+        .expect("invariant: new proposal lands");
+    assert!(
+        minted.id.starts_with("idea-"),
+        "new proposals mint typed slug ids: {}",
+        minted.id
+    );
 }
 
 #[test]
@@ -250,41 +276,21 @@ fn refresh_does_not_apply_harness_config_changes() {
 }
 
 #[test]
-fn load_rejects_backlog_schema_mismatch() {
+fn load_ignores_legacy_backlog_yaml() {
     let temp = TestTempDir::new("maestro-harness-backlog");
     let paths = paths_for(&temp);
+    // A migration leftover, any schema: the card store is the only store (D7),
+    // so the legacy file is never read and never an error.
     fs::write(
         paths.harness_dir().join("backlog.yaml"),
-        "schema_version: maestro.backlog.v0\nitems: []\n",
+        "schema_version: maestro.backlog.v0\nitems:\n  - id: hb-001\n    title: ghost\n",
     )
     .expect("invariant: backlog should be writable");
 
-    let error = backlog::load(&paths).expect_err("invariant: schema mismatch should fail");
+    let backlog = backlog::load(&paths).expect("invariant: legacy file must not break the load");
 
-    assert!(error.to_string().contains("schema mismatch"));
-    // The mismatch is the typed error, so it carries the actionable doctor hint
-    // (parity with the feature/decision stores) instead of a bare bail.
-    let hint = error
-        .downcast_ref::<MaestroError>()
-        .and_then(MaestroError::hint);
-    assert_eq!(hint.as_deref(), Some("run maestro doctor"));
-}
-
-#[cfg(unix)]
-#[test]
-fn refresh_rejects_symlinked_backlog_paths() {
-    let temp = TestTempDir::new("maestro-harness-backlog");
-    let external = TestTempDir::new("maestro-harness-backlog-external");
-    let paths = MaestroPaths::new(temp.path());
-    fs::create_dir_all(paths.maestro_dir()).expect("invariant: maestro dir should be creatable");
-    std::os::unix::fs::symlink(external.path(), paths.harness_dir())
-        .expect("invariant: symlinked harness dir should be creatable");
-
-    let error = backlog::refresh(
-        &paths,
-        vec![proposal("source", "missing_skill", "Add skill")],
-    )
-    .expect_err("invariant: symlinked backlog path should fail");
-
-    assert!(error.to_string().contains("symlink"));
+    assert!(
+        backlog.items.is_empty(),
+        "items come from idea cards only, never backlog.yaml"
+    );
 }

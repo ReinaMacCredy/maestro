@@ -1,0 +1,7 @@
+family: run-event
+read:
+  - maestro.event.v1
+write: maestro.event.v1
+legacy: []
+# Event logs are append-only and never rewritten; readers tolerate and skip
+# unrecognized lines per-line instead of failing the whole log.

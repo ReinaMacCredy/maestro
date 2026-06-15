@@ -665,8 +665,6 @@ fn uninstall_retries_removing_state_after_mirrors_were_removed() {
     );
     fs::write(temp_dir.path().join(".codex/hooks.json"), "{}\n")
         .expect("invariant: restored hooks json should be writable");
-    fs::remove_file(temp_dir.path().join(".codex/skills"))
-        .expect("invariant: removed skill symlink should be removable");
 
     let retry = maestro(&["uninstall", "--agent", "codex"], temp_dir.path());
 

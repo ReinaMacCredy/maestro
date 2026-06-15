@@ -1,6 +1,6 @@
 //! Task verification operation.
 
-use anyhow::Result;
+use anyhow::{Result, bail};
 
 use super::{TaskVerifyApplication, TaskVerifyUnappliedReason, feature_prepare};
 use crate::domain::{proof, task};
@@ -42,6 +42,13 @@ pub(crate) fn verify_task(
     actor: &str,
 ) -> Result<TaskVerifyResult> {
     let mut handle = task::load_task_for_update(&paths.tasks_dir(), task_id)?;
+    if handle.task().state != task::TaskState::NeedsVerification {
+        bail!(
+            "cannot verify task {} — state is {}; expected needs_verification",
+            handle.task().id,
+            handle.task().state.as_str()
+        );
+    }
     let verified_at = utc_now_timestamp();
     let attempt = verify_loaded_task(paths, &mut handle, actor, &verified_at)?;
     let verification = proof::TaskVerification::from_report(&attempt.report);

@@ -1,0 +1,89 @@
+schema_version: maestro.card.v1
+id: task-maestro-sync-resyncs-the-claude-md-f2f7
+type: task
+title: maestro sync resyncs the CLAUDE.md/AGENTS.md managed blocks (D2)
+status: verified
+parent: code-playbook-styleguides-surfaced-to-agents
+claimed_by: claude#s81914-1781446757246856000
+claimed_at: 2026-06-14T14:19:17.247Z
+created_at: 2026-06-14T14:11:01.831Z
+updated_at: 2026-06-14T14:26:49.399Z
+extra:
+  schema_version: maestro.task.v2
+  claims:
+  - maestro sync resyncs a drifted CLAUDE.md/AGENTS.md managed block in place, restoring shipped content and backing up the pre-sync copy under .maestro/backups/
+  - user content outside the markers is preserved and a file without the markers is left untouched
+  - 'on a freshly installed repo the mirror-block resync is a pure no-op: no write and no backup'
+  - tests/sync_integration.rs passes 8/8 including the three new mirror-block tests
+  covers:
+  - ac-2
+  state_history:
+  - state: draft
+    at: 2026-06-14T14:11:01.831Z
+    by: maestro
+  - state: exploring
+    at: 2026-06-14T14:11:01.854Z
+    by: maestro
+  - state: ready
+    at: 2026-06-14T14:11:01.900Z
+    by: maestro
+  - state: needs_verification
+    at: 2026-06-14T14:25:22.531Z
+    by: maestro
+    summary: maestro sync now resyncs the CLAUDE.md/AGENTS.md managed mirror blocks by content (marker-gated, drift backed up, no-op when current, markers-absent files untouched); kept narrow in mirrors.rs with no install-lock coupling. ac-2.
+    claims:
+    - maestro sync resyncs a drifted CLAUDE.md/AGENTS.md managed block in place, restoring shipped content and backing up the pre-sync copy under .maestro/backups/
+    - user content outside the markers is preserved and a file without the markers is left untouched
+    - 'on a freshly installed repo the mirror-block resync is a pure no-op: no write and no backup'
+    - tests/sync_integration.rs passes 8/8 including the three new mirror-block tests
+  - state: needs_verification
+    at: 2026-06-14T14:25:22.544Z
+    by: maestro
+    summary: 'verification failed: verify command failed: cargo test (exit 101)'
+    open_items:
+    - 'verify command failed: cargo test (exit 101)'
+  - state: verified
+    at: 2026-06-14T14:26:49.399Z
+    by: maestro
+    summary: 'verification passed: 4 claim(s), 1 proof source(s)'
+  lane: normal
+  risk: medium
+  verification:
+    status: passed
+    verified_at: 2026-06-14T14:26:49.399Z
+    verified_commit: 57c6449eb9b7b8c3f56eb9deeb07b6ebaef790dc
+    verified_by_run: .maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
+    contract_hash: cd513fa1b36a75324a355aa7be7bddb66814398be957ffbafad72c3bf98debab
+    claim_checks:
+    - claim: maestro sync resyncs a drifted CLAUDE.md/AGENTS.md managed block in place, restoring shipped content and backing up the pre-sync copy under .maestro/backups/
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
+    - claim: user content outside the markers is preserved and a file without the markers is left untouched
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
+    - claim: 'on a freshly installed repo the mirror-block resync is a pure no-op: no write and no backup'
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
+    - claim: tests/sync_integration.rs passes 8/8 including the three new mirror-block tests
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
+    commands:
+    - cmd: cargo build
+      exit_code: 0
+      duration_ms: 3220
+    - cmd: cargo test
+      exit_code: 0
+      duration_ms: 136753
+    - cmd: cargo clippy -- -D warnings
+      exit_code: 0
+      duration_ms: 4197
+    proof_sources:
+    - kind: event
+      path: .maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
+      hash: b666da5f1b61ad24b39af1123d7968d28896fc3043f6f8836f0102f04c1b8378
+  acceptance_locked: true
+  acceptance:
+    checks:
+    - 'in an installed repo, hand-edit the maestro managed block in CLAUDE.md (and add user text outside the markers), run `maestro sync`; the block is restored to shipped content, user text outside the markers is preserved, and the pre-sync copy is backed up under .maestro/backups/. A file lacking the markers is left untouched (sync only refreshes blocks that already exist). No-op guard: on a freshly installed repo (block already matches shipped), `maestro sync` writes nothing and backs up nothing for the mirror blocks (this feature does not change the block bodies, only HARNESS.md).'
+    locked_by: maestro
+    locked_at: 2026-06-14T14:11:01.900Z

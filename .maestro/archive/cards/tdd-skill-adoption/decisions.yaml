@@ -1,0 +1,51 @@
+- schema_version: maestro.card.v1
+  id: dec-tdd-content-placement-fold-into-maestro-660c
+  type: decision
+  title: 'TDD content placement: fold into maestro-card reference'
+  status: superseded
+  parent: tdd-skill-adoption
+  created_at: 2026-06-12T10:57:10.333Z
+  updated_at: 2026-06-12T10:57:18.864Z
+  description: mattpocock's tdd skill could be bundled as a new embedded skill, folded into maestro-card, or left user-level. Bundle today is 4 harness-driving skills; work.md implement loop is methodology-agnostic; ~/.claude/skills/tdd already exists as a real dir so a new bundled 'tdd' skill would collide on install.
+  extra:
+    locked_at: 2026-06-12T10:57:18.864Z
+    decision: Fold a single condensed, maestro-adapted tdd.md into embedded/skills/maestro-card/reference/, MIT-attributed. SKILL.md gains one route line; work.md implement lane gains a pointer. The tdd planning step is replaced by the card's locked acceptance criteria; red-green cycle evidence feeds task --claim/--proof.
+    superseded_by: dec-tdd-fidelity-full-6-file-verbatim-port-d59f
+    preview: 'maestro-card/reference/tdd.md: planning = card acceptance criteria; RED/GREEN evidence = task --claim/--proof text'
+    rejected:
+    - 'New bundled skill (embedded/skills/tdd/): broadens the bundle from harness-driving to general methodology, costs catalog.rs registration, and collides with the existing real ~/.claude/skills/tdd dir on install'
+    - 'Don''t bundle (user-level only): zero maestro cost but other repos/machines get nothing from maestro install; loses the natural proof-gate integration'
+- schema_version: maestro.card.v1
+  id: dec-tdd-trigger-default-test-first-for-b8df
+  type: decision
+  title: 'TDD trigger: default test-first for implement cards'
+  status: locked
+  parent: tdd-skill-adoption
+  created_at: 2026-06-12T11:00:18.696Z
+  updated_at: 2026-06-12T11:00:28.924Z
+  description: 'Once tdd.md exists in maestro-card/reference/, when does an agent use it? Pure opt-in references rarely fire; a hard rule for every card is wrong for spikes and renames. The card''s --check field gives a mechanical trigger: it describes observable behavior, which is exactly what a red->green test proves.'
+  extra:
+    locked_at: 2026-06-12T11:00:28.924Z
+    decision: 'Default test-first: work.md instructs agents to work implement-lane cards test-first per reference/tdd.md whenever the card''s --check is observable/testable behavior. Non-testable work (explore/spike lanes, renames, chores without a testable surface) skips with a one-line reason in the card notes. Red->green output becomes the --proof text.'
+    preview: agent claims implement card with --check 'ship fails on stale qa.md' -> failing test (RED) -> minimal pass (GREEN) -> repeat -> proof carries red->green evidence; explore card skips with noted reason
+    rejected:
+    - 'Pure opt-in (only when user/card asks): zero behavior change but the reference would rarely fire; defeats the point of bundling'
+    - 'Hard rule for every card: forces failing tests onto spikes and renames; produces fake tests or blocks'
+- schema_version: maestro.card.v1
+  id: dec-tdd-fidelity-full-6-file-verbatim-port-d59f
+  type: decision
+  title: 'TDD fidelity: full 6-file verbatim port'
+  status: locked
+  parent: tdd-skill-adoption
+  created_at: 2026-06-12T11:02:17.360Z
+  updated_at: 2026-06-12T11:02:28.870Z
+  description: 'User direction: maestro''s copy should be just like the original skill, not a condensed house-style rewrite. The original''s progressive disclosure (short workflow + 5 satellite files) is part of its design. Supersedes the ''single condensed tdd.md'' clause of the placement decision; the placement itself (fold into maestro-card/reference/) stands.'
+  extra:
+    locked_at: 2026-06-12T11:02:28.870Z
+    decision: 'Port the original skill at full fidelity into maestro-card: reference/tdd.md carries the original SKILL.md body (philosophy, horizontal-slice anti-pattern, workflow, per-cycle checklist) with an MIT attribution header; reference/tdd/ carries tests.md, mocking.md, deep-modules.md, interface-design.md, refactoring.md verbatim with links adjusted. Exactly two surgical swaps in tdd.md: the planning step defers to the card''s locked acceptance criteria instead of re-asking the user, and red->green cycle evidence is recorded as task --claim/--proof text. Placement from the superseded decision stands: fold into maestro-card, no new catalog.rs entry, user-level ~/.claude/skills/tdd untouched.'
+    supersedes:
+    - dec-tdd-content-placement-fold-into-maestro-660c
+    preview: reference/tdd.md (original body + 2 maestro swaps) + reference/tdd/{tests,mocking,deep-modules,interface-design,refactoring}.md verbatim
+    rejected:
+    - 'Single faithful file with satellites inlined: loses the original''s progressive-disclosure structure and link graph'
+    - 'Condensed house-style rewrite (the superseded lean): user explicitly wants it just like the skill they sent'

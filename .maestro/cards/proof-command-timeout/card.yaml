@@ -1,0 +1,26 @@
+schema_version: maestro.card.v1
+id: proof-command-timeout
+type: feature
+title: proof command timeout
+status: proposed
+created_at: 2026-06-08T07:11:06.136Z
+updated_at: 2026-06-08T07:16:40.955Z
+description: 'maestro feature verify --prove runs harness verify commands via a blocking sh -c .status() call with no timeout (src/domain/proof/commands.rs:26-29); a command that hangs (stdin wait, watch process, wedged test runner) blocks verification forever with no recovery. No timeout/kill exists anywhere in src/domain/proof, src/domain/run, or src/foundation -- the only timeout is codex.timeout for the hook recorder (event.rs:27). Origin: audit backlog hb-012; idea source oh-my-openagent comment-checker (30s + SIGTERM->grace->SIGKILL).'
+extra:
+  schema_version: maestro.feature.v2
+  id: proof-command-timeout
+  title: proof command timeout
+  description: 'maestro feature verify --prove runs harness verify commands via a blocking sh -c .status() call with no timeout (src/domain/proof/commands.rs:26-29); a command that hangs (stdin wait, watch process, wedged test runner) blocks verification forever with no recovery. No timeout/kill exists anywhere in src/domain/proof, src/domain/run, or src/foundation -- the only timeout is codex.timeout for the hook recorder (event.rs:27). Origin: audit backlog hb-012; idea source oh-my-openagent comment-checker (30s + SIGTERM->grace->SIGKILL).'
+  status: proposed
+  created_at: 2026-06-08T07:11:06.136Z
+  updated_at: 2026-06-08T07:16:40.955Z
+  affected_areas:
+  - src/domain/proof/commands.rs (bounded wait + process-group spawn/kill)
+  - src/domain/harness/schema.rs (optional verify timeout field + default)
+  - src/domain/proof/verify_task.rs (124 timeout message on the existing failure path)
+  - tests
+  acceptance:
+  - Proof verify commands run under a cutoff that defaults to 600s and is overridable per repo via an optional harness.yml stack field; when unset the cutoff is 600s and ON.
+  - A verify command that exceeds the cutoff is killed together with its whole process group (no orphaned cargo/test children survive), recorded with exit_code 124 and a 'timed out after <N>s' message, and flows through the existing exit_code != 0 path so verify fails closed.
+  - 'A verify command that finishes within the cutoff behaves exactly as today: same exit_code and duration_ms, no timeout artifact.'
+  - 'Real case: a harness verify command that sleeps longer than a small configured cutoff makes ''maestro feature verify --prove'' terminate it and report a timeout failure at about the cutoff, instead of hanging.'

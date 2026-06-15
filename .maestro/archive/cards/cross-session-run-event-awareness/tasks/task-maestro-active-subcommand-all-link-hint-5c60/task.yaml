@@ -1,0 +1,81 @@
+schema_version: maestro.card.v1
+id: task-maestro-active-subcommand-all-link-hint-5c60
+type: task
+title: maestro active subcommand (+ --all, link hint)
+status: verified
+parent: cross-session-run-event-awareness
+claimed_by: claude#s28080-1781374098940575000
+claimed_at: 2026-06-13T18:08:18.940Z
+created_at: 2026-06-13T17:05:47.690Z
+updated_at: 2026-06-13T18:26:34.547Z
+extra:
+  schema_version: maestro.task.v2
+  claims:
+  - maestro active renders one row per live session with mode, bound-card title+status, type-aware progress, age, and presence label, marking the running session you
+  - active hides stale sessions by default and reveals them under --all tagged [stale Nm]; a recent Stop reads [waiting], not excluded
+  - active prints a copy-pasteable 'maestro link add <your-card> <their-card>' hint naming the peer card id and creates no related edge (pull-only)
+  covers:
+  - ac-1
+  - ac-2
+  - ac-5
+  - ac-7
+  state_history:
+  - state: draft
+    at: 2026-06-13T17:05:47.690Z
+    by: maestro
+  - state: exploring
+    at: 2026-06-13T17:05:47.715Z
+    by: maestro
+  - state: ready
+    at: 2026-06-13T17:05:47.836Z
+    by: maestro
+  - state: needs_verification
+    at: 2026-06-13T18:26:34.529Z
+    by: maestro
+    summary: 'Add ''maestro active [--all]'' cross-session awareness verb: run-event liveness rows enriched from the card store with type-aware progress, plus a copy-pasteable link hint. Pull-only.'
+    claims:
+    - maestro active renders one row per live session with mode, bound-card title+status, type-aware progress, age, and presence label, marking the running session you
+    - active hides stale sessions by default and reveals them under --all tagged [stale Nm]; a recent Stop reads [waiting], not excluded
+    - active prints a copy-pasteable 'maestro link add <your-card> <their-card>' hint naming the peer card id and creates no related edge (pull-only)
+  - state: verified
+    at: 2026-06-13T18:26:34.547Z
+    by: maestro
+    summary: 'verification passed: 3 claim(s), 1 proof source(s)'
+  lane: normal
+  risk: medium
+  verification:
+    status: passed
+    verified_at: 2026-06-13T18:26:34.547Z
+    verified_commit: 5de362335e024012c0d4b4c09ff57d2a65e05cef
+    verified_by_run: .maestro/runs/df536043-8689-4054-89d6-f29d1590ba93/events.jsonl
+    contract_hash: a696308ddc47bf87bb4cbb4058cfbe4fa51203ade2e3031c61da9b1f14553161
+    claim_checks:
+    - claim: maestro active renders one row per live session with mode, bound-card title+status, type-aware progress, age, and presence label, marking the running session you
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/df536043-8689-4054-89d6-f29d1590ba93/events.jsonl
+    - claim: active hides stale sessions by default and reveals them under --all tagged [stale Nm]; a recent Stop reads [waiting], not excluded
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/df536043-8689-4054-89d6-f29d1590ba93/events.jsonl
+    - claim: active prints a copy-pasteable 'maestro link add <your-card> <their-card>' hint naming the peer card id and creates no related edge (pull-only)
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/df536043-8689-4054-89d6-f29d1590ba93/events.jsonl
+    commands:
+    - cmd: cargo build
+      exit_code: 0
+      duration_ms: 93
+    - cmd: cargo test
+      exit_code: 0
+      duration_ms: 121562
+    - cmd: cargo clippy -- -D warnings
+      exit_code: 0
+      duration_ms: 7062
+    proof_sources:
+    - kind: event
+      path: .maestro/runs/df536043-8689-4054-89d6-f29d1590ba93/events.jsonl
+      hash: 3b4e18895824450bea6ad4b7d51f758ee8a2ac048d6f8c6e3a90dcb8815bdae9
+  acceptance_locked: true
+  acceptance:
+    checks:
+    - '`maestro active` prints one digest row per live session (session, mode, card title+status, type-aware progress, last action, age, presence) with the running session marked ''you''; stale sessions hidden unless `--all` (tagged [stale Nm]); a copy-pasteable `maestro link add <your-card> <their-card>` hint is printed and no link edge is created; nothing auto-fires (pull-only verb).'
+    locked_by: maestro
+    locked_at: 2026-06-13T17:05:47.836Z

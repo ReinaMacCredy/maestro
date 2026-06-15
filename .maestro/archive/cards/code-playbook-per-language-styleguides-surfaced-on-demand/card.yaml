@@ -1,0 +1,35 @@
+schema_version: maestro.card.v1
+id: code-playbook-per-language-styleguides-surfaced-on-demand
+type: feature
+title: 'Code playbook: per-language styleguides surfaced on-demand'
+status: shipped
+created_at: 2026-06-14T15:03:47.143Z
+updated_at: 2026-06-14T15:36:58.515Z
+description: Supersedes code-playbook-styleguides-surfaced-to-agents (7 inline general bullets in HARNESS.md). Vendor the full per-language code styleguides from Gemini CLI Conductor (templates/code_styleguides) as .md files surfaced to agents, loaded on-demand by the language being edited so context stays lean.
+extra:
+  schema_version: maestro.feature.v2
+  outcome: Per-language code styleguides vendored to embedded/playbook/ (9 Gemini Conductor files byte-verbatim + authored rust.md, PLAYBOOK.md anchor); maestro init/sync/update extract them to .maestro/playbook/<lang>.md under one PLAYBOOK.md frontmatter version gate; HARNESS.md 1.15.0 keeps the 7 universal bullets inline and points agents to read only their language's file; resources_version_guard + arch embed-allowlist recorded; full suite + clippy + fmt green.
+  qa:
+    surface: none
+    reason: 'User directive: skip qa, go (accept -> prepare -> work -> verify; ship gate cleared with a lean slice from the real e2e run)'
+    amend_log_position: 0
+  affected_areas:
+  - embedded/playbook/ (vendored + authored styleguides + anchor)
+  - src/domain/extraction/playbook.rs + extraction/mod.rs wiring
+  - 'embedded/harness/HARNESS.md ## Code style (pointer + version bump)'
+  - src/foundation/core/paths.rs (playbook_dir)
+  - tests/resources_version_guard.rs + tests/architecture_imports.rs (guards)
+  acceptance_sweeps:
+  - at: 2026-06-14T15:34:29.021Z
+    resolved:
+    - ac-1
+    - ac-2
+    - ac-3
+    - ac-4
+    - ac-5
+  acceptance:
+  - maestro init/install extracts a .maestro/playbook/ folder containing PLAYBOOK.md plus one .md per language (9 vendored + rust.md)
+  - The 9 Gemini files are byte-verbatim copies of the Conductor templates/code_styleguides sources; PLAYBOOK.md carries the Apache-2.0 attribution and NOTICE
+  - 'HARNESS.md ## Code style keeps its general principles inline and points the agent at .maestro/playbook/<lang>.md for the language being edited'
+  - 'Playbook rides the shared version gate: one PLAYBOOK.md frontmatter version governs the whole folder; local edits survive update until that version changes; sync/init --dry-run report the playbook as ONE folder line'
+  - resources_version_guard records the playbook (version + tree-hash) and the architecture embed-allowlist permits the playbook module; full suite + clippy + fmt green

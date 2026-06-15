@@ -1,0 +1,22 @@
+- schema_version: maestro.card.v1
+  id: card-c5b8a4
+  type: decision
+  title: Where recovery hints live
+  status: locked
+  parent: no-dead-end-errors
+  created_at: 2026-06-07T15:04:21.828Z
+  updated_at: 2026-06-07T15:04:30.948Z
+  description: SchemaMismatch is shared by harness/task/feature/decisions artifacts whose recoveries differ (migrate-v2 vs update vs doctor), so the hint cannot be a static string in the error message; and all errors funnel through one print site in main.rs
+  extra:
+    id: card-c5b8a4
+    title: Where recovery hints live
+    status: locked
+    feature: no-dead-end-errors
+    context: SchemaMismatch is shared by harness/task/feature/decisions artifacts whose recoveries differ (migrate-v2 vs update vs doctor), so the hint cannot be a static string in the error message; and all errors funnel through one print site in main.rs
+    decision: 'hint() method on MaestroError returning Option<String> per variant (context-aware for SchemaMismatch), appended once as a fix: line at the main.rs print chokepoint; a unit test forces an explicit Some/None decision per variant'
+    rejected:
+    - 'embed fixes in #[error] message strings: SchemaMismatch is shared across artifacts with different recoveries, a static string is wrong for at least one'
+    - 'wholesale typed-error conversion of all ~150 bail!/anyhow! sites: massive churn for marginal gain; argument-validation errors already self-explain via clap/context'
+    preview: 'before: Error: schema mismatch for .maestro/features/x/feature.yaml: expected maestro.feature.v2, found maestro.feature.v1 | after: same line + fix: run maestro migrate-v2'
+    created_at: 2026-06-07T15:04:21.828Z
+    locked_at: 2026-06-07T15:04:30.948Z

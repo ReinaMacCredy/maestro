@@ -2,6 +2,7 @@ use anyhow::{Result, bail};
 
 use crate::domain::decisions;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
+use crate::foundation::core::table;
 use crate::interfaces::cli::{DecisionArgs, DecisionCommand};
 
 /// Execute `maestro decision`.
@@ -14,7 +15,38 @@ pub fn run(args: DecisionArgs) -> Result<()> {
             title,
             context,
             feature,
-        } => new_decision(&paths, &title, context.as_deref(), feature.as_deref()),
+            lock,
+            decision,
+            rejected,
+            preview,
+            supersedes,
+            id_only,
+        } => {
+            if lock {
+                let decision = decision.expect("clap invariant: --lock requires --decision");
+                new_locked_decision(
+                    &paths,
+                    &title,
+                    context.as_deref(),
+                    feature.as_deref(),
+                    decisions::LockInputs {
+                        decision: &decision,
+                        rejected: &rejected,
+                        preview: preview.as_deref(),
+                        supersedes: &supersedes,
+                    },
+                    id_only,
+                )
+            } else {
+                new_decision(
+                    &paths,
+                    &title,
+                    context.as_deref(),
+                    feature.as_deref(),
+                    id_only,
+                )
+            }
+        }
         DecisionCommand::Lock {
             id,
             decision,
@@ -30,7 +62,9 @@ pub fn run(args: DecisionArgs) -> Result<()> {
             &supersedes,
         ),
         DecisionCommand::Show { id } => show_decision(&paths, &id),
-        DecisionCommand::List => list_decisions(&paths),
+        DecisionCommand::List { all, feature } => {
+            render_decision_list(decisions::list_tolerant(&paths), all, feature.as_deref())
+        }
     }
 }
 
@@ -39,14 +73,45 @@ fn new_decision(
     title: &str,
     context: Option<&str>,
     feature: Option<&str>,
+    id_only: bool,
 ) -> Result<()> {
     if title.trim().is_empty() {
         bail!("decision title cannot be empty; e.g. `maestro decision new \"Adopt X for Y\"`");
     }
     let report = decisions::create_open(paths, title, context, feature)?;
+    emit_feature_touch(paths, &report.record);
+    if id_only {
+        println!("{}", report.record.id);
+        return Ok(());
+    }
     println!("opened {} (status: open)", report.record.id);
-    println!("store: {}", report.path.display());
-    println!("{}", decisions::query::render_record(&report.record));
+    if let Some(feature_id) = &report.record.feature {
+        println!("feature: {feature_id}");
+    }
+    Ok(())
+}
+
+/// One-shot open+lock for a pre-decided fork. Unlike the standalone lock,
+/// `--rejected` stays optional: a fork the user already settled often has no
+/// enumerated alternatives worth recording.
+fn new_locked_decision(
+    paths: &MaestroPaths,
+    title: &str,
+    context: Option<&str>,
+    feature: Option<&str>,
+    inputs: decisions::LockInputs<'_>,
+    id_only: bool,
+) -> Result<()> {
+    if title.trim().is_empty() {
+        bail!("decision title cannot be empty; e.g. `maestro decision new \"Adopt X for Y\"`");
+    }
+    let report = decisions::create_locked(paths, title, context, feature, inputs)?;
+    emit_feature_touch(paths, &report.record);
+    if id_only {
+        println!("{}", report.record.id);
+        return Ok(());
+    }
+    print_lock_report(&report);
     Ok(())
 }
 
@@ -62,14 +127,29 @@ fn lock_decision(
         bail!("decision lock requires at least one --rejected \"<option: why>\"");
     }
     let report = decisions::lock(paths, id, decision, rejected, preview, supersedes)?;
+    emit_feature_touch(paths, &report.record);
+    print_lock_report(&report);
+    Ok(())
+}
+
+/// Bind the session to the decision's parent feature (D3 preview: a decision
+/// verb touches the feature the design work belongs to, not the decision card).
+/// A global decision has no feature, so nothing is bound.
+fn emit_feature_touch(paths: &MaestroPaths, record: &decisions::schema::DecisionRecord) {
+    if let Some(feature_id) = record.feature.as_deref() {
+        super::emit_card_touch(paths, feature_id);
+    }
+}
+
+fn print_lock_report(report: &decisions::DecisionLockReport) {
     println!("locked {}", report.record.id);
-    println!("store: {}", report.path.display());
-    println!("{}", decisions::query::render_record(&report.record));
-    if let Some(line) = report.note_line {
+    for superseded in &report.record.supersedes {
+        println!("  supersedes {superseded}");
+    }
+    if let Some(line) = &report.note_line {
         println!("note:");
         println!("  {line}");
     }
-    Ok(())
 }
 
 fn show_decision(paths: &MaestroPaths, id: &str) -> Result<()> {
@@ -86,23 +166,67 @@ fn show_decision(paths: &MaestroPaths, id: &str) -> Result<()> {
     Ok(())
 }
 
-fn list_decisions(paths: &MaestroPaths) -> Result<()> {
-    let entries = decisions::list_tolerant(paths);
-    if entries.is_empty() {
+/// How many decisions the bare `decision list` / `query decisions` shows before
+/// `--all` is needed: design history grows without bound, but an agent orienting
+/// only needs the recent forks, so the default bounds output to this window.
+const RECENT_DECISIONS: usize = 20;
+
+/// Shared renderer for `decision list` and `query decisions` (ac-4): scope to one
+/// feature when asked, window to the most recent decisions by activity unless
+/// `--all`, and render the ID/STATUS/HOME/TITLE table. Both call sites pass their
+/// already-scanned entries (tolerant vs strict scan), so the windowing stays
+/// identical across the two verbs.
+pub(crate) fn render_decision_list(
+    mut entries: Vec<decisions::DecisionListEntry>,
+    all: bool,
+    feature: Option<&str>,
+) -> Result<()> {
+    if let Some(feature_id) = feature {
+        entries.retain(|entry| {
+            matches!(&entry.source, decisions::DecisionSource::Feature { feature_id: id } if id == feature_id)
+        });
+        if entries.is_empty() {
+            println!("no decisions for feature {feature_id}");
+            return Ok(());
+        }
+    } else if entries.is_empty() {
         println!("no decisions found");
         return Ok(());
     }
 
-    println!("ID\tSTATUS\tHOME\tTITLE");
-    for entry in entries {
+    // Most-recent-first by activity (locked_at else created_at). Ties and legacy
+    // rows (empty activity) fall back to a stable id order so output is deterministic.
+    entries.sort_by(|left, right| {
+        right
+            .activity()
+            .cmp(left.activity())
+            .then_with(|| left.id.cmp(&right.id))
+    });
+
+    let total = entries.len();
+    if !all && total > RECENT_DECISIONS {
+        entries.truncate(RECENT_DECISIONS);
         println!(
-            "{}\t{}\t{}\t{}",
-            entry.id,
-            entry.status,
-            home(&entry.source),
-            entry.title
+            "{} of {total} recent (--all for full; --feature <id> to scope)",
+            entries.len()
         );
     }
+
+    let rows: Vec<Vec<String>> = entries
+        .iter()
+        .map(|entry| {
+            vec![
+                entry.id.clone(),
+                entry.status.clone(),
+                home(&entry.source),
+                entry.title.clone(),
+            ]
+        })
+        .collect();
+    print!(
+        "{}",
+        table::render_table(&["ID", "STATUS", "HOME", "TITLE"], &rows)
+    );
 
     Ok(())
 }

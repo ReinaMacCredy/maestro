@@ -1,0 +1,79 @@
+schema_version: maestro.card.v1
+id: task-agents-md-read-verb-convention-line-a27e
+type: task
+title: AGENTS.md read-verb convention line
+status: verified
+parent: read-output-budget-for-agent-facing-read-verbs
+claimed_by: maestro
+claimed_at: 2026-06-14T10:18:30.946Z
+created_at: 2026-06-14T09:52:00.216Z
+updated_at: 2026-06-14T10:30:57.466Z
+extra:
+  schema_version: maestro.task.v2
+  claims:
+  - Root AGENTS.md now states read verbs bound their default to the live/relevant slice (list hides coarse-closed, decision list/query decisions window), with the full set one --all away and --feature <id> scoping decisions; the count header names what was hidden
+  covers:
+  - ac-6
+  state_history:
+  - state: draft
+    at: 2026-06-14T09:52:00.216Z
+    by: maestro
+  - state: exploring
+    at: 2026-06-14T09:52:00.235Z
+    by: maestro
+  - state: ready
+    at: 2026-06-14T09:52:00.331Z
+    by: maestro
+  - state: in_progress
+    at: 2026-06-14T10:18:30.946Z
+    by: maestro
+  - state: needs_verification
+    at: 2026-06-14T10:19:41.429Z
+    by: maestro
+    summary: AGENTS.md gains a read-verb output convention bullet, sibling to the write-verb one
+    claims:
+    - Root AGENTS.md now states read verbs bound their default to the live/relevant slice (list hides coarse-closed, decision list/query decisions window), with the full set one --all away and --feature <id> scoping decisions; the count header names what was hidden
+  - state: needs_verification
+    at: 2026-06-14T10:19:41.442Z
+    by: maestro
+    summary: 'verification failed: verify command failed: cargo build (exit 101)'
+    open_items:
+    - 'verify command failed: cargo build (exit 101)'
+    - 'verify command failed: cargo test (exit 101)'
+    - 'verify command failed: cargo clippy -- -D warnings (exit 101)'
+  - state: verified
+    at: 2026-06-14T10:30:57.466Z
+    by: maestro
+    summary: 'verification passed: 1 claim(s), 1 proof source(s)'
+  lane: normal
+  risk: medium
+  verification:
+    status: passed
+    verified_at: 2026-06-14T10:30:57.466Z
+    verified_commit: 73e5d1fb6663627cff8544171b298d2148bd29fb
+    verified_by_run: .maestro/runs/6ef6f1c0-d4d9-41c5-9c86-d0fcaf53a2ba/events.jsonl
+    contract_hash: c9021996d4f1153409fa3483f60eb53d11144728efe7b58bede9193eb7596b8b
+    claim_checks:
+    - claim: Root AGENTS.md now states read verbs bound their default to the live/relevant slice (list hides coarse-closed, decision list/query decisions window), with the full set one --all away and --feature <id> scoping decisions; the count header names what was hidden
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/6ef6f1c0-d4d9-41c5-9c86-d0fcaf53a2ba/events.jsonl
+    commands:
+    - cmd: cargo build
+      exit_code: 0
+      duration_ms: 223
+    - cmd: cargo test
+      exit_code: 0
+      duration_ms: 42135
+    - cmd: cargo clippy -- -D warnings
+      exit_code: 0
+      duration_ms: 282
+    proof_sources:
+    - kind: event
+      path: .maestro/runs/6ef6f1c0-d4d9-41c5-9c86-d0fcaf53a2ba/events.jsonl
+      hash: 757dbf621cad2f770a9dc4824089b2fb4cd876876119a00c7cecb3d3c337bc43
+  acceptance_locked: true
+  acceptance:
+    checks:
+    - rg confirms AGENTS.md carries a one-line read-verb convention sibling to the write-verb one (live/relevant default, full set one --all/--feature away).
+    locked_by: maestro
+    locked_at: 2026-06-14T09:52:00.331Z
