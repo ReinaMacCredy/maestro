@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-version: 1.15.0
+version: 1.16.0
 description: "Use for design or brainstorming in a Maestro repo before implementation starts. Map current behavior, decide one fork at a time, record decisions and notes, then hand the approved contract to maestro-card."
 ---
 
@@ -79,6 +79,13 @@ structure, or other judgment-heavy forks.
 4. If scores cluster, run pairwise matches until one option survives.
 5. Lock the survivor with `maestro decision new` then `maestro decision lock`;
    record why rejected options lost. Generators do not become durable outputs.
+
+## Probe Forks
+
+When a fork hinges on runtime or state-machine behavior you cannot settle by
+reading, build a throwaway runnable harness, drive it through the edge cases,
+record the answer in the decision context or `notes.md`, then delete the
+harness. Preserve the answer, not the code.
 
 ## Stop
 
