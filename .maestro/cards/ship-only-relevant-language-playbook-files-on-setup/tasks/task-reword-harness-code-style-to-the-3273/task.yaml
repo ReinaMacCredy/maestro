@@ -1,0 +1,83 @@
+schema_version: maestro.card.v1
+id: task-reword-harness-code-style-to-the-3273
+type: task
+title: Reword HARNESS Code style to the command, bump version, re-record guard snapshot
+status: verified
+parent: ship-only-relevant-language-playbook-files-on-setup
+claimed_by: claude#s28330-1781537431075711000
+claimed_at: 2026-06-15T15:30:31.075Z
+created_at: 2026-06-15T15:04:59.280Z
+updated_at: 2026-06-15T15:30:31.118Z
+extra:
+  schema_version: maestro.task.v2
+  claims:
+  - 'HARNESS ## Code style instructs maestro playbook <lang> with no .maestro/playbook/<lang>.md path'
+  - HARNESS frontmatter version > 1.15.0
+  - CLAUDE.md/AGENTS.md mirror blocks unchanged @-pointers
+  - resources_version_guard + full suite green
+  covers:
+  - ac-7
+  state_history:
+  - state: draft
+    at: 2026-06-15T15:04:59.280Z
+    by: maestro
+  - state: exploring
+    at: 2026-06-15T15:04:59.298Z
+    by: maestro
+  - state: ready
+    at: 2026-06-15T15:04:59.328Z
+    by: maestro
+  - state: needs_verification
+    at: 2026-06-15T15:30:31.103Z
+    by: maestro
+    summary: 'Reworded HARNESS ## Code style to instruct ''maestro playbook <lang>'' (dropped the .maestro/playbook/<lang>.md path), bumped HARNESS version 1.15.0->1.16.0, re-recorded the resources_version_guard harness snapshot, and bumped the extract.rs version assertion; regenerated the 4 skill cli.md files for the new command.'
+    claims:
+    - 'HARNESS ## Code style instructs maestro playbook <lang> with no .maestro/playbook/<lang>.md path'
+    - HARNESS frontmatter version > 1.15.0
+    - CLAUDE.md/AGENTS.md mirror blocks unchanged @-pointers
+    - resources_version_guard + full suite green
+  - state: verified
+    at: 2026-06-15T15:30:31.118Z
+    by: maestro
+    summary: 'verification passed: 4 claim(s), 1 proof source(s)'
+  lane: normal
+  risk: medium
+  verification:
+    status: passed
+    verified_at: 2026-06-15T15:30:31.118Z
+    verified_commit: c76664e59d2f3d40d2cc5645a29b2a7ca11413da
+    verified_by_run: .maestro/runs/7dcac9f0-8973-4e23-aaab-193c084801cd/events.jsonl
+    contract_hash: ab568b808bf65c1f30d950edb3fa68a8697d78c49d4f8c82f99f4ce8733f5f7a
+    claim_checks:
+    - claim: 'HARNESS ## Code style instructs maestro playbook <lang> with no .maestro/playbook/<lang>.md path'
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/7dcac9f0-8973-4e23-aaab-193c084801cd/events.jsonl
+    - claim: HARNESS frontmatter version > 1.15.0
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/7dcac9f0-8973-4e23-aaab-193c084801cd/events.jsonl
+    - claim: CLAUDE.md/AGENTS.md mirror blocks unchanged @-pointers
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/7dcac9f0-8973-4e23-aaab-193c084801cd/events.jsonl
+    - claim: resources_version_guard + full suite green
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/7dcac9f0-8973-4e23-aaab-193c084801cd/events.jsonl
+    commands:
+    - cmd: cargo build
+      exit_code: 0
+      duration_ms: 211
+    - cmd: cargo test
+      exit_code: 0
+      duration_ms: 45523
+    - cmd: cargo clippy -- -D warnings
+      exit_code: 0
+      duration_ms: 281
+    proof_sources:
+    - kind: event
+      path: .maestro/runs/7dcac9f0-8973-4e23-aaab-193c084801cd/events.jsonl
+      hash: e35a8be634a517db4816fc196ae0c72235f296a81436a4ada2460a87ed8f3787
+  acceptance_locked: true
+  acceptance:
+    checks:
+    - 'embedded/harness/HARNESS.md ## Code style instructs `maestro playbook <lang>` with no .maestro/playbook/<lang>.md path; HARNESS frontmatter version > 1.15.0; CLAUDE.md/AGENTS.md mirror blocks unchanged @-pointers; resources_version_guard suite green'
+    locked_by: maestro
+    locked_at: 2026-06-15T15:04:59.328Z

@@ -1,0 +1,86 @@
+schema_version: maestro.card.v1
+id: task-add-maestro-playbook-command-serving-460c
+type: task
+title: Add maestro playbook command serving embedded guides + PLAYBOOK index
+status: verified
+parent: ship-only-relevant-language-playbook-files-on-setup
+claimed_by: claude#s20352-1781537305780554000
+claimed_at: 2026-06-15T15:28:25.780Z
+created_at: 2026-06-15T15:04:59.221Z
+updated_at: 2026-06-15T15:28:25.828Z
+extra:
+  schema_version: maestro.task.v2
+  claims:
+  - maestro playbook <lang> serves embedded/playbook/<lang>.md byte-identical exit 0 for all 10 langs
+  - 'bare maestro playbook prints index: how-to + 10 tokens + Apache attribution exit 0'
+  - maestro playbook nosuchlang exits non-zero and lists valid tokens
+  - maestro playbook rust from empty non-repo dir serves guide exit 0, no init error
+  covers:
+  - ac-1
+  - ac-2
+  - ac-3
+  - ac-4
+  state_history:
+  - state: draft
+    at: 2026-06-15T15:04:59.221Z
+    by: maestro
+  - state: exploring
+    at: 2026-06-15T15:04:59.241Z
+    by: maestro
+  - state: ready
+    at: 2026-06-15T15:04:59.308Z
+    by: maestro
+  - state: needs_verification
+    at: 2026-06-15T15:28:25.813Z
+    by: maestro
+    summary: 'Added maestro playbook [LANGUAGE] command: serves embedded per-language guides byte-identical from new src/domain/playbook.rs (include_dir), bare prints index, unknown token errors with valid-token list; works with no repo.'
+    claims:
+    - maestro playbook <lang> serves embedded/playbook/<lang>.md byte-identical exit 0 for all 10 langs
+    - 'bare maestro playbook prints index: how-to + 10 tokens + Apache attribution exit 0'
+    - maestro playbook nosuchlang exits non-zero and lists valid tokens
+    - maestro playbook rust from empty non-repo dir serves guide exit 0, no init error
+  - state: verified
+    at: 2026-06-15T15:28:25.828Z
+    by: maestro
+    summary: 'verification passed: 4 claim(s), 1 proof source(s)'
+  lane: normal
+  risk: medium
+  verification:
+    status: passed
+    verified_at: 2026-06-15T15:28:25.828Z
+    verified_commit: c76664e59d2f3d40d2cc5645a29b2a7ca11413da
+    verified_by_run: .maestro/runs/7dcac9f0-8973-4e23-aaab-193c084801cd/events.jsonl
+    contract_hash: 2c3ac583a29d7efe98aca2a35f5f93cbc881f1252e6b434c601c4ef5e96a075b
+    claim_checks:
+    - claim: maestro playbook <lang> serves embedded/playbook/<lang>.md byte-identical exit 0 for all 10 langs
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/7dcac9f0-8973-4e23-aaab-193c084801cd/events.jsonl
+    - claim: 'bare maestro playbook prints index: how-to + 10 tokens + Apache attribution exit 0'
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/7dcac9f0-8973-4e23-aaab-193c084801cd/events.jsonl
+    - claim: maestro playbook nosuchlang exits non-zero and lists valid tokens
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/7dcac9f0-8973-4e23-aaab-193c084801cd/events.jsonl
+    - claim: maestro playbook rust from empty non-repo dir serves guide exit 0, no init error
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/7dcac9f0-8973-4e23-aaab-193c084801cd/events.jsonl
+    commands:
+    - cmd: cargo build
+      exit_code: 0
+      duration_ms: 89
+    - cmd: cargo test
+      exit_code: 0
+      duration_ms: 45517
+    - cmd: cargo clippy -- -D warnings
+      exit_code: 0
+      duration_ms: 4917
+    proof_sources:
+    - kind: event
+      path: .maestro/runs/7dcac9f0-8973-4e23-aaab-193c084801cd/events.jsonl
+      hash: 1179b285d8a60fe69ce9b40a6655b8a326dc61dba0b3b2b081d3bbf3635cd46e
+  acceptance_locked: true
+  acceptance:
+    checks:
+    - maestro playbook rust prints embedded/playbook/rust.md byte-identical exit 0; bare maestro playbook prints the index with all 10 tokens + attribution exit 0; maestro playbook nosuchlang exits non-zero and lists valid tokens; maestro playbook rust from an empty non-repo dir still serves the guide exit 0
+    locked_by: maestro
+    locked_at: 2026-06-15T15:04:59.308Z

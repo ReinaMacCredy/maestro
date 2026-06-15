@@ -1,0 +1,70 @@
+- schema_version: maestro.card.v1
+  id: dec-playbook-delivery-model-command-served-bb2a
+  type: decision
+  title: 'Playbook delivery model: command-served, not per-repo files'
+  status: locked
+  parent: ship-only-relevant-language-playbook-files-on-setup
+  created_at: 2026-06-15T14:25:51.854Z
+  updated_at: 2026-06-15T14:25:51.878Z
+  description: 'User pain: init/sync commit all 10 language guides into .maestro/playbook/ (not gitignored) when only one language is relevant. Two delivery models were weighed: (A) filter files written at setup, vs (B) serve guides from the binary via a new ''maestro playbook'' command with nothing committed. User chose B.'
+  extra:
+    locked_at: 2026-06-15T14:25:51.878Z
+    decision: 'Add a ''maestro playbook [<lang>]'' command that prints the requested guide from the embedded PLAYBOOK_DIR to stdout; bare invocation defaults to the detected stack. The per-repo .maestro/playbook/ extraction goes away. All 10 guides stay reachable on demand by name; zero guide files are committed to the repo. The harness ## Code style protocol is reworded to ''run: maestro playbook <lang>''. Mirrors the skills-served-from-cache precedent.'
+    preview: |-
+      NEW: maestro playbook command
+
+      Repo on disk:
+        .maestro/playbook/   <- gone entirely
+
+      Agent, about to edit Rust:
+        $ maestro playbook rust   -> prints rust.md
+        $ maestro playbook        -> detect stack -> rust.md
+        $ maestro playbook go     -> go.md (all 10 reachable)
+
+      Harness ## Code style: 'run: maestro playbook <lang>'
+    rejected:
+    - 'Model A (filter files at setup): still commits 1-few files, leaves PLAYBOOK.md''s static table pointing at absent guides, keeps the detector coverage gap on disk, and keeps per-repo version-gate complexity.'
+- schema_version: maestro.card.v1
+  id: dec-existing-maestro-playbook-folders-sync-deef
+  type: decision
+  title: 'Existing .maestro/playbook/ folders: sync/update removes cleanly'
+  status: locked
+  parent: ship-only-relevant-language-playbook-files-on-setup
+  created_at: 2026-06-15T14:30:51.091Z
+  updated_at: 2026-06-15T14:30:51.121Z
+  description: 'Once delivery is command-served (dec-playbook-delivery-model-command-served-bb2a), the per-repo .maestro/playbook/ folder in already-initialized repos is obsolete. Options weighed: doctor-warns-and-leaves (non-destructive, clutter lingers) vs sync-removes. User: ''just rmv then cleanly.'''
+  extra:
+    locked_at: 2026-06-15T14:30:51.121Z
+    decision: sync and update remove an obsolete .maestro/playbook/ folder cleanly (no backup). No backup is kept because the content is byte-recoverable from the embedded binary and on-disk guide files are inert under the command model (the command serves from the binary, never the file). The removal surfaces as a normal git deletion the user commits. This finishes the de-clutter goal for existing repos, not just new ones.
+    preview: |-
+      $ maestro sync   (in an old repo)
+      removed obsolete .maestro/playbook/ (guides now via: maestro playbook)
+
+      $ git status
+        deleted: .maestro/playbook/rust.md ...   (user commits the cleanup)
+
+      Accepted tradeoff: a locally-EDITED guide file is lost on removal -- rare, and
+      such edits are already inert under the command model.
+    rejected:
+    - 'doctor-warns-and-leaves: non-destructive but the 10 committed files linger in every existing repo until the user manually deletes, leaving the goal half-done. sync-removes-WITH-backup: backing up byte-vendored content that is already recoverable from the binary just creates new cruft, against the ''remove cleanly'' directive.'
+- schema_version: maestro.card.v1
+  id: dec-bare-maestro-playbook-prints-the-index-06aa
+  type: decision
+  title: Bare maestro playbook prints the index, not a detected guide
+  status: locked
+  parent: ship-only-relevant-language-playbook-files-on-setup
+  created_at: 2026-06-15T14:32:21.925Z
+  updated_at: 2026-06-15T14:32:21.953Z
+  description: 'Bare invocation (no lang arg) needed a behavior. Index-output (PLAYBOOK.md content + available languages) vs detected-stack-guide (reuse detect_stack + Generic fallback). User chose index. This dissolves the earlier scope/detector-richness fork entirely: the playbook uses NO stack detection; all 10 guides are reached explicitly by name.'
+  extra:
+    locked_at: 2026-06-15T14:32:21.953Z
+    decision: 'Bare ''maestro playbook'' prints the index: the overview/how-to (today''s PLAYBOOK.md prose) plus the list of available languages. ''maestro playbook <lang>'' prints that guide. No detect_stack coupling anywhere in the playbook. PLAYBOOK.md''s content becomes the bare-index output; its frontmatter version is no longer a folder gate (it can drop or stay as content).'
+    preview: |-
+      $ maestro playbook
+      Code Playbook - per-language styleguides
+      Run: maestro playbook <lang>
+      Available: rust python go typescript javascript cpp csharp dart html-css general
+
+      $ maestro playbook rust   -> prints rust.md
+    rejected:
+    - 'Bare = detected stack''s guide: couples the playbook to detect_stack''s 4-case coverage and forces a Generic->general.md fallback rule, for a one-call convenience the agent rarely needs (it knows the language it edits).'
