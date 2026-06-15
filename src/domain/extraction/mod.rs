@@ -87,7 +87,11 @@ pub fn preview_all(paths: &MaestroPaths, mode: ExtractMode<'_>) -> Result<Vec<Fo
 /// Idempotent: a fresh repo has nothing to remove. `managed_path` rejects a
 /// symlinked component so the removal can never escape `.maestro/`.
 fn remove_obsolete_playbook_folder(paths: &MaestroPaths) -> Result<()> {
-    let dir = managed_path(paths, ".maestro/playbook", SymlinkPolicy::RejectAllComponents)?;
+    let dir = managed_path(
+        paths,
+        ".maestro/playbook",
+        SymlinkPolicy::RejectAllComponents,
+    )?;
     match std::fs::remove_dir_all(&dir) {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
