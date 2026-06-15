@@ -23,6 +23,7 @@ pub mod install;
 pub mod mcp;
 pub mod migrate;
 pub mod msg;
+pub mod playbook;
 pub mod query;
 pub mod reference;
 pub mod resume;
@@ -204,6 +205,11 @@ pub enum RootCommand {
     Watch(WatchArgs),
     #[command(about = "Verify a task against its recorded proof")]
     Verify { id: Option<String> },
+    #[command(
+        about = "Print a language code styleguide, or the index with no language",
+        after_help = "Examples:\n  maestro playbook            # list the available guides\n  maestro playbook rust       # print the Rust styleguide"
+    )]
+    Playbook(PlaybookArgs),
     #[command(about = "Print the maestro version and binary path")]
     Version,
 }
@@ -285,6 +291,13 @@ pub struct SyncArgs {
 pub enum Agent {
     Claude,
     Codex,
+}
+
+#[derive(Debug, Args)]
+pub struct PlaybookArgs {
+    /// Language token to print (e.g. rust, python, html-css); omit for the index.
+    #[arg(value_name = "LANGUAGE")]
+    pub lang: Option<String>,
 }
 
 #[derive(Debug, Args)]
@@ -1344,6 +1357,7 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Hook(args) => hook::run(args),
         RootCommand::Watch(args) => watch::run(args),
         RootCommand::Verify { id } => verify::run(id),
+        RootCommand::Playbook(args) => playbook::run(args),
         RootCommand::Version => version::run(),
     }
 }

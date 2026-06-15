@@ -34,16 +34,6 @@ impl MaestroPaths {
         self.maestro_dir().join("harness")
     }
 
-    /// Return the code playbook directory (`.maestro/playbook`).
-    ///
-    /// Holds the per-language styleguides surfaced to agents on demand: a
-    /// `PLAYBOOK.md` anchor whose frontmatter `version:` gates the whole folder,
-    /// plus one `<lang>.md` per language. Extracted on init/install/sync like the
-    /// harness protocol.
-    pub fn playbook_dir(&self) -> PathBuf {
-        self.maestro_dir().join("playbook")
-    }
-
     /// Return the feature artifact directory.
     pub fn features_dir(&self) -> PathBuf {
         self.maestro_dir().join("features")

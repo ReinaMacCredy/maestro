@@ -28,12 +28,8 @@ const RECORD_SH: &str = include_str!("../embedded/hooks/record.sh");
 const HARNESS_MD: &str = include_str!("../embedded/harness/HARNESS.md");
 const RECOVERY_MD: &str = include_str!("../embedded/harness/RECOVERY.md");
 
-/// The shipped code playbook tree (its `PLAYBOOK.md` frontmatter `version:` is
-/// the single gate marker for the whole folder).
-static PLAYBOOK_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/embedded/playbook");
-
 /// `(group, name, shipped version, sha256 tree-hash of the resource files)`.
-const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 17] = [
+const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 16] = [
     (
         "skill",
         "maestro-card",
@@ -67,14 +63,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 17] = [
     (
         "harness",
         "HARNESS.md",
-        "1.15.0",
-        "ddb1ba240bdbf4552f15ed639afcb0d48233426586034c0467e03c49f3048cd5",
-    ),
-    (
-        "playbook",
-        "PLAYBOOK.md",
-        "1.0.0",
-        "4cbda4f6316dd076d0c8956ba436b7502c5d26d426392e8558efb3162a1a32ce",
+        "1.16.0",
+        "090ba1cbb0799d3faa83db781932db10666dc864786154adc9bd9dbc08b7b59f",
     ),
     (
         "schema",
@@ -221,18 +211,6 @@ fn shipped_resource_trees_and_versions_match_the_recorded_guard() {
                 ]),
                 HARNESS_MD.contains(&format!("version: {version}")),
             ),
-            "playbook" => {
-                let files = collect_embedded_files(&PLAYBOOK_DIR, &PLAYBOOK_DIR);
-                let anchor = files
-                    .iter()
-                    .find(|(path, _)| *path == name)
-                    .map(|(_, contents)| String::from_utf8_lossy(contents))
-                    .unwrap_or_else(|| panic!("playbook is missing {name}"));
-                (
-                    tree_hash(&files),
-                    anchor.contains(&format!("version: {version}")),
-                )
-            }
             "schema" => {
                 let pack = schema_pack_dir(name)
                     .unwrap_or_else(|| panic!("recorded schema pack {name} is no longer shipped"));
@@ -271,9 +249,8 @@ fn every_recorded_guard_entry_maps_to_a_shipped_resource() {
                 "RESOURCE_VERSION_GUARD lists skill {name}, which is no longer shipped"
             ),
             // The hook script and harness protocol are fixed single-file
-            // resources Maestro always ships; the playbook is a fixed folder it
-            // always ships.
-            "hook" | "harness" | "playbook" => {}
+            // resources Maestro always ships.
+            "hook" | "harness" => {}
             "schema" => assert!(
                 schema_pack_dir(name).is_some(),
                 "RESOURCE_VERSION_GUARD lists schema pack {name}, which is no longer shipped"

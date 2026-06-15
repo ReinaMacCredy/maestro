@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.0.0 -->
-<!-- maestro:cli-reference-sha256: 8c5731f129844fa4210c1ca312661968245d0345e64558f695fb3c6403460393 -->
+<!-- maestro:cli-reference-sha256: 37e36a21108d20414105f7164ccdeda7b141981883792c836eb0de6d19268e53 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -316,6 +316,10 @@ Every verb and flag is listed; a spelling not found here does not exist.
 
 - `maestro verify [ID]` -- Verify a task against its recorded proof
 
+## maestro playbook
+
+- `maestro playbook [LANGUAGE]` -- Print a language code styleguide, or the index with no language
+
 ## maestro version
 
 - `maestro version` -- Print the maestro version and binary path
@@ -425,5 +429,6 @@ Every verb and flag is listed; a spelling not found here does not exist.
 - `maestro help hook record`
 - `maestro help watch snapshot`
 - `maestro help verify` -- Verify a task against its recorded proof
+- `maestro help playbook` -- Print a language code styleguide, or the index with no language
 - `maestro help version` -- Print the maestro version and binary path
 - `maestro help help` -- Print this message or the help of the given subcommand(s)
