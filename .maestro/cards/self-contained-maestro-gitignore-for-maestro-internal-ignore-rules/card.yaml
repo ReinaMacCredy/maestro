@@ -1,0 +1,85 @@
+schema_version: maestro.card.v1
+id: self-contained-maestro-gitignore-for-maestro-internal-ignore-rules
+type: feature
+title: Self-contained .maestro/.gitignore for maestro-internal ignore rules
+status: shipped
+deps:
+- kind: related
+  target: ship-only-relevant-language-playbook-files-on-setup
+created_at: 2026-06-15T14:15:09.113Z
+updated_at: 2026-06-15T15:10:22.566Z
+description: 'Maestro injects all its gitignore rules as one managed block in the repo-root .gitignore (gitignore_block() in src/domain/install/mirrors.rs, written at mirror_plan call sites). This mixes maestro-internal local-only paths (.maestro/runs, channels, backups, index, install-lock.yaml, tasks/*/evidence, archive/**/...) with the user''s own root file, and means the .maestro/ directory is not self-describing. Goal: move the maestro-internal paths into a maestro-owned .maestro/.gitignore (patterns relative to .maestro/), leaving only the two paths that live OUTSIDE .maestro/ (.claude/settings.local.json, .codex/hooks.json) in a shrunken root block. Ship as a feature for all maestro users via the installer.'
+extra:
+  schema_version: maestro.feature.v2
+  outcome: 'Maestro now writes a self-contained .maestro/.gitignore (maestro-internal local paths relative to .maestro/, with update-check folded in), stops writing any repo-root managed block, and drops .claude/settings.local.json + .codex/hooks.json from its gitignore concern (files still written). install --agent strips the legacy root block (idempotent, preserves user lines) and writes the new file in one op; uninstall removes it. Migration is install-owned: existing installs migrate on their next ''maestro install''; sync/upgrade/init leave the legacy block until then.'
+  non_goals:
+  - Changing how maestro writes .claude/settings.local.json or .codex/hooks.json themselves -- only their gitignore coverage is dropped.
+  - Adding .claude/.gitignore or .codex/.gitignore (fully-nested layout was rejected).
+  acceptance:
+  - 'After a fresh maestro init/sync, .maestro/.gitignore exists and lists the maestro-internal local paths with patterns relative to .maestro/: runs/, channels/, backups/, index/, install-lock.yaml, update-check, tasks/*/evidence/, tasks/*/local/, archive/**/evidence/, archive/**/local/, archive/**/runs/.'
+  - After init/sync, the repo-root .gitignore contains no maestro managed block (no '# >>> maestro >>>' markers) and none of the formerly-managed maestro lines.
+  - 'Migration: running the new version''s sync on a repo that still carries the legacy root managed block removes that block from the root .gitignore while leaving user-managed root entries untouched.'
+  - git status in an initialized repo does not show .maestro/update-check (the prior coverage gap is closed by .maestro/.gitignore).
+  - Uninstall removes .maestro/.gitignore (it lives under .maestro/) and strips any legacy root block; no orphaned maestro lines remain in the root .gitignore.
+  - Maestro no longer adds .claude/settings.local.json or .codex/hooks.json to any gitignore (documented behavior drop); the files themselves are still written by hook_config_plan unchanged.
+  - 'Migration is owned by ''maestro install --agent <X>'': re-running install on a repo that still carries the legacy root maestro managed block strips that block from the repo-root .gitignore (idempotent, no-op if absent) while preserving user-managed root entries outside the markers, and writes .maestro/.gitignore in the same operation so there is no window where the maestro-internal paths are un-ignored. (sync/upgrade/init do not migrate the gitignore.)'
+  amends:
+  - at: 2026-06-15T14:42:15.689Z
+    reason: 'Entry-point correction: original ac-3 named ''sync'' as the migration entry point, but the .gitignore mirror is owned exclusively by ''maestro install'' -- the install lock records its ownership for lock-driven uninstall, and sync/upgrade/init all structurally leave the gitignore mirror untouched. A sync-created .maestro/.gitignore would be orphaned from uninstall. ac-3 will be waived at verify and is superseded by this install-worded AC.'
+    added:
+      acceptance:
+      - 'Migration is owned by ''maestro install --agent <X>'': re-running install on a repo that still carries the legacy root maestro managed block strips that block from the repo-root .gitignore (idempotent, no-op if absent) while preserving user-managed root entries outside the markers, and writes .maestro/.gitignore in the same operation so there is no window where the maestro-internal paths are un-ignored. (sync/upgrade/init do not migrate the gitignore.)'
+  acceptance_sweeps:
+  - at: 2026-06-15T15:02:53.586Z
+    unresolved:
+    - ac-1
+    - ac-2
+    - ac-3
+    - ac-4
+    - ac-5
+    - ac-6
+    - ac-7
+  - at: 2026-06-15T15:04:50.541Z
+    resolved:
+    - ac-1
+    - ac-2
+    - ac-3
+    - ac-4
+    - ac-5
+    - ac-6
+    - ac-7
+  acceptance_evidence:
+  - ac_id: ac-1
+    kind: explicit
+    text: 'qa-slice bl-001 (release g94a352bf, real git repo, claude+codex): .maestro/.gitignore body = runs/ channels/ backups/ index/ install-lock.yaml update-check tasks/*/evidence/ tasks/*/local/ archive/**/evidence/ archive/**/local/ archive/**/runs/; no line carries a .maestro/ prefix; playbook/ absent.'
+    at: 2026-06-15T15:04:43.661Z
+  - ac_id: ac-2
+    kind: explicit
+    text: 'qa-slice bl-002: after fresh init+install no repo-root .gitignore is created; grep for maestro markers/lines/settings.local/hooks.json finds nothing.'
+    at: 2026-06-15T15:04:43.661Z
+  - ac_id: ac-4
+    kind: explicit
+    text: 'qa-slice bl-004: git check-ignore .maestro/update-check echoes the path (ignored); git status --porcelain | grep update-check is empty.'
+    at: 2026-06-15T15:04:43.661Z
+  - ac_id: ac-5
+    kind: explicit
+    text: 'qa-slice bl-005: uninstall --agent claude removed .maestro/.gitignore in both fresh-install and migrated/preserved-.maestro cases; root .gitignore kept /target/ with no maestro residue; .maestro/ dir preserved.'
+    at: 2026-06-15T15:04:43.661Z
+  - ac_id: ac-6
+    kind: explicit
+    text: 'qa-slice bl-006: no gitignore (root or .maestro/) mentions .claude/settings.local.json or .codex/hooks.json; both files still written by hook_config_plan with the maestro hooks key.'
+    at: 2026-06-15T15:04:43.661Z
+  - ac_id: ac-7
+    kind: explicit
+    text: 'qa-slice bl-003: seeded legacy root maestro block + user lines (/target/, .DS_Store); install --agent claude stripped the block leaving only the user lines, wrote .maestro/.gitignore same op; 2nd install left root .gitignore byte-identical (idempotent).'
+    at: 2026-06-15T15:04:43.661Z
+  - ac_id: ac-3
+    kind: waived
+    text: Superseded by ac-7. ac-3 named 'sync' as the migration entry point, but the .gitignore mirror is owned exclusively by 'maestro install' (install-lock-recorded for lock-driven uninstall); sync/upgrade/init structurally leave the gitignore mirror untouched and a sync-created .maestro/.gitignore would be orphaned from uninstall. The migration behavior is proved through 'maestro install' under ac-7.
+    at: 2026-06-15T15:04:43.661Z
+  affected_areas:
+  - src/domain/install/mirrors.rs (mirror_plan + gitignore_block + GitignoreSection render)
+  - 'installer sync/init migration: strip legacy root managed block via remove_managed_block'
+  - uninstall path
+  open_questions:
+  - 'Implementation: write .maestro/.gitignore by reusing the GitignoreSection managed-block machinery (file carries the ''# >>> maestro >>>'' markers, near-zero new code) vs a wholesale-owned plain file (no markers, needs a new MirrorKind). Lean: reuse machinery.'

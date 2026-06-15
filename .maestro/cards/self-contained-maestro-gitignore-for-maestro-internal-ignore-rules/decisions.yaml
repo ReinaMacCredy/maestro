@@ -1,0 +1,63 @@
+- schema_version: maestro.card.v1
+  id: dec-gitignore-layout-hybrid-maestro-0cd0
+  type: decision
+  title: 'Gitignore layout: hybrid (.maestro/.gitignore + shrunken root block)'
+  status: superseded
+  parent: self-contained-maestro-gitignore-for-maestro-internal-ignore-rules
+  created_at: 2026-06-15T14:16:44.457Z
+  updated_at: 2026-06-15T14:16:44.477Z
+  description: 'git applies a .gitignore only to its own subtree, so the two agent-settings paths (outside .maestro/, and maestro-managed via hook_config_plan) cannot move into .maestro/.gitignore. Honest tradeoff: hybrid does NOT simplify the installer (root marker-block upsert/remove stays AND a .maestro/.gitignore writer is added). Real wins: .maestro/ becomes self-contained (clean copy/uninstall) and the root residue shrinks ~11 -> ~3 lines. Advisor-reviewed before lock.'
+  extra:
+    locked_at: 2026-06-15T14:16:44.477Z
+    decision: 'Hybrid: maestro-internal local paths move into a maestro-owned .maestro/.gitignore (patterns relative to .maestro/); the repo-root managed block shrinks to only the two paths that live outside .maestro/ (.claude/settings.local.json, .codex/hooks.json).'
+    superseded_by: dec-gitignore-scope-maestro-scope-only-2fcf
+    preview: |-
+      ROOT .gitignore                 .maestro/.gitignore (maestro-owned)
+        # >>> maestro >>>               runs/
+        .claude/settings.local.json     channels/
+        .codex/hooks.json               backups/
+        # <<< maestro <<<               index/
+                                        install-lock.yaml
+                                        update-check
+                                        tasks/*/evidence/
+                                        tasks/*/local/
+                                        archive/**/{evidence,local,runs}/
+
+      each rule lives where its subject lives; root residue ~11 -> ~3 lines
+    rejected:
+    - 'Keep single root block (status quo): ships nothing; user asked for a real feature and to make .maestro/ self-describing.'
+    - 'Fully-nested (add .claude/.gitignore + .codex/.gitignore, delete root block): forces maestro to plant ignore files into .claude/ and .codex/, directories it does not own and other tooling writes to; against maestro staying passive.'
+- schema_version: maestro.card.v1
+  id: dec-gitignore-scope-maestro-scope-only-2fcf
+  type: decision
+  title: 'Gitignore scope: maestro-scope-only (single .maestro/.gitignore, no root block)'
+  status: locked
+  parent: self-contained-maestro-gitignore-for-maestro-internal-ignore-rules
+  created_at: 2026-06-15T14:20:31.586Z
+  updated_at: 2026-06-15T14:20:31.612Z
+  description: 'User directive 2026-06-15: ''maestro scope only, dont care about .claude or codex''; chose Drop both in the confirm. Acknowledged consequence: .claude/settings.local.json (holds user''s local Claude perms; maestro merges only its hooks key, hooks.rs:17-26) and maestro-generated .codex/hooks.json lose maestro''s auto-ignore -- hygiene-only, no secret leak; agent tools/user own that now. MIGRATION: existing installs carry the legacy root managed block (markers ''# >>> maestro >>>'' / ''# <<< maestro <<<''); new version must remove it from root .gitignore on sync via remove_managed_block.'
+  extra:
+    locked_at: 2026-06-15T14:20:31.612Z
+    decision: Maestro writes ONLY .maestro/.gitignore, containing the maestro-internal local paths with patterns relative to .maestro/. Maestro stops writing any managed block in the repo-root .gitignore and strips its legacy root block on sync. .claude/settings.local.json and .codex/hooks.json are no longer maestro's gitignore concern.
+    supersedes:
+    - dec-gitignore-layout-hybrid-maestro-0cd0
+    preview: |-
+      ROOT .gitignore
+        (no maestro block at all)
+
+      .maestro/.gitignore   <- maestro's ONLY ignore file
+        runs/
+        channels/
+        backups/
+        index/
+        install-lock.yaml
+        update-check
+        tasks/*/evidence/
+        tasks/*/local/
+        archive/**/{evidence,local,runs}/
+
+      dropped: .claude/settings.local.json + .codex/hooks.json
+      no longer auto-ignored (agent tools / user own that)
+    rejected:
+    - Hybrid (shrunken root block for the two agent paths) -- superseded; user wants maestro confined to .maestro/ scope.
+    - Keep a 1-line root entry for .claude/settings.local.json -- declined; user chose Drop both.

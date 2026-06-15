@@ -1,0 +1,31 @@
+schema_version: maestro.card.v1
+id: task-repoint-the-gitignore-mirror-to-maestro-a689
+type: task
+title: Repoint the .gitignore mirror to .maestro/.gitignore
+status: closed
+parent: self-contained-maestro-gitignore-for-maestro-internal-ignore-rules
+claimed_by: claude#s54478-1781533566146128000
+claimed_at: 2026-06-15T14:26:06.146Z
+created_at: 2026-06-15T14:25:38.993Z
+updated_at: 2026-06-15T14:56:26.739Z
+extra:
+  schema_version: maestro.task.v2
+  acceptance:
+    checks:
+    - maestro init writes .maestro/.gitignore listing the maestro-internal local paths relative to .maestro/ (runs/, channels/, backups/, index/, install-lock.yaml, update-check, tasks/*/evidence/, tasks/*/local/, archive/**/evidence/, archive/**/local/, archive/**/runs/); the repo-root .gitignore contains no maestro managed block; git check-ignore reports .maestro/update-check as ignored; .claude/settings.local.json and .codex/hooks.json are still written by hook_config_plan but appear in no gitignore maestro writes
+    locked_by: maestro
+    locked_at: 2026-06-15T14:25:39.063Z
+  state_history:
+  - state: draft
+    at: 2026-06-15T14:25:38.993Z
+    by: maestro
+  - state: exploring
+    at: 2026-06-15T14:25:39.012Z
+    by: maestro
+  - state: ready
+    at: 2026-06-15T14:25:39.063Z
+    by: maestro
+  lane: normal
+  risk: medium
+  verification: {}
+  acceptance_locked: true
