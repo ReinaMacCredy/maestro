@@ -57,3 +57,18 @@
     preview: 'before: resume said ''objective: continue task task-001'' (fake); after: ''objective: inspect repo status'', status shows tasks active=0'
     created_at: 2026-06-07T14:36:31.118Z
     locked_at: 2026-06-07T14:36:38.382Z
+- schema_version: maestro.card.v1
+  id: dec-mattpocock-research-prototype-borrow-0713
+  type: decision
+  title: 'mattpocock Research+Prototype: borrow LOGIC-branch technique, no machinery'
+  status: locked
+  created_at: 2026-06-15T17:18:18.564Z
+  updated_at: 2026-06-15T17:18:18.587Z
+  description: 'Evaluated mattpocock/skills Research+Prototype boxes for maestro adoption. Source check: Research is an unbuilt diagram box (no skill dir, no research.md anywhere in repo; only obsidian-vault mentions the word). Prototype is a real skill but throwaway-and-document: durable output is the WRITTEN answer in docs, code is deleted/absorbed; notes.md already captures that answer. maestro already covers Grill/PRD/Issues/Implement/Review via maestro-design -> maestro-card lifecycle + qa-baseline/qa-slice gates.'
+  extra:
+    locked_at: 2026-06-15T17:18:18.587Z
+    decision: 'No new machinery (no verbs, schema, or card types). Add one technique reference to maestro-design borrowing the Prototype LOGIC-branch discipline: for a fork hinging on runtime/state-machine behavior, build a throwaway runnable harness, drive edge cases, record the answer in the decision/notes, then delete the harness. Preserve the answer, not the code.'
+    rejected:
+    - 'Lean fold (Option A): named Research spec section + <card>/prototype asset dir + work-loop pointer. Rejected: preserves prototype code, which is MORE than upstream ships (Prototype is throwaway-and-document).'
+    - 'First-class verbs (Option B): feature research / feature prototype sidecars traveling through accept->ship->archive. Rejected: machinery for what spec sections + notes.md already hold.'
+    - 'Pure do-nothing, zero skill text. Rejected: the LOGIC-branch state-machine probe is a genuinely useful technique worth one reference line.'
