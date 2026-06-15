@@ -17,7 +17,7 @@ pub use mirrors::{
 };
 
 use lock::remove_lock_file;
-use mirrors::{prepare_mirrors, write_prepared_mirrors};
+use mirrors::{migrate_legacy_root_gitignore, prepare_mirrors, write_prepared_mirrors};
 
 /// Agent integrations supported by V1 install.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -92,6 +92,13 @@ where
     committed_install.mark_committed();
     lock.set_agent(agent, committed_install);
     lock.save(&lock_path)?;
+
+    // The maestro-internal ignore rules now live in the `.maestro/.gitignore`
+    // mirror written above; strip any obsolete maestro block left in the
+    // repo-root `.gitignore` by an earlier install. Runs after the mirror write
+    // so the rules are never momentarily un-ignored, and after the lock commit
+    // so the install state reflects the mirror writes that succeeded.
+    migrate_legacy_root_gitignore(paths)?;
 
     Ok(())
 }

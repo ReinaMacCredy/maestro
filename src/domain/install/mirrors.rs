@@ -137,7 +137,7 @@ pub fn mirror_plan(agent: InstallAgent) -> Result<Vec<MirrorPlan>> {
         markdown("CLAUDE.md", claude_md_block()),
         markdown("AGENTS.md", agents_md_block()),
         hash(
-            ".gitignore",
+            ".maestro/.gitignore",
             gitignore_block(),
             MirrorKind::GitignoreSection,
         ),
@@ -969,8 +969,52 @@ fn agents_md_block() -> &'static str {
     "# Maestro Harness Protocol\nRead .maestro/harness/HARNESS.md first before working in this repo."
 }
 
+/// Body of the maestro-owned `.maestro/.gitignore`. Patterns are relative to
+/// `.maestro/` (a nested `.gitignore` applies to its own subtree), so they carry
+/// no `.maestro/` prefix. Covers only maestro-internal local-only paths; agent
+/// settings (`.claude/settings.local.json`, `.codex/hooks.json`) live outside
+/// `.maestro/` and are no longer maestro's gitignore concern. `playbook/` is
+/// deliberately absent so its files stay tracked.
 fn gitignore_block() -> &'static str {
-    "# Maestro local-only paths\n.maestro/runs/\n.maestro/channels/\n.maestro/backups/\n.maestro/index/\n.maestro/install-lock.yaml\n.maestro/tasks/*/evidence/\n.maestro/tasks/*/local/\n.maestro/archive/**/evidence/\n.maestro/archive/**/local/\n.maestro/archive/**/runs/\n\n# Local agent settings\n.claude/settings.local.json\n.codex/hooks.json"
+    "# Maestro local-only paths\nruns/\nchannels/\nbackups/\nindex/\ninstall-lock.yaml\nupdate-check\ntasks/*/evidence/\ntasks/*/local/\narchive/**/evidence/\narchive/**/local/\narchive/**/runs/"
+}
+
+/// Strip an obsolete maestro managed block from the repo-root `.gitignore`.
+///
+/// Earlier installs wrote maestro's local-only ignore rules as a `HashComment`
+/// block in the repo-root `.gitignore`. Those rules now live in
+/// `.maestro/.gitignore` (written as a mirror by the same install), so the root
+/// block is obsolete. Remove it while preserving any user-managed lines outside
+/// the markers. A no-op when the root file is absent or carries no maestro
+/// block. If the strip empties the file -- it held nothing but maestro's block,
+/// so there is no user content to keep -- the root `.gitignore` is removed
+/// rather than left as a husk.
+///
+/// Call this only after the `.maestro/.gitignore` mirror has been written, so
+/// the maestro-internal paths are never momentarily un-ignored.
+pub(crate) fn migrate_legacy_root_gitignore(paths: &MaestroPaths) -> Result<()> {
+    let path = managed_mirror_path(paths, ".gitignore")?;
+    let Some(contents) = read_to_string_if_exists(&path)? else {
+        return Ok(());
+    };
+    let stripped = remove_managed_block(&contents, ManagedBlockFormat::HashComment);
+    if stripped == contents {
+        return Ok(());
+    }
+    if is_empty_residue(&stripped) {
+        fs::remove_file(&path)
+            .with_context(|| format!("failed to remove emptied {}", path.display()))?;
+        println!("removed legacy maestro block from .gitignore (file emptied, removed)");
+    } else {
+        write_string_atomic(&path, &stripped).with_context(|| {
+            format!(
+                "failed to strip legacy maestro block from {}",
+                path.display()
+            )
+        })?;
+        println!("stripped legacy maestro block from .gitignore");
+    }
+    Ok(())
 }
 
 fn codex_config_block() -> &'static str {

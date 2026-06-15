@@ -7,7 +7,9 @@ use maestro::domain::install::{
     AgentInstall, FileOwnership, InstallAgent, InstallLock, InstallState, MirrorKind,
 };
 use maestro::foundation::core::hash::sha256_prefixed;
-use maestro::foundation::core::managed_blocks::{ManagedBlockFormat, remove_managed_block};
+use maestro::foundation::core::managed_blocks::{
+    ManagedBlockFormat, remove_managed_block, upsert_managed_block,
+};
 use support::TestTempDir;
 
 fn maestro(args: &[&str], cwd: &std::path::Path) -> std::process::Output {
@@ -61,6 +63,135 @@ fn install_claude_writes_managed_mirrors_and_lock() {
             .path()
             .join(".claude/settings.local.json")
             .is_file()
+    );
+}
+
+#[test]
+fn install_writes_maestro_gitignore_and_leaves_no_root_block() {
+    // ac-1/ac-2/ac-6: a fresh install writes the maestro-internal rules into
+    // .maestro/.gitignore (patterns relative to .maestro/), never adds a managed
+    // block to the repo-root .gitignore, and no longer lists the agent settings
+    // files in any gitignore (though it still writes the files themselves).
+    let temp_dir = TestTempDir::new("maestro-install-cli-test");
+    init_repo(temp_dir.path());
+
+    let output = maestro(&["install", "--agent", "claude"], temp_dir.path());
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let maestro_gitignore = fs::read_to_string(temp_dir.path().join(".maestro/.gitignore"))
+        .expect("invariant: .maestro/.gitignore should be written");
+    for line in [
+        "runs/",
+        "channels/",
+        "backups/",
+        "index/",
+        "install-lock.yaml",
+        "update-check",
+        "tasks/*/evidence/",
+        "tasks/*/local/",
+        "archive/**/evidence/",
+        "archive/**/local/",
+        "archive/**/runs/",
+    ] {
+        assert!(
+            maestro_gitignore.contains(line),
+            "{line} missing from .maestro/.gitignore: {maestro_gitignore}"
+        );
+    }
+    assert!(
+        !maestro_gitignore.contains(".maestro/"),
+        "patterns must be relative to .maestro/ (no prefix): {maestro_gitignore}"
+    );
+    assert!(
+        !temp_dir.path().join(".gitignore").exists(),
+        "a fresh install must not create or write a repo-root .gitignore"
+    );
+    assert!(!maestro_gitignore.contains(".claude/settings.local.json"));
+    assert!(!maestro_gitignore.contains(".codex/hooks.json"));
+    assert!(
+        temp_dir
+            .path()
+            .join(".claude/settings.local.json")
+            .is_file(),
+        "the hook settings file is still written, just no longer gitignored"
+    );
+}
+
+#[test]
+fn install_migrates_legacy_root_gitignore_block_and_preserves_user_lines() {
+    // ac-7 / bl-003: a repo carrying the pre-feature maestro block in the
+    // repo-root .gitignore. Re-running install strips that block (preserving the
+    // user's own lines outside the markers) and writes the maestro-internal rules
+    // into .maestro/.gitignore in the same operation.
+    let temp_dir = TestTempDir::new("maestro-install-cli-test");
+    init_repo(temp_dir.path());
+    let root_gitignore = temp_dir.path().join(".gitignore");
+    let legacy = upsert_managed_block(
+        Some("/target/\n.DS_Store\n"),
+        ManagedBlockFormat::HashComment,
+        "# Maestro local-only paths\n.maestro/runs/\n.claude/settings.local.json\n.codex/hooks.json",
+    );
+    fs::write(&root_gitignore, &legacy)
+        .expect("invariant: legacy root .gitignore should be writable");
+
+    let output = maestro(&["install", "--agent", "claude"], temp_dir.path());
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let root =
+        fs::read_to_string(&root_gitignore).expect("invariant: root .gitignore should remain");
+    assert!(
+        !root.contains("# >>> maestro >>>"),
+        "the legacy maestro block must be stripped from root .gitignore: {root}"
+    );
+    assert!(
+        !root.contains(".maestro/runs/"),
+        "formerly-managed maestro lines must be gone from root .gitignore: {root}"
+    );
+    assert!(
+        root.contains("/target/") && root.contains(".DS_Store"),
+        "user-managed lines outside the markers must be preserved: {root}"
+    );
+
+    let maestro_gitignore = fs::read_to_string(temp_dir.path().join(".maestro/.gitignore"))
+        .expect("invariant: .maestro/.gitignore should be written in the same operation");
+    assert!(maestro_gitignore.contains("runs/"));
+    assert!(maestro_gitignore.contains("update-check"));
+}
+
+#[test]
+fn install_migration_removes_root_gitignore_that_held_only_the_maestro_block() {
+    // When the root .gitignore held nothing but maestro's block (no user lines),
+    // stripping it leaves no content to preserve, so the migration removes the
+    // emptied file rather than leaving a 0-byte husk.
+    let temp_dir = TestTempDir::new("maestro-install-cli-test");
+    init_repo(temp_dir.path());
+    let root_gitignore = temp_dir.path().join(".gitignore");
+    let legacy = upsert_managed_block(
+        None,
+        ManagedBlockFormat::HashComment,
+        "# Maestro local-only paths\n.maestro/runs/",
+    );
+    fs::write(&root_gitignore, &legacy)
+        .expect("invariant: legacy root .gitignore should be writable");
+
+    let output = maestro(&["install", "--agent", "codex"], temp_dir.path());
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    assert!(
+        !root_gitignore.exists(),
+        "an emptied root .gitignore (only maestro's block) must be removed, not left as a husk"
     );
 }
 
@@ -133,7 +264,7 @@ fn failed_install_does_not_write_partial_mirrors() {
     assert!(!output.status.success());
     assert!(!temp_dir.path().join("CLAUDE.md").exists());
     assert!(!temp_dir.path().join("AGENTS.md").exists());
-    assert!(!temp_dir.path().join(".gitignore").exists());
+    assert!(!temp_dir.path().join(".maestro/.gitignore").exists());
     assert!(!temp_dir.path().join(".maestro/install-lock.yaml").exists());
 }
 
@@ -151,7 +282,7 @@ fn install_rejects_symlinked_managed_directory_without_partial_writes() {
     assert!(!output.status.success());
     assert!(!temp_dir.path().join("CLAUDE.md").exists());
     assert!(!temp_dir.path().join("AGENTS.md").exists());
-    assert!(!temp_dir.path().join(".gitignore").exists());
+    assert!(!temp_dir.path().join(".maestro/.gitignore").exists());
     assert!(!temp_dir.path().join(".maestro/install-lock.yaml").exists());
     assert!(!external_dir.path().join("hooks.json").exists());
 }
@@ -177,7 +308,7 @@ fn install_lock_save_failure_does_not_write_mirrors() {
     assert!(!output.status.success());
     assert!(!temp_dir.path().join("CLAUDE.md").exists());
     assert!(!temp_dir.path().join("AGENTS.md").exists());
-    assert!(!temp_dir.path().join(".gitignore").exists());
+    assert!(!temp_dir.path().join(".maestro/.gitignore").exists());
     assert!(!temp_dir.path().join(".maestro/install-lock.yaml").exists());
 }
 
@@ -210,7 +341,7 @@ fn install_write_failure_rolls_back_mirrors_and_lock() {
         .expect("invariant: CLAUDE.md should be readable");
     assert_eq!(claude, "# User Claude\n");
     assert!(!temp_dir.path().join("AGENTS.md").exists());
-    assert!(!temp_dir.path().join(".gitignore").exists());
+    assert!(!temp_dir.path().join(".maestro/.gitignore").exists());
     assert!(!temp_dir.path().join(".maestro/install-lock.yaml").exists());
 }
 
@@ -514,15 +645,15 @@ fn reinstall_then_uninstall_removes_a_maestro_created_file_instead_of_leaving_a_
 
 #[test]
 fn two_agent_uninstall_removes_shared_mirror_husks() {
-    // claude creates CLAUDE.md/AGENTS.md/.gitignore fresh; codex then installs
-    // into the same shared mirrors and would record them as pre-existing (they now
-    // exist on disk). Uninstalling both agents must not leave 0-byte husks: the
-    // created-fresh verdict is inherited across agents, so the final uninstall
-    // removes maestro's own emptied residue instead of preserving a husk.
+    // claude creates CLAUDE.md/AGENTS.md/.maestro/.gitignore fresh; codex then
+    // installs into the same shared mirrors and would record them as pre-existing
+    // (they now exist on disk). Uninstalling both agents must not leave 0-byte
+    // husks: the created-fresh verdict is inherited across agents, so the final
+    // uninstall removes maestro's own emptied residue instead of preserving a husk.
     let temp_dir = TestTempDir::new("maestro-install-cli-test");
     init_repo(temp_dir.path());
 
-    let shared = ["CLAUDE.md", "AGENTS.md", ".gitignore"];
+    let shared = ["CLAUDE.md", "AGENTS.md", ".maestro/.gitignore"];
     for agent in ["claude", "codex"] {
         let install = maestro(&["install", "--agent", agent], temp_dir.path());
         assert!(
@@ -656,7 +787,7 @@ fn uninstall_retries_removing_state_after_mirrors_were_removed() {
         ManagedBlockFormat::Markdown,
     );
     remove_managed_text(
-        temp_dir.path().join(".gitignore"),
+        temp_dir.path().join(".maestro/.gitignore"),
         ManagedBlockFormat::HashComment,
     );
     remove_managed_text(
