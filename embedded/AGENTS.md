@@ -37,7 +37,7 @@ Parent:
 - [../AGENTS.md](../AGENTS.md)
 
 Children:
-- none
+- [schemas/AGENTS.md](schemas/AGENTS.md)
 
 Managed by `init-deep`. Edit outside this block.
 <!-- AGENTS-HIERARCHY:END -->

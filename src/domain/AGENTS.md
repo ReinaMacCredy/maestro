@@ -53,7 +53,12 @@ Parent:
 - [../AGENTS.md](../AGENTS.md)
 
 Children:
+- [card/AGENTS.md](card/AGENTS.md)
+- [feature/AGENTS.md](feature/AGENTS.md)
+- [install/AGENTS.md](install/AGENTS.md)
 - [proof/AGENTS.md](proof/AGENTS.md)
+- [run/AGENTS.md](run/AGENTS.md)
+- [task/AGENTS.md](task/AGENTS.md)
 
 Managed by `init-deep`. Edit outside this block.
 <!-- AGENTS-HIERARCHY:END -->

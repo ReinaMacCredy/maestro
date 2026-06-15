@@ -13,7 +13,7 @@ boundaries.
 | Verify a task | `task_verify/` | Coordinates Proof report production and Task outcome application. |
 | Update binary/resources | `update/` | Keeps passive check, update, replacement, and schema drift separate. |
 | Sync repo-local artifacts | `sync/` | Keep dry-run/check behavior and extraction boundaries explicit. |
-| Metrics and friction proposals | `metrics/`, `improver/` | Read source artifacts; backlog refresh must not apply protocol changes. |
+| Harness proposals | `harness/` | Read source artifacts; backlog refresh must not apply protocol changes. |
 
 ## CONVENTIONS
 

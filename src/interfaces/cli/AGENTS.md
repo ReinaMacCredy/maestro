@@ -13,7 +13,8 @@ for the `maestro` binary.
 | Task verbs | `task.rs`, `task_id.rs` | Adapter over Task and task verification contracts. |
 | Verification command | `verify.rs` | Routes to `operations/task_verify/`. |
 | Update command | `update.rs` | Render check/update UX; passive check behavior matters. |
-| Query/metrics/improve | `query.rs`, `metrics.rs`, `improve.rs` | Read models and Harness backlog surfaces. |
+| Query/read models | `query.rs`, `status.rs`, `active.rs`, `msg.rs` | Read models and agent-facing projections. |
+| Harness backlog surface | `harness.rs` | Adapter over `operations/harness/` proposal flows. |
 | MCP/hook/watch adapters | `mcp.rs`, `hook.rs`, `watch.rs` | Thin command entrypoints for non-CLI interfaces. |
 
 ## CONVENTIONS

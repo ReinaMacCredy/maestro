@@ -54,8 +54,8 @@ maestro/
 - Keep new production imports on target facades:
   `crate::domain::*`, `crate::operations::*`, `crate::interfaces::*`, and
   `crate::foundation::core`.
-- Compatibility roots such as `crate::core`, `crate::hooks`,
-  `crate::mcp`, `crate::shell`, and `crate::tui` are transitional shims.
+- Compatibility roots `crate::hooks`, `crate::mcp`, and `crate::tui` are
+  transitional shims.
 - Generated or installed agent-facing files are user-owned once written.
   Template refresh needs an explicit mutation path, visible diff, backup, or
   force/apply story.
@@ -160,9 +160,15 @@ Parent:
 Children:
 - [.claude/AGENTS.md](.claude/AGENTS.md)
 - [embedded/AGENTS.md](embedded/AGENTS.md)
+- [embedded/schemas/AGENTS.md](embedded/schemas/AGENTS.md)
 - [src/AGENTS.md](src/AGENTS.md)
 - [src/domain/AGENTS.md](src/domain/AGENTS.md)
+- [src/domain/card/AGENTS.md](src/domain/card/AGENTS.md)
+- [src/domain/feature/AGENTS.md](src/domain/feature/AGENTS.md)
+- [src/domain/install/AGENTS.md](src/domain/install/AGENTS.md)
 - [src/domain/proof/AGENTS.md](src/domain/proof/AGENTS.md)
+- [src/domain/run/AGENTS.md](src/domain/run/AGENTS.md)
+- [src/domain/task/AGENTS.md](src/domain/task/AGENTS.md)
 - [src/foundation/core/AGENTS.md](src/foundation/core/AGENTS.md)
 - [src/interfaces/cli/AGENTS.md](src/interfaces/cli/AGENTS.md)
 - [src/operations/AGENTS.md](src/operations/AGENTS.md)
