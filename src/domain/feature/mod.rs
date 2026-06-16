@@ -16,7 +16,8 @@ pub use registry::{
     SpecSectionReport, TransitionReport, accept, accept_with_qa_none, amend, cancel, create,
     diagnose, ensure_exists, feature_sidecar_dir, list, list_archived, list_tolerant,
     list_tolerant_with_entries, list_with_entries, note, set, set_with_report, ship, ship_gaps,
-    show, show_archived, start, status, status_label, titles, write_spec_section,
+    show, show_archived, start, status, status_label, titles, verified_child_commit_drift,
+    write_spec_section,
 };
 pub use schema::{FeatureStatus, normalize_acceptance_id};
 pub use verification::{

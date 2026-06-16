@@ -351,6 +351,7 @@ fn feature_domain_facade_exposes_the_deliberate_surface() {
             "titles".to_string(),
             "unarchive_feature".to_string(),
             "uncovered_acceptance".to_string(),
+            "verified_child_commit_drift".to_string(),
             "verify_feature".to_string(),
             "write_spec_section".to_string(),
         ]),

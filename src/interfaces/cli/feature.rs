@@ -640,6 +640,17 @@ fn ship_feature(
     if dry_run {
         println!("ship preview:");
         println!("  feature: {}", report.id);
+        // dec-ac-7-final: a non-blocking reminder that verified children carry
+        // proof from older commits. It never feeds the ship gate, so it cannot
+        // turn a passing preview into a blocked one.
+        let drifted = feature::verified_child_commit_drift(paths, &report.id)?;
+        if !drifted.is_empty() {
+            println!(
+                "  note: {} child task(s) verified at older commits (HEAD moved); re-verify if their code changed: {} (advisory; does not block ship)",
+                drifted.len(),
+                drifted.join(", ")
+            );
+        }
         println!("  target: shipped");
         println!("  full verify suite would run before shipping");
         println!("writes: none");

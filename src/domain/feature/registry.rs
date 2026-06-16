@@ -763,19 +763,6 @@ pub fn ship(
         } else {
             format!("would block ship {id}:\n  {}", gaps.join("\n  "))
         };
-        // dec-ac-7-final: a non-blocking reminder that verified children carry
-        // proof from older commits. It rides the dry-run note only, never `gaps`,
-        // so it cannot turn a passing preview into a blocked one.
-        let drifted = verified_child_commit_drift(paths, &record.id)?;
-        let note = if drifted.is_empty() {
-            note
-        } else {
-            format!(
-                "{note}\nadvisory (does not block ship): {} child task(s) verified at older commits (HEAD moved); re-verify if their code changed: {}",
-                drifted.len(),
-                drifted.join(", ")
-            )
-        };
         return Ok(no_op_report(id, record.status, note));
     }
 
@@ -806,7 +793,11 @@ pub fn ship_gaps(paths: &MaestroPaths, id: &str) -> Result<Vec<String>> {
 /// no longer matches HEAD (dec-ac-7-final). Both commits come from `git::head`,
 /// so a plain string compare matches the proof-staleness check. Empty outside a
 /// real git repo (no HEAD to compare against) or when every proof is current.
-fn verified_child_commit_drift(paths: &MaestroPaths, feature_id: &str) -> Result<Vec<String>> {
+///
+/// The `feature ship --dry-run` CLI renders this as a non-blocking `note:` line
+/// inside its ship preview; it never feeds `ship_gaps_for_record`, so it cannot
+/// turn a passing preview into a blocked one.
+pub fn verified_child_commit_drift(paths: &MaestroPaths, feature_id: &str) -> Result<Vec<String>> {
     let Some(head) = git::head(paths.repo_root()).unwrap_or(None) else {
         return Ok(Vec::new());
     };
