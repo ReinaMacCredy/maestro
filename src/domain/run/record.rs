@@ -99,6 +99,14 @@ fn normalize_event(payload: &Value) -> Option<Value> {
 
     if let Some(tool_input) = payload.get("tool_input") {
         event.insert("tool_input_hash".to_string(), json!(hash_value(tool_input)));
+        // Keep the edited path so a peer's warm-file overlap can be surfaced
+        // (src/domain/run/active.rs); the rest of tool_input stays hashed away.
+        if let Some(file_path) = tool_input.get("file_path").and_then(Value::as_str) {
+            let trimmed = file_path.trim();
+            if !trimmed.is_empty() {
+                event.insert("file_path".to_string(), json!(trimmed));
+            }
+        }
     }
 
     Some(Value::Object(event))
@@ -147,4 +155,65 @@ fn hash_value(value: &Value) -> String {
     let bytes =
         serde_json::to_vec(value).expect("invariant: serde_json::Value should serialize to JSON");
     sha256_prefixed(&bytes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn retains_file_path_from_edit_tool_input_and_keeps_the_hash() {
+        let payload = json!({
+            "event_type": "PostToolUse",
+            "session_id": "cli-test",
+            "tool_name": "Edit",
+            "tool_input": {"file_path": "src/auth/login.rs", "old_string": "a", "new_string": "b"},
+        });
+        let event = normalize_event(&payload).expect("Edit PostToolUse is an accepted event");
+        let object = event.as_object().expect("normalized event is an object");
+        assert_eq!(
+            object.get("file_path").and_then(Value::as_str),
+            Some("src/auth/login.rs"),
+            "file_path must be retained, not hashed away"
+        );
+        assert!(
+            object.contains_key("tool_input_hash"),
+            "tool_input_hash must still be recorded alongside file_path"
+        );
+    }
+
+    #[test]
+    fn omits_file_path_when_tool_input_carries_none() {
+        let payload = json!({
+            "event_type": "PostToolUse",
+            "session_id": "cli-test",
+            "tool_name": "Bash",
+            "tool_input": {"command": "cargo test"},
+        });
+        let event = normalize_event(&payload).expect("Bash PostToolUse is an accepted event");
+        let object = event.as_object().expect("normalized event is an object");
+        assert!(
+            !object.contains_key("file_path"),
+            "no file_path field when tool_input has none"
+        );
+        assert!(object.contains_key("tool_input_hash"));
+    }
+
+    #[test]
+    fn omits_file_path_when_blank() {
+        let payload = json!({
+            "event_type": "PostToolUse",
+            "session_id": "cli-test",
+            "tool_name": "Edit",
+            "tool_input": {"file_path": "   "},
+        });
+        let event = normalize_event(&payload).expect("accepted event");
+        assert!(
+            !event
+                .as_object()
+                .expect("object")
+                .contains_key("file_path"),
+            "a blank file_path is dropped"
+        );
+    }
 }

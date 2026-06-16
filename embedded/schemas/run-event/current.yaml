@@ -25,4 +25,5 @@ contracts:
       - activation_mode
       - duration_ms
       - tool_input_hash
+      - file_path             # edited path kept from Edit/Write tool_input for warm-file overlap
       - commit
