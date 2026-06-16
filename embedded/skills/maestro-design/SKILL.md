@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-version: 1.16.0
+version: 1.17.0
 description: "Use for design or brainstorming in a Maestro repo before implementation starts. Map current behavior, decide one fork at a time, record decisions and notes, then hand the approved contract to maestro-card."
 ---
 
@@ -41,7 +41,9 @@ maestro never auto-reads or auto-replies; you do.
    where code is involved. Write what you map into the spec as you go:
    `maestro feature spec <id> --section "Current state" --append "<finding>"`.
    The same verb fills `Problem` and creates any new section; `--replace`
-   rewrites a section wholesale.
+   rewrites a section wholesale. For a complex core domain, model it here: run
+   the DDD fitness gate in [reference/ddd.md](reference/ddd.md) before reaching
+   for domain-driven design (most cards do not need it; stop at the first NO).
 3. Put the problem and open questions on the feature:
    `maestro feature set <id> --description "<problem>" --question "<loose question>"`.
 4. Decide one fork at a time. For each fork, give the concrete example, the
