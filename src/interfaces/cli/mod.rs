@@ -7,7 +7,9 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use serde::Serialize;
 
 use crate::domain::feature::{FeatureStatus, FeatureView};
+use crate::domain::proof;
 use crate::domain::run;
+use crate::domain::task::{TaskRecord, TaskState};
 use crate::foundation::core::git;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::interfaces::hooks::record;
@@ -105,6 +107,71 @@ pub(crate) fn clean_worktree_note(code_other_dirty: usize) -> String {
     format!(
         "note: commit the {code_other_dirty} uncommitted code/other change(s) before the ship/verify step so proof reflects the intended tree"
     )
+}
+
+/// Shorten a git commit oid to its 7-char display prefix, leaving short
+/// sentinels (e.g. `<none>`) intact.
+pub(crate) fn short_commit(commit: &str) -> &str {
+    commit.get(..7).unwrap_or(commit)
+}
+
+/// The named repair for a stale proof: a refresh framed as "HEAD moved, likely
+/// no code change", naming the commit drift (`old->new`) when the stale reason
+/// carries one. Shared so `resume`/`status` and `feature ship --dry-run` name
+/// the same repair.
+pub(crate) fn stale_proof_repair(
+    task_id: &str,
+    stale_reasons: &[proof::ProofStaleReason],
+) -> String {
+    match stale_reasons
+        .iter()
+        .find(|reason| reason.field == "verified_commit")
+    {
+        Some(reason) => format!(
+            "proof: stale ({}->{}); refresh (HEAD moved, likely no code change): maestro task verify {task_id}",
+            short_commit(&reason.actual),
+            short_commit(&reason.expected),
+        ),
+        None => format!("proof: stale; refresh: maestro task verify {task_id}"),
+    }
+}
+
+/// Pure concern-only proof predicate: the actionable proof line for a focal
+/// task, or `None` when the proof is in no state the user must act on. A proof
+/// is a concern only when it is stale, failed, or missing on a task that still
+/// needs verification; an accepted proof, or a missing proof in any other
+/// state, is normal and renders nothing.
+fn proof_concern_line_from(
+    task_id: &str,
+    kind: &proof::ProofStatusKind,
+    state: &TaskState,
+    stale_reasons: &[proof::ProofStaleReason],
+) -> Option<String> {
+    match kind {
+        proof::ProofStatusKind::Stale => Some(stale_proof_repair(task_id, stale_reasons)),
+        proof::ProofStatusKind::Failed => Some(format!(
+            "proof: failed; fix, then re-verify: maestro task verify {task_id}"
+        )),
+        proof::ProofStatusKind::Missing if *state == TaskState::NeedsVerification => Some(format!(
+            "proof: missing; bind proof: maestro task verify {task_id}"
+        )),
+        proof::ProofStatusKind::Missing | proof::ProofStatusKind::Accepted => None,
+    }
+}
+
+/// The concern-only proof line for a focal task on `resume`/`status`, or `None`
+/// when there is nothing to act on. Pre-gates on the states where proof can be
+/// a concern so unrelated focal tasks never read proof; a soft proof read
+/// failure renders no line rather than breaking the surface.
+pub(crate) fn proof_concern_line(paths: &MaestroPaths, task: &TaskRecord) -> Option<String> {
+    if !matches!(
+        task.state,
+        TaskState::NeedsVerification | TaskState::Verified
+    ) {
+        return None;
+    }
+    let status = proof::proof_status(paths, &task.id).ok()?;
+    proof_concern_line_from(&task.id, &status.kind, &task.state, &status.stale_reasons)
 }
 
 #[derive(Debug, Parser)]
@@ -1512,4 +1579,106 @@ pub(super) fn detected_agent_hint() -> &'static str {
         return "codex";
     }
     "<claude|codex>"
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::proof::{ProofStaleReason, ProofStatusKind};
+
+    fn commit_drift() -> Vec<ProofStaleReason> {
+        vec![ProofStaleReason {
+            field: "verified_commit",
+            // expected = current HEAD (new); actual = stored verified_commit (old).
+            expected: "def5678def".to_string(),
+            actual: "abc1234abc".to_string(),
+        }]
+    }
+
+    #[test]
+    fn stale_with_commit_drift_names_old_to_new_and_verify_refresh() {
+        let line = proof_concern_line_from(
+            "task-x",
+            &ProofStatusKind::Stale,
+            &TaskState::Verified,
+            &commit_drift(),
+        )
+        .expect("stale proof is a concern");
+        assert_eq!(
+            line,
+            "proof: stale (abc1234->def5678); refresh (HEAD moved, likely no code change): maestro task verify task-x"
+        );
+    }
+
+    #[test]
+    fn stale_without_commit_drift_falls_back_to_bare_refresh() {
+        let reasons = vec![ProofStaleReason {
+            field: "contract_hash",
+            expected: "new".to_string(),
+            actual: "old".to_string(),
+        }];
+        let line = proof_concern_line_from(
+            "task-x",
+            &ProofStatusKind::Stale,
+            &TaskState::Verified,
+            &reasons,
+        )
+        .expect("stale proof is a concern");
+        assert_eq!(line, "proof: stale; refresh: maestro task verify task-x");
+    }
+
+    #[test]
+    fn failed_proof_names_fix_then_verify() {
+        let line = proof_concern_line_from(
+            "task-x",
+            &ProofStatusKind::Failed,
+            &TaskState::NeedsVerification,
+            &[],
+        )
+        .expect("failed proof is a concern");
+        assert_eq!(
+            line,
+            "proof: failed; fix, then re-verify: maestro task verify task-x"
+        );
+    }
+
+    #[test]
+    fn missing_proof_is_a_concern_only_while_needs_verification() {
+        let line = proof_concern_line_from(
+            "task-x",
+            &ProofStatusKind::Missing,
+            &TaskState::NeedsVerification,
+            &[],
+        )
+        .expect("missing proof on a needs_verification task is a concern");
+        assert_eq!(
+            line,
+            "proof: missing; bind proof: maestro task verify task-x"
+        );
+        for state in [
+            TaskState::Draft,
+            TaskState::Exploring,
+            TaskState::Ready,
+            TaskState::InProgress,
+            TaskState::Verified,
+        ] {
+            assert!(
+                proof_concern_line_from("task-x", &ProofStatusKind::Missing, &state, &[]).is_none(),
+                "missing proof must be silent in {state:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn accepted_proof_is_never_a_concern() {
+        assert!(
+            proof_concern_line_from(
+                "task-x",
+                &ProofStatusKind::Accepted,
+                &TaskState::Verified,
+                &[]
+            )
+            .is_none()
+        );
+    }
 }

@@ -10,7 +10,7 @@ use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::safe_write::write_string_atomic;
 use crate::foundation::core::time::utc_now_timestamp;
 use crate::interfaces::cli::{
-    GitReadout, ResumeArgs, clean_worktree_note, git_readout, render_git_line,
+    GitReadout, ResumeArgs, clean_worktree_note, git_readout, proof_concern_line, render_git_line,
 };
 
 const RESUME_SCHEMA: &str = "maestro.resume.v1";
@@ -62,6 +62,9 @@ fn build_resume_report(
         .map(|task| task::task_yaml_path(&paths.tasks_dir(), &task.id))
         .transpose()?;
     let next = next_action_for(selected_task.as_ref(), selected_feature.as_ref());
+    let proof_concern = selected_task
+        .as_ref()
+        .and_then(|task| proof_concern_line(paths, task));
     let git = git_readout(paths);
     let ship_or_verify_pending = verb_is_ship_or_verify_shaped(
         selected_task.as_ref().map(|task| &task.state),
@@ -115,6 +118,7 @@ fn build_resume_report(
         ship_or_verify_pending,
         blockers: blocker_lines(selected_task.as_ref()),
         next,
+        proof_concern,
         required_reads,
         guardrails,
         memory: memory_lines(paths),
@@ -241,7 +245,7 @@ fn next_action_for(
                 task.id
             ),
             task::TaskState::NeedsVerification => {
-                format!("recover proof with maestro query proof {}", task.id)
+                format!("recover proof with maestro task verify {}", task.id)
             }
             task::TaskState::Verified
             | task::TaskState::Rejected
@@ -438,6 +442,9 @@ fn render_resume_report(report: &ResumeReport) -> String {
     }
     push_line(&mut out, "next:");
     push_line(&mut out, format!("  {}", report.next));
+    if let Some(concern) = &report.proof_concern {
+        push_line(&mut out, concern.clone());
+    }
     write_list(&mut out, "required reads", &report.required_reads);
     write_list(&mut out, "guardrails", &report.guardrails);
     if !report.memory.is_empty() {
@@ -589,6 +596,10 @@ struct ResumeReport {
     ship_or_verify_pending: bool,
     blockers: Vec<String>,
     next: String,
+    /// Concern-only proof repair line for the focal task; render-only, not part
+    /// of the serialized contract. `None` when the proof needs no action.
+    #[serde(skip)]
+    proof_concern: Option<String>,
     required_reads: Vec<String>,
     guardrails: Vec<String>,
     /// Recent archive lid lines (SPEC-archive-memory-2 R3); empty when

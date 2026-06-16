@@ -9,8 +9,8 @@ use crate::domain::task::{self, TaskRecord, TaskState};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::table;
 use crate::interfaces::cli::{
-    GitReadout, StatusArgs, clean_worktree_note, feature_next_label, git_readout, recovery_label,
-    render_git_line,
+    GitReadout, StatusArgs, clean_worktree_note, feature_next_label, git_readout,
+    proof_concern_line, recovery_label, render_git_line,
 };
 use crate::operations::harness;
 
@@ -122,6 +122,7 @@ fn build_task_next_report(paths: &MaestroPaths) -> Result<StatusReport> {
         Some(action) => Some(action),
         None => choose_next_task_action(paths, &live_tasks)?,
     };
+    let proof_concern = focal_proof_concern(paths, next_action.as_ref(), &live_tasks);
     let ready_to_ship_features = ready_to_ship_features(&features);
     for (_, path, error, _, _) in unreadable_features {
         warnings.push(WarningJson {
@@ -150,6 +151,7 @@ fn build_task_next_report(paths: &MaestroPaths) -> Result<StatusReport> {
         current_feature,
         git: None,
         ship_or_verify_pending: false,
+        proof_concern,
         warnings,
         next_action,
         tasks: TaskSummaryJson::default(),
@@ -213,6 +215,9 @@ fn print_status(report: StatusReport, json: bool) -> Result<()> {
         print_next_action(action);
     } else {
         println!("no actionable tasks");
+    }
+    if let Some(concern) = &report.proof_concern {
+        println!("{concern}");
     }
     if !report.task_rows.is_empty() {
         println!("ACTIONS");
@@ -290,6 +295,9 @@ fn print_task_next(report: &StatusReport) {
     print_audit_hint(report.audit_hint.as_ref());
     if let Some(action) = &report.next_action {
         print_next_action(action);
+        if let Some(concern) = &report.proof_concern {
+            println!("{concern}");
+        }
         return;
     }
     println!("no actionable task");
@@ -365,6 +373,18 @@ fn print_next_action(action: &NextAction) {
     if let Some(inspect) = action.inspect.as_deref() {
         println!("inspect: {inspect}");
     }
+}
+
+/// The concern-only proof line for the focal (next-action) task, shared by both
+/// the `status` and `task next` builders so the surfaces never diverge.
+fn focal_proof_concern(
+    paths: &MaestroPaths,
+    next_action: Option<&NextAction>,
+    live_tasks: &[TaskRecord],
+) -> Option<String> {
+    let task_id = next_action?.task_id.as_deref()?;
+    let task = live_tasks.iter().find(|task| task.id == task_id)?;
+    proof_concern_line(paths, task)
 }
 
 fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
@@ -448,6 +468,7 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
         Some(action) => Some(action),
         None => choose_next_task_action(paths, &live_tasks)?,
     };
+    let proof_concern = focal_proof_concern(paths, next_action.as_ref(), &live_tasks);
     let ready_to_ship_features = ready_to_ship_features(&features);
     let mut active_features = active_feature_rows(&features);
     for (id, path, error, hint, _) in unreadable_features {
@@ -492,6 +513,7 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
         current_feature,
         git,
         ship_or_verify_pending,
+        proof_concern,
         warnings,
         next_action,
         tasks: TaskSummaryJson::from_tasks(&tasks),
@@ -545,8 +567,8 @@ fn task_action(paths: &MaestroPaths, task: &TaskRecord) -> Result<Option<NextAct
         TaskState::NeedsVerification => NextAction::task(
             "proof_recovery",
             task,
-            runnable_command(["maestro", "query", "proof", task.id.as_str()]),
-            "verification needs proof recovery",
+            runnable_command(["maestro", "task", "verify", task.id.as_str()]),
+            "verification needs proof; re-verify",
         ),
         TaskState::Ready => NextAction::task(
             "claim_task",
@@ -662,6 +684,11 @@ struct StatusReport {
     /// note. Render-only, not part of the serialized contract.
     #[serde(skip)]
     ship_or_verify_pending: bool,
+    /// Concern-only proof repair line for the focal (next-action) task;
+    /// render-only, not part of the serialized contract. `None` when the proof
+    /// needs no action.
+    #[serde(skip)]
+    proof_concern: Option<String>,
     warnings: Vec<WarningJson>,
     next_action: Option<NextAction>,
     tasks: TaskSummaryJson,
@@ -689,6 +716,7 @@ impl StatusReport {
             current_feature: None,
             git: None,
             ship_or_verify_pending: false,
+            proof_concern: None,
             warnings: vec![WarningJson {
                 code: "not_initialized".to_string(),
                 message: reason,

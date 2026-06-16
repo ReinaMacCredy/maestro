@@ -1594,3 +1594,148 @@ fn untabify(output: &str) -> String {
         .collect::<Vec<_>>()
         .join("\n")
 }
+
+/// ac-4/5/6: a task left in needs_verification with a failed proof surfaces a
+/// concern-only proof line that names the exact repair (`maestro task verify`),
+/// on both the default `resume` and `status` surfaces, and the verb pointer is
+/// `task verify`, not `query proof`.
+#[test]
+fn needs_verification_failed_proof_surfaces_verify_repair_on_resume_and_status() {
+    let temp = setup_repo("maestro-proof-concern-failed");
+    let repo = temp.path();
+    run(
+        repo,
+        &[
+            "task",
+            "create",
+            "Failed proof concern",
+            "--check",
+            "observable behavior",
+        ],
+    );
+    let id = id_by_title(repo, "Failed proof concern");
+    run(repo, &["task", "explore", &id]);
+    run(repo, &["task", "accept", &id]);
+    run(repo, &["task", "claim", &id]);
+    // No backing event: complete fails verification and persists status=failed
+    // while the task remains in needs_verification.
+    let complete = maestro(
+        repo,
+        &[
+            "task",
+            "complete",
+            &id,
+            "--summary",
+            "done",
+            "--claim",
+            "observable behavior",
+        ],
+    );
+    assert_failure(&complete, &["task", "complete", &id]);
+
+    let resume = run(repo, &["resume"]);
+    assert!(
+        resume.contains(&format!(
+            "proof: failed; fix, then re-verify: maestro task verify {id}"
+        )),
+        "resume must surface the failed-proof concern line:\n{resume}"
+    );
+    assert!(
+        resume.contains(&format!("recover proof with maestro task verify {id}")),
+        "resume next action must point at task verify, not query proof:\n{resume}"
+    );
+
+    let status = run(repo, &["status"]);
+    assert!(
+        status.contains(&format!(
+            "proof: failed; fix, then re-verify: maestro task verify {id}"
+        )),
+        "status must surface the failed-proof concern line:\n{status}"
+    );
+    assert!(
+        status.contains(&format!("maestro task verify {id}")),
+        "status next action must point at task verify:\n{status}"
+    );
+}
+
+/// ac-4/5: a verified task whose proof commit no longer matches HEAD surfaces a
+/// stale concern framed as a refresh and naming the commit drift; a still-fresh
+/// verified task surfaces no concern line at all.
+#[test]
+fn verified_stale_proof_surfaces_refresh_repair_via_resume_task() {
+    let (temp, repository) = setup_git_repo("maestro-proof-concern-stale");
+    let repo = temp.path();
+    run(
+        repo,
+        &[
+            "task",
+            "create",
+            "Stale proof concern",
+            "--check",
+            "observable behavior",
+        ],
+    );
+    let id = id_by_title(repo, "Stale proof concern");
+    run(repo, &["task", "explore", &id]);
+    run(repo, &["task", "accept", &id]);
+    run(repo, &["task", "claim", &id]);
+    run(
+        repo,
+        &[
+            "event",
+            "create",
+            "--task-id",
+            &id,
+            "--claim",
+            "observable behavior",
+        ],
+    );
+    let complete = run(
+        repo,
+        &[
+            "task",
+            "complete",
+            &id,
+            "--summary",
+            "done",
+            "--claim",
+            "observable behavior",
+        ],
+    );
+    assert!(
+        complete.contains(&format!("task verified: {id}")),
+        "task should auto-verify to verified:\n{complete}"
+    );
+    let verified_oid = repository
+        .head()
+        .ok()
+        .and_then(|head| head.target())
+        .expect("invariant: HEAD should resolve after verify")
+        .to_string();
+
+    // Fresh verified proof: no concern line on the focal verified task.
+    let fresh = run(repo, &["resume", "--task", &id]);
+    assert!(
+        !fresh.contains("proof:"),
+        "a fresh verified task must surface no proof concern line:\n{fresh}"
+    );
+
+    // Move HEAD so the stored verified_commit no longer matches.
+    commit_worktree(&repository, "advance head past the verified commit");
+    let new_oid = repository
+        .head()
+        .ok()
+        .and_then(|head| head.target())
+        .expect("invariant: HEAD should resolve after advancing")
+        .to_string();
+
+    let stale = run(repo, &["resume", "--task", &id]);
+    assert!(
+        stale.contains(&format!(
+            "proof: stale ({}->{}); refresh (HEAD moved, likely no code change): maestro task verify {id}",
+            &verified_oid[..7],
+            &new_oid[..7],
+        )),
+        "stale verified proof must surface the refresh repair naming the commit drift:\n{stale}"
+    );
+}
