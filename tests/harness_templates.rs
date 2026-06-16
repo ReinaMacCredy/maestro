@@ -86,6 +86,57 @@ fn harness_yaml_is_valid_yaml() {
 }
 
 #[test]
+fn harness_config_round_trips_projects_declaration() {
+    let temp_dir = TestTempDir::new("maestro-harness-test");
+    let mut config = HarnessConfig::detect(temp_dir.path());
+    config.projects = vec!["services/*".to_string(), "apps/*".to_string()];
+
+    let yaml = harness_yml(&config).expect("invariant: harness config should serialize");
+    assert!(yaml.contains("projects:"));
+    assert!(yaml.contains("services/*"));
+    assert!(yaml.contains("apps/*"));
+
+    let parsed: HarnessConfig =
+        serde_yaml::from_str(&yaml).expect("invariant: harness config should deserialize");
+    assert_eq!(parsed, config);
+    assert_eq!(parsed.projects, vec!["services/*", "apps/*"]);
+}
+
+#[test]
+fn harness_config_without_projects_key_is_forward_compatible() {
+    let legacy = "\
+schema_version: maestro.harness.v1
+stack:
+  kind: rust
+  detected_by:
+    - Cargo.toml
+  verify:
+    - cargo test
+escalation:
+  enabled: true
+  warn_after: 2
+  act_after: 3
+";
+
+    let config: HarnessConfig =
+        serde_yaml::from_str(legacy).expect("invariant: legacy harness.yml should deserialize");
+    assert!(config.projects.is_empty());
+
+    let reserialized = harness_yml(&config).expect("invariant: harness config should re-serialize");
+    assert!(!reserialized.contains("projects:"));
+}
+
+#[test]
+fn harness_init_default_emits_no_projects_key() {
+    let temp_dir = TestTempDir::new("maestro-harness-test");
+    let config = HarnessConfig::detect(temp_dir.path());
+    assert!(config.projects.is_empty());
+
+    let harness = harness_yml(&config).expect("invariant: harness config should serialize");
+    assert!(!harness.contains("projects:"));
+}
+
+#[test]
 fn maestro_paths_include_phase_2_artifact_locations() {
     let temp_dir = TestTempDir::new("maestro-harness-test");
     let paths = MaestroPaths::new(temp_dir.path().to_path_buf());

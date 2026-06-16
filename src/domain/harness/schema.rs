@@ -37,6 +37,11 @@ pub struct HarnessConfig {
     pub schema_version: String,
     /// Detected stack and verification defaults.
     pub stack: StackConfig,
+    /// Optional declared project scopes (glob or literal strings, as authored).
+    /// Empty means no declaration; init emits no key (forward-compatible with
+    /// legacy harness.yml files that predate this field).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub projects: Vec<String>,
     /// Optional recurrence-threshold surfacing policy. Missing means disabled for
     /// legacy repos so read verbs keep their old behavior until the repo opts in.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -169,6 +174,7 @@ impl HarnessConfig {
         Self {
             schema_version: HARNESS_SCHEMA_VERSION.to_string(),
             stack: detect_stack(repo_root),
+            projects: Vec::new(),
             escalation: Some(EscalationConfig::enabled_default()),
             audit: None,
             claims_only_verification: false,
