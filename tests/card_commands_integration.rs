@@ -347,6 +347,114 @@ fn project_survives_a_typed_update_via_the_fold_carry() {
     );
 }
 
+/// Plant a `.maestro/harness/harness.yml` declaring `projects:` so the
+/// folder->project auto-infer (T3) activates. The body is the minimal valid
+/// `HarnessConfig` plus the declared scopes.
+fn write_projects_declaration(repo: &Path, patterns: &[&str]) {
+    let dir = repo.join(".maestro/harness");
+    fs::create_dir_all(&dir).expect("invariant: harness dir should be creatable");
+    let mut yaml = String::from(
+        "schema_version: maestro.harness.v1\n\
+         stack:\n  kind: generic\n  detected_by: []\n  verify: []\n\
+         projects:\n",
+    );
+    for pattern in patterns {
+        yaml.push_str(&format!("  - \"{pattern}\"\n"));
+    }
+    fs::write(dir.join("harness.yml"), yaml).expect("invariant: harness.yml should be writable");
+}
+
+/// T3 ac-2/ac-3: with `projects: ["*"]` declared, a card created from a
+/// subfolder infers `project` from the first path segment with no `--project`
+/// flag, driven through the real binary's `current_dir`.
+#[test]
+fn create_infers_project_from_subfolder_under_top_level_wildcard() {
+    let temp = cards_repo("s2-infer-wildcard");
+    let repo = temp.path();
+    write_projects_declaration(repo, &["*"]);
+    let subfolder = repo.join("svc-pay/src");
+    fs::create_dir_all(&subfolder).expect("invariant: subfolder should be creatable");
+
+    run(&subfolder, &["create", "-t", "bug", "Race in checkout"]);
+    let bug = id_by_title(repo, "Race in checkout");
+    assert_eq!(
+        card_doc(repo, &bug)["project"],
+        "svc-pay",
+        "a card created under svc-pay/ infers project=svc-pay with no flag"
+    );
+}
+
+/// T3: `--project` always overrides inference -- the explicit name wins even
+/// when the cwd would infer a different segment.
+#[test]
+fn explicit_project_flag_overrides_inference() {
+    let temp = cards_repo("s2-infer-override");
+    let repo = temp.path();
+    write_projects_declaration(repo, &["*"]);
+    let subfolder = repo.join("svc-pay/src");
+    fs::create_dir_all(&subfolder).expect("invariant: subfolder should be creatable");
+
+    run(
+        &subfolder,
+        &[
+            "create",
+            "-t",
+            "bug",
+            "Shared concern",
+            "--project",
+            "shared",
+        ],
+    );
+    let bug = id_by_title(repo, "Shared concern");
+    assert_eq!(
+        card_doc(repo, &bug)["project"],
+        "shared",
+        "--project overrides the svc-pay the cwd would infer"
+    );
+}
+
+/// T3 activation gate: with NO `projects:` declared, the same subfolder create
+/// infers nothing -- inference is off until a repo opts in.
+#[test]
+fn create_without_projects_declaration_infers_nothing() {
+    let temp = cards_repo("s2-infer-no-declaration");
+    let repo = temp.path();
+    let subfolder = repo.join("svc-pay/src");
+    fs::create_dir_all(&subfolder).expect("invariant: subfolder should be creatable");
+
+    run(&subfolder, &["create", "-t", "bug", "No scope here"]);
+    let bug = id_by_title(repo, "No scope here");
+    assert!(
+        card_doc(repo, &bug).get("project").is_none(),
+        "no projects: declaration means no inference"
+    );
+}
+
+/// T3 ac-11 guard: a card created from any subfolder still lands in the single
+/// root `.maestro/cards/`; the subfolder cwd does not split the store.
+#[test]
+fn subfolder_create_lands_in_the_single_root_card_store() {
+    let temp = cards_repo("s2-infer-single-store");
+    let repo = temp.path();
+    write_projects_declaration(repo, &["*"]);
+    let subfolder = repo.join("svc-pay/src");
+    fs::create_dir_all(&subfolder).expect("invariant: subfolder should be creatable");
+
+    run(&subfolder, &["create", "-t", "bug", "Lands at root"]);
+    let bug = id_by_title(repo, "Lands at root");
+    let record = card_support::card_record_path(repo, &bug);
+    assert!(
+        record.starts_with(repo.join(".maestro/cards")),
+        "the card created from svc-pay/src lives under the single root .maestro/cards/, \
+         got {}",
+        record.display()
+    );
+    assert!(
+        !subfolder.join(".maestro").exists(),
+        "no nested .maestro/ store is created under the subfolder"
+    );
+}
+
 /// SPEC-archive-memory A1: `list --grep` filters case-insensitively over
 /// title, description, and sidecars, composing with the existing filters;
 /// `--archived` extends the same query into `archive/cards/` with rows

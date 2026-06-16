@@ -1483,6 +1483,56 @@ pub(super) fn actor() -> String {
     std::env::var("MAESTRO_ACTOR").unwrap_or_else(|_| "maestro".to_string())
 }
 
+/// Resolve a card's project at create time (T3): an explicit `--project` always
+/// wins and short-circuits inference; otherwise the repo's declared `projects:`
+/// scopes drive folder->project auto-infer from the real cwd. Shared by the four
+/// explicit create entry points (create / feature new / task create / decision
+/// new). `None` means store no project.
+pub(super) fn resolve_project(
+    explicit: Option<String>,
+    paths: &MaestroPaths,
+) -> Result<Option<String>> {
+    let cwd = env::current_dir()?;
+    resolve_project_in(explicit, paths, &cwd)
+}
+
+/// Inner seam of [`resolve_project`] with the cwd passed in, so the inference
+/// path is testable without mutating the process cwd. `repo_root` from discovery
+/// is canonicalized, so `cwd` is canonicalized here to match -- otherwise a
+/// `/var` vs `/private/var`-style mismatch on macOS would make `strip_prefix`
+/// silently fail and turn inference off.
+pub(super) fn resolve_project_in(
+    explicit: Option<String>,
+    paths: &MaestroPaths,
+    cwd: &std::path::Path,
+) -> Result<Option<String>> {
+    if let Some(project) = explicit {
+        return Ok(Some(project));
+    }
+    // Function-local root import: shadows the cli `harness` submodule so the
+    // facade call is a plain root import (the sanctioned form), not a forbidden
+    // deep `operations::harness::*` path under the architecture guard.
+    use crate::operations::harness;
+    // Inference is best-effort metadata: a config that fails to load (e.g. a
+    // symlinked `.maestro` the read guard rejects, or a malformed file) degrades
+    // to no-inference rather than aborting the create the way an unconditional
+    // `?` would -- create never read the harness config before this.
+    let patterns = harness::load_config(paths)
+        .ok()
+        .flatten()
+        .map(|config| config.projects)
+        .unwrap_or_default();
+    if patterns.is_empty() {
+        return Ok(None);
+    }
+    let cwd = cwd.canonicalize().unwrap_or_else(|_| cwd.to_path_buf());
+    Ok(crate::foundation::core::paths::infer_project(
+        paths.repo_root(),
+        &cwd,
+        &patterns,
+    ))
+}
+
 pub(super) fn cli_run_id() -> String {
     for key in [
         "MAESTRO_SESSION_ID",

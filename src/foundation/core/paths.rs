@@ -136,6 +136,53 @@ impl MaestroPaths {
     }
 }
 
+/// Infer a card's project from where it is being created, gated by the repo's
+/// declared `projects:` scopes (T3). Purely lexical: `cwd` is passed in (not read
+/// from the process) and matched against `repo_root` by prefix, so it is
+/// unit-testable without touching disk or mutating the global cwd.
+///
+/// Patterns are evaluated IN ORDER; the first match's captured segment wins.
+/// Exactly three declared forms are supported:
+/// - `*`            -> the first path segment (`svc-pay/src` -> `svc-pay`).
+/// - `prefix/*`     -> the second segment when the first equals `prefix`
+///   (`services/pay/x` -> `pay`; bare `services` -> None).
+/// - literal        -> the literal when it equals the first segment
+///   (`fe/src` with `["fe"]` -> `fe`).
+///
+/// Returns `None` when: `patterns` is empty (the activation gate -- no
+/// declaration means nothing is inferred), `cwd` equals `repo_root` (no relative
+/// segments), `cwd` is not under `repo_root`, or no pattern matches.
+pub fn infer_project(repo_root: &Path, cwd: &Path, patterns: &[String]) -> Option<String> {
+    if patterns.is_empty() {
+        return None;
+    }
+    let relative = cwd.strip_prefix(repo_root).ok()?;
+    let segments: Vec<&str> = relative
+        .components()
+        .filter_map(|component| component.as_os_str().to_str())
+        .filter(|segment| !segment.is_empty())
+        .collect();
+    let first = segments.first()?;
+
+    for pattern in patterns {
+        if pattern == "*" {
+            return Some((*first).to_string());
+        }
+        if let Some(prefix) = pattern.strip_suffix("/*") {
+            if *first == prefix
+                && let Some(second) = segments.get(1)
+            {
+                return Some((*second).to_string());
+            }
+            continue;
+        }
+        if *first == pattern.as_str() {
+            return Some(pattern.clone());
+        }
+    }
+    None
+}
+
 /// Discover the repository root from the current working directory.
 pub fn discover_repo_root() -> Result<PathBuf> {
     let current_dir = env::current_dir().context("failed to read current working directory")?;
@@ -267,6 +314,103 @@ mod tests {
                 .expect("invariant: project dir should canonicalize")
         );
         fs::remove_dir_all(root).expect("invariant: temp root should be removable");
+    }
+
+    #[test]
+    fn infer_top_level_wildcard_captures_first_segment() {
+        let root = Path::new("/repo");
+        let patterns = vec!["*".to_string()];
+        assert_eq!(
+            infer_project(root, &root.join("svc-pay/src"), &patterns),
+            Some("svc-pay".to_string())
+        );
+    }
+
+    #[test]
+    fn infer_top_level_wildcard_at_repo_root_is_none() {
+        let root = Path::new("/repo");
+        let patterns = vec!["*".to_string()];
+        assert_eq!(infer_project(root, root, &patterns), None);
+    }
+
+    #[test]
+    fn infer_nested_prefix_captures_second_segment() {
+        let root = Path::new("/repo");
+        let patterns = vec!["services/*".to_string()];
+        assert_eq!(
+            infer_project(root, &root.join("services/pay/x"), &patterns),
+            Some("pay".to_string())
+        );
+    }
+
+    #[test]
+    fn infer_nested_prefix_without_second_segment_is_none() {
+        let root = Path::new("/repo");
+        let patterns = vec!["services/*".to_string()];
+        assert_eq!(infer_project(root, &root.join("services"), &patterns), None);
+    }
+
+    #[test]
+    fn infer_nested_prefix_non_matching_first_segment_is_none() {
+        let root = Path::new("/repo");
+        let patterns = vec!["services/*".to_string()];
+        assert_eq!(infer_project(root, &root.join("fe/x"), &patterns), None);
+    }
+
+    #[test]
+    fn infer_literal_matches_first_segment() {
+        let root = Path::new("/repo");
+        let patterns = vec!["fe".to_string(), "be".to_string()];
+        assert_eq!(
+            infer_project(root, &root.join("fe/src"), &patterns),
+            Some("fe".to_string())
+        );
+    }
+
+    #[test]
+    fn infer_literal_set_ignores_unlisted_folder() {
+        let root = Path::new("/repo");
+        let patterns = vec!["fe".to_string(), "be".to_string()];
+        assert_eq!(infer_project(root, &root.join("docs/x"), &patterns), None);
+    }
+
+    #[test]
+    fn infer_without_declaration_is_always_none() {
+        let root = Path::new("/repo");
+        assert_eq!(infer_project(root, &root.join("svc-pay/src"), &[]), None);
+    }
+
+    #[test]
+    fn infer_first_matching_pattern_wins() {
+        let root = Path::new("/repo");
+        // A literal `fe` ahead of the catch-all `*` must capture `fe` itself,
+        // not let the wildcard win -- ordering, not specificity, decides.
+        let patterns = vec!["fe".to_string(), "*".to_string()];
+        assert_eq!(
+            infer_project(root, &root.join("fe/deep/leaf"), &patterns),
+            Some("fe".to_string())
+        );
+    }
+
+    #[test]
+    fn infer_captures_by_segment_index_not_depth() {
+        let root = Path::new("/repo");
+        // Deeper than the pattern reaches: `*` still grabs the FIRST segment,
+        // never the leaf.
+        let patterns = vec!["*".to_string()];
+        assert_eq!(
+            infer_project(root, &root.join("svc-pay/a/b/c"), &patterns),
+            Some("svc-pay".to_string())
+        );
+    }
+
+    #[test]
+    fn infer_cwd_outside_repo_is_none() {
+        let patterns = vec!["*".to_string()];
+        assert_eq!(
+            infer_project(Path::new("/repo"), Path::new("/other/svc-pay"), &patterns),
+            None
+        );
     }
 
     fn temp_root(prefix: &str) -> PathBuf {

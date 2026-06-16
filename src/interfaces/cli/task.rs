@@ -178,6 +178,7 @@ fn create_task(
     if let Some(target) = feature.as_deref() {
         guard_feature_target(paths, target)?;
     }
+    let project = super::resolve_project(project, paths)?;
     let now = utc_now_timestamp();
     let task = task::create_task(
         &paths.tasks_dir(),

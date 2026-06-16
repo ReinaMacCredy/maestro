@@ -626,6 +626,7 @@ fn harness_operation_owns_implementation() {
             "detect".to_string(),
             "load_backlog".to_string(),
             "load_backlog_in_cards".to_string(),
+            "load_config".to_string(),
             "looks_like_correction".to_string(),
             "measure".to_string(),
             "over_threshold_items".to_string(),

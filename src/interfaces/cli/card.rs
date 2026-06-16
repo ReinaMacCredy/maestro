@@ -300,7 +300,7 @@ pub fn create(args: CreateArgs) -> Result<()> {
         new_card.parent = Some(parent);
     }
     new_card.description = args.description;
-    new_card.project = args.project;
+    new_card.project = super::resolve_project(args.project, &paths)?;
     card::store::create_card(&paths, &new_card)?;
     super::emit_card_touch(&paths, &id);
     if args.id_only {

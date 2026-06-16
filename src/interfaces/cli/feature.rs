@@ -438,6 +438,7 @@ fn new_feature(
     project: Option<String>,
     id_only: bool,
 ) -> Result<()> {
+    let project = super::resolve_project(project, paths)?;
     let id = feature::create(paths, title, project)?;
     let initialized = description.is_some() || !questions.is_empty();
     if initialized {

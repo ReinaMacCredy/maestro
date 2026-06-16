@@ -82,6 +82,7 @@ fn new_decision(
     if title.trim().is_empty() {
         bail!("decision title cannot be empty; e.g. `maestro decision new \"Adopt X for Y\"`");
     }
+    let project = super::resolve_project(project, paths)?;
     let report = decisions::create_open(paths, title, context, feature, project)?;
     emit_feature_touch(paths, &report.record);
     if id_only {
@@ -110,6 +111,7 @@ fn new_locked_decision(
     if title.trim().is_empty() {
         bail!("decision title cannot be empty; e.g. `maestro decision new \"Adopt X for Y\"`");
     }
+    let project = super::resolve_project(project, paths)?;
     let report = decisions::create_locked(paths, title, context, feature, inputs, project)?;
     emit_feature_touch(paths, &report.record);
     if id_only {
