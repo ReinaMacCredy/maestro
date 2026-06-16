@@ -33,6 +33,9 @@ pub fn ready(args: ReadyArgs) -> Result<()> {
     if let Some(feature) = args.feature.as_deref() {
         ready.retain(|c| c.parent.as_deref() == Some(feature));
     }
+    if let Some(project) = args.project.as_deref() {
+        ready.retain(|c| c.project.as_deref() == Some(project));
+    }
     if args.json {
         render_ready_json(&ready)?;
     } else {
@@ -118,6 +121,9 @@ pub fn list(args: ListArgs) -> Result<()> {
             }
             !drop
         });
+    }
+    if let Some(project) = args.project.as_deref() {
+        rows.retain(|(c, _)| c.project.as_deref() == Some(project));
     }
     if args.json {
         render_list_json(&rows)?;
@@ -606,11 +612,12 @@ fn render_ready(cards: &[&card::schema::Card]) {
     for (i, c) in cards.iter().enumerate() {
         let rank = i + 1;
         println!(
-            "  {rank}. [P{rank}] {:<id_width$}  {:<type_width$}  {:<title_width$}  {}",
+            "  {rank}. [P{rank}] {:<id_width$}  {:<type_width$}  {:<title_width$}  {}{}",
             c.id,
             c.card_type.as_str(),
             c.title,
             claim_label(c),
+            project_badge(c),
         );
     }
 }
@@ -655,21 +662,59 @@ fn render_list(rows: &[(&card::schema::Card, bool)], hidden: usize, archived: bo
         .map(|(c, _)| c.parent.as_deref().unwrap_or("-").len())
         .max()
         .unwrap_or(0);
-    for (i, (c, archived)) in rows.iter().enumerate() {
+    // Column widths are global so alignment stays consistent whether the list is
+    // flat or grouped; only headers are added inside groups.
+    let print_row = |rank: usize, c: &card::schema::Card, archived: bool| {
         let marker = match (archived, c.parent.as_deref()) {
             (true, Some(parent)) => format!("  (archived: {parent})"),
             (true, None) => "  (archived)".to_string(),
             (false, _) => String::new(),
         };
         println!(
-            "  {}. {:<id_width$}  {:<type_width$}  {:<status_width$}  {:<parent_width$}  {}{marker}",
-            i + 1,
+            "  {rank}. {:<id_width$}  {:<type_width$}  {:<status_width$}  {:<parent_width$}  {}{}{marker}",
             c.id,
             c.card_type.as_str(),
             c.status,
             c.parent.as_deref().unwrap_or("-"),
             c.title,
+            project_badge(c),
         );
+    };
+
+    let mut projects: Vec<&str> = rows
+        .iter()
+        .filter_map(|(c, _)| c.project.as_deref())
+        .collect();
+    projects.sort_unstable();
+    projects.dedup();
+    // Group under project headers only when >=2 distinct projects appear among the
+    // shown rows (ac-6); with 0 or 1 distinct project the list is flat and, for the
+    // zero case, byte-identical to today's badge-free output (ac-3).
+    if projects.len() < 2 {
+        for (i, (c, archived)) in rows.iter().enumerate() {
+            print_row(i + 1, c, *archived);
+        }
+        return;
+    }
+    let mut rank = 0usize;
+    for project in &projects {
+        println!("{project}:");
+        for (c, archived) in rows
+            .iter()
+            .filter(|(c, _)| c.project.as_deref() == Some(project))
+        {
+            rank += 1;
+            print_row(rank, c, *archived);
+        }
+    }
+    let mut printed_unassigned = false;
+    for (c, archived) in rows.iter().filter(|(c, _)| c.project.is_none()) {
+        if !printed_unassigned {
+            println!("unassigned:");
+            printed_unassigned = true;
+        }
+        rank += 1;
+        print_row(rank, c, *archived);
     }
 }
 
@@ -782,6 +827,15 @@ fn claim_label(c: &card::schema::Card) -> String {
     }
 }
 
+/// Trailing ` [<project>]` token for a row whose card carries a project scope, or
+/// the empty string otherwise. A project-less row stays byte-identical to today.
+fn project_badge(c: &card::schema::Card) -> String {
+    match c.project.as_deref() {
+        Some(project) => format!("  [{project}]"),
+        None => String::new(),
+    }
+}
+
 #[derive(Serialize)]
 struct ReadyJson<'a> {
     version: u8,
@@ -799,6 +853,7 @@ struct ReadyCardJson<'a> {
     status: &'a str,
     parent: Option<&'a str>,
     claimed_by: Option<&'a str>,
+    project: Option<&'a str>,
 }
 
 impl<'a> ReadyCardJson<'a> {
@@ -811,6 +866,7 @@ impl<'a> ReadyCardJson<'a> {
             status: &card.status,
             parent: card.parent.as_deref(),
             claimed_by: card.claimed_by.as_deref(),
+            project: card.project.as_deref(),
         }
     }
 }
@@ -832,6 +888,7 @@ struct ListCardJson<'a> {
     parent: Option<&'a str>,
     claimed_by: Option<&'a str>,
     claimed_at: Option<&'a str>,
+    project: Option<&'a str>,
     archived: bool,
 }
 
@@ -845,6 +902,7 @@ impl<'a> ListCardJson<'a> {
             parent: card.parent.as_deref(),
             claimed_by: card.claimed_by.as_deref(),
             claimed_at: card.claimed_at.as_deref(),
+            project: card.project.as_deref(),
             archived,
         }
     }

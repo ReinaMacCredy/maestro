@@ -464,6 +464,9 @@ pub struct ReadyArgs {
     /// Print machine-readable ready JSON.
     #[arg(long)]
     pub json: bool,
+    /// Only cards whose stored project scope equals this value.
+    #[arg(long, value_name = "PROJECT")]
+    pub project: Option<String>,
     /// Restrict to cards parented to this feature id (one level).
     #[arg(value_name = "FEATURE")]
     pub feature: Option<String>,
@@ -483,6 +486,9 @@ pub struct ListArgs {
     /// Only cards in this coarse status (open, in_progress, closed).
     #[arg(long, value_name = "STATUS")]
     pub status: Option<String>,
+    /// Only cards whose stored project scope equals this value.
+    #[arg(long, value_name = "PROJECT")]
+    pub project: Option<String>,
     /// Only cards whose title, description, or notes.md/spec.md sidecars
     /// contain this case-insensitive substring.
     #[arg(long, value_name = "TERM")]

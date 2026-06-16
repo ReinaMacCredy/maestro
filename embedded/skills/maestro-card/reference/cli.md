@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.0.0 -->
-<!-- maestro:cli-reference-sha256: 0b527ec396cf61abd94abf0d4f462eb4b162d040f8c914d98f48091256c2291c -->
+<!-- maestro:cli-reference-sha256: 15054755701710e95aaa872f5361358cdfd17e1115bec8ca847125de27798884 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -153,8 +153,8 @@ Every verb and flag is listed; a spelling not found here does not exist.
 
 ## maestro card
 
-- `maestro card ready [FEATURE] [--json]` -- List workable cards with no open blockers
-- `maestro card list [--parent <PARENT>] [--type <TYPE>] [--assignee <ASSIGNEE>] [--status <STATUS>] [--grep <TERM>] [--archived] [--all] [--json]` -- List cards filtered by parent, type, assignee, or coarse status
+- `maestro card ready [FEATURE] [--json] [--project <PROJECT>]` -- List workable cards with no open blockers
+- `maestro card list [--parent <PARENT>] [--type <TYPE>] [--assignee <ASSIGNEE>] [--status <STATUS>] [--project <PROJECT>] [--grep <TERM>] [--archived] [--all] [--json]` -- List cards filtered by parent, type, assignee, or coarse status
 - `maestro card dep add <CHILD> <PARENT>` -- Add a blocking edge: CHILD waits until PARENT closes
 - `maestro card dep remove <CHILD> <PARENT>` -- Remove a blocking edge so CHILD no longer waits on PARENT
 - `maestro card dep help add` -- Add a blocking edge: CHILD waits until PARENT closes
@@ -182,11 +182,11 @@ Every verb and flag is listed; a spelling not found here does not exist.
 
 ## maestro ready
 
-- `maestro ready [FEATURE] [--json]` -- List workable cards with no open blockers (card store)
+- `maestro ready [FEATURE] [--json] [--project <PROJECT>]` -- List workable cards with no open blockers (card store)
 
 ## maestro list
 
-- `maestro list [--parent <PARENT>] [--type <TYPE>] [--assignee <ASSIGNEE>] [--status <STATUS>] [--grep <TERM>] [--archived] [--all] [--json]` -- List cards filtered by parent, type, assignee, or coarse status (card store)
+- `maestro list [--parent <PARENT>] [--type <TYPE>] [--assignee <ASSIGNEE>] [--status <STATUS>] [--project <PROJECT>] [--grep <TERM>] [--archived] [--all] [--json]` -- List cards filtered by parent, type, assignee, or coarse status (card store)
 
 ## maestro dep
 

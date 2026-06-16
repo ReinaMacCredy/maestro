@@ -461,6 +461,7 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
             title: task.title.clone(),
             next: compact_next(paths, task)?,
             inspect: format!("maestro task show {}", task.id),
+            project: task.project.clone(),
         });
     }
 
@@ -482,6 +483,7 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
             title: error,
             next: recovery_label(hint.as_deref()),
             inspect: format!("maestro feature spec {id}"),
+            project: None,
         });
     }
     let harness_friction = harness::over_threshold_items(paths)?
@@ -665,6 +667,7 @@ fn active_feature_rows(features: &[feature::FeatureView]) -> Vec<FeatureRowJson>
             title: view.title.clone(),
             next: feature_next_label(view).to_string(),
             inspect: format!("maestro feature show {}", view.id),
+            project: view.project.clone(),
         })
         .collect()
 }
@@ -1123,6 +1126,7 @@ struct TaskRowJson {
     title: String,
     next: String,
     inspect: String,
+    project: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -1132,6 +1136,7 @@ struct FeatureRowJson {
     title: String,
     next: String,
     inspect: String,
+    project: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]

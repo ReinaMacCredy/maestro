@@ -90,6 +90,10 @@ pub struct FeatureView {
     pub qa_none_reason: Option<String>,
     /// Design notes (`notes.md`), read on demand by `show`. None elsewhere.
     pub notes: Option<String>,
+    /// Project/service scope carried on the underlying card base. Read-time
+    /// projection: the folded `FeatureRecord` does not persist it, so the loader
+    /// captures it from the card before folding.
+    pub project: Option<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -410,7 +414,7 @@ pub fn set_with_report(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> 
     save_record(paths, &record, &write)?;
     let counts = count_tasks_for_feature(&paths.tasks_dir(), &record.id)?;
     Ok(SetReport {
-        view: view_from_record(record, counts),
+        view: view_from_record(record, counts, None),
         replaced,
         added,
         edited_acceptance: edits.edit_acceptance.len(),
@@ -995,7 +999,7 @@ fn views_from_records(
                 .get(&record.id)
                 .cloned()
                 .unwrap_or_default();
-            view_from_record(record, counts)
+            view_from_record(record, counts, None)
         })
         .collect())
 }
@@ -1023,6 +1027,9 @@ pub fn list_tolerant_with_entries(
         let path = card_store::card_path(paths, &id);
         match card_store::load(&path) {
             Ok(Some(card)) if card.card_type == CardType::Feature => {
+                // The card base carries the project scope (T4); capture it before
+                // `record_from_card` folds the card into the project-less record.
+                let project = card.project.clone();
                 match record_from_card(card, path.display().to_string()) {
                     Ok(record) => {
                         let counts = counts_by_feature
@@ -1030,7 +1037,7 @@ pub fn list_tolerant_with_entries(
                             .cloned()
                             .unwrap_or_default();
                         entries.push(FeatureRosterEntry::Loaded(Box::new(view_from_record(
-                            record, counts,
+                            record, counts, project,
                         ))));
                     }
                     Err(error) => entries.push(unreadable_entry(id, path, &error)),
@@ -1102,7 +1109,7 @@ pub fn show(paths: &MaestroPaths, id: &str) -> Result<FeatureView> {
     let acceptance_coverage =
         verification::acceptance_coverage_for_record_in_entries(&record, &task_entries);
     let notes = read_notes_at(&feature_sidecar_dir(paths, id))?;
-    let mut view = view_from_record(record, counts);
+    let mut view = view_from_record(record, counts, None);
     view.acceptance_coverage = Some(acceptance_coverage);
     view.notes = notes;
     Ok(view)
@@ -1123,7 +1130,7 @@ pub fn show_archived(paths: &MaestroPaths, id: &str) -> Result<FeatureView> {
     let acceptance_coverage =
         verification::acceptance_coverage_for_record_in_entries(&record, &task_entries);
     let notes = read_notes_at(&paths.archive_cards_dir().join(id))?;
-    let mut view = view_from_record(record, counts);
+    let mut view = view_from_record(record, counts, None);
     view.acceptance_coverage = Some(acceptance_coverage);
     view.notes = notes;
     Ok(view)
@@ -1148,9 +1155,10 @@ pub fn list_archived(paths: &MaestroPaths) -> Result<Vec<FeatureView>> {
         .filter(|card| card.card_type == CardType::Feature)
         .map(|card| {
             let artifact = archive_cards_dir.join(&card.id).join("card.yaml");
+            let project = card.project.clone();
             let record = record_from_card(card, artifact.display().to_string())?;
             let counts = count_tasks_for_feature_in_entries(&task_entries, &record.id);
-            Ok(view_from_record(record, counts))
+            Ok(view_from_record(record, counts, project))
         })
         .collect()
 }
@@ -1317,7 +1325,11 @@ fn apply_acceptance_text_edits(
     Ok(())
 }
 
-fn view_from_record(record: FeatureRecord, counts: FeatureTaskCounts) -> FeatureView {
+fn view_from_record(
+    record: FeatureRecord,
+    counts: FeatureTaskCounts,
+    project: Option<String>,
+) -> FeatureView {
     FeatureView {
         id: record.id,
         title: record.title,
@@ -1341,6 +1353,7 @@ fn view_from_record(record: FeatureRecord, counts: FeatureTaskCounts) -> Feature
             .map(|qa| qa.reason),
         // notes.md is read on demand by `show`, not on the list path.
         notes: None,
+        project,
     }
 }
 

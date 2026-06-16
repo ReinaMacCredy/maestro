@@ -40,6 +40,7 @@ pub(crate) fn record_from_card(card: Card, artifact: String) -> Result<TaskRecor
         title,
         status,
         parent,
+        project,
         claimed_by,
         claimed_at,
         created_at,
@@ -62,6 +63,7 @@ pub(crate) fn record_from_card(card: Card, artifact: String) -> Result<TaskRecor
     // would route later saves and lookups at a different logical record.
     record.id = id;
     record.feature_id = parent;
+    record.project = project;
     // The card verbs (`update`, `close`, `claim`) write only the top-level copy
     // fields, so they are the freshest source for what they own (SPEC DN3: the
     // card status is the single source of truth). The overlay is conservative:
@@ -103,6 +105,7 @@ fn task_state_from_status(status: &str) -> Option<TaskState> {
 fn record_from_native_card(card: Card) -> TaskRecord {
     let mut record = TaskRecord::draft(&card.id, &card.title, &card.created_at);
     record.feature_id = card.parent;
+    record.project = card.project;
     record.updated_at = card.updated_at;
     record.claimed_by = card.claimed_by;
     record.claimed_at = card.claimed_at;

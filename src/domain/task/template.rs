@@ -64,6 +64,11 @@ pub struct TaskRecord {
     pub id: String,
     #[serde(default, skip)]
     pub feature_id: Option<String>,
+    /// Project/service scope carried on the underlying card base (T4). A
+    /// read-time projection like `feature_id`: never in `task.yaml`, populated by
+    /// the card fold, fully skipped on serialize/deserialize.
+    #[serde(default, skip)]
+    pub project: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub covers: Vec<String>,
     pub title: String,
@@ -243,6 +248,7 @@ impl TaskRecord {
             schema_version: TASK_SCHEMA_VERSION.to_string(),
             id: id.to_string(),
             feature_id: None,
+            project: None,
             covers: Vec::new(),
             title: title.to_string(),
             lane: Some("normal".to_string()),
