@@ -4,8 +4,11 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
+use serde::Serialize;
+
 use crate::domain::feature::{FeatureStatus, FeatureView};
 use crate::domain::run;
+use crate::foundation::core::git;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::interfaces::hooks::record;
 
@@ -64,6 +67,44 @@ pub(crate) fn feature_next_label(view: &FeatureView) -> &'static str {
         FeatureStatus::InProgress => "run: resolve_tasks",
         FeatureStatus::Shipped | FeatureStatus::Cancelled => "run: archive_feature",
     }
+}
+
+/// Working-tree git readout shared by `resume` and `status` so the rendered git
+/// line and clean-worktree note never diverge between the two surfaces.
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct GitReadout {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub branch: Option<String>,
+    pub code_other_dirty: usize,
+    pub maestro_dirty: usize,
+}
+
+/// Read the working-tree git state, returning `None` (not an error) when the
+/// repo is not a git repository so the readout never breaks the caller.
+pub(crate) fn git_readout(paths: &MaestroPaths) -> Option<GitReadout> {
+    git::snapshot(paths.repo_root())
+        .ok()
+        .map(|snapshot| GitReadout {
+            branch: snapshot.branch,
+            code_other_dirty: snapshot.code_other_dirty,
+            maestro_dirty: snapshot.maestro_dirty,
+        })
+}
+
+pub(crate) fn render_git_line(git: &GitReadout) -> String {
+    let branch = git.branch.as_deref().unwrap_or("detached");
+    format!(
+        "git: {branch}, {} code/other + {} maestro-card uncommitted",
+        git.code_other_dirty, git.maestro_dirty
+    )
+}
+
+/// The contextual clean-worktree note, shown only when the next verb is
+/// ship/verify-shaped and uncommitted code/other changes exist.
+pub(crate) fn clean_worktree_note(code_other_dirty: usize) -> String {
+    format!(
+        "note: commit the {code_other_dirty} uncommitted code/other change(s) before the ship/verify step so proof reflects the intended tree"
+    )
 }
 
 #[derive(Debug, Parser)]

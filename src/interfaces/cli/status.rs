@@ -8,7 +8,10 @@ use crate::domain::feature::{self, FeatureRosterEntry, FeatureStatus};
 use crate::domain::task::{self, TaskRecord, TaskState};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::table;
-use crate::interfaces::cli::{StatusArgs, feature_next_label, recovery_label};
+use crate::interfaces::cli::{
+    GitReadout, StatusArgs, clean_worktree_note, feature_next_label, git_readout, recovery_label,
+    render_git_line,
+};
 use crate::operations::harness;
 
 const STATUS_TASK_ROW_LIMIT: usize = 5;
@@ -145,6 +148,8 @@ fn build_task_next_report(paths: &MaestroPaths) -> Result<StatusReport> {
         repo: paths.repo_root().display().to_string(),
         current_task,
         current_feature,
+        git: None,
+        ship_or_verify_pending: false,
         warnings,
         next_action,
         tasks: TaskSummaryJson::default(),
@@ -196,6 +201,12 @@ fn print_status(report: StatusReport, json: bool) -> Result<()> {
         report.features.active,
         report.ready_to_ship_features.len()
     );
+    if let Some(git) = &report.git {
+        println!("{}", render_git_line(git));
+        if report.ship_or_verify_pending && git.code_other_dirty > 0 {
+            println!("{}", clean_worktree_note(git.code_other_dirty));
+        }
+    }
     print_harness_friction(&report.harness_friction);
     print_audit_hint(report.audit_hint.as_ref());
     if let Some(action) = &report.next_action {
@@ -460,6 +471,14 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
     let sections = StatusSectionsJson {
         ready_to_ship: ready_to_ship_features.clone(),
     };
+    let git = git_readout(paths);
+    // The next verb is ship/verify-shaped when the chosen task action is a proof
+    // or completion step, or a feature is ready to ship (`feature_ship` never
+    // appears as a task `next_action.kind`; it lives in ready_to_ship_features).
+    let ship_or_verify_pending = next_action
+        .as_ref()
+        .is_some_and(|action| matches!(action.kind.as_str(), "complete_task" | "proof_recovery"))
+        || !ready_to_ship_features.is_empty();
 
     Ok(StatusReport {
         schema: "maestro.status.v1".to_string(),
@@ -471,6 +490,8 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
         repo: paths.repo_root().display().to_string(),
         current_task,
         current_feature,
+        git,
+        ship_or_verify_pending,
         warnings,
         next_action,
         tasks: TaskSummaryJson::from_tasks(&tasks),
@@ -633,6 +654,14 @@ struct StatusReport {
     repo: String,
     current_task: Option<String>,
     current_feature: Option<String>,
+    /// Working-tree git readout; `None` when not a git repository or on the
+    /// `task next` surface, which does not render it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    git: Option<GitReadout>,
+    /// Whether the next verb is ship/verify-shaped; drives the clean-worktree
+    /// note. Render-only, not part of the serialized contract.
+    #[serde(skip)]
+    ship_or_verify_pending: bool,
     warnings: Vec<WarningJson>,
     next_action: Option<NextAction>,
     tasks: TaskSummaryJson,
@@ -658,6 +687,8 @@ impl StatusReport {
             repo: repo.display().to_string(),
             current_task: None,
             current_feature: None,
+            git: None,
+            ship_or_verify_pending: false,
             warnings: vec![WarningJson {
                 code: "not_initialized".to_string(),
                 message: reason,

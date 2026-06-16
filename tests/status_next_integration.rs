@@ -6,6 +6,7 @@ use std::path::Path;
 use std::process::Command;
 
 use card_support::{card_dir, card_record_path, id_by_title, sole_idea_id, task_record};
+use git2::{Repository, Signature};
 use maestro::foundation::core::fs::ensure_dir;
 use serde_json::Value as JsonValue;
 use serde_yaml::Value as YamlValue;
@@ -66,6 +67,62 @@ fn setup_repo(prefix: &str) -> TestTempDir {
     let claims_only = maestro(temp.path(), &["harness", "set", "--claims-only"]);
     assert_success(&claims_only, &["harness", "set", "--claims-only"]);
     temp
+}
+
+/// Like `setup_repo`, but initializes a real git repository (with an initial
+/// commit so HEAD and a branch exist) instead of an empty `.git` marker. The
+/// git readout reads via `git2`, which rejects the bare marker, so the git line
+/// only renders in a real repo.
+fn setup_git_repo(prefix: &str) -> (TestTempDir, Repository) {
+    let temp = TestTempDir::new(prefix);
+    let repository = Repository::init(temp.path()).expect("invariant: git repo should initialize");
+    fs::write(temp.path().join("seed.txt"), "seed\n")
+        .expect("invariant: seed file should be writable");
+    commit_worktree(&repository, "seed");
+    let init = maestro(temp.path(), &["init", "--yes"]);
+    assert_success(&init, &["init", "--yes"]);
+    let claims_only = maestro(temp.path(), &["harness", "set", "--claims-only"]);
+    assert_success(&claims_only, &["harness", "set", "--claims-only"]);
+    (temp, repository)
+}
+
+/// Commit every non-ignored worktree change (initial commit when HEAD is unborn,
+/// otherwise on top of HEAD). `.maestro/` ignore rules are respected, so this
+/// drives the code/other dirty count to zero without forcing the card store in.
+fn commit_worktree(repository: &Repository, message: &str) {
+    let mut index = repository
+        .index()
+        .expect("invariant: git index should be readable");
+    index
+        .add_all(["*"].iter(), git2::IndexAddOption::DEFAULT, None)
+        .expect("invariant: git index add should succeed");
+    index
+        .write()
+        .expect("invariant: git index write should succeed");
+    let tree_id = index
+        .write_tree()
+        .expect("invariant: git tree write should succeed");
+    let tree = repository
+        .find_tree(tree_id)
+        .expect("invariant: git tree should exist");
+    let signature = Signature::now("Maestro Test", "maestro@example.test")
+        .expect("invariant: git signature should be constructable");
+    let parent = repository
+        .head()
+        .ok()
+        .and_then(|head| head.target())
+        .and_then(|oid| repository.find_commit(oid).ok());
+    let parents: Vec<&git2::Commit> = parent.iter().collect();
+    repository
+        .commit(
+            Some("HEAD"),
+            &signature,
+            &signature,
+            message,
+            &tree,
+            &parents,
+        )
+        .expect("invariant: git commit should succeed");
 }
 
 fn run(repo: &Path, args: &[&str]) -> String {
@@ -380,6 +437,114 @@ fn resume_full_handoff_and_write_are_explicit() {
         "{resume_doc}"
     );
     assert!(resume_doc.contains("handoff prompt:"), "{resume_doc}");
+}
+
+#[test]
+fn resume_and_status_show_git_line_and_clean_note_for_ship_or_verify_state() {
+    let (temp, repository) = setup_git_repo("maestro-git-line-ship");
+    let repo = temp.path();
+    let branch = repository
+        .head()
+        .expect("invariant: head should exist after the seed commit")
+        .shorthand()
+        .expect("invariant: the seed commit should be on a named branch")
+        .to_string();
+
+    run(repo, &["feature", "new", "CSV export"]);
+    run(
+        repo,
+        &[
+            "task",
+            "create",
+            "Implement CSV writer",
+            "--feature",
+            "csv-export",
+        ],
+    );
+    let id = id_by_title(repo, "Implement CSV writer");
+    run(repo, &["task", "explore", &id]);
+    run(repo, &["task", "accept", &id]);
+    run(repo, &["task", "claim", &id]);
+    fs::write(repo.join("feature_change.rs"), "fn changed() {}\n")
+        .expect("invariant: code change should be writable");
+
+    // Leg (a): next verb is `task complete` (ship/verify-shaped) AND there are
+    // uncommitted code/other changes -> the git line and clean note both show.
+    let resume = run(repo, &["resume"]);
+    assert!(
+        resume.contains(&format!("git: {branch},")),
+        "resume git line: {resume}"
+    );
+    assert!(
+        resume.contains("code/other") && resume.contains("maestro-card"),
+        "resume git counts: {resume}"
+    );
+    assert!(
+        resume.contains("before the ship/verify step"),
+        "resume clean-worktree note should show: {resume}"
+    );
+
+    let status = run(repo, &["status"]);
+    assert!(
+        status.contains(&format!("git: {branch},")),
+        "status git line: {status}"
+    );
+    assert!(
+        status.contains("code/other") && status.contains("maestro-card"),
+        "status git counts: {status}"
+    );
+    assert!(
+        status.contains("before the ship/verify step"),
+        "status clean-worktree note should show: {status}"
+    );
+
+    // Leg (c): commit the worktree so code/other == 0 -> the git line stays but
+    // the note drops, even though the next verb is still ship/verify-shaped.
+    commit_worktree(&repository, "commit worktree");
+    let resume_clean = run(repo, &["resume"]);
+    assert!(
+        resume_clean.contains(&format!("git: {branch},")),
+        "resume git line after commit: {resume_clean}"
+    );
+    assert!(
+        !resume_clean.contains("before the ship/verify step"),
+        "clean worktree must drop the note on resume: {resume_clean}"
+    );
+
+    let status_clean = run(repo, &["status"]);
+    assert!(
+        status_clean.contains(&format!("git: {branch},")),
+        "status git line after commit: {status_clean}"
+    );
+    assert!(
+        !status_clean.contains("before the ship/verify step"),
+        "clean worktree must drop the note on status: {status_clean}"
+    );
+}
+
+#[test]
+fn resume_and_status_omit_clean_note_when_next_verb_is_not_ship_shaped() {
+    let (temp, _repository) = setup_git_repo("maestro-git-line-not-ship");
+    let repo = temp.path();
+    // A draft task: the next verb is "author checks or explore", not
+    // ship/verify-shaped, so the clean note stays off even with code dirty.
+    run(repo, &["task", "create", "Draft task"]);
+    fs::write(repo.join("loose_change.rs"), "fn loose() {}\n")
+        .expect("invariant: code change should be writable");
+
+    let resume = run(repo, &["resume"]);
+    assert!(resume.contains("git:"), "resume git line present: {resume}");
+    assert!(
+        !resume.contains("before the ship/verify step"),
+        "non-ship verb must omit the note on resume: {resume}"
+    );
+
+    let status = run(repo, &["status"]);
+    assert!(status.contains("git:"), "status git line present: {status}");
+    assert!(
+        !status.contains("before the ship/verify step"),
+        "non-ship verb must omit the note on status: {status}"
+    );
 }
 
 #[test]
