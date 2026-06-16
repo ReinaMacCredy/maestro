@@ -211,6 +211,142 @@ fn create_uses_a_slug_for_features_and_a_typed_slug_for_other_types() {
     );
 }
 
+#[test]
+fn generic_create_persists_project_for_bug_and_chore() {
+    let temp = cards_repo("s2-create-project-generic");
+    let repo = temp.path();
+
+    run(
+        repo,
+        &[
+            "create",
+            "-t",
+            "bug",
+            "Fix ordering race",
+            "--project",
+            "svc-pay",
+        ],
+    );
+    let bug = id_by_title(repo, "Fix ordering race");
+    assert_eq!(
+        card_doc(repo, &bug)["project"],
+        "svc-pay",
+        "a bug minted with --project persists project on the card"
+    );
+
+    run(
+        repo,
+        &["create", "-t", "chore", "Tidy logs", "--project", "svc-pay"],
+    );
+    let chore = id_by_title(repo, "Tidy logs");
+    assert_eq!(
+        card_doc(repo, &chore)["project"],
+        "svc-pay",
+        "a chore minted with --project persists project on the card"
+    );
+
+    run(
+        repo,
+        &["create", "-t", "idea", "Spark", "--project", "svc-pay"],
+    );
+    let idea = id_by_title(repo, "Spark");
+    assert_eq!(
+        card_doc(repo, &idea)["project"],
+        "svc-pay",
+        "an idea minted with --project persists project on the card"
+    );
+
+    run(repo, &["create", "-t", "bug", "No project here"]);
+    let bare = id_by_title(repo, "No project here");
+    assert!(
+        card_doc(repo, &bare).get("project").is_none(),
+        "a card minted without --project has no project key"
+    );
+}
+
+#[test]
+fn typed_creates_persist_project_at_creation() {
+    let temp = cards_repo("s2-create-project-typed");
+    let repo = temp.path();
+
+    run(
+        repo,
+        &["feature", "new", "Billing CSV", "--project", "svc-pay"],
+    );
+    assert_eq!(
+        card_doc(repo, "billing-csv")["project"],
+        "svc-pay",
+        "feature new --project persists project on the folded card"
+    );
+
+    run(
+        repo,
+        &["task", "create", "Wire the export", "--project", "svc-pay"],
+    );
+    let task = id_by_title(repo, "Wire the export");
+    assert_eq!(
+        card_doc(repo, &task)["project"],
+        "svc-pay",
+        "task create --project persists project on the folded card"
+    );
+
+    // Plain open decision (no --lock): isolates create-time persistence from
+    // the re-fold a lock would trigger (carry is exercised separately).
+    run(
+        repo,
+        &["decision", "new", "Adopt X", "--project", "svc-pay"],
+    );
+    let decision = id_by_title(repo, "Adopt X");
+    assert_eq!(
+        card_doc(repo, &decision)["project"],
+        "svc-pay",
+        "decision new --project persists project on the folded card"
+    );
+}
+
+#[test]
+fn project_survives_a_typed_update_via_the_fold_carry() {
+    let temp = cards_repo("s2-project-carry");
+    let repo = temp.path();
+
+    run(
+        repo,
+        &["task", "create", "Wire the export", "--project", "svc-pay"],
+    );
+    let task = id_by_title(repo, "Wire the export");
+    // A typed update re-folds the card from its record; without the carry the
+    // base-only `project` field would be wiped here.
+    run(repo, &["task", "explore", &task]);
+    assert_eq!(
+        card_doc(repo, &task)["project"],
+        "svc-pay",
+        "project survives a task re-fold"
+    );
+
+    run(
+        repo,
+        &["decision", "new", "Adopt X", "--project", "svc-pay"],
+    );
+    let decision = id_by_title(repo, "Adopt X");
+    run(
+        repo,
+        &[
+            "decision",
+            "lock",
+            &decision,
+            "--decision",
+            "X",
+            "--rejected",
+            "Y: slower",
+        ],
+    );
+    assert_eq!(
+        card_doc(repo, &decision)["project"],
+        "svc-pay",
+        "project survives a decision re-fold"
+    );
+}
+
 /// SPEC-archive-memory A1: `list --grep` filters case-insensitively over
 /// title, description, and sidecars, composing with the existing filters;
 /// `--archived` extends the same query into `archive/cards/` with rows

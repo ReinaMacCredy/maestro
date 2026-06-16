@@ -19,6 +19,7 @@ fn create_open_persists_first_global_decision() {
         "Use single HARNESS.md",
         Some("too many files"),
         None,
+        None,
     )
     .expect("invariant: create should succeed");
 
@@ -47,7 +48,7 @@ fn create_open_rejects_empty_slug_title() {
     let temp = cards_repo("maestro-decision-empty");
     let paths = MaestroPaths::new(temp.path());
 
-    let err = decisions::create_open(&paths, "   ", None, None)
+    let err = decisions::create_open(&paths, "   ", None, None, None)
         .expect_err("empty-slug title must be rejected");
     assert!(
         err.to_string()

@@ -229,8 +229,13 @@ pub(crate) fn records_in_cards(cards: &[(Card, PathBuf)]) -> Result<Vec<TaskReco
 /// a CAS create, so a concurrent create of the same id is rejected (matching
 /// the legacy `.alloc-` atomic-create guard). Returns the home so callers can
 /// report the landing path.
-pub(crate) fn create(paths: &MaestroPaths, record: &TaskRecord) -> Result<CardHome> {
-    let card = card_for(record)?;
+pub(crate) fn create(
+    paths: &MaestroPaths,
+    record: &TaskRecord,
+    project: Option<String>,
+) -> Result<CardHome> {
+    let mut card = card_for(record)?;
+    card.project = project;
     card_store::create_card(paths, &card)
 }
 
@@ -417,7 +422,7 @@ mod tests {
     #[test]
     fn typed_save_preserves_card_only_fields_and_lifts_the_claim() {
         let paths = card_mode_repo("preserve-fields");
-        let home = create(&paths, &parented_draft()).expect("create the task card");
+        let home = create(&paths, &parented_draft(), None).expect("create the task card");
         assert!(
             home.path().ends_with("tasks/task-001/task.yaml"),
             "an unparented-in-practice task pools at the root: {}",
@@ -467,7 +472,7 @@ mod tests {
         let paths = card_mode_repo("carry-foreign");
         let mut draft = parented_draft();
         draft.claims = vec!["touched src/export.rs".to_string()];
-        create(&paths, &draft).expect("create the task card");
+        create(&paths, &draft, None).expect("create the task card");
 
         let resolved = card_store::resolve(&paths, "task-001")
             .expect("resolve the card")
@@ -573,7 +578,7 @@ mod tests {
     #[test]
     fn typed_save_unions_blocker_deps_and_releases_them_on_resolve() {
         let paths = card_mode_repo("blocker-deps");
-        create(&paths, &parented_draft()).expect("create the task card");
+        create(&paths, &parented_draft(), None).expect("create the task card");
 
         let resolved = card_store::resolve(&paths, "task-001")
             .expect("resolve the card")
@@ -646,7 +651,7 @@ mod tests {
     #[test]
     fn card_mode_save_rejects_a_stale_task_writer() {
         let paths = card_mode_repo("stale-writer");
-        create(&paths, &parented_draft()).expect("create the task card");
+        create(&paths, &parented_draft(), None).expect("create the task card");
 
         let (mut winner, winner_resolved) = load_one(&paths, "task-001")
             .expect("first read")

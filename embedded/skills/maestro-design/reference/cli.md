@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.0.0 -->
-<!-- maestro:cli-reference-sha256: 37e36a21108d20414105f7164ccdeda7b141981883792c836eb0de6d19268e53 -->
+<!-- maestro:cli-reference-sha256: 0b527ec396cf61abd94abf0d4f462eb4b162d040f8c914d98f48091256c2291c -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -53,7 +53,7 @@ Every verb and flag is listed; a spelling not found here does not exist.
 
 ## maestro task
 
-- `maestro task create <TITLE> [--feature <FEATURE>] [--lane <LANE>] [--risk <RISK>] [--check <CHECK>]... [--covers <COVERS>]... [--id-only]` -- Create a task (-> draft)
+- `maestro task create <TITLE> [--feature <FEATURE>] [--lane <LANE>] [--risk <RISK>] [--check <CHECK>]... [--covers <COVERS>]... [--project <PROJECT>] [--id-only]` -- Create a task (-> draft)
 - `maestro task set <ID> [--check <CHECK>]... [--feature <FEATURE>] [--no-feature] [--covers <COVERS>]... [--verify-command <VERIFY_COMMAND>] [--clear-verify-command]` -- Author task checks or change its feature link
 - `maestro task explore <ID>` -- Move a draft into exploring (-> exploring)
 - `maestro task accept <ID>` -- Lock acceptance and mark the task ready (-> ready)
@@ -107,7 +107,7 @@ Every verb and flag is listed; a spelling not found here does not exist.
 
 ## maestro feature
 
-- `maestro feature new <TITLE> [--description <DESCRIPTION>] [--question <QUESTION>]... [--id-only]` -- Propose a new feature (-> proposed)
+- `maestro feature new <TITLE> [--description <DESCRIPTION>] [--question <QUESTION>]... [--project <PROJECT>] [--id-only]` -- Propose a new feature (-> proposed)
 - `maestro feature set <ID> [--acceptance <ACCEPTANCE>]... [--area <AREA>]... [--non-goal <NON_GOAL>]... [--question <QUESTION>]... [--clear-questions] [--add-acceptance <ADD_ACCEPTANCE>]... [--add-area <ADD_AREA>]... [--add-non-goal <ADD_NON_GOAL>]... [--add-question <ADD_QUESTION>]... [--edit-acceptance <AC_ID>]... [--text <TEXT>]... [--description <DESCRIPTION>] [--request <REQUEST>] [--type <INPUT_TYPE>]` -- Author a proposed feature's contract (replace or append fields)
 - `maestro feature accept <ID> [--qa <SURFACE>] [--reason <REASON>] [--dry-run]` -- Accept a feature into ready, freezing its contract (-> ready; gated)
 - `maestro feature prepare <ID> [--from <PLAN_FILE>] [--draft]` -- Prepare an accepted feature into a ready implementation queue
@@ -141,7 +141,7 @@ Every verb and flag is listed; a spelling not found here does not exist.
 
 ## maestro decision
 
-- `maestro decision new <TITLE> [--context <CONTEXT>] [--feature <FEATURE>] [--lock] [--decision <DECISION>] [--rejected <REJECTED>]... [--preview <PREVIEW>] [--supersedes <SUPERSEDES>]... [--id-only]` -- Open a structured decision fork (mints a decision card)
+- `maestro decision new <TITLE> [--context <CONTEXT>] [--feature <FEATURE>] [--lock] [--decision <DECISION>] [--rejected <REJECTED>]... [--preview <PREVIEW>] [--supersedes <SUPERSEDES>]... [--project <PROJECT>] [--id-only]` -- Open a structured decision fork (mints a decision card)
 - `maestro decision lock <ID> --decision <DECISION> [--rejected <REJECTED>]... [--preview <PREVIEW>] [--supersedes <SUPERSEDES>]...` -- Lock an open decision with the chosen answer
 - `maestro decision show <ID>` -- Show a decision card by id
 - `maestro decision list [--all] [--feature <FEATURE>]` -- List decision cards (recent 20 by activity unless --all)
@@ -163,7 +163,7 @@ Every verb and flag is listed; a spelling not found here does not exist.
 - `maestro card archive [FEATURE] [--loose]` -- Archive a feature card and its child cards
 - `maestro card claim <ID>` -- Claim a workable card for this session
 - `maestro card note <ID> <TEXT>` -- Append a dated note to a card's notes.md
-- `maestro card create <TITLE> -t|--type <TYPE> [--parent <PARENT>] [--description <TEXT>] [--id-only]` -- Create a card of any type
+- `maestro card create <TITLE> -t|--type <TYPE> [--parent <PARENT>] [--description <TEXT>] [--project <PROJECT>] [--id-only]` -- Create a card of any type
 - `maestro card show <ID> [--json] [--compact-json]` -- Show a card's header, edges, and body
 - `maestro card update [ID] [--status <STATUS>] [--title <TITLE>] [--description <TEXT>] [--claim] [--json]` -- Update a card's status, title, description, or claim
 - `maestro card close <ID>` -- Close a card: status -> closed
@@ -232,7 +232,7 @@ Every verb and flag is listed; a spelling not found here does not exist.
 
 ## maestro create
 
-- `maestro create <TITLE> -t|--type <TYPE> [--parent <PARENT>] [--description <TEXT>] [--id-only]` -- Create a card of any type (card store)
+- `maestro create <TITLE> -t|--type <TYPE> [--parent <PARENT>] [--description <TEXT>] [--project <PROJECT>] [--id-only]` -- Create a card of any type (card store)
 
 ## maestro show
 

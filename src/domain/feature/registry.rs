@@ -288,7 +288,7 @@ pub struct NoteReport {
 ///
 /// Errors when the title has no ASCII slug content, when a feature with the
 /// generated id already exists, or when the record cannot be written.
-pub fn create(paths: &MaestroPaths, title: &str) -> Result<String> {
+pub fn create(paths: &MaestroPaths, title: &str, project: Option<String>) -> Result<String> {
     let id = slugify_ascii(title);
     if id.is_empty() {
         bail!("feature title must contain at least one ASCII letter or digit");
@@ -303,7 +303,7 @@ pub fn create(paths: &MaestroPaths, title: &str) -> Result<String> {
         );
     }
     let record = FeatureRecord::proposed(&id, title, &utc_now_timestamp());
-    save_new_record(paths, &record)?;
+    save_new_record(paths, &record, project)?;
     scaffold_spec_file(paths, &id, title)?;
     Ok(id)
 }
@@ -1646,12 +1646,17 @@ pub(crate) fn save_record(
 /// Create a new feature card through the store seam, which rejects a reserved
 /// container name (e.g. `tasks`), an id already taken anywhere in the store,
 /// and a concurrent create (CAS against an absent snapshot).
-fn save_new_record(paths: &MaestroPaths, record: &FeatureRecord) -> Result<()> {
-    let card = fold::feature_card(
+fn save_new_record(
+    paths: &MaestroPaths,
+    record: &FeatureRecord,
+    project: Option<String>,
+) -> Result<()> {
+    let mut card = fold::feature_card(
         record.id.clone(),
         fold::record_to_mapping(record, "feature record")?,
         &utc_now_timestamp(),
     );
+    card.project = project;
     card_store::create_card(paths, &card).map(|_| ())
 }
 
@@ -1767,7 +1772,7 @@ mod cutover_tests {
     #[test]
     fn card_mode_save_rejects_a_stale_feature_writer() {
         let (root, paths) = card_mode_repo("stale-writer");
-        let id = create(&paths, "Race").expect("create writes a feature card");
+        let id = create(&paths, "Race", None).expect("create writes a feature card");
 
         let (mut winner, winner_write) =
             load_record_for_update(&paths, &id).expect("first read for update");
@@ -1802,8 +1807,8 @@ mod cutover_tests {
     #[test]
     fn card_mode_create_refuses_a_duplicate_id() {
         let (root, paths) = card_mode_repo("dup-id");
-        let id = create(&paths, "Csv export").expect("first create");
-        let error = create(&paths, "Csv export").expect_err("second create must fail");
+        let id = create(&paths, "Csv export", None).expect("first create");
+        let error = create(&paths, "Csv export", None).expect_err("second create must fail");
         assert!(
             error
                 .to_string()
@@ -1819,7 +1824,7 @@ mod cutover_tests {
     #[test]
     fn spec_section_writes_fill_the_scaffold() {
         let (root, paths) = card_mode_repo("spec-section");
-        let id = create(&paths, "Csv export").expect("create scaffolds spec.md");
+        let id = create(&paths, "Csv export", None).expect("create scaffolds spec.md");
         let spec_path = feature_sidecar_dir(&paths, &id).join("spec.md");
 
         let first = write_spec_section(&paths, &id, "Current state", "One writer.", false)
@@ -1872,7 +1877,7 @@ mod cutover_tests {
     #[test]
     fn card_mode_create_refuses_a_reserved_container_slug() {
         let (root, paths) = card_mode_repo("reserved-slug");
-        let error = create(&paths, "Tasks").expect_err("reserved slug must be refused");
+        let error = create(&paths, "Tasks", None).expect_err("reserved slug must be refused");
         assert!(
             error.to_string().contains("reserved by the card store"),
             "{error}"

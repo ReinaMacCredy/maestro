@@ -3,6 +3,7 @@ mod support;
 use std::fs;
 
 use maestro::domain::card::schema::Card;
+use maestro::domain::card::{self};
 use maestro::domain::feature::{self, ContractAdditions, ContractEdits};
 use maestro::foundation::core::fs::ensure_dir;
 use maestro::foundation::core::paths::MaestroPaths;
@@ -82,7 +83,7 @@ fn create_generates_slug_id_and_persists() {
     let temp = TestTempDir::new("maestro-feature-create");
     let paths = MaestroPaths::new(temp.path());
 
-    feature::create(&paths, "Billing CSV Export").expect("invariant: create should succeed");
+    feature::create(&paths, "Billing CSV Export", None).expect("invariant: create should succeed");
 
     let views = feature::list(&paths).expect("invariant: list should succeed");
     assert_eq!(views.len(), 1);
@@ -96,7 +97,8 @@ fn create_rejects_empty_title() {
     let temp = TestTempDir::new("maestro-feature-empty");
     let paths = MaestroPaths::new(temp.path());
 
-    let error = feature::create(&paths, "   ").expect_err("invariant: empty title must error");
+    let error =
+        feature::create(&paths, "   ", None).expect_err("invariant: empty title must error");
     assert!(error.to_string().contains("ASCII"));
 }
 
@@ -105,9 +107,9 @@ fn create_rejects_duplicate_id() {
     let temp = TestTempDir::new("maestro-feature-dup");
     let paths = MaestroPaths::new(temp.path());
 
-    feature::create(&paths, "Billing CSV").expect("invariant: first create should succeed");
-    let error =
-        feature::create(&paths, "Billing CSV").expect_err("invariant: duplicate id must error");
+    feature::create(&paths, "Billing CSV", None).expect("invariant: first create should succeed");
+    let error = feature::create(&paths, "Billing CSV", None)
+        .expect_err("invariant: duplicate id must error");
     assert!(error.to_string().contains("already exists"));
 }
 
@@ -116,7 +118,7 @@ fn set_replaces_per_field_and_is_proposed_only() {
     let temp = TestTempDir::new("maestro-feature-set");
     let paths = MaestroPaths::new(temp.path());
 
-    feature::create(&paths, "Billing CSV").expect("invariant: create should succeed");
+    feature::create(&paths, "Billing CSV", None).expect("invariant: create should succeed");
     let view = feature::set(
         &paths,
         "billing-csv",
@@ -164,7 +166,7 @@ fn set_rejects_a_blank_contract_value_so_it_cannot_satisfy_the_accept_gate() {
     let temp = TestTempDir::new("maestro-feature-set-blank");
     let paths = MaestroPaths::new(temp.path());
 
-    feature::create(&paths, "Billing CSV").expect("invariant: create should succeed");
+    feature::create(&paths, "Billing CSV", None).expect("invariant: create should succeed");
     // A `--acceptance ""` (or whitespace) would store a `[""]` that satisfies the
     // length-only accept gate while carrying no contract; it must be refused, like
     // the sibling `task set --check ""`.
@@ -192,7 +194,7 @@ fn amend_rejects_a_blank_addition_value() {
     let temp = TestTempDir::new("maestro-feature-amend-blank");
     let paths = MaestroPaths::new(temp.path());
 
-    feature::create(&paths, "Billing CSV").expect("invariant: create should succeed");
+    feature::create(&paths, "Billing CSV", None).expect("invariant: create should succeed");
     author_contract(&paths, "billing-csv");
     feature::accept(&paths, "billing-csv", false).expect("invariant: accept should succeed");
 
@@ -218,7 +220,7 @@ fn amend_rejects_a_blank_addition_value() {
 fn verify_rejects_unknown_acceptance_evidence_kind() {
     let temp = TestTempDir::new("maestro-feature-evidence-kind");
     let paths = MaestroPaths::new(temp.path());
-    feature::create(&paths, "Billing CSV").expect("invariant: create should succeed");
+    feature::create(&paths, "Billing CSV", None).expect("invariant: create should succeed");
     feature::set(
         &paths,
         "billing-csv",
@@ -279,7 +281,7 @@ fn accept_gate_requires_acceptance_and_areas() {
     let temp = TestTempDir::new("maestro-feature-accept-gate");
     let paths = MaestroPaths::new(temp.path());
 
-    feature::create(&paths, "Billing CSV").expect("invariant: create should succeed");
+    feature::create(&paths, "Billing CSV", None).expect("invariant: create should succeed");
     let error = feature::accept(&paths, "billing-csv", false)
         .expect_err("invariant: accept must block on an incomplete contract");
     let message = error.to_string();
@@ -293,11 +295,43 @@ fn accept_gate_requires_acceptance_and_areas() {
 }
 
 #[test]
+fn project_neither_satisfies_nor_alters_the_accept_gate() {
+    let temp = TestTempDir::new("maestro-feature-project-gate");
+    let paths = MaestroPaths::new(temp.path());
+
+    // A feature minted WITH --project but no acceptance/areas is still blocked:
+    // project is a base-envelope scope, distinct from affected_areas, and must
+    // not satisfy the readiness gate.
+    feature::create(&paths, "Billing CSV", Some("svc-pay".to_string()))
+        .expect("invariant: create should succeed");
+    let id = "billing-csv";
+    let card = card::store::load(&card::store::card_path(&paths, id))
+        .expect("load card")
+        .expect("feature card exists");
+    assert_eq!(
+        card.project.as_deref(),
+        Some("svc-pay"),
+        "project is stored on the feature card"
+    );
+    let error = feature::accept(&paths, id, false)
+        .expect_err("invariant: project must not satisfy the accept gate");
+    let message = error.to_string();
+    assert!(message.contains("acceptance"), "{message}");
+    assert!(message.contains("affected_areas"), "{message}");
+
+    // Authoring the real contract flips it ready regardless of project.
+    author_contract(&paths, id);
+    let report = feature::accept(&paths, id, false).expect("invariant: accept succeeds");
+    assert!(report.changed);
+    assert_eq!(report.status, feature::FeatureStatus::Ready);
+}
+
+#[test]
 fn accept_dry_run_previews_without_transitioning() {
     let temp = TestTempDir::new("maestro-feature-accept-dry");
     let paths = MaestroPaths::new(temp.path());
 
-    feature::create(&paths, "Billing CSV").expect("invariant: create should succeed");
+    feature::create(&paths, "Billing CSV", None).expect("invariant: create should succeed");
     let report =
         feature::accept(&paths, "billing-csv", true).expect("invariant: dry-run is exit 0");
     assert!(!report.changed);
@@ -312,7 +346,7 @@ fn full_lifecycle_new_set_accept_start_ship() {
     let temp = TestTempDir::new("maestro-feature-lifecycle");
     let paths = MaestroPaths::new(temp.path());
 
-    feature::create(&paths, "Billing CSV").expect("invariant: create should succeed");
+    feature::create(&paths, "Billing CSV", None).expect("invariant: create should succeed");
     author_contract(&paths, "billing-csv");
     feature::accept(&paths, "billing-csv", false).expect("invariant: accept should succeed");
     let started = feature::start(&paths, "billing-csv").expect("invariant: start should succeed");
@@ -328,7 +362,7 @@ fn illegal_transitions_name_the_gap() {
     let temp = TestTempDir::new("maestro-feature-illegal");
     let paths = MaestroPaths::new(temp.path());
 
-    feature::create(&paths, "Billing CSV").expect("invariant: create should succeed");
+    feature::create(&paths, "Billing CSV", None).expect("invariant: create should succeed");
     // start before accept
     let error = feature::start(&paths, "billing-csv").expect_err("invariant: start must block");
     assert!(error.to_string().contains("not accepted"));
@@ -346,7 +380,7 @@ fn completed_transitions_are_idempotent_no_ops() {
     let temp = TestTempDir::new("maestro-feature-noop");
     let paths = MaestroPaths::new(temp.path());
 
-    feature::create(&paths, "Billing CSV").expect("invariant: create should succeed");
+    feature::create(&paths, "Billing CSV", None).expect("invariant: create should succeed");
     author_contract(&paths, "billing-csv");
     feature::accept(&paths, "billing-csv", false).expect("invariant: accept should succeed");
 
@@ -362,7 +396,7 @@ fn ship_blocks_on_live_child_task() {
     let temp = TestTempDir::new("maestro-feature-ship-block");
     let paths = MaestroPaths::new(temp.path());
 
-    feature::create(&paths, "Billing CSV").expect("invariant: create should succeed");
+    feature::create(&paths, "Billing CSV", None).expect("invariant: create should succeed");
     author_contract(&paths, "billing-csv");
     feature::accept(&paths, "billing-csv", false).expect("invariant: accept should succeed");
     feature::start(&paths, "billing-csv").expect("invariant: start should succeed");
@@ -385,7 +419,7 @@ fn cancel_cascades_to_live_child_tasks() {
     let temp = TestTempDir::new("maestro-feature-cancel");
     let paths = MaestroPaths::new(temp.path());
 
-    feature::create(&paths, "Billing CSV").expect("invariant: create should succeed");
+    feature::create(&paths, "Billing CSV", None).expect("invariant: create should succeed");
     author_contract(&paths, "billing-csv");
     feature::accept(&paths, "billing-csv", false).expect("invariant: accept should succeed");
     feature::start(&paths, "billing-csv").expect("invariant: start should succeed");
@@ -422,7 +456,7 @@ fn cannot_cancel_a_shipped_feature() {
     let temp = TestTempDir::new("maestro-feature-cancel-shipped");
     let paths = MaestroPaths::new(temp.path());
 
-    feature::create(&paths, "Billing CSV").expect("invariant: create should succeed");
+    feature::create(&paths, "Billing CSV", None).expect("invariant: create should succeed");
     author_contract(&paths, "billing-csv");
     feature::accept(&paths, "billing-csv", false).expect("invariant: accept should succeed");
     feature::start(&paths, "billing-csv").expect("invariant: start should succeed");
@@ -439,7 +473,7 @@ fn amend_is_append_only_with_value_dedup() {
     let temp = TestTempDir::new("maestro-feature-amend");
     let paths = MaestroPaths::new(temp.path());
 
-    feature::create(&paths, "Billing CSV").expect("invariant: create should succeed");
+    feature::create(&paths, "Billing CSV", None).expect("invariant: create should succeed");
     author_contract(&paths, "billing-csv");
     feature::accept(&paths, "billing-csv", false).expect("invariant: accept should succeed");
 
@@ -485,7 +519,7 @@ fn amend_rejects_a_proposed_feature() {
     let temp = TestTempDir::new("maestro-feature-amend-proposed");
     let paths = MaestroPaths::new(temp.path());
 
-    feature::create(&paths, "Billing CSV").expect("invariant: create should succeed");
+    feature::create(&paths, "Billing CSV", None).expect("invariant: create should succeed");
     let error = feature::amend(
         &paths,
         "billing-csv",
@@ -504,7 +538,7 @@ fn list_joins_task_counts() {
     let temp = TestTempDir::new("maestro-feature-counts");
     let paths = MaestroPaths::new(temp.path());
 
-    feature::create(&paths, "Billing CSV").expect("invariant: create should succeed");
+    feature::create(&paths, "Billing CSV", None).expect("invariant: create should succeed");
     write_task(&paths, "task-001", "billing-csv", "verified");
     write_task(&paths, "task-002", "billing-csv", "ready");
 
@@ -560,7 +594,7 @@ fn tolerant_titles_return_id_to_title_map() {
     let temp = TestTempDir::new("maestro-feature-titles");
     let paths = MaestroPaths::new(temp.path());
 
-    feature::create(&paths, "Billing CSV").expect("invariant: create should succeed");
+    feature::create(&paths, "Billing CSV", None).expect("invariant: create should succeed");
 
     let titles = feature::titles(&paths);
     assert_eq!(
@@ -574,7 +608,7 @@ fn tolerant_roster_marks_incompatible_record_without_dropping_healthy_rows() {
     let temp = TestTempDir::new("maestro-feature-tolerant-roster");
     let paths = MaestroPaths::new(temp.path());
 
-    feature::create(&paths, "Healthy Feature").expect("invariant: create should succeed");
+    feature::create(&paths, "Healthy Feature", None).expect("invariant: create should succeed");
     write_feature(&paths, "billing-csv", BAD_RECORD);
 
     let roster = feature::list_tolerant(&paths);
@@ -600,7 +634,7 @@ fn tolerant_roster_surfaces_a_card_that_fails_to_load() {
     let temp = TestTempDir::new("maestro-feature-tolerant-load-err");
     let paths = MaestroPaths::new(temp.path());
 
-    feature::create(&paths, "Healthy Feature").expect("invariant: create should succeed");
+    feature::create(&paths, "Healthy Feature", None).expect("invariant: create should succeed");
     write_feature(&paths, "billing-csv", "type: feature\nbroken: [");
     write_feature(&paths, "card-broken1", "type: task\nbroken: [");
 
@@ -638,7 +672,7 @@ fn diagnose_reports_count_on_compatible_store() {
     let temp = TestTempDir::new("maestro-feature-diag-ok");
     let paths = MaestroPaths::new(temp.path());
 
-    feature::create(&paths, "Billing CSV").expect("invariant: create should succeed");
+    feature::create(&paths, "Billing CSV", None).expect("invariant: create should succeed");
 
     assert_eq!(feature::diagnose(&loaded_cards(&paths)).found, Ok(1));
 }

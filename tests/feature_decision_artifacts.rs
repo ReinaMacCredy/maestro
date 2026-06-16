@@ -14,7 +14,7 @@ fn created_feature_record_carries_v2_schema_version() {
     let temp_dir = TestTempDir::new("maestro-feature-schema");
     let paths = MaestroPaths::new(temp_dir.path());
 
-    maestro::domain::feature::create(&paths, "Billing CSV export")
+    maestro::domain::feature::create(&paths, "Billing CSV export", None)
         .expect("invariant: create should succeed");
 
     // A feature is now a `feature`-typed card at `.maestro/cards/<slug>/card.yaml`;

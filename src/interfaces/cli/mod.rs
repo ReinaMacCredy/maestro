@@ -540,6 +540,8 @@ pub enum TaskCommand {
             help = "Feature acceptance id this task covers, e.g. ac-1 (repeatable)"
         )]
         covers: Vec<String>,
+        #[arg(long, help = "Project/service scope stored on the card")]
+        project: Option<String>,
         #[arg(long, help = "Print only the new card id on stdout")]
         id_only: bool,
     },
@@ -743,6 +745,8 @@ pub enum FeatureCommand {
         description: Option<String>,
         #[arg(long = "question", help = "Initial open question (repeatable)")]
         question: Vec<String>,
+        #[arg(long, help = "Project/service scope stored on the card")]
+        project: Option<String>,
         #[arg(long, help = "Print only the new card id on stdout")]
         id_only: bool,
     },
@@ -1000,6 +1004,8 @@ pub enum DecisionCommand {
             requires = "lock"
         )]
         supersedes: Vec<String>,
+        #[arg(long, help = "Project/service scope stored on the card")]
+        project: Option<String>,
         #[arg(long, help = "Print only the new card id on stdout")]
         id_only: bool,
     },
@@ -1077,6 +1083,9 @@ pub struct CreateArgs {
     /// Longer description stored on the card.
     #[arg(long, value_name = "TEXT")]
     pub description: Option<String>,
+    /// Project/service scope stored on the card (does not affect readiness).
+    #[arg(long, value_name = "PROJECT")]
+    pub project: Option<String>,
     /// Print only the new card id on stdout.
     #[arg(long)]
     pub id_only: bool,

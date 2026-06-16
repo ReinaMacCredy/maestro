@@ -20,6 +20,7 @@ pub fn run(args: DecisionArgs) -> Result<()> {
             rejected,
             preview,
             supersedes,
+            project,
             id_only,
         } => {
             if lock {
@@ -35,6 +36,7 @@ pub fn run(args: DecisionArgs) -> Result<()> {
                         preview: preview.as_deref(),
                         supersedes: &supersedes,
                     },
+                    project,
                     id_only,
                 )
             } else {
@@ -43,6 +45,7 @@ pub fn run(args: DecisionArgs) -> Result<()> {
                     &title,
                     context.as_deref(),
                     feature.as_deref(),
+                    project,
                     id_only,
                 )
             }
@@ -73,12 +76,13 @@ fn new_decision(
     title: &str,
     context: Option<&str>,
     feature: Option<&str>,
+    project: Option<String>,
     id_only: bool,
 ) -> Result<()> {
     if title.trim().is_empty() {
         bail!("decision title cannot be empty; e.g. `maestro decision new \"Adopt X for Y\"`");
     }
-    let report = decisions::create_open(paths, title, context, feature)?;
+    let report = decisions::create_open(paths, title, context, feature, project)?;
     emit_feature_touch(paths, &report.record);
     if id_only {
         println!("{}", report.record.id);
@@ -100,12 +104,13 @@ fn new_locked_decision(
     context: Option<&str>,
     feature: Option<&str>,
     inputs: decisions::LockInputs<'_>,
+    project: Option<String>,
     id_only: bool,
 ) -> Result<()> {
     if title.trim().is_empty() {
         bail!("decision title cannot be empty; e.g. `maestro decision new \"Adopt X for Y\"`");
     }
-    let report = decisions::create_locked(paths, title, context, feature, inputs)?;
+    let report = decisions::create_locked(paths, title, context, feature, inputs, project)?;
     emit_feature_touch(paths, &report.record);
     if id_only {
         println!("{}", report.record.id);

@@ -272,14 +272,17 @@ fn merge_folded_deps(card: &mut Card, existing: &Card, released: &BTreeSet<Strin
 }
 
 /// Carry the card-only fields a typed-record fold cannot derive (`deps`
-/// edges, `lane`, a card-set `description`) from the existing card, so the
-/// rebuilt copy does not wipe them.
+/// edges, `lane`, a card-set `description`, the create-time `project`) from
+/// the existing card, so the rebuilt copy does not wipe them.
 fn carry_card_only_fields(card: &mut Card, existing: &Card) {
     if card.lane.is_none() {
         card.lane = existing.lane.clone();
     }
     if card.description.is_none() {
         card.description = existing.description.clone();
+    }
+    if card.project.is_none() {
+        card.project = existing.project.clone();
     }
     carry_unknown_payload(card, existing);
 }
@@ -857,6 +860,7 @@ mod tests {
             created_at: "2026-06-08T00:00:00Z".to_string(),
             updated_at: "2026-06-08T01:00:00Z".to_string(),
             description: Some("Stream rows to stdout.".to_string()),
+            project: Some("svc-pay".to_string()),
             extra: serde_yaml::from_str(
                 "legacy_field: kept\nstate_history:\n  - draft\n  - ready\n",
             )

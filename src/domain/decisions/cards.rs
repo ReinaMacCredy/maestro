@@ -223,8 +223,13 @@ pub(crate) fn records_in_cards(
 /// parent dictates (a feature's `decisions.yaml` or the global one). The write
 /// is a CAS create, so a concurrent create of the same id is rejected. Returns
 /// the home so callers can report the landing path.
-pub(crate) fn create(paths: &MaestroPaths, record: &DecisionRecord) -> Result<CardHome> {
-    let card = card_for(record)?;
+pub(crate) fn create(
+    paths: &MaestroPaths,
+    record: &DecisionRecord,
+    project: Option<String>,
+) -> Result<CardHome> {
+    let mut card = card_for(record)?;
+    card.project = project;
     card_store::create_card(paths, &card)
 }
 
@@ -357,7 +362,7 @@ mod tests {
         // container; it lands as an entry in the root decisions.yaml.
         let mut record = feature_decision();
         record.feature = None;
-        let home = create(&paths, &record).expect("create the decision card");
+        let home = create(&paths, &record, None).expect("create the decision card");
         assert!(
             home.path().ends_with("decisions.yaml"),
             "a global decision lands in the root decisions.yaml: {}",

@@ -54,6 +54,12 @@ pub struct Card {
     /// Optional longer description.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    /// Optional project/service scope set explicitly at create with `--project`.
+    /// A base-envelope field on every card type, distinct from feature
+    /// `affected_areas`: it never satisfies the accept readiness gate. Absent
+    /// loads as `None`; a `None` serializes to no key (round-trip safe).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project: Option<String>,
     /// Carrier for type-specific payload that has not yet moved into first-class
     /// card fields. Shared identity/display fields live in the card envelope
     /// above; typed readers seed those fields back into this map before
@@ -85,6 +91,7 @@ impl Card {
             created_at: now.to_string(),
             updated_at: now.to_string(),
             description: None,
+            project: None,
             extra: serde_yaml::Mapping::new(),
             unknown: serde_yaml::Mapping::new(),
         }
@@ -220,6 +227,37 @@ mod tests {
             .reconcile(existing, incoming.clone())
             .expect("non-idea reconcile is infallible");
         assert_eq!(merged, incoming);
+    }
+
+    #[test]
+    fn project_serializes_only_when_set_and_loads_absent_as_none() {
+        let mut card = Card::new(
+            "card-aaaaaa",
+            CardType::Task,
+            "title",
+            "open",
+            "2026-06-16T00:00:00Z",
+        );
+        assert_eq!(card.project, None, "a fresh card has no project");
+
+        let without = serde_yaml::to_string(&card).expect("serialize");
+        assert!(
+            !without.contains("project:"),
+            "a None project serializes with no key: {without}"
+        );
+
+        card.project = Some("svc-pay".to_string());
+        let with = serde_yaml::to_string(&card).expect("serialize");
+        assert!(
+            with.contains("project: svc-pay"),
+            "a set project serializes its value: {with}"
+        );
+
+        let legacy: Card = serde_yaml::from_str(&without).expect("deserialize legacy");
+        assert_eq!(
+            legacy.project, None,
+            "a card.yaml lacking project loads as None"
+        );
     }
 
     #[test]

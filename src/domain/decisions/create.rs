@@ -34,12 +34,13 @@ pub fn create_open(
     title: &str,
     context: Option<&str>,
     feature: Option<&str>,
+    project: Option<String>,
 ) -> Result<DecisionWriteReport> {
     if slugify_ascii(title).is_empty() {
         bail!("decision title must contain at least one ASCII letter or digit");
     }
     let feature = feature.map(str::trim).filter(|value| !value.is_empty());
-    create_open_card(paths, title, context, feature)
+    create_open_card(paths, title, context, feature, project)
 }
 
 fn create_open_card(
@@ -47,6 +48,7 @@ fn create_open_card(
     title: &str,
     context: Option<&str>,
     feature: Option<&str>,
+    project: Option<String>,
 ) -> Result<DecisionWriteReport> {
     if let Some(feature_id) = feature {
         feature::ensure_exists(paths, feature_id)?;
@@ -55,7 +57,7 @@ fn create_open_card(
     // O3'), no reservation marker -- the create-time CAS (D1) guards collisions.
     let id = card_store::mint_card_id(paths, CardType::Decision, title);
     let record = open_record(id, title, context, feature);
-    cards::create(paths, &record)?;
+    cards::create(paths, &record, project)?;
     Ok(DecisionWriteReport {
         record,
         source: cards::source_from_parent(feature),
@@ -108,6 +110,7 @@ pub fn create_locked(
     context: Option<&str>,
     feature: Option<&str>,
     inputs: LockInputs<'_>,
+    project: Option<String>,
 ) -> Result<DecisionLockReport> {
     if inputs.decision.trim().is_empty() {
         bail!("--decision must not be empty");
@@ -115,7 +118,7 @@ pub fn create_locked(
     if inputs.rejected.iter().any(|value| value.trim().is_empty()) {
         bail!("--rejected values must not be empty");
     }
-    let report = create_open(paths, title, context, feature)?;
+    let report = create_open(paths, title, context, feature, project)?;
     let id = report.record.id;
     lock_card(
         paths,

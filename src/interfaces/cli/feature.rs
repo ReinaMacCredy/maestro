@@ -22,8 +22,9 @@ pub fn run(args: FeatureArgs) -> Result<()> {
             title,
             description,
             question,
+            project,
             id_only,
-        } => new_feature(&paths, &title, description, question, id_only),
+        } => new_feature(&paths, &title, description, question, project, id_only),
         FeatureCommand::Set {
             id,
             acceptance,
@@ -434,9 +435,10 @@ fn new_feature(
     title: &str,
     description: Option<String>,
     questions: Vec<String>,
+    project: Option<String>,
     id_only: bool,
 ) -> Result<()> {
-    let id = feature::create(paths, title)?;
+    let id = feature::create(paths, title, project)?;
     let initialized = description.is_some() || !questions.is_empty();
     if initialized {
         feature::set(

@@ -30,8 +30,11 @@ pub fn run(args: TaskArgs) -> Result<()> {
             lane,
             risk,
             check,
+            project,
             id_only,
-        } => create_task(&paths, &title, feature, covers, lane, risk, check, id_only),
+        } => create_task(
+            &paths, &title, feature, covers, lane, risk, check, project, id_only,
+        ),
         TaskCommand::Set {
             id,
             check,
@@ -169,6 +172,7 @@ fn create_task(
     lane: Option<String>,
     risk: Option<String>,
     checks: Vec<String>,
+    project: Option<String>,
     id_only: bool,
 ) -> Result<()> {
     if let Some(target) = feature.as_deref() {
@@ -184,6 +188,7 @@ fn create_task(
             lane,
             risk,
             checks,
+            project,
             created_at: now,
         },
     )?;

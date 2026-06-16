@@ -48,6 +48,7 @@ pub struct CreateTaskOptions {
     pub lane: Option<String>,
     pub risk: Option<String>,
     pub checks: Vec<String>,
+    pub project: Option<String>,
     pub created_at: String,
 }
 
@@ -158,7 +159,7 @@ pub fn create_task(
         task.risk = Some(risk);
     }
     task.acceptance = AcceptanceFile::new(&id, options.checks);
-    cards::create(&paths, &task)?;
+    cards::create(&paths, &task, options.project)?;
     Ok(task)
 }
 
@@ -1133,8 +1134,8 @@ mod tests {
         let paths = card_mode_repo("detach");
         let tasks_dir = paths.tasks_dir();
 
-        let feature_id =
-            crate::domain::feature::create(&paths, "Csv export").expect("create feature card");
+        let feature_id = crate::domain::feature::create(&paths, "Csv export", None)
+            .expect("create feature card");
         let task = create_task(
             &tasks_dir,
             "Add CSV export",
@@ -1144,6 +1145,7 @@ mod tests {
                 lane: None,
                 risk: None,
                 checks: Vec::new(),
+                project: None,
                 created_at: "2026-06-09T12:00:00Z".to_string(),
             },
         )

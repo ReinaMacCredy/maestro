@@ -358,6 +358,7 @@ pub fn apply(paths: &MaestroPaths, id: &str, checks: Vec<String>) -> Result<Appl
             lane: None,
             risk: None,
             checks: checks.clone(),
+            project: None,
             created_at: now.clone(),
         },
     )?;

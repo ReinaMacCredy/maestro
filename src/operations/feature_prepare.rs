@@ -150,6 +150,7 @@ fn prepare_from_file_with_blocker(
                     lane: None,
                     risk: None,
                     checks: item.checks.clone(),
+                    project: None,
                     created_at: now,
                 },
             )?;
@@ -701,7 +702,7 @@ mod tests {
     fn prepare_rolls_back_created_tasks_when_blocker_attachment_fails() {
         let root = temp_root("maestro-feature-prepare-rollback");
         let paths = MaestroPaths::new(&root);
-        let feature_id = feature::create(&paths, "Rollback Prepare")
+        let feature_id = feature::create(&paths, "Rollback Prepare", None)
             .expect("invariant: feature should be created");
         feature::set(
             &paths,

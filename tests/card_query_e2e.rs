@@ -74,7 +74,7 @@ fn ready_and_list_reflect_a_migrated_card_store() {
     // workable card in its creation status ("draft" -> coarse OPEN), so it is
     // ready; the feature card is not workable and must never appear in `ready`.
     let feature_id =
-        maestro::domain::feature::create(&paths, "Csv export").expect("create feature");
+        maestro::domain::feature::create(&paths, "Csv export", None).expect("create feature");
     assert_eq!(feature_id, "csv-export");
     task::create_task(
         &paths.tasks_dir(),
@@ -85,6 +85,7 @@ fn ready_and_list_reflect_a_migrated_card_store() {
             lane: None,
             risk: None,
             checks: vec!["exports a header row".to_string()],
+            project: None,
             created_at: NOW.to_string(),
         },
     )

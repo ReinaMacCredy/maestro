@@ -654,7 +654,8 @@ mod tests {
         let paths = card_mode_repo("dangling-card-note");
 
         // A real decision card minted in card mode carries a `dec-<slug>-<hex4>` id.
-        let decision = create_open(&paths, "Writer choice", None, None).expect("create decision");
+        let decision =
+            create_open(&paths, "Writer choice", None, None, None).expect("create decision");
         let decision_id = decision.record.id.clone();
         assert!(
             decision_id.starts_with("dec-"),
@@ -704,16 +705,17 @@ mod tests {
         // The real verb writes a feature card whose `extra` carries a parseable
         // FeatureRecord; the bare `save_feature_card` shortcut leaves `extra`
         // empty, which `create_open`'s `feature::ensure_exists` cannot read.
-        let feature_id =
-            crate::domain::feature::create(&paths, "Csv export").expect("create feature card");
+        let feature_id = crate::domain::feature::create(&paths, "Csv export", None)
+            .expect("create feature card");
 
-        let global = create_open(&paths, "Use fire-and-forget hooks", None, None)
+        let global = create_open(&paths, "Use fire-and-forget hooks", None, None, None)
             .expect("create global decision");
         let feature = create_open(
             &paths,
             "Use a replay queue for hooks",
             None,
             Some(&feature_id),
+            None,
         )
         .expect("create feature decision");
 
