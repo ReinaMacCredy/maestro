@@ -1,0 +1,90 @@
+schema_version: maestro.card.v1
+id: task-read-surface-project-filter-project-95e8
+type: task
+title: Read surface -- `--project` filter, `[project]` badge, group-by-project, flat `--json`
+status: verified
+parent: monorepo-and-multi-service-maestro-scopes
+claimed_by: claude#s83106-1781620722390002000
+claimed_at: 2026-06-16T14:38:42.390Z
+created_at: 2026-06-16T12:32:30.724Z
+updated_at: 2026-06-16T15:06:01.695Z
+extra:
+  schema_version: maestro.task.v2
+  blockers:
+  - id: blk-001
+    kind: task
+    blocked_ref:
+      kind: task
+      id: task-add-optional-project-field-to-the-card-2afc
+    title: Blocked by task-add-optional-project-field-to-the-card-2afc
+    reason: 'after dependency: T1 (task-add-optional-project-field-to-the-card-2afc) verified'
+    source: command
+    created_at: 2026-06-16T12:32:30.830Z
+    resolved_at: 2026-06-16T13:41:22.823Z
+  state_history:
+  - state: draft
+    at: 2026-06-16T12:32:30.724Z
+    by: maestro
+  - state: exploring
+    at: 2026-06-16T12:32:30.743Z
+    by: maestro
+  - state: exploring
+    at: 2026-06-16T12:32:30.830Z
+    by: maestro
+    summary: 'blocker added: blk-001'
+  - state: ready
+    at: 2026-06-16T12:32:30.887Z
+    by: maestro
+  - state: ready
+    at: 2026-06-16T13:41:22.823Z
+    by: maestro
+    summary: 'blocker resolved: blk-001'
+  - state: needs_verification
+    at: 2026-06-16T15:06:01.677Z
+    by: maestro
+    summary: 'Read surface: --project filter on list/ready (+namespaced; unknown=>empty exit 0); [project] badge per card project presence; group-by-project in render_list at >=2 distinct (sorted headers + trailing unassigned); flat project field on list/ready/status --json; status has no --project flag; zero-project output byte-identical'
+    claims:
+    - 'RED: project_scope_read_surface grouping and json-flat tests failed before impl'
+    - 'GREEN: cargo test 924 passed, 0 failed'
+  - state: verified
+    at: 2026-06-16T15:06:01.695Z
+    by: maestro
+    summary: 'verification passed: 2 claim(s), 1 proof source(s)'
+  lane: normal
+  risk: medium
+  verification:
+    status: passed
+    verified_at: 2026-06-16T15:06:01.695Z
+    verified_commit: f179bed77086477831cab02f4d39e0e820ee4220
+    verified_by_run: .maestro/runs/87b527b0-94e5-4e97-9b90-59041dbeb46b/events.jsonl
+    contract_hash: 347d341fddf275a3d8484b9c159144aea20d8dc19787edc70b6269c3be72661d
+    claim_checks:
+    - claim: 'RED: project_scope_read_surface grouping and json-flat tests failed before impl'
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/87b527b0-94e5-4e97-9b90-59041dbeb46b/events.jsonl
+    - claim: 'GREEN: cargo test 924 passed, 0 failed'
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/87b527b0-94e5-4e97-9b90-59041dbeb46b/events.jsonl
+    commands:
+    - cmd: cargo build
+      exit_code: 0
+      duration_ms: 129
+    - cmd: cargo test
+      exit_code: 0
+      duration_ms: 215881
+    - cmd: cargo clippy -- -D warnings
+      exit_code: 0
+      duration_ms: 7837
+    proof_sources:
+    - kind: event
+      path: .maestro/runs/87b527b0-94e5-4e97-9b90-59041dbeb46b/events.jsonl
+      hash: 102f6bb9079c3d339cdf8d3dd2d2302801e65f48ae5fab486e76725c2e13be11
+  acceptance_locked: true
+  acceptance:
+    checks:
+    - '`maestro list --project P` / `maestro ready --project P` (and card-namespaced) return only cards whose stored project==P; unknown project => empty result, exit 0; `status` has no `--project` flag; human rows show a `[project]` badge when set and none when unset; `list` without `--project` groups under project headers ONLY when >=2 distinct projects among shown cards (no-project cards under a root/unassigned group), else flat and byte-identical to today; `list`/`ready`/`status` `--json` emit the existing dense single-line-per-item envelope with `project` as one flat field, never grouped or nested. Covers ac-4, ac-5, ac-6, ac-7.'
+    locked_by: maestro
+    locked_at: 2026-06-16T12:32:30.887Z
+  claims:
+  - 'RED: project_scope_read_surface grouping and json-flat tests failed before impl'
+  - 'GREEN: cargo test 924 passed, 0 failed'

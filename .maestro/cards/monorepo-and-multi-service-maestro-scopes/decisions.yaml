@@ -1,0 +1,185 @@
+- schema_version: maestro.card.v1
+  id: dec-foundational-model-one-root-scope-a225
+  type: decision
+  title: 'Foundational model: one root scope + filterable project dimension; no polyrepo federation'
+  status: locked
+  parent: monorepo-and-multi-service-maestro-scopes
+  created_at: 2026-06-16T09:53:52.292Z
+  updated_at: 2026-06-16T09:53:52.313Z
+  description: 'Research (Nx/Turborepo, Oxlint/ESLint-flat/Biome, GitHub Projects, Google repo/mani) shows monorepos use ONE workspace root + first-class sub-projects, while polyrepo coordination lives in an above-the-repos layer that existing tools own. maestro .maestro lives inside a repo, so monorepo=>one root (matches walk-up discovery, init can''t nest), polyrepo=>N isolated scopes (matches git). Advisor pre-blessed this lean direction and argued explicitly against a federation framework (also against repo memory: ~/.maestro YAGNI, no speculative abstractions). User selected the recommended option.'
+  extra:
+    locked_at: 2026-06-16T09:53:52.313Z
+    decision: 'maestro supports multi-service work as ONE root .maestro per git repo with ''project/service'' promoted to a first-class, FILTERABLE dimension on cards (the only real in-model gap today: --area is settable but not filterable). Separate git repos stay isolated by design; cross-repo aggregation is delegated to external meta-repo tooling (repo/mani/GitKraken Workspaces/org-level GitHub Projects).'
+    preview: |-
+      ONE repo -> ONE .maestro at root.
+      'project' becomes first-class + filterable:
+        $ maestro list --project svc-pay
+          [svc-pay] refund bug
+        $ maestro list          (every service)
+          [fe] button  [be] auth  [svc-pay] refund
+      separate git repos: stay isolated; span them
+      with repo/mani/org-Projects.
+    rejected:
+    - 'Federation layer (root aggregates+links across N nested/sibling .maestro): reinvents repo/mani/org-Projects, speculative framework, against repo philosophy.'
+    - 'Hybrid (filter now + read-only child-scope roll-up later): still bakes in the federation/aggregation concept; defer until a concrete pain proves it.'
+    - 'Docs-only: undersells the real, narrow --area-not-filterable gap that the monorepo case actually hits.'
+- schema_version: maestro.card.v1
+  id: dec-project-tagging-auto-infer-from-folder-db98
+  type: decision
+  title: 'Project tagging: auto-infer from folder, overridable, first-segment default + optional layout globs'
+  status: superseded
+  parent: monorepo-and-multi-service-maestro-scopes
+  created_at: 2026-06-16T10:01:30.042Z
+  updated_at: 2026-06-16T10:01:30.063Z
+  description: Cards always write to the single root .maestro/cards (store.rs:34); project must be captured at create time since cwd is ephemeral. Inference rule defaults to the top-level path segment under repo root, with optional layout globs in HarnessConfig (.maestro/harness/, schema.rs:35) for nested service layouts (services/*, apps/*) -- matches Nx workspaceLayout. Running at repo root yields no project (cross-cutting card).
+  extra:
+    locked_at: 2026-06-16T10:01:30.063Z
+    decision: 'On card create, project is auto-inferred from the folder you run in: default = first path segment under repo root; if harness config declares project globs (e.g. services/*, apps/*) the matched segment wins. Always overridable with --project <name>; running at repo root sets no project. The inferred/explicit value is STORED on the card and is what read-side --project filters on.'
+    superseded_by: dec-activation-declaration-gated-auto-infer-7cd8
+    preview: |-
+      create from a folder -> project inferred + STORED:
+        fe/src/x        -> project=fe
+        be/api          -> project=be
+        services/pay/x  -> project=pay   (via globs services/*)
+        <repo root>     -> no project (cross-cutting)
+      override: maestro feature new "x" --project shared
+      config (only if nested): projects: ["services/*","apps/*"]
+    rejected:
+    - 'Explicit --project only: ceremony on every card; misses the zero-friction subfolder workflow the user wanted.'
+    - 'Just make --area filterable: keeps manual hand-tagging; no path inference.'
+    - 'First-segment only (no globs): collapses nested microservice layouts (services/* all become ''services'').'
+    - 'Manifest detection (package.json/Cargo.toml): unpredictable; root manifest swallows everything, multiple manifests ambiguous.'
+- schema_version: maestro.card.v1
+  id: dec-project-is-a-new-card-base-field-4aca
+  type: decision
+  title: project is a new Card-base field, distinct from feature affected_areas
+  status: locked
+  parent: monorepo-and-multi-service-maestro-scopes
+  created_at: 2026-06-16T10:02:23.837Z
+  updated_at: 2026-06-16T10:02:23.858Z
+  description: 'Consumer enumeration of affected_areas (feature-only): cli/feature.rs (set/show/print), operations/feature_prepare.rs (plan), domain/feature/qa.rs (QA baseline), domain/feature/registry.rs (Phase A set_contract gate requires acceptance+affected_areas non-empty), cli/resume.rs (resume packet). It is feature-only, multi-value, semantically ''what this feature touches'', and gates set_contract. Work cards (task/bug/chore) -- the ones you filter by service -- have NO area field. Card base (schema.rs:21) already carries shared fields + an extra map + a #[serde(flatten)] unknown forward-tolerance catch-all (schema.rs:63), so an optional new field is additive and round-trip-safe.'
+  extra:
+    locked_at: 2026-06-16T10:02:23.858Z
+    decision: 'Add project: Option<String> as a first-class field on the Card BASE struct (applies to all card types: feature/task/bug/chore/idea/decision), populated per dec-project-tagging-auto-infer-from-folder. Keep affected_areas exactly as-is (feature ''touches'' + set_contract gate); the two coexist and do not interact. project is the field the read-side --project filter reads.'
+    preview: |-
+      card.yaml gains one optional field:
+        type: task
+        title: refund retry
+        project: svc-pay     <- NEW, on the card base
+        status: ...
+      affected_areas stays on features only (unchanged).
+    rejected:
+    - 'Reuse affected_areas as the project tag: feature-only (work cards can''t carry it), wrong cardinality/semantics (touches vs single owner), and would entangle the project filter with the QA/set_contract gate.'
+- schema_version: maestro.card.v1
+  id: dec-read-surface-project-filter-project-3d10
+  type: decision
+  title: 'Read surface: --project filter + [project] badge + group-by-project in unfiltered list'
+  status: locked
+  parent: monorepo-and-multi-service-maestro-scopes
+  created_at: 2026-06-16T10:03:21.367Z
+  updated_at: 2026-06-16T10:03:21.392Z
+  description: User goal is 'root sees everything organized by service'. list/ready/card list today filter by parent/type/assignee/status/grep/archived/all (reference/cli.md:157,189) -- no area/project filter. Grouping in the single-handoff status readout and in active (session list) is lower value and noisier, so it is deferred, not built.
+  extra:
+    locked_at: 2026-06-16T10:03:21.392Z
+    decision: 'Read surface: (1) add --project <name> to list and ready (and card list/ready); (2) show a [project] badge on each card row; (3) when list is run WITHOUT --project, group rows under project headers (cards with no project fall under an ''unassigned''/root group). status and active are unchanged for now.'
+    preview: |-
+      $ maestro list --project svc-pay   (filter)
+      $ maestro list                     (grouped)
+        fe
+          button redesign
+        be
+          auth endpoint
+        svc-pay
+          refund bug    retry logic
+    rejected:
+    - 'Filter + badge only: gives the filter but not the ''organized by service'' root view the user explicitly wanted.'
+    - 'Also split status/active by project: status is a single-handoff readout and active is a session list; grouping there adds noise for little gain -- deferred until a concrete need.'
+- schema_version: maestro.card.v1
+  id: dec-activation-declaration-gated-auto-infer-7cd8
+  type: decision
+  title: 'Activation: declaration-gated auto-infer via projects: layout in harness config'
+  status: locked
+  parent: monorepo-and-multi-service-maestro-scopes
+  created_at: 2026-06-16T10:10:03.751Z
+  updated_at: 2026-06-16T10:10:03.773Z
+  description: 'Advisor flagged that an always-on first-segment default turns docs/, scripts/, src/ into phantom projects in a normal single-service repo, and silently changes list output for every existing user. User chose to gate all auto-inference on a one-time declaration. This refines D2 (dec-project-tagging-auto-infer-from-folder-db98): the first-segment-by-default behaviour is replaced by declaration-gated activation. D2''s substance (folder-derived value, globs, --project override, root=no-project, value STORED on card) is preserved; only the activation trigger changes.'
+  extra:
+    locked_at: 2026-06-16T10:10:03.773Z
+    decision: 'Auto-inference of project fires ONLY against a one-time projects: layout declared in HarnessConfig. Forms: projects: ["*"] = every top-level dir is a project; projects: ["services/*","apps/*"] = nested layouts; projects: ["fe","be"] = an explicit closed set. With a declaration, a card created under a matched folder gets project auto-inferred (the matched segment) and STORED; --project <name> always overrides; running at repo root or outside any match sets no project. With NO declaration: no auto-infer ever, project stays empty unless set explicitly with --project, and the read-side stays byte-identical to today (flat list, no grouping, no badges). This keeps single-service repos unchanged and prevents docs/scripts/src from becoming phantom projects.'
+    supersedes:
+    - dec-project-tagging-auto-infer-from-folder-db98
+    preview: |-
+      harness config gates everything:
+
+        # no projects: key  -> single-service repo
+        $ maestro list            (flat, unchanged, no badges)
+          button redesign
+          auth endpoint
+
+        # projects: ["*"]   -> every top-level dir
+        $ cd svc-pay && maestro task new "refund"
+          -> project=svc-pay (inferred + stored)
+
+        # projects: ["services/*","apps/*"]  (nested)
+        $ cd services/pay && maestro task new "x"
+          -> project=pay
+
+        # projects: ["fe","be"]  (explicit closed set)
+        #   docs/, scripts/ never match -> no project
+
+        --project <name> always overrides; repo root = no project
+    rejected:
+    - 'Always-on first-segment auto-infer (D2 original default): every first path segment silently becomes a project; turns docs/scripts/src into phantom projects and changes list output for every existing repo with zero opt-in.'
+    - 'Explicit --project only, no auto-infer at all: safe but loses the ergonomic win of ''work in svc-pay/ and the card just knows''; declaration form projects:["*"] recovers always-on behaviour for those who want it.'
+- schema_version: maestro.card.v1
+  id: dec-build-sequencing-full-surface-in-one-dd0e
+  type: decision
+  title: 'Build sequencing: full surface in one pass (no thin-slice deferral)'
+  status: locked
+  parent: monorepo-and-multi-service-maestro-scopes
+  created_at: 2026-06-16T10:15:56.547Z
+  updated_at: 2026-06-16T10:15:56.572Z
+  description: Advisor raised that D1's foundational finding was that the only real in-model gap is '--area settable but not filterable', so a thin first slice (project field + --project filter) was a viable smaller pass with auto-infer/globs/badge/grouping deferred until used. Surfaced to the user as an explicit scope checkpoint at the design/build boundary.
+  extra:
+    locked_at: 2026-06-16T10:15:56.572Z
+    decision: 'First build covers the FULL 11-AC contract in one pass: project field on all card types, declaration-gated auto-infer + globs, harness projects: key, --project filter on list/ready, [project] badge, group-by-project (>=2 threshold), flat --json field, and lifecycle preservation. No thin-slice deferral.'
+    preview: |-
+      FIRST BUILD = whole contract, one pass:
+        project field (all card types)
+        projects: ["*" | "services/*" | "fe","be"] config
+        auto-infer from folder (declaration-gated)
+        --project filter on list/ready
+        [project] badge + group-by-project (>=2)
+        flat --json field
+        survives init/sync/harness re-detect
+    rejected:
+    - 'Thin slice first: ship only the project field + --project filter (minimal close of the D1 gap) and defer auto-infer, globs, badge, and grouping until the dimension proves used. Rejected: user chose to land the full surface together.'
+- schema_version: maestro.card.v1
+  id: dec-setup-context-ingestion-read-docs-specs-16ec
+  type: decision
+  title: 'Setup context ingestion: read docs+specs IN, synthesize into root harness guidance per-project (no write-out)'
+  status: locked
+  parent: monorepo-and-multi-service-maestro-scopes
+  created_at: 2026-06-16T10:28:18.131Z
+  updated_at: 2026-06-16T10:28:18.156Z
+  description: 'Enhancement ask: make the maestro-setup skill read all docs + agent specs and fill them into maestro context, per project in a mono/microservice repo. Advisor caught that the chosen option''s wording included writing guidance OUT into each sub-project AGENTS.md/CLAUDE.md, which contradicts locked D1 (one root .maestro; sub-projects are not separate maestro scopes) and is write-out rather than the read-in the ask requested. Verified: install writes managed blocks only at root.join(AGENTS.md/CLAUDE.md) (src/domain/install/mod.rs:379,452), so per-project write-out is net-new file-ownership overreach. This is a setup/harness-guidance concern (different subsystem from the card-tagging the rest of the feature covers); kept on this card per the user''s ''enhance here''.'
+  extra:
+    locked_at: 2026-06-16T10:28:18.156Z
+    decision: 'The maestro-setup skill enumerates and reads a BOUNDED set of docs + agent specs (AGENTS.md, CLAUDE.md, README.md, docs/*.md, with a depth/size cap to protect context footprint) at the repo root AND under each folder matched by the projects: declaration (D-activation), then the conductor synthesizes them into the SINGLE root harness guidance with one section per project. Read-IN only: docs enrich maestro''s one root context. No new CLI verb, no new schema, no persisted store -- the change is maestro-setup skill content only (version bump + guard re-record); maestro stays passive. With no projects: declared, only root docs are read and there is exactly one guidance section (single-repo behavior unchanged). Maestro does NOT write guidance out into sub-project specs; per-project write-out is deferred as a separate fork.'
+    preview: |-
+      maestro-setup skill (enhanced), READ-IN only:
+        enumerate a BOUNDED doc set at root AND per
+        declared project (projects: gates the folders):
+          AGENTS.md  CLAUDE.md  README.md  docs/*.md  (cap depth/size)
+            root/          -> root docs
+            fe/            -> fe docs
+            services/pay/  -> its docs
+        conductor reads -> synthesizes into the SINGLE
+        root harness guidance, one section per project.
+
+        NO write-out to sub-project specs (would break D1).
+        NO new verb, NO new schema. maestro stays passive.
+        no projects: -> root docs only, one section (today's behavior).
+    rejected:
+    - 'Write-out half: fold synthesized guidance into each sub-project''s own AGENTS.md/CLAUDE.md. Contradicts locked D1 and is write-out not read-in; install/sync write managed blocks only at root today, so it is net-new file-ownership overreach. Deferred to a separate decision if explicitly wanted.'
+    - New persisted per-project context store + 'maestro context' verb. New CLI + schema, less passive, contradicts 'the skill reads' and the lean/passive bias.

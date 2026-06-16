@@ -1,0 +1,168 @@
+schema_version: maestro.card.v1
+id: monorepo-and-multi-service-maestro-scopes
+type: feature
+title: monorepo and multi-service maestro scopes
+status: shipped
+created_at: 2026-06-16T09:47:20.636Z
+updated_at: 2026-06-16T16:19:45.296Z
+description: A repo with many sub-projects (fe, be, and increasingly N microservices) where each sub-project plus the root may each carry its own .maestro. How should maestro discover, isolate, and/or coordinate across multiple/nested .maestro scopes?
+extra:
+  schema_version: maestro.feature.v2
+  outcome: 'Monorepo/multi-service support: one root .maestro scope + a filterable project dimension (no polyrepo federation). Card base gains optional project (additive, all 6 types); declaration-gated folder->project auto-infer via projects: in harness config (overridable, byte-identical when undeclared); read surface adds --project filter + [project] badge + group-by-project (>=2 distinct) with flat dense JSON unchanged; projects: survives init/sync; maestro-setup reads bounded per-project docs into single root guidance (read-in only, no new CLI/schema surface). 6 tasks, 15/15 ACs proven on the real binary, 11/11 qa-slices. 3 wording reconciliations recorded in notes (all PASS substantively): ac-1 card.yaml path varies by type; ac-6 byte-identical sub-clause vs unconditional ac-5 badge; ac-10 gate is AND not OR. Built b2a62fba..bbabfc2f.'
+  acceptance_sweeps:
+  - at: 2026-06-16T15:53:42.802Z
+    unresolved:
+    - ac-1
+    - ac-2
+    - ac-3
+    - ac-4
+    - ac-5
+    - ac-6
+    - ac-7
+    - ac-8
+    - ac-9
+    - ac-10
+    - ac-11
+    - ac-12
+    - ac-13
+    - ac-14
+    - ac-15
+  - at: 2026-06-16T16:13:18.146Z
+    unresolved:
+    - ac-1
+    - ac-2
+    - ac-3
+    - ac-4
+    - ac-5
+    - ac-6
+    - ac-7
+    - ac-8
+    - ac-9
+    - ac-10
+    - ac-11
+    - ac-12
+    - ac-13
+    - ac-14
+    - ac-15
+  - at: 2026-06-16T16:14:00.000Z
+    resolved:
+    - ac-1
+    - ac-2
+    - ac-3
+    - ac-4
+    - ac-5
+    - ac-6
+    - ac-7
+    - ac-8
+    - ac-9
+    - ac-10
+    - ac-11
+    - ac-12
+    - ac-13
+    - ac-14
+    - ac-15
+  - at: 2026-06-16T16:15:12.168Z
+    resolved:
+    - ac-1
+    - ac-2
+    - ac-3
+    - ac-4
+    - ac-5
+    - ac-6
+    - ac-7
+    - ac-8
+    - ac-9
+    - ac-10
+    - ac-11
+    - ac-12
+    - ac-13
+    - ac-14
+    - ac-15
+  affected_areas:
+  - src/domain/card/schema.rs (project on Card base)
+  - src/domain/card/store.rs (auto-infer on create + --project override)
+  - 'src/domain/harness/schema.rs (projects: layout declaration, forward-compat)'
+  - src/foundation/core/paths.rs (folder->project resolution vs repo root)
+  - src/interfaces/cli (list/ready --project filter, project badge, group-by-project)
+  - JSON encoding (dense flat project field on list/ready/status)
+  - 'src/operations/init + sync (preserve projects: config across lifecycle)'
+  - embedded/skills/maestro-setup/SKILL.md (read-in doc/agent-spec enumeration per project; version bump + guard re-record)
+  acceptance_evidence:
+  - ac_id: ac-1
+    kind: explicit
+    text: 'bl-001/bl-002 on real binary: --project svc-pay persists ''project: svc-pay'' for ALL 6 types (feature, task, bug, chore, idea, decision); no --project => no key (feature/task) and card still loads (show exit 0). WORDING NOTE: AC says ''.maestro/cards/<id>/card.yaml'' but storage path varies by type - task/bug/chore at .maestro/cards/tasks/<id>/task.yaml, idea/decision in aggregate ideas.yaml/decisions.yaml; the substantive claim (project persists round-trip for every type) holds.'
+    at: 2026-06-16T16:13:34.515Z
+  - ac_id: ac-2
+    kind: explicit
+    text: 'bl-003 on real binary: projects:["*"] under <root>/svc-pay/ => project=svc-pay; projects:["services/*"] under services/pay/ => project=pay; projects:["fe","be"] under docs/ => <none>, under fe/ => fe; explicit --project from svc-pay/ => override-wins; projects:["*"] from repo ROOT => <none>. Matched segment is the stored value.'
+    at: 2026-06-16T16:13:34.547Z
+  - ac_id: ac-3
+    kind: explicit
+    text: 'bl-004 on real binary: with NO projects: key, list/ready/cardlist human output is byte-identical (empty diff) to pre-feature binary gdc1c65f4; project-less rows show no badge, no grouping. Explicit --project manual-set with no declaration still stores project: manual-set.'
+    at: 2026-06-16T16:13:34.573Z
+  - ac_id: ac-4
+    kind: explicit
+    text: 'bl-005 on real binary: list/ready --project svc-pay and card-namespaced card list/ready --project return only matching cards with [svc-pay] badge; unknown project ''does-not-exist'' => empty result, exit 0 (not error); status has no --project flag.'
+    at: 2026-06-16T16:13:34.601Z
+  - ac_id: ac-5
+    kind: explicit
+    text: 'bl-006 on real binary: list/ready HUMAN output shows [project] badge on every row carrying a project; rows with no project show no badge (e.g. task-root-c-08c7 unbadged). Badge is unconditional per-card.'
+    at: 2026-06-16T16:13:34.627Z
+  - ac_id: ac-6
+    kind: explicit
+    text: 'bl-006 on real binary: unfiltered list with 2 distinct projects (svc-auth, svc-pay) groups under headers svc-auth/svc-pay/unassigned; with 1 distinct project the list is FLAT (no headers). WORDING NOTE: AC''s ''byte-identical to today'' sub-clause holds for grouping structure (no headers at <2 distinct), but the unconditional ac-5 badge DOES appear at 1-distinct; byte-identity to pre-feature is guaranteed by the ac-3 no-declaration protective bar, while ac-6 governs only the grouping threshold.'
+    at: 2026-06-16T16:13:48.017Z
+  - ac_id: ac-7
+    kind: explicit
+    text: 'bl-007 on real binary: list/ready/status --json emit the dense single-line envelope with project as one flat field (string or null); never grouped/nested regardless of distinct-project count. root-c card shows project:null.'
+    at: 2026-06-16T16:13:48.070Z
+  - ac_id: ac-8
+    kind: explicit
+    text: 'bl-008 on real binary: authored projects: [be, fe, services/*] preserved verbatim across init --yes, init --force --yes, and sync (no strip/reorder/overwrite).'
+    at: 2026-06-16T16:13:48.111Z
+  - ac_id: ac-9
+    kind: explicit
+    text: 'bl-008 on real binary: harness config with NO projects: key loads unchanged after init+sync; harness.yml byte-unchanged across the lifecycle (additive schema add).'
+    at: 2026-06-16T16:13:48.139Z
+  - ac_id: ac-10
+    kind: explicit
+    text: 'bl-009 on real binary: feature with project: svc-pay but empty acceptance+areas is BLOCKED at accept (incomplete contract); adding acceptance clears the acceptance gap with project untouched. project never satisfies/alters the gate (registry.rs accept_inner has no project reference; gate predates T1 at ebb80b01). WORDING NOTE: AC text says gate is ''acceptance OR affected_areas'' but the implemented gate requires BOTH acceptance AND affected_areas AND qa-baseline as independent gaps; the substantive D3 no-interaction claim (project independent of gate) holds either way.'
+    at: 2026-06-16T16:13:48.167Z
+  - ac_id: ac-11
+    kind: explicit
+    text: 'bl-010 on real binary: card created from services/deep/nested/ lands in the SINGLE root .maestro/cards/tasks/; status header shows one repo root; only one .maestro dir in the repo; no aggregation/federation verb in CLI surface; two separate git repos each list only their own card (isolated).'
+    at: 2026-06-16T16:13:59.846Z
+  - ac_id: ac-12
+    kind: explicit
+    text: 'T6 content guards (tests/setup_skill_context_readin.rs, 3 tests PASS): SKILL.md Step 8 enumerates bounded set (AGENTS.md/CLAUDE.md/README.md/docs/*.md, shallow, size cap) at root AND under each projects:-matched folder; Step 9 synthesizes into SINGLE root harness guidance, one section per project.'
+    at: 2026-06-16T16:13:59.877Z
+  - ac_id: ac-13
+    kind: explicit
+    text: 'bl-011 on real binary: ''maestro install --agent codex'' in monorepo writes maestro:start/end managed block ONLY at root AGENTS.md/CLAUDE.md; fe/be sub-project specs unchanged (no managed block); install_mirrors.rs 12/12 structurally guarantees root-relative only. SKILL.md states read-in only, never write into sub-project specs.'
+    at: 2026-06-16T16:13:59.902Z
+  - ac_id: ac-14
+    kind: explicit
+    text: 'bl-011-ac14 on real binary: T6 ingestion commit bbabfc2f changed ONLY embedded/skills/maestro-setup/SKILL.md + tests/resources_version_guard.rs + tests/setup_skill_context_readin.rs; no CLI verb, no harness schema field; no ingestion verb in any cli.md. Version-bumped 1.5.0 + guard re-recorded.'
+    at: 2026-06-16T16:13:59.929Z
+  - ac_id: ac-15
+    kind: explicit
+    text: 'bl-004 byte-identical no-declaration bar + SKILL.md no-projects collapse: with no projects: declaration setup reads only root docs and produces exactly one guidance section; ''With no projects: declared, this is the repo root alone.'' Single-repo behavior byte-identical to today.'
+    at: 2026-06-16T16:13:59.955Z
+  acceptance:
+  - 'Card-base project field: a card created with --project svc-pay persists ''project: svc-pay'' in .maestro/cards/<id>/card.yaml for EVERY card type (feature/task/bug/chore/idea/decision); a card created without it has no project key; pre-existing cards lacking the field still load (additive, round-trip safe via the existing extra/unknown forward-tolerance).'
+  - 'Auto-infer when declared: with projects: ["*"] in harness config, ''maestro task new x'' run under <root>/svc-pay/ stores project=svc-pay with no flag; with projects: ["services/*"], running under services/pay/ stores project=pay; with projects: ["fe","be"], running under docs/ stores no project. The matched segment is the stored value.'
+  - 'No declaration = no behavior change: with no projects: key in harness config, ''maestro task new x'' from any subfolder stores no project, and ''maestro list'' / ''maestro ready'' human output is byte-identical to the pre-feature binary (no project badge, no grouping). An explicit --project still sets and stores the value.'
+  - 'Project filter: ''maestro list --project svc-pay'', ''maestro ready --project svc-pay'', and the card-namespaced equivalents return only cards whose stored project equals svc-pay; an unknown project name returns an empty result, not an error. status intentionally gets NO --project filter (D4 keeps status/active unchanged), though status --json still carries the project field per the JSON criterion.'
+  - 'Project badge: in list/ready HUMAN output every card row carrying a project shows a [project] badge; rows with no project show no badge.'
+  - 'Group-by-project with a >=2 threshold: grouping counts distinct projects over the SHOWN cards (the post-default-filter rows list already displays). ''maestro list'' without --project groups rows under project headers ONLY when >=2 distinct projects appear among the shown cards (cards with no project fall under a root/unassigned group); with 0 or 1 distinct project the list stays flat and byte-identical to today.'
+  - 'JSON stays flat: ''maestro list --json'' (and ready/status --json) emit the existing dense single-line-per-item envelope with project added as one flat field; never grouped or nested, regardless of distinct-project count. Preserves the dense-JSON multi-item contract.'
+  - 'projects: config survives lifecycle: a user-authored projects: declaration in harness config is preserved across ''maestro init'' (re-init/merge), ''maestro sync'', and any harness re-detection; none of these strip, reorder, or overwrite it.'
+  - 'Harness config forward-compat: an existing harness config with NO projects: key still loads unchanged after this feature ships (the schema add is additive, parallel to the card-field guarantee).'
+  - 'set_contract gate unchanged: setting project on a feature does NOT satisfy or alter the feature readiness gate (acceptance OR affected_areas non-empty); project and affected_areas remain independent, confirming D3''s no-interaction claim as a check rather than an assertion.'
+  - 'One root scope, no federation: discovery still returns exactly one root .maestro via the existing nearest-wins walk; a card created from any subfolder lands in the single root .maestro/cards/; no cross-repo aggregation verb is added and separate git repos remain isolated.'
+  - 'Setup context read-in: the maestro-setup skill enumerates a BOUNDED doc/agent-spec set (AGENTS.md, CLAUDE.md, README.md, docs/*.md, with a depth/size cap) at the repo root AND under each folder matched by the projects: declaration, and the conductor synthesizes them into the SINGLE root harness guidance with one section per project.'
+  - 'Read-in only, no write-out: setup never writes maestro-managed guidance into sub-project AGENTS.md/CLAUDE.md; install/sync continue to write managed blocks only at the repo root (src/domain/install/mod.rs).'
+  - 'No new surface for ingestion: context ingestion adds no CLI verb and no harness schema field; the change is maestro-setup skill content only (version-bumped + guard re-recorded). maestro stays passive.'
+  - 'Single-repo unchanged: with no projects: declaration, setup reads only root docs and produces exactly one guidance section, byte-identical to today''s setup behavior.'
+  open_questions:
+  - 'Deferred fork: should maestro ALSO write per-project guidance OUT into each sub-project''s own AGENTS.md/CLAUDE.md? Currently rejected (contradicts D1 one-root-scope, net-new file ownership); open a separate decision only if explicitly wanted.'

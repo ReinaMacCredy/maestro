@@ -1,0 +1,71 @@
+schema_version: maestro.card.v1
+id: task-add-optional-project-field-to-the-card-2afc
+type: task
+title: Add optional `project` field to the Card base
+status: verified
+parent: monorepo-and-multi-service-maestro-scopes
+claimed_by: claude#s88756-1781613247912292000
+claimed_at: 2026-06-16T12:34:07.912Z
+created_at: 2026-06-16T12:32:30.629Z
+updated_at: 2026-06-16T13:40:29.654Z
+extra:
+  schema_version: maestro.task.v2
+  claims:
+  - 'RED: project_serializes_only_when_set_and_loads_absent_as_none failed before impl'
+  - 'GREEN: cargo test 900 passed, 0 failed'
+  state_history:
+  - state: draft
+    at: 2026-06-16T12:32:30.629Z
+    by: maestro
+  - state: exploring
+    at: 2026-06-16T12:32:30.653Z
+    by: maestro
+  - state: ready
+    at: 2026-06-16T12:32:30.858Z
+    by: maestro
+  - state: needs_verification
+    at: 2026-06-16T13:40:29.638Z
+    by: maestro
+    summary: Add optional project field to the Card base (all card types) + --project flag on create/feature new/task create/decision new; carried across fold rebuilds; independent of feature set_contract gate
+    claims:
+    - 'RED: project_serializes_only_when_set_and_loads_absent_as_none failed before impl'
+    - 'GREEN: cargo test 900 passed, 0 failed'
+  - state: verified
+    at: 2026-06-16T13:40:29.654Z
+    by: maestro
+    summary: 'verification passed: 2 claim(s), 1 proof source(s)'
+  lane: normal
+  risk: medium
+  verification:
+    status: passed
+    verified_at: 2026-06-16T13:40:29.654Z
+    verified_commit: dc1c65f43e4e7a5369030ea221a881851402aa60
+    verified_by_run: .maestro/runs/87b527b0-94e5-4e97-9b90-59041dbeb46b/events.jsonl
+    contract_hash: fa54146dc5a193077bfc41f57ba30e871810a17a280292ae588e3fb3ddfc949c
+    claim_checks:
+    - claim: 'RED: project_serializes_only_when_set_and_loads_absent_as_none failed before impl'
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/87b527b0-94e5-4e97-9b90-59041dbeb46b/events.jsonl
+    - claim: 'GREEN: cargo test 900 passed, 0 failed'
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/87b527b0-94e5-4e97-9b90-59041dbeb46b/events.jsonl
+    commands:
+    - cmd: cargo build
+      exit_code: 0
+      duration_ms: 267
+    - cmd: cargo test
+      exit_code: 0
+      duration_ms: 45562
+    - cmd: cargo clippy -- -D warnings
+      exit_code: 0
+      duration_ms: 7273
+    proof_sources:
+    - kind: event
+      path: .maestro/runs/87b527b0-94e5-4e97-9b90-59041dbeb46b/events.jsonl
+      hash: d8b0adb24b3cfd6c96c35f8b31cfd27514bcc6a5e1b89a92ec4c9a5f89793b7f
+  acceptance_locked: true
+  acceptance:
+    checks:
+    - 'a card created with `--project P` persists `project: P` in card.yaml for every card type (feature/task/bug/chore/idea/decision); a card created without the flag has no `project` key; a legacy card.yaml lacking the field still loads and round-trips with no spurious `project:`; setting `project` on a feature neither satisfies nor alters the accept readiness gate (acceptance OR affected_areas). Covers ac-1, ac-10.'
+    locked_by: maestro
+    locked_at: 2026-06-16T12:32:30.858Z
