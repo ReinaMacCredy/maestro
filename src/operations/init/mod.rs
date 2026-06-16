@@ -167,7 +167,19 @@ struct InitFile {
 
 impl InitPlan {
     fn new(paths: &MaestroPaths) -> Result<Self> {
-        let harness_config = HarnessConfig::detect(paths.repo_root());
+        let mut harness_config = HarnessConfig::detect(paths.repo_root());
+
+        // detect() can reconstruct every field except a user's project globs.
+        // A refresh (--force regenerates harness.yml) would otherwise drop them,
+        // so carry an existing declaration forward. Best-effort: a config that
+        // no longer parses is left to regenerate clean (force's escape hatch),
+        // and the original is preserved by the backup either way.
+        if let Some(existing) = crate::operations::harness::load_config(paths)
+            .ok()
+            .flatten()
+        {
+            harness_config.projects = existing.projects;
+        }
 
         Ok(Self {
             directories: vec![paths.harness_dir(), paths.cards_dir()],
