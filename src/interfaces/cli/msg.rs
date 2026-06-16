@@ -188,7 +188,7 @@ pub(super) fn inbox_banner() -> Result<()> {
     };
 
     let mut counts: Vec<(String, usize)> = Vec::new();
-    for channel in visible_channels(&paths, &me_card.card)? {
+    for channel in visible_channels_union(&paths, &me_card.card)? {
         let at = cursor(&paths, &channel, &me)?;
         let unread = channel.unread(&me, at.as_deref()).len();
         if unread > 0 {
@@ -208,22 +208,6 @@ pub(super) fn inbox_banner() -> Result<()> {
         .join(", ");
     eprintln!("[inbox] {total} new ({breakdown}) -> maestro msg read");
     Ok(())
-}
-
-/// Every channel `me` participates in that is currently visible IN THE LOCAL
-/// worktree: enumerated from `.maestro/channels/` headers, kept only while the
-/// pair is still linked (archive-aware, so a boxed partner stays visible until
-/// `link remove`). The inbox banner uses this local view; `read`/`list` union
-/// across worktrees via `visible_channels_union`.
-fn visible_channels(paths: &MaestroPaths, me: &card::schema::Card) -> Result<Vec<Channel>> {
-    let mut visible = Vec::new();
-    for channel in channel::channels_for(paths, &me.id)? {
-        let partner = channel.partner(&me.id).to_string();
-        if card::query::pair_linked(paths, me, &partner)? {
-            visible.push(channel);
-        }
-    }
-    Ok(visible)
 }
 
 /// Visible channels merged across every worktree of the repo: a peer messaging

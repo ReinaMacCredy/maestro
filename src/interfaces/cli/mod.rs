@@ -1431,6 +1431,7 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Hook(_) | RootCommand::Mcp(_) | RootCommand::Version
     ) {
         let _ = msg::inbox_banner();
+        let _ = active::overlap_banner();
     }
     match cli.command {
         RootCommand::Init(args) => init::run(args),

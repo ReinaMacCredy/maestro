@@ -340,3 +340,52 @@ fn render_link_hint(
         }
     }
 }
+
+/// The ambient warm-file overlap line: when another live session is editing a
+/// file the running session is also editing in this SAME worktree, print one
+/// advisory `[overlap]` line per peer on STDERR before any command runs
+/// (`dec-default-active-flags-warm-file-overlap-51a9`). LOCAL only -- worktree
+/// isolation is the feature's own remedy, so the signal must clear once peers
+/// split into separate folders and therefore never unions across worktrees.
+/// Editor-scoped: only when the running session is one of the contenders, so the
+/// "also editing" reads relative to me; a peer with no bound card falls back to
+/// its session id. Advisory -- nothing is blocked. Best-effort: the caller
+/// discards any error so the banner can never fail or slow a command.
+pub(super) fn overlap_banner() -> Result<()> {
+    let Ok(root) = discover_repo_root() else {
+        return Ok(());
+    };
+    let paths = MaestroPaths::new(root);
+    let me = super::cli_run_id();
+    let now = utc_now_timestamp();
+
+    let mut printed = false;
+    for overlap in run::warm_file_overlaps(&paths, &now)? {
+        if !overlap.editors.iter().any(|editor| editor.session_id == me) {
+            continue;
+        }
+        for peer in overlap.editors.iter().filter(|e| e.session_id != me) {
+            let who = peer.bound_card.as_deref().unwrap_or(&peer.session_id);
+            eprintln!(
+                "[overlap] {who} also editing {} ({})",
+                overlap.file_path,
+                recency(peer.age_minutes)
+            );
+            printed = true;
+        }
+    }
+    if printed {
+        eprintln!("          -> repeated overlap = time to split into a worktree");
+    }
+    Ok(())
+}
+
+/// Humanized warm-edit recency for the overlap line: "just now" within the first
+/// minute, else "<n>m ago" (matches the locked banner preview).
+fn recency(age_minutes: u64) -> String {
+    if age_minutes == 0 {
+        "just now".to_string()
+    } else {
+        format!("{age_minutes}m ago")
+    }
+}
