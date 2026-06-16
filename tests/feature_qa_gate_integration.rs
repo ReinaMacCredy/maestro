@@ -396,3 +396,46 @@ fn non_goal_amend_does_not_block_ship_via_cli() {
     let shipped = stdout(maestro(&ship, repo), &ship);
     assert!(shipped.contains("shipped report-builder"));
 }
+
+#[test]
+fn qa_none_survives_a_non_behavioral_amend_without_redeclaring() {
+    let temp = TestTempDir::new("maestro-qa-none-nongoal-test");
+    let repo = temp.path();
+    init_and_author(repo, "config-cleanup", "Config cleanup");
+
+    let accept = [
+        "feature",
+        "accept",
+        "config-cleanup",
+        "--qa",
+        "none",
+        "--reason",
+        "config-only, no behavior",
+    ];
+    assert!(
+        stdout(maestro(&accept, repo), &accept).contains("accepted config-cleanup"),
+        "qa: none accept should pass with no baseline"
+    );
+    stdout(
+        maestro(&["feature", "start", "config-cleanup"], repo),
+        &["feature", "start"],
+    );
+
+    // A non-goal amend grows no behavioral surface, so the qa: none waiver holds:
+    // ship must not re-arm the QA gate, and no re-declaration is required.
+    let amend = [
+        "feature",
+        "amend",
+        "config-cleanup",
+        "--add-non-goal",
+        "no migration",
+        "--reason",
+        "clarify scope",
+    ];
+    stdout(maestro(&amend, repo), &amend);
+
+    prove_contract(repo, "config-cleanup");
+    let ship = ["feature", "ship", "config-cleanup"];
+    let shipped = stdout(maestro(&ship, repo), &ship);
+    assert!(shipped.contains("shipped config-cleanup"), "{shipped}");
+}

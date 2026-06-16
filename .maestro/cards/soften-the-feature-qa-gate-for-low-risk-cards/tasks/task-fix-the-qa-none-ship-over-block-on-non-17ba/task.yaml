@@ -1,0 +1,82 @@
+schema_version: maestro.card.v1
+id: task-fix-the-qa-none-ship-over-block-on-non-17ba
+type: task
+title: Fix the qa:none ship over-block on non-behavioral amends
+status: verified
+parent: soften-the-feature-qa-gate-for-low-risk-cards
+claimed_by: maestro
+claimed_at: 2026-06-16T18:52:11.411Z
+created_at: 2026-06-16T18:51:26.924Z
+updated_at: 2026-06-16T19:03:02.420Z
+extra:
+  schema_version: maestro.task.v2
+  claims:
+  - 'RED: test qa_none_survives_non_behavioral_amend failed before the fix'
+  - 'GREEN: cargo test 936 passed, 0 failed'
+  - 'E2E: qa-gate integration suite 5 passed via the real CLI, incl qa_none_survives_a_non_behavioral_amend_without_redeclaring'
+  covers:
+  - ac-2
+  - ac-3
+  state_history:
+  - state: draft
+    at: 2026-06-16T18:51:26.924Z
+    by: maestro
+  - state: exploring
+    at: 2026-06-16T18:51:26.949Z
+    by: maestro
+  - state: ready
+    at: 2026-06-16T18:51:26.997Z
+    by: maestro
+  - state: in_progress
+    at: 2026-06-16T18:52:11.411Z
+    by: maestro
+  - state: needs_verification
+    at: 2026-06-16T19:03:02.404Z
+    by: maestro
+    summary: Aligned the ship gate's qa:none freshness to behavioral amends. Extracted qa::qa_declared_none_fresh (pure, mirrors ship_qa_gaps E.1) and repointed registry.rs; a non-behavioral amend (non-goal/open-question) no longer re-arms the QA gate, while a behavioral amend (acceptance/area) still does.
+    claims:
+    - 'RED: test qa_none_survives_non_behavioral_amend failed before the fix'
+    - 'GREEN: cargo test 936 passed, 0 failed'
+    - 'E2E: qa-gate integration suite 5 passed via the real CLI, incl qa_none_survives_a_non_behavioral_amend_without_redeclaring'
+  - state: verified
+    at: 2026-06-16T19:03:02.420Z
+    by: maestro
+    summary: 'verification passed: 3 claim(s), 1 proof source(s)'
+  lane: normal
+  risk: medium
+  verification:
+    status: passed
+    verified_at: 2026-06-16T19:03:02.420Z
+    verified_commit: 2650f3a5579ded41dc24f1e03fdc1b73a5edab41
+    verified_by_run: .maestro/runs/391829a6-0977-4ba4-9345-3db7664abe56/events.jsonl
+    contract_hash: d1cae9988f6d3dfbdf6f91f7939790a05f5fe6e73e85db18971a51cf3b7f44ed
+    claim_checks:
+    - claim: 'RED: test qa_none_survives_non_behavioral_amend failed before the fix'
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/391829a6-0977-4ba4-9345-3db7664abe56/events.jsonl
+    - claim: 'GREEN: cargo test 936 passed, 0 failed'
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/391829a6-0977-4ba4-9345-3db7664abe56/events.jsonl
+    - claim: 'E2E: qa-gate integration suite 5 passed via the real CLI, incl qa_none_survives_a_non_behavioral_amend_without_redeclaring'
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/391829a6-0977-4ba4-9345-3db7664abe56/events.jsonl
+    commands:
+    - cmd: cargo build
+      exit_code: 0
+      duration_ms: 158
+    - cmd: cargo test
+      exit_code: 0
+      duration_ms: 46277
+    - cmd: cargo clippy -- -D warnings
+      exit_code: 0
+      duration_ms: 4540
+    proof_sources:
+    - kind: event
+      path: .maestro/runs/391829a6-0977-4ba4-9345-3db7664abe56/events.jsonl
+      hash: bff5b45f16c947ec4127cae6a9c70615e7771707ed1fba6293755c28ed68a38c
+  acceptance_locked: true
+  acceptance:
+    checks:
+    - after accepting a feature with `--qa none --reason` and starting it, a non-behavioral amend (`--add-non-goal`) leaves `feature ship --dry-run` with no qa-baseline/qa-slice gap, while a behavioral amend (`--add-acceptance`) makes `feature ship --dry-run` report a qa-baseline gap
+    locked_by: maestro
+    locked_at: 2026-06-16T18:51:26.997Z

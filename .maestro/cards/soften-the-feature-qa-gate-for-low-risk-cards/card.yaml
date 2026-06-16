@@ -1,0 +1,28 @@
+schema_version: maestro.card.v1
+id: soften-the-feature-qa-gate-for-low-risk-cards
+type: feature
+title: Soften the feature QA gate for low-risk cards
+status: shipped
+deps:
+- kind: related
+  target: light-task-category-relax-heavy-gates-for-low-risk-cards
+created_at: 2026-06-16T17:10:04.918Z
+updated_at: 2026-06-16T19:11:29.420Z
+description: 'The feature QA gate fires the same for every feature: accept requires a qa.md baseline; ship requires a counting slice per [bl-NNN] scenario. For small/light/mechanical features this ceremony feels like overkill. A zero-[bl-NNN] baseline already ships with no slices, but a baseline file must still exist at accept. The light lane (shipped) relaxes TASK gates (test-first, simplify) but deliberately KEPT accept/QA (dec-light-scope-relax-test-first-and-0720). Decide how to make QA softer without letting behavioral cards dodge proof.'
+extra:
+  schema_version: maestro.feature.v2
+  outcome: 'QA softening shipped via the existing --qa none --reason path: documented in maestro-card 1.13.0 qa-baseline.md + fixed the over-block bug (non-behavioral amend no longer re-arms the ship gate); no new marker built'
+  acceptance_sweeps:
+  - at: 2026-06-16T19:10:26.501Z
+    resolved:
+    - ac-1
+    - ac-2
+    - ac-3
+  affected_areas:
+  - 'src/domain/feature/registry.rs (ship gate: qa_declared_none freshness aligned to is_behavioral() at/after the declaration position instead of amends.len())'
+  - embedded/skills/maestro-card/reference/qa-baseline.md (document the --qa none --reason no-behavioral-surface path + the behavior-keyed rule)
+  - tests/resources_version_guard.rs (maestro-card skill version bump re-record)
+  acceptance:
+  - 'The maestro-card skill documents the `maestro feature accept <id> --qa none --reason "<why>"` path: a feature with no behavioral surface (docs/config, or mechanical/structural with behavior held constant) accepts with --qa none --reason, which waives the qa.md baseline at accept and ships with no QA slices, and re-arms the gate if a behavioral amend lands; the behavior-keyed rule is stated -- any observable behavior change is NOT a no-surface feature, capture a real qa.md'
+  - A feature accepted with --qa none --reason that then receives only a non-behavioral amend (non-goal or open-question) still passes feature ship with no qa-baseline/qa-slice gap (the over-block bug is fixed)
+  - A feature accepted with --qa none --reason that then receives a behavioral amend (acceptance or affected area) re-blocks feature ship until a qa.md baseline is captured (the safety property is preserved)

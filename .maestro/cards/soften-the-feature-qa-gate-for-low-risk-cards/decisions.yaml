@@ -1,0 +1,56 @@
+- schema_version: maestro.card.v1
+  id: dec-light-features-skip-the-feature-qa-gate-06c5
+  type: decision
+  title: Light features skip the feature QA gate via an honor-system light marker
+  status: superseded
+  parent: soften-the-feature-qa-gate-for-low-risk-cards
+  created_at: 2026-06-16T18:30:42.718Z
+  updated_at: 2026-06-16T18:30:42.747Z
+  description: 'QA is feature-level: accept = baseline_present (qa.md non-empty); ship = per-[bl-NNN] slice coverage (qa.rs:72-74 and ship_qa_gaps). A zero-[bl-NNN] baseline already ships sliceless, so the residual friction is the qa.md file existing at accept plus slices for any scenarios written. The shipped light concept (work.md:40-41) is already behavior-keyed: mechanical/structural/docs/config = light; ANY observable behavior change = NOT light, whatever its size. User chose to extend light to the feature QA gate (binary + skill) and to trust the marker rather than have maestro police it.'
+  extra:
+    locked_at: 2026-06-16T18:30:42.747Z
+    decision: 'A feature carries a light marker (the existing --lane light convention extended to features). When light, the QA gate is skipped: feature accept does not require a qa.md baseline, and feature ship does not require per-[bl-NNN] slice coverage. The skip is honor-system: the agent marks light per the behavior-keyed definition and records a --reason that maestro persists on the feature; maestro does NOT inspect acceptance/areas to judge behavior (free-text judgement over-blocks real light work and misses worded dodges). A mismark is a visible lie in the audit trail, exactly like today''s task --lane light. This is BOTH a binary change (accept + ship gates read the light marker and the recorded reason) AND a skill change (qa-baseline.md / feature.md document the light path). It extends light to the feature QA gate -- a scope dec-light-scope-relax-test-first-and-0720 deliberately kept out for the task lane; a deliberate boundary change, not a contradiction. That decision''s test-first and cleanup relaxations stand. Builds on dec-light-is-behavior-keyed-not-size-keyed-f867 and dec-light-marker-lane-light-convention-word-9e0d.'
+    superseded_by: dec-qa-softening-is-delivered-by-the-54b8
+    preview: |-
+      you mark it light and say why:
+        feature accept --light --reason "just a rename"
+
+      maestro accepts -> QA gate skipped, reason saved.
+      if you lied, anyone reading the feature sees it.
+
+      same trust model light tasks already use today.
+      rule: mechanical/structural/docs/config = light;
+      any observable behavior change = NOT light.
+    rejected:
+    - 'Enforced behavioral check (maestro refuses light when acceptance/areas look behavioral): relies on unreliable free-text judgement -- over-blocks real light features and misses cleverly-worded dodges.'
+    - 'Skill-only two-line stub, gate unchanged: leaner and reverses nothing, but the user chose the real binary skip so a light feature needs no qa.md at all.'
+- schema_version: maestro.card.v1
+  id: dec-qa-softening-is-delivered-by-the-54b8
+  type: decision
+  title: QA softening is delivered by the existing --qa none --reason, not a new light marker
+  status: locked
+  parent: soften-the-feature-qa-gate-for-low-risk-cards
+  created_at: 2026-06-16T18:48:11.045Z
+  updated_at: 2026-06-16T18:48:11.081Z
+  description: 'Live-verified 2026-06-17 on binary g2650f3a5 in a scratch repo: maestro feature accept <id> --qa none --reason already waives the qa.md baseline at accept (ac-1), ships with no slice gap (ac-2: ship --dry-run showed only the unrelated acceptance-sweep gate), persists the reason on the feature shown by feature show/spec (ac-3), inspects no acceptance/areas (ac-4 honor system), and leaves non--qa-none features fully gated (ac-5). The earlier current-state claim that a qa.md must EXIST at accept for trivial features is FALSE. The only un-met criterion is ac-6: no skill prose documents this path (--qa none lives only in cli.md). --qa none is also SAFER than the proposed flat marker -- it re-arms the full ship gate when a behavioral amend lands after the declaration.'
+  extra:
+    locked_at: 2026-06-16T18:48:11.081Z
+    decision: 'Do NOT build a separate --light feature marker; it would duplicate --qa none. Deliver: (1) document the --qa none --reason path + the behavior-keyed rule in the maestro-card skill (ac-6, the only gap); (2) one one-line bug fix: the ship gate''s qa_declared_none freshness is count-based (amend_log_position == amends.len(), registry.rs:847) so a NON-behavioral amend over-blocks ship -- align it to ship_qa_gaps E.1''s is_behavioral() filter so only a behavioral amend re-arms the gate.'
+    supersedes:
+    - dec-light-features-skip-the-feature-qa-gate-06c5
+    preview: |-
+      QA softening ALREADY exists:
+        maestro feature accept <id> \
+          --qa none --reason "just a rename"
+        -> no qa.md needed at accept
+        -> ships with no QA slices
+        -> reason saved + shown on feature show
+        -> re-arms if real behavior is added
+
+      deliver: document it in the skill (ac-6)
+        + 1-line fix: a non-goal amend must NOT
+          re-lock the QA gate at ship
+      NOT a new --light marker (it duplicates --qa none).
+    rejected:
+    - Build the separate --light feature marker as originally locked (duplicates --qa none; the second spelling for one action cuts against no-speculative-abstractions; advisor + skeptic advise against)
+    - Document only and skip the bug fix (leaves a docs-only/non-goal amend wrongly re-locking the QA gate at ship)

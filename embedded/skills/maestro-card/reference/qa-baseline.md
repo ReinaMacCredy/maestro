@@ -10,6 +10,27 @@ behavior oracle for `feature ship`, not a list of tests.
 - The feature touches user-visible, data, security, persistence,
   compatibility, release, or workflow behavior.
 
+## No behavioral surface
+
+A feature with nothing to QA skips the baseline entirely — accept it with a
+declaration instead of a `qa.md`:
+
+```sh
+maestro feature accept <id> --qa none --reason "<why there is nothing to QA>"
+```
+
+This waives the baseline at accept and lets the feature ship with no slices; the
+reason persists on the feature and prints on `feature show` / `feature spec`. The
+waiver stays fresh until a *behavioral* amend lands: adding acceptance or an
+affected area re-arms the full gate, so capture a real `qa.md` then (re-declare
+`--qa none` only if the new scope is still non-behavioral). A non-behavioral
+amend — a non-goal or open question — leaves the waiver intact.
+
+Reach for `--qa none` only when the change is behavior-keyed light: docs- or
+config-only, or mechanical/structural code with behavior held constant and
+already covered by the existing suite. Any change that adds or alters observable
+behavior has a surface — write a real baseline below, however small.
+
 ## Do
 
 1. Read `maestro feature show <id>` for acceptance criteria and areas.

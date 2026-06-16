@@ -841,10 +841,7 @@ fn ship_gaps_for_record(
     }
     // D5 cond 2/3 -- QA baseline present + fresh, every behavioral scenario proven.
     let feat_dir = feature_sidecar_dir(paths, id);
-    let qa_declared_none = record
-        .qa
-        .as_ref()
-        .is_some_and(|qa| qa.surface == "none" && qa.amend_log_position == record.amends.len());
+    let qa_declared_none = qa::qa_declared_none_fresh(record.qa.as_ref(), &record.amends);
     let mut baseline = None;
     if !qa_declared_none {
         baseline = qa::read_baseline(&feat_dir)?;

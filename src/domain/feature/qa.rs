@@ -20,7 +20,7 @@ use std::path::Path;
 use anyhow::{Result, anyhow};
 use serde::Deserialize;
 
-use crate::domain::feature::schema::{AmendLog, normalize_acceptance_id};
+use crate::domain::feature::schema::{AmendEntry, AmendLog, QaDeclaration, normalize_acceptance_id};
 use crate::foundation::core::fs::read_to_string_if_exists;
 
 /// The parsed `qa.md` baseline: the amend-log position it was captured against and
@@ -71,6 +71,27 @@ pub(crate) fn read_baseline(feature_dir: &Path) -> Result<Option<Baseline>> {
 /// True when a non-empty `qa.md` exists (the accept-gate precondition F).
 pub(crate) fn baseline_present(feature_dir: &Path) -> Result<bool> {
     Ok(read_baseline(feature_dir)?.is_some())
+}
+
+/// Whether a feature's `qa: none` declaration still waives the ship QA gate.
+///
+/// True only when the declaration is `surface: none` *and* no **behavioral**
+/// amend (added acceptance or area) landed at or after the position it was
+/// captured against. This mirrors [`ship_qa_gaps`]'s E.1 freshness exactly: a
+/// behavioral amend re-arms the full gate (a new surface needs a baseline),
+/// while a non-behavioral amend (non-goal / open-question) leaves the waiver
+/// intact. An out-of-range position is treated as 0 (fail-closed: re-check all).
+pub(crate) fn qa_declared_none_fresh(qa: Option<&QaDeclaration>, amends: &[AmendEntry]) -> bool {
+    let Some(qa) = qa else { return false };
+    if qa.surface != "none" {
+        return false;
+    }
+    let position = if qa.amend_log_position > amends.len() {
+        0
+    } else {
+        qa.amend_log_position
+    };
+    !amends[position..].iter().any(AmendEntry::is_behavioral)
 }
 
 /// Why a baseline is unusable, so the accept/ship gates word the remedy precisely:
@@ -453,6 +474,59 @@ mod tests {
         let amend = log(vec![entry(&["new criterion"], &[])]);
         let gaps = ship_qa_gaps("demo", Some(&b), "missing", &slices, &amend);
         assert!(gaps.iter().any(|g| g.contains("stale")));
+    }
+
+    fn qa_none(position: usize) -> QaDeclaration {
+        QaDeclaration {
+            surface: "none".to_string(),
+            reason: "mechanical, behavior held constant".to_string(),
+            amend_log_position: position,
+        }
+    }
+
+    fn non_goal_amend() -> AmendEntry {
+        AmendEntry {
+            at: "t".to_string(),
+            reason: "clarify scope".to_string(),
+            added: AmendAdditions {
+                non_goals: vec!["out of scope".to_string()],
+                ..Default::default()
+            },
+        }
+    }
+
+    #[test]
+    fn qa_none_waives_ship_with_no_amends() {
+        assert!(qa_declared_none_fresh(Some(&qa_none(0)), &[]));
+    }
+
+    #[test]
+    fn qa_none_survives_non_behavioral_amend() {
+        // A non-goal/open-question amend grows no behavioral surface, so the
+        // qa:none waiver stays intact — mirroring ship_qa_gaps E.1, which only
+        // re-arms on a behavioral amend.
+        assert!(qa_declared_none_fresh(Some(&qa_none(0)), &[non_goal_amend()]));
+    }
+
+    #[test]
+    fn qa_none_rearms_on_behavioral_amend() {
+        // An acceptance amend adds a real surface, so the waiver lapses and the
+        // full ship gate re-arms (safety property preserved).
+        assert!(!qa_declared_none_fresh(
+            Some(&qa_none(0)),
+            &[entry(&["new behavior"], &[])]
+        ));
+    }
+
+    #[test]
+    fn qa_none_fresh_requires_surface_none() {
+        let other = QaDeclaration {
+            surface: "ui".to_string(),
+            reason: "r".to_string(),
+            amend_log_position: 0,
+        };
+        assert!(!qa_declared_none_fresh(Some(&other), &[]));
+        assert!(!qa_declared_none_fresh(None, &[]));
     }
 
     #[test]
