@@ -1,6 +1,6 @@
 ---
 name: maestro-setup
-version: 1.4.2
+version: 1.5.0
 description: "Use after Maestro init/install or doctor warnings to tune a repository harness from verified repo evidence."
 ---
 
@@ -29,10 +29,20 @@ Activate:
 5. Run `maestro doctor`.
 6. If no agent integration is installed, run `maestro install --agent codex`
    unless the user asked for another agent.
-7. Inspect repo structure, build/test commands, existing agent instructions,
-   and workflow constraints.
-8. Update harness guidance only from verified files or command output.
-9. Run `maestro doctor`, then `maestro status`.
+7. Inspect repo structure, build/test commands, and workflow constraints.
+8. Read in the existing agent and doc instructions as a BOUNDED set: at the
+   repo root, and under each folder matched by the `projects:` globs in
+   `.maestro/harness/harness.yml`, read `AGENTS.md`, `CLAUDE.md`, `README.md`,
+   and top-level `docs/*.md`. Stay shallow (one level per location, no deep
+   crawl) and skip outsized files (roughly 64 KB and up) so a vendored doc dump
+   cannot flood context. With no `projects:` declared, this is the repo root
+   alone.
+9. Synthesize what you read into the SINGLE root harness guidance, one section
+   per project (a single section when nothing is declared). This is read-in
+   only: never write maestro-managed guidance into a sub-project's own
+   `AGENTS.md`/`CLAUDE.md` -- `maestro install`/`sync` write managed blocks at
+   the repo root alone. Cite the inspected files; do not tune from guesses.
+10. Run `maestro doctor`, then `maestro status`.
 
 ## Stop
 
@@ -42,6 +52,8 @@ Activate:
   files first.
 - Do not tune the harness from guesses, package-manager defaults, or stale chat
   memory.
+- Per-project docs are read-in only. Maestro owns one root scope; never write
+  maestro-managed guidance into a sub-project's `AGENTS.md`/`CLAUDE.md`.
 
 ## Done
 
