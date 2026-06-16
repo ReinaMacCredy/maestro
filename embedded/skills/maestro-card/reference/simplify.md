@@ -10,8 +10,10 @@ Do not look for correctness bugs -- that is what `/code-review` is for.
 Run on every card after implementation and before `task complete --proof`, on
 the working-tree diff (or the card's commit range if you already committed) --
 night and day. The review always runs; you only edit when it finds something.
-Skip the review only for a purely non-code (docs/config-only) diff, and name
-that reason in the completion summary -- "looked trivial" is not a skip.
+Skip the review only for a purely non-code (docs/config-only) diff or a
+`--lane light` card (no-logic change: nothing to clean, or the change is itself
+the cleanup), and name that reason in the completion summary -- "looked
+trivial" is not a skip.
 
 On a test-first card this IS the red-green-REFACTOR step ([tdd.md](tdd.md) ->
 [tdd/refactoring.md](tdd/refactoring.md)): do it once, here, not twice. Simplify
@@ -88,7 +90,8 @@ report records the simplify outcome ([loop.md](loop.md)).
 - Do not hunt bugs or security issues; that is `/code-review`.
 - Do not widen scope past this card's own diff.
 - Do not run it twice on a test-first card -- the refactor step already is it.
-- Do not skip the review except for a purely non-code diff, with the reason named.
+- Do not skip the review except for a purely non-code diff or a `--lane light`
+  card, with the reason named.
 
 ## Hand-off
 

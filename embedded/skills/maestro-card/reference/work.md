@@ -24,7 +24,7 @@ The loop, in order (signatures: [cli.md](cli.md)):
 ```sh
 maestro task create        # mint the card; seed --check with the observable result
 maestro task explore
-maestro task accept        # locks acceptance, except tiny lane may skip
+maestro task accept        # locks acceptance
 maestro task claim --next  # prints feature and dependency context
 maestro task update        # record progress: summary and/or evidence claim
 maestro task complete      # summary + claim + proof; auto-verifies
@@ -34,26 +34,40 @@ maestro task verify
 `verify` and `show` can omit `<id>` when `MAESTRO_CURRENT_TASK` is set.
 
 Use `--lane` as a routing convention, not a schema enum. Standard lanes are
-`implement`, `explore`, `review`, `audit`, and `normal` for unrouted default
-work; extend the vocabulary only by team convention. Existing states still own
-workflow meaning: exploring is a task state, brainstorm/design work belongs in
-a feature card or SPEC, and planning usually happens before `feature prepare`.
+`implement`, `explore`, `review`, `audit`, `light`, and `normal` for unrouted
+default work; extend the vocabulary only by team convention. A `light` card is
+one whose change carries no real logic to test: mechanical or structural code
+with behavior held constant, config-only, docs-only, or a throwaway spike. A
+change that adds or alters observable behavior is not light, whatever its size.
+Existing states still own workflow meaning: exploring is a task state,
+brainstorm/design work belongs in a feature card or SPEC, and planning usually
+happens before `feature prepare`.
 
 When a card's locked `--check` names observable behavior, that check is the
 test: STOP and work it test-first per [tdd.md](tdd.md) — one failing test,
 minimal code to green, repeat, then refactor — before writing implementation
 code. The skip is valid only when the `--check` is non-behavioral
-(docs/markdown/config-only) or the lane is explore/spike; the skip note must
-name which of those two cases applies. "Non-testable" is not a free judgment
-call: a locked observable `--check` is, by definition, testable.
+(docs/markdown/config-only), the lane is explore/spike, or the card is
+`--lane light` (no real logic to test); the skip note must name which case
+applies. "Non-testable" is not a free judgment call: a locked observable
+`--check` is, by definition, testable.
+
+`--lane light` is a marker, never a grant: it does not exempt a card from
+verification. If the `--check` names behavior the change introduces or alters,
+the card is not light -- keep test-first. The Evidence Gate below is unchanged
+for a light card; a code light card (mechanical/structural) still proves
+behavior held constant -- the existing suite/build stays green (the normal
+GREEN claim, minus the RED-first ordering) -- not merely the skip reason, while
+a docs/config-only light card records the skip reason as its claim.
 
 After the implementation is green and before `task complete --proof`, run the
 simplify pass on the working-tree diff per [simplify.md](simplify.md): tidy the
 change (reuse, dead code, wrong altitude) in place and keep it green. The
 assessment runs on every card; you only edit when it finds something. On a
 test-first card that pass IS the red-green-refactor step -- do it once, not
-twice. Skip the assessment only for a purely non-code (docs/config) diff, and
-name that reason in the completion summary.
+twice. Skip the assessment only for a purely non-code (docs/config) diff or a
+`--lane light` card (nothing to clean, or the change is itself the cleanup),
+and name that reason in the completion summary.
 
 ## Evidence Gate
 
