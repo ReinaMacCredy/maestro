@@ -1,0 +1,75 @@
+schema_version: maestro.card.v1
+id: task-extend-gitsnapshot-with-branch-name-and-83aa
+type: task
+title: Extend GitSnapshot with branch name and categorized dirty counts
+status: verified
+parent: resume-state-readout
+claimed_by: maestro
+claimed_at: 2026-06-16T09:50:20.013Z
+created_at: 2026-06-16T09:47:16.362Z
+updated_at: 2026-06-16T09:52:28.682Z
+extra:
+  schema_version: maestro.task.v2
+  claims:
+  - 'RED: git_snapshot_splits_dirty_counts_by_maestro_prefix failed before impl (no field maestro_dirty/code_other_dirty on GitSnapshot)'
+  - 'GREEN: cargo test --test core_backup_diff_git: 9 passed, 0 failed'
+  state_history:
+  - state: draft
+    at: 2026-06-16T09:47:16.362Z
+    by: maestro
+  - state: exploring
+    at: 2026-06-16T09:47:16.384Z
+    by: maestro
+  - state: ready
+    at: 2026-06-16T09:47:16.513Z
+    by: maestro
+  - state: in_progress
+    at: 2026-06-16T09:50:20.013Z
+    by: maestro
+  - state: needs_verification
+    at: 2026-06-16T09:52:28.662Z
+    by: maestro
+    summary: Extend GitSnapshot with branch name + categorized dirty counts (maestro_dirty for .maestro/ paths, code_other_dirty for the rest); dirty bool now derived from the same categorized count so existing behavior is unchanged.
+    claims:
+    - 'RED: git_snapshot_splits_dirty_counts_by_maestro_prefix failed before impl (no field maestro_dirty/code_other_dirty on GitSnapshot)'
+    - 'GREEN: cargo test --test core_backup_diff_git: 9 passed, 0 failed'
+  - state: verified
+    at: 2026-06-16T09:52:28.682Z
+    by: maestro
+    summary: 'verification passed: 2 claim(s), 1 proof source(s)'
+  lane: normal
+  risk: medium
+  verification:
+    status: passed
+    verified_at: 2026-06-16T09:52:28.682Z
+    verified_commit: f3a2198f95bf625ae885a10b089e0436e12a6cfb
+    verified_by_run: .maestro/runs/70483b87-02a0-4fd8-a658-f23cd32e4554/events.jsonl
+    contract_hash: 1f0ce0bab96a15a03175656bbce22da5792a9de3caf8a11f41e8a7ffc6dc15d6
+    claim_checks:
+    - claim: 'RED: git_snapshot_splits_dirty_counts_by_maestro_prefix failed before impl (no field maestro_dirty/code_other_dirty on GitSnapshot)'
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/70483b87-02a0-4fd8-a658-f23cd32e4554/events.jsonl
+    - claim: 'GREEN: cargo test --test core_backup_diff_git: 9 passed, 0 failed'
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/70483b87-02a0-4fd8-a658-f23cd32e4554/events.jsonl
+    commands:
+    - cmd: cargo build
+      exit_code: 0
+      duration_ms: 277
+    - cmd: cargo test
+      exit_code: 0
+      duration_ms: 142993
+    - cmd: cargo clippy -- -D warnings
+      exit_code: 0
+      duration_ms: 326
+    proof_sources:
+    - kind: event
+      path: .maestro/runs/70483b87-02a0-4fd8-a658-f23cd32e4554/events.jsonl
+      hash: 317f76ee27ea7beae259d2d3ca4d32cf84ad7b79ad464eda5ae22a17a8baa79d
+  acceptance_locked: true
+  acceptance:
+    checks:
+    - GitSnapshot exposes the current branch name and two uncommitted file counts split by path prefix -- one count for paths under .maestro/ (maestro cards), one for all other tracked/untracked changes (code/other)
+    - a unit test over a fixture repo with one .maestro/ change and one non-.maestro/ change asserts the branch is set and the counts are maestro-cards=1 and code/other=1
+    locked_by: maestro
+    locked_at: 2026-06-16T09:47:16.513Z

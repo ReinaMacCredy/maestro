@@ -1,0 +1,40 @@
+schema_version: maestro.card.v1
+id: resume-state-readout
+type: feature
+title: resume state readout
+status: shipped
+created_at: 2026-06-16T09:17:34.064Z
+updated_at: 2026-06-16T12:09:51.209Z
+description: 'maestro resume and status reconstruct task/card state but omit git working-tree state (branch, dirty), gate proof status behind --full, and never name the proof repair. Resume threads waste effort reconstructing repo+proof state from transcripts, and stale proof (HEAD moved after proof recorded) reads as unfinished work when the fix is usually re-verify, not implementation. Tight slice carved from resume-prior-task-context: make resume+status state-complete and name the exact repair/next command. ac-7 additionally adds a non-blocking advisory to feature ship --dry-run listing verified child tasks whose proof commit predates HEAD (a re-verify reminder). No new command (honors locked card-36759d).'
+extra:
+  schema_version: maestro.feature.v2
+  outcome: resume/status now carry a git working-tree line + concern-only proof line naming the exact repair (task verify); feature ship --dry-run prints a non-blocking advisory for verified children whose proof predates HEAD
+  non_goals:
+  - No scoped resume.md checkpoint files, upstream-learnings briefs, or tiered freshness gate that blocks resume; those stay parked in feature resume-prior-task-context (governed there by card-36759d/card-362613).
+  - No new top-level command and no new resume flag; lands in the default resume/status views (honors locked card-36759d).
+  - No change to how proof staleness is computed; reuses src/domain/proof/stale.rs.
+  - No re-home of resume-prior-task-context's locked decisions; CLI has no decision move.
+  affected_areas:
+  - src/foundation/core/git.rs (branch name + categorized dirty counts on GitSnapshot)
+  - src/interfaces/cli/resume.rs (git line, concern-only proof line, named repair, contextual clean-worktree note, sharpen :226)
+  - src/interfaces/cli/status read model (git line + concern-only proof line)
+  - 'src/interfaces/cli/feature.rs ship_feature dry-run preview (non-blocking advisory: list verified child tasks whose proof commit != HEAD; reuses proof freshness/stale.rs; NOT a ship_gaps_for_record blocking gap)'
+  - tests
+  acceptance_sweeps:
+  - at: 2026-06-16T12:06:25.992Z
+    resolved:
+    - ac-1
+    - ac-2
+    - ac-3
+    - ac-4
+    - ac-5
+    - ac-6
+    - ac-7
+  acceptance:
+  - maestro resume (default, no --full) and maestro status render a git line showing the current branch name and uncommitted file counts.
+  - 'Uncommitted counts split into two buckets by path: changes under .maestro/ reported as ''maestro cards'', all other tracked/untracked changes as ''code/other''. src/foundation/core/git.rs (GitSnapshot) is extended to expose the branch name and the two categorized counts.'
+  - A clean-worktree note appears only when the next valid verb is ship/verify-shaped AND code/other dirty count > 0; otherwise no clean-worktree line is shown.
+  - 'The proof line appears in the default resume/status view only on concern: Stale, Failed, or Missing-when-expected. Missing counts as a concern only when the task is in needs_verification (completed, awaiting verification) but has no proof binding; in every other state (ready/claimed/in_progress before completion, or verified) a missing proof is normal and shows no line. An Accepted+fresh task also shows no proof line.'
+  - 'Each proof concern names the exact repair: Stale -> ''maestro task verify <id>'' framed as a refresh (HEAD moved; likely no code change) with the stale reason; Failed -> fix then ''maestro task verify <id>''; Missing(expected) -> the lifecycle verb.'
+  - resume's existing proof-recovery pointer (resume.rs:226) changes from 'maestro query proof <id>' to 'maestro task verify <id>'.
+  - 'maestro feature ship --dry-run <id> prints a non-blocking, informational advisory in its ship-preview output listing each verified child task whose proof commit differs from current HEAD: ''N child task(s) verified at older commits (HEAD moved); re-verify if their code changed: <ids>''. Advisory only -- it does not block ship and adds no entry to the blocking ship gaps (ship_gaps_for_record), so the dry-run still passes. contract_hash staleness is not handled: no CLI path can drift a verified task''s contract_hash (set_checks/task update/set_verify_command all bail on a verified task).'
