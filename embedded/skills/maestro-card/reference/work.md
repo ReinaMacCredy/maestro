@@ -47,6 +47,14 @@ code. The skip is valid only when the `--check` is non-behavioral
 name which of those two cases applies. "Non-testable" is not a free judgment
 call: a locked observable `--check` is, by definition, testable.
 
+After the implementation is green and before `task complete --proof`, run the
+simplify pass on the working-tree diff per [simplify.md](simplify.md): tidy the
+change (reuse, dead code, wrong altitude) in place and keep it green. The
+assessment runs on every card; you only edit when it finds something. On a
+test-first card that pass IS the red-green-refactor step -- do it once, not
+twice. Skip the assessment only for a purely non-code (docs/config) diff, and
+name that reason in the completion summary.
+
 ## Evidence Gate
 
 `complete --proof` records proof text and auto-runs verification. Verification

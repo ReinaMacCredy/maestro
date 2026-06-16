@@ -58,7 +58,8 @@ and declared delivered only while someone is awake.
 The session's final message is the report the human reads over coffee:
 
 - per unit: outcome plus TDD evidence (`verified, tdd: 3 cycles` or
-  `verified, tdd: skipped - <reason>`)
+  `verified, tdd: skipped - <reason>`) and the simplify outcome
+  (`simplified` or `simplify: skipped - <non-code reason>`)
 - blocked cards with reasons
 - SHIP-READY features with the exact command to run
   (`maestro feature ship <id> --outcome "<one line>"`)

@@ -93,6 +93,11 @@ After all tests pass, look for [refactor candidates](tdd/refactoring.md):
 
 **Never refactor while RED.** Get to GREEN first.
 
+On a maestro card this refactor step IS the simplify pass
+([simplify.md](simplify.md)): one once-per-card cleanup, widened to the reuse,
+altitude, and dead-code lenses. Do not run simplify again before `task
+complete`.
+
 ## Checklist Per Cycle
 
 ```

@@ -8,3 +8,8 @@ After TDD cycle, look for:
 - **Feature envy** → Move logic to where data lives
 - **Primitive obsession** → Introduce value objects
 - **Existing code** the new code reveals as problematic
+
+On a maestro card this refactor step IS the simplify pass
+([../simplify.md](../simplify.md)) -- run it once here, not again before
+`task complete`. Simplify widens these candidates with the reuse, altitude,
+and dead-code lenses.
