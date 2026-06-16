@@ -9,9 +9,9 @@ on:
     inputs:
       release_notes:
         description: >-
-          Optional release notes body. Leave blank to auto-generate from commits
-          (--generate-notes). Set it for the FIRST Rust release, whose auto-diff would
-          otherwise span the entire TS->Rust rewrite (SPEC-ci-cd D4).
+          Optional hand-written summary. When set, it is PREPENDED above the
+          auto-generated categorized changelog (it no longer replaces it), so the
+          summary, the per-type commit list, and the Full Changelog link all appear.
         required: false
         type: string
 
@@ -131,6 +131,9 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
+          # Full history + tags so release-notes.sh can walk <prev release>..HEAD.
+          fetch-depth: 0
+          fetch-tags: true
       - name: Download built assets
         uses: actions/download-artifact@v8
         with:
@@ -157,6 +160,7 @@ jobs:
           TAG: ${{ needs.gate.outputs.tag }}
           RELEASE_NOTES: ${{ inputs.release_notes }}
           TARGET_SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           # Defensive idempotency re-check: if the gate's existence check transiently
@@ -166,12 +170,29 @@ jobs:
             echo "::notice::release $TAG already exists -> skipping create (idempotent)"
             exit 0
           fi
-          notes_args=()
-          if [ -n "${RELEASE_NOTES:-}" ]; then
-            notes_args=(--notes "$RELEASE_NOTES")
+          # Most recent existing release = the previous one (the new tag isn't created
+          # yet). Walk <prev>..HEAD for the changelog; on the first release (or if the
+          # tag wasn't fetched) fall back to full history with no compare link.
+          prev_tag="$(gh release list --limit 1 --json tagName --jq '.[0].tagName // ""')"
+          range="HEAD"
+          if [ -n "$prev_tag" ] && git rev-parse -q --verify "${prev_tag}^{commit}" >/dev/null; then
+            range="${prev_tag}..HEAD"
           else
-            notes_args=(--generate-notes)
+            prev_tag=""
           fi
+          # Body: optional hand-written summary, then the categorized commit changelog,
+          # then a GitHub compare link (auto-rendered). Replaces --generate-notes, whose
+          # PR-title list collapsed a squash-merged feature to a single line.
+          : > notes.md
+          if [ -n "${RELEASE_NOTES:-}" ]; then
+            printf '%s\n\n' "$RELEASE_NOTES" >> notes.md
+          fi
+          bash scripts/release-notes.sh "$range" >> notes.md
+          if [ -n "$prev_tag" ]; then
+            printf '\n**Full Changelog**: https://github.com/%s/compare/%s...%s\n' \
+              "$REPO" "$prev_tag" "$TAG" >> notes.md
+          fi
+          echo "----- release notes -----"; cat notes.md; echo "-------------------------"
           # Release creation is the LAST step: assets are built + verified first, so a
           # failure here is the only partial-state window, closed by the cleanup below.
           # --latest is explicit: the tag's `-g<sha>` suffix is semver-prerelease-shaped,
@@ -181,7 +202,7 @@ jobs:
             --target "$TARGET_SHA" \
             --title "$TAG" \
             --latest \
-            "${notes_args[@]}" \
+            --notes-file notes.md \
             dist/*
       - name: Clean up partial release on failure
         if: failure()
