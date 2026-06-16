@@ -1594,6 +1594,19 @@ pub(super) fn current_card(paths: &MaestroPaths) -> Option<String> {
     run::current_bound_card(paths, &cli_run_id()).ok().flatten()
 }
 
+/// Every worktree root the repo exposes, each as its own `MaestroPaths`, for the
+/// verbs that read across worktrees (`active` liveness union, `msg` read union).
+/// `git::worktree_roots` returns a single root for a lone repo, so the common
+/// one-worktree case is unchanged and no flag engages the union; an unreadable
+/// git topology (not a repo, bare) falls back to the local root alone
+/// (`dec-cross-worktree-active-auto-unions-read-51b9`).
+pub(super) fn worktree_roots(paths: &MaestroPaths) -> Vec<MaestroPaths> {
+    match git::worktree_roots(paths.repo_root()) {
+        Ok(roots) if !roots.is_empty() => roots.into_iter().map(MaestroPaths::new).collect(),
+        _ => vec![MaestroPaths::new(paths.repo_root().to_path_buf())],
+    }
+}
+
 /// The `<session>` half of a card claim identity (SPEC E6): `MAESTRO_SESSION` if
 /// set, then any real per-session id the agent runtime exports, else a
 /// process-unique token. Never the colliding `cli-DATE` form `cli_run_id` falls

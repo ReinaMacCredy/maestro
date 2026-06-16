@@ -13,10 +13,10 @@ use anyhow::Result;
 
 use crate::domain::card;
 use crate::domain::run::{self, Presence, SessionActivity};
-use crate::foundation::core::git;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::time::utc_now_timestamp;
 use crate::interfaces::cli::ActiveArgs;
+use crate::interfaces::cli::worktree_roots;
 
 /// Max width for the bound-card title column; longer titles truncate to keep one
 /// scannable line per session (row width is a tunable detail, not locked by D5).
@@ -70,17 +70,6 @@ pub fn run(args: ActiveArgs) -> Result<()> {
 
     render_link_hint(&shown, &by_id, &me, your_card);
     Ok(())
-}
-
-/// The worktree roots to union liveness over: every worktree the repo has, or
-/// just the local root when git topology is unreadable (not a repo, bare, etc.).
-/// `git::worktree_roots` returns one root for a lone repo, so the single-worktree
-/// view is unchanged and no flag is needed to engage the union.
-fn worktree_roots(paths: &MaestroPaths) -> Vec<MaestroPaths> {
-    match git::worktree_roots(paths.repo_root()) {
-        Ok(roots) if !roots.is_empty() => roots.into_iter().map(MaestroPaths::new).collect(),
-        _ => vec![MaestroPaths::new(paths.repo_root().to_path_buf())],
-    }
 }
 
 /// Whether the live cards `a` and `b` share a `related` edge in either

@@ -14,7 +14,7 @@ use anyhow::{Result, anyhow, bail};
 use crate::domain::card;
 use crate::domain::channel::{self, Channel};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
-use crate::interfaces::cli::{MsgArgs, MsgCommand};
+use crate::interfaces::cli::{MsgArgs, MsgCommand, worktree_roots};
 
 /// How many already-seen partner messages a read prints as context above the
 /// unread block (`dec-msg-verbs-read-model-send-link-gated-52f6`).
@@ -62,7 +62,7 @@ fn read(scope: Option<&str>) -> Result<()> {
     let paths = MaestroPaths::new(discover_repo_root()?);
     let me = current_card(&paths)?;
     let me_card = resolve_card(&paths, &me)?;
-    let channels = visible_channels(&paths, &me_card)?;
+    let channels = visible_channels_union(&paths, &me_card)?;
     let selected: Vec<&Channel> = channels
         .iter()
         .filter(|channel| scope.is_none_or(|target| channel.partner(&me) == target))
@@ -85,7 +85,7 @@ fn list(scope: Option<&str>) -> Result<()> {
     let paths = MaestroPaths::new(discover_repo_root()?);
     let me = current_card(&paths)?;
     let me_card = resolve_card(&paths, &me)?;
-    let mut channels = visible_channels(&paths, &me_card)?;
+    let mut channels = visible_channels_union(&paths, &me_card)?;
     channels.sort_by(|a, b| a.partner(&me).cmp(b.partner(&me)));
 
     match scope {
@@ -96,7 +96,8 @@ fn list(scope: Option<&str>) -> Result<()> {
             }
             for channel in &channels {
                 let partner = channel.partner(&me);
-                let unread = channel.unread(&me, cursor(&paths, channel, &me)?).len();
+                let at = cursor(&paths, channel, &me)?;
+                let unread = channel.unread(&me, at.as_deref()).len();
                 let last_message = channel.messages.last();
                 let last = last_message.map_or("-", |message| message.ts.as_str());
                 // Direction of the last message -> whose turn it is to reply.
@@ -106,9 +107,10 @@ fn list(scope: Option<&str>) -> Result<()> {
                     None => "-",
                 };
                 // The partner's read-through is derived from their stored cursor,
-                // omitted when absent (peer hasn't read / cross-machine no cursor).
+                // omitted when absent (peer hasn't read / cross-machine or
+                // cross-worktree, where their cursor lives in another tree).
                 let peer_cursor = channel::cursor(&paths, &channel.key, partner)?;
-                let read_through = match channel.read_through(peer_cursor) {
+                let read_through = match channel.read_through(peer_cursor.as_deref()) {
                     Some(through) => format!("  peer read through {through}"),
                     None => String::new(),
                 };
@@ -131,7 +133,9 @@ fn list(scope: Option<&str>) -> Result<()> {
                 };
                 println!("  {who}  {}  {}", message.ts, message.text);
             }
-            channel::set_cursor(&paths, &channel.key, &me, channel.len)?;
+            if let Some(newest) = channel.latest_ts() {
+                channel::set_cursor(&paths, &channel.key, &me, newest)?;
+            }
         }
     }
     Ok(())
@@ -142,8 +146,8 @@ fn list(scope: Option<&str>) -> Result<()> {
 /// nothing is unread, so a repeat read still surfaces the recent conversation.
 fn read_channel(paths: &MaestroPaths, me: &str, channel: &Channel) -> Result<()> {
     let at = cursor(paths, channel, me)?;
-    let unread = channel.unread(me, at);
-    let seen = channel.seen_context(me, at, CONTEXT_LIMIT);
+    let unread = channel.unread(me, at.as_deref());
+    let seen = channel.seen_context(me, at.as_deref(), CONTEXT_LIMIT);
 
     println!("{}:", channel.partner(me));
     for message in &seen {
@@ -156,7 +160,9 @@ fn read_channel(paths: &MaestroPaths, me: &str, channel: &Channel) -> Result<()>
             println!("  * {}  {}", message.ts, message.text);
         }
     }
-    channel::set_cursor(paths, &channel.key, me, channel.len)?;
+    if let Some(newest) = channel.latest_ts() {
+        channel::set_cursor(paths, &channel.key, me, newest)?;
+    }
     Ok(())
 }
 
@@ -183,7 +189,8 @@ pub(super) fn inbox_banner() -> Result<()> {
 
     let mut counts: Vec<(String, usize)> = Vec::new();
     for channel in visible_channels(&paths, &me_card.card)? {
-        let unread = channel.unread(&me, cursor(&paths, &channel, &me)?).len();
+        let at = cursor(&paths, &channel, &me)?;
+        let unread = channel.unread(&me, at.as_deref()).len();
         if unread > 0 {
             counts.push((channel.partner(&me).to_string(), unread));
         }
@@ -203,9 +210,11 @@ pub(super) fn inbox_banner() -> Result<()> {
     Ok(())
 }
 
-/// Every channel `me` participates in that is currently visible: enumerated from
-/// `.maestro/channels/` headers, kept only while the pair is still linked
-/// (archive-aware, so a boxed partner stays visible until `link remove`).
+/// Every channel `me` participates in that is currently visible IN THE LOCAL
+/// worktree: enumerated from `.maestro/channels/` headers, kept only while the
+/// pair is still linked (archive-aware, so a boxed partner stays visible until
+/// `link remove`). The inbox banner uses this local view; `read`/`list` union
+/// across worktrees via `visible_channels_union`.
 fn visible_channels(paths: &MaestroPaths, me: &card::schema::Card) -> Result<Vec<Channel>> {
     let mut visible = Vec::new();
     for channel in channel::channels_for(paths, &me.id)? {
@@ -217,7 +226,24 @@ fn visible_channels(paths: &MaestroPaths, me: &card::schema::Card) -> Result<Vec
     Ok(visible)
 }
 
-fn cursor(paths: &MaestroPaths, channel: &Channel, me: &str) -> Result<u64> {
+/// Visible channels merged across every worktree of the repo: a peer messaging
+/// from a sibling worktree writes its own `.maestro/channels/` file (send is
+/// local), so `read`/`list` union those files by ts to show the full thread
+/// (`dec-msg-send-local-read-union-cross-worktree`). The link gate is checked
+/// against the LOCAL card store -- relatedness is a property of my card here.
+fn visible_channels_union(paths: &MaestroPaths, me: &card::schema::Card) -> Result<Vec<Channel>> {
+    let roots = worktree_roots(paths);
+    let mut visible = Vec::new();
+    for channel in channel::channels_for_union(&roots, &me.id)? {
+        let partner = channel.partner(&me.id).to_string();
+        if card::query::pair_linked(paths, me, &partner)? {
+            visible.push(channel);
+        }
+    }
+    Ok(visible)
+}
+
+fn cursor(paths: &MaestroPaths, channel: &Channel, me: &str) -> Result<Option<String>> {
     channel::cursor(paths, &channel.key, me)
 }
 

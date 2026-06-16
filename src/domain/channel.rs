@@ -7,12 +7,23 @@
 //! On-disk shape under `.maestro/channels/` (gitignored, machine-local):
 //!   `<key>.jsonl`         line 1 = `{"pair":[a,b]}` header (authoritative),
 //!                         lines 2.. = `{ts,from_card,from_session,text}`.
-//!   `<key>.cur-<cardkey>` a single decimal byte offset: the viewer's cursor.
+//!   `<key>.cur-<cardkey>` the viewer's read-through cursor: the ts of the
+//!                         newest message they have seen (a point, not an
+//!                         offset). A read re-shows only strictly-newer partner
+//!                         messages, so the same cursor stays correct when the
+//!                         channel is merged across several worktree files.
 //!
 //! `key` is a short hash of the sorted lowercased id pair, so both cards derive
 //! the same channel; `cardkey` is a short hash of the viewer's card id, so the
 //! cursor survives a title rename (ids are stable, titles are not).
+//!
+//! A send always writes the running worktree's own channel file
+//! (`open_managed_appendable` cannot escape the local repo root). The union
+//! reads -- `load_union`/`channels_for_union` -- merge every worktree's file for
+//! a pair by ts; because a message lives in exactly one worktree's file there is
+//! nothing to dedup, only to interleave.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::io::ErrorKind;
 
@@ -30,63 +41,74 @@ use crate::foundation::core::time::utc_now_timestamp;
 /// is still caught by the authoritative header check, never silently merged.
 const KEY_LEN: usize = 16;
 
-/// One message line, tagged with its start byte offset so a reader can split
-/// seen-from-unread against a stored cursor without per-message bookkeeping.
+/// One message line. Timestamps are fixed-width RFC3339 millis, so a string
+/// compare on `ts` is a chronological compare -- the cursor and the union sort
+/// both rely on it.
 pub struct Message {
     pub ts: String,
     pub from_card: String,
     pub from_session: String,
     pub text: String,
-    pub offset: u64,
 }
 
-/// A loaded channel: the authoritative header pair, every message, and the total
-/// byte length (the offset a reader advances its cursor to once all is seen).
+/// A loaded channel: the authoritative header pair and every message (ts-sorted
+/// when produced by the union readers).
 pub struct Channel {
     pub key: String,
     pub pair: [String; 2],
     pub messages: Vec<Message>,
-    pub len: u64,
 }
 
 impl Channel {
     /// Messages `viewer` has not read: from the partner (never the viewer's own)
-    /// and at or beyond `cursor`. Own messages are auto-seen, so they never count
-    /// as unread regardless of cursor.
-    pub fn unread(&self, viewer: &str, cursor: u64) -> Vec<&Message> {
+    /// and strictly newer than `through` (the ts of the newest message the
+    /// viewer has already seen). `None` means nothing has been read, so every
+    /// partner message is unread. Own messages are auto-seen and never counted.
+    pub fn unread(&self, viewer: &str, through: Option<&str>) -> Vec<&Message> {
         self.messages
             .iter()
-            .filter(|message| message.offset >= cursor && message.from_card != viewer)
+            .filter(|message| message.from_card != viewer)
+            .filter(|message| through.is_none_or(|seen| message.ts.as_str() > seen))
             .collect()
     }
 
     /// Up to `limit` most-recent already-seen partner messages, oldest-to-newest:
-    /// the context window a read prints above the unread block.
-    pub fn seen_context(&self, viewer: &str, cursor: u64, limit: usize) -> Vec<&Message> {
+    /// the context window a read prints above the unread block. Seen means a
+    /// partner message at or before `through`; `None` yields no context.
+    pub fn seen_context(&self, viewer: &str, through: Option<&str>, limit: usize) -> Vec<&Message> {
+        let Some(through) = through else {
+            return Vec::new();
+        };
         let mut seen: Vec<&Message> = self
             .messages
             .iter()
-            .filter(|message| message.offset < cursor && message.from_card != viewer)
+            .filter(|message| message.from_card != viewer && message.ts.as_str() <= through)
             .collect();
         let start = seen.len().saturating_sub(limit);
         seen.split_off(start)
     }
 
-    /// The ts through which `peer` has read this channel, derived solely from the
-    /// peer's stored byte-offset cursor: the latest message the cursor has passed.
-    /// `None` when the cursor is at the start -- which covers both "peer hasn't
-    /// read" and a missing cursor file. Channels are gitignored/machine-local, so
-    /// a peer on another machine has no cursor here and reads as `None` (blank),
-    /// never a wrong timestamp (`dec-msg-read-signal-partner-read-through-2035`).
-    pub fn read_through(&self, peer_cursor: u64) -> Option<&str> {
-        if peer_cursor == 0 {
-            return None;
-        }
+    /// The ts the partner has read through, given their stored cursor ts: the
+    /// latest message at or before it. `None` when the peer has no cursor here --
+    /// which covers "peer hasn't read" and a peer on another machine or worktree
+    /// whose cursor lives elsewhere (blank, never a wrong timestamp;
+    /// `dec-msg-read-signal-partner-read-through-2035`).
+    pub fn read_through(&self, peer_through: Option<&str>) -> Option<&str> {
+        let through = peer_through?;
         self.messages
             .iter()
             .rev()
-            .find(|message| message.offset < peer_cursor)
+            .find(|message| message.ts.as_str() <= through)
             .map(|message| message.ts.as_str())
+    }
+
+    /// The newest message ts in the channel, or `None` when empty: the value a
+    /// read stores as the viewer's cursor so a repeat read shows nothing new.
+    pub fn latest_ts(&self) -> Option<&str> {
+        self.messages
+            .iter()
+            .map(|message| message.ts.as_str())
+            .max()
     }
 
     /// The partner card id for `viewer` (the other half of the header pair).
@@ -103,6 +125,11 @@ impl Channel {
 /// channel and its authoritative header on first send. Does NOT advance the
 /// sender's cursor (own messages are auto-seen). The caller owns the link gate;
 /// the store only persists, reusing the run log's symlink-hardened append.
+///
+/// The write lands in the running worktree's `.maestro/channels/` only --
+/// `open_managed_appendable` rejects any path outside the local repo root -- so
+/// a peer in another worktree never sees this byte until a union read merges the
+/// files (`dec-msg-send-local-read-union-cross-worktree`).
 pub fn send(
     paths: &MaestroPaths,
     from_card: &str,
@@ -134,15 +161,34 @@ pub fn send(
         .with_context(|| format!("failed to append to {relative_path}"))
 }
 
-/// Load the channel between `a` and `b`, or `None` if no message has been sent.
+/// Load the channel between `a` and `b` from a single root, or `None` if no
+/// message has been sent there. Local read; the union readers cover worktrees.
 pub fn load(paths: &MaestroPaths, a: &str, b: &str) -> Result<Option<Channel>> {
     let (_, key) = identity(a, b);
     load_by_key(paths, &key)
 }
 
-/// Every channel whose header pair contains `card`, loaded in full. Reads each
-/// header in `.maestro/channels/` -- O(total channels in the repo). Visibility
-/// (the link gate) is applied by the caller, not here.
+/// Load and merge the channel between `a` and `b` across every worktree root,
+/// or `None` if no message exists in any. A send is always local, so a given
+/// message lives in exactly one root's file -- merging needs no dedup, only a ts
+/// sort to interleave the per-worktree append streams.
+pub fn load_union(roots: &[MaestroPaths], a: &str, b: &str) -> Result<Option<Channel>> {
+    let (_, key) = identity(a, b);
+    let mut found: Vec<Channel> = Vec::new();
+    for paths in roots {
+        if let Some(channel) = load_by_key(paths, &key)? {
+            found.push(channel);
+        }
+    }
+    if found.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(merge_same_key(key, found)))
+}
+
+/// Every channel whose header pair contains `card`, loaded in full from one
+/// root. Reads each header in `.maestro/channels/` -- O(total channels in the
+/// repo). Visibility (the link gate) is applied by the caller, not here.
 pub fn channels_for(paths: &MaestroPaths, card: &str) -> Result<Vec<Channel>> {
     let dir = paths.channels_dir();
     let entries = match fs::read_dir(&dir) {
@@ -169,23 +215,50 @@ pub fn channels_for(paths: &MaestroPaths, card: &str) -> Result<Vec<Channel>> {
     Ok(channels)
 }
 
-/// The viewer's stored cursor (byte offset) for the channel `key`, 0 if none.
-pub fn cursor(paths: &MaestroPaths, key: &str, viewer: &str) -> Result<u64> {
+/// Every channel `card` participates in, merged across all worktree roots: one
+/// `Channel` per distinct key with the per-worktree append streams interleaved
+/// by ts. Visibility (the link gate) is applied by the caller.
+pub fn channels_for_union(roots: &[MaestroPaths], card: &str) -> Result<Vec<Channel>> {
+    let mut by_key: BTreeMap<String, Vec<Channel>> = BTreeMap::new();
+    for paths in roots {
+        for channel in channels_for(paths, card)? {
+            by_key.entry(channel.key.clone()).or_default().push(channel);
+        }
+    }
+    Ok(by_key
+        .into_iter()
+        .map(|(key, channels)| merge_same_key(key, channels))
+        .collect())
+}
+
+/// The viewer's stored read-through cursor (the newest-seen message ts) for
+/// channel `key`, or `None` when unread. A legacy byte-offset cursor (pure
+/// digits, no `T`) or an empty file also reads as `None` ("nothing seen yet"):
+/// a benign over-show on the gitignored, ephemeral channel rather than a parse
+/// error -- the next read re-stamps it as a ts.
+pub fn cursor(paths: &MaestroPaths, key: &str, viewer: &str) -> Result<Option<String>> {
     let relative_path = cursor_relative_path(key, viewer);
     let path = managed_path(paths, &relative_path, SymlinkPolicy::RejectAllComponents)?;
     match fs::read_to_string(&path) {
-        Ok(text) => Ok(text.trim().parse().unwrap_or(0)),
-        Err(error) if error.kind() == ErrorKind::NotFound => Ok(0),
+        Ok(text) => {
+            let trimmed = text.trim();
+            if trimmed.contains('T') {
+                Ok(Some(trimmed.to_string()))
+            } else {
+                Ok(None)
+            }
+        }
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
         Err(error) => Err(error).with_context(|| format!("failed to read {relative_path}")),
     }
 }
 
-/// Advance the viewer's cursor for channel `key` to `offset` (the channel byte
-/// length after a read). managed_path rejects a symlinked cursor leaf.
-pub fn set_cursor(paths: &MaestroPaths, key: &str, viewer: &str, offset: u64) -> Result<()> {
+/// Advance the viewer's cursor for channel `key` to `through_ts` (the newest
+/// message ts shown by a read). managed_path rejects a symlinked cursor leaf.
+pub fn set_cursor(paths: &MaestroPaths, key: &str, viewer: &str, through_ts: &str) -> Result<()> {
     let relative_path = cursor_relative_path(key, viewer);
     let path = managed_path(paths, &relative_path, SymlinkPolicy::RejectAllComponents)?;
-    fs::write(&path, format!("{offset}\n"))
+    fs::write(&path, format!("{through_ts}\n"))
         .with_context(|| format!("failed to write {relative_path}"))
 }
 
@@ -205,6 +278,22 @@ fn channel_relative_path(key: &str) -> String {
 fn cursor_relative_path(key: &str, viewer: &str) -> String {
     let card_key = &sha256_hex(viewer.to_lowercase().as_bytes())[..KEY_LEN];
     format!(".maestro/channels/{key}.cur-{card_key}")
+}
+
+/// Merge channels that share a key (the same pair, one file per worktree) into a
+/// single channel whose messages are ts-sorted. Assumes a non-empty input.
+fn merge_same_key(key: String, mut channels: Vec<Channel>) -> Channel {
+    let pair = channels[0].pair.clone();
+    let mut messages: Vec<Message> = channels
+        .drain(..)
+        .flat_map(|channel| channel.messages)
+        .collect();
+    messages.sort_by(|a, b| a.ts.cmp(&b.ts));
+    Channel {
+        key,
+        pair,
+        messages,
+    }
 }
 
 fn load_by_key(paths: &MaestroPaths, key: &str) -> Result<Option<Channel>> {
@@ -238,13 +327,9 @@ fn verify_header(paths: &MaestroPaths, key: &str, expected: &[String; 2]) -> Res
 
 fn parse_channel(key: &str, bytes: &[u8]) -> Result<Channel> {
     let text = std::str::from_utf8(bytes).context("channel file is not UTF-8")?;
-    let len = bytes.len() as u64;
-    let mut offset: u64 = 0;
     let mut pair: Option<[String; 2]> = None;
     let mut messages = Vec::new();
-    for line in text.split_inclusive('\n') {
-        let start = offset;
-        offset += line.len() as u64;
+    for line in text.lines() {
         let trimmed = line.trim();
         if trimmed.is_empty() {
             continue;
@@ -253,7 +338,7 @@ fn parse_channel(key: &str, bytes: &[u8]) -> Result<Channel> {
             .with_context(|| format!("malformed channel line in {key}"))?;
         match pair {
             None => pair = Some(parse_header_pair(&value, key)?),
-            Some(_) => messages.push(parse_message(&value, start)),
+            Some(_) => messages.push(parse_message(&value)),
         }
     }
     let pair = pair.with_context(|| format!("channel {key} has no header line"))?;
@@ -261,7 +346,6 @@ fn parse_channel(key: &str, bytes: &[u8]) -> Result<Channel> {
         key: key.to_string(),
         pair,
         messages,
-        len,
     })
 }
 
@@ -278,7 +362,7 @@ fn parse_header_pair(value: &Value, key: &str) -> Result<[String; 2]> {
     Ok([first, second])
 }
 
-fn parse_message(value: &Value, offset: u64) -> Message {
+fn parse_message(value: &Value) -> Message {
     let field = |name: &str| {
         value
             .get(name)
@@ -291,7 +375,6 @@ fn parse_message(value: &Value, offset: u64) -> Message {
         from_card: field("from_card"),
         from_session: field("from_session"),
         text: field("text"),
-        offset,
     }
 }
 
@@ -330,6 +413,24 @@ mod tests {
         }
     }
 
+    /// Build an in-memory channel with controlled timestamps, so the cursor and
+    /// read-through edge cases are exercised without racing the millis clock.
+    fn channel_with(pair: [&str; 2], messages: &[(&str, &str, &str)]) -> Channel {
+        Channel {
+            key: "test-key".to_string(),
+            pair: [pair[0].to_string(), pair[1].to_string()],
+            messages: messages
+                .iter()
+                .map(|(ts, from, text)| Message {
+                    ts: (*ts).to_string(),
+                    from_card: (*from).to_string(),
+                    from_session: "sess".to_string(),
+                    text: (*text).to_string(),
+                })
+                .collect(),
+        }
+    }
+
     #[test]
     fn send_then_load_round_trips_with_canonical_pair_and_unread_for_partner_only() {
         let temp = TestTempDir::new("maestro-channel-roundtrip");
@@ -350,8 +451,8 @@ mod tests {
             "three sends, three message lines"
         );
 
-        // A's unread from cursor 0 is only B's message, not A's own one/three.
-        let unread_for_a = channel.unread("card-a", 0);
+        // A's unread from a never-read cursor is only B's message, not its own.
+        let unread_for_a = channel.unread("card-a", None);
         assert_eq!(
             unread_for_a.len(),
             1,
@@ -359,40 +460,93 @@ mod tests {
         );
         assert_eq!(unread_for_a[0].text, "two");
 
-        // Reading advances A's cursor to EOF; nothing unread remains afterwards.
-        set_cursor(&paths, &channel.key, "card-a", channel.len).expect("cursor write");
+        // Reading stores the newest ts as A's cursor; nothing unread remains.
+        let newest = channel.latest_ts().expect("non-empty channel has a latest ts");
+        set_cursor(&paths, &channel.key, "card-a", newest).expect("cursor write");
         let after = cursor(&paths, &channel.key, "card-a").expect("cursor read");
-        assert_eq!(after, channel.len);
+        assert_eq!(after.as_deref(), Some(newest));
         assert!(
-            channel.unread("card-a", after).is_empty(),
-            "after reading to EOF nothing is unread"
+            channel.unread("card-a", after.as_deref()).is_empty(),
+            "after reading to the newest ts nothing is unread"
         );
     }
 
     #[test]
-    fn read_through_maps_partner_cursor_to_the_last_passed_message_and_blanks_at_zero() {
-        let temp = TestTempDir::new("maestro-channel-readthrough");
+    fn unread_reshows_strictly_newer_partner_messages_and_holds_the_same_ts_edge() {
+        // Two partner messages share a ts; a third is strictly newer.
+        let channel = channel_with(
+            ["card-a", "card-b"],
+            &[
+                ("2026-06-17T00:00:00.000Z", "card-b", "first at T0"),
+                ("2026-06-17T00:00:01.000Z", "card-b", "second at T1"),
+            ],
+        );
+
+        // Cursor at T0 re-shows only the strictly-newer T1 message.
+        let unread = channel.unread("card-a", Some("2026-06-17T00:00:00.000Z"));
+        assert_eq!(unread.len(), 1);
+        assert_eq!(unread[0].text, "second at T1");
+
+        // KNOWN EDGE (qa.md baseline gap): a partner message stamped at exactly
+        // the stored cursor ts reads as already-seen. After reading through T1, a
+        // same-ts T1 message does not re-surface -- accepted, not fixed.
+        let same_ts = channel_with(
+            ["card-a", "card-b"],
+            &[
+                ("2026-06-17T00:00:01.000Z", "card-b", "seen at T1"),
+                ("2026-06-17T00:00:01.000Z", "card-b", "arrived later at T1"),
+            ],
+        );
+        assert!(
+            same_ts
+                .unread("card-a", Some("2026-06-17T00:00:01.000Z"))
+                .is_empty(),
+            "a same-ts post-read message is treated as seen (documented edge)"
+        );
+    }
+
+    #[test]
+    fn read_through_maps_partner_cursor_to_the_last_passed_message_and_blanks_when_absent() {
+        let channel = channel_with(
+            ["card-a", "card-b"],
+            &[
+                ("2026-06-17T00:00:00.000Z", "card-a", "one"),
+                ("2026-06-17T00:00:01.000Z", "card-a", "two"),
+            ],
+        );
+
+        // No cursor (peer hasn't read, or cross-worktree/cross-machine) -> blank.
+        assert_eq!(channel.read_through(None), None);
+        // A cursor at the first ts has passed exactly the first message.
+        assert_eq!(
+            channel.read_through(Some("2026-06-17T00:00:00.000Z")),
+            Some("2026-06-17T00:00:00.000Z")
+        );
+        // A cursor at the newest ts has passed both -> the last ts.
+        assert_eq!(
+            channel.read_through(Some("2026-06-17T00:00:01.000Z")),
+            Some("2026-06-17T00:00:01.000Z")
+        );
+    }
+
+    #[test]
+    fn legacy_byte_offset_cursor_reads_as_nothing_seen_not_a_crash() {
+        let temp = TestTempDir::new("maestro-channel-legacy-cursor");
         let paths = MaestroPaths::new(temp.path());
+        let (_, key) = identity("card-a", "card-b");
 
-        send(&paths, "card-a", "card-b", "sess-a", "one").expect("a's first send");
-        send(&paths, "card-a", "card-b", "sess-a", "two").expect("a's second send");
+        // Simulate a pre-migration cursor file holding a raw byte offset.
+        let channels = temp.path().join(".maestro/channels");
+        fs::create_dir_all(&channels).expect("channels dir should be creatable");
+        let card_key = &sha256_hex("card-a".as_bytes())[..KEY_LEN];
+        fs::write(channels.join(format!("{key}.cur-{card_key}")), "4096\n")
+            .expect("legacy cursor should be writable");
 
-        let channel = load(&paths, "card-a", "card-b")
-            .expect("load should succeed")
-            .expect("channel should exist after sends");
-        let first = &channel.messages[0];
-        let second = &channel.messages[1];
-
-        // A zero cursor (peer never read, or no cursor file -> cross-machine)
-        // yields no read-through: blank, never a wrong timestamp.
-        assert_eq!(channel.read_through(0), None);
-        // A cursor exactly at the first message's start has passed nothing yet:
-        // strict offset comparison, so still None (rules out "always last").
-        assert_eq!(channel.read_through(first.offset), None);
-        // A cursor at the second message's start has passed only the first.
-        assert_eq!(channel.read_through(second.offset), Some(first.ts.as_str()));
-        // A cursor at EOF (the value a read sets) has passed both -> the last ts.
-        assert_eq!(channel.read_through(channel.len), Some(second.ts.as_str()));
+        assert_eq!(
+            cursor(&paths, &key, "card-a").expect("legacy cursor should not error"),
+            None,
+            "a numeric (no-'T') cursor reads as nothing seen"
+        );
     }
 
     #[test]
@@ -411,6 +565,42 @@ mod tests {
             .collect();
         partners.sort();
         assert_eq!(partners, vec!["card-b".to_string(), "card-e".to_string()]);
+    }
+
+    #[test]
+    fn send_is_local_and_load_union_merges_worktree_files_by_ts() {
+        let root_a = TestTempDir::new("maestro-channel-union-a");
+        let root_b = TestTempDir::new("maestro-channel-union-b");
+        let paths_a = MaestroPaths::new(root_a.path());
+        let paths_b = MaestroPaths::new(root_b.path());
+
+        // Each worktree sends into its OWN channel file (send is local).
+        send(&paths_a, "card-a", "card-b", "sess-a", "from worktree A").expect("a send");
+        send(&paths_b, "card-b", "card-a", "sess-b", "from worktree B").expect("b send");
+
+        // A local load sees only the local worktree's one message -> send-local.
+        let local_a = load(&paths_a, "card-a", "card-b")
+            .expect("local load ok")
+            .expect("local channel exists");
+        assert_eq!(
+            local_a.messages.len(),
+            1,
+            "send wrote only worktree A's file, not a shared store"
+        );
+        assert_eq!(local_a.messages[0].text, "from worktree A");
+
+        // The union merges both worktrees' files, ts-sorted.
+        let union = load_union(&[paths_a, paths_b], "card-a", "card-b")
+            .expect("union load ok")
+            .expect("union channel exists");
+        assert_eq!(union.messages.len(), 2, "both worktrees' messages merge");
+        let texts: Vec<&str> = union.messages.iter().map(|m| m.text.as_str()).collect();
+        assert!(texts.contains(&"from worktree A"));
+        assert!(texts.contains(&"from worktree B"));
+        assert!(
+            union.messages.windows(2).all(|w| w[0].ts <= w[1].ts),
+            "merged messages are in non-decreasing ts order"
+        );
     }
 
     #[test]
