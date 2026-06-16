@@ -10,15 +10,25 @@ pub struct GitSnapshot {
     pub head: Option<String>,
     /// Whether tracked or untracked worktree changes are present.
     pub dirty: bool,
+    /// Current branch name, or `None` for a detached or unborn HEAD.
+    pub branch: Option<String>,
+    /// Uncommitted changes under `.maestro/` (the card store).
+    pub maestro_dirty: usize,
+    /// Uncommitted changes outside `.maestro/` (code and everything else).
+    pub code_other_dirty: usize,
 }
 
 /// Read the current Git HEAD and dirty state for the repository containing `path`.
 pub fn snapshot(path: impl AsRef<Path>) -> Result<GitSnapshot> {
     let repository = discover_repository(path.as_ref())?;
+    let counts = dirty_counts(&repository)?;
 
     Ok(GitSnapshot {
         head: head_oid(&repository)?,
-        dirty: is_dirty(&repository)?,
+        dirty: counts.maestro + counts.code_other > 0,
+        branch: branch_name(&repository)?,
+        maestro_dirty: counts.maestro,
+        code_other_dirty: counts.code_other,
     })
 }
 
@@ -50,12 +60,43 @@ fn head_oid(repository: &Repository) -> Result<Option<String>> {
     }
 }
 
-fn is_dirty(repository: &Repository) -> Result<bool> {
+fn branch_name(repository: &Repository) -> Result<Option<String>> {
+    match repository.head() {
+        Ok(reference) if reference.is_branch() => Ok(reference.shorthand().map(str::to_string)),
+        Ok(_) => Ok(None),
+        Err(error) if error.code() == git2::ErrorCode::UnbornBranch => Ok(None),
+        Err(error) if error.code() == git2::ErrorCode::NotFound => Ok(None),
+        Err(error) => Err(error).context("failed to read git branch"),
+    }
+}
+
+/// Uncommitted-change counts, split by whether the path is under `.maestro/`.
+struct DirtyCounts {
+    maestro: usize,
+    code_other: usize,
+}
+
+fn dirty_counts(repository: &Repository) -> Result<DirtyCounts> {
     let mut options = StatusOptions::new();
     options.include_untracked(true).recurse_untracked_dirs(true);
     let statuses = repository
         .statuses(Some(&mut options))
         .context("failed to read git status")?;
 
-    Ok(!statuses.is_empty())
+    let mut counts = DirtyCounts {
+        maestro: 0,
+        code_other: 0,
+    };
+    for entry in statuses.iter() {
+        match entry.path() {
+            Some(path) if path.starts_with(".maestro/") => counts.maestro += 1,
+            _ => counts.code_other += 1,
+        }
+    }
+    Ok(counts)
+}
+
+fn is_dirty(repository: &Repository) -> Result<bool> {
+    let counts = dirty_counts(repository)?;
+    Ok(counts.maestro + counts.code_other > 0)
 }

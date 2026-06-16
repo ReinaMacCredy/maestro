@@ -162,6 +162,38 @@ fn git_helpers_report_head_and_dirty_state() {
     assert!(dirty(temp_dir.path()).expect("invariant: git status should load"));
 }
 
+#[test]
+fn git_snapshot_splits_dirty_counts_by_maestro_prefix() {
+    let temp_dir = TestTempDir::new("maestro-git-test");
+    let repository =
+        Repository::init(temp_dir.path()).expect("invariant: git repo should initialize");
+    fs::write(temp_dir.path().join("tracked.txt"), "first\n")
+        .expect("invariant: tracked file should be writable");
+    commit_all(&repository, "initial");
+
+    fs::create_dir_all(temp_dir.path().join(".maestro/cards"))
+        .expect("invariant: card dir should be creatable");
+    fs::write(temp_dir.path().join(".maestro/cards/card.yaml"), "x\n")
+        .expect("invariant: card file should be writable");
+    fs::write(temp_dir.path().join("code_change.rs"), "y\n")
+        .expect("invariant: code file should be writable");
+
+    let snapshot = snapshot(temp_dir.path()).expect("invariant: git snapshot should load");
+
+    assert!(
+        snapshot.branch.is_some(),
+        "branch should be set on a born repo"
+    );
+    assert_eq!(
+        snapshot.maestro_dirty, 1,
+        "one uncommitted change under .maestro/"
+    );
+    assert_eq!(
+        snapshot.code_other_dirty, 1,
+        "one uncommitted change outside .maestro/"
+    );
+}
+
 fn commit_all(repository: &Repository, message: &str) {
     let mut index = repository
         .index()
