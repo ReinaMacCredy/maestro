@@ -424,13 +424,16 @@ fn run_domain_facade_does_not_publish_leaf_modules() {
         public_reexport_item_names(&run_facade),
         BTreeSet::from([
             "active_sessions".to_string(),
+            "active_sessions_union".to_string(),
             "current_bound_card".to_string(),
             "hook_event_contract".to_string(),
             "load_run_evidence".to_string(),
             "managed_event_logs".to_string(),
             "visit_managed_event_logs".to_string(),
             "visit_managed_events".to_string(),
+            "warm_file_overlaps".to_string(),
             "write_evidence_for_session".to_string(),
+            "FileOverlap".to_string(),
             "HookEventContract".to_string(),
             "Presence".to_string(),
             "RunEvent".to_string(),
@@ -439,6 +442,7 @@ fn run_domain_facade_does_not_publish_leaf_modules() {
             "RunEvidenceLoad".to_string(),
             "RunEvidenceRecord".to_string(),
             "SessionActivity".to_string(),
+            "WarmEditor".to_string(),
         ]),
         "src/domain/run/mod.rs should expose only the deliberate Run contract surface"
     );

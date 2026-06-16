@@ -13,6 +13,7 @@ use anyhow::Result;
 
 use crate::domain::card;
 use crate::domain::run::{self, Presence, SessionActivity};
+use crate::foundation::core::git;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::time::utc_now_timestamp;
 use crate::interfaces::cli::ActiveArgs;
@@ -24,7 +25,7 @@ const CARD_WIDTH: usize = 28;
 pub fn run(args: ActiveArgs) -> Result<()> {
     let paths = MaestroPaths::new(discover_repo_root()?);
     let now = utc_now_timestamp();
-    let rows = run::active_sessions(&paths, &now)?;
+    let rows = run::active_sessions_union(&worktree_roots(&paths), &now)?;
 
     let cards = if paths.cards_dir().is_dir() {
         card::query::scan(&paths)?
@@ -69,6 +70,17 @@ pub fn run(args: ActiveArgs) -> Result<()> {
 
     render_link_hint(&shown, &by_id, &me, your_card);
     Ok(())
+}
+
+/// The worktree roots to union liveness over: every worktree the repo has, or
+/// just the local root when git topology is unreadable (not a repo, bare, etc.).
+/// `git::worktree_roots` returns one root for a lone repo, so the single-worktree
+/// view is unchanged and no flag is needed to engage the union.
+fn worktree_roots(paths: &MaestroPaths) -> Vec<MaestroPaths> {
+    match git::worktree_roots(paths.repo_root()) {
+        Ok(roots) if !roots.is_empty() => roots.into_iter().map(MaestroPaths::new).collect(),
+        _ => vec![MaestroPaths::new(paths.repo_root().to_path_buf())],
+    }
 }
 
 /// Whether the live cards `a` and `b` share a `related` edge in either
@@ -311,9 +323,14 @@ fn render_link_hint(
     // terminal (coarse-Closed) card is dropped from the suggestion list. An
     // already-linked terminal peer is unaffected -- it stays in `linked` and
     // still renders 'linked' (`dec-terminal-card-link-msg-keep-the-live-5878`).
+    // A cross-worktree peer whose card is absent from this checkout cannot be
+    // linked (link add resolves ids in the local store), so it gets no link
+    // suggestion -- it still renders '<id> (missing)' in the table
+    // (`dec-cross-worktree-active-auto-unions-read-51b9`).
     let unlinked: Vec<&str> = unlinked
         .into_iter()
         .filter(|peer| !peer_terminal(by_id, peer))
+        .filter(|peer| by_id.contains_key(*peer))
         .collect();
 
     if !linked.is_empty() {

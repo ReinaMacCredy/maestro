@@ -66,6 +66,11 @@ impl RunEvent {
         self.string("tool_input_hash")
     }
 
+    /// Edited path kept from an Edit/Write `tool_input`, when present.
+    pub fn file_path(&self) -> Option<&str> {
+        self.string("file_path")
+    }
+
     /// Event status, when present.
     pub fn status(&self) -> Option<&str> {
         self.string("status")
