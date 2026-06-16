@@ -41,6 +41,7 @@ use crate::domain::feature::verification;
 use crate::domain::task::{self, TaskEntry, TaskState, TransitionDetails};
 use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::fs::{append_text_file, read_to_string_if_exists};
+use crate::foundation::core::git;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::safe_write::write_string_atomic;
 use crate::foundation::core::schema::FEATURE_SCHEMA_VERSION;
@@ -762,6 +763,19 @@ pub fn ship(
         } else {
             format!("would block ship {id}:\n  {}", gaps.join("\n  "))
         };
+        // dec-ac-7-final: a non-blocking reminder that verified children carry
+        // proof from older commits. It rides the dry-run note only, never `gaps`,
+        // so it cannot turn a passing preview into a blocked one.
+        let drifted = verified_child_commit_drift(paths, &record.id)?;
+        let note = if drifted.is_empty() {
+            note
+        } else {
+            format!(
+                "{note}\nadvisory (does not block ship): {} child task(s) verified at older commits (HEAD moved); re-verify if their code changed: {}",
+                drifted.len(),
+                drifted.join(", ")
+            )
+        };
         return Ok(no_op_report(id, record.status, note));
     }
 
@@ -786,6 +800,32 @@ pub fn ship(
 pub fn ship_gaps(paths: &MaestroPaths, id: &str) -> Result<Vec<String>> {
     let record = load_record(paths, id)?;
     Ok(ship_gaps_for_record(paths, id, &record)?.gaps)
+}
+
+/// Sorted ids of the feature's verified child tasks whose recorded proof commit
+/// no longer matches HEAD (dec-ac-7-final). Both commits come from `git::head`,
+/// so a plain string compare matches the proof-staleness check. Empty outside a
+/// real git repo (no HEAD to compare against) or when every proof is current.
+fn verified_child_commit_drift(paths: &MaestroPaths, feature_id: &str) -> Result<Vec<String>> {
+    let Some(head) = git::head(paths.repo_root()).unwrap_or(None) else {
+        return Ok(Vec::new());
+    };
+    let mut ids: Vec<String> = task::load_task_entries(&paths.tasks_dir())?
+        .into_iter()
+        .map(|entry| entry.task)
+        .filter(|task| {
+            task.feature_id.as_deref() == Some(feature_id) && task.state == TaskState::Verified
+        })
+        .filter(|task| {
+            task.verification
+                .verified_commit
+                .as_deref()
+                .is_some_and(|stored| stored != head)
+        })
+        .map(|task| task.id)
+        .collect();
+    ids.sort();
+    Ok(ids)
 }
 
 fn ship_gaps_for_record(

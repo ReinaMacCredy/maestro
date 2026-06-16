@@ -1739,3 +1739,103 @@ fn verified_stale_proof_surfaces_refresh_repair_via_resume_task() {
         "stale verified proof must surface the refresh repair naming the commit drift:\n{stale}"
     );
 }
+
+/// ac-7: `feature ship --dry-run` prints a non-blocking advisory naming each
+/// verified child task whose recorded proof commit no longer matches HEAD. A
+/// feature whose verified children all match HEAD prints none, and the advisory
+/// never blocks a dry-run that would otherwise pass.
+#[test]
+fn feature_ship_dry_run_flags_verified_children_at_older_commits_without_blocking() {
+    let (temp, repository) = setup_git_repo("maestro-ship-advisory-drift");
+    let repo = temp.path();
+
+    run(repo, &["feature", "new", "Ship advisory"]);
+    run(
+        repo,
+        &[
+            "feature",
+            "set",
+            "ship-advisory",
+            "--acceptance",
+            "advisory behaves",
+            "--area",
+            "ship",
+        ],
+    );
+    let feature_dir = repo.join(".maestro/cards/ship-advisory");
+    fs::write(
+        feature_dir.join("qa.md"),
+        "---\namend_log_position: 0\n---\n\n### QA Baseline Contract\n\n- Scenario Matrix:\n  - [bl-001] advisory behaves (covers: ac-1)\n",
+    )
+    .expect("invariant: qa.md should be writable");
+    run(repo, &["feature", "accept", "ship-advisory"]);
+    run(repo, &["feature", "start", "ship-advisory"]);
+
+    // A verified child task, recorded at the seed commit. It settles BEFORE the
+    // acceptance sweep below, so the sweep is never flagged stale by it.
+    run(
+        repo,
+        &[
+            "task",
+            "create",
+            "Child of advisory",
+            "--feature",
+            "ship-advisory",
+        ],
+    );
+    let child = id_by_title(repo, "Child of advisory");
+    run(repo, &["task", "explore", &child]);
+    run(repo, &["task", "accept", &child]);
+    run(repo, &["task", "claim", &child]);
+    let complete = run(
+        repo,
+        &[
+            "task",
+            "complete",
+            &child,
+            "--summary",
+            "done",
+            "--claim",
+            "advisory behaves",
+            "--proof",
+            "advisory behaves",
+        ],
+    );
+    assert!(
+        complete.contains(&format!("task verified: {child}")),
+        "child task should auto-verify:\n{complete}"
+    );
+
+    // Cover the baseline scenario (clears the QA gate and resolves ac-1 via the
+    // counting slice), then run the acceptance sweep last so it stays fresh.
+    let mut qa = fs::read_to_string(feature_dir.join("qa.md")).expect("invariant: qa.md readable");
+    qa.push_str("\n```yaml\nslices:\n  - scenarios: [\"bl-001\"]\n    evidence: [\"proof for bl-001\"]\n```\n");
+    fs::write(feature_dir.join("qa.md"), qa).expect("invariant: qa.md should be writable");
+    run(repo, &["feature", "verify", "ship-advisory"]);
+
+    // Before HEAD moves: the verified child matches HEAD -> would ship, no advisory.
+    let fresh = run(repo, &["feature", "ship", "ship-advisory", "--dry-run"]);
+    assert!(
+        fresh.contains("would ship"),
+        "a fully-gated feature should pass the dry-run:\n{fresh}"
+    );
+    assert!(
+        !fresh.contains("verified at older commits"),
+        "no commit drift means no advisory:\n{fresh}"
+    );
+
+    // Advance HEAD past the child's recorded proof commit.
+    commit_worktree(&repository, "advance head past the verified child commit");
+
+    let drifted = run(repo, &["feature", "ship", "ship-advisory", "--dry-run"]);
+    assert!(
+        drifted.contains("would ship"),
+        "the advisory must not block a dry-run that would otherwise pass:\n{drifted}"
+    );
+    assert!(
+        drifted.contains(&format!(
+            "verified at older commits (HEAD moved); re-verify if their code changed: {child}"
+        )),
+        "the dry-run must flag the verified child whose proof commit drifted from HEAD:\n{drifted}"
+    );
+}
