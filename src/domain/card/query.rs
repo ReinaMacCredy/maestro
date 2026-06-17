@@ -570,6 +570,18 @@ pub fn cards_related(a: &Card, b: &Card) -> bool {
     has_related_to(a, &b.id) || has_related_to(b, &a.id)
 }
 
+/// The feature a card belongs to (the agent-teams group boundary): itself if it
+/// is a feature card, else its parent feature (one-level hierarchy). `None` for
+/// a loose card with no parent. Single source so the broadcast-membership gate
+/// (`msg`) and the `active` `team` link compute the same boundary.
+pub fn feature_of(card: &Card) -> Option<String> {
+    if card.card_type == CardType::Feature {
+        Some(card.id.clone())
+    } else {
+        card.parent.clone()
+    }
+}
+
 /// Whether the pair (`me`, `partner_id`) is currently linked, reading the
 /// partner from the live store OR the archive tree so a link to an archived
 /// partner still counts. Archiving a card never hides its channel -- only

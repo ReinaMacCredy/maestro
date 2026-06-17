@@ -86,6 +86,26 @@ fn related_pair(by_id: &HashMap<&str, &card::schema::Card>, a: &str, b: &str) ->
     }
 }
 
+/// Whether the live cards `a` and `b` resolve to the same feature (the
+/// agent-teams group boundary) -- the pure predicate behind the `team` link.
+/// Reuses `card::query::feature_of` so this and the `msg` broadcast-membership
+/// gate agree on what "same feature" means. A card with no feature (a loose
+/// card) is never a teammate, even of another loose card.
+fn same_feature(by_id: &HashMap<&str, &card::schema::Card>, a: &str, b: &str) -> bool {
+    match (by_id.get(a), by_id.get(b)) {
+        (Some(a_card), Some(b_card)) => {
+            match (
+                card::query::feature_of(a_card),
+                card::query::feature_of(b_card),
+            ) {
+                (Some(fa), Some(fb)) => fa.eq_ignore_ascii_case(&fb),
+                _ => false,
+            }
+        }
+        _ => false,
+    }
+}
+
 /// Whether a peer's bound card is terminal (coarse-Closed) in the live scan, so
 /// `active`'s link hint must not suggest opening a link the guard would refuse
 /// (`dec-terminal-card-link-msg-keep-the-live-5878`).
@@ -175,6 +195,7 @@ fn cells_for(
     } else {
         match (your_card, row.bound_card.as_deref()) {
             (Some(mine), Some(peer)) if related_pair(by_id, mine, peer) => "linked".to_string(),
+            (Some(mine), Some(peer)) if same_feature(by_id, mine, peer) => "team".to_string(),
             _ => dash(),
         }
     };
@@ -364,5 +385,82 @@ fn recency(age_minutes: u64) -> String {
         "just now".to_string()
     } else {
         format!("{age_minutes}m ago")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use card::schema::{Card, Dep, DepKind};
+
+    fn card(id: &str, ty: card::schema::CardType, parent: Option<&str>) -> Card {
+        let mut c = Card::new(id, ty, id, "in_progress", "t0");
+        c.parent = parent.map(str::to_string);
+        c
+    }
+
+    fn row(session: &str, bound: Option<&str>) -> SessionActivity {
+        SessionActivity {
+            session_id: session.to_string(),
+            mode: None,
+            bound_card: bound.map(str::to_string),
+            last_action: "card_touch".to_string(),
+            last_ts: "t0".to_string(),
+            age_minutes: 1,
+            presence: Presence::Working,
+        }
+    }
+
+    fn link_of(
+        session: &str,
+        bound: Option<&str>,
+        cards: &[Card],
+        me: &str,
+        your_card: Option<&str>,
+    ) -> String {
+        let by_id: HashMap<&str, &Card> = cards.iter().map(|c| (c.id.as_str(), c)).collect();
+        cells_for(&row(session, bound), &by_id, cards, me, your_card).link
+    }
+
+    #[test]
+    fn link_column_precedence_is_you_then_linked_then_team_then_dash() {
+        use card::schema::CardType::{Feature, Task};
+        let mut mine = card("task-1", Task, Some("auth"));
+        // an explicit pairwise edge mine<->task-3, which must win over same-feature
+        mine.deps.push(Dep {
+            kind: DepKind::Related,
+            target: "task-3".to_string(),
+        });
+        let cards = vec![
+            mine,
+            card("task-2", Task, Some("auth")), // same feature -> team
+            card("task-3", Task, Some("auth")), // same feature AND related -> linked
+            card("task-o", Task, Some("other")), // different feature -> dash
+            card("task-x", Task, None),         // loose, no feature -> dash
+            card("auth", Feature, None),
+            card("other", Feature, None),
+        ];
+        let me = "meS";
+        let mine_id = Some("task-1");
+
+        assert_eq!(link_of(me, mine_id, &cards, me, mine_id), "(you)");
+        assert_eq!(link_of("p2", Some("task-3"), &cards, me, mine_id), "linked");
+        assert_eq!(link_of("p1", Some("task-2"), &cards, me, mine_id), "team");
+        assert_eq!(link_of("p3", Some("task-o"), &cards, me, mine_id), "-");
+        assert_eq!(link_of("p4", Some("task-x"), &cards, me, mine_id), "-");
+    }
+
+    #[test]
+    fn a_peer_bound_to_the_feature_card_is_a_teammate_of_its_children() {
+        use card::schema::CardType::{Feature, Task};
+        let cards = vec![
+            card("auth", Feature, None),
+            card("task-1", Task, Some("auth")),
+        ];
+        // me on a child, peer on the feature card itself -> team
+        assert_eq!(
+            link_of("p1", Some("auth"), &cards, "meS", Some("task-1")),
+            "team"
+        );
     }
 }

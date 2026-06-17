@@ -79,7 +79,8 @@ fn send_broadcast(
     feature_id: &str,
     text: &str,
 ) -> Result<()> {
-    let member = feature_of(me_card).is_some_and(|f| f.eq_ignore_ascii_case(feature_id));
+    let member =
+        card::query::feature_of(me_card).is_some_and(|f| f.eq_ignore_ascii_case(feature_id));
     if !member {
         bail!(
             "{me} is not in feature {feature_id}; only the feature and cards created under it can post here -- create your work with `maestro task create --feature {feature_id}` (maestro has no reparent verb to move an existing card in)"
@@ -88,17 +89,6 @@ fn send_broadcast(
     channel::send_feature(paths, feature_id, me, &super::cli_run_id(), text)?;
     println!("broadcast to feature {feature_id} (from {me})");
     Ok(())
-}
-
-/// The feature a card belongs to for channel membership: itself if it is a
-/// feature card, else its parent feature (one-level hierarchy). `None` for a
-/// loose card with no parent.
-fn feature_of(card: &card::schema::Card) -> Option<String> {
-    if card.card_type == card::schema::CardType::Feature {
-        Some(card.id.clone())
-    } else {
-        card.parent.clone()
-    }
 }
 
 /// `maestro msg read [card]`: print each visible channel's seen context plus all
@@ -307,7 +297,7 @@ fn visible_channels_union(paths: &MaestroPaths, me: &card::schema::Card) -> Resu
     // The running card's feature broadcast channel: membership is the live parent
     // edge, checked by construction here (we load only my own feature's channel),
     // so no link is required and a non-member never reaches it.
-    if let Some(feature_id) = feature_of(me)
+    if let Some(feature_id) = card::query::feature_of(me)
         && let Some(channel) = channel::load_feature_union(&roots, &feature_id)?
     {
         visible.push(channel);
