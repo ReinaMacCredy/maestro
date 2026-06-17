@@ -732,3 +732,95 @@ fn watch_board_marks_a_card_model_blocked_task_blocked() {
         "the open blocker stays ready:\n{blocker_line}"
     );
 }
+
+/// The four open-bucket counts (active/ready/needs_verification/blocked) the
+/// number after `key` on `line`, tolerating both the `active=1` (status) and
+/// `active 1` (board) separators.
+fn count_after(line: &str, key: &str) -> usize {
+    let idx = line
+        .find(key)
+        .unwrap_or_else(|| panic!("missing `{key}` in: {line}"));
+    line[idx + key.len()..]
+        .chars()
+        .skip_while(|c| !c.is_ascii_digit())
+        .take_while(|c| c.is_ascii_digit())
+        .collect::<String>()
+        .parse()
+        .unwrap_or_else(|_| panic!("no number after `{key}` in: {line}"))
+}
+
+#[test]
+fn status_open_bucket_counts_agree_with_the_watch_board() {
+    // Regression: `maestro status` counted from the legacy `TaskRecord`
+    // projection (`active` = every live task, `ready` = `TaskState::Ready`,
+    // `blocked` = the empty `blockers` field), so on a card-model repo it read
+    // `active=4 ready=0 blocked=0` while the board read the correct partition.
+    // Both surfaces now classify the card graph through `query::classify`, so
+    // their four open buckets must agree. One card per board state.
+    let temp = TestTempDir::new("status-board-agree");
+    let paths = MaestroPaths::new(temp.path());
+    let repo = temp.path();
+
+    let feature = Card::new("feat-x", CardType::Feature, "Feature X", "proposed", NOW);
+    let mut done = Card::new("task-done", CardType::Task, "Done", "verified", NOW);
+    done.parent = Some("feat-x".to_string());
+    let mut active = Card::new("task-active", CardType::Task, "Active", "in_progress", NOW);
+    active.parent = Some("feat-x".to_string());
+    active.claimed_by = Some("codex#s1".to_string());
+    let mut ready = Card::new("task-ready", CardType::Task, "Ready", "ready", NOW);
+    ready.parent = Some("feat-x".to_string());
+    let mut nv = Card::new("task-nv", CardType::Task, "NV", "needs_verification", NOW);
+    nv.parent = Some("feat-x".to_string());
+    // blocked by the open `task-active`, so it stays out of `ready` and reads
+    // blocked on both surfaces.
+    let mut blocked = Card::new("task-blocked", CardType::Task, "Blocked", "ready", NOW);
+    blocked.parent = Some("feat-x".to_string());
+    blocked.deps = vec![Dep {
+        kind: DepKind::Blocks,
+        target: "task-active".to_string(),
+    }];
+    for card in [&feature, &done, &active, &ready, &nv, &blocked] {
+        write_card(&paths, card);
+    }
+
+    let board = run(repo, &["watch", "snapshot"]);
+    let board_header = board
+        .lines()
+        .find(|line| line.contains("| ready"))
+        .unwrap_or_else(|| panic!("the board must render a feature header:\n{board}"));
+    let status = run(repo, &["status"]);
+    let status_line = status
+        .lines()
+        .find(|line| line.starts_with("tasks: active="))
+        .unwrap_or_else(|| panic!("status must print the task summary line:\n{status}"));
+
+    for key in ["active", "ready", "needs_verification", "blocked"] {
+        assert_eq!(
+            count_after(status_line, key),
+            count_after(board_header, key),
+            "`{key}` must agree between status and the board\nstatus: {status_line}\nboard:  {board_header}"
+        );
+    }
+    // The partition is exercised, not just equal-to-each-other: one card per
+    // open bucket plus the done card excluded from all four.
+    assert_eq!(
+        count_after(status_line, "active"),
+        1,
+        "status: {status_line}"
+    );
+    assert_eq!(
+        count_after(status_line, "ready"),
+        1,
+        "status: {status_line}"
+    );
+    assert_eq!(
+        count_after(status_line, "needs_verification"),
+        1,
+        "status: {status_line}"
+    );
+    assert_eq!(
+        count_after(status_line, "blocked"),
+        1,
+        "status: {status_line}"
+    );
+}

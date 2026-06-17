@@ -1,9 +1,11 @@
+use std::collections::BTreeSet;
 use std::env;
 use std::path::PathBuf;
 
 use anyhow::{Result, bail};
 use serde::Serialize;
 
+use crate::domain::card;
 use crate::domain::feature::{self, FeatureRosterEntry, FeatureStatus};
 use crate::domain::task::{self, TaskRecord, TaskState};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
@@ -423,6 +425,15 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
         .filter(|task| task.state.is_live())
         .cloned()
         .collect();
+    // The summary counts come from the card graph, not the legacy `TaskRecord`
+    // projection, so they read the same buckets the `maestro watch` board does
+    // (the projection counted a card-model `blocks` dep as unblocked and any
+    // open card as `active`). Rows and next-action still ride the records.
+    let summary_cards = card::query::scan(paths)?;
+    let blocked_ids: BTreeSet<String> = card::query::blocked(&summary_cards)
+        .into_iter()
+        .map(|card| card.id.clone())
+        .collect();
 
     let current_task_action = match env::var("MAESTRO_CURRENT_TASK") {
         Ok(id) if !id.trim().is_empty() => match task::load_task_record(&paths.tasks_dir(), &id) {
@@ -518,7 +529,7 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
         proof_concern,
         warnings,
         next_action,
-        tasks: TaskSummaryJson::from_tasks(&tasks),
+        tasks: TaskSummaryJson::from_cards(&summary_cards, &blocked_ids),
         features: FeatureSummaryJson::from_features(&features),
         task_rows: rows,
         active_features,
@@ -1067,27 +1078,27 @@ struct TaskSummaryJson {
 }
 
 impl TaskSummaryJson {
-    fn from_tasks(tasks: &[TaskRecord]) -> Self {
-        Self {
-            total: tasks.len(),
-            active: tasks.iter().filter(|task| task.state.is_live()).count(),
-            ready: tasks
-                .iter()
-                .filter(|task| task.state == TaskState::Ready)
-                .count(),
-            needs_verification: tasks
-                .iter()
-                .filter(|task| task.state == TaskState::NeedsVerification)
-                .count(),
-            blocked: tasks
-                .iter()
-                .filter(|task| task::has_unresolved_blockers(task))
-                .count(),
-            verified: tasks
-                .iter()
-                .filter(|task| task.state == TaskState::Verified)
-                .count(),
+    /// Tally the open buckets from the card graph through the same
+    /// [`query::classify`] the `maestro watch` board uses, so the two never
+    /// disagree on `active`/`ready`/`needs_verification`/`blocked`. `total` and
+    /// `verified` are repo-wide over workable cards (not the board's
+    /// open-feature subset), so they are not expected to match a board frame.
+    fn from_cards(cards: &[card::schema::Card], blocked_ids: &BTreeSet<String>) -> Self {
+        let mut summary = Self::default();
+        for card in cards.iter().filter(|card| card.card_type.workable()) {
+            summary.total += 1;
+            if card.status == "verified" {
+                summary.verified += 1;
+            }
+            match card::query::classify(card, blocked_ids) {
+                card::query::RowState::Done => {}
+                card::query::RowState::Blocked => summary.blocked += 1,
+                card::query::RowState::NeedsVerification => summary.needs_verification += 1,
+                card::query::RowState::Active => summary.active += 1,
+                card::query::RowState::Ready => summary.ready += 1,
+            }
         }
+        summary
     }
 }
 

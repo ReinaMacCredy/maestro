@@ -12,6 +12,10 @@ use crate::domain::task;
 use crate::foundation::core::git;
 use crate::foundation::core::paths::MaestroPaths;
 
+// The board classifier moved to `card::query` so `maestro status` shares it
+// (interface code reaches domain submodules inline, not via a deep `use`).
+type RowState = card::query::RowState;
+
 /// Run the polling watch loop. The loop is the reuse unit: each tick calls
 /// `render` for one frame, so `task list --watch` and `maestro watch` share it
 /// while sourcing different renderers (task records vs the card graph). A
@@ -49,40 +53,6 @@ fn live_footer(interval: u64) -> String {
     format!("(live; refreshes every {interval}s; Ctrl-C to exit)")
 }
 
-/// The board-row state a workable card maps to, finer than coarse status: it
-/// splits the OPEN/IN_PROGRESS band into the planr header buckets.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum RowState {
-    Done,
-    Blocked,
-    NeedsVerification,
-    Active,
-    Ready,
-}
-
-/// Classify a workable card for the board. `blocked_ids` is the set of card ids
-/// held back by an unsatisfied `blocks` dependency (`card::query::blocked`), so a
-/// card reads blocked here exactly when an open dependency keeps it out of
-/// `maestro ready`.
-fn classify(
-    card: &card::schema::Card,
-    blocked_ids: &std::collections::BTreeSet<String>,
-) -> RowState {
-    if card::query::coarse_of(&card.status) == Some(card::query::Coarse::Closed) {
-        return RowState::Done;
-    }
-    if blocked_ids.contains(&card.id) {
-        return RowState::Blocked;
-    }
-    if card.status == "needs_verification" {
-        return RowState::NeedsVerification;
-    }
-    if card.claimed_by.is_some() || card.status == "in_progress" {
-        return RowState::Active;
-    }
-    RowState::Ready
-}
-
 #[derive(Default)]
 struct RowCounts {
     done: usize,
@@ -99,7 +69,7 @@ impl RowCounts {
     ) -> Self {
         let mut counts = Self::default();
         for card in cards {
-            counts.bump(classify(card, blocked_ids));
+            counts.bump(card::query::classify(card, blocked_ids));
         }
         counts
     }
@@ -214,7 +184,7 @@ fn place<'a>(
         if !visited.insert(node.id.as_str()) {
             continue;
         }
-        let state = classify(node, blocked_ids);
+        let state = card::query::classify(node, blocked_ids);
         // Done rows are hidden in steady state; a card in `just_completed`
         // (live and now Done) renders one tick frame before it drops next reload.
         if state != RowState::Done || just_completed.contains(&node.id) {
@@ -379,7 +349,8 @@ fn format_board_opts(
                 Some(parent) => !features.contains_key(parent),
             })
             .filter(|card| {
-                classify(card, blocked_ids) != RowState::Done || just_completed.contains(&card.id)
+                card::query::classify(card, blocked_ids) != RowState::Done
+                    || just_completed.contains(&card.id)
             })
             .collect();
         if !orphans.is_empty() {
@@ -390,7 +361,7 @@ fn format_board_opts(
                 push_row(
                     &mut out,
                     orphan,
-                    classify(orphan, blocked_ids),
+                    card::query::classify(orphan, blocked_ids),
                     0,
                     live_tick,
                 );
@@ -463,7 +434,7 @@ pub fn run_board(paths: &MaestroPaths, focus: Option<&str>, interval_seconds: u6
             if !card.card_type.workable() {
                 continue;
             }
-            if classify(card, &blocked_ids) == RowState::Done {
+            if card::query::classify(card, &blocked_ids) == RowState::Done {
                 if prev_live.contains(&card.id) {
                     just_completed.insert(card.id.clone());
                 }
@@ -704,7 +675,7 @@ mod tests {
         card::schema::Card::new(id, card::schema::CardType::Task, title, status, "t0")
     }
 
-    use super::{RowState, classify, glyph};
+    use super::{RowState, glyph};
 
     #[test]
     fn glyph_vocabulary_is_the_locked_set() {
@@ -894,8 +865,8 @@ mod tests {
         let card = work("task-1", "auth", "x", "ready");
         let mut blocked = BTreeSet::new();
         blocked.insert("task-1".to_string());
-        assert!(classify(&card, &blocked) == RowState::Blocked);
-        assert!(classify(&card, &BTreeSet::new()) == RowState::Ready);
+        assert!(card::query::classify(&card, &blocked) == RowState::Blocked);
+        assert!(card::query::classify(&card, &BTreeSet::new()) == RowState::Ready);
     }
 
     #[test]

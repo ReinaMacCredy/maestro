@@ -3,7 +3,7 @@
 //! filter (G3). These are pure functions over the scanned card set; the CLI
 //! verbs that surface them are a thin adapter layer.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
@@ -395,6 +395,43 @@ fn is_blocked(card: &Card, by_id: &HashMap<&str, &Card>) -> bool {
                 .get(dep.target.as_str())
                 .is_some_and(|target| coarse_of(&target.status) == Some(Coarse::Closed))
         })
+}
+
+/// The board-row bucket a workable card maps to, finer than coarse status: it
+/// splits the OPEN/IN_PROGRESS band into the planr header buckets. The watch
+/// board and `maestro status` both classify through this so their open-bucket
+/// counts cannot diverge.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum RowState {
+    Done,
+    Blocked,
+    NeedsVerification,
+    Active,
+    Ready,
+}
+
+/// Classify a workable card into its [`RowState`]. `blocked_ids` is the set of
+/// ids held back by an unsatisfied `blocks` dependency (from [`blocked`]), so a
+/// card reads blocked here exactly when an open dependency keeps it out of
+/// [`ready`]. A claimed card reads `Active` before `Ready` (the distinction
+/// [`is_ready`] does not draw), which is why count consumers route through this
+/// rather than reassembling buckets from [`ready`]/[`blocked`]. A non-workable
+/// card never lands in `blocked_ids` and falls through to `Ready`; filter to
+/// `card_type.workable()` before counting.
+pub fn classify(card: &Card, blocked_ids: &BTreeSet<String>) -> RowState {
+    if coarse_of(&card.status) == Some(Coarse::Closed) {
+        return RowState::Done;
+    }
+    if blocked_ids.contains(&card.id) {
+        return RowState::Blocked;
+    }
+    if card.status == "needs_verification" {
+        return RowState::NeedsVerification;
+    }
+    if card.claimed_by.is_some() || card.status == "in_progress" {
+        return RowState::Active;
+    }
+    RowState::Ready
 }
 
 /// The `list` filter (SPEC G3): every supplied predicate must match (AND). An
