@@ -67,10 +67,10 @@ extra:
     claim_checks:
     - claim: feature ship --dry-run <id> prints a non-blocking advisory listing each verified child task whose proof commit differs from current HEAD ('verified at older commits; re-verify if their code changed'); a feature whose verified children all match HEAD prints no advisory
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/70483b87-02a0-4fd8-a658-f23cd32e4554/events.jsonl
+      source: .maestro/runs/70483b87-02a0-4fd8-a658-f23cd32e4554/events.jsonl
     - claim: the advisory does not block the dry-run and adds no entry to ship_gaps_for_record's blocking gaps (a dry-run that would otherwise pass still passes with the advisory present)
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/70483b87-02a0-4fd8-a658-f23cd32e4554/events.jsonl
+      source: .maestro/runs/70483b87-02a0-4fd8-a658-f23cd32e4554/events.jsonl
     commands:
     - cmd: cargo build
       exit_code: 0

@@ -93,11 +93,10 @@ where
     lock.set_agent(agent, committed_install);
     lock.save(&lock_path)?;
 
-    // The maestro-internal ignore rules now live in the `.maestro/.gitignore`
-    // mirror written above; strip any obsolete maestro block left in the
-    // repo-root `.gitignore` by an earlier install. Runs after the mirror write
-    // so the rules are never momentarily un-ignored, and after the lock commit
-    // so the install state reflects the mirror writes that succeeded.
+    // The mirror write above rewrites legacy root ignore blocks to the current
+    // agent-settings-only body. This cleanup is a guarded no-op for current
+    // blocks and strips only obsolete root blocks that still carry `.maestro/`
+    // internals.
     migrate_legacy_root_gitignore(paths)?;
 
     Ok(())

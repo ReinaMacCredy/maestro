@@ -50,13 +50,13 @@ extra:
     claim_checks:
     - claim: scratch maestro init --yes writes no .maestro/playbook/ and init --dry-run has no playbook line
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/7dcac9f0-8973-4e23-aaab-193c084801cd/events.jsonl
+      source: .maestro/runs/7dcac9f0-8973-4e23-aaab-193c084801cd/events.jsonl
     - claim: seeded tracked .maestro/playbook/ removed by sync and init --force with no .maestro/backups/ copy; git shows the deletion
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/7dcac9f0-8973-4e23-aaab-193c084801cd/events.jsonl
+      source: .maestro/runs/7dcac9f0-8973-4e23-aaab-193c084801cd/events.jsonl
     - claim: fresh init with no prior folder does not error
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/7dcac9f0-8973-4e23-aaab-193c084801cd/events.jsonl
+      source: .maestro/runs/7dcac9f0-8973-4e23-aaab-193c084801cd/events.jsonl
     commands:
     - cmd: cargo build
       exit_code: 0

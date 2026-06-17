@@ -57,16 +57,16 @@ extra:
     claim_checks:
     - claim: maestro sync resyncs a drifted CLAUDE.md/AGENTS.md managed block in place, restoring shipped content and backing up the pre-sync copy under .maestro/backups/
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
+      source: .maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
     - claim: user content outside the markers is preserved and a file without the markers is left untouched
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
+      source: .maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
     - claim: 'on a freshly installed repo the mirror-block resync is a pure no-op: no write and no backup'
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
+      source: .maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
     - claim: tests/sync_integration.rs passes 8/8 including the three new mirror-block tests
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
+      source: .maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
     commands:
     - cmd: cargo build
       exit_code: 0

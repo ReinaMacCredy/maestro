@@ -54,16 +54,16 @@ extra:
     claim_checks:
     - claim: maestro playbook <lang> serves embedded/playbook/<lang>.md byte-identical exit 0 for all 10 langs
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/7dcac9f0-8973-4e23-aaab-193c084801cd/events.jsonl
+      source: .maestro/runs/7dcac9f0-8973-4e23-aaab-193c084801cd/events.jsonl
     - claim: 'bare maestro playbook prints index: how-to + 10 tokens + Apache attribution exit 0'
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/7dcac9f0-8973-4e23-aaab-193c084801cd/events.jsonl
+      source: .maestro/runs/7dcac9f0-8973-4e23-aaab-193c084801cd/events.jsonl
     - claim: maestro playbook nosuchlang exits non-zero and lists valid tokens
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/7dcac9f0-8973-4e23-aaab-193c084801cd/events.jsonl
+      source: .maestro/runs/7dcac9f0-8973-4e23-aaab-193c084801cd/events.jsonl
     - claim: maestro playbook rust from empty non-repo dir serves guide exit 0, no init error
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/7dcac9f0-8973-4e23-aaab-193c084801cd/events.jsonl
+      source: .maestro/runs/7dcac9f0-8973-4e23-aaab-193c084801cd/events.jsonl
     commands:
     - cmd: cargo build
       exit_code: 0

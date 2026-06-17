@@ -64,10 +64,10 @@ extra:
     claim_checks:
     - claim: 'RED: setup_skill_context_readin content guard failed before the edit -- the 1.4.2 SKILL.md lacked BOUNDED, the projects: enumeration, and the read-in-only language (3 failed)'
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/87b527b0-94e5-4e97-9b90-59041dbeb46b/events.jsonl
+      source: .maestro/runs/87b527b0-94e5-4e97-9b90-59041dbeb46b/events.jsonl
     - claim: 'GREEN: after the edit setup_skill_context_readin 3 passed, 0 failed and resources_version_guard re-recorded at maestro-setup 1.5.0 / f0e5e097 passes 4/4 (no new CLI verb or harness schema field)'
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/87b527b0-94e5-4e97-9b90-59041dbeb46b/events.jsonl
+      source: .maestro/runs/87b527b0-94e5-4e97-9b90-59041dbeb46b/events.jsonl
     commands:
     - cmd: cargo build
       exit_code: 0

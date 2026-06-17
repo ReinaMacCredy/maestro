@@ -163,7 +163,7 @@ pub(crate) fn evaluate_task_report(
     let inputs = freshness_inputs_for_task(task, git::head(paths.repo_root()).unwrap_or(None))?;
     let claims = completion_claims(task);
     let evidence = collect_evidence(paths, task_dir, &task.id)?;
-    let claim_checks = check_claims(&claims, &evidence);
+    let claim_checks = check_claims(&claims, &evidence, paths.repo_root());
     let standalone_without_checks = task.feature_id.is_none() && task.acceptance.checks.is_empty();
     let failures = failures_for(
         task,

@@ -59,13 +59,13 @@ extra:
     claim_checks:
     - claim: HARNESS.md carries a '## Code style' section with the locked bullets and version 1.14.0
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
+      source: .maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
     - claim: resources_version_guard passes with the bumped version + new tree-hash 0d2c1b85bf1a4a74d5192305c016e1285b66c219c5c9ed035157adcca7d28fc0
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
+      source: .maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
     - claim: harness_templates, harness_extract, and init_integration suites pass after the edit
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
+      source: .maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
     commands:
     - cmd: cargo build
       exit_code: 0

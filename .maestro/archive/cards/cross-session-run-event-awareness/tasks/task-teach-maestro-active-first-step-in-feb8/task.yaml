@@ -47,10 +47,10 @@ extra:
     claim_checks:
     - claim: Both work-entry skills (maestro-design, maestro-card) instruct running 'maestro active' (pull-only) as a session's first step and point to the 'maestro link' follow-up
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/df536043-8689-4054-89d6-f29d1590ba93/events.jsonl
+      source: .maestro/runs/df536043-8689-4054-89d6-f29d1590ba93/events.jsonl
     - claim: Both edited skills' versions are bumped and the resource version guard is re-recorded for the doc change
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/df536043-8689-4054-89d6-f29d1590ba93/events.jsonl
+      source: .maestro/runs/df536043-8689-4054-89d6-f29d1590ba93/events.jsonl
     commands:
     - cmd: cargo build
       exit_code: 0

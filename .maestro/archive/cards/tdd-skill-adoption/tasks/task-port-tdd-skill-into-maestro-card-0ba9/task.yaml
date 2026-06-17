@@ -50,10 +50,10 @@ extra:
     claim_checks:
     - claim: 'resources_version_guard: 4 passed, 0 failed'
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/cli-2026-06-12/events.jsonl
+      source: .maestro/runs/cli-2026-06-12/events.jsonl
     - claim: fresh maestro init extracts reference/tdd.md and 5 satellites, tests.md sha e12182f5 matches upstream; cargo test full suite green incl skills_extract 21 passed and resources_version_guard 4 passed
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/cli-2026-06-12/events.jsonl
+      source: .maestro/runs/cli-2026-06-12/events.jsonl
     commands:
     - cmd: cargo build
       exit_code: 0

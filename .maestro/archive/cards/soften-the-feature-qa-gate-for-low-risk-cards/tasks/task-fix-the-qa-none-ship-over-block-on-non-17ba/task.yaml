@@ -53,13 +53,13 @@ extra:
     claim_checks:
     - claim: 'RED: test qa_none_survives_non_behavioral_amend failed before the fix'
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/391829a6-0977-4ba4-9345-3db7664abe56/events.jsonl
+      source: .maestro/runs/391829a6-0977-4ba4-9345-3db7664abe56/events.jsonl
     - claim: 'GREEN: cargo test 936 passed, 0 failed'
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/391829a6-0977-4ba4-9345-3db7664abe56/events.jsonl
+      source: .maestro/runs/391829a6-0977-4ba4-9345-3db7664abe56/events.jsonl
     - claim: 'E2E: qa-gate integration suite 5 passed via the real CLI, incl qa_none_survives_a_non_behavioral_amend_without_redeclaring'
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/391829a6-0977-4ba4-9345-3db7664abe56/events.jsonl
+      source: .maestro/runs/391829a6-0977-4ba4-9345-3db7664abe56/events.jsonl
     commands:
     - cmd: cargo build
       exit_code: 0

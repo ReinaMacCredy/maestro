@@ -52,13 +52,13 @@ extra:
     claim_checks:
     - claim: maestro active renders one row per live session with mode, bound-card title+status, type-aware progress, age, and presence label, marking the running session you
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/df536043-8689-4054-89d6-f29d1590ba93/events.jsonl
+      source: .maestro/runs/df536043-8689-4054-89d6-f29d1590ba93/events.jsonl
     - claim: active hides stale sessions by default and reveals them under --all tagged [stale Nm]; a recent Stop reads [waiting], not excluded
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/df536043-8689-4054-89d6-f29d1590ba93/events.jsonl
+      source: .maestro/runs/df536043-8689-4054-89d6-f29d1590ba93/events.jsonl
     - claim: active prints a copy-pasteable 'maestro link add <your-card> <their-card>' hint naming the peer card id and creates no related edge (pull-only)
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/df536043-8689-4054-89d6-f29d1590ba93/events.jsonl
+      source: .maestro/runs/df536043-8689-4054-89d6-f29d1590ba93/events.jsonl
     commands:
     - cmd: cargo build
       exit_code: 0

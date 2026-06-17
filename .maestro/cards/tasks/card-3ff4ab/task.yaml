@@ -69,7 +69,7 @@ extra:
     claim_checks:
     - claim: status and feature list degrade with a sick feature while preserving healthy rows
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/cli-2026-06-07/events.jsonl
+      source: .maestro/runs/cli-2026-06-07/events.jsonl
     commands:
     - cmd: cargo build
       exit_code: 0

@@ -60,7 +60,7 @@ extra:
     claim_checks:
     - claim: embedded/skills/maestro-design/SKILL.md:89 pipeline names prepare; :3 version 1.12.0; :92-95 handoff = skill boundary not a lifecycle gate, build flows straight through
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/d7764a32-6ea3-4c17-b3c2-30ba0d37050e/events.jsonl
+      source: .maestro/runs/d7764a32-6ea3-4c17-b3c2-30ba0d37050e/events.jsonl
     commands:
     - cmd: cargo build
       exit_code: 0

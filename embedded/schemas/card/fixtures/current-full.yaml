@@ -4,6 +4,7 @@ type: task
 title: Full envelope fixture
 status: in_progress
 parent: feature-search-engine-0f3a
+project: search
 deps:
   - kind: blocks
     target: card-aa11bb

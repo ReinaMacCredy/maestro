@@ -58,13 +58,13 @@ extra:
     claim_checks:
     - claim: All 9 files (cpp,csharp,dart,general,go,html-css,javascript,python,typescript) byte-match their raw Conductor sources (diff -q clean on re-fetch)
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
+      source: .maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
     - claim: PLAYBOOK.md carries frontmatter version 1.0.0, the Apache-2.0 attribution/NOTICE for the vendored set, and a per-language index
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
+      source: .maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
     - claim: rust.md authored (maestro-original idiomatic Rust summary; Gemini set has no Rust)
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
+      source: .maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
     commands:
     - cmd: cargo build
       exit_code: 0

@@ -4,18 +4,26 @@ agents:
     installed_at: 2026-06-12T00:00:00.000Z
     state: committed
     files:
-      .claude/CLAUDE.md:
+      CLAUDE.md:
         kind: markdown_managed_block
-        content_hash: '4444444444444444444444444444444444444444444444444444444444444444'
+        content_hash: 'sha256:4444444444444444444444444444444444444444444444444444444444444444'
         created_fresh: true
-      .claude/settings.json:
+      AGENTS.md:
+        kind: markdown_managed_block
+        content_hash: 'sha256:5555555555555555555555555555555555555555555555555555555555555555'
+        created_fresh: true
+      .maestro/.gitignore:
+        kind: gitignore_section
+        content_hash: 'sha256:6666666666666666666666666666666666666666666666666666666666666666'
+        created_fresh: true
+      .gitignore:
+        kind: gitignore_section
+        content_hash: 'sha256:7777777777777777777777777777777777777777777777777777777777777777'
+        created_fresh: true
+      .claude/settings.local.json:
         kind: json_managed_keys
         managed_keys:
           - hooks
         previous_values:
           hooks: null
-      .gitignore:
-        kind: gitignore_section
-      skills/maestro-card:
-        kind: symlink
-        target: ../.maestro/skills/maestro-card
+        created_fresh: true

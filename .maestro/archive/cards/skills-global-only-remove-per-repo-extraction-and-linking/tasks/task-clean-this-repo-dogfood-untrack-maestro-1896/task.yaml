@@ -51,16 +51,16 @@ extra:
     claim_checks:
     - claim: the .claude/skills dogfood symlinks (305da5db) are removed
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/1e7ed302-b661-4557-a1ea-abd5d3513548/events.jsonl
+      source: .maestro/runs/1e7ed302-b661-4557-a1ea-abd5d3513548/events.jsonl
     - claim: .maestro/skills is untracked and deleted from the repo
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/1e7ed302-b661-4557-a1ea-abd5d3513548/events.jsonl
+      source: .maestro/runs/1e7ed302-b661-4557-a1ea-abd5d3513548/events.jsonl
     - claim: embedded/skills is the sole authoring source
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/1e7ed302-b661-4557-a1ea-abd5d3513548/events.jsonl
+      source: .maestro/runs/1e7ed302-b661-4557-a1ea-abd5d3513548/events.jsonl
     - claim: ~/.maestro/skills resynced to embedded maestro-card 1.9.0
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/1e7ed302-b661-4557-a1ea-abd5d3513548/events.jsonl
+      source: .maestro/runs/1e7ed302-b661-4557-a1ea-abd5d3513548/events.jsonl
     commands:
     - cmd: cargo build
       exit_code: 0

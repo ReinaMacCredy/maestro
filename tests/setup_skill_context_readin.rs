@@ -11,7 +11,7 @@ use maestro::domain::skills::catalog::skills;
 
 fn setup_skill_md() -> &'static str {
     skills()
-        .into_iter()
+        .iter()
         .find(|skill| skill.name == "maestro-setup")
         .expect("invariant: maestro-setup skill must be shipped")
         .skill_md()

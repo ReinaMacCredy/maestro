@@ -224,7 +224,8 @@ mod tests {
 
         assert_eq!(canon_set(&from_main), expected, "main view sees both");
         assert_eq!(
-            canon_set(&from_linked), expected,
+            canon_set(&from_linked),
+            expected,
             "linked view sees the same set regardless of invoking worktree"
         );
         // The main worktree is listed first so the union has a stable anchor.

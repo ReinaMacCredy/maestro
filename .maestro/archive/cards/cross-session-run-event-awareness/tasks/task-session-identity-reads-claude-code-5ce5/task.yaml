@@ -61,7 +61,7 @@ extra:
     claim_checks:
     - claim: 'cargo test --test hook_record_integration: 16 passed, 0 failed'
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/cli-2026-06-13/events.jsonl
+      source: .maestro/runs/cli-2026-06-13/events.jsonl
     commands:
     - cmd: cargo build
       exit_code: 0

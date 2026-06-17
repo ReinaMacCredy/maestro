@@ -48,10 +48,10 @@ extra:
     claim_checks:
     - claim: 'RED: git_snapshot_splits_dirty_counts_by_maestro_prefix failed before impl (no field maestro_dirty/code_other_dirty on GitSnapshot)'
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/70483b87-02a0-4fd8-a658-f23cd32e4554/events.jsonl
+      source: .maestro/runs/70483b87-02a0-4fd8-a658-f23cd32e4554/events.jsonl
     - claim: 'GREEN: cargo test --test core_backup_diff_git: 9 passed, 0 failed'
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/70483b87-02a0-4fd8-a658-f23cd32e4554/events.jsonl
+      source: .maestro/runs/70483b87-02a0-4fd8-a658-f23cd32e4554/events.jsonl
     commands:
     - cmd: cargo build
       exit_code: 0

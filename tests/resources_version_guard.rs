@@ -28,8 +28,11 @@ const RECORD_SH: &str = include_str!("../embedded/hooks/record.sh");
 const HARNESS_MD: &str = include_str!("../embedded/harness/HARNESS.md");
 const RECOVERY_MD: &str = include_str!("../embedded/harness/RECOVERY.md");
 
+/// The shipped code playbook, served from the binary instead of extracted.
+static PLAYBOOK_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/embedded/playbook");
+
 /// `(group, name, shipped version, sha256 tree-hash of the resource files)`.
-const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 16] = [
+const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 17] = [
     (
         "skill",
         "maestro-card",
@@ -67,6 +70,12 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 16] = [
         "090ba1cbb0799d3faa83db781932db10666dc864786154adc9bd9dbc08b7b59f",
     ),
     (
+        "playbook",
+        "PLAYBOOK.md",
+        "binary-served",
+        "39662b7afe1a4b9c45c859aecea6de5206923b6284192126b15cc280aa9836e8",
+    ),
+    (
         "schema",
         "backlog",
         "maestro.card.v1",
@@ -76,7 +85,7 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 16] = [
         "schema",
         "card",
         "maestro.card.v1",
-        "0d4e24fb3a74575dfa585be641c076ee6de50c3d3b12b7c24f655acd91e7aa14",
+        "adadf5806fe185753f1250d41ac7581f7f2ea9677c61b413089af69dccc361dc",
     ),
     (
         "schema",
@@ -100,7 +109,7 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 16] = [
         "schema",
         "install",
         "maestro.install_lock.v1",
-        "2f0f9979f49f39583250f5b37be1f6035394f24d02ac35a34489df0fab9954ef",
+        "e9ff23c09bcea690c67446e7a0efabfbc36949f4596875b46ef21c8b83942329",
     ),
     (
         "schema",
@@ -211,6 +220,10 @@ fn shipped_resource_trees_and_versions_match_the_recorded_guard() {
                 ]),
                 HARNESS_MD.contains(&format!("version: {version}")),
             ),
+            "playbook" => {
+                let files = collect_embedded_files(&PLAYBOOK_DIR, &PLAYBOOK_DIR);
+                (tree_hash(&files), version == "binary-served")
+            }
             "schema" => {
                 let pack = schema_pack_dir(name)
                     .unwrap_or_else(|| panic!("recorded schema pack {name} is no longer shipped"));
@@ -249,8 +262,9 @@ fn every_recorded_guard_entry_maps_to_a_shipped_resource() {
                 "RESOURCE_VERSION_GUARD lists skill {name}, which is no longer shipped"
             ),
             // The hook script and harness protocol are fixed single-file
-            // resources Maestro always ships.
-            "hook" | "harness" => {}
+            // resources Maestro always ships. The playbook is a fixed embedded
+            // tree served from the binary.
+            "hook" | "harness" | "playbook" => {}
             "schema" => assert!(
                 schema_pack_dir(name).is_some(),
                 "RESOURCE_VERSION_GUARD lists schema pack {name}, which is no longer shipped"
@@ -275,6 +289,16 @@ fn every_shipped_schema_pack_is_recorded_in_the_guard() {
             "shipped schema pack {family} is missing from RESOURCE_VERSION_GUARD",
         );
     }
+}
+
+#[test]
+fn shipped_playbook_tree_is_recorded_in_the_guard() {
+    assert!(
+        RESOURCE_VERSION_GUARD
+            .iter()
+            .any(|(group, name, _, _)| *group == "playbook" && *name == "PLAYBOOK.md"),
+        "shipped playbook tree is missing from RESOURCE_VERSION_GUARD",
+    );
 }
 
 #[test]

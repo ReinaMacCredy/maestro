@@ -61,10 +61,10 @@ extra:
     claim_checks:
     - claim: 'RED: force_init_preserves_authored_projects failed before impl -- force regenerated harness.yml and stripped the declaration (left: [] vs right: services/*, apps/*)'
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/87b527b0-94e5-4e97-9b90-59041dbeb46b/events.jsonl
+      source: .maestro/runs/87b527b0-94e5-4e97-9b90-59041dbeb46b/events.jsonl
     - claim: 'GREEN: cargo test --test projects_lifecycle 4 passed, 0 failed after copying existing.projects into the detected config in InitPlan::new'
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/87b527b0-94e5-4e97-9b90-59041dbeb46b/events.jsonl
+      source: .maestro/runs/87b527b0-94e5-4e97-9b90-59041dbeb46b/events.jsonl
     commands:
     - cmd: cargo build
       exit_code: 0

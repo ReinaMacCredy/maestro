@@ -57,7 +57,7 @@ extra:
     claim_checks:
     - claim: Bare list (no --all, no explicit filter) hides non-archived coarse-Closed cards with a 'N live (M closed hidden; --all)' header; --all and explicit --status/--type/--parent/--assignee/--grep filters govern as-is; --archived stays orthogonal; list --json emits the same sliced set without touching render_list_json
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/6ef6f1c0-d4d9-41c5-9c86-d0fcaf53a2ba/events.jsonl
+      source: .maestro/runs/6ef6f1c0-d4d9-41c5-9c86-d0fcaf53a2ba/events.jsonl
     commands:
     - cmd: cargo build
       exit_code: 0

@@ -516,12 +516,16 @@ mod tests {
         seed(
             dir_a.path(),
             "s-main",
-            &[r#"{"event_type":"card_touch","session_id":"s-main","card_id":"card-main","ts":"2026-06-14T11:59:00.000Z"}"#],
+            &[
+                r#"{"event_type":"card_touch","session_id":"s-main","card_id":"card-main","ts":"2026-06-14T11:59:00.000Z"}"#,
+            ],
         );
         seed(
             dir_b.path(),
             "s-oauth",
-            &[r#"{"event_type":"card_touch","session_id":"s-oauth","card_id":"card-oauth","ts":"2026-06-14T11:58:00.000Z"}"#],
+            &[
+                r#"{"event_type":"card_touch","session_id":"s-oauth","card_id":"card-oauth","ts":"2026-06-14T11:58:00.000Z"}"#,
+            ],
         );
 
         let roots = [
@@ -530,11 +534,19 @@ mod tests {
         ];
         let union = active_sessions_union(&roots, NOW).expect("union reads every root");
         let ids: Vec<&str> = union.iter().map(|row| row.session_id.as_str()).collect();
-        assert_eq!(ids, ["s-main", "s-oauth"], "both worktrees' sessions appear");
+        assert_eq!(
+            ids,
+            ["s-main", "s-oauth"],
+            "both worktrees' sessions appear"
+        );
 
         let local = active_sessions(&roots[0], NOW).expect("single root reads only itself");
         let local_ids: Vec<&str> = local.iter().map(|row| row.session_id.as_str()).collect();
-        assert_eq!(local_ids, ["s-main"], "one worktree shows only local sessions");
+        assert_eq!(
+            local_ids,
+            ["s-main"],
+            "one worktree shows only local sessions"
+        );
     }
 
     #[test]
@@ -580,7 +592,9 @@ mod tests {
         seed(
             dir.path(),
             "s-a",
-            &[r#"{"event_type":"PostToolUse","session_id":"s-a","tool_name":"Edit","file_path":"src/auth/login.rs","ts":"2026-06-14T11:59:00.000Z"}"#],
+            &[
+                r#"{"event_type":"PostToolUse","session_id":"s-a","tool_name":"Edit","file_path":"src/auth/login.rs","ts":"2026-06-14T11:59:00.000Z"}"#,
+            ],
         );
 
         let overlaps = warm_file_overlaps(&MaestroPaths::new(dir.path().to_path_buf()), NOW)
@@ -594,13 +608,17 @@ mod tests {
         seed(
             dir.path(),
             "s-a",
-            &[r#"{"event_type":"PostToolUse","session_id":"s-a","tool_name":"Edit","file_path":"src/auth/login.rs","ts":"2026-06-14T11:59:00.000Z"}"#],
+            &[
+                r#"{"event_type":"PostToolUse","session_id":"s-a","tool_name":"Edit","file_path":"src/auth/login.rs","ts":"2026-06-14T11:59:00.000Z"}"#,
+            ],
         );
         // s-b last edited the file 10m ago -> outside the live window -> no longer warm.
         seed(
             dir.path(),
             "s-b",
-            &[r#"{"event_type":"PostToolUse","session_id":"s-b","tool_name":"Edit","file_path":"src/auth/login.rs","ts":"2026-06-14T11:50:00.000Z"}"#],
+            &[
+                r#"{"event_type":"PostToolUse","session_id":"s-b","tool_name":"Edit","file_path":"src/auth/login.rs","ts":"2026-06-14T11:50:00.000Z"}"#,
+            ],
         );
 
         let overlaps = warm_file_overlaps(&MaestroPaths::new(dir.path().to_path_buf()), NOW)
@@ -617,13 +635,17 @@ mod tests {
         seed(
             dir.path(),
             "s-a",
-            &[r#"{"event_type":"PostToolUse","session_id":"s-a","tool_name":"Edit","file_path":"src/auth/login.rs","ts":"2026-06-14T11:59:00.000Z"}"#],
+            &[
+                r#"{"event_type":"PostToolUse","session_id":"s-a","tool_name":"Edit","file_path":"src/auth/login.rs","ts":"2026-06-14T11:59:00.000Z"}"#,
+            ],
         );
         // A concurrent Read of the same file is not a write conflict.
         seed(
             dir.path(),
             "s-b",
-            &[r#"{"event_type":"PostToolUse","session_id":"s-b","tool_name":"Read","file_path":"src/auth/login.rs","ts":"2026-06-14T11:59:00.000Z"}"#],
+            &[
+                r#"{"event_type":"PostToolUse","session_id":"s-b","tool_name":"Read","file_path":"src/auth/login.rs","ts":"2026-06-14T11:59:00.000Z"}"#,
+            ],
         );
 
         let overlaps = warm_file_overlaps(&MaestroPaths::new(dir.path().to_path_buf()), NOW)
@@ -638,13 +660,17 @@ mod tests {
         seed(
             dir_a.path(),
             "s-a",
-            &[r#"{"event_type":"PostToolUse","session_id":"s-a","tool_name":"Edit","file_path":"src/auth/login.rs","ts":"2026-06-14T11:59:00.000Z"}"#],
+            &[
+                r#"{"event_type":"PostToolUse","session_id":"s-a","tool_name":"Edit","file_path":"src/auth/login.rs","ts":"2026-06-14T11:59:00.000Z"}"#,
+            ],
         );
         // Same path, different worktree -> isolation, NOT contention.
         seed(
             dir_b.path(),
             "s-b",
-            &[r#"{"event_type":"PostToolUse","session_id":"s-b","tool_name":"Edit","file_path":"src/auth/login.rs","ts":"2026-06-14T11:59:00.000Z"}"#],
+            &[
+                r#"{"event_type":"PostToolUse","session_id":"s-b","tool_name":"Edit","file_path":"src/auth/login.rs","ts":"2026-06-14T11:59:00.000Z"}"#,
+            ],
         );
 
         let overlaps = warm_file_overlaps(&MaestroPaths::new(dir_a.path().to_path_buf()), NOW)

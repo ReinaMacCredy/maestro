@@ -47,10 +47,10 @@ extra:
     claim_checks:
     - claim: Low-frequency events (card_touch, skill_activation, SessionStart) echo a multi-line verbose block; the high-frequency tool firehose stays a single terse line
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/df536043-8689-4054-89d6-f29d1590ba93/events.jsonl
+      source: .maestro/runs/df536043-8689-4054-89d6-f29d1590ba93/events.jsonl
     - claim: The verbose block carries the session id and the session's bound card, plus a 'maestro active' tip
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/df536043-8689-4054-89d6-f29d1590ba93/events.jsonl
+      source: .maestro/runs/df536043-8689-4054-89d6-f29d1590ba93/events.jsonl
     commands:
     - cmd: cargo build
       exit_code: 0

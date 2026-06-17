@@ -66,10 +66,10 @@ extra:
     claim_checks:
     - claim: 'DOC: qa-baseline.md documents the --qa none --reason path and the behavior-keyed rule'
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/391829a6-0977-4ba4-9345-3db7664abe56/events.jsonl
+      source: .maestro/runs/391829a6-0977-4ba4-9345-3db7664abe56/events.jsonl
     - claim: 'VERSION: maestro-card bumped 1.12.0 to 1.13.0; resources_version_guard 4 passed'
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/391829a6-0977-4ba4-9345-3db7664abe56/events.jsonl
+      source: .maestro/runs/391829a6-0977-4ba4-9345-3db7664abe56/events.jsonl
     commands:
     - cmd: cargo build
       exit_code: 0

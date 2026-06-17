@@ -138,7 +138,12 @@ pub fn mirror_plan(agent: InstallAgent) -> Result<Vec<MirrorPlan>> {
         markdown("AGENTS.md", agents_md_block()),
         hash(
             ".maestro/.gitignore",
-            gitignore_block(),
+            maestro_gitignore_block(),
+            MirrorKind::GitignoreSection,
+        ),
+        hash(
+            ".gitignore",
+            agent_settings_gitignore_block(),
             MirrorKind::GitignoreSection,
         ),
     ];
@@ -458,12 +463,12 @@ fn contents_for_existing(
         MirrorKind::GitignoreSection => Ok(upsert_managed_block(
             existing,
             ManagedBlockFormat::HashComment,
-            gitignore_block(),
+            text_mirror_body(&plan.kind, &plan.contents)?,
         )),
         MirrorKind::TomlSection => Ok(upsert_managed_block(
             existing,
             ManagedBlockFormat::HashComment,
-            codex_config_block(),
+            text_mirror_body(&plan.kind, &plan.contents)?,
         )),
         MirrorKind::JsonManagedKeys => {
             let object = plan
@@ -783,6 +788,14 @@ fn validate_install_ownership(
         .map(|(relative_path, _)| relative_path.clone())
         .collect::<BTreeSet<_>>();
     let expected_paths = allowed.keys().cloned().collect::<BTreeSet<_>>();
+    let has_root_gitignore = install
+        .files
+        .get(".gitignore")
+        .is_some_and(|ownership| ownership.kind == MirrorKind::GitignoreSection);
+    let has_nested_gitignore = install
+        .files
+        .get(".maestro/.gitignore")
+        .is_some_and(|ownership| ownership.kind == MirrorKind::GitignoreSection);
     // A lock whose only entries are legacy skill symlinks (no real mirrors left)
     // predates a real install; tolerate it so uninstall/migration can still strip
     // the symlink and drop the lock instead of dead-ending on a mirror mismatch.
@@ -791,7 +804,21 @@ fn validate_install_ownership(
             .files
             .values()
             .any(|ownership| ownership.kind == MirrorKind::Symlink);
-    if owned_paths != expected_paths && !legacy_symlink_only {
+    let unexpected_paths = owned_paths
+        .difference(&expected_paths)
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    let missing_required_paths = expected_paths
+        .difference(&owned_paths)
+        .filter(|path| match path.as_str() {
+            ".maestro/.gitignore" => !has_root_gitignore,
+            ".gitignore" => !has_nested_gitignore,
+            _ => true,
+        })
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    if (!unexpected_paths.is_empty() || !missing_required_paths.is_empty()) && !legacy_symlink_only
+    {
         bail!(
             "install lock for {} does not match the expected mirror set",
             agent.key()
@@ -847,6 +874,11 @@ fn verify_text_content_ownership(
             let owned_content = text_ownership_content(&ownership.kind, contents)?;
             if !ownership.matches_text_content(owned_content)
                 && !legacy_full_file_lock_still_owns_current_block(ownership, plan, owned_content)?
+                && !legacy_root_gitignore_lock_still_owns_block(
+                    relative_path,
+                    ownership,
+                    owned_content,
+                )
             {
                 bail!(
                     "refusing to uninstall {} because the current contents do not match the install lock",
@@ -890,6 +922,17 @@ fn legacy_full_file_lock_still_owns_current_block(
     Ok(owned_content == text_ownership_content(&plan.kind, &plan.contents)?)
 }
 
+fn legacy_root_gitignore_lock_still_owns_block(
+    relative_path: &str,
+    ownership: &FileOwnership,
+    owned_content: &str,
+) -> bool {
+    relative_path == ".gitignore"
+        && ownership.kind == MirrorKind::GitignoreSection
+        && (ownership.content_hash.is_none() || ownership.has_legacy_text_hash())
+        && owned_content.contains("# Maestro local-only paths")
+}
+
 fn text_ownership_content<'a>(kind: &MirrorKind, contents: &'a str) -> Result<&'a str> {
     let Some((start_marker, end_marker)) = text_markers(kind) else {
         bail!("install lock entry is not a text mirror");
@@ -898,6 +941,21 @@ fn text_ownership_content<'a>(kind: &MirrorKind, contents: &'a str) -> Result<&'
         bail!("managed text mirror is missing Maestro ownership markers");
     };
     Ok(block)
+}
+
+fn text_mirror_body<'a>(kind: &MirrorKind, contents: &'a str) -> Result<&'a str> {
+    let Some((start_marker, end_marker)) = text_markers(kind) else {
+        bail!("install lock entry is not a text mirror");
+    };
+    let block = text_ownership_content(kind, contents)?;
+    let body_with_end = block
+        .strip_prefix(start_marker)
+        .and_then(|rest| rest.strip_prefix('\n'))
+        .context("managed text mirror has malformed start marker")?;
+    let end_marker_start = body_with_end
+        .rfind(end_marker)
+        .context("managed text mirror has malformed end marker")?;
+    Ok(body_with_end[..end_marker_start].trim_matches('\n'))
 }
 
 fn text_markers(kind: &MirrorKind) -> Option<(&'static str, &'static str)> {
@@ -971,32 +1029,32 @@ fn agents_md_block() -> &'static str {
 
 /// Body of the maestro-owned `.maestro/.gitignore`. Patterns are relative to
 /// `.maestro/` (a nested `.gitignore` applies to its own subtree), so they carry
-/// no `.maestro/` prefix. Covers only maestro-internal local-only paths; agent
-/// settings (`.claude/settings.local.json`, `.codex/hooks.json`) live outside
-/// `.maestro/` and are no longer maestro's gitignore concern. `playbook/` is
-/// deliberately absent so its files stay tracked.
-fn gitignore_block() -> &'static str {
+/// no `.maestro/` prefix. Covers maestro-internal local-only paths. `playbook/`
+/// is deliberately absent so its files stay tracked.
+fn maestro_gitignore_block() -> &'static str {
     "# Maestro local-only paths\nruns/\nchannels/\nbackups/\nindex/\ninstall-lock.yaml\nupdate-check\ntasks/*/evidence/\ntasks/*/local/\narchive/**/evidence/\narchive/**/local/\narchive/**/runs/"
 }
 
-/// Strip an obsolete maestro managed block from the repo-root `.gitignore`.
+fn agent_settings_gitignore_block() -> &'static str {
+    "# Maestro local agent settings\n.claude/settings.local.json\n.codex/hooks.json"
+}
+
+/// Strip an obsolete maestro-internal block from the repo-root `.gitignore`.
 ///
-/// Earlier installs wrote maestro's local-only ignore rules as a `HashComment`
-/// block in the repo-root `.gitignore`. Those rules now live in
-/// `.maestro/.gitignore` (written as a mirror by the same install), so the root
-/// block is obsolete. Remove it while preserving any user-managed lines outside
-/// the markers. A no-op when the root file is absent or carries no maestro
-/// block. If the strip empties the file -- it held nothing but maestro's block,
-/// so there is no user content to keep -- the root `.gitignore` is removed
-/// rather than left as a husk.
-///
-/// Call this only after the `.maestro/.gitignore` mirror has been written, so
-/// the maestro-internal paths are never momentarily un-ignored.
+/// Earlier installs wrote maestro-internal ignore rules into the repo-root
+/// `.gitignore`. New installs keep only agent-local config files there and put
+/// internal paths under `.maestro/.gitignore`. This cleanup is a no-op once the
+/// root block has been rewritten to the current agent-settings body.
 pub(crate) fn migrate_legacy_root_gitignore(paths: &MaestroPaths) -> Result<()> {
     let path = managed_mirror_path(paths, ".gitignore")?;
     let Some(contents) = read_to_string_if_exists(&path)? else {
         return Ok(());
     };
+    if !marked_block_for_format(&contents, ManagedBlockFormat::HashComment)
+        .is_some_and(|block| block.contains(".maestro/"))
+    {
+        return Ok(());
+    }
     let stripped = remove_managed_block(&contents, ManagedBlockFormat::HashComment);
     if stripped == contents {
         return Ok(());

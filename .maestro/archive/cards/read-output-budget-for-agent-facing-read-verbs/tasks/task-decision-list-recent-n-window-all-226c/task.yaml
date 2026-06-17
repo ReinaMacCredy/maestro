@@ -55,7 +55,7 @@ extra:
     claim_checks:
     - claim: DecisionListEntry carries created_at+locked_at and an activity() key (locked_at else created_at); shared render_decision_list windows to 20 unless --all and prints 'N of M recent (--all for full; --feature <id> to scope)' only when windowed; --feature retains one feature's decisions; query decisions delegates to the same renderer (strict scan), decision list uses tolerant scan
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/6ef6f1c0-d4d9-41c5-9c86-d0fcaf53a2ba/events.jsonl
+      source: .maestro/runs/6ef6f1c0-d4d9-41c5-9c86-d0fcaf53a2ba/events.jsonl
     commands:
     - cmd: cargo build
       exit_code: 0

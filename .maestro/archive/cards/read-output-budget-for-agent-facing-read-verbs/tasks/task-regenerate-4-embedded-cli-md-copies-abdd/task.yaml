@@ -48,7 +48,7 @@ extra:
     claim_checks:
     - claim: After the list --all, decision list --all/--feature, and query decisions --all/--feature additions, all 4 embedded reference/cli.md copies are regenerated via the ignored regenerate_cli_md test and are byte-equal to the clap model; cli.md is excluded from the resources version guard tree hash so no skill bump was needed for it
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/6ef6f1c0-d4d9-41c5-9c86-d0fcaf53a2ba/events.jsonl
+      source: .maestro/runs/6ef6f1c0-d4d9-41c5-9c86-d0fcaf53a2ba/events.jsonl
     commands:
     - cmd: cargo build
       exit_code: 0

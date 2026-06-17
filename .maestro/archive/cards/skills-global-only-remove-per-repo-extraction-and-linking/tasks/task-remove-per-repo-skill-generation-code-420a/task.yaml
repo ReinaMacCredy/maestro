@@ -62,19 +62,19 @@ extra:
     claim_checks:
     - claim: init writes no .maestro/skills
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/1e7ed302-b661-4557-a1ea-abd5d3513548/events.jsonl
+      source: .maestro/runs/1e7ed302-b661-4557-a1ea-abd5d3513548/events.jsonl
     - claim: install creates no per-repo skills symlink and no Symlink lock entry
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/1e7ed302-b661-4557-a1ea-abd5d3513548/events.jsonl
+      source: .maestro/runs/1e7ed302-b661-4557-a1ea-abd5d3513548/events.jsonl
     - claim: legacy skills symlink pruned without recreating .maestro/skills
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/1e7ed302-b661-4557-a1ea-abd5d3513548/events.jsonl
+      source: .maestro/runs/1e7ed302-b661-4557-a1ea-abd5d3513548/events.jsonl
     - claim: global sync doctor and both-agent discovery pass
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/1e7ed302-b661-4557-a1ea-abd5d3513548/events.jsonl
+      source: .maestro/runs/1e7ed302-b661-4557-a1ea-abd5d3513548/events.jsonl
     - claim: cargo test full suite green
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/1e7ed302-b661-4557-a1ea-abd5d3513548/events.jsonl
+      source: .maestro/runs/1e7ed302-b661-4557-a1ea-abd5d3513548/events.jsonl
     commands:
     - cmd: cargo build
       exit_code: 0

@@ -58,13 +58,13 @@ extra:
     claim_checks:
     - claim: tests/resources_version_guard.rs has a playbook row (PLAYBOOK.md, 1.0.0, tree-hash over all 11 files) + a playbook match arm + playbook in the mapping arm, count 16->17, and the harness hash re-recorded for 1.15.0
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
+      source: .maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
     - claim: tests/architecture_imports.rs RESOURCE_EMBED_ALLOWLIST permits src/domain/extraction/playbook.rs -> embedded/playbook; resource_embeds_stay_in_owning_modules passes
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
+      source: .maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
     - claim: cargo test full suite exit 0 with no failures; cargo clippy --all-targets exit 0; cargo fmt --check clean for the files this feature touched
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
+      source: .maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
     commands:
     - cmd: cargo build
       exit_code: 0

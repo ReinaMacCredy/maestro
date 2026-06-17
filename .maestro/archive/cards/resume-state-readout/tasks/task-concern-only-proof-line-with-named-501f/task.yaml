@@ -65,13 +65,13 @@ extra:
     claim_checks:
     - claim: 'Default resume/status print a proof concern line ONLY on a concern for the focal task: Failed, or Missing while needs_verification; never on accepted/fresh.'
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/70483b87-02a0-4fd8-a658-f23cd32e4554/events.jsonl
+      source: .maestro/runs/70483b87-02a0-4fd8-a658-f23cd32e4554/events.jsonl
     - claim: 'Each concern names the exact repair: stale -> ''maestro task verify <id>'' framed as a refresh (HEAD moved, likely no code change) with (old7->new7); failed -> fix then re-verify; missing(expected) -> bind proof.'
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/70483b87-02a0-4fd8-a658-f23cd32e4554/events.jsonl
+      source: .maestro/runs/70483b87-02a0-4fd8-a658-f23cd32e4554/events.jsonl
     - claim: resume next-action and status proof_recovery argv now say 'maestro task verify <id>' instead of 'maestro query proof <id>'.
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/70483b87-02a0-4fd8-a658-f23cd32e4554/events.jsonl
+      source: .maestro/runs/70483b87-02a0-4fd8-a658-f23cd32e4554/events.jsonl
     commands:
     - cmd: cargo build
       exit_code: 0

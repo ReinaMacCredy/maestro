@@ -17,6 +17,7 @@ contracts:
       - title
       - status
       - parent
+      - project
       - deps
       - lane
       - claimed_by

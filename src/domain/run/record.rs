@@ -209,10 +209,7 @@ mod tests {
         });
         let event = normalize_event(&payload).expect("accepted event");
         assert!(
-            !event
-                .as_object()
-                .expect("object")
-                .contains_key("file_path"),
+            !event.as_object().expect("object").contains_key("file_path"),
             "a blank file_path is dropped"
         );
     }

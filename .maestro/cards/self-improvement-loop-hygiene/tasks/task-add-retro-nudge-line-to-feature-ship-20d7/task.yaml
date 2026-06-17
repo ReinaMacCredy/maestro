@@ -54,7 +54,7 @@ extra:
     claim_checks:
     - claim: feature ship success output now ends with the retro nudge naming the real verb maestro harness propose
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/cli-2026-06-12/events.jsonl
+      source: .maestro/runs/cli-2026-06-12/events.jsonl
     commands:
     - cmd: cargo build
       exit_code: 0

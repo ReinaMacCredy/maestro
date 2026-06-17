@@ -56,13 +56,13 @@ extra:
     claim_checks:
     - claim: maestro init into a scratch repo writes .maestro/playbook/ with 11 files (PLAYBOOK.md + 10 language guides incl rust.md)
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
+      source: .maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
     - claim: 'sync --dry-run reports the playbook as exactly one folder line: ''skip playbook (1.0.0)'''
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
+      source: .maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
     - claim: an edited playbook file survives sync at matching version; a behind-version (0.9.0) install refreshes to 1.0.0, backs up all 11 files, and restores the edited file verbatim
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
+      source: .maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
     commands:
     - cmd: cargo build
       exit_code: 0

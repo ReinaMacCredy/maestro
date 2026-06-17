@@ -64,10 +64,10 @@ extra:
     claim_checks:
     - claim: 'RED: integration tests resume_and_status_show_git_line_and_clean_note_for_ship_or_verify_state and resume_and_status_omit_clean_note_when_next_verb_is_not_ship_shaped failed before impl (no git line rendered)'
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/70483b87-02a0-4fd8-a658-f23cd32e4554/events.jsonl
+      source: .maestro/runs/70483b87-02a0-4fd8-a658-f23cd32e4554/events.jsonl
     - claim: 'GREEN: git line + contextual clean note render on resume+status; non-ship verb and clean worktree both suppress the note; primitive ship/verify predicate unit-tested'
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/70483b87-02a0-4fd8-a658-f23cd32e4554/events.jsonl
+      source: .maestro/runs/70483b87-02a0-4fd8-a658-f23cd32e4554/events.jsonl
     commands:
     - cmd: cargo build
       exit_code: 0

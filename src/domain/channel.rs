@@ -6,12 +6,10 @@
 //!
 //! On-disk shape under `.maestro/channels/` (gitignored, machine-local):
 //!   `<key>.jsonl`         line 1 = `{"pair":[a,b]}` header (authoritative),
-//!                         lines 2.. = `{ts,from_card,from_session,text}`.
-//!   `<key>.cur-<cardkey>` the viewer's read-through cursor: the ts of the
-//!                         newest message they have seen (a point, not an
-//!                         offset). A read re-shows only strictly-newer partner
-//!                         messages, so the same cursor stays correct when the
-//!                         channel is merged across several worktree files.
+//!                         lines 2.. = `{id,ts,from_card,from_session,text}`.
+//!   `<key>.cur-<cardkey>` the viewer's read-through cursor: the newest seen ts
+//!                         plus exact message ids at that ts. Legacy bare-ts
+//!                         cursors still read as timestamp-only cursors.
 //!
 //! `key` is a short hash of the sorted lowercased id pair, so both cards derive
 //! the same channel; `cardkey` is a short hash of the viewer's card id, so the
@@ -23,9 +21,11 @@
 //! a pair by ts; because a message lives in exactly one worktree's file there is
 //! nothing to dedup, only to interleave.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::ErrorKind;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, bail};
 use serde_json::{Value, json};
@@ -34,17 +34,20 @@ use crate::domain::run::{append_jsonl_line, open_managed_appendable};
 use crate::foundation::core::hash::sha256_hex;
 use crate::foundation::core::managed_path::{SymlinkPolicy, managed_path};
 use crate::foundation::core::paths::MaestroPaths;
-use crate::foundation::core::time::utc_now_timestamp;
+use crate::foundation::core::time::{parse_utc_timestamp, utc_now_timestamp};
 
 /// Truncation length for the hashed channel and cursor keys: enough to make a
 /// collision astronomically unlikely while keeping filenames short. A collision
 /// is still caught by the authoritative header check, never silently merged.
 const KEY_LEN: usize = 16;
+const CURSOR_SCHEMA_VERSION: &str = "maestro.channel-cursor.v1";
+static MESSAGE_ID_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// One message line. Timestamps are fixed-width RFC3339 millis, so a string
 /// compare on `ts` is a chronological compare -- the cursor and the union sort
 /// both rely on it.
 pub struct Message {
+    pub id: Option<String>,
     pub ts: String,
     pub from_card: String,
     pub from_session: String,
@@ -61,14 +64,15 @@ pub struct Channel {
 
 impl Channel {
     /// Messages `viewer` has not read: from the partner (never the viewer's own)
-    /// and strictly newer than `through` (the ts of the newest message the
-    /// viewer has already seen). `None` means nothing has been read, so every
-    /// partner message is unread. Own messages are auto-seen and never counted.
+    /// and either newer than the cursor or, for exact cursors, missing from the
+    /// cursor's same-timestamp seen set. Own messages are auto-seen and never
+    /// counted.
     pub fn unread(&self, viewer: &str, through: Option<&str>) -> Vec<&Message> {
+        let cursor = through.and_then(parse_cursor);
         self.messages
             .iter()
             .filter(|message| message.from_card != viewer)
-            .filter(|message| through.is_none_or(|seen| message.ts.as_str() > seen))
+            .filter(|message| cursor.as_ref().is_none_or(|seen| !seen.covers(message)))
             .collect()
     }
 
@@ -76,29 +80,26 @@ impl Channel {
     /// the context window a read prints above the unread block. Seen means a
     /// partner message at or before `through`; `None` yields no context.
     pub fn seen_context(&self, viewer: &str, through: Option<&str>, limit: usize) -> Vec<&Message> {
-        let Some(through) = through else {
+        let Some(cursor) = through.and_then(parse_cursor) else {
             return Vec::new();
         };
         let mut seen: Vec<&Message> = self
             .messages
             .iter()
-            .filter(|message| message.from_card != viewer && message.ts.as_str() <= through)
+            .filter(|message| message.from_card != viewer && cursor.covers(message))
             .collect();
         let start = seen.len().saturating_sub(limit);
         seen.split_off(start)
     }
 
-    /// The ts the partner has read through, given their stored cursor ts: the
-    /// latest message at or before it. `None` when the peer has no cursor here --
-    /// which covers "peer hasn't read" and a peer on another machine or worktree
-    /// whose cursor lives elsewhere (blank, never a wrong timestamp;
-    /// `dec-msg-read-signal-partner-read-through-2035`).
+    /// The ts the partner has read through, given their stored cursor. `None`
+    /// when the peer has no cursor.
     pub fn read_through(&self, peer_through: Option<&str>) -> Option<&str> {
-        let through = peer_through?;
+        let through = peer_through.and_then(parse_cursor)?;
         self.messages
             .iter()
             .rev()
-            .find(|message| message.ts.as_str() <= through)
+            .find(|message| through.covers(message))
             .map(|message| message.ts.as_str())
     }
 
@@ -151,8 +152,10 @@ pub fn send(
     } else {
         verify_header(paths, &key, &pair)?;
     }
+    let ts = utc_now_timestamp();
     let message = json!({
-        "ts": utc_now_timestamp(),
+        "id": new_message_id(&ts, from_card, from_session, text),
+        "ts": ts,
         "from_card": from_card,
         "from_session": from_session,
         "text": text,
@@ -231,18 +234,17 @@ pub fn channels_for_union(roots: &[MaestroPaths], card: &str) -> Result<Vec<Chan
         .collect())
 }
 
-/// The viewer's stored read-through cursor (the newest-seen message ts) for
-/// channel `key`, or `None` when unread. A legacy byte-offset cursor (pure
-/// digits, no `T`) or an empty file also reads as `None` ("nothing seen yet"):
-/// a benign over-show on the gitignored, ephemeral channel rather than a parse
-/// error -- the next read re-stamps it as a ts.
+/// The viewer's stored read-through cursor for channel `key`, or `None` when
+/// unread. A legacy byte-offset cursor, malformed cursor, or empty file reads as
+/// `None`: a benign over-show on the gitignored, ephemeral channel rather than a
+/// parse error.
 pub fn cursor(paths: &MaestroPaths, key: &str, viewer: &str) -> Result<Option<String>> {
     let relative_path = cursor_relative_path(key, viewer);
     let path = managed_path(paths, &relative_path, SymlinkPolicy::RejectAllComponents)?;
     match fs::read_to_string(&path) {
         Ok(text) => {
             let trimmed = text.trim();
-            if trimmed.contains('T') {
+            if parse_cursor(trimmed).is_some() {
                 Ok(Some(trimmed.to_string()))
             } else {
                 Ok(None)
@@ -253,12 +255,46 @@ pub fn cursor(paths: &MaestroPaths, key: &str, viewer: &str) -> Result<Option<St
     }
 }
 
+/// Read the newest cursor for `viewer` across worktree roots, merging exact
+/// same-timestamp seen ids when several roots have read to the same point.
+pub fn cursor_union(roots: &[MaestroPaths], key: &str, viewer: &str) -> Result<Option<String>> {
+    let mut merged: Option<CursorState> = None;
+    for paths in roots {
+        let Some(raw) = cursor(paths, key, viewer)? else {
+            continue;
+        };
+        let Some(state) = parse_cursor(&raw) else {
+            continue;
+        };
+        match &mut merged {
+            None => merged = Some(state),
+            Some(current) => current.merge(state),
+        }
+    }
+    Ok(merged.map(|state| state.to_storage()))
+}
+
 /// Advance the viewer's cursor for channel `key` to `through_ts` (the newest
 /// message ts shown by a read). managed_path rejects a symlinked cursor leaf.
 pub fn set_cursor(paths: &MaestroPaths, key: &str, viewer: &str, through_ts: &str) -> Result<()> {
+    ensure_channels_dir(paths)?;
     let relative_path = cursor_relative_path(key, viewer);
     let path = managed_path(paths, &relative_path, SymlinkPolicy::RejectAllComponents)?;
     fs::write(&path, format!("{through_ts}\n"))
+        .with_context(|| format!("failed to write {relative_path}"))
+}
+
+/// Advance the viewer's cursor to the newest loaded message, preserving exact
+/// ids for every message at that timestamp so later same-ms messages remain
+/// unread.
+pub fn set_cursor_to_latest(paths: &MaestroPaths, channel: &Channel, viewer: &str) -> Result<()> {
+    let Some(cursor) = CursorState::for_latest(channel) else {
+        return Ok(());
+    };
+    ensure_channels_dir(paths)?;
+    let relative_path = cursor_relative_path(&channel.key, viewer);
+    let path = managed_path(paths, &relative_path, SymlinkPolicy::RejectAllComponents)?;
+    fs::write(&path, format!("{}\n", cursor.to_storage()))
         .with_context(|| format!("failed to write {relative_path}"))
 }
 
@@ -278,6 +314,129 @@ fn channel_relative_path(key: &str) -> String {
 fn cursor_relative_path(key: &str, viewer: &str) -> String {
     let card_key = &sha256_hex(viewer.to_lowercase().as_bytes())[..KEY_LEN];
     format!(".maestro/channels/{key}.cur-{card_key}")
+}
+
+fn ensure_channels_dir(paths: &MaestroPaths) -> Result<()> {
+    let dir = managed_path(
+        paths,
+        ".maestro/channels",
+        SymlinkPolicy::RejectAllComponents,
+    )?;
+    fs::create_dir_all(&dir).with_context(|| format!("failed to create {}", dir.display()))
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct CursorState {
+    through_ts: String,
+    seen_at_through: BTreeSet<String>,
+    exact: bool,
+}
+
+impl CursorState {
+    fn timestamp_only(through_ts: String) -> Self {
+        Self {
+            through_ts,
+            seen_at_through: BTreeSet::new(),
+            exact: false,
+        }
+    }
+
+    fn exact(through_ts: String, seen_at_through: BTreeSet<String>) -> Self {
+        Self {
+            through_ts,
+            seen_at_through,
+            exact: true,
+        }
+    }
+
+    fn for_latest(channel: &Channel) -> Option<Self> {
+        let through_ts = channel.latest_ts()?.to_string();
+        let seen_at_through = channel
+            .messages
+            .iter()
+            .filter(|message| message.ts == through_ts)
+            .map(message_cursor_id)
+            .collect();
+        Some(Self::exact(through_ts, seen_at_through))
+    }
+
+    fn covers(&self, message: &Message) -> bool {
+        match message.ts.as_str().cmp(self.through_ts.as_str()) {
+            std::cmp::Ordering::Less => true,
+            std::cmp::Ordering::Greater => false,
+            std::cmp::Ordering::Equal if !self.exact => true,
+            std::cmp::Ordering::Equal => self.seen_at_through.contains(&message_cursor_id(message)),
+        }
+    }
+
+    fn merge(&mut self, other: Self) {
+        match other.through_ts.cmp(&self.through_ts) {
+            std::cmp::Ordering::Less => {}
+            std::cmp::Ordering::Greater => *self = other,
+            std::cmp::Ordering::Equal if self.exact && other.exact => {
+                self.seen_at_through.extend(other.seen_at_through);
+            }
+            std::cmp::Ordering::Equal => {
+                self.exact = false;
+                self.seen_at_through.clear();
+            }
+        }
+    }
+
+    fn to_storage(&self) -> String {
+        if !self.exact {
+            return self.through_ts.clone();
+        }
+        let seen: Vec<&str> = self.seen_at_through.iter().map(String::as_str).collect();
+        json!({
+            "schema_version": CURSOR_SCHEMA_VERSION,
+            "through_ts": self.through_ts,
+            "seen_at_through": seen,
+        })
+        .to_string()
+    }
+}
+
+fn parse_cursor(raw: &str) -> Option<CursorState> {
+    let raw = raw.trim();
+    if parse_utc_timestamp(raw).is_some() {
+        return Some(CursorState::timestamp_only(raw.to_string()));
+    }
+    let value: Value = serde_json::from_str(raw).ok()?;
+    let through_ts = value.get("through_ts").and_then(Value::as_str)?;
+    parse_utc_timestamp(through_ts)?;
+    let seen_at_through = value
+        .get("seen_at_through")
+        .and_then(Value::as_array)?
+        .iter()
+        .filter_map(Value::as_str)
+        .map(str::to_string)
+        .collect();
+    Some(CursorState::exact(through_ts.to_string(), seen_at_through))
+}
+
+fn new_message_id(ts: &str, from_card: &str, from_session: &str, text: &str) -> String {
+    let sequence = MESSAGE_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or(0);
+    sha256_hex(
+        format!("{ts}\x1f{from_card}\x1f{from_session}\x1f{text}\x1f{nonce}\x1f{sequence}")
+            .as_bytes(),
+    )
+}
+
+fn message_cursor_id(message: &Message) -> String {
+    message.id.clone().unwrap_or_else(|| {
+        sha256_hex(
+            format!(
+                "{}\x1f{}\x1f{}\x1f{}",
+                message.ts, message.from_card, message.from_session, message.text
+            )
+            .as_bytes(),
+        )
+    })
 }
 
 /// Merge channels that share a key (the same pair, one file per worktree) into a
@@ -371,6 +530,7 @@ fn parse_message(value: &Value) -> Message {
             .to_string()
     };
     Message {
+        id: value.get("id").and_then(Value::as_str).map(str::to_string),
         ts: field("ts"),
         from_card: field("from_card"),
         from_session: field("from_session"),
@@ -422,6 +582,9 @@ mod tests {
             messages: messages
                 .iter()
                 .map(|(ts, from, text)| Message {
+                    id: Some(sha256_hex(
+                        format!("{ts}\x1f{from}\x1fsess\x1f{text}").as_bytes(),
+                    )),
                     ts: (*ts).to_string(),
                     from_card: (*from).to_string(),
                     from_session: "sess".to_string(),
@@ -461,7 +624,9 @@ mod tests {
         assert_eq!(unread_for_a[0].text, "two");
 
         // Reading stores the newest ts as A's cursor; nothing unread remains.
-        let newest = channel.latest_ts().expect("non-empty channel has a latest ts");
+        let newest = channel
+            .latest_ts()
+            .expect("non-empty channel has a latest ts");
         set_cursor(&paths, &channel.key, "card-a", newest).expect("cursor write");
         let after = cursor(&paths, &channel.key, "card-a").expect("cursor read");
         assert_eq!(after.as_deref(), Some(newest));
@@ -487,9 +652,8 @@ mod tests {
         assert_eq!(unread.len(), 1);
         assert_eq!(unread[0].text, "second at T1");
 
-        // KNOWN EDGE (qa.md baseline gap): a partner message stamped at exactly
-        // the stored cursor ts reads as already-seen. After reading through T1, a
-        // same-ts T1 message does not re-surface -- accepted, not fixed.
+        // Exact cursors remember which same-ts messages were already shown, so
+        // a later message stamped at the same millisecond still surfaces.
         let same_ts = channel_with(
             ["card-a", "card-b"],
             &[
@@ -497,12 +661,50 @@ mod tests {
                 ("2026-06-17T00:00:01.000Z", "card-b", "arrived later at T1"),
             ],
         );
-        assert!(
-            same_ts
-                .unread("card-a", Some("2026-06-17T00:00:01.000Z"))
-                .is_empty(),
-            "a same-ts post-read message is treated as seen (documented edge)"
+        let cursor = CursorState::exact(
+            "2026-06-17T00:00:01.000Z".to_string(),
+            BTreeSet::from([message_cursor_id(&same_ts.messages[0])]),
+        )
+        .to_storage();
+        let unread = same_ts.unread("card-a", Some(&cursor));
+        assert_eq!(unread.len(), 1);
+        assert_eq!(unread[0].text, "arrived later at T1");
+    }
+
+    #[test]
+    fn cursor_union_merges_exact_same_timestamp_seen_sets() {
+        let temp_a = TestTempDir::new("maestro-channel-cursor-union-a");
+        let temp_b = TestTempDir::new("maestro-channel-cursor-union-b");
+        let paths_a = MaestroPaths::new(temp_a.path());
+        let paths_b = MaestroPaths::new(temp_b.path());
+        let channel_a = channel_with(
+            ["card-a", "card-b"],
+            &[("2026-06-17T00:00:01.000Z", "card-b", "seen in A")],
         );
+        let channel_b = channel_with(
+            ["card-a", "card-b"],
+            &[("2026-06-17T00:00:01.000Z", "card-b", "seen in B")],
+        );
+
+        set_cursor_to_latest(&paths_a, &channel_a, "card-a").expect("cursor A should write");
+        set_cursor_to_latest(&paths_b, &channel_b, "card-a").expect("cursor B should write");
+
+        let roots = [paths_a, paths_b];
+        let cursor = cursor_union(&roots, &channel_a.key, "card-a")
+            .expect("cursor union should read")
+            .expect("merged cursor should exist");
+        let merged = channel_with(
+            ["card-a", "card-b"],
+            &[
+                ("2026-06-17T00:00:01.000Z", "card-b", "seen in A"),
+                ("2026-06-17T00:00:01.000Z", "card-b", "seen in B"),
+                ("2026-06-17T00:00:01.000Z", "card-b", "unseen at same ts"),
+            ],
+        );
+
+        let unread = merged.unread("card-a", Some(&cursor));
+        assert_eq!(unread.len(), 1);
+        assert_eq!(unread[0].text, "unseen at same ts");
     }
 
     #[test]
@@ -546,6 +748,28 @@ mod tests {
             cursor(&paths, &key, "card-a").expect("legacy cursor should not error"),
             None,
             "a numeric (no-'T') cursor reads as nothing seen"
+        );
+    }
+
+    #[test]
+    fn malformed_timestamp_cursor_reads_as_nothing_seen() {
+        let temp = TestTempDir::new("maestro-channel-bad-cursor");
+        let paths = MaestroPaths::new(temp.path());
+        let (_, key) = identity("card-a", "card-b");
+
+        let channels = temp.path().join(".maestro/channels");
+        fs::create_dir_all(&channels).expect("channels dir should be creatable");
+        let card_key = &sha256_hex("card-a".as_bytes())[..KEY_LEN];
+        fs::write(
+            channels.join(format!("{key}.cur-{card_key}")),
+            "not-a-Time\n",
+        )
+        .expect("bad cursor should be writable");
+
+        assert_eq!(
+            cursor(&paths, &key, "card-a").expect("bad cursor should not error"),
+            None,
+            "a malformed timestamp cursor reads as nothing seen"
         );
     }
 

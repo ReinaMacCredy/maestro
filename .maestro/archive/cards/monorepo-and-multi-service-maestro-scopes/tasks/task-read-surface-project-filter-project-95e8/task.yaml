@@ -61,10 +61,10 @@ extra:
     claim_checks:
     - claim: 'RED: project_scope_read_surface grouping and json-flat tests failed before impl'
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/87b527b0-94e5-4e97-9b90-59041dbeb46b/events.jsonl
+      source: .maestro/runs/87b527b0-94e5-4e97-9b90-59041dbeb46b/events.jsonl
     - claim: 'GREEN: cargo test 924 passed, 0 failed'
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/87b527b0-94e5-4e97-9b90-59041dbeb46b/events.jsonl
+      source: .maestro/runs/87b527b0-94e5-4e97-9b90-59041dbeb46b/events.jsonl
     commands:
     - cmd: cargo build
       exit_code: 0

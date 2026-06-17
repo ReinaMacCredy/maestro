@@ -51,16 +51,16 @@ extra:
     claim_checks:
     - claim: 'HARNESS ## Code style instructs maestro playbook <lang> with no .maestro/playbook/<lang>.md path'
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/7dcac9f0-8973-4e23-aaab-193c084801cd/events.jsonl
+      source: .maestro/runs/7dcac9f0-8973-4e23-aaab-193c084801cd/events.jsonl
     - claim: HARNESS frontmatter version > 1.15.0
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/7dcac9f0-8973-4e23-aaab-193c084801cd/events.jsonl
+      source: .maestro/runs/7dcac9f0-8973-4e23-aaab-193c084801cd/events.jsonl
     - claim: CLAUDE.md/AGENTS.md mirror blocks unchanged @-pointers
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/7dcac9f0-8973-4e23-aaab-193c084801cd/events.jsonl
+      source: .maestro/runs/7dcac9f0-8973-4e23-aaab-193c084801cd/events.jsonl
     - claim: resources_version_guard + full suite green
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/7dcac9f0-8973-4e23-aaab-193c084801cd/events.jsonl
+      source: .maestro/runs/7dcac9f0-8973-4e23-aaab-193c084801cd/events.jsonl
     commands:
     - cmd: cargo build
       exit_code: 0

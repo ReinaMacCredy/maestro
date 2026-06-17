@@ -45,10 +45,10 @@ extra:
     claim_checks:
     - claim: 'RED: harness_config_round_trips_projects_declaration failed before impl (no field projects on HarnessConfig)'
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/87b527b0-94e5-4e97-9b90-59041dbeb46b/events.jsonl
+      source: .maestro/runs/87b527b0-94e5-4e97-9b90-59041dbeb46b/events.jsonl
     - claim: 'GREEN: cargo test 903 passed, 0 failed'
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/87b527b0-94e5-4e97-9b90-59041dbeb46b/events.jsonl
+      source: .maestro/runs/87b527b0-94e5-4e97-9b90-59041dbeb46b/events.jsonl
     commands:
     - cmd: cargo build
       exit_code: 0

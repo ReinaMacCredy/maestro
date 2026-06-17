@@ -55,7 +55,7 @@ extra:
     claim_checks:
     - claim: embedded/skills/maestro-design/SKILL.md Stop line now resumes from 'maestro decision list --feature <id>' (not bare list); version 1.13.0 -> 1.14.0; resources_version_guard maestro-design tuple re-recorded to the new tree-hash; resume.rs prior_decisions is unchanged (not a reopen of A3)
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/6ef6f1c0-d4d9-41c5-9c86-d0fcaf53a2ba/events.jsonl
+      source: .maestro/runs/6ef6f1c0-d4d9-41c5-9c86-d0fcaf53a2ba/events.jsonl
     commands:
     - cmd: cargo build
       exit_code: 0

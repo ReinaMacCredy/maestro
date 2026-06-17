@@ -48,7 +48,7 @@ extra:
     claim_checks:
     - claim: 'cargo test card_touch + run::event: card_touch_event_carries_card_id_and_normalizes passed; 3 run::event unit tests passed'
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/df536043-8689-4054-89d6-f29d1590ba93/events.jsonl
+      source: .maestro/runs/df536043-8689-4054-89d6-f29d1590ba93/events.jsonl
     commands:
     - cmd: cargo build
       exit_code: 0

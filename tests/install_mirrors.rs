@@ -26,25 +26,35 @@ fn mirror_plan_writes_managed_content_for_claude() {
     assert!(plans.iter().any(|plan| {
         plan.relative_path == "CLAUDE.md" && plan.contents.contains("@.maestro/harness/HARNESS.md")
     }));
-    // The gitignore mirror now targets the maestro-owned `.maestro/.gitignore`,
-    // not the repo-root file. Its patterns are relative to `.maestro/` (no
-    // `.maestro/` prefix) and cover maestro-internal paths only.
+    // The nested gitignore covers maestro-internal paths only; a small root
+    // gitignore block protects the agent-local settings files that live outside
+    // `.maestro/`.
     let gitignore_plan = plans
         .iter()
         .find(|plan| plan.relative_path == ".maestro/.gitignore")
         .expect("invariant: .maestro/.gitignore plan should exist");
-    assert!(!plans.iter().any(|plan| plan.relative_path == ".gitignore"));
+    let root_gitignore_plan = plans
+        .iter()
+        .find(|plan| plan.relative_path == ".gitignore")
+        .expect("invariant: root .gitignore plan should exist");
     assert!(gitignore_plan.contents.contains("runs/"));
     assert!(gitignore_plan.contents.contains("update-check"));
     assert!(!gitignore_plan.contents.contains(".maestro/"));
-    // Agent settings live outside `.maestro/` and are no longer maestro's
-    // gitignore concern; `playbook/` stays tracked for the peer feature.
     assert!(
         !gitignore_plan
             .contents
             .contains(".claude/settings.local.json")
     );
     assert!(!gitignore_plan.contents.contains(".codex/hooks.json"));
+    assert!(
+        root_gitignore_plan
+            .contents
+            .contains(".claude/settings.local.json")
+    );
+    assert!(root_gitignore_plan.contents.contains(".codex/hooks.json"));
+    assert!(!root_gitignore_plan.contents.contains(".maestro/runs/"));
+    assert!(!root_gitignore_plan.contents.contains("runs/"));
+    // `playbook/` stays tracked for the peer feature.
     assert!(!gitignore_plan.contents.contains("playbook/"));
     // Skills are global-only now: the gitignore no longer ignores the retired
     // per-repo skills symlink paths.

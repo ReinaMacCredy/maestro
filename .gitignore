@@ -20,6 +20,7 @@
 
 # Maestro local cache (not covered by the managed block above)
 .maestro/update-check
+.maestro/index/
 
 # macOS / local noise
 .DS_Store

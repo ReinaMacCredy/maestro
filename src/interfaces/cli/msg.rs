@@ -106,10 +106,9 @@ fn list(scope: Option<&str>) -> Result<()> {
                     Some(_) => "from them",
                     None => "-",
                 };
-                // The partner's read-through is derived from their stored cursor,
-                // omitted when absent (peer hasn't read / cross-machine or
-                // cross-worktree, where their cursor lives in another tree).
-                let peer_cursor = channel::cursor(&paths, &channel.key, partner)?;
+                // The partner's read-through is derived from their newest cursor
+                // across worktrees, omitted when absent (peer hasn't read).
+                let peer_cursor = cursor(&paths, channel, partner)?;
                 let read_through = match channel.read_through(peer_cursor.as_deref()) {
                     Some(through) => format!("  peer read through {through}"),
                     None => String::new(),
@@ -133,9 +132,7 @@ fn list(scope: Option<&str>) -> Result<()> {
                 };
                 println!("  {who}  {}  {}", message.ts, message.text);
             }
-            if let Some(newest) = channel.latest_ts() {
-                channel::set_cursor(&paths, &channel.key, &me, newest)?;
-            }
+            channel::set_cursor_to_latest(&paths, channel, &me)?;
         }
     }
     Ok(())
@@ -160,9 +157,7 @@ fn read_channel(paths: &MaestroPaths, me: &str, channel: &Channel) -> Result<()>
             println!("  * {}  {}", message.ts, message.text);
         }
     }
-    if let Some(newest) = channel.latest_ts() {
-        channel::set_cursor(paths, &channel.key, me, newest)?;
-    }
+    channel::set_cursor_to_latest(paths, channel, me)?;
     Ok(())
 }
 
@@ -177,9 +172,6 @@ pub(super) fn inbox_banner() -> Result<()> {
         return Ok(());
     };
     let paths = MaestroPaths::new(root);
-    if !paths.channels_dir().exists() {
-        return Ok(());
-    }
     let Some(me) = super::current_card(&paths) else {
         return Ok(());
     };
@@ -228,7 +220,7 @@ fn visible_channels_union(paths: &MaestroPaths, me: &card::schema::Card) -> Resu
 }
 
 fn cursor(paths: &MaestroPaths, channel: &Channel, me: &str) -> Result<Option<String>> {
-    channel::cursor(paths, &channel.key, me)
+    channel::cursor_union(&worktree_roots(paths), &channel.key, me)
 }
 
 fn empty_note(scope: Option<&str>) -> String {

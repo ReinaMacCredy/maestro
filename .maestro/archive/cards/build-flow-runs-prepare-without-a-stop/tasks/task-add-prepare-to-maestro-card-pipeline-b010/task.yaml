@@ -49,7 +49,7 @@ extra:
     claim_checks:
     - claim: embedded/skills/maestro-card/SKILL.md:87 pipeline names prepare; :3 version 1.8.0; reference/feature.md:59-64 states straight-through build + freeze-and-park
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/d7764a32-6ea3-4c17-b3c2-30ba0d37050e/events.jsonl
+      source: .maestro/runs/d7764a32-6ea3-4c17-b3c2-30ba0d37050e/events.jsonl
     commands:
     - cmd: cargo build
       exit_code: 0

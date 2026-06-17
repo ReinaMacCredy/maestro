@@ -55,13 +55,13 @@ extra:
     claim_checks:
     - claim: active_sessions returns one row per session bucket with mode (latest skill_activation), bound card (latest card_touch), last action, age, and a presence label derived from last-event recency and kind
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/df536043-8689-4054-89d6-f29d1590ba93/events.jsonl
+      source: .maestro/runs/df536043-8689-4054-89d6-f29d1590ba93/events.jsonl
     - claim: a recent Stop reads as waiting (not excluded) and a recent non-Stop event including card_touch reads as working; older-but-in-window is idle, beyond the window is stale
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/df536043-8689-4054-89d6-f29d1590ba93/events.jsonl
+      source: .maestro/runs/df536043-8689-4054-89d6-f29d1590ba93/events.jsonl
     - claim: 'the model adds no hook: it is pure read-time math, skips sessions whose latest event has no parseable ts, and collapses a merged cli-date bucket to one row'
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/df536043-8689-4054-89d6-f29d1590ba93/events.jsonl
+      source: .maestro/runs/df536043-8689-4054-89d6-f29d1590ba93/events.jsonl
     commands:
     - cmd: cargo build
       exit_code: 0

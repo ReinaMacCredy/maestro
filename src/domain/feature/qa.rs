@@ -20,7 +20,9 @@ use std::path::Path;
 use anyhow::{Result, anyhow};
 use serde::Deserialize;
 
-use crate::domain::feature::schema::{AmendEntry, AmendLog, QaDeclaration, normalize_acceptance_id};
+use crate::domain::feature::schema::{
+    AmendEntry, AmendLog, QaDeclaration, normalize_acceptance_id,
+};
 use crate::foundation::core::fs::read_to_string_if_exists;
 
 /// The parsed `qa.md` baseline: the amend-log position it was captured against and
@@ -505,7 +507,10 @@ mod tests {
         // A non-goal/open-question amend grows no behavioral surface, so the
         // qa:none waiver stays intact — mirroring ship_qa_gaps E.1, which only
         // re-arms on a behavioral amend.
-        assert!(qa_declared_none_fresh(Some(&qa_none(0)), &[non_goal_amend()]));
+        assert!(qa_declared_none_fresh(
+            Some(&qa_none(0)),
+            &[non_goal_amend()]
+        ));
     }
 
     #[test]

@@ -24,7 +24,11 @@ pub(super) fn collect_evidence(
     Ok(evidence)
 }
 
-pub(super) fn check_claims(claims: &[String], evidence: &[EvidenceText]) -> Vec<ClaimCheck> {
+pub(super) fn check_claims(
+    claims: &[String],
+    evidence: &[EvidenceText],
+    repo_root: &Path,
+) -> Vec<ClaimCheck> {
     claims
         .iter()
         .map(|claim| {
@@ -37,7 +41,7 @@ pub(super) fn check_claims(claims: &[String], evidence: &[EvidenceText]) -> Vec<
                         .iter()
                         .any(|candidate| normalize_claim(candidate) == normalized_claim)
                 })
-                .map(|source| source.path.display().to_string());
+                .map(|source| display_path(repo_root, &source.path));
             ClaimCheck {
                 claim: claim.clone(),
                 matched: source.is_some(),
@@ -157,6 +161,13 @@ fn proof_text_claims(text: &str) -> Vec<String> {
         .collect()
 }
 
+fn display_path(root: &Path, path: &Path) -> String {
+    path.strip_prefix(root)
+        .unwrap_or(path)
+        .display()
+        .to_string()
+}
+
 fn normalize_claim(claim: &str) -> String {
     claim.split_whitespace().collect::<Vec<_>>().join(" ")
 }
@@ -190,5 +201,28 @@ fn collect_files(dir: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
         }
         Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
         Err(error) => Err(error).with_context(|| format!("failed to read {}", dir.display())),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn claim_sources_are_repo_relative_when_evidence_is_under_repo() {
+        let root = Path::new("/repo");
+        let evidence = vec![EvidenceText {
+            kind: EVENT_PROOF_SOURCE_KIND.to_string(),
+            path: root.join(".maestro/runs/run-1/events.jsonl"),
+            text: "claim-a".to_string(),
+            claims: vec!["claim-a".to_string()],
+        }];
+
+        let checks = check_claims(&["claim-a".to_string()], &evidence, root);
+
+        assert_eq!(
+            checks[0].source.as_deref(),
+            Some(".maestro/runs/run-1/events.jsonl")
+        );
     }
 }

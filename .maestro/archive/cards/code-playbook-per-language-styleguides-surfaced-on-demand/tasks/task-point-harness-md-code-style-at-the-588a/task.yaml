@@ -55,10 +55,10 @@ extra:
     claim_checks:
     - claim: HARNESS.md retains the 7 general bullets and adds a paragraph directing the agent to read .maestro/playbook/<lang>.md for the language being edited
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
+      source: .maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
     - claim: HARNESS.md frontmatter version is 1.15.0 and the src/domain/harness/extract.rs version assertion was updated to Some(1.15.0) to match
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
+      source: .maestro/runs/e3f059b0-58a1-4e0a-b483-6c32c9cda00e/events.jsonl
     commands:
     - cmd: cargo build
       exit_code: 0

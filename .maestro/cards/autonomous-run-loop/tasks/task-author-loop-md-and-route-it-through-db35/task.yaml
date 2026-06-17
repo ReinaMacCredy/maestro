@@ -69,10 +69,10 @@ extra:
     claim_checks:
     - claim: loop.md exists and carries replenish, stops, boundaries, morning report, scheduler variant; SKILL.md routes reference/loop.md at version 1.3.0; HARNESS.md menu routes unattended loop at version 1.12.0; work.md untouched; resources_version_guard 4 passed; skills_extract 21 passed
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/cli-2026-06-12/events.jsonl
+      source: .maestro/runs/cli-2026-06-12/events.jsonl
     - claim: loop.md exists with the unattended loop policy; maestro-card SKILL.md version 1.5.0 routes reference/loop.md; HARNESS.md version 1.13.0 routes user away/asleep backlog work to unattended loop; work.md was not touched by c28f7ec8; cargo clippy -- -D warnings passed; cargo test passed
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/cli-2026-06-12/events.jsonl
+      source: .maestro/runs/cli-2026-06-12/events.jsonl
     commands:
     - cmd: cargo build
       exit_code: 0
