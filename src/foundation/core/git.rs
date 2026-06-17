@@ -157,11 +157,13 @@ mod tests {
     use std::collections::BTreeSet;
     use std::env;
     use std::fs;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static TEMP_DIR_COUNTER: AtomicU64 = AtomicU64::new(0);
 
     fn unique_base(label: &str) -> PathBuf {
         let pid = std::process::id();
-        let counter = std::sync::atomic::AtomicU64::new(0);
-        let nonce = counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let nonce = TEMP_DIR_COUNTER.fetch_add(1, Ordering::Relaxed);
         let dir = env::temp_dir().join(format!("maestro-wt-{label}-{pid}-{nonce}"));
         fs::create_dir_all(&dir).expect("temp base dir is creatable");
         dir

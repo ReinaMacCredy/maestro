@@ -429,6 +429,7 @@ fn run_domain_facade_does_not_publish_leaf_modules() {
             "hook_event_contract".to_string(),
             "load_run_evidence".to_string(),
             "managed_event_logs".to_string(),
+            "union_session_id".to_string(),
             "visit_managed_event_logs".to_string(),
             "visit_managed_events".to_string(),
             "warm_file_overlaps".to_string(),

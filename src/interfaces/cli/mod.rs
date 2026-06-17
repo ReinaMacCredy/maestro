@@ -10,6 +10,7 @@ use crate::domain::feature::{FeatureStatus, FeatureView};
 use crate::domain::proof;
 use crate::domain::run;
 use crate::domain::task::{TaskRecord, TaskState};
+use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::git;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::interfaces::hooks::record;
@@ -1520,15 +1521,12 @@ pub(super) fn resolve_project_in(
     // facade call is a plain root import (the sanctioned form), not a forbidden
     // deep `operations::harness::*` path under the architecture guard.
     use crate::operations::harness;
-    // Inference is best-effort metadata: a config that fails to load (e.g. a
-    // symlinked `.maestro` the read guard rejects, or a malformed file) degrades
-    // to no-inference rather than aborting the create the way an unconditional
-    // `?` would -- create never read the harness config before this.
-    let patterns = harness::load_config(paths)
-        .ok()
-        .flatten()
-        .map(|config| config.projects)
-        .unwrap_or_default();
+    let patterns = match harness::load_config(paths) {
+        Ok(Some(config)) => config.projects,
+        Ok(None) => Vec::new(),
+        Err(error) if is_managed_path_symlink_error(&error) => Vec::new(),
+        Err(error) => return Err(error),
+    };
     if patterns.is_empty() {
         return Ok(None);
     }
@@ -1538,6 +1536,15 @@ pub(super) fn resolve_project_in(
         &cwd,
         &patterns,
     ))
+}
+
+fn is_managed_path_symlink_error(error: &anyhow::Error) -> bool {
+    error.chain().any(|cause| {
+        matches!(
+            cause.downcast_ref::<MaestroError>(),
+            Some(MaestroError::ManagedPathContainsSymlink { .. })
+        )
+    })
 }
 
 pub(super) fn cli_run_id() -> String {

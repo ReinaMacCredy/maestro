@@ -430,6 +430,28 @@ fn create_without_projects_declaration_infers_nothing() {
     );
 }
 
+#[test]
+fn create_reports_malformed_projects_declaration_instead_of_dropping_scope() {
+    let temp = cards_repo("s2-infer-bad-config");
+    let repo = temp.path();
+    let harness_dir = repo.join(".maestro/harness");
+    fs::create_dir_all(&harness_dir).expect("invariant: harness dir should be creatable");
+    fs::write(
+        harness_dir.join("harness.yml"),
+        "schema_version: maestro.harness.v1\nprojects: [\n",
+    )
+    .expect("invariant: harness.yml should be writable");
+    let subfolder = repo.join("svc-pay/src");
+    fs::create_dir_all(&subfolder).expect("invariant: subfolder should be creatable");
+
+    let stderr = run_err(&subfolder, &["create", "-t", "bug", "Bad scope"]);
+
+    assert!(
+        stderr.contains("failed to parse") && stderr.contains("harness.yml"),
+        "malformed project config should be reported, not treated as no inference:\n{stderr}"
+    );
+}
+
 /// T3 ac-11 guard: a card created from any subfolder still lands in the single
 /// root `.maestro/cards/`; the subfolder cwd does not split the store.
 #[test]

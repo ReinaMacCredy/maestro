@@ -8,6 +8,7 @@
 
 use std::cmp::Reverse;
 use std::collections::BTreeMap;
+use std::path::{Component, Path};
 
 use anyhow::Result;
 
@@ -99,19 +100,29 @@ pub fn active_sessions(paths: &MaestroPaths, now: &str) -> Result<Vec<SessionAct
     active_sessions_union(std::slice::from_ref(paths), now)
 }
 
+/// Display/session key used by cross-worktree active rows. A single-root read
+/// keeps the historical session id; a union qualifies the id with the source
+/// worktree so same-named sessions never collapse into one row.
+pub fn union_session_id(paths: &MaestroPaths, roots: &[MaestroPaths], session_id: &str) -> String {
+    if roots.len() < 2 {
+        return session_id.to_string();
+    }
+    format!("{session_id}@{}", root_label(paths.repo_root()))
+}
+
 /// Build the cross-session liveness rows as of `now`, unioned over every
 /// worktree root. With a single root this is the local view; with the roots of
 /// every worktree (`git::worktree_roots`), sessions from sibling worktrees merge
-/// in as a read-only union -- the same session id seen in two roots collapses to
-/// one row taking its latest event across both. The union is read-only: it never
-/// writes outside any root and needs no flag to engage.
+/// in as a read-only union. Cross-worktree session ids are source-qualified so
+/// fallback or reused ids do not collapse distinct work. The union is read-only:
+/// it never writes outside any root and needs no flag to engage.
 pub fn active_sessions_union(roots: &[MaestroPaths], now: &str) -> Result<Vec<SessionActivity>> {
     let now_nanos = timestamp_nanos(now).unwrap_or(i128::MAX);
     let mut by_session: BTreeMap<String, Accumulator> = BTreeMap::new();
 
     for paths in roots {
         visit_managed_events(paths, |record| {
-            let session_id = record.session_id().to_string();
+            let session_id = union_session_id(paths, roots, record.session_id());
             let event = record.event();
             let Some(ts) = event.timestamp() else {
                 return Ok(());
@@ -252,10 +263,11 @@ pub fn warm_file_overlaps(paths: &MaestroPaths, now: &str) -> Result<Vec<FileOve
         if is_warm_edit(event)
             && let Some(file) = event.file_path()
         {
+            let file = normalize_warm_file_path(paths, file);
             let latest = warm
                 .entry(session_id)
                 .or_default()
-                .entry(file.to_string())
+                .entry(file)
                 .or_insert(i128::MIN);
             *latest = (*latest).max(ts_nanos);
         }
@@ -300,6 +312,43 @@ fn is_warm_edit(event: &RunEvent) -> bool {
         && event
             .tool_name()
             .is_some_and(|name| WARM_EDIT_TOOLS.contains(&name))
+}
+
+fn root_label(path: &Path) -> String {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| path.display().to_string())
+}
+
+fn normalize_warm_file_path(paths: &MaestroPaths, file: &str) -> String {
+    let trimmed = file.trim();
+    let path = Path::new(trimmed);
+    let relative = if path.is_absolute() {
+        path.strip_prefix(paths.repo_root()).unwrap_or(path)
+    } else {
+        path
+    };
+    let mut parts: Vec<String> = Vec::new();
+    for component in relative.components() {
+        match component {
+            Component::CurDir => {}
+            Component::Normal(part) => parts.push(part.to_string_lossy().to_string()),
+            Component::ParentDir => match parts.last() {
+                Some(last) if last != ".." => {
+                    parts.pop();
+                }
+                _ => parts.push("..".to_string()),
+            },
+            Component::RootDir | Component::Prefix(_) => return trimmed.to_string(),
+        }
+    }
+    if parts.is_empty() {
+        ".".to_string()
+    } else {
+        parts.join("/")
+    }
 }
 
 fn age_minutes_between(then_nanos: i128, now_nanos: i128) -> u64 {
@@ -534,10 +583,13 @@ mod tests {
         ];
         let union = active_sessions_union(&roots, NOW).expect("union reads every root");
         let ids: Vec<&str> = union.iter().map(|row| row.session_id.as_str()).collect();
-        assert_eq!(
-            ids,
-            ["s-main", "s-oauth"],
-            "both worktrees' sessions appear"
+        assert!(
+            ids.iter().any(|id| id.starts_with("s-main@")),
+            "main worktree session is root-qualified in a union: {ids:?}"
+        );
+        assert!(
+            ids.iter().any(|id| id.starts_with("s-oauth@")),
+            "linked worktree session is root-qualified in a union: {ids:?}"
         );
 
         let local = active_sessions(&roots[0], NOW).expect("single root reads only itself");
@@ -546,6 +598,46 @@ mod tests {
             local_ids,
             ["s-main"],
             "one worktree shows only local sessions"
+        );
+    }
+
+    #[test]
+    fn union_keeps_same_named_sessions_from_different_worktrees_distinct() {
+        let dir_a = TestTempDir::new("maestro-active-union-same-a");
+        let dir_b = TestTempDir::new("maestro-active-union-same-b");
+        seed(
+            dir_a.path(),
+            "cli-2026-06-14",
+            &[
+                r#"{"event_type":"card_touch","session_id":"cli-2026-06-14","card_id":"card-a","ts":"2026-06-14T11:59:00.000Z"}"#,
+            ],
+        );
+        seed(
+            dir_b.path(),
+            "cli-2026-06-14",
+            &[
+                r#"{"event_type":"card_touch","session_id":"cli-2026-06-14","card_id":"card-b","ts":"2026-06-14T11:58:00.000Z"}"#,
+            ],
+        );
+
+        let roots = [
+            MaestroPaths::new(dir_a.path().to_path_buf()),
+            MaestroPaths::new(dir_b.path().to_path_buf()),
+        ];
+        let rows = active_sessions_union(&roots, NOW).expect("union reads every root");
+
+        assert_eq!(
+            rows.len(),
+            2,
+            "same session id in two worktrees must not collapse"
+        );
+        let cards: Vec<&str> = rows
+            .iter()
+            .filter_map(|row| row.bound_card.as_deref())
+            .collect();
+        assert!(
+            cards.contains(&"card-a") && cards.contains(&"card-b"),
+            "both bound cards survive the union: {cards:?}"
         );
     }
 
@@ -584,6 +676,30 @@ mod tests {
             [("s-a", Some("card-a")), ("s-b", Some("card-b"))],
             "both editors are named with their bound cards"
         );
+    }
+
+    #[test]
+    fn warm_overlap_normalizes_equivalent_local_path_spellings() {
+        let dir = TestTempDir::new("maestro-overlap-normalized");
+        let absolute = dir.path().join("src/auth/login.rs");
+        seed(
+            dir.path(),
+            "s-a",
+            &[
+                r#"{"event_type":"PostToolUse","session_id":"s-a","tool_name":"Edit","file_path":"./src/auth/login.rs","ts":"2026-06-14T11:59:00.000Z"}"#,
+            ],
+        );
+        let absolute_event = format!(
+            r#"{{"event_type":"PostToolUse","session_id":"s-b","tool_name":"Write","file_path":"{}","ts":"2026-06-14T11:58:00.000Z"}}"#,
+            absolute.display()
+        );
+        seed(dir.path(), "s-b", &[&absolute_event]);
+
+        let overlaps = warm_file_overlaps(&MaestroPaths::new(dir.path().to_path_buf()), NOW)
+            .expect("overlap reads the seeded logs");
+
+        assert_eq!(overlaps.len(), 1, "equivalent paths are grouped");
+        assert_eq!(overlaps[0].file_path, "src/auth/login.rs");
     }
 
     #[test]

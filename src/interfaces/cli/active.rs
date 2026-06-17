@@ -14,6 +14,7 @@ use anyhow::Result;
 use crate::domain::card;
 use crate::domain::run::{self, Presence, SessionActivity};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
+use crate::foundation::core::table;
 use crate::foundation::core::time::utc_now_timestamp;
 use crate::interfaces::cli::ActiveArgs;
 use crate::interfaces::cli::worktree_roots;
@@ -25,7 +26,8 @@ const CARD_WIDTH: usize = 28;
 pub fn run(args: ActiveArgs) -> Result<()> {
     let paths = MaestroPaths::new(discover_repo_root()?);
     let now = utc_now_timestamp();
-    let rows = run::active_sessions_union(&worktree_roots(&paths), &now)?;
+    let roots = worktree_roots(&paths);
+    let rows = run::active_sessions_union(&roots, &now)?;
 
     let cards = if paths.cards_dir().is_dir() {
         card::query::scan(&paths)?
@@ -35,7 +37,7 @@ pub fn run(args: ActiveArgs) -> Result<()> {
     let by_id: HashMap<&str, &card::schema::Card> =
         cards.iter().map(|card| (card.id.as_str(), card)).collect();
 
-    let me = super::cli_run_id();
+    let me = run::union_session_id(&paths, &roots, &super::cli_run_id());
     let your_card = rows
         .iter()
         .find(|row| row.session_id == me)
@@ -129,49 +131,24 @@ fn render_table(
         "STATE",
         "LAST ACTION",
     ];
-    let mut widths: Vec<usize> = headers.iter().map(|header| header.len()).collect();
-    for cell in &rows {
-        for (index, value) in cell.columns().iter().enumerate() {
-            widths[index] = widths[index].max(value.len());
-        }
-    }
-
-    print_columns(&headers, &widths);
-    for cell in &rows {
-        let columns = cell.columns();
-        println!("{}", render_columns(&columns, &widths));
-    }
+    let rows: Vec<Vec<String>> = rows.into_iter().map(Cells::into_columns).collect();
+    print!("{}", table::render_table(&headers, &rows));
 }
 
 impl Cells {
-    fn columns(&self) -> [&str; 9] {
-        [
-            &self.session,
-            &self.mode,
-            &self.card,
-            &self.link,
-            &self.status,
-            &self.progress,
-            &self.age,
-            &self.state,
-            &self.last_action,
+    fn into_columns(self) -> Vec<String> {
+        vec![
+            self.session,
+            self.mode,
+            self.card,
+            self.link,
+            self.status,
+            self.progress,
+            self.age,
+            self.state,
+            self.last_action,
         ]
     }
-}
-
-fn print_columns(values: &[&str; 9], widths: &[usize]) {
-    println!("{}", render_columns(values, widths));
-}
-
-fn render_columns(values: &[&str], widths: &[usize]) -> String {
-    values
-        .iter()
-        .enumerate()
-        .map(|(index, value)| format!("{value:<width$}", width = widths[index]))
-        .collect::<Vec<_>>()
-        .join("  ")
-        .trim_end()
-        .to_string()
 }
 
 fn cells_for(

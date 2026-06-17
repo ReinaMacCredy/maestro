@@ -10,7 +10,7 @@ mod record;
 
 pub use active::{
     FileOverlap, Presence, SessionActivity, WarmEditor, active_sessions, active_sessions_union,
-    current_bound_card, warm_file_overlaps,
+    current_bound_card, union_session_id, warm_file_overlaps,
 };
 pub(crate) use append::{append_jsonl_line, append_manual_event, open_managed_appendable};
 pub use discovery::{RunEventLog, managed_event_logs};

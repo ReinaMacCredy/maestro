@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use anyhow::{Result, anyhow};
 use serde::Serialize;
 
@@ -681,40 +683,40 @@ fn render_list(rows: &[(&card::schema::Card, bool)], hidden: usize, archived: bo
         );
     };
 
-    let mut projects: Vec<&str> = rows
-        .iter()
-        .filter_map(|(c, _)| c.project.as_deref())
-        .collect();
-    projects.sort_unstable();
-    projects.dedup();
+    let mut project_groups: BTreeMap<&str, Vec<(&card::schema::Card, bool)>> = BTreeMap::new();
+    let mut unassigned = Vec::new();
+    for (card, archived) in rows {
+        match card.project.as_deref() {
+            Some(project) => project_groups
+                .entry(project)
+                .or_default()
+                .push((*card, *archived)),
+            None => unassigned.push((*card, *archived)),
+        }
+    }
     // Group under project headers only when >=2 distinct projects appear among the
     // shown rows (ac-6); with 0 or 1 distinct project the list is flat and, for the
     // zero case, byte-identical to today's badge-free output (ac-3).
-    if projects.len() < 2 {
+    if project_groups.len() < 2 {
         for (i, (c, archived)) in rows.iter().enumerate() {
             print_row(i + 1, c, *archived);
         }
         return;
     }
     let mut rank = 0usize;
-    for project in &projects {
+    for (project, group) in project_groups {
         println!("{project}:");
-        for (c, archived) in rows
-            .iter()
-            .filter(|(c, _)| c.project.as_deref() == Some(project))
-        {
+        for (c, archived) in group {
             rank += 1;
-            print_row(rank, c, *archived);
+            print_row(rank, c, archived);
         }
     }
-    let mut printed_unassigned = false;
-    for (c, archived) in rows.iter().filter(|(c, _)| c.project.is_none()) {
-        if !printed_unassigned {
-            println!("unassigned:");
-            printed_unassigned = true;
-        }
+    if !unassigned.is_empty() {
+        println!("unassigned:");
+    }
+    for (c, archived) in unassigned {
         rank += 1;
-        print_row(rank, c, *archived);
+        print_row(rank, c, archived);
     }
 }
 
