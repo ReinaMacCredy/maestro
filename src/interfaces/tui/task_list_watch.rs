@@ -43,6 +43,12 @@ fn paint(frame: &str) -> String {
     format!("\x1b[H{body}\x1b[J")
 }
 
+/// The live-loop footer: the reload cadence and how to exit. Only the live
+/// board appends it; the snapshot / non-terminal frame stays bare.
+fn live_footer(interval: u64) -> String {
+    format!("(live; refreshes every {interval}s; Ctrl-C to exit)")
+}
+
 /// The board-row state a workable card maps to, finer than coarse status: it
 /// splits the OPEN/IN_PROGRESS band into the planr header buckets.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -310,6 +316,52 @@ fn format_board_opts(
         }
         out.push('\n');
     }
+
+    // Workable cards with no parent feature (or a parent that is not a feature
+    // in the store) have nowhere to live on the feature-grouped board. Collect
+    // the open ones under a synthetic "(no feature)" group so loose active work
+    // is visible. Skipped under focus, which renders exactly one named feature.
+    if focus.is_none() {
+        let mut orphans: Vec<&card::schema::Card> = cards
+            .iter()
+            .filter(|card| card.card_type.workable())
+            .filter(|card| match card.parent.as_deref() {
+                None => true,
+                Some(parent) => !features.contains_key(parent),
+            })
+            .filter(|card| {
+                classify(card, blocked_ids) != RowState::Done
+                    || just_completed.contains(&card.id)
+            })
+            .collect();
+        if !orphans.is_empty() {
+            orphans.sort_by(|left, right| left.id.cmp(&right.id));
+            let total = orphans.len();
+            let mut counts = [0usize; 5];
+            for orphan in &orphans {
+                counts[classify(orphan, blocked_ids) as usize] += 1;
+            }
+            let done = counts[RowState::Done as usize];
+            let pct = done * 100 / total.max(1);
+            out.push_str(&format!(
+                "(no feature): {done}/{total} done ({pct}%) | ready {} | active {} | needs_verification {} | blocked {}\n",
+                counts[RowState::Ready as usize],
+                counts[RowState::Active as usize],
+                counts[RowState::NeedsVerification as usize],
+                counts[RowState::Blocked as usize],
+            ));
+            for orphan in &orphans {
+                push_row(&mut out, orphan, classify(orphan, blocked_ids), 0, live_tick);
+            }
+            out.push('\n');
+        }
+    }
+
+    // Never return empty: a blank frame in the live loop reads as a hang. When
+    // nothing open renders, point at where the work is instead.
+    if out.is_empty() {
+        out.push_str("No open work to show. Run `maestro ready` or `maestro list`.\n");
+    }
     out
 }
 
@@ -379,7 +431,8 @@ pub fn run_board(paths: &MaestroPaths, focus: Option<&str>, interval_seconds: u6
             }
         }
         for _ in 0..render_ticks {
-            let frame = format_board_opts(&cards, &blocked_ids, focus, Some(tick), &just_completed);
+            let board = format_board_opts(&cards, &blocked_ids, focus, Some(tick), &just_completed);
+            let frame = format!("{board}\n{}\n", live_footer(interval));
             print!("{}", paint(&frame));
             io::stdout()
                 .flush()
@@ -598,6 +651,10 @@ mod tests {
 
     fn work(id: &str, parent: &str, title: &str, status: &str) -> card::schema::Card {
         child(id, parent, card::schema::CardType::Task, title, status)
+    }
+
+    fn loose(id: &str, title: &str, status: &str) -> card::schema::Card {
+        card::schema::Card::new(id, card::schema::CardType::Task, title, status, "t0")
     }
 
     use super::{classify, glyph, RowState};
@@ -923,6 +980,97 @@ mod tests {
             out.contains("\x1b[K"),
             "should erase each overwritten line to end-of-line:\n{out:?}"
         );
+    }
+
+    use super::live_footer;
+
+    #[test]
+    fn board_groups_loose_workable_cards_under_no_feature() {
+        // A workable card with no parent feature has nowhere to live on the
+        // feature-grouped board; it must surface under a "(no feature)" group so
+        // active loose work is visible instead of producing a blank screen.
+        let mut active = loose("card-a1", "repeatable prove", "in_progress");
+        active.claimed_by = Some("maestro".to_string());
+        let waiting = loose("card-b1", "prune retired skills", "ready");
+        let cards = vec![active, waiting];
+        let mut blocked = BTreeSet::new();
+        blocked.insert("card-b1".to_string());
+        let out = format_board(&cards, &blocked, None);
+        assert!(out.contains("(no feature):"), "loose cards need a (no feature) group:\n{out}");
+        assert!(
+            out.contains("0/2 done (0%) | ready 0 | active 1 | needs_verification 0 | blocked 1"),
+            "orphan header counts only open loose cards:\n{out}"
+        );
+        assert!(
+            out.contains("repeatable prove") && out.contains("maestro"),
+            "active loose row carries its title and claimant:\n{out}"
+        );
+        assert!(out.contains("prune retired skills"), "blocked loose row missing:\n{out}");
+    }
+
+    #[test]
+    fn board_hides_closed_loose_cards_from_no_feature_group() {
+        // A closed loose card is not open work: it must not render nor inflate
+        // the group total, and an all-closed orphan set yields no group at all.
+        let cards = vec![loose("card-done", "old loose chore", "verified")];
+        let out = format_board(&cards, &BTreeSet::new(), None);
+        assert!(!out.contains("old loose chore"), "closed loose card must not show:\n{out}");
+        assert!(!out.contains("(no feature)"), "an all-closed orphan set yields no group:\n{out}");
+    }
+
+    #[test]
+    fn board_shows_empty_state_when_nothing_is_open() {
+        // No open feature work and no open loose work: the board must still
+        // render a status line, never empty output (a blank live screen reads
+        // as a hang, the bug this fixes).
+        let cards = vec![
+            feat("design", "Design only"),
+            child("dec-1", "design", card::schema::CardType::Decision, "a fork", "locked"),
+        ];
+        let out = format_board(&cards, &BTreeSet::new(), None);
+        assert!(!out.trim().is_empty(), "empty board must still render a line:\n{out:?}");
+        assert!(out.contains("No open work"), "empty board needs an explanatory hint:\n{out}");
+    }
+
+    #[test]
+    fn board_focus_excludes_the_no_feature_group() {
+        // Focus renders exactly one feature; loose cards are not part of it.
+        let cards = vec![
+            feat("auth", "Auth"),
+            work("task-1", "auth", "hash passwords", "ready"),
+            loose("card-loose", "loose task", "in_progress"),
+        ];
+        let out = format_board(&cards, &BTreeSet::new(), Some("auth"));
+        assert!(out.contains("Auth"), "focused feature header missing:\n{out}");
+        assert!(!out.contains("(no feature)"), "focus must not show the orphan group:\n{out}");
+        assert!(!out.contains("loose task"), "focus must not leak loose rows:\n{out}");
+    }
+
+    #[test]
+    fn board_renders_a_feature_group_and_the_no_feature_group_together() {
+        // The shipped per-feature overview and the loose-card group coexist: an
+        // open feature renders its header and rows, and loose open work still
+        // appears under "(no feature)" after it (features first).
+        let cards = vec![
+            feat("auth", "Auth"),
+            work("task-1", "auth", "hash passwords", "ready"),
+            loose("card-loose", "loose task", "in_progress"),
+        ];
+        let out = format_board(&cards, &BTreeSet::new(), None);
+        assert!(out.contains("Auth:"), "feature group header missing:\n{out}");
+        assert!(out.contains("hash passwords"), "feature row missing:\n{out}");
+        assert!(out.contains("(no feature):"), "orphan group missing:\n{out}");
+        assert!(out.contains("loose task"), "loose row missing:\n{out}");
+        assert!(
+            out.find("Auth:").unwrap() < out.find("(no feature):").unwrap(),
+            "feature groups must render before the loose group:\n{out}"
+        );
+    }
+
+    #[test]
+    fn live_footer_shows_the_interval_and_exit_hint() {
+        assert_eq!(live_footer(2), "(live; refreshes every 2s; Ctrl-C to exit)");
+        assert_eq!(live_footer(5), "(live; refreshes every 5s; Ctrl-C to exit)");
     }
 
     struct TestTempDir {
