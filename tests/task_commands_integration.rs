@@ -704,9 +704,15 @@ fn list_supports_basic_output_and_requested_filters() {
     let snapshot = maestro(repo, &["watch", "snapshot"]);
     assert_success(&snapshot, &["watch", "snapshot"]);
     let snapshot_out = stdout(&snapshot);
-    assert!(snapshot_out.contains("scheduler: 1 agents active"));
-    assert!(snapshot_out.contains("~ Task A"));
-    assert!(snapshot_out.contains("! Task B"));
+    // `watch snapshot` renders the card-model board: a per-feature header with
+    // the done ratio and live counts, then workable rows keyed by state glyph.
+    assert!(snapshot_out.contains(
+        "Billing CSV: 0/2 done (0%) | ready 0 | active 1 | needs_verification 0 | blocked 1"
+    ));
+    assert!(snapshot_out.contains("\u{25d0} active"));
+    assert!(snapshot_out.contains("Task A"));
+    assert!(snapshot_out.contains("\u{00b7} blocked"));
+    assert!(snapshot_out.contains("Task B"));
 }
 
 #[test]

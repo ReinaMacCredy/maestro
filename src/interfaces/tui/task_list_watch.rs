@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 
+use crate::domain::card;
 use crate::domain::feature;
 use crate::domain::proof;
 use crate::domain::task;
@@ -31,6 +32,145 @@ where
             .context("failed to flush watch output")?;
         thread::sleep(Duration::from_secs(interval));
     }
+}
+
+/// The board-row state a workable card maps to, finer than coarse status: it
+/// splits the OPEN/IN_PROGRESS band into the planr header buckets.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum RowState {
+    Done,
+    Blocked,
+    NeedsVerification,
+    Active,
+    Ready,
+}
+
+/// Classify a workable card for the board. `blocked_ids` is the set of card ids
+/// with an unresolved blocker (the same `has_unresolved_blockers` predicate
+/// `maestro status` counts), so a card reads blocked here exactly when status
+/// counts it blocked.
+fn classify(card: &card::schema::Card, blocked_ids: &std::collections::BTreeSet<String>) -> RowState {
+    if card::query::coarse_of(&card.status) == Some(card::query::Coarse::Closed) {
+        return RowState::Done;
+    }
+    if blocked_ids.contains(&card.id) {
+        return RowState::Blocked;
+    }
+    if card.status == "needs_verification" {
+        return RowState::NeedsVerification;
+    }
+    if card.claimed_by.is_some() || card.status == "in_progress" {
+        return RowState::Active;
+    }
+    RowState::Ready
+}
+
+fn glyph(state: RowState) -> char {
+    match state {
+        RowState::Done => '\u{2713}',             // tick
+        RowState::Ready => '\u{25CB}',            // open circle
+        RowState::Active => '\u{25D0}',           // half circle
+        RowState::NeedsVerification => '\u{25C6}', // diamond
+        RowState::Blocked => '\u{00B7}',          // middle dot
+    }
+}
+
+fn state_word(state: RowState) -> &'static str {
+    match state {
+        RowState::Done => "done",
+        RowState::Ready => "ready",
+        RowState::Active => "active",
+        RowState::NeedsVerification => "needs_verification",
+        RowState::Blocked => "blocked",
+    }
+}
+
+/// Render the planr-style board: a per-feature header (`<feature>: X/Y done
+/// (Z%) | ready N | active N | needs_verification N | blocked N`) followed by
+/// that feature's open workable cards. Pure over its inputs so it is testable
+/// without IO. Features with no workable children (design-only) or no open work
+/// (finished) are omitted; closed cards are hidden but still counted in X/Y.
+fn format_board(cards: &[card::schema::Card], blocked_ids: &std::collections::BTreeSet<String>) -> String {
+    use std::collections::BTreeMap;
+
+    let mut features: BTreeMap<&str, &card::schema::Card> = BTreeMap::new();
+    let mut children: BTreeMap<&str, Vec<&card::schema::Card>> = BTreeMap::new();
+    for card in cards {
+        if card.card_type == card::schema::CardType::Feature {
+            features.insert(card.id.as_str(), card);
+        }
+    }
+    for card in cards {
+        if !card.card_type.workable() {
+            continue;
+        }
+        if let Some(parent) = card.parent.as_deref() {
+            children.entry(parent).or_default().push(card);
+        }
+    }
+
+    let mut out = String::new();
+    for (fid, feature) in &features {
+        let Some(kids) = children.get(fid) else {
+            continue;
+        };
+        let total = kids.len();
+        let mut kids: Vec<&card::schema::Card> = kids.clone();
+        kids.sort_by(|left, right| left.id.cmp(&right.id));
+
+        let mut counts = [0usize; 5];
+        for kid in &kids {
+            counts[classify(kid, blocked_ids) as usize] += 1;
+        }
+        let done = counts[RowState::Done as usize];
+        if done == total {
+            continue;
+        }
+        let pct = done * 100 / total;
+        out.push_str(&format!(
+            "{}: {done}/{total} done ({pct}%) | ready {} | active {} | needs_verification {} | blocked {}\n",
+            feature.title,
+            counts[RowState::Ready as usize],
+            counts[RowState::Active as usize],
+            counts[RowState::NeedsVerification as usize],
+            counts[RowState::Blocked as usize],
+        ));
+        for kid in &kids {
+            let state = classify(kid, blocked_ids);
+            if state == RowState::Done {
+                continue;
+            }
+            out.push_str(&format!(
+                "  {} {:<18} {}  {}",
+                glyph(state),
+                state_word(state),
+                kid.id,
+                kid.title,
+            ));
+            if state == RowState::Active
+                && let Some(claimant) = kid.claimed_by.as_deref()
+            {
+                out.push_str(&format!("  {claimant}"));
+            }
+            out.push('\n');
+        }
+        out.push('\n');
+    }
+    out
+}
+
+/// Load the card store and render one board snapshot. The blocked-id set comes
+/// from the same task-record predicate `maestro status` uses, so the header's
+/// blocked count matches status per card.
+pub fn render_board(paths: &MaestroPaths) -> Result<String> {
+    let cards = card::query::scan(paths)?;
+    let tasks = task::load_task_records(&paths.tasks_dir())?;
+    let blocked_ids: std::collections::BTreeSet<String> = tasks
+        .iter()
+        .filter(|task| task::has_unresolved_blockers(task))
+        .map(|task| task.id.clone())
+        .collect();
+    Ok(format_board(&cards, &blocked_ids))
 }
 
 /// Render one sandcastle-style task status snapshot.
@@ -216,6 +356,130 @@ mod tests {
 
         assert!(output.contains("Add CSV export"));
         assert!(output.contains("needs_verification (last verify failed)"));
+    }
+
+    use super::format_board;
+    use crate::domain::card;
+    use std::collections::BTreeSet;
+
+    fn feat(id: &str, title: &str) -> card::schema::Card {
+        card::schema::Card::new(id, card::schema::CardType::Feature, title, "in_progress", "t0")
+    }
+
+    fn child(
+        id: &str,
+        parent: &str,
+        ctype: card::schema::CardType,
+        title: &str,
+        status: &str,
+    ) -> card::schema::Card {
+        let mut c = card::schema::Card::new(id, ctype, title, status, "t0");
+        c.parent = Some(parent.to_string());
+        c
+    }
+
+    fn work(id: &str, parent: &str, title: &str, status: &str) -> card::schema::Card {
+        child(id, parent, card::schema::CardType::Task, title, status)
+    }
+
+    use super::{classify, glyph, RowState};
+
+    #[test]
+    fn glyph_vocabulary_is_the_locked_set() {
+        assert_eq!(glyph(RowState::Done), '\u{2713}');
+        assert_eq!(glyph(RowState::Ready), '\u{25CB}');
+        assert_eq!(glyph(RowState::Active), '\u{25D0}');
+        assert_eq!(glyph(RowState::NeedsVerification), '\u{25C6}');
+        assert_eq!(glyph(RowState::Blocked), '\u{00B7}');
+    }
+
+    #[test]
+    fn board_excludes_non_workable_rows_and_hides_closed() {
+        let cards = vec![
+            feat("auth", "Auth"),
+            work("task-1", "auth", "hash passwords", "ready"),
+            work("task-2", "auth", "old login", "verified"),
+            child("idea-1", "auth", card::schema::CardType::Idea, "maybe oauth", "open"),
+            child("dec-1", "auth", card::schema::CardType::Decision, "pick hasher", "locked"),
+        ];
+        let out = format_board(&cards, &BTreeSet::new());
+        assert!(out.contains("hash passwords"), "open work row missing:\n{out}");
+        assert!(!out.contains("old login"), "closed row should be hidden:\n{out}");
+        assert!(!out.contains("maybe oauth"), "idea row should never appear:\n{out}");
+        assert!(!out.contains("pick hasher"), "decision row should never appear:\n{out}");
+        // total counts only the two workable children (one done, one ready).
+        assert!(out.contains("1/2 done"), "header should count only workable kids:\n{out}");
+    }
+
+    #[test]
+    fn board_renders_active_glyph_and_claimant() {
+        let mut active = work("task-1", "auth", "session store", "in_progress");
+        active.claimed_by = Some("claude#a4f2".to_string());
+        let cards = vec![feat("auth", "Auth"), active];
+        let out = format_board(&cards, &BTreeSet::new());
+        assert!(
+            out.contains("\u{25D0} active"),
+            "active glyph missing:\n{out}"
+        );
+        assert!(out.contains("claude#a4f2"), "claimant token missing:\n{out}");
+    }
+
+    #[test]
+    fn board_omits_design_only_and_finished_features() {
+        let cards = vec![
+            // design-only: only a decision child, no workable cards
+            feat("design", "Design only"),
+            child("dec-1", "design", card::schema::CardType::Decision, "a fork", "locked"),
+            // finished: every workable child closed
+            feat("done-feat", "Finished"),
+            work("task-9", "done-feat", "shipped work", "verified"),
+        ];
+        let out = format_board(&cards, &BTreeSet::new());
+        assert!(!out.contains("Design only"), "design-only feature should be omitted:\n{out}");
+        assert!(!out.contains("Finished"), "finished feature should be omitted:\n{out}");
+    }
+
+    #[test]
+    fn board_marks_blocked_from_predicate_set() {
+        let cards = vec![
+            feat("auth", "Auth"),
+            work("task-1", "auth", "waits on dep", "ready"),
+        ];
+        let mut blocked = BTreeSet::new();
+        blocked.insert("task-1".to_string());
+        let out = format_board(&cards, &blocked);
+        assert!(
+            out.contains("blocked 1"),
+            "blocked count should come from the predicate set:\n{out}"
+        );
+        assert!(out.contains("\u{00B7} blocked"), "blocked glyph row missing:\n{out}");
+        assert!(out.contains("ready 0"), "a blocked card must not also read ready:\n{out}");
+    }
+
+    #[test]
+    fn classify_prefers_blocked_over_ready() {
+        let card = work("task-1", "auth", "x", "ready");
+        let mut blocked = BTreeSet::new();
+        blocked.insert("task-1".to_string());
+        assert!(classify(&card, &blocked) == RowState::Blocked);
+        assert!(classify(&card, &BTreeSet::new()) == RowState::Ready);
+    }
+
+    #[test]
+    fn board_header_shows_done_ratio_and_counts_for_open_feature() {
+        let mut active = work("task-3", "auth", "session store", "in_progress");
+        active.claimed_by = Some("claude#a4f2".to_string());
+        let cards = vec![
+            feat("auth", "Auth"),
+            work("task-1", "auth", "add login", "verified"),
+            work("task-2", "auth", "hash passwords", "ready"),
+            active,
+        ];
+        let out = format_board(&cards, &BTreeSet::new());
+        assert!(
+            out.contains("Auth: 1/3 done (33%) | ready 1 | active 1 | needs_verification 0 | blocked 0"),
+            "header line missing; got:\n{out}"
+        );
     }
 
     struct TestTempDir {
