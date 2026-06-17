@@ -250,9 +250,10 @@ fn print_claim_outcome(id: &str, identity: &str, outcome: &card::edit::ClaimOutc
 }
 
 /// Execute `maestro assign <card> <who>`: set or clear a card's advisory
-/// `suggested_for` routing hint. Advisory only -- it changes no status and never
-/// blocks a claim by any session (agent-teams routing decision). `none` or
-/// `--clear` clears the hint.
+/// `suggested_for` routing hint. Advisory only -- it changes no status, never
+/// blocks a claim by any session (agent-teams routing decision), and emits no
+/// `card_touch`: routing a hint is not work state, so it must not re-bind the
+/// assigner's `active`/`msg` current card. `none` or `--clear` clears the hint.
 pub fn assign(args: AssignArgs) -> Result<()> {
     let Some(paths) = card_paths()? else {
         return Ok(());
@@ -272,7 +273,6 @@ pub fn assign(args: AssignArgs) -> Result<()> {
         }
     };
     let changed = card::edit::assign(&paths, &args.id, who.as_deref(), &utc_now_timestamp())?;
-    super::emit_card_touch(&paths, &args.id);
     match (changed, &who) {
         (true, Some(who)) => println!("{} suggested for {who} (advisory; not a claim)", args.id),
         (false, Some(who)) => println!("{} already suggested for {who}", args.id),

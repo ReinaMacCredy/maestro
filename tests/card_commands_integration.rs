@@ -1672,6 +1672,51 @@ fn card_mutating_verbs_auto_emit_card_touch_tagged_session_and_card() {
     );
 }
 
+/// `assign` sets an advisory routing hint; it is not a claim and must not change
+/// what the assigner is working on. Regression for the post-ship finding that
+/// `assign` emitted a `card_touch`, silently re-binding the assigner's `active`
+/// and `msg` current card to the card it merely routed.
+#[test]
+fn assign_is_advisory_and_does_not_bind_the_assigners_session() {
+    let temp = cards_repo("assign-no-bind");
+    let repo = temp.path();
+
+    // Create both cards under a SETUP session so their create-touches land in a
+    // different bucket and never pollute the assigner's binding.
+    maestro_in_session(repo, "setup", &["create", "-t", "chore", "My work"]);
+    let mine = id_by_title(repo, "My work");
+    maestro_in_session(repo, "setup", &["create", "-t", "chore", "Someone else's"]);
+    let other = id_by_title(repo, "Someone else's");
+
+    let session = "assigner";
+    // Claiming binds the assigner's session to `mine` -- their real work.
+    let claimed = maestro_in_session(repo, session, &["claim", &mine]);
+    assert!(
+        claimed.status.success(),
+        "claim exits 0\nstderr:\n{}",
+        String::from_utf8_lossy(&claimed.stderr)
+    );
+    // Routing an advisory hint to `other` must leave the current card untouched.
+    let assigned = maestro_in_session(repo, session, &["assign", &other, "dana"]);
+    assert!(
+        assigned.status.success(),
+        "assign exits 0\nstderr:\n{}",
+        String::from_utf8_lossy(&assigned.stderr)
+    );
+
+    let touches = card_touch_events(repo, session);
+    assert_eq!(
+        touches.len(),
+        1,
+        "only the claim binds the assigner; assign emits no card_touch: {touches:#?}"
+    );
+    assert_eq!(
+        touches.last().expect("the claim touch")["card_id"],
+        Value::String(mine.clone()),
+        "the assigner's current card stays the claimed card, not the routed one: {touches:#?}"
+    );
+}
+
 #[test]
 fn card_touch_emit_is_non_fatal_when_the_run_log_cannot_be_written() {
     let temp = cards_repo("t3-nonfatal");
