@@ -1,18 +1,22 @@
-//! `maestro msg`: pull-only messaging on a linked-card channel. `send` is
-//! link-gated and validated; `read` consumes unread (advancing the viewer's
-//! cursor); `list` shows the channel overview or one partner's full timeline.
-//! The sender is always the running session's current card -- the card it last
-//! touched -- never a named argument, so messaging rides on normal work.
+//! `maestro msg`: pull-only messaging on a card channel. A send addressed to a
+//! pair partner is link-gated; a send addressed to a feature card broadcasts to
+//! every card under that feature, gated by membership (the parent edge) rather
+//! than a link. `read` consumes unread (advancing the viewer's cursor); `list`
+//! shows the channel overview or one channel's full timeline. The sender is
+//! always the running session's current card -- the card it last touched -- never
+//! a named argument, so messaging rides on normal work.
 //!
-//! Visibility is the live link: a channel shows in `read`/`list` (and the
-//! banner) only while the pair currently shares a `related` edge. Unlinking
-//! hides it without deleting; relinking restores history and prior unread
-//! (`dec-channel-visibility-hide-on-unlink-6091`).
+//! Pair visibility is the live link: the channel shows in `read`/`list` (and the
+//! banner) only while the pair currently shares a `related` edge. Unlinking hides
+//! it without deleting; relinking restores history and prior unread
+//! (`dec-channel-visibility-hide-on-unlink-6091`). A feature channel shows while
+//! the running card is under that feature (membership is the live parent edge;
+//! there is no reparent verb, so it ends only when the feature goes terminal).
 
 use anyhow::{Result, anyhow, bail};
 
 use crate::domain::card;
-use crate::domain::channel::{self, Channel};
+use crate::domain::channel::{self, Channel, ChannelKind, Message};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::interfaces::cli::{MsgArgs, MsgCommand, worktree_roots};
 
@@ -43,6 +47,15 @@ fn send(to: &str, text: &str) -> Result<()> {
             None => Err(anyhow!("no card {to} to message")),
         };
     }
+
+    // A send addressed to a live feature card is a broadcast to its members, not
+    // a pairwise message: dispatch before the link gate.
+    if let Some(resolved) = card::store::resolve(&paths, to)?
+        && resolved.card.card_type == card::schema::CardType::Feature
+    {
+        return send_broadcast(&paths, &me, &me_card, &resolved.card.id, text);
+    }
+
     if !card::query::pair_linked(&paths, &me_card, to)? {
         if let Some(status) = partner_terminal_status(&paths, to)? {
             bail!("{to} is finished ({status}); no channel can be opened with a finished card");
@@ -53,6 +66,39 @@ fn send(to: &str, text: &str) -> Result<()> {
     channel::send(&paths, &me, to, &super::cli_run_id(), text)?;
     println!("sent to {to} (from {me})");
     Ok(())
+}
+
+/// Broadcast to a feature channel, gated by membership: the running card must be
+/// the feature itself or a card under it. The non-member error names the real
+/// join path (create under the feature) -- maestro has no reparent verb, so an
+/// existing loose card cannot be moved in.
+fn send_broadcast(
+    paths: &MaestroPaths,
+    me: &str,
+    me_card: &card::schema::Card,
+    feature_id: &str,
+    text: &str,
+) -> Result<()> {
+    let member = feature_of(me_card).is_some_and(|f| f.eq_ignore_ascii_case(feature_id));
+    if !member {
+        bail!(
+            "{me} is not in feature {feature_id}; only the feature and cards created under it can post here -- create your work with `maestro task create --feature {feature_id}` (maestro has no reparent verb to move an existing card in)"
+        );
+    }
+    channel::send_feature(paths, feature_id, me, &super::cli_run_id(), text)?;
+    println!("broadcast to feature {feature_id} (from {me})");
+    Ok(())
+}
+
+/// The feature a card belongs to for channel membership: itself if it is a
+/// feature card, else its parent feature (one-level hierarchy). `None` for a
+/// loose card with no parent.
+fn feature_of(card: &card::schema::Card) -> Option<String> {
+    if card.card_type == card::schema::CardType::Feature {
+        Some(card.id.clone())
+    } else {
+        card.parent.clone()
+    }
 }
 
 /// `maestro msg read [card]`: print each visible channel's seen context plus all
@@ -95,27 +141,36 @@ fn list(scope: Option<&str>) -> Result<()> {
                 return Ok(());
             }
             for channel in &channels {
-                let partner = channel.partner(&me);
                 let at = cursor(&paths, channel, &me)?;
                 let unread = channel.unread(&me, at.as_deref()).len();
                 let last_message = channel.messages.last();
                 let last = last_message.map_or("-", |message| message.ts.as_str());
-                // Direction of the last message -> whose turn it is to reply.
-                let direction = match last_message {
-                    Some(message) if message.from_card == me => "from you",
-                    Some(_) => "from them",
-                    None => "-",
-                };
-                // The partner's read-through is derived from their newest cursor
-                // across worktrees, omitted when absent (peer hasn't read).
-                let peer_cursor = cursor(&paths, channel, partner)?;
-                let read_through = match channel.read_through(peer_cursor.as_deref()) {
-                    Some(through) => format!("  peer read through {through}"),
-                    None => String::new(),
-                };
-                println!(
-                    "{partner}  your unread: {unread}{read_through}  last {last} ({direction})"
-                );
+                match &channel.kind {
+                    ChannelKind::Pair(_) => {
+                        let partner = channel.partner(&me);
+                        // Direction of the last message -> whose turn it is to reply.
+                        let direction = match last_message {
+                            Some(message) if message.from_card == me => "from you",
+                            Some(_) => "from them",
+                            None => "-",
+                        };
+                        // The partner's read-through is derived from their newest
+                        // cursor across worktrees, omitted when absent.
+                        let peer_cursor = cursor(&paths, channel, partner)?;
+                        let read_through = match channel.read_through(peer_cursor.as_deref()) {
+                            Some(through) => format!("  peer read through {through}"),
+                            None => String::new(),
+                        };
+                        println!(
+                            "{partner}  your unread: {unread}{read_through}  last {last} ({direction})"
+                        );
+                    }
+                    // N-party: no single-partner direction or peer-read-through
+                    // framing -- a feature thread has many speakers, not one peer.
+                    ChannelKind::Feature(feature) => {
+                        println!("feature {feature}  your unread: {unread}  last {last}");
+                    }
+                }
             }
         }
         Some(target) => {
@@ -125,10 +180,15 @@ fn list(scope: Option<&str>) -> Result<()> {
             };
             println!("{target}:");
             for message in &channel.messages {
-                let who = if message.from_card == me {
+                // A feature thread labels each non-self line with its real sender;
+                // a pair thread labels the partner's lines with the partner id.
+                let who: &str = if message.from_card == me {
                     "you"
                 } else {
-                    target
+                    match &channel.kind {
+                        ChannelKind::Pair(_) => target,
+                        ChannelKind::Feature(_) => message.from_card.as_str(),
+                    }
                 };
                 println!("  {who}  {}  {}", message.ts, message.text);
             }
@@ -148,17 +208,45 @@ fn read_channel(paths: &MaestroPaths, me: &str, channel: &Channel) -> Result<()>
 
     println!("{}:", channel.partner(me));
     for message in &seen {
-        println!("  . {}  {}", message.ts, message.text);
+        println!(
+            "  . {}{}  {}",
+            line_speaker(channel, me, message),
+            message.ts,
+            message.text
+        );
     }
     if unread.is_empty() {
         println!("  (no new messages)");
     } else {
         for message in &unread {
-            println!("  * {}  {}", message.ts, message.text);
+            println!(
+                "  * {}{}  {}",
+                line_speaker(channel, me, message),
+                message.ts,
+                message.text
+            );
         }
     }
     channel::set_cursor_to_latest(paths, channel, me)?;
     Ok(())
+}
+
+/// The per-line speaker prefix for a read/list line. A pair channel has none (the
+/// header already names the partner); a feature channel labels each line with its
+/// sender (`you` for the viewer, else the sender card id) so a multi-party thread
+/// is never collapsed to a single "from them".
+fn line_speaker(channel: &Channel, me: &str, message: &Message) -> String {
+    match &channel.kind {
+        ChannelKind::Pair(_) => String::new(),
+        ChannelKind::Feature(_) => {
+            let who = if message.from_card == me {
+                "you"
+            } else {
+                message.from_card.as_str()
+            };
+            format!("{who}  ")
+        }
+    }
 }
 
 /// The ambient inbox banner: a one-line STDERR summary of unread messages on
@@ -215,6 +303,14 @@ fn visible_channels_union(paths: &MaestroPaths, me: &card::schema::Card) -> Resu
         if card::query::pair_linked(paths, me, &partner)? {
             visible.push(channel);
         }
+    }
+    // The running card's feature broadcast channel: membership is the live parent
+    // edge, checked by construction here (we load only my own feature's channel),
+    // so no link is required and a non-member never reaches it.
+    if let Some(feature_id) = feature_of(me)
+        && let Some(channel) = channel::load_feature_union(&roots, &feature_id)?
+    {
+        visible.push(channel);
     }
     Ok(visible)
 }

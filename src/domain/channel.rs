@@ -1,19 +1,22 @@
-//! The linked-card chat-channel store: pull-only, file-backed messaging between
-//! two cards that share a `related` edge. This module is pure persistence and
-//! queries -- the link gate, visibility, and rendering live in the `msg` verbs
-//! and the inbox banner. maestro never pushes; a peer's message is seen only
-//! when the other agent reads it.
+//! The chat-channel store: pull-only, file-backed messaging. A channel is either
+//! a two-card pair that shares a `related` edge, or a feature-scoped broadcast
+//! every card under a feature shares (no `related` edge required). This module is
+//! pure persistence and queries -- the link/membership gate, visibility, and
+//! rendering live in the `msg` verbs and the inbox banner. maestro never pushes;
+//! a peer's message is seen only when the other agent reads it.
 //!
 //! On-disk shape under `.maestro/channels/` (gitignored, machine-local):
-//!   `<key>.jsonl`         line 1 = `{"pair":[a,b]}` header (authoritative),
+//!   `<key>.jsonl`         line 1 = `{"pair":[a,b]}` (two-card) or `{"feature":id}`
+//!                         (feature broadcast) header (authoritative),
 //!                         lines 2.. = `{id,ts,from_card,from_session,text}`.
 //!   `<key>.cur-<cardkey>` the viewer's read-through cursor: the newest seen ts
 //!                         plus exact message ids at that ts. Legacy bare-ts
 //!                         cursors still read as timestamp-only cursors.
 //!
-//! `key` is a short hash of the sorted lowercased id pair, so both cards derive
-//! the same channel; `cardkey` is a short hash of the viewer's card id, so the
-//! cursor survives a title rename (ids are stable, titles are not).
+//! `key` is a short hash of the sorted lowercased id pair (two-card) or of
+//! `feature\n<id>` (broadcast), so every member derives the same channel;
+//! `cardkey` is a short hash of the viewer's card id, so the cursor survives a
+//! title rename (ids are stable, titles are not).
 //!
 //! A send always writes the running worktree's own channel file
 //! (`open_managed_appendable` cannot escape the local repo root). The union
@@ -54,11 +57,21 @@ pub struct Message {
     pub text: String,
 }
 
-/// A loaded channel: the authoritative header pair and every message (ts-sorted
-/// when produced by the union readers).
+/// The two channel shapes, mirroring the header line: a two-card `Pair`
+/// (`related`-gated) or a `Feature` broadcast every card under the feature
+/// shares. The variant drives rendering -- a pair has a partner; a feature labels
+/// each line by its sender.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ChannelKind {
+    Pair([String; 2]),
+    Feature(String),
+}
+
+/// A loaded channel: its kind (the authoritative header) and every message
+/// (ts-sorted when produced by the union readers).
 pub struct Channel {
     pub key: String,
-    pub pair: [String; 2],
+    pub kind: ChannelKind,
     pub messages: Vec<Message>,
 }
 
@@ -112,12 +125,19 @@ impl Channel {
             .max()
     }
 
-    /// The partner card id for `viewer` (the other half of the header pair).
+    /// The partner card id for `viewer` on a pair channel (the other header half).
+    /// A feature channel has no single partner, so it answers with the feature id;
+    /// callers branch on `kind` before relying on this.
     pub fn partner(&self, viewer: &str) -> &str {
-        if self.pair[0] == viewer {
-            &self.pair[1]
-        } else {
-            &self.pair[0]
+        match &self.kind {
+            ChannelKind::Pair(pair) => {
+                if pair[0] == viewer {
+                    &pair[1]
+                } else {
+                    &pair[0]
+                }
+            }
+            ChannelKind::Feature(id) => id,
         }
     }
 }
@@ -139,7 +159,54 @@ pub fn send(
     text: &str,
 ) -> Result<()> {
     let (pair, key) = identity(from_card, to_card);
-    let relative_path = channel_relative_path(&key);
+    append_message(
+        paths,
+        &key,
+        &ChannelKind::Pair(pair),
+        from_card,
+        from_session,
+        text,
+    )
+}
+
+/// Append a broadcast message from `from_card` to its feature's channel, creating
+/// the channel and its `{"feature":id}` header on first send. Membership is the
+/// caller's gate (the feature parent edge); the store only persists. Like
+/// [`send`], the write is local to the running worktree -- a union read merges the
+/// other worktrees' files.
+pub fn send_feature(
+    paths: &MaestroPaths,
+    feature_id: &str,
+    from_card: &str,
+    from_session: &str,
+    text: &str,
+) -> Result<()> {
+    let key = feature_identity(feature_id);
+    append_message(
+        paths,
+        &key,
+        &ChannelKind::Feature(feature_id.to_lowercase()),
+        from_card,
+        from_session,
+        text,
+    )
+}
+
+/// Append one message under `header`, writing the authoritative header line on
+/// first send and verifying it on every later send (a key collision errors rather
+/// than cross-writing into the wrong conversation). Shared by [`send`] and
+/// [`send_feature`]; does NOT advance the sender's cursor (own messages are
+/// auto-seen). The write lands in the running worktree's `.maestro/channels/`
+/// only -- `open_managed_appendable` rejects any path outside the local repo root.
+fn append_message(
+    paths: &MaestroPaths,
+    key: &str,
+    header: &ChannelKind,
+    from_card: &str,
+    from_session: &str,
+    text: &str,
+) -> Result<()> {
+    let relative_path = channel_relative_path(key);
     let mut file = open_managed_appendable(paths, &relative_path)?;
     if file
         .metadata()
@@ -147,10 +214,10 @@ pub fn send(
         .len()
         == 0
     {
-        append_jsonl_line(&mut file, &json!({ "pair": pair }))
+        append_jsonl_line(&mut file, &header_json(header))
             .with_context(|| format!("failed to write header to {relative_path}"))?;
     } else {
-        verify_header(paths, &key, &pair)?;
+        verify_header(paths, key, header)?;
     }
     let ts = utc_now_timestamp();
     let message = json!({
@@ -162,6 +229,14 @@ pub fn send(
     });
     append_jsonl_line(&mut file, &message)
         .with_context(|| format!("failed to append to {relative_path}"))
+}
+
+/// The JSON header line for a channel kind: `{"pair":[a,b]}` or `{"feature":id}`.
+fn header_json(kind: &ChannelKind) -> Value {
+    match kind {
+        ChannelKind::Pair(pair) => json!({ "pair": pair }),
+        ChannelKind::Feature(id) => json!({ "feature": id }),
+    }
 }
 
 /// Load the channel between `a` and `b` from a single root, or `None` if no
@@ -177,21 +252,44 @@ pub fn load(paths: &MaestroPaths, a: &str, b: &str) -> Result<Option<Channel>> {
 /// sort to interleave the per-worktree append streams.
 pub fn load_union(roots: &[MaestroPaths], a: &str, b: &str) -> Result<Option<Channel>> {
     let (_, key) = identity(a, b);
+    load_union_by_key(roots, &key)
+}
+
+/// Load the feature-scoped broadcast channel for `feature_id` from a single root,
+/// or `None` if nothing was broadcast there. Local read; the union reader covers
+/// worktrees.
+pub fn load_feature(paths: &MaestroPaths, feature_id: &str) -> Result<Option<Channel>> {
+    load_by_key(paths, &feature_identity(feature_id))
+}
+
+/// Load and merge the feature-scoped broadcast channel across every worktree
+/// root, ts-sorted, or `None` if nothing was broadcast in any.
+pub fn load_feature_union(roots: &[MaestroPaths], feature_id: &str) -> Result<Option<Channel>> {
+    load_union_by_key(roots, &feature_identity(feature_id))
+}
+
+/// Merge one channel key across worktree roots into a single ts-sorted channel,
+/// or `None` if no root holds it. Shared by the pair and feature union readers; a
+/// send is always local, so a message lives in exactly one root's file (no dedup).
+fn load_union_by_key(roots: &[MaestroPaths], key: &str) -> Result<Option<Channel>> {
     let mut found: Vec<Channel> = Vec::new();
     for paths in roots {
-        if let Some(channel) = load_by_key(paths, &key)? {
+        if let Some(channel) = load_by_key(paths, key)? {
             found.push(channel);
         }
     }
     if found.is_empty() {
         return Ok(None);
     }
-    Ok(Some(merge_same_key(key, found)))
+    Ok(Some(merge_same_key(key.to_string(), found)))
 }
 
-/// Every channel whose header pair contains `card`, loaded in full from one
-/// root. Reads each header in `.maestro/channels/` -- O(total channels in the
-/// repo). Visibility (the link gate) is applied by the caller, not here.
+/// Every *pair* channel whose header pair contains `card`, loaded in full from
+/// one root. Reads each header in `.maestro/channels/` -- O(total channels in the
+/// repo). Feature broadcast channels are not keyed by member id (the header holds
+/// only the feature), so they are excluded here; a caller loads a feature channel
+/// directly with [`load_feature`]. Visibility (the link gate) is applied by the
+/// caller, not here.
 pub fn channels_for(paths: &MaestroPaths, card: &str) -> Result<Vec<Channel>> {
     let dir = paths.channels_dir();
     let entries = match fs::read_dir(&dir) {
@@ -210,7 +308,8 @@ pub fn channels_for(paths: &MaestroPaths, card: &str) -> Result<Vec<Channel>> {
             continue;
         };
         if let Some(channel) = load_by_key(paths, key)?
-            && channel.pair.contains(&needle)
+            && let ChannelKind::Pair(pair) = &channel.kind
+            && pair.contains(&needle)
         {
             channels.push(channel);
         }
@@ -305,6 +404,13 @@ fn identity(a: &str, b: &str) -> ([String; 2], String) {
     pair.sort();
     let key = sha256_hex(format!("{}\n{}", pair[0], pair[1]).as_bytes())[..KEY_LEN].to_string();
     (pair, key)
+}
+
+/// The channel key for a feature-scoped broadcast: a short hash of `feature\n<id>`
+/// (lowercased), namespaced apart from pair keys (`{a}\n{b}`) so the two kinds
+/// never collide.
+fn feature_identity(feature_id: &str) -> String {
+    sha256_hex(format!("feature\n{}", feature_id.to_lowercase()).as_bytes())[..KEY_LEN].to_string()
 }
 
 fn channel_relative_path(key: &str) -> String {
@@ -442,7 +548,7 @@ fn message_cursor_id(message: &Message) -> String {
 /// Merge channels that share a key (the same pair, one file per worktree) into a
 /// single channel whose messages are ts-sorted. Assumes a non-empty input.
 fn merge_same_key(key: String, mut channels: Vec<Channel>) -> Channel {
-    let pair = channels[0].pair.clone();
+    let kind = channels[0].kind.clone();
     let mut messages: Vec<Message> = channels
         .drain(..)
         .flat_map(|channel| channel.messages)
@@ -450,7 +556,7 @@ fn merge_same_key(key: String, mut channels: Vec<Channel>) -> Channel {
     messages.sort_by(|a, b| a.ts.cmp(&b.ts));
     Channel {
         key,
-        pair,
+        kind,
         messages,
     }
 }
@@ -468,16 +574,16 @@ fn load_by_key(paths: &MaestroPaths, key: &str) -> Result<Option<Channel>> {
     parse_channel(key, &bytes).map(Some)
 }
 
-/// Confirm the on-disk header pair matches the pair we are about to write to. A
-/// mismatch means two different id pairs hashed to the same key (a collision) --
+/// Confirm the on-disk header matches the kind we are about to write to. A
+/// mismatch means two different ids hashed to the same key (a collision) --
 /// error rather than cross-write into the wrong conversation.
-fn verify_header(paths: &MaestroPaths, key: &str, expected: &[String; 2]) -> Result<()> {
+fn verify_header(paths: &MaestroPaths, key: &str, expected: &ChannelKind) -> Result<()> {
     let channel =
         load_by_key(paths, key)?.context("channel file vanished between open and header check")?;
-    if &channel.pair != expected {
+    if &channel.kind != expected {
         bail!(
             "channel key {key} already holds {:?}; refusing to write {:?} (hash collision)",
-            channel.pair,
+            channel.kind,
             expected
         );
     }
@@ -486,7 +592,7 @@ fn verify_header(paths: &MaestroPaths, key: &str, expected: &[String; 2]) -> Res
 
 fn parse_channel(key: &str, bytes: &[u8]) -> Result<Channel> {
     let text = std::str::from_utf8(bytes).context("channel file is not UTF-8")?;
-    let mut pair: Option<[String; 2]> = None;
+    let mut kind: Option<ChannelKind> = None;
     let mut messages = Vec::new();
     for line in text.lines() {
         let trimmed = line.trim();
@@ -495,30 +601,38 @@ fn parse_channel(key: &str, bytes: &[u8]) -> Result<Channel> {
         }
         let value: Value = serde_json::from_str(trimmed)
             .with_context(|| format!("malformed channel line in {key}"))?;
-        match pair {
-            None => pair = Some(parse_header_pair(&value, key)?),
+        match kind {
+            None => kind = Some(parse_header(&value, key)?),
             Some(_) => messages.push(parse_message(&value)),
         }
     }
-    let pair = pair.with_context(|| format!("channel {key} has no header line"))?;
+    let kind = kind.with_context(|| format!("channel {key} has no header line"))?;
     Ok(Channel {
         key: key.to_string(),
-        pair,
+        kind,
         messages,
     })
 }
 
-fn parse_header_pair(value: &Value, key: &str) -> Result<[String; 2]> {
-    let pair = value
-        .get("pair")
-        .and_then(Value::as_array)
-        .with_context(|| format!("channel {key} header missing pair"))?;
-    if pair.len() != 2 {
-        bail!("channel {key} header pair must have two ids");
+/// Parse the authoritative header line into a [`ChannelKind`]: `{"pair":[a,b]}`
+/// for a two-card channel, `{"feature":id}` for a feature broadcast.
+fn parse_header(value: &Value, key: &str) -> Result<ChannelKind> {
+    if value.get("pair").is_some() {
+        let pair = value
+            .get("pair")
+            .and_then(Value::as_array)
+            .with_context(|| format!("channel {key} header missing pair"))?;
+        if pair.len() != 2 {
+            bail!("channel {key} header pair must have two ids");
+        }
+        let first = pair[0].as_str().unwrap_or_default().to_string();
+        let second = pair[1].as_str().unwrap_or_default().to_string();
+        Ok(ChannelKind::Pair([first, second]))
+    } else if let Some(feature) = value.get("feature").and_then(Value::as_str) {
+        Ok(ChannelKind::Feature(feature.to_string()))
+    } else {
+        bail!("channel {key} header missing pair/feature")
     }
-    let first = pair[0].as_str().unwrap_or_default().to_string();
-    let second = pair[1].as_str().unwrap_or_default().to_string();
-    Ok([first, second])
 }
 
 fn parse_message(value: &Value) -> Message {
@@ -578,7 +692,7 @@ mod tests {
     fn channel_with(pair: [&str; 2], messages: &[(&str, &str, &str)]) -> Channel {
         Channel {
             key: "test-key".to_string(),
-            pair: [pair[0].to_string(), pair[1].to_string()],
+            kind: ChannelKind::Pair([pair[0].to_string(), pair[1].to_string()]),
             messages: messages
                 .iter()
                 .map(|(ts, from, text)| Message {
@@ -607,7 +721,10 @@ mod tests {
         let channel = load(&paths, "card-b", "card-a")
             .expect("load should succeed")
             .expect("channel should exist after sends");
-        assert_eq!(channel.pair, ["card-a".to_string(), "card-b".to_string()]);
+        assert_eq!(
+            channel.kind,
+            ChannelKind::Pair(["card-a".to_string(), "card-b".to_string()])
+        );
         assert_eq!(
             channel.messages.len(),
             3,
@@ -821,6 +938,84 @@ mod tests {
         let texts: Vec<&str> = union.messages.iter().map(|m| m.text.as_str()).collect();
         assert!(texts.contains(&"from worktree A"));
         assert!(texts.contains(&"from worktree B"));
+        assert!(
+            union.messages.windows(2).all(|w| w[0].ts <= w[1].ts),
+            "merged messages are in non-decreasing ts order"
+        );
+    }
+
+    #[test]
+    fn feature_broadcast_reaches_members_on_one_distinct_channel_with_per_sender_lines() {
+        let temp = TestTempDir::new("maestro-channel-feature-broadcast");
+        let paths = MaestroPaths::new(temp.path());
+
+        // Two different members broadcast to the same feature; no pair channel.
+        send_feature(&paths, "feat-x", "card-a", "sess-a", "switching to redis")
+            .expect("a's broadcast persists");
+        send_feature(&paths, "feat-x", "card-b", "sess-b", "ack, migrating keys")
+            .expect("b's broadcast persists");
+
+        let channel = load_feature(&paths, "feat-x")
+            .expect("load_feature ok")
+            .expect("feature channel exists after a broadcast");
+        assert_eq!(channel.kind, ChannelKind::Feature("feat-x".to_string()));
+        assert_eq!(
+            channel.messages.len(),
+            2,
+            "both members' lines on one channel"
+        );
+
+        // Each line carries its real sender (speaker-per-line render depends on it).
+        let senders: BTreeSet<&str> = channel
+            .messages
+            .iter()
+            .map(|message| message.from_card.as_str())
+            .collect();
+        assert_eq!(senders, BTreeSet::from(["card-a", "card-b"]));
+
+        // The feature key is namespaced apart from the members' pair key.
+        let (_, pair_key) = identity("card-a", "card-b");
+        assert_ne!(channel.key, pair_key);
+        assert!(
+            load(&paths, "card-a", "card-b")
+                .expect("pair load ok")
+                .is_none(),
+            "a broadcast must not create a pairwise channel"
+        );
+
+        // A member's unread from a never-read cursor is the OTHER member's line
+        // only -- own lines are auto-seen.
+        let unread_for_a = channel.unread("card-a", None);
+        let texts: Vec<&str> = unread_for_a.iter().map(|m| m.text.as_str()).collect();
+        assert_eq!(texts, vec!["ack, migrating keys"]);
+    }
+
+    #[test]
+    fn feature_broadcast_send_is_local_and_load_feature_union_merges_carrying_kind() {
+        let root_a = TestTempDir::new("maestro-channel-feature-union-a");
+        let root_b = TestTempDir::new("maestro-channel-feature-union-b");
+        let paths_a = MaestroPaths::new(root_a.path());
+        let paths_b = MaestroPaths::new(root_b.path());
+
+        send_feature(&paths_a, "feat-x", "card-a", "sess-a", "from worktree A").expect("a send");
+        send_feature(&paths_b, "feat-x", "card-b", "sess-b", "from worktree B").expect("b send");
+
+        // Send is local: each worktree's file holds only its own line.
+        let local_a = load_feature(&paths_a, "feat-x")
+            .expect("local load ok")
+            .expect("local feature channel exists");
+        assert_eq!(local_a.messages.len(), 1);
+
+        // The union merges both worktrees' files, ts-sorted, preserving the kind.
+        let union = load_feature_union(&[paths_a, paths_b], "feat-x")
+            .expect("union load ok")
+            .expect("union feature channel exists");
+        assert_eq!(union.messages.len(), 2, "both worktrees' messages merge");
+        assert_eq!(
+            union.kind,
+            ChannelKind::Feature("feat-x".to_string()),
+            "the union must carry the Feature kind, not drop it on merge"
+        );
         assert!(
             union.messages.windows(2).all(|w| w[0].ts <= w[1].ts),
             "merged messages are in non-decreasing ts order"
