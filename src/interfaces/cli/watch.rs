@@ -14,8 +14,8 @@ pub fn run(args: WatchArgs) -> Result<()> {
             print!("{}", task_list_watch::render_board(&paths, id.as_deref())?);
             Ok(())
         }
-        None => task_list_watch::run(args.interval.unwrap_or(2), move || {
-            task_list_watch::render_board(&paths, args.id.as_deref())
-        }),
+        None => {
+            task_list_watch::run_board(&paths, args.id.as_deref(), args.interval.unwrap_or(2))
+        }
     }
 }

@@ -35,6 +35,14 @@ where
     }
 }
 
+/// Redraw a board frame in place: home the cursor (never a full-screen clear,
+/// which would strobe at the render tick), erase each overwritten line to its
+/// end, then erase any rows left over from a taller previous frame.
+fn paint(frame: &str) -> String {
+    let body = frame.replace('\n', "\x1b[K\n");
+    format!("\x1b[H{body}\x1b[J")
+}
+
 /// The board-row state a workable card maps to, finer than coarse status: it
 /// splits the OPEN/IN_PROGRESS band into the planr header buckets.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -76,6 +84,18 @@ fn glyph(state: RowState) -> char {
     }
 }
 
+/// The Braille spinner cycle for active rows (dec-live-board-animates...).
+const SPINNER_FRAMES: [char; 10] = [
+    '\u{280B}', '\u{2819}', '\u{2839}', '\u{2838}', '\u{283C}', '\u{2834}', '\u{2826}', '\u{2827}',
+    '\u{2807}', '\u{280F}',
+];
+
+/// The spinner glyph for a render tick. Pure over the tick so the animation is
+/// testable without the loop; cycles the set so `frame(n)` advances and wraps.
+fn spinner_frame(tick: u64) -> char {
+    SPINNER_FRAMES[(tick % SPINNER_FRAMES.len() as u64) as usize]
+}
+
 fn state_word(state: RowState) -> &'static str {
     match state {
         RowState::Done => "done",
@@ -89,15 +109,27 @@ fn state_word(state: RowState) -> &'static str {
 /// Append one board row at `depth`. Depth 0 (a root, and the only depth in the
 /// flat no-edges case) renders exactly as a flat row; deeper rows carry a
 /// `\u{2514} ` tree connector so a blocks chain reads like planr's nested view.
-fn push_row(out: &mut String, card: &card::schema::Card, state: RowState, depth: usize) {
+fn push_row(
+    out: &mut String,
+    card: &card::schema::Card,
+    state: RowState,
+    depth: usize,
+    live_tick: Option<u64>,
+) {
     let connector = if depth == 0 {
         String::new()
     } else {
         format!("{}\u{2514} ", "  ".repeat(depth - 1))
     };
+    // Live active rows animate the spinner; everything else (and any snapshot /
+    // non-terminal frame, where live_tick is None) keeps the static glyph.
+    let row_glyph = match (state, live_tick) {
+        (RowState::Active, Some(tick)) => spinner_frame(tick),
+        _ => glyph(state),
+    };
     out.push_str(&format!(
         "  {connector}{} {:<18} {}  {}",
-        glyph(state),
+        row_glyph,
         state_word(state),
         card.id,
         card.title,
@@ -118,6 +150,8 @@ fn place<'a>(
     root: &'a card::schema::Card,
     children_of: &BTreeMap<&'a str, Vec<&'a card::schema::Card>>,
     blocked_ids: &BTreeSet<String>,
+    just_completed: &BTreeSet<String>,
+    live_tick: Option<u64>,
     visited: &mut BTreeSet<&'a str>,
     out: &mut String,
 ) {
@@ -127,8 +161,10 @@ fn place<'a>(
             continue;
         }
         let state = classify(node, blocked_ids);
-        if state != RowState::Done {
-            push_row(out, node, state, depth);
+        // Done rows are hidden in steady state; a card in `just_completed`
+        // (live and now Done) renders one tick frame before it drops next reload.
+        if state != RowState::Done || just_completed.contains(&node.id) {
+            push_row(out, node, state, depth, live_tick);
         }
         if let Some(dependents) = children_of.get(node.id.as_str()) {
             // push reversed so siblings pop in id order (pre-order, id-sorted)
@@ -148,6 +184,19 @@ fn format_board(
     cards: &[card::schema::Card],
     blocked_ids: &std::collections::BTreeSet<String>,
     focus: Option<&str>,
+) -> String {
+    format_board_opts(cards, blocked_ids, focus, None, &BTreeSet::new())
+}
+
+/// Render the board with the live extras: `live_tick` animates active rows
+/// (None = static snapshot), and `just_completed` un-suppresses the Done rows
+/// that finished this reload so they flash one tick frame (dec-completed-card).
+fn format_board_opts(
+    cards: &[card::schema::Card],
+    blocked_ids: &std::collections::BTreeSet<String>,
+    focus: Option<&str>,
+    live_tick: Option<u64>,
+    just_completed: &BTreeSet<String>,
 ) -> String {
     use std::collections::BTreeMap;
 
@@ -192,7 +241,11 @@ fn format_board(
             counts[classify(kid, blocked_ids) as usize] += 1;
         }
         let done = counts[RowState::Done as usize];
-        if done == total && focus.is_none() {
+        // A finished feature is hidden in the overview, unless one of its tasks
+        // just completed this reload: then it shows its 100% header and the tick
+        // row for one frame before dropping next reload (tick-then-clear).
+        let has_flash = kids.iter().any(|kid| just_completed.contains(&kid.id));
+        if done == total && focus.is_none() && !has_flash {
             continue;
         }
         // total == 0 (a focused feature with no workable kids) implies done == 0,
@@ -245,14 +298,14 @@ fn format_board(
         let mut visited: BTreeSet<&str> = BTreeSet::new();
         for &kid in &kids {
             if !has_blocker.contains(kid.id.as_str()) {
-                place(kid, &children_of, blocked_ids, &mut visited, &mut out);
+                place(kid, &children_of, blocked_ids, just_completed, live_tick, &mut visited, &mut out);
             }
         }
         // Any kid still unplaced sits in a cycle (every edge is a back-edge);
         // seed from it in id order so the cycle renders once and terminates.
         for &kid in &kids {
             if !visited.contains(kid.id.as_str()) {
-                place(kid, &children_of, blocked_ids, &mut visited, &mut out);
+                place(kid, &children_of, blocked_ids, just_completed, live_tick, &mut visited, &mut out);
             }
         }
         out.push('\n');
@@ -260,28 +313,82 @@ fn format_board(
     out
 }
 
-/// Load the card store and render one board snapshot. The blocked-id set comes
-/// from the same task-record predicate `maestro status` uses, so the header's
-/// blocked count matches status per card.
-pub fn render_board(paths: &MaestroPaths, focus: Option<&str>) -> Result<String> {
+/// Scan the card store for the board and compute the blocked-id set. The
+/// blocked set comes from the same task-record predicate `maestro status` uses,
+/// so the header's blocked count matches status per card. An unknown focus id
+/// errors with a re-list hint rather than rendering empty.
+fn load_board(
+    paths: &MaestroPaths,
+    focus: Option<&str>,
+) -> Result<(Vec<card::schema::Card>, BTreeSet<String>)> {
     let cards = card::query::scan(paths)?;
     if let Some(focus) = focus {
         let known = cards.iter().any(|card| {
             card.card_type == card::schema::CardType::Feature && card.id == focus
         });
         if !known {
-            anyhow::bail!(
-                "no feature '{focus}'; run `maestro list --type feature` to see ids"
-            );
+            anyhow::bail!("no feature '{focus}'; run `maestro list --type feature` to see ids");
         }
     }
     let tasks = task::load_task_records(&paths.tasks_dir())?;
-    let blocked_ids: std::collections::BTreeSet<String> = tasks
+    let blocked_ids: BTreeSet<String> = tasks
         .iter()
         .filter(|task| task::has_unresolved_blockers(task))
         .map(|task| task.id.clone())
         .collect();
+    Ok((cards, blocked_ids))
+}
+
+/// Load the card store and render one static board snapshot (active = static
+/// half-circle, no flash). The seam both `watch snapshot` and the live loop's
+/// non-terminal path render from.
+pub fn render_board(paths: &MaestroPaths, focus: Option<&str>) -> Result<String> {
+    let (cards, blocked_ids) = load_board(paths, focus)?;
     Ok(format_board(&cards, &blocked_ids, focus))
+}
+
+/// Run the live board loop. Extends the poll loop (dec-surface-under-watch):
+/// a fixed ~100ms render tick advances the spinner over each `--interval` data
+/// reload, and the board redraws via cursor-home so it never strobes. Between
+/// reloads it diffs the live set against the previous one so a card that just
+/// finished flashes the tick for that reload (dec-completed-card). A
+/// non-terminal stdout prints one static frame and exits.
+pub fn run_board(paths: &MaestroPaths, focus: Option<&str>, interval_seconds: u64) -> Result<()> {
+    let interval = normalized_interval(interval_seconds);
+    if !io::stdout().is_terminal() {
+        print!("{}", render_board(paths, focus)?);
+        return Ok(());
+    }
+    let render_ticks = interval * 10; // ~100ms render tick across the data interval
+    let mut prev_live: BTreeSet<String> = BTreeSet::new();
+    let mut tick: u64 = 0;
+    loop {
+        let (cards, blocked_ids) = load_board(paths, focus)?;
+        let mut live_now: BTreeSet<String> = BTreeSet::new();
+        let mut just_completed: BTreeSet<String> = BTreeSet::new();
+        for card in &cards {
+            if !card.card_type.workable() {
+                continue;
+            }
+            if classify(card, &blocked_ids) == RowState::Done {
+                if prev_live.contains(&card.id) {
+                    just_completed.insert(card.id.clone());
+                }
+            } else {
+                live_now.insert(card.id.clone());
+            }
+        }
+        for _ in 0..render_ticks {
+            let frame = format_board_opts(&cards, &blocked_ids, focus, Some(tick), &just_completed);
+            print!("{}", paint(&frame));
+            io::stdout()
+                .flush()
+                .context("failed to flush watch output")?;
+            tick += 1;
+            thread::sleep(Duration::from_millis(100));
+        }
+        prev_live = live_now;
+    }
 }
 
 /// Render one sandcastle-style task status snapshot.
@@ -717,6 +824,105 @@ mod tests {
         let out = format_board(&cards, &BTreeSet::new(), None);
         assert_eq!(out.matches("card a").count(), 1, "cycle member a must render once:\n{out}");
         assert_eq!(out.matches("card b").count(), 1, "cycle member b must render once:\n{out}");
+    }
+
+    use super::{format_board_opts, paint, spinner_frame, SPINNER_FRAMES};
+
+    #[test]
+    fn spinner_frame_cycles_the_locked_braille_set() {
+        assert_eq!(
+            SPINNER_FRAMES,
+            [
+                '\u{280B}', '\u{2819}', '\u{2839}', '\u{2838}', '\u{283C}', '\u{2834}', '\u{2826}',
+                '\u{2827}', '\u{2807}', '\u{280F}'
+            ]
+        );
+        assert_ne!(
+            spinner_frame(0),
+            spinner_frame(1),
+            "the frame must advance with the tick counter"
+        );
+        assert_eq!(spinner_frame(0), '\u{280B}');
+        assert_eq!(spinner_frame(10), spinner_frame(0), "the frame cycles every 10 ticks");
+        assert_eq!(spinner_frame(11), spinner_frame(1));
+    }
+
+    #[test]
+    fn live_board_animates_active_rows_with_the_spinner() {
+        let mut active = work("task-1", "auth", "session store", "in_progress");
+        active.claimed_by = Some("claude#a4f2".to_string());
+        let cards = vec![feat("auth", "Auth"), active];
+        let empty = BTreeSet::new();
+        let f0 = format_board_opts(&cards, &BTreeSet::new(), None, Some(0), &empty);
+        assert!(f0.contains(spinner_frame(0)), "active row must show spinner frame 0:\n{f0}");
+        assert!(
+            !f0.contains('\u{25D0}'),
+            "a live active row must not render the static half-circle:\n{f0}"
+        );
+        let f1 = format_board_opts(&cards, &BTreeSet::new(), None, Some(1), &empty);
+        assert!(f1.contains(spinner_frame(1)), "active row must advance to spinner frame 1:\n{f1}");
+        assert!(
+            f0.contains("active") && f0.contains("claude#a4f2"),
+            "the state word and claimant survive the spinner glyph:\n{f0}"
+        );
+    }
+
+    #[test]
+    fn snapshot_active_row_stays_the_static_half_circle() {
+        // ac-8: with no live tick (snapshot / non-terminal) active renders the
+        // static half-circle, never an animated spinner frame.
+        let active = work("task-1", "auth", "session store", "in_progress");
+        let cards = vec![feat("auth", "Auth"), active];
+        let out = format_board_opts(&cards, &BTreeSet::new(), None, None, &BTreeSet::new());
+        assert!(out.contains('\u{25D0}'), "static active glyph missing:\n{out}");
+        for tick in 0..SPINNER_FRAMES.len() as u64 {
+            assert!(
+                !out.contains(spinner_frame(tick)),
+                "snapshot must not render any spinner frame ({tick}):\n{out}"
+            );
+        }
+    }
+
+    #[test]
+    fn live_board_flashes_a_just_completed_card_then_hides_it() {
+        // A finished single-task feature: steady state hides the closed card and
+        // (per the feature-skip rule) the whole feature; the completing reload
+        // still flashes the card with the tick and shows the 100% header.
+        let cards = vec![feat("auth", "Auth"), work("task-1", "auth", "hash passwords", "verified")];
+        let hidden = format_board_opts(&cards, &BTreeSet::new(), None, Some(0), &BTreeSet::new());
+        assert!(
+            !hidden.contains("hash passwords"),
+            "steady state hides the closed card even as a feature's only task (ac-4):\n{hidden}"
+        );
+        let mut just = BTreeSet::new();
+        just.insert("task-1".to_string());
+        let flash = format_board_opts(&cards, &BTreeSet::new(), None, Some(0), &just);
+        assert!(
+            flash.contains("Auth: 1/1 done (100%)"),
+            "a feature whose last task just completed still shows its header on the flash reload:\n{flash}"
+        );
+        let row = flash
+            .lines()
+            .find(|l| l.contains("hash passwords"))
+            .expect("just-completed card must flash one tick frame");
+        assert!(
+            row.contains('\u{2713}') && row.contains("done"),
+            "the flash row carries the tick glyph (ac-8):\n{flash}"
+        );
+    }
+
+    #[test]
+    fn paint_uses_cursor_home_and_never_full_screen_clear() {
+        let out = paint("Auth: 1/2 done\n  row\n");
+        assert!(out.starts_with("\x1b[H"), "must home the cursor:\n{out:?}");
+        assert!(
+            !out.contains("\x1b[2J"),
+            "must never full-screen clear (would strobe at the render tick):\n{out:?}"
+        );
+        assert!(
+            out.contains("\x1b[K"),
+            "should erase each overwritten line to end-of-line:\n{out:?}"
+        );
     }
 
     struct TestTempDir {

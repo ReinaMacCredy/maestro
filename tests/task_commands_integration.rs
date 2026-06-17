@@ -713,6 +713,17 @@ fn list_supports_basic_output_and_requested_filters() {
     assert!(snapshot_out.contains("Task A"));
     assert!(snapshot_out.contains("\u{00b7} blocked"));
     assert!(snapshot_out.contains("Task B"));
+    // The snapshot path never animates: with Task A active it renders the static
+    // half-circle (asserted above) and none of the live-only Braille frames.
+    for frame in [
+        '\u{280B}', '\u{2819}', '\u{2839}', '\u{2838}', '\u{283C}', '\u{2834}', '\u{2826}',
+        '\u{2827}', '\u{2807}', '\u{280F}',
+    ] {
+        assert!(
+            !snapshot_out.contains(frame),
+            "watch snapshot must not render the live spinner frame {frame:?}:\n{snapshot_out}"
+        );
+    }
 
     // `watch snapshot <known-id>` focuses on exactly that feature.
     let focus = maestro(repo, &["watch", "snapshot", "billing-csv"]);
