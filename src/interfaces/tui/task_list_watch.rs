@@ -154,6 +154,13 @@ fn push_row(
     {
         out.push_str(&format!("  {claimant}"));
     }
+    // An unclaimed card carrying an advisory `suggested_for` shows the routing
+    // hint; a claim supersedes it (the claimant renders above instead).
+    if card.claimed_by.is_none()
+        && let Some(who) = card.suggested_for.as_deref()
+    {
+        out.push_str(&format!("  -> for {who}"));
+    }
     out.push('\n');
 }
 
@@ -744,6 +751,32 @@ mod tests {
         assert!(
             out.contains("claude#a4f2"),
             "claimant token missing:\n{out}"
+        );
+    }
+
+    #[test]
+    fn board_renders_the_assignee_hint_until_a_claim_supersedes_it() {
+        let mut suggested = work("task-1", "auth", "session store", "ready");
+        suggested.suggested_for = Some("codex#s9".to_string());
+        let cards = vec![feat("auth", "Auth"), suggested];
+        let out = format_board(&cards, &BTreeSet::new(), None);
+        assert!(
+            out.contains("-> for codex#s9"),
+            "unclaimed suggested card should show the routing hint:\n{out}"
+        );
+
+        // Once claimed, the claimant supersedes the hint on the row.
+        let mut claimed = work("task-1", "auth", "session store", "in_progress");
+        claimed.suggested_for = Some("codex#s9".to_string());
+        claimed.claimed_by = Some("claude#a4f2".to_string());
+        let out2 = format_board(
+            &[feat("auth", "Auth"), claimed].to_vec(),
+            &BTreeSet::new(),
+            None,
+        );
+        assert!(
+            out2.contains("claude#a4f2") && !out2.contains("-> for"),
+            "a claim supersedes the hint in the board render:\n{out2}"
         );
     }
 

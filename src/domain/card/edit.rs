@@ -261,6 +261,35 @@ pub fn apply_claim(card: &mut Card, claimed_by: &str, now: &str) -> Result<Claim
     Ok(outcome)
 }
 
+/// Set (`who = Some`) or clear (`who = None`) a workable card's advisory
+/// `suggested_for` routing hint -- the `assign` verb. Deliberately separate from
+/// [`claim`]: it changes no status and never gates claimability, so any session
+/// may set or change it and a later claim by anyone still succeeds. Only
+/// task/bug/chore carry a hint, since the suggestion routes claimable work. An
+/// idempotent set/clear (the stored value already matches) skips the CAS write
+/// and returns `false`; a real change returns `true`.
+pub fn assign(paths: &MaestroPaths, id: &str, who: Option<&str>, now: &str) -> Result<bool> {
+    validate_card_id(id)?;
+    let Some(resolved) = resolve(paths, id)? else {
+        bail!("no card {id} to assign");
+    };
+    if !resolved.card.card_type.workable() {
+        bail!(
+            "{id} is a {}, not a workable card; only task/bug/chore take an assignee hint",
+            resolved.card.card_type.as_str()
+        );
+    }
+    let next = who.map(str::to_string);
+    if resolved.card.suggested_for == next {
+        return Ok(false);
+    }
+    let mut card = resolved.card.clone();
+    card.suggested_for = next;
+    card.updated_at = now.to_string();
+    save_resolved(&card, &resolved)?;
+    Ok(true)
+}
+
 /// Whether a claim stamped at `claimed_at` is older than the stale TTL as of
 /// `now`. An unparseable/missing timestamp counts as stale so it can never pin a
 /// card forever (SPEC E6).
@@ -703,6 +732,87 @@ mod tests {
 
         let err = claim(&paths, "task-001", "claude#s1", LATER).expect_err("closed not claimable");
         assert!(err.to_string().contains("closed"), "says it is closed");
+    }
+
+    #[test]
+    fn assign_sets_then_clears_the_advisory_hint_without_touching_status() {
+        let paths = repo("assign-set-clear");
+        seed(&paths, "task-001");
+
+        assert!(
+            assign(&paths, "task-001", Some("codex#s9"), LATER).expect("set"),
+            "a fresh hint is written"
+        );
+        let card = load(&card_path(&paths, "task-001"))
+            .expect("load")
+            .expect("card exists");
+        assert_eq!(card.suggested_for.as_deref(), Some("codex#s9"));
+        assert_eq!(card.status, "ready", "advisory hint changes no status");
+        assert_eq!(card.claimed_by, None, "advisory hint is not a claim");
+        assert_eq!(card.updated_at, LATER, "set bumps updated_at");
+
+        assert!(
+            assign(&paths, "task-001", None, SOON).expect("clear"),
+            "clearing a set hint is a change"
+        );
+        let cleared = load(&card_path(&paths, "task-001"))
+            .expect("load")
+            .expect("card exists");
+        assert_eq!(cleared.suggested_for, None, "clear removes the hint");
+        assert_eq!(cleared.status, "ready", "clear changes no status");
+    }
+
+    #[test]
+    fn assign_is_idempotent() {
+        let paths = repo("assign-idem");
+        seed(&paths, "task-001");
+
+        assert!(assign(&paths, "task-001", Some("codex#s9"), LATER).expect("first set"));
+        assert!(
+            !assign(&paths, "task-001", Some("codex#s9"), SOON).expect("second set"),
+            "re-assigning the same who is a no-op"
+        );
+        assert!(
+            !assign(&paths, "task-001", None, SOON).is_err(),
+            "clearing is fine"
+        );
+        // a second clear on an already-clear card is also a no-op
+        assert!(!assign(&paths, "task-001", None, SOON).expect("clear-again"));
+    }
+
+    #[test]
+    fn claim_does_not_clear_a_suggested_for_and_assign_never_blocks_a_claim() {
+        let paths = repo("assign-no-block");
+        seed(&paths, "task-001");
+        assign(&paths, "task-001", Some("codex#s9"), NOW).expect("assign to a peer");
+
+        // A different session claims the card the hint suggested for someone else.
+        let outcome = claim(&paths, "task-001", "claude#s1", LATER).expect("claim succeeds");
+        assert_eq!(
+            outcome,
+            ClaimOutcome::Claimed,
+            "the hint never blocks a claim"
+        );
+
+        let card = load(&card_path(&paths, "task-001"))
+            .expect("load")
+            .expect("card exists");
+        assert_eq!(card.claimed_by.as_deref(), Some("claude#s1"));
+        assert_eq!(
+            card.suggested_for.as_deref(),
+            Some("codex#s9"),
+            "claim does not auto-clear the advisory hint"
+        );
+    }
+
+    #[test]
+    fn assign_refuses_a_non_workable_card() {
+        let paths = repo("assign-feature");
+        seed_full(&paths, "feat-001", CardType::Feature, "open", None, None);
+
+        let err =
+            assign(&paths, "feat-001", Some("codex#s9"), NOW).expect_err("feature takes no hint");
+        assert!(err.to_string().contains("feature"), "names the type");
     }
 
     #[test]

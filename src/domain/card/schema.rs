@@ -47,6 +47,12 @@ pub struct Card {
     /// Timestamp the claim was stamped, used by the stale-claim TTL (SPEC E6).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub claimed_at: Option<String>,
+    /// Advisory routing hint set by `assign`: who a teammate suggests should
+    /// pick up this card. Purely advisory -- it changes no status and never
+    /// gates a claim; `claimed_by` supersedes it in the work-board render once
+    /// the card is taken. `None` when no suggestion stands.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub suggested_for: Option<String>,
     /// Creation timestamp string.
     pub created_at: String,
     /// Last update timestamp string.
@@ -88,6 +94,7 @@ impl Card {
             lane: None,
             claimed_by: None,
             claimed_at: None,
+            suggested_for: None,
             created_at: now.to_string(),
             updated_at: now.to_string(),
             description: None,

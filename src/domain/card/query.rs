@@ -454,9 +454,15 @@ impl ListFilter<'_> {
                 .card_type
                 .is_none_or(|card_type| card.card_type == card_type)
             && self.assignee.is_none_or(|assignee| {
-                card.claimed_by
+                let claimed = card
+                    .claimed_by
                     .as_deref()
-                    .is_some_and(|owner| claim_matches(owner, assignee))
+                    .is_some_and(|owner| claim_matches(owner, assignee));
+                let suggested = card
+                    .suggested_for
+                    .as_deref()
+                    .is_some_and(|who| claim_matches(who, assignee));
+                claimed || suggested
             })
             && self
                 .status
@@ -995,6 +1001,44 @@ mod tests {
             by_agent("nobody"),
             Vec::<&str>::new(),
             "no claim and no card matches; unclaimed cards never answer an assignee filter"
+        );
+    }
+
+    #[test]
+    fn assignee_matches_the_advisory_hint_or_the_claim() {
+        // unclaimed but suggested for codex
+        let mut suggested = card("task-001", CardType::Task, "ready");
+        suggested.suggested_for = Some("codex#s9".to_string());
+        // claimed by codex, no hint -- the existing claim-only match
+        let mut claimed = card("task-002", CardType::Task, "in_progress");
+        claimed.claimed_by = Some("codex#s2".to_string());
+        // suggested for someone else
+        let mut other = card("task-003", CardType::Task, "ready");
+        other.suggested_for = Some("claude#s1".to_string());
+        let cards = vec![suggested, claimed, other];
+
+        let by = |q: &str| -> Vec<&str> {
+            query(
+                &cards,
+                &ListFilter {
+                    assignee: Some(q),
+                    ..Default::default()
+                },
+            )
+            .iter()
+            .map(|c| c.id.as_str())
+            .collect()
+        };
+
+        assert_eq!(
+            by("codex"),
+            vec!["task-001", "task-002"],
+            "--assignee matches the advisory hint OR the actual claim (a superset of claim-only)"
+        );
+        assert_eq!(
+            by("claude"),
+            vec!["task-003"],
+            "a hint for another who is matched by that who"
         );
     }
 

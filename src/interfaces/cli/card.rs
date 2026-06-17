@@ -9,8 +9,8 @@ use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::slug::slugify_ascii;
 use crate::foundation::core::time::utc_now_timestamp;
 use crate::interfaces::cli::{
-    ArchiveArgs, ClaimArgs, CloseArgs, CreateArgs, DepArgs, DepCommand, LinkArgs, LinkCommand,
-    ListArgs, NoteArgs, ReadyArgs, ShowArgs, UpdateArgs,
+    ArchiveArgs, AssignArgs, ClaimArgs, CloseArgs, CreateArgs, DepArgs, DepCommand, LinkArgs,
+    LinkCommand, ListArgs, NoteArgs, ReadyArgs, ShowArgs, UpdateArgs,
 };
 
 const READY_JSON_SCHEMA: &str = "maestro.ready.v1";
@@ -247,6 +247,39 @@ fn print_claim_outcome(id: &str, identity: &str, outcome: &card::edit::ClaimOutc
             println!("reclaimed {id} from {previous} (stale) as {identity}")
         }
     }
+}
+
+/// Execute `maestro assign <card> <who>`: set or clear a card's advisory
+/// `suggested_for` routing hint. Advisory only -- it changes no status and never
+/// blocks a claim by any session (agent-teams routing decision). `none` or
+/// `--clear` clears the hint.
+pub fn assign(args: AssignArgs) -> Result<()> {
+    let Some(paths) = card_paths()? else {
+        return Ok(());
+    };
+    let who = if args.clear {
+        None
+    } else {
+        match args.who.as_deref().map(str::trim) {
+            None | Some("") => {
+                return Err(anyhow!(
+                    "specify who to suggest {} for, or pass `none` / --clear to clear the hint",
+                    args.id
+                ));
+            }
+            Some("none") => None,
+            Some(name) => Some(name.to_string()),
+        }
+    };
+    let changed = card::edit::assign(&paths, &args.id, who.as_deref(), &utc_now_timestamp())?;
+    super::emit_card_touch(&paths, &args.id);
+    match (changed, &who) {
+        (true, Some(who)) => println!("{} suggested for {who} (advisory; not a claim)", args.id),
+        (false, Some(who)) => println!("{} already suggested for {who}", args.id),
+        (true, None) => println!("cleared the assignee hint on {}", args.id),
+        (false, None) => println!("{} had no assignee hint to clear", args.id),
+    }
+    Ok(())
 }
 
 /// Execute `maestro note <id> <text>`: append a dated note to the card's
@@ -614,12 +647,13 @@ fn render_ready(cards: &[&card::schema::Card]) {
     for (i, c) in cards.iter().enumerate() {
         let rank = i + 1;
         println!(
-            "  {rank}. [P{rank}] {:<id_width$}  {:<type_width$}  {:<title_width$}  {}{}",
+            "  {rank}. [P{rank}] {:<id_width$}  {:<type_width$}  {:<title_width$}  {}{}{}",
             c.id,
             c.card_type.as_str(),
             c.title,
             claim_label(c),
             project_badge(c),
+            assignee_hint(c),
         );
     }
 }
@@ -673,13 +707,14 @@ fn render_list(rows: &[(&card::schema::Card, bool)], hidden: usize, archived: bo
             (false, _) => String::new(),
         };
         println!(
-            "  {rank}. {:<id_width$}  {:<type_width$}  {:<status_width$}  {:<parent_width$}  {}{}{marker}",
+            "  {rank}. {:<id_width$}  {:<type_width$}  {:<status_width$}  {:<parent_width$}  {}{}{}{marker}",
             c.id,
             c.card_type.as_str(),
             c.status,
             c.parent.as_deref().unwrap_or("-"),
             c.title,
             project_badge(c),
+            assignee_hint(c),
         );
     };
 
@@ -765,6 +800,11 @@ fn render_show(c: &card::schema::Card, alias: Option<&str>, related_by: &[String
     if let Some(parent) = &c.parent {
         println!("parent: {parent}");
     }
+    // show is the full-detail view: reveal the raw advisory hint even once the
+    // card is claimed (the work-board renders suppress it; show does not).
+    if let Some(who) = &c.suggested_for {
+        println!("suggested for: {who}");
+    }
     // SPEC E2: the dotted alias is render-time only -- never a ref, never
     // accepted as an address, so it is labeled to discourage `claim <alias>`.
     if let Some(alias) = alias {
@@ -838,6 +878,17 @@ fn project_badge(c: &card::schema::Card) -> String {
     }
 }
 
+/// Trailing `  -> for <who>` token for an UNCLAIMED card carrying an advisory
+/// `suggested_for` hint, or the empty string otherwise. A claim supersedes the
+/// hint in the work-board render (the claimant shows instead), so a claimed card
+/// renders no hint here even when the field is still set.
+fn assignee_hint(c: &card::schema::Card) -> String {
+    match (&c.claimed_by, c.suggested_for.as_deref()) {
+        (None, Some(who)) => format!("  -> for {who}"),
+        _ => String::new(),
+    }
+}
+
 #[derive(Serialize)]
 struct ReadyJson<'a> {
     version: u8,
@@ -855,6 +906,7 @@ struct ReadyCardJson<'a> {
     status: &'a str,
     parent: Option<&'a str>,
     claimed_by: Option<&'a str>,
+    suggested_for: Option<&'a str>,
     project: Option<&'a str>,
 }
 
@@ -868,6 +920,7 @@ impl<'a> ReadyCardJson<'a> {
             status: &card.status,
             parent: card.parent.as_deref(),
             claimed_by: card.claimed_by.as_deref(),
+            suggested_for: card.suggested_for.as_deref(),
             project: card.project.as_deref(),
         }
     }
@@ -890,6 +943,7 @@ struct ListCardJson<'a> {
     parent: Option<&'a str>,
     claimed_by: Option<&'a str>,
     claimed_at: Option<&'a str>,
+    suggested_for: Option<&'a str>,
     project: Option<&'a str>,
     archived: bool,
 }
@@ -904,6 +958,7 @@ impl<'a> ListCardJson<'a> {
             parent: card.parent.as_deref(),
             claimed_by: card.claimed_by.as_deref(),
             claimed_at: card.claimed_at.as_deref(),
+            suggested_for: card.suggested_for.as_deref(),
             project: card.project.as_deref(),
             archived,
         }

@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.0.0 -->
-<!-- maestro:cli-reference-sha256: 26d7073241657f84f42632a3082b63a7fa9834617de0a9a5f5eb02556499d89b -->
+<!-- maestro:cli-reference-sha256: ac67f82e591ef39bc7eca1314a42950f97209f614e72820ee283b03d32257eac -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -162,6 +162,7 @@ Every verb and flag is listed; a spelling not found here does not exist.
 - `maestro card dep help help` -- Print this message or the help of the given subcommand(s)
 - `maestro card archive [FEATURE] [--loose]` -- Archive a feature card and its child cards
 - `maestro card claim <ID>` -- Claim a workable card for this session
+- `maestro card assign <ID> [WHO] [--clear]` -- Suggest an owner for a workable card (advisory; never blocks a claim)
 - `maestro card note <ID> <TEXT>` -- Append a dated note to a card's notes.md
 - `maestro card create <TITLE> -t|--type <TYPE> [--parent <PARENT>] [--description <TEXT>] [--project <PROJECT>] [--id-only]` -- Create a card of any type
 - `maestro card show <ID> [--json] [--compact-json]` -- Show a card's header, edges, and body
@@ -173,6 +174,7 @@ Every verb and flag is listed; a spelling not found here does not exist.
 - `maestro card help dep remove` -- Remove a blocking edge so CHILD no longer waits on PARENT
 - `maestro card help archive` -- Archive a feature card and its child cards
 - `maestro card help claim` -- Claim a workable card for this session
+- `maestro card help assign` -- Suggest an owner for a workable card (advisory; never blocks a claim)
 - `maestro card help note` -- Append a dated note to a card's notes.md
 - `maestro card help create` -- Create a card of any type
 - `maestro card help show` -- Show a card's header, edges, and body
@@ -225,6 +227,10 @@ Every verb and flag is listed; a spelling not found here does not exist.
 ## maestro claim
 
 - `maestro claim <ID>` -- Claim a workable card for this session (card store)
+
+## maestro assign
+
+- `maestro assign <ID> [WHO] [--clear]` -- Suggest an owner for a workable card (advisory; never blocks a claim)
 
 ## maestro note
 
@@ -386,6 +392,7 @@ Every verb and flag is listed; a spelling not found here does not exist.
 - `maestro help card dep remove` -- Remove a blocking edge so CHILD no longer waits on PARENT
 - `maestro help card archive` -- Archive a feature card and its child cards
 - `maestro help card claim` -- Claim a workable card for this session
+- `maestro help card assign` -- Suggest an owner for a workable card (advisory; never blocks a claim)
 - `maestro help card note` -- Append a dated note to a card's notes.md
 - `maestro help card create` -- Create a card of any type
 - `maestro help card show` -- Show a card's header, edges, and body
@@ -403,6 +410,7 @@ Every verb and flag is listed; a spelling not found here does not exist.
 - `maestro help msg list` -- Channel overview, or one partner's full timeline
 - `maestro help archive` -- Archive a feature card and its child cards (card store)
 - `maestro help claim` -- Claim a workable card for this session (card store)
+- `maestro help assign` -- Suggest an owner for a workable card (advisory; never blocks a claim)
 - `maestro help note` -- Append a dated note to a card's notes.md (card store)
 - `maestro help create` -- Create a card of any type (card store)
 - `maestro help show` -- Show a card's header, edges, and body (card store)

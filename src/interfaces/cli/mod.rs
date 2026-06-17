@@ -280,6 +280,11 @@ pub enum RootCommand {
     )]
     Claim(ClaimArgs),
     #[command(
+        about = "Suggest an owner for a workable card (advisory; never blocks a claim)",
+        after_help = "Examples:\n  maestro assign task-0a1b2c codex   # advisory routing hint, not a claim\n  maestro assign task-0a1b2c none    # clear the hint\n  maestro assign task-0a1b2c --clear"
+    )]
+    Assign(AssignArgs),
+    #[command(
         about = "Append a dated note to a card's notes.md (card store)",
         after_help = "Examples:\n  maestro note task-0a1b2c \"chose option B; A breaks on reparent\""
     )]
@@ -451,6 +456,8 @@ pub enum CardCommand {
     Archive(ArchiveArgs),
     #[command(about = "Claim a workable card for this session")]
     Claim(ClaimArgs),
+    #[command(about = "Suggest an owner for a workable card (advisory; never blocks a claim)")]
+    Assign(AssignArgs),
     #[command(about = "Append a dated note to a card's notes.md")]
     Note(NoteArgs),
     #[command(about = "Create a card of any type")]
@@ -484,7 +491,8 @@ pub struct ListArgs {
     /// Only cards of this type (feature, task, bug, chore, idea, decision).
     #[arg(long = "type", value_name = "TYPE")]
     pub card_type: Option<String>,
-    /// Only cards claimed by this agent or full `<agent>#<session>` token.
+    /// Only cards whose advisory assignee hint OR actual claim is this agent or
+    /// full `<agent>#<session>` token.
     #[arg(long, value_name = "ASSIGNEE")]
     pub assignee: Option<String>,
     /// Only cards in this coarse status (open, in_progress, closed).
@@ -1070,6 +1078,20 @@ pub struct ClaimArgs {
 }
 
 #[derive(Debug, Args)]
+pub struct AssignArgs {
+    /// The workable card (task/bug/chore) to suggest an owner for.
+    #[arg(value_name = "ID")]
+    pub id: String,
+    /// Who to suggest the card for; pass `none` to clear the hint. Advisory
+    /// only -- it never claims the card or blocks another session's claim.
+    #[arg(value_name = "WHO")]
+    pub who: Option<String>,
+    /// Clear the advisory assignee hint.
+    #[arg(long)]
+    pub clear: bool,
+}
+
+#[derive(Debug, Args)]
 pub struct NoteArgs {
     /// The card to append a note to.
     #[arg(value_name = "ID")]
@@ -1469,6 +1491,7 @@ pub fn run(cli: Cli) -> Result<()> {
             CardCommand::Dep(args) => card::dep(args),
             CardCommand::Archive(args) => card::archive(args),
             CardCommand::Claim(args) => card::claim(args),
+            CardCommand::Assign(args) => card::assign(args),
             CardCommand::Note(args) => card::note(args),
             CardCommand::Create(args) => card::create(args),
             CardCommand::Show(args) => card::show(args),
@@ -1483,6 +1506,7 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Msg(args) => msg::run(args),
         RootCommand::Archive(args) => card::archive(args),
         RootCommand::Claim(args) => card::claim(args),
+        RootCommand::Assign(args) => card::assign(args),
         RootCommand::Note(args) => card::note(args),
         RootCommand::Create(args) => card::create(args),
         RootCommand::Show(args) => card::show(args),

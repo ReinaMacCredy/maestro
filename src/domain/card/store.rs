@@ -857,6 +857,7 @@ mod tests {
             lane: Some("build".to_string()),
             claimed_by: Some("claude#session-1".to_string()),
             claimed_at: Some("2026-06-08T00:00:00Z".to_string()),
+            suggested_for: Some("codex#session-2".to_string()),
             created_at: "2026-06-08T00:00:00Z".to_string(),
             updated_at: "2026-06-08T01:00:00Z".to_string(),
             description: Some("Stream rows to stdout.".to_string()),
