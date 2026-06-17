@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.0.0 -->
-<!-- maestro:cli-reference-sha256: 15054755701710e95aaa872f5361358cdfd17e1115bec8ca847125de27798884 -->
+<!-- maestro:cli-reference-sha256: cf7111f5b9f798879f8a57fa1ea2edebe761f7c40327b29700d756ccad740647 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -308,8 +308,8 @@ Every verb and flag is listed; a spelling not found here does not exist.
 
 ## maestro watch
 
-- `maestro watch snapshot`
-- `maestro watch help snapshot`
+- `maestro watch snapshot [ID]` -- Render the live board once and exit
+- `maestro watch help snapshot` -- Render the live board once and exit
 - `maestro watch help help` -- Print this message or the help of the given subcommand(s)
 
 ## maestro verify
@@ -427,7 +427,7 @@ Every verb and flag is listed; a spelling not found here does not exist.
 - `maestro help mcp tools` -- List the MCP tool names maestro exposes
 - `maestro help mcp list` -- List the MCP tool names maestro exposes (same as tools)
 - `maestro help hook record`
-- `maestro help watch snapshot`
+- `maestro help watch snapshot` -- Render the live board once and exit
 - `maestro help verify` -- Verify a task against its recorded proof
 - `maestro help playbook` -- Print a language code styleguide, or the index with no language
 - `maestro help version` -- Print the maestro version and binary path

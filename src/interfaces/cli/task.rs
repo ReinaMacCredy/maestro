@@ -833,8 +833,9 @@ struct TaskListFilters {
 
 fn list_tasks(paths: &MaestroPaths, filters: TaskListFilters) -> Result<()> {
     if filters.watch {
-        return task_list_watch::run(paths, filters.interval.unwrap_or(2), || {
-            filtered_tasks(paths, &filters)
+        return task_list_watch::run(filters.interval.unwrap_or(2), || {
+            let tasks = filtered_tasks(paths, &filters)?;
+            task_list_watch::render_snapshot(paths, &tasks)
         });
     }
 
@@ -891,12 +892,12 @@ fn task_filter(filters: &TaskListFilters, include_terminal: bool) -> task::TaskF
 }
 
 fn watch_tasks(paths: &MaestroPaths, id: Option<String>, interval: Option<u64>) -> Result<()> {
-    task_list_watch::run(paths, interval.unwrap_or(2), || {
+    task_list_watch::run(interval.unwrap_or(2), || {
         let mut tasks = task::load_task_records(&paths.tasks_dir())?;
         if let Some(id) = id.as_deref() {
             tasks.retain(|task| task.id == id);
         }
-        Ok(tasks)
+        task_list_watch::render_snapshot(paths, &tasks)
     })
 }
 

@@ -310,7 +310,10 @@ pub enum RootCommand {
     Mcp(McpArgs),
     #[command(about = "Hook entry points invoked by the agent harness")]
     Hook(HookArgs),
-    #[command(about = "Watch tasks and render snapshots on change")]
+    #[command(
+        about = "Live dependency-tree board (bare) or a one-shot snapshot; optional feature-id focuses one feature",
+        after_help = "Examples:\n  maestro watch                 # live board, all features with open work\n  maestro watch <feature-id>    # live board focused on one feature\n  maestro watch snapshot        # render one frame and exit\n  maestro watch snapshot <feature-id>"
+    )]
     Watch(WatchArgs),
     #[command(about = "Verify a task against its recorded proof")]
     Verify { id: Option<String> },
@@ -1391,14 +1394,24 @@ pub enum McpCommand {
 }
 
 #[derive(Debug, Args)]
+#[command(args_conflicts_with_subcommands = true)]
 pub struct WatchArgs {
     #[command(subcommand)]
-    pub command: WatchCommand,
+    pub command: Option<WatchCommand>,
+    /// Focus on a single feature id (overview when omitted)
+    pub id: Option<String>,
+    /// Re-render interval in seconds (live mode)
+    #[arg(long)]
+    pub interval: Option<u64>,
 }
 
 #[derive(Debug, Subcommand)]
 pub enum WatchCommand {
-    Snapshot,
+    #[command(about = "Render the live board once and exit")]
+    Snapshot {
+        /// Focus on a single feature id (overview when omitted)
+        id: Option<String>,
+    },
 }
 
 #[derive(Debug, Args)]
@@ -1671,6 +1684,40 @@ pub(super) fn detected_agent_hint() -> &'static str {
 mod tests {
     use super::*;
     use crate::domain::proof::{ProofStaleReason, ProofStatusKind};
+    use clap::Parser;
+
+    fn parse_watch(argv: &[&str]) -> WatchArgs {
+        match Cli::try_parse_from(argv)
+            .unwrap_or_else(|e| panic!("parse {argv:?}: {e}"))
+            .command
+        {
+            RootCommand::Watch(args) => args,
+            other => panic!("expected watch, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn watch_parse_matrix_bare_focus_and_snapshot() {
+        let bare = parse_watch(&["maestro", "watch"]);
+        assert!(bare.command.is_none() && bare.id.is_none());
+
+        // The fall-through case: a bare positional must land on `id`, not be
+        // rejected as an unknown subcommand.
+        let focus = parse_watch(&["maestro", "watch", "feat-x"]);
+        assert!(focus.command.is_none());
+        assert_eq!(focus.id.as_deref(), Some("feat-x"));
+
+        let snap = parse_watch(&["maestro", "watch", "snapshot"]);
+        assert!(matches!(snap.command, Some(WatchCommand::Snapshot { id: None })));
+
+        let snap_focus = parse_watch(&["maestro", "watch", "snapshot", "feat-x"]);
+        assert!(
+            matches!(snap_focus.command, Some(WatchCommand::Snapshot { id: Some(ref s) }) if s == "feat-x")
+        );
+
+        let interval = parse_watch(&["maestro", "watch", "--interval", "5"]);
+        assert_eq!(interval.interval, Some(5));
+    }
 
     fn commit_drift() -> Vec<ProofStaleReason> {
         vec![ProofStaleReason {

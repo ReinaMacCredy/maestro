@@ -713,6 +713,51 @@ fn list_supports_basic_output_and_requested_filters() {
     assert!(snapshot_out.contains("Task A"));
     assert!(snapshot_out.contains("\u{00b7} blocked"));
     assert!(snapshot_out.contains("Task B"));
+
+    // `watch snapshot <known-id>` focuses on exactly that feature.
+    let focus = maestro(repo, &["watch", "snapshot", "billing-csv"]);
+    assert_success(&focus, &["watch", "snapshot", "billing-csv"]);
+    let focus_out = stdout(&focus);
+    assert!(focus_out.contains("Billing CSV: 0/2 done (0%)"));
+    assert!(!focus_out.contains("Other"), "focus must exclude other features:\n{focus_out}");
+
+    // Focusing the other feature renders only its header and rows.
+    let focus_other = maestro(repo, &["watch", "snapshot", "other"]);
+    assert_success(&focus_other, &["watch", "snapshot", "other"]);
+    let focus_other_out = stdout(&focus_other);
+    assert!(focus_other_out.contains("Other: 0/1 done (0%)"));
+    assert!(focus_other_out.contains("Task C"));
+    assert!(
+        !focus_other_out.contains("Billing CSV"),
+        "focus must exclude other features:\n{focus_other_out}"
+    );
+
+    // An unknown feature id errors with a re-list hint, never empty output.
+    let unknown = maestro(repo, &["watch", "snapshot", "does-not-exist"]);
+    assert!(!unknown.status.success(), "unknown focus id should error");
+    let unknown_err = String::from_utf8_lossy(&unknown.stderr);
+    assert!(
+        unknown_err.contains("no feature 'does-not-exist'")
+            && unknown_err.contains("maestro list --type feature"),
+        "unknown id must point back to the feature list:\n{unknown_err}"
+    );
+
+    // Bare `maestro watch` over a pipe (non-terminal) prints one frame and exits 0.
+    let bare = maestro(repo, &["watch"]);
+    assert_success(&bare, &["watch"]);
+    assert!(stdout(&bare).contains("Billing CSV: 0/2 done (0%)"));
+
+    // The unknown-id error must also surface through the bare (live) path, where
+    // it propagates out of the render closure rather than a direct call. The
+    // command returns (does not hang) with the same re-list hint.
+    let bare_unknown = maestro(repo, &["watch", "does-not-exist"]);
+    assert!(!bare_unknown.status.success(), "bare unknown focus id should error");
+    let bare_unknown_err = String::from_utf8_lossy(&bare_unknown.stderr);
+    assert!(
+        bare_unknown_err.contains("no feature 'does-not-exist'")
+            && bare_unknown_err.contains("maestro list --type feature"),
+        "bare unknown id must point back to the feature list:\n{bare_unknown_err}"
+    );
 }
 
 #[test]

@@ -12,21 +12,22 @@ use crate::domain::task;
 use crate::foundation::core::git;
 use crate::foundation::core::paths::MaestroPaths;
 
-/// Run the polling task status screen.
-pub fn run<F>(paths: &MaestroPaths, interval_seconds: u64, load_tasks: F) -> Result<()>
+/// Run the polling watch loop. The loop is the reuse unit: each tick calls
+/// `render` for one frame, so `task list --watch` and `maestro watch` share it
+/// while sourcing different renderers (task records vs the card graph). A
+/// non-terminal stdout prints one frame and exits.
+pub fn run<R>(interval_seconds: u64, render: R) -> Result<()>
 where
-    F: Fn() -> Result<Vec<task::TaskRecord>>,
+    R: Fn() -> Result<String>,
 {
     let interval = normalized_interval(interval_seconds);
     if !io::stdout().is_terminal() {
-        let initial_tasks = load_tasks()?;
-        print!("{}", render_snapshot(paths, &initial_tasks)?);
+        print!("{}", render()?);
         return Ok(());
     }
 
     loop {
-        let tasks = load_tasks()?;
-        print!("\x1b[2J\x1b[H{}", render_snapshot(paths, &tasks)?);
+        print!("\x1b[2J\x1b[H{}", render()?);
         io::stdout()
             .flush()
             .context("failed to flush watch output")?;
@@ -143,7 +144,11 @@ fn place<'a>(
 /// that feature's open workable cards. Pure over its inputs so it is testable
 /// without IO. Features with no workable children (design-only) or no open work
 /// (finished) are omitted; closed cards are hidden but still counted in X/Y.
-fn format_board(cards: &[card::schema::Card], blocked_ids: &std::collections::BTreeSet<String>) -> String {
+fn format_board(
+    cards: &[card::schema::Card],
+    blocked_ids: &std::collections::BTreeSet<String>,
+    focus: Option<&str>,
+) -> String {
     use std::collections::BTreeMap;
 
     let mut features: BTreeMap<&str, &card::schema::Card> = BTreeMap::new();
@@ -164,8 +169,19 @@ fn format_board(cards: &[card::schema::Card], blocked_ids: &std::collections::BT
 
     let mut out = String::new();
     for (fid, feature) in &features {
-        let Some(kids) = children.get(fid) else {
+        // Focus renders exactly one feature and never hides it: a focused
+        // design-only or finished feature still prints its header (ac-2), so
+        // the overview-only omissions below are skipped in focus mode.
+        if let Some(focus) = focus
+            && *fid != focus
+        {
             continue;
+        }
+        let empty: Vec<&card::schema::Card> = Vec::new();
+        let kids = match children.get(fid) {
+            Some(kids) => kids,
+            None if focus.is_some() => &empty,
+            None => continue,
         };
         let total = kids.len();
         let mut kids: Vec<&card::schema::Card> = kids.clone();
@@ -176,10 +192,12 @@ fn format_board(cards: &[card::schema::Card], blocked_ids: &std::collections::BT
             counts[classify(kid, blocked_ids) as usize] += 1;
         }
         let done = counts[RowState::Done as usize];
-        if done == total {
+        if done == total && focus.is_none() {
             continue;
         }
-        let pct = done * 100 / total;
+        // total == 0 (a focused feature with no workable kids) implies done == 0,
+        // so the .max(1) guard yields 0% without a separate branch.
+        let pct = done * 100 / total.max(1);
         out.push_str(&format!(
             "{}: {done}/{total} done ({pct}%) | ready {} | active {} | needs_verification {} | blocked {}\n",
             feature.title,
@@ -245,15 +263,25 @@ fn format_board(cards: &[card::schema::Card], blocked_ids: &std::collections::BT
 /// Load the card store and render one board snapshot. The blocked-id set comes
 /// from the same task-record predicate `maestro status` uses, so the header's
 /// blocked count matches status per card.
-pub fn render_board(paths: &MaestroPaths) -> Result<String> {
+pub fn render_board(paths: &MaestroPaths, focus: Option<&str>) -> Result<String> {
     let cards = card::query::scan(paths)?;
+    if let Some(focus) = focus {
+        let known = cards.iter().any(|card| {
+            card.card_type == card::schema::CardType::Feature && card.id == focus
+        });
+        if !known {
+            anyhow::bail!(
+                "no feature '{focus}'; run `maestro list --type feature` to see ids"
+            );
+        }
+    }
     let tasks = task::load_task_records(&paths.tasks_dir())?;
     let blocked_ids: std::collections::BTreeSet<String> = tasks
         .iter()
         .filter(|task| task::has_unresolved_blockers(task))
         .map(|task| task.id.clone())
         .collect();
-    Ok(format_board(&cards, &blocked_ids))
+    Ok(format_board(&cards, &blocked_ids, focus))
 }
 
 /// Render one sandcastle-style task status snapshot.
@@ -485,7 +513,7 @@ mod tests {
             child("idea-1", "auth", card::schema::CardType::Idea, "maybe oauth", "open"),
             child("dec-1", "auth", card::schema::CardType::Decision, "pick hasher", "locked"),
         ];
-        let out = format_board(&cards, &BTreeSet::new());
+        let out = format_board(&cards, &BTreeSet::new(), None);
         assert!(out.contains("hash passwords"), "open work row missing:\n{out}");
         assert!(!out.contains("old login"), "closed row should be hidden:\n{out}");
         assert!(!out.contains("maybe oauth"), "idea row should never appear:\n{out}");
@@ -499,7 +527,7 @@ mod tests {
         let mut active = work("task-1", "auth", "session store", "in_progress");
         active.claimed_by = Some("claude#a4f2".to_string());
         let cards = vec![feat("auth", "Auth"), active];
-        let out = format_board(&cards, &BTreeSet::new());
+        let out = format_board(&cards, &BTreeSet::new(), None);
         assert!(
             out.contains("\u{25D0} active"),
             "active glyph missing:\n{out}"
@@ -517,9 +545,54 @@ mod tests {
             feat("done-feat", "Finished"),
             work("task-9", "done-feat", "shipped work", "verified"),
         ];
-        let out = format_board(&cards, &BTreeSet::new());
+        let out = format_board(&cards, &BTreeSet::new(), None);
         assert!(!out.contains("Design only"), "design-only feature should be omitted:\n{out}");
         assert!(!out.contains("Finished"), "finished feature should be omitted:\n{out}");
+    }
+
+    #[test]
+    fn board_focus_renders_only_the_named_feature() {
+        let cards = vec![
+            feat("auth", "Auth"),
+            work("task-1", "auth", "hash passwords", "ready"),
+            feat("billing", "Billing"),
+            work("task-2", "billing", "invoice export", "ready"),
+        ];
+        let out = format_board(&cards, &BTreeSet::new(), Some("billing"));
+        assert!(out.contains("Billing"), "focused feature header missing:\n{out}");
+        assert!(out.contains("invoice export"), "focused feature row missing:\n{out}");
+        assert!(!out.contains("Auth"), "other feature must be excluded under focus:\n{out}");
+        assert!(!out.contains("hash passwords"), "other feature's row leaked:\n{out}");
+    }
+
+    #[test]
+    fn board_focus_shows_header_for_a_finished_feature() {
+        // ac-2: a focused feature is never hidden, even when every child is
+        // closed -- the header renders rather than producing empty output.
+        let cards = vec![
+            feat("done-feat", "Finished"),
+            work("task-9", "done-feat", "shipped work", "verified"),
+        ];
+        let out = format_board(&cards, &BTreeSet::new(), Some("done-feat"));
+        assert!(
+            out.contains("Finished: 1/1 done (100%)"),
+            "focused finished feature must still show its header:\n{out}"
+        );
+    }
+
+    #[test]
+    fn board_focus_shows_header_for_a_design_only_feature() {
+        // ac-2: a focused feature with no workable children still renders a
+        // header (0/0) rather than empty output.
+        let cards = vec![
+            feat("design", "Design only"),
+            child("dec-1", "design", card::schema::CardType::Decision, "a fork", "locked"),
+        ];
+        let out = format_board(&cards, &BTreeSet::new(), Some("design"));
+        assert!(
+            out.contains("Design only: 0/0 done (0%)"),
+            "focused design-only feature must still show its header:\n{out}"
+        );
     }
 
     #[test]
@@ -530,7 +603,7 @@ mod tests {
         ];
         let mut blocked = BTreeSet::new();
         blocked.insert("task-1".to_string());
-        let out = format_board(&cards, &blocked);
+        let out = format_board(&cards, &blocked, None);
         assert!(
             out.contains("blocked 1"),
             "blocked count should come from the predicate set:\n{out}"
@@ -558,7 +631,7 @@ mod tests {
             work("task-2", "auth", "hash passwords", "ready"),
             active,
         ];
-        let out = format_board(&cards, &BTreeSet::new());
+        let out = format_board(&cards, &BTreeSet::new(), None);
         assert!(
             out.contains("Auth: 1/3 done (33%) | ready 1 | active 1 | needs_verification 0 | blocked 0"),
             "header line missing; got:\n{out}"
@@ -581,7 +654,7 @@ mod tests {
             work("task-db", "auth", "setup db", "in_progress"),
             migrations,
         ];
-        let out = format_board(&cards, &BTreeSet::new());
+        let out = format_board(&cards, &BTreeSet::new(), None);
         let db_line = out.lines().find(|l| l.contains("setup db")).expect("blocker row");
         let mig_line = out.lines().find(|l| l.contains("run migrations")).expect("dependent row");
         assert!(!db_line.contains('\u{2514}'), "root blocker must not be indented:\n{out}");
@@ -598,7 +671,7 @@ mod tests {
             work("task-1", "auth", "one", "ready"),
             work("task-2", "auth", "two", "ready"),
         ];
-        let out = format_board(&cards, &BTreeSet::new());
+        let out = format_board(&cards, &BTreeSet::new(), None);
         assert!(
             !out.contains('\u{2514}'),
             "no blocks edges must render a flat list, no connectors:\n{out}"
@@ -616,7 +689,7 @@ mod tests {
         let mut late = work("task-late", "auth", "late blocker", "in_progress");
         late.created_at = "t5".to_string();
         let cards = vec![feat("auth", "Auth"), early, late, seed];
-        let out = format_board(&cards, &BTreeSet::new());
+        let out = format_board(&cards, &BTreeSet::new(), None);
         assert_eq!(
             out.matches("seed data").count(),
             1,
@@ -641,7 +714,7 @@ mod tests {
         b.deps = vec![blocks_dep("task-a")];
         let cards = vec![feat("auth", "Auth"), a, b];
         // Must terminate; a naive recursion over the cycle would hang here.
-        let out = format_board(&cards, &BTreeSet::new());
+        let out = format_board(&cards, &BTreeSet::new(), None);
         assert_eq!(out.matches("card a").count(), 1, "cycle member a must render once:\n{out}");
         assert_eq!(out.matches("card b").count(), 1, "cycle member b must render once:\n{out}");
     }
