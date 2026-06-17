@@ -85,6 +85,59 @@ fn state_word(state: RowState) -> &'static str {
     }
 }
 
+/// Append one board row at `depth`. Depth 0 (a root, and the only depth in the
+/// flat no-edges case) renders exactly as a flat row; deeper rows carry a
+/// `\u{2514} ` tree connector so a blocks chain reads like planr's nested view.
+fn push_row(out: &mut String, card: &card::schema::Card, state: RowState, depth: usize) {
+    let connector = if depth == 0 {
+        String::new()
+    } else {
+        format!("{}\u{2514} ", "  ".repeat(depth - 1))
+    };
+    out.push_str(&format!(
+        "  {connector}{} {:<18} {}  {}",
+        glyph(state),
+        state_word(state),
+        card.id,
+        card.title,
+    ));
+    if state == RowState::Active
+        && let Some(claimant) = card.claimed_by.as_deref()
+    {
+        out.push_str(&format!("  {claimant}"));
+    }
+    out.push('\n');
+}
+
+/// Depth-first placement of one blocks subtree, seeded at `root`. Each card is
+/// emitted at most once (the `visited` set), so a back-edge into an
+/// already-placed card is dropped: the walk is total and terminates on any
+/// cycle. Done cards are counted in the header but their row is hidden.
+fn place<'a>(
+    root: &'a card::schema::Card,
+    children_of: &BTreeMap<&'a str, Vec<&'a card::schema::Card>>,
+    blocked_ids: &BTreeSet<String>,
+    visited: &mut BTreeSet<&'a str>,
+    out: &mut String,
+) {
+    let mut stack = vec![(root, 0usize)];
+    while let Some((node, depth)) = stack.pop() {
+        if !visited.insert(node.id.as_str()) {
+            continue;
+        }
+        let state = classify(node, blocked_ids);
+        if state != RowState::Done {
+            push_row(out, node, state, depth);
+        }
+        if let Some(dependents) = children_of.get(node.id.as_str()) {
+            // push reversed so siblings pop in id order (pre-order, id-sorted)
+            for dependent in dependents.iter().rev() {
+                stack.push((dependent, depth + 1));
+            }
+        }
+    }
+}
+
 /// Render the planr-style board: a per-feature header (`<feature>: X/Y done
 /// (Z%) | ready N | active N | needs_verification N | blocked N`) followed by
 /// that feature's open workable cards. Pure over its inputs so it is testable
@@ -135,24 +188,54 @@ fn format_board(cards: &[card::schema::Card], blocked_ids: &std::collections::BT
             counts[RowState::NeedsVerification as usize],
             counts[RowState::Blocked as usize],
         ));
-        for kid in &kids {
-            let state = classify(kid, blocked_ids);
-            if state == RowState::Done {
+        // Lay the feature's workable children out as a forest over their
+        // in-feature `blocks` edges (dec-tree-nesting-...-6905): roots are
+        // children with no in-feature blocker; each dependent nests under its
+        // earliest-created blocker. A multi-blocker card attaches once, under
+        // that earliest blocker; remaining edges are not redrawn. Edges to
+        // cross-feature or non-workable targets fall outside `by_id`, so they
+        // are ignored for layout and the card renders as a root.
+        let by_id: BTreeMap<&str, &card::schema::Card> =
+            kids.iter().map(|&kid| (kid.id.as_str(), kid)).collect();
+        let mut children_of: BTreeMap<&str, Vec<&card::schema::Card>> = BTreeMap::new();
+        let mut has_blocker: BTreeSet<&str> = BTreeSet::new();
+        for &kid in &kids {
+            let mut blockers: Vec<&card::schema::Card> = kid
+                .deps
+                .iter()
+                .filter(|dep| dep.kind.is_blocking())
+                .filter_map(|dep| by_id.get(dep.target.as_str()).copied())
+                .collect();
+            if blockers.is_empty() {
                 continue;
             }
-            out.push_str(&format!(
-                "  {} {:<18} {}  {}",
-                glyph(state),
-                state_word(state),
-                kid.id,
-                kid.title,
-            ));
-            if state == RowState::Active
-                && let Some(claimant) = kid.claimed_by.as_deref()
-            {
-                out.push_str(&format!("  {claimant}"));
+            blockers.sort_by(|left, right| {
+                left.created_at
+                    .cmp(&right.created_at)
+                    .then_with(|| left.id.cmp(&right.id))
+            });
+            children_of
+                .entry(blockers[0].id.as_str())
+                .or_default()
+                .push(kid);
+            has_blocker.insert(kid.id.as_str());
+        }
+        for dependents in children_of.values_mut() {
+            dependents.sort_by(|left, right| left.id.cmp(&right.id));
+        }
+
+        let mut visited: BTreeSet<&str> = BTreeSet::new();
+        for &kid in &kids {
+            if !has_blocker.contains(kid.id.as_str()) {
+                place(kid, &children_of, blocked_ids, &mut visited, &mut out);
             }
-            out.push('\n');
+        }
+        // Any kid still unplaced sits in a cycle (every edge is a back-edge);
+        // seed from it in id order so the cycle renders once and terminates.
+        for &kid in &kids {
+            if !visited.contains(kid.id.as_str()) {
+                place(kid, &children_of, blocked_ids, &mut visited, &mut out);
+            }
         }
         out.push('\n');
     }
@@ -480,6 +563,87 @@ mod tests {
             out.contains("Auth: 1/3 done (33%) | ready 1 | active 1 | needs_verification 0 | blocked 0"),
             "header line missing; got:\n{out}"
         );
+    }
+
+    fn blocks_dep(target: &str) -> card::schema::Dep {
+        card::schema::Dep {
+            kind: card::schema::DepKind::Blocks,
+            target: target.to_string(),
+        }
+    }
+
+    #[test]
+    fn board_nests_a_blocked_child_under_its_blocker() {
+        let mut migrations = work("task-mig", "auth", "run migrations", "ready");
+        migrations.deps = vec![blocks_dep("task-db")];
+        let cards = vec![
+            feat("auth", "Auth"),
+            work("task-db", "auth", "setup db", "in_progress"),
+            migrations,
+        ];
+        let out = format_board(&cards, &BTreeSet::new());
+        let db_line = out.lines().find(|l| l.contains("setup db")).expect("blocker row");
+        let mig_line = out.lines().find(|l| l.contains("run migrations")).expect("dependent row");
+        assert!(!db_line.contains('\u{2514}'), "root blocker must not be indented:\n{out}");
+        assert!(mig_line.contains('\u{2514}'), "dependent must carry the tree connector:\n{out}");
+        let db_at = out.find("setup db").unwrap();
+        let mig_at = out.find("run migrations").unwrap();
+        assert!(db_at < mig_at, "blocker should render before its dependent:\n{out}");
+    }
+
+    #[test]
+    fn board_renders_flat_with_no_blocks_edges() {
+        let cards = vec![
+            feat("auth", "Auth"),
+            work("task-1", "auth", "one", "ready"),
+            work("task-2", "auth", "two", "ready"),
+        ];
+        let out = format_board(&cards, &BTreeSet::new());
+        assert!(
+            !out.contains('\u{2514}'),
+            "no blocks edges must render a flat list, no connectors:\n{out}"
+        );
+    }
+
+    #[test]
+    fn board_places_a_multi_blocker_child_once_under_earliest_created_blocker() {
+        // seed lists its LATE blocker first, to prove placement keys on
+        // created_at, not edge order.
+        let mut seed = work("task-seed", "auth", "seed data", "ready");
+        seed.deps = vec![blocks_dep("task-late"), blocks_dep("task-early")];
+        let mut early = work("task-early", "auth", "early blocker", "in_progress");
+        early.created_at = "t1".to_string();
+        let mut late = work("task-late", "auth", "late blocker", "in_progress");
+        late.created_at = "t5".to_string();
+        let cards = vec![feat("auth", "Auth"), early, late, seed];
+        let out = format_board(&cards, &BTreeSet::new());
+        assert_eq!(
+            out.matches("seed data").count(),
+            1,
+            "a multi-blocker child must render exactly once:\n{out}"
+        );
+        let early_at = out.find("early blocker").unwrap();
+        let late_at = out.find("late blocker").unwrap();
+        let seed_at = out.find("seed data").unwrap();
+        assert!(
+            early_at < seed_at && seed_at < late_at,
+            "seed must nest under its earliest-created blocker (early), not late:\n{out}"
+        );
+        let seed_line = out.lines().find(|l| l.contains("seed data")).unwrap();
+        assert!(seed_line.contains('\u{2514}'), "nested child must be indented:\n{out}");
+    }
+
+    #[test]
+    fn board_breaks_a_blocks_cycle_without_hanging_or_duplicating() {
+        let mut a = work("task-a", "auth", "card a", "in_progress");
+        a.deps = vec![blocks_dep("task-b")];
+        let mut b = work("task-b", "auth", "card b", "in_progress");
+        b.deps = vec![blocks_dep("task-a")];
+        let cards = vec![feat("auth", "Auth"), a, b];
+        // Must terminate; a naive recursion over the cycle would hang here.
+        let out = format_board(&cards, &BTreeSet::new());
+        assert_eq!(out.matches("card a").count(), 1, "cycle member a must render once:\n{out}");
+        assert_eq!(out.matches("card b").count(), 1, "cycle member b must render once:\n{out}");
     }
 
     struct TestTempDir {
