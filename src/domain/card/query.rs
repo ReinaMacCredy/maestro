@@ -369,6 +369,34 @@ fn is_ready(card: &Card, by_id: &HashMap<&str, &Card>) -> bool {
         })
 }
 
+/// The blocked set: workable, coarse-OPEN cards carrying at least one `blocks`
+/// dependency whose target is not closed (open, or missing from the scanned
+/// set). This is the readiness rule's failing case (SPEC E3/E8) -- a card is
+/// blocked exactly when an unsatisfied `blocks` edge keeps it out of [`ready`].
+/// The watch board uses it to classify rows from the card graph, not the legacy
+/// `blockers` field.
+pub fn blocked(cards: &[Card]) -> Vec<&Card> {
+    let by_id: HashMap<&str, &Card> = cards.iter().map(|c| (c.id.as_str(), c)).collect();
+    cards.iter().filter(|c| is_blocked(c, &by_id)).collect()
+}
+
+fn is_blocked(card: &Card, by_id: &HashMap<&str, &Card>) -> bool {
+    if !card.card_type.workable() {
+        return false;
+    }
+    if coarse_of(&card.status) != Some(Coarse::Open) {
+        return false;
+    }
+    card.deps
+        .iter()
+        .filter(|dep| dep.kind.is_blocking())
+        .any(|dep| {
+            !by_id
+                .get(dep.target.as_str())
+                .is_some_and(|target| coarse_of(&target.status) == Some(Coarse::Closed))
+        })
+}
+
 /// The `list` filter (SPEC G3): every supplied predicate must match (AND). An
 /// unset field does not constrain. `assignee` matches a claim by full token or
 /// agent portion (see [`claim_matches`]); `status` matches the COARSE word
@@ -654,6 +682,77 @@ mod tests {
         assert!(
             ready(&cards).is_empty(),
             "features/ideas/decisions are not workable; an in_progress task is not coarse-open"
+        );
+    }
+
+    #[test]
+    fn blocked_holds_a_card_with_an_open_blocker() {
+        let mut held = card("task-001", CardType::Task, "ready");
+        held.deps = vec![Dep {
+            kind: DepKind::Blocks,
+            target: "task-002".to_string(),
+        }];
+        let open_blocker = card("task-002", CardType::Task, "in_progress");
+        let cards = vec![held, open_blocker];
+        let b: Vec<&str> = blocked(&cards).iter().map(|c| c.id.as_str()).collect();
+        assert_eq!(
+            b,
+            vec!["task-001"],
+            "a blocks dep on a non-closed card marks the dependent blocked, not the blocker"
+        );
+    }
+
+    #[test]
+    fn blocked_clears_when_blocker_is_closed() {
+        let mut held = card("task-001", CardType::Task, "ready");
+        held.deps = vec![Dep {
+            kind: DepKind::Blocks,
+            target: "task-002".to_string(),
+        }];
+        let closed_blocker = card("task-002", CardType::Task, "verified");
+        let cards = vec![held, closed_blocker];
+        assert!(
+            blocked(&cards).is_empty(),
+            "a closed blocker satisfies the edge, so nothing is blocked"
+        );
+    }
+
+    #[test]
+    fn blocked_is_conservative_on_a_missing_blocker() {
+        let mut held = card("task-001", CardType::Task, "ready");
+        held.deps = vec![Dep {
+            kind: DepKind::Blocks,
+            target: "task-404".to_string(),
+        }];
+        let cards = vec![held];
+        let b: Vec<&str> = blocked(&cards).iter().map(|c| c.id.as_str()).collect();
+        assert_eq!(
+            b,
+            vec!["task-001"],
+            "a blocks dep on an absent target is unsatisfied, so the card is blocked"
+        );
+    }
+
+    #[test]
+    fn blocked_ignores_non_blocking_edges_and_non_open_cards() {
+        let mut related = card("task-001", CardType::Task, "ready");
+        related.deps = vec![Dep {
+            kind: DepKind::Related,
+            target: "task-002".to_string(),
+        }];
+        let mut closed_with_open_blocker = card("task-003", CardType::Task, "verified");
+        closed_with_open_blocker.deps = vec![Dep {
+            kind: DepKind::Blocks,
+            target: "task-002".to_string(),
+        }];
+        let cards = vec![
+            related,
+            card("task-002", CardType::Task, "in_progress"),
+            closed_with_open_blocker,
+        ];
+        assert!(
+            blocked(&cards).is_empty(),
+            "related edges never block, and a closed card is never blocked"
         );
     }
 

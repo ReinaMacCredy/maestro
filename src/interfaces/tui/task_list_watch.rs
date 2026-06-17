@@ -61,10 +61,13 @@ enum RowState {
 }
 
 /// Classify a workable card for the board. `blocked_ids` is the set of card ids
-/// with an unresolved blocker (the same `has_unresolved_blockers` predicate
-/// `maestro status` counts), so a card reads blocked here exactly when status
-/// counts it blocked.
-fn classify(card: &card::schema::Card, blocked_ids: &std::collections::BTreeSet<String>) -> RowState {
+/// held back by an unsatisfied `blocks` dependency (`card::query::blocked`), so a
+/// card reads blocked here exactly when an open dependency keeps it out of
+/// `maestro ready`.
+fn classify(
+    card: &card::schema::Card,
+    blocked_ids: &std::collections::BTreeSet<String>,
+) -> RowState {
     if card::query::coarse_of(&card.status) == Some(card::query::Coarse::Closed) {
         return RowState::Done;
     }
@@ -80,13 +83,49 @@ fn classify(card: &card::schema::Card, blocked_ids: &std::collections::BTreeSet<
     RowState::Ready
 }
 
+#[derive(Default)]
+struct RowCounts {
+    done: usize,
+    blocked: usize,
+    needs_verification: usize,
+    active: usize,
+    ready: usize,
+}
+
+impl RowCounts {
+    fn from_cards<'a>(
+        cards: impl IntoIterator<Item = &'a card::schema::Card>,
+        blocked_ids: &BTreeSet<String>,
+    ) -> Self {
+        let mut counts = Self::default();
+        for card in cards {
+            counts.bump(classify(card, blocked_ids));
+        }
+        counts
+    }
+
+    fn bump(&mut self, state: RowState) {
+        match state {
+            RowState::Done => self.done += 1,
+            RowState::Blocked => self.blocked += 1,
+            RowState::NeedsVerification => self.needs_verification += 1,
+            RowState::Active => self.active += 1,
+            RowState::Ready => self.ready += 1,
+        }
+    }
+
+    fn total(&self) -> usize {
+        self.done + self.blocked + self.needs_verification + self.active + self.ready
+    }
+}
+
 fn glyph(state: RowState) -> char {
     match state {
-        RowState::Done => '\u{2713}',             // tick
-        RowState::Ready => '\u{25CB}',            // open circle
-        RowState::Active => '\u{25D0}',           // half circle
+        RowState::Done => '\u{2713}',              // tick
+        RowState::Ready => '\u{25CB}',             // open circle
+        RowState::Active => '\u{25D0}',            // half circle
         RowState::NeedsVerification => '\u{25C6}', // diamond
-        RowState::Blocked => '\u{00B7}',          // middle dot
+        RowState::Blocked => '\u{00B7}',           // middle dot
     }
 }
 
@@ -146,6 +185,15 @@ fn push_row(
         out.push_str(&format!("  {claimant}"));
     }
     out.push('\n');
+}
+
+fn push_group_header(out: &mut String, title: &str, counts: &RowCounts) {
+    let total = counts.total();
+    let pct = counts.done * 100 / total.max(1);
+    out.push_str(&format!(
+        "{title}: {}/{} done ({pct}%) | ready {} | active {} | needs_verification {} | blocked {}\n",
+        counts.done, total, counts.ready, counts.active, counts.needs_verification, counts.blocked,
+    ));
 }
 
 /// Depth-first placement of one blocks subtree, seeded at `root`. Each card is
@@ -238,33 +286,18 @@ fn format_board_opts(
             None if focus.is_some() => &empty,
             None => continue,
         };
-        let total = kids.len();
         let mut kids: Vec<&card::schema::Card> = kids.clone();
         kids.sort_by(|left, right| left.id.cmp(&right.id));
 
-        let mut counts = [0usize; 5];
-        for kid in &kids {
-            counts[classify(kid, blocked_ids) as usize] += 1;
-        }
-        let done = counts[RowState::Done as usize];
+        let counts = RowCounts::from_cards(kids.iter().copied(), blocked_ids);
         // A finished feature is hidden in the overview, unless one of its tasks
         // just completed this reload: then it shows its 100% header and the tick
         // row for one frame before dropping next reload (tick-then-clear).
         let has_flash = kids.iter().any(|kid| just_completed.contains(&kid.id));
-        if done == total && focus.is_none() && !has_flash {
+        if counts.done == counts.total() && focus.is_none() && !has_flash {
             continue;
         }
-        // total == 0 (a focused feature with no workable kids) implies done == 0,
-        // so the .max(1) guard yields 0% without a separate branch.
-        let pct = done * 100 / total.max(1);
-        out.push_str(&format!(
-            "{}: {done}/{total} done ({pct}%) | ready {} | active {} | needs_verification {} | blocked {}\n",
-            feature.title,
-            counts[RowState::Ready as usize],
-            counts[RowState::Active as usize],
-            counts[RowState::NeedsVerification as usize],
-            counts[RowState::Blocked as usize],
-        ));
+        push_group_header(&mut out, &feature.title, &counts);
         // Lay the feature's workable children out as a forest over their
         // in-feature `blocks` edges (dec-tree-nesting-...-6905): roots are
         // children with no in-feature blocker; each dependent nests under its
@@ -304,14 +337,30 @@ fn format_board_opts(
         let mut visited: BTreeSet<&str> = BTreeSet::new();
         for &kid in &kids {
             if !has_blocker.contains(kid.id.as_str()) {
-                place(kid, &children_of, blocked_ids, just_completed, live_tick, &mut visited, &mut out);
+                place(
+                    kid,
+                    &children_of,
+                    blocked_ids,
+                    just_completed,
+                    live_tick,
+                    &mut visited,
+                    &mut out,
+                );
             }
         }
         // Any kid still unplaced sits in a cycle (every edge is a back-edge);
         // seed from it in id order so the cycle renders once and terminates.
         for &kid in &kids {
             if !visited.contains(kid.id.as_str()) {
-                place(kid, &children_of, blocked_ids, just_completed, live_tick, &mut visited, &mut out);
+                place(
+                    kid,
+                    &children_of,
+                    blocked_ids,
+                    just_completed,
+                    live_tick,
+                    &mut visited,
+                    &mut out,
+                );
             }
         }
         out.push('\n');
@@ -330,28 +379,21 @@ fn format_board_opts(
                 Some(parent) => !features.contains_key(parent),
             })
             .filter(|card| {
-                classify(card, blocked_ids) != RowState::Done
-                    || just_completed.contains(&card.id)
+                classify(card, blocked_ids) != RowState::Done || just_completed.contains(&card.id)
             })
             .collect();
         if !orphans.is_empty() {
             orphans.sort_by(|left, right| left.id.cmp(&right.id));
-            let total = orphans.len();
-            let mut counts = [0usize; 5];
+            let counts = RowCounts::from_cards(orphans.iter().copied(), blocked_ids);
+            push_group_header(&mut out, "(no feature)", &counts);
             for orphan in &orphans {
-                counts[classify(orphan, blocked_ids) as usize] += 1;
-            }
-            let done = counts[RowState::Done as usize];
-            let pct = done * 100 / total.max(1);
-            out.push_str(&format!(
-                "(no feature): {done}/{total} done ({pct}%) | ready {} | active {} | needs_verification {} | blocked {}\n",
-                counts[RowState::Ready as usize],
-                counts[RowState::Active as usize],
-                counts[RowState::NeedsVerification as usize],
-                counts[RowState::Blocked as usize],
-            ));
-            for orphan in &orphans {
-                push_row(&mut out, orphan, classify(orphan, blocked_ids), 0, live_tick);
+                push_row(
+                    &mut out,
+                    orphan,
+                    classify(orphan, blocked_ids),
+                    0,
+                    live_tick,
+                );
             }
             out.push('\n');
         }
@@ -366,27 +408,26 @@ fn format_board_opts(
 }
 
 /// Scan the card store for the board and compute the blocked-id set. The
-/// blocked set comes from the same task-record predicate `maestro status` uses,
-/// so the header's blocked count matches status per card. An unknown focus id
-/// errors with a re-list hint rather than rendering empty.
+/// blocked set comes from the card-model `blocks` graph (`card::query::blocked`,
+/// the rule `maestro ready` inverts), so a card reads blocked here exactly when
+/// an unsatisfied dependency keeps it out of `ready`. An unknown focus id errors
+/// with a re-list hint rather than rendering empty.
 fn load_board(
     paths: &MaestroPaths,
     focus: Option<&str>,
 ) -> Result<(Vec<card::schema::Card>, BTreeSet<String>)> {
     let cards = card::query::scan(paths)?;
     if let Some(focus) = focus {
-        let known = cards.iter().any(|card| {
-            card.card_type == card::schema::CardType::Feature && card.id == focus
-        });
+        let known = cards
+            .iter()
+            .any(|card| card.card_type == card::schema::CardType::Feature && card.id == focus);
         if !known {
             anyhow::bail!("no feature '{focus}'; run `maestro list --type feature` to see ids");
         }
     }
-    let tasks = task::load_task_records(&paths.tasks_dir())?;
-    let blocked_ids: BTreeSet<String> = tasks
-        .iter()
-        .filter(|task| task::has_unresolved_blockers(task))
-        .map(|task| task.id.clone())
+    let blocked_ids: BTreeSet<String> = card::query::blocked(&cards)
+        .into_iter()
+        .map(|card| card.id.clone())
         .collect();
     Ok((cards, blocked_ids))
 }
@@ -634,7 +675,13 @@ mod tests {
     use std::collections::BTreeSet;
 
     fn feat(id: &str, title: &str) -> card::schema::Card {
-        card::schema::Card::new(id, card::schema::CardType::Feature, title, "in_progress", "t0")
+        card::schema::Card::new(
+            id,
+            card::schema::CardType::Feature,
+            title,
+            "in_progress",
+            "t0",
+        )
     }
 
     fn child(
@@ -657,7 +704,7 @@ mod tests {
         card::schema::Card::new(id, card::schema::CardType::Task, title, status, "t0")
     }
 
-    use super::{classify, glyph, RowState};
+    use super::{RowState, classify, glyph};
 
     #[test]
     fn glyph_vocabulary_is_the_locked_set() {
@@ -674,16 +721,43 @@ mod tests {
             feat("auth", "Auth"),
             work("task-1", "auth", "hash passwords", "ready"),
             work("task-2", "auth", "old login", "verified"),
-            child("idea-1", "auth", card::schema::CardType::Idea, "maybe oauth", "open"),
-            child("dec-1", "auth", card::schema::CardType::Decision, "pick hasher", "locked"),
+            child(
+                "idea-1",
+                "auth",
+                card::schema::CardType::Idea,
+                "maybe oauth",
+                "open",
+            ),
+            child(
+                "dec-1",
+                "auth",
+                card::schema::CardType::Decision,
+                "pick hasher",
+                "locked",
+            ),
         ];
         let out = format_board(&cards, &BTreeSet::new(), None);
-        assert!(out.contains("hash passwords"), "open work row missing:\n{out}");
-        assert!(!out.contains("old login"), "closed row should be hidden:\n{out}");
-        assert!(!out.contains("maybe oauth"), "idea row should never appear:\n{out}");
-        assert!(!out.contains("pick hasher"), "decision row should never appear:\n{out}");
+        assert!(
+            out.contains("hash passwords"),
+            "open work row missing:\n{out}"
+        );
+        assert!(
+            !out.contains("old login"),
+            "closed row should be hidden:\n{out}"
+        );
+        assert!(
+            !out.contains("maybe oauth"),
+            "idea row should never appear:\n{out}"
+        );
+        assert!(
+            !out.contains("pick hasher"),
+            "decision row should never appear:\n{out}"
+        );
         // total counts only the two workable children (one done, one ready).
-        assert!(out.contains("1/2 done"), "header should count only workable kids:\n{out}");
+        assert!(
+            out.contains("1/2 done"),
+            "header should count only workable kids:\n{out}"
+        );
     }
 
     #[test]
@@ -696,7 +770,10 @@ mod tests {
             out.contains("\u{25D0} active"),
             "active glyph missing:\n{out}"
         );
-        assert!(out.contains("claude#a4f2"), "claimant token missing:\n{out}");
+        assert!(
+            out.contains("claude#a4f2"),
+            "claimant token missing:\n{out}"
+        );
     }
 
     #[test]
@@ -704,14 +781,26 @@ mod tests {
         let cards = vec![
             // design-only: only a decision child, no workable cards
             feat("design", "Design only"),
-            child("dec-1", "design", card::schema::CardType::Decision, "a fork", "locked"),
+            child(
+                "dec-1",
+                "design",
+                card::schema::CardType::Decision,
+                "a fork",
+                "locked",
+            ),
             // finished: every workable child closed
             feat("done-feat", "Finished"),
             work("task-9", "done-feat", "shipped work", "verified"),
         ];
         let out = format_board(&cards, &BTreeSet::new(), None);
-        assert!(!out.contains("Design only"), "design-only feature should be omitted:\n{out}");
-        assert!(!out.contains("Finished"), "finished feature should be omitted:\n{out}");
+        assert!(
+            !out.contains("Design only"),
+            "design-only feature should be omitted:\n{out}"
+        );
+        assert!(
+            !out.contains("Finished"),
+            "finished feature should be omitted:\n{out}"
+        );
     }
 
     #[test]
@@ -723,10 +812,22 @@ mod tests {
             work("task-2", "billing", "invoice export", "ready"),
         ];
         let out = format_board(&cards, &BTreeSet::new(), Some("billing"));
-        assert!(out.contains("Billing"), "focused feature header missing:\n{out}");
-        assert!(out.contains("invoice export"), "focused feature row missing:\n{out}");
-        assert!(!out.contains("Auth"), "other feature must be excluded under focus:\n{out}");
-        assert!(!out.contains("hash passwords"), "other feature's row leaked:\n{out}");
+        assert!(
+            out.contains("Billing"),
+            "focused feature header missing:\n{out}"
+        );
+        assert!(
+            out.contains("invoice export"),
+            "focused feature row missing:\n{out}"
+        );
+        assert!(
+            !out.contains("Auth"),
+            "other feature must be excluded under focus:\n{out}"
+        );
+        assert!(
+            !out.contains("hash passwords"),
+            "other feature's row leaked:\n{out}"
+        );
     }
 
     #[test]
@@ -750,7 +851,13 @@ mod tests {
         // header (0/0) rather than empty output.
         let cards = vec![
             feat("design", "Design only"),
-            child("dec-1", "design", card::schema::CardType::Decision, "a fork", "locked"),
+            child(
+                "dec-1",
+                "design",
+                card::schema::CardType::Decision,
+                "a fork",
+                "locked",
+            ),
         ];
         let out = format_board(&cards, &BTreeSet::new(), Some("design"));
         assert!(
@@ -772,8 +879,14 @@ mod tests {
             out.contains("blocked 1"),
             "blocked count should come from the predicate set:\n{out}"
         );
-        assert!(out.contains("\u{00B7} blocked"), "blocked glyph row missing:\n{out}");
-        assert!(out.contains("ready 0"), "a blocked card must not also read ready:\n{out}");
+        assert!(
+            out.contains("\u{00B7} blocked"),
+            "blocked glyph row missing:\n{out}"
+        );
+        assert!(
+            out.contains("ready 0"),
+            "a blocked card must not also read ready:\n{out}"
+        );
     }
 
     #[test]
@@ -797,7 +910,9 @@ mod tests {
         ];
         let out = format_board(&cards, &BTreeSet::new(), None);
         assert!(
-            out.contains("Auth: 1/3 done (33%) | ready 1 | active 1 | needs_verification 0 | blocked 0"),
+            out.contains(
+                "Auth: 1/3 done (33%) | ready 1 | active 1 | needs_verification 0 | blocked 0"
+            ),
             "header line missing; got:\n{out}"
         );
     }
@@ -819,13 +934,28 @@ mod tests {
             migrations,
         ];
         let out = format_board(&cards, &BTreeSet::new(), None);
-        let db_line = out.lines().find(|l| l.contains("setup db")).expect("blocker row");
-        let mig_line = out.lines().find(|l| l.contains("run migrations")).expect("dependent row");
-        assert!(!db_line.contains('\u{2514}'), "root blocker must not be indented:\n{out}");
-        assert!(mig_line.contains('\u{2514}'), "dependent must carry the tree connector:\n{out}");
+        let db_line = out
+            .lines()
+            .find(|l| l.contains("setup db"))
+            .expect("blocker row");
+        let mig_line = out
+            .lines()
+            .find(|l| l.contains("run migrations"))
+            .expect("dependent row");
+        assert!(
+            !db_line.contains('\u{2514}'),
+            "root blocker must not be indented:\n{out}"
+        );
+        assert!(
+            mig_line.contains('\u{2514}'),
+            "dependent must carry the tree connector:\n{out}"
+        );
         let db_at = out.find("setup db").unwrap();
         let mig_at = out.find("run migrations").unwrap();
-        assert!(db_at < mig_at, "blocker should render before its dependent:\n{out}");
+        assert!(
+            db_at < mig_at,
+            "blocker should render before its dependent:\n{out}"
+        );
     }
 
     #[test]
@@ -867,7 +997,10 @@ mod tests {
             "seed must nest under its earliest-created blocker (early), not late:\n{out}"
         );
         let seed_line = out.lines().find(|l| l.contains("seed data")).unwrap();
-        assert!(seed_line.contains('\u{2514}'), "nested child must be indented:\n{out}");
+        assert!(
+            seed_line.contains('\u{2514}'),
+            "nested child must be indented:\n{out}"
+        );
     }
 
     #[test]
@@ -879,11 +1012,19 @@ mod tests {
         let cards = vec![feat("auth", "Auth"), a, b];
         // Must terminate; a naive recursion over the cycle would hang here.
         let out = format_board(&cards, &BTreeSet::new(), None);
-        assert_eq!(out.matches("card a").count(), 1, "cycle member a must render once:\n{out}");
-        assert_eq!(out.matches("card b").count(), 1, "cycle member b must render once:\n{out}");
+        assert_eq!(
+            out.matches("card a").count(),
+            1,
+            "cycle member a must render once:\n{out}"
+        );
+        assert_eq!(
+            out.matches("card b").count(),
+            1,
+            "cycle member b must render once:\n{out}"
+        );
     }
 
-    use super::{format_board_opts, paint, spinner_frame, SPINNER_FRAMES};
+    use super::{SPINNER_FRAMES, format_board_opts, paint, spinner_frame};
 
     #[test]
     fn spinner_frame_cycles_the_locked_braille_set() {
@@ -900,7 +1041,11 @@ mod tests {
             "the frame must advance with the tick counter"
         );
         assert_eq!(spinner_frame(0), '\u{280B}');
-        assert_eq!(spinner_frame(10), spinner_frame(0), "the frame cycles every 10 ticks");
+        assert_eq!(
+            spinner_frame(10),
+            spinner_frame(0),
+            "the frame cycles every 10 ticks"
+        );
         assert_eq!(spinner_frame(11), spinner_frame(1));
     }
 
@@ -911,13 +1056,19 @@ mod tests {
         let cards = vec![feat("auth", "Auth"), active];
         let empty = BTreeSet::new();
         let f0 = format_board_opts(&cards, &BTreeSet::new(), None, Some(0), &empty);
-        assert!(f0.contains(spinner_frame(0)), "active row must show spinner frame 0:\n{f0}");
+        assert!(
+            f0.contains(spinner_frame(0)),
+            "active row must show spinner frame 0:\n{f0}"
+        );
         assert!(
             !f0.contains('\u{25D0}'),
             "a live active row must not render the static half-circle:\n{f0}"
         );
         let f1 = format_board_opts(&cards, &BTreeSet::new(), None, Some(1), &empty);
-        assert!(f1.contains(spinner_frame(1)), "active row must advance to spinner frame 1:\n{f1}");
+        assert!(
+            f1.contains(spinner_frame(1)),
+            "active row must advance to spinner frame 1:\n{f1}"
+        );
         assert!(
             f0.contains("active") && f0.contains("claude#a4f2"),
             "the state word and claimant survive the spinner glyph:\n{f0}"
@@ -931,7 +1082,10 @@ mod tests {
         let active = work("task-1", "auth", "session store", "in_progress");
         let cards = vec![feat("auth", "Auth"), active];
         let out = format_board_opts(&cards, &BTreeSet::new(), None, None, &BTreeSet::new());
-        assert!(out.contains('\u{25D0}'), "static active glyph missing:\n{out}");
+        assert!(
+            out.contains('\u{25D0}'),
+            "static active glyph missing:\n{out}"
+        );
         for tick in 0..SPINNER_FRAMES.len() as u64 {
             assert!(
                 !out.contains(spinner_frame(tick)),
@@ -945,7 +1099,10 @@ mod tests {
         // A finished single-task feature: steady state hides the closed card and
         // (per the feature-skip rule) the whole feature; the completing reload
         // still flashes the card with the tick and shows the 100% header.
-        let cards = vec![feat("auth", "Auth"), work("task-1", "auth", "hash passwords", "verified")];
+        let cards = vec![
+            feat("auth", "Auth"),
+            work("task-1", "auth", "hash passwords", "verified"),
+        ];
         let hidden = format_board_opts(&cards, &BTreeSet::new(), None, Some(0), &BTreeSet::new());
         assert!(
             !hidden.contains("hash passwords"),
@@ -996,7 +1153,10 @@ mod tests {
         let mut blocked = BTreeSet::new();
         blocked.insert("card-b1".to_string());
         let out = format_board(&cards, &blocked, None);
-        assert!(out.contains("(no feature):"), "loose cards need a (no feature) group:\n{out}");
+        assert!(
+            out.contains("(no feature):"),
+            "loose cards need a (no feature) group:\n{out}"
+        );
         assert!(
             out.contains("0/2 done (0%) | ready 0 | active 1 | needs_verification 0 | blocked 1"),
             "orphan header counts only open loose cards:\n{out}"
@@ -1005,7 +1165,10 @@ mod tests {
             out.contains("repeatable prove") && out.contains("maestro"),
             "active loose row carries its title and claimant:\n{out}"
         );
-        assert!(out.contains("prune retired skills"), "blocked loose row missing:\n{out}");
+        assert!(
+            out.contains("prune retired skills"),
+            "blocked loose row missing:\n{out}"
+        );
     }
 
     #[test]
@@ -1014,8 +1177,14 @@ mod tests {
         // the group total, and an all-closed orphan set yields no group at all.
         let cards = vec![loose("card-done", "old loose chore", "verified")];
         let out = format_board(&cards, &BTreeSet::new(), None);
-        assert!(!out.contains("old loose chore"), "closed loose card must not show:\n{out}");
-        assert!(!out.contains("(no feature)"), "an all-closed orphan set yields no group:\n{out}");
+        assert!(
+            !out.contains("old loose chore"),
+            "closed loose card must not show:\n{out}"
+        );
+        assert!(
+            !out.contains("(no feature)"),
+            "an all-closed orphan set yields no group:\n{out}"
+        );
     }
 
     #[test]
@@ -1025,11 +1194,23 @@ mod tests {
         // as a hang, the bug this fixes).
         let cards = vec![
             feat("design", "Design only"),
-            child("dec-1", "design", card::schema::CardType::Decision, "a fork", "locked"),
+            child(
+                "dec-1",
+                "design",
+                card::schema::CardType::Decision,
+                "a fork",
+                "locked",
+            ),
         ];
         let out = format_board(&cards, &BTreeSet::new(), None);
-        assert!(!out.trim().is_empty(), "empty board must still render a line:\n{out:?}");
-        assert!(out.contains("No open work"), "empty board needs an explanatory hint:\n{out}");
+        assert!(
+            !out.trim().is_empty(),
+            "empty board must still render a line:\n{out:?}"
+        );
+        assert!(
+            out.contains("No open work"),
+            "empty board needs an explanatory hint:\n{out}"
+        );
     }
 
     #[test]
@@ -1041,9 +1222,18 @@ mod tests {
             loose("card-loose", "loose task", "in_progress"),
         ];
         let out = format_board(&cards, &BTreeSet::new(), Some("auth"));
-        assert!(out.contains("Auth"), "focused feature header missing:\n{out}");
-        assert!(!out.contains("(no feature)"), "focus must not show the orphan group:\n{out}");
-        assert!(!out.contains("loose task"), "focus must not leak loose rows:\n{out}");
+        assert!(
+            out.contains("Auth"),
+            "focused feature header missing:\n{out}"
+        );
+        assert!(
+            !out.contains("(no feature)"),
+            "focus must not show the orphan group:\n{out}"
+        );
+        assert!(
+            !out.contains("loose task"),
+            "focus must not leak loose rows:\n{out}"
+        );
     }
 
     #[test]
@@ -1057,9 +1247,18 @@ mod tests {
             loose("card-loose", "loose task", "in_progress"),
         ];
         let out = format_board(&cards, &BTreeSet::new(), None);
-        assert!(out.contains("Auth:"), "feature group header missing:\n{out}");
-        assert!(out.contains("hash passwords"), "feature row missing:\n{out}");
-        assert!(out.contains("(no feature):"), "orphan group missing:\n{out}");
+        assert!(
+            out.contains("Auth:"),
+            "feature group header missing:\n{out}"
+        );
+        assert!(
+            out.contains("hash passwords"),
+            "feature row missing:\n{out}"
+        );
+        assert!(
+            out.contains("(no feature):"),
+            "orphan group missing:\n{out}"
+        );
         assert!(out.contains("loose task"), "loose row missing:\n{out}");
         assert!(
             out.find("Auth:").unwrap() < out.find("(no feature):").unwrap(),

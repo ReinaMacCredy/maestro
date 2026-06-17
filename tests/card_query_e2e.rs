@@ -684,3 +684,51 @@ fn ready_and_list_json_stay_parseable_without_a_card_store() {
         );
     }
 }
+
+#[test]
+fn watch_board_marks_a_card_model_blocked_task_blocked() {
+    // Regression: the watch board built its blocked set from the legacy
+    // `.maestro/tasks` scan plus the `blockers` field, so a card-model `blocks`
+    // dep never lit the blocked glyph -- a held-back task read "ready" on the
+    // board even though `maestro ready` correctly excluded it. A feature-parented
+    // task blocked by an open sibling must read "blocked" on `watch snapshot`.
+    let temp = TestTempDir::new("watch-blocked");
+    let paths = MaestroPaths::new(temp.path());
+    let repo = temp.path();
+
+    let feature = Card::new("feat-x", CardType::Feature, "Feature X", "proposed", NOW);
+    let mut blocker = Card::new("task-100", CardType::Task, "Blocker", "ready", NOW);
+    blocker.parent = Some("feat-x".to_string());
+    let mut blocked = Card::new("task-101", CardType::Task, "Dependent", "ready", NOW);
+    blocked.parent = Some("feat-x".to_string());
+    blocked.deps = vec![Dep {
+        kind: DepKind::Blocks,
+        target: "task-100".to_string(),
+    }];
+    write_card(&paths, &feature);
+    write_card(&paths, &blocker);
+    write_card(&paths, &blocked);
+
+    let board = run(repo, &["watch", "snapshot"]);
+
+    assert!(
+        board.contains("blocked 1"),
+        "the feature header counts the blocked task (was `blocked 0` before the fix):\n{board}"
+    );
+    let blocked_line = board
+        .lines()
+        .find(|line| line.contains("task-101"))
+        .unwrap_or_else(|| panic!("the dependent task must render:\n{board}"));
+    assert!(
+        blocked_line.contains("blocked"),
+        "the card-model blocked task reads blocked, not ready:\n{blocked_line}"
+    );
+    let blocker_line = board
+        .lines()
+        .find(|line| line.contains("task-100"))
+        .unwrap_or_else(|| panic!("the blocker task must render:\n{board}"));
+    assert!(
+        blocker_line.contains("ready"),
+        "the open blocker stays ready:\n{blocker_line}"
+    );
+}
