@@ -730,7 +730,10 @@ fn list_supports_basic_output_and_requested_filters() {
     assert_success(&focus, &["watch", "snapshot", "billing-csv"]);
     let focus_out = stdout(&focus);
     assert!(focus_out.contains("Billing CSV: 0/2 done (0%)"));
-    assert!(!focus_out.contains("Other"), "focus must exclude other features:\n{focus_out}");
+    assert!(
+        !focus_out.contains("Other"),
+        "focus must exclude other features:\n{focus_out}"
+    );
 
     // Focusing the other feature renders only its header and rows.
     let focus_other = maestro(repo, &["watch", "snapshot", "other"]);
@@ -762,7 +765,10 @@ fn list_supports_basic_output_and_requested_filters() {
     // it propagates out of the render closure rather than a direct call. The
     // command returns (does not hang) with the same re-list hint.
     let bare_unknown = maestro(repo, &["watch", "does-not-exist"]);
-    assert!(!bare_unknown.status.success(), "bare unknown focus id should error");
+    assert!(
+        !bare_unknown.status.success(),
+        "bare unknown focus id should error"
+    );
     let bare_unknown_err = String::from_utf8_lossy(&bare_unknown.stderr);
     assert!(
         bare_unknown_err.contains("no feature 'does-not-exist'")

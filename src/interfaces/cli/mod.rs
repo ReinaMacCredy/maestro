@@ -1708,7 +1708,10 @@ mod tests {
         assert_eq!(focus.id.as_deref(), Some("feat-x"));
 
         let snap = parse_watch(&["maestro", "watch", "snapshot"]);
-        assert!(matches!(snap.command, Some(WatchCommand::Snapshot { id: None })));
+        assert!(matches!(
+            snap.command,
+            Some(WatchCommand::Snapshot { id: None })
+        ));
 
         let snap_focus = parse_watch(&["maestro", "watch", "snapshot", "feat-x"]);
         assert!(

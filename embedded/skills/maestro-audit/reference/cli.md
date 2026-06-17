@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.0.0 -->
-<!-- maestro:cli-reference-sha256: cf7111f5b9f798879f8a57fa1ea2edebe761f7c40327b29700d756ccad740647 -->
+<!-- maestro:cli-reference-sha256: 26d7073241657f84f42632a3082b63a7fa9834617de0a9a5f5eb02556499d89b -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -308,6 +308,7 @@ Every verb and flag is listed; a spelling not found here does not exist.
 
 ## maestro watch
 
+- `maestro watch [ID] [--interval <INTERVAL>]` -- Live dependency-tree board (bare) or a one-shot snapshot; optional feature-id focuses one feature
 - `maestro watch snapshot [ID]` -- Render the live board once and exit
 - `maestro watch help snapshot` -- Render the live board once and exit
 - `maestro watch help help` -- Print this message or the help of the given subcommand(s)

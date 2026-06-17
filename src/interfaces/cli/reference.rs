@@ -79,23 +79,38 @@ pub fn verify_self_check(content: &str) -> Result<(), String> {
     }
 }
 
-/// Append one `- \`signature\` -- about` bullet per leaf command under `cmd`.
+/// Append one `- \`signature\` -- about` bullet per invokable command under `cmd`.
 fn collect_leaf_lines(cmd: &Command, path: &str, lines: &mut Vec<String>) {
     let subs: Vec<&Command> = cmd
         .get_subcommands()
         .filter(|sub| !sub.is_hide_set())
         .collect();
-    if subs.is_empty() {
-        let about = cmd
-            .get_about()
-            .map(|about| format!(" -- {about}"))
-            .unwrap_or_default();
-        lines.push(format!("- `{}`{about}", signature(cmd, path)));
-        return;
+    if subs.is_empty() || has_visible_invocation_args(cmd) {
+        lines.push(signature_line(cmd, path));
+        if subs.is_empty() {
+            return;
+        }
     }
     for sub in subs {
         collect_leaf_lines(sub, &format!("{path} {}", sub.get_name()), lines);
     }
+}
+
+fn has_visible_invocation_args(cmd: &Command) -> bool {
+    cmd.get_arguments().any(|arg| {
+        !arg.is_hide_set() && {
+            let id = arg.get_id().as_str();
+            id != "help" && id != "version"
+        }
+    })
+}
+
+fn signature_line(cmd: &Command, path: &str) -> String {
+    let about = cmd
+        .get_about()
+        .map(|about| format!(" -- {about}"))
+        .unwrap_or_default();
+    format!("- `{}`{about}", signature(cmd, path))
 }
 
 /// One full invocation line: positionals in declaration order, then options.
@@ -169,6 +184,14 @@ mod tests {
         assert!(
             reference.contains("maestro card show <ID>"),
             "the card namespace must be listed: {reference}"
+        );
+        assert!(
+            reference.contains("maestro watch [ID] [--interval <INTERVAL>]"),
+            "invokable parents with args must be listed: {reference}"
+        );
+        assert!(
+            !reference.contains("- `maestro task`"),
+            "pure command namespaces must not be listed as invokable commands: {reference}"
         );
         assert!(
             reference.contains("-t|--type <TYPE>"),
