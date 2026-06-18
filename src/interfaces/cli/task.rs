@@ -276,7 +276,7 @@ fn set_task(
                 task.id
             ),
             None => println!(
-                "updated {} -> verify command cleared (task verify runs the repo-global stack.verify)",
+                "updated {} -> verify command cleared (task verify now uses claims/proof; the repo-global stack.verify runs at feature ship)",
                 task.id
             ),
         }

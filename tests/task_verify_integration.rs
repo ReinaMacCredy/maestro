@@ -429,6 +429,9 @@ fn task_verify_passes_with_event_proof_and_embeds_verification() {
 
 #[test]
 fn task_verify_fails_closed_when_no_verify_commands_are_configured() {
+    // A standalone task (no feature) with no narrow falsifier and no claims-only
+    // opt-in fails closed: the repo-global stack.verify is no longer a per-task
+    // fallback (decision-002), so the slice must set a falsifier or opt in.
     let temp = setup_fail_closed_repo();
     let repo = temp.path();
     create_completed_task(repo, "implemented CSV export");
@@ -438,7 +441,8 @@ fn task_verify_fails_closed_when_no_verify_commands_are_configured() {
 
     assert_failure(&verify, &["task", "verify", "task-001"]);
     let err = stderr(&verify);
-    assert!(err.contains("no verify commands configured"), "{err}");
+    assert!(err.contains("has no verify command"), "{err}");
+    assert!(err.contains("--verify-command"), "{err}");
     assert!(err.contains("maestro harness set --claims-only"), "{err}");
     assert_eq!(
         task_yaml(repo, "task-001")["state"],
@@ -482,25 +486,114 @@ fn task_verify_runs_only_the_per_task_falsifier_and_passes_when_the_global_stack
 }
 
 #[test]
-fn task_with_no_falsifier_still_runs_the_repo_global_stack_verify() {
-    let temp = setup_repo();
+fn task_with_no_falsifier_does_not_run_the_repo_global_stack_verify() {
+    // decision-002: stack.verify is the feature-ship backstop, not a per-task
+    // fallback. A standalone slice with no narrow falsifier does NOT silently run
+    // the whole suite — even a passing one — it refuses and points at the fix.
+    let temp = setup_fail_closed_repo();
     let repo = temp.path();
+    // stack.verify would PASS if it ran (`true`), proving it is never invoked.
     write_harness_verify_command(repo, "true");
     create_completed_task(repo, "implemented CSV export");
     write_event(repo, "task-001", "implemented CSV export");
 
     let verify = maestro(repo, &["task", "verify", "task-001"]);
-    assert_success(&verify, &["task", "verify", "task-001"]);
-
-    let task = task_yaml(repo, "task-001");
-    let commands = task["verification"]["commands"]
-        .as_sequence()
-        .expect("invariant: commands should be recorded");
-    assert_eq!(commands.len(), 1, "the repo-global stack.verify should run");
+    assert_failure(&verify, &["task", "verify", "task-001"]);
+    assert!(
+        stderr(&verify).contains("has no verify command"),
+        "{}",
+        stderr(&verify)
+    );
     assert_eq!(
-        commands[0]["cmd"],
-        YamlValue::String("true".to_string()),
-        "default behavior unchanged: stack.verify command runs"
+        task_yaml(repo, "task-001")["state"],
+        YamlValue::String("needs_verification".to_string())
+    );
+}
+
+#[test]
+fn feature_task_with_no_falsifier_verifies_on_claims_without_running_the_stack_suite() {
+    // A feature task's full suite is the ship backstop (decision-002): at the
+    // task gate it verifies on claims/proof, and stack.verify is NOT run even
+    // when it would fail. The old per-task fallback would have run `false` here
+    // and failed the slice.
+    let temp = setup_repo();
+    let repo = temp.path();
+    assert_success(
+        &maestro(repo, &["feature", "new", "CSV Export"]),
+        &["feature", "new", "CSV Export"],
+    );
+    assert_success(
+        &maestro(
+            repo,
+            &[
+                "feature",
+                "set",
+                "csv-export",
+                "--acceptance",
+                "csv export works",
+                "--area",
+                "export",
+            ],
+        ),
+        &["feature", "set", "csv-export"],
+    );
+    write_feature_baseline(repo, "csv-export");
+    assert_success(
+        &maestro(repo, &["feature", "accept", "csv-export"]),
+        &["feature", "accept", "csv-export"],
+    );
+    let plan = repo.join("PLAN-csv-export.md");
+    fs::write(
+        &plan,
+        "## Task T1: Add CSV export\ncheck: csv export works\n",
+    )
+    .expect("invariant: prepare plan should be writable");
+    let plan_arg = plan
+        .to_str()
+        .expect("invariant: prepare plan path should be UTF-8");
+    assert_success(
+        &maestro(
+            repo,
+            &["feature", "prepare", "csv-export", "--from", plan_arg],
+        ),
+        &["feature", "prepare", "csv-export", "--from"],
+    );
+    let t1 = id_by_title(repo, "Add CSV export");
+    assert_success(
+        &maestro(repo, &["task", "claim", &t1]),
+        &["task", "claim", &t1],
+    );
+
+    // A stack.verify that would FAIL if it ran, with no claims-only opt-in.
+    write_harness_verify_command(repo, "false");
+
+    let complete = maestro(
+        repo,
+        &[
+            "task",
+            "complete",
+            &t1,
+            "--summary",
+            "csv export works",
+            "--claim",
+            "csv export works",
+            "--proof",
+            "csv export works",
+        ],
+    );
+    assert_success(&complete, &["task", "complete", &t1]);
+    assert!(
+        stdout(&complete).contains(&format!("verification passed for {t1}")),
+        "{}",
+        stdout(&complete)
+    );
+    let task = task_yaml(repo, &t1);
+    assert_eq!(task["state"], YamlValue::String("verified".to_string()));
+    let commands = task["verification"]["commands"].as_sequence();
+    assert!(
+        commands.map(|commands| commands.is_empty()).unwrap_or(true),
+        "feature slice must verify with no commands run; the suite is the ship backstop: {:?}",
+        task["verification"]["commands"]
     );
 }
 
@@ -738,8 +831,12 @@ fn task_verify_stale_snapshot_writes_unapplied_report_without_marking_verified()
     let repo = temp.path();
     create_completed_task(repo, "implemented stale snapshot handling");
     write_event(repo, "task-001", "implemented stale snapshot handling");
-    write_harness_verify_command(
+    // The narrow falsifier mutates the card mid-verify, so the apply's
+    // compare-and-set sees a changed record. (Previously this rode the
+    // repo-global stack.verify fallback, which is no longer a per-task path.)
+    set_task_verify_command(
         repo,
+        "task-001",
         &format!(
             "{} task update task-001 --summary concurrent-change",
             env!("CARGO_BIN_EXE_maestro")
@@ -781,14 +878,16 @@ fn concurrent_verify_does_not_overwrite_applied_canonical_report_with_stale_atte
     let repo = temp.path();
     create_completed_task(repo, "implemented concurrent verification");
     write_event(repo, "task-001", "implemented concurrent verification");
-    let harness_path = repo.join(".maestro/harness/harness.yml");
-    write_harness_verify_command(
+    // The narrow falsifier first clears itself, then spawns a nested verify. The
+    // clear drops the falsifier so the nested verify runs command-free under the
+    // claims-only harness and applies the canonical report first; the outer apply
+    // then loses the compare-and-set. (Clearing also breaks what would otherwise
+    // be infinite re-entry into this same command.)
+    let bin = shell_quote(Path::new(env!("CARGO_BIN_EXE_maestro")));
+    set_task_verify_command(
         repo,
-        &format!(
-            "printf '%s\\n' 'schema_version: maestro.harness.v1' 'stack:' '  kind: generic' '  detected_by: []' '  verify:' '  - true' > {} && {} task verify task-001",
-            shell_quote(&harness_path),
-            shell_quote(Path::new(env!("CARGO_BIN_EXE_maestro")))
-        ),
+        "task-001",
+        &format!("{bin} task set task-001 --clear-verify-command && {bin} task verify task-001"),
     );
 
     let verify = maestro(repo, &["task", "verify", "task-001"]);
@@ -1002,7 +1101,7 @@ fn task_verify_hashes_inline_acceptance_contract() {
 }
 
 #[test]
-fn task_verify_ignores_legacy_acceptance_symlink_created_by_harness_verify_command() {
+fn task_verify_ignores_legacy_acceptance_symlink_created_by_a_verify_command() {
     let temp = setup_repo();
     let repo = temp.path();
     create_completed_task(repo, "implemented acceptance symlink protection");
@@ -1018,8 +1117,11 @@ fn task_verify_ignores_legacy_acceptance_symlink_created_by_harness_verify_comma
         "schema_version: maestro.acceptance.v1\ntask: task-001\nchecks: [external]\n",
     )
     .expect("invariant: external acceptance should be writable");
-    write_harness_verify_command(
+    // The narrow falsifier plants the legacy symlink mid-verify; the slice still
+    // passes because verify ignores symlinked acceptance artifacts.
+    set_task_verify_command(
         repo,
+        "task-001",
         &format!(
             "rm -f {} && ln -s {} {}",
             shell_quote(&acceptance_path),

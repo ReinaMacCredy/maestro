@@ -173,7 +173,6 @@ pub(crate) fn evaluate_task_report(
         VerificationCommandPolicy {
             commands: &command_run.commands,
             claims_only: command_run.claims_only,
-            stack_kind: &command_run.stack_kind,
         },
         standalone_without_checks,
     );
@@ -385,10 +384,17 @@ fn failures_for(
             task.id
         ));
     }
-    if command_policy.commands.is_empty() && !command_policy.claims_only {
+    if command_policy.commands.is_empty()
+        && !command_policy.claims_only
+        && task.feature_id.is_none()
+    {
+        // A standalone slice no longer falls back to the repo-global stack.verify
+        // suite, so with no narrow falsifier it must opt into claims-only or set
+        // one. A feature task does not reach here: its full suite is the ship
+        // backstop (decision-002), so it verifies on claims/proof at this gate.
         failures.push(format!(
-            "cannot verify {} -- no verify commands configured (stack: {})\n  fix: add commands to .maestro/harness/harness.yml stack.verify\n  or: accept claims-only verification: maestro harness set --claims-only\n  retry: maestro task verify {}",
-            task.id, command_policy.stack_kind, task.id
+            "standalone task {} has no verify command; add a narrow falsifier with `maestro task set {} --verify-command \"...\"` or accept claims-only with `maestro harness set --claims-only`",
+            task.id, task.id
         ));
     }
 
@@ -415,7 +421,6 @@ fn failures_for(
 struct VerificationCommandPolicy<'a> {
     commands: &'a [VerificationCommand],
     claims_only: bool,
-    stack_kind: &'a str,
 }
 
 fn claims_only_suffix(report: &VerificationReport) -> String {
