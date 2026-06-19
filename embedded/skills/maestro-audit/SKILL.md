@@ -1,6 +1,6 @@
 ---
 name: maestro-audit
-version: 1.3.0
+version: 1.4.0
 description: "Use for read-only Maestro repo audits that propose harness backlog improvements without implementing them."
 ---
 
@@ -25,7 +25,14 @@ Produce proposals only.
    tests, scripts, and shipped embedded resources relevant to the finding.
    Sweep every lens so coverage is checkable, not just whatever surfaced
    first: correctness, security, performance, test coverage, tech debt,
-   dependencies, developer experience, docs.
+   dependencies, developer experience, docs. The tech-debt lens includes the
+   reach-ladder (HARNESS Code style): code a lower rung -- stdlib, native
+   platform, an installed dependency, a one-liner -- already covers. The
+   session lean mode tunes how strictly to propose these (`maestro lean`):
+   `ultra` proposes replacing such code, `full`/`lite` propose the cheaper
+   form, `off` skips the reach-ladder lens. `maestro lean audit` runs the
+   focused, mode-adjusted reach-ladder pass; this skill still only proposes
+   (no edits, no markers).
 3. Vet each finding before filing: try to refute it against the live repo
    (re-read the code, re-run the command). Drop findings that do not survive.
 4. Cross-check findings against Maestro state so you do not propose work already

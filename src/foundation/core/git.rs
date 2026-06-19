@@ -95,6 +95,42 @@ pub fn worktree_roots(path: impl AsRef<Path>) -> Result<Vec<PathBuf>> {
     Ok(roots)
 }
 
+/// Every non-ignored file in the repository at `path`, as repo-relative paths,
+/// sorted and de-duplicated: the tracked files (from the index) plus untracked
+/// files git would not ignore. This is the `git ls-files --cached --others
+/// --exclude-standard` set -- the surface a tree-wide scan (e.g. lean-debt
+/// markers) should read, with build output and other ignored paths excluded for
+/// free.
+pub fn repo_files(path: impl AsRef<Path>) -> Result<Vec<PathBuf>> {
+    let repository = discover_repository(path.as_ref())?;
+    let mut files: BTreeSet<PathBuf> = BTreeSet::new();
+
+    let index = repository.index().context("failed to read git index")?;
+    for entry in index.iter() {
+        if let Ok(path) = std::str::from_utf8(&entry.path) {
+            files.insert(PathBuf::from(path));
+        }
+    }
+
+    let mut options = StatusOptions::new();
+    options
+        .include_untracked(true)
+        .recurse_untracked_dirs(true)
+        .include_ignored(false);
+    let statuses = repository
+        .statuses(Some(&mut options))
+        .context("failed to read git status")?;
+    for entry in statuses.iter() {
+        if entry.status().contains(git2::Status::WT_NEW)
+            && let Some(path) = entry.path()
+        {
+            files.insert(PathBuf::from(path));
+        }
+    }
+
+    Ok(files.into_iter().collect())
+}
+
 fn discover_repository(path: &Path) -> Result<Repository> {
     Repository::discover(path)
         .with_context(|| format!("failed to discover git repository from {}", path.display()))

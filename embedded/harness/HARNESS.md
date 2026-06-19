@@ -1,5 +1,5 @@
 ---
-version: 1.18.0
+version: 1.19.0
 ---
 
 # Maestro Harness Protocol
@@ -36,6 +36,11 @@ conventions live in this repo AGENTS.md, not here.
 
 - Simplest thing that works; no speculative abstraction or
   one-caller indirection.
+- Reach for the lowest rung before writing new code: skip/YAGNI ->
+  stdlib -> native platform -> installed dependency -> one-liner ->
+  minimal new code. `maestro lean` sets how strictly to climb it
+  (lite/full/ultra/off); `maestro lean review|audit` walk a diff or
+  the tree against the ladder.
 - Names state intent (what/why), not type or mechanism.
 - Validate at trust boundaries only; do not guard impossible states.
 - Errors fail loud and early with actionable context; no silent catch.

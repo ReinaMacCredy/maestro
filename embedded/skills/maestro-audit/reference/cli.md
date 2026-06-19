@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.0.0 -->
-<!-- maestro:cli-reference-sha256: 3311fb910be3d4d03a095807a692437e198a424f331f73d2f9c5abef5588c340 -->
+<!-- maestro:cli-reference-sha256: 1d560c0be5e40e17c498f2a3859e36c6377f5952fa76dd760b58dd18acce495b -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -172,6 +172,10 @@ Every verb and flag is listed; a spelling not found here does not exist.
 
 - `maestro loop list` -- List the loop-orchestration recipes with a one-line when-to-use
 - `maestro loop show <NAME>` -- Print one recipe verbatim
+
+## maestro lean
+
+- `maestro lean [TARGET] [--card]` -- Lean reach-ladder tooling: show/set the session strictness mode, emit review/audit guidance, or harvest debt markers
 
 ## maestro version
 
