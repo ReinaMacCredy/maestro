@@ -250,6 +250,29 @@ clean:
 [inbox] 2 new (card-a 1, card-b 1) -> maestro msg read
 ```
 
+When two sessions end up on the same file, the holder can post a notice instead of opening a link.
+`maestro conflict <peer> "<why>"` aims a link-free, git-free "I'm taking this ground, hold off"
+advisory at a peer card; the peer sees it on stderr before its next command, and `--clear` retracts
+it once merged back:
+
+```
+maestro conflict task-b "taking login.rs, worktreeing it"
+maestro conflict --clear task-b   # retract once merged back
+```
+
+```
+[CONFLICT] card-a holds card-b: src/foo.rs: mid-refactor, hold off
+           -> hold off the shared file until the notice clears
+```
+
+The notice never writes a `related` edge and never runs git. It is liveness-scoped with no timer: it
+fades on its own when the asserter clears it, finishes its card, or falls out of the live session
+union, so a crashed or walked-away session never leaves a peer stuck. When a peer is live,
+`maestro feature accept` and `feature prepare` also print a `[worktree]` advisory suggesting you
+isolate in a git worktree before sharing a file. And because two full-suite gate runs would thrash
+one machine, `feature ship`'s suite run takes a shared lock across sessions: a second run prints a
+`[busy]` waiting line and proceeds when the slot frees.
+
 ### Suggested workflow
 
 The card model composes into one operating rhythm. The [Quickstart](#quickstart) above is the
@@ -499,7 +522,7 @@ ideas, and superseded decisions after it. Every archived card appends a one-line
 `.maestro/archive/cards/INDEX.md`; `maestro resume` opens with the most recent of those
 lines, `maestro list --grep <term> --archived` searches the full history (kept fast by the
 local text index, which falls back to a plain scan when missing or stale), and
-`maestro query graph <id>` renders a card's dependency neighborhood with `[archived]`
+`maestro card graph <id>` renders a card's dependency neighborhood with `[archived]`
 targets marked. Closing verbs print the `next: maestro archive <id>` nudge, and
 `maestro doctor` warns when closed cards pile up in the live store.
 
@@ -631,33 +654,35 @@ edits. `maestro sync --global-skills` refreshes only the user-level global skill
 | --- | --- |
 | `init` | Scaffold `.maestro/` and extract bundled resources |
 | `install` / `uninstall` | Wire or remove agent hooks and config (`--agent claude\|codex`) |
-| `sync` | Resync repo-local bundled resources, or global skills with `--global-skills` |
+| `sync` / `shell-init` | Resync repo-local resources (or global skills with `--global-skills`); print the shell init snippet |
 | `upgrade` | Upgrade the binary and refresh resources |
 | `doctor` | Diagnose the installation |
 | `status` / `resume` | Print the current handoff, next action, or clean-session resume packet |
 | `active` | Show other live sessions, their bound cards, link state, progress, and copy-paste link/message hints |
-| `migrate-v2` | Fold old v1 artifacts into the reduced v2 layout |
 | `migrate` | Snapshot `.maestro/` and fold legacy feature/task/decision/harness trees into `.maestro/cards/` |
 | `feature` | Manage the product contract and its lifecycle |
-| `task` | Complete, verify, block, and query proof-gated work cards |
-| `verify` | Verify a task against its recorded proof |
+| `task` | Create, claim, complete, `verify`, and inspect `proof` for proof-gated work cards (`task watch` for a live list) |
 | `decision` | Create, lock, show, and list decision cards |
-| `harness` | List, show, apply, dismiss, and measure self-improvement idea cards |
-| `create` / `update` / `close` | Create generic cards, mutate workable-card fields, or close workable cards |
-| `ready` / `list` / `show` | Discover and inspect cards in the flat store (`--parent`, `--type`, `--assignee`, `--status`, `--grep`) |
-| `claim` / `note` / `dep` / `archive` | Claim a workable card, append a note, add a blocking edge, or archive a closed feature tree (`--loose` sweeps loose closed cards) |
+| `card` | Work the flat store: `ready` / `list` / `show` / `create` / `update` / `close` / `claim` / `assign` / `note` / `dep` / `graph` / `archive` (`--parent`, `--type`, `--assignee`, `--status`, `--grep`) |
 | `link` | Add or remove non-blocking `related` edges between live cards; linked cards can use `msg` |
 | `msg` | Send, read, and list pull-only messages on linked-card channels |
-| `event` / `query` | Record harness events and inspect computed read models, including `query graph` for a card's dependency web |
-| `index` | Maintain the local text index that accelerates `list --grep` |
-| `mcp` / `hook` / `watch` | Advanced integrations for MCP, agent hooks, and task snapshots |
+| `conflict` | Flag a link-free, git-free "I'm taking this ground, hold off" notice on a peer card; `--clear` retracts it |
+| `harness` | List, show, apply, dismiss, and measure self-improvement idea cards |
+| `event` / `query` | Record harness events and inspect computed read models (matrix, friction, backlog) |
+| `watch` | Live dependency-tree board, or a one-shot snapshot; an optional id focuses one feature |
+| `index` | Maintain the local text index that accelerates `card list --grep` |
+| `loop` | Print a loop-orchestration recipe (or the index): `loop list`, `loop show <name>` |
+| `playbook` | Print a language code styleguide, or the index with no language |
+| `lean` | Show or set the session lean mode, emit review/audit guidance, or harvest debt markers |
+| `mcp` / `hook` | MCP server and agent-hook entry points |
 | `version` | Print the version and binary path |
 
-The entity verbs (`feature`, `task`, `harness`, `decision`, `verify`) are the only surface for the
-proof- and QA-gated lifecycle; the flat card verbs are for discovery and lightweight edits. `ready`
-only shows workable cards (`task`, `bug`, `chore`) whose `blocks` dependencies are closed. `list`
-accepts the coarse status filter `open`, `in_progress`, or `closed`. Run
-`maestro <command> --help` from the checked-out source build for the full surface.
+The entity verbs (`feature`, `task`, `harness`, `decision`) own the proof- and QA-gated lifecycle;
+the `card` subcommands are for discovery and lightweight edits. `card ready` only shows workable
+cards (`task`, `bug`, `chore`) whose `blocks` dependencies are closed. `card list` accepts the
+coarse status filter `open`, `in_progress`, or `closed`. Several legacy root aliases (`ready`,
+`list`, `claim`, `verify`, ...) still dispatch but are hidden from `--help`; run
+`maestro <command> --help` for the full surface.
 
 ## Migration
 
