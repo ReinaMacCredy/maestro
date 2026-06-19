@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.0.0 -->
-<!-- maestro:cli-reference-sha256: 100e23a3aefd94772d0adf8df256eb1fb3837b9fd5bfb9a1941f17933f7530dd -->
+<!-- maestro:cli-reference-sha256: ce53a7083ded5d9f8c18fc9f67d480c2bec362ab6eff60281235b1986c67c295 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -335,6 +335,10 @@ Every verb and flag is listed; a spelling not found here does not exist.
 - `maestro loop help show` -- Print one recipe verbatim
 - `maestro loop help help` -- Print this message or the help of the given subcommand(s)
 
+## maestro lean
+
+- `maestro lean [TARGET] [--card]` -- Lean reach-ladder tooling: show/set the session strictness mode, emit review/audit guidance, or harvest debt markers
+
 ## maestro version
 
 - `maestro version` -- Print the maestro version and binary path
@@ -449,5 +453,6 @@ Every verb and flag is listed; a spelling not found here does not exist.
 - `maestro help playbook` -- Print a language code styleguide, or the index with no language
 - `maestro help loop list` -- List the loop-orchestration recipes with a one-line when-to-use
 - `maestro help loop show` -- Print one recipe verbatim
+- `maestro help lean` -- Lean reach-ladder tooling: show/set the session strictness mode, emit review/audit guidance, or harvest debt markers
 - `maestro help version` -- Print the maestro version and binary path
 - `maestro help help` -- Print this message or the help of the given subcommand(s)

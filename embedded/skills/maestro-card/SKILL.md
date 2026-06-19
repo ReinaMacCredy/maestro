@@ -1,6 +1,6 @@
 ---
 name: maestro-card
-version: 1.14.0
+version: 1.15.0
 description: "Use for active Maestro card work: pick up and deliver work cards (claim, update, complete, verify), run the feature-card lifecycle (accept, prepare, amend, ship), and capture qa-baseline/qa-slice gate evidence."
 ---
 

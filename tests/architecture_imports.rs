@@ -1240,6 +1240,7 @@ fn transitional_public_surfaces_match_phase_policy() {
             "feature",
             "harness",
             "install",
+            "lean",
             "loop_recipes",
             "playbook",
             "proof",
