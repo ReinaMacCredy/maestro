@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.0.0 -->
-<!-- maestro:cli-reference-sha256: ac67f82e591ef39bc7eca1314a42950f97209f614e72820ee283b03d32257eac -->
+<!-- maestro:cli-reference-sha256: 100e23a3aefd94772d0adf8df256eb1fb3837b9fd5bfb9a1941f17933f7530dd -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -327,6 +327,14 @@ Every verb and flag is listed; a spelling not found here does not exist.
 
 - `maestro playbook [LANGUAGE]` -- Print a language code styleguide, or the index with no language
 
+## maestro loop
+
+- `maestro loop list` -- List the loop-orchestration recipes with a one-line when-to-use
+- `maestro loop show <NAME>` -- Print one recipe verbatim
+- `maestro loop help list` -- List the loop-orchestration recipes with a one-line when-to-use
+- `maestro loop help show` -- Print one recipe verbatim
+- `maestro loop help help` -- Print this message or the help of the given subcommand(s)
+
 ## maestro version
 
 - `maestro version` -- Print the maestro version and binary path
@@ -439,5 +447,7 @@ Every verb and flag is listed; a spelling not found here does not exist.
 - `maestro help watch snapshot` -- Render the live board once and exit
 - `maestro help verify` -- Verify a task against its recorded proof
 - `maestro help playbook` -- Print a language code styleguide, or the index with no language
+- `maestro help loop list` -- List the loop-orchestration recipes with a one-line when-to-use
+- `maestro help loop show` -- Print one recipe verbatim
 - `maestro help version` -- Print the maestro version and binary path
 - `maestro help help` -- Print this message or the help of the given subcommand(s)

@@ -53,6 +53,7 @@ const RESOURCE_EMBED_ALLOWLIST: &[(&str, &[&str])] = &[
         &["embedded/hooks/record.sh"],
     ),
     ("src/domain/playbook.rs", &["embedded/playbook"]),
+    ("src/domain/loop_recipes.rs", &["embedded/loop"]),
     ("src/domain/skills/catalog.rs", &["embedded/skills"]),
     (
         "src/domain/schema_contracts/catalog.rs",
@@ -1239,6 +1240,7 @@ fn transitional_public_surfaces_match_phase_policy() {
             "feature",
             "harness",
             "install",
+            "loop_recipes",
             "playbook",
             "proof",
             "run",

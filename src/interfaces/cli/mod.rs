@@ -26,6 +26,7 @@ pub mod hook;
 pub mod index;
 pub mod init;
 pub mod install;
+pub mod loop_recipes;
 pub mod mcp;
 pub mod migrate;
 pub mod msg;
@@ -327,6 +328,11 @@ pub enum RootCommand {
         after_help = "Examples:\n  maestro playbook            # list the available guides\n  maestro playbook rust       # print the Rust styleguide"
     )]
     Playbook(PlaybookArgs),
+    #[command(
+        about = "Print a loop-orchestration recipe, or the index with no recipe",
+        after_help = "Examples:\n  maestro loop                      # list the recipes\n  maestro loop list                 # same as above\n  maestro loop show feature-fan-out # print one recipe"
+    )]
+    Loop(LoopArgs),
     #[command(about = "Print the maestro version and binary path")]
     Version,
 }
@@ -415,6 +421,24 @@ pub struct PlaybookArgs {
     /// Language token to print (e.g. rust, python, html-css); omit for the index.
     #[arg(value_name = "LANGUAGE")]
     pub lang: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct LoopArgs {
+    #[command(subcommand)]
+    pub command: Option<LoopCommand>,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum LoopCommand {
+    #[command(about = "List the loop-orchestration recipes with a one-line when-to-use")]
+    List,
+    #[command(about = "Print one recipe verbatim")]
+    Show {
+        /// Recipe name (e.g. feature-fan-out); run `maestro loop` for the list.
+        #[arg(value_name = "NAME")]
+        name: String,
+    },
 }
 
 #[derive(Debug, Args)]
@@ -1520,6 +1544,7 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Watch(args) => watch::run(args),
         RootCommand::Verify { id } => verify::run(id),
         RootCommand::Playbook(args) => playbook::run(args),
+        RootCommand::Loop(args) => loop_recipes::run(args),
         RootCommand::Version => version::run(),
     }
 }
