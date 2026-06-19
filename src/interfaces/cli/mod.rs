@@ -26,6 +26,7 @@ pub mod hook;
 pub mod index;
 pub mod init;
 pub mod install;
+pub mod lean;
 pub mod loop_recipes;
 pub mod mcp;
 pub mod migrate;
@@ -333,6 +334,11 @@ pub enum RootCommand {
         after_help = "Examples:\n  maestro loop                      # list the recipes\n  maestro loop list                 # same as above\n  maestro loop show feature-fan-out # print one recipe"
     )]
     Loop(LoopArgs),
+    #[command(
+        about = "Lean reach-ladder tooling: show/set the session strictness mode, emit review/audit guidance, or harvest debt markers",
+        after_help = "Examples:\n  maestro lean                 # print the session lean mode\n  maestro lean ultra           # set the session lean mode\n  maestro lean review          # mode-adjusted reach-ladder review guidance\n  maestro lean debt --card     # mint a deduped task card per `// lean:` marker"
+    )]
+    Lean(LeanArgs),
     #[command(about = "Print the maestro version and binary path")]
     Version,
 }
@@ -439,6 +445,17 @@ pub enum LoopCommand {
         #[arg(value_name = "NAME")]
         name: String,
     },
+}
+
+#[derive(Debug, Args)]
+pub struct LeanArgs {
+    /// Omit to print the session lean mode; lite|full|ultra|off to set it;
+    /// review or audit for mode-adjusted guidance; debt to list `// lean:` markers.
+    #[arg(value_name = "TARGET")]
+    pub target: Option<String>,
+    /// With `debt`: mint a deduped task card per marker.
+    #[arg(long)]
+    pub card: bool,
 }
 
 #[derive(Debug, Args)]
@@ -1545,6 +1562,7 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Verify { id } => verify::run(id),
         RootCommand::Playbook(args) => playbook::run(args),
         RootCommand::Loop(args) => loop_recipes::run(args),
+        RootCommand::Lean(args) => lean::run(args),
         RootCommand::Version => version::run(),
     }
 }
