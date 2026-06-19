@@ -1239,6 +1239,7 @@ fn transitional_public_surfaces_match_phase_policy() {
             "decisions",
             "extraction",
             "feature",
+            "gate_lock",
             "harness",
             "install",
             "lean",

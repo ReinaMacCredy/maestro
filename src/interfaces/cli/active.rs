@@ -12,6 +12,7 @@ use std::collections::HashMap;
 use anyhow::Result;
 
 use crate::domain::card;
+use crate::domain::gate_lock;
 use crate::domain::run::{self, Presence, SessionActivity};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::table;
@@ -42,6 +43,11 @@ pub fn run(args: ActiveArgs) -> Result<()> {
         .iter()
         .find(|row| row.session_id == me)
         .and_then(|row| row.bound_card.as_deref());
+
+    if let Some(busy) = gate_lock::holder(&paths) {
+        println!("[busy] {busy} is running the full-suite gate (heavy run in progress)");
+        println!();
+    }
 
     let shown: Vec<&SessionActivity> = rows
         .iter()
@@ -374,6 +380,24 @@ pub(super) fn overlap_banner() -> Result<()> {
     }
     if printed {
         eprintln!("          -> repeated overlap = time to split into a worktree");
+    }
+    Ok(())
+}
+
+/// The heavy-run `[busy]` advisory: when another session holds the full-suite
+/// gate lock, print one STDERR line before any command naming the holder, so a
+/// hand-run knows a machine-heavy suite is in progress and can hold its own.
+/// Best-effort (the caller discards any error) and never blocks. Not
+/// self-suppressed: two terminals sharing one session id should still surface a
+/// real busy state, and the holder is blocked inside the suite so it does not
+/// self-print in practice.
+pub(super) fn busy_banner() -> Result<()> {
+    let Ok(root) = discover_repo_root() else {
+        return Ok(());
+    };
+    let paths = MaestroPaths::new(root);
+    if let Some(holder) = gate_lock::holder(&paths) {
+        eprintln!("[busy] {holder} is running the full-suite gate; hold heavy runs until it clears");
     }
     Ok(())
 }

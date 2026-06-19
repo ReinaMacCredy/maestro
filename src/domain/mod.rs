@@ -6,6 +6,7 @@ pub mod conflict;
 pub mod decisions;
 pub mod extraction;
 pub mod feature;
+pub mod gate_lock;
 pub mod harness;
 pub mod install;
 pub mod lean;

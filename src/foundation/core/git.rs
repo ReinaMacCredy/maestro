@@ -95,6 +95,19 @@ pub fn worktree_roots(path: impl AsRef<Path>) -> Result<Vec<PathBuf>> {
     Ok(roots)
 }
 
+/// The Git common directory shared by every worktree of the repository
+/// containing `path` (the main repo's `.git`). `commondir` resolves to the same
+/// place from the main worktree or any linked one, so a lockfile placed here
+/// serializes a cross-worktree resource. Canonicalized so a `/tmp` ->
+/// `/private/tmp` style symlink does not split it into two paths.
+pub fn common_dir(path: impl AsRef<Path>) -> Result<PathBuf> {
+    let repository = discover_repository(path.as_ref())?;
+    let commondir = repository.commondir();
+    Ok(commondir
+        .canonicalize()
+        .unwrap_or_else(|_| commondir.to_path_buf()))
+}
+
 /// Every non-ignored file in the repository at `path`, as repo-relative paths,
 /// sorted and de-duplicated: the tracked files (from the index) plus untracked
 /// files git would not ignore. This is the `git ls-files --cached --others

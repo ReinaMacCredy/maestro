@@ -44,7 +44,19 @@ impl StackVerifyOutcome {
 pub(crate) fn run_stack_verify(paths: &MaestroPaths) -> Result<StackVerifyOutcome> {
     let config = harness_verify_config(paths)?;
     let stack_kind = format!("{:?}", config.stack.kind).to_ascii_lowercase();
-    let commands = run_commands(paths, config.stack.verify)?;
+    let verify = config.stack.verify;
+    // Serialize the heavy full suite across concurrent sessions so two machines'
+    // worth of test/build jobs never run at once (decision 6a17). The guard holds
+    // for the duration of the run and releases on drop. The per-task narrow
+    // falsifier in `run_verify_commands` is deliberately NOT serialized. Skipped
+    // when the suite is empty -- there is nothing heavy to gate.
+    let _gate = (!verify.is_empty()).then(|| {
+        crate::domain::gate_lock::acquire(
+            paths,
+            &crate::foundation::core::session::session_token(),
+        )
+    });
+    let commands = run_commands(paths, verify)?;
     Ok(StackVerifyOutcome {
         commands,
         stack_kind,

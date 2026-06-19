@@ -1572,6 +1572,7 @@ pub fn run(cli: Cli) -> Result<()> {
         let _ = msg::inbox_banner();
         let _ = active::overlap_banner();
         let _ = conflict::conflict_banner();
+        let _ = active::busy_banner();
     }
     match cli.command {
         RootCommand::Init(args) => init::run(args),
@@ -1693,32 +1694,7 @@ fn is_managed_path_symlink_error(error: &anyhow::Error) -> bool {
 }
 
 pub(super) fn cli_run_id() -> String {
-    for key in [
-        "MAESTRO_SESSION_ID",
-        "MAESTRO_RUN_ID",
-        // Codex CLI's real per-session id (the verified var is CODEX_THREAD_ID,
-        // not the never-set CODEX_SESSION_ID it replaces); ordered ahead of the
-        // CLAUDE keys so a Codex run buckets under its thread.
-        "CODEX_THREAD_ID",
-        "CLAUDE_SESSION_ID",
-        "CLAUDECODE_SESSION_ID",
-        // Claude Code's real per-session id; without it every CLI-path event in a
-        // Claude session collapses into one cli-<date> bucket (D9).
-        "CLAUDE_CODE_SESSION_ID",
-    ] {
-        if let Ok(value) = env::var(key)
-            && !value.trim().is_empty()
-        {
-            // Trimmed: the raw value becomes a claim/assignee token, and
-            // stray whitespace would break later equality lookups.
-            return value.trim().to_string();
-        }
-    }
-    let date = crate::foundation::core::time::utc_now_timestamp()
-        .split_once('T')
-        .map(|(date, _)| date.to_string())
-        .unwrap_or_else(|| "1970-01-01".to_string());
-    format!("cli-{date}")
+    crate::foundation::core::session::session_token()
 }
 
 /// Best-effort: bind this session to a card it just mutated by recording a
