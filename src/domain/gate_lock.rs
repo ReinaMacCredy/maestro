@@ -69,20 +69,22 @@ pub struct GateGuard {
 pub fn acquire(paths: &MaestroPaths, holder: &str) -> GateGuard {
     #[cfg(unix)]
     {
-        match try_acquire(paths, holder) {
+        // Resolve the lockfile once: the wait loop below polls for the holder's
+        // whole (possibly multi-minute) suite, and the path never changes.
+        let path = lock_path(paths);
+        match try_acquire_at(&path, holder) {
             Ok(Some(guard)) => return guard,
             Ok(None) => {}
             Err(error) => return unserialized(error),
         }
 
-        let waiting_on =
-            read_holder(&lock_path(paths)).unwrap_or_else(|| "another session".to_string());
+        let waiting_on = read_holder(&path).unwrap_or_else(|| "another session".to_string());
         eprintln!("{}", waiting_line(&waiting_on));
         let started = Instant::now();
         let mut last_report = 0u64;
         loop {
             std::thread::sleep(POLL);
-            match try_acquire(paths, holder) {
+            match try_acquire_at(&path, holder) {
                 Ok(Some(guard)) => return guard,
                 Ok(None) => {}
                 Err(error) => return unserialized(error),
@@ -139,13 +141,14 @@ fn unserialized(error: anyhow::Error) -> GateGuard {
     GateGuard { _file: None }
 }
 
-/// One non-blocking attempt to take the gate exclusively: `Some(guard)` if free,
-/// `None` if a peer holds it. The building block behind [`acquire`]'s wait loop.
+/// One non-blocking attempt to take the gate exclusively at a known lockfile
+/// path: `Some(guard)` if free, `None` if a peer holds it. The building block
+/// behind [`acquire`]'s wait loop, which resolves the path once and reuses it so
+/// a multi-minute wait never re-discovers the Git common dir on every poll.
 #[cfg(unix)]
-pub(crate) fn try_acquire(paths: &MaestroPaths, holder: &str) -> Result<Option<GateGuard>> {
+pub(crate) fn try_acquire_at(path: &std::path::Path, holder: &str) -> Result<Option<GateGuard>> {
     use std::os::unix::io::AsRawFd;
 
-    let path = lock_path(paths);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).ok();
     }
@@ -157,7 +160,7 @@ pub(crate) fn try_acquire(paths: &MaestroPaths, holder: &str) -> Result<Option<G
         // lock and rewrite it under set_len(0). Truncating here would blank a
         // peer's id the instant we open, before acquiring.
         .truncate(false)
-        .open(&path)
+        .open(path)
         .with_context(|| format!("failed to open gate lock {}", path.display()))?;
     if flock_nb(file.as_raw_fd(), sys::LOCK_EX)? {
         write_holder(&file, holder)?;
@@ -265,18 +268,19 @@ mod tests {
     // independent descriptors that still conflict -- which is exactly what lets us
     // prove mutual exclusion without spawning a second process. This test is also
     // the flock-semantics guard: if the lock ever drifted to fcntl/POSIX
-    // (per-process) locks, the second try_acquire below would SUCCEED and this
+    // (per-process) locks, the second try_acquire_at below would SUCCEED and this
     // would fail.
     #[test]
     fn a_second_descriptor_cannot_acquire_while_the_first_holds_the_gate() {
         let repo = TempRepo::new("mutex");
         let paths = repo.paths();
+        let path = lock_path(&paths);
 
-        let first = try_acquire(&paths, "sessA")
+        let first = try_acquire_at(&path, "sessA")
             .expect("io")
             .expect("a free gate acquires");
         assert!(
-            try_acquire(&paths, "sessB").expect("io").is_none(),
+            try_acquire_at(&path, "sessB").expect("io").is_none(),
             "a second descriptor must not acquire while the first holds the gate"
         );
         assert_eq!(
@@ -292,7 +296,7 @@ mod tests {
             "the gate is free once the holder's descriptor is dropped"
         );
 
-        let second = try_acquire(&paths, "sessB")
+        let second = try_acquire_at(&path, "sessB")
             .expect("io")
             .expect("the gate is acquirable again after release");
         assert_eq!(holder(&paths).as_deref(), Some("sessB"));

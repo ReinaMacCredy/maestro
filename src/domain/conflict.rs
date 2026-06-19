@@ -146,11 +146,10 @@ fn append_event(
 /// liveness fails safe to hidden rather than showing a notice from a session we
 /// cannot confirm is live.
 pub fn active_notices(roots: &[MaestroPaths], now: &str) -> Result<Vec<Notice>> {
-    let presence: HashMap<String, Presence> = active_sessions_union(roots, now)?
-        .into_iter()
-        .map(|row| (row.session_id, row.presence))
-        .collect();
-
+    // Fold the notice files first: when no session has run `maestro conflict`
+    // there is no file to read, so we skip the cross-worktree active-session
+    // union walk entirely. This runs in the pre-command banner on every command,
+    // and the no-conflict case is overwhelmingly the common one.
     let mut folded: BTreeMap<(String, String), (Action, Notice)> = BTreeMap::new();
     for paths in roots {
         for raw in read_root_notices(paths)? {
@@ -168,6 +167,14 @@ pub fn active_notices(roots: &[MaestroPaths], now: &str) -> Result<Vec<Notice>> 
             folded.insert(key, (raw.action, notice));
         }
     }
+    if folded.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let presence: HashMap<String, Presence> = active_sessions_union(roots, now)?
+        .into_iter()
+        .map(|row| (row.session_id, row.presence))
+        .collect();
 
     Ok(folded
         .into_values()

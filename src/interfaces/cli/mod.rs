@@ -1572,7 +1572,11 @@ pub fn run(cli: Cli) -> Result<()> {
         let _ = msg::inbox_banner();
         let _ = active::overlap_banner();
         let _ = conflict::conflict_banner();
-        let _ = active::busy_banner();
+        // `maestro active` prints the gate holder in its own structured view, so
+        // the ambient pre-command banner would surface the same busy state twice.
+        if !matches!(cli.command, RootCommand::Active(_)) {
+            let _ = active::busy_banner();
+        }
     }
     match cli.command {
         RootCommand::Init(args) => init::run(args),
