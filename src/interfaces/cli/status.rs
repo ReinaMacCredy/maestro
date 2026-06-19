@@ -1090,14 +1090,12 @@ impl TaskSummaryJson {
             if card.status == "verified" {
                 summary.verified += 1;
             }
-            match card::query::classify(card, blocked_ids) {
-                card::query::RowState::Done => {}
-                card::query::RowState::Blocked => summary.blocked += 1,
-                card::query::RowState::NeedsVerification => summary.needs_verification += 1,
-                card::query::RowState::Active => summary.active += 1,
-                card::query::RowState::Ready => summary.ready += 1,
-            }
         }
+        let counts = card::query::RowStateCounts::from_cards(cards.iter(), blocked_ids);
+        summary.active = counts.active;
+        summary.ready = counts.ready;
+        summary.needs_verification = counts.needs_verification;
+        summary.blocked = counts.blocked;
         summary
     }
 }

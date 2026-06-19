@@ -53,42 +53,6 @@ fn live_footer(interval: u64) -> String {
     format!("(live; refreshes every {interval}s; Ctrl-C to exit)")
 }
 
-#[derive(Default)]
-struct RowCounts {
-    done: usize,
-    blocked: usize,
-    needs_verification: usize,
-    active: usize,
-    ready: usize,
-}
-
-impl RowCounts {
-    fn from_cards<'a>(
-        cards: impl IntoIterator<Item = &'a card::schema::Card>,
-        blocked_ids: &BTreeSet<String>,
-    ) -> Self {
-        let mut counts = Self::default();
-        for card in cards {
-            counts.bump(card::query::classify(card, blocked_ids));
-        }
-        counts
-    }
-
-    fn bump(&mut self, state: RowState) {
-        match state {
-            RowState::Done => self.done += 1,
-            RowState::Blocked => self.blocked += 1,
-            RowState::NeedsVerification => self.needs_verification += 1,
-            RowState::Active => self.active += 1,
-            RowState::Ready => self.ready += 1,
-        }
-    }
-
-    fn total(&self) -> usize {
-        self.done + self.blocked + self.needs_verification + self.active + self.ready
-    }
-}
-
 fn glyph(state: RowState) -> char {
     match state {
         RowState::Done => '\u{2713}',              // tick
@@ -164,7 +128,7 @@ fn push_row(
     out.push('\n');
 }
 
-fn push_group_header(out: &mut String, title: &str, counts: &RowCounts) {
+fn push_group_header(out: &mut String, title: &str, counts: &card::query::RowStateCounts) {
     let total = counts.total();
     let pct = counts.done * 100 / total.max(1);
     out.push_str(&format!(
@@ -173,29 +137,67 @@ fn push_group_header(out: &mut String, title: &str, counts: &RowCounts) {
     ));
 }
 
+struct BoardLayout<'a> {
+    groups: Vec<BoardGroup<'a>>,
+}
+
+struct BoardGroup<'a> {
+    title: String,
+    counts: card::query::RowStateCounts,
+    rows: Vec<BoardRow<'a>>,
+}
+
+struct BoardRow<'a> {
+    card: &'a card::schema::Card,
+    state: RowState,
+    depth: usize,
+}
+
+impl BoardLayout<'_> {
+    fn render(&self, live_tick: Option<u64>) -> String {
+        let mut out = String::new();
+        for group in &self.groups {
+            push_group_header(&mut out, &group.title, &group.counts);
+            for row in &group.rows {
+                push_row(&mut out, row.card, row.state, row.depth, live_tick);
+            }
+            out.push('\n');
+        }
+        if out.is_empty() {
+            out.push_str("No open work to show. Run `maestro card ready` or `maestro card list`.\n");
+        }
+        out
+    }
+}
+
 /// Depth-first placement of one blocks subtree, seeded at `root`. Each card is
 /// emitted at most once (the `visited` set), so a back-edge into an
 /// already-placed card is dropped: the walk is total and terminates on any
 /// cycle. Done cards are counted in the header but their row is hidden.
-fn place<'a>(
+fn place_rows<'a>(
     root: &'a card::schema::Card,
     children_of: &BTreeMap<&'a str, Vec<&'a card::schema::Card>>,
     blocked_ids: &BTreeSet<String>,
     just_completed: &BTreeSet<String>,
-    live_tick: Option<u64>,
     visited: &mut BTreeSet<&'a str>,
-    out: &mut String,
+    rows: &mut Vec<BoardRow<'a>>,
 ) {
     let mut stack = vec![(root, 0usize)];
     while let Some((node, depth)) = stack.pop() {
         if !visited.insert(node.id.as_str()) {
             continue;
         }
-        let state = card::query::classify(node, blocked_ids);
+        let Some(state) = card::query::classify(node, blocked_ids) else {
+            continue;
+        };
         // Done rows are hidden in steady state; a card in `just_completed`
         // (live and now Done) renders one tick frame before it drops next reload.
         if state != RowState::Done || just_completed.contains(&node.id) {
-            push_row(out, node, state, depth, live_tick);
+            rows.push(BoardRow {
+                card: node,
+                state,
+                depth,
+            });
         }
         if let Some(dependents) = children_of.get(node.id.as_str()) {
             // push reversed so siblings pop in id order (pre-order, id-sorted)
@@ -229,8 +231,15 @@ fn format_board_opts(
     live_tick: Option<u64>,
     just_completed: &BTreeSet<String>,
 ) -> String {
-    use std::collections::BTreeMap;
+    build_board_layout(cards, blocked_ids, focus, just_completed).render(live_tick)
+}
 
+fn build_board_layout<'a>(
+    cards: &'a [card::schema::Card],
+    blocked_ids: &BTreeSet<String>,
+    focus: Option<&str>,
+    just_completed: &BTreeSet<String>,
+) -> BoardLayout<'a> {
     let mut features: BTreeMap<&str, &card::schema::Card> = BTreeMap::new();
     let mut children: BTreeMap<&str, Vec<&card::schema::Card>> = BTreeMap::new();
     for card in cards {
@@ -247,7 +256,7 @@ fn format_board_opts(
         }
     }
 
-    let mut out = String::new();
+    let mut groups = Vec::new();
     for (fid, feature) in &features {
         // Focus renders exactly one feature and never hides it: a focused
         // design-only or finished feature still prints its header (ac-2), so
@@ -266,7 +275,7 @@ fn format_board_opts(
         let mut kids: Vec<&card::schema::Card> = kids.clone();
         kids.sort_by(|left, right| left.id.cmp(&right.id));
 
-        let counts = RowCounts::from_cards(kids.iter().copied(), blocked_ids);
+        let counts = card::query::RowStateCounts::from_cards(kids.iter().copied(), blocked_ids);
         // A finished feature is hidden in the overview, unless one of its tasks
         // just completed this reload: then it shows its 100% header and the tick
         // row for one frame before dropping next reload (tick-then-clear).
@@ -274,73 +283,11 @@ fn format_board_opts(
         if counts.done == counts.total() && focus.is_none() && !has_flash {
             continue;
         }
-        push_group_header(&mut out, &feature.title, &counts);
-        // Lay the feature's workable children out as a forest over their
-        // in-feature `blocks` edges (dec-tree-nesting-...-6905): roots are
-        // children with no in-feature blocker; each dependent nests under its
-        // earliest-created blocker. A multi-blocker card attaches once, under
-        // that earliest blocker; remaining edges are not redrawn. Edges to
-        // cross-feature or non-workable targets fall outside `by_id`, so they
-        // are ignored for layout and the card renders as a root.
-        let by_id: BTreeMap<&str, &card::schema::Card> =
-            kids.iter().map(|&kid| (kid.id.as_str(), kid)).collect();
-        let mut children_of: BTreeMap<&str, Vec<&card::schema::Card>> = BTreeMap::new();
-        let mut has_blocker: BTreeSet<&str> = BTreeSet::new();
-        for &kid in &kids {
-            let mut blockers: Vec<&card::schema::Card> = kid
-                .deps
-                .iter()
-                .filter(|dep| dep.kind.is_blocking())
-                .filter_map(|dep| by_id.get(dep.target.as_str()).copied())
-                .collect();
-            if blockers.is_empty() {
-                continue;
-            }
-            blockers.sort_by(|left, right| {
-                left.created_at
-                    .cmp(&right.created_at)
-                    .then_with(|| left.id.cmp(&right.id))
-            });
-            children_of
-                .entry(blockers[0].id.as_str())
-                .or_default()
-                .push(kid);
-            has_blocker.insert(kid.id.as_str());
-        }
-        for dependents in children_of.values_mut() {
-            dependents.sort_by(|left, right| left.id.cmp(&right.id));
-        }
-
-        let mut visited: BTreeSet<&str> = BTreeSet::new();
-        for &kid in &kids {
-            if !has_blocker.contains(kid.id.as_str()) {
-                place(
-                    kid,
-                    &children_of,
-                    blocked_ids,
-                    just_completed,
-                    live_tick,
-                    &mut visited,
-                    &mut out,
-                );
-            }
-        }
-        // Any kid still unplaced sits in a cycle (every edge is a back-edge);
-        // seed from it in id order so the cycle renders once and terminates.
-        for &kid in &kids {
-            if !visited.contains(kid.id.as_str()) {
-                place(
-                    kid,
-                    &children_of,
-                    blocked_ids,
-                    just_completed,
-                    live_tick,
-                    &mut visited,
-                    &mut out,
-                );
-            }
-        }
-        out.push('\n');
+        groups.push(BoardGroup {
+            title: feature.title.clone(),
+            counts,
+            rows: feature_rows(&kids, blocked_ids, just_completed),
+        });
     }
 
     // Workable cards with no parent feature (or a parent that is not a feature
@@ -356,33 +303,105 @@ fn format_board_opts(
                 Some(parent) => !features.contains_key(parent),
             })
             .filter(|card| {
-                card::query::classify(card, blocked_ids) != RowState::Done
+                card::query::classify(card, blocked_ids) != Some(RowState::Done)
                     || just_completed.contains(&card.id)
             })
             .collect();
         if !orphans.is_empty() {
             orphans.sort_by(|left, right| left.id.cmp(&right.id));
-            let counts = RowCounts::from_cards(orphans.iter().copied(), blocked_ids);
-            push_group_header(&mut out, "(no feature)", &counts);
-            for orphan in &orphans {
-                push_row(
-                    &mut out,
-                    orphan,
-                    card::query::classify(orphan, blocked_ids),
-                    0,
-                    live_tick,
-                );
-            }
-            out.push('\n');
+            groups.push(BoardGroup {
+                title: "(no feature)".to_string(),
+                counts: card::query::RowStateCounts::from_cards(
+                    orphans.iter().copied(),
+                    blocked_ids,
+                ),
+                rows: orphans
+                    .into_iter()
+                    .filter_map(|orphan| {
+                        card::query::classify(orphan, blocked_ids).map(|state| BoardRow {
+                            card: orphan,
+                            state,
+                            depth: 0,
+                        })
+                    })
+                    .collect(),
+            });
         }
     }
 
-    // Never return empty: a blank frame in the live loop reads as a hang. When
-    // nothing open renders, point at where the work is instead.
-    if out.is_empty() {
-        out.push_str("No open work to show. Run `maestro ready` or `maestro list`.\n");
+    BoardLayout { groups }
+}
+
+fn feature_rows<'a>(
+    kids: &[&'a card::schema::Card],
+    blocked_ids: &BTreeSet<String>,
+    just_completed: &BTreeSet<String>,
+) -> Vec<BoardRow<'a>> {
+    // Lay the feature's workable children out as a forest over their in-feature
+    // `blocks` edges (dec-tree-nesting-...-6905): roots are children with no
+    // in-feature blocker; each dependent nests under its earliest-created
+    // blocker. A multi-blocker card attaches once, under that earliest blocker;
+    // remaining edges are not redrawn. Edges to cross-feature or non-workable
+    // targets fall outside `by_id`, so they are ignored for layout and the card
+    // renders as a root.
+    let by_id: BTreeMap<&str, &card::schema::Card> =
+        kids.iter().map(|&kid| (kid.id.as_str(), kid)).collect();
+    let mut children_of: BTreeMap<&str, Vec<&card::schema::Card>> = BTreeMap::new();
+    let mut has_blocker: BTreeSet<&str> = BTreeSet::new();
+    for &kid in kids {
+        let mut blockers: Vec<&card::schema::Card> = kid
+            .deps
+            .iter()
+            .filter(|dep| dep.kind.is_blocking())
+            .filter_map(|dep| by_id.get(dep.target.as_str()).copied())
+            .collect();
+        if blockers.is_empty() {
+            continue;
+        }
+        blockers.sort_by(|left, right| {
+            left.created_at
+                .cmp(&right.created_at)
+                .then_with(|| left.id.cmp(&right.id))
+        });
+        children_of
+            .entry(blockers[0].id.as_str())
+            .or_default()
+            .push(kid);
+        has_blocker.insert(kid.id.as_str());
     }
-    out
+    for dependents in children_of.values_mut() {
+        dependents.sort_by(|left, right| left.id.cmp(&right.id));
+    }
+
+    let mut rows = Vec::new();
+    let mut visited: BTreeSet<&str> = BTreeSet::new();
+    for &kid in kids {
+        if !has_blocker.contains(kid.id.as_str()) {
+            place_rows(
+                kid,
+                &children_of,
+                blocked_ids,
+                just_completed,
+                &mut visited,
+                &mut rows,
+            );
+        }
+    }
+    // Any kid still unplaced sits in a cycle (every edge is a back-edge); seed
+    // from it in id order so the cycle renders once and terminates.
+    for &kid in kids {
+        if !visited.contains(kid.id.as_str()) {
+            place_rows(
+                kid,
+                &children_of,
+                blocked_ids,
+                just_completed,
+                &mut visited,
+                &mut rows,
+            );
+        }
+    }
+    rows
 }
 
 /// Scan the card store for the board and compute the blocked-id set. The
@@ -438,10 +457,10 @@ pub fn run_board(paths: &MaestroPaths, focus: Option<&str>, interval_seconds: u6
         let mut live_now: BTreeSet<String> = BTreeSet::new();
         let mut just_completed: BTreeSet<String> = BTreeSet::new();
         for card in &cards {
-            if !card.card_type.workable() {
+            let Some(state) = card::query::classify(card, &blocked_ids) else {
                 continue;
-            }
-            if card::query::classify(card, &blocked_ids) == RowState::Done {
+            };
+            if state == RowState::Done {
                 if prev_live.contains(&card.id) {
                     just_completed.insert(card.id.clone());
                 }
@@ -449,8 +468,9 @@ pub fn run_board(paths: &MaestroPaths, focus: Option<&str>, interval_seconds: u6
                 live_now.insert(card.id.clone());
             }
         }
+        let layout = build_board_layout(&cards, &blocked_ids, focus, &just_completed);
         for _ in 0..render_ticks {
-            let board = format_board_opts(&cards, &blocked_ids, focus, Some(tick), &just_completed);
+            let board = layout.render(Some(tick));
             let frame = format!("{board}\n{}\n", live_footer(interval));
             print!("{}", paint(&frame));
             io::stdout()
@@ -769,11 +789,7 @@ mod tests {
         let mut claimed = work("task-1", "auth", "session store", "in_progress");
         claimed.suggested_for = Some("codex#s9".to_string());
         claimed.claimed_by = Some("claude#a4f2".to_string());
-        let out2 = format_board(
-            &[feat("auth", "Auth"), claimed].to_vec(),
-            &BTreeSet::new(),
-            None,
-        );
+        let out2 = format_board(&[feat("auth", "Auth"), claimed], &BTreeSet::new(), None);
         assert!(
             out2.contains("claude#a4f2") && !out2.contains("-> for"),
             "a claim supersedes the hint in the board render:\n{out2}"
@@ -898,8 +914,8 @@ mod tests {
         let card = work("task-1", "auth", "x", "ready");
         let mut blocked = BTreeSet::new();
         blocked.insert("task-1".to_string());
-        assert!(card::query::classify(&card, &blocked) == RowState::Blocked);
-        assert!(card::query::classify(&card, &BTreeSet::new()) == RowState::Ready);
+        assert!(card::query::classify(&card, &blocked) == Some(RowState::Blocked));
+        assert!(card::query::classify(&card, &BTreeSet::new()) == Some(RowState::Ready));
     }
 
     #[test]

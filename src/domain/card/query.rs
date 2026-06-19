@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 
 use crate::domain::card::fold;
-use crate::domain::card::schema::{Card, CardType, DepKind};
+use crate::domain::card::schema::{Card, CardType, Dep, DepKind};
 use crate::domain::card::store::{
     CARD_FILE, DECISIONS_FILE, IDEAS_FILE, TASK_FILE, TASKS_DIR, is_dir_backed, is_symlink, load,
     load_entries, resolve, resolve_in,
@@ -353,20 +353,7 @@ pub fn ready(cards: &[Card]) -> Vec<&Card> {
 }
 
 fn is_ready(card: &Card, by_id: &HashMap<&str, &Card>) -> bool {
-    if !card.card_type.workable() {
-        return false;
-    }
-    if coarse_of(&card.status) != Some(Coarse::Open) {
-        return false;
-    }
-    card.deps
-        .iter()
-        .filter(|dep| dep.kind.is_blocking())
-        .all(|dep| {
-            by_id
-                .get(dep.target.as_str())
-                .is_some_and(|target| coarse_of(&target.status) == Some(Coarse::Closed))
-        })
+    open_workable(card) && !has_unsatisfied_blocker(card, by_id)
 }
 
 /// The blocked set: workable, coarse-OPEN cards carrying at least one `blocks`
@@ -381,27 +368,31 @@ pub fn blocked(cards: &[Card]) -> Vec<&Card> {
 }
 
 fn is_blocked(card: &Card, by_id: &HashMap<&str, &Card>) -> bool {
-    if !card.card_type.workable() {
-        return false;
-    }
-    if coarse_of(&card.status) != Some(Coarse::Open) {
-        return false;
-    }
+    open_workable(card) && has_unsatisfied_blocker(card, by_id)
+}
+
+fn open_workable(card: &Card) -> bool {
+    card.card_type.workable() && coarse_of(&card.status) == Some(Coarse::Open)
+}
+
+fn has_unsatisfied_blocker(card: &Card, by_id: &HashMap<&str, &Card>) -> bool {
     card.deps
         .iter()
         .filter(|dep| dep.kind.is_blocking())
-        .any(|dep| {
-            !by_id
-                .get(dep.target.as_str())
-                .is_some_and(|target| coarse_of(&target.status) == Some(Coarse::Closed))
-        })
+        .any(|dep| !blocking_dep_satisfied(dep, by_id))
+}
+
+fn blocking_dep_satisfied(dep: &Dep, by_id: &HashMap<&str, &Card>) -> bool {
+    by_id
+        .get(dep.target.as_str())
+        .is_some_and(|target| coarse_of(&target.status) == Some(Coarse::Closed))
 }
 
 /// The board-row bucket a workable card maps to, finer than coarse status: it
 /// splits the OPEN/IN_PROGRESS band into the planr header buckets. The watch
 /// board and `maestro status` both classify through this so their open-bucket
 /// counts cannot diverge.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RowState {
     Done,
     Blocked,
@@ -410,28 +401,69 @@ pub enum RowState {
     Ready,
 }
 
-/// Classify a workable card into its [`RowState`]. `blocked_ids` is the set of
-/// ids held back by an unsatisfied `blocks` dependency (from [`blocked`]), so a
-/// card reads blocked here exactly when an open dependency keeps it out of
-/// [`ready`]. A claimed card reads `Active` before `Ready` (the distinction
-/// [`is_ready`] does not draw), which is why count consumers route through this
-/// rather than reassembling buckets from [`ready`]/[`blocked`]. A non-workable
-/// card never lands in `blocked_ids` and falls through to `Ready`; filter to
-/// `card_type.workable()` before counting.
-pub fn classify(card: &Card, blocked_ids: &BTreeSet<String>) -> RowState {
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct RowStateCounts {
+    pub done: usize,
+    pub blocked: usize,
+    pub needs_verification: usize,
+    pub active: usize,
+    pub ready: usize,
+}
+
+impl RowStateCounts {
+    pub fn from_cards<'a>(
+        cards: impl IntoIterator<Item = &'a Card>,
+        blocked_ids: &BTreeSet<String>,
+    ) -> Self {
+        let mut counts = Self::default();
+        for card in cards {
+            if let Some(state) = classify(card, blocked_ids) {
+                counts.bump(state);
+            }
+        }
+        counts
+    }
+
+    pub fn total(&self) -> usize {
+        self.done + self.blocked + self.needs_verification + self.active + self.ready
+    }
+
+    fn bump(&mut self, state: RowState) {
+        match state {
+            RowState::Done => self.done += 1,
+            RowState::Blocked => self.blocked += 1,
+            RowState::NeedsVerification => self.needs_verification += 1,
+            RowState::Active => self.active += 1,
+            RowState::Ready => self.ready += 1,
+        }
+    }
+}
+
+/// Classify a workable card into its [`RowState`]. Non-workable cards return
+/// `None`, so callers cannot accidentally count feature/idea/decision cards as
+/// ready work. `blocked_ids` is the set of ids held back by an unsatisfied
+/// `blocks` dependency (from [`blocked`]), so a card reads blocked here exactly
+/// when an open dependency keeps it out of [`ready`]. A claimed card reads
+/// `Active` before `Ready` (the distinction [`is_ready`] does not draw), which
+/// is why count consumers route through this rather than reassembling buckets
+/// from [`ready`]/[`blocked`].
+pub fn classify(card: &Card, blocked_ids: &BTreeSet<String>) -> Option<RowState> {
+    if !card.card_type.workable() {
+        return None;
+    }
     if coarse_of(&card.status) == Some(Coarse::Closed) {
-        return RowState::Done;
+        return Some(RowState::Done);
     }
     if blocked_ids.contains(&card.id) {
-        return RowState::Blocked;
+        return Some(RowState::Blocked);
     }
     if card.status == "needs_verification" {
-        return RowState::NeedsVerification;
+        return Some(RowState::NeedsVerification);
     }
     if card.claimed_by.is_some() || card.status == "in_progress" {
-        return RowState::Active;
+        return Some(RowState::Active);
     }
-    RowState::Ready
+    Some(RowState::Ready)
 }
 
 /// The `list` filter (SPEC G3): every supplied predicate must match (AND). An
@@ -574,11 +606,11 @@ pub fn cards_related(a: &Card, b: &Card) -> bool {
 /// is a feature card, else its parent feature (one-level hierarchy). `None` for
 /// a loose card with no parent. Single source so the broadcast-membership gate
 /// (`msg`) and the `active` `team` link compute the same boundary.
-pub fn feature_of(card: &Card) -> Option<String> {
+pub fn feature_of(card: &Card) -> Option<&str> {
     if card.card_type == CardType::Feature {
-        Some(card.id.clone())
+        Some(card.id.as_str())
     } else {
-        card.parent.clone()
+        card.parent.as_deref()
     }
 }
 
@@ -606,7 +638,6 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use super::*;
-    use crate::domain::card::schema::Dep;
     use crate::domain::card::store::{card_path, load_with_snapshot, save_with_snapshot};
     use crate::foundation::core::fs::ensure_dir;
 
@@ -622,6 +653,12 @@ mod tests {
         assert!(!CardType::Feature.workable());
         assert!(!CardType::Idea.workable());
         assert!(!CardType::Decision.workable());
+    }
+
+    #[test]
+    fn classify_returns_none_for_non_workable_cards() {
+        let feature = card("feat-001", CardType::Feature, "ready");
+        assert_eq!(classify(&feature, &BTreeSet::new()), None);
     }
 
     #[test]

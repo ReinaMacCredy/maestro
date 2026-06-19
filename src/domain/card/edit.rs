@@ -773,8 +773,8 @@ mod tests {
             "re-assigning the same who is a no-op"
         );
         assert!(
-            !assign(&paths, "task-001", None, SOON).is_err(),
-            "clearing is fine"
+            assign(&paths, "task-001", None, SOON).expect("clear"),
+            "clearing a set hint is a change"
         );
         // a second clear on an already-clear card is also a no-op
         assert!(!assign(&paths, "task-001", None, SOON).expect("clear-again"));

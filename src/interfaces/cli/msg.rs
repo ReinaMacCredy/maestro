@@ -40,24 +40,24 @@ fn send(to: &str, text: &str) -> Result<()> {
     let me = current_card(&paths)?;
     let me_card = resolve_card(&paths, &me)?;
 
-    if !card_exists(&paths, to)? {
+    let Some(target) = resolve_live_or_archived_card(&paths, to)? else {
         let ids = card::query::scan(&paths).unwrap_or_default();
         return match card::suggest::did_you_mean(to, ids.iter().map(|card| card.id.as_str())) {
             Some(near) => Err(anyhow!("no card {to}; did you mean {near}?")),
             None => Err(anyhow!("no card {to} to message")),
         };
-    }
+    };
 
     // A send addressed to a live feature card is a broadcast to its members, not
     // a pairwise message: dispatch before the link gate.
-    if let Some(resolved) = card::store::resolve(&paths, to)?
-        && resolved.card.card_type == card::schema::CardType::Feature
+    if let CardPresence::Live(target_card) = &target
+        && target_card.card_type == card::schema::CardType::Feature
     {
-        return send_broadcast(&paths, &me, &me_card, &resolved.card.id, text);
+        return send_broadcast(&paths, &me, &me_card, &target_card.id, text);
     }
 
     if !card::query::pair_linked(&paths, &me_card, to)? {
-        if let Some(status) = partner_terminal_status(&paths, to)? {
+        if let Some(status) = target.terminal_status() {
             bail!("{to} is finished ({status}); no channel can be opened with a finished card");
         }
         bail!("{me} and {to} are not linked; run `maestro link add {me} {to}` before messaging");
@@ -101,7 +101,7 @@ fn read(scope: Option<&str>) -> Result<()> {
     let channels = visible_channels_union(&paths, &me_card)?;
     let selected: Vec<&Channel> = channels
         .iter()
-        .filter(|channel| scope.is_none_or(|target| channel.partner(&me) == target))
+        .filter(|channel| scope.is_none_or(|target| channel.address(&me) == target))
         .collect();
 
     if selected.is_empty() {
@@ -122,7 +122,7 @@ fn list(scope: Option<&str>) -> Result<()> {
     let me = current_card(&paths)?;
     let me_card = resolve_card(&paths, &me)?;
     let mut channels = visible_channels_union(&paths, &me_card)?;
-    channels.sort_by(|a, b| a.partner(&me).cmp(b.partner(&me)));
+    channels.sort_by(|a, b| a.address(&me).cmp(b.address(&me)));
 
     match scope {
         None => {
@@ -137,7 +137,9 @@ fn list(scope: Option<&str>) -> Result<()> {
                 let last = last_message.map_or("-", |message| message.ts.as_str());
                 match &channel.kind {
                     ChannelKind::Pair(_) => {
-                        let partner = channel.partner(&me);
+                        let partner = channel
+                            .pair_partner(&me)
+                            .expect("pair channel has a partner");
                         // Direction of the last message -> whose turn it is to reply.
                         let direction = match last_message {
                             Some(message) if message.from_card == me => "from you",
@@ -164,7 +166,7 @@ fn list(scope: Option<&str>) -> Result<()> {
             }
         }
         Some(target) => {
-            let Some(channel) = channels.iter().find(|c| c.partner(&me) == target) else {
+            let Some(channel) = channels.iter().find(|c| c.address(&me) == target) else {
                 println!("{}", empty_note(scope));
                 return Ok(());
             };
@@ -196,7 +198,7 @@ fn read_channel(paths: &MaestroPaths, me: &str, channel: &Channel) -> Result<()>
     let unread = channel.unread(me, at.as_deref());
     let seen = channel.seen_context(me, at.as_deref(), CONTEXT_LIMIT);
 
-    println!("{}:", channel.partner(me));
+    println!("{}:", channel.address(me));
     for message in &seen {
         println!(
             "  . {}{}  {}",
@@ -262,7 +264,7 @@ pub(super) fn inbox_banner() -> Result<()> {
         let at = cursor(&paths, &channel, &me)?;
         let unread = channel.unread(&me, at.as_deref()).len();
         if unread > 0 {
-            counts.push((channel.partner(&me).to_string(), unread));
+            counts.push((channel.address(&me).to_string(), unread));
         }
     }
     if counts.is_empty() {
@@ -289,8 +291,10 @@ fn visible_channels_union(paths: &MaestroPaths, me: &card::schema::Card) -> Resu
     let roots = worktree_roots(paths);
     let mut visible = Vec::new();
     for channel in channel::channels_for_union(&roots, &me.id)? {
-        let partner = channel.partner(&me.id).to_string();
-        if card::query::pair_linked(paths, me, &partner)? {
+        let Some(partner) = channel.pair_partner(&me.id) else {
+            continue;
+        };
+        if card::query::pair_linked(paths, me, partner)? {
             visible.push(channel);
         }
     }
@@ -298,7 +302,7 @@ fn visible_channels_union(paths: &MaestroPaths, me: &card::schema::Card) -> Resu
     // edge, checked by construction here (we load only my own feature's channel),
     // so no link is required and a non-member never reaches it.
     if let Some(feature_id) = card::query::feature_of(me)
-        && let Some(channel) = channel::load_feature_union(&roots, &feature_id)?
+        && let Some(channel) = channel::load_feature_union(&roots, feature_id)?
     {
         visible.push(channel);
     }
@@ -332,29 +336,34 @@ fn resolve_card(paths: &MaestroPaths, id: &str) -> Result<card::schema::Card> {
         .card)
 }
 
-/// Whether `id` names a real card, live OR archived. A send to a still-linked
-/// partner that was archived after linking stays valid (link/unlink gates, not
-/// lifecycle); only a genuinely unknown id earns the did-you-mean.
-fn card_exists(paths: &MaestroPaths, id: &str) -> Result<bool> {
-    if card::store::resolve(paths, id)?.is_some() {
-        return Ok(true);
-    }
-    Ok(card::store::resolve_in(&paths.archive_cards_dir(), id)?.is_some())
+enum CardPresence {
+    Live(card::schema::Card),
+    Archived(card::schema::Card),
 }
 
-/// The partner's status word when it is terminal -- coarse-Closed in the live
-/// store, or present only in the archive (archived implies done). Drives msg
-/// send's honest dead-end for a finished partner instead of pointing at a
-/// `link add` the guard would refuse (`dec-terminal-card-link-msg-keep-the-live-5878`).
-/// Only reached on the not-linked branch; an already-linked terminal partner
-/// passes `pair_linked` and keeps messaging.
-fn partner_terminal_status(paths: &MaestroPaths, id: &str) -> Result<Option<String>> {
-    if let Some(resolved) = card::store::resolve(paths, id)? {
-        if card::query::coarse_of(&resolved.card.status) == Some(card::query::Coarse::Closed) {
-            return Ok(Some(resolved.card.status));
+impl CardPresence {
+    fn terminal_status(&self) -> Option<&str> {
+        match self {
+            Self::Live(card)
+                if card::query::coarse_of(&card.status) == Some(card::query::Coarse::Closed) =>
+            {
+                Some(card.status.as_str())
+            }
+            Self::Live(_) => None,
+            Self::Archived(card) => Some(card.status.as_str()),
         }
-        return Ok(None);
+    }
+}
+
+/// Resolve `id` from the live store or archive once for `msg send`. A send to a
+/// still-linked partner that was archived after linking stays valid
+/// (link/unlink gates, not lifecycle); only a genuinely unknown id earns the
+/// did-you-mean. Live features dispatch to broadcast before the pair link gate;
+/// archived features are terminal cards, not broadcast targets.
+fn resolve_live_or_archived_card(paths: &MaestroPaths, id: &str) -> Result<Option<CardPresence>> {
+    if let Some(resolved) = card::store::resolve(paths, id)? {
+        return Ok(Some(CardPresence::Live(resolved.card)));
     }
     Ok(card::store::resolve_in(&paths.archive_cards_dir(), id)?
-        .map(|resolved| resolved.card.status))
+        .map(|resolved| CardPresence::Archived(resolved.card)))
 }

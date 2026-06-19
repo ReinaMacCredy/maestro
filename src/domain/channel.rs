@@ -26,7 +26,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::io::ErrorKind;
+use std::io::{BufRead, ErrorKind};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -125,18 +125,30 @@ impl Channel {
             .max()
     }
 
-    /// The partner card id for `viewer` on a pair channel (the other header half).
-    /// A feature channel has no single partner, so it answers with the feature id;
-    /// callers branch on `kind` before relying on this.
-    pub fn partner(&self, viewer: &str) -> &str {
+    /// The partner card id for `viewer` on a pair channel (the other header
+    /// half). Feature broadcast channels have no single partner.
+    pub fn pair_partner(&self, viewer: &str) -> Option<&str> {
         match &self.kind {
             ChannelKind::Pair(pair) => {
                 if pair[0] == viewer {
-                    &pair[1]
+                    Some(&pair[1])
+                } else if pair[1] == viewer {
+                    Some(&pair[0])
                 } else {
-                    &pair[0]
+                    None
                 }
             }
+            ChannelKind::Feature(_) => None,
+        }
+    }
+
+    /// The user-addressable channel id for a pair or feature channel: pair
+    /// partner for direct messages, feature id for a broadcast.
+    pub fn address(&self, viewer: &str) -> &str {
+        match &self.kind {
+            ChannelKind::Pair(_) => self
+                .pair_partner(viewer)
+                .expect("invariant: pair channel has a partner"),
             ChannelKind::Feature(id) => id,
         }
     }
@@ -307,9 +319,9 @@ pub fn channels_for(paths: &MaestroPaths, card: &str) -> Result<Vec<Channel>> {
         let Some(key) = name.to_str().and_then(|name| name.strip_suffix(".jsonl")) else {
             continue;
         };
-        if let Some(channel) = load_by_key(paths, key)?
-            && let ChannelKind::Pair(pair) = &channel.kind
+        if let Some(ChannelKind::Pair(pair)) = load_kind_by_key(paths, key)?
             && pair.contains(&needle)
+            && let Some(channel) = load_by_key(paths, key)?
         {
             channels.push(channel);
         }
@@ -572,6 +584,36 @@ fn load_by_key(paths: &MaestroPaths, key: &str) -> Result<Option<Channel>> {
         }
     };
     parse_channel(key, &bytes).map(Some)
+}
+
+fn load_kind_by_key(paths: &MaestroPaths, key: &str) -> Result<Option<ChannelKind>> {
+    let relative_path = channel_relative_path(key);
+    let path = managed_path(paths, &relative_path, SymlinkPolicy::RejectAllComponents)?;
+    let file = match fs::File::open(&path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
+        Err(error) => {
+            return Err(error).with_context(|| format!("failed to read {relative_path}"));
+        }
+    };
+    let mut reader = std::io::BufReader::new(file);
+    let mut line = String::new();
+    loop {
+        line.clear();
+        let read = reader
+            .read_line(&mut line)
+            .with_context(|| format!("failed to read header from {relative_path}"))?;
+        if read == 0 {
+            bail!("channel {key} has no header line");
+        }
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let value: Value = serde_json::from_str(trimmed)
+            .with_context(|| format!("malformed channel line in {key}"))?;
+        return parse_header(&value, key).map(Some);
+    }
 }
 
 /// Confirm the on-disk header matches the kind we are about to write to. A
@@ -891,6 +933,26 @@ mod tests {
     }
 
     #[test]
+    fn pair_partner_only_exists_for_pair_members() {
+        let pair = Channel {
+            key: "pair-key".to_string(),
+            kind: ChannelKind::Pair(["card-a".to_string(), "card-b".to_string()]),
+            messages: Vec::new(),
+        };
+        assert_eq!(pair.pair_partner("card-a"), Some("card-b"));
+        assert_eq!(pair.pair_partner("card-b"), Some("card-a"));
+        assert_eq!(pair.pair_partner("card-c"), None);
+
+        let feature = Channel {
+            key: "feature-key".to_string(),
+            kind: ChannelKind::Feature("feature-1".to_string()),
+            messages: Vec::new(),
+        };
+        assert_eq!(feature.pair_partner("feature-1"), None);
+        assert_eq!(feature.address("card-a"), "feature-1");
+    }
+
+    #[test]
     fn channels_for_returns_only_channels_containing_the_card() {
         let temp = TestTempDir::new("maestro-channel-membership");
         let paths = MaestroPaths::new(temp.path());
@@ -902,7 +964,12 @@ mod tests {
         let mut partners: Vec<String> = channels_for(&paths, "card-a")
             .expect("enumeration should succeed")
             .iter()
-            .map(|channel| channel.partner("card-a").to_string())
+            .map(|channel| {
+                channel
+                    .pair_partner("card-a")
+                    .expect("pair channel has a partner")
+                    .to_string()
+            })
             .collect();
         partners.sort();
         assert_eq!(partners, vec!["card-b".to_string(), "card-e".to_string()]);

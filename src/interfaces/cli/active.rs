@@ -98,7 +98,7 @@ fn same_feature(by_id: &HashMap<&str, &card::schema::Card>, a: &str, b: &str) ->
                 card::query::feature_of(a_card),
                 card::query::feature_of(b_card),
             ) {
-                (Some(fa), Some(fb)) => fa.eq_ignore_ascii_case(&fb),
+                (Some(fa), Some(fb)) => fa.eq_ignore_ascii_case(fb),
                 _ => false,
             }
         }
