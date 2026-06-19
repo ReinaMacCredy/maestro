@@ -107,6 +107,7 @@ mod tests {
         let names = recipes();
         for expected in [
             "adversarial-fan-out",
+            "conflict-handoff",
             "feature-fan-out",
             "generate-and-filter",
             "intake-triage",
@@ -115,7 +116,7 @@ mod tests {
         ] {
             assert!(names.contains(&expected), "loop catalog is missing {expected}");
         }
-        assert_eq!(names.len(), 6, "v1 ships exactly 6 recipes");
+        assert_eq!(names.len(), 7, "ships exactly 7 recipes");
     }
 
     #[test]
