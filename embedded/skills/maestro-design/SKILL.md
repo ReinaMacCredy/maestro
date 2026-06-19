@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-version: 1.19.0
+version: 1.20.0
 description: "Use for design or brainstorming in a Maestro repo before implementation starts. Map current behavior, decide one fork at a time, record decisions and notes, then hand the approved contract to maestro-card."
 ---
 
@@ -109,3 +109,8 @@ qa-baseline reference, then `feature accept`). The hand-off is this skill
 boundary, crossed once here; it is not a lifecycle gate. When the user
 authorizes building, do not re-ask -- flow straight through accept -> prepare
 -> work.
+
+If another session is live as you cross into implementation, follow the
+conflict-handoff protocol in HARNESS.md (worktree-isolate; link + `maestro
+conflict` on a shared file; merge back then `--clear`); `maestro loop show
+conflict-handoff` is the full dance.

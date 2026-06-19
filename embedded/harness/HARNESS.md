@@ -1,5 +1,5 @@
 ---
-version: 1.19.0
+version: 1.20.0
 ---
 
 # Maestro Harness Protocol
@@ -128,3 +128,29 @@ independent. Each recipe's full HOW: `maestro loop show <name>`. The menu:
 Results land through the verbs (task / decision / event), never only in conversation.
 Claude Code: author a Workflow script. Codex: parallel sub-agents directly (worktree
 threads when files overlap).
+
+## Concurrent sessions (conflict handoff)
+
+maestro is a noticeboard: it surfaces who else is live but never runs git, makes
+a worktree, or links cards -- you do. `maestro active` and the pre-command
+`[overlap]` / `[CONFLICT]` / `[busy]` banners are how other live sessions show up.
+
+When any other session is live as you cross from design into implementation
+(`feature accept` / `prepare` print a `[worktree]` nudge):
+
+1. Isolate -- implement in your own `git worktree` so two sessions never clobber
+   one checkout.
+2. Share a file with a peer? Link the cards (`maestro link add <yours> <theirs>`)
+   and assert it (`maestro conflict <peer-card> "<file: why>"`) so the peer sees
+   a `[CONFLICT]` naming you.
+3. Peer-side: while a `[CONFLICT]` names a file, hold off editing that file until
+   it clears.
+4. Done -- you run the git merge back to the shared branch, then
+   `maestro conflict --clear <peer-card>`. A stale asserter's notice auto-hides,
+   but clear yours when you resolve.
+5. Heavy runs serialize themselves: the full-suite gate takes a shared lock, so a
+   second gate run waits (you see `[busy]`); let it finish rather than forcing a
+   parallel suite.
+
+Full worktree-split / merge-back dance, including a merge-back that itself
+conflicts: `maestro loop show conflict-handoff`.

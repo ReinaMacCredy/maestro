@@ -1,6 +1,6 @@
 ---
 name: maestro-card
-version: 1.16.0
+version: 1.17.0
 description: "Use for active Maestro card work: pick up and deliver work cards (claim, update, complete, verify), run the feature-card lifecycle (accept, prepare, amend, ship), and capture qa-baseline/qa-slice gate evidence."
 ---
 
@@ -23,6 +23,10 @@ auto-links. Once linked, coordinate through the channel: `maestro msg send
 maestro msg read` line on STDERR before any command means a linked peer is
 waiting -- clear it with `maestro msg read` (see [reference/work.md](reference/work.md)).
 Reply when the message poses a question or needs a decision; an FYI needs no reply.
+When any other session is live as you start implementing, follow the
+conflict-handoff protocol in HARNESS.md: worktree-isolate, link + `maestro
+conflict` on a file you will share, merge back then `--clear`. The full dance
+(including a conflicted merge-back) is `maestro loop show conflict-handoff`.
 
 ## Route
 
