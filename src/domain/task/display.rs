@@ -105,7 +105,7 @@ pub fn render_task(task: &TaskRecord, checks: &[String]) -> String {
     }
     if task.state == TaskState::NeedsVerification {
         out.push_str("proof: needs attention\n");
-        out.push_str(&format!("next: maestro query proof {}\n", task.id));
+        out.push_str(&format!("next: maestro task proof {}\n", task.id));
     }
 
     if task.blockers.is_empty() {
@@ -225,6 +225,6 @@ mod tests {
         let out = render_task(&task, &["observable check".to_string()]);
 
         assert!(out.contains("proof: needs attention"), "{out}");
-        assert!(out.contains("next: maestro query proof task-001"), "{out}");
+        assert!(out.contains("next: maestro task proof task-001"), "{out}");
     }
 }

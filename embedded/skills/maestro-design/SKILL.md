@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-version: 1.18.0
+version: 1.19.0
 description: "Use for design or brainstorming in a Maestro repo before implementation starts. Map current behavior, decide one fork at a time, record decisions and notes, then hand the approved contract to maestro-card."
 ---
 

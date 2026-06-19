@@ -20,7 +20,7 @@ asks for QA evidence.
      --proof "<observed evidence>"
    ```
 
-5. If verification fails, run `maestro query proof <id>`, repair the claim or
+5. If verification fails, run `maestro task proof <id>`, repair the claim or
    evidence, then `maestro task verify <id>`.
 
 ## Repair

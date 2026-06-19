@@ -109,7 +109,7 @@ impl BlockerTarget {
             Some(CardType::Task | CardType::Bug | CardType::Chore) => Ok(Self::Task(by)),
             Some(CardType::Decision) => Ok(Self::Decision(by)),
             Some(kind @ (CardType::Feature | CardType::Idea)) => bail!(
-                "cannot block on {by}: it is a {} card, not a task or decision\n  record the dependency as a card edge instead: maestro dep add <task> {by}",
+                "cannot block on {by}: it is a {} card, not a task or decision\n  record the dependency as a card edge instead: maestro card dep add <task> {by}",
                 kind.as_str()
             ),
             None => Ok(Self::from_prefix(by)),
@@ -964,7 +964,7 @@ mod tests {
             .expect_err("a feature ref is not a blocker target");
         let message = format!("{error:#}");
         assert!(
-            message.contains("maestro dep add") && message.contains("feature"),
+            message.contains("maestro card dep add") && message.contains("feature"),
             "error routes to the dep edge: {message}"
         );
         let _ = std::fs::remove_dir_all(&root);

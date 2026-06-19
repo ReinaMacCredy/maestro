@@ -117,7 +117,7 @@ match the domain's words (maestro-card's `tdd.md` already asks for this).
   because G4 / G5 = YES, a per-service repository seam is warranted.
 - Hand to maestro-card to implement test-first, using exactly those names.
 
-**STOPS at the gate -- add a `--json` flag to `maestro list` (mechanical).**
+**STOPS at the gate -- add a `--json` flag to `maestro card list` (mechanical).**
 - G1 no: it shapes existing data into JSON, with no new rules or invariants.
 - -> Stop at G1. No language work, no subdomains, no aggregates, no repository.
   Design it as the small mechanical change it is; pulling in DDD here would be

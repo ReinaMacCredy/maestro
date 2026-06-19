@@ -20,7 +20,7 @@ pub fn run(args: IndexArgs) -> Result<()> {
                 report.archived_docs
             );
             println!("  file: .maestro/index/text.json");
-            println!("next: maestro list --grep <word> [--archived]");
+            println!("next: maestro card list --grep <word> [--archived]");
             Ok(())
         }
     }

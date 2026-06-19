@@ -8,7 +8,7 @@ of running it.
 
 ## Setup: prove independence first
 
-    maestro ready <feature>
+    maestro card ready <feature>
 
 For each candidate card, read its locked acceptance checks. Two cards are
 parallel-safe only when they share neither files nor a dependency edge. If they
@@ -19,7 +19,7 @@ git worktree so commits never collide.
 
 Each agent owns exactly one card, end to end:
 
-    maestro claim <id> -> work the card (test-first per work.md) ->
+    maestro card claim <id> -> work the card (test-first per work.md) ->
     maestro task complete <id> --summary --claim --proof
 
 - Claude Code: one `Workflow` stage per card; pass the card id and its checks

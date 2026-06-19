@@ -1484,7 +1484,7 @@ fn update_without_id_or_flags_guides_rather_than_erroring() {
     // A bare `update` (no id) prints usage and exits 0 (no-dead-end-errors).
     let bare = run(repo, &["update"]);
     assert!(
-        bare.contains("usage: maestro update"),
+        bare.contains("usage: maestro card update"),
         "bare update prints usage:\n{bare}"
     );
 
@@ -1594,7 +1594,7 @@ fn text_index_accelerates_grep_transparently_with_silent_fallback() {
         receipt.contains("(2 live, 1 archived)"),
         "the receipt counts both trees:\n{receipt}"
     );
-    assert!(receipt.contains("next: maestro list --grep"), "{receipt}");
+    assert!(receipt.contains("next: maestro card list --grep"), "{receipt}");
 }
 
 /// Drive a verb under a fixed session id. `MAESTRO_SESSION_ID` is the first key

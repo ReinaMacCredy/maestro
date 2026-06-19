@@ -1713,8 +1713,8 @@ fn task_archive_and_unarchive_redirect_to_the_feature_cascade() {
             "`task {verb}` must redirect: {message}"
         );
         assert!(
-            message.contains(&format!("maestro close {id}"))
-                && message.contains("maestro archive <feature>"),
+            message.contains(&format!("maestro card close {id}"))
+                && message.contains("maestro card archive <feature>"),
             "`task {verb}` must point at close + the feature cascade: {message}"
         );
         assert!(

@@ -293,7 +293,7 @@ fn required_reads(
     if let Some(task) = task {
         reads.push(format!("maestro task show {}", task.id));
         if task.state == task::TaskState::NeedsVerification {
-            reads.push(format!("maestro query proof {}", task.id));
+            reads.push(format!("maestro task proof {}", task.id));
         }
     }
     if let Some(feature) = feature {

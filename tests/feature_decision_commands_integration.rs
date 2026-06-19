@@ -626,7 +626,7 @@ fn feature_guarded_lifecycle_via_cli() {
     assert!(ship_output.contains("shipped billing-csv-export"));
     assert!(ship_output.contains("ship receipt:"));
     // The closing moment points at the archive, not the status dead end (R4).
-    assert!(ship_output.contains("next: maestro archive billing-csv-export"));
+    assert!(ship_output.contains("next: maestro card archive billing-csv-export"));
     assert!(!ship_output.contains("optional: maestro feature archive"));
 
     let show_after_ship = stdout(
@@ -2698,7 +2698,7 @@ fn feature_archive_moves_terminal_child_cards_with_feature() {
     let cancelled = stdout(maestro(&cancel_args, root), &cancel_args);
     assert!(cancelled.contains("cancel receipt:"));
     // The closing moment points at the archive, not the status dead end (R4).
-    assert!(cancelled.contains("next: maestro archive billing-csv-export"));
+    assert!(cancelled.contains("next: maestro card archive billing-csv-export"));
 
     // A live standalone task blocked by the terminal child task-002 entangles it.
     stdout(

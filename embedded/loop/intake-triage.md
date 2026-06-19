@@ -23,15 +23,15 @@ item from driving a real command.
 
 ## Dedupe: the conductor, against the store
 
-    maestro list ; maestro list --type feature
+    maestro card list ; maestro card list --type feature
 
 The conductor (a trusted context, not a classifier) dedupes the verdicts
 against existing cards before creating anything.
 
 ## Mint: real work through the verbs
 
-    maestro create "<title>" -t <task|bug|chore>     # new, actionable
-    maestro task block <id> --reason "<why>"          # needs a decision/escalation
+    maestro card create "<title>" -t <task|bug|chore>  # new, actionable
+    maestro task block <id> --reason "<why>"           # needs a decision/escalation
 
 ## Stop
 

@@ -1,5 +1,5 @@
 ---
-version: 1.17.0
+version: 1.18.0
 ---
 
 # Maestro Harness Protocol
@@ -13,7 +13,7 @@ unbacked claim ships); decisions + friction + skills are the compounding memory;
 
 ## Shared protocol (all agents)
 1. Start with `maestro status`; honor MAESTRO_CURRENT_TASK env or `maestro task show <id>` when a current task is set.
-2. Acceptance criteria live in the card (`maestro show <id>`) - they are locked.
+2. Acceptance criteria live in the card (`maestro card show <id>`) - they are locked.
 3. Use the skills active for this task.
 4. Exact command signatures live in `reference/cli.md` inside every installed
    maestro skill (e.g. `.maestro/skills/maestro-card/reference/cli.md`),
@@ -27,7 +27,7 @@ unbacked claim ships); decisions + friction + skills are the compounding memory;
 7. Hooks auto-record your tool calls as proof. Verification matches each `--claim` against recorded or inline proof - an empty or unbacked claim fails.
 8. When the user corrects your behavior, record it with
    `maestro event intervention --note "<what was wrong>"`.
-9. Before proposing an idea or re-opening a settled question, run `maestro list --grep <topic> --archived` and cite any precedent card in the proposal.
+9. Before proposing an idea or re-opening a settled question, run `maestro card list --grep <topic> --archived` and cite any precedent card in the proposal.
 
 ## Code style
 
@@ -66,7 +66,7 @@ Orient and find work:
 
     maestro status        # repo handoff and next action
     maestro task next     # one best task action
-    maestro ready         # claimable work (ready + unblocked)
+    maestro card ready    # claimable work (ready + unblocked)
     maestro task show     # task detail: state, claim, blockers
 
 Make a task claimable (intake):
@@ -80,7 +80,7 @@ Execute:
     maestro task claim    # -> in_progress
     maestro task update   # record evidence claims as you work
     maestro task complete # summary + claim + proof; auto-verifies
-    maestro query proof   # recovery path when verification fails
+    maestro task proof    # recovery path when verification fails
 
 When stuck:
 

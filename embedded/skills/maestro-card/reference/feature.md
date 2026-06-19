@@ -22,7 +22,7 @@ maestro feature accept            # -> ready, requires qa-baseline
 maestro feature prepare --draft   # reviewable child-task plan
 maestro feature prepare --from    # create/explore/accept tasks from a plan file
 maestro feature ship              # -> shipped, requires qa-slice; --outcome required
-maestro archive <id>              # terminal features only; archives children too
+maestro card archive <id>         # terminal features only; archives children too
 ```
 
 `set` works only while `proposed`. Repeating a base field replaces its full
@@ -37,7 +37,7 @@ for real forks; `--question` is for loose questions not yet forks.
 At the approval moment, record constraints before `accept`. Scope constraints go
 into the frozen contract with `feature set <id> --add-non-goal "<constraint>"`.
 Directive or sequencing constraints, plus the dated authorization line, go into
-one `maestro note <id> "<date + authorization + constraints>"`. Then run
+one `maestro card note <id> "<date + authorization + constraints>"`. Then run
 `feature accept`; `accept` itself does not grow approval fields.
 
 `prepare --from` expects a visible plan:
@@ -98,11 +98,11 @@ Use feature fan-out only when 2+ ready work cards are independent. Full
 orchestration HOW (dispatch, worktree isolation, collection): `maestro loop
 show feature-fan-out`.
 
-1. Confirm with `maestro ready <feature>` and each card's locked acceptance
+1. Confirm with `maestro card ready <feature>` and each card's locked acceptance
    checks. Same files or dependency edges mean serialize, or isolate in
    separate worktrees.
 2. Spawn one fresh sub-agent per card. Each owns:
-   `maestro claim <id> -> work -> task complete --summary --claim --proof`.
+   `maestro card claim <id> -> work -> task complete --summary --claim --proof`.
 3. The conductor collects completions, runs `maestro task verify <id>`, commits
    verified slices, then runs the [qa-slice.md](qa-slice.md) pass before ship.
 
@@ -119,4 +119,4 @@ show feature-fan-out`.
 
 Next: accepted feature -> [work.md](work.md); all children verified ->
 [qa-slice.md](qa-slice.md), then `feature ship --outcome "<one line>"`;
-shipped -> `maestro archive <id>` if you mean to retire it.
+shipped -> `maestro card archive <id>` if you mean to retire it.

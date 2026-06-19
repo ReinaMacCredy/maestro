@@ -16,44 +16,54 @@ use crate::operations::harness;
 
 /// Execute `maestro query`.
 pub fn run(args: QueryArgs) -> Result<()> {
-    let repo_root = discover_repo_root()?;
-    let paths = MaestroPaths::new(repo_root);
-
     match args.command {
         QueryCommand::Proof {
             task_id,
             task_id_flag,
-        } => {
-            let explicit = match (task_id, task_id_flag) {
-                (Some(positional), Some(flag)) if positional != flag => bail!(
-                    "conflicting task ids: positional `{positional}` and --task-id `{flag}`; pass just one"
-                ),
-                (Some(id), _) | (None, Some(id)) => Some(id),
-                (None, None) => None,
-            };
-            // Honor MAESTRO_CURRENT_TASK like the sibling read view `task show`
-            // (strict: no single-task auto-detect), and name it in the remedy.
-            let task_id = match explicit {
-                Some(id) => id,
-                None => match std::env::var("MAESTRO_CURRENT_TASK") {
-                    Ok(id) if !id.trim().is_empty() => id,
-                    _ => bail!(
-                        "task id is required or set MAESTRO_CURRENT_TASK for `maestro query proof`"
-                    ),
-                },
-            };
-            let status = proof::proof_status(&paths, &task_id)?;
-            print!("{}", proof::render_proof_status(&status));
-            Ok(())
-        }
-        QueryCommand::Matrix => query_matrix(&paths),
-        QueryCommand::Friction => query_friction(&paths),
+        } => run_proof(task_id, task_id_flag),
+        QueryCommand::Matrix => query_matrix(&query_paths()?),
+        QueryCommand::Friction => query_friction(&query_paths()?),
         QueryCommand::Decisions { all, feature } => {
-            query_decisions(&paths, all, feature.as_deref())
+            query_decisions(&query_paths()?, all, feature.as_deref())
         }
-        QueryCommand::Backlog => query_backlog(&paths),
-        QueryCommand::Graph { id, dot } => query_graph(&paths, id, dot),
+        QueryCommand::Backlog => query_backlog(&query_paths()?),
+        QueryCommand::Graph { id, dot } => run_graph(id, dot),
     }
+}
+
+fn query_paths() -> Result<MaestroPaths> {
+    Ok(MaestroPaths::new(discover_repo_root()?))
+}
+
+/// The proof read view, shared by the canonical `task proof` and the hidden
+/// back-compat alias `query proof`.
+pub fn run_proof(task_id: Option<String>, task_id_flag: Option<String>) -> Result<()> {
+    let paths = query_paths()?;
+    let explicit = match (task_id, task_id_flag) {
+        (Some(positional), Some(flag)) if positional != flag => bail!(
+            "conflicting task ids: positional `{positional}` and --task-id `{flag}`; pass just one"
+        ),
+        (Some(id), _) | (None, Some(id)) => Some(id),
+        (None, None) => None,
+    };
+    // Honor MAESTRO_CURRENT_TASK like the sibling read view `task show`
+    // (strict: no single-task auto-detect), and name it in the remedy.
+    let task_id = match explicit {
+        Some(id) => id,
+        None => match std::env::var("MAESTRO_CURRENT_TASK") {
+            Ok(id) if !id.trim().is_empty() => id,
+            _ => bail!("task id is required or set MAESTRO_CURRENT_TASK for `maestro task proof`"),
+        },
+    };
+    let status = proof::proof_status(&paths, &task_id)?;
+    print!("{}", proof::render_proof_status(&status));
+    Ok(())
+}
+
+/// The typed-edge graph view, shared by the canonical `card graph` and the
+/// hidden back-compat alias `query graph`.
+pub fn run_graph(id: Option<String>, dot: bool) -> Result<()> {
+    query_graph(&query_paths()?, id, dot)
 }
 
 /// How many hops `query graph <id>` walks from the root (SPEC R7 preview).
@@ -107,7 +117,7 @@ fn query_graph(paths: &MaestroPaths, id: Option<String>, dot: bool) -> Result<()
     let edges = graph_edges(&cards);
     match (id, dot) {
         (None, false) => bail!(
-            "provide a card id or --dot\n  tree: maestro query graph <id>\n  whole web: maestro query graph --dot"
+            "provide a card id or --dot\n  tree: maestro card graph <id>\n  whole web: maestro card graph --dot"
         ),
         (Some(id), false) => print_graph_tree(paths, &cards, &edges, &id),
         (None, true) => {
@@ -126,7 +136,7 @@ fn query_graph(paths: &MaestroPaths, id: Option<String>, dot: bool) -> Result<()
 fn resolve_graph_root(paths: &MaestroPaths, id: &str) -> Result<String> {
     let Some(resolved) = card::store::resolve(paths, id)? else {
         bail!(
-            "no card {id} in the live store\n  list ids: maestro list\n  archived cards stay greppable: maestro list --grep <word> --archived"
+            "no card {id} in the live store\n  list ids: maestro card list\n  archived cards stay greppable: maestro card list --grep <word> --archived"
         );
     };
     Ok(resolved.card.id)

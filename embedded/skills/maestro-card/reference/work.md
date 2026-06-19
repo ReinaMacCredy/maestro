@@ -5,12 +5,12 @@ implementation; a feature card is the product contract it may deliver against.
 
 ## Use
 
-- Find work: `maestro ready`, `maestro list --parent <feature>`.
+- Find work: `maestro card ready`, `maestro card list --parent <feature>`.
 - Create or prepare work: `task create`, `task explore`, `task accept`.
 - Pick up work: `task claim --next` (sequenced queue with dependency context)
-  or `maestro claim <id>` (any ready card).
+  or `maestro card claim <id>` (any ready card).
 - Record progress: `task update --summary` and/or `--claim`;
-  `maestro note <id> "<text>"` for running notes.
+  `maestro card note <id> "<text>"` for running notes.
 - Finish work: `task complete --summary --claim --proof`, then verify.
 - Handle pauses or terminal outcomes: `block`, `unblock`, `reject`,
   `abandon`, `supersede`.
@@ -103,12 +103,12 @@ add manual evidence after the default proof path is insufficient.
 ## Blockers And Terminal Verbs
 
 ```sh
-maestro dep add <child> <blocker>   # child waits on blocker (card edge)
-maestro task block                  # --reason why; --by names the blocking card
-maestro task unblock                # pass the blocker's own blk- id, not the target
-maestro task reject                 # terminal; --reason required
-maestro task abandon                # terminal; --reason required
-maestro task supersede              # terminal; --by names the replacement
+maestro card dep add <child> <blocker>  # child waits on blocker (card edge)
+maestro task block                      # --reason why; --by names the blocking card
+maestro task unblock                    # pass the blocker's own blk- id, not the target
+maestro task reject                     # terminal; --reason required
+maestro task abandon                    # terminal; --reason required
+maestro task supersede                  # terminal; --by names the replacement
 maestro task doctor
 maestro task watch
 ```
@@ -122,14 +122,14 @@ For unstructured audit/review/user-feedback backlogs:
 
 1. Use read-only classifiers for raw untrusted items. They return severity,
    area, duplicate-or-new, and fixable-or-escalate only.
-2. The conductor dedupes against `maestro list` and `maestro list --type
+2. The conductor dedupes against `maestro card list` and `maestro card list --type
    feature`.
 3. Create or block real work through task verbs. The agent that read untrusted
    content does not run privileged actions.
 
 For unknown-size work:
 
-- Stop on a query, not a feeling: `maestro ready` empty, or K discovery sweeps
+- Stop on a query, not a feeling: `maestro card ready` empty, or K discovery sweeps
   with zero new findings.
 - Turn each new finding into a card immediately so it survives context loss.
 - Claim, work, complete, verify, then re-check the stop condition.

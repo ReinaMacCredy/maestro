@@ -22,7 +22,7 @@ pub const REGENERATE_COMMAND: &str =
     "cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored";
 
 /// Render the full reference: a version-stamped self-checking header plus one
-/// signature bullet per leaf command.
+/// signature bullet per invokable command.
 pub fn render_cli_reference() -> String {
     let mut cmd = Cli::command();
     cmd.build();
@@ -35,10 +35,10 @@ pub fn render_cli_reference() -> String {
          Every verb and flag is listed; a spelling not found here does not exist.\n\
          `<X>` required, `[X]` optional, `...` repeatable.\n",
     );
-    for sub in cmd.get_subcommands().filter(|sub| !sub.is_hide_set()) {
+    for sub in cmd.get_subcommands().filter(|sub| is_rendered(sub)) {
         body.push_str(&format!("\n## maestro {}\n\n", sub.get_name()));
         let mut lines = Vec::new();
-        collect_leaf_lines(sub, &format!("maestro {}", sub.get_name()), &mut lines);
+        collect_invocation_lines(sub, &format!("maestro {}", sub.get_name()), &mut lines);
         for line in lines {
             body.push_str(&line);
             body.push('\n');
@@ -80,11 +80,8 @@ pub fn verify_self_check(content: &str) -> Result<(), String> {
 }
 
 /// Append one `- \`signature\` -- about` bullet per invokable command under `cmd`.
-fn collect_leaf_lines(cmd: &Command, path: &str, lines: &mut Vec<String>) {
-    let subs: Vec<&Command> = cmd
-        .get_subcommands()
-        .filter(|sub| !sub.is_hide_set())
-        .collect();
+fn collect_invocation_lines(cmd: &Command, path: &str, lines: &mut Vec<String>) {
+    let subs: Vec<&Command> = cmd.get_subcommands().filter(|sub| is_rendered(sub)).collect();
     if subs.is_empty() || has_visible_invocation_args(cmd) {
         lines.push(signature_line(cmd, path));
         if subs.is_empty() {
@@ -92,8 +89,15 @@ fn collect_leaf_lines(cmd: &Command, path: &str, lines: &mut Vec<String>) {
         }
     }
     for sub in subs {
-        collect_leaf_lines(sub, &format!("{path} {}", sub.get_name()), lines);
+        collect_invocation_lines(sub, &format!("{path} {}", sub.get_name()), lines);
     }
+}
+
+/// A subcommand is rendered unless it is clap-hidden or the auto-generated
+/// `help` pseudo-subcommand, which only duplicates its siblings under
+/// `<ns> help <verb>` and is pure noise in an agent-facing reference.
+fn is_rendered(sub: &Command) -> bool {
+    !sub.is_hide_set() && sub.get_name() != "help"
 }
 
 fn has_visible_invocation_args(cmd: &Command) -> bool {
@@ -204,7 +208,7 @@ mod tests {
         let reference = render_cli_reference();
         let mut cmd = Cli::command();
         cmd.build();
-        for sub in cmd.get_subcommands().filter(|sub| !sub.is_hide_set()) {
+        for sub in cmd.get_subcommands().filter(|sub| is_rendered(sub)) {
             assert!(
                 reference.contains(&format!("## maestro {}", sub.get_name())),
                 "missing section for {}",
@@ -227,5 +231,83 @@ mod tests {
     fn a_hand_edit_fails_the_self_check() {
         let tampered = render_cli_reference().replace("## maestro task", "## maestro tasks");
         assert!(verify_self_check(&tampered).is_err());
+    }
+
+    #[test]
+    fn hidden_duplicates_and_relocations_shape_the_reference() {
+        let reference = render_cli_reference();
+        // The 11 flat card verbs + top-level verify + both migrations are hidden:
+        // no top-level section renders for them.
+        for hidden in [
+            "## maestro ready",
+            "## maestro list",
+            "## maestro dep",
+            "## maestro archive",
+            "## maestro claim",
+            "## maestro assign",
+            "## maestro note",
+            "## maestro create",
+            "## maestro show",
+            "## maestro update",
+            "## maestro close",
+            "## maestro verify",
+            "## maestro migrate",
+            "## maestro migrate-v2",
+        ] {
+            assert!(
+                !reference.contains(hidden),
+                "hidden top-level verb still rendered: {hidden}\n{reference}"
+            );
+        }
+        // The card namespace is the canonical home for those verbs.
+        assert!(reference.contains("## maestro card"), "{reference}");
+        assert!(reference.contains("maestro card ready"), "{reference}");
+        // Relocated read views are canonical under their resource.
+        assert!(
+            reference.contains("maestro task proof"),
+            "task proof must be canonical: {reference}"
+        );
+        assert!(
+            reference.contains("maestro card graph"),
+            "card graph must be canonical: {reference}"
+        );
+        // query keeps the cross-cutting reports and drops the relocated/synonym ones.
+        assert!(reference.contains("maestro query matrix"), "{reference}");
+        assert!(reference.contains("maestro query friction"), "{reference}");
+        assert!(reference.contains("maestro query backlog"), "{reference}");
+        for gone in [
+            "maestro query proof",
+            "maestro query graph",
+            "maestro query decisions",
+        ] {
+            assert!(
+                !reference.contains(gone),
+                "relocated/synonym query verb must be hidden: {gone}\n{reference}"
+            );
+        }
+        // mcp shows serve/tools only; the stdin/list synonyms are hidden.
+        assert!(reference.contains("maestro mcp serve"), "{reference}");
+        assert!(reference.contains("maestro mcp tools"), "{reference}");
+        assert!(!reference.contains("maestro mcp stdin"), "{reference}");
+        assert!(!reference.contains("maestro mcp list"), "{reference}");
+    }
+
+    #[test]
+    fn clap_auto_help_pseudo_subcommands_are_not_rendered() {
+        let reference = render_cli_reference();
+        assert!(
+            !reference.contains("## maestro help"),
+            "the root `help` pseudo-subcommand must not get a section: {reference}"
+        );
+        for line in reference.lines() {
+            let Some(rest) = line.strip_prefix("- `maestro ") else {
+                continue;
+            };
+            let path = rest.split('`').next().unwrap_or_default();
+            assert!(
+                !path.split_whitespace().any(|tok| tok == "help"),
+                "clap auto-`help` pseudo-subcommand lines must not render: {line}"
+            );
+        }
     }
 }

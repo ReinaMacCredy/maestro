@@ -6,6 +6,7 @@ use crate::domain::task;
 use crate::domain::task::{BlockerKind, BlockerTarget, TaskRecord, TaskState, TransitionDetails};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::time::utc_now_timestamp;
+use crate::interfaces::cli::query;
 use crate::interfaces::cli::status;
 use crate::interfaces::cli::task_id::resolve_optional_task_id;
 use crate::interfaces::cli::verify;
@@ -153,6 +154,10 @@ pub fn run(args: TaskArgs) -> Result<()> {
             },
         ),
         TaskCommand::Watch { id, interval } => watch_tasks(&paths, id, interval),
+        TaskCommand::Proof {
+            task_id,
+            task_id_flag,
+        } => query::run_proof(task_id, task_id_flag),
         TaskCommand::Doctor => doctor_tasks(&paths),
         TaskCommand::Archive { id, dry_run: _ } => {
             bail!("{}", per_task_archive_retired(&id))
@@ -511,7 +516,7 @@ fn complete_task(
         }
         Err(error) => {
             eprintln!("task remains: needs_verification");
-            eprintln!("next: maestro query proof {}", task.id);
+            eprintln!("next: maestro task proof {}", task.id);
             eprintln!("then: fix proof and run maestro task verify {}", task.id);
             Err(error)
         }
@@ -735,8 +740,8 @@ fn per_task_archive_retired(id: &str) -> String {
         "blocked: per-task archive removed\n\
          task: {id}\n\
          why: archive is now a feature-level cascade; a finished task stays as closed history\n\
-         close instead: maestro close {id}\n\
-         archive a feature and its tasks: maestro archive <feature>"
+         close instead: maestro card close {id}\n\
+         archive a feature and its tasks: maestro card archive <feature>"
     )
 }
 

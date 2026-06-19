@@ -624,7 +624,7 @@ fn cancel_feature(paths: &MaestroPaths, id: &str, reason: &str, dry_run: bool) -
         println!("retry: maestro feature cancel {id} --reason \"<reason>\"");
     } else if report.changed {
         println!("inspect: maestro feature show {}", report.id);
-        println!("next: maestro archive {}", report.id);
+        println!("next: maestro card archive {}", report.id);
     } else {
         println!("inspect: maestro feature show {}", report.id);
         println!("next: maestro status");
@@ -676,7 +676,7 @@ fn ship_feature(
             println!("  verification: {claims_only} claims-only task(s)");
         }
         println!("inspect: maestro feature show {}", report.id);
-        println!("next: maestro archive {}", report.id);
+        println!("next: maestro card archive {}", report.id);
         println!("retro: anything to make a permanent rule?");
         println!("  record it: maestro harness propose --title \"<rule>\" --evidence \"<why>\"");
     } else {

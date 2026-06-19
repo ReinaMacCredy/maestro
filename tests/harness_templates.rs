@@ -14,7 +14,7 @@ fn harness_markdown_matches_spec_section_14_protocol() {
     assert!(HARNESS_MD.contains("Start with `maestro status`"));
     assert!(HARNESS_MD.contains("maestro task next"));
     assert!(HARNESS_MD.contains("maestro task complete"));
-    assert!(HARNESS_MD.contains("maestro query proof"));
+    assert!(HARNESS_MD.contains("maestro task proof"));
     assert!(!HARNESS_MD.contains("## If you are Claude Code"));
     assert!(!HARNESS_MD.contains("## If you are Codex CLI"));
 }

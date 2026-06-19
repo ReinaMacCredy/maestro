@@ -10,7 +10,7 @@ full HOW.
 
 Stop only when one of these holds:
 
-    maestro ready          # empty -> no claimable work remains
+    maestro card ready     # empty -> no claimable work remains
     K discovery sweeps in a row return zero new findings
 
 Pick K up front (2-3 is typical). A single empty sweep is not enough for
@@ -24,7 +24,7 @@ ones remain.
 2. Capture immediately: turn each new finding into a card *before* working it,
    so it survives context loss.
 
-       maestro create "<finding>" -t <task|bug>
+       maestro card create "<finding>" -t <task|bug>
 
 3. Work the ready cards: `claim -> work -> task complete --proof -> task verify`.
 4. Re-check the stop condition. Not met -> loop.

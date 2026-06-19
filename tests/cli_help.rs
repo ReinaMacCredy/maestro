@@ -50,27 +50,35 @@ fn root_help_lists_top_level_commands() {
             "event",
             "feature",
             "decision",
-            "ready",
-            "list",
-            "dep",
+            "card",
             "active",
             "link",
-            "archive",
-            "claim",
-            "note",
-            "create",
-            "show",
-            "update",
-            "close",
             "harness",
             "query",
             "mcp",
             "hook",
             "watch",
-            "verify",
             "version",
         ],
     );
+
+    // The 11 flat card verbs, top-level verify, and both migrations are hidden:
+    // the card namespace is canonical, but each flat spelling still dispatches.
+    let command_section = output
+        .split("Options:")
+        .next()
+        .expect("root --help always has a Commands section before Options");
+    for hidden in [
+        "  ready ", "  list ", "  dep ", "  archive ", "  claim ", "  assign ", "  note ",
+        "  create ", "  show ", "  update ", "  close ", "  verify ", "  migrate ",
+        "  migrate-v2 ",
+    ] {
+        assert!(
+            !command_section.contains(hidden),
+            "hidden verb `{}` must not appear in root --help:\n{command_section}",
+            hidden.trim()
+        );
+    }
 }
 
 #[test]
@@ -106,8 +114,8 @@ fn root_about_strings_name_every_subcommand() {
             "Create, show, and list decision cards in the card store",
             "Author non-blocking related links between cards",
             "List, show, apply, unapply, dismiss, and measure harness improvement suggestions",
-            "Query computed read models (matrix, friction, decisions, proof, backlog)",
-            "Run or inspect the MCP server (serve, stdin, tools, list)",
+            "Query computed read models (matrix, friction, backlog)",
+            "Run or inspect the MCP server (serve, tools)",
         ],
     );
 }
@@ -280,13 +288,14 @@ fn nested_help_lists_section_38_command_tree() {
     );
     assert_contains_all(
         &maestro(&["query", "--help"]),
-        &["matrix", "friction", "decisions", "backlog", "proof"],
+        &["matrix", "friction", "backlog"],
     );
+    // query proof/graph/decisions are hidden but still dispatch (back-compat);
+    // task proof and card graph are the canonical homes.
     assert_contains_all(&maestro(&["query", "proof", "--help"]), &["--task-id"]);
-    assert_contains_all(
-        &maestro(&["mcp", "--help"]),
-        &["serve", "stdin", "tools", "list"],
-    );
+    assert_contains_all(&maestro(&["task", "proof", "--help"]), &["--task-id"]);
+    assert_contains_all(&maestro(&["card", "graph", "--help"]), &["--dot"]);
+    assert_contains_all(&maestro(&["mcp", "--help"]), &["serve", "tools"]);
     assert_contains_all(&maestro(&["hook", "--help"]), &["record"]);
     assert_contains_all(&maestro(&["watch", "--help"]), &["snapshot"]);
 }

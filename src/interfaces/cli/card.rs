@@ -437,12 +437,12 @@ pub fn update(args: UpdateArgs) -> Result<()> {
     let Some(id) = args.id.as_deref() else {
         if args.json {
             eprintln!(
-                "usage: maestro update <id> [--status S] [--title T] [--description D] [--claim] [--json]"
+                "usage: maestro card update <id> [--status S] [--title T] [--description D] [--claim] [--json]"
             );
             render_update_json(&[])?;
         } else {
             println!(
-                "usage: maestro update <id> [--status S] [--title T] [--description D] [--claim] [--json]"
+                "usage: maestro card update <id> [--status S] [--title T] [--description D] [--claim] [--json]"
             );
         }
         return Ok(());
@@ -573,7 +573,7 @@ fn per_type_verbs_hint(card_type: card::schema::CardType) -> &'static str {
         card::schema::CardType::Idea => "use `maestro harness apply/dismiss/measure`",
         card::schema::CardType::Task
         | card::schema::CardType::Bug
-        | card::schema::CardType::Chore => "use `maestro close`",
+        | card::schema::CardType::Chore => "use `maestro card close`",
     }
 }
 

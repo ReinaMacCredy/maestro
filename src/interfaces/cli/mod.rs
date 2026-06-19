@@ -207,9 +207,13 @@ pub enum RootCommand {
         after_help = "Examples:\n  maestro sync                 # resync repo bundled resources to this binary, preserving edits\n  maestro sync --global-skills # resync user-level Maestro skill cache and links\n  maestro sync --dry-run       # preview the resync, write nothing"
     )]
     Sync(SyncArgs),
-    #[command(about = "Migrate v1 Maestro artifacts to the reduced v2 layout")]
+    #[command(
+        hide = true,
+        about = "Migrate v1 Maestro artifacts to the reduced v2 layout"
+    )]
     MigrateV2,
     #[command(
+        hide = true,
         about = "Fold the legacy v2 trees (features/tasks/decisions/backlog) into the card store",
         after_help = "Examples:\n  maestro migrate              # snapshot .maestro, then mint cards from the legacy trees"
     )]
@@ -239,21 +243,23 @@ pub enum RootCommand {
     #[command(about = "Create, show, and list decision cards in the card store")]
     Decision(DecisionArgs),
     #[command(
-        about = "Card-store verbs under one namespace (same output as the flat spellings)",
-        after_help = "Examples:\n  maestro card show task-0a1b2c   # identical to `maestro show task-0a1b2c`\n  maestro card ready"
+        about = "Work the card store: ready, list, show, create, update, close, claim, assign, note, dep, archive",
+        after_help = "Examples:\n  maestro card ready              # claimable work (ready + unblocked)\n  maestro card show task-0a1b2c\n  maestro card create \"<title>\" -t task"
     )]
     Card(CardArgs),
     #[command(
+        hide = true,
         about = "List workable cards with no open blockers (card store)",
         after_help = "Examples:\n  maestro ready                # every unblocked task/bug/chore\n  maestro ready --json\n  maestro ready agent-cli-ux   # only those parented to a feature"
     )]
     Ready(ReadyArgs),
     #[command(
+        hide = true,
         about = "List cards filtered by parent, type, assignee, or coarse status (card store)",
         after_help = "Examples:\n  maestro list --parent agent-cli-ux\n  maestro list --json --type bug --status open\n  maestro list --assignee claude#s1"
     )]
     List(ListArgs),
-    #[command(about = "Author dependency edges between cards (card store)")]
+    #[command(hide = true, about = "Author dependency edges between cards (card store)")]
     Dep(DepArgs),
     #[command(
         about = "Show what other live sessions are doing (cross-session awareness)",
@@ -271,48 +277,54 @@ pub enum RootCommand {
     )]
     Msg(MsgArgs),
     #[command(
+        hide = true,
         about = "Archive a feature card and its child cards (card store)",
         after_help = "Examples:\n  maestro archive csv-export   # archives the feature card + every parent=csv-export card\n  maestro archive --loose      # sweeps closed loose tasks/ideas + superseded decisions"
     )]
     Archive(ArchiveArgs),
     #[command(
+        hide = true,
         about = "Claim a workable card for this session (card store)",
         after_help = "Examples:\n  maestro claim task-0a1b2c   # take an unclaimed task/bug/chore\n  MAESTRO_SESSION=mine maestro claim task-0a1b2c"
     )]
     Claim(ClaimArgs),
     #[command(
+        hide = true,
         about = "Suggest an owner for a workable card (advisory; never blocks a claim)",
         after_help = "Examples:\n  maestro assign task-0a1b2c codex   # advisory routing hint, not a claim\n  maestro assign task-0a1b2c none    # clear the hint\n  maestro assign task-0a1b2c --clear"
     )]
     Assign(AssignArgs),
     #[command(
+        hide = true,
         about = "Append a dated note to a card's notes.md (card store)",
         after_help = "Examples:\n  maestro note task-0a1b2c \"chose option B; A breaks on reparent\""
     )]
     Note(NoteArgs),
     #[command(
+        hide = true,
         about = "Create a card of any type (card store)",
         after_help = "Examples:\n  maestro create -t task \"Add CSV export\" --parent csv-export\n  maestro create -t bug \"Fix ordering race\"\n  maestro create -t feature \"CSV export\""
     )]
     Create(CreateArgs),
-    #[command(about = "Show a card's header, edges, and body (card store)")]
+    #[command(hide = true, about = "Show a card's header, edges, and body (card store)")]
     Show(ShowArgs),
     #[command(
+        hide = true,
         about = "Update a card's status, title, description, or claim (card store)",
         after_help = "Examples:\n  maestro update task-add-csv-export-0a1b --status needs_verification\n  maestro update task-add-csv-export-0a1b --claim\n  maestro update task-add-csv-export-0a1b --title \"New title\""
     )]
     Update(UpdateArgs),
-    #[command(about = "Close a card: status -> closed (card store)")]
+    #[command(hide = true, about = "Close a card: status -> closed (card store)")]
     Close(CloseArgs),
     #[command(
         about = "List, show, apply, unapply, dismiss, and measure harness improvement suggestions"
     )]
     Harness(HarnessArgs),
-    #[command(about = "Query computed read models (matrix, friction, decisions, proof, backlog)")]
+    #[command(about = "Query computed read models (matrix, friction, backlog)")]
     Query(QueryArgs),
     #[command(about = "Maintain the local text index that accelerates list --grep")]
     Index(IndexArgs),
-    #[command(about = "Run or inspect the MCP server (serve, stdin, tools, list)")]
+    #[command(about = "Run or inspect the MCP server (serve, tools)")]
     Mcp(McpArgs),
     #[command(about = "Hook entry points invoked by the agent harness")]
     Hook(HookArgs),
@@ -321,7 +333,10 @@ pub enum RootCommand {
         after_help = "Examples:\n  maestro watch                 # live board, all features with open work\n  maestro watch <feature-id>    # live board focused on one feature\n  maestro watch snapshot        # render one frame and exit\n  maestro watch snapshot <feature-id>"
     )]
     Watch(WatchArgs),
-    #[command(about = "Verify a task against its recorded proof")]
+    #[command(
+        hide = true,
+        about = "Verify a task against its recorded proof"
+    )]
     Verify { id: Option<String> },
     #[command(
         about = "Print a language code styleguide, or the index with no language",
@@ -492,6 +507,17 @@ pub enum CardCommand {
     Update(UpdateArgs),
     #[command(about = "Close a card: status -> closed")]
     Close(CloseArgs),
+    #[command(
+        about = "Walk a card's typed edges (parent/blocks/related/supersedes)",
+        after_help = "Examples:\n  maestro card graph task-0a1b2c        # connected cards, two hops\n  maestro card graph --dot > cards.dot  # the whole web as Graphviz DOT\n  maestro card graph task-0a1b2c --dot  # one card's connected component"
+    )]
+    Graph {
+        /// Card id to walk from; omit with --dot to export the whole web.
+        id: Option<String>,
+        /// Emit Graphviz DOT instead of a tree.
+        #[arg(long)]
+        dot: bool,
+    },
 }
 
 #[derive(Debug, Args)]
@@ -717,7 +743,7 @@ pub enum TaskCommand {
             help = "Include terminal/done tasks (verified, rejected, abandoned, superseded) and archived ones"
         )]
         all: bool,
-        #[arg(long)]
+        #[arg(long, hide = true)]
         watch: bool,
         #[arg(long)]
         interval: Option<u64>,
@@ -727,6 +753,12 @@ pub enum TaskCommand {
         id: Option<String>,
         #[arg(long)]
         interval: Option<u64>,
+    },
+    #[command(about = "Show a task's proof status")]
+    Proof {
+        task_id: Option<String>,
+        #[arg(long = "task-id", value_name = "TASK_ID")]
+        task_id_flag: Option<String>,
     },
     #[command(about = "Check the task blocker graph for cycles and dangling refs")]
     Doctor,
@@ -1376,7 +1408,10 @@ pub enum QueryCommand {
     Matrix,
     #[command(about = "Summarize recorded run friction (events, prompts, corrections)")]
     Friction,
-    #[command(about = "List decision cards (ID/STATUS/HOME/TITLE; recent 20 unless --all)")]
+    #[command(
+        hide = true,
+        about = "List decision cards (ID/STATUS/HOME/TITLE; recent 20 unless --all)"
+    )]
     Decisions {
         /// List all decisions, not just the recent window.
         #[arg(long)]
@@ -1387,15 +1422,16 @@ pub enum QueryCommand {
     },
     #[command(about = "List improvement backlog items (ID/TITLE)")]
     Backlog,
-    #[command(about = "Show a task's proof status")]
+    #[command(hide = true, about = "Show a task's proof status")]
     Proof {
         task_id: Option<String>,
         #[arg(long = "task-id", value_name = "TASK_ID")]
         task_id_flag: Option<String>,
     },
     #[command(
+        hide = true,
         about = "Walk a card's typed edges (parent/blocks/related/supersedes)",
-        after_help = "Examples:\n  maestro query graph task-0a1b2c        # connected cards, two hops\n  maestro query graph --dot > cards.dot  # the whole web as Graphviz DOT\n  maestro query graph task-0a1b2c --dot  # one card's connected component"
+        after_help = "Examples:\n  maestro card graph task-0a1b2c        # connected cards, two hops\n  maestro card graph --dot > cards.dot  # the whole web as Graphviz DOT\n  maestro card graph task-0a1b2c --dot  # one card's connected component"
     )]
     Graph {
         /// Card id to walk from; omit with --dot to export the whole web.
@@ -1431,11 +1467,17 @@ pub struct McpArgs {
 pub enum McpCommand {
     #[command(alias = "stdio", about = "Run the MCP server over stdio")]
     Serve,
-    #[command(about = "Run the MCP server over stdio (same as serve)")]
+    #[command(
+        hide = true,
+        about = "Run the MCP server over stdio (same as serve)"
+    )]
     Stdin,
     #[command(about = "List the MCP tool names maestro exposes")]
     Tools,
-    #[command(about = "List the MCP tool names maestro exposes (same as tools)")]
+    #[command(
+        hide = true,
+        about = "List the MCP tool names maestro exposes (same as tools)"
+    )]
     List,
 }
 
@@ -1521,6 +1563,7 @@ pub fn run(cli: Cli) -> Result<()> {
             CardCommand::Show(args) => card::show(args),
             CardCommand::Update(args) => card::update(args),
             CardCommand::Close(args) => card::close(args),
+            CardCommand::Graph { id, dot } => query::run_graph(id, dot),
         },
         RootCommand::Ready(args) => card::ready(args),
         RootCommand::List(args) => card::list(args),
@@ -1769,6 +1812,59 @@ mod tests {
 
         let interval = parse_watch(&["maestro", "watch", "--interval", "5"]);
         assert_eq!(interval.interval, Some(5));
+    }
+
+    #[test]
+    fn hidden_verbs_and_relocated_views_still_parse() {
+        // `task list --watch` is hidden from help (clap arg hide), but the flag
+        // still parses and sets watch=true -- the dispatch path is unchanged.
+        match Cli::try_parse_from(["maestro", "task", "list", "--watch", "--interval", "2"])
+            .expect("task list --watch must still parse")
+            .command
+        {
+            RootCommand::Task(args) => match args.command {
+                TaskCommand::List {
+                    watch, interval, ..
+                } => {
+                    assert!(watch, "the hidden --watch flag must still set watch=true");
+                    assert_eq!(interval, Some(2));
+                }
+                other => panic!("expected task list, got {other:?}"),
+            },
+            other => panic!("expected task, got {other:?}"),
+        }
+
+        // The relocated read views parse under their canonical resource.
+        assert!(matches!(
+            Cli::try_parse_from(["maestro", "task", "proof", "task-x"])
+                .expect("task proof must parse")
+                .command,
+            RootCommand::Task(_)
+        ));
+        assert!(matches!(
+            Cli::try_parse_from(["maestro", "card", "graph", "card-x", "--dot"])
+                .expect("card graph must parse")
+                .command,
+            RootCommand::Card(_)
+        ));
+
+        // Every hidden duplicate/synonym still parses, preserving back-compat.
+        for argv in [
+            ["maestro", "ready"].as_slice(),
+            ["maestro", "verify", "task-x"].as_slice(),
+            ["maestro", "migrate-v2"].as_slice(),
+            ["maestro", "migrate"].as_slice(),
+            ["maestro", "query", "proof", "task-x"].as_slice(),
+            ["maestro", "query", "graph", "card-x"].as_slice(),
+            ["maestro", "query", "decisions"].as_slice(),
+            ["maestro", "mcp", "stdin"].as_slice(),
+            ["maestro", "mcp", "list"].as_slice(),
+        ] {
+            assert!(
+                Cli::try_parse_from(argv).is_ok(),
+                "hidden alias must still parse: {argv:?}"
+            );
+        }
     }
 
     fn commit_drift() -> Vec<ProofStaleReason> {

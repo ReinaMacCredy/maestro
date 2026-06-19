@@ -1,6 +1,6 @@
 ---
 name: maestro-card
-version: 1.14.0
+version: 1.15.0
 description: "Use for active Maestro card work: pick up and deliver work cards (claim, update, complete, verify), run the feature-card lifecycle (accept, prepare, amend, ship), and capture qa-baseline/qa-slice gate evidence."
 ---
 
@@ -51,25 +51,25 @@ Read the reference for the job at hand; they share the ground rules below.
 - Exact command signatures live in [reference/cli.md](reference/cli.md),
   generated from the binary. A verb or flag not listed there does not exist;
   read it instead of probing `--help`.
-- Discover work with the flat card verbs: `maestro ready`, `maestro list`,
-  `maestro show`. Take and annotate work with `maestro claim`,
-  `maestro note`, and `maestro dep add`.
+- Discover work with the card verbs: `maestro card ready`, `maestro card list`,
+  `maestro card show`. Take and annotate work with `maestro card claim`,
+  `maestro card note`, and `maestro card dep add`.
 - Ids are stable and opaque (`card-<hash>`; features keep their creation
   slug). The dotted alias `show` prints is display-only; never address a card
   with it.
-- Never chain a guessed id: use only ids read from verb output (`create
-  --id-only`, `ready`, `list`, `show`). When a lookup misses, re-list and
+- Never chain a guessed id: use only ids read from verb output (`card create
+  --id-only`, `card ready`, `card list`, `card show`). When a lookup misses, re-list and
   read the real id; do not retry spelling variations.
 - Do not hand-edit `card.yaml` or the verb-guarded sidecars (`qa.md`,
   state history). Use verbs so gates and audit trails stay intact.
 - Terminal words are per type — feature `shipped`/`cancelled`, work
   `verified`/`rejected`/`abandoned`/`superseded`, decision
   `locked`/`superseded`, loose task/bug/chore `closed` — and all of them read
-  as coarse `closed` on the board. `maestro close` fits only task/bug/chore.
+  as coarse `closed` on the board. `maestro card close` fits only task/bug/chore.
   When the user says "close" a feature, branch on its state: a live feature
   means `feature ship` or `feature cancel`; a feature already terminal
-  (shipped/cancelled) means archive it — run `maestro archive <id>` directly,
-  do not re-ask. `maestro archive` moves a terminal feature's records to
+  (shipped/cancelled) means archive it — run `maestro card archive <id>` directly,
+  do not re-ask. `maestro card archive` moves a terminal feature's records to
   `.maestro/archive/`; the user's word "close" on a terminal card is the
   explicit intent to archive, but archive is never an automatic side effect of
   ship/cancel, and a non-terminal feature is never archived.

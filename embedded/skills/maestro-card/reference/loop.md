@@ -12,11 +12,11 @@ The human says some form of "work the backlog while I sleep" and leaves. No
 stop time or unit cap is required, ever. If the kickoff prompt states one
 ("until 07:00", "max 5 cards"), honor it; never ask for one.
 
-Start from the store, not from memory: `maestro status`, then `maestro ready`.
+Start from the store, not from memory: `maestro status`, then `maestro card ready`.
 
 ## Loop
 
-1. `maestro ready` -> `maestro claim <id>` -> work the card per
+1. `maestro card ready` -> `maestro card claim <id>` -> work the card per
    [work.md](work.md). The test-first rule applies unchanged: an observable
    `--check` is worked test-first; a skip is valid only for a non-behavioral
    check or an explore/spike lane, and the skip note names which. Skips are
@@ -24,7 +24,7 @@ Start from the store, not from memory: `maestro status`, then `maestro ready`.
 2. Finish with `task complete --summary --claim --proof`, then
    `maestro task verify <id>`.
 3. Commit each verified slice locally on the feature branch. Never push.
-4. When `maestro ready` is dry, replenish: find accepted features that lack
+4. When `maestro card ready` is dry, replenish: find accepted features that lack
    tasks (`maestro feature list`, state `ready`, tasks 0), run
    `feature prepare <id> --draft`, review the draft, apply with
    `prepare --from`, and continue the loop.

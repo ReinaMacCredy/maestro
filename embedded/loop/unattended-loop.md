@@ -13,11 +13,11 @@ Per unit of work this adds nothing: every card is claimed, worked, and verified
 exactly per `work.md`, test-first default included.
 
 1. Start from the store, never from memory: `maestro status`, then
-   `maestro ready`.
-2. `maestro claim <id>` -> work -> `task complete --summary --claim --proof` ->
+   `maestro card ready`.
+2. `maestro card claim <id>` -> work -> `task complete --summary --claim --proof` ->
    `maestro task verify <id>`.
 3. Commit each verified slice locally on the feature branch. Never push.
-4. When `maestro ready` is dry, replenish: find accepted features with no tasks
+4. When `maestro card ready` is dry, replenish: find accepted features with no tasks
    (`maestro feature list`), `feature prepare <id> --draft`, review, apply with
    `prepare --from`, continue.
 5. When nothing is workable or preparable, stop and write the morning report.
