@@ -71,6 +71,13 @@ cleanup must stay green (a broken test is not a simplification). Finish with a
 brief note of what was fixed and what was skipped, or confirm the diff was
 already clean.
 
+The session lean mode tunes how hard this pass applies (`maestro lean`): `full`
+(the default this pass assumes) edits the diff in place as described; `lite`
+downgrades each finding to a suggestion for the author rather than editing;
+`ultra` rejects diff that a lower reach-ladder rung already covers instead of
+merely tidying it; `off` drops the reach-ladder findings. `maestro lean review`
+walks the diff against the ladder.
+
 ## Boundaries
 
 - vs maestro-audit: simplify is diff-scoped and APPLIES the fix; audit is

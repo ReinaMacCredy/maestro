@@ -52,6 +52,14 @@ code. The skip is valid only when the `--check` is non-behavioral
 applies. "Non-testable" is not a free judgment call: a locked observable
 `--check` is, by definition, testable.
 
+Before you write implementation code, climb the reach-ladder (HARNESS Code
+style: skip/YAGNI -> stdlib -> native platform -> installed dependency ->
+one-liner -> minimal new code) and stop at the lowest rung that solves the
+card; name the rung you reached in the completion summary. `maestro lean` sets
+how strictly to climb (lite/full/ultra/off) and `maestro lean review` walks the
+diff against the ladder; the simplify pass below tidies whatever still sits too
+high.
+
 `--lane light` is a marker, never a grant: it does not exempt a card from
 verification. If the `--check` names behavior the change introduces or alters,
 the card is not light -- keep test-first. The Evidence Gate below is unchanged
