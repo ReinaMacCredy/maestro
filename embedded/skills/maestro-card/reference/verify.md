@@ -36,7 +36,8 @@ asks for QA evidence.
 ## Adversarial Fan-out
 
 Use when a card failed verify twice, risk is high, or many cards support a
-feature ship.
+feature ship. Full orchestration HOW (refuter dispatch, majority, verdict
+collection): `maestro loop show adversarial-fan-out`.
 
 1. Rubric is the locked acceptance checks plus completion claims. Do not
    invent softer checks.

@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-version: 1.17.0
+version: 1.18.0
 description: "Use for design or brainstorming in a Maestro repo before implementation starts. Map current behavior, decide one fork at a time, record decisions and notes, then hand the approved contract to maestro-card."
 ---
 
@@ -72,7 +72,8 @@ maestro never auto-reads or auto-replies; you do.
 ## Taste Forks
 
 Use a generate-and-filter pass for naming, UX wording, API shape, report
-structure, or other judgment-heavy forks.
+structure, or other judgment-heavy forks. Full orchestration HOW (generator
+angles, judge, pairwise): `maestro loop show generate-and-filter`.
 
 1. Write a 3-5 point rubric into `notes.md` before generating options.
 2. Ask 3-5 fresh-context generators for one concrete option each from different

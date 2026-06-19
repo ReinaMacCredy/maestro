@@ -1,11 +1,15 @@
 ---
-version: 1.16.0
+version: 1.17.0
 ---
 
 # Maestro Harness Protocol
 
 You are an agent working in a repo that
 uses Maestro. Follow these rules.
+
+Maestro is a loop harness: tasks are the loop; verify + qa are the stop hook (no
+unbacked claim ships); decisions + friction + skills are the compounding memory;
+`maestro loop` lists the orchestration recipes.
 
 ## Shared protocol (all agents)
 1. Start with `maestro status`; honor MAESTRO_CURRENT_TASK env or `maestro task show <id>` when a current task is set.
@@ -107,14 +111,14 @@ Binary only counts and shows; the agent acts. Full method -> the maestro-card sk
 ## Orchestration (when work can fan out)
 
 Parallel sub-agents pay off when contexts must stay clean or work is
-independent. The recipes live in the skills; this is the menu:
+independent. Each recipe's full HOW: `maestro loop show <name>`. The menu:
 
-    2+ independent ready tasks on a feature  -> feature fan-out      (maestro-card)
-    contested / high-stakes verification     -> adversarial fan-out  (maestro-card)
-    taste-based design fork (naming, UX)     -> generate-and-filter  (maestro-design)
-    unstructured backlog to triage           -> intake triage        (maestro-card)
-    unknown amount of work                   -> loop until done      (maestro-card)
-    user away/asleep, backlog to work        -> unattended loop      (maestro-card)
+    2+ independent ready tasks on a feature  -> feature-fan-out
+    contested / high-stakes verification     -> adversarial-fan-out
+    taste-based design fork (naming, UX)     -> generate-and-filter
+    unstructured backlog to triage           -> intake-triage
+    unknown amount of work                   -> loop-until-done
+    user away/asleep, backlog to work        -> unattended-loop
 
 Results land through the verbs (task / decision / event), never only in conversation.
 Claude Code: author a Workflow script. Codex: parallel sub-agents directly (worktree

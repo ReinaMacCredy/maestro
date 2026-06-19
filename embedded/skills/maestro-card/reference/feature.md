@@ -94,7 +94,9 @@ state.
 
 ## Fan-out
 
-Use feature fan-out only when 2+ ready work cards are independent.
+Use feature fan-out only when 2+ ready work cards are independent. Full
+orchestration HOW (dispatch, worktree isolation, collection): `maestro loop
+show feature-fan-out`.
 
 1. Confirm with `maestro ready <feature>` and each card's locked acceptance
    checks. Same files or dependency edges mean serialize, or isolate in
