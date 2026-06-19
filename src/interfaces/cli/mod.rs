@@ -17,6 +17,7 @@ use crate::interfaces::hooks::record;
 
 pub mod active;
 pub mod card;
+pub mod conflict;
 pub mod decision;
 pub mod doctor;
 pub mod event;
@@ -277,6 +278,11 @@ pub enum RootCommand {
         after_help = "Examples:\n  maestro msg send task-b \"ready for review\"\n  maestro msg read              # unread across every linked partner\n  maestro msg read task-b       # one partner\n  maestro msg list              # channel overview"
     )]
     Msg(MsgArgs),
+    #[command(
+        about = "Flag a work conflict on a peer card so it holds off (no link, no git)",
+        after_help = "Examples:\n  maestro conflict task-b \"taking login.rs, worktreeing it\"\n  maestro conflict --clear task-b   # retract once merged back"
+    )]
+    Conflict(ConflictArgs),
     #[command(
         hide = true,
         about = "Archive a feature card and its child cards (card store)",
@@ -1347,6 +1353,20 @@ pub enum MsgCommand {
 }
 
 #[derive(Debug, Args)]
+pub struct ConflictArgs {
+    /// The peer card whose ground you are taking (the card to warn).
+    #[arg(value_name = "PEER")]
+    pub peer: String,
+    /// Why you are taking it -- the advisory the peer sees. Required to assert;
+    /// omit with --clear.
+    #[arg(value_name = "REASON")]
+    pub reason: Option<String>,
+    /// Retract the conflict notice you asserted against PEER.
+    #[arg(long)]
+    pub clear: bool,
+}
+
+#[derive(Debug, Args)]
 pub struct HarnessArgs {
     #[command(subcommand)]
     pub command: HarnessCommand,
@@ -1551,6 +1571,7 @@ pub fn run(cli: Cli) -> Result<()> {
     ) {
         let _ = msg::inbox_banner();
         let _ = active::overlap_banner();
+        let _ = conflict::conflict_banner();
     }
     match cli.command {
         RootCommand::Init(args) => init::run(args),
@@ -1588,6 +1609,7 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Active(args) => active::run(args),
         RootCommand::Link(args) => card::link(args),
         RootCommand::Msg(args) => msg::run(args),
+        RootCommand::Conflict(args) => conflict::run(args),
         RootCommand::Archive(args) => card::archive(args),
         RootCommand::Claim(args) => card::claim(args),
         RootCommand::Assign(args) => card::assign(args),

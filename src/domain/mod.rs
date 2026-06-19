@@ -2,6 +2,7 @@
 
 pub mod card;
 pub mod channel;
+pub mod conflict;
 pub mod decisions;
 pub mod extraction;
 pub mod feature;

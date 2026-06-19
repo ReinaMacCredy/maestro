@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.0.0 -->
-<!-- maestro:cli-reference-sha256: 1d560c0be5e40e17c498f2a3859e36c6377f5952fa76dd760b58dd18acce495b -->
+<!-- maestro:cli-reference-sha256: 70e9ba50d4bd543bf3c1599d4304c1b923072ae50ec7bc5035a0235994da8985 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -128,6 +128,10 @@ Every verb and flag is listed; a spelling not found here does not exist.
 - `maestro msg send <TO> <TEXT>` -- Send a message to a linked card (sender is your current card)
 - `maestro msg read [CARD]` -- Read unread messages; with no card, aggregate every linked partner
 - `maestro msg list [CARD]` -- Channel overview, or one partner's full timeline
+
+## maestro conflict
+
+- `maestro conflict <PEER> [REASON] [--clear]` -- Flag a work conflict on a peer card so it holds off (no link, no git)
 
 ## maestro harness
 

@@ -1235,6 +1235,7 @@ fn transitional_public_surfaces_match_phase_policy() {
         &[
             "card",
             "channel",
+            "conflict",
             "decisions",
             "extraction",
             "feature",
