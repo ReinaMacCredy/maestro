@@ -1881,26 +1881,42 @@ pub(crate) fn worktree_roots(paths: &MaestroPaths) -> Vec<MaestroPaths> {
 }
 
 /// The `<session>` half of a card claim identity (SPEC E6): `MAESTRO_SESSION` if
-/// set, then any real per-session id the agent runtime exports, else a
-/// process-unique token. Never the colliding `cli-DATE` form `cli_run_id` falls
-/// back to -- a date is not a session, and would let two runs share one claim.
+/// set, then any real per-session id the agent runtime exports (the shared
+/// `session_id_from_env` scan, so a claim buckets under the same id as the run
+/// log and the active union), else a process-unique token. Never the colliding
+/// `cli-DATE` form `cli_run_id` falls back to -- a date is not a session, and
+/// would let two runs share one claim. Delegating the scan fixed
+/// bug-claim-...-2ce0: the old inline list missed `CODEX_THREAD_ID` and
+/// `CLAUDE_CODE_SESSION_ID`, so a real Codex/Claude run fell through to a
+/// per-process token that changed every call and self-locked the agent.
 pub(super) fn claim_session() -> String {
-    for key in [
-        "MAESTRO_SESSION",
-        "MAESTRO_SESSION_ID",
-        "MAESTRO_RUN_ID",
-        "CODEX_SESSION_ID",
-        "CLAUDE_SESSION_ID",
-        "CLAUDECODE_SESSION_ID",
-    ] {
-        if let Ok(value) = env::var(key)
-            && !value.trim().is_empty()
-        {
-            // Trimmed: the raw value becomes a claim/assignee token, and
-            // stray whitespace would break later equality lookups.
-            return value.trim().to_string();
+    resolve_claim_session(
+        env::var("MAESTRO_SESSION").ok(),
+        crate::foundation::core::session::session_id_from_env(),
+        process_unique_token,
+    )
+}
+
+/// Pure precedence for [`claim_session`]: `MAESTRO_SESSION` override, then the
+/// runtime session id, then the process-unique fallback. Split out so the order
+/// is testable without mutating the process-global env.
+fn resolve_claim_session(
+    maestro_session: Option<String>,
+    runtime_session_id: Option<String>,
+    fallback: impl FnOnce() -> String,
+) -> String {
+    if let Some(value) = maestro_session {
+        let trimmed = value.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
         }
     }
+    runtime_session_id.unwrap_or_else(fallback)
+}
+
+/// A token unique to this process invocation; the deliberate non-`cli-DATE`
+/// fallback so two concurrent runs never collide on one claim.
+fn process_unique_token() -> String {
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|elapsed| elapsed.as_nanos())
@@ -1946,6 +1962,34 @@ mod tests {
             RootCommand::Watch(args) => args,
             other => panic!("expected watch, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn resolve_claim_session_prefers_the_maestro_session_override() {
+        let got = resolve_claim_session(
+            Some("  override  ".to_string()),
+            Some("runtime".to_string()),
+            || panic!("override present, must not reach fallback"),
+        );
+        assert_eq!(got, "override");
+    }
+
+    #[test]
+    fn resolve_claim_session_uses_the_runtime_id_when_no_override() {
+        // bug-claim-...-2ce0: a real runtime session id (CLAUDE_CODE_SESSION_ID /
+        // CODEX_THREAD_ID, surfaced by session_id_from_env) must win over the
+        // per-process fallback, or the agent self-locks out of its own card.
+        let got = resolve_claim_session(None, Some("claude-58fc".to_string()), || {
+            panic!("runtime id present, must not reach the per-process fallback")
+        });
+        assert_eq!(got, "claude-58fc");
+    }
+
+    #[test]
+    fn resolve_claim_session_falls_back_when_override_blank_and_no_runtime_id() {
+        let got =
+            resolve_claim_session(Some("   ".to_string()), None, || "s123-456".to_string());
+        assert_eq!(got, "s123-456");
     }
 
     #[test]
