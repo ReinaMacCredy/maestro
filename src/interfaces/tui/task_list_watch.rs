@@ -8,9 +8,11 @@ use anyhow::{Context, Result};
 use crate::domain::card;
 use crate::domain::feature;
 use crate::domain::proof;
+use crate::domain::run::{self, Presence, SessionActivity};
 use crate::domain::task;
 use crate::foundation::core::git;
 use crate::foundation::core::paths::MaestroPaths;
+use crate::foundation::core::time::utc_now_timestamp;
 
 // The board classifier moved to `card::query` so `maestro status` shares it
 // (interface code reaches domain submodules inline, not via a deep `use`).
@@ -51,6 +53,66 @@ fn paint(frame: &str) -> String {
 /// board appends it; the snapshot / non-terminal frame stays bare.
 fn live_footer(interval: u64) -> String {
     format!("(live; refreshes every {interval}s; Ctrl-C to exit)")
+}
+
+/// Max width for the bound-card title in a session line; matches `maestro
+/// active`'s column so the two views truncate the same way.
+const SESSION_CARD_WIDTH: usize = 28;
+
+/// Truncate to `max` chars, ellipsizing with a trailing '.' (the same rule
+/// `maestro active` uses, kept local so the board does not depend on the CLI).
+fn truncate(value: &str, max: usize) -> String {
+    if value.chars().count() <= max {
+        return value.to_string();
+    }
+    let head: String = value.chars().take(max.saturating_sub(1)).collect();
+    format!("{head}.")
+}
+
+/// The presence label for a session line, mirroring `maestro active`'s STATE
+/// column so the board reads the same.
+fn presence_label(presence: Presence) -> &'static str {
+    match presence {
+        Presence::Working => "[working]",
+        Presence::Waiting => "[waiting]",
+        Presence::Idle => "[idle]",
+        Presence::Stale => "[stale]",
+    }
+}
+
+/// The skill mode with the `maestro-` prefix stripped (`maestro-design` ->
+/// `design`), matching `maestro active`'s MODE column.
+fn mode_label(skill: &str) -> &str {
+    skill.strip_prefix("maestro-").unwrap_or(skill)
+}
+
+/// A short, session-distinguishing who-label: the leading token of the session
+/// id (before the union `@worktree` suffix and the first `-`), so concurrent
+/// sessions read apart (`claude#s66637`, `f08020da`) rather than all collapsing
+/// to the constant worktree name.
+fn who_label(session_id: &str) -> &str {
+    let core = session_id.split('@').next().unwrap_or(session_id);
+    core.split('-').next().unwrap_or(core)
+}
+
+/// One compact line for the LIVE SESSIONS block: mode, bound-card title (or id,
+/// or '-'), who, and presence. The card title is joined from the live scan; a
+/// bound id absent from the scan renders `<id> (missing)` like `maestro active`.
+fn session_line(session: &SessionActivity, by_id: &BTreeMap<&str, &card::schema::Card>) -> String {
+    let mode = session.mode.as_deref().map(mode_label).unwrap_or("-");
+    let card = match session.bound_card.as_deref() {
+        Some(id) => match by_id.get(id) {
+            Some(card) => truncate(&card.title, SESSION_CARD_WIDTH),
+            None => format!("{id} (missing)"),
+        },
+        None => "-".to_string(),
+    };
+    format!(
+        "  {mode}  {card}  {} {} {}m",
+        who_label(&session.session_id),
+        presence_label(session.presence),
+        session.age_minutes,
+    )
 }
 
 fn glyph(state: RowState) -> char {
@@ -138,6 +200,9 @@ fn push_group_header(out: &mut String, title: &str, counts: &card::query::RowSta
 }
 
 struct BoardLayout<'a> {
+    /// Rendered LIVE SESSIONS lines (empty when no live session), shown above the
+    /// feature groups so `maestro watch` mirrors `maestro active`'s liveness.
+    sessions: Vec<String>,
     groups: Vec<BoardGroup<'a>>,
 }
 
@@ -145,6 +210,9 @@ struct BoardGroup<'a> {
     title: String,
     counts: card::query::RowStateCounts,
     rows: Vec<BoardRow<'a>>,
+    /// Header note for a design-only live feature (no workable tasks): renders
+    /// `<title>: <note>` instead of the 0/0 counts line.
+    note: Option<String>,
 }
 
 struct BoardRow<'a> {
@@ -156,15 +224,30 @@ struct BoardRow<'a> {
 impl BoardLayout<'_> {
     fn render(&self, live_tick: Option<u64>) -> String {
         let mut out = String::new();
+        if !self.sessions.is_empty() {
+            out.push_str(&format!("LIVE SESSIONS ({})\n", self.sessions.len()));
+            for line in &self.sessions {
+                out.push_str(line);
+                out.push('\n');
+            }
+            out.push_str(&format!("{}\n", "\u{2500}".repeat(44)));
+        }
         for group in &self.groups {
-            push_group_header(&mut out, &group.title, &group.counts);
+            match &group.note {
+                Some(note) if group.counts.total() == 0 => {
+                    out.push_str(&format!("{}: {note}\n", group.title));
+                }
+                _ => push_group_header(&mut out, &group.title, &group.counts),
+            }
             for row in &group.rows {
                 push_row(&mut out, row.card, row.state, row.depth, live_tick);
             }
             out.push('\n');
         }
         if out.is_empty() {
-            out.push_str("No open work to show. Run `maestro card ready` or `maestro card list`.\n");
+            out.push_str(
+                "No open work to show. Run `maestro card ready` or `maestro card list`.\n",
+            );
         }
         out
     }
@@ -213,6 +296,8 @@ fn place_rows<'a>(
 /// that feature's open workable cards. Pure over its inputs so it is testable
 /// without IO. Features with no workable children (design-only) or no open work
 /// (finished) are omitted; closed cards are hidden but still counted in X/Y.
+/// Test-only session-less wrapper; production renders via `build_board_layout`.
+#[cfg(test)]
 fn format_board(
     cards: &[card::schema::Card],
     blocked_ids: &std::collections::BTreeSet<String>,
@@ -224,6 +309,8 @@ fn format_board(
 /// Render the board with the live extras: `live_tick` animates active rows
 /// (None = static snapshot), and `just_completed` un-suppresses the Done rows
 /// that finished this reload so they flash one tick frame (dec-completed-card).
+/// Test-only session-less wrapper; production renders via `build_board_layout`.
+#[cfg(test)]
 fn format_board_opts(
     cards: &[card::schema::Card],
     blocked_ids: &std::collections::BTreeSet<String>,
@@ -231,7 +318,7 @@ fn format_board_opts(
     live_tick: Option<u64>,
     just_completed: &BTreeSet<String>,
 ) -> String {
-    build_board_layout(cards, blocked_ids, focus, just_completed).render(live_tick)
+    build_board_layout(cards, blocked_ids, focus, just_completed, &[]).render(live_tick)
 }
 
 fn build_board_layout<'a>(
@@ -239,12 +326,41 @@ fn build_board_layout<'a>(
     blocked_ids: &BTreeSet<String>,
     focus: Option<&str>,
     just_completed: &BTreeSet<String>,
+    sessions: &[SessionActivity],
 ) -> BoardLayout<'a> {
+    let by_id: BTreeMap<&str, &card::schema::Card> =
+        cards.iter().map(|card| (card.id.as_str(), card)).collect();
+    // Focus is a single-feature drill-down, not the live roster: the global
+    // session block is an overview concern, so it is omitted when focused. A
+    // session bound to a sibling feature would otherwise leak into the view and
+    // break the "focus excludes other features" contract.
+    let session_lines: Vec<String> = if focus.is_none() {
+        sessions
+            .iter()
+            .map(|session| session_line(session, &by_id))
+            .collect()
+    } else {
+        Vec::new()
+    };
+
     let mut features: BTreeMap<&str, &card::schema::Card> = BTreeMap::new();
     let mut children: BTreeMap<&str, Vec<&card::schema::Card>> = BTreeMap::new();
     for card in cards {
         if card.card_type == card::schema::CardType::Feature {
             features.insert(card.id.as_str(), card);
+        }
+    }
+    // A feature bound by a live session shows even with no workable children, so
+    // an in-flight design session is visible on the board. Keep the earliest
+    // session's mode for that feature's header note.
+    let mut live_feature_mode: BTreeMap<&str, Option<String>> = BTreeMap::new();
+    for session in sessions {
+        if let Some(bound) = session.bound_card.as_deref()
+            && features.contains_key(bound)
+        {
+            live_feature_mode
+                .entry(bound)
+                .or_insert_with(|| session.mode.clone());
         }
     }
     for card in cards {
@@ -266,10 +382,11 @@ fn build_board_layout<'a>(
         {
             continue;
         }
+        let live_mode = live_feature_mode.get(fid);
         let empty: Vec<&card::schema::Card> = Vec::new();
         let kids = match children.get(fid) {
             Some(kids) => kids,
-            None if focus.is_some() => &empty,
+            None if focus.is_some() || live_mode.is_some() => &empty,
             None => continue,
         };
         let mut kids: Vec<&card::schema::Card> = kids.clone();
@@ -277,16 +394,26 @@ fn build_board_layout<'a>(
 
         let counts = card::query::RowStateCounts::from_cards(kids.iter().copied(), blocked_ids);
         // A finished feature is hidden in the overview, unless one of its tasks
-        // just completed this reload: then it shows its 100% header and the tick
-        // row for one frame before dropping next reload (tick-then-clear).
+        // just completed this reload (it then shows its 100% header + tick row for
+        // one frame), or a live session is bound to it (keep it on the board).
         let has_flash = kids.iter().any(|kid| just_completed.contains(&kid.id));
-        if counts.done == counts.total() && focus.is_none() && !has_flash {
+        if counts.done == counts.total() && focus.is_none() && !has_flash && live_mode.is_none() {
             continue;
         }
+        // A live feature with no workable tasks gets an alt header noting its
+        // session mode; one with tasks renders its normal counts line.
+        let note = match live_mode {
+            Some(mode) if counts.total() == 0 => Some(match mode {
+                Some(mode) => format!("{} (live session)", mode_label(mode)),
+                None => "(live session)".to_string(),
+            }),
+            _ => None,
+        };
         groups.push(BoardGroup {
             title: feature.title.clone(),
             counts,
             rows: feature_rows(&kids, blocked_ids, just_completed),
+            note,
         });
     }
 
@@ -325,11 +452,15 @@ fn build_board_layout<'a>(
                         })
                     })
                     .collect(),
+                note: None,
             });
         }
     }
 
-    BoardLayout { groups }
+    BoardLayout {
+        sessions: session_lines,
+        groups,
+    }
 }
 
 fn feature_rows<'a>(
@@ -429,12 +560,27 @@ fn load_board(
     Ok((cards, blocked_ids))
 }
 
+/// The live sessions for the board's LIVE SESSIONS block: the same cross-worktree
+/// liveness `maestro active` reads (`run::active_sessions_union` over every
+/// worktree root), filtered to non-stale so the block matches `active`'s default
+/// view. A read failure degrades to no block rather than aborting the board.
+fn load_live_sessions(paths: &MaestroPaths) -> Vec<SessionActivity> {
+    let roots = crate::interfaces::cli::worktree_roots(paths);
+    let now = utc_now_timestamp();
+    run::active_sessions_union(&roots, &now)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|session| session.presence != Presence::Stale)
+        .collect()
+}
+
 /// Load the card store and render one static board snapshot (active = static
 /// half-circle, no flash). The seam both `watch snapshot` and the live loop's
 /// non-terminal path render from.
 pub fn render_board(paths: &MaestroPaths, focus: Option<&str>) -> Result<String> {
     let (cards, blocked_ids) = load_board(paths, focus)?;
-    Ok(format_board(&cards, &blocked_ids, focus))
+    let sessions = load_live_sessions(paths);
+    Ok(build_board_layout(&cards, &blocked_ids, focus, &BTreeSet::new(), &sessions).render(None))
 }
 
 /// Run the live board loop. Extends the poll loop (dec-surface-under-watch):
@@ -468,7 +614,8 @@ pub fn run_board(paths: &MaestroPaths, focus: Option<&str>, interval_seconds: u6
                 live_now.insert(card.id.clone());
             }
         }
-        let layout = build_board_layout(&cards, &blocked_ids, focus, &just_completed);
+        let sessions = load_live_sessions(paths);
+        let layout = build_board_layout(&cards, &blocked_ids, focus, &just_completed, &sessions);
         for _ in 0..render_ticks {
             let board = layout.render(Some(tick));
             let frame = format!("{board}\n{}\n", live_footer(interval));
@@ -1290,6 +1437,218 @@ mod tests {
     fn live_footer_shows_the_interval_and_exit_hint() {
         assert_eq!(live_footer(2), "(live; refreshes every 2s; Ctrl-C to exit)");
         assert_eq!(live_footer(5), "(live; refreshes every 5s; Ctrl-C to exit)");
+    }
+
+    use super::{build_board_layout, mode_label, session_line, who_label};
+    use crate::domain::run::{Presence, SessionActivity};
+    use std::collections::BTreeMap;
+
+    fn session(
+        id: &str,
+        mode: Option<&str>,
+        card: Option<&str>,
+        presence: Presence,
+        age: u64,
+    ) -> SessionActivity {
+        SessionActivity {
+            session_id: id.to_string(),
+            mode: mode.map(str::to_string),
+            bound_card: card.map(str::to_string),
+            last_action: "card_touch".to_string(),
+            last_ts: "t0".to_string(),
+            age_minutes: age,
+            presence,
+        }
+    }
+
+    fn board(cards: &[card::schema::Card], sessions: &[SessionActivity]) -> String {
+        build_board_layout(cards, &BTreeSet::new(), None, &BTreeSet::new(), sessions).render(None)
+    }
+
+    #[test]
+    fn who_label_takes_the_session_token_not_the_worktree() {
+        // Strip the union `@worktree` suffix and the trailing id, so concurrent
+        // sessions read apart instead of all collapsing to the worktree name.
+        assert_eq!(
+            who_label("claude#s66637-1781925049@maestro"),
+            "claude#s66637"
+        );
+        assert_eq!(who_label("f08020da-b6e9-41a8@maestro"), "f08020da");
+        assert_eq!(who_label("plain"), "plain");
+    }
+
+    #[test]
+    fn mode_label_strips_the_maestro_prefix() {
+        assert_eq!(mode_label("maestro-design"), "design");
+        assert_eq!(mode_label("design"), "design");
+    }
+
+    #[test]
+    fn session_line_shows_mode_card_who_presence_and_age() {
+        let cards = [feat("rcli", "Reduce CLI token bloat")];
+        let by_id = cards
+            .iter()
+            .map(|c| (c.id.as_str(), c))
+            .collect::<BTreeMap<_, _>>();
+        let line = session_line(
+            &session(
+                "f08020da-b6e9@maestro",
+                Some("maestro-design"),
+                Some("rcli"),
+                Presence::Working,
+                2,
+            ),
+            &by_id,
+        );
+        assert_eq!(
+            line, "  design  Reduce CLI token bloat  f08020da [working] 2m",
+            "session line shape changed:\n{line}"
+        );
+    }
+
+    #[test]
+    fn session_line_marks_a_bound_card_absent_from_the_scan() {
+        let by_id = BTreeMap::new();
+        let line = session_line(
+            &session(
+                "s1",
+                Some("maestro-design"),
+                Some("gone"),
+                Presence::Idle,
+                9,
+            ),
+            &by_id,
+        );
+        assert!(
+            line.contains("gone (missing)"),
+            "missing card not flagged:\n{line}"
+        );
+        assert!(line.contains("[idle]"), "presence label wrong:\n{line}");
+    }
+
+    #[test]
+    fn live_sessions_block_renders_header_and_separator() {
+        let cards = vec![loose("card-loose", "loose task", "in_progress")];
+        let sessions = vec![session(
+            "f08020da@maestro",
+            Some("maestro-design"),
+            None,
+            Presence::Working,
+            1,
+        )];
+        let out = board(&cards, &sessions);
+        assert!(
+            out.contains("LIVE SESSIONS (1)"),
+            "block header missing:\n{out}"
+        );
+        assert!(out.contains('\u{2500}'), "separator rule missing:\n{out}");
+        assert!(
+            out.find("LIVE SESSIONS").unwrap() < out.find("(no feature):").unwrap(),
+            "sessions block must render above the groups:\n{out}"
+        );
+    }
+
+    #[test]
+    fn no_sessions_means_no_block() {
+        let cards = vec![loose("card-loose", "loose task", "in_progress")];
+        let out = board(&cards, &[]);
+        assert!(
+            !out.contains("LIVE SESSIONS"),
+            "block leaked with no sessions:\n{out}"
+        );
+    }
+
+    #[test]
+    fn focus_mode_omits_the_live_sessions_block() {
+        // Focus is a single-feature drill-down: a session bound to a sibling
+        // feature must not leak into the focused view (regression: an
+        // env-derived session surfaced "Other" inside `watch snapshot billing`).
+        let cards = vec![feat("billing", "Billing CSV"), feat("other", "Other")];
+        let sessions = vec![session(
+            "7523131a@maestro",
+            None,
+            Some("other"),
+            Presence::Working,
+            0,
+        )];
+        let out = build_board_layout(
+            &cards,
+            &BTreeSet::new(),
+            Some("billing"),
+            &BTreeSet::new(),
+            &sessions,
+        )
+        .render(None);
+        assert!(
+            !out.contains("LIVE SESSIONS"),
+            "focus mode must omit the global session block:\n{out}"
+        );
+        assert!(
+            !out.contains("Other"),
+            "focus must exclude sibling features even via sessions:\n{out}"
+        );
+        assert!(
+            out.contains("Billing CSV"),
+            "focused feature still renders its header:\n{out}"
+        );
+    }
+
+    #[test]
+    fn live_feature_with_no_tasks_renders_alt_header() {
+        // A design-only feature is hidden in the overview, but a live session
+        // bound to it surfaces it with a `<title>: <mode> (live session)` header.
+        let cards = vec![feat("rcli", "Reduce CLI token bloat")];
+        let sessions = vec![session(
+            "f08020da@maestro",
+            Some("maestro-design"),
+            Some("rcli"),
+            Presence::Working,
+            1,
+        )];
+        let out = board(&cards, &sessions);
+        assert!(
+            out.contains("Reduce CLI token bloat: design (live session)"),
+            "live design-only feature header missing:\n{out}"
+        );
+        assert!(
+            !out.contains("0/0 done"),
+            "design-only live feature must not show a counts line:\n{out}"
+        );
+    }
+
+    #[test]
+    fn feature_with_no_session_or_tasks_stays_hidden() {
+        let cards = vec![feat("idle", "Idle Feature")];
+        let out = board(&cards, &[]);
+        assert!(
+            !out.contains("Idle Feature"),
+            "idle design-only feature must stay hidden:\n{out}"
+        );
+    }
+
+    #[test]
+    fn live_feature_with_tasks_keeps_its_counts_header() {
+        let cards = vec![
+            feat("auth", "Auth"),
+            work("task-1", "auth", "hash passwords", "ready"),
+        ];
+        let sessions = vec![session(
+            "f08020da@maestro",
+            Some("maestro-design"),
+            Some("auth"),
+            Presence::Working,
+            1,
+        )];
+        let out = board(&cards, &sessions);
+        assert!(
+            out.contains("Auth: 0/1 done"),
+            "counts header missing:\n{out}"
+        );
+        assert!(out.contains("hash passwords"), "task row missing:\n{out}");
+        assert!(
+            !out.contains("Auth: design (live session)"),
+            "a feature with tasks must keep its counts header, not the note:\n{out}"
+        );
     }
 
     struct TestTempDir {
