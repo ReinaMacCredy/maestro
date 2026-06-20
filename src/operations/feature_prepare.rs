@@ -311,7 +311,7 @@ fn guard_feature_can_prepare(status: &FeatureStatus, feature_id: &str) -> Result
                 "cannot prepare {feature_id} — not accepted; run `maestro feature accept {feature_id}` first"
             )
         }
-        FeatureStatus::Shipped | FeatureStatus::Cancelled => {
+        FeatureStatus::Closed | FeatureStatus::Cancelled => {
             bail!(
                 "cannot prepare {feature_id} — terminal (status: {})",
                 status.as_str()

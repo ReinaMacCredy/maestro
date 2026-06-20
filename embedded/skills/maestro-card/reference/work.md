@@ -80,7 +80,7 @@ and name that reason in the completion summary.
 ## Cards As A Lightweight Todo List
 
 For simple work that does not need the full
-feature->accept->verify->ship pipeline, the gate-free `card` verbs are a
+feature->accept->verify->close pipeline, the gate-free `card` verbs are a
 Claude-task-tool-style todo tracker. The whole loop is three verbs:
 
 ```sh

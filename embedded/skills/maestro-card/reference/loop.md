@@ -30,8 +30,8 @@ Start from the store, not from memory: `maestro status`, then `maestro card read
    `prepare --from`, and continue the loop.
 5. When nothing is workable or preparable, stop and write the morning report.
 
-A feature whose children are all verified is parked, not shipped: confirm
-with `maestro feature ship <id> --dry-run`, record SHIP-READY in the report,
+A feature whose children are all verified is parked, not closed: confirm
+with `maestro feature close <id> --dry-run`, record CLOSE-READY in the report,
 and move on.
 
 ## Failure Budget
@@ -48,9 +48,9 @@ and move on.
 Night MAY: `claim`, work, `complete`, `verify`, `prepare`, `note`, `block`,
 local per-step commits on the feature branch.
 
-Night NEVER: `feature accept`, `feature ship`, `archive`, push, tag,
+Night NEVER: `feature accept`, `feature close`, `archive`, push, tag,
 publish, destructive git operations, hand-editing `card.yaml` or guarded
-sidecars. `accept` and `ship` are the human's gates: contracts are frozen
+sidecars. `accept` and `close` are the human's gates: contracts are frozen
 and declared delivered only while someone is awake.
 
 ## Morning Report
@@ -61,8 +61,8 @@ The session's final message is the report the human reads over coffee:
   `verified, tdd: skipped - <reason>`) and the simplify outcome
   (`simplified` or `simplify: skipped - <non-code reason>`)
 - blocked cards with reasons
-- SHIP-READY features with the exact command to run
-  (`maestro feature ship <id> --outcome "<one line>"`)
+- CLOSE-READY features with the exact command to run
+  (`maestro feature close <id> --outcome "<one line>"`)
 - features prepared overnight (replenishment)
 - why the loop stopped (dry, cap reached, or failure budget)
 
@@ -87,6 +87,6 @@ double work. Maestro itself never schedules anything.
 
 ## Hand-off
 
-Morning, human: review the report, `feature ship` anything SHIP-READY,
+Morning, human: review the report, `feature close` anything CLOSE-READY,
 unblock or reassign blocked cards, accept the next contracts. Per-unit method
 -> [work.md](work.md); proof -> [verify.md](verify.md).

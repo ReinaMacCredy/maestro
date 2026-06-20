@@ -106,7 +106,7 @@ pub fn verify_feature(
             record.id,
             record.id
         ),
-        FeatureStatus::Shipped | FeatureStatus::Cancelled => bail!(
+        FeatureStatus::Closed | FeatureStatus::Cancelled => bail!(
             "cannot verify feature {} — terminal (status: {})",
             record.id,
             record.status.as_str()
@@ -180,7 +180,7 @@ pub fn verify_feature(
     })
 }
 
-pub(crate) fn acceptance_ship_gap(
+pub(crate) fn acceptance_close_gap(
     record: &FeatureRecord,
     task_entries: &[TaskEntry],
 ) -> Result<Option<String>> {
@@ -189,7 +189,7 @@ pub(crate) fn acceptance_ship_gap(
     }
     let Some(latest) = record.acceptance_sweeps.last() else {
         return Ok(Some(format!(
-            "contract sweep missing — {} acceptance item(s) need feature-level evidence\n    fix: maestro feature verify {}\n    retry: maestro feature ship {} --outcome \"<outcome>\"",
+            "contract sweep missing — {} acceptance item(s) need feature-level evidence\n    fix: maestro feature verify {}\n    retry: maestro feature close {} --outcome \"<outcome>\"",
             record.acceptance.len(),
             record.id,
             record.id
@@ -198,7 +198,7 @@ pub(crate) fn acceptance_ship_gap(
     let invalidated_by = invalidations_since(record, &latest.at, task_entries);
     if !invalidated_by.is_empty() {
         return Ok(Some(format!(
-            "contract sweep stale — {}\n    fix: maestro feature verify {}\n    retry: maestro feature ship {} --outcome \"<outcome>\"",
+            "contract sweep stale — {}\n    fix: maestro feature verify {}\n    retry: maestro feature close {} --outcome \"<outcome>\"",
             invalidated_by.join("; "),
             record.id,
             record.id
@@ -206,7 +206,7 @@ pub(crate) fn acceptance_ship_gap(
     }
     if !latest.unresolved.is_empty() {
         return Ok(Some(format!(
-            "contract sweep incomplete — {} acceptance item(s) unresolved: {}\n    fix: maestro feature verify {} then add proof with `maestro feature verify {} --prove <ac-id> --evidence \"<observed>\"` or waive with `--waive <ac-id> --reason \"<why>\"`\n    retry: maestro feature ship {} --outcome \"<outcome>\"",
+            "contract sweep incomplete — {} acceptance item(s) unresolved: {}\n    fix: maestro feature verify {} then add proof with `maestro feature verify {} --prove <ac-id> --evidence \"<observed>\"` or waive with `--waive <ac-id> --reason \"<why>\"`\n    retry: maestro feature close {} --outcome \"<outcome>\"",
             latest.unresolved.len(),
             latest.unresolved.join(", "),
             record.id,

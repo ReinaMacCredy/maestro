@@ -390,7 +390,7 @@ fn failures_for(
     {
         // A standalone slice no longer falls back to the repo-global stack.verify
         // suite, so with no narrow falsifier it must opt into claims-only or set
-        // one. A feature task does not reach here: its full suite is the ship
+        // one. A feature task does not reach here: its full suite is the close
         // backstop (decision-002), so it verifies on claims/proof at this gate.
         failures.push(format!(
             "standalone task {} has no verify command; add a narrow falsifier with `maestro task set {} --verify-command \"...\"` or accept claims-only with `maestro harness set --claims-only`",

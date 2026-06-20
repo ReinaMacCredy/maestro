@@ -1,4 +1,4 @@
-//! End-to-end QA gate wiring (§4): accept reads `qa.md`, ship reads its fenced
+//! End-to-end QA gate wiring (§4): accept reads `qa.md`, close reads its fenced
 //! QA slices block and the `feature.yaml` amends that `feature amend` writes.
 //! The pure gate predicates are unit-tested in `domain::feature::qa`; this file
 //! proves the CLI actually consults the on-disk artifacts.
@@ -122,9 +122,9 @@ fn prove_contract(repo: &Path, id: &str) {
         "--evidence",
         "fixture evidence",
         // This helper only records the proof and confirms the green sweep;
-        // callers ship explicitly. --no-ship defers the implicit ship that
+        // callers close explicitly. --no-close defers the implicit close that
         // proving the lone AC would trigger on an otherwise-ready feature.
-        "--no-ship",
+        "--no-close",
     ];
     stdout(maestro(&prove, repo), &prove);
     let sweep = ["feature", "verify", id];
@@ -175,12 +175,12 @@ fn feature_qa_gates_via_cli() {
         &["feature", "start"],
     );
 
-    // Coverage — ship blocks while [bl-001] has no counting slice.
-    let ship = ["feature", "ship", "report-builder"];
-    let stderr = assert_failure(maestro(&ship, repo), &ship);
+    // Coverage — close blocks while [bl-001] has no counting slice.
+    let close = ["feature", "close", "report-builder"];
+    let stderr = assert_failure(maestro(&close, repo), &close);
     assert!(
         stderr.contains("bl-001"),
-        "ship should name the uncovered scenario: {stderr}"
+        "close should name the uncovered scenario: {stderr}"
     );
     assert!(stderr.contains("coverage incomplete"));
     assert!(
@@ -192,7 +192,7 @@ fn feature_qa_gates_via_cli() {
         "{stderr}"
     );
     assert!(
-        stderr.contains("retry: maestro feature ship report-builder --outcome \"<outcome>\""),
+        stderr.contains("retry: maestro feature close report-builder --outcome \"<outcome>\""),
         "{stderr}"
     );
 
@@ -203,7 +203,7 @@ fn feature_qa_gates_via_cli() {
         "report-builder",
         "slices:\n  - scenarios: [\"bl-001\"]\n",
     );
-    let stderr = assert_failure(maestro(&ship, repo), &ship);
+    let stderr = assert_failure(maestro(&close, repo), &close);
     assert!(
         stderr.contains("bl-001"),
         "an evidence-less slice must not count: {stderr}"
@@ -211,14 +211,14 @@ fn feature_qa_gates_via_cli() {
 
     write_qa_slices(repo, "report-builder", &["bl-001"]);
     verify_contract_from_qa(repo, "report-builder");
-    let dry = ["feature", "ship", "report-builder", "--dry-run"];
+    let dry = ["feature", "close", "report-builder", "--dry-run"];
     let preview = stdout(maestro(&dry, repo), &dry);
     assert!(
-        preview.contains("would ship"),
+        preview.contains("would close"),
         "dry-run should pass once covered: {preview}"
     );
 
-    // E freshness — a behavioral amend (new area) staleness-blocks ship; the gate
+    // E freshness — a behavioral amend (new area) staleness-blocks close; the gate
     // reads the amend-log.yaml that `feature amend` actually wrote.
     let amend = [
         "feature",
@@ -230,7 +230,7 @@ fn feature_qa_gates_via_cli() {
         "scope grew",
     ];
     stdout(maestro(&amend, repo), &amend);
-    let stderr = assert_failure(maestro(&ship, repo), &ship);
+    let stderr = assert_failure(maestro(&close, repo), &close);
     assert!(
         stderr.contains("stale"),
         "behavioral amend should stale the baseline: {stderr}"
@@ -245,7 +245,7 @@ fn feature_qa_gates_via_cli() {
     write_baseline(repo, "report-builder", 1, &["bl-001", "bl-002"]);
     let sweep = ["feature", "verify", "report-builder"];
     stdout(maestro(&sweep, repo), &sweep);
-    let stderr = assert_failure(maestro(&ship, repo), &ship);
+    let stderr = assert_failure(maestro(&close, repo), &close);
     assert!(
         stderr.contains("bl-002"),
         "re-extended baseline needs a slice for the new scenario: {stderr}"
@@ -257,8 +257,8 @@ fn feature_qa_gates_via_cli() {
 
     write_qa_slices(repo, "report-builder", &["bl-001", "bl-002"]);
     verify_contract_from_qa(repo, "report-builder");
-    let shipped = stdout(maestro(&ship, repo), &ship);
-    assert!(shipped.contains("shipped report-builder"));
+    let closed = stdout(maestro(&close, repo), &close);
+    assert!(closed.contains("closed report-builder"));
 }
 
 #[test]
@@ -329,8 +329,8 @@ fn qa_none_accept_skips_gates_until_a_behavioral_amend_requires_a_fresh_declarat
     ];
     stdout(maestro(&amend, repo), &amend);
 
-    let ship = ["feature", "ship", "config-cleanup"];
-    let stale = assert_failure(maestro(&ship, repo), &ship);
+    let close = ["feature", "close", "config-cleanup"];
+    let stale = assert_failure(maestro(&close, repo), &close);
     assert!(stale.contains("qa-baseline"), "{stale}");
 
     let redeclare = [
@@ -349,25 +349,25 @@ fn qa_none_accept_skips_gates_until_a_behavioral_amend_requires_a_fresh_declarat
     );
 
     prove_contract(repo, "config-cleanup");
-    let shipped = stdout(maestro(&ship, repo), &ship);
-    assert!(shipped.contains("shipped config-cleanup"), "{shipped}");
+    let closed = stdout(maestro(&close, repo), &close);
+    assert!(closed.contains("closed config-cleanup"), "{closed}");
     assert!(
-        shipped.contains("qa: none (still config-only after amend review)"),
-        "{shipped}"
+        closed.contains("qa: none (still config-only after amend review)"),
+        "{closed}"
     );
     assert!(
-        shipped.contains("retro: anything to make a permanent rule?"),
-        "{shipped}"
+        closed.contains("retro: anything to make a permanent rule?"),
+        "{closed}"
     );
     assert!(
-        shipped
+        closed
             .contains("record it: maestro harness propose --title \"<rule>\" --evidence \"<why>\""),
-        "{shipped}"
+        "{closed}"
     );
 }
 
 #[test]
-fn non_goal_amend_does_not_block_ship_via_cli() {
+fn non_goal_amend_does_not_block_close_via_cli() {
     let temp = TestTempDir::new("maestro-qa-nongoal-test");
     let repo = temp.path();
     init_and_author(repo, "report-builder", "Report builder");
@@ -396,9 +396,9 @@ fn non_goal_amend_does_not_block_ship_via_cli() {
     stdout(maestro(&amend, repo), &amend);
 
     verify_contract_from_qa(repo, "report-builder");
-    let ship = ["feature", "ship", "report-builder"];
-    let shipped = stdout(maestro(&ship, repo), &ship);
-    assert!(shipped.contains("shipped report-builder"));
+    let close = ["feature", "close", "report-builder"];
+    let closed = stdout(maestro(&close, repo), &close);
+    assert!(closed.contains("closed report-builder"));
 }
 
 #[test]
@@ -426,7 +426,7 @@ fn qa_none_survives_a_non_behavioral_amend_without_redeclaring() {
     );
 
     // A non-goal amend grows no behavioral surface, so the qa: none waiver holds:
-    // ship must not re-arm the QA gate, and no re-declaration is required.
+    // close must not re-arm the QA gate, and no re-declaration is required.
     let amend = [
         "feature",
         "amend",
@@ -439,7 +439,7 @@ fn qa_none_survives_a_non_behavioral_amend_without_redeclaring() {
     stdout(maestro(&amend, repo), &amend);
 
     prove_contract(repo, "config-cleanup");
-    let ship = ["feature", "ship", "config-cleanup"];
-    let shipped = stdout(maestro(&ship, repo), &ship);
-    assert!(shipped.contains("shipped config-cleanup"), "{shipped}");
+    let close = ["feature", "close", "config-cleanup"];
+    let closed = stdout(maestro(&close, repo), &close);
+    assert!(closed.contains("closed config-cleanup"), "{closed}");
 }

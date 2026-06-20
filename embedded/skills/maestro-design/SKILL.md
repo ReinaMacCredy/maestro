@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-version: 1.20.0
+version: 1.21.0
 description: "Use for design or brainstorming in a Maestro repo before implementation starts. Map current behavior, decide one fork at a time, record decisions and notes, then hand the approved contract to maestro-card."
 ---
 
@@ -102,7 +102,7 @@ harness. Preserve the answer, not the code.
 
 ## Hand-off
 
-Pipeline: `[maestro-design] -> maestro-card (qa-baseline -> feature accept -> prepare -> work -> verify -> qa-slice -> feature ship)`
+Pipeline: `[maestro-design] -> maestro-card (qa-baseline -> feature accept -> prepare -> work -> verify -> qa-slice -> feature close)`
 
 Next: decisions locked and contract authored -> `maestro-card` (its
 qa-baseline reference, then `feature accept`). The hand-off is this skill

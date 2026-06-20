@@ -63,6 +63,18 @@ pub fn coarse_of(status: &str) -> Option<Coarse> {
     }
 }
 
+/// Canonicalize a stored status word for human display. The feature terminal
+/// word was renamed `shipped` -> `closed`; records written before the rename
+/// keep `shipped` on disk (no migration, by design), so the generic card views
+/// map that one legacy spelling forward. Every other word renders verbatim.
+/// JSON renders stay faithful to the stored bytes.
+pub fn canonical_status(status: &str) -> &str {
+    match status {
+        "shipped" => "closed",
+        other => other,
+    }
+}
+
 /// The status words `update --status` accepts on a workable card: the task
 /// fine states (SPEC DN3) plus the uniform create/close words `open`/`closed`.
 /// The `update` error message prints this list, so keep the two in step.

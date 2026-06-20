@@ -94,7 +94,7 @@ pub(super) fn render_verified_handoff(paths: &MaestroPaths, task_id: &str) -> Re
                     "  {feature_id} tasks: {}/{} verified",
                     view.counts.verified, view.counts.total
                 );
-                print_feature_ship_handoff(paths, feature_id)?;
+                print_feature_close_handoff(paths, feature_id)?;
             } else if next_ready_task_for_feature(paths, feature_id)?.is_some() {
                 println!("feature progress:");
                 println!(
@@ -120,18 +120,18 @@ pub(super) fn render_verified_handoff(paths: &MaestroPaths, task_id: &str) -> Re
     Ok(())
 }
 
-fn print_feature_ship_handoff(paths: &MaestroPaths, feature_id: &str) -> Result<()> {
-    let report = feature::ship(paths, feature_id, None, true)?;
+fn print_feature_close_handoff(paths: &MaestroPaths, feature_id: &str) -> Result<()> {
+    let report = feature::close(paths, feature_id, None, true)?;
     if report.note.contains("qa-slice coverage incomplete") {
         println!("next: maestro-card skill (qa-slice) -> replay affected baseline scenarios");
-        println!("then: maestro feature ship {feature_id} --outcome \"<outcome>\"");
+        println!("then: maestro feature close {feature_id} --outcome \"<outcome>\"");
     } else if report.note.contains("qa-baseline") {
         println!("next: maestro-card skill (qa-baseline) -> .maestro/cards/{feature_id}/qa.md");
-        println!("then: maestro feature ship {feature_id} --outcome \"<outcome>\"");
+        println!("then: maestro feature close {feature_id} --outcome \"<outcome>\"");
     } else {
-        println!("template: maestro feature ship {feature_id} --outcome \"<outcome>\"");
+        println!("template: maestro feature close {feature_id} --outcome \"<outcome>\"");
         println!("required input:");
-        println!("- outcome: shipping outcome text");
+        println!("- outcome: closing outcome text");
     }
     Ok(())
 }

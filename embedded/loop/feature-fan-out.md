@@ -37,12 +37,12 @@ The conductor (not the workers) gathers completions and closes the loop:
     maestro task verify <id>        # per returned card
     git commit                      # each verified slice, on the feature branch
 
-Then run the `qa-slice` pass over the baseline before `feature ship`. A card
+Then run the `qa-slice` pass over the baseline before `feature close`. A card
 whose verifier refutes a claim is blocked, not verified:
 
     maestro task block <id> --reason "<what failed>"
 
 ## Stop
 
-All independent cards verified and committed -> qa-slice -> ship. Never `accept`
-or `ship` from inside a worker; those are conductor/human gates.
+All independent cards verified and committed -> qa-slice -> close. Never `accept`
+or `close` from inside a worker; those are conductor/human gates.

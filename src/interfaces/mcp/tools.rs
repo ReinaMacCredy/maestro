@@ -70,8 +70,8 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
             json!({"type":"object","properties":{"id":{"type":"string"}},"required":["id"]}),
         ),
         tool(
-            "maestro_feature_ship",
-            "Ships an in_progress feature; in_progress to shipped; enforces the ship gate.",
+            "maestro_feature_close",
+            "Closes an in_progress feature; in_progress to closed; enforces the close gate.",
             json!({"type":"object","properties":{"id":{"type":"string"}},"required":["id"]}),
         ),
         tool(
@@ -115,7 +115,7 @@ pub fn call_tool(paths: &MaestroPaths, name: &str, arguments: &Value) -> Result<
         "maestro_feature_list" => feature_list(arguments),
         "maestro_feature_show" => cli(required_args(arguments, &["feature", "show"], &["id"])?),
         "maestro_feature_start" => cli(required_args(arguments, &["feature", "start"], &["id"])?),
-        "maestro_feature_ship" => cli(required_args(arguments, &["feature", "ship"], &["id"])?),
+        "maestro_feature_close" => cli(required_args(arguments, &["feature", "close"], &["id"])?),
         "maestro_decision_list" => decision_list(arguments),
         "maestro_decision_new" => cli(required_args(arguments, &["decision", "new"], &["title"])?),
         "maestro_verify" => cli(required_args(arguments, &["task", "verify"], &["id"])?),

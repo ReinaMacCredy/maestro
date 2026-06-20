@@ -150,7 +150,7 @@ fn feature_verify_sweeps_acceptance_contract() {
         maestro(
             &[
                 "feature",
-                "ship",
+                "close",
                 "contract-sweep",
                 "--dry-run",
                 "--outcome",
@@ -160,7 +160,7 @@ fn feature_verify_sweeps_acceptance_contract() {
         ),
         &[
             "feature",
-            "ship",
+            "close",
             "contract-sweep",
             "--dry-run",
             "--outcome",
@@ -184,9 +184,9 @@ fn feature_verify_sweeps_acceptance_contract() {
         "ac-2",
         "--evidence",
         "manual proof",
-        // --no-ship: this proof completes ship-readiness; defer the implicit ship
-        // so the test can still inspect the green sweep and ship preview.
-        "--no-ship",
+        // --no-close: this proof completes close-readiness; defer the implicit close
+        // so the test can still inspect the green sweep and close preview.
+        "--no-close",
     ];
     stdout(maestro(&prove_args, temp_dir.path()), &prove_args);
     let sweep = stdout(
@@ -200,11 +200,11 @@ fn feature_verify_sweeps_acceptance_contract() {
         "{sweep}"
     );
 
-    let ship_preview = stdout(
+    let close_preview = stdout(
         maestro(
             &[
                 "feature",
-                "ship",
+                "close",
                 "contract-sweep",
                 "--dry-run",
                 "--outcome",
@@ -214,7 +214,7 @@ fn feature_verify_sweeps_acceptance_contract() {
         ),
         &[
             "feature",
-            "ship",
+            "close",
             "contract-sweep",
             "--dry-run",
             "--outcome",
@@ -222,8 +222,8 @@ fn feature_verify_sweeps_acceptance_contract() {
         ],
     );
     assert!(
-        ship_preview.contains("would ship contract-sweep"),
-        "{ship_preview}"
+        close_preview.contains("would close contract-sweep"),
+        "{close_preview}"
     );
 }
 
@@ -351,10 +351,10 @@ fn feature_contract_display_warnings_waivers_and_stale_sweep() {
         "ac-3",
         "--evidence",
         "manual third proof",
-        // --no-ship: ac-1 is waived and ac-2 is task-resolved, so proving ac-3
-        // completes ship-readiness; defer the implicit ship so the test can still
-        // inspect the green sweep, the stale-sweep re-derive, and ship previews.
-        "--no-ship",
+        // --no-close: ac-1 is waived and ac-2 is task-resolved, so proving ac-3
+        // completes close-readiness; defer the implicit close so the test can still
+        // inspect the green sweep, the stale-sweep re-derive, and close previews.
+        "--no-close",
     ];
     stdout(maestro(&prove_args, temp_dir.path()), &prove_args);
     let sweep = stdout(
@@ -371,11 +371,11 @@ fn feature_contract_display_warnings_waivers_and_stale_sweep() {
         sweep.contains("ok: every acceptance item has evidence"),
         "{sweep}"
     );
-    let ship_preview = stdout(
+    let close_preview = stdout(
         maestro(
             &[
                 "feature",
-                "ship",
+                "close",
                 "coverage-display",
                 "--dry-run",
                 "--outcome",
@@ -385,14 +385,14 @@ fn feature_contract_display_warnings_waivers_and_stale_sweep() {
         ),
         &[
             "feature",
-            "ship",
+            "close",
             "coverage-display",
             "--dry-run",
             "--outcome",
             "done",
         ],
     );
-    assert!(ship_preview.contains("would ship coverage-display"));
+    assert!(close_preview.contains("would close coverage-display"));
 
     let create_hotfix_args = [
         "task",
@@ -419,7 +419,7 @@ fn feature_contract_display_warnings_waivers_and_stale_sweep() {
         maestro(
             &[
                 "feature",
-                "ship",
+                "close",
                 "coverage-display",
                 "--dry-run",
                 "--outcome",
@@ -429,7 +429,7 @@ fn feature_contract_display_warnings_waivers_and_stale_sweep() {
         ),
         &[
             "feature",
-            "ship",
+            "close",
             "coverage-display",
             "--dry-run",
             "--outcome",
@@ -594,7 +594,7 @@ fn feature_guarded_lifecycle_via_cli() {
     );
     assert!(clear_questions_output.contains("questions=0"));
 
-    // accept also requires a captured baseline (F); ship requires it proven.
+    // accept also requires a captured baseline (F); close requires it proven.
     let cards_dir = temp_dir.path().join(".maestro/cards");
     write_baseline(&cards_dir, "billing-csv-export");
     write_qa_slice(&cards_dir, "billing-csv-export");
@@ -606,7 +606,7 @@ fn feature_guarded_lifecycle_via_cli() {
     let accept_output = stdout(maestro(&accept_args, temp_dir.path()), &accept_args);
     assert!(accept_output.contains("accepted billing-csv-export"));
 
-    // start, then ship blocks while a live child task exists.
+    // start, then close blocks while a live child task exists.
     stdout(
         maestro(&["feature", "start", "billing-csv-export"], temp_dir.path()),
         &["feature", "start", "billing-csv-export"],
@@ -617,34 +617,34 @@ fn feature_guarded_lifecycle_via_cli() {
     write_task(&cards_dir, "task-003", "billing-csv-export", "in_progress");
     verify_acceptance(temp_dir.path(), "billing-csv-export");
 
-    let ship_args = [
+    let close_args = [
         "feature",
-        "ship",
+        "close",
         "billing-csv-export",
         "--outcome",
-        "csv export shipped",
+        "csv export closed",
     ];
-    let ship_stderr = assert_failure(maestro(&ship_args, temp_dir.path()), &ship_args);
-    assert!(ship_stderr.contains("task-003"));
+    let close_stderr = assert_failure(maestro(&close_args, temp_dir.path()), &close_args);
+    assert!(close_stderr.contains("task-003"));
 
-    // resolve the live child, then ship succeeds.
+    // resolve the live child, then close succeeds.
     write_task(&cards_dir, "task-003", "billing-csv-export", "verified");
-    let ship_output = stdout(maestro(&ship_args, temp_dir.path()), &ship_args);
-    assert!(ship_output.contains("shipped billing-csv-export"));
-    assert!(ship_output.contains("ship receipt:"));
+    let close_output = stdout(maestro(&close_args, temp_dir.path()), &close_args);
+    assert!(close_output.contains("closed billing-csv-export"));
+    assert!(close_output.contains("close receipt:"));
     // The closing moment points at the archive, not the status dead end (R4).
-    assert!(ship_output.contains("next: maestro card archive billing-csv-export"));
-    assert!(!ship_output.contains("optional: maestro feature archive"));
+    assert!(close_output.contains("next: maestro card archive billing-csv-export"));
+    assert!(!close_output.contains("optional: maestro feature archive"));
 
-    let show_after_ship = stdout(
+    let show_after_close = stdout(
         maestro(&["feature", "show", "billing-csv-export"], temp_dir.path()),
         &["feature", "show", "billing-csv-export"],
     );
-    assert!(show_after_ship.contains("status: shipped"));
-    // ship --outcome records the one-line result; show renders it.
-    assert!(show_after_ship.contains("outcome: csv export shipped"));
+    assert!(show_after_close.contains("status: closed"));
+    // close --outcome records the one-line result; show renders it.
+    assert!(show_after_close.contains("outcome: csv export closed"));
 
-    // A shipped feature is terminal, so the default list hides it behind a hint.
+    // A closed feature is terminal, so the default list hides it behind a hint.
     let list_output = stdout(
         maestro(&["feature", "list"], temp_dir.path()),
         &["feature", "list"],
@@ -658,13 +658,13 @@ fn feature_guarded_lifecycle_via_cli() {
         &["feature", "list", "--all"],
     );
     assert!(list_all.contains("billing-csv-export"));
-    assert!(list_all.contains("shipped"));
+    assert!(list_all.contains("closed"));
     assert!(list_all.contains("NEXT"));
     assert!(!list_all.contains("INSPECT"));
     assert!(list_all.contains("inspect any: maestro feature show <id>"));
     assert!(untabify(&list_all).contains("\t3\t3\t"));
     // the outcome rides the title column in `list --all`.
-    assert!(list_all.contains("csv export shipped"));
+    assert!(list_all.contains("csv export closed"));
 }
 
 #[test]
@@ -1055,10 +1055,10 @@ fn feature_verify_records_repeatable_paired_proofs_atomically() {
         "ac-3",
         "--evidence",
         "third proof again",
-        // --no-ship: this batch proves the last outstanding acceptance items
-        // (ac-1 already proven), completing ship-readiness; defer the implicit
-        // ship so the follow-up bare sweep can still inspect the recorded proofs.
-        "--no-ship",
+        // --no-close: this batch proves the last outstanding acceptance items
+        // (ac-1 already proven), completing close-readiness; defer the implicit
+        // close so the follow-up bare sweep can still inspect the recorded proofs.
+        "--no-close",
     ];
     stdout(maestro(&fixed_args, root), &fixed_args);
     let sweep = stdout(
@@ -1109,26 +1109,26 @@ fn feature_verify_green_sweep_prints_state_appropriate_next_hint() {
     );
     assert_eq!(feature_record(root, "ready-hint"), before_ready);
 
-    create_qa_none_feature(root, "Ship Hint", "ship-hint");
+    create_qa_none_feature(root, "Close Hint", "close-hint");
     stdout(
-        maestro(&["feature", "start", "ship-hint"], root),
-        &["feature", "start", "ship-hint"],
+        maestro(&["feature", "start", "close-hint"], root),
+        &["feature", "start", "close-hint"],
     );
-    record_feature_evidence(root, "ship-hint");
-    let ship_sweep = stdout(
-        maestro(&["feature", "verify", "ship-hint"], root),
-        &["feature", "verify", "ship-hint"],
+    record_feature_evidence(root, "close-hint");
+    let close_sweep = stdout(
+        maestro(&["feature", "verify", "close-hint"], root),
+        &["feature", "verify", "close-hint"],
     );
-    assert!(ship_sweep.contains("ok: every acceptance item has evidence"));
+    assert!(close_sweep.contains("ok: every acceptance item has evidence"));
     assert!(
-        ship_sweep.contains("next: maestro feature ship ship-hint --outcome \"<outcome>\""),
-        "{ship_sweep}"
+        close_sweep.contains("next: maestro feature close close-hint --outcome \"<outcome>\""),
+        "{close_sweep}"
     );
 
-    create_qa_none_feature(root, "Blocked Ship Hint", "blocked-ship-hint");
+    create_qa_none_feature(root, "Blocked Close Hint", "blocked-close-hint");
     stdout(
-        maestro(&["feature", "start", "blocked-ship-hint"], root),
-        &["feature", "start", "blocked-ship-hint"],
+        maestro(&["feature", "start", "blocked-close-hint"], root),
+        &["feature", "start", "blocked-close-hint"],
     );
     stdout(
         maestro(
@@ -1137,7 +1137,7 @@ fn feature_verify_green_sweep_prints_state_appropriate_next_hint() {
                 "create",
                 "Live child",
                 "--feature",
-                "blocked-ship-hint",
+                "blocked-close-hint",
             ],
             root,
         ),
@@ -1146,18 +1146,18 @@ fn feature_verify_green_sweep_prints_state_appropriate_next_hint() {
             "create",
             "Live child",
             "--feature",
-            "blocked-ship-hint",
+            "blocked-close-hint",
         ],
     );
     let child_id = id_by_title(root, "Live child");
-    record_feature_evidence(root, "blocked-ship-hint");
+    record_feature_evidence(root, "blocked-close-hint");
     let blocked_sweep = stdout(
-        maestro(&["feature", "verify", "blocked-ship-hint"], root),
-        &["feature", "verify", "blocked-ship-hint"],
+        maestro(&["feature", "verify", "blocked-close-hint"], root),
+        &["feature", "verify", "blocked-close-hint"],
     );
     assert!(blocked_sweep.contains("ok: every acceptance item has evidence"));
     assert!(
-        blocked_sweep.contains("not yet shippable:"),
+        blocked_sweep.contains("not yet closable:"),
         "{blocked_sweep}"
     );
     assert!(
@@ -1165,11 +1165,11 @@ fn feature_verify_green_sweep_prints_state_appropriate_next_hint() {
         "{blocked_sweep}"
     );
     assert!(
-        blocked_sweep.contains("fix: verify or abandon them, then re-ship"),
+        blocked_sweep.contains("fix: verify or abandon them, then re-close"),
         "{blocked_sweep}"
     );
     assert!(
-        !blocked_sweep.contains("next: maestro feature ship"),
+        !blocked_sweep.contains("next: maestro feature close"),
         "{blocked_sweep}"
     );
 }
@@ -2392,16 +2392,16 @@ fn record_feature_evidence(root: &Path, slug: &str) {
         "ac-1",
         "--evidence",
         "observed in integration test",
-        // This helper only records the proof; callers inspect the sweep / ship
-        // hint themselves. --no-ship defers the implicit ship that proving the
+        // This helper only records the proof; callers inspect the sweep / close
+        // hint themselves. --no-close defers the implicit close that proving the
         // lone acceptance item would otherwise trigger on a qa-none feature.
-        "--no-ship",
+        "--no-close",
     ];
     stdout(maestro(&prove_args, root), &prove_args);
 }
 
 /// Write a minimal QA baseline (one `[bl-001]` scenario) so the accept gate's
-/// baseline precondition (F) and the ship gate's coverage check are satisfiable.
+/// baseline precondition (F) and the close gate's coverage check are satisfiable.
 /// In card mode the QA artifact rides the feature card directory at
 /// `.maestro/cards/<id>/qa.md`, so callers pass `.maestro/cards` here.
 fn write_baseline(cards_dir: &Path, id: &str) {
@@ -2459,9 +2459,9 @@ fn write_bad_feature_card(root: &Path, id: &str) {
     .expect("invariant: bad feature card should be writable");
 }
 
-/// Drive a fresh feature all the way to Shipped: new -> set -> baseline+slice ->
-/// accept -> start -> one verified child -> ship.
-fn ship_feature(root: &Path, title: &str, slug: &str, child: &str) {
+/// Drive a fresh feature all the way to Closed: new -> set -> baseline+slice ->
+/// accept -> start -> one verified child -> close.
+fn close_feature(root: &Path, title: &str, slug: &str, child: &str) {
     stdout(
         maestro(&["feature", "new", title], root),
         &["feature", "new", title],
@@ -2490,8 +2490,8 @@ fn ship_feature(root: &Path, title: &str, slug: &str, child: &str) {
     write_task(&cards_dir, child, slug, "verified");
     verify_acceptance(root, slug);
     stdout(
-        maestro(&["feature", "ship", slug], root),
-        &["feature", "ship", slug],
+        maestro(&["feature", "close", slug], root),
+        &["feature", "close", slug],
     );
 }
 
@@ -2505,10 +2505,10 @@ fn verify_acceptance(root: &Path, slug: &str) {
         "--evidence",
         "fixture evidence",
         // This helper only records the acceptance proof and confirms the green
-        // sweep; callers ship explicitly afterward. --no-ship defers the implicit
-        // ship that proving the lone AC would trigger on an otherwise-ready
+        // sweep; callers close explicitly afterward. --no-close defers the implicit
+        // close that proving the lone AC would trigger on an otherwise-ready
         // feature (a no-op where a live child still blocks the gate).
-        "--no-ship",
+        "--no-close",
     ];
     stdout(maestro(&prove_args, root), &prove_args);
     stdout(
@@ -2527,6 +2527,9 @@ fn feature_create_refuses_a_slug_held_in_the_archive() {
     );
 
     // An archived feature still owns its slug; `create` must not reissue it (L6a).
+    // The fixture keeps the pre-rename `status: shipped` spelling on purpose: this
+    // archived record must still load through the legacy alias for the slug-collision
+    // read to fire.
     let archived = temp_dir.path().join(".maestro/archive/cards/csv-export");
     ensure_dir(&archived).expect("invariant: archive card dir should be creatable");
     fs::write(
@@ -2541,13 +2544,13 @@ fn feature_create_refuses_a_slug_held_in_the_archive() {
     assert!(stderr.contains("archive"));
 }
 
-/// Drive a feature to Shipped, then archive it: the feature card dir + its
+/// Drive a feature to Closed, then archive it: the feature card dir + its
 /// terminal child card dirs leave the live scan, the QA sidecar travels inside
 /// the archived feature dir, reads fall through (L6b), and unarchive
 /// round-trips (§5.9).
 #[test]
 fn feature_archive_cascades_children_with_qa_and_round_trips() {
-    let temp_dir = TestTempDir::new("maestro-feature-archive-shipped");
+    let temp_dir = TestTempDir::new("maestro-feature-archive-closed");
     let root = temp_dir.path();
     init_git_marker(root);
     stdout(maestro(&["init", "--yes"], root), &["init", "--yes"]);
@@ -2588,8 +2591,8 @@ fn feature_archive_cascades_children_with_qa_and_round_trips() {
     write_task(&cards_dir, "task-002", "billing-csv-export", "verified");
     verify_acceptance(root, "billing-csv-export");
     stdout(
-        maestro(&["feature", "ship", "billing-csv-export"], root),
-        &["feature", "ship", "billing-csv-export"],
+        maestro(&["feature", "close", "billing-csv-export"], root),
+        &["feature", "close", "billing-csv-export"],
     );
 
     // Archive cascades the terminal children alongside the feature.
@@ -2619,7 +2622,7 @@ fn feature_archive_cascades_children_with_qa_and_round_trips() {
         maestro(&["feature", "show", "billing-csv-export"], root),
         &["feature", "show", "billing-csv-export"],
     );
-    assert!(show.contains("status: shipped"));
+    assert!(show.contains("status: closed"));
     assert!(show.contains("tasks_total: 2"));
     // L6b: the read-fallthrough discloses it is an archive view (R26).
     assert!(show.contains("archived: true"));
@@ -2635,7 +2638,7 @@ fn feature_archive_cascades_children_with_qa_and_round_trips() {
     let archived_accept =
         assert_failure(maestro(&archived_accept_args, root), &archived_accept_args);
     assert!(
-        archived_accept.contains("feature billing-csv-export is archived (shipped)"),
+        archived_accept.contains("feature billing-csv-export is archived (closed)"),
         "{archived_accept}"
     );
     assert!(
@@ -2706,7 +2709,7 @@ fn feature_archive_moves_terminal_child_cards_with_feature() {
     );
 
     // Three live children; cancel abandons them so the feature is terminal with
-    // terminal children (cheaper than the ship gate, exercises the same cascade).
+    // terminal children (cheaper than the close gate, exercises the same cascade).
     write_task(&cards_dir, "task-001", "billing-csv-export", "in_progress");
     write_task(&cards_dir, "task-002", "billing-csv-export", "in_progress");
     write_task(&cards_dir, "task-003", "billing-csv-export", "in_progress");
@@ -2816,7 +2819,7 @@ fn feature_archive_ignores_open_decisions_and_moves_them_with_the_container() {
     assert!(live_decisions.contains("Pick the writer"));
 }
 
-/// `feature archive --closed` archives every terminal feature -- shipped AND
+/// `feature archive --closed` archives every terminal feature -- closed AND
 /// cancelled (each cascading its children) -- and leaves live features in the
 /// live tree. Doctor surfaces the backlog before the sweep and goes green after.
 #[test]
@@ -2826,10 +2829,10 @@ fn feature_archive_closed_sweeps_terminal_features() {
     init_git_marker(root);
     stdout(maestro(&["init", "--yes"], root), &["init", "--yes"]);
 
-    // Two shipped features (each with a verified child), one cancelled, one
+    // Two closed features (each with a verified child), one cancelled, one
     // still in progress.
-    ship_feature(root, "Alpha export", "alpha-export", "task-001");
-    ship_feature(root, "Beta export", "beta-export", "task-002");
+    close_feature(root, "Alpha export", "alpha-export", "task-001");
+    close_feature(root, "Beta export", "beta-export", "task-002");
 
     stdout(
         maestro(&["feature", "new", "Delta export"], root),
@@ -2874,7 +2877,7 @@ fn feature_archive_closed_sweeps_terminal_features() {
         "warning: 3 closed feature(s) not archived; sweep with `maestro feature archive --closed`"
     ));
 
-    // --closed archives the shipped and cancelled features and their children;
+    // --closed archives the closed and cancelled features and their children;
     // in-progress gamma stays live.
     let bulk = ["feature", "archive", "--closed"];
     let out = stdout(maestro(&bulk, root), &bulk);

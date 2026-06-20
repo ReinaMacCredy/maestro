@@ -1,6 +1,6 @@
 # Adversarial fan-out
 
-WHEN: a claim is contested or high-stakes and must not ship wrong.
+WHEN: a claim is contested or high-stakes and must not land wrong.
 
 Spawn independent skeptics that try to *refute* each claim, rather than trust a
 single self-verification. The skill (maestro-card `verify.md`) covers the

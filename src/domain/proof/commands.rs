@@ -17,7 +17,7 @@ pub(super) struct VerificationCommandRun {
     pub claims_only: bool,
 }
 
-/// Outcome of running the repo-global `stack.verify` suite at the feature ship gate.
+/// Outcome of running the repo-global `stack.verify` suite at the feature close gate.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StackVerifyOutcome {
     /// The commands that ran (the configured `stack.verify`), in order, with exit codes.
@@ -38,9 +38,9 @@ impl StackVerifyOutcome {
 
 /// Run the repo-global `stack.verify` suite from the repo root, ignoring any
 /// per-task falsifier and the `claims_only` policy. This is the full-suite
-/// backstop run at the feature ship gate (decision-002), the counterpart to the
+/// backstop run at the feature close gate (decision-002), the counterpart to the
 /// per-task narrow falsifier at task-verify. An empty `stack.verify` returns an
-/// empty (passing) outcome — the ship gate's other conditions still apply.
+/// empty (passing) outcome — the close gate's other conditions still apply.
 pub(crate) fn run_stack_verify(paths: &MaestroPaths) -> Result<StackVerifyOutcome> {
     let config = harness_verify_config(paths)?;
     let stack_kind = format!("{:?}", config.stack.kind).to_ascii_lowercase();
@@ -67,7 +67,7 @@ pub(crate) fn run_stack_verify(paths: &MaestroPaths) -> Result<StackVerifyOutcom
 ///
 /// A per-task narrow falsifier (`verify_command`), when set, is the ONLY command
 /// that runs. With no falsifier the slice runs NO commands: the repo-global
-/// `stack.verify` full suite is the feature-ship backstop (decision-002), not a
+/// `stack.verify` full suite is the feature-close backstop (decision-002), not a
 /// per-task fallback — so concurrent slice verifications never each re-run the
 /// whole suite. `claims_only` is carried through so the caller can accept a
 /// standalone slice on claims/proof alone.

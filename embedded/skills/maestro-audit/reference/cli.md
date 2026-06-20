@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.0.0 -->
-<!-- maestro:cli-reference-sha256: db5fa9684800c26fa6c685f10c8c472288b17b819051f1e7ba6d29bd8326a1a9 -->
+<!-- maestro:cli-reference-sha256: 286f1b1f977050dfd0a167b5812e244d7fd0f6b0c9b01b63fcc2a6eecc495ac1 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -81,9 +81,9 @@ Every verb and flag is listed; a spelling not found here does not exist.
 - `maestro feature prepare <ID> [--from <PLAN_FILE>] [--draft]` -- Prepare an accepted feature into a ready implementation queue
 - `maestro feature amend <ID> [--add-acceptance <ADD_ACCEPTANCE>]... [--add-area <ADD_AREA>]... [--add-non-goal <ADD_NON_GOAL>]... [--add-question <ADD_QUESTION>]... --reason <REASON>` -- Grow a frozen contract additively with an audit reason (ready/in_progress)
 - `maestro feature start <ID>` -- Start work on a ready feature (-> in_progress)
-- `maestro feature verify <ID> [--prove <AC_ID>]... [--evidence <EVIDENCE>]... [--waive <AC_ID>]... [--reason <REASON>]... [--no-ship] [--outcome <OUTCOME>]` -- Sweep or record proof for a feature's acceptance contract
+- `maestro feature verify <ID> [--prove <AC_ID>]... [--evidence <EVIDENCE>]... [--waive <AC_ID>]... [--reason <REASON>]... [--no-close] [--outcome <OUTCOME>]` -- Sweep or record proof for a feature's acceptance contract
 - `maestro feature note <ID> <TEXT>` -- Append a dated note to a feature's notes.md
-- `maestro feature ship <ID> [--outcome <OUTCOME>] [--dry-run]` -- Ship an in-progress feature (-> shipped; gated)
+- `maestro feature close <ID> [--outcome <OUTCOME>] [--dry-run]` -- Close an in-progress feature (-> closed; gated)
 - `maestro feature cancel <ID> --reason <REASON> [--dry-run]` -- Cancel a non-terminal feature, abandoning its live child tasks (-> cancelled)
 - `maestro feature show <ID>` -- Show a feature's status, full contract, and task counts
 - `maestro feature spec <ID> [--section <SECTION>] [--append <TEXT>] [--replace <TEXT>]` -- Render a feature's spec-of-record, or fill one section (--section with --append/--replace)

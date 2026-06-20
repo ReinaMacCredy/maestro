@@ -1385,9 +1385,9 @@ fn close_and_status_writes_are_guarded_per_type() {
     );
 
     run(repo, &["create", "-t", "feature", "CSV export"]);
-    let refused = run_err(repo, &["update", "csv-export", "--status", "shipped"]);
+    let refused = run_err(repo, &["update", "csv-export", "--status", "closed"]);
     assert!(
-        refused.contains("maestro feature ship"),
+        refused.contains("maestro feature close"),
         "a generic status write on a feature points at the gated verb:\n{refused}"
     );
 

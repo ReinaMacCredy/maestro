@@ -9,7 +9,7 @@ the QA baseline and slice evidence in `qa.md` prove the feature gates.
 - Freeze a proposed contract: `accept`.
 - Turn an accepted contract into work cards: `prepare`.
 - Grow a frozen contract: `amend`.
-- Finish or retire the feature: `ship`, `cancel`, `archive`, `unarchive`.
+- Finish or retire the feature: `close`, `cancel`, `archive`, `unarchive`.
 
 ## Do
 
@@ -21,7 +21,7 @@ maestro feature set               # author acceptance and affected areas
 maestro feature accept            # -> ready, requires qa-baseline
 maestro feature prepare --draft   # reviewable child-task plan
 maestro feature prepare --from    # create/explore/accept tasks from a plan file
-maestro feature ship              # -> shipped, requires qa-slice; --outcome required
+maestro feature close              # -> closed, requires qa-slice; --outcome required
 maestro card archive <id>         # terminal features only; archives children too
 ```
 
@@ -79,17 +79,17 @@ On pass, the contract and baseline freeze. Later growth uses:
 maestro feature amend <id> --add-acceptance "<check>" --reason "<why>"
 ```
 
-Behavioral amends, meaning added acceptance or area, make the ship gate require
+Behavioral amends, meaning added acceptance or area, make the close gate require
 fresh baseline/slice coverage.
 
-Ship passes only when:
+Close passes only when:
 
 - no live child work cards remain
 - the baseline is fresh for behavioral amends
 - every behavioral `[bl-NNN]` in the baseline has a counting slice in the
   fenced `slices:` block of `qa.md`
 
-Use `accept --dry-run` or `ship --dry-run` to preview a gate without changing
+Use `accept --dry-run` or `close --dry-run` to preview a gate without changing
 state.
 
 ## Fan-out
@@ -104,7 +104,7 @@ show feature-fan-out`.
 2. Spawn one fresh sub-agent per card. Each owns:
    `maestro card claim <id> -> work -> task complete --summary --claim --proof`.
 3. The conductor collects completions, runs `maestro task verify <id>`, commits
-   verified slices, then runs the [qa-slice.md](qa-slice.md) pass before ship.
+   verified slices, then runs the [qa-slice.md](qa-slice.md) pass before close.
 
 ## Stop
 
@@ -113,10 +113,10 @@ show feature-fan-out`.
 - Do not use `set` after accept; use `amend`.
 - Do not cancel a feature you only mean to pause. `cancel` is terminal and
   abandons live child work.
-- Do not ship around QA blockers. Fix the work, baseline, or slice evidence.
+- Do not close around QA blockers. Fix the work, baseline, or slice evidence.
 
 ## Hand-off
 
 Next: accepted feature -> [work.md](work.md); all children verified ->
-[qa-slice.md](qa-slice.md), then `feature ship --outcome "<one line>"`;
-shipped -> `maestro card archive <id>` if you mean to retire it.
+[qa-slice.md](qa-slice.md), then `feature close --outcome "<one line>"`;
+closed -> `maestro card archive <id>` if you mean to retire it.
