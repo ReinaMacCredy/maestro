@@ -10,7 +10,7 @@
 //!   when it references at least one `[bl-NNN]` scenario *and* carries non-empty
 //!   evidence.
 //!
-//! The gates ([`baseline_present`] at `accept`, [`ship_qa_gaps`] at `ship`) are
+//! The gates ([`baseline_present`] at `accept`, [`close_qa_gaps`] at `close`) are
 //! pure functions over these artifacts so they unit-test in isolation; the
 //! registry loads the inputs and renders the gaps.
 
@@ -26,7 +26,7 @@ use crate::domain::feature::schema::{
 use crate::foundation::core::fs::read_to_string_if_exists;
 
 /// The parsed `qa.md` baseline: the amend-log position it was captured against and
-/// the set of `[bl-NNN]` scenario ids it declares (the ship-gate coverage units).
+/// the set of `[bl-NNN]` scenario ids it declares (the close-gate coverage units).
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(crate) struct Baseline {
     /// Amend-log length at capture; freshness re-checks every entry at or after it.
@@ -35,7 +35,7 @@ pub(crate) struct Baseline {
     pub scenario_ids: BTreeSet<String>,
 }
 
-/// Append-only proven QA slices the ship gate reads from `qa.md`. Only the
+/// Append-only proven QA slices the close gate reads from `qa.md`. Only the
 /// fields the gate consumes are modeled; any extra keys the skill documents
 /// (`at`, `probes`, `result`) are ignored on parse.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq)]
@@ -75,11 +75,11 @@ pub(crate) fn baseline_present(feature_dir: &Path) -> Result<bool> {
     Ok(read_baseline(feature_dir)?.is_some())
 }
 
-/// Whether a feature's `qa: none` declaration still waives the ship QA gate.
+/// Whether a feature's `qa: none` declaration still waives the close QA gate.
 ///
 /// True only when the declaration is `surface: none` *and* no **behavioral**
 /// amend (added acceptance or area) landed at or after the position it was
-/// captured against. This mirrors [`ship_qa_gaps`]'s E.1 freshness exactly: a
+/// captured against. This mirrors [`close_qa_gaps`]'s E.1 freshness exactly: a
 /// behavioral amend re-arms the full gate (a new surface needs a baseline),
 /// while a non-behavioral amend (non-goal / open-question) leaves the waiver
 /// intact. An out-of-range position is treated as 0 (fail-closed: re-check all).
@@ -96,7 +96,7 @@ pub(crate) fn qa_declared_none_fresh(qa: Option<&QaDeclaration>, amends: &[Amend
     !amends[position..].iter().any(AmendEntry::is_behavioral)
 }
 
-/// Why a baseline is unusable, so the accept/ship gates word the remedy precisely:
+/// Why a baseline is unusable, so the accept/close gates word the remedy precisely:
 /// a present-but-blank file reads `"empty"`, anything else (absent, or an IO error)
 /// `"missing"` (fail-closed, matching `read_baseline`). Called only on the gate-fail
 /// path, where a usable baseline never reaches it.
@@ -146,7 +146,7 @@ pub(crate) fn acceptance_ids_covered_by_counting_slices(
         .collect())
 }
 
-/// The ship-gate QA gaps for a feature: presence, freshness (E.1), and per-scenario
+/// The close-gate QA gaps for a feature: presence, freshness (E.1), and per-scenario
 /// coverage (E.2, which subsumes the ≥1-proven-slice floor). Empty vec = QA clear.
 ///
 /// - **Presence** — no baseline blocks (and short-circuits; freshness/coverage are
@@ -156,7 +156,7 @@ pub(crate) fn acceptance_ids_covered_by_counting_slices(
 ///   position means the baseline predates real behavior and must be refreshed.
 /// - **Coverage (E.2)** — every `[bl-NNN]` in the baseline needs a counting slice;
 ///   a baseline with zero `[bl-NNN]` declares no behavioral surface (QA C skip).
-pub(crate) fn ship_qa_gaps(
+pub(crate) fn close_qa_gaps(
     id: &str,
     baseline: Option<&Baseline>,
     absence: &str,
@@ -167,7 +167,7 @@ pub(crate) fn ship_qa_gaps(
 
     let Some(baseline) = baseline else {
         gaps.push(format!(
-              "qa-baseline {absence} (.maestro/cards/{id}/qa.md)\n    skill: maestro-card (qa-baseline)\n    target: .maestro/cards/{id}/qa.md\n    retry: maestro feature ship {id} --outcome \"<outcome>\""
+              "qa-baseline {absence} (.maestro/cards/{id}/qa.md)\n    skill: maestro-card (qa-baseline)\n    target: .maestro/cards/{id}/qa.md\n    retry: maestro feature close {id} --outcome \"<outcome>\""
           ));
         return gaps;
     };
@@ -186,7 +186,7 @@ pub(crate) fn ship_qa_gaps(
         .count();
     if behavioral_after > 0 {
         gaps.push(format!(
-                "qa-baseline stale — {behavioral_after} behavioral amend(s) since capture; set amend_log_position: {len}\n    skill: maestro-card (qa-baseline)\n    target: .maestro/cards/{id}/qa.md\n    retry: maestro feature ship {id} --outcome \"<outcome>\""
+                "qa-baseline stale — {behavioral_after} behavioral amend(s) since capture; set amend_log_position: {len}\n    skill: maestro-card (qa-baseline)\n    target: .maestro/cards/{id}/qa.md\n    retry: maestro feature close {id} --outcome \"<outcome>\""
           ));
     }
 
@@ -202,7 +202,7 @@ pub(crate) fn ship_qa_gaps(
             .collect();
         if !uncovered.is_empty() {
             gaps.push(format!(
-                    "qa-slice coverage incomplete — {} baseline scenario(s) without a counting slice: {}\n    skill: maestro-card (qa-slice)\n    target: .maestro/cards/{id}/qa.md\n    retry: maestro feature ship {id} --outcome \"<outcome>\"",
+                    "qa-slice coverage incomplete — {} baseline scenario(s) without a counting slice: {}\n    skill: maestro-card (qa-slice)\n    target: .maestro/cards/{id}/qa.md\n    retry: maestro feature close {id} --outcome \"<outcome>\"",
                   uncovered.len(),
                   uncovered.join(", ")
               ));
@@ -360,7 +360,7 @@ mod tests {
 
     #[test]
     fn missing_baseline_blocks_and_short_circuits() {
-        let gaps = ship_qa_gaps(
+        let gaps = close_qa_gaps(
             "demo",
             None,
             "missing",
@@ -373,19 +373,19 @@ mod tests {
 
     #[test]
     fn empty_baseline_words_the_gap_as_empty_not_missing() {
-        let gaps = ship_qa_gaps("demo", None, "empty", &QaSliceLog::default(), &log(vec![]));
+        let gaps = close_qa_gaps("demo", None, "empty", &QaSliceLog::default(), &log(vec![]));
         assert_eq!(gaps.len(), 1);
         assert!(gaps[0].contains("qa-baseline empty"));
         assert!(!gaps[0].contains("qa-baseline missing"));
     }
 
     #[test]
-    fn covered_behavioral_scenarios_ship() {
+    fn covered_behavioral_scenarios_close() {
         let b = baseline(0, &["bl-001", "bl-002"]);
         let slices = QaSliceLog {
             slices: vec![slice(&["bl-001", "bl-002"], &["test passed"])],
         };
-        assert!(ship_qa_gaps("demo", Some(&b), "missing", &slices, &log(vec![])).is_empty());
+        assert!(close_qa_gaps("demo", Some(&b), "missing", &slices, &log(vec![])).is_empty());
     }
 
     #[test]
@@ -395,7 +395,7 @@ mod tests {
         let slices = QaSliceLog {
             slices: vec![slice(&["bl-001"], &["proof"])],
         };
-        let gaps = ship_qa_gaps("demo", Some(&b), "missing", &slices, &log(vec![]));
+        let gaps = close_qa_gaps("demo", Some(&b), "missing", &slices, &log(vec![]));
         assert_eq!(gaps.len(), 1);
         assert!(gaps[0].contains("bl-002"));
         assert!(gaps[0].contains("bl-003"));
@@ -408,16 +408,16 @@ mod tests {
         let slices = QaSliceLog {
             slices: vec![slice(&["bl-001"], &[])],
         };
-        let gaps = ship_qa_gaps("demo", Some(&b), "missing", &slices, &log(vec![]));
+        let gaps = close_qa_gaps("demo", Some(&b), "missing", &slices, &log(vec![]));
         assert!(gaps.iter().any(|g| g.contains("bl-001")));
     }
 
     #[test]
-    fn no_behavioral_surface_ships_with_no_slices() {
+    fn no_behavioral_surface_closes_with_no_slices() {
         // QA C: zero [bl-NNN] declares no behavioral surface.
         let b = baseline(0, &[]);
         assert!(
-            ship_qa_gaps(
+            close_qa_gaps(
                 "demo",
                 Some(&b),
                 "missing",
@@ -434,7 +434,7 @@ mod tests {
         // still blocks (the baseline now needs a scenario).
         let b = baseline(0, &[]);
         let amend = log(vec![entry(&[], &["src/new.rs"])]);
-        let gaps = ship_qa_gaps("demo", Some(&b), "missing", &QaSliceLog::default(), &amend);
+        let gaps = close_qa_gaps("demo", Some(&b), "missing", &QaSliceLog::default(), &amend);
         assert_eq!(gaps.len(), 1);
         assert!(gaps[0].contains("stale"));
     }
@@ -453,7 +453,7 @@ mod tests {
                 ..Default::default()
             },
         }]);
-        assert!(ship_qa_gaps("demo", Some(&b), "missing", &slices, &amend).is_empty());
+        assert!(close_qa_gaps("demo", Some(&b), "missing", &slices, &amend).is_empty());
     }
 
     #[test]
@@ -464,7 +464,7 @@ mod tests {
             slices: vec![slice(&["bl-001"], &["proof"])],
         };
         let amend = log(vec![entry(&["new criterion"], &[])]);
-        assert!(ship_qa_gaps("demo", Some(&b), "missing", &slices, &amend).is_empty());
+        assert!(close_qa_gaps("demo", Some(&b), "missing", &slices, &amend).is_empty());
     }
 
     #[test]
@@ -474,7 +474,7 @@ mod tests {
             slices: vec![slice(&["bl-001"], &["proof"])],
         };
         let amend = log(vec![entry(&["new criterion"], &[])]);
-        let gaps = ship_qa_gaps("demo", Some(&b), "missing", &slices, &amend);
+        let gaps = close_qa_gaps("demo", Some(&b), "missing", &slices, &amend);
         assert!(gaps.iter().any(|g| g.contains("stale")));
     }
 
@@ -498,14 +498,14 @@ mod tests {
     }
 
     #[test]
-    fn qa_none_waives_ship_with_no_amends() {
+    fn qa_none_waives_close_with_no_amends() {
         assert!(qa_declared_none_fresh(Some(&qa_none(0)), &[]));
     }
 
     #[test]
     fn qa_none_survives_non_behavioral_amend() {
         // A non-goal/open-question amend grows no behavioral surface, so the
-        // qa:none waiver stays intact — mirroring ship_qa_gaps E.1, which only
+        // qa:none waiver stays intact — mirroring close_qa_gaps E.1, which only
         // re-arms on a behavioral amend.
         assert!(qa_declared_none_fresh(
             Some(&qa_none(0)),
@@ -516,7 +516,7 @@ mod tests {
     #[test]
     fn qa_none_rearms_on_behavioral_amend() {
         // An acceptance amend adds a real surface, so the waiver lapses and the
-        // full ship gate re-arms (safety property preserved).
+        // full close gate re-arms (safety property preserved).
         assert!(!qa_declared_none_fresh(
             Some(&qa_none(0)),
             &[entry(&["new behavior"], &[])]

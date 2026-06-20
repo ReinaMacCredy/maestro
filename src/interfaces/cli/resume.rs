@@ -66,7 +66,7 @@ fn build_resume_report(
         .as_ref()
         .and_then(|task| proof_concern_line(paths, task));
     let git = git_readout(paths);
-    let ship_or_verify_pending = verb_is_ship_or_verify_shaped(
+    let close_or_verify_pending = verb_is_close_or_verify_shaped(
         selected_task.as_ref().map(|task| &task.state),
         selected_task
             .as_ref()
@@ -115,7 +115,7 @@ fn build_resume_report(
         objective: objective(selected_task.as_ref(), selected_feature.as_ref()),
         state: state_label(selected_task.as_ref(), selected_feature.as_ref()),
         git,
-        ship_or_verify_pending,
+        close_or_verify_pending,
         blockers: blocker_lines(selected_task.as_ref()),
         next,
         proof_concern,
@@ -267,7 +267,7 @@ fn next_action_for(
                 if feature.counts.total > 0 && feature.counts.total == feature.counts.verified =>
             {
                 format!(
-                    "ship with maestro feature ship {} --outcome \"<outcome>\"",
+                    "close with maestro feature close {} --outcome \"<outcome>\"",
                     feature.id
                 )
             }
@@ -275,7 +275,7 @@ fn next_action_for(
                 "inspect feature tasks with maestro feature show {}",
                 feature.id
             ),
-            feature::FeatureStatus::Shipped | feature::FeatureStatus::Cancelled => {
+            feature::FeatureStatus::Closed | feature::FeatureStatus::Cancelled => {
                 "inspect repo status with maestro status".to_string()
             }
         };
@@ -428,7 +428,7 @@ fn render_resume_report(report: &ResumeReport) -> String {
     push_line(&mut out, format!("state: {}", report.state));
     if let Some(git) = &report.git {
         push_line(&mut out, render_git_line(git));
-        if report.ship_or_verify_pending && git.code_other_dirty > 0 {
+        if report.close_or_verify_pending && git.code_other_dirty > 0 {
             push_line(&mut out, clean_worktree_note(git.code_other_dirty));
         }
     }
@@ -528,11 +528,11 @@ fn display_repo_relative(paths: &MaestroPaths, path: &Path) -> String {
         .to_string()
 }
 
-/// Whether the next verb resume would recommend is ship/verify-shaped (the
-/// states where uncommitted code matters for the proof or ship). Mirrors the
-/// ship/verify arms of `next_action_for`; kept over primitive inputs so it is
+/// Whether the next verb resume would recommend is close/verify-shaped (the
+/// states where uncommitted code matters for the proof or close). Mirrors the
+/// close/verify arms of `next_action_for`; kept over primitive inputs so it is
 /// value-level unit-testable without constructing a full `TaskRecord`.
-fn verb_is_ship_or_verify_shaped(
+fn verb_is_close_or_verify_shaped(
     task_state: Option<&task::TaskState>,
     task_has_blockers: bool,
     feature: Option<(&feature::FeatureStatus, usize, usize)>,
@@ -590,10 +590,10 @@ struct ResumeReport {
     /// Working-tree git readout; `None` when the repo is not a git repository.
     #[serde(skip_serializing_if = "Option::is_none")]
     git: Option<GitReadout>,
-    /// Whether the next verb is ship/verify-shaped; drives the clean-worktree
+    /// Whether the next verb is close/verify-shaped; drives the clean-worktree
     /// note. Render-only, not part of the serialized contract.
     #[serde(skip)]
-    ship_or_verify_pending: bool,
+    close_or_verify_pending: bool,
     blockers: Vec<String>,
     next: String,
     /// Concern-only proof repair line for the focal task; render-only, not part
@@ -631,15 +631,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn ship_or_verify_shaped_covers_only_proof_and_ship_states() {
+    fn close_or_verify_shaped_covers_only_proof_and_close_states() {
         // Task-selected arms: only InProgress (next: task complete) and
-        // NeedsVerification (next: proof recovery) are ship/verify-shaped.
-        assert!(verb_is_ship_or_verify_shaped(
+        // NeedsVerification (next: proof recovery) are close/verify-shaped.
+        assert!(verb_is_close_or_verify_shaped(
             Some(&task::TaskState::InProgress),
             false,
             None
         ));
-        assert!(verb_is_ship_or_verify_shaped(
+        assert!(verb_is_close_or_verify_shaped(
             Some(&task::TaskState::NeedsVerification),
             false,
             None
@@ -651,39 +651,39 @@ mod tests {
             task::TaskState::Verified,
         ] {
             assert!(
-                !verb_is_ship_or_verify_shaped(Some(&state), false, None),
-                "state {state:?} should not be ship/verify-shaped"
+                !verb_is_close_or_verify_shaped(Some(&state), false, None),
+                "state {state:?} should not be close/verify-shaped"
             );
         }
         // Unresolved blockers redirect the next verb to "inspect blockers".
-        assert!(!verb_is_ship_or_verify_shaped(
+        assert!(!verb_is_close_or_verify_shaped(
             Some(&task::TaskState::InProgress),
             true,
             None
         ));
-        // Feature-only arm (reachable via `maestro resume --feature`): ship is
+        // Feature-only arm (reachable via `maestro resume --feature`): close is
         // shaped only when every counted task is verified.
-        assert!(verb_is_ship_or_verify_shaped(
+        assert!(verb_is_close_or_verify_shaped(
             None,
             false,
             Some((&feature::FeatureStatus::InProgress, 3, 3))
         ));
-        assert!(!verb_is_ship_or_verify_shaped(
+        assert!(!verb_is_close_or_verify_shaped(
             None,
             false,
             Some((&feature::FeatureStatus::InProgress, 3, 2))
         ));
-        assert!(!verb_is_ship_or_verify_shaped(
+        assert!(!verb_is_close_or_verify_shaped(
             None,
             false,
             Some((&feature::FeatureStatus::InProgress, 0, 0))
         ));
-        assert!(!verb_is_ship_or_verify_shaped(
+        assert!(!verb_is_close_or_verify_shaped(
             None,
             false,
             Some((&feature::FeatureStatus::Ready, 0, 0))
         ));
         // Nothing selected: next verb is "inspect repo status".
-        assert!(!verb_is_ship_or_verify_shaped(None, false, None));
+        assert!(!verb_is_close_or_verify_shaped(None, false, None));
     }
 }

@@ -1571,7 +1571,7 @@ fn mcp_serve_lists_tools_and_calls_status_over_stdio() {
     assert!(
         tools
             .iter()
-            .any(|tool| tool["name"] == "maestro_feature_ship")
+            .any(|tool| tool["name"] == "maestro_feature_close")
     );
     assert!(
         tools

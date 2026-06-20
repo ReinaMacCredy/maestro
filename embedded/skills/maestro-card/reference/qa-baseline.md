@@ -1,7 +1,7 @@
 # QA Baseline
 
 Create `.maestro/cards/<id>/qa.md` before feature edits start. This is the
-behavior oracle for `feature ship`, not a list of tests.
+behavior oracle for `feature close`, not a list of tests.
 
 ## Use
 
@@ -19,7 +19,7 @@ declaration instead of a `qa.md`:
 maestro feature accept <id> --qa none --reason "<why there is nothing to QA>"
 ```
 
-This waives the baseline at accept and lets the feature ship with no slices; the
+This waives the baseline at accept and lets the feature close with no slices; the
 reason persists on the feature and prints on `feature show` / `feature spec`. The
 waiver stays fresh until a *behavioral* amend lands: adding acceptance or an
 affected area re-arms the full gate, so capture a real `qa.md` then (re-declare
@@ -42,7 +42,7 @@ behavior has a surface — write a real baseline below, however small.
    example setup -> create work -> record proof -> verify -> inspect output.
    Keep isolated probes for safety-critical local invariants such as rollback,
    auth, parsers, schemas, install ownership, migration, and destructive guards.
-4. Give each behavioral scenario a stable `[bl-NNN]` id. These ids are the ship
+4. Give each behavioral scenario a stable `[bl-NNN]` id. These ids are the close
    coverage units. No behavioral surface means record that explicitly and use
    no ids. A scenario line may declare `(covers: ac-N)` to tie it to an
    acceptance criterion.

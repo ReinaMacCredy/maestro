@@ -1,4 +1,4 @@
-//! Cross-session serialization of the full-suite ship gate (decision
+//! Cross-session serialization of the full-suite close gate (decision
 //! `dec-heavy-run-serialization-lock-only-6a17`).
 //!
 //! Two maestro sessions that each launch the repo-global `stack.verify` suite
@@ -11,7 +11,7 @@
 //! session id into the file so a waiting run, `maestro active`, and the
 //! pre-command banner can name who is busy.
 //!
-//! Only the ship-gate full suite is serialized. The per-task narrow falsifier is
+//! Only the close-gate full suite is serialized. The per-task narrow falsifier is
 //! not -- concurrent slice verifications must stay independent.
 
 use std::fs::{File, OpenOptions};
@@ -56,7 +56,7 @@ mod sys {
 /// Held for the lifetime of one serialized gate run. Dropping it closes the
 /// descriptor, which is what releases the advisory lock. `None` means the run is
 /// proceeding unserialized (non-Unix, or the lockfile could not be opened) -- a
-/// best-effort degrade so a transient IO problem never blocks a legitimate ship.
+/// best-effort degrade so a transient IO problem never blocks a legitimate close.
 pub struct GateGuard {
     _file: Option<File>,
 }

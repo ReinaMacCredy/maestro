@@ -15,7 +15,7 @@
 //!
 //! The state machine is guarded: every state-changing verb routes through
 //! [`legal_transition`] (the §3.2 transition table) and the gated verbs
-//! (`accept`, `ship`) layer their preconditions on top, emitting actionable
+//! (`accept`, `close`) layer their preconditions on top, emitting actionable
 //! errors that name the gap and the fix command.
 
 use std::collections::BTreeMap;
@@ -82,7 +82,7 @@ pub struct FeatureView {
     pub non_goals: Vec<String>,
     /// Open questions (non-blocking).
     pub open_questions: Vec<String>,
-    /// One-line shipped outcome, set at `ship --outcome`.
+    /// One-line closed outcome, set at `close --outcome`.
     pub outcome: Option<String>,
     /// Operator reason recorded at `cancel --reason`.
     pub cancel_reason: Option<String>,
@@ -243,7 +243,7 @@ pub struct TransitionReport {
     pub note: String,
 }
 
-struct ShipGateReport {
+struct CloseGateReport {
     gaps: Vec<String>,
     qa_declared_none: bool,
     baseline: Option<qa::Baseline>,
@@ -343,7 +343,7 @@ pub fn set_with_report(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> 
             "cannot edit {id} — contract frozen at accept (status: {}); grow it with `maestro feature amend {id} --add-acceptance \"…\" --reason \"…\"`",
             record.status.as_str()
         ),
-        FeatureStatus::Shipped | FeatureStatus::Cancelled => bail!(
+        FeatureStatus::Closed | FeatureStatus::Cancelled => bail!(
             "cannot edit {id} — terminal (status: {})",
             record.status.as_str()
         ),
@@ -598,7 +598,7 @@ pub fn amend(
         FeatureStatus::Proposed => bail!(
             "cannot amend {id} — not accepted; author the contract with `maestro feature set {id} --…` then `maestro feature accept {id}`"
         ),
-        FeatureStatus::Shipped | FeatureStatus::Cancelled => {
+        FeatureStatus::Closed | FeatureStatus::Cancelled => {
             bail!(
                 "cannot amend {id} — terminal (status: {})",
                 record.status.as_str()
@@ -712,7 +712,7 @@ pub fn start(paths: &MaestroPaths, id: &str) -> Result<TransitionReport> {
     })
 }
 
-/// Ship a feature: `InProgress → Shipped`, gated (D5).
+/// Close a feature: `InProgress → Closed`, gated (D5).
 ///
 /// Phase A gate: condition 1 only — no LIVE child task
 /// (`draft/exploring/ready/in_progress/needs_verification` block; `verified` and
@@ -722,22 +722,22 @@ pub fn start(paths: &MaestroPaths, id: &str) -> Result<TransitionReport> {
 /// # Errors
 ///
 /// Errors when the feature is not found, the source state is illegal, or
-/// (non-dry-run) a live child task blocks ship.
-pub fn ship(
+/// (non-dry-run) a live child task blocks close.
+pub fn close(
     paths: &MaestroPaths,
     id: &str,
     outcome: Option<String>,
     dry_run: bool,
 ) -> Result<TransitionReport> {
     let (mut record, write) = load_record_for_update(paths, id)?;
-    let target = match legal_transition(id, &record.status, FeatureVerb::Ship) {
+    let target = match legal_transition(id, &record.status, FeatureVerb::Close) {
         Transition::NoOp => {
-            // The outcome is set once, at ship. On an already-shipped no-op a new
+            // The outcome is set once, at close. On an already-closed no-op a new
             // `--outcome` cannot be recorded; say so rather than dropping it silently.
             let note = if outcome.is_some() {
-                format!("{id} is already shipped; --outcome not recorded (it is set once, at ship)")
+                format!("{id} is already closed; --outcome not recorded (it is set once, at close)")
             } else {
-                format!("{id} is already shipped")
+                format!("{id} is already closed")
             };
             return Ok(no_op_report(id, record.status, note));
         }
@@ -745,7 +745,7 @@ pub fn ship(
         Transition::To(target) => target,
     };
 
-    let gate = ship_gaps_for_record(paths, id, &record)?;
+    let gate = close_gaps_for_record(paths, id, &record)?;
     let gaps = gate.gaps;
 
     if dry_run {
@@ -763,15 +763,15 @@ pub fn ship(
             } else {
                 "qa-baseline proven"
             };
-            format!("would ship {id} (-> shipped); no live child tasks, {qa}")
+            format!("would close {id} (-> closed); no live child tasks, {qa}")
         } else {
-            format!("would block ship {id}:\n  {}", gaps.join("\n  "))
+            format!("would block close {id}:\n  {}", gaps.join("\n  "))
         };
         return Ok(no_op_report(id, record.status, note));
     }
 
     if !gaps.is_empty() {
-        bail!("cannot ship {id}:\n  {}", gaps.join("\n  "));
+        bail!("cannot close {id}:\n  {}", gaps.join("\n  "));
     }
 
     record.status = target.clone();
@@ -784,13 +784,13 @@ pub fn ship(
         id: id.to_string(),
         status: target,
         changed: true,
-        note: format!("shipped {id} (-> shipped)"),
+        note: format!("closed {id} (-> closed)"),
     })
 }
 
-pub fn ship_gaps(paths: &MaestroPaths, id: &str) -> Result<Vec<String>> {
+pub fn close_gaps(paths: &MaestroPaths, id: &str) -> Result<Vec<String>> {
     let record = load_record(paths, id)?;
-    Ok(ship_gaps_for_record(paths, id, &record)?.gaps)
+    Ok(close_gaps_for_record(paths, id, &record)?.gaps)
 }
 
 /// Sorted ids of the feature's verified child tasks whose recorded proof commit
@@ -798,8 +798,8 @@ pub fn ship_gaps(paths: &MaestroPaths, id: &str) -> Result<Vec<String>> {
 /// so a plain string compare matches the proof-staleness check. Empty outside a
 /// real git repo (no HEAD to compare against) or when every proof is current.
 ///
-/// The `feature ship --dry-run` CLI renders this as a non-blocking `note:` line
-/// inside its ship preview; it never feeds `ship_gaps_for_record`, so it cannot
+/// The `feature close --dry-run` CLI renders this as a non-blocking `note:` line
+/// inside its close preview; it never feeds `close_gaps_for_record`, so it cannot
 /// turn a passing preview into a blocked one.
 pub fn verified_child_commit_drift(paths: &MaestroPaths, feature_id: &str) -> Result<Vec<String>> {
     let Some(head) = git::head(paths.repo_root()).unwrap_or(None) else {
@@ -823,18 +823,18 @@ pub fn verified_child_commit_drift(paths: &MaestroPaths, feature_id: &str) -> Re
     Ok(ids)
 }
 
-fn ship_gaps_for_record(
+fn close_gaps_for_record(
     paths: &MaestroPaths,
     id: &str,
     record: &FeatureRecord,
-) -> Result<ShipGateReport> {
+) -> Result<CloseGateReport> {
     let mut gaps = Vec::new();
     let task_entries = task::load_task_entries(&paths.tasks_dir())?;
-    // D5 cond 1 -- no live child task may outlive its shipped feature.
+    // D5 cond 1 -- no live child task may outlive its closed feature.
     let live = live_child_task_ids_in_entries(&task_entries, &record.id);
     if !live.is_empty() {
         gaps.push(format!(
-            "{} live child task(s): {}\n    fix: verify or abandon them, then re-ship",
+            "{} live child task(s): {}\n    fix: verify or abandon them, then re-close",
             live.len(),
             live.join(", ")
         ));
@@ -856,7 +856,7 @@ fn ship_gaps_for_record(
         } else {
             "missing"
         };
-        gaps.extend(qa::ship_qa_gaps(
+        gaps.extend(qa::close_qa_gaps(
             id,
             baseline.as_ref(),
             absence,
@@ -866,10 +866,10 @@ fn ship_gaps_for_record(
     }
     // D5 cond 4 -- the full feature acceptance contract must have a fresh
     // sweep run that resolved every ac-N item.
-    if let Some(gap) = verification::acceptance_ship_gap(record, &task_entries)? {
+    if let Some(gap) = verification::acceptance_close_gap(record, &task_entries)? {
         gaps.push(gap);
     }
-    Ok(ShipGateReport {
+    Ok(CloseGateReport {
         gaps,
         qa_declared_none,
         baseline,
@@ -885,7 +885,7 @@ fn ship_gaps_for_record(
 ///
 /// # Errors
 ///
-/// Errors when the feature is not found, it is already terminal (Shipped), or a
+/// Errors when the feature is not found, it is already terminal (Closed), or a
 /// child task cannot be abandoned.
 pub fn cancel(paths: &MaestroPaths, id: &str, reason: &str, dry_run: bool) -> Result<CancelReport> {
     let (mut record, write) = load_record_for_update(paths, id)?;
@@ -905,7 +905,7 @@ pub fn cancel(paths: &MaestroPaths, id: &str, reason: &str, dry_run: bool) -> Re
     let live = live_child_task_ids(&paths.tasks_dir(), &record.id)?;
 
     // `--dry-run` previews exactly which child tasks the cascade would abandon,
-    // mirroring accept/ship/archive, before any irreversible mutation.
+    // mirroring accept/close/archive, before any irreversible mutation.
     if dry_run {
         let note = if live.is_empty() {
             format!("would cancel {id} (-> cancelled); no child tasks affected")
@@ -1214,7 +1214,7 @@ pub fn status_label(status: &FeatureStatus) -> &'static str {
 enum FeatureVerb {
     Accept,
     Start,
-    Ship,
+    Close,
     Cancel,
 }
 
@@ -1229,14 +1229,14 @@ enum Transition {
 }
 
 fn legal_transition(id: &str, from: &FeatureStatus, verb: FeatureVerb) -> Transition {
-    use FeatureStatus::{Cancelled, InProgress, Proposed, Ready, Shipped};
+    use FeatureStatus::{Cancelled, Closed, InProgress, Proposed, Ready};
     match (verb, from) {
         (FeatureVerb::Accept, Proposed) => Transition::To(Ready),
         (FeatureVerb::Accept, Ready) => Transition::NoOp,
         (FeatureVerb::Accept, InProgress) => Transition::Illegal(format!(
             "cannot accept {id} — already past accept (status: in_progress)"
         )),
-        (FeatureVerb::Accept, Shipped | Cancelled) => Transition::Illegal(format!(
+        (FeatureVerb::Accept, Closed | Cancelled) => Transition::Illegal(format!(
             "cannot accept {id} — terminal (status: {})",
             from.as_str()
         )),
@@ -1246,27 +1246,27 @@ fn legal_transition(id: &str, from: &FeatureStatus, verb: FeatureVerb) -> Transi
         (FeatureVerb::Start, Proposed) => Transition::Illegal(format!(
             "cannot start {id} — not accepted; run `maestro feature accept {id}` first"
         )),
-        (FeatureVerb::Start, Shipped | Cancelled) => Transition::Illegal(format!(
+        (FeatureVerb::Start, Closed | Cancelled) => Transition::Illegal(format!(
             "cannot start {id} — terminal (status: {})",
             from.as_str()
         )),
 
-        (FeatureVerb::Ship, InProgress) => Transition::To(Shipped),
-        (FeatureVerb::Ship, Shipped) => Transition::NoOp,
-        (FeatureVerb::Ship, Proposed) => Transition::Illegal(format!(
-            "cannot ship {id} — not started; run `maestro feature accept {id}` then `maestro feature start {id}`"
+        (FeatureVerb::Close, InProgress) => Transition::To(Closed),
+        (FeatureVerb::Close, Closed) => Transition::NoOp,
+        (FeatureVerb::Close, Proposed) => Transition::Illegal(format!(
+            "cannot close {id} — not started; run `maestro feature accept {id}` then `maestro feature start {id}`"
         )),
-        (FeatureVerb::Ship, Ready) => Transition::Illegal(format!(
-            "cannot ship {id} — not started; run `maestro feature start {id}` first"
+        (FeatureVerb::Close, Ready) => Transition::Illegal(format!(
+            "cannot close {id} — not started; run `maestro feature start {id}` first"
         )),
-        (FeatureVerb::Ship, Cancelled) => {
-            Transition::Illegal(format!("cannot ship {id} — terminal (status: cancelled)"))
+        (FeatureVerb::Close, Cancelled) => {
+            Transition::Illegal(format!("cannot close {id} — terminal (status: cancelled)"))
         }
 
         (FeatureVerb::Cancel, Proposed | Ready | InProgress) => Transition::To(Cancelled),
         (FeatureVerb::Cancel, Cancelled) => Transition::NoOp,
-        (FeatureVerb::Cancel, Shipped) => Transition::Illegal(format!(
-            "cannot cancel {id} — shipped features are terminal"
+        (FeatureVerb::Cancel, Closed) => Transition::Illegal(format!(
+            "cannot cancel {id} — closed features are terminal"
         )),
     }
 }
@@ -1590,7 +1590,7 @@ fn record_from_card(card: Card, artifact: String) -> Result<FeatureRecord> {
     let mut extra = extra;
     fold::seed_string_if_absent(&mut extra, "id", &id);
     fold::seed_string_if_absent(&mut extra, "title", &title);
-    let record_status = feature_status_from_word(&status).unwrap_or(FeatureStatus::Proposed);
+    let record_status = FeatureStatus::parse(&status).unwrap_or(FeatureStatus::Proposed);
     fold::seed_string_if_absent(&mut extra, "status", record_status.as_str());
     fold::seed_optional_string_if_absent(&mut extra, "description", description.as_deref());
     fold::seed_string_if_absent(&mut extra, "created_at", &created_at);
@@ -1603,27 +1603,13 @@ fn record_from_card(card: Card, artifact: String) -> Result<FeatureRecord> {
     // status word and an absent description keep the record's own.
     record.id = id;
     record.title = title;
-    if let Some(mapped) = feature_status_from_word(&status) {
+    if let Some(mapped) = FeatureStatus::parse(&status) {
         record.status = mapped;
     }
     if description.is_some() {
         record.description = description;
     }
     Ok(record)
-}
-
-/// Map a card status word to the feature status it denotes. `closed` is the
-/// DN3b spelling of shipped (the SPEC renames the terminal word); an unknown
-/// word maps to `None` so callers keep a better source.
-fn feature_status_from_word(status: &str) -> Option<FeatureStatus> {
-    Some(match status {
-        "proposed" => FeatureStatus::Proposed,
-        "ready" => FeatureStatus::Ready,
-        "in_progress" => FeatureStatus::InProgress,
-        "shipped" | "closed" => FeatureStatus::Shipped,
-        "cancelled" => FeatureStatus::Cancelled,
-        _ => return None,
-    })
 }
 
 /// Build a [`FeatureRecord`] from a native card's own fields (no `extra`
@@ -1634,7 +1620,7 @@ fn record_from_native_card(card: Card) -> FeatureRecord {
     let mut record = FeatureRecord::proposed(&card.id, &card.title, &card.created_at);
     record.updated_at = card.updated_at;
     record.description = card.description;
-    record.status = feature_status_from_word(&card.status).unwrap_or(FeatureStatus::Proposed);
+    record.status = FeatureStatus::parse(&card.status).unwrap_or(FeatureStatus::Proposed);
     record
 }
 

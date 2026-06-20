@@ -255,7 +255,7 @@ fn nested_help_lists_section_38_command_tree() {
     assert_contains_all(
         &maestro(&["feature", "--help"]),
         &[
-            "new", "set", "accept", "amend", "start", "ship", "cancel", "show", "list",
+            "new", "set", "accept", "amend", "start", "close", "cancel", "show", "list",
         ],
     );
     assert_contains_all(&maestro(&["decision", "--help"]), &["new", "show", "list"]);

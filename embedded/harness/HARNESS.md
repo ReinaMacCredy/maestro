@@ -8,7 +8,7 @@ You are an agent working in a repo that
 uses Maestro. Follow these rules.
 
 Maestro is a loop harness: tasks are the loop; verify + qa are the stop hook (no
-unbacked claim ships); decisions + friction + skills are the compounding memory;
+unbacked claim lands); decisions + friction + skills are the compounding memory;
 `maestro loop` lists the orchestration recipes.
 
 ## Shared protocol (all agents)
@@ -60,7 +60,7 @@ not the rest.
     picking up work        -> maestro-card skill (work)
     brainstorm / design    -> maestro-design skill
     proof failed / verify  -> maestro-card skill (verify)
-    before accept / ship   -> maestro-card skill (qa-baseline / qa-slice)
+    before accept / close  -> maestro-card skill (qa-baseline / qa-slice)
 
 ## Task commands (the loop)
 

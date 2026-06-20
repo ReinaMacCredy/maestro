@@ -1,6 +1,6 @@
 //! decision-002 pairing: the full repo-global `stack.verify` suite runs at
-//! `feature ship` (real ship only), backstopping the per-task narrow falsifier.
-//! Proves the operations ship coordinator runs the suite, blocks on failure, and
+//! `feature close` (real close only), backstopping the per-task narrow falsifier.
+//! Proves the operations close coordinator runs the suite, blocks on failure, and
 //! leaves read-only paths (`--dry-run`) free of suite execution.
 
 mod support;
@@ -54,7 +54,7 @@ fn write_stack_verify(repo: &Path, command: &str) {
 
 /// Drive a feature to a state where every evidence gate (live tasks / QA /
 /// acceptance sweep) is clear, so only the full-suite backstop is left to decide.
-fn shippable_feature(repo: &Path, id: &str) {
+fn closable_feature(repo: &Path, id: &str) {
     fs::create_dir(repo.join(".git")).expect("invariant: .git marker should be creatable");
     stdout(maestro(&["init", "--yes"], repo), &["init"]);
     stdout(
@@ -97,17 +97,17 @@ fn shippable_feature(repo: &Path, id: &str) {
 }
 
 #[test]
-fn feature_ship_blocks_when_the_full_suite_fails() {
-    let temp = TestTempDir::new("maestro-ship-suite-fail");
+fn feature_close_blocks_when_the_full_suite_fails() {
+    let temp = TestTempDir::new("maestro-close-suite-fail");
     let repo = temp.path();
-    shippable_feature(repo, "report-builder");
+    closable_feature(repo, "report-builder");
     write_stack_verify(repo, "false");
 
-    let ship = ["feature", "ship", "report-builder", "--outcome", "done"];
-    let stderr = assert_failure(maestro(&ship, repo), &ship);
+    let close = ["feature", "close", "report-builder", "--outcome", "done"];
+    let stderr = assert_failure(maestro(&close, repo), &close);
     assert!(
         stderr.contains("full verify suite failed"),
-        "ship must block on a failing suite: {stderr}"
+        "close must block on a failing suite: {stderr}"
     );
     assert!(
         stderr.contains("false (exit"),
@@ -121,40 +121,40 @@ fn feature_ship_blocks_when_the_full_suite_fails() {
     );
     assert!(
         show.contains("in_progress"),
-        "a blocked ship must not flip the feature: {show}"
+        "a blocked close must not flip the feature: {show}"
     );
 }
 
 #[test]
-fn feature_ship_succeeds_when_the_full_suite_passes() {
-    let temp = TestTempDir::new("maestro-ship-suite-pass");
+fn feature_close_succeeds_when_the_full_suite_passes() {
+    let temp = TestTempDir::new("maestro-close-suite-pass");
     let repo = temp.path();
-    shippable_feature(repo, "report-builder");
+    closable_feature(repo, "report-builder");
     write_stack_verify(repo, "true");
 
-    let ship = ["feature", "ship", "report-builder", "--outcome", "done"];
-    let shipped = stdout(maestro(&ship, repo), &ship);
-    assert!(shipped.contains("shipped report-builder"), "{shipped}");
-    assert!(shipped.contains("full verify suite passed"), "{shipped}");
+    let close = ["feature", "close", "report-builder", "--outcome", "done"];
+    let closed = stdout(maestro(&close, repo), &close);
+    assert!(closed.contains("closed report-builder"), "{closed}");
+    assert!(closed.contains("full verify suite passed"), "{closed}");
 }
 
 #[test]
-fn feature_ship_dry_run_does_not_execute_the_suite() {
-    let temp = TestTempDir::new("maestro-ship-suite-dryrun");
+fn feature_close_dry_run_does_not_execute_the_suite() {
+    let temp = TestTempDir::new("maestro-close-suite-dryrun");
     let repo = temp.path();
-    shippable_feature(repo, "report-builder");
+    closable_feature(repo, "report-builder");
     // A suite that would FAIL if run; dry-run must still preview cleanly.
     write_stack_verify(repo, "false");
 
-    let dry = ["feature", "ship", "report-builder", "--dry-run"];
+    let dry = ["feature", "close", "report-builder", "--dry-run"];
     let preview = stdout(maestro(&dry, repo), &dry);
     assert!(
-        preview.contains("would ship"),
+        preview.contains("would close"),
         "dry-run must preview without running the suite: {preview}"
     );
     assert!(
         preview.contains("full verify suite would run"),
-        "dry-run should state the suite would run on a real ship: {preview}"
+        "dry-run should state the suite would run on a real close: {preview}"
     );
     assert!(
         !preview.contains("full verify suite failed"),

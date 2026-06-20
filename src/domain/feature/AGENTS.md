@@ -12,7 +12,7 @@ coverage, QA gates, archive behavior, and feature read models.
 | Lifecycle and feature views | `registry.rs` | Gated transitions, strict/tolerant scans, notes/spec writes. |
 | Feature status and schema | `schema.rs` | Normalize acceptance ids consistently. |
 | Task counts and child lookups | `query.rs` | Counts are computed on read, not persisted. |
-| QA baseline and slices | `qa.rs` | Accept/ship gates fail closed on missing or empty baseline data. |
+| QA baseline and slices | `qa.rs` | Accept/close gates fail closed on missing or empty baseline data. |
 | Feature verification sweep | `verification.rs` | Acceptance coverage and proof summaries. |
 | Archive/unarchive | `archive.rs` | Keep card-store and sidecar movement consistent. |
 
@@ -20,7 +20,7 @@ coverage, QA gates, archive behavior, and feature read models.
 
 - Feature records are the product contract; task counts and coverage are read
   models.
-- `accept` and `ship` layer preconditions over legal lifecycle transitions.
+- `accept` and `close` layer preconditions over legal lifecycle transitions.
 - QA slices count only when they cite scenarios and carry non-empty evidence.
 - Keep feature-to-card/task boundaries explicit through facades.
 
@@ -35,7 +35,7 @@ coverage, QA gates, archive behavior, and feature read models.
 Start with `tests/feature_domain.rs`,
 `tests/feature_decision_commands_integration.rs`,
 `tests/feature_qa_gate_integration.rs`, and
-`tests/feature_ship_suite_integration.rs`. Broaden to card query and task tests
+`tests/feature_close_suite_integration.rs`. Broaden to card query and task tests
 when parent/child behavior changes.
 
 <!-- AGENTS-HIERARCHY:START -->

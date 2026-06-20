@@ -266,7 +266,7 @@ fn build_task_next_report(paths: &MaestroPaths) -> Result<StatusReport> {
         None => choose_next_task_action(paths, &live_tasks)?,
     };
     let proof_concern = focal_proof_concern(paths, next_action.as_ref(), &live_tasks);
-    let ready_to_ship_features = ready_to_ship_features(&features);
+    let ready_to_close_features = ready_to_close_features(&features);
     for (_, path, error, _, _) in unreadable_features {
         warnings.push(WarningJson {
             code: "feature_unreadable".to_string(),
@@ -279,7 +279,7 @@ fn build_task_next_report(paths: &MaestroPaths) -> Result<StatusReport> {
         .collect::<Vec<_>>();
     let audit_hint = harness::audit_overdue_hint(paths)?.map(AuditHintJson::from);
     let sections = StatusSectionsJson {
-        ready_to_ship: ready_to_ship_features.clone(),
+        ready_to_close: ready_to_close_features.clone(),
     };
 
     Ok(StatusReport {
@@ -293,7 +293,7 @@ fn build_task_next_report(paths: &MaestroPaths) -> Result<StatusReport> {
         current_task,
         current_feature,
         git: None,
-        ship_or_verify_pending: false,
+        close_or_verify_pending: false,
         proof_concern,
         warnings,
         next_action,
@@ -304,7 +304,7 @@ fn build_task_next_report(paths: &MaestroPaths) -> Result<StatusReport> {
         harness_friction,
         audit_hint,
         sections,
-        ready_to_ship_features,
+        ready_to_close_features,
     })
 }
 
@@ -333,17 +333,17 @@ fn print_status(report: StatusReport, json: bool) -> Result<()> {
     }
     println!("repo: {}", report.repo);
     println!(
-        "tasks: active={} ready={} needs_verification={} blocked={} | features: active={} ready_to_ship={}",
+        "tasks: active={} ready={} needs_verification={} blocked={} | features: active={} ready_to_close={}",
         report.tasks.active,
         report.tasks.ready,
         report.tasks.needs_verification,
         report.tasks.blocked,
         report.features.active,
-        report.ready_to_ship_features.len()
+        report.ready_to_close_features.len()
     );
     if let Some(git) = &report.git {
         println!("{}", render_git_line(git));
-        if report.ship_or_verify_pending && git.code_other_dirty > 0 {
+        if report.close_or_verify_pending && git.code_other_dirty > 0 {
             println!("{}", clean_worktree_note(git.code_other_dirty));
         }
     }
@@ -393,10 +393,10 @@ fn print_status(report: StatusReport, json: bool) -> Result<()> {
         );
         println!("inspect any: maestro feature show <id>");
     }
-    if !report.ready_to_ship_features.is_empty() {
-        println!("FEATURES READY TO SHIP");
+    if !report.ready_to_close_features.is_empty() {
+        println!("FEATURES READY TO CLOSE");
         let rows: Vec<Vec<String>> = report
-            .ready_to_ship_features
+            .ready_to_close_features
             .iter()
             .map(|feature| {
                 vec![
@@ -429,8 +429,8 @@ fn print_task_next(report: &StatusReport) {
         return;
     }
     println!("no actionable task");
-    if !report.ready_to_ship_features.is_empty() {
-        println!("broader repo action available: ready_to_ship_features");
+    if !report.ready_to_close_features.is_empty() {
+        println!("broader repo action available: ready_to_close_features");
         println!("check broader repo status: maestro status");
     }
 }
@@ -607,7 +607,7 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
         None => choose_next_task_action(paths, &live_tasks)?,
     };
     let proof_concern = focal_proof_concern(paths, next_action.as_ref(), &live_tasks);
-    let ready_to_ship_features = ready_to_ship_features(&features);
+    let ready_to_close_features = ready_to_close_features(&features);
     let mut active_features = active_feature_rows(&features);
     for (id, path, error, hint, _) in unreadable_features {
         warnings.push(WarningJson {
@@ -629,16 +629,16 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
         .collect::<Vec<_>>();
     let audit_hint = harness::audit_overdue_hint(paths)?.map(AuditHintJson::from);
     let sections = StatusSectionsJson {
-        ready_to_ship: ready_to_ship_features.clone(),
+        ready_to_close: ready_to_close_features.clone(),
     };
     let git = git_readout(paths);
-    // The next verb is ship/verify-shaped when the chosen task action is a proof
-    // or completion step, or a feature is ready to ship (`feature_ship` never
-    // appears as a task `next_action.kind`; it lives in ready_to_ship_features).
-    let ship_or_verify_pending = next_action
+    // The next verb is close/verify-shaped when the chosen task action is a proof
+    // or completion step, or a feature is ready to close (`feature_close` never
+    // appears as a task `next_action.kind`; it lives in ready_to_close_features).
+    let close_or_verify_pending = next_action
         .as_ref()
         .is_some_and(|action| matches!(action.kind.as_str(), "complete_task" | "proof_recovery"))
-        || !ready_to_ship_features.is_empty();
+        || !ready_to_close_features.is_empty();
 
     Ok(StatusReport {
         schema: "maestro.status.v1".to_string(),
@@ -651,7 +651,7 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
         current_task,
         current_feature,
         git,
-        ship_or_verify_pending,
+        close_or_verify_pending,
         proof_concern,
         warnings,
         next_action,
@@ -662,7 +662,7 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
         harness_friction,
         audit_hint,
         sections,
-        ready_to_ship_features,
+        ready_to_close_features,
     })
 }
 
@@ -778,7 +778,7 @@ fn task_state_label(task: &TaskRecord) -> String {
     }
 }
 
-fn ready_to_ship_features(features: &[feature::FeatureView]) -> Vec<ReadyFeatureJson> {
+fn ready_to_close_features(features: &[feature::FeatureView]) -> Vec<ReadyFeatureJson> {
     features
         .iter()
         .filter(|view| view.status == FeatureStatus::InProgress)
@@ -789,7 +789,7 @@ fn ready_to_ship_features(features: &[feature::FeatureView]) -> Vec<ReadyFeature
             title: view.title.clone(),
             total: view.counts.total,
             verified: view.counts.verified,
-            next_action: NextAction::feature_ship(view),
+            next_action: NextAction::feature_close(view),
         })
         .collect()
 }
@@ -820,10 +820,10 @@ struct StatusReport {
     /// `task next` surface, which does not render it.
     #[serde(skip_serializing_if = "Option::is_none")]
     git: Option<GitReadout>,
-    /// Whether the next verb is ship/verify-shaped; drives the clean-worktree
+    /// Whether the next verb is close/verify-shaped; drives the clean-worktree
     /// note. Render-only, not part of the serialized contract.
     #[serde(skip)]
-    ship_or_verify_pending: bool,
+    close_or_verify_pending: bool,
     /// Concern-only proof repair line for the focal (next-action) task;
     /// render-only, not part of the serialized contract. `None` when the proof
     /// needs no action.
@@ -838,12 +838,12 @@ struct StatusReport {
     harness_friction: Vec<HarnessFrictionJson>,
     audit_hint: Option<AuditHintJson>,
     sections: StatusSectionsJson,
-    ready_to_ship_features: Vec<ReadyFeatureJson>,
+    ready_to_close_features: Vec<ReadyFeatureJson>,
 }
 
 #[derive(Clone, Debug, Default, Serialize)]
 struct StatusSectionsJson {
-    ready_to_ship: Vec<ReadyFeatureJson>,
+    ready_to_close: Vec<ReadyFeatureJson>,
 }
 
 impl StatusReport {
@@ -855,7 +855,7 @@ impl StatusReport {
             current_task: None,
             current_feature: None,
             git: None,
-            ship_or_verify_pending: false,
+            close_or_verify_pending: false,
             proof_concern: None,
             warnings: vec![WarningJson {
                 code: "not_initialized".to_string(),
@@ -873,7 +873,7 @@ impl StatusReport {
             harness_friction: Vec::new(),
             audit_hint: None,
             sections: StatusSectionsJson::default(),
-            ready_to_ship_features: Vec::new(),
+            ready_to_close_features: Vec::new(),
         }
     }
 }
@@ -888,7 +888,7 @@ struct NextJson {
     next_action: Option<NextAction>,
     harness_friction: Vec<HarnessFrictionJson>,
     audit_hint: Option<AuditHintJson>,
-    ready_to_ship_features: Vec<ReadyFeatureJson>,
+    ready_to_close_features: Vec<ReadyFeatureJson>,
 }
 
 impl NextJson {
@@ -902,7 +902,7 @@ impl NextJson {
             next_action: report.next_action.clone(),
             harness_friction: report.harness_friction.clone(),
             audit_hint: report.audit_hint.clone(),
-            ready_to_ship_features: report.ready_to_ship_features.clone(),
+            ready_to_close_features: report.ready_to_close_features.clone(),
         }
     }
 }
@@ -964,9 +964,9 @@ struct BroaderActionJson {
 impl From<&ReadyFeatureJson> for BroaderActionJson {
     fn from(feature: &ReadyFeatureJson) -> Self {
         Self {
-            kind: "feature_ready_to_ship".to_string(),
+            kind: "feature_ready_to_close".to_string(),
             feature_id: feature.id.clone(),
-            summary: "ready-to-ship feature available in status".to_string(),
+            summary: "ready-to-close feature available in status".to_string(),
             inspect: format!("maestro feature show {}", feature.id),
         }
     }
@@ -980,7 +980,7 @@ impl From<&StatusReport> for TaskNextJson {
             && report.audit_hint.is_none()
         {
             report
-                .ready_to_ship_features
+                .ready_to_close_features
                 .iter()
                 .map(BroaderActionJson::from)
                 .collect()
@@ -1106,12 +1106,12 @@ impl NextAction {
         }
     }
 
-    fn feature_ship(view: &feature::FeatureView) -> Self {
-        let command = feature_ship_template(&view.id);
+    fn feature_close(view: &feature::FeatureView) -> Self {
+        let command = feature_close_template(&view.id);
         let runnable = command.argv.is_some();
         let requires_input = !command.requires_input.is_empty();
         Self {
-            kind: "feature_ship".to_string(),
+            kind: "feature_close".to_string(),
             scope: "feature".to_string(),
             task_id: None,
             feature_id: Some(view.id.clone()),
@@ -1202,13 +1202,13 @@ fn task_complete_template(task_id: &str) -> CommandJson {
     )
 }
 
-fn feature_ship_template(feature_id: &str) -> CommandJson {
+fn feature_close_template(feature_id: &str) -> CommandJson {
     template_command(
-        format!("maestro feature ship {feature_id} --outcome \"<outcome>\""),
+        format!("maestro feature close {feature_id} --outcome \"<outcome>\""),
         vec![
             "maestro",
             "feature",
-            "ship",
+            "close",
             feature_id,
             "--outcome",
             "<outcome>",
@@ -1217,7 +1217,7 @@ fn feature_ship_template(feature_id: &str) -> CommandJson {
             "outcome",
             "--outcome",
             "<outcome>",
-            "shipping outcome text",
+            "closing outcome text",
         )],
     )
 }
@@ -1297,7 +1297,7 @@ impl TaskSummaryJson {
 struct FeatureSummaryJson {
     total: usize,
     active: usize,
-    shipped: usize,
+    closed: usize,
     cancelled: usize,
 }
 
@@ -1309,9 +1309,9 @@ impl FeatureSummaryJson {
                 .iter()
                 .filter(|view| !view.status.is_terminal())
                 .count(),
-            shipped: features
+            closed: features
                 .iter()
-                .filter(|view| view.status == FeatureStatus::Shipped)
+                .filter(|view| view.status == FeatureStatus::Closed)
                 .count(),
             cancelled: features
                 .iter()

@@ -1,14 +1,14 @@
 # QA Slice
 
 Replay affected baseline scenarios after an implementation wave and record the
-evidence as counting slices in `.maestro/cards/<id>/qa.md`. The ship gate
+evidence as counting slices in `.maestro/cards/<id>/qa.md`. The close gate
 counts only slices with scenario ids and non-empty evidence.
 
 ## Use
 
 - After a task wave changes feature behavior.
-- Before `maestro feature ship`.
-- When ship reports uncovered `[bl-NNN]` scenarios or stale QA evidence.
+- Before `maestro feature close`.
+- When close reports uncovered `[bl-NNN]` scenarios or stale QA evidence.
 
 ## Do
 
@@ -40,12 +40,12 @@ slices:
     result: pass
     evidence:
       - "feature_domain: 12 passed; 0 failed"
-      - "manual: feature new -> accept -> ship round-trips on temp .maestro"
+      - "manual: feature new -> accept -> close round-trips on temp .maestro"
 ```
 ````
 
 Required for the gate: `scenarios` and `evidence`. Other fields are optional.
-If the block does not parse, the ship gate prints the path, parse error, and
+If the block does not parse, the close gate prints the path, parse error, and
 the expected shape.
 
 ## Output When Blocked
@@ -88,4 +88,4 @@ If clean:
 ## Hand-off
 
 Next: all behavioral baseline ids covered -> [feature.md](feature.md) for
-`feature ship --outcome "<one line>"`.
+`feature close --outcome "<one line>"`.

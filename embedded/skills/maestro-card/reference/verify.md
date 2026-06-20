@@ -36,7 +36,7 @@ asks for QA evidence.
 ## Adversarial Fan-out
 
 Use when a card failed verify twice, risk is high, or many cards support a
-feature ship. Full orchestration HOW (refuter dispatch, majority, verdict
+feature close. Full orchestration HOW (refuter dispatch, majority, verdict
 collection): `maestro loop show adversarial-fan-out`.
 
 1. Rubric is the locked acceptance checks plus completion claims. Do not
@@ -58,11 +58,11 @@ Never message a running verifier with new context. Start a fresh verifier.
 
 - Accept blocker says `qa-baseline` -> write `.maestro/cards/<id>/qa.md` with
   [qa-baseline.md](qa-baseline.md), then rerun accept.
-- Ship blocker says `qa-slice` -> append counting slices to the fenced
+- Close blocker says `qa-slice` -> append counting slices to the fenced
   `slices:` block of `.maestro/cards/<id>/qa.md` with
-  [qa-slice.md](qa-slice.md), then rerun ship.
-- Do not report a feature shipped until
-  `maestro feature ship <id> --outcome "<one line>"` passes.
+  [qa-slice.md](qa-slice.md), then rerun close.
+- Do not report a feature closed until
+  `maestro feature close <id> --outcome "<one line>"` passes.
 
 ## Stop
 

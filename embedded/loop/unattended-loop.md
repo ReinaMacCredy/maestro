@@ -26,11 +26,11 @@ exactly per `work.md`, test-first default included.
 
 - MAY: `claim`, work, `complete`, `verify`, `prepare`, `note`, `block`, local
   per-slice commits on the feature branch.
-- NEVER: `feature accept`, `feature ship`, `archive`, push, tag, publish,
-  destructive git. Accept and ship are the awake human's gates.
+- NEVER: `feature accept`, `feature close`, `archive`, push, tag, publish,
+  destructive git. Accept and close are the awake human's gates.
 
-A feature whose children are all verified is parked, not shipped: confirm with
-`feature ship <id> --dry-run`, record SHIP-READY in the report, move on.
+A feature whose children are all verified is parked, not closed: confirm with
+`feature close <id> --dry-run`, record CLOSE-READY in the report, move on.
 
 ## Scheduler variant
 

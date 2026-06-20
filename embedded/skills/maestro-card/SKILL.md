@@ -1,7 +1,7 @@
 ---
 name: maestro-card
 version: 1.19.0
-description: "Use for active Maestro card work: pick up and deliver work cards (claim, update, complete, verify), run the feature-card lifecycle (accept, prepare, amend, ship), and capture qa-baseline/qa-slice gate evidence."
+description: "Use for active Maestro card work: pick up and deliver work cards (claim, update, complete, verify), run the feature-card lifecycle (accept, prepare, amend, close), and capture qa-baseline/qa-slice gate evidence."
 ---
 
 # Maestro Card
@@ -44,13 +44,13 @@ Read the reference for the job at hand; they share the ground rules below.
   the red-green-refactor step, not a second pass.
 - Work the backlog unattended while the user is away or asleep:
   [reference/loop.md](reference/loop.md)
-- Author, accept, prepare, amend, ship, or archive a feature card:
+- Author, accept, prepare, amend, close, or archive a feature card:
   [reference/feature.md](reference/feature.md)
 - Prove a claim, repair failed proof, or verify adversarially:
   [reference/verify.md](reference/verify.md)
 - Capture the behavior contract before `feature accept`:
   [reference/qa-baseline.md](reference/qa-baseline.md)
-- Replay scenarios and record slice evidence before `feature ship`:
+- Replay scenarios and record slice evidence before `feature close`:
   [reference/qa-slice.md](reference/qa-slice.md)
 
 ## Shared Ground
@@ -69,17 +69,17 @@ Read the reference for the job at hand; they share the ground rules below.
   read the real id; do not retry spelling variations.
 - Do not hand-edit `card.yaml` or the verb-guarded sidecars (`qa.md`,
   state history). Use verbs so gates and audit trails stay intact.
-- Terminal words are per type — feature `shipped`/`cancelled`, work
+- Terminal words are per type — feature `closed`/`cancelled`, work
   `verified`/`rejected`/`abandoned`/`superseded`, decision
   `locked`/`superseded`, loose task/bug/chore `closed` — and all of them read
   as coarse `closed` on the board. `maestro card close` fits only task/bug/chore.
   When the user says "close" a feature, branch on its state: a live feature
-  means `feature ship` or `feature cancel`; a feature already terminal
-  (shipped/cancelled) means archive it — run `maestro card archive <id>` directly,
+  means `feature close` or `feature cancel`; a feature already terminal
+  (closed/cancelled) means archive it — run `maestro card archive <id>` directly,
   do not re-ask. `maestro card archive` moves a terminal feature's records to
   `.maestro/archive/`; the user's word "close" on a terminal card is the
   explicit intent to archive, but archive is never an automatic side effect of
-  ship/cancel, and a non-terminal feature is never archived.
+  close/cancel, and a non-terminal feature is never archived.
 - When the user corrects your behavior, record it:
   `maestro event intervention --note "<what was wrong>" [--topic <slug>]`.
 
@@ -102,4 +102,4 @@ the conversion; there is no CLI parser for external documents.
 ## Pipeline
 
 `maestro-design -> [maestro-card: qa-baseline -> feature accept -> prepare ->
-work -> verify -> qa-slice -> feature ship]`
+work -> verify -> qa-slice -> feature close]`

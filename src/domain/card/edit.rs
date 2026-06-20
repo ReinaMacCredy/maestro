@@ -154,7 +154,7 @@ pub fn remove_related_link(paths: &MaestroPaths, from: &str, to: &str, now: &str
 }
 
 /// Refuse to link a terminal card. A related link is a live-coordination
-/// signal -- and the seam a linked-card channel rides on -- so a closed/shipped
+/// signal -- and the seam a linked-card channel rides on -- so a closed
 /// card has nothing actionable to coordinate (bl-012). Archived cards are
 /// already rejected upstream: `resolve` finds only live cards, so this catches
 /// the done-but-not-yet-archived case the resolver still returns.

@@ -281,7 +281,7 @@ fn set_task(
                 task.id
             ),
             None => println!(
-                "updated {} -> verify command cleared (task verify now uses claims/proof; the repo-global stack.verify runs at feature ship)",
+                "updated {} -> verify command cleared (task verify now uses claims/proof; the repo-global stack.verify runs at feature close)",
                 task.id
             ),
         }
@@ -596,7 +596,7 @@ fn print_verify_block(task: &TaskRecord, checks: &[String]) {
         println!("verify+ locked:");
         println!("  checks: {}", checks.len());
         if task.feature_id.is_some() {
-            println!("  feature gate: qa-baseline + qa-slice at feature accept/ship");
+            println!("  feature gate: qa-baseline + qa-slice at feature accept/close");
         }
         return;
     }

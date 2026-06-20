@@ -22,7 +22,7 @@ generalizes that refactor step to every card.
 ## Scope
 
 Only this card's changes -- the diff you just produced. Do not re-review code an
-earlier card already shipped; cross-card and repo-wide cleanup is maestro-audit's
+earlier card already closed; cross-card and repo-wide cleanup is maestro-audit's
 job. Read the diff, not whole files, except to grep for a reuse target.
 
 ## Phase 1 -- Review (four angles)

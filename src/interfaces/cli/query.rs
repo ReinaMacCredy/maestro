@@ -309,7 +309,7 @@ fn node_line(card: &card::schema::Card) -> String {
         "{} ({}, {}) {}",
         card.id,
         card.card_type.as_str(),
-        card.status,
+        card::query::canonical_status(&card.status),
         card.title
     )
 }

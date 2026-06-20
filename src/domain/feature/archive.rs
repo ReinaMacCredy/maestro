@@ -68,7 +68,7 @@ pub fn archive_feature(
 
     if !record.status.is_terminal() {
         bail!(
-            "cannot archive {id} — not terminal (status: {}); ship or cancel it first",
+            "cannot archive {id} — not terminal (status: {}); close or cancel it first",
             record.status.as_str()
         );
     }
@@ -98,7 +98,7 @@ pub fn archive_feature(
     if !live_children.is_empty() {
         live_children.sort();
         bail!(
-            "cannot archive {id} — {} live child task(s): {}; ship or cancel the feature first",
+            "cannot archive {id} — {} live child task(s): {}; close or cancel the feature first",
             live_children.len(),
             live_children.join(", ")
         );
@@ -147,7 +147,7 @@ pub fn archive_feature(
         // the moves succeed and only on the feature-moving run -- a sweep
         // re-run (feature already archived) must not duplicate it. "closed"
         // is the coarse word (DN3); the outcome is the write-once
-        // `ship --outcome` line.
+        // `close --outcome` line.
         if feature_live {
             let outcome = record.outcome.as_deref().unwrap_or("no outcome recorded");
             let line = format!(

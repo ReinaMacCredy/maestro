@@ -555,8 +555,8 @@ fn resume_full_handoff_and_write_are_explicit() {
 }
 
 #[test]
-fn resume_and_status_show_git_line_and_clean_note_for_ship_or_verify_state() {
-    let (temp, repository) = setup_git_repo("maestro-git-line-ship");
+fn resume_and_status_show_git_line_and_clean_note_for_close_or_verify_state() {
+    let (temp, repository) = setup_git_repo("maestro-git-line-close");
     let repo = temp.path();
     let branch = repository
         .head()
@@ -583,7 +583,7 @@ fn resume_and_status_show_git_line_and_clean_note_for_ship_or_verify_state() {
     fs::write(repo.join("feature_change.rs"), "fn changed() {}\n")
         .expect("invariant: code change should be writable");
 
-    // Leg (a): next verb is `task complete` (ship/verify-shaped) AND there are
+    // Leg (a): next verb is `task complete` (close/verify-shaped) AND there are
     // uncommitted code/other changes -> the git line and clean note both show.
     let resume = run(repo, &["resume"]);
     assert!(
@@ -595,7 +595,7 @@ fn resume_and_status_show_git_line_and_clean_note_for_ship_or_verify_state() {
         "resume git counts: {resume}"
     );
     assert!(
-        resume.contains("before the ship/verify step"),
+        resume.contains("before the close/verify step"),
         "resume clean-worktree note should show: {resume}"
     );
 
@@ -609,12 +609,12 @@ fn resume_and_status_show_git_line_and_clean_note_for_ship_or_verify_state() {
         "status git counts: {status}"
     );
     assert!(
-        status.contains("before the ship/verify step"),
+        status.contains("before the close/verify step"),
         "status clean-worktree note should show: {status}"
     );
 
     // Leg (c): commit the worktree so code/other == 0 -> the git line stays but
-    // the note drops, even though the next verb is still ship/verify-shaped.
+    // the note drops, even though the next verb is still close/verify-shaped.
     commit_worktree(&repository, "commit worktree");
     let resume_clean = run(repo, &["resume"]);
     assert!(
@@ -622,7 +622,7 @@ fn resume_and_status_show_git_line_and_clean_note_for_ship_or_verify_state() {
         "resume git line after commit: {resume_clean}"
     );
     assert!(
-        !resume_clean.contains("before the ship/verify step"),
+        !resume_clean.contains("before the close/verify step"),
         "clean worktree must drop the note on resume: {resume_clean}"
     );
 
@@ -632,17 +632,17 @@ fn resume_and_status_show_git_line_and_clean_note_for_ship_or_verify_state() {
         "status git line after commit: {status_clean}"
     );
     assert!(
-        !status_clean.contains("before the ship/verify step"),
+        !status_clean.contains("before the close/verify step"),
         "clean worktree must drop the note on status: {status_clean}"
     );
 }
 
 #[test]
-fn resume_and_status_omit_clean_note_when_next_verb_is_not_ship_shaped() {
-    let (temp, _repository) = setup_git_repo("maestro-git-line-not-ship");
+fn resume_and_status_omit_clean_note_when_next_verb_is_not_close_shaped() {
+    let (temp, _repository) = setup_git_repo("maestro-git-line-not-close");
     let repo = temp.path();
     // A draft task: the next verb is "author checks or explore", not
-    // ship/verify-shaped, so the clean note stays off even with code dirty.
+    // close/verify-shaped, so the clean note stays off even with code dirty.
     run(repo, &["task", "create", "Draft task"]);
     fs::write(repo.join("loose_change.rs"), "fn loose() {}\n")
         .expect("invariant: code change should be writable");
@@ -650,15 +650,15 @@ fn resume_and_status_omit_clean_note_when_next_verb_is_not_ship_shaped() {
     let resume = run(repo, &["resume"]);
     assert!(resume.contains("git:"), "resume git line present: {resume}");
     assert!(
-        !resume.contains("before the ship/verify step"),
-        "non-ship verb must omit the note on resume: {resume}"
+        !resume.contains("before the close/verify step"),
+        "non-close verb must omit the note on resume: {resume}"
     );
 
     let status = run(repo, &["status"]);
     assert!(status.contains("git:"), "status git line present: {status}");
     assert!(
-        !status.contains("before the ship/verify step"),
-        "non-ship verb must omit the note on status: {status}"
+        !status.contains("before the close/verify step"),
+        "non-close verb must omit the note on status: {status}"
     );
 }
 
@@ -1036,8 +1036,8 @@ fn current_ready_task_next_claims_selected_task_not_generic_next() {
 }
 
 #[test]
-fn ready_to_ship_status_json_and_task_next_broader_actions_are_structured() {
-    let temp = setup_repo("maestro-ready-to-ship-json");
+fn ready_to_close_status_json_and_task_next_broader_actions_are_structured() {
+    let temp = setup_repo("maestro-ready-to-close-json");
     let repo = temp.path();
     run(repo, &["feature", "new", "CSV export"]);
     run(
@@ -1089,7 +1089,7 @@ fn ready_to_ship_status_json_and_task_next_broader_actions_are_structured() {
         "{complete}"
     );
     assert!(
-        complete.contains("then: maestro feature ship csv-export --outcome \"<outcome>\""),
+        complete.contains("then: maestro feature close csv-export --outcome \"<outcome>\""),
         "{complete}"
     );
 
@@ -1097,16 +1097,16 @@ fn ready_to_ship_status_json_and_task_next_broader_actions_are_structured() {
     assert_success(&status, &["status", "--json"]);
     let status_json: JsonValue =
         serde_json::from_str(&stdout(&status)).expect("invariant: status JSON should parse");
-    let ready = &status_json["sections"]["ready_to_ship"][0];
+    let ready = &status_json["sections"]["ready_to_close"][0];
     assert_eq!(ready["feature_id"], "csv-export");
-    assert_eq!(ready["next_action"]["kind"], "feature_ship");
+    assert_eq!(ready["next_action"]["kind"], "feature_close");
     assert!(ready["next_action"]["command"]["argv"].is_null());
     assert_eq!(
         ready["next_action"]["command"]["argv_template"],
         serde_json::json!([
             "maestro",
             "feature",
-            "ship",
+            "close",
             "csv-export",
             "--outcome",
             "<outcome>"
@@ -1124,7 +1124,7 @@ fn ready_to_ship_status_json_and_task_next_broader_actions_are_structured() {
     assert!(next_json["next_action"].is_null());
     assert_eq!(
         next_json["broader_actions"][0]["kind"],
-        "feature_ready_to_ship"
+        "feature_ready_to_close"
     );
     assert_eq!(next_json["broader_actions"][0]["feature_id"], "csv-export");
 }
@@ -1864,36 +1864,36 @@ fn verified_stale_proof_surfaces_refresh_repair_via_resume_task() {
     );
 }
 
-/// ac-7: `feature ship --dry-run` prints a non-blocking advisory naming each
+/// ac-7: `feature close --dry-run` prints a non-blocking advisory naming each
 /// verified child task whose recorded proof commit no longer matches HEAD. A
 /// feature whose verified children all match HEAD prints none, and the advisory
 /// never blocks a dry-run that would otherwise pass.
 #[test]
-fn feature_ship_dry_run_flags_verified_children_at_older_commits_without_blocking() {
-    let (temp, repository) = setup_git_repo("maestro-ship-advisory-drift");
+fn feature_close_dry_run_flags_verified_children_at_older_commits_without_blocking() {
+    let (temp, repository) = setup_git_repo("maestro-close-advisory-drift");
     let repo = temp.path();
 
-    run(repo, &["feature", "new", "Ship advisory"]);
+    run(repo, &["feature", "new", "Close advisory"]);
     run(
         repo,
         &[
             "feature",
             "set",
-            "ship-advisory",
+            "close-advisory",
             "--acceptance",
             "advisory behaves",
             "--area",
-            "ship",
+            "close",
         ],
     );
-    let feature_dir = repo.join(".maestro/cards/ship-advisory");
+    let feature_dir = repo.join(".maestro/cards/close-advisory");
     fs::write(
         feature_dir.join("qa.md"),
         "---\namend_log_position: 0\n---\n\n### QA Baseline Contract\n\n- Scenario Matrix:\n  - [bl-001] advisory behaves (covers: ac-1)\n",
     )
     .expect("invariant: qa.md should be writable");
-    run(repo, &["feature", "accept", "ship-advisory"]);
-    run(repo, &["feature", "start", "ship-advisory"]);
+    run(repo, &["feature", "accept", "close-advisory"]);
+    run(repo, &["feature", "start", "close-advisory"]);
 
     // A verified child task, recorded at the seed commit. It settles BEFORE the
     // acceptance sweep below, so the sweep is never flagged stale by it.
@@ -1904,7 +1904,7 @@ fn feature_ship_dry_run_flags_verified_children_at_older_commits_without_blockin
             "create",
             "Child of advisory",
             "--feature",
-            "ship-advisory",
+            "close-advisory",
         ],
     );
     let child = id_by_title(repo, "Child of advisory");
@@ -1935,12 +1935,12 @@ fn feature_ship_dry_run_flags_verified_children_at_older_commits_without_blockin
     let mut qa = fs::read_to_string(feature_dir.join("qa.md")).expect("invariant: qa.md readable");
     qa.push_str("\n```yaml\nslices:\n  - scenarios: [\"bl-001\"]\n    evidence: [\"proof for bl-001\"]\n```\n");
     fs::write(feature_dir.join("qa.md"), qa).expect("invariant: qa.md should be writable");
-    run(repo, &["feature", "verify", "ship-advisory"]);
+    run(repo, &["feature", "verify", "close-advisory"]);
 
-    // Before HEAD moves: the verified child matches HEAD -> would ship, no advisory.
-    let fresh = run(repo, &["feature", "ship", "ship-advisory", "--dry-run"]);
+    // Before HEAD moves: the verified child matches HEAD -> would close, no advisory.
+    let fresh = run(repo, &["feature", "close", "close-advisory", "--dry-run"]);
     assert!(
-        fresh.contains("would ship"),
+        fresh.contains("would close"),
         "a fully-gated feature should pass the dry-run:\n{fresh}"
     );
     assert!(
@@ -1951,9 +1951,9 @@ fn feature_ship_dry_run_flags_verified_children_at_older_commits_without_blockin
     // Advance HEAD past the child's recorded proof commit.
     commit_worktree(&repository, "advance head past the verified child commit");
 
-    let drifted = run(repo, &["feature", "ship", "ship-advisory", "--dry-run"]);
+    let drifted = run(repo, &["feature", "close", "close-advisory", "--dry-run"]);
     assert!(
-        drifted.contains("would ship"),
+        drifted.contains("would close"),
         "the advisory must not block a dry-run that would otherwise pass:\n{drifted}"
     );
     assert!(

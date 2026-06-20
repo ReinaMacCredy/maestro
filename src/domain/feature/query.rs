@@ -66,7 +66,7 @@ pub fn count_tasks_by_feature_in_entries(
 
 /// Ids of the feature's child tasks that are still live, sorted.
 ///
-/// "Live" mirrors the D5 ship-gate rule: a child blocks ship (and is the target
+/// "Live" mirrors the D5 close-gate rule: a child blocks close (and is the target
 /// of cancel cascade) while it is `draft/exploring/ready/in_progress/
 /// needs_verification`. `verified` and the terminal-settled states do not.
 pub fn live_child_task_ids(tasks_dir: &Path, feature_id: &str) -> Result<Vec<String>> {

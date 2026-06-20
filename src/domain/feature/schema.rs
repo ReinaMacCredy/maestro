@@ -54,7 +54,7 @@ pub struct FeatureRecord {
     /// Explicit non-goals.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub non_goals: Vec<String>,
-    /// One-line shipped outcome, set at `ship --outcome`. Write-once.
+    /// One-line outcome recorded at close, set at `close --outcome`. Write-once.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub outcome: Option<String>,
     /// Operator reason recorded at `cancel --reason`, kept for the audit trail.
@@ -155,8 +155,10 @@ pub enum FeatureStatus {
     Ready,
     /// Active implementation work is in progress.
     InProgress,
-    /// Feature has shipped.
-    Shipped,
+    /// Feature is closed (the successful terminal state). `shipped` is the
+    /// pre-rename on-disk spelling, accepted on read for backward compatibility.
+    #[serde(alias = "shipped")]
+    Closed,
     /// Feature was cancelled.
     Cancelled,
 }
@@ -168,25 +170,30 @@ impl FeatureStatus {
             Self::Proposed => "proposed",
             Self::Ready => "ready",
             Self::InProgress => "in_progress",
-            Self::Shipped => "shipped",
+            Self::Closed => "closed",
             Self::Cancelled => "cancelled",
         }
     }
 
     /// A terminal status can no longer transition.
     pub fn is_terminal(&self) -> bool {
-        matches!(self, Self::Shipped | Self::Cancelled)
+        matches!(self, Self::Closed | Self::Cancelled)
     }
 
-    /// Parse a canonical label back into a status -- the inverse of
-    /// [`Self::as_str`], so raw-status readers (e.g. the doctor walking card
-    /// envelopes) share this enum's predicates instead of re-deriving them.
+    /// Parse a card status word into a status -- the inverse of [`Self::as_str`],
+    /// so every raw-status reader (the doctor, the card overlay) shares one
+    /// mapping. `shipped` is the pre-rename spelling of `closed`, accepted on
+    /// read for backward compatibility; an unknown word maps to `None` so
+    /// callers can keep a better source.
     pub fn parse(label: &str) -> Option<Self> {
+        if label == "shipped" {
+            return Some(Self::Closed);
+        }
         [
             Self::Proposed,
             Self::Ready,
             Self::InProgress,
-            Self::Shipped,
+            Self::Closed,
             Self::Cancelled,
         ]
         .into_iter()
@@ -258,5 +265,25 @@ impl AmendAdditions {
             && self.affected_areas.is_empty()
             && self.non_goals.is_empty()
             && self.open_questions.is_empty()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The terminal status was renamed `shipped` -> `closed`; records written
+    // before the rename still say `shipped` on disk. Both read paths must keep
+    // loading them as `Closed`, or those records silently break.
+    #[test]
+    fn legacy_shipped_word_loads_as_closed() {
+        // Card-overlay path: the raw status word.
+        assert_eq!(FeatureStatus::parse("shipped"), Some(FeatureStatus::Closed));
+        // serde alias path: a feature.yaml round-trip.
+        let record: FeatureRecord = serde_yaml::from_str(
+            "schema_version: maestro.feature.v1\nid: csv-export\ntitle: CSV Export\nstatus: shipped\ncreated_at: \"1\"\nupdated_at: \"1\"\n",
+        )
+        .expect("invariant: legacy shipped record must deserialize");
+        assert_eq!(record.status, FeatureStatus::Closed);
     }
 }

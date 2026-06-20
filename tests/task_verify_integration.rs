@@ -487,7 +487,7 @@ fn task_verify_runs_only_the_per_task_falsifier_and_passes_when_the_global_stack
 
 #[test]
 fn task_with_no_falsifier_does_not_run_the_repo_global_stack_verify() {
-    // decision-002: stack.verify is the feature-ship backstop, not a per-task
+    // decision-002: stack.verify is the feature-close backstop, not a per-task
     // fallback. A standalone slice with no narrow falsifier does NOT silently run
     // the whole suite — even a passing one — it refuses and points at the fix.
     let temp = setup_fail_closed_repo();
@@ -512,7 +512,7 @@ fn task_with_no_falsifier_does_not_run_the_repo_global_stack_verify() {
 
 #[test]
 fn feature_task_with_no_falsifier_verifies_on_claims_without_running_the_stack_suite() {
-    // A feature task's full suite is the ship backstop (decision-002): at the
+    // A feature task's full suite is the close backstop (decision-002): at the
     // task gate it verifies on claims/proof, and stack.verify is NOT run even
     // when it would fail. The old per-task fallback would have run `false` here
     // and failed the slice.
@@ -592,7 +592,7 @@ fn feature_task_with_no_falsifier_verifies_on_claims_without_running_the_stack_s
     let commands = task["verification"]["commands"].as_sequence();
     assert!(
         commands.map(|commands| commands.is_empty()).unwrap_or(true),
-        "feature slice must verify with no commands run; the suite is the ship backstop: {:?}",
+        "feature slice must verify with no commands run; the suite is the close backstop: {:?}",
         task["verification"]["commands"]
     );
 }

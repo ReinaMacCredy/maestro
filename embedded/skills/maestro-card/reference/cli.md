@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.0.0 -->
-<!-- maestro:cli-reference-sha256: eedc3c1174f5225fe2c190dec09a8169adf7bb456d79cb8f23e46d1a9f400fd6 -->
+<!-- maestro:cli-reference-sha256: f1a2a68d4b5b3fcede2dd05dfa5961612861605e3a77a67bc6c58a4284f14162 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -83,11 +83,11 @@ Every verb and flag is listed; a spelling not found here does not exist.
 - `maestro feature prepare <ID> [--from <PLAN_FILE>] [--draft] [--task <TASK>]... [--check <CHECK>]... [--covers <COVERS>]... [--blocker <BLOCKER>]... [--after <AFTER>]...` -- Prepare an accepted feature into a ready implementation queue
 - `maestro feature amend <ID> [--add-acceptance <ADD_ACCEPTANCE>]... [--add-area <ADD_AREA>]... [--add-non-goal <ADD_NON_GOAL>]... [--add-question <ADD_QUESTION>]... --reason <REASON>` -- Grow a frozen contract additively with an audit reason (ready/in_progress)
 - `maestro feature start <ID>` -- Start work on a ready feature (-> in_progress)
-- `maestro feature verify <ID> [--prove <AC_ID>]... [--evidence <EVIDENCE>]... [--waive <AC_ID>]... [--reason <REASON>]... [--no-ship] [--outcome <OUTCOME>]` -- Sweep or record proof for a feature's acceptance contract
-- `maestro feature proof add <ID> --ac <AC> --evidence <EVIDENCE> [--no-ship] [--outcome <OUTCOME>]` -- Record explicit feature acceptance proof
+- `maestro feature verify <ID> [--prove <AC_ID>]... [--evidence <EVIDENCE>]... [--waive <AC_ID>]... [--reason <REASON>]... [--no-close] [--outcome <OUTCOME>]` -- Sweep or record proof for a feature's acceptance contract
+- `maestro feature proof add <ID> --ac <AC> --evidence <EVIDENCE> [--no-close] [--outcome <OUTCOME>]` -- Record explicit feature acceptance proof
 - `maestro feature proof waive <ID> --ac <AC> --reason <REASON>` -- Waive a feature acceptance item with an explicit reason
 - `maestro feature note <ID> <TEXT>` -- Append a dated note to a feature's notes.md
-- `maestro feature ship <ID> [--outcome <OUTCOME>] [--dry-run]` -- Ship an in-progress feature (-> shipped; gated)
+- `maestro feature close <ID> [--outcome <OUTCOME>] [--dry-run]` -- Close an in-progress feature (-> closed; gated)
 - `maestro feature cancel <ID> --reason <REASON> [--dry-run]` -- Cancel a non-terminal feature, abandoning its live child tasks (-> cancelled)
 - `maestro feature show <ID>` -- Show a feature's status, full contract, and task counts
 - `maestro feature spec <ID> [--section <SECTION>] [--append <TEXT>] [--replace <TEXT>]` -- Render a feature's spec-of-record, or fill one section (--section with --append/--replace)

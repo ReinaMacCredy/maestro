@@ -14,7 +14,7 @@ use crate::foundation::core::time::render_timestamp;
 use crate::interfaces::cli::{
     FeatureArgs, FeatureCommand, FeatureProofCommand, feature_next_label, recovery_label,
 };
-use crate::operations::{feature_prepare, feature_ship};
+use crate::operations::{feature_close, feature_prepare};
 
 /// Execute `maestro feature`.
 pub fn run(args: FeatureArgs) -> Result<()> {
@@ -140,17 +140,15 @@ pub fn run(args: FeatureArgs) -> Result<()> {
             evidence,
             waive,
             reason,
-            no_ship,
+            no_close,
             outcome,
-        } => verify_feature(
-            &paths, &id, prove, evidence, waive, reason, no_ship, outcome,
-        ),
+        } => verify_feature(&paths, &id, prove, evidence, waive, reason, no_close, outcome),
         FeatureCommand::Proof { command } => match command {
             FeatureProofCommand::Add {
                 id,
                 ac,
                 evidence,
-                no_ship,
+                no_close,
                 outcome,
             } => verify_feature(
                 &paths,
@@ -159,7 +157,7 @@ pub fn run(args: FeatureArgs) -> Result<()> {
                 vec![evidence],
                 Vec::new(),
                 Vec::new(),
-                no_ship,
+                no_close,
                 outcome,
             ),
             FeatureProofCommand::Waive { id, ac, reason } => verify_feature(
@@ -183,11 +181,11 @@ pub fn run(args: FeatureArgs) -> Result<()> {
             println!("  {}", report.line);
             Ok(())
         }
-        FeatureCommand::Ship {
+        FeatureCommand::Close {
             id,
             outcome,
             dry_run,
-        } => ship_feature(&paths, &id, outcome, dry_run),
+        } => close_feature(&paths, &id, outcome, dry_run),
         FeatureCommand::Cancel {
             id,
             reason,
@@ -392,7 +390,7 @@ fn verify_feature(
     evidence: Vec<String>,
     waive: Vec<String>,
     reason: Vec<String>,
-    no_ship: bool,
+    no_close: bool,
     outcome: Option<String>,
 ) -> Result<()> {
     if prove.len() != evidence.len() {
@@ -415,7 +413,7 @@ fn verify_feature(
     let report = feature::verify_feature(paths, id, updates)?;
     if let Some(recorded) = report.recorded {
         println!("recorded {recorded}");
-        return after_prove_autoship(paths, &report.feature_id, no_ship, outcome);
+        return after_prove_autoclose(paths, &report.feature_id, no_close, outcome);
     }
     let Some(sweep) = report.sweep else {
         return Ok(());
@@ -463,26 +461,26 @@ fn verify_feature(
 }
 
 /// After `feature verify --prove` records evidence, re-sweep the contract and,
-/// per the implicit-ship decisions, fire the ship gate when this proof completes
-/// ship-readiness:
-/// - dec-fully-automatic-trigger: the verify that empties `ship_gaps` runs the
+/// per the auto-close decisions, fire the close gate when this proof completes
+/// close-readiness:
+/// - dec-fully-automatic-trigger: the verify that empties `close_gaps` runs the
 ///   full gate (evidence + suite + terminal close) in the same call.
-/// - dec-add-a-no-ship-suppressor: `--no-ship` records the proof and defers.
+/// - dec-add-a-no-ship-suppressor: `--no-close` records the proof and defers.
 /// - dec-keep-write-once-outcome: a generated AC-proof summary is the default
 ///   outcome; `--outcome` on the triggering verify overrides it.
 /// - dec-foreknowledge-nudge: when exactly one acceptance item is left, warn
-///   that the next `--prove` will auto-ship unless `--no-ship`.
+///   that the next `--prove` will auto-close unless `--no-close`.
 /// - dec-auto-fire-gate-suite-failure: a gate/suite failure bails out of
-///   `feature_ship::ship`, so the just-recorded proof stays, the feature stays
-///   `in_progress`, and this command exits non-zero (retry via `feature ship`).
-fn after_prove_autoship(
+///   `feature_close::close`, so the just-recorded proof stays, the feature stays
+///   `in_progress`, and this command exits non-zero (retry via `feature close`).
+fn after_prove_autoclose(
     paths: &MaestroPaths,
     id: &str,
-    no_ship: bool,
+    no_close: bool,
     outcome: Option<String>,
 ) -> Result<()> {
-    // Refresh the acceptance sweep so ship-readiness reflects the proof just
-    // recorded: the ship gate's acceptance check requires a fresh contract sweep,
+    // Refresh the acceptance sweep so close-readiness reflects the proof just
+    // recorded: the close gate's acceptance check requires a fresh contract sweep,
     // which only a bare `feature verify` produces.
     let sweep = feature::verify_feature(paths, id, Vec::new())?.sweep;
     let unresolved = sweep
@@ -496,37 +494,37 @@ fn after_prove_autoship(
         })
         .unwrap_or(0);
 
-    if no_ship {
+    if no_close {
         println!(
-            "--no-ship: proof recorded; auto-ship deferred. ship when ready: maestro feature ship {id} --outcome \"<outcome>\""
+            "--no-close: proof recorded; auto-close deferred. close when ready: maestro feature close {id} --outcome \"<outcome>\""
         );
         return Ok(());
     }
 
-    let gaps = feature::ship_gaps(paths, id)?;
+    let gaps = feature::close_gaps(paths, id)?;
     if gaps.is_empty() {
-        let outcome = Some(outcome.unwrap_or_else(|| default_ship_outcome(sweep.as_ref())));
-        println!("ship-ready: auto-shipping (full verify suite + close)");
-        let report = feature_ship::ship(paths, id, outcome, false)?;
+        let outcome = Some(outcome.unwrap_or_else(|| default_close_outcome(sweep.as_ref())));
+        println!("close-ready: auto-closing (full verify suite + close)");
+        let report = feature_close::close(paths, id, outcome, false)?;
         println!("{}", report.note);
-        print_ship_receipt(paths, &report)?;
+        print_close_receipt(paths, &report)?;
         return Ok(());
     }
 
     if unresolved == 1 {
         eprintln!(
-            "note: 1 acceptance item left; the next `maestro feature verify {id} --prove` will auto-ship (full verify suite + close) unless you pass --no-ship"
+            "note: 1 acceptance item left; the next `maestro feature verify {id} --prove` will auto-close (full verify suite + close) unless you pass --no-close"
         );
     }
-    println!("not yet shippable:");
+    println!("not yet closable:");
     println!("  {}", gaps.join("\n  "));
     println!("next: maestro feature verify {id} --prove <ac-id> --evidence \"<observed>\"");
     Ok(())
 }
 
-/// The write-once outcome recorded on an auto-ship when the agent passed no
+/// The write-once outcome recorded on an auto-close when the agent passed no
 /// `--outcome`: a terse AC-proof summary derived from the just-run sweep.
-fn default_ship_outcome(sweep: Option<&feature::AcceptanceSweepReport>) -> String {
+fn default_close_outcome(sweep: Option<&feature::AcceptanceSweepReport>) -> String {
     match sweep {
         Some(report) if !report.items.is_empty() => {
             let ids = report
@@ -540,12 +538,12 @@ fn default_ship_outcome(sweep: Option<&feature::AcceptanceSweepReport>) -> Strin
     }
 }
 
-/// Print the post-ship receipt, shared by explicit `feature ship` and the
-/// auto-ship triggered from `feature verify --prove`.
-fn print_ship_receipt(paths: &MaestroPaths, report: &feature::TransitionReport) -> Result<()> {
-    println!("ship receipt:");
+/// Print the post-close receipt, shared by explicit `feature close` and the
+/// auto-close triggered from `feature verify --prove`.
+fn print_close_receipt(paths: &MaestroPaths, report: &feature::TransitionReport) -> Result<()> {
+    println!("close receipt:");
     println!("  feature: {}", report.id);
-    println!("  status: shipped");
+    println!("  status: closed");
     println!("  full verify suite passed");
     if let Ok(view) = feature::show(paths, &report.id)
         && let Some(reason) = view.qa_none_reason.as_deref()
@@ -565,20 +563,20 @@ fn print_ship_receipt(paths: &MaestroPaths, report: &feature::TransitionReport) 
 
 fn print_green_sweep_next(paths: &MaestroPaths, feature_id: &str) -> Result<()> {
     // Only the lifecycle status drives the next-step hint; avoid show's task,
-    // coverage, and note joins (the InProgress arm re-loads via ship_gaps anyway).
+    // coverage, and note joins (the InProgress arm re-loads via close_gaps anyway).
     match feature::status(paths, feature_id)? {
         FeatureStatus::Proposed => {}
         FeatureStatus::Ready => println!("next: maestro feature start {feature_id}"),
         FeatureStatus::InProgress => {
-            let gaps = feature::ship_gaps(paths, feature_id)?;
+            let gaps = feature::close_gaps(paths, feature_id)?;
             if gaps.is_empty() {
-                println!("next: maestro feature ship {feature_id} --outcome \"<outcome>\"");
+                println!("next: maestro feature close {feature_id} --outcome \"<outcome>\"");
             } else {
-                println!("not yet shippable:");
+                println!("not yet closable:");
                 println!("  {}", gaps.join("\n  "));
             }
         }
-        FeatureStatus::Shipped | FeatureStatus::Cancelled => {}
+        FeatureStatus::Closed | FeatureStatus::Cancelled => {}
     }
     Ok(())
 }
@@ -876,37 +874,37 @@ fn cancel_feature(paths: &MaestroPaths, id: &str, reason: &str, dry_run: bool) -
     Ok(())
 }
 
-fn ship_feature(
+fn close_feature(
     paths: &MaestroPaths,
     id: &str,
     outcome: Option<String>,
     dry_run: bool,
 ) -> Result<()> {
-    let report = feature_ship::ship(paths, id, outcome, dry_run)?;
+    let report = feature_close::close(paths, id, outcome, dry_run)?;
     println!("{}", report.note);
     if dry_run {
-        println!("ship preview:");
+        println!("close preview:");
         println!("  feature: {}", report.id);
         // dec-ac-7-final: a non-blocking reminder that verified children carry
-        // proof from older commits. It never feeds the ship gate, so it cannot
+        // proof from older commits. It never feeds the close gate, so it cannot
         // turn a passing preview into a blocked one.
         let drifted = feature::verified_child_commit_drift(paths, &report.id)?;
         if !drifted.is_empty() {
             println!(
-                "  note: {} child task(s) verified at older commits (HEAD moved); re-verify if their code changed: {} (advisory; does not block ship)",
+                "  note: {} child task(s) verified at older commits (HEAD moved); re-verify if their code changed: {} (advisory; does not block close)",
                 drifted.len(),
                 drifted.join(", ")
             );
         }
-        println!("  target: shipped");
-        println!("  full verify suite would run before shipping");
+        println!("  target: closed");
+        println!("  full verify suite would run before closing");
         println!("writes: none");
         println!(
-            "retry: maestro feature ship {} --outcome \"<outcome>\"",
+            "retry: maestro feature close {} --outcome \"<outcome>\"",
             report.id
         );
-    } else if report.changed && report.status == FeatureStatus::Shipped {
-        print_ship_receipt(paths, &report)?;
+    } else if report.changed && report.status == FeatureStatus::Closed {
+        print_close_receipt(paths, &report)?;
     } else {
         println!("inspect: maestro feature show {}", report.id);
         println!("next: maestro status");
@@ -956,7 +954,7 @@ fn print_feature_unarchive_note(id: &str, note: &str) {
 fn feature_archive_error_message(id: &str, error: &str) -> String {
     if error.contains("not terminal") {
         return format!(
-            "cannot archive {id}:\n  not terminal\nnext:\n  ship: maestro feature ship {id} --outcome \"<outcome>\"\n  or cancel: maestro feature cancel {id} --reason \"<reason>\""
+            "cannot archive {id}:\n  not terminal\nnext:\n  close: maestro feature close {id} --outcome \"<outcome>\"\n  or cancel: maestro feature cancel {id} --reason \"<reason>\""
         );
     }
     if error.contains("live child task") {
@@ -998,9 +996,9 @@ fn feature_unarchive_error_message(id: &str, error: &str) -> String {
 }
 
 fn feature_cancel_error_message(id: &str, reason: &str, error: &str) -> String {
-    if error.contains("shipped features are terminal") || error.contains("terminal") {
+    if error.contains("closed features are terminal") || error.contains("terminal") {
         return format!(
-            "blocked: cannot cancel {id}\nreason: shipped features are terminal\ninspect: maestro feature show {id}\nnext: maestro feature archive {id}"
+            "blocked: cannot cancel {id}\nreason: closed features are terminal\ninspect: maestro feature show {id}\nnext: maestro feature archive {id}"
         );
     }
     if error.contains("failed to abandon child task") {

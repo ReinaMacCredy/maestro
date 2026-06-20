@@ -69,10 +69,10 @@ pub(crate) fn feature_next_label(view: &FeatureView) -> &'static str {
         FeatureStatus::InProgress
             if view.counts.total > 0 && view.counts.total == view.counts.verified =>
         {
-            "template: ship_feature"
+            "template: close_feature"
         }
         FeatureStatus::InProgress => "run: resolve_tasks",
-        FeatureStatus::Shipped | FeatureStatus::Cancelled => "run: archive_feature",
+        FeatureStatus::Closed | FeatureStatus::Cancelled => "run: archive_feature",
     }
 }
 
@@ -107,10 +107,10 @@ pub(crate) fn render_git_line(git: &GitReadout) -> String {
 }
 
 /// The contextual clean-worktree note, shown only when the next verb is
-/// ship/verify-shaped and uncommitted code/other changes exist.
+/// close/verify-shaped and uncommitted code/other changes exist.
 pub(crate) fn clean_worktree_note(code_other_dirty: usize) -> String {
     format!(
-        "note: commit the {code_other_dirty} uncommitted code/other change(s) before the ship/verify step so proof reflects the intended tree"
+        "note: commit the {code_other_dirty} uncommitted code/other change(s) before the close/verify step so proof reflects the intended tree"
     )
 }
 
@@ -122,7 +122,7 @@ pub(crate) fn short_commit(commit: &str) -> &str {
 
 /// The named repair for a stale proof: a refresh framed as "HEAD moved, likely
 /// no code change", naming the commit drift (`old->new`) when the stale reason
-/// carries one. Shared so `resume`/`status` and `feature ship --dry-run` name
+/// carries one. Shared so `resume`/`status` and `feature close --dry-run` name
 /// the same repair.
 pub(crate) fn stale_proof_repair(
     task_id: &str,
@@ -1073,12 +1073,12 @@ pub enum FeatureCommand {
         reason: Vec<String>,
         #[arg(
             long,
-            help = "Record the proof but suppress the auto-ship when this verify completes ship-readiness (defer to explicit `feature ship`)"
+            help = "Record the proof but suppress the auto-close when this verify completes close-readiness (defer to explicit `feature close`)"
         )]
-        no_ship: bool,
+        no_close: bool,
         #[arg(
             long,
-            help = "Outcome line for the auto-ship close (overrides the generated default; ignored unless this verify auto-ships)"
+            help = "Outcome line for the auto-close (overrides the generated default; ignored unless this verify auto-closes)"
         )]
         outcome: Option<String>,
     },
@@ -1089,15 +1089,15 @@ pub enum FeatureCommand {
     },
     #[command(about = "Append a dated note to a feature's notes.md")]
     Note { id: String, text: String },
-    #[command(about = "Ship an in-progress feature (-> shipped; gated)")]
-    Ship {
+    #[command(about = "Close an in-progress feature (-> closed; gated)")]
+    Close {
         id: String,
         #[arg(
             long,
             help = "One-line outcome recorded on the feature, shown in `feature list --all`"
         )]
         outcome: Option<String>,
-        #[arg(long, help = "Preview the ship gate without transitioning")]
+        #[arg(long, help = "Preview the close gate without transitioning")]
         dry_run: bool,
     },
     #[command(
@@ -1133,7 +1133,7 @@ pub enum FeatureCommand {
     List {
         #[arg(
             long,
-            help = "Include terminal features (shipped, cancelled) and archived ones"
+            help = "Include terminal features (closed, cancelled) and archived ones"
         )]
         all: bool,
     },
@@ -1145,7 +1145,7 @@ pub enum FeatureCommand {
         id: Option<String>,
         #[arg(
             long,
-            help = "Archive every closed feature (shipped or cancelled; mutually exclusive with <id>)"
+            help = "Archive every closed feature (closed or cancelled; mutually exclusive with <id>)"
         )]
         closed: bool,
         #[arg(
@@ -1167,9 +1167,9 @@ pub enum FeatureProofCommand {
         ac: String,
         #[arg(long, help = "Observed evidence")]
         evidence: String,
-        #[arg(long, help = "Record proof but suppress auto-ship")]
-        no_ship: bool,
-        #[arg(long, help = "Outcome line if this proof auto-ships")]
+        #[arg(long, help = "Record proof but suppress auto-close")]
+        no_close: bool,
+        #[arg(long, help = "Outcome line if this proof auto-closes")]
         outcome: Option<String>,
     },
     #[command(about = "Waive a feature acceptance item with an explicit reason")]

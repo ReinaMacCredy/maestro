@@ -546,7 +546,7 @@ pub fn update(args: UpdateArgs) -> Result<()> {
     let mut c = resolved.card.clone();
     if let Some(status) = args.status.as_deref() {
         // SPEC E3: feature/idea/decision keep their per-type lifecycle
-        // verbs; a generic status write would bypass their gates (ship/QA,
+        // verbs; a generic status write would bypass their gates (close/QA,
         // lock stamps, backlog reconciliation).
         if !c.card_type.workable() {
             return Err(anyhow!(
@@ -654,7 +654,7 @@ pub fn close(args: CloseArgs) -> Result<()> {
 /// --status` (SPEC E3: feature/idea/decision keep per-type terminal verbs).
 fn per_type_verbs_hint(card_type: card::schema::CardType) -> &'static str {
     match card_type {
-        card::schema::CardType::Feature => "use `maestro feature ship` or `maestro feature cancel`",
+        card::schema::CardType::Feature => "use `maestro feature close` or `maestro feature cancel`",
         card::schema::CardType::Decision => "use `maestro decision lock`",
         card::schema::CardType::Idea => "use `maestro harness apply/dismiss/measure`",
         card::schema::CardType::Task
@@ -778,7 +778,11 @@ fn render_list(rows: &[(&card::schema::Card, bool)], hidden: usize, archived: bo
         .map(|(c, _)| c.card_type.as_str().len())
         .max()
         .unwrap_or(0);
-    let status_width = rows.iter().map(|(c, _)| c.status.len()).max().unwrap_or(0);
+    let status_width = rows
+        .iter()
+        .map(|(c, _)| card::query::canonical_status(&c.status).len())
+        .max()
+        .unwrap_or(0);
     let parent_width = rows
         .iter()
         .map(|(c, _)| c.parent.as_deref().unwrap_or("-").len())
@@ -796,7 +800,7 @@ fn render_list(rows: &[(&card::schema::Card, bool)], hidden: usize, archived: bo
             "  {rank}. {:<id_width$}  {:<type_width$}  {:<status_width$}  {:<parent_width$}  {}{}{}{marker}",
             c.id,
             c.card_type.as_str(),
-            c.status,
+            card::query::canonical_status(&c.status),
             c.parent.as_deref().unwrap_or("-"),
             c.title,
             project_badge(c),
@@ -880,7 +884,7 @@ fn render_show(c: &card::schema::Card, alias: Option<&str>, related_by: &[String
         c.id,
         c.card_type.as_str(),
         c.title,
-        c.status,
+        card::query::canonical_status(&c.status),
         claim_label(c),
     );
     if let Some(parent) = &c.parent {

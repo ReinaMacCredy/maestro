@@ -188,7 +188,7 @@ fn cells_for(
         Some(id) => match by_id.get(id.as_str()) {
             Some(card) => (
                 truncate(&card.title, CARD_WIDTH),
-                card.status.clone(),
+                card::query::canonical_status(&card.status).to_string(),
                 progress_for(&card.id, cards),
             ),
             None => (format!("{id} (missing)"), dash(), String::new()),

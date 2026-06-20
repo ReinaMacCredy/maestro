@@ -399,6 +399,31 @@ fn archive_moves_a_shipped_feature_and_its_children_through_the_binary() {
 }
 
 #[test]
+fn legacy_shipped_feature_renders_as_closed_in_generic_card_views() {
+    let temp = TestTempDir::new("p4d-legacy-display");
+    let paths = MaestroPaths::new(temp.path());
+    let repo = temp.path();
+
+    // A pre-rename feature keeps `shipped` on disk (no migration, by design). The
+    // type-agnostic card views must show the current spelling, never the legacy word.
+    write_card(
+        &paths,
+        &Card::new("csv-export", CardType::Feature, "CSV export", "shipped", NOW),
+    );
+
+    for args in [
+        &["card", "show", "csv-export"][..],
+        &["card", "list", "--all"][..],
+    ] {
+        let out = run(repo, args);
+        assert!(
+            out.contains("closed") && !out.contains("shipped"),
+            "{args:?} renders the legacy terminal word as closed, not shipped:\n{out}"
+        );
+    }
+}
+
+#[test]
 fn archived_task_still_renders_in_show_and_list_all() {
     let temp = TestTempDir::new("p4d-archive-read");
     let paths = MaestroPaths::new(temp.path());

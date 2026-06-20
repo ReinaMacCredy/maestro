@@ -42,7 +42,7 @@ const BAD_RECORD: &str = "schema_version: maestro.card.v1\nid: billing-csv\ntype
 /// Author a complete contract on a freshly-created Proposed feature, plus a
 /// present baseline with no `[bl-NNN]` scenarios. The empty Scenario Matrix
 /// declares no behavioral surface (QA C), so it satisfies the accept precondition
-/// (F) and the ship coverage skip without entangling these transition-machinery
+/// (F) and the close coverage skip without entangling these transition-machinery
 /// tests with slice authoring (the behavioral path lives in feature_qa_gate_integration).
 fn author_contract(paths: &MaestroPaths, id: &str) {
     feature::set(
@@ -342,7 +342,7 @@ fn accept_dry_run_previews_without_transitioning() {
 }
 
 #[test]
-fn full_lifecycle_new_set_accept_start_ship() {
+fn full_lifecycle_new_set_accept_start_close() {
     let temp = TestTempDir::new("maestro-feature-lifecycle");
     let paths = MaestroPaths::new(temp.path());
 
@@ -352,9 +352,9 @@ fn full_lifecycle_new_set_accept_start_ship() {
     let started = feature::start(&paths, "billing-csv").expect("invariant: start should succeed");
     assert_eq!(started.status, feature::FeatureStatus::InProgress);
     verify_contract(&paths, "billing-csv");
-    let shipped =
-        feature::ship(&paths, "billing-csv", None, false).expect("invariant: ship should succeed");
-    assert_eq!(shipped.status, feature::FeatureStatus::Shipped);
+    let closed =
+        feature::close(&paths, "billing-csv", None, false).expect("invariant: close should succeed");
+    assert_eq!(closed.status, feature::FeatureStatus::Closed);
 }
 
 #[test]
@@ -369,9 +369,9 @@ fn illegal_transitions_name_the_gap() {
 
     author_contract(&paths, "billing-csv");
     feature::accept(&paths, "billing-csv", false).expect("invariant: accept should succeed");
-    // ship before start
+    // close before start
     let error =
-        feature::ship(&paths, "billing-csv", None, false).expect_err("invariant: ship must block");
+        feature::close(&paths, "billing-csv", None, false).expect_err("invariant: close must block");
     assert!(error.to_string().contains("not started"));
 }
 
@@ -392,8 +392,8 @@ fn completed_transitions_are_idempotent_no_ops() {
 }
 
 #[test]
-fn ship_blocks_on_live_child_task() {
-    let temp = TestTempDir::new("maestro-feature-ship-block");
+fn close_blocks_on_live_child_task() {
+    let temp = TestTempDir::new("maestro-feature-close-block");
     let paths = MaestroPaths::new(temp.path());
 
     feature::create(&paths, "Billing CSV", None).expect("invariant: create should succeed");
@@ -404,14 +404,14 @@ fn ship_blocks_on_live_child_task() {
 
     write_task(&paths, "task-001", "billing-csv", "in_progress");
     let error =
-        feature::ship(&paths, "billing-csv", None, false).expect_err("invariant: ship must block");
+        feature::close(&paths, "billing-csv", None, false).expect_err("invariant: close must block");
     assert!(error.to_string().contains("task-001"));
 
-    // A verified child does not block ship.
+    // A verified child does not block close.
     write_task(&paths, "task-001", "billing-csv", "verified");
-    let shipped =
-        feature::ship(&paths, "billing-csv", None, false).expect("invariant: ship succeeds");
-    assert_eq!(shipped.status, feature::FeatureStatus::Shipped);
+    let closed =
+        feature::close(&paths, "billing-csv", None, false).expect("invariant: close succeeds");
+    assert_eq!(closed.status, feature::FeatureStatus::Closed);
 }
 
 #[test]
@@ -452,8 +452,8 @@ fn cancel_cascades_to_live_child_tasks() {
 }
 
 #[test]
-fn cannot_cancel_a_shipped_feature() {
-    let temp = TestTempDir::new("maestro-feature-cancel-shipped");
+fn cannot_cancel_a_closed_feature() {
+    let temp = TestTempDir::new("maestro-feature-cancel-closed");
     let paths = MaestroPaths::new(temp.path());
 
     feature::create(&paths, "Billing CSV", None).expect("invariant: create should succeed");
@@ -461,10 +461,10 @@ fn cannot_cancel_a_shipped_feature() {
     feature::accept(&paths, "billing-csv", false).expect("invariant: accept should succeed");
     feature::start(&paths, "billing-csv").expect("invariant: start should succeed");
     verify_contract(&paths, "billing-csv");
-    feature::ship(&paths, "billing-csv", None, false).expect("invariant: ship should succeed");
+    feature::close(&paths, "billing-csv", None, false).expect("invariant: close should succeed");
 
     let error = feature::cancel(&paths, "billing-csv", "too late", false)
-        .expect_err("invariant: shipped features cannot be cancelled");
+        .expect_err("invariant: closed features cannot be cancelled");
     assert!(error.to_string().contains("terminal"));
 }
 
@@ -733,8 +733,8 @@ fn status_label_renders_snake_case() {
         "in_progress"
     );
     assert_eq!(
-        feature::status_label(&feature::FeatureStatus::Shipped),
-        "shipped"
+        feature::status_label(&feature::FeatureStatus::Closed),
+        "closed"
     );
     assert_eq!(
         feature::status_label(&feature::FeatureStatus::Cancelled),
