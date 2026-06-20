@@ -428,14 +428,18 @@ pub(super) fn worktree_advisory(paths: &MaestroPaths) -> Result<()> {
     let Some((count, who)) = live_peer_summary(&rows, &me) else {
         return Ok(());
     };
-    eprintln!(
-        "[worktree] {count} other live session{}: {who}",
-        if count == 1 { "" } else { "s" }
-    );
-    eprintln!(
-        "           -> isolate in a git worktree before implementing; maestro link add + maestro conflict if you'll share a file"
-    );
+    eprintln!("{}", worktree_advisory_text(count, &who));
     Ok(())
+}
+
+/// The two STDERR lines [`worktree_advisory`] prints, pure so the wording stays
+/// unit-testable. Names the canonical gitignored `.maestro/worktree/<slug>`
+/// isolation path so the recipe's location is discoverable at the nudge.
+fn worktree_advisory_text(count: usize, who: &str) -> String {
+    format!(
+        "[worktree] {count} other live session{plural}: {who}\n           -> isolate in .maestro/worktree/<slug> (git worktree add) before implementing; maestro link add + maestro conflict if you'll share a file",
+        plural = if count == 1 { "" } else { "s" }
+    )
 }
 
 /// The live-peer summary behind [`worktree_advisory`]: the count and a
@@ -559,5 +563,17 @@ mod tests {
         let (count, who) = live_peer_summary(&rows, "meS").expect("live peers present");
         assert_eq!(count, 2);
         assert_eq!(who, "task-2, p2");
+    }
+
+    #[test]
+    fn worktree_advisory_text_names_the_maestro_worktree_path() {
+        let text = worktree_advisory_text(2, "task-2, p2");
+        assert!(text.contains("[worktree] 2 other live sessions: task-2, p2"));
+        assert!(
+            text.contains(".maestro/worktree/<slug>"),
+            "nudge must name the canonical isolation path: {text}"
+        );
+        // singular peer -> "session", not "sessions"
+        assert!(worktree_advisory_text(1, "task-2").contains("1 other live session:"));
     }
 }

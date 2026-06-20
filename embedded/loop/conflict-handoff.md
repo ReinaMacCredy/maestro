@@ -11,10 +11,11 @@ cards. You drive the whole dance below; maestro only carries the notices.
 1. See who is live: `maestro active`. At the design-to-implement boundary
    `feature accept` / `prepare` also print a `[worktree]` nudge when a peer is
    live.
-2. Isolate -- create your own worktree and implement there, so two sessions
-   never write the same checkout:
+2. Isolate -- create your own worktree under the repo's gitignored
+   `.maestro/worktree/` and implement there, so two sessions never write the
+   same checkout:
 
-       git worktree add ../<repo>-<slug> -b <branch>
+       git worktree add .maestro/worktree/<slug> -b <branch>
 
 3. If you will touch a file a peer is also editing, make it visible:
 
@@ -56,4 +57,4 @@ A real git conflict on step 5 means you and the peer changed the same lines.
 
 Your slice is merged to the shared branch, the suite is green, and every
 `maestro conflict` you opened is cleared. Then remove the worktree
-(`git worktree remove ../<repo>-<slug>`).
+(`git worktree remove .maestro/worktree/<slug>`).

@@ -87,6 +87,7 @@ fn install_writes_nested_gitignore_and_root_agent_settings_block() {
         "runs/",
         "channels/",
         "backups/",
+        "worktree/",
         "index/",
         "install-lock.yaml",
         "update-check",

@@ -1029,10 +1029,12 @@ fn agents_md_block() -> &'static str {
 
 /// Body of the maestro-owned `.maestro/.gitignore`. Patterns are relative to
 /// `.maestro/` (a nested `.gitignore` applies to its own subtree), so they carry
-/// no `.maestro/` prefix. Covers maestro-internal local-only paths. `playbook/`
-/// is deliberately absent so its files stay tracked.
+/// no `.maestro/` prefix. Covers maestro-internal local-only paths. `worktree/`
+/// is where the conflict-handoff recipe puts agent worktrees (full checkouts);
+/// they must never be committed. `playbook/` is deliberately absent so its files
+/// stay tracked.
 fn maestro_gitignore_block() -> &'static str {
-    "# Maestro local-only paths\nruns/\nchannels/\nconflicts.jsonl\nmaestro-gate.lock\nbackups/\nindex/\ninstall-lock.yaml\nupdate-check\ntasks/*/evidence/\ntasks/*/local/\narchive/**/evidence/\narchive/**/local/\narchive/**/runs/"
+    "# Maestro local-only paths\nruns/\nchannels/\nconflicts.jsonl\nmaestro-gate.lock\nbackups/\nworktree/\nindex/\ninstall-lock.yaml\nupdate-check\ntasks/*/evidence/\ntasks/*/local/\narchive/**/evidence/\narchive/**/local/\narchive/**/runs/"
 }
 
 fn agent_settings_gitignore_block() -> &'static str {
