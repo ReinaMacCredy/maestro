@@ -13,7 +13,7 @@ use anyhow::Result;
 use serde::Serialize;
 
 use crate::domain::card;
-use crate::domain::card::query::{Coarse, coarse_of};
+use crate::domain::card::query::{Coarse, canonical_status, coarse_of};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::time::timestamp_nanos;
 
@@ -150,7 +150,7 @@ pub fn assemble(
                     .unwrap_or_else(|| "(not in store)".to_string()),
                 status: facts
                     .as_ref()
-                    .map(|f| f.status.clone())
+                    .map(|f| canonical_status(&f.status).to_string())
                     .unwrap_or_else(|| "unknown".to_string()),
                 tdd: tdd_evidence(&act.claims),
                 latest_proof: act.latest_proof.map(|(_, message)| message),
@@ -426,6 +426,16 @@ mod tests {
         let trace = assemble(events, |_| None, 0);
         assert_eq!(trace.entries[0].status, "unknown");
         assert_eq!(trace.entries[0].title, "(not in store)");
+    }
+
+    #[test]
+    fn a_legacy_shipped_status_renders_as_the_canonical_closed_word() {
+        // The `ship`->`close` rename shipped no data migration, so pre-rename
+        // records still carry `status: shipped` on disk. The trace must show the
+        // canonical `closed` like every other surface, not the stale word.
+        let events = vec![touch("done", "s", "2026-06-20T01:00:00Z")];
+        let trace = assemble(events, |_| Some(facts("Old feature", "shipped")), 0);
+        assert_eq!(trace.entries[0].status, "closed");
     }
 
     #[test]
