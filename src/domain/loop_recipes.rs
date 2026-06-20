@@ -114,7 +114,10 @@ mod tests {
             "loop-until-done",
             "unattended-loop",
         ] {
-            assert!(names.contains(&expected), "loop catalog is missing {expected}");
+            assert!(
+                names.contains(&expected),
+                "loop catalog is missing {expected}"
+            );
         }
         assert_eq!(names.len(), 7, "ships exactly 7 recipes");
     }

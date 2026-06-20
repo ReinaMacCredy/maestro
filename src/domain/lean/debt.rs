@@ -46,7 +46,10 @@ pub struct MintOutcome {
 pub fn marker_text(line: &str) -> Option<String> {
     for (idx, _) in line.match_indices(TOKEN) {
         let before = line[..idx].trim_end();
-        if COMMENT_LEADERS.iter().any(|leader| before.ends_with(leader)) {
+        if COMMENT_LEADERS
+            .iter()
+            .any(|leader| before.ends_with(leader))
+        {
             let text = line[idx + TOKEN.len()..].trim();
             if !text.is_empty() {
                 return Some(text.to_string());
@@ -158,9 +161,15 @@ mod tests {
 
     #[test]
     fn accepts_anchored_markers_after_each_comment_leader() {
-        assert_eq!(marker_text("// lean: cache this"), Some("cache this".to_string()));
+        assert_eq!(
+            marker_text("// lean: cache this"),
+            Some("cache this".to_string())
+        );
         assert_eq!(marker_text("# lean: dedupe"), Some("dedupe".to_string()));
-        assert_eq!(marker_text("-- lean: index this"), Some("index this".to_string()));
+        assert_eq!(
+            marker_text("-- lean: index this"),
+            Some("index this".to_string())
+        );
         assert_eq!(marker_text("//lean:nospace"), Some("nospace".to_string()));
     }
 
@@ -176,9 +185,17 @@ mod tests {
     fn rejects_clean_and_boolean_and_unanchored_lean() {
         assert_eq!(marker_text("let clean: bool = true;"), None);
         assert_eq!(marker_text("fn parse() -> boolean: {}"), None);
-        assert_eq!(marker_text("let lean: i32 = 0;"), None, "a var named lean is not a marker");
+        assert_eq!(
+            marker_text("let lean: i32 = 0;"),
+            None,
+            "a var named lean is not a marker"
+        );
         assert_eq!(marker_text("// nothing to see here"), None);
-        assert_eq!(marker_text("// lean:"), None, "an empty marker is not actionable");
+        assert_eq!(
+            marker_text("// lean:"),
+            None,
+            "an empty marker is not actionable"
+        );
     }
 
     #[test]
@@ -186,8 +203,16 @@ mod tests {
         let dir = TestTempDir::new("maestro-lean-debt-mint");
         let paths = MaestroPaths::new(dir.path());
         let markers = vec![
-            Marker { file: "src/a.rs".to_string(), line: 10, text: "cache once".to_string() },
-            Marker { file: "src/b.rs".to_string(), line: 20, text: "use serde".to_string() },
+            Marker {
+                file: "src/a.rs".to_string(),
+                line: 10,
+                text: "cache once".to_string(),
+            },
+            Marker {
+                file: "src/b.rs".to_string(),
+                line: 20,
+                text: "use serde".to_string(),
+            },
         ];
 
         let first = mint_cards(&paths, &markers).unwrap();
@@ -202,6 +227,9 @@ mod tests {
 
         let second = mint_cards(&paths, &markers).unwrap();
         assert_eq!(second.minted.len(), 0, "a re-run mints nothing");
-        assert_eq!(second.deduped, 2, "both markers dedupe against the existing cards");
+        assert_eq!(
+            second.deduped, 2,
+            "both markers dedupe against the existing cards"
+        );
     }
 }

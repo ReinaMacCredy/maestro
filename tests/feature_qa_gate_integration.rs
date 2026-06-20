@@ -136,6 +136,132 @@ fn prove_contract(repo: &Path, id: &str) {
 }
 
 #[test]
+fn qa_baseline_helper_writes_acceptance_baseline() {
+    let temp = TestTempDir::new("maestro-qa-baseline-helper");
+    let repo = temp.path();
+    init_and_author(repo, "report-builder", "Report builder");
+
+    let args = [
+        "qa",
+        "baseline",
+        "report-builder",
+        "--observed",
+        "current report command prints a summary",
+    ];
+    let out = stdout(maestro(&args, repo), &args);
+
+    assert!(out.contains("recorded baseline"), "{out}");
+    let qa = fs::read_to_string(feature_dir(repo, "report-builder").join("qa.md"))
+        .expect("invariant: qa.md should be written");
+    assert!(qa.contains("[bl-001]"), "{qa}");
+    assert!(
+        qa.contains("current report command prints a summary"),
+        "{qa}"
+    );
+    stdout(
+        maestro(&["feature", "accept", "report-builder"], repo),
+        &["feature", "accept"],
+    );
+}
+
+#[test]
+fn qa_slice_helper_appends_counting_slice() {
+    let temp = TestTempDir::new("maestro-qa-slice-helper");
+    let repo = temp.path();
+    init_and_author(repo, "report-builder", "Report builder");
+    write_baseline(repo, "report-builder", 0, &["bl-001"]);
+
+    let args = [
+        "qa",
+        "slice",
+        "report-builder",
+        "--scenario",
+        "bl-001",
+        "--observed",
+        "slice evidence",
+    ];
+    let out = stdout(maestro(&args, repo), &args);
+
+    assert!(out.contains("recorded qa slice"), "{out}");
+    let qa = fs::read_to_string(feature_dir(repo, "report-builder").join("qa.md"))
+        .expect("invariant: qa.md should be readable");
+    assert!(qa.contains("slices:"), "{qa}");
+    assert!(qa.contains("bl-001"), "{qa}");
+    assert!(qa.contains("slice evidence"), "{qa}");
+}
+
+#[test]
+fn feature_proof_add_records_explicit_evidence() {
+    let temp = TestTempDir::new("maestro-feature-proof-add-helper");
+    let repo = temp.path();
+    init_and_author(repo, "report-builder", "Report builder");
+    write_baseline(repo, "report-builder", 0, &["bl-001"]);
+    stdout(
+        maestro(&["feature", "accept", "report-builder"], repo),
+        &["feature", "accept"],
+    );
+    stdout(
+        maestro(&["feature", "start", "report-builder"], repo),
+        &["feature", "start"],
+    );
+
+    let args = [
+        "feature",
+        "proof",
+        "add",
+        "report-builder",
+        "--ac",
+        "ac-1",
+        "--evidence",
+        "observed helper proof",
+        "--no-ship",
+    ];
+    let out = stdout(maestro(&args, repo), &args);
+
+    assert!(out.contains("recorded"), "{out}");
+    let verify = stdout(
+        maestro(&["feature", "verify", "report-builder"], repo),
+        &["feature", "verify"],
+    );
+    assert!(
+        verify.contains("ok: every acceptance item has evidence"),
+        "{verify}"
+    );
+}
+
+#[test]
+fn feature_prepare_task_helper_creates_validated_task() {
+    let temp = TestTempDir::new("maestro-feature-prepare-task-helper");
+    let repo = temp.path();
+    init_and_author(repo, "report-builder", "Report builder");
+    write_baseline(repo, "report-builder", 0, &["bl-001"]);
+    stdout(
+        maestro(&["feature", "accept", "report-builder"], repo),
+        &["feature", "accept"],
+    );
+
+    let args = [
+        "feature",
+        "prepare",
+        "report-builder",
+        "--task",
+        "T1: Add helper path",
+        "--check",
+        "helper path works",
+        "--covers",
+        "ac-1",
+    ];
+    let out = stdout(maestro(&args, repo), &args);
+
+    assert!(out.contains("prepared 1 task(s)"), "{out}");
+    let list = stdout(
+        maestro(&["task", "list", "--feature", "report-builder"], repo),
+        &["task", "list"],
+    );
+    assert!(list.contains("Add helper path"), "{list}");
+}
+
+#[test]
 fn feature_qa_gates_via_cli() {
     let temp = TestTempDir::new("maestro-qa-gate-test");
     let repo = temp.path();

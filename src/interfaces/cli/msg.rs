@@ -26,7 +26,7 @@ const CONTEXT_LIMIT: usize = 5;
 
 pub fn run(args: MsgArgs) -> Result<()> {
     match args.command {
-        MsgCommand::Send { to, text } => send(&to, &text),
+        MsgCommand::Send { from, to, text } => send(from.as_deref(), &to, &text),
         MsgCommand::Read { card } => read(card.as_deref()),
         MsgCommand::List { card } => list(card.as_deref()),
     }
@@ -35,9 +35,16 @@ pub fn run(args: MsgArgs) -> Result<()> {
 /// `maestro msg send <to> <text>`: append a message to the channel between the
 /// running card and `<to>`. Link-gated (bidirectional, archive-aware) and
 /// validated; emits no card_touch and no run event -- a send is not work state.
-fn send(to: &str, text: &str) -> Result<()> {
+fn send(from: Option<&str>, to: &str, text: &str) -> Result<()> {
     let paths = MaestroPaths::new(discover_repo_root()?);
     let me = current_card(&paths)?;
+    if let Some(asserted) = from
+        && asserted != me
+    {
+        bail!(
+            "--from does not match current card; requested from: {asserted}; current card: {me}; touch or claim {asserted} before sending from it"
+        );
+    }
     let me_card = resolve_card(&paths, &me)?;
 
     let Some(target) = resolve_live_or_archived_card(&paths, to)? else {

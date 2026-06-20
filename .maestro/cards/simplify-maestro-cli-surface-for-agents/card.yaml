@@ -1,0 +1,68 @@
+schema_version: maestro.card.v1
+id: simplify-maestro-cli-surface-for-agents
+type: feature
+title: Simplify Maestro CLI surface for agents
+status: shipped
+created_at: 2026-06-20T10:17:34.969Z
+updated_at: 2026-06-20T11:30:05.336Z
+description: Simplify Maestro's agent-facing CLI by adding one canonical loop entrypoint, tightening lifecycle guardrails, lowering feature-flow friction, and reducing cross-agent coordination mistakes without violating the local-first artifact model.
+extra:
+  schema_version: maestro.feature.v2
+  outcome: Simplified Maestro agent CLI surface with next, guardrails, helpers, and coordination assertions.
+  non_goals:
+  - Remove hidden flat aliases in the first change.
+  - Invent proof, QA baselines, acceptance waivers, or prepare plans without explicit user/agent input.
+  - Auto-ship, archive, or mutate coordination links from maestro next loop mode.
+  affected_areas:
+  - src/interfaces/cli
+  - src/domain/card
+  - src/domain/task
+  - src/domain/feature
+  - src/domain/channel
+  acceptance_sweeps:
+  - at: 2026-06-20T11:28:17.076Z
+    resolved:
+    - ac-1
+    - ac-2
+    - ac-3
+    - ac-4
+  - at: 2026-06-20T11:28:17.165Z
+    resolved:
+    - ac-1
+    - ac-2
+    - ac-3
+    - ac-4
+  - at: 2026-06-20T11:28:17.252Z
+    resolved:
+    - ac-1
+    - ac-2
+    - ac-3
+    - ac-4
+  - at: 2026-06-20T11:28:17.336Z
+    resolved:
+    - ac-1
+    - ac-2
+    - ac-3
+    - ac-4
+  acceptance_evidence:
+  - ac_id: ac-1
+    kind: explicit
+    text: maestro next supports suggest, --run, --loop, JSON, auto_safe claim-only execution, and refusal for input-required actions; cargo test passed.
+    at: 2026-06-20T11:28:17.020Z
+  - ac_id: ac-2
+    kind: explicit
+    text: generic card update rejects needs_verification and verified with typed task remedies while compatible updates still pass; cargo test passed.
+    at: 2026-06-20T11:28:17.116Z
+  - ac_id: ac-3
+    kind: explicit
+    text: qa baseline/slice, feature proof add/waive, and feature prepare --task helpers are covered by feature_qa_gate_integration; cargo test passed.
+    at: 2026-06-20T11:28:17.205Z
+  - ac_id: ac-4
+    kind: explicit
+    text: active --connect and msg send --from assertion are covered by active/card integration tests; cargo test passed.
+    at: 2026-06-20T11:28:17.289Z
+  acceptance:
+  - Agents can run one canonical next command to discover the safest next action, with read-only, one-step, and bounded-loop modes clearly separated.
+  - Generic card status updates cannot bypass task-owned verification lifecycle transitions; errors point to typed commands.
+  - Feature-flow helpers reduce manual QA, prepare, and proof artifact editing while preserving the same durable artifact contracts.
+  - Coordination improvements make current-card sender and link remedies explicit without auto-linking peers.

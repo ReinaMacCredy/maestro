@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.0.0 -->
-<!-- maestro:cli-reference-sha256: db5fa9684800c26fa6c685f10c8c472288b17b819051f1e7ba6d29bd8326a1a9 -->
+<!-- maestro:cli-reference-sha256: eedc3c1174f5225fe2c190dec09a8169adf7bb456d79cb8f23e46d1a9f400fd6 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -39,6 +39,10 @@ Every verb and flag is listed; a spelling not found here does not exist.
 
 - `maestro status [--json]` -- Show the repo's current agent handoff and next action
 
+## maestro next
+
+- `maestro next [--json] [--run] [--loop] [--max-steps <MAX_STEPS>]` -- Show or run the next safe agent action
+
 ## maestro resume
 
 - `maestro resume [--task <TASK_ID>] [--feature <FEATURE_ID>] [--full] [--handoff] [--write] [--json]` -- Print a clean-session resume packet from current repo artifacts
@@ -65,8 +69,6 @@ Every verb and flag is listed; a spelling not found here does not exist.
 - `maestro task watch [ID] [--interval <INTERVAL>]` -- Watch tasks live, refreshing on an interval
 - `maestro task proof [TASK_ID] [--task-id <TASK_ID>]` -- Show a task's proof status
 - `maestro task doctor` -- Check the task blocker graph for cycles and dangling refs
-- `maestro task archive <ID> [--dry-run]` -- Archive a done task out of the live scan (-> .maestro/archive/tasks)
-- `maestro task unarchive <ID>` -- Restore an archived task to the live scan
 
 ## maestro event
 
@@ -78,10 +80,12 @@ Every verb and flag is listed; a spelling not found here does not exist.
 - `maestro feature new <TITLE> [--description <DESCRIPTION>] [--question <QUESTION>]... [--project <PROJECT>] [--id-only]` -- Propose a new feature (-> proposed)
 - `maestro feature set <ID> [--acceptance <ACCEPTANCE>]... [--area <AREA>]... [--non-goal <NON_GOAL>]... [--question <QUESTION>]... [--description <DESCRIPTION>] [--request <REQUEST>] [--type <INPUT_TYPE>]` -- Author a proposed feature's contract (replace or append fields)
 - `maestro feature accept <ID> [--qa <SURFACE>] [--reason <REASON>] [--dry-run]` -- Accept a feature into ready, freezing its contract (-> ready; gated)
-- `maestro feature prepare <ID> [--from <PLAN_FILE>] [--draft]` -- Prepare an accepted feature into a ready implementation queue
+- `maestro feature prepare <ID> [--from <PLAN_FILE>] [--draft] [--task <TASK>]... [--check <CHECK>]... [--covers <COVERS>]... [--blocker <BLOCKER>]... [--after <AFTER>]...` -- Prepare an accepted feature into a ready implementation queue
 - `maestro feature amend <ID> [--add-acceptance <ADD_ACCEPTANCE>]... [--add-area <ADD_AREA>]... [--add-non-goal <ADD_NON_GOAL>]... [--add-question <ADD_QUESTION>]... --reason <REASON>` -- Grow a frozen contract additively with an audit reason (ready/in_progress)
 - `maestro feature start <ID>` -- Start work on a ready feature (-> in_progress)
 - `maestro feature verify <ID> [--prove <AC_ID>]... [--evidence <EVIDENCE>]... [--waive <AC_ID>]... [--reason <REASON>]... [--no-ship] [--outcome <OUTCOME>]` -- Sweep or record proof for a feature's acceptance contract
+- `maestro feature proof add <ID> --ac <AC> --evidence <EVIDENCE> [--no-ship] [--outcome <OUTCOME>]` -- Record explicit feature acceptance proof
+- `maestro feature proof waive <ID> --ac <AC> --reason <REASON>` -- Waive a feature acceptance item with an explicit reason
 - `maestro feature note <ID> <TEXT>` -- Append a dated note to a feature's notes.md
 - `maestro feature ship <ID> [--outcome <OUTCOME>] [--dry-run]` -- Ship an in-progress feature (-> shipped; gated)
 - `maestro feature cancel <ID> --reason <REASON> [--dry-run]` -- Cancel a non-terminal feature, abandoning its live child tasks (-> cancelled)
@@ -90,6 +94,11 @@ Every verb and flag is listed; a spelling not found here does not exist.
 - `maestro feature list [--all]` -- List features with their statuses and task counts
 - `maestro feature archive [ID] [--closed] [--dry-run]` -- Archive a terminal feature and its terminal child tasks (-> .maestro/archive/features)
 - `maestro feature unarchive <ID>` -- Restore an archived feature and its archived child tasks
+
+## maestro qa
+
+- `maestro qa baseline <ID> --observed <OBSERVED>` -- Write a feature QA baseline from explicit observed behavior
+- `maestro qa slice <ID> [--scenario <SCENARIO>]... --observed <OBSERVED>` -- Append counting QA slice evidence for baseline scenarios
 
 ## maestro decision
 
@@ -116,7 +125,7 @@ Every verb and flag is listed; a spelling not found here does not exist.
 
 ## maestro active
 
-- `maestro active [--all]` -- Show what other live sessions are doing (cross-session awareness)
+- `maestro active [--all] [--connect]` -- Show what other live sessions are doing (cross-session awareness)
 
 ## maestro link
 
@@ -125,7 +134,7 @@ Every verb and flag is listed; a spelling not found here does not exist.
 
 ## maestro msg
 
-- `maestro msg send <TO> <TEXT>` -- Send a message to a linked card (sender is your current card)
+- `maestro msg send <TO> <TEXT> [--from <CARD>]` -- Send a message to a linked card (sender is your current card)
 - `maestro msg read [CARD]` -- Read unread messages; with no card, aggregate every linked partner
 - `maestro msg list [CARD]` -- Channel overview, or one partner's full timeline
 

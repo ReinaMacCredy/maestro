@@ -138,7 +138,12 @@ mod tests {
 
     #[test]
     fn parse_round_trips_every_mode() {
-        for mode in [LeanMode::Lite, LeanMode::Full, LeanMode::Ultra, LeanMode::Off] {
+        for mode in [
+            LeanMode::Lite,
+            LeanMode::Full,
+            LeanMode::Ultra,
+            LeanMode::Off,
+        ] {
             assert_eq!(LeanMode::parse(mode.as_str()), Some(mode));
         }
     }

@@ -11,8 +11,8 @@ use crate::domain::task::{self, TaskRecord, TaskState};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::table;
 use crate::interfaces::cli::{
-    GitReadout, StatusArgs, clean_worktree_note, feature_next_label, git_readout,
-    proof_concern_line, recovery_label, render_git_line,
+    ClaimArgs, GitReadout, NextArgs, StatusArgs, clean_worktree_note, feature_next_label,
+    git_readout, proof_concern_line, recovery_label, render_git_line,
 };
 use crate::operations::harness;
 
@@ -51,6 +51,149 @@ pub fn run_task_next(paths: &MaestroPaths, json: bool) -> Result<()> {
     if report.next_action.is_none() && report.harness_friction.is_empty() {
         bail!("no actionable task");
     }
+    Ok(())
+}
+
+pub fn run_next(args: NextArgs) -> Result<()> {
+    let repo_root = match discover_repo_root() {
+        Ok(repo_root) => repo_root,
+        Err(_) => {
+            let cwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+            let report = StatusReport::not_initialized(cwd, "repo root not found".to_string());
+            return print_next_suggest(&report, "suggest", args.json);
+        }
+    };
+    let paths = MaestroPaths::new(repo_root);
+    if !paths.maestro_dir().is_dir() {
+        let report = StatusReport::not_initialized(
+            paths.repo_root().to_path_buf(),
+            ".maestro is missing".to_string(),
+        );
+        return print_next_suggest(&report, "suggest", args.json);
+    }
+
+    if args.loop_mode {
+        return run_next_loop(&paths, args.max_steps, args.json);
+    }
+    let report = build_task_next_report(&paths)?;
+    if args.run {
+        run_one_next_action(&paths, &report, args.json)
+    } else {
+        print_next_suggest(&report, "suggest", args.json)
+    }
+}
+
+fn run_next_loop(paths: &MaestroPaths, max_steps: usize, json: bool) -> Result<()> {
+    let max_steps = max_steps.max(1);
+    let mut taken = Vec::new();
+    for step in 1..=max_steps {
+        let report = build_task_next_report(paths)?;
+        let Some(action) = report.next_action.as_ref() else {
+            if json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&NextRunJson::done("loop", taken))?
+                );
+            } else {
+                println!("done: no actionable task");
+            }
+            return Ok(());
+        };
+        if !action.auto_safe {
+            if json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&NextRunJson::blocked(
+                        "loop",
+                        taken,
+                        action,
+                        "next action is not auto-safe",
+                    ))?
+                );
+            } else {
+                println!("blocked: next action requires input or review");
+                print_next_action(action);
+            }
+            return Ok(());
+        }
+        if json {
+            taken.push(action.command.display.clone());
+        } else {
+            println!("step {step}/{max_steps}:");
+        }
+        execute_auto_safe_action(paths, action)?;
+    }
+    let report = build_task_next_report(paths)?;
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&NextRunJson::done("loop", taken))?
+        );
+    } else if let Some(action) = report.next_action.as_ref() {
+        println!("blocked: max steps reached");
+        print_next_action(action);
+    } else {
+        println!("done: max steps reached and no actionable task remains");
+    }
+    Ok(())
+}
+
+fn run_one_next_action(paths: &MaestroPaths, report: &StatusReport, json: bool) -> Result<()> {
+    let Some(action) = report.next_action.as_ref() else {
+        if json {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&NextRunJson::done("run", Vec::new()))?
+            );
+        } else {
+            println!("no actionable task");
+        }
+        return Ok(());
+    };
+    if !action.auto_safe {
+        if json {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&NextRunJson::blocked(
+                    "run",
+                    Vec::new(),
+                    action,
+                    "next action is not auto-safe",
+                ))?
+            );
+        } else {
+            println!("blocked: next action requires input");
+            print_next_action(action);
+        }
+        bail!("next action requires input or review");
+    }
+    execute_auto_safe_action(paths, action)
+}
+
+fn execute_auto_safe_action(_paths: &MaestroPaths, action: &NextAction) -> Result<()> {
+    match action.kind.as_str() {
+        "claim_task" => {
+            let Some(task_id) = action.task_id.as_deref() else {
+                bail!("claim_task action missing task id");
+            };
+            println!("auto-safe: {}", action.command.display);
+            super::card::claim(ClaimArgs {
+                id: task_id.to_string(),
+            })
+        }
+        _ => bail!("next action {} is not auto-safe", action.kind),
+    }
+}
+
+fn print_next_suggest(report: &StatusReport, mode: &str, json: bool) -> Result<()> {
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&NextJson::from_report(report, mode))?
+        );
+        return Ok(());
+    }
+    print_task_next(report);
     Ok(())
 }
 
@@ -736,6 +879,69 @@ impl StatusReport {
 }
 
 #[derive(Clone, Debug, Serialize)]
+struct NextJson {
+    schema: String,
+    mode: String,
+    status: String,
+    repo: String,
+    warnings: Vec<WarningJson>,
+    next_action: Option<NextAction>,
+    harness_friction: Vec<HarnessFrictionJson>,
+    audit_hint: Option<AuditHintJson>,
+    ready_to_ship_features: Vec<ReadyFeatureJson>,
+}
+
+impl NextJson {
+    fn from_report(report: &StatusReport, mode: &str) -> Self {
+        Self {
+            schema: "maestro.next.v1".to_string(),
+            mode: mode.to_string(),
+            status: report.status.clone(),
+            repo: report.repo.clone(),
+            warnings: report.warnings.clone(),
+            next_action: report.next_action.clone(),
+            harness_friction: report.harness_friction.clone(),
+            audit_hint: report.audit_hint.clone(),
+            ready_to_ship_features: report.ready_to_ship_features.clone(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct NextRunJson {
+    schema: String,
+    mode: String,
+    status: String,
+    actions_taken: Vec<String>,
+    blocker: Option<String>,
+    next_action: Option<NextAction>,
+}
+
+impl NextRunJson {
+    fn done(mode: &str, actions_taken: Vec<String>) -> Self {
+        Self {
+            schema: "maestro.next.v1".to_string(),
+            mode: mode.to_string(),
+            status: "done".to_string(),
+            actions_taken,
+            blocker: None,
+            next_action: None,
+        }
+    }
+
+    fn blocked(mode: &str, actions_taken: Vec<String>, action: &NextAction, blocker: &str) -> Self {
+        Self {
+            schema: "maestro.next.v1".to_string(),
+            mode: mode.to_string(),
+            status: "blocked".to_string(),
+            actions_taken,
+            blocker: Some(blocker.to_string()),
+            next_action: Some(action.clone()),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize)]
 struct TaskNextJson {
     schema: String,
     status: String,
@@ -856,6 +1062,7 @@ struct NextAction {
     feature_id: Option<String>,
     title: Option<String>,
     command: CommandJson,
+    auto_safe: bool,
     runnable: bool,
     requires_input: bool,
     reason: String,
@@ -873,6 +1080,7 @@ impl NextAction {
             feature_id: task.feature_id.clone(),
             title: Some(task.title.clone()),
             command,
+            auto_safe: kind == "claim_task",
             runnable,
             requires_input,
             reason: reason.to_string(),
@@ -890,6 +1098,7 @@ impl NextAction {
             feature_id: None,
             title: None,
             command,
+            auto_safe: false,
             runnable,
             requires_input,
             reason: reason.to_string(),
@@ -908,6 +1117,7 @@ impl NextAction {
             feature_id: Some(view.id.clone()),
             title: Some(view.title.clone()),
             command,
+            auto_safe: false,
             runnable,
             requires_input,
             reason: "feature has no open child task work".to_string(),

@@ -113,7 +113,25 @@ fn active_lists_live_sessions_with_enriched_rows_and_you_marker() {
     run(repo, &[], &["create", "-t", "feature", "Peer topic"]);
     let task_one = create_id(repo, &["-t", "task", "Task one", "--parent", "peer-topic"]);
     create_id(repo, &["-t", "task", "Task two", "--parent", "peer-topic"]);
-    run(repo, &[], &["update", &task_one, "--status", "verified"]);
+    run(repo, &[], &["task", "set", &task_one, "--check", "done"]);
+    run(repo, &[], &["task", "explore", &task_one]);
+    run(repo, &[], &["task", "accept", &task_one]);
+    run(repo, &[], &["task", "claim", &task_one]);
+    run(
+        repo,
+        &[],
+        &[
+            "task",
+            "complete",
+            &task_one,
+            "--summary",
+            "done",
+            "--claim",
+            "GREEN: done",
+            "--proof",
+            "GREEN: done",
+        ],
+    );
     clear_runs(repo);
 
     let recent = ts_minutes_ago(1);
@@ -158,6 +176,55 @@ fn active_lists_live_sessions_with_enriched_rows_and_you_marker() {
         "running mode (maestro-design)\n{out}"
     );
     assert!(you.contains("you"), "running session marked you\n{out}");
+}
+
+#[test]
+fn active_connect_prints_advisory_commands_without_linking() {
+    let temp = cards_repo("active-connect-advisory");
+    let repo = temp.path();
+
+    let mine = create_id(repo, &["-t", "task", "Mine"]);
+    let peer = create_id(repo, &["-t", "task", "Peer"]);
+    clear_runs(repo);
+
+    let recent = ts_minutes_ago(1);
+    seed_run(
+        repo,
+        "peer-sess",
+        &[
+            skill_event("peer-sess", "maestro-card", &recent),
+            card_touch_event("peer-sess", &peer, &recent),
+        ],
+    );
+    seed_run(
+        repo,
+        "you-sess",
+        &[
+            skill_event("you-sess", "maestro-card", &recent),
+            card_touch_event("you-sess", &mine, &recent),
+        ],
+    );
+
+    let out = run(
+        repo,
+        &[("MAESTRO_SESSION_ID", "you-sess")],
+        &["active", "--connect"],
+    );
+
+    assert!(out.contains("suggested coordination"), "{out}");
+    assert!(
+        out.contains(&format!("maestro link add {mine} {peer}")),
+        "{out}"
+    );
+    assert!(
+        out.contains(&format!("maestro msg send --from {mine} {peer}")),
+        "{out}"
+    );
+    let links = run(repo, &[], &["card", "graph", &mine]);
+    assert!(
+        !links.contains(&peer),
+        "active --connect must not create related edges:\n{links}"
+    );
 }
 
 #[test]

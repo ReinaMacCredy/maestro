@@ -81,7 +81,10 @@ pub fn verify_self_check(content: &str) -> Result<(), String> {
 
 /// Append one `- \`signature\` -- about` bullet per invokable command under `cmd`.
 fn collect_invocation_lines(cmd: &Command, path: &str, lines: &mut Vec<String>) {
-    let subs: Vec<&Command> = cmd.get_subcommands().filter(|sub| is_rendered(sub)).collect();
+    let subs: Vec<&Command> = cmd
+        .get_subcommands()
+        .filter(|sub| is_rendered(sub))
+        .collect();
     if subs.is_empty() || has_visible_invocation_args(cmd) {
         lines.push(signature_line(cmd, path));
         if subs.is_empty() {

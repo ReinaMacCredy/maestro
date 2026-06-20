@@ -561,6 +561,18 @@ pub fn update(args: UpdateArgs) -> Result<()> {
                 card::query::WORKABLE_STATUS_WORDS.join(", ")
             ));
         }
+        if matches!(status, "needs_verification" | "verified") {
+            let remedy = match status {
+                "needs_verification" => format!(
+                    "run `maestro task complete {id} --summary \"<summary>\" --claim \"<claim>\" --proof \"<observed evidence>\"`"
+                ),
+                "verified" => format!("run `maestro task verify {id}`"),
+                _ => unreachable!("invariant: guarded status already matched"),
+            };
+            return Err(anyhow!(
+                "cannot set {id} to {status} with generic card update; {remedy}"
+            ));
+        }
         c.status = status.to_string();
     }
     if let Some(title) = args.title.as_deref() {

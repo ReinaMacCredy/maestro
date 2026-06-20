@@ -55,7 +55,11 @@ fn run_debt(paths: &MaestroPaths, mint: bool) -> Result<()> {
         for (id, marker) in &outcome.minted {
             println!("minted {id}  ({}:{})", marker.file, marker.line);
         }
-        println!("minted {}, deduped {}", outcome.minted.len(), outcome.deduped);
+        println!(
+            "minted {}, deduped {}",
+            outcome.minted.len(),
+            outcome.deduped
+        );
     }
     Ok(())
 }

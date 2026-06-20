@@ -1,0 +1,100 @@
+schema_version: maestro.card.v1
+id: task-hide-dead-end-retired-task-archive-e4e3
+type: task
+title: Hide dead-end retired task archive verbs and run full validation
+status: verified
+parent: simplify-maestro-cli-surface-for-agents
+claimed_by: maestro#s79215-1781954204410531000
+claimed_at: 2026-06-20T11:16:44.410Z
+created_at: 2026-06-20T11:00:59.023Z
+updated_at: 2026-06-20T11:28:02.336Z
+extra:
+  schema_version: maestro.task.v2
+  blockers:
+  - id: blk-001
+    kind: task
+    blocked_ref:
+      kind: task
+      id: task-add-coordination-advisories-and-sender-4133
+    title: Blocked by task-add-coordination-advisories-and-sender-4133
+    reason: 'after dependency: T4 (task-add-coordination-advisories-and-sender-4133) verified'
+    source: command
+    created_at: 2026-06-20T11:00:59.092Z
+    resolved_at: 2026-06-20T11:16:37.936Z
+  covers:
+  - ac-1
+  - ac-2
+  - ac-3
+  - ac-4
+  state_history:
+  - state: draft
+    at: 2026-06-20T11:00:59.023Z
+    by: maestro
+  - state: exploring
+    at: 2026-06-20T11:00:59.051Z
+    by: maestro
+  - state: exploring
+    at: 2026-06-20T11:00:59.092Z
+    by: maestro
+    summary: 'blocker added: blk-001'
+  - state: ready
+    at: 2026-06-20T11:00:59.146Z
+    by: maestro
+  - state: ready
+    at: 2026-06-20T11:16:37.936Z
+    by: maestro
+    summary: 'blocker resolved: blk-001'
+  - state: needs_verification
+    at: 2026-06-20T11:28:02.320Z
+    by: maestro
+    summary: Hid retired task archive help, regenerated CLI references, and ran full validation.
+    claims:
+    - 'GREEN: cargo fmt -- --check passed'
+    - 'GREEN: cargo check --all-targets passed'
+    - 'GREEN: cargo clippy --all-targets -- -D warnings passed'
+    - 'GREEN: cargo test passed'
+    - 'GREEN: target/debug/maestro version printed 0.107.0.1781948549-g16c5f87f'
+  - state: verified
+    at: 2026-06-20T11:28:02.336Z
+    by: maestro
+    summary: 'verification passed: 5 claim(s), 1 proof source(s)'
+  lane: normal
+  risk: medium
+  verification:
+    status: passed
+    verified_at: 2026-06-20T11:28:02.336Z
+    verified_commit: 16c5f87fdf47c22879f8a9ecfe7afd18e1325313
+    verified_by_run: .maestro/runs/cli-2026-06-20/events.jsonl
+    contract_hash: 956fec63c6a4ae37fc7132083fd046763ab7197bef270224a29813fbb911c79e
+    claim_checks:
+    - claim: 'GREEN: cargo fmt -- --check passed'
+      matched: true
+      source: .maestro/runs/cli-2026-06-20/events.jsonl
+    - claim: 'GREEN: cargo check --all-targets passed'
+      matched: true
+      source: .maestro/runs/cli-2026-06-20/events.jsonl
+    - claim: 'GREEN: cargo clippy --all-targets -- -D warnings passed'
+      matched: true
+      source: .maestro/runs/cli-2026-06-20/events.jsonl
+    - claim: 'GREEN: cargo test passed'
+      matched: true
+      source: .maestro/runs/cli-2026-06-20/events.jsonl
+    - claim: 'GREEN: target/debug/maestro version printed 0.107.0.1781948549-g16c5f87f'
+      matched: true
+      source: .maestro/runs/cli-2026-06-20/events.jsonl
+    proof_sources:
+    - kind: event
+      path: .maestro/runs/cli-2026-06-20/events.jsonl
+      hash: f5410f099affec309a9077e27d6730b675f4cb8972dbf6561b07151a5cf39284
+  acceptance_locked: true
+  acceptance:
+    checks:
+    - retired task archive/unarchive are not visible as normal help paths, compatibility errors remain instructional, and `cargo fmt -- --check`, `cargo clippy --all-targets -- -D warnings`, and `cargo test` pass
+    locked_by: maestro
+    locked_at: 2026-06-20T11:00:59.146Z
+  claims:
+  - 'GREEN: cargo fmt -- --check passed'
+  - 'GREEN: cargo check --all-targets passed'
+  - 'GREEN: cargo clippy --all-targets -- -D warnings passed'
+  - 'GREEN: cargo test passed'
+  - 'GREEN: target/debug/maestro version printed 0.107.0.1781948549-g16c5f87f'

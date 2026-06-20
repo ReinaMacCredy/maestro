@@ -33,6 +33,7 @@ pub mod mcp;
 pub mod migrate;
 pub mod msg;
 pub mod playbook;
+pub mod qa;
 pub mod query;
 pub mod reference;
 pub mod resume;
@@ -232,6 +233,11 @@ pub enum RootCommand {
     )]
     Status(StatusArgs),
     #[command(
+        about = "Show or run the next safe agent action",
+        after_help = "Examples:\n  maestro next\n  maestro next --json\n  maestro next --run\n  maestro next --loop --max-steps 5"
+    )]
+    Next(NextArgs),
+    #[command(
         about = "Print a clean-session resume packet from current repo artifacts",
         after_help = "Examples:\n  maestro resume\n  maestro resume --full\n  maestro resume --handoff --write"
     )]
@@ -242,6 +248,8 @@ pub enum RootCommand {
     Event(EventArgs),
     #[command(about = "Manage features: the product contract and its lifecycle")]
     Feature(FeatureArgs),
+    #[command(about = "Record feature QA baseline and slice evidence")]
+    Qa(QaArgs),
     #[command(about = "Create, show, and list decision cards in the card store")]
     Decision(DecisionArgs),
     #[command(
@@ -261,7 +269,10 @@ pub enum RootCommand {
         after_help = "Examples:\n  maestro list --parent agent-cli-ux\n  maestro list --json --type bug --status open\n  maestro list --assignee claude#s1"
     )]
     List(ListArgs),
-    #[command(hide = true, about = "Author dependency edges between cards (card store)")]
+    #[command(
+        hide = true,
+        about = "Author dependency edges between cards (card store)"
+    )]
     Dep(DepArgs),
     #[command(
         about = "Show what other live sessions are doing (cross-session awareness)",
@@ -313,7 +324,10 @@ pub enum RootCommand {
         after_help = "Examples:\n  maestro create -t task \"Add CSV export\" --parent csv-export\n  maestro create -t bug \"Fix ordering race\"\n  maestro create -t feature \"CSV export\""
     )]
     Create(CreateArgs),
-    #[command(hide = true, about = "Show a card's header, edges, and body (card store)")]
+    #[command(
+        hide = true,
+        about = "Show a card's header, edges, and body (card store)"
+    )]
     Show(ShowArgs),
     #[command(
         hide = true,
@@ -340,10 +354,7 @@ pub enum RootCommand {
         after_help = "Examples:\n  maestro watch                 # live board, all features with open work\n  maestro watch <feature-id>    # live board focused on one feature\n  maestro watch snapshot        # render one frame and exit\n  maestro watch snapshot <feature-id>"
     )]
     Watch(WatchArgs),
-    #[command(
-        hide = true,
-        about = "Verify a task against its recorded proof"
-    )]
+    #[command(hide = true, about = "Verify a task against its recorded proof")]
     Verify { id: Option<String> },
     #[command(
         about = "Print a language code styleguide, or the index with no language",
@@ -492,10 +503,29 @@ pub struct StatusArgs {
 }
 
 #[derive(Debug, Args)]
+pub struct NextArgs {
+    #[arg(long, help = "Print machine-readable next-action JSON")]
+    pub json: bool,
+    #[arg(long, conflicts_with = "loop_mode", help = "Run one auto-safe action")]
+    pub run: bool,
+    #[arg(
+        long = "loop",
+        conflicts_with = "run",
+        help = "Run auto-safe actions until blocked"
+    )]
+    pub loop_mode: bool,
+    #[arg(long, default_value_t = 10, help = "Maximum actions for --loop")]
+    pub max_steps: usize,
+}
+
+#[derive(Debug, Args)]
 pub struct ActiveArgs {
     /// Include stale sessions (last event beyond the live window), hidden by default.
     #[arg(long)]
     pub all: bool,
+    /// Print explicit link/message/conflict suggestions without mutating links.
+    #[arg(long)]
+    pub connect: bool,
 }
 
 #[derive(Debug, Args)]
@@ -785,13 +815,16 @@ pub enum TaskCommand {
     },
     #[command(about = "Check the task blocker graph for cycles and dangling refs")]
     Doctor,
-    #[command(about = "Archive a done task out of the live scan (-> .maestro/archive/tasks)")]
+    #[command(
+        hide = true,
+        about = "Archive a done task out of the live scan (-> .maestro/archive/tasks)"
+    )]
     Archive {
         id: String,
         #[arg(long, help = "Preview the move without archiving")]
         dry_run: bool,
     },
-    #[command(about = "Restore an archived task to the live scan")]
+    #[command(hide = true, about = "Restore an archived task to the live scan")]
     Unarchive { id: String },
 }
 
@@ -831,6 +864,30 @@ pub enum EventCommand {
 pub struct FeatureArgs {
     #[command(subcommand)]
     pub command: FeatureCommand,
+}
+
+#[derive(Debug, Args)]
+pub struct QaArgs {
+    #[command(subcommand)]
+    pub command: QaCommand,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum QaCommand {
+    #[command(about = "Write a feature QA baseline from explicit observed behavior")]
+    Baseline {
+        id: String,
+        #[arg(long, help = "Observed current behavior for the baseline scenario")]
+        observed: String,
+    },
+    #[command(about = "Append counting QA slice evidence for baseline scenarios")]
+    Slice {
+        id: String,
+        #[arg(long = "scenario", help = "Baseline scenario id, e.g. bl-001")]
+        scenario: Vec<String>,
+        #[arg(long, help = "Observed slice evidence")]
+        observed: String,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -953,6 +1010,28 @@ pub enum FeatureCommand {
             help = "Create or point to the feature prepare draft file"
         )]
         draft: bool,
+        #[arg(
+            long = "task",
+            conflicts_with_all = ["from", "draft"],
+            help = "Structured task entry, e.g. T1: Add parser"
+        )]
+        task: Vec<String>,
+        #[arg(
+            long = "check",
+            requires = "task",
+            help = "Task check for --task entries"
+        )]
+        check: Vec<String>,
+        #[arg(
+            long = "covers",
+            requires = "task",
+            help = "Acceptance id covered by --task"
+        )]
+        covers: Vec<String>,
+        #[arg(long = "blocker", requires = "task", help = "Blocker line for --task")]
+        blocker: Vec<String>,
+        #[arg(long = "after", requires = "task", help = "Dependency ref for --task")]
+        after: Vec<String>,
     },
     #[command(about = "Grow a frozen contract additively with an audit reason (ready/in_progress)")]
     Amend {
@@ -1002,6 +1081,11 @@ pub enum FeatureCommand {
             help = "Outcome line for the auto-ship close (overrides the generated default; ignored unless this verify auto-ships)"
         )]
         outcome: Option<String>,
+    },
+    #[command(about = "Record or waive feature acceptance proof with explicit input")]
+    Proof {
+        #[command(subcommand)]
+        command: FeatureProofCommand,
     },
     #[command(about = "Append a dated note to a feature's notes.md")]
     Note { id: String, text: String },
@@ -1072,6 +1156,30 @@ pub enum FeatureCommand {
     },
     #[command(about = "Restore an archived feature and its archived child tasks")]
     Unarchive { id: String },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum FeatureProofCommand {
+    #[command(about = "Record explicit feature acceptance proof")]
+    Add {
+        id: String,
+        #[arg(long = "ac", help = "Acceptance id to prove")]
+        ac: String,
+        #[arg(long, help = "Observed evidence")]
+        evidence: String,
+        #[arg(long, help = "Record proof but suppress auto-ship")]
+        no_ship: bool,
+        #[arg(long, help = "Outcome line if this proof auto-ships")]
+        outcome: Option<String>,
+    },
+    #[command(about = "Waive a feature acceptance item with an explicit reason")]
+    Waive {
+        id: String,
+        #[arg(long = "ac", help = "Acceptance id to waive")]
+        ac: String,
+        #[arg(long, help = "Waiver reason")]
+        reason: String,
+    },
 }
 
 #[derive(Debug, Args)]
@@ -1352,6 +1460,9 @@ pub enum MsgCommand {
         after_help = "Examples:\n  maestro msg send task-b \"ready for review\""
     )]
     Send {
+        /// Assert the sender card matches the running session's current card.
+        #[arg(long = "from", value_name = "CARD")]
+        from: Option<String>,
         /// The linked partner card to message.
         #[arg(value_name = "TO")]
         to: String,
@@ -1531,10 +1642,7 @@ pub struct McpArgs {
 pub enum McpCommand {
     #[command(alias = "stdio", about = "Run the MCP server over stdio")]
     Serve,
-    #[command(
-        hide = true,
-        about = "Run the MCP server over stdio (same as serve)"
-    )]
+    #[command(hide = true, about = "Run the MCP server over stdio (same as serve)")]
     Stdin,
     #[command(about = "List the MCP tool names maestro exposes")]
     Tools,
@@ -1616,10 +1724,12 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Doctor => doctor::run(),
         RootCommand::ShellInit => shell_init::run(),
         RootCommand::Status(args) => status::run(args),
+        RootCommand::Next(args) => status::run_next(args),
         RootCommand::Resume(args) => resume::run(args),
         RootCommand::Task(args) => task::run(args),
         RootCommand::Event(args) => event::run(args),
         RootCommand::Feature(args) => feature::run(args),
+        RootCommand::Qa(args) => qa::run(args),
         RootCommand::Decision(args) => decision::run(args),
         RootCommand::Card(args) => match args.command {
             CardCommand::Ready(args) => card::ready(args),

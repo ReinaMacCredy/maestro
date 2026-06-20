@@ -1,3 +1,5 @@
+use std::fs;
+
 use anyhow::{Result, bail};
 
 use crate::domain::card;
@@ -9,7 +11,9 @@ use crate::domain::task;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::table;
 use crate::foundation::core::time::render_timestamp;
-use crate::interfaces::cli::{FeatureArgs, FeatureCommand, feature_next_label, recovery_label};
+use crate::interfaces::cli::{
+    FeatureArgs, FeatureCommand, FeatureProofCommand, feature_next_label, recovery_label,
+};
 use crate::operations::{feature_prepare, feature_ship};
 
 /// Execute `maestro feature`.
@@ -81,8 +85,29 @@ pub fn run(args: FeatureArgs) -> Result<()> {
             }
             Ok(())
         }
-        FeatureCommand::Prepare { id, from, draft } => {
-            prepare_feature(&paths, &id, from.as_deref(), draft)?;
+        FeatureCommand::Prepare {
+            id,
+            from,
+            draft,
+            task,
+            check,
+            covers,
+            blocker,
+            after,
+        } => {
+            prepare_feature(
+                &paths,
+                &id,
+                from.as_deref(),
+                draft,
+                InlinePrepareArgs {
+                    tasks: task,
+                    checks: check,
+                    covers,
+                    blockers: blocker,
+                    after,
+                },
+            )?;
             let _ = super::active::worktree_advisory(&paths);
             Ok(())
         }
@@ -117,7 +142,37 @@ pub fn run(args: FeatureArgs) -> Result<()> {
             reason,
             no_ship,
             outcome,
-        } => verify_feature(&paths, &id, prove, evidence, waive, reason, no_ship, outcome),
+        } => verify_feature(
+            &paths, &id, prove, evidence, waive, reason, no_ship, outcome,
+        ),
+        FeatureCommand::Proof { command } => match command {
+            FeatureProofCommand::Add {
+                id,
+                ac,
+                evidence,
+                no_ship,
+                outcome,
+            } => verify_feature(
+                &paths,
+                &id,
+                vec![ac],
+                vec![evidence],
+                Vec::new(),
+                Vec::new(),
+                no_ship,
+                outcome,
+            ),
+            FeatureProofCommand::Waive { id, ac, reason } => verify_feature(
+                &paths,
+                &id,
+                Vec::new(),
+                Vec::new(),
+                vec![ac],
+                vec![reason],
+                true,
+                None,
+            ),
+        },
         FeatureCommand::Note { id, text } => {
             let report = feature::note(&paths, &id, &text)?;
             if report.created {
@@ -188,13 +243,17 @@ fn prepare_feature(
     id: &str,
     plan_file: Option<&std::path::Path>,
     draft: bool,
+    inline: InlinePrepareArgs,
 ) -> Result<()> {
-    match (plan_file, draft) {
-        (Some(_), true) => bail!("use either --from <plan-file> or --draft, not both"),
-        (None, false) => bail!(
-            "feature prepare requires --from <plan-file> or --draft\n  maestro feature prepare {id} --draft\n  maestro feature prepare {id} --from <plan-file>"
+    let has_inline_tasks = !inline.tasks.is_empty();
+    match (plan_file, draft, has_inline_tasks) {
+        (Some(_), true, _) => bail!("use either --from <plan-file> or --draft, not both"),
+        (Some(_), _, true) => bail!("use either --from <plan-file> or --task, not both"),
+        (_, true, true) => bail!("use either --draft or --task, not both"),
+        (None, false, false) => bail!(
+            "feature prepare requires --from <plan-file>, --draft, or --task\n  maestro feature prepare {id} --draft\n  maestro feature prepare {id} --from <plan-file>\n  maestro feature prepare {id} --task \"T1: <title>\" --check \"<observable result>\""
         ),
-        (None, true) => {
+        (None, true, false) => {
             let report = feature_prepare::write_draft(paths, id)?;
             if report.written {
                 println!("wrote {}", report.path.display());
@@ -209,44 +268,119 @@ fn prepare_feature(
             );
             Ok(())
         }
-        (Some(plan_file), false) => {
+        (Some(plan_file), false, false) => {
             let actor = super::actor();
             let report = feature_prepare::prepare_from_file(paths, id, plan_file, &actor)?;
-            println!("prepared {} task(s)", report.task_count);
-            if report.started {
-                println!("started {} -> in_progress", report.feature_id);
-            } else if report.remained_ready {
-                println!("feature remains ready");
-            }
-            println!("prepared:");
-            for task in &report.prepared {
-                let state = if task.blocked {
-                    "ready / blocked"
-                } else {
-                    "ready"
-                };
-                println!("  {} {:<15} {}", task.id, state, task.title);
-            }
-            if !report.blockers.is_empty() {
-                println!("blockers:");
-                for blocker in &report.blockers {
-                    println!(
-                        "  {} {} {}",
-                        blocker.task_id, blocker.blocker_id, blocker.reason
-                    );
-                }
-            }
-            if report.ready_count > 0 {
-                println!("next: maestro task claim --next");
-            } else {
-                println!(
-                    "next: maestro task list --feature {} --blocked",
-                    report.feature_id
-                );
-            }
+            print_prepare_report(&report);
             print_uncovered_acceptance_warning(paths, id, CoverageFix::Locked)?;
             Ok(())
         }
+        (None, false, true) => {
+            if inline.checks.iter().any(|check| check.trim().is_empty()) {
+                bail!("--check must not be empty");
+            }
+            if inline.checks.is_empty() {
+                bail!("--task requires at least one --check");
+            }
+            let plan = inline_prepare_plan(
+                &inline.tasks,
+                &inline.checks,
+                &inline.covers,
+                &inline.blockers,
+                &inline.after,
+            )?;
+            let path = feature::feature_sidecar_dir(paths, id).join("prepare-inline.md");
+            fs::write(&path, plan)?;
+            let actor = super::actor();
+            let report = feature_prepare::prepare_from_file(paths, id, &path, &actor)?;
+            print_prepare_report(&report);
+            print_uncovered_acceptance_warning(paths, id, CoverageFix::Locked)?;
+            Ok(())
+        }
+    }
+}
+
+struct InlinePrepareArgs {
+    tasks: Vec<String>,
+    checks: Vec<String>,
+    covers: Vec<String>,
+    blockers: Vec<String>,
+    after: Vec<String>,
+}
+
+fn inline_prepare_plan(
+    tasks: &[String],
+    checks: &[String],
+    covers: &[String],
+    blockers: &[String],
+    after: &[String],
+) -> Result<String> {
+    let mut plan = String::new();
+    for task in tasks {
+        let task = task.trim();
+        if task.is_empty() {
+            bail!("--task must not be empty");
+        }
+        plan.push_str("## Task ");
+        plan.push_str(task);
+        plan.push('\n');
+        if !covers.is_empty() {
+            plan.push_str("covers: ");
+            plan.push_str(&covers.join(", "));
+            plan.push('\n');
+        }
+        for check in checks {
+            plan.push_str("check: ");
+            plan.push_str(check);
+            plan.push('\n');
+        }
+        for blocker in blockers {
+            plan.push_str("blocker: ");
+            plan.push_str(blocker);
+            plan.push('\n');
+        }
+        if !after.is_empty() {
+            plan.push_str("after: ");
+            plan.push_str(&after.join(", "));
+            plan.push('\n');
+        }
+        plan.push('\n');
+    }
+    Ok(plan)
+}
+
+fn print_prepare_report(report: &feature_prepare::PrepareReport) {
+    println!("prepared {} task(s)", report.task_count);
+    if report.started {
+        println!("started {} -> in_progress", report.feature_id);
+    } else if report.remained_ready {
+        println!("feature remains ready");
+    }
+    println!("prepared:");
+    for task in &report.prepared {
+        let state = if task.blocked {
+            "ready / blocked"
+        } else {
+            "ready"
+        };
+        println!("  {} {:<15} {}", task.id, state, task.title);
+    }
+    if !report.blockers.is_empty() {
+        println!("blockers:");
+        for blocker in &report.blockers {
+            println!(
+                "  {} {} {}",
+                blocker.task_id, blocker.blocker_id, blocker.reason
+            );
+        }
+    }
+    if report.ready_count > 0 {
+        println!("next: maestro task claim --next");
+    } else {
+        println!(
+            "next: maestro task list --feature {} --blocked",
+            report.feature_id
+        );
     }
 }
 

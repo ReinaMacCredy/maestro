@@ -1,0 +1,63 @@
+schema_version: maestro.card.v1
+id: task-add-canonical-maestro-next-modes-7830
+type: task
+title: Add canonical maestro next modes
+status: verified
+parent: simplify-maestro-cli-surface-for-agents
+claimed_by: maestro#s9185-1781953365648547000
+claimed_at: 2026-06-20T11:02:45.648Z
+created_at: 2026-06-20T11:00:58.867Z
+updated_at: 2026-06-20T11:08:01.326Z
+extra:
+  schema_version: maestro.task.v2
+  claims:
+  - 'RED: cargo test --test status_next_integration next_ failed because maestro next was an unrecognized subcommand'
+  - 'GREEN: cargo test --test status_next_integration next_ passed 14 tests'
+  covers:
+  - ac-1
+  state_history:
+  - state: draft
+    at: 2026-06-20T11:00:58.867Z
+    by: maestro
+  - state: exploring
+    at: 2026-06-20T11:00:58.901Z
+    by: maestro
+  - state: ready
+    at: 2026-06-20T11:00:59.104Z
+    by: maestro
+  - state: needs_verification
+    at: 2026-06-20T11:08:01.305Z
+    by: maestro
+    summary: Added canonical maestro next suggest/run/loop modes on the existing status next-action read model.
+    claims:
+    - 'RED: cargo test --test status_next_integration next_ failed because maestro next was an unrecognized subcommand'
+    - 'GREEN: cargo test --test status_next_integration next_ passed 14 tests'
+  - state: verified
+    at: 2026-06-20T11:08:01.326Z
+    by: maestro
+    summary: 'verification passed: 2 claim(s), 1 proof source(s)'
+  lane: normal
+  risk: medium
+  verification:
+    status: passed
+    verified_at: 2026-06-20T11:08:01.326Z
+    verified_commit: 16c5f87fdf47c22879f8a9ecfe7afd18e1325313
+    verified_by_run: .maestro/runs/cli-2026-06-20/events.jsonl
+    contract_hash: 1593a4c438326cb71cfdb884e192be12f231035fef037b94c1132cdf68d2ea45
+    claim_checks:
+    - claim: 'RED: cargo test --test status_next_integration next_ failed because maestro next was an unrecognized subcommand'
+      matched: true
+      source: .maestro/runs/cli-2026-06-20/events.jsonl
+    - claim: 'GREEN: cargo test --test status_next_integration next_ passed 14 tests'
+      matched: true
+      source: .maestro/runs/cli-2026-06-20/events.jsonl
+    proof_sources:
+    - kind: event
+      path: .maestro/runs/cli-2026-06-20/events.jsonl
+      hash: 9f9c2605a6fb8ff6a260e4eafa89ffa975ce0c02186a8b09434d588a1f2eccff
+  acceptance_locked: true
+  acceptance:
+    checks:
+    - '`maestro next` reports one best action read-only, `maestro next --run` claims only an auto-safe ready card, and `maestro next --loop --max-steps N` stops at input/risk/blocker with a transcript'
+    locked_by: maestro
+    locked_at: 2026-06-20T11:00:59.104Z
