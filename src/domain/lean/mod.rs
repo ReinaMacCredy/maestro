@@ -10,5 +10,5 @@ mod guidance;
 mod mode;
 
 pub use debt::{Marker, MintOutcome, harvest, marker_text, mint_cards};
-pub use guidance::{audit_guidance, review_guidance};
+pub use guidance::{audit_guidance, help_guidance, review_guidance};
 pub use mode::{LeanMode, read_mode, resolve_mode, write_mode};

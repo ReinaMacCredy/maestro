@@ -1,5 +1,5 @@
 ---
-version: 1.21.0
+version: 1.22.0
 ---
 
 # Maestro Harness Protocol
@@ -36,10 +36,19 @@ conventions live in this repo AGENTS.md, not here.
 
 - Simplest thing that works; no speculative abstraction or
   one-caller indirection.
-- Reach for the lowest rung before writing new code: skip/YAGNI ->
-  stdlib -> native platform -> installed dependency -> one-liner ->
-  minimal new code. `maestro lean` sets how strictly to climb it
-  (lite/full/ultra/off); `maestro lean review|audit` walk a diff or
+- Lean reach-ladder, active every session and every response (still
+  active when unsure; suspended only when the user says so). Before
+  and while writing, climb to the lowest rung that holds and stop:
+  skip/YAGNI -> stdlib -> native platform (a DB constraint over app
+  code, CSS over JS) -> installed dependency -> one-liner -> minimal
+  new code. It is a reflex, not a research project; if two rungs both
+  work, take the higher one. Strictness follows your `maestro lean`
+  mode: full applies the cheaper version, ultra rejects what a lower
+  rung already covers, lite names the lazier alternative, off suspends
+  the climb. Never simplify away validation, error handling, security,
+  accessibility, or anything explicitly requested; non-trivial logic
+  still leaves one runnable check. The ladder governs what you build,
+  not how you explain it. `maestro lean review|audit` walk a diff or
   the tree against the ladder.
 - Names state intent (what/why), not type or mechanism.
 - Validate at trust boundaries only; do not guard impossible states.

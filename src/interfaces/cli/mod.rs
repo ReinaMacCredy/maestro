@@ -482,7 +482,8 @@ pub enum LoopCommand {
 #[derive(Debug, Args)]
 pub struct LeanArgs {
     /// Omit to print the session lean mode; lite|full|ultra|off to set it;
-    /// review or audit for mode-adjusted guidance; debt to list `// lean:` markers.
+    /// review or audit for mode-adjusted guidance; debt to list `// lean:`
+    /// markers; help for the modes, verbs, and default-mode env.
     #[arg(value_name = "TARGET")]
     pub target: Option<String>,
     /// With `debt`: mint a deduped task card per marker.
