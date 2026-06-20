@@ -409,7 +409,7 @@ fn has_unsatisfied_blocker(card: &Card, by_id: &HashMap<&str, &Card>) -> bool {
         .any(|dep| !blocking_dep_satisfied(dep, by_id))
 }
 
-fn blocking_dep_satisfied(dep: &Dep, by_id: &HashMap<&str, &Card>) -> bool {
+pub(crate) fn blocking_dep_satisfied(dep: &Dep, by_id: &HashMap<&str, &Card>) -> bool {
     by_id
         .get(dep.target.as_str())
         .is_some_and(|target| coarse_of(&target.status) == Some(Coarse::Closed))

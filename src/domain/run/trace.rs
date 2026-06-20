@@ -13,7 +13,7 @@ use anyhow::Result;
 use serde::Serialize;
 
 use crate::domain::card;
-use crate::domain::card::query::{Coarse, canonical_status, coarse_of};
+use crate::domain::card::query::{blocking_dep_satisfied, canonical_status};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::time::timestamp_nanos;
 
@@ -240,12 +240,7 @@ fn facts_from_card(
     let blocked_by = card
         .deps
         .iter()
-        .filter(|dep| dep.kind.is_blocking())
-        .filter(|dep| {
-            !by_id
-                .get(dep.target.as_str())
-                .is_some_and(|target| coarse_of(&target.status) == Some(Coarse::Closed))
-        })
+        .filter(|dep| dep.kind.is_blocking() && !blocking_dep_satisfied(dep, by_id))
         .map(|dep| dep.target.clone())
         .collect();
     CardFacts {
