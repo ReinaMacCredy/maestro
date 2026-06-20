@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.0.0 -->
-<!-- maestro:cli-reference-sha256: f1a2a68d4b5b3fcede2dd05dfa5961612861605e3a77a67bc6c58a4284f14162 -->
+<!-- maestro:cli-reference-sha256: 1e430ad98cc47b7605afbab816f806982629c285e83ceda6547f21ee966ca896 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -158,6 +158,7 @@ Every verb and flag is listed; a spelling not found here does not exist.
 - `maestro query matrix` -- Show the feature x task matrix (FEATURE/TASK/STATE/PROOF/TITLE)
 - `maestro query friction` -- Summarize recorded run friction (events, prompts, corrections)
 - `maestro query backlog` -- List improvement backlog items (ID/TITLE)
+- `maestro query run [--since <TS>] [--json]` -- Reassemble the run trace for a window from the durable run log
 
 ## maestro index
 
