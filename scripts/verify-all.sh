@@ -299,11 +299,11 @@ green-feature-task-explore
 green-feature-task-accept
 green-feature-task-claim
 green-feature-task-complete
-green-feature-ship-block
-green-feature-ship-dry
+green-feature-close-block
+green-feature-close-dry
 green-feature-prove
 green-feature-verify
-green-feature-ship
+green-feature-close
 green-query-matrix
 green-harness-list
 green-query-backlog
@@ -520,17 +520,17 @@ run_greenfield_workflow() {
   run_in green-feature-task-claim "$work" 0 "$BIN" task claim "$green_feature_task_id"
   run_in green-feature-task-complete "$work" 0 "$BIN" task complete "$green_feature_task_id" --summary "wired export" --claim "Greenfield export ships" --proof "observed: Greenfield export ships"
   contains green-feature-task-complete "feature ready:"
-  run_in green-feature-ship-block "$work" fail "$BIN" feature ship greenfield-export --outcome "Greenfield export shipped"
-  contains green-feature-ship-block "skill: maestro-card (qa-slice)"
+  run_in green-feature-close-block "$work" fail "$BIN" feature close greenfield-export --outcome "Greenfield export closed"
+  contains green-feature-close-block "skill: maestro-card (qa-slice)"
   write_qa_slices "$work" greenfield-export bl-001 "Greenfield export ships"
-  run_in green-feature-ship-dry "$work" 0 "$BIN" feature ship greenfield-export --outcome "Greenfield export shipped" --dry-run
-  contains green-feature-ship-dry "writes: none"
+  run_in green-feature-close-dry "$work" 0 "$BIN" feature close greenfield-export --outcome "Greenfield export closed" --dry-run
+  contains green-feature-close-dry "writes: none"
   run_in green-feature-prove "$work" 0 "$BIN" feature verify greenfield-export --prove ac-1 --evidence "observed: Greenfield export ships"
   contains green-feature-prove "explicit ac-1"
   run_in green-feature-verify "$work" 0 "$BIN" feature verify greenfield-export
   contains green-feature-verify "every acceptance item has evidence"
-  run_in green-feature-ship "$work" 0 "$BIN" feature ship greenfield-export --outcome "Greenfield export shipped"
-  contains green-feature-ship "ship receipt:"
+  run_in green-feature-close "$work" 0 "$BIN" feature close greenfield-export --outcome "Greenfield export closed"
+  contains green-feature-close "close receipt:"
 
   run_in green-query-matrix "$work" 0 "$BIN" query matrix
   contains green-query-matrix "greenfield-export"
