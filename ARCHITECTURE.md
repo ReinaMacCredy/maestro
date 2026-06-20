@@ -5,7 +5,7 @@ entity selected in `SPEC-beads-model.md`, DM1 = full rewrite, implemented on the
 `card-model` branch). §3 records what the rewrite collapsed and the deviations kept.
 
 Related: `./AGENTS.md` (working rules). The full design history (SPEC-beads-model and
-its decision log) lives in untracked working notes, archived after ship.
+its decision log) lives in untracked working notes, archived after close.
 
 ---
 
@@ -117,7 +117,7 @@ harness item -> `type:idea` · decision -> `type:decision` · plus new `bug`/`ch
 
 The entity verbs (`task ...`/`feature ...` proof + QA machinery) coexist with the flat
 card verbs by design: they are the only surface for the proof-gated lifecycle
-(complete/verify, accept/prepare/amend/ship), and every handler operates on the card
+(complete/verify, accept/prepare/amend/close), and every handler operates on the card
 store. The legacy persistence plumbing behind them (`SaveTaskHook`, the
 `TaskSnapshot::Legacy` arm, the `task.yaml` tree readers) is gone.
 

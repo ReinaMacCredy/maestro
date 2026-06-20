@@ -21,7 +21,7 @@ maestro fixes that by making the work itself durable, queryable, and gated:
 - A **feature card** owns the contract; work cards dock to it through `parent`.
 - `maestro ready` computes unblocked work from card dependencies instead of a global counter.
 - `maestro claim` stamps the current `agent#session`, so multi-session work stays visible.
-- **Proof** and **QA** gates keep "done" and "shipped" evidence-backed.
+- **Proof** and **QA** gates keep "done" and "closed" evidence-backed.
 - Harness suggestions and decisions are cards too, so tool-improvement and reasoning survive context loss.
 
 Everything is repo-local and reviewable in a diff.
@@ -64,7 +64,7 @@ flowchart LR
     G --> H[maestro claim]
     H --> I[task complete with proof]
     I --> J[task verify]
-    J --> K[feature verify + ship]
+    J --> K[feature verify + close]
     K --> L[archive card tree]
 
     R[run events + hooks] --> I
@@ -81,7 +81,7 @@ The card type controls which verbs are valid:
 
 | Type | Role | Main verbs |
 | --- | --- | --- |
-| `feature` | Product contract and parent container | `feature accept`, `feature prepare`, `feature verify`, `feature ship`, `archive` |
+| `feature` | Product contract and parent container | `feature accept`, `feature prepare`, `feature verify`, `feature close`, `archive` |
 | `task` / `bug` / `chore` | Workable implementation cards | `ready`, `claim`, `task complete`, `task verify`, `close` |
 | `idea` | Harness/self-improvement proposal | `harness list`, `harness apply`, `harness dismiss`, `harness measure` |
 | `decision` | Durable reasoning record | `decision new`, `decision lock`, `decision show` |
@@ -172,7 +172,7 @@ maestro claim <task-card-id>                                  # stamp agent#sess
 maestro task complete <task-card-id> --summary "wrote csv writer" \
   --claim "cargo test export passes" --proof "observed: cargo test export passes"
 
-# ship is gated on QA coverage: every [bl-NNN] baseline scenario needs a proven slice.
+# close is gated on QA coverage: every [bl-NNN] baseline scenario needs a proven slice.
 # The maestro-card skill (qa-slice reference) writes this for you; by hand, append one
 # fenced yaml block to qa.md mapping each scenario to its evidence:
 cat >> .maestro/cards/csv-export/qa.md <<'EOF'
@@ -184,10 +184,10 @@ slices:
 ```
 EOF
 
-# ship also sweeps the acceptance contract for fresh evidence:
+# close also sweeps the acceptance contract for fresh evidence:
 maestro feature verify csv-export --prove ac-1 --evidence "observed: cargo test export passes"
 maestro feature verify csv-export
-maestro feature ship csv-export --outcome "Shipped streaming CSV export"   # -> shipped
+maestro feature close csv-export --outcome "streaming CSV export closed"   # -> closed
 ````
 
 `maestro feature show <id>` and `maestro task show <id>` render the current state and the
@@ -270,7 +270,7 @@ fades on its own when the asserter clears it, finishes its card, or falls out of
 union, so a crashed or walked-away session never leaves a peer stuck. When a peer is live,
 `maestro feature accept` and `feature prepare` also print a `[worktree]` advisory suggesting you
 isolate in a git worktree before sharing a file. And because two full-suite gate runs would thrash
-one machine, `feature ship`'s suite run takes a shared lock across sessions: a second run prints a
+one machine, `feature close`'s suite run takes a shared lock across sessions: a second run prints a
 `[busy]` waiting line and proceeds when the slot frees.
 
 ### Suggested workflow
@@ -283,16 +283,16 @@ the run actually looks like, gates and all. `maestro install` puts the matching 
 reference that owns that flow rather than spelling out every verb. The command surface below is
 checked against the current source tree.
 
-#### From a high-level idea to a shipped product
+#### From a high-level idea to a closed feature
 
 One feature, start to finish: a raw idea becomes a frozen contract, the work is proven slice by slice,
-and it ships only once QA covers the baseline. This is the prompt you paste into a fresh agent session:
+and it closes only once QA covers the baseline. This is the prompt you paste into a fresh agent session:
 
 > We want to add rate limiting to the public API: requests over a key's limit should get an HTTP 429.
 > Set it up as a maestro feature, driving each step through the right skill reference: `maestro-design`
 > to map the contract and record the fixed-window-vs-token-bucket decision, the maestro-card skill's
 > qa-baseline reference to capture a behavior baseline, then its work and verify references to drive it
-> to shipped through proof-gated tasks, and its qa-slice reference for the ship gate. Don't skip the gates.
+> to closed through proof-gated tasks, and its qa-slice reference for the close gate. Don't skip the gates.
 
 How it looks end to end (the `qa.md` baseline and slices bodies are in flows 1 and 3 below,
 and copy-paste-ready in the Quickstart):
@@ -341,9 +341,9 @@ auto: maestro task verify card-764dd7
 verification passed for card-764dd7 (1 claim(s), 1 proof source(s))
 next: maestro-card skill (qa-slice) -> replay affected baseline scenarios
 
-# (write the qa.md slices block + sweep the contract first; see flow 3) ship then succeeds:
-$ maestro feature ship api-rate-limiting --outcome "Shipped fixed-window rate limiting"
-shipped api-rate-limiting (-> shipped)
+# (write the qa.md slices block + sweep the contract first; see flow 3) close then succeeds:
+$ maestro feature close api-rate-limiting --outcome "fixed-window rate limiting closed"
+closed api-rate-limiting (-> closed)
 ```
 
 The same journey, flow by flow: each leads with the gate that blocks you until the evidence exists,
@@ -398,31 +398,31 @@ verification failure: claim not backed by events/proof: cargo test ratelimit pas
 Error: verification failed for card-cad8af
 ```
 
-#### 3. Ship the feature once QA is proven
+#### 3. Close the feature once QA is proven
 
-A feature ships only when it has no live child tasks *and* its QA coverage is green: every `[bl-NNN]`
+A feature closes only when it has no live child tasks *and* its QA coverage is green: every `[bl-NNN]`
 scenario in the baseline must be matched by a slice in the `qa.md` slices block carrying non-empty
 evidence, *and* every acceptance item must have fresh evidence from the contract sweep
-(`maestro feature verify`). Coverage is checked, not asserted, so a green ship is a real signal.
+(`maestro feature verify`). Coverage is checked, not asserted, so a green close is a real signal.
 
 *Prompt:* "With the maestro-card skill's qa-slice reference, map every `[bl-NNN]` baseline scenario of
 <feature> to a slice in the fenced yaml `slices:` block appended to `.maestro/cards/<id>/qa.md`, with
 the test that proves it as `evidence`. Sweep the contract with `maestro feature verify <id>`, then
-`feature ship --outcome "..."`. Verify the gate passes; don't `--force` it."
+`feature close --outcome "..."`. Verify the gate passes; don't `--force` it."
 
-The gate: `ship` refuses while any baseline scenario lacks a covering slice or any acceptance item
+The gate: `close` refuses while any baseline scenario lacks a covering slice or any acceptance item
 lacks fresh evidence, and lists which.
 
 ```
-$ maestro feature ship api-rate-limiting --outcome "Shipped fixed-window rate limiting"
-Error: cannot ship api-rate-limiting:
+$ maestro feature close api-rate-limiting --outcome "fixed-window rate limiting closed"
+Error: cannot close api-rate-limiting:
   qa-slice coverage incomplete - 2 baseline scenario(s) without a counting slice: bl-001, bl-002
     skill: maestro-card (qa-slice)
     target: .maestro/cards/api-rate-limiting/qa.md
-    retry: maestro feature ship api-rate-limiting --outcome "<outcome>"
+    retry: maestro feature close api-rate-limiting --outcome "<outcome>"
   contract sweep missing - 2 acceptance item(s) need feature-level evidence
     fix: maestro feature verify api-rate-limiting
-    retry: maestro feature ship api-rate-limiting --outcome "<outcome>"
+    retry: maestro feature close api-rate-limiting --outcome "<outcome>"
 ```
 
 #### 4. Improve the harness - maestro's self-improvement
@@ -489,7 +489,7 @@ vanished. Either way, the improvement is tracked and backed by a verified task, 
 A feature card is the product contract and the parent container for work. `proposed` is the
 editable design state; `accept` freezes the contract into `ready` and requires a behavior baseline;
 `prepare` turns a reviewed plan into child work cards; `verify` records feature-level evidence; and
-`ship` requires no live child work plus QA coverage and a passing contract sweep. Each feature is a
+`close` requires no live child work plus QA coverage and a passing contract sweep. Each feature is a
 card under `.maestro/cards/<id>/`: `card.yaml` holds typed state, `qa.md` holds the behavior baseline
 and slices block, `spec.md` is the design write-up, and `notes.md` accumulates the running design log.
 
@@ -505,9 +505,9 @@ The result is that "done" is always backed by evidence you can open.
 
 QA lives in one file per feature, `.maestro/cards/<id>/qa.md`: the behavior baseline (markdown with
 an `amend_log_position` frontmatter and `[bl-NNN]` scenario lines) plus a fenced yaml `slices:`
-block appended at the end, each slice mapping `scenarios` to `evidence`. A feature ships only when its
+block appended at the end, each slice mapping `scenarios` to `evidence`. A feature closes only when its
 baseline is fresh and every scenario is covered by a slice with non-empty evidence. Coverage is
-checked, not asserted, so a green ship is a real signal.
+checked, not asserted, so a green close is a real signal.
 
 ### Decisions
 
