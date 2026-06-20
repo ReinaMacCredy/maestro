@@ -7,6 +7,7 @@ mod event;
 mod evidence;
 mod reader;
 mod record;
+mod trace;
 
 pub use active::{
     FileOverlap, Presence, SessionActivity, WarmEditor, active_sessions, active_sessions_union,
@@ -23,3 +24,4 @@ pub use evidence::{
 };
 pub use reader::{RunEvent, RunEventRecord, visit_managed_event_logs, visit_managed_events};
 pub(crate) use record::{RecordOutcome, record_hook_event};
+pub use trace::{RunStatus, RunTrace, TraceEntry, assemble_trace};
