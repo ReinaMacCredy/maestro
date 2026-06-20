@@ -239,6 +239,121 @@ fn task_next_no_action_prints_summary_and_exits_nonzero() {
 }
 
 #[test]
+fn next_default_reports_best_action_without_mutating_ready_task() {
+    let temp = setup_repo("maestro-next-read-only-ready");
+    let repo = temp.path();
+    run(
+        repo,
+        &["task", "create", "Ready task", "--check", "ready check"],
+    );
+    let ready = id_by_title(repo, "Ready task");
+    run(repo, &["task", "explore", &ready]);
+    run(repo, &["task", "accept", &ready]);
+
+    let next = run(repo, &["next"]);
+
+    assert!(next.contains("run: maestro task claim"), "{next}");
+    assert!(next.contains(&format!("task: {ready}")), "{next}");
+    assert_eq!(task_yaml(repo, &ready)["state"].as_str(), Some("ready"));
+    assert!(task_yaml(repo, &ready)["claimed_by"].is_null());
+}
+
+#[test]
+fn next_json_uses_next_schema_and_marks_claim_task_auto_safe() {
+    let temp = setup_repo("maestro-next-json-ready");
+    let repo = temp.path();
+    run(
+        repo,
+        &["task", "create", "Ready task", "--check", "ready check"],
+    );
+    let ready = id_by_title(repo, "Ready task");
+    run(repo, &["task", "explore", &ready]);
+    run(repo, &["task", "accept", &ready]);
+
+    let json = run(repo, &["next", "--json"]);
+    let parsed: JsonValue = serde_json::from_str(&json).expect("invariant: next JSON should parse");
+
+    assert_eq!(parsed["schema"], "maestro.next.v1");
+    assert_eq!(parsed["mode"], "suggest");
+    assert_eq!(parsed["next_action"]["kind"], "claim_task");
+    assert_eq!(parsed["next_action"]["auto_safe"], true);
+    assert_eq!(parsed["next_action"]["task_id"], ready);
+}
+
+#[test]
+fn next_run_claims_only_auto_safe_ready_task() {
+    let temp = setup_repo("maestro-next-run-ready");
+    let repo = temp.path();
+    run(
+        repo,
+        &["task", "create", "Ready task", "--check", "ready check"],
+    );
+    let ready = id_by_title(repo, "Ready task");
+    run(repo, &["task", "explore", &ready]);
+    run(repo, &["task", "accept", &ready]);
+
+    let next = run(repo, &["next", "--run"]);
+
+    assert!(next.contains("auto-safe: maestro task claim"), "{next}");
+    assert_eq!(
+        task_yaml(repo, &ready)["state"].as_str(),
+        Some("in_progress")
+    );
+    assert!(!task_yaml(repo, &ready)["claimed_by"].is_null());
+}
+
+#[test]
+fn next_run_refuses_input_requiring_completion_template() {
+    let temp = setup_repo("maestro-next-run-refuses-input");
+    let repo = temp.path();
+    run(
+        repo,
+        &["task", "create", "Ready task", "--check", "ready check"],
+    );
+    let ready = id_by_title(repo, "Ready task");
+    run(repo, &["task", "explore", &ready]);
+    run(repo, &["task", "accept", &ready]);
+    run(repo, &["task", "claim", &ready]);
+
+    let next = maestro(repo, &["next", "--run"]);
+
+    assert_failure(&next, &["next", "--run"]);
+    let out = stdout(&next);
+    assert!(out.contains("blocked: next action requires input"), "{out}");
+    assert!(out.contains("template: maestro task complete"), "{out}");
+    assert_eq!(
+        task_yaml(repo, &ready)["state"].as_str(),
+        Some("in_progress")
+    );
+}
+
+#[test]
+fn next_loop_stops_after_first_blocker_and_reports_transcript() {
+    let temp = setup_repo("maestro-next-loop-ready");
+    let repo = temp.path();
+    run(
+        repo,
+        &["task", "create", "Ready task", "--check", "ready check"],
+    );
+    let ready = id_by_title(repo, "Ready task");
+    run(repo, &["task", "explore", &ready]);
+    run(repo, &["task", "accept", &ready]);
+
+    let next = run(repo, &["next", "--loop", "--max-steps", "5"]);
+
+    assert!(next.contains("step 1/5:"), "{next}");
+    assert!(next.contains("auto-safe: maestro task claim"), "{next}");
+    assert!(
+        next.contains("blocked: next action requires input"),
+        "{next}"
+    );
+    assert_eq!(
+        task_yaml(repo, &ready)["state"].as_str(),
+        Some("in_progress")
+    );
+}
+
+#[test]
 fn status_and_task_next_choose_current_task_before_ready_queue() {
     let temp = setup_repo("maestro-status-current");
     let repo = temp.path();
@@ -1174,7 +1289,10 @@ fn task_list_next_column_uses_verify_contract_state_not_only_lifecycle_state() {
 
     let list = run(repo, &["task", "list"]);
     assert!(list.contains("template: add_check"), "{list}");
-    assert!(list.contains("inspect any: maestro task show <id>"), "{list}");
+    assert!(
+        list.contains("inspect any: maestro task show <id>"),
+        "{list}"
+    );
     assert!(
         !untabify(&list).contains(&format!("{id}\tdraft\trun: explore")),
         "standalone draft without checks must not point at explore first: {list}"

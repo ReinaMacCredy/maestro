@@ -85,7 +85,13 @@ fn started_feature_two_acceptances(repo: &Path, id: &str) {
 
 fn prove(repo: &Path, id: &str, ac: &str, extra: &[&str]) -> std::process::Output {
     let mut args = vec![
-        "feature", "verify", id, "--prove", ac, "--evidence", "observed",
+        "feature",
+        "verify",
+        id,
+        "--prove",
+        ac,
+        "--evidence",
+        "observed",
     ];
     args.extend_from_slice(extra);
     maestro(&args, repo)
@@ -107,7 +113,10 @@ fn last_prove_auto_ships_in_the_same_call() {
     // Second (last) proof: completes readiness -> auto-ship.
     let last = prove(repo, "report-builder", "ac-2", &[]);
     let out = stdout(last, &["feature", "verify", "--prove", "ac-2"]);
-    assert!(out.contains("auto-shipping"), "should announce auto-ship: {out}");
+    assert!(
+        out.contains("auto-shipping"),
+        "should announce auto-ship: {out}"
+    );
     assert!(
         out.contains("full verify suite passed"),
         "the full suite ran: {out}"
@@ -130,8 +139,14 @@ fn auto_ship_records_default_outcome() {
     started_feature_two_acceptances(repo, "report-builder");
     write_stack_verify(repo, "true");
 
-    stdout(prove(repo, "report-builder", "ac-1", &[]), &["prove", "ac-1"]);
-    stdout(prove(repo, "report-builder", "ac-2", &[]), &["prove", "ac-2"]);
+    stdout(
+        prove(repo, "report-builder", "ac-1", &[]),
+        &["prove", "ac-1"],
+    );
+    stdout(
+        prove(repo, "report-builder", "ac-2", &[]),
+        &["prove", "ac-2"],
+    );
 
     let show = stdout(
         maestro(&["feature", "show", "report-builder"], repo),
@@ -150,7 +165,10 @@ fn auto_ship_uses_explicit_outcome_override() {
     started_feature_two_acceptances(repo, "report-builder");
     write_stack_verify(repo, "true");
 
-    stdout(prove(repo, "report-builder", "ac-1", &[]), &["prove", "ac-1"]);
+    stdout(
+        prove(repo, "report-builder", "ac-1", &[]),
+        &["prove", "ac-1"],
+    );
     stdout(
         prove(
             repo,
@@ -180,7 +198,10 @@ fn no_ship_defers_the_auto_fire() {
     started_feature_two_acceptances(repo, "report-builder");
     write_stack_verify(repo, "true");
 
-    stdout(prove(repo, "report-builder", "ac-1", &[]), &["prove", "ac-1"]);
+    stdout(
+        prove(repo, "report-builder", "ac-1", &[]),
+        &["prove", "ac-1"],
+    );
     let deferred = stdout(
         prove(repo, "report-builder", "ac-2", &["--no-ship"]),
         &["prove", "ac-2", "--no-ship"],
@@ -220,7 +241,10 @@ fn one_acceptance_left_nudges_on_stderr() {
     write_stack_verify(repo, "true");
 
     let first = prove(repo, "report-builder", "ac-1", &[]);
-    assert!(first.status.success(), "the nudge must not block the command");
+    assert!(
+        first.status.success(),
+        "the nudge must not block the command"
+    );
     let stderr = String::from_utf8(first.stderr).expect("stderr utf8");
     assert!(
         stderr.contains("1 acceptance item left") && stderr.contains("auto-ship"),
@@ -247,7 +271,10 @@ fn auto_ship_suite_failure_keeps_proof_and_stays_in_progress() {
     started_feature_two_acceptances(repo, "report-builder");
     write_stack_verify(repo, "false");
 
-    stdout(prove(repo, "report-builder", "ac-1", &[]), &["prove", "ac-1"]);
+    stdout(
+        prove(repo, "report-builder", "ac-1", &[]),
+        &["prove", "ac-1"],
+    );
     let last = prove(repo, "report-builder", "ac-2", &[]);
     assert!(
         !last.status.success(),
@@ -289,7 +316,10 @@ fn waive_completing_readiness_also_auto_ships() {
     started_feature_two_acceptances(repo, "report-builder");
     write_stack_verify(repo, "true");
 
-    stdout(prove(repo, "report-builder", "ac-1", &[]), &["prove", "ac-1"]);
+    stdout(
+        prove(repo, "report-builder", "ac-1", &[]),
+        &["prove", "ac-1"],
+    );
     // Waiving the last unresolved acceptance item completes readiness -> auto-ship.
     let last = maestro(
         &[

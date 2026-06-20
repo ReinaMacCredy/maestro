@@ -27,7 +27,10 @@ pub fn run(args: ConflictArgs) -> Result<()> {
     if args.clear {
         return clear(&paths, &peer);
     }
-    let reason = args.reason.as_deref().filter(|reason| !reason.trim().is_empty());
+    let reason = args
+        .reason
+        .as_deref()
+        .filter(|reason| !reason.trim().is_empty());
     let Some(reason) = reason else {
         return Err(anyhow!(
             "a conflict needs a reason: maestro conflict {peer} \"<why you are taking it>\" (or --clear to retract)"
@@ -72,7 +75,10 @@ pub(super) fn conflict_banner() -> Result<()> {
     let roots = worktree_roots(&paths);
 
     let notices = conflict::active_notices(&roots, &now)?;
-    let mine: Vec<&Notice> = notices.iter().filter(|notice| notice.peer_card == me).collect();
+    let mine: Vec<&Notice> = notices
+        .iter()
+        .filter(|notice| notice.peer_card == me)
+        .collect();
     if mine.is_empty() {
         return Ok(());
     }

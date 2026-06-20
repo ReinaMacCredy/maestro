@@ -51,10 +51,7 @@ pub(crate) fn run_stack_verify(paths: &MaestroPaths) -> Result<StackVerifyOutcom
     // falsifier in `run_verify_commands` is deliberately NOT serialized. Skipped
     // when the suite is empty -- there is nothing heavy to gate.
     let _gate = (!verify.is_empty()).then(|| {
-        crate::domain::gate_lock::acquire(
-            paths,
-            &crate::foundation::core::session::session_token(),
-        )
+        crate::domain::gate_lock::acquire(paths, &crate::foundation::core::session::session_token())
     });
     let commands = run_commands(paths, verify)?;
     Ok(StackVerifyOutcome {

@@ -702,7 +702,7 @@ fn update_writes_fields_claims_and_close_closes() {
             "update",
             &id,
             "--status",
-            "needs_verification",
+            "in_progress",
             "--description",
             "blocked on review",
         ],
@@ -713,7 +713,7 @@ fn update_writes_fields_claims_and_close_closes() {
     );
     let shown = run(repo, &["show", &id]);
     assert!(
-        shown.contains("needs_verification"),
+        shown.contains("in_progress"),
         "the new status is persisted:\n{shown}"
     );
     assert!(
@@ -748,6 +748,37 @@ fn update_writes_fields_claims_and_close_closes() {
     assert!(
         again.contains("already closed"),
         "a second close guides rather than erroring:\n{again}"
+    );
+}
+
+#[test]
+fn generic_update_refuses_task_verification_lifecycle_states() {
+    let temp = cards_repo("s2-update-gated-status");
+    let repo = temp.path();
+
+    run(repo, &["create", "-t", "task", "Wire verification"]);
+    let id = id_by_title(repo, "Wire verification");
+
+    let needs_verification = run_err(repo, &["update", &id, "--status", "needs_verification"]);
+    assert!(
+        needs_verification.contains("cannot set")
+            && needs_verification.contains("needs_verification")
+            && needs_verification.contains("maestro task complete"),
+        "needs_verification refusal should point at task complete:\n{needs_verification}"
+    );
+
+    let verified = run_err(repo, &["update", &id, "--status", "verified"]);
+    assert!(
+        verified.contains("cannot set")
+            && verified.contains("verified")
+            && verified.contains("maestro task verify"),
+        "verified refusal should point at task verify:\n{verified}"
+    );
+
+    let shown = run(repo, &["show", &id]);
+    assert!(
+        shown.contains("open"),
+        "refused lifecycle writes must leave status unchanged:\n{shown}"
     );
 }
 
@@ -1367,6 +1398,40 @@ fn msg_send_echoes_sender_and_list_shows_direction() {
     );
 }
 
+#[test]
+fn msg_send_from_asserts_current_card_without_impersonating() {
+    let temp = cards_repo("s2-msg-from-assertion");
+    let repo = temp.path();
+
+    maestro_in_session(repo, "setup", &["create", "-t", "chore", "Alpha"]);
+    let alpha = id_by_title(repo, "Alpha");
+    maestro_in_session(repo, "setup", &["create", "-t", "chore", "Bravo"]);
+    let bravo = id_by_title(repo, "Bravo");
+    maestro_in_session(repo, "setup", &["link", "add", &alpha, &bravo]);
+
+    maestro_in_session(repo, "asess", &["note", &alpha, "bind"]);
+    let sent = maestro_in_session(
+        repo,
+        "asess",
+        &["msg", "send", "--from", &alpha, &bravo, "your move"],
+    );
+    assert!(
+        sent.status.success(),
+        "matching --from should send\nstderr:\n{}",
+        String::from_utf8_lossy(&sent.stderr)
+    );
+
+    let wrong = maestro_in_session(
+        repo,
+        "asess",
+        &["msg", "send", "--from", &bravo, &alpha, "impersonate"],
+    );
+    assert!(!wrong.status.success(), "mismatched --from should fail");
+    let err = String::from_utf8_lossy(&wrong.stderr);
+    assert!(err.contains("--from does not match current card"), "{err}");
+    assert!(err.contains(&alpha) && err.contains(&bravo), "{err}");
+}
+
 /// SPEC E3: `close` and `update --status` are workable-card verbs. A decision
 /// or feature keeps its per-type lifecycle (the generic write would bypass its
 /// gates), and a typo'd status word is rejected loudly instead of silently
@@ -1594,7 +1659,10 @@ fn text_index_accelerates_grep_transparently_with_silent_fallback() {
         receipt.contains("(2 live, 1 archived)"),
         "the receipt counts both trees:\n{receipt}"
     );
-    assert!(receipt.contains("next: maestro card list --grep"), "{receipt}");
+    assert!(
+        receipt.contains("next: maestro card list --grep"),
+        "{receipt}"
+    );
 }
 
 /// Drive a verb under a fixed session id. `MAESTRO_SESSION_ID` is the first key
@@ -1813,7 +1881,10 @@ fn create_batch_mints_one_open_card_per_title() {
     // ac-1: three titles in one invocation mint three open cards.
     let created = run(repo, &["create", "-t", "task", "alpha", "beta", "gamma"]);
     assert_eq!(
-        created.lines().filter(|l| l.starts_with("created ")).count(),
+        created
+            .lines()
+            .filter(|l| l.starts_with("created "))
+            .count(),
         3,
         "three titles mint three cards:\n{created}"
     );
@@ -1823,7 +1894,10 @@ fn create_batch_mints_one_open_card_per_title() {
     }
 
     // ac-1: --id-only prints exactly the new ids, one per line, nothing else.
-    let ids = run(repo, &["create", "-t", "task", "delta", "epsilon", "--id-only"]);
+    let ids = run(
+        repo,
+        &["create", "-t", "task", "delta", "epsilon", "--id-only"],
+    );
     let id_lines: Vec<&str> = ids.lines().filter(|l| !l.is_empty()).collect();
     assert_eq!(id_lines.len(), 2, "two titles print two bare ids:\n{ids}");
     for line in &id_lines {
@@ -1843,7 +1917,10 @@ fn create_single_title_is_backward_compatible() {
     // unchanged `created <id> (<type>): <title>` shape.
     let created = run(repo, &["create", "-t", "task", "only one"]);
     assert_eq!(
-        created.lines().filter(|l| l.starts_with("created ")).count(),
+        created
+            .lines()
+            .filter(|l| l.starts_with("created "))
+            .count(),
         1,
         "one title mints one card:\n{created}"
     );
@@ -1860,13 +1937,19 @@ fn create_batch_refuses_per_card_text_and_mints_nothing() {
 
     // ac-3: --description is refused in batch mode, pointing at `card update`,
     // and no card is created by the rejected call (the guard runs before mint).
-    let err = run_err(repo, &["create", "-t", "task", "a", "b", "--description", "d"]);
+    let err = run_err(
+        repo,
+        &["create", "-t", "task", "a", "b", "--description", "d"],
+    );
     assert!(
         err.contains("--description") && err.contains("card update"),
         "the batch --description refusal points at card update:\n{err}"
     );
     // --active-form is the same per-card text hazard; refused identically.
-    let af_err = run_err(repo, &["create", "-t", "task", "a", "b", "--active-form", "doing"]);
+    let af_err = run_err(
+        repo,
+        &["create", "-t", "task", "a", "b", "--active-form", "doing"],
+    );
     assert!(
         af_err.contains("--active-form") && af_err.contains("card update"),
         "the batch --active-form refusal points at card update:\n{af_err}"
@@ -1879,7 +1962,10 @@ fn create_batch_refuses_per_card_text_and_mints_nothing() {
 
     // ac-3: --parent still applies to every card in a batch.
     run(repo, &["create", "-t", "feature", "Auth"]);
-    run(repo, &["create", "-t", "task", "p1", "p2", "--parent", "auth"]);
+    run(
+        repo,
+        &["create", "-t", "task", "p1", "p2", "--parent", "auth"],
+    );
     let parented = run(repo, &["list", "--parent", "auth"]);
     assert!(
         parented.contains("p1") && parented.contains("p2") && parented.matches("auth").count() >= 2,
@@ -1909,10 +1995,24 @@ fn active_form_persists_and_does_not_change_status() {
     let repo = temp.path();
 
     // ac-8: --active-form is stored at create and is display-only (status open).
-    let id = run(repo, &["create", "-t", "task", "Export rows", "--active-form", "Wiring export", "--id-only"]);
+    let id = run(
+        repo,
+        &[
+            "create",
+            "-t",
+            "task",
+            "Export rows",
+            "--active-form",
+            "Wiring export",
+            "--id-only",
+        ],
+    );
     let id = id.trim();
     let doc = card_doc(repo, id);
-    assert_eq!(doc["active_form"], "Wiring export", "create stores active_form");
+    assert_eq!(
+        doc["active_form"], "Wiring export",
+        "create stores active_form"
+    );
     assert_eq!(doc["status"], "open", "active_form does not change status");
 
     // ac-8: update can set it; an unset card serializes no key.
@@ -1924,7 +2024,8 @@ fn active_form_persists_and_does_not_change_status() {
     );
     run(repo, &["update", plain, "--active-form", "Doing plain"]);
     assert_eq!(
-        card_doc(repo, plain)["active_form"], "Doing plain",
+        card_doc(repo, plain)["active_form"],
+        "Doing plain",
         "update sets active_form"
     );
 }
@@ -1973,7 +2074,10 @@ fn claim_nudges_when_session_already_holds_another_in_progress() {
     let u2 = run(repo, &["create", "-t", "task", "u-two", "--id-only"]);
     let u2 = u2.trim();
     let (_, _, ue1) = run_as(repo, "codex", "X", &["update", u1, "--claim"]);
-    assert!(ue1.trim().is_empty(), "first update --claim is silent:\n{ue1}");
+    assert!(
+        ue1.trim().is_empty(),
+        "first update --claim is silent:\n{ue1}"
+    );
     let (_, _, ue2) = run_as(repo, "codex", "X", &["update", u2, "--claim"]);
     assert!(
         ue2.contains(u1) && ue2.contains("in_progress"),

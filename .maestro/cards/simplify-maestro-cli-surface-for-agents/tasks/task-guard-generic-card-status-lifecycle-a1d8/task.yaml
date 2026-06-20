@@ -1,0 +1,82 @@
+schema_version: maestro.card.v1
+id: task-guard-generic-card-status-lifecycle-a1d8
+type: task
+title: Guard generic card status lifecycle transitions
+status: verified
+parent: simplify-maestro-cli-surface-for-agents
+claimed_by: maestro#s31223-1781953698510266000
+claimed_at: 2026-06-20T11:08:18.510Z
+created_at: 2026-06-20T11:00:58.912Z
+updated_at: 2026-06-20T11:09:33.657Z
+extra:
+  schema_version: maestro.task.v2
+  blockers:
+  - id: blk-001
+    kind: task
+    blocked_ref:
+      kind: task
+      id: task-add-canonical-maestro-next-modes-7830
+    title: Blocked by task-add-canonical-maestro-next-modes-7830
+    reason: 'after dependency: T1 (task-add-canonical-maestro-next-modes-7830) verified'
+    source: command
+    created_at: 2026-06-20T11:00:59.061Z
+    resolved_at: 2026-06-20T11:08:01.360Z
+  covers:
+  - ac-2
+  state_history:
+  - state: draft
+    at: 2026-06-20T11:00:58.912Z
+    by: maestro
+  - state: exploring
+    at: 2026-06-20T11:00:58.939Z
+    by: maestro
+  - state: exploring
+    at: 2026-06-20T11:00:59.061Z
+    by: maestro
+    summary: 'blocker added: blk-001'
+  - state: ready
+    at: 2026-06-20T11:00:59.113Z
+    by: maestro
+  - state: ready
+    at: 2026-06-20T11:08:01.360Z
+    by: maestro
+    summary: 'blocker resolved: blk-001'
+  - state: needs_verification
+    at: 2026-06-20T11:09:33.635Z
+    by: maestro
+    summary: Added guided hard errors for generic card status updates that target task-owned verification states.
+    claims:
+    - 'RED: cargo test --test card_commands_integration update_ failed because update --status needs_verification succeeded'
+    - 'GREEN: cargo test --test card_commands_integration update_ passed 6 tests'
+  - state: verified
+    at: 2026-06-20T11:09:33.657Z
+    by: maestro
+    summary: 'verification passed: 2 claim(s), 1 proof source(s)'
+  lane: normal
+  risk: medium
+  verification:
+    status: passed
+    verified_at: 2026-06-20T11:09:33.657Z
+    verified_commit: 16c5f87fdf47c22879f8a9ecfe7afd18e1325313
+    verified_by_run: .maestro/runs/cli-2026-06-20/events.jsonl
+    contract_hash: 7dbf52f03a579e146ad918e11b55c975c3ab00c7e6cfea430c120554e3771f56
+    claim_checks:
+    - claim: 'RED: cargo test --test card_commands_integration update_ failed because update --status needs_verification succeeded'
+      matched: true
+      source: .maestro/runs/cli-2026-06-20/events.jsonl
+    - claim: 'GREEN: cargo test --test card_commands_integration update_ passed 6 tests'
+      matched: true
+      source: .maestro/runs/cli-2026-06-20/events.jsonl
+    proof_sources:
+    - kind: event
+      path: .maestro/runs/cli-2026-06-20/events.jsonl
+      hash: 99f8194136a6cefe68211164296d5310581a2a9b13dcc6ed6e100a7d9eb55851
+  acceptance_locked: true
+  acceptance:
+    checks:
+    - generic `maestro card update <task> --status verified` and `--status needs_verification` fail with typed task remedies while compatible low-risk status updates still work
+    locked_by: maestro
+    locked_at: 2026-06-20T11:00:59.113Z
+  claims:
+  - 'RED: cargo test --test card_commands_integration update_ failed because update --status needs_verification succeeded'
+  - 'GREEN: cargo test --test card_commands_integration update_ passed 6 tests'

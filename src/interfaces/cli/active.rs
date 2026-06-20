@@ -76,7 +76,7 @@ pub fn run(args: ActiveArgs) -> Result<()> {
         println!("({hidden_stale} stale hidden; --all to show)");
     }
 
-    render_link_hint(&shown, &by_id, &me, your_card);
+    render_link_hint(&shown, &by_id, &me, your_card, args.connect);
     Ok(())
 }
 
@@ -294,6 +294,7 @@ fn render_link_hint(
     by_id: &HashMap<&str, &card::schema::Card>,
     me: &str,
     your_card: Option<&str>,
+    connect: bool,
 ) {
     let peers: Vec<&str> = shown
         .iter()
@@ -328,19 +329,44 @@ fn render_link_hint(
 
     if !linked.is_empty() {
         println!();
-        println!("linked -- message them:");
+        if connect {
+            println!("suggested coordination:");
+        } else {
+            println!("linked -- message them:");
+        }
         for their_card in &linked {
-            println!("  maestro msg send {their_card} \"<text>\"");
+            if connect {
+                let your = your_card.unwrap_or("<your-card>");
+                println!("  message:");
+                println!("    maestro msg send --from {your} {their_card} \"<text>\"");
+                println!("  conflict notice:");
+                println!("    maestro conflict {their_card} \"<why>\"");
+            } else {
+                println!("  maestro msg send {their_card} \"<text>\"");
+            }
         }
     }
 
     if !unlinked.is_empty() {
         let your = your_card.unwrap_or("<your-card>");
         println!();
-        println!("related? link, then message:");
+        if connect {
+            println!("suggested coordination:");
+        } else {
+            println!("related? link, then message:");
+        }
         for their_card in &unlinked {
-            println!("  maestro link add {your} {their_card}");
-            println!("  maestro msg send {their_card} \"<text>\"");
+            if connect {
+                println!("  link:");
+                println!("    maestro link add {your} {their_card}");
+                println!("  message:");
+                println!("    maestro msg send --from {your} {their_card} \"<text>\"");
+                println!("  conflict notice:");
+                println!("    maestro conflict {their_card} \"<why>\"");
+            } else {
+                println!("  maestro link add {your} {their_card}");
+                println!("  maestro msg send {their_card} \"<text>\"");
+            }
         }
     }
 }
@@ -397,7 +423,9 @@ pub(super) fn busy_banner() -> Result<()> {
     };
     let paths = MaestroPaths::new(root);
     if let Some(holder) = gate_lock::holder(&paths) {
-        eprintln!("[busy] {holder} is running the full-suite gate; hold heavy runs until it clears");
+        eprintln!(
+            "[busy] {holder} is running the full-suite gate; hold heavy runs until it clears"
+        );
     }
     Ok(())
 }
@@ -457,7 +485,11 @@ fn live_peer_summary(rows: &[SessionActivity], me: &str) -> Option<(usize, Strin
     }
     let who = peers
         .iter()
-        .map(|peer| peer.bound_card.as_deref().unwrap_or(peer.session_id.as_str()))
+        .map(|peer| {
+            peer.bound_card
+                .as_deref()
+                .unwrap_or(peer.session_id.as_str())
+        })
         .collect::<Vec<_>>()
         .join(", ");
     Some((peers.len(), who))
@@ -548,17 +580,20 @@ mod tests {
     #[test]
     fn worktree_advisory_is_silent_when_the_running_session_is_alone() {
         // Only my own row in the union, plus a long-dead peer: no live peer.
-        let rows = vec![row("meS", Some("task-1")), stale_row("ghost", Some("task-9"))];
+        let rows = vec![
+            row("meS", Some("task-1")),
+            stale_row("ghost", Some("task-9")),
+        ];
         assert_eq!(live_peer_summary(&rows, "meS"), None);
     }
 
     #[test]
     fn worktree_advisory_names_every_live_peer_when_present() {
         let rows = vec![
-            row("meS", Some("task-1")),       // self -> excluded
-            row("p1", Some("task-2")),        // live peer, bound -> card id
-            row("p2", None),                  // live peer, no card -> session id
-            stale_row("p3", Some("task-3")),  // stale peer -> excluded
+            row("meS", Some("task-1")),      // self -> excluded
+            row("p1", Some("task-2")),       // live peer, bound -> card id
+            row("p2", None),                 // live peer, no card -> session id
+            stale_row("p3", Some("task-3")), // stale peer -> excluded
         ];
         let (count, who) = live_peer_summary(&rows, "meS").expect("live peers present");
         assert_eq!(count, 2);

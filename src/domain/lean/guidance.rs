@@ -6,8 +6,7 @@
 use crate::domain::lean::LeanMode;
 
 /// The reach-ladder, lowest rung first: reach for the cheapest before the next.
-const LADDER: &str =
-    "skip/YAGNI -> stdlib -> native platform -> installed dependency -> one-liner -> minimal new code";
+const LADDER: &str = "skip/YAGNI -> stdlib -> native platform -> installed dependency -> one-liner -> minimal new code";
 
 /// What the session mode tells the agent to do with a unit the ladder already
 /// covers from a lower rung.
@@ -17,9 +16,7 @@ fn climb_directive(mode: LeanMode) -> &'static str {
             "ultra: reject code a lower rung already covers; send it back rather than apply it."
         }
         LeanMode::Full => "full: apply the cheaper, lower-rung version in place.",
-        LeanMode::Lite => {
-            "lite: suggest the cheaper version; leave the call to the author."
-        }
+        LeanMode::Lite => "lite: suggest the cheaper version; leave the call to the author.",
         LeanMode::Off => "off: the climb step is suppressed this session; skip it.",
     }
 }
@@ -82,7 +79,10 @@ mod tests {
     fn review_names_the_mode_and_its_climb_directive() {
         for (mode, verb) in CLIMB_VERBS {
             let text = review_guidance(mode);
-            assert!(text.contains(mode.as_str()), "review for {mode} names the mode");
+            assert!(
+                text.contains(mode.as_str()),
+                "review for {mode} names the mode"
+            );
             assert!(
                 text.to_lowercase().contains(verb),
                 "review for {mode} carries the `{verb}` climb directive: {text}"
@@ -94,7 +94,10 @@ mod tests {
     fn audit_names_the_mode_and_its_climb_directive() {
         for (mode, verb) in CLIMB_VERBS {
             let text = audit_guidance(mode);
-            assert!(text.contains(mode.as_str()), "audit for {mode} names the mode");
+            assert!(
+                text.contains(mode.as_str()),
+                "audit for {mode} names the mode"
+            );
             assert!(
                 text.to_lowercase().contains(verb),
                 "audit for {mode} carries the `{verb}` climb directive: {text}"
@@ -116,9 +119,18 @@ mod tests {
 
     #[test]
     fn both_carry_the_reach_ladder_rungs() {
-        for text in [review_guidance(LeanMode::Full), audit_guidance(LeanMode::Full)] {
-            assert!(text.contains("stdlib"), "ladder names the stdlib rung: {text}");
-            assert!(text.contains("one-liner"), "ladder names the one-liner rung: {text}");
+        for text in [
+            review_guidance(LeanMode::Full),
+            audit_guidance(LeanMode::Full),
+        ] {
+            assert!(
+                text.contains("stdlib"),
+                "ladder names the stdlib rung: {text}"
+            );
+            assert!(
+                text.contains("one-liner"),
+                "ladder names the one-liner rung: {text}"
+            );
         }
     }
 }

@@ -45,10 +45,12 @@ fn root_help_lists_top_level_commands() {
             "uninstall",
             "doctor",
             "shell-init",
+            "next",
             "resume",
             "task",
             "event",
             "feature",
+            "qa",
             "decision",
             "card",
             "active",
@@ -69,8 +71,19 @@ fn root_help_lists_top_level_commands() {
         .next()
         .expect("root --help always has a Commands section before Options");
     for hidden in [
-        "  ready ", "  list ", "  dep ", "  archive ", "  claim ", "  assign ", "  note ",
-        "  create ", "  show ", "  update ", "  close ", "  verify ", "  migrate ",
+        "  ready ",
+        "  list ",
+        "  dep ",
+        "  archive ",
+        "  claim ",
+        "  assign ",
+        "  note ",
+        "  create ",
+        "  show ",
+        "  update ",
+        "  close ",
+        "  verify ",
+        "  migrate ",
         "  migrate-v2 ",
     ] {
         assert!(
@@ -79,6 +92,24 @@ fn root_help_lists_top_level_commands() {
             hidden.trim()
         );
     }
+}
+
+#[test]
+fn task_help_hides_retired_archive_verbs() {
+    let output = maestro(&["task", "--help"]);
+    let command_section = output
+        .split("Options:")
+        .next()
+        .expect("task --help always has a Commands section before Options");
+
+    assert!(
+        !command_section.contains("  archive "),
+        "retired task archive must not appear in task --help:\n{command_section}"
+    );
+    assert!(
+        !command_section.contains("  unarchive "),
+        "retired task unarchive must not appear in task --help:\n{command_section}"
+    );
 }
 
 #[test]

@@ -193,13 +193,16 @@ pub fn active_notices(roots: &[MaestroPaths], now: &str) -> Result<Vec<Notice>> 
 /// the store is a best-effort advisory, so one bad line must not blank the
 /// banner.
 fn read_root_notices(paths: &MaestroPaths) -> Result<Vec<RawNotice>> {
-    let path = managed_path(paths, CONFLICTS_RELATIVE_PATH, SymlinkPolicy::RejectAllComponents)?;
+    let path = managed_path(
+        paths,
+        CONFLICTS_RELATIVE_PATH,
+        SymlinkPolicy::RejectAllComponents,
+    )?;
     let text = match fs::read_to_string(&path) {
         Ok(text) => text,
         Err(error) if error.kind() == ErrorKind::NotFound => return Ok(Vec::new()),
         Err(error) => {
-            return Err(error)
-                .with_context(|| format!("failed to read {CONFLICTS_RELATIVE_PATH}"));
+            return Err(error).with_context(|| format!("failed to read {CONFLICTS_RELATIVE_PATH}"));
         }
     };
     Ok(text
@@ -299,8 +302,14 @@ mod tests {
             "card-mine",
             "2026-06-14T12:00:00.000Z",
         );
-        assert(&paths, "sess-a", "card-mine", "card-yours", "taking login.rs")
-            .expect("assert should persist");
+        assert(
+            &paths,
+            "sess-a",
+            "card-mine",
+            "card-yours",
+            "taking login.rs",
+        )
+        .expect("assert should persist");
 
         // 1m later the asserter is live -> the notice surfaces.
         let live = active_notices(roots, "2026-06-14T12:01:00.000Z").expect("read should succeed");
@@ -311,8 +320,7 @@ mod tests {
 
         // 31m later the asserter is past the window (stale) -> the notice hides,
         // with no re-assert and no cleanup write (dec-c5eb).
-        let stale =
-            active_notices(roots, "2026-06-14T12:31:00.000Z").expect("read should succeed");
+        let stale = active_notices(roots, "2026-06-14T12:31:00.000Z").expect("read should succeed");
         assert!(stale.is_empty(), "a stale asserter's notice auto-hides");
     }
 
@@ -330,13 +338,22 @@ mod tests {
             "card-mine",
             "2026-06-14T12:00:00.000Z",
         );
-        assert(&paths_a, "sess-a", "card-mine", "card-yours", "worktreeing it")
-            .expect("assert should persist in A");
+        assert(
+            &paths_a,
+            "sess-a",
+            "card-mine",
+            "card-yours",
+            "worktreeing it",
+        )
+        .expect("assert should persist in A");
 
         // A read scoped to worktree B alone sees nothing (the notice is in A).
         let only_b = active_notices(std::slice::from_ref(&paths_b), "2026-06-14T12:01:00.000Z")
             .expect("read B");
-        assert!(only_b.is_empty(), "the notice lives only in worktree A's file");
+        assert!(
+            only_b.is_empty(),
+            "the notice lives only in worktree A's file"
+        );
 
         // The union over both roots surfaces A's notice to B.
         let union = active_notices(&[paths_a, paths_b], "2026-06-14T12:01:00.000Z")
@@ -358,8 +375,7 @@ mod tests {
         );
 
         assert(&paths, "sess-a", "card-mine", "card-yours", "taking it").expect("assert");
-        let before =
-            active_notices(roots, "2026-06-14T12:01:00.000Z").expect("read after assert");
+        let before = active_notices(roots, "2026-06-14T12:01:00.000Z").expect("read after assert");
         assert_eq!(before.len(), 1, "the assert surfaces");
 
         clear(&paths, "sess-a", "card-yours").expect("clear");

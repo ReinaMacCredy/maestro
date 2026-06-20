@@ -1,0 +1,123 @@
+- schema_version: maestro.card.v1
+  id: dec-design-maestro-next-with-three-power-bf7e
+  type: decision
+  title: Design maestro next with three power modes
+  status: superseded
+  parent: simplify-maestro-cli-surface-for-agents
+  created_at: 2026-06-20T10:34:56.448Z
+  updated_at: 2026-06-20T10:34:56.479Z
+  description: User chose to design all three modes. This preserves a safe read-only default while still offering automation for agents that want less CLI ceremony. The skeptic review warned that execution must be a thin facade over the existing status/task-next read model and must refuse input-requiring, auto-ship, QA, prepare, or proof-writing surprises unless explicitly allowed.
+  extra:
+    locked_at: 2026-06-20T10:34:56.479Z
+    decision: 'will have three explicit modes: default suggest-only,  for one allowlisted safe action, and  for bounded repeated safe actions until blocked.'
+    superseded_by: dec-design-maestro-next-with-three-explicit-7d99
+    preview: 'maestro next                 # read-only best next action\nmaestro next --run           # execute one auto-safe action, else explain blocker\nmaestro next --loop --max 5  # repeat auto-safe actions until input/risk/blocker'
+- schema_version: maestro.card.v1
+  id: dec-design-maestro-next-with-three-explicit-7d99
+  type: decision
+  title: Design maestro next with three explicit modes
+  status: locked
+  parent: simplify-maestro-cli-surface-for-agents
+  created_at: 2026-06-20T10:35:22.436Z
+  updated_at: 2026-06-20T10:35:22.491Z
+  description: Supersedes dec-design-maestro-next-with-three-power-bf7e because the original lock text was mangled by shell backtick interpolation in the command argument. User chose to design all three modes. This keeps a read-only default while offering opt-in automation with strict refusal for input-requiring, auto-ship, QA, prepare, proof-writing, archive, or conflict-handling surprises.
+  extra:
+    locked_at: 2026-06-20T10:35:22.491Z
+    decision: 'maestro next will support three explicit modes: default suggest-only, --run for one allowlisted safe action, and --loop for bounded repeated safe actions until blocked.'
+    supersedes:
+    - dec-design-maestro-next-with-three-power-bf7e
+    preview: maestro next = read-only best next action; maestro next --run = execute one auto-safe action or explain blocker; maestro next --loop --max-steps 5 = repeat auto-safe actions until input, risk, or blocker
+    rejected:
+    - 'Suggest only: safest but leaves agent ceremony unsolved.'
+    - 'Run only: useful for a step but does not address repetitive low-risk loops.'
+    - 'Loop only: too surprising without a read-only default and single-step mode.'
+- schema_version: maestro.card.v1
+  id: dec-use-guided-compatibility-for-generic-5673
+  type: decision
+  title: Use guided compatibility for generic status updates
+  status: locked
+  parent: simplify-maestro-cli-surface-for-agents
+  created_at: 2026-06-20T10:36:26.756Z
+  updated_at: 2026-06-20T10:36:26.783Z
+  description: User chose guided compatibility. Current card update accepts workable status words including needs_verification and verified, while the task lifecycle says verified is owned by task verify. This design avoids breaking all generic status usage while preventing the most harmful bypasses.
+  extra:
+    locked_at: 2026-06-20T10:36:26.783Z
+    decision: Generic card status updates for task-like cards stay available for compatible low-risk edits, but reject lifecycle-owned gated transitions with typed-command remedies.
+    preview: 'allow: open, draft, exploring, ready, in_progress, rejected, abandoned, superseded, closed where compatible; reject: verified -> run maestro task verify <id>; needs_verification -> run maestro task complete <id> with summary/proof'
+    rejected:
+    - 'Strict typed lifecycle: safest but likely breaks existing flat card workflows and hidden aliases too abruptly.'
+    - 'Warn then later reject: softer migration but leaves the bypass active.'
+    - 'Leave as is: preserves compatibility but does not reduce agent error.'
+- schema_version: maestro.card.v1
+  id: dec-use-validated-helpers-for-feature-flow-1198
+  type: decision
+  title: Use validated helpers for feature-flow artifacts
+  status: locked
+  parent: simplify-maestro-cli-surface-for-agents
+  created_at: 2026-06-20T10:40:25.518Z
+  updated_at: 2026-06-20T10:40:25.564Z
+  description: User chose validated helpers after previewing generators-only, validated helpers, one-command advance, and manual artifacts. This reduces paired-flag and sidecar-edit mistakes while preserving Maestro's local-first artifact contract.
+  extra:
+    locked_at: 2026-06-20T10:40:25.564Z
+    decision: Add validated helper commands for prepare plans, QA baseline/slices, and proof evidence; helpers write the same durable artifacts from explicit structured input and preview complex writes.
+    preview: maestro feature prepare <feature> --task T1:<title> --check <cmd> --covers ac-1; maestro qa baseline <feature> --observed <text>; maestro feature proof add <feature> --ac ac-1 --evidence <text>
+    rejected:
+    - 'Generators only: safe but leaves too much copy/paste ceremony.'
+    - 'One-command advance: reduces ceremony but hides review gates and risks surprise mutations.'
+    - 'Keep manual artifacts: faithful to current model but does not reduce enough agent error.'
+- schema_version: maestro.card.v1
+  id: dec-use-advisory-plus-assertions-for-e611
+  type: decision
+  title: Use advisory plus assertions for coordination
+  status: locked
+  parent: simplify-maestro-cli-surface-for-agents
+  created_at: 2026-06-20T10:46:33.343Z
+  updated_at: 2026-06-20T10:46:33.382Z
+  description: User chose advisory plus assertions. Current msg sender is implicit current card and active/link/msg flow is multi-step. This design reduces mistakes by making routes explicit while preserving Maestro's pull-only, card-scoped coordination model.
+  extra:
+    locked_at: 2026-06-20T10:46:33.382Z
+    decision: Cross-agent coordination simplification should print exact advisory commands and add explicit safety assertions, but should not auto-create links or silently change channel relationships.
+    preview: maestro active --connect prints link/msg/conflict suggestions; maestro msg send --from <current-card> <peer> <text> asserts sender and fails if current card differs; failed msg send prints exact link add remedy
+    rejected:
+    - 'Advisory only: safe but does not catch wrong-current-card sends.'
+    - 'Auto-connect allowed: less ceremony but can create surprising related edges and channel visibility changes.'
+    - 'Leave as is: keeps current contract but does not reduce coordination errors.'
+- schema_version: maestro.card.v1
+  id: dec-ship-gated-status-guardrails-as-81c4
+  type: decision
+  title: Ship gated status guardrails as immediate errors
+  status: locked
+  parent: simplify-maestro-cli-surface-for-agents
+  created_at: 2026-06-20T10:59:51.042Z
+  updated_at: 2026-06-20T10:59:51.076Z
+  description: This resolves rollout policy. The feature is specifically meant to prevent agent mistakes, and current task lifecycle already rejects direct verified transitions, so continuing to allow the generic bypass would undercut the safety goal.
+  extra:
+    locked_at: 2026-06-20T10:59:51.076Z
+    decision: Ship immediate hard errors for generic card update attempts to set lifecycle-owned gated states needs_verification or verified; leave non-gated compatible status writes unchanged.
+    preview: maestro card update <task> --status verified => error with maestro task verify remedy; --status needs_verification => error with maestro task complete remedy
+- schema_version: maestro.card.v1
+  id: dec-start-next-automation-with-a-narrow-9f10
+  type: decision
+  title: Start next automation with a narrow auto-safe allowlist
+  status: locked
+  parent: simplify-maestro-cli-surface-for-agents
+  created_at: 2026-06-20T10:59:58.158Z
+  updated_at: 2026-06-20T10:59:58.190Z
+  description: This resolves the remaining auto_safe design question for implementation. Claiming a ready card is idempotent enough for one-step automation and already has card-store ownership semantics; broader actions can be added after the first UX proves safe.
+  extra:
+    locked_at: 2026-06-20T10:59:58.190Z
+    decision: 'Initial maestro next automation allowlist is intentionally narrow: --run and --loop may claim the recommended ready card, but must refuse proof-writing, QA authoring, prepare, ship, archive, link creation, conflict handling, or any action requiring input.'
+    preview: 'auto_safe v1: claim recommended ready card only; everything else prints template/blocker'
+- schema_version: maestro.card.v1
+  id: dec-name-validated-helpers-as-qa-and-4fdf
+  type: decision
+  title: Name validated helpers as qa and feature proof verbs
+  status: locked
+  parent: simplify-maestro-cli-surface-for-agents
+  created_at: 2026-06-20T11:00:04.844Z
+  updated_at: 2026-06-20T11:00:04.878Z
+  description: This resolves command naming before implementation. QA helpers sit under a short top-level qa namespace because they write feature QA artifacts; proof helpers sit under feature proof because they affect feature acceptance evidence; prepare --task extends the existing prepare flow.
+  extra:
+    locked_at: 2026-06-20T11:00:04.878Z
+    decision: Use maestro qa baseline, maestro qa slice, maestro feature proof add, maestro feature proof waive, and maestro feature prepare --task for the first validated helper surface.
+    preview: maestro qa baseline <feature> --observed <text>; maestro qa slice <feature> --observed <text> --covers <ac>; maestro feature proof add <feature> --ac <ac> --evidence <text>; maestro feature prepare <feature> --task T1:<title> --check <cmd>

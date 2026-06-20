@@ -20,9 +20,9 @@ use std::path::PathBuf;
 #[cfg(unix)]
 use std::time::{Duration, Instant};
 
-use anyhow::Result;
 #[cfg(unix)]
 use anyhow::Context;
+use anyhow::Result;
 
 use crate::foundation::core::git;
 use crate::foundation::core::paths::MaestroPaths;
@@ -122,9 +122,7 @@ pub fn holder(paths: &MaestroPaths) -> Option<String> {
                 unsafe { sys::flock(file.as_raw_fd(), sys::LOCK_UN) };
                 None
             }
-            Ok(false) => {
-                Some(read_holder(&path).unwrap_or_else(|| "another session".to_string()))
-            }
+            Ok(false) => Some(read_holder(&path).unwrap_or_else(|| "another session".to_string())),
             Err(_) => None,
         }
     }
@@ -137,7 +135,9 @@ pub fn holder(paths: &MaestroPaths) -> Option<String> {
 
 #[cfg(unix)]
 fn unserialized(error: anyhow::Error) -> GateGuard {
-    eprintln!("[busy] gate lock unavailable ({error}); running without cross-session serialization");
+    eprintln!(
+        "[busy] gate lock unavailable ({error}); running without cross-session serialization"
+    );
     GateGuard { _file: None }
 }
 
@@ -247,8 +247,10 @@ mod tests {
     impl TempRepo {
         fn new(label: &str) -> Self {
             let nonce = COUNTER.fetch_add(1, Ordering::Relaxed);
-            let path = std::env::temp_dir()
-                .join(format!("maestro-gate-{label}-{}-{nonce}", std::process::id()));
+            let path = std::env::temp_dir().join(format!(
+                "maestro-gate-{label}-{}-{nonce}",
+                std::process::id()
+            ));
             std::fs::create_dir_all(path.join(".maestro")).expect("temp .maestro dir is creatable");
             Self { path }
         }
