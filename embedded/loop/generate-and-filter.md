@@ -35,6 +35,10 @@ the top scores cluster, run pairwise matches until one option survives.
 The generators are scaffolding, not outputs: nothing they produced persists
 except the locked decision and the recorded reasons the rejected options lost.
 
+Only the conductor locks, one decision at a time: parallel `decision lock` calls
+on one feature collide on the shared `decisions.yaml`. Generators return their
+option as data; they never lock.
+
 ## Stop
 
 One option locked as a decision with its rejected alternatives recorded. Do not

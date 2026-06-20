@@ -1,5 +1,5 @@
 ---
-version: 1.20.0
+version: 1.21.0
 ---
 
 # Maestro Harness Protocol
@@ -126,8 +126,16 @@ independent. Each recipe's full HOW: `maestro loop show <name>`. The menu:
     user away/asleep, backlog to work        -> unattended-loop
 
 Results land through the verbs (task / decision / event), never only in conversation.
+The card store is shared state every session writes, so in a fan-out the orchestrator
+runs the store-mutating verbs (decision lock, task complete/verify, status, notes);
+sub-agents return results as data, they do not each write the store. Two sub-agents
+locking decisions on one feature collide on the shared decisions.yaml -- serialize
+through the orchestrator, or give a genuinely-parallel writer its own worktree (the
+store is git-tracked, merges back via conflict-handoff) even when its code files do
+not overlap. A failed multi-file store command is partial: re-run it, it re-reads the
+latest store and reapplies (AGENTS.md concurrent-agent contract).
 Claude Code: author a Workflow script. Codex: parallel sub-agents directly (worktree
-threads when files overlap).
+threads when files -- or the card store -- overlap).
 
 ## Concurrent sessions (conflict handoff)
 

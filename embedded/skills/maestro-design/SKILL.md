@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-version: 1.20.0
+version: 1.21.0
 description: "Use for design or brainstorming in a Maestro repo before implementation starts. Map current behavior, decide one fork at a time, record decisions and notes, then hand the approved contract to maestro-card."
 ---
 
@@ -82,6 +82,9 @@ angles, judge, pairwise): `maestro loop show generate-and-filter`.
 4. If scores cluster, run pairwise matches until one option survives.
 5. Lock the survivor with `maestro decision new` then `maestro decision lock`;
    record why rejected options lost. Generators do not become durable outputs.
+   Only the conductor locks, one decision at a time: parallel `decision lock`
+   calls on one feature collide on the shared `decisions.yaml` (HARNESS
+   Orchestration). Generators return their option as data; they never lock.
 
 ## Probe Forks
 
