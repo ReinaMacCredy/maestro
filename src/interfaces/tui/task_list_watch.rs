@@ -168,12 +168,19 @@ fn push_row(
         (RowState::Active, Some(tick)) => spinner_frame(tick),
         _ => glyph(state),
     };
+    // The active (in_progress) row prefers the card's present-tense `active_form`
+    // over its title, mirroring the task tool's activeForm; every other row, and
+    // any active card without one, shows the title. Display-only.
+    let label = match (state, card.active_form.as_deref()) {
+        (RowState::Active, Some(active_form)) => active_form,
+        _ => card.title.as_str(),
+    };
     out.push_str(&format!(
         "  {connector}{} {:<18} {}  {}",
         row_glyph,
         state_word(state),
         card.id,
-        card.title,
+        label,
     ));
     if state == RowState::Active
         && let Some(claimant) = card.claimed_by.as_deref()
@@ -918,6 +925,42 @@ mod tests {
         assert!(
             out.contains("claude#a4f2"),
             "claimant token missing:\n{out}"
+        );
+    }
+
+    #[test]
+    fn active_row_prefers_active_form_over_title_and_falls_back() {
+        let mut active = work("task-1", "auth", "session store", "in_progress");
+        active.claimed_by = Some("claude#a4f2".to_string());
+        active.active_form = Some("Persisting tokens".to_string());
+        // A second active card with no active_form falls back to its title.
+        let mut bare = work("task-2", "auth", "token refresh", "in_progress");
+        bare.claimed_by = Some("claude#b1c3".to_string());
+        let cards = vec![feat("auth", "Auth"), active, bare];
+        let out = format_board(&cards, &BTreeSet::new(), None);
+        assert!(
+            out.contains("Persisting tokens"),
+            "active row renders active_form:\n{out}"
+        );
+        assert!(
+            !out.contains("session store"),
+            "active row omits the title when active_form is set:\n{out}"
+        );
+        assert!(
+            out.contains("token refresh"),
+            "an active card without active_form keeps its title:\n{out}"
+        );
+    }
+
+    #[test]
+    fn active_form_is_ignored_on_a_non_active_row() {
+        // active_form is the active row's label; a ready card shows its title.
+        let mut ready = work("task-1", "auth", "session store", "ready");
+        ready.active_form = Some("Should not show".to_string());
+        let out = format_board(&[feat("auth", "Auth"), ready], &BTreeSet::new(), None);
+        assert!(
+            out.contains("session store") && !out.contains("Should not show"),
+            "a ready row ignores active_form:\n{out}"
         );
     }
 

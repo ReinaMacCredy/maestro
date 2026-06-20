@@ -60,6 +60,12 @@ pub struct Card {
     /// Optional longer description.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    /// Optional present-tense label the watch board shows on this card's active
+    /// (in_progress) row in place of the title, mirroring the task tool's
+    /// `activeForm`. Display-only: it never gates, reorders, or changes the
+    /// lifecycle, and an unset card renders its title. Absent loads as `None`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_form: Option<String>,
     /// Optional project/service scope set explicitly at create with `--project`.
     /// A base-envelope field on every card type, distinct from feature
     /// `affected_areas`: it never satisfies the accept readiness gate. Absent
@@ -98,6 +104,7 @@ impl Card {
             created_at: now.to_string(),
             updated_at: now.to_string(),
             description: None,
+            active_form: None,
             project: None,
             extra: serde_yaml::Mapping::new(),
             unknown: serde_yaml::Mapping::new(),

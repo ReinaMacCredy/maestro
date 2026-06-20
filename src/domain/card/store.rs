@@ -861,6 +861,7 @@ mod tests {
             created_at: "2026-06-08T00:00:00Z".to_string(),
             updated_at: "2026-06-08T01:00:00Z".to_string(),
             description: Some("Stream rows to stdout.".to_string()),
+            active_form: Some("Streaming CSV rows".to_string()),
             project: Some("svc-pay".to_string()),
             extra: serde_yaml::from_str(
                 "legacy_field: kept\nstate_history:\n  - draft\n  - ready\n",

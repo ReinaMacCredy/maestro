@@ -1192,19 +1192,25 @@ pub struct CreateArgs {
     /// Card type: feature, task, bug, chore, idea, or decision.
     #[arg(short = 't', long = "type", value_name = "TYPE")]
     pub card_type: String,
-    /// Card title.
-    #[arg(value_name = "TITLE")]
-    pub title: String,
-    /// Parent card id; sets the new card's one-level `parent`.
+    /// One or more card titles; each title mints a card. A single title is the
+    /// original one-card behavior; two or more batch-mint that many open cards.
+    #[arg(value_name = "TITLE", required = true)]
+    pub titles: Vec<String>,
+    /// Parent card id; sets each new card's one-level `parent`.
     #[arg(long, value_name = "PARENT")]
     pub parent: Option<String>,
-    /// Longer description stored on the card.
+    /// Longer description stored on the card; rejected when batch-minting more
+    /// than one title (per-card descriptions belong on `card update`).
     #[arg(long, value_name = "TEXT")]
     pub description: Option<String>,
+    /// Present-tense board label shown on the active row in place of the title;
+    /// rejected when batch-minting more than one title.
+    #[arg(long, value_name = "TEXT")]
+    pub active_form: Option<String>,
     /// Project/service scope stored on the card (does not affect readiness).
     #[arg(long, value_name = "PROJECT")]
     pub project: Option<String>,
-    /// Print only the new card id on stdout.
+    /// Print only the new card ids on stdout, one per line.
     #[arg(long)]
     pub id_only: bool,
 }
@@ -1236,6 +1242,10 @@ pub struct UpdateArgs {
     /// Set the card's description.
     #[arg(long, value_name = "TEXT")]
     pub description: Option<String>,
+    /// Set the card's present-tense board label (shown on the active row in
+    /// place of the title).
+    #[arg(long, value_name = "TEXT")]
+    pub active_form: Option<String>,
     /// Claim the card for this session (same seam as `maestro claim`).
     #[arg(long)]
     pub claim: bool,

@@ -77,6 +77,57 @@ twice. Skip the assessment only for a purely non-code (docs/config) diff or a
 `--lane light` card (nothing to clean, or the change is itself the cleanup),
 and name that reason in the completion summary.
 
+## Cards As A Lightweight Todo List
+
+For simple work that does not need the full
+feature->accept->verify->ship pipeline, the gate-free `card` verbs are a
+Claude-task-tool-style todo tracker. The whole loop is three verbs:
+
+```sh
+maestro card create -t task "first thing" "second thing" "third thing"  # batch-mint N open todos
+maestro card claim <id>     # start one: marks it in_progress and takes ownership
+maestro card close <id>     # finish it
+```
+
+`card create` takes one or more titles and mints one open card each; pass
+`--id-only` to capture the ids for scripting (one per line). `--parent` and
+`-t/--type` apply to every card in a batch; per-card text
+(`--description`, `--active-form`) is one card's, so set it later with
+`card update <id>`. No `feature`, `accept`, `verify`, or proof is involved --
+these are plain todos.
+
+Focus discipline (the task tool's one-active-item rule):
+
+- `claim` is the "start before working" step. It records you as the owner and
+  moves the card to `in_progress` in one move -- use it, not
+  `card update --status in_progress` (which leaves the card unowned).
+- Keep one card `in_progress` per session at a time. If you claim a second
+  while one is still active, `claim` prints a STDERR advisory naming the
+  already-active card; it never blocks, so close or pause the first when you
+  switch.
+- `close` when the work is done.
+
+Scoped todo view -- the same `list` filters narrow to your todos:
+
+```sh
+maestro card list --type task --status open          # the backlog (pending)
+maestro card list --type task --status in_progress   # what is being worked
+maestro card list --assignee "<agent>#<session>"     # just yours
+```
+
+The model maps 1:1 to the task tool, so the board reads the same way:
+
+| task tool   | maestro status | board glyph        |
+| ----------- | -------------- | ------------------ |
+| pending     | `open`         | `○` (ready)   |
+| in_progress | `in_progress`  | `◐` (active)  |
+| completed   | `closed`       | `✓` (done)    |
+
+`maestro watch` renders the board live. A card given `--active-form "<doing
+X>"` shows that present-tense label on its active row in place of the title
+(display-only, like the task tool's activeForm); set it at `create` for a
+single card or later with `card update <id> --active-form "..."`.
+
 ## Evidence Gate
 
 `complete --proof` records proof text and auto-runs verification. Verification

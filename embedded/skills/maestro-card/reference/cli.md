@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.0.0 -->
-<!-- maestro:cli-reference-sha256: 8668e29ffce2f5c3878d2686e7a267d786fa5c7d95ff7eb6d8d99e4a7a6de640 -->
+<!-- maestro:cli-reference-sha256: eeca90349087dd5dcccfa26fea6ea2ff01f70f87896214a894532c994c0f5b71 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -108,9 +108,9 @@ Every verb and flag is listed; a spelling not found here does not exist.
 - `maestro card claim <ID>` -- Claim a workable card for this session
 - `maestro card assign <ID> [WHO] [--clear]` -- Suggest an owner for a workable card (advisory; never blocks a claim)
 - `maestro card note <ID> <TEXT>` -- Append a dated note to a card's notes.md
-- `maestro card create <TITLE> -t|--type <TYPE> [--parent <PARENT>] [--description <TEXT>] [--project <PROJECT>] [--id-only]` -- Create a card of any type
+- `maestro card create <TITLE>... -t|--type <TYPE> [--parent <PARENT>] [--description <TEXT>] [--active-form <TEXT>] [--project <PROJECT>] [--id-only]` -- Create a card of any type
 - `maestro card show <ID> [--json] [--compact-json]` -- Show a card's header, edges, and body
-- `maestro card update [ID] [--status <STATUS>] [--title <TITLE>] [--description <TEXT>] [--claim] [--json]` -- Update a card's status, title, description, or claim
+- `maestro card update [ID] [--status <STATUS>] [--title <TITLE>] [--description <TEXT>] [--active-form <TEXT>] [--claim] [--json]` -- Update a card's status, title, description, or claim
 - `maestro card close <ID>` -- Close a card: status -> closed
 - `maestro card graph [ID] [--dot]` -- Walk a card's typed edges (parent/blocks/related/supersedes)
 

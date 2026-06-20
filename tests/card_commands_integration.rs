@@ -1781,3 +1781,202 @@ fn multi_item_json_verbs_emit_single_compact_line() {
         "single-item show --json stays pretty-printed (multi-line):\n{show}"
     );
 }
+
+// ---------------------------------------------------------------------------
+// cards-as-lightweight-progress-tracking-without-the-full-pipeline
+// ---------------------------------------------------------------------------
+
+/// Run a card verb under an explicit `<agent>#<session>` identity, returning
+/// `(success, stdout, stderr)`. The per-session focus nudge keys on the claim
+/// identity, so a nudge test must vary the session the same way two real agents
+/// would (the default helper pins agent=codex session=s1).
+fn run_as(cwd: &Path, agent: &str, session: &str, args: &[&str]) -> (bool, String, String) {
+    let output = Command::new(env!("CARGO_BIN_EXE_maestro"))
+        .args(args)
+        .current_dir(cwd)
+        .env("MAESTRO_AGENT", agent)
+        .env("MAESTRO_SESSION", session)
+        .output()
+        .expect("invariant: compiled maestro binary should run in integration tests");
+    (
+        output.status.success(),
+        String::from_utf8_lossy(&output.stdout).into_owned(),
+        String::from_utf8_lossy(&output.stderr).into_owned(),
+    )
+}
+
+#[test]
+fn create_batch_mints_one_open_card_per_title() {
+    let temp = cards_repo("s2-create-batch");
+    let repo = temp.path();
+
+    // ac-1: three titles in one invocation mint three open cards.
+    let created = run(repo, &["create", "-t", "task", "alpha", "beta", "gamma"]);
+    assert_eq!(
+        created.lines().filter(|l| l.starts_with("created ")).count(),
+        3,
+        "three titles mint three cards:\n{created}"
+    );
+    let open = run(repo, &["list", "--type", "task", "--status", "open"]);
+    for title in ["alpha", "beta", "gamma"] {
+        assert!(open.contains(title), "{title} is open:\n{open}");
+    }
+
+    // ac-1: --id-only prints exactly the new ids, one per line, nothing else.
+    let ids = run(repo, &["create", "-t", "task", "delta", "epsilon", "--id-only"]);
+    let id_lines: Vec<&str> = ids.lines().filter(|l| !l.is_empty()).collect();
+    assert_eq!(id_lines.len(), 2, "two titles print two bare ids:\n{ids}");
+    for line in &id_lines {
+        assert!(
+            line.starts_with("task-") && !line.contains(' '),
+            "an --id-only line is a bare id:\n{line}"
+        );
+    }
+}
+
+#[test]
+fn create_single_title_is_backward_compatible() {
+    let temp = cards_repo("s2-create-single");
+    let repo = temp.path();
+
+    // ac-2: a single positional title still mints exactly one card with the
+    // unchanged `created <id> (<type>): <title>` shape.
+    let created = run(repo, &["create", "-t", "task", "only one"]);
+    assert_eq!(
+        created.lines().filter(|l| l.starts_with("created ")).count(),
+        1,
+        "one title mints one card:\n{created}"
+    );
+    assert!(
+        created.contains("(task): only one"),
+        "single create keeps its confirmation shape:\n{created}"
+    );
+}
+
+#[test]
+fn create_batch_refuses_per_card_text_and_mints_nothing() {
+    let temp = cards_repo("s2-create-batch-guard");
+    let repo = temp.path();
+
+    // ac-3: --description is refused in batch mode, pointing at `card update`,
+    // and no card is created by the rejected call (the guard runs before mint).
+    let err = run_err(repo, &["create", "-t", "task", "a", "b", "--description", "d"]);
+    assert!(
+        err.contains("--description") && err.contains("card update"),
+        "the batch --description refusal points at card update:\n{err}"
+    );
+    // --active-form is the same per-card text hazard; refused identically.
+    let af_err = run_err(repo, &["create", "-t", "task", "a", "b", "--active-form", "doing"]);
+    assert!(
+        af_err.contains("--active-form") && af_err.contains("card update"),
+        "the batch --active-form refusal points at card update:\n{af_err}"
+    );
+    let listed = run(repo, &["list", "--type", "task", "--all"]);
+    assert!(
+        listed.contains("no cards match"),
+        "a refused batch create mints nothing:\n{listed}"
+    );
+
+    // ac-3: --parent still applies to every card in a batch.
+    run(repo, &["create", "-t", "feature", "Auth"]);
+    run(repo, &["create", "-t", "task", "p1", "p2", "--parent", "auth"]);
+    let parented = run(repo, &["list", "--parent", "auth"]);
+    assert!(
+        parented.contains("p1") && parented.contains("p2") && parented.matches("auth").count() >= 2,
+        "a batch --parent docks both cards:\n{parented}"
+    );
+}
+
+#[test]
+fn task_create_still_mints_a_draft() {
+    let temp = cards_repo("s2-task-create-draft");
+    let repo = temp.path();
+
+    // ac-4: the gated `task create` path is unchanged -- it mints at draft, not
+    // the lightweight `open`.
+    run(repo, &["task", "create", "Gated task"]);
+    let id = id_by_title(repo, "Gated task");
+    let doc = card_doc(repo, &id);
+    assert_eq!(
+        doc["status"], "draft",
+        "task create still mints a draft card:\n{doc:?}"
+    );
+}
+
+#[test]
+fn active_form_persists_and_does_not_change_status() {
+    let temp = cards_repo("s2-active-form");
+    let repo = temp.path();
+
+    // ac-8: --active-form is stored at create and is display-only (status open).
+    let id = run(repo, &["create", "-t", "task", "Export rows", "--active-form", "Wiring export", "--id-only"]);
+    let id = id.trim();
+    let doc = card_doc(repo, id);
+    assert_eq!(doc["active_form"], "Wiring export", "create stores active_form");
+    assert_eq!(doc["status"], "open", "active_form does not change status");
+
+    // ac-8: update can set it; an unset card serializes no key.
+    let plain = run(repo, &["create", "-t", "task", "Plain", "--id-only"]);
+    let plain = plain.trim();
+    assert!(
+        card_doc(repo, plain).get("active_form").is_none(),
+        "an unset active_form serializes no key"
+    );
+    run(repo, &["update", plain, "--active-form", "Doing plain"]);
+    assert_eq!(
+        card_doc(repo, plain)["active_form"], "Doing plain",
+        "update sets active_form"
+    );
+}
+
+#[test]
+fn claim_nudges_when_session_already_holds_another_in_progress() {
+    let temp = cards_repo("s2-claim-nudge");
+    let repo = temp.path();
+
+    let c1 = run(repo, &["create", "-t", "task", "one", "--id-only"]);
+    let c1 = c1.trim();
+    let c2 = run(repo, &["create", "-t", "task", "two", "--id-only"]);
+    let c2 = c2.trim();
+    let c3 = run(repo, &["create", "-t", "task", "three", "--id-only"]);
+    let c3 = c3.trim();
+
+    // ac-7: agent-A's first claim is silent.
+    let (ok1, _, err1) = run_as(repo, "claude", "A", &["claim", c1]);
+    assert!(ok1, "first claim succeeds");
+    assert!(err1.trim().is_empty(), "first claim is silent:\n{err1}");
+
+    // ac-7: agent-A's second claim emits an advisory naming the first, exit 0.
+    let (ok2, _, err2) = run_as(repo, "claude", "A", &["claim", c2]);
+    assert!(ok2, "second claim still succeeds (never blocks)");
+    assert!(
+        err2.contains(c1) && err2.contains("in_progress"),
+        "the nudge names the already-active card:\n{err2}"
+    );
+
+    // ac-7: the first card is NOT auto-released; both stay in_progress for A.
+    assert_eq!(card_doc(repo, c1)["status"], "in_progress");
+    assert_eq!(card_doc(repo, c1)["claimed_by"], "claude#A");
+    assert_eq!(card_doc(repo, c2)["status"], "in_progress");
+
+    // ac-7: a different session holding only one card is silent (per-session).
+    let (ok3, _, err3) = run_as(repo, "claude", "B", &["claim", c3]);
+    assert!(ok3, "agent-B claim succeeds");
+    assert!(
+        err3.trim().is_empty(),
+        "a different session holding one card is silent:\n{err3}"
+    );
+
+    // ac-7: the nudge fires identically through `update --claim`.
+    let u1 = run(repo, &["create", "-t", "task", "u-one", "--id-only"]);
+    let u1 = u1.trim();
+    let u2 = run(repo, &["create", "-t", "task", "u-two", "--id-only"]);
+    let u2 = u2.trim();
+    let (_, _, ue1) = run_as(repo, "codex", "X", &["update", u1, "--claim"]);
+    assert!(ue1.trim().is_empty(), "first update --claim is silent:\n{ue1}");
+    let (_, _, ue2) = run_as(repo, "codex", "X", &["update", u2, "--claim"]);
+    assert!(
+        ue2.contains(u1) && ue2.contains("in_progress"),
+        "update --claim shares the nudge seam:\n{ue2}"
+    );
+}

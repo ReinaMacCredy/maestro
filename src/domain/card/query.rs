@@ -371,6 +371,21 @@ fn is_blocked(card: &Card, by_id: &HashMap<&str, &Card>) -> bool {
     open_workable(card) && has_unsatisfied_blocker(card, by_id)
 }
 
+/// The cards a session already holds in_progress, in scan order, excluding
+/// `except` (the card it just claimed). A card counts when its coarse status is
+/// `in_progress` and its `claimed_by` equals `identity` -- the per-session claim
+/// id `<agent>#<session>`. The CLI uses this after a claim persists to nudge a
+/// session that now holds more than one in-flight card; it is advisory only and
+/// never gates a claim, so this stays a pure read with no side effects.
+pub fn in_progress_held_by<'a>(cards: &'a [Card], identity: &str, except: &str) -> Vec<&'a Card> {
+    cards
+        .iter()
+        .filter(|c| c.id != except)
+        .filter(|c| coarse_of(&c.status) == Some(Coarse::InProgress))
+        .filter(|c| c.claimed_by.as_deref() == Some(identity))
+        .collect()
+}
+
 fn open_workable(card: &Card) -> bool {
     card.card_type.workable() && coarse_of(&card.status) == Some(Coarse::Open)
 }
@@ -659,6 +674,43 @@ mod tests {
     fn classify_returns_none_for_non_workable_cards() {
         let feature = card("feat-001", CardType::Feature, "ready");
         assert_eq!(classify(&feature, &BTreeSet::new()), None);
+    }
+
+    #[test]
+    fn in_progress_held_by_scopes_to_one_session_and_excludes_the_just_claimed() {
+        let mine_a = {
+            let mut c = card("card-a", CardType::Task, "in_progress");
+            c.claimed_by = Some("claude#A".to_string());
+            c
+        };
+        let mine_b = {
+            let mut c = card("card-b", CardType::Task, "in_progress");
+            c.claimed_by = Some("claude#A".to_string());
+            c
+        };
+        let other_session = {
+            let mut c = card("card-c", CardType::Task, "in_progress");
+            c.claimed_by = Some("claude#B".to_string());
+            c
+        };
+        let mine_open = {
+            // open, not in_progress -- never counted even though I hold it.
+            let mut c = card("card-d", CardType::Task, "open");
+            c.claimed_by = Some("claude#A".to_string());
+            c
+        };
+        let cards = vec![mine_a, mine_b, other_session, mine_open];
+
+        // Holding card-b, A also holds card-a: one other in_progress card.
+        let others = in_progress_held_by(&cards, "claude#A", "card-b");
+        assert_eq!(others.len(), 1, "only the other in_progress card A holds");
+        assert_eq!(others[0].id, "card-a");
+
+        // A different session holding its own card sees nothing of A's.
+        assert!(
+            in_progress_held_by(&cards, "claude#B", "card-c").is_empty(),
+            "B holds only card-c; excluding it leaves none"
+        );
     }
 
     #[test]

@@ -233,6 +233,7 @@ pub fn claim(args: ClaimArgs) -> Result<()> {
     let outcome = card::edit::claim(&paths, &args.id, &identity, &utc_now_timestamp())?;
     super::emit_card_touch(&paths, &args.id);
     print_claim_outcome(&args.id, &identity, &outcome);
+    nudge_if_holding_other_in_progress(&paths, &identity, &args.id);
     Ok(())
 }
 
@@ -246,6 +247,32 @@ fn print_claim_outcome(id: &str, identity: &str, outcome: &card::edit::ClaimOutc
         card::edit::ClaimOutcome::Reclaimed { previous } => {
             println!("reclaimed {id} from {previous} (stale) as {identity}")
         }
+    }
+}
+
+/// After a claim persists, nudge a session that now holds another card
+/// in_progress: the focus discipline is one in-flight card per session at a time.
+/// Advisory only -- it prints to STDERR (so it never pollutes `--id-only`/scripted
+/// stdout), names the already-active card, and never blocks or auto-releases. The
+/// pure query keys on the per-session claim id, so a different session holding its
+/// own card produces no note. Shared by `claim <id>` and `update <id> --claim`.
+fn nudge_if_holding_other_in_progress(paths: &MaestroPaths, identity: &str, just_claimed: &str) {
+    let Ok(cards) = card::query::scan(paths) else {
+        return;
+    };
+    let others = card::query::in_progress_held_by(&cards, identity, just_claimed);
+    if let Some(other) = others.first() {
+        let extra = if others.len() > 1 {
+            format!(" (and {} more)", others.len() - 1)
+        } else {
+            String::new()
+        };
+        eprintln!(
+            "note: you now hold {} cards in_progress -- {} is also active{extra}. \
+             Focus is one card at a time; close or pause it when you switch.",
+            others.len() + 1,
+            other.id,
+        );
     }
 }
 
@@ -298,56 +325,92 @@ pub fn note(args: NoteArgs) -> Result<()> {
     Ok(())
 }
 
-/// Execute `maestro create -t <type> <title>`: mint a new card (DN9). Non-feature
-/// cards get a typed slug id `<type>-<slug>-<hex4>` (SPEC-card-slug-ids D1/D1b);
-/// feature cards keep an immutable creation slug (SPEC E2). The initial status is
-/// the uniform coarse-open word `open`, so a workable card is immediately `ready`
-/// once it has no open blocker.
+/// Execute `maestro create -t <type> <title>...`: mint one card per title (DN9).
+/// A single title is the original one-card behavior; two or more batch-mint that
+/// many cards in one invocation. Non-feature cards get a typed slug id
+/// `<type>-<slug>-<hex4>` (SPEC-card-slug-ids D1/D1b); feature cards keep an
+/// immutable creation slug (SPEC E2). The initial status is the uniform
+/// coarse-open word `open`, so a workable card is immediately `ready` once it has
+/// no open blocker. `--parent`/`--type` apply to every card; the per-card text
+/// fields (`--description`, `--active-form`) are refused in batch mode -- they
+/// belong on `card update` once the cards exist.
 pub fn create(args: CreateArgs) -> Result<()> {
     let Some(paths) = card_paths()? else {
         return Ok(());
     };
     let card_type = parse_card_type(&args.card_type)?;
-    let now = utc_now_timestamp();
-    let id = match card_type {
-        card::schema::CardType::Feature => slugify_ascii(&args.title),
-        _ => card::store::mint_card_id(&paths, card_type, &args.title),
-    };
-    let mut new_card = card::schema::Card::new(&id, card_type, &args.title, "open", &now);
-    if let Some(parent) = args.parent {
-        // SPEC G1/E1: `parent` docks a card under a feature container. Features
-        // are roots, and a dangling parent ref would poison the display alias
-        // and parent-filtered queries, so the dock is validated at the door.
-        if card_type == card::schema::CardType::Feature {
+    let batch = args.titles.len() > 1;
+    // Refuse per-card text in batch mode before minting anything, so a batch
+    // create is all-or-nothing: a single shared description/active-form cannot be
+    // smeared across many cards, and there is no batch syntax for distinct ones.
+    if batch {
+        if args.description.is_some() {
             return Err(anyhow!(
-                "a feature card cannot take --parent; features are top-level containers"
+                "--description is one card's text; it cannot apply to {} cards at once. \
+                 Create them, then set each with `maestro card update <id> --description \"...\"`",
+                args.titles.len()
             ));
         }
-        card::store::validate_card_id(&parent)?;
-        let parent_card = card::store::resolve(&paths, &parent)?
-            .map(|resolved| resolved.card)
-            .ok_or_else(|| {
-                anyhow!(
-                    "parent {parent} not found; create the feature first \
-                     (`maestro create -t feature \"<title>\"`)"
-                )
-            })?;
-        if parent_card.card_type != card::schema::CardType::Feature {
+        if args.active_form.is_some() {
             return Err(anyhow!(
-                "parent {parent} is a {}, not a feature; cards dock under feature parents",
-                parent_card.card_type.as_str()
+                "--active-form is one card's text; it cannot apply to {} cards at once. \
+                 Create them, then set each with `maestro card update <id> --active-form \"...\"`",
+                args.titles.len()
             ));
         }
-        new_card.parent = Some(parent);
     }
-    new_card.description = args.description;
-    new_card.project = super::resolve_project(args.project, &paths)?;
-    card::store::create_card(&paths, &new_card)?;
-    super::emit_card_touch(&paths, &id);
-    if args.id_only {
-        println!("{id}");
-    } else {
-        println!("created {id} ({}): {}", card_type.as_str(), args.title);
+    let now = utc_now_timestamp();
+    // Resolve the shared parent and project once, above the mint loop, so a
+    // dangling --parent fails before any card is written (batch stays atomic).
+    let parent = match args.parent {
+        Some(parent) => {
+            // SPEC G1/E1: `parent` docks a card under a feature container.
+            // Features are roots, and a dangling parent ref would poison the
+            // display alias and parent-filtered queries, so the dock is
+            // validated at the door.
+            if card_type == card::schema::CardType::Feature {
+                return Err(anyhow!(
+                    "a feature card cannot take --parent; features are top-level containers"
+                ));
+            }
+            card::store::validate_card_id(&parent)?;
+            let parent_card = card::store::resolve(&paths, &parent)?
+                .map(|resolved| resolved.card)
+                .ok_or_else(|| {
+                    anyhow!(
+                        "parent {parent} not found; create the feature first \
+                         (`maestro create -t feature \"<title>\"`)"
+                    )
+                })?;
+            if parent_card.card_type != card::schema::CardType::Feature {
+                return Err(anyhow!(
+                    "parent {parent} is a {}, not a feature; cards dock under feature parents",
+                    parent_card.card_type.as_str()
+                ));
+            }
+            Some(parent)
+        }
+        None => None,
+    };
+    let project = super::resolve_project(args.project, &paths)?;
+
+    for title in &args.titles {
+        let id = match card_type {
+            card::schema::CardType::Feature => slugify_ascii(title),
+            _ => card::store::mint_card_id(&paths, card_type, title),
+        };
+        let mut new_card = card::schema::Card::new(&id, card_type, title, "open", &now);
+        new_card.parent = parent.clone();
+        new_card.description = args.description.clone();
+        new_card.active_form = args.active_form.clone();
+        new_card.project = project.clone();
+        card::store::create_card(&paths, &new_card)?;
+        super::emit_card_touch(&paths, &id);
+        if args.id_only {
+            println!("{id}");
+        } else {
+            println!("created {id} ({}): {}", card_type.as_str(), title);
+        }
     }
     Ok(())
 }
@@ -437,26 +500,29 @@ pub fn update(args: UpdateArgs) -> Result<()> {
     let Some(id) = args.id.as_deref() else {
         if args.json {
             eprintln!(
-                "usage: maestro card update <id> [--status S] [--title T] [--description D] [--claim] [--json]"
+                "usage: maestro card update <id> [--status S] [--title T] [--description D] [--active-form F] [--claim] [--json]"
             );
             render_update_json(&[])?;
         } else {
             println!(
-                "usage: maestro card update <id> [--status S] [--title T] [--description D] [--claim] [--json]"
+                "usage: maestro card update <id> [--status S] [--title T] [--description D] [--active-form F] [--claim] [--json]"
             );
         }
         return Ok(());
     };
-    let has_fields = args.status.is_some() || args.title.is_some() || args.description.is_some();
+    let has_fields = args.status.is_some()
+        || args.title.is_some()
+        || args.description.is_some()
+        || args.active_form.is_some();
     if !has_fields && !args.claim {
         if args.json {
             eprintln!(
-                "nothing to update for {id}; pass --status, --title, --description, or --claim"
+                "nothing to update for {id}; pass --status, --title, --description, --active-form, or --claim"
             );
             render_update_json(&[])?;
         } else {
             println!(
-                "nothing to update for {id}; pass --status, --title, --description, or --claim"
+                "nothing to update for {id}; pass --status, --title, --description, --active-form, or --claim"
             );
         }
         return Ok(());
@@ -503,6 +569,9 @@ pub fn update(args: UpdateArgs) -> Result<()> {
     if let Some(description) = args.description.as_deref() {
         c.description = Some(description.to_string());
     }
+    if let Some(active_form) = args.active_form.as_deref() {
+        c.active_form = Some(active_form.to_string());
+    }
     if has_fields {
         c.updated_at = now.clone();
     }
@@ -517,6 +586,11 @@ pub fn update(args: UpdateArgs) -> Result<()> {
         card::store::save_resolved(&c, &resolved)?;
     }
     super::emit_card_touch(&paths, id);
+    // `update --claim` shares the claim seam, so it shares the focus nudge. The
+    // advisory is STDERR-only, so it is safe to emit before the JSON return.
+    if claim_outcome.is_some() {
+        nudge_if_holding_other_in_progress(&paths, &claim_identity(), id);
+    }
     if args.json {
         render_update_json(&[&c])?;
         return Ok(());

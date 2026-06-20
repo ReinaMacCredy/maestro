@@ -1,6 +1,6 @@
 ---
 name: maestro-card
-version: 1.17.0
+version: 1.18.0
 description: "Use for active Maestro card work: pick up and deliver work cards (claim, update, complete, verify), run the feature-card lifecycle (accept, prepare, amend, ship), and capture qa-baseline/qa-slice gate evidence."
 ---
 
@@ -36,6 +36,9 @@ Read the reference for the job at hand; they share the ground rules below.
   [reference/work.md](reference/work.md). Its implement step is test-first
   (red-green-refactor) whenever the card's `--check` names observable
   behavior: [reference/tdd.md](reference/tdd.md).
+- Track simple work as a lightweight todo list (batch `card create` -> `claim`
+  -> `close`, no feature/accept/verify), Claude-task-tool style: the "Cards As
+  A Lightweight Todo List" section of [reference/work.md](reference/work.md).
 - Tidy a card's diff before proving it (quality cleanup, applied in place):
   [reference/simplify.md](reference/simplify.md). On a test-first card this is
   the red-green-refactor step, not a second pass.

@@ -38,6 +38,7 @@ pub fn feature_card(id: String, source: Mapping, now: &str) -> Card {
         updated_at,
         description,
         id,
+        active_form: None,
         project: None,
         extra: without_envelope_fields(
             source,
@@ -83,6 +84,7 @@ pub fn task_card(id: String, source: Mapping, parent: Option<String>, now: &str)
         updated_at,
         description: None,
         id,
+        active_form: None,
         project: None,
         extra: without_envelope_fields(
             source,
@@ -130,6 +132,7 @@ pub fn decision_card(
         updated_at,
         description,
         id,
+        active_form: None,
         project: None,
         extra: without_envelope_fields(
             source,
@@ -165,6 +168,7 @@ pub fn idea_card(id: String, source: Mapping, now: &str) -> Card {
         updated_at,
         description: None,
         id,
+        active_form: None,
         project: None,
         extra: without_envelope_fields(source, &["id", "title", "status"]),
         unknown: Mapping::new(),

@@ -243,6 +243,13 @@ fn nested_help_lists_section_38_command_tree() {
             "--archived",
         ],
     );
+    // `create` takes a variadic title (batch-mint) and the display-only
+    // `--active-form` label; the per-card text fields are documented as
+    // batch-refused.
+    assert_contains_all(
+        &maestro(&["create", "--help"]),
+        &["<TITLE>...", "--active-form", "--description", "--id-only"],
+    );
     assert_contains_all(&maestro(&["dep", "--help"]), &["add", "remove"]);
     assert_contains_all(
         &maestro(&["active", "--help"]),
