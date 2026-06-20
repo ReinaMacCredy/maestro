@@ -81,8 +81,8 @@ fn phase3_core_verbs_demo_path_runs_end_to_end() {
     let feature_list = stdout(run(repo, &["feature", "list"]));
     assert!(feature_list.contains("billing-csv-export"));
     assert!(feature_list.contains("NEXT"));
-    assert!(feature_list.contains("INSPECT"));
-    assert!(feature_list.contains("maestro feature show billing-csv-export"));
+    assert!(!feature_list.contains("INSPECT"));
+    assert!(feature_list.contains("inspect any: maestro feature show <id>"));
     assert!(untabify(&feature_list).contains("\t1\t1\t"));
 
     let decision_list = stdout(run(repo, &["decision", "list"]));

@@ -871,6 +871,7 @@ fn list_tasks(paths: &MaestroPaths, filters: TaskListFilters) -> Result<()> {
                 &missing_verify_contract_ids,
             )
         );
+        println!("inspect any: maestro task show <id>");
     }
     if !filters.all {
         let with_terminal = task::filter_tasks(all_tasks, &task_filter(&filters, true));

@@ -16,8 +16,6 @@ use crate::interfaces::cli::{
 };
 use crate::operations::harness;
 
-const STATUS_TASK_ROW_LIMIT: usize = 5;
-
 pub fn run(args: StatusArgs) -> Result<()> {
     let repo_root = match discover_repo_root() {
         Ok(repo_root) => repo_root,
@@ -190,18 +188,13 @@ fn print_status(report: StatusReport, json: bool) -> Result<()> {
         }
         println!();
     }
-    println!("maestro status");
     println!("repo: {}", report.repo);
-    println!("resume: maestro resume");
     println!(
-        "tasks: active={} ready={} needs_verification={} blocked={}",
+        "tasks: active={} ready={} needs_verification={} blocked={} | features: active={} ready_to_ship={}",
         report.tasks.active,
         report.tasks.ready,
         report.tasks.needs_verification,
-        report.tasks.blocked
-    );
-    println!(
-        "features: active={} ready_to_ship={}",
+        report.tasks.blocked,
         report.features.active,
         report.ready_to_ship_features.len()
     );
@@ -214,39 +207,28 @@ fn print_status(report: StatusReport, json: bool) -> Result<()> {
     print_harness_friction(&report.harness_friction);
     print_audit_hint(report.audit_hint.as_ref());
     if let Some(action) = &report.next_action {
-        print_next_action(action);
+        if action.requires_input {
+            println!("template: {}", action.command.display);
+        } else {
+            println!("run: {}", action.command.display);
+        }
+        match (action.task_id.as_deref(), action.title.as_deref()) {
+            (Some(id), Some(title)) => println!("task: {id}  {title}"),
+            (Some(id), None) => println!("task: {id}"),
+            _ => {}
+        }
+        if let Some(feature_id) = action.feature_id.as_deref() {
+            println!("feature: {feature_id}");
+        }
+        let others = report.task_rows.len().saturating_sub(1);
+        if others > 0 {
+            println!("+{others} other active tasks: maestro task list");
+        }
     } else {
         println!("no actionable tasks");
     }
     if let Some(concern) = &report.proof_concern {
         println!("{concern}");
-    }
-    if !report.task_rows.is_empty() {
-        println!("ACTIONS");
-        let rows: Vec<Vec<String>> = report
-            .task_rows
-            .iter()
-            .take(STATUS_TASK_ROW_LIMIT)
-            .map(|row| {
-                vec![
-                    row.next.clone(),
-                    row.id.clone(),
-                    row.state.clone(),
-                    row.inspect.clone(),
-                    row.title.clone(),
-                ]
-            })
-            .collect();
-        print!(
-            "{}",
-            table::render_table(&["NEXT", "TASK", "STATE", "INSPECT", "TITLE"], &rows)
-        );
-        if report.task_rows.len() > STATUS_TASK_ROW_LIMIT {
-            println!(
-                "... {} more active task(s); run maestro task list",
-                report.task_rows.len() - STATUS_TASK_ROW_LIMIT
-            );
-        }
     }
     if !report.active_features.is_empty() {
         println!("ACTIVE FEATURES");
@@ -258,15 +240,15 @@ fn print_status(report: StatusReport, json: bool) -> Result<()> {
                     row.id.clone(),
                     row.state.clone(),
                     row.next.clone(),
-                    row.inspect.clone(),
                     row.title.clone(),
                 ]
             })
             .collect();
         print!(
             "{}",
-            table::render_table(&["FEATURE", "STATE", "NEXT", "INSPECT", "TITLE"], &rows)
+            table::render_table(&["FEATURE", "STATE", "NEXT", "TITLE"], &rows)
         );
+        println!("inspect any: maestro feature show <id>");
     }
     if !report.ready_to_ship_features.is_empty() {
         println!("FEATURES READY TO SHIP");
@@ -283,6 +265,7 @@ fn print_status(report: StatusReport, json: bool) -> Result<()> {
             .collect();
         print!("{}", table::render_table(&[], &rows));
     }
+    println!("more: maestro resume");
     Ok(())
 }
 

@@ -872,38 +872,45 @@ pub enum FeatureCommand {
         question: Vec<String>,
         #[arg(
             long = "clear-questions",
+            hide = true,
             help = "Clear all open questions (with --question, clear then set the passed list)"
         )]
         clear_questions: bool,
         #[arg(
             long = "add-acceptance",
+            hide = true,
             help = "Acceptance criterion to append while proposed (repeatable)"
         )]
         add_acceptance: Vec<String>,
         #[arg(
             long = "add-area",
+            hide = true,
             help = "Affected area to append while proposed (repeatable)"
         )]
         add_area: Vec<String>,
         #[arg(
             long = "add-non-goal",
+            hide = true,
             help = "Non-goal to append while proposed (repeatable)"
         )]
         add_non_goal: Vec<String>,
         #[arg(
             long = "add-question",
+            hide = true,
             help = "Open question to append while proposed (repeatable)"
         )]
         add_question: Vec<String>,
         #[arg(
             long = "edit-acceptance",
             value_name = "AC_ID",
+            hide = true,
             help = "Acceptance id to edit in place, paired by index with --text"
         )]
         edit_acceptance: Vec<String>,
         #[arg(
             long = "text",
             value_name = "TEXT",
+            hide = true,
             help = "Replacement acceptance text, paired by index with --edit-acceptance"
         )]
         text: Vec<String>,

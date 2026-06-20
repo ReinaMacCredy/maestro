@@ -593,8 +593,8 @@ fn list_supports_basic_output_and_requested_filters() {
     let all = maestro(repo, &["task", "list"]);
     assert_success(&all, &["task", "list"]);
     let all_out = stdout(&all);
-    assert!(untabify(&all_out).contains("ID\tSTATE\tNEXT\tINSPECT\tTITLE"));
-    assert!(all_out.contains(&format!("maestro task show {a}")));
+    assert!(untabify(&all_out).contains("ID\tSTATE\tNEXT\tTITLE"));
+    assert!(all_out.contains("inspect any: maestro task show <id>"));
     assert!(all_out.contains(&a));
     assert!(all_out.contains(&b));
     assert!(all_out.contains(&c));

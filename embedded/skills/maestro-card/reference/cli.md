@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.0.0 -->
-<!-- maestro:cli-reference-sha256: 70e9ba50d4bd543bf3c1599d4304c1b923072ae50ec7bc5035a0235994da8985 -->
+<!-- maestro:cli-reference-sha256: 8668e29ffce2f5c3878d2686e7a267d786fa5c7d95ff7eb6d8d99e4a7a6de640 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -76,7 +76,7 @@ Every verb and flag is listed; a spelling not found here does not exist.
 ## maestro feature
 
 - `maestro feature new <TITLE> [--description <DESCRIPTION>] [--question <QUESTION>]... [--project <PROJECT>] [--id-only]` -- Propose a new feature (-> proposed)
-- `maestro feature set <ID> [--acceptance <ACCEPTANCE>]... [--area <AREA>]... [--non-goal <NON_GOAL>]... [--question <QUESTION>]... [--clear-questions] [--add-acceptance <ADD_ACCEPTANCE>]... [--add-area <ADD_AREA>]... [--add-non-goal <ADD_NON_GOAL>]... [--add-question <ADD_QUESTION>]... [--edit-acceptance <AC_ID>]... [--text <TEXT>]... [--description <DESCRIPTION>] [--request <REQUEST>] [--type <INPUT_TYPE>]` -- Author a proposed feature's contract (replace or append fields)
+- `maestro feature set <ID> [--acceptance <ACCEPTANCE>]... [--area <AREA>]... [--non-goal <NON_GOAL>]... [--question <QUESTION>]... [--description <DESCRIPTION>] [--request <REQUEST>] [--type <INPUT_TYPE>]` -- Author a proposed feature's contract (replace or append fields)
 - `maestro feature accept <ID> [--qa <SURFACE>] [--reason <REASON>] [--dry-run]` -- Accept a feature into ready, freezing its contract (-> ready; gated)
 - `maestro feature prepare <ID> [--from <PLAN_FILE>] [--draft]` -- Prepare an accepted feature into a ready implementation queue
 - `maestro feature amend <ID> [--add-acceptance <ADD_ACCEPTANCE>]... [--add-area <ADD_AREA>]... [--add-non-goal <ADD_NON_GOAL>]... [--add-question <ADD_QUESTION>]... --reason <REASON>` -- Grow a frozen contract additively with an audit reason (ready/in_progress)

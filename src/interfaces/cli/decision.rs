@@ -93,6 +93,10 @@ fn new_decision(
     if let Some(feature_id) = &report.record.feature {
         println!("feature: {feature_id}");
     }
+    println!(
+        "next: maestro decision lock {} --decision \"<chosen>\"",
+        report.record.id
+    );
     Ok(())
 }
 

@@ -475,7 +475,7 @@ fn new_feature(
 fn set_feature(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> Result<()> {
     if edits.is_empty() {
         bail!(
-            "no fields to set\n  maestro feature set {id} --acceptance \"<criterion>\" --area \"<surface>\"\n  maestro feature set {id} --add-acceptance \"<criterion>\"\n  maestro feature set {id} --edit-acceptance ac-1 --text \"<criterion>\"\n  flags: --acceptance --area --non-goal --question --clear-questions --add-acceptance --add-area --add-non-goal --add-question --edit-acceptance --text --description --request --type"
+            "no fields to set\n  maestro feature set {id} --acceptance \"<criterion>\" --area \"<surface>\"\n  flags: --acceptance --area --non-goal --question --description --request --type"
         );
     }
     let report = feature::set_with_report(paths, id, edits)?;
@@ -1223,7 +1223,6 @@ fn list_features(paths: &MaestroPaths, all: bool) -> Result<()> {
                     view.id.clone(),
                     feature::status_label(&view.status).to_string(),
                     feature_next_label(view).to_string(),
-                    format!("maestro feature show {}", view.id),
                     view.counts.total.to_string(),
                     view.counts.verified.to_string(),
                     title,
@@ -1235,7 +1234,6 @@ fn list_features(paths: &MaestroPaths, all: bool) -> Result<()> {
                 id.clone(),
                 "unreadable".to_string(),
                 recovery_label(hint.as_deref()).to_string(),
-                format!("maestro feature spec {id}"),
                 "0".to_string(),
                 "0".to_string(),
                 error.clone(),
@@ -1244,12 +1242,11 @@ fn list_features(paths: &MaestroPaths, all: bool) -> Result<()> {
         print!(
             "{}",
             table::render_table(
-                &[
-                    "ID", "STATE", "NEXT", "INSPECT", "TASKS", "VERIFIED", "TITLE"
-                ],
+                &["ID", "STATE", "NEXT", "TASKS", "VERIFIED", "TITLE"],
                 &rows
             )
         );
+        println!("inspect any: maestro feature show <id>");
     }
 
     if !all && hidden > 0 {

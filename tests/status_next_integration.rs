@@ -319,7 +319,7 @@ fn status_points_to_resume_and_resume_default_is_compact_read_only() {
     run(repo, &["task", "claim", &id]);
 
     let status = run(repo, &["status"]);
-    assert!(status.contains("resume: maestro resume"), "{status}");
+    assert!(status.contains("more: maestro resume"), "{status}");
 
     let resume = run(repo, &["resume"]);
     assert!(
@@ -818,7 +818,10 @@ fn current_task_infers_feature_context_without_feature_env() {
     let human = run(repo, &["status"]);
     assert!(human.contains("ACTIVE FEATURES"), "{human}");
     assert!(human.contains("csv-export"), "{human}");
-    assert!(human.contains("maestro feature show csv-export"), "{human}");
+    assert!(
+        human.contains("inspect any: maestro feature show <id>"),
+        "{human}"
+    );
 }
 
 #[test]
@@ -1081,7 +1084,7 @@ fn manual_and_root_verify_pass_use_context_aware_handoff() {
 }
 
 #[test]
-fn status_limits_large_task_rows_and_points_to_task_list() {
+fn status_summarizes_other_active_tasks_and_points_to_task_list() {
     let temp = setup_repo("maestro-status-row-limit");
     let repo = temp.path();
 
@@ -1091,7 +1094,10 @@ fn status_limits_large_task_rows_and_points_to_task_list() {
 
     let status = run(repo, &["status"]);
 
-    assert!(status.contains("... 1 more active task(s); run maestro task list"));
+    assert!(
+        status.contains("+5 other active tasks: maestro task list"),
+        "{status}"
+    );
 }
 
 #[test]
@@ -1117,9 +1123,9 @@ fn task_create_check_handoff_and_list_columns_are_actionable() {
 
     let list = run(repo, &["task", "list"]);
     assert!(list.contains("NEXT"));
-    assert!(list.contains("INSPECT"));
+    assert!(!list.contains("INSPECT"));
     assert!(list.contains("run: explore"));
-    assert!(list.contains(&format!("maestro task show {id}")));
+    assert!(list.contains("inspect any: maestro task show <id>"));
 }
 
 #[test]
@@ -1168,7 +1174,7 @@ fn task_list_next_column_uses_verify_contract_state_not_only_lifecycle_state() {
 
     let list = run(repo, &["task", "list"]);
     assert!(list.contains("template: add_check"), "{list}");
-    assert!(list.contains(&format!("maestro task show {id}")), "{list}");
+    assert!(list.contains("inspect any: maestro task show <id>"), "{list}");
     assert!(
         !untabify(&list).contains(&format!("{id}\tdraft\trun: explore")),
         "standalone draft without checks must not point at explore first: {list}"

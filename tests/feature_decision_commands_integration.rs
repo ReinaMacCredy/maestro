@@ -561,7 +561,7 @@ fn feature_guarded_lifecycle_via_cli() {
         &["feature", "set", "--help"],
     );
     assert!(help.contains("REPLACES the full questions list"), "{help}");
-    assert!(help.contains("--add-acceptance"), "{help}");
+    assert!(!help.contains("--add-acceptance"), "{help}");
 
     let redundant_clear_args = [
         "feature",
@@ -653,8 +653,8 @@ fn feature_guarded_lifecycle_via_cli() {
     assert!(list_all.contains("billing-csv-export"));
     assert!(list_all.contains("shipped"));
     assert!(list_all.contains("NEXT"));
-    assert!(list_all.contains("INSPECT"));
-    assert!(list_all.contains("maestro feature show billing-csv-export"));
+    assert!(!list_all.contains("INSPECT"));
+    assert!(list_all.contains("inspect any: maestro feature show <id>"));
     assert!(untabify(&list_all).contains("\t3\t3\t"));
     // the outcome rides the title column in `list --all`.
     assert!(list_all.contains("csv export shipped"));
@@ -829,12 +829,14 @@ fn feature_set_edits_one_acceptance_item_by_id() {
     );
     assert_eq!(feature_record(root, "edit-acceptance"), before_unknown);
 
+    // L4: --edit-acceptance/--text stay dispatchable (exercised above and the
+    // record changed) but are hidden from the rendered help signature.
     let help = stdout(
         maestro(&["feature", "set", "--help"], root),
         &["feature", "set", "--help"],
     );
-    assert!(help.contains("--edit-acceptance"), "{help}");
-    assert!(help.contains("--text"), "{help}");
+    assert!(!help.contains("--edit-acceptance"), "{help}");
+    assert!(!help.contains("--text"), "{help}");
 }
 
 #[test]

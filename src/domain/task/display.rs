@@ -150,12 +150,11 @@ pub fn render_task_list_with_missing_checks(
                 task.id.clone(),
                 state,
                 compact_next(task, missing_verify_contract_ids.contains(&task.id)).to_string(),
-                format!("maestro task show {}", task.id),
                 task.title.clone(),
             ]
         })
         .collect();
-    table::render_table(&["ID", "STATE", "NEXT", "INSPECT", "TITLE"], &rows)
+    table::render_table(&["ID", "STATE", "NEXT", "TITLE"], &rows)
 }
 
 fn state_label(task: &TaskRecord) -> String {
@@ -215,6 +214,14 @@ mod tests {
         let out = render_task_list_with_missing_checks(&[task], &BTreeSet::new(), &missing);
 
         assert!(out.contains("template: add_check"), "{out}");
+    }
+
+    #[test]
+    fn render_task_list_has_no_inspect_column() {
+        let task = TaskRecord::draft("task-001", "No inspect col", "2026-06-02T00:00:00Z");
+        let out = render_task_list(&[task], &BTreeSet::new());
+        assert!(!out.contains("INSPECT"), "{out}");
+        assert!(!out.contains("maestro task show"), "{out}");
     }
 
     #[test]
