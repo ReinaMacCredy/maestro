@@ -426,6 +426,7 @@ fn run_domain_facade_does_not_publish_leaf_modules() {
         BTreeSet::from([
             "active_sessions".to_string(),
             "active_sessions_union".to_string(),
+            "assemble_trace".to_string(),
             "current_bound_card".to_string(),
             "hook_event_contract".to_string(),
             "load_run_evidence".to_string(),
@@ -443,7 +444,10 @@ fn run_domain_facade_does_not_publish_leaf_modules() {
             "RunEventRecord".to_string(),
             "RunEvidenceLoad".to_string(),
             "RunEvidenceRecord".to_string(),
+            "RunStatus".to_string(),
+            "RunTrace".to_string(),
             "SessionActivity".to_string(),
+            "TraceEntry".to_string(),
             "WarmEditor".to_string(),
         ]),
         "src/domain/run/mod.rs should expose only the deliberate Run contract surface"
