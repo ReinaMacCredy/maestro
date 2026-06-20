@@ -5,14 +5,20 @@ use anyhow::{Result, bail};
 use crate::domain::card;
 use crate::domain::decisions;
 use crate::domain::feature;
+use crate::domain::feature::FeatureStatus;
 use crate::domain::proof;
 use crate::domain::run;
 use crate::domain::task;
 use crate::foundation::core::git;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::table;
+use crate::foundation::core::time::{timestamp_nanos, utc_now_timestamp};
 use crate::interfaces::cli::{QueryArgs, QueryCommand};
 use crate::operations::harness;
+
+/// Default `query run` window when no `--since` is given (one overnight run).
+const DEFAULT_WINDOW_NANOS: i128 = 12 * 60 * 60 * 1_000_000_000;
+const NANOS_PER_MINUTE: i128 = 60 * 1_000_000_000;
 
 /// Execute `maestro query`.
 pub fn run(args: QueryArgs) -> Result<()> {
@@ -28,6 +34,7 @@ pub fn run(args: QueryArgs) -> Result<()> {
         }
         QueryCommand::Backlog => query_backlog(&query_paths()?),
         QueryCommand::Graph { id, dot } => run_graph(id, dot),
+        QueryCommand::Run { since, json } => query_run(&query_paths()?, since.as_deref(), json),
     }
 }
 
@@ -503,6 +510,115 @@ fn query_backlog(paths: &MaestroPaths) -> Result<()> {
         .collect();
     print!("{}", table::render_table(&["ID", "TITLE"], &rows));
     Ok(())
+}
+
+/// `maestro query run`: reassemble the run trace for a window from the durable
+/// run log, plus the honest current-state status. A pure read over persisted
+/// state -- it schedules and starts nothing.
+fn query_run(paths: &MaestroPaths, since: Option<&str>, json: bool) -> Result<()> {
+    let now = utc_now_timestamp();
+    let now_nanos = timestamp_nanos(&now).unwrap_or(0);
+    let (cutoff_nanos, window) = match since {
+        Some(raw) => match timestamp_nanos(raw) {
+            Some(nanos) => (nanos, format!("since {raw}")),
+            None => bail!("--since `{raw}` is not a timestamp (expected RFC3339, e.g. 2026-06-21T00:00:00Z)"),
+        },
+        None => (now_nanos - DEFAULT_WINDOW_NANOS, "last 12h".to_string()),
+    };
+
+    let trace = run::assemble_trace(paths, cutoff_nanos)?;
+    let status = compute_run_status(paths, trace.last_activity.as_deref(), now_nanos)?;
+
+    if json {
+        let report = serde_json::json!({
+            "window": window,
+            "now": now,
+            "trace": trace,
+            "status": status,
+            // The interruption inference is a method on RunStatus, not a serialized
+            // field; surface it so the JSON consumer gets the same honest verdict
+            // the text render prints.
+            "verdict": status.verdict(),
+        });
+        println!("{}", serde_json::to_string(&report)?);
+        return Ok(());
+    }
+    render_run_text(&window, &trace, &status);
+    Ok(())
+}
+
+/// Current backlog state at trace time. `ready` comes from the live card scan;
+/// `accepted_without_tasks`/`proposed` from the feature registry. `minutes_since_last`
+/// is derived from the trace's newest activity, so the verdict can infer an
+/// interruption without inventing a stop reason.
+fn compute_run_status(
+    paths: &MaestroPaths,
+    last_activity: Option<&str>,
+    now_nanos: i128,
+) -> Result<run::RunStatus> {
+    let cards = card::query::scan(paths)?;
+    let ready = card::query::ready(&cards).len();
+
+    let entries = task::load_task_entries(&paths.tasks_dir())?;
+    let features = feature::list_with_entries(paths, &entries)?;
+    let mut accepted_without_tasks = 0;
+    let mut proposed = 0;
+    for view in &features {
+        match view.status {
+            FeatureStatus::Ready if view.counts.total == 0 => accepted_without_tasks += 1,
+            FeatureStatus::Proposed => proposed += 1,
+            _ => {}
+        }
+    }
+
+    let minutes_since_last = last_activity
+        .and_then(timestamp_nanos)
+        .map(|then| ((now_nanos - then) / NANOS_PER_MINUTE) as i64);
+
+    Ok(run::RunStatus {
+        ready,
+        accepted_without_tasks,
+        proposed,
+        minutes_since_last,
+    })
+}
+
+fn render_run_text(window: &str, trace: &run::RunTrace, status: &run::RunStatus) {
+    println!("RUN TRACE ({window})");
+    println!(
+        "sessions: {}  cards touched: {}",
+        trace.session_count,
+        trace.entries.len()
+    );
+    if trace.entries.is_empty() {
+        println!("  no card activity in window");
+    }
+    for entry in &trace.entries {
+        let mut line = format!("  {}  [{}]  {}", entry.card_id, entry.status, entry.title);
+        if let Some(tdd) = &entry.tdd {
+            line.push_str(&format!("  ({tdd})"));
+        }
+        if entry.resumed_across_sessions() {
+            line.push_str(&format!(
+                "  resumed across {} sessions",
+                entry.session_count
+            ));
+        }
+        if !entry.blocked_by.is_empty() {
+            line.push_str(&format!("  blocked by {}", entry.blocked_by.join(", ")));
+        }
+        println!("{line}");
+        if let Some(proof) = &entry.latest_proof {
+            println!("      proof: {proof}");
+        }
+    }
+
+    println!();
+    println!(
+        "current state: ready={} accepted-without-tasks={} proposed={}",
+        status.ready, status.accepted_without_tasks, status.proposed
+    );
+    println!("{}", status.verdict());
 }
 
 #[derive(Debug)]

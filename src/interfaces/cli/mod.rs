@@ -1598,6 +1598,18 @@ pub enum QueryCommand {
     },
     #[command(about = "List improvement backlog items (ID/TITLE)")]
     Backlog,
+    #[command(
+        about = "Reassemble the run trace for a window from the durable run log",
+        after_help = "Examples:\n  maestro query run                       # last 12h: per-card outcome + crash spans + status\n  maestro query run --since 2026-06-20T00:00:00Z\n  maestro query run --json"
+    )]
+    Run {
+        /// Trace activity at or after this RFC3339 timestamp (default: last 12h).
+        #[arg(long, value_name = "TS")]
+        since: Option<String>,
+        /// Emit the trace and status as one JSON line.
+        #[arg(long)]
+        json: bool,
+    },
     #[command(hide = true, about = "Show a task's proof status")]
     Proof {
         task_id: Option<String>,

@@ -339,6 +339,15 @@ fn nested_help_lists_section_38_command_tree() {
 }
 
 #[test]
+fn query_run_subcommand_is_listed_and_documents_its_window_flags() {
+    assert!(
+        maestro(&["query", "--help"]).contains("run"),
+        "query --help should list the new `run` subcommand"
+    );
+    assert_contains_all(&maestro(&["query", "run", "--help"]), &["--since", "--json"]);
+}
+
+#[test]
 fn nested_help_hides_internal_names_and_sibling_examples() {
     // R27: the `--task-id` flag must show a clean value placeholder, not the
     // raw field identifier (`TASK_ID_FLAG`) clap derives by default.
