@@ -194,3 +194,8 @@ Managed by `init-deep`. Edit outside this block.
   tests or stable data contracts.
 - Keep module facades small and intentional. Do not expose child modules or add
   new abstraction layers unless the architecture docs already define the seam.
+
+<!-- maestro:start -->
+# Maestro Harness Protocol
+Read .maestro/harness/HARNESS.md first before working in this repo.
+<!-- maestro:end -->

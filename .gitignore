@@ -1,13 +1,5 @@
 # >>> maestro >>>
-# Maestro local-only paths
-.maestro/runs/
-.maestro/channels/
-.maestro/backups/
-.maestro/install-lock.yaml
-.maestro/tasks/*/evidence/
-.maestro/tasks/*/local/
-
-# Local agent settings
+# Maestro local agent settings
 .claude/settings.local.json
 .codex/hooks.json
 # <<< maestro <<<

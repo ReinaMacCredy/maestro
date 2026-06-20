@@ -1,5 +1,5 @@
 ---
-version: 1.10.0
+version: 1.22.0
 ---
 
 # Maestro Harness Protocol
@@ -7,13 +7,61 @@ version: 1.10.0
 You are an agent working in a repo that
 uses Maestro. Follow these rules.
 
+Maestro is a loop harness: tasks are the loop; verify + qa are the stop hook (no
+unbacked claim lands); decisions + friction + skills are the compounding memory;
+`maestro loop` lists the orchestration recipes.
+
 ## Shared protocol (all agents)
 1. Start with `maestro status`; honor MAESTRO_CURRENT_TASK env or `maestro task show <id>` when a current task is set.
-2. Acceptance criteria live in the card (`maestro show <id>`) - they are locked.
+2. Acceptance criteria live in the card (`maestro card show <id>`) - they are locked.
 3. Use the skills active for this task.
-4. Complete tasks with `maestro task complete <id> --summary "<what>" --claim "<claim>" --proof "<observed evidence>"`; Maestro records the proof and auto-runs verification.
-5. Hooks auto-record your tool calls as proof. Verification matches each `--claim` against recorded or inline proof - an empty or unbacked claim fails.
-6. When the user corrects your behavior, record it: `maestro event intervention --note "<what was wrong>" [--topic <slug>]`.
+4. Exact command signatures live in `reference/cli.md` inside every installed
+   maestro skill (e.g. `.maestro/skills/maestro-card/reference/cli.md`),
+   generated from this binary. A verb or flag not listed there does not
+   exist; read it instead of probing `--help`.
+5. Never chain a guessed id: use only ids read from verb output. When a
+   lookup misses, re-list and read the real id; do not retry spelling
+   variations.
+6. Complete tasks with `maestro task complete` (summary, claim, and proof);
+   Maestro records the proof and auto-runs verification.
+7. Hooks auto-record your tool calls as proof. Verification matches each `--claim` against recorded or inline proof - an empty or unbacked claim fails.
+8. When the user corrects your behavior, record it with
+   `maestro event intervention --note "<what was wrong>"`.
+9. Before proposing an idea or re-opening a settled question, run `maestro card list --grep <topic> --archived` and cite any precedent card in the proposal.
+
+## Code style
+
+Universal principles for code written here. Project-specific
+conventions live in this repo AGENTS.md, not here.
+
+- Simplest thing that works; no speculative abstraction or
+  one-caller indirection.
+- Lean reach-ladder, active every session and every response (still
+  active when unsure; suspended only when the user says so). Before
+  and while writing, climb to the lowest rung that holds and stop:
+  skip/YAGNI -> stdlib -> native platform (a DB constraint over app
+  code, CSS over JS) -> installed dependency -> one-liner -> minimal
+  new code. It is a reflex, not a research project; if two rungs both
+  work, take the higher one. Strictness follows your `maestro lean`
+  mode: full applies the cheaper version, ultra rejects what a lower
+  rung already covers, lite names the lazier alternative, off suspends
+  the climb. Never simplify away validation, error handling, security,
+  accessibility, or anything explicitly requested; non-trivial logic
+  still leaves one runnable check. The ladder governs what you build,
+  not how you explain it. `maestro lean review|audit` walk a diff or
+  the tree against the ladder.
+- Names state intent (what/why), not type or mechanism.
+- Validate at trust boundaries only; do not guard impossible states.
+- Errors fail loud and early with actionable context; no silent catch.
+- Match the surrounding file style, idioms, and comment density.
+- Comment the non-obvious why, sparingly; names carry the what.
+- Every changed line traces to the task; no drive-by edits.
+
+Per-language styleguides are served by `maestro playbook <lang>` (Rust, Python,
+Go, TypeScript, JavaScript, C++, C#, Dart, HTML/CSS, plus `general`). Before
+writing or changing code, run it for the language you are editing; run
+`maestro playbook` with no language to list the guides. Read the one you need,
+not the rest.
 
 ## Where to look
 
@@ -21,7 +69,7 @@ uses Maestro. Follow these rules.
     picking up work        -> maestro-card skill (work)
     brainstorm / design    -> maestro-design skill
     proof failed / verify  -> maestro-card skill (verify)
-    before accept / ship   -> maestro-card skill (qa-baseline / qa-slice)
+    before accept / close  -> maestro-card skill (qa-baseline / qa-slice)
 
 ## Task commands (the loop)
 
@@ -30,28 +78,28 @@ State flow: draft -> exploring -> ready -> in_progress -> needs_verification -> 
 
 Orient and find work:
 
-    maestro status                                # repo handoff and next action
-    maestro task next                             # one best task action
-    maestro ready                                 # claimable work (ready + unblocked)
-    maestro task show <id>                        # task detail: state, claim, blockers
+    maestro status        # repo handoff and next action
+    maestro task next     # one best task action
+    maestro card ready    # claimable work (ready + unblocked)
+    maestro task show     # task detail: state, claim, blockers
 
 Make a task claimable (intake):
 
-    maestro task create "<title>" [--feature F --risk R --check "<observable result>"]   # -> draft
-    maestro task explore <id>                      # -> exploring
-    maestro task accept <id>                       # locks acceptance -> ready
+    maestro task create   # -> draft; seed --check with the observable result
+    maestro task explore  # -> exploring
+    maestro task accept   # locks acceptance -> ready
 
 Execute:
 
-    maestro task claim <id>                        # -> in_progress
-    maestro task update <id> --claim "<evidence>"  # record progress as you work
-    maestro task complete <id> --summary "<what>" --claim "<evidence>" --proof "<observed evidence>"   # auto-verifies
-    maestro query proof <id>                       # recovery path when verification fails
+    maestro task claim    # -> in_progress
+    maestro task update   # record evidence claims as you work
+    maestro task complete # summary + claim + proof; auto-verifies
+    maestro task proof    # recovery path when verification fails
 
 When stuck:
 
-    maestro task block <id> --reason "<why>" [--by <card id>|<external>]
-    maestro task unblock <id> --blocker blk-NN     # use the blocker's own blk- id, not the target
+    maestro task block    # --reason why; --by names the blocking card
+    maestro task unblock  # pass the blocker's own blk- id, not the target
 
 Terminal verbs (reject / abandon / supersede), plus doctor and watch -> see the maestro-card skill (work reference).
 
@@ -60,11 +108,11 @@ Terminal verbs (reject / abandon / supersede), plus doctor and watch -> see the 
 Design lands as a feature while `proposed`. Map the problem from real code, then walk
 open questions ONE at a time - lock each as a decision + a notes.md line, never batch-decide.
 
-    maestro feature new "<topic>"                  # scaffolds notes.md
-    maestro feature set <id> --description "<problem>" --question "<q>" ...
-    maestro decision new "<the locked fork>"       # per lock; drop the answered --question
-    maestro feature show <id>                      # resume point
-    maestro feature set <id> --acceptance "<criterion>" --area "<surface>"   # then author the contract
+    maestro feature new       # scaffolds notes.md
+    maestro feature set       # --description carries the problem, --question each open question
+    maestro decision new      # open the fork; lock it, or --lock for a pre-decided one
+    maestro feature show      # resume point
+    maestro feature set       # then author the contract: acceptance + areas
 
 Full method -> the maestro-design skill; lifecycle -> maestro-card (feature reference).
 
@@ -77,14 +125,49 @@ Binary only counts and shows; the agent acts. Full method -> the maestro-card sk
 ## Orchestration (when work can fan out)
 
 Parallel sub-agents pay off when contexts must stay clean or work is
-independent. The recipes live in the skills; this is the menu:
+independent. Each recipe's full HOW: `maestro loop show <name>`. The menu:
 
-    2+ independent ready tasks on a feature  -> feature fan-out      (maestro-card)
-    contested / high-stakes verification     -> adversarial fan-out  (maestro-card)
-    taste-based design fork (naming, UX)     -> generate-and-filter  (maestro-design)
-    unstructured backlog to triage           -> intake triage        (maestro-card)
-    unknown amount of work                   -> loop until done      (maestro-card)
+    2+ independent ready tasks on a feature  -> feature-fan-out
+    contested / high-stakes verification     -> adversarial-fan-out
+    taste-based design fork (naming, UX)     -> generate-and-filter
+    unstructured backlog to triage           -> intake-triage
+    unknown amount of work                   -> loop-until-done
+    user away/asleep, backlog to work        -> unattended-loop
 
 Results land through the verbs (task / decision / event), never only in conversation.
+The card store is shared state every session writes, so in a fan-out the orchestrator
+runs the store-mutating verbs (decision lock, task complete/verify, status, notes);
+sub-agents return results as data, they do not each write the store. Two sub-agents
+locking decisions on one feature collide on the shared decisions.yaml -- serialize
+through the orchestrator, or give a genuinely-parallel writer its own worktree (the
+store is git-tracked, merges back via conflict-handoff) even when its code files do
+not overlap. A failed multi-file store command is partial: re-run it, it re-reads the
+latest store and reapplies (AGENTS.md concurrent-agent contract).
 Claude Code: author a Workflow script. Codex: parallel sub-agents directly (worktree
-threads when files overlap).
+threads when files -- or the card store -- overlap).
+
+## Concurrent sessions (conflict handoff)
+
+maestro is a noticeboard: it surfaces who else is live but never runs git, makes
+a worktree, or links cards -- you do. `maestro active` and the pre-command
+`[overlap]` / `[CONFLICT]` / `[busy]` banners are how other live sessions show up.
+
+When any other session is live as you cross from design into implementation
+(`feature accept` / `prepare` print a `[worktree]` nudge):
+
+1. Isolate -- implement in your own `git worktree` so two sessions never clobber
+   one checkout.
+2. Share a file with a peer? Link the cards (`maestro link add <yours> <theirs>`)
+   and assert it (`maestro conflict <peer-card> "<file: why>"`) so the peer sees
+   a `[CONFLICT]` naming you.
+3. Peer-side: while a `[CONFLICT]` names a file, hold off editing that file until
+   it clears.
+4. Done -- you run the git merge back to the shared branch, then
+   `maestro conflict --clear <peer-card>`. A stale asserter's notice auto-hides,
+   but clear yours when you resolve.
+5. Heavy runs serialize themselves: the full-suite gate takes a shared lock, so a
+   second gate run waits (you see `[busy]`); let it finish rather than forcing a
+   parallel suite.
+
+Full worktree-split / merge-back dance, including a merge-back that itself
+conflicts: `maestro loop show conflict-handoff`.
