@@ -615,7 +615,7 @@ fn render_run_text(window: &str, trace: &run::RunTrace, status: &run::RunStatus)
 
     println!();
     println!(
-        "current state: ready={} accepted-without-tasks={} proposed={}",
+        "current state at trace time: ready={} accepted-without-tasks={} proposed={}",
         status.ready, status.accepted_without_tasks, status.proposed
     );
     println!("{}", status.verdict());
