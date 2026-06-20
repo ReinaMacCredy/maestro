@@ -28,6 +28,27 @@ pub struct Marker {
     pub text: String,
 }
 
+impl Marker {
+    /// The ceiling: the note text before the first comma (the whole note when it
+    /// has none). A lean marker reads `lean: <ceiling>, <upgrade trigger>`, where
+    /// the ceiling is the simpler choice taken and the trigger says when to climb.
+    pub fn ceiling(&self) -> &str {
+        match self.text.split_once(',') {
+            Some((ceiling, _)) => ceiling.trim(),
+            None => self.text.trim(),
+        }
+    }
+
+    /// The upgrade trigger: the note text after the first comma, if any. `None`
+    /// when the marker names no trigger -- debt flags those as `no-trigger`.
+    pub fn upgrade(&self) -> Option<&str> {
+        self.text
+            .split_once(',')
+            .map(|(_, trigger)| trigger.trim())
+            .filter(|trigger| !trigger.is_empty())
+    }
+}
+
 /// The outcome of minting cards from markers.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct MintOutcome {
@@ -196,6 +217,35 @@ mod tests {
             None,
             "an empty marker is not actionable"
         );
+    }
+
+    fn marker(text: &str) -> Marker {
+        Marker {
+            file: "src/x.rs".to_string(),
+            line: 1,
+            text: text.to_string(),
+        }
+    }
+
+    #[test]
+    fn splits_ceiling_from_upgrade_trigger_on_the_first_comma() {
+        let m = marker("global lock, per-account locks if throughput matters");
+        assert_eq!(m.ceiling(), "global lock");
+        assert_eq!(m.upgrade(), Some("per-account locks if throughput matters"));
+    }
+
+    #[test]
+    fn a_note_with_no_comma_is_all_ceiling_and_has_no_trigger() {
+        let m = marker("hand-rolled retry loop");
+        assert_eq!(m.ceiling(), "hand-rolled retry loop");
+        assert_eq!(m.upgrade(), None, "no comma means no upgrade trigger");
+    }
+
+    #[test]
+    fn an_empty_trigger_after_the_comma_counts_as_no_trigger() {
+        let m = marker("in-memory cache,   ");
+        assert_eq!(m.ceiling(), "in-memory cache");
+        assert_eq!(m.upgrade(), None, "a blank trigger is no trigger");
     }
 
     #[test]

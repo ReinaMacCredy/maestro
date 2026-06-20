@@ -10,6 +10,7 @@ use crate::interfaces::cli::{LeanArgs, cli_run_id};
 ///   review               -> mode-adjusted reach-ladder review guidance
 ///   audit                -> mode-adjusted reach-ladder audit guidance
 ///   debt [--card]        -> list anchored `// lean:` markers (and mint cards)
+///   help                 -> the modes, verbs, and default-mode env
 ///
 /// The mode is keyed to this session's run dir, so concurrent sessions stay
 /// independent and a fresh session starts from the `MAESTRO_LEAN` default.
@@ -24,13 +25,14 @@ pub fn run(args: LeanArgs) -> Result<()> {
         Some("review") => print!("{}", lean::review_guidance(resolve())),
         Some("audit") => print!("{}", lean::audit_guidance(resolve())),
         Some("debt") => run_debt(&paths, args.card)?,
+        Some("help") => print!("{}", lean::help_guidance()),
         Some(token) => match LeanMode::parse(token) {
             Some(mode) => {
                 lean::write_mode(&paths, &session, mode)?;
                 println!("{mode}");
             }
             None => anyhow::bail!(
-                "unknown lean target `{token}`; expected one of: lite, full, ultra, off, review, audit, debt"
+                "unknown lean target `{token}`; expected one of: lite, full, ultra, off, review, audit, debt, help"
             ),
         },
     }
@@ -45,10 +47,29 @@ fn run_debt(paths: &MaestroPaths, mint: bool) -> Result<()> {
         println!("no lean markers");
         return Ok(());
     }
+    let mut no_trigger = 0;
     for marker in &markers {
-        println!("{}:{}  {}", marker.file, marker.line, marker.text);
+        match marker.upgrade() {
+            Some(trigger) => {
+                println!(
+                    "{}:{}  {} -> {trigger}",
+                    marker.file,
+                    marker.line,
+                    marker.ceiling()
+                )
+            }
+            None => {
+                no_trigger += 1;
+                println!(
+                    "{}:{}  {} [no-trigger]",
+                    marker.file,
+                    marker.line,
+                    marker.ceiling()
+                );
+            }
+        }
     }
-    println!("{} marker(s)", markers.len());
+    println!("{} marker(s), {no_trigger} with no trigger", markers.len());
 
     if mint {
         let outcome = lean::mint_cards(paths, &markers)?;
