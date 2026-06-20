@@ -408,7 +408,13 @@ fn legacy_shipped_feature_renders_as_closed_in_generic_card_views() {
     // type-agnostic card views must show the current spelling, never the legacy word.
     write_card(
         &paths,
-        &Card::new("csv-export", CardType::Feature, "CSV export", "shipped", NOW),
+        &Card::new(
+            "csv-export",
+            CardType::Feature,
+            "CSV export",
+            "shipped",
+            NOW,
+        ),
     );
 
     for args in [

@@ -1265,9 +1265,9 @@ fn legal_transition(id: &str, from: &FeatureStatus, verb: FeatureVerb) -> Transi
 
         (FeatureVerb::Cancel, Proposed | Ready | InProgress) => Transition::To(Cancelled),
         (FeatureVerb::Cancel, Cancelled) => Transition::NoOp,
-        (FeatureVerb::Cancel, Closed) => Transition::Illegal(format!(
-            "cannot cancel {id} — closed features are terminal"
-        )),
+        (FeatureVerb::Cancel, Closed) => {
+            Transition::Illegal(format!("cannot cancel {id} — closed features are terminal"))
+        }
     }
 }
 

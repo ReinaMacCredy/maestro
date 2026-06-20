@@ -142,7 +142,9 @@ pub fn run(args: FeatureArgs) -> Result<()> {
             reason,
             no_close,
             outcome,
-        } => verify_feature(&paths, &id, prove, evidence, waive, reason, no_close, outcome),
+        } => verify_feature(
+            &paths, &id, prove, evidence, waive, reason, no_close, outcome,
+        ),
         FeatureCommand::Proof { command } => match command {
             FeatureProofCommand::Add {
                 id,

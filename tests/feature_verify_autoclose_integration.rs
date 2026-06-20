@@ -113,12 +113,18 @@ fn last_prove_auto_closes_in_the_same_call() {
     // Second (last) proof: completes readiness -> auto-close.
     let last = prove(repo, "report-builder", "ac-2", &[]);
     let out = stdout(last, &["feature", "verify", "--prove", "ac-2"]);
-    assert!(out.contains("auto-closing"), "should announce auto-close: {out}");
+    assert!(
+        out.contains("auto-closing"),
+        "should announce auto-close: {out}"
+    );
     assert!(
         out.contains("full verify suite passed"),
         "the full suite ran: {out}"
     );
-    assert!(out.contains("close receipt"), "close receipt printed: {out}");
+    assert!(
+        out.contains("close receipt"),
+        "close receipt printed: {out}"
+    );
 
     let show = stdout(
         maestro(&["feature", "show", "report-builder"], repo),
@@ -313,7 +319,10 @@ fn waive_completing_readiness_also_auto_closes() {
     started_feature_two_acceptances(repo, "report-builder");
     write_stack_verify(repo, "true");
 
-    stdout(prove(repo, "report-builder", "ac-1", &[]), &["prove", "ac-1"]);
+    stdout(
+        prove(repo, "report-builder", "ac-1", &[]),
+        &["prove", "ac-1"],
+    );
     // Waiving the last unresolved acceptance item completes readiness -> auto-close.
     let last = maestro(
         &[

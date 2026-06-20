@@ -654,7 +654,9 @@ pub fn close(args: CloseArgs) -> Result<()> {
 /// --status` (SPEC E3: feature/idea/decision keep per-type terminal verbs).
 fn per_type_verbs_hint(card_type: card::schema::CardType) -> &'static str {
     match card_type {
-        card::schema::CardType::Feature => "use `maestro feature close` or `maestro feature cancel`",
+        card::schema::CardType::Feature => {
+            "use `maestro feature close` or `maestro feature cancel`"
+        }
         card::schema::CardType::Decision => "use `maestro decision lock`",
         card::schema::CardType::Idea => "use `maestro harness apply/dismiss/measure`",
         card::schema::CardType::Task

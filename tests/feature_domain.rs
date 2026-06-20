@@ -352,8 +352,8 @@ fn full_lifecycle_new_set_accept_start_close() {
     let started = feature::start(&paths, "billing-csv").expect("invariant: start should succeed");
     assert_eq!(started.status, feature::FeatureStatus::InProgress);
     verify_contract(&paths, "billing-csv");
-    let closed =
-        feature::close(&paths, "billing-csv", None, false).expect("invariant: close should succeed");
+    let closed = feature::close(&paths, "billing-csv", None, false)
+        .expect("invariant: close should succeed");
     assert_eq!(closed.status, feature::FeatureStatus::Closed);
 }
 
@@ -370,8 +370,8 @@ fn illegal_transitions_name_the_gap() {
     author_contract(&paths, "billing-csv");
     feature::accept(&paths, "billing-csv", false).expect("invariant: accept should succeed");
     // close before start
-    let error =
-        feature::close(&paths, "billing-csv", None, false).expect_err("invariant: close must block");
+    let error = feature::close(&paths, "billing-csv", None, false)
+        .expect_err("invariant: close must block");
     assert!(error.to_string().contains("not started"));
 }
 
@@ -403,8 +403,8 @@ fn close_blocks_on_live_child_task() {
     verify_contract(&paths, "billing-csv");
 
     write_task(&paths, "task-001", "billing-csv", "in_progress");
-    let error =
-        feature::close(&paths, "billing-csv", None, false).expect_err("invariant: close must block");
+    let error = feature::close(&paths, "billing-csv", None, false)
+        .expect_err("invariant: close must block");
     assert!(error.to_string().contains("task-001"));
 
     // A verified child does not block close.
