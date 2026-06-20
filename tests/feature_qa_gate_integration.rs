@@ -121,6 +121,10 @@ fn prove_contract(repo: &Path, id: &str) {
         "ac-1",
         "--evidence",
         "fixture evidence",
+        // This helper only records the proof and confirms the green sweep;
+        // callers ship explicitly. --no-ship defers the implicit ship that
+        // proving the lone AC would trigger on an otherwise-ready feature.
+        "--no-ship",
     ];
     stdout(maestro(&prove, repo), &prove);
     let sweep = ["feature", "verify", id];

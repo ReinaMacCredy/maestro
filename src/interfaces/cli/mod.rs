@@ -992,6 +992,16 @@ pub enum FeatureCommand {
         waive: Vec<String>,
         #[arg(long, help = "Reason required with --waive (repeatable)")]
         reason: Vec<String>,
+        #[arg(
+            long,
+            help = "Record the proof but suppress the auto-ship when this verify completes ship-readiness (defer to explicit `feature ship`)"
+        )]
+        no_ship: bool,
+        #[arg(
+            long,
+            help = "Outcome line for the auto-ship close (overrides the generated default; ignored unless this verify auto-ships)"
+        )]
+        outcome: Option<String>,
     },
     #[command(about = "Append a dated note to a feature's notes.md")]
     Note { id: String, text: String },

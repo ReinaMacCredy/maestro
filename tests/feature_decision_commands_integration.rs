@@ -184,6 +184,9 @@ fn feature_verify_sweeps_acceptance_contract() {
         "ac-2",
         "--evidence",
         "manual proof",
+        // --no-ship: this proof completes ship-readiness; defer the implicit ship
+        // so the test can still inspect the green sweep and ship preview.
+        "--no-ship",
     ];
     stdout(maestro(&prove_args, temp_dir.path()), &prove_args);
     let sweep = stdout(
@@ -348,6 +351,10 @@ fn feature_contract_display_warnings_waivers_and_stale_sweep() {
         "ac-3",
         "--evidence",
         "manual third proof",
+        // --no-ship: ac-1 is waived and ac-2 is task-resolved, so proving ac-3
+        // completes ship-readiness; defer the implicit ship so the test can still
+        // inspect the green sweep, the stale-sweep re-derive, and ship previews.
+        "--no-ship",
     ];
     stdout(maestro(&prove_args, temp_dir.path()), &prove_args);
     let sweep = stdout(
@@ -1048,6 +1055,10 @@ fn feature_verify_records_repeatable_paired_proofs_atomically() {
         "ac-3",
         "--evidence",
         "third proof again",
+        // --no-ship: this batch proves the last outstanding acceptance items
+        // (ac-1 already proven), completing ship-readiness; defer the implicit
+        // ship so the follow-up bare sweep can still inspect the recorded proofs.
+        "--no-ship",
     ];
     stdout(maestro(&fixed_args, root), &fixed_args);
     let sweep = stdout(
@@ -2381,6 +2392,10 @@ fn record_feature_evidence(root: &Path, slug: &str) {
         "ac-1",
         "--evidence",
         "observed in integration test",
+        // This helper only records the proof; callers inspect the sweep / ship
+        // hint themselves. --no-ship defers the implicit ship that proving the
+        // lone acceptance item would otherwise trigger on a qa-none feature.
+        "--no-ship",
     ];
     stdout(maestro(&prove_args, root), &prove_args);
 }
@@ -2489,6 +2504,11 @@ fn verify_acceptance(root: &Path, slug: &str) {
         "ac-1",
         "--evidence",
         "fixture evidence",
+        // This helper only records the acceptance proof and confirms the green
+        // sweep; callers ship explicitly afterward. --no-ship defers the implicit
+        // ship that proving the lone AC would trigger on an otherwise-ready
+        // feature (a no-op where a live child still blocks the gate).
+        "--no-ship",
     ];
     stdout(maestro(&prove_args, root), &prove_args);
     stdout(

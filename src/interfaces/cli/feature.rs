@@ -115,7 +115,9 @@ pub fn run(args: FeatureArgs) -> Result<()> {
             evidence,
             waive,
             reason,
-        } => verify_feature(&paths, &id, prove, evidence, waive, reason),
+            no_ship,
+            outcome,
+        } => verify_feature(&paths, &id, prove, evidence, waive, reason, no_ship, outcome),
         FeatureCommand::Note { id, text } => {
             let report = feature::note(&paths, &id, &text)?;
             if report.created {
@@ -248,6 +250,7 @@ fn prepare_feature(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn verify_feature(
     paths: &MaestroPaths,
     id: &str,
@@ -255,6 +258,8 @@ fn verify_feature(
     evidence: Vec<String>,
     waive: Vec<String>,
     reason: Vec<String>,
+    no_ship: bool,
+    outcome: Option<String>,
 ) -> Result<()> {
     if prove.len() != evidence.len() {
         bail!("each --prove needs its --evidence");
@@ -276,8 +281,7 @@ fn verify_feature(
     let report = feature::verify_feature(paths, id, updates)?;
     if let Some(recorded) = report.recorded {
         println!("recorded {recorded}");
-        println!("next: maestro feature verify {}", report.feature_id);
-        return Ok(());
+        return after_prove_autoship(paths, &report.feature_id, no_ship, outcome);
     }
     let Some(sweep) = report.sweep else {
         return Ok(());
@@ -321,6 +325,107 @@ fn verify_feature(
             report.feature_id
         );
     }
+    Ok(())
+}
+
+/// After `feature verify --prove` records evidence, re-sweep the contract and,
+/// per the implicit-ship decisions, fire the ship gate when this proof completes
+/// ship-readiness:
+/// - dec-fully-automatic-trigger: the verify that empties `ship_gaps` runs the
+///   full gate (evidence + suite + terminal close) in the same call.
+/// - dec-add-a-no-ship-suppressor: `--no-ship` records the proof and defers.
+/// - dec-keep-write-once-outcome: a generated AC-proof summary is the default
+///   outcome; `--outcome` on the triggering verify overrides it.
+/// - dec-foreknowledge-nudge: when exactly one acceptance item is left, warn
+///   that the next `--prove` will auto-ship unless `--no-ship`.
+/// - dec-auto-fire-gate-suite-failure: a gate/suite failure bails out of
+///   `feature_ship::ship`, so the just-recorded proof stays, the feature stays
+///   `in_progress`, and this command exits non-zero (retry via `feature ship`).
+fn after_prove_autoship(
+    paths: &MaestroPaths,
+    id: &str,
+    no_ship: bool,
+    outcome: Option<String>,
+) -> Result<()> {
+    // Refresh the acceptance sweep so ship-readiness reflects the proof just
+    // recorded: the ship gate's acceptance check requires a fresh contract sweep,
+    // which only a bare `feature verify` produces.
+    let sweep = feature::verify_feature(paths, id, Vec::new())?.sweep;
+    let unresolved = sweep
+        .as_ref()
+        .map(|report| {
+            report
+                .items
+                .iter()
+                .filter(|item| matches!(item.proof, feature::AcceptanceProof::Missing))
+                .count()
+        })
+        .unwrap_or(0);
+
+    if no_ship {
+        println!(
+            "--no-ship: proof recorded; auto-ship deferred. ship when ready: maestro feature ship {id} --outcome \"<outcome>\""
+        );
+        return Ok(());
+    }
+
+    let gaps = feature::ship_gaps(paths, id)?;
+    if gaps.is_empty() {
+        let outcome = Some(outcome.unwrap_or_else(|| default_ship_outcome(sweep.as_ref())));
+        println!("ship-ready: auto-shipping (full verify suite + close)");
+        let report = feature_ship::ship(paths, id, outcome, false)?;
+        println!("{}", report.note);
+        print_ship_receipt(paths, &report)?;
+        return Ok(());
+    }
+
+    if unresolved == 1 {
+        eprintln!(
+            "note: 1 acceptance item left; the next `maestro feature verify {id} --prove` will auto-ship (full verify suite + close) unless you pass --no-ship"
+        );
+    }
+    println!("not yet shippable:");
+    println!("  {}", gaps.join("\n  "));
+    println!("next: maestro feature verify {id} --prove <ac-id> --evidence \"<observed>\"");
+    Ok(())
+}
+
+/// The write-once outcome recorded on an auto-ship when the agent passed no
+/// `--outcome`: a terse AC-proof summary derived from the just-run sweep.
+fn default_ship_outcome(sweep: Option<&feature::AcceptanceSweepReport>) -> String {
+    match sweep {
+        Some(report) if !report.items.is_empty() => {
+            let ids = report
+                .items
+                .iter()
+                .map(|item| item.ac_id.as_str())
+                .collect::<Vec<_>>();
+            format!("{} acceptance proven: {}", ids.len(), ids.join(", "))
+        }
+        _ => "acceptance proven".to_string(),
+    }
+}
+
+/// Print the post-ship receipt, shared by explicit `feature ship` and the
+/// auto-ship triggered from `feature verify --prove`.
+fn print_ship_receipt(paths: &MaestroPaths, report: &feature::TransitionReport) -> Result<()> {
+    println!("ship receipt:");
+    println!("  feature: {}", report.id);
+    println!("  status: shipped");
+    println!("  full verify suite passed");
+    if let Ok(view) = feature::show(paths, &report.id)
+        && let Some(reason) = view.qa_none_reason.as_deref()
+    {
+        println!("  qa: none ({reason})");
+    }
+    let claims_only = claims_only_verified_count(paths, &report.id)?;
+    if claims_only > 0 {
+        println!("  verification: {claims_only} claims-only task(s)");
+    }
+    println!("inspect: maestro feature show {}", report.id);
+    println!("next: maestro card archive {}", report.id);
+    println!("retro: anything to make a permanent rule?");
+    println!("  record it: maestro harness propose --title \"<rule>\" --evidence \"<why>\"");
     Ok(())
 }
 
@@ -667,23 +772,7 @@ fn ship_feature(
             report.id
         );
     } else if report.changed && report.status == FeatureStatus::Shipped {
-        println!("ship receipt:");
-        println!("  feature: {}", report.id);
-        println!("  status: shipped");
-        println!("  full verify suite passed");
-        if let Ok(view) = feature::show(paths, &report.id)
-            && let Some(reason) = view.qa_none_reason.as_deref()
-        {
-            println!("  qa: none ({reason})");
-        }
-        let claims_only = claims_only_verified_count(paths, &report.id)?;
-        if claims_only > 0 {
-            println!("  verification: {claims_only} claims-only task(s)");
-        }
-        println!("inspect: maestro feature show {}", report.id);
-        println!("next: maestro card archive {}", report.id);
-        println!("retro: anything to make a permanent rule?");
-        println!("  record it: maestro harness propose --title \"<rule>\" --evidence \"<why>\"");
+        print_ship_receipt(paths, &report)?;
     } else {
         println!("inspect: maestro feature show {}", report.id);
         println!("next: maestro status");
