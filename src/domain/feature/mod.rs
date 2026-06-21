@@ -21,7 +21,7 @@ pub use registry::{
     write_spec_section,
 };
 pub use schema::{FeatureStatus, normalize_acceptance_id};
-pub use staleness::{STALE_PROPOSED_THRESHOLD_DAYS, age_days, is_stale_proposed};
+pub use staleness::{RETIRE_REMINDER, STALE_PROPOSED_THRESHOLD_DAYS, age_days, is_stale_proposed};
 pub use verification::{
     AcceptanceCoverage, AcceptanceProof, AcceptanceSweepItem, AcceptanceSweepReport,
     FeatureProofUpdate, FeatureVerifyReport, acceptance_coverage, acceptance_coverage_archived,

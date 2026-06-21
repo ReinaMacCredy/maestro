@@ -14,6 +14,12 @@ use crate::foundation::core::time::timestamp_nanos;
 /// Tunable here at build time; intentionally not a runtime knob.
 pub const STALE_PROPOSED_THRESHOLD_DAYS: u64 = 14;
 
+/// Fixed reminder shown beside the stale-proposed collapse on every surface
+/// (status and feature list). Constant by contract: maestro never computes
+/// whether a feature's work already shipped, so the wording never varies with
+/// which features are listed.
+pub const RETIRE_REMINDER: &str = "before retiring, verify none shipped under another card";
+
 const NANOS_PER_DAY: i128 = 24 * 60 * 60 * 1_000_000_000;
 
 /// Whole days elapsed between `updated_at` and `now`, or `None` when
