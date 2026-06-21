@@ -19,7 +19,18 @@ implementation; a feature card is the product contract it may deliver against.
 
 ## Do
 
-The loop, in order (signatures: [cli.md](cli.md)):
+When native Maestro MCP tools are available, use them for the normal work-card
+loop:
+
+```text
+maestro_task_create -> maestro_task_explore -> maestro_task_accept
+maestro_task_claim -> maestro_task_update -> maestro_task_complete
+maestro_verify
+```
+
+Use `maestro_card_ready`, `maestro_card_list`, and `maestro_card_show` for
+orientation. Use the CLI loop below when MCP is unavailable or a needed verb is
+not exposed as an MCP tool. Signatures: [mcp.md](mcp.md), [cli.md](cli.md).
 
 ```sh
 maestro task create        # mint the card; seed --check with the observable result
@@ -82,6 +93,8 @@ and name that reason in the completion summary.
 For simple work that does not need the full
 feature->accept->verify->close pipeline, the gate-free `card` verbs are a
 Claude-task-tool-style todo tracker. The whole loop is three verbs:
+
+MCP: `maestro_card_create` -> `maestro_card_claim` -> `maestro_card_close`.
 
 ```sh
 maestro card create -t task "first thing" "second thing" "third thing"  # batch-mint N open todos

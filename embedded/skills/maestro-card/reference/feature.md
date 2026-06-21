@@ -13,7 +13,18 @@ the QA baseline and slice evidence in `qa.md` prove the feature gates.
 
 ## Do
 
-The lifecycle, in order (signatures: [cli.md](cli.md)):
+For feature lifecycle work after the design contract is authored, prefer native
+MCP when available:
+
+```text
+maestro_qa_baseline -> maestro_feature_accept -> maestro_feature_prepare
+maestro_feature_verify -> maestro_qa_slice -> maestro_feature_close
+```
+
+Use the CLI for authoring and maintenance verbs not yet exposed as MCP tools
+(`feature new`, `feature set`, `feature spec`, `feature amend`, archive and
+unarchive), or when MCP is unavailable. Signatures: [mcp.md](mcp.md),
+[cli.md](cli.md).
 
 ```sh
 maestro feature new               # -> proposed

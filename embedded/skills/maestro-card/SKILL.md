@@ -1,6 +1,6 @@
 ---
 name: maestro-card
-version: 1.23.0
+version: 1.24.0
 description: "Use for active Maestro card work: pick up and deliver work cards (claim, update, complete, verify), run the feature-card lifecycle (accept, prepare, amend, close), and capture qa-baseline/qa-slice gate evidence."
 ---
 
@@ -67,9 +67,15 @@ Read the reference for the job at hand; they share the ground rules below.
 
 ## Shared Ground
 
+- Prefer native Maestro MCP tools for lifecycle reads and writes when the host
+  exposes them. Exact tool names and argument shapes live in
+  [reference/mcp.md](reference/mcp.md). Use CLI commands when MCP is
+  unavailable, for verbs not yet exposed as MCP tools, or when debugging
+  install/sync/MCP server setup.
 - Exact command signatures live in [reference/cli.md](reference/cli.md),
   generated from the binary. A verb or flag not listed there does not exist;
-  read it instead of probing `--help`.
+  read it instead of probing `--help`. CLI remains the compatibility and
+  human-facing contract; MCP is the agent ergonomic contract.
 - Discover work with the card verbs: `maestro card ready`, `maestro card list`,
   `maestro card show`. Take and annotate work with `maestro card claim`,
   `maestro card note`, and `maestro card dep add`.

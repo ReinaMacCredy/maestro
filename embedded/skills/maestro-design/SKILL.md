@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-version: 1.23.0
+version: 1.24.0
 description: "Use for design or brainstorming in a Maestro repo before implementation starts. Map current behavior, decide one fork at a time, record decisions and notes, then hand the approved contract to maestro-card."
 ---
 
@@ -30,6 +30,13 @@ generated from the binary. A verb or flag not listed there does not exist;
 read it instead of probing `--help`. Never chain a guessed id: use only ids
 read from verb output, and when a lookup misses, re-list instead of retrying
 spelling variations.
+
+Native Maestro MCP tools may be used for supported orientation reads
+(`maestro_status`, `maestro_feature_show`, `maestro_card_list`, and related
+list/show tools) when the host exposes them. Design authoring still uses the
+CLI because `feature spec`, `feature set`, and `decision lock` are not MCP
+tools yet. After the design hand-off, `maestro-card` prefers MCP for supported
+work-card and feature-lifecycle steps.
 
 Routing: external PRD with open forks -> decide forks in design, then intake per maestro-card.
 

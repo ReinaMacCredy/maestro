@@ -14,6 +14,7 @@
 use include_dir::{Dir, include_dir};
 use maestro::domain::skills::catalog::skills;
 use maestro::foundation::core::hash::sha256_hex;
+use maestro::interfaces::mcp::tools::tool_definitions;
 
 /// The shipped schema contract packs (WS5 / D6.2-B), one directory per artifact
 /// family. Included here directly, independent of the runtime catalog, so the
@@ -30,14 +31,15 @@ const RECOVERY_MD: &str = include_str!("../embedded/harness/RECOVERY.md");
 
 /// The shipped code playbook, served from the binary instead of extracted.
 static PLAYBOOK_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/embedded/playbook");
+const MAESTRO_CARD_MCP_MD: &str = include_str!("../embedded/skills/maestro-card/reference/mcp.md");
 
 /// `(group, name, shipped version, sha256 tree-hash of the resource files)`.
 const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 17] = [
     (
         "skill",
         "maestro-card",
-        "1.23.0",
-        "fce318898127678b68e9ee09c8be7a5086c20e64e085dd96478e788698532cd1",
+        "1.24.0",
+        "b5fcec99e04c935227ff1e5b4c2924a5365532e92265e9f987e5858b7bb34072",
     ),
     (
         "skill",
@@ -48,8 +50,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 17] = [
     (
         "skill",
         "maestro-design",
-        "1.23.0",
-        "1fef64cb25e19cfbbb8d8ab1944badd14acd5cb3006dd9f4751b65f496556deb",
+        "1.24.0",
+        "c749df4bd836ebd242408dae92613bbf8118be26f9be5909a78e141a5e045c9e",
     ),
     (
         "skill",
@@ -332,6 +334,17 @@ fn every_shipped_skill_explains_droid_session_identity() {
                 && contents.contains("Do not rely on a `DROID_SESSION_ID` env var"),
             "shipped skill {} must explain Droid hook JSON session_id attribution",
             skill.name,
+        );
+    }
+}
+
+#[test]
+fn maestro_card_mcp_reference_lists_every_shipped_tool() {
+    for tool in tool_definitions() {
+        assert!(
+            MAESTRO_CARD_MCP_MD.contains(&format!("`{}(", tool.name)),
+            "maestro-card reference/mcp.md is missing MCP tool {}",
+            tool.name
         );
     }
 }

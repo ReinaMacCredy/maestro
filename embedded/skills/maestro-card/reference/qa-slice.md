@@ -26,6 +26,10 @@ counts only slices with scenario ids and non-empty evidence.
 6. If blocked, return a tracker entry with expected vs actual, reproduction,
    evidence, and fix path. Do not fix code from this reference.
 
+MCP: when available, `maestro_qa_slice` records observed slice evidence through
+the normal QA gate, and `maestro_feature_close` closes only after the gate is
+satisfied.
+
 ## The slices block
 
 One fenced yaml block inside `qa.md`, append-only. Scenario ids must match

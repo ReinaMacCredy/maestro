@@ -50,6 +50,10 @@ behavior has a surface — write a real baseline below, however small.
    result, evidence to capture, and reproduction steps.
 6. Write the contract below to `.maestro/cards/<id>/qa.md`.
 
+MCP: when available, `maestro_qa_baseline` records the observed baseline through
+the normal QA gate. If there is no behavioral surface, use
+`maestro_feature_accept` with `qa.mode = "none"` and a non-empty reason.
+
 ## Freshness
 
 The frontmatter tracks how far through the feature's amend log this baseline
