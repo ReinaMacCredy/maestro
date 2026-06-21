@@ -12,7 +12,7 @@ use crate::domain::task;
 use crate::foundation::core::git;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::table;
-use crate::foundation::core::time::{timestamp_nanos, utc_now_timestamp};
+use crate::foundation::core::time::{parse_utc_timestamp, timestamp_nanos, utc_now_timestamp};
 use crate::interfaces::cli::{QueryArgs, QueryCommand};
 use crate::operations::harness;
 
@@ -519,8 +519,8 @@ fn query_run(paths: &MaestroPaths, since: Option<&str>, json: bool) -> Result<()
     let now = utc_now_timestamp();
     let now_nanos = timestamp_nanos(&now).unwrap_or(0);
     let (cutoff_nanos, window) = match since {
-        Some(raw) => match timestamp_nanos(raw) {
-            Some(nanos) => (nanos, format!("since {raw}")),
+        Some(raw) => match parse_utc_timestamp(raw) {
+            Some(parsed) => (parsed.nanos_since_epoch, format!("since {raw}")),
             None => bail!("--since `{raw}` is not a timestamp (expected RFC3339, e.g. 2026-06-21T00:00:00Z)"),
         },
         None => (now_nanos - DEFAULT_WINDOW_NANOS, "last 12h".to_string()),

@@ -787,6 +787,26 @@ fn query_backlog_reports_empty_state_when_no_idea_cards_exist() {
 }
 
 #[test]
+fn query_run_rejects_an_all_digit_since_as_not_rfc3339() {
+    // `--since` is a user-facing date, so an all-digit value like `20260101` is a
+    // typo'd RFC3339 date, not a raw nanos-since-epoch count. It must error, not
+    // silently parse to ~1970 and quietly widen the window to all history.
+    let temp = setup_repo("maestro-query-run-since");
+    let repo = temp.path();
+
+    let bad = maestro(repo, &["query", "run", "--since", "20260101"]);
+    assert_failure(&bad, &["query", "run", "--since", "20260101"]);
+    assert!(
+        stderr(&bad).contains("not a timestamp"),
+        "all-digit --since must report a not-a-timestamp error, got:\n{}",
+        stderr(&bad)
+    );
+
+    let good = maestro(repo, &["query", "run", "--since", "2026-01-01T00:00:00Z"]);
+    assert_success(&good, &["query", "run", "--since", "2026-01-01T00:00:00Z"]);
+}
+
+#[test]
 fn query_views_scan_current_artifacts_without_writing_cache_files() {
     let temp = setup_repo("maestro-query-views");
     let repo = temp.path();
