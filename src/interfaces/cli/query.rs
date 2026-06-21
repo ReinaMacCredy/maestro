@@ -521,7 +521,9 @@ fn query_run(paths: &MaestroPaths, since: Option<&str>, json: bool) -> Result<()
     let (cutoff_nanos, window) = match since {
         Some(raw) => match parse_utc_timestamp(raw) {
             Some(parsed) => (parsed.nanos_since_epoch, format!("since {raw}")),
-            None => bail!("--since `{raw}` is not a timestamp (expected RFC3339, e.g. 2026-06-21T00:00:00Z)"),
+            None => bail!(
+                "--since `{raw}` is not a timestamp (expected RFC3339, e.g. 2026-06-21T00:00:00Z)"
+            ),
         },
         None => (now_nanos - DEFAULT_WINDOW_NANOS, "last 12h".to_string()),
     };

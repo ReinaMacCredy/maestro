@@ -121,7 +121,11 @@ pub fn assemble(
         sessions.insert(event.session_id.clone());
         let entry = activity.entry(event.card_id.clone()).or_default();
         entry.sessions.insert(event.session_id.clone());
-        if entry.last.as_deref().is_none_or(|last| event.ts.as_str() > last) {
+        if entry
+            .last
+            .as_deref()
+            .is_none_or(|last| event.ts.as_str() > last)
+        {
             entry.last = Some(event.ts.clone());
         }
         if event.kind == TraceEventKind::Proof {
@@ -378,7 +382,10 @@ mod tests {
         assert!(entry.resumed_across_sessions(), "two sessions = crash span");
         assert_eq!(entry.status, "verified");
         assert_eq!(entry.tdd.as_deref(), Some("red->green"));
-        assert_eq!(entry.latest_proof.as_deref(), Some("cargo test => 12 passed"));
+        assert_eq!(
+            entry.latest_proof.as_deref(),
+            Some("cargo test => 12 passed")
+        );
         assert_eq!(trace.session_count, 2);
     }
 
@@ -435,8 +442,14 @@ mod tests {
 
     #[test]
     fn tdd_evidence_does_not_false_positive_on_prose() {
-        assert_eq!(tdd_evidence(&["greenfield rollout, tested".to_string()]), Some("proof recorded".to_string()));
-        assert_eq!(tdd_evidence(&["GREEN: suite passes".to_string()]), Some("green".to_string()));
+        assert_eq!(
+            tdd_evidence(&["greenfield rollout, tested".to_string()]),
+            Some("proof recorded".to_string())
+        );
+        assert_eq!(
+            tdd_evidence(&["GREEN: suite passes".to_string()]),
+            Some("green".to_string())
+        );
         assert_eq!(tdd_evidence(&[]), None);
     }
 
@@ -477,7 +490,11 @@ mod tests {
             proposed: 8,
             minutes_since_last: Some(120),
         };
-        assert!(drained.verdict().contains("backlog drained"), "{}", drained.verdict());
+        assert!(
+            drained.verdict().contains("backlog drained"),
+            "{}",
+            drained.verdict()
+        );
 
         let preparable = RunStatus {
             ready: 0,

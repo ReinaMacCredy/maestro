@@ -11,9 +11,7 @@
 **/*.rs.bk
 
 # Maestro local cache (not covered by the managed block above)
-.maestro/update-check
-.maestro/index/
-
+.maestro/
 # macOS / local noise
 .DS_Store
 .claude/scheduled_tasks.lock

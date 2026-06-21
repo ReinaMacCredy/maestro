@@ -344,7 +344,10 @@ fn query_run_subcommand_is_listed_and_documents_its_window_flags() {
         maestro(&["query", "--help"]).contains("run"),
         "query --help should list the new `run` subcommand"
     );
-    assert_contains_all(&maestro(&["query", "run", "--help"]), &["--since", "--json"]);
+    assert_contains_all(
+        &maestro(&["query", "run", "--help"]),
+        &["--since", "--json"],
+    );
 }
 
 #[test]

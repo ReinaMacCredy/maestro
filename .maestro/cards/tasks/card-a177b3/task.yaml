@@ -2,22 +2,14 @@ schema_version: maestro.card.v1
 id: card-a177b3
 type: task
 title: feature verify --prove should be repeatable in one invocation
-status: ready
+status: verified
+claimed_by: maestro
+claimed_at: 2026-06-20T21:15:49.262Z
 created_at: 2026-06-07T16:28:24.134Z
-updated_at: 2026-06-07T16:28:24.134Z
+updated_at: 2026-06-20T21:17:01.578Z
 extra:
   schema_version: maestro.task.v2
-  id: card-a177b3
-  title: feature verify --prove should be repeatable in one invocation
-  lane: normal
-  risk: medium
-  state: ready
-  acceptance_locked: true
-  acceptance:
-    checks:
-    - batch-prove improvement is implemented and a fresh maestro-audit pass does not re-propose it
-    locked_by: maestro-harness
-    locked_at: 2026-06-07T16:28:24.134Z
+  verify_command: cargo test --test feature_decision_commands_integration feature_verify_records_repeatable_paired_proofs_atomically
   state_history:
   - state: draft
     at: 2026-06-07T16:28:24.134Z
@@ -28,6 +20,50 @@ extra:
   - state: ready
     at: 2026-06-07T16:28:24.134Z
     by: maestro-harness
-  verification: {}
-  created_at: 2026-06-07T16:28:24.134Z
-  updated_at: 2026-06-07T16:28:24.134Z
+  - state: in_progress
+    at: 2026-06-20T21:15:49.262Z
+    by: maestro
+  - state: needs_verification
+    at: 2026-06-20T21:16:03.098Z
+    by: maestro
+    summary: 'Already shipped: feature verify accepts repeatable --prove/--evidence in one invocation. verify_feature(prove: Vec<String>, evidence: Vec<String>) zips the pairs into batched FeatureProofUpdate (src/interfaces/cli/feature.rs:404-415); both flags declared repeatable Vec<String> (src/interfaces/cli/mod.rs:1062-1066).'
+    claims:
+    - A single 'feature verify <id> --prove A --evidence x --prove B --evidence y' invocation parses and records multiple acceptance proofs; clap accepts the repeated flags.
+  - state: needs_verification
+    at: 2026-06-20T21:16:03.113Z
+    by: maestro
+    summary: 'verification failed: standalone task card-a177b3 has no verify command; add a narrow falsifier with `maestro task set card-a177b3 --verify-command "..."` or accept claims-only with `maestro harness set --claims-only`'
+    open_items:
+    - standalone task card-a177b3 has no verify command; add a narrow falsifier with `maestro task set card-a177b3 --verify-command "..."` or accept claims-only with `maestro harness set --claims-only`
+  - state: verified
+    at: 2026-06-20T21:17:01.578Z
+    by: maestro
+    summary: 'verification passed: 1 claim(s), 1 proof source(s)'
+  lane: normal
+  risk: medium
+  verification:
+    status: passed
+    verified_at: 2026-06-20T21:17:01.578Z
+    verified_commit: d58af432c8d0d9396482156c71819e3bf4eafd54
+    verified_by_run: .maestro/runs/85b46cdb-c7b9-48d2-8057-18136fac5c28/events.jsonl
+    contract_hash: adec4d14579a3359ee483f6bfbe6cd09e95b9f27607ef9edaac2efacfea6ee3f
+    claim_checks:
+    - claim: A single 'feature verify <id> --prove A --evidence x --prove B --evidence y' invocation parses and records multiple acceptance proofs; clap accepts the repeated flags.
+      matched: true
+      source: .maestro/runs/85b46cdb-c7b9-48d2-8057-18136fac5c28/events.jsonl
+    commands:
+    - cmd: cargo test --test feature_decision_commands_integration feature_verify_records_repeatable_paired_proofs_atomically
+      exit_code: 0
+      duration_ms: 11569
+    proof_sources:
+    - kind: event
+      path: .maestro/runs/85b46cdb-c7b9-48d2-8057-18136fac5c28/events.jsonl
+      hash: 346e41c932ef47bc13ff8c7d2473abdb12593d7e257c9695cc6b7409d54974e0
+  acceptance_locked: true
+  acceptance:
+    checks:
+    - batch-prove improvement is implemented and a fresh maestro-audit pass does not re-propose it
+    locked_by: maestro-harness
+    locked_at: 2026-06-07T16:28:24.134Z
+  claims:
+  - A single 'feature verify <id> --prove A --evidence x --prove B --evidence y' invocation parses and records multiple acceptance proofs; clap accepts the repeated flags.

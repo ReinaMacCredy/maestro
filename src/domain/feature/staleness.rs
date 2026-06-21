@@ -111,12 +111,20 @@ mod tests {
             FeatureStatus::Closed,
             FeatureStatus::Cancelled,
         ] {
-            assert!(!is_stale_proposed(&status, "2026-01-01T00:00:00.000Z", now()));
+            assert!(!is_stale_proposed(
+                &status,
+                "2026-01-01T00:00:00.000Z",
+                now()
+            ));
         }
     }
 
     #[test]
     fn proposed_with_unparseable_timestamp_is_not_stale() {
-        assert!(!is_stale_proposed(&FeatureStatus::Proposed, "garbage", now()));
+        assert!(!is_stale_proposed(
+            &FeatureStatus::Proposed,
+            "garbage",
+            now()
+        ));
     }
 }

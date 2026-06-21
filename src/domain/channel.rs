@@ -987,8 +987,11 @@ mod tests {
         send(&paths, "card-a", "card-b", "sess-a", "hi b").expect("a-b send");
         // ...and a corrupt/foreign .jsonl dropped alongside it (an interrupted append
         // or a non-maestro file in the gitignored channels dir).
-        fs::write(paths.channels_dir().join("garbage.jsonl"), "not json at all\n")
-            .expect("plant the corrupt file");
+        fs::write(
+            paths.channels_dir().join("garbage.jsonl"),
+            "not json at all\n",
+        )
+        .expect("plant the corrupt file");
 
         // Enumeration returns the healthy channel rather than `?`-aborting on the
         // unreadable header and hiding every channel's unread.
