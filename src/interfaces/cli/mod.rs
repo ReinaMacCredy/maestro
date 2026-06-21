@@ -84,6 +84,15 @@ pub(crate) struct GitReadout {
     pub branch: Option<String>,
     pub code_other_dirty: usize,
     pub maestro_dirty: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub divergence: Option<GitDivergenceReadout>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct GitDivergenceReadout {
+    pub shared_branch: String,
+    pub ahead: usize,
+    pub behind: usize,
 }
 
 /// Read the working-tree git state, returning `None` (not an error) when the
@@ -95,6 +104,14 @@ pub(crate) fn git_readout(paths: &MaestroPaths) -> Option<GitReadout> {
             branch: snapshot.branch,
             code_other_dirty: snapshot.code_other_dirty,
             maestro_dirty: snapshot.maestro_dirty,
+            divergence: git::branch_divergence(paths.repo_root())
+                .ok()
+                .flatten()
+                .map(|divergence| GitDivergenceReadout {
+                    shared_branch: divergence.shared_branch,
+                    ahead: divergence.ahead,
+                    behind: divergence.behind,
+                }),
         })
 }
 
@@ -104,6 +121,23 @@ pub(crate) fn render_git_line(git: &GitReadout) -> String {
         "git: {branch}, {} code/other + {} maestro-card uncommitted",
         git.code_other_dirty, git.maestro_dirty
     )
+}
+
+pub(crate) fn stale_merge_advisory(git: &GitReadout) -> Option<String> {
+    let divergence = git.divergence.as_ref()?;
+    if divergence.behind == 0 {
+        return None;
+    }
+    Some(format!(
+        "[stale] {} moved {} commit{} since this worktree forked; rebase before merging",
+        divergence.shared_branch,
+        divergence.behind,
+        if divergence.behind == 1 { "" } else { "s" }
+    ))
+}
+
+pub(crate) fn merge_busy_advisory(holder: &str) -> String {
+    format!("[merge-busy] {holder} is merging back; wait before rebase+fast-forward")
 }
 
 /// The contextual clean-worktree note, shown only when the next verb is
@@ -1999,9 +2033,65 @@ mod tests {
 
     #[test]
     fn resolve_claim_session_falls_back_when_override_blank_and_no_runtime_id() {
-        let got =
-            resolve_claim_session(Some("   ".to_string()), None, || "s123-456".to_string());
+        let got = resolve_claim_session(Some("   ".to_string()), None, || "s123-456".to_string());
         assert_eq!(got, "s123-456");
+    }
+
+    #[test]
+    fn stale_merge_advisory_is_silent_when_shared_branch_has_not_moved() {
+        let git = GitReadout {
+            branch: Some("slice".to_string()),
+            code_other_dirty: 0,
+            maestro_dirty: 0,
+            divergence: Some(GitDivergenceReadout {
+                shared_branch: "main".to_string(),
+                ahead: 2,
+                behind: 0,
+            }),
+        };
+
+        assert_eq!(stale_merge_advisory(&git), None);
+    }
+
+    #[test]
+    fn stale_merge_advisory_points_to_rebase_before_merging() {
+        let git = GitReadout {
+            branch: Some("slice".to_string()),
+            code_other_dirty: 0,
+            maestro_dirty: 0,
+            divergence: Some(GitDivergenceReadout {
+                shared_branch: "main".to_string(),
+                ahead: 1,
+                behind: 4,
+            }),
+        };
+
+        assert_eq!(
+            stale_merge_advisory(&git).as_deref(),
+            Some("[stale] main moved 4 commits since this worktree forked; rebase before merging")
+        );
+    }
+
+    #[test]
+    fn merge_busy_advisory_points_to_manual_fast_forward_wait() {
+        assert_eq!(
+            merge_busy_advisory("session-a"),
+            "[merge-busy] session-a is merging back; wait before rebase+fast-forward"
+        );
+    }
+
+    #[test]
+    fn merge_back_workflow_stays_on_existing_surfaces_not_a_merge_verb() {
+        assert!(
+            Cli::try_parse_from(["maestro", "merge"]).is_err(),
+            "merge-back coordination should not introduce a required maestro merge verb"
+        );
+        let recipe = crate::domain::loop_recipes::serve("conflict-handoff").expect("recipe ships");
+        assert!(recipe.contains("maestro status"));
+        assert!(recipe.contains("[stale]"));
+        assert!(recipe.contains("[merge-busy]"));
+        assert!(recipe.contains("git merge --ff-only <branch>"));
+        assert!(recipe.contains("maestro never does"));
     }
 
     #[test]

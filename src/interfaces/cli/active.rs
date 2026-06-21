@@ -17,8 +17,8 @@ use crate::domain::run::{self, Presence, SessionActivity};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::table;
 use crate::foundation::core::time::utc_now_timestamp;
-use crate::interfaces::cli::ActiveArgs;
 use crate::interfaces::cli::worktree_roots;
+use crate::interfaces::cli::{ActiveArgs, merge_busy_advisory, stale_merge_advisory};
 
 /// Max width for the bound-card title column; longer titles truncate to keep one
 /// scannable line per session (row width is a tunable detail, not locked by D5).
@@ -48,6 +48,17 @@ pub fn run(args: ActiveArgs) -> Result<()> {
         println!("[busy] {busy} is running the full-suite gate (heavy run in progress)");
         println!();
     }
+    if let Some(git) = super::git_readout(&paths)
+        && let Some(stale) = stale_merge_advisory(&git)
+    {
+        println!("{stale}");
+        println!();
+    }
+    if let Some(holder) = gate_lock::merge_holder(&paths) {
+        println!("{}", merge_busy_advisory(&holder));
+        println!();
+    }
+    render_scope_overlap_advisories(&run::declared_scope_overlaps_union(&roots, &now)?);
 
     let shown: Vec<&SessionActivity> = rows
         .iter()
@@ -78,6 +89,25 @@ pub fn run(args: ActiveArgs) -> Result<()> {
 
     render_link_hint(&shown, &by_id, &me, your_card, args.connect);
     Ok(())
+}
+
+fn render_scope_overlap_advisories(overlaps: &[run::DeclaredScopeOverlap]) {
+    if overlaps.is_empty() {
+        return;
+    }
+    for overlap in overlaps {
+        let who = overlap
+            .owners
+            .iter()
+            .map(|owner| owner.bound_card.as_deref().unwrap_or(&owner.session_id))
+            .collect::<Vec<_>>()
+            .join(", ");
+        println!(
+            "[scope-overlap] {who} declare overlapping scope {}",
+            overlap.scope_path
+        );
+    }
+    println!();
 }
 
 /// Whether the live cards `a` and `b` share a `related` edge in either

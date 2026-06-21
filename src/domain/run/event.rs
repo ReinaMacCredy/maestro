@@ -78,7 +78,7 @@ pub(crate) fn is_accepted_event(event_type: &str) -> bool {
         // they are accepted here without being part of the installed contract.
         || matches!(
             event_type,
-            "SkillActivation" | "skill_activation" | "card_touch"
+            "SkillActivation" | "skill_activation" | "card_touch" | "scope_declaration"
         )
 }
 

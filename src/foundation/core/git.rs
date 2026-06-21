@@ -2,7 +2,7 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use git2::{Repository, StatusOptions};
+use git2::{Oid, Repository, StatusOptions};
 
 /// Current Git state needed by proof freshness and migration checks.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -19,6 +19,19 @@ pub struct GitSnapshot {
     pub code_other_dirty: usize,
 }
 
+/// Read-only divergence of the current branch from the repo's shared branch.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BranchDivergence {
+    /// Current branch name, or `None` for a detached HEAD.
+    pub branch: Option<String>,
+    /// Shared branch used as the merge-back target, such as `main`.
+    pub shared_branch: String,
+    /// Commits reachable from the current branch but not from the shared branch.
+    pub ahead: usize,
+    /// Commits reachable from the shared branch but not from the current branch.
+    pub behind: usize,
+}
+
 /// Read the current Git HEAD and dirty state for the repository containing `path`.
 pub fn snapshot(path: impl AsRef<Path>) -> Result<GitSnapshot> {
     let repository = discover_repository(path.as_ref())?;
@@ -31,6 +44,32 @@ pub fn snapshot(path: impl AsRef<Path>) -> Result<GitSnapshot> {
         maestro_dirty: counts.maestro,
         code_other_dirty: counts.code_other,
     })
+}
+
+/// Compare the current HEAD against the shared branch tip without mutating git.
+///
+/// `None` means no useful comparison is available: unborn/detached HEAD, no
+/// local `main`/`master`, or the shared ref cannot be resolved. Callers treat
+/// that as "no advisory" rather than an error.
+pub fn branch_divergence(path: impl AsRef<Path>) -> Result<Option<BranchDivergence>> {
+    let repository = discover_repository(path.as_ref())?;
+    let branch = branch_name(&repository)?;
+    let Some(head) = head_commit_oid(&repository)? else {
+        return Ok(None);
+    };
+    let Some((shared_branch, shared)) = shared_branch_oid(&repository, branch.as_deref())? else {
+        return Ok(None);
+    };
+    let (ahead, behind) = repository
+        .graph_ahead_behind(head, shared)
+        .context("failed to compare branch divergence")?;
+
+    Ok(Some(BranchDivergence {
+        branch,
+        shared_branch,
+        ahead,
+        behind,
+    }))
 }
 
 /// Return the current Git HEAD object id.
@@ -168,6 +207,47 @@ fn branch_name(repository: &Repository) -> Result<Option<String>> {
     }
 }
 
+fn head_commit_oid(repository: &Repository) -> Result<Option<Oid>> {
+    match repository.head() {
+        Ok(reference) => Ok(Some(
+            reference
+                .peel_to_commit()
+                .context("failed to peel HEAD to commit")?
+                .id(),
+        )),
+        Err(error) if error.code() == git2::ErrorCode::UnbornBranch => Ok(None),
+        Err(error) if error.code() == git2::ErrorCode::NotFound => Ok(None),
+        Err(error) => Err(error).context("failed to read git HEAD"),
+    }
+}
+
+fn shared_branch_oid(
+    repository: &Repository,
+    current_branch: Option<&str>,
+) -> Result<Option<(String, Oid)>> {
+    for name in ["main", "master"] {
+        if current_branch == Some(name) {
+            let Some(oid) = head_commit_oid(repository)? else {
+                return Ok(None);
+            };
+            return Ok(Some((name.to_string(), oid)));
+        }
+        let refname = format!("refs/heads/{name}");
+        match repository.find_reference(&refname) {
+            Ok(reference) => {
+                let oid = reference
+                    .peel_to_commit()
+                    .with_context(|| format!("failed to peel shared branch {name} to commit"))?
+                    .id();
+                return Ok(Some((name.to_string(), oid)));
+            }
+            Err(error) if error.code() == git2::ErrorCode::NotFound => {}
+            Err(error) => return Err(error).with_context(|| format!("failed to read {refname}")),
+        }
+    }
+    Ok(None)
+}
+
 /// Uncommitted-change counts, split by whether the path is under `.maestro/`.
 struct DirtyCounts {
     maestro: usize,
@@ -202,7 +282,7 @@ fn is_dirty(repository: &Repository) -> Result<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use git2::Signature;
+    use git2::{RepositoryInitOptions, Signature};
     use std::collections::BTreeSet;
     use std::env;
     use std::fs;
@@ -218,6 +298,12 @@ mod tests {
         dir
     }
 
+    fn init_main_repo(path: &Path) -> Repository {
+        let mut options = RepositoryInitOptions::new();
+        options.initial_head("main");
+        Repository::init_opts(path, &options).expect("init main repo")
+    }
+
     fn commit_repo(repository: &Repository) {
         let signature = Signature::now("t", "t@example.com").expect("signature");
         let tree_oid = repository
@@ -229,6 +315,45 @@ mod tests {
         repository
             .commit(Some("HEAD"), &signature, &signature, "init", &tree, &[])
             .expect("commit");
+    }
+
+    fn commit_file(repository: &Repository, path: &str, contents: &str, message: &str) -> Oid {
+        let workdir = repository.workdir().expect("workdir repo");
+        let full_path = workdir.join(path);
+        if let Some(parent) = full_path.parent() {
+            fs::create_dir_all(parent).expect("parent dir");
+        }
+        fs::write(&full_path, contents).expect("write fixture file");
+
+        let mut index = repository.index().expect("index");
+        index
+            .add_path(Path::new(path))
+            .expect("fixture path added to index");
+        index.write().expect("index written");
+        let tree_oid = index.write_tree().expect("tree");
+        let tree = repository.find_tree(tree_oid).expect("tree");
+        let signature = Signature::now("t", "t@example.com").expect("signature");
+        let parents = match repository.head() {
+            Ok(reference) => vec![
+                reference
+                    .peel_to_commit()
+                    .expect("HEAD peels to parent commit"),
+            ],
+            Err(error) if error.code() == git2::ErrorCode::UnbornBranch => Vec::new(),
+            Err(error) if error.code() == git2::ErrorCode::NotFound => Vec::new(),
+            Err(error) => panic!("unexpected HEAD error: {error}"),
+        };
+        let parent_refs: Vec<&git2::Commit<'_>> = parents.iter().collect();
+        repository
+            .commit(
+                Some("HEAD"),
+                &signature,
+                &signature,
+                message,
+                &tree,
+                &parent_refs,
+            )
+            .expect("commit file")
     }
 
     fn canon_set(roots: &[PathBuf]) -> BTreeSet<PathBuf> {
@@ -243,7 +368,7 @@ mod tests {
         let base = unique_base("lone");
         let main = base.join("main");
         fs::create_dir_all(&main).expect("main dir");
-        Repository::init(&main).expect("init");
+        init_main_repo(&main);
 
         let roots = worktree_roots(&main).expect("roots");
         assert_eq!(
@@ -257,7 +382,7 @@ mod tests {
         let base = unique_base("union");
         let main = base.join("main");
         fs::create_dir_all(&main).expect("main dir");
-        let repository = Repository::init(&main).expect("init");
+        let repository = init_main_repo(&main);
         commit_repo(&repository);
 
         let linked = base.join("wt-oauth");
@@ -284,5 +409,47 @@ mod tests {
             from_main.first().map(|root| root.canonicalize().unwrap()),
             Some(main.canonicalize().expect("canon main")),
         );
+    }
+
+    #[test]
+    fn branch_divergence_reports_shared_branch_moving_under_a_slice() {
+        let base = unique_base("diverged");
+        let main = base.join("main");
+        fs::create_dir_all(&main).expect("main dir");
+        let repository = init_main_repo(&main);
+        let base_oid = commit_file(&repository, "base.txt", "base", "base");
+        let base_commit = repository.find_commit(base_oid).expect("base commit");
+        repository
+            .branch("slice", &base_commit, false)
+            .expect("slice branch");
+        drop(base_commit);
+
+        commit_file(&repository, "main.txt", "main", "main moves");
+        repository.set_head("refs/heads/slice").expect("head slice");
+
+        let divergence = branch_divergence(&main)
+            .expect("divergence reads")
+            .expect("shared branch exists");
+        assert_eq!(divergence.branch.as_deref(), Some("slice"));
+        assert_eq!(divergence.shared_branch, "main");
+        assert_eq!(divergence.ahead, 0);
+        assert_eq!(divergence.behind, 1);
+    }
+
+    #[test]
+    fn branch_divergence_is_zero_on_shared_branch() {
+        let base = unique_base("current");
+        let main = base.join("main");
+        fs::create_dir_all(&main).expect("main dir");
+        let repository = init_main_repo(&main);
+        commit_file(&repository, "base.txt", "base", "base");
+
+        let divergence = branch_divergence(&main)
+            .expect("divergence reads")
+            .expect("shared branch exists");
+        assert_eq!(divergence.branch.as_deref(), Some("main"));
+        assert_eq!(divergence.shared_branch, "main");
+        assert_eq!(divergence.ahead, 0);
+        assert_eq!(divergence.behind, 0);
     }
 }

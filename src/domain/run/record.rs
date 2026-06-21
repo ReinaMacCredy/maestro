@@ -95,6 +95,7 @@ fn normalize_event(payload: &Value) -> Option<Value> {
     copy_string(payload, &mut event, "permission_decision");
     copy_string(payload, &mut event, "skill_name");
     copy_string(payload, &mut event, "activation_mode");
+    copy_string_array(payload, &mut event, "scope_paths");
     copy_number(payload, &mut event, "duration_ms");
 
     if let Some(tool_input) = payload.get("tool_input") {
@@ -151,6 +152,21 @@ fn copy_number(source: &Value, target: &mut Map<String, Value>, field: &str) {
     }
 }
 
+fn copy_string_array(source: &Value, target: &mut Map<String, Value>, field: &str) {
+    let Some(values) = source.get(field).and_then(Value::as_array) else {
+        return;
+    };
+    let values: Vec<&str> = values
+        .iter()
+        .filter_map(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .collect();
+    if !values.is_empty() {
+        target.insert(field.to_string(), json!(values));
+    }
+}
+
 fn hash_value(value: &Value) -> String {
     let bytes =
         serde_json::to_vec(value).expect("invariant: serde_json::Value should serialize to JSON");
@@ -179,6 +195,22 @@ mod tests {
         assert!(
             object.contains_key("tool_input_hash"),
             "tool_input_hash must still be recorded alongside file_path"
+        );
+    }
+
+    #[test]
+    fn retains_declared_scope_paths_from_scope_declaration() {
+        let payload = json!({
+            "event_type": "scope_declaration",
+            "session_id": "cli-test",
+            "scope_paths": ["src/interfaces/cli/status.rs", " ", "tests/status.rs"],
+        });
+        let event = normalize_event(&payload).expect("scope declarations are accepted");
+        let object = event.as_object().expect("normalized event is an object");
+        assert_eq!(
+            object.get("scope_paths"),
+            Some(&json!(["src/interfaces/cli/status.rs", "tests/status.rs"])),
+            "declared path scopes stay visible to active-session overlap checks"
         );
     }
 

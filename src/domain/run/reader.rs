@@ -71,6 +71,19 @@ impl RunEvent {
         self.string("file_path")
     }
 
+    /// Repo-relative path scopes declared by an orchestrator for this session.
+    pub fn scope_paths(&self) -> Vec<&str> {
+        self.value
+            .get("scope_paths")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .map(str::trim)
+            .filter(|path| !path.is_empty())
+            .collect()
+    }
+
     /// Event status, when present.
     pub fn status(&self) -> Option<&str> {
         self.string("status")

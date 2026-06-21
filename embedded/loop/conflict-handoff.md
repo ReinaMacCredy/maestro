@@ -3,8 +3,9 @@
 WHEN: another session is live and you are about to implement on the same repo.
 
 maestro is passive: it shows peers (`maestro active`, the `[overlap]` /
-`[CONFLICT]` / `[busy]` banners) but never runs git, makes a worktree, or links
-cards. You drive the whole dance below; maestro only carries the notices.
+`[scope-overlap]` / `[CONFLICT]` / `[stale]` / `[merge-busy]` / `[busy]`
+banners) but never runs git, makes a worktree, or links cards. You drive the
+whole dance below; maestro only carries the notices.
 
 ## Shape
 
@@ -28,10 +29,19 @@ cards. You drive the whole dance below; maestro only carries the notices.
 4. Heavy runs serialize themselves: the full-suite gate takes a shared lock, so
    if a peer is mid-gate you will see `[busy]` and your gate waits its turn. Let
    it; do not force a second suite.
-5. Merge back when your slice is verified. YOU run git; maestro never does:
+5. Merge back when your slice is verified. YOU run git; maestro never does.
+   First orient on the passive merge-back banners:
 
+       maestro status
+
+   If `[merge-busy]` is present, wait: another session is in the rebase +
+   fast-forward critical section. If `[stale]` is present, rebase your branch
+   onto the shared branch before merging. Then land with a fast-forward:
+
+       git switch <branch>
+       git rebase <shared-branch>
        git switch <shared-branch>
-       git merge <branch>      # or rebase your branch first, then fast-forward
+       git merge --ff-only <branch>
 
 6. Clear your notice so the peer is unblocked:
 

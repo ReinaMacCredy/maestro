@@ -27,9 +27,52 @@ use anyhow::Result;
 use crate::foundation::core::git;
 use crate::foundation::core::paths::MaestroPaths;
 
-/// Name of the advisory lockfile placed in the Git common dir (or, with no Git,
-/// under `.maestro/`).
-const LOCK_FILE_NAME: &str = "maestro-gate.lock";
+/// Name of the full-suite advisory lockfile placed in the Git common dir (or,
+/// with no Git, under `.maestro/`).
+const GATE_LOCK_FILE_NAME: &str = "maestro-gate.lock";
+
+/// Name of the merge-back advisory lockfile, also in the Git common dir so every
+/// sibling worktree sees the same critical section.
+const MERGE_LOCK_FILE_NAME: &str = "maestro-merge.lock";
+
+#[derive(Clone, Copy, Debug)]
+enum LockKind {
+    Gate,
+    Merge,
+}
+
+impl LockKind {
+    fn file_name(self) -> &'static str {
+        match self {
+            Self::Gate => GATE_LOCK_FILE_NAME,
+            Self::Merge => MERGE_LOCK_FILE_NAME,
+        }
+    }
+
+    #[cfg(unix)]
+    fn waiting_line(self, holder: &str) -> String {
+        match self {
+            Self::Gate => {
+                format!("[busy] waiting for {holder}'s full-suite gate to finish (Ctrl-C to abort)")
+            }
+            Self::Merge => {
+                format!(
+                    "[merge-busy] waiting for {holder}'s merge-back to finish (Ctrl-C to abort)"
+                )
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    fn still_waiting_line(self, holder: &str, elapsed: u64) -> String {
+        match self {
+            Self::Gate => format!("[busy] still waiting ({elapsed}s) for {holder}'s gate"),
+            Self::Merge => {
+                format!("[merge-busy] still waiting ({elapsed}s) for {holder}'s merge-back")
+            }
+        }
+    }
+}
 
 /// How often the wait loop wakes to retry the lock. Decoupled from the print
 /// cadence: a tight poll keeps the wait Ctrl-C-responsive without flooding the
@@ -67,11 +110,22 @@ pub struct GateGuard {
 /// coarse elapsed line every [`REPORT_EVERY_SECS`]; a Ctrl-C during the wait
 /// terminates the process through the default SIGINT handler (no custom handler).
 pub fn acquire(paths: &MaestroPaths, holder: &str) -> GateGuard {
+    acquire_kind(paths, holder, LockKind::Gate)
+}
+
+/// Take the merge-back lock, waiting for any current merge holder to finish.
+/// This is the same advisory flock primitive as the gate lock, but on a separate
+/// lockfile so merge-back ordering does not block the full-suite gate.
+pub fn acquire_merge(paths: &MaestroPaths, holder: &str) -> GateGuard {
+    acquire_kind(paths, holder, LockKind::Merge)
+}
+
+fn acquire_kind(paths: &MaestroPaths, holder: &str, kind: LockKind) -> GateGuard {
     #[cfg(unix)]
     {
         // Resolve the lockfile once: the wait loop below polls for the holder's
         // whole (possibly multi-minute) suite, and the path never changes.
-        let path = lock_path(paths);
+        let path = lock_path(paths, kind);
         match try_acquire_at(&path, holder) {
             Ok(Some(guard)) => return guard,
             Ok(None) => {}
@@ -79,7 +133,7 @@ pub fn acquire(paths: &MaestroPaths, holder: &str) -> GateGuard {
         }
 
         let waiting_on = read_holder(&path).unwrap_or_else(|| "another session".to_string());
-        eprintln!("{}", waiting_line(&waiting_on));
+        eprintln!("{}", kind.waiting_line(&waiting_on));
         let started = Instant::now();
         let mut last_report = 0u64;
         loop {
@@ -92,13 +146,13 @@ pub fn acquire(paths: &MaestroPaths, holder: &str) -> GateGuard {
             let elapsed = started.elapsed().as_secs();
             if elapsed - last_report >= REPORT_EVERY_SECS {
                 last_report = elapsed;
-                eprintln!("{}", still_waiting_line(&waiting_on, elapsed));
+                eprintln!("{}", kind.still_waiting_line(&waiting_on, elapsed));
             }
         }
     }
     #[cfg(not(unix))]
     {
-        let _ = (paths, holder);
+        let _ = (paths, holder, kind);
         GateGuard { _file: None }
     }
 }
@@ -111,11 +165,21 @@ pub fn acquire(paths: &MaestroPaths, holder: &str) -> GateGuard {
 /// busy. An empty read in the brief window between acquiring the lock and writing
 /// the id reports a generic name rather than a blank one.
 pub fn holder(paths: &MaestroPaths) -> Option<String> {
+    holder_for(paths, LockKind::Gate)
+}
+
+/// The session id currently holding the merge-back lock, or `None` if it is
+/// free. See [`holder`] for the lock probing semantics.
+pub fn merge_holder(paths: &MaestroPaths) -> Option<String> {
+    holder_for(paths, LockKind::Merge)
+}
+
+fn holder_for(paths: &MaestroPaths, kind: LockKind) -> Option<String> {
     #[cfg(unix)]
     {
         use std::os::unix::io::AsRawFd;
 
-        let path = lock_path(paths);
+        let path = lock_path(paths, kind);
         let file = File::open(&path).ok()?;
         match flock_nb(file.as_raw_fd(), sys::LOCK_SH) {
             Ok(true) => {
@@ -128,7 +192,7 @@ pub fn holder(paths: &MaestroPaths) -> Option<String> {
     }
     #[cfg(not(unix))]
     {
-        let _ = paths;
+        let _ = (paths, kind);
         None
     }
 }
@@ -215,21 +279,11 @@ fn read_holder(path: &std::path::Path) -> Option<String> {
 
 /// The lockfile path: the Git common dir when in a repo (shared across every
 /// worktree), else `.maestro/` for a non-Git tree.
-fn lock_path(paths: &MaestroPaths) -> PathBuf {
+fn lock_path(paths: &MaestroPaths, kind: LockKind) -> PathBuf {
     match git::common_dir(paths.repo_root()) {
-        Ok(common) => common.join(LOCK_FILE_NAME),
-        Err(_) => paths.maestro_dir().join(LOCK_FILE_NAME),
+        Ok(common) => common.join(kind.file_name()),
+        Err(_) => paths.maestro_dir().join(kind.file_name()),
     }
-}
-
-#[cfg(unix)]
-fn waiting_line(holder: &str) -> String {
-    format!("[busy] waiting for {holder}'s full-suite gate to finish (Ctrl-C to abort)")
-}
-
-#[cfg(unix)]
-fn still_waiting_line(holder: &str, elapsed: u64) -> String {
-    format!("[busy] still waiting ({elapsed}s) for {holder}'s gate")
 }
 
 #[cfg(all(test, unix))]
@@ -276,7 +330,7 @@ mod tests {
     fn a_second_descriptor_cannot_acquire_while_the_first_holds_the_gate() {
         let repo = TempRepo::new("mutex");
         let paths = repo.paths();
-        let path = lock_path(&paths);
+        let path = lock_path(&paths, LockKind::Gate);
 
         let first = try_acquire_at(&path, "sessA")
             .expect("io")
@@ -312,7 +366,7 @@ mod tests {
     fn holder_reports_a_generic_name_when_the_id_is_not_yet_written() {
         let repo = TempRepo::new("empty");
         let paths = repo.paths();
-        let path = lock_path(&paths);
+        let path = lock_path(&paths, LockKind::Gate);
         std::fs::create_dir_all(path.parent().expect("lock path has a parent"))
             .expect("lock parent dir is creatable");
 
@@ -337,14 +391,48 @@ mod tests {
     }
 
     #[test]
+    fn merge_lock_uses_its_own_common_dir_lockfile() {
+        let repo = TempRepo::new("merge");
+        let paths = repo.paths();
+        let gate_path = lock_path(&paths, LockKind::Gate);
+        let merge_path = lock_path(&paths, LockKind::Merge);
+
+        assert_ne!(
+            gate_path, merge_path,
+            "merge-back does not block the suite gate"
+        );
+
+        let merge = try_acquire_at(&merge_path, "merge-session")
+            .expect("io")
+            .expect("a free merge lock acquires");
+        assert_eq!(merge_holder(&paths).as_deref(), Some("merge-session"));
+        assert_eq!(holder(&paths), None, "gate holder stays independent");
+
+        assert!(
+            try_acquire_at(&merge_path, "peer").expect("io").is_none(),
+            "a second descriptor must not acquire the same merge lock"
+        );
+        drop(merge);
+        assert_eq!(merge_holder(&paths), None);
+    }
+
+    #[test]
     fn wait_lines_name_the_holder_and_elapsed() {
         assert_eq!(
-            waiting_line("task-7"),
+            LockKind::Gate.waiting_line("task-7"),
             "[busy] waiting for task-7's full-suite gate to finish (Ctrl-C to abort)"
         );
         assert_eq!(
-            still_waiting_line("task-7", 90),
+            LockKind::Gate.still_waiting_line("task-7", 90),
             "[busy] still waiting (90s) for task-7's gate"
+        );
+        assert_eq!(
+            LockKind::Merge.waiting_line("task-7"),
+            "[merge-busy] waiting for task-7's merge-back to finish (Ctrl-C to abort)"
+        );
+        assert_eq!(
+            LockKind::Merge.still_waiting_line("task-7", 90),
+            "[merge-busy] still waiting (90s) for task-7's merge-back"
         );
     }
 }

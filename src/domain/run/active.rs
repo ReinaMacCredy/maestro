@@ -223,6 +223,15 @@ pub struct FileOverlap {
     pub editors: Vec<WarmEditor>,
 }
 
+/// A declared path scope claimed by two or more live sessions.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DeclaredScopeOverlap {
+    /// The contended repo-relative path or path pair.
+    pub scope_path: String,
+    /// The sessions whose declared scopes overlap, ordered by session id.
+    pub owners: Vec<WarmEditor>,
+}
+
 /// Files that two or more live sessions are warm-editing in this worktree.
 ///
 /// Reads the LOCAL run logs only -- never a cross-worktree union -- because the
@@ -307,6 +316,101 @@ pub fn warm_file_overlaps(paths: &MaestroPaths, now: &str) -> Result<Vec<FileOve
     Ok(overlaps)
 }
 
+/// Declared path scopes that overlap across live sessions in one or more
+/// worktrees. This is split-time advisory data: an orchestrator can declare the
+/// intended repo-relative paths before agents edit, and the read model compares
+/// those declarations without guessing from freeform feature areas.
+pub fn declared_scope_overlaps_union(
+    roots: &[MaestroPaths],
+    now: &str,
+) -> Result<Vec<DeclaredScopeOverlap>> {
+    let active = active_sessions_union(roots, now)?;
+    let live: BTreeMap<String, WarmEditor> = active
+        .into_iter()
+        .filter(|row| row.presence != Presence::Stale)
+        .map(|row| {
+            (
+                row.session_id.clone(),
+                WarmEditor {
+                    session_id: row.session_id,
+                    bound_card: row.bound_card,
+                    age_minutes: row.age_minutes,
+                },
+            )
+        })
+        .collect();
+
+    let mut latest_scope: BTreeMap<String, (i128, Vec<String>)> = BTreeMap::new();
+    for paths in roots {
+        visit_managed_events(paths, |record| {
+            let session_id = union_session_id(paths, roots, record.session_id());
+            if !live.contains_key(&session_id) {
+                return Ok(());
+            }
+            let event = record.event();
+            let scopes = event.scope_paths();
+            if scopes.is_empty() {
+                return Ok(());
+            }
+            let Some(ts) = event.timestamp() else {
+                return Ok(());
+            };
+            let Some(ts_nanos) = timestamp_nanos(ts) else {
+                return Ok(());
+            };
+            let normalized = scopes
+                .into_iter()
+                .map(|scope| normalize_warm_file_path(paths, scope))
+                .collect::<Vec<_>>();
+            let slot = latest_scope
+                .entry(session_id)
+                .or_insert((i128::MIN, Vec::new()));
+            if ts_nanos >= slot.0 {
+                *slot = (ts_nanos, normalized);
+            }
+            Ok(())
+        })?;
+    }
+
+    let mut by_overlap: BTreeMap<String, BTreeMap<String, WarmEditor>> = BTreeMap::new();
+    let sessions: Vec<(&String, &Vec<String>)> = latest_scope
+        .iter()
+        .map(|(session, (_, scopes))| (session, scopes))
+        .collect();
+    for (left_index, (left_session, left_scopes)) in sessions.iter().enumerate() {
+        for (right_session, right_scopes) in sessions.iter().skip(left_index + 1) {
+            for left in left_scopes.iter() {
+                for right in right_scopes.iter() {
+                    if !scopes_overlap(left, right) {
+                        continue;
+                    }
+                    let label = scope_overlap_label(left, right);
+                    if let Some(owner) = live.get(*left_session) {
+                        by_overlap
+                            .entry(label.clone())
+                            .or_default()
+                            .insert((*left_session).clone(), owner.clone());
+                    }
+                    if let Some(owner) = live.get(*right_session) {
+                        by_overlap
+                            .entry(label)
+                            .or_default()
+                            .insert((*right_session).clone(), owner.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(by_overlap
+        .into_iter()
+        .map(|(scope_path, owners)| DeclaredScopeOverlap {
+            scope_path,
+            owners: owners.into_values().collect(),
+        })
+        .collect())
+}
+
 fn is_warm_edit(event: &RunEvent) -> bool {
     event.is_event_type("PostToolUse")
         && event
@@ -348,6 +452,30 @@ fn normalize_warm_file_path(paths: &MaestroPaths, file: &str) -> String {
         ".".to_string()
     } else {
         parts.join("/")
+    }
+}
+
+fn scopes_overlap(left: &str, right: &str) -> bool {
+    left == right
+        || left == "."
+        || right == "."
+        || is_path_prefix(left, right)
+        || is_path_prefix(right, left)
+}
+
+fn is_path_prefix(parent: &str, child: &str) -> bool {
+    child
+        .strip_prefix(parent)
+        .is_some_and(|suffix| suffix.starts_with('/'))
+}
+
+fn scope_overlap_label(left: &str, right: &str) -> String {
+    if left == right {
+        left.to_string()
+    } else if is_path_prefix(left, right) || left == "." {
+        format!("{left} ↔ {right}")
+    } else {
+        format!("{right} ↔ {left}")
     }
 }
 
@@ -716,6 +844,72 @@ mod tests {
         let overlaps = warm_file_overlaps(&MaestroPaths::new(dir.path().to_path_buf()), NOW)
             .expect("overlap reads the seeded log");
         assert!(overlaps.is_empty(), "one editor is not an overlap");
+    }
+
+    #[test]
+    fn declared_scope_overlap_flags_live_sessions_across_worktrees() {
+        let dir_a = TestTempDir::new("maestro-scope-a");
+        let dir_b = TestTempDir::new("maestro-scope-b");
+        seed(
+            dir_a.path(),
+            "s-a",
+            &[
+                r#"{"event_type":"scope_declaration","session_id":"s-a","scope_paths":["src/interfaces/cli/status.rs"],"ts":"2026-06-14T11:59:00.000Z"}"#,
+            ],
+        );
+        seed(
+            dir_b.path(),
+            "s-b",
+            &[
+                r#"{"event_type":"scope_declaration","session_id":"s-b","scope_paths":["./src/interfaces/cli/status.rs"],"ts":"2026-06-14T11:58:00.000Z"}"#,
+            ],
+        );
+
+        let roots = [
+            MaestroPaths::new(dir_a.path().to_path_buf()),
+            MaestroPaths::new(dir_b.path().to_path_buf()),
+        ];
+        let overlaps = declared_scope_overlaps_union(&roots, NOW).expect("scope overlaps read");
+
+        assert_eq!(overlaps.len(), 1);
+        assert_eq!(overlaps[0].scope_path, "src/interfaces/cli/status.rs");
+        let owners: Vec<String> = overlaps[0]
+            .owners
+            .iter()
+            .map(|owner| owner.session_id.clone())
+            .collect();
+        assert_eq!(
+            owners,
+            [
+                format!("s-a@{}", root_label(dir_a.path())),
+                format!("s-b@{}", root_label(dir_b.path())),
+            ]
+        );
+    }
+
+    #[test]
+    fn declared_scope_overlap_is_silent_for_disjoint_scopes() {
+        let dir = TestTempDir::new("maestro-scope-disjoint");
+        seed(
+            dir.path(),
+            "s-a",
+            &[
+                r#"{"event_type":"scope_declaration","session_id":"s-a","scope_paths":["src/interfaces/cli/status.rs"],"ts":"2026-06-14T11:59:00.000Z"}"#,
+            ],
+        );
+        seed(
+            dir.path(),
+            "s-b",
+            &[
+                r#"{"event_type":"scope_declaration","session_id":"s-b","scope_paths":["src/domain/run/active.rs"],"ts":"2026-06-14T11:58:00.000Z"}"#,
+            ],
+        );
+
+        let overlaps =
+            declared_scope_overlaps_union(&[MaestroPaths::new(dir.path().to_path_buf())], NOW)
+                .expect("scope overlaps read");
+
+        assert!(overlaps.is_empty(), "disjoint declarations stay silent");
     }
 
     #[test]

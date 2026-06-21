@@ -5,15 +5,16 @@ use std::path::PathBuf;
 use anyhow::{Result, bail};
 use serde::Serialize;
 
-use crate::domain::card;
 use crate::domain::feature::{self, FeatureRosterEntry, FeatureStatus};
 use crate::domain::task::{self, TaskRecord, TaskState};
+use crate::domain::{card, gate_lock};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::table;
 use crate::foundation::core::time::{timestamp_nanos, utc_now_timestamp};
 use crate::interfaces::cli::{
     ClaimArgs, GitReadout, NextArgs, StatusArgs, clean_worktree_note, feature_next_label,
-    git_readout, proof_concern_line, recovery_label, render_git_line,
+    git_readout, merge_busy_advisory, proof_concern_line, recovery_label, render_git_line,
+    stale_merge_advisory,
 };
 use crate::operations::harness;
 
@@ -294,6 +295,7 @@ fn build_task_next_report(paths: &MaestroPaths) -> Result<StatusReport> {
         current_task,
         current_feature,
         git: None,
+        merge_lock_holder: None,
         close_or_verify_pending: false,
         proof_concern,
         warnings,
@@ -344,9 +346,15 @@ fn print_status(report: StatusReport, json: bool) -> Result<()> {
     );
     if let Some(git) = &report.git {
         println!("{}", render_git_line(git));
+        if let Some(stale) = stale_merge_advisory(git) {
+            println!("{stale}");
+        }
         if report.close_or_verify_pending && git.code_other_dirty > 0 {
             println!("{}", clean_worktree_note(git.code_other_dirty));
         }
+    }
+    if let Some(holder) = report.merge_lock_holder.as_deref() {
+        println!("{}", merge_busy_advisory(holder));
     }
     print_harness_friction(&report.harness_friction);
     print_audit_hint(report.audit_hint.as_ref());
@@ -616,6 +624,7 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
         ready_to_close: ready_to_close_features.clone(),
     };
     let git = git_readout(paths);
+    let merge_lock_holder = gate_lock::merge_holder(paths);
     // The next verb is close/verify-shaped when the chosen task action is a proof
     // or completion step, or a feature is ready to close (`feature_close` never
     // appears as a task `next_action.kind`; it lives in ready_to_close_features).
@@ -635,6 +644,7 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
         current_task,
         current_feature,
         git,
+        merge_lock_holder,
         close_or_verify_pending,
         proof_concern,
         warnings,
@@ -846,6 +856,8 @@ struct StatusReport {
     /// `task next` surface, which does not render it.
     #[serde(skip_serializing_if = "Option::is_none")]
     git: Option<GitReadout>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    merge_lock_holder: Option<String>,
     /// Whether the next verb is close/verify-shaped; drives the clean-worktree
     /// note. Render-only, not part of the serialized contract.
     #[serde(skip)]
@@ -881,6 +893,7 @@ impl StatusReport {
             current_task: None,
             current_feature: None,
             git: None,
+            merge_lock_holder: None,
             close_or_verify_pending: false,
             proof_concern: None,
             warnings: vec![WarningJson {
@@ -1422,10 +1435,20 @@ mod tests {
             proposed_view("fresh-new", "2026-06-20T00:00:00.000Z"), // 1d  -> fresh
         ];
         let rows = active_feature_rows(&views, now());
-        assert_eq!(rows.len(), 2, "render-only collapse keeps every row in the data");
+        assert_eq!(
+            rows.len(),
+            2,
+            "render-only collapse keeps every row in the data"
+        );
         let block = active_features_block(&rows);
-        assert!(block.contains("fresh-new"), "fresh proposed renders as a row");
-        assert!(!block.contains("stale-old"), "stale proposed is collapsed out");
+        assert!(
+            block.contains("fresh-new"),
+            "fresh proposed renders as a row"
+        );
+        assert!(
+            !block.contains("stale-old"),
+            "stale proposed is collapsed out"
+        );
         assert!(block.contains("(1 proposed stale hidden; feature list --all to review)"));
         assert!(block.contains(feature::RETIRE_REMINDER));
         assert!(block.contains("inspect any: maestro feature show <id>"));
@@ -1449,7 +1472,10 @@ mod tests {
         let block = active_features_block(&active_feature_rows(&views, now()));
         assert!(block.contains("(2 proposed stale hidden; feature list --all to review)"));
         assert!(block.contains(feature::RETIRE_REMINDER));
-        assert!(!block.contains("inspect any"), "no visible rows -> no inspect line");
+        assert!(
+            !block.contains("inspect any"),
+            "no visible rows -> no inspect line"
+        );
         assert!(!block.contains("alpha title") && !block.contains("beta title"));
     }
 
