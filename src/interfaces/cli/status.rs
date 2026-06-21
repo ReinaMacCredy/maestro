@@ -1452,4 +1452,18 @@ mod tests {
         assert!(!block.contains("inspect any"), "no visible rows -> no inspect line");
         assert!(!block.contains("alpha title") && !block.contains("beta title"));
     }
+
+    #[test]
+    fn retire_reminder_is_one_const_line_regardless_of_stale_count() {
+        // ac-4: the reminder is a single const, byte-identical no matter how
+        // many proposed features are collapsed -- it never moves into a loop.
+        let one = vec![proposed_view("a", "2026-06-01T00:00:00.000Z")];
+        let many: Vec<feature::FeatureView> = (0..5)
+            .map(|i| proposed_view(&format!("f{i}"), "2026-06-01T00:00:00.000Z"))
+            .collect();
+        let block_one = active_features_block(&active_feature_rows(&one, now()));
+        let block_many = active_features_block(&active_feature_rows(&many, now()));
+        assert_eq!(block_one.matches(feature::RETIRE_REMINDER).count(), 1);
+        assert_eq!(block_many.matches(feature::RETIRE_REMINDER).count(), 1);
+    }
 }

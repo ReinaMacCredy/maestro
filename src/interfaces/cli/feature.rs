@@ -1636,6 +1636,22 @@ mod tests {
     }
 
     #[test]
+    fn retire_reminder_prints_once_regardless_of_stale_count() {
+        // ac-4: one const reminder for the whole block, byte-identical whether
+        // one feature is stale or many -- it never moves into the per-card loop.
+        let many: Vec<feature::FeatureView> = (0..5)
+            .map(|i| proposed_view(&format!("f{i}"), "2026-06-01T00:00:00.000Z", false))
+            .collect();
+        let many_refs: Vec<&feature::FeatureView> = many.iter().collect();
+        let block_one = stale_reveal_block(&[&many[0]], now());
+        let block_many = stale_reveal_block(&many_refs, now());
+        assert_eq!(block_one.matches(feature::RETIRE_REMINDER).count(), 1);
+        assert_eq!(block_many.matches(feature::RETIRE_REMINDER).count(), 1);
+        assert!(block_one.trim_end().ends_with(feature::RETIRE_REMINDER));
+        assert!(block_many.trim_end().ends_with(feature::RETIRE_REMINDER));
+    }
+
+    #[test]
     fn build_hint_is_set_until_contract_complete_then_accept() {
         let incomplete = proposed_view("f", "2026-06-01T00:00:00.000Z", false);
         let complete = proposed_view("f", "2026-06-01T00:00:00.000Z", true);
