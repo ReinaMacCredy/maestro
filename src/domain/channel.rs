@@ -319,9 +319,12 @@ pub fn channels_for(paths: &MaestroPaths, card: &str) -> Result<Vec<Channel>> {
         let Some(key) = name.to_str().and_then(|name| name.strip_suffix(".jsonl")) else {
             continue;
         };
-        if let Some(ChannelKind::Pair(pair)) = load_kind_by_key(paths, key)?
+        // A corrupt, half-written, or foreign .jsonl must not blind enumeration of
+        // every healthy channel: skip an unreadable file (matching `cursor`'s lenient
+        // read on this gitignored, ephemeral store) rather than `?`-propagating it.
+        if let Ok(Some(ChannelKind::Pair(pair))) = load_kind_by_key(paths, key)
             && pair.contains(&needle)
-            && let Some(channel) = load_by_key(paths, key)?
+            && let Ok(Some(channel)) = load_by_key(paths, key)
         {
             channels.push(channel);
         }
@@ -973,6 +976,33 @@ mod tests {
             .collect();
         partners.sort();
         assert_eq!(partners, vec!["card-b".to_string(), "card-e".to_string()]);
+    }
+
+    #[test]
+    fn channels_for_skips_an_unreadable_file_instead_of_aborting() {
+        let temp = TestTempDir::new("maestro-channel-corrupt");
+        let paths = MaestroPaths::new(temp.path());
+
+        // One healthy pair channel...
+        send(&paths, "card-a", "card-b", "sess-a", "hi b").expect("a-b send");
+        // ...and a corrupt/foreign .jsonl dropped alongside it (an interrupted append
+        // or a non-maestro file in the gitignored channels dir).
+        fs::write(paths.channels_dir().join("garbage.jsonl"), "not json at all\n")
+            .expect("plant the corrupt file");
+
+        // Enumeration returns the healthy channel rather than `?`-aborting on the
+        // unreadable header and hiding every channel's unread.
+        let partners: Vec<String> = channels_for(&paths, "card-a")
+            .expect("a corrupt file must not abort enumeration")
+            .iter()
+            .map(|channel| {
+                channel
+                    .pair_partner("card-a")
+                    .expect("pair channel has a partner")
+                    .to_string()
+            })
+            .collect();
+        assert_eq!(partners, vec!["card-b".to_string()]);
     }
 
     #[test]
