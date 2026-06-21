@@ -9,7 +9,7 @@ mod reader;
 mod record;
 mod trace;
 
-pub(crate) use active::{DeclaredScopeOverlap, declared_scope_overlaps_union};
+pub(crate) use active::{DeclaredScopeOverlap, declared_scope_overlaps_for_active_union};
 pub use active::{
     FileOverlap, Presence, SessionActivity, WarmEditor, active_sessions, active_sessions_union,
     current_bound_card, union_session_id, warm_file_overlaps,

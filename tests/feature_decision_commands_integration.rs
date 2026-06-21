@@ -6,7 +6,9 @@ use std::os::unix::fs as unix_fs;
 use std::path::Path;
 use std::process::Command;
 
-use card_support::{card_dir, card_doc, id_by_title, seed_optional_string, seed_string};
+use card_support::{
+    card_dir, card_doc, card_record_path, id_by_title, seed_optional_string, seed_string,
+};
 use maestro::domain::decisions::template::decision_markdown;
 use maestro::foundation::core::fs::ensure_dir;
 use serde_yaml::Value as YamlValue;
@@ -48,6 +50,20 @@ fn assert_failure(output: std::process::Output, args: &[&str]) -> String {
     String::from_utf8(output.stderr).expect("invariant: stderr should be UTF-8")
 }
 
+fn set_feature_updated_at(root: &Path, id: &str, updated_at: &str) {
+    let path = card_record_path(root, id);
+    let raw = fs::read_to_string(&path).expect("invariant: feature card should be readable");
+    let mut card: YamlValue =
+        serde_yaml::from_str(&raw).expect("invariant: feature card should parse");
+    card["updated_at"] = YamlValue::String(updated_at.to_string());
+    card["extra"]["updated_at"] = YamlValue::String(updated_at.to_string());
+    fs::write(
+        &path,
+        serde_yaml::to_string(&card).expect("invariant: feature card should serialize"),
+    )
+    .expect("invariant: feature card should be writable");
+}
+
 fn assert_dated_note_line(notes: &str, expected_text: &str) {
     let line = notes
         .lines()
@@ -57,6 +73,32 @@ fn assert_dated_note_line(notes: &str, expected_text: &str) {
     assert_eq!(&line[4..5], "-", "{line}");
     assert_eq!(&line[7..8], "-", "{line}");
     assert_eq!(&line[10..12], "  ", "{line}");
+}
+
+#[test]
+fn feature_list_all_reveals_stale_proposed_without_empty_state() {
+    let temp_dir = TestTempDir::new("maestro-feature-list-stale-only");
+    init_git_marker(temp_dir.path());
+    stdout(
+        maestro(&["init", "--yes"], temp_dir.path()),
+        &["init", "--yes"],
+    );
+    stdout(
+        maestro(&["feature", "new", "Stale Review Only"], temp_dir.path()),
+        &["feature", "new", "Stale Review Only"],
+    );
+    set_feature_updated_at(temp_dir.path(), "stale-review-only", "1970-01-01T00:00:00Z");
+
+    let list = stdout(
+        maestro(&["feature", "list", "--all"], temp_dir.path()),
+        &["feature", "list", "--all"],
+    );
+    assert!(
+        list.contains("STALE PROPOSED (review or retire):"),
+        "{list}"
+    );
+    assert!(list.contains("stale-review-only"), "{list}");
+    assert!(!list.contains("no features found"), "{list}");
 }
 
 #[test]

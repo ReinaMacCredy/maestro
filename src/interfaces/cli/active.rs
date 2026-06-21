@@ -58,7 +58,9 @@ pub fn run(args: ActiveArgs) -> Result<()> {
         println!("{}", merge_busy_advisory(&holder));
         println!();
     }
-    render_scope_overlap_advisories(&run::declared_scope_overlaps_union(&roots, &now)?);
+    render_scope_overlap_advisories(&run::declared_scope_overlaps_for_active_union(
+        &roots, &rows,
+    )?);
 
     let shown: Vec<&SessionActivity> = rows
         .iter()
@@ -171,9 +173,10 @@ fn render_table(
     me: &str,
     your_card: Option<&str>,
 ) {
+    let progress_by_parent = progress_by_parent(cards);
     let rows: Vec<Cells> = shown
         .iter()
-        .map(|row| cells_for(row, by_id, cards, me, your_card))
+        .map(|row| cells_for(row, by_id, &progress_by_parent, me, your_card))
         .collect();
 
     let headers = [
@@ -210,7 +213,7 @@ impl Cells {
 fn cells_for(
     row: &SessionActivity,
     by_id: &HashMap<&str, &card::schema::Card>,
-    cards: &[card::schema::Card],
+    progress_by_parent: &HashMap<&str, ProgressCounts>,
     me: &str,
     your_card: Option<&str>,
 ) -> Cells {
@@ -219,7 +222,7 @@ fn cells_for(
             Some(card) => (
                 truncate(&card.title, CARD_WIDTH),
                 card::query::canonical_status(&card.status).to_string(),
-                progress_for(&card.id, cards),
+                progress_for(&card.id, progress_by_parent),
             ),
             None => (format!("{id} (missing)"), dash(), String::new()),
         },
@@ -253,32 +256,47 @@ fn cells_for(
     }
 }
 
-/// Type-aware progress from the bound card's children: tasks done/total when any
-/// workable child exists, else the locked-decision count, else blank. Keys on
-/// the children present rather than the skill mode, so a design-stage feature
-/// (decisions, no tasks) and an impl-stage feature (tasks) each read correctly.
-/// "done" is the `verified` terminal, matching `feature list`'s fraction.
-fn progress_for(card_id: &str, cards: &[card::schema::Card]) -> String {
-    let children: Vec<&card::schema::Card> = cards
-        .iter()
-        .filter(|card| card.parent.as_deref() == Some(card_id))
-        .collect();
+#[derive(Default)]
+struct ProgressCounts {
+    total: usize,
+    done: usize,
+    locked: usize,
+}
 
-    let total = children.iter().filter(|c| c.card_type.workable()).count();
-    if total > 0 {
-        let done = children
-            .iter()
-            .filter(|c| c.card_type.workable() && c.status == "verified")
-            .count();
-        return format!("{done}/{total} tasks");
+/// Type-aware progress from each bound card's children, precomputed once for the
+/// rendered card set. Keys on the children present rather than the skill mode, so
+/// a design-stage feature and an impl-stage feature each read correctly.
+fn progress_by_parent(cards: &[card::schema::Card]) -> HashMap<&str, ProgressCounts> {
+    let mut progress = HashMap::new();
+    for card in cards {
+        let Some(parent) = card.parent.as_deref() else {
+            continue;
+        };
+        let counts = progress
+            .entry(parent)
+            .or_insert_with(ProgressCounts::default);
+        if card.card_type.workable() {
+            counts.total += 1;
+            if card.status == "verified" {
+                counts.done += 1;
+            }
+        } else if card.card_type == card::schema::CardType::Decision && card.status == "locked" {
+            counts.locked += 1;
+        }
     }
+    progress
+}
 
-    let locked = children
-        .iter()
-        .filter(|c| c.card_type == card::schema::CardType::Decision && c.status == "locked")
-        .count();
-    if locked > 0 {
-        return format!("{locked} decisions");
+/// "done" is the `verified` terminal, matching `feature list`'s fraction.
+fn progress_for(card_id: &str, progress_by_parent: &HashMap<&str, ProgressCounts>) -> String {
+    let Some(counts) = progress_by_parent.get(card_id) else {
+        return String::new();
+    };
+    if counts.total > 0 {
+        return format!("{}/{} tasks", counts.done, counts.total);
+    }
+    if counts.locked > 0 {
+        return format!("{} decisions", counts.locked);
     }
     String::new()
 }
@@ -556,7 +574,15 @@ mod tests {
         your_card: Option<&str>,
     ) -> String {
         let by_id: HashMap<&str, &Card> = cards.iter().map(|c| (c.id.as_str(), c)).collect();
-        cells_for(&row(session, bound), &by_id, cards, me, your_card).link
+        let progress_by_parent = progress_by_parent(cards);
+        cells_for(
+            &row(session, bound),
+            &by_id,
+            &progress_by_parent,
+            me,
+            your_card,
+        )
+        .link
     }
 
     #[test]

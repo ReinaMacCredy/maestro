@@ -320,20 +320,28 @@ pub fn warm_file_overlaps(paths: &MaestroPaths, now: &str) -> Result<Vec<FileOve
 /// worktrees. This is split-time advisory data: an orchestrator can declare the
 /// intended repo-relative paths before agents edit, and the read model compares
 /// those declarations without guessing from freeform feature areas.
+#[cfg(test)]
 pub fn declared_scope_overlaps_union(
     roots: &[MaestroPaths],
     now: &str,
 ) -> Result<Vec<DeclaredScopeOverlap>> {
     let active = active_sessions_union(roots, now)?;
+    declared_scope_overlaps_for_active_union(roots, &active)
+}
+
+pub fn declared_scope_overlaps_for_active_union(
+    roots: &[MaestroPaths],
+    active: &[SessionActivity],
+) -> Result<Vec<DeclaredScopeOverlap>> {
     let live: BTreeMap<String, WarmEditor> = active
-        .into_iter()
+        .iter()
         .filter(|row| row.presence != Presence::Stale)
         .map(|row| {
             (
                 row.session_id.clone(),
                 WarmEditor {
-                    session_id: row.session_id,
-                    bound_card: row.bound_card,
+                    session_id: row.session_id.clone(),
+                    bound_card: row.bound_card.clone(),
                     age_minutes: row.age_minutes,
                 },
             )

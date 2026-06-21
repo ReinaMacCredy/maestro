@@ -1,5 +1,3 @@
-use std::fs;
-
 use anyhow::{Result, bail};
 
 use crate::domain::card;
@@ -9,6 +7,7 @@ use crate::domain::feature::{
 };
 use crate::domain::task;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
+use crate::foundation::core::safe_write::write_string_atomic;
 use crate::foundation::core::table;
 use crate::foundation::core::time::{render_timestamp, timestamp_nanos, utc_now_timestamp};
 use crate::interfaces::cli::{
@@ -290,7 +289,7 @@ fn prepare_feature(
                 &inline.after,
             )?;
             let path = feature::feature_sidecar_dir(paths, id).join("prepare-inline.md");
-            fs::write(&path, plan)?;
+            write_string_atomic(&path, &plan)?;
             let actor = super::actor();
             let report = feature_prepare::prepare_from_file(paths, id, &path, &actor)?;
             print_prepare_report(&report);
@@ -1444,7 +1443,7 @@ fn list_features(paths: &MaestroPaths, all: bool) -> Result<()> {
             .collect()
     };
 
-    if shown.is_empty() && unreadable.is_empty() {
+    if shown.is_empty() && unreadable.is_empty() && (!all || stale.is_empty()) {
         println!("no features found");
     } else {
         let mut rows: Vec<Vec<String>> = shown

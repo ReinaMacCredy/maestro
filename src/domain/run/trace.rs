@@ -13,7 +13,7 @@ use anyhow::Result;
 use serde::Serialize;
 
 use crate::domain::card;
-use crate::domain::card::query::{blocking_dep_satisfied, canonical_status};
+use crate::domain::card::query::{canonical_status, unsatisfied_blockers};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::time::timestamp_nanos;
 
@@ -241,12 +241,7 @@ fn facts_from_card(
     card: &card::schema::Card,
     by_id: &std::collections::HashMap<&str, &card::schema::Card>,
 ) -> CardFacts {
-    let blocked_by = card
-        .deps
-        .iter()
-        .filter(|dep| dep.kind.is_blocking() && !blocking_dep_satisfied(dep, by_id))
-        .map(|dep| dep.target.clone())
-        .collect();
+    let blocked_by = unsatisfied_blockers(card, by_id);
     CardFacts {
         title: card.title.clone(),
         status: card.status.clone(),

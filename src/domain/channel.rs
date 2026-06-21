@@ -283,10 +283,12 @@ pub fn load_feature_union(roots: &[MaestroPaths], feature_id: &str) -> Result<Op
 /// Merge one channel key across worktree roots into a single ts-sorted channel,
 /// or `None` if no root holds it. Shared by the pair and feature union readers; a
 /// send is always local, so a message lives in exactly one root's file (no dedup).
+/// A corrupt root is skipped so one half-written gitignored channel file does not
+/// hide healthy channels from read surfaces.
 fn load_union_by_key(roots: &[MaestroPaths], key: &str) -> Result<Option<Channel>> {
     let mut found: Vec<Channel> = Vec::new();
     for paths in roots {
-        if let Some(channel) = load_by_key(paths, key)? {
+        if let Ok(Some(channel)) = load_by_key(paths, key) {
             found.push(channel);
         }
     }
@@ -1120,6 +1122,33 @@ mod tests {
             union.messages.windows(2).all(|w| w[0].ts <= w[1].ts),
             "merged messages are in non-decreasing ts order"
         );
+    }
+
+    #[test]
+    fn load_feature_union_skips_one_corrupt_worktree_file() {
+        let root_a = TestTempDir::new("maestro-channel-feature-union-good-a");
+        let root_b = TestTempDir::new("maestro-channel-feature-union-good-b");
+        let root_corrupt = TestTempDir::new("maestro-channel-feature-union-corrupt");
+        let paths_a = MaestroPaths::new(root_a.path());
+        let paths_b = MaestroPaths::new(root_b.path());
+        let paths_corrupt = MaestroPaths::new(root_corrupt.path());
+
+        send_feature(&paths_a, "feat-x", "card-a", "sess-a", "from worktree A").expect("a send");
+        send_feature(&paths_b, "feat-x", "card-b", "sess-b", "from worktree B").expect("b send");
+        fs::create_dir_all(paths_corrupt.channels_dir()).expect("channels dir should be creatable");
+        fs::write(
+            paths_corrupt
+                .channels_dir()
+                .join(format!("{}.jsonl", feature_identity("feat-x"))),
+            "not json at all\n",
+        )
+        .expect("corrupt feature channel should be writable");
+
+        let union = load_feature_union(&[paths_a, paths_corrupt, paths_b], "feat-x")
+            .expect("one corrupt root should not abort union reads")
+            .expect("healthy roots still produce a feature channel");
+        assert_eq!(union.messages.len(), 2, "healthy worktree messages survive");
+        assert_eq!(union.kind, ChannelKind::Feature("feat-x".to_string()));
     }
 
     #[test]

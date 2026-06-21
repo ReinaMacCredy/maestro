@@ -405,11 +405,22 @@ fn open_workable(card: &Card) -> bool {
 fn has_unsatisfied_blocker(card: &Card, by_id: &HashMap<&str, &Card>) -> bool {
     card.deps
         .iter()
-        .filter(|dep| dep.kind.is_blocking())
-        .any(|dep| !blocking_dep_satisfied(dep, by_id))
+        .any(|dep| unsatisfied_blocking_dep(dep, by_id))
 }
 
-pub(crate) fn blocking_dep_satisfied(dep: &Dep, by_id: &HashMap<&str, &Card>) -> bool {
+pub fn unsatisfied_blockers(card: &Card, by_id: &HashMap<&str, &Card>) -> Vec<String> {
+    card.deps
+        .iter()
+        .filter(|dep| unsatisfied_blocking_dep(dep, by_id))
+        .map(|dep| dep.target.clone())
+        .collect()
+}
+
+fn unsatisfied_blocking_dep(dep: &Dep, by_id: &HashMap<&str, &Card>) -> bool {
+    dep.kind.is_blocking() && !blocking_dep_satisfied(dep, by_id)
+}
+
+fn blocking_dep_satisfied(dep: &Dep, by_id: &HashMap<&str, &Card>) -> bool {
     by_id
         .get(dep.target.as_str())
         .is_some_and(|target| coarse_of(&target.status) == Some(Coarse::Closed))

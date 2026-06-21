@@ -600,8 +600,8 @@ pub fn update(args: UpdateArgs) -> Result<()> {
     super::emit_card_touch(&paths, id);
     // `update --claim` shares the claim seam, so it shares the focus nudge. The
     // advisory is STDERR-only, so it is safe to emit before the JSON return.
-    if claim_outcome.is_some() {
-        nudge_if_holding_other_in_progress(&paths, &claim_identity(), id);
+    if let Some((identity, _)) = claim_outcome.as_ref() {
+        nudge_if_holding_other_in_progress(&paths, identity, id);
     }
     if args.json {
         render_update_json(&[&c])?;
