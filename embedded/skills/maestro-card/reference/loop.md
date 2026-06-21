@@ -1,18 +1,33 @@
 # Unattended Loop
 
-The overnight/away mode of the work loop: one long-lived session works the
-card store until done while the human sleeps. Per unit of work this file adds
-nothing — every card is claimed, worked, and verified exactly per
-[work.md](work.md), including its test-first default. This file adds only the
-unattended policy: replenishment, stops, boundaries, and the morning report.
+>> ENTER UNATTENDED MODE NOW.
+>> Keep going on what you're already doing -- carry the current work forward
+>> and loop it autonomously until it's done: claim -> work -> verify -> commit
+>> locally. Stay grounded in the maestro card store, not chat memory: the
+>> feature and cards you're on now, then `maestro card ready` and the features
+>> you've ACCEPTED (`feature prepare` their tasks).
+>> NEVER push, accept, or close (those are the human's gates), and never run
+>> destructive git. End with the report.
+
+The away mode of the work loop: one long-lived session carries the current
+work forward and works the card store until done while the human is away. Per
+unit of work this file adds nothing — every card is claimed, worked, and
+verified exactly per [work.md](work.md), including its test-first default. This
+file adds only the unattended policy: replenishment, stops, boundaries, and the
+report.
 
 ## Kickoff
 
-The human says some form of "work the backlog while I sleep" and leaves. No
-stop time or unit cap is required, ever. If the kickoff prompt states one
-("until 07:00", "max 5 cards"), honor it; never ask for one.
+The human says some form of "keep working / work the backlog while I'm away"
+and leaves. Carry forward the work they were on — continue the current feature
+and its cards, do not abandon them for a fresh queue. A feature just
+brainstormed is taken end-to-end only after the human's one `feature accept`
+(the gate); then `feature prepare` mints its tasks and the loop works them. No
+stop time or unit cap is required, ever; if the prompt states one ("until
+07:00", "max 5 cards"), honor it, never ask for one.
 
-Start from the store, not from memory: `maestro status`, then `maestro card ready`.
+Start from the store, never from memory (the session can die; the store is the
+only durable state): `maestro status`, then `maestro card ready`.
 
 ## Loop
 
@@ -20,7 +35,7 @@ Start from the store, not from memory: `maestro status`, then `maestro card read
    [work.md](work.md). The test-first rule applies unchanged: an observable
    `--check` is worked test-first; a skip is valid only for a non-behavioral
    check or an explore/spike lane, and the skip note names which. Skips are
-   surfaced in the morning report.
+   surfaced in the report.
 2. Finish with `task complete --summary --claim --proof`, then
    `maestro task verify <id>`.
 3. Commit each verified slice locally on the feature branch. Never push.
@@ -28,7 +43,7 @@ Start from the store, not from memory: `maestro status`, then `maestro card read
    tasks (`maestro feature list`, state `ready`, tasks 0), run
    `feature prepare <id> --draft`, review the draft, apply with
    `prepare --from`, and continue the loop.
-5. When nothing is workable or preparable, stop and write the morning report.
+5. When nothing is workable or preparable, stop and write the report.
 
 A feature whose children are all verified is parked, not closed: confirm
 with `maestro feature close <id> --dry-run`, record CLOSE-READY in the report,
@@ -53,9 +68,9 @@ publish, destructive git operations, hand-editing `card.yaml` or guarded
 sidecars. `accept` and `close` are the human's gates: contracts are frozen
 and declared delivered only while someone is awake.
 
-## Morning Report
+## Report
 
-The session's final message is the report the human reads over coffee:
+The session's final message is the report the human reads when they return:
 
 - per unit: outcome plus TDD evidence (`verified, tdd: 3 cycles` or
   `verified, tdd: skipped - <reason>`) and the simplify outcome
@@ -80,7 +95,7 @@ firing reclaims it once the claim crosses the existing 15-min stale TTL — the
 same timeout that frees any abandoned claim, not a new mechanism. Rebuild the
 night's account from durable state with `maestro query run` (its `--json`
 carries the per-card trace and an honest interruption verdict); never
-reconstruct the morning report from a dead firing's memory. Maestro itself
+reconstruct the report from a dead firing's memory. Maestro itself
 never schedules anything.
 
 ## Stop
@@ -93,6 +108,6 @@ never schedules anything.
 
 ## Hand-off
 
-Morning, human: review the report, `feature close` anything CLOSE-READY,
+On return, human: review the report, `feature close` anything CLOSE-READY,
 unblock or reassign blocked cards, accept the next contracts. Per-unit method
 -> [work.md](work.md); proof -> [verify.md](verify.md).

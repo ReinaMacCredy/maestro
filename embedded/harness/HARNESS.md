@@ -1,5 +1,5 @@
 ---
-version: 1.22.0
+version: 1.23.0
 ---
 
 # Maestro Harness Protocol
@@ -70,6 +70,7 @@ not the rest.
     brainstorm / design    -> maestro-design skill
     proof failed / verify  -> maestro-card skill (verify)
     before accept / close  -> maestro-card skill (qa-baseline / qa-slice)
+    backlog / unattended   -> maestro loop show unattended-loop (keep going in place; follow imperatively)
 
 ## Task commands (the loop)
 
