@@ -10,7 +10,7 @@ use crate::domain::feature::{
 use crate::domain::task;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::table;
-use crate::foundation::core::time::render_timestamp;
+use crate::foundation::core::time::{render_timestamp, timestamp_nanos, utc_now_timestamp};
 use crate::interfaces::cli::{
     FeatureArgs, FeatureCommand, FeatureProofCommand, feature_next_label, recovery_label,
 };
@@ -1416,19 +1416,31 @@ fn list_features(paths: &MaestroPaths, all: bool) -> Result<()> {
             } => unreadable.push((id, error, hint)),
         }
     }
-    let hidden = views
+    let now_nanos = timestamp_nanos(&utc_now_timestamp()).unwrap_or(0);
+    let terminal_hidden = views
         .iter()
         .filter(|view| view.status.is_terminal())
         .count();
+    // Stale proposed features collapse out of the table on both default and
+    // --all; --all re-surfaces them in a dedicated build/retire guidance block.
+    let stale: Vec<feature::FeatureView> = views
+        .iter()
+        .filter(|view| feature::is_stale_proposed(&view.status, &view.updated_at, now_nanos))
+        .cloned()
+        .collect();
     let shown: Vec<_> = if all {
         // L6b: --all also reads the archive sibling tree.
-        let mut all_views = views;
+        let mut all_views: Vec<_> = views
+            .into_iter()
+            .filter(|view| !feature::is_stale_proposed(&view.status, &view.updated_at, now_nanos))
+            .collect();
         all_views.extend(feature::list_archived(paths)?);
         all_views
     } else {
         views
             .into_iter()
             .filter(|view| !view.status.is_terminal())
+            .filter(|view| !feature::is_stale_proposed(&view.status, &view.updated_at, now_nanos))
             .collect()
     };
 
@@ -1472,11 +1484,57 @@ fn list_features(paths: &MaestroPaths, all: bool) -> Result<()> {
         println!("inspect any: maestro feature show <id>");
     }
 
-    if !all && hidden > 0 {
-        println!("# {hidden} terminal feature(s) hidden; use --all to include");
+    if all {
+        let stale_refs: Vec<&feature::FeatureView> = stale.iter().collect();
+        print!("{}", stale_reveal_block(&stale_refs, now_nanos));
+    } else {
+        if terminal_hidden > 0 {
+            println!("# {terminal_hidden} terminal feature(s) hidden; use --all to include");
+        }
+        if !stale.is_empty() {
+            println!(
+                "# {} proposed stale feature(s) hidden; use --all to review",
+                stale.len()
+            );
+            println!("{}", feature::RETIRE_REMINDER);
+        }
     }
 
     Ok(())
+}
+
+/// The `feature list --all` reveal for stale proposed features: each one with
+/// its age marker and the existing build / retire verbs surfaced as guidance
+/// text (no new command). Returns the empty string when nothing is stale.
+fn stale_reveal_block(stale: &[&feature::FeatureView], now_nanos: i128) -> String {
+    if stale.is_empty() {
+        return String::new();
+    }
+    let mut out = String::from("STALE PROPOSED (review or retire):\n");
+    for view in stale {
+        let age = feature::age_days(&view.updated_at, now_nanos).unwrap_or(0);
+        out.push_str(&format!("  {}\n", view.id));
+        out.push_str(&format!("    proposed [stale {age}d]\n"));
+        out.push_str(&format!("    build:  {}\n", stale_build_hint(view)));
+        out.push_str(&format!(
+            "    retire: maestro feature cancel {0} --reason \"...\"  then  maestro feature archive {0}\n",
+            view.id
+        ));
+    }
+    out.push_str(feature::RETIRE_REMINDER);
+    out.push('\n');
+    out
+}
+
+/// The happy-path build command for a stale proposed feature: keep authoring
+/// the contract while it is incomplete, otherwise freeze it. Mirrors the
+/// proposed branch of `feature_next_label`, rendered as a runnable command.
+fn stale_build_hint(view: &feature::FeatureView) -> String {
+    if !view.acceptance.is_empty() && !view.affected_areas.is_empty() {
+        format!("maestro feature accept {}", view.id)
+    } else {
+        format!("maestro feature set {}", view.id)
+    }
 }
 
 fn print_note(note: String) -> Result<()> {
@@ -1510,5 +1568,78 @@ fn opt_list(values: Vec<String>) -> Option<Vec<String>> {
         None
     } else {
         Some(values)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn proposed_view(id: &str, updated_at: &str, contract_complete: bool) -> feature::FeatureView {
+        feature::FeatureView {
+            id: id.to_string(),
+            title: format!("{id} title"),
+            status: FeatureStatus::Proposed,
+            counts: feature::query::FeatureTaskCounts::default(),
+            created_at: updated_at.to_string(),
+            updated_at: updated_at.to_string(),
+            description: None,
+            raw_request: None,
+            input_type: None,
+            acceptance: if contract_complete {
+                vec!["ac-1 do X".to_string()]
+            } else {
+                Vec::new()
+            },
+            acceptance_coverage: None,
+            affected_areas: if contract_complete {
+                vec!["src/x.rs".to_string()]
+            } else {
+                Vec::new()
+            },
+            non_goals: Vec::new(),
+            open_questions: Vec::new(),
+            outcome: None,
+            cancel_reason: None,
+            qa_none_reason: None,
+            notes: None,
+            project: None,
+        }
+    }
+
+    fn now() -> i128 {
+        timestamp_nanos("2026-06-21T00:00:00.000Z").expect("fixed now parses")
+    }
+
+    #[test]
+    fn reveal_block_shows_age_marker_build_and_retire_for_each_stale() {
+        let v1 = proposed_view("incomplete-feat", "2026-06-01T00:00:00.000Z", false); // 20d
+        let v2 = proposed_view("ready-feat", "2026-05-22T00:00:00.000Z", true); // 30d
+        let block = stale_reveal_block(&[&v1, &v2], now());
+        assert!(block.contains("STALE PROPOSED (review or retire):"));
+        assert!(block.contains("incomplete-feat"));
+        assert!(block.contains("proposed [stale 20d]"));
+        assert!(block.contains("build:  maestro feature set incomplete-feat"));
+        assert!(block.contains("ready-feat"));
+        assert!(block.contains("proposed [stale 30d]"));
+        assert!(block.contains("build:  maestro feature accept ready-feat"));
+        assert!(block.contains(
+            "retire: maestro feature cancel incomplete-feat --reason \"...\"  then  maestro feature archive incomplete-feat"
+        ));
+        // The reminder is a single constant line, printed once at the end.
+        assert_eq!(block.matches(feature::RETIRE_REMINDER).count(), 1);
+    }
+
+    #[test]
+    fn reveal_block_is_empty_without_stale() {
+        assert!(stale_reveal_block(&[], now()).is_empty());
+    }
+
+    #[test]
+    fn build_hint_is_set_until_contract_complete_then_accept() {
+        let incomplete = proposed_view("f", "2026-06-01T00:00:00.000Z", false);
+        let complete = proposed_view("f", "2026-06-01T00:00:00.000Z", true);
+        assert_eq!(stale_build_hint(&incomplete), "maestro feature set f");
+        assert_eq!(stale_build_hint(&complete), "maestro feature accept f");
     }
 }
