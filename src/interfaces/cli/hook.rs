@@ -39,7 +39,10 @@ fn record_hook(
     let skill_for_ack = skill.clone();
     let outcome = match event {
         Some(event) => {
-            let session_id = session.unwrap_or_else(super::cli_run_id);
+            let stdin_payload = record::optional_stdin_payload()?;
+            let session_id = session
+                .or_else(|| stdin_payload.as_ref().and_then(record::payload_session_id))
+                .unwrap_or_else(super::cli_run_id);
             let mut payload = json!({
                 "event": event,
                 "session_id": session_id,

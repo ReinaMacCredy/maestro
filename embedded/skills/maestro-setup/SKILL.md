@@ -1,6 +1,6 @@
 ---
 name: maestro-setup
-version: 1.6.0
+version: 1.7.0
 description: "Use after Maestro init/install or doctor warnings to tune a repository harness from verified repo evidence."
 ---
 
@@ -8,16 +8,20 @@ description: "Use after Maestro init/install or doctor warnings to tune a reposi
 
 Tune a Maestro-enabled repository harness from current repository evidence.
 
-Activate:
-`maestro hook record --event skill_activation --skill maestro-setup`
+Activate with a known session id:
+`maestro hook record --event skill_activation --skill maestro-setup --session <session_id>`
 
 ## Droid Session Identity
 
-Droid does not expose a normal shell session env var like `CODEX_THREAD_ID` or
-`CLAUDE_CODE_SESSION_ID`. In Droid hooks, read `session_id` from the hook JSON
-stdin and pass it to Maestro with `maestro hook record --session <session_id>`
-for synthetic events; hook payload recording keeps the payload `session_id`.
-Do not rely on a `DROID_SESSION_ID` env var unless Factory documents one later.
+Factory's Droid hook reference says hook commands receive JSON on stdin with a
+common `session_id` field. Droid does not expose a normal shell session env var
+like `CODEX_THREAD_ID` or `CLAUDE_CODE_SESSION_ID`; read `session_id` from the
+hook JSON stdin. When `maestro hook record --event ...` runs as a Droid hook,
+Maestro reads that stdin `session_id` for synthetic events; hook payload
+recording keeps the payload `session_id`. From an ordinary shell, pass
+`--session <session_id>` or skip the activation record so it does not fall back
+to `cli-YYYY-MM-DD`. Do not rely on a `DROID_SESSION_ID` env var unless Factory
+documents one later.
 
 ## Use
 

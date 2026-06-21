@@ -1,4 +1,4 @@
-use std::io::{self, Read};
+use std::io::{self, IsTerminal, Read};
 
 use anyhow::{Context, Result};
 use serde_json::Value;
@@ -12,6 +12,33 @@ pub(crate) fn record_stdin(paths: &MaestroPaths) -> Result<run::RecordOutcome> {
         .read_to_string(&mut raw)
         .context("failed to read hook payload from stdin")?;
     record_payload(paths, &raw)
+}
+
+pub(crate) fn optional_stdin_payload() -> Result<Option<Value>> {
+    let mut stdin = io::stdin();
+    if stdin.is_terminal() {
+        return Ok(None);
+    }
+
+    let mut raw = String::new();
+    stdin
+        .read_to_string(&mut raw)
+        .context("failed to read hook payload from stdin")?;
+    if raw.trim().is_empty() {
+        return Ok(None);
+    }
+
+    let payload = serde_json::from_str(&raw).context("failed to parse hook payload JSON")?;
+    Ok(Some(payload))
+}
+
+pub(crate) fn payload_session_id(payload: &Value) -> Option<String> {
+    payload
+        .get("session_id")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
 }
 
 pub(crate) fn record_value(paths: &MaestroPaths, payload: &Value) -> Result<run::RecordOutcome> {

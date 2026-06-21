@@ -36,26 +36,26 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 17] = [
     (
         "skill",
         "maestro-card",
-        "1.22.0",
-        "460debfaa488048cd0b636e46a9d2c7713e09f238a38f2f0d0288abfd55fee40",
+        "1.23.0",
+        "fce318898127678b68e9ee09c8be7a5086c20e64e085dd96478e788698532cd1",
     ),
     (
         "skill",
         "maestro-setup",
-        "1.6.0",
-        "789173275fdcff0e5aa79c50d61e9a362dbb58c919d5ffd8c51d1b66fda0c424",
+        "1.7.0",
+        "9793213f0c5458b1cee7b044907483c38268bd15cdd89264d7e6245c698728c0",
     ),
     (
         "skill",
         "maestro-design",
-        "1.22.0",
-        "ffae386f1bbf3c89572eaa9322e3612dfc4dc95b533937ac27ff40b0035e636a",
+        "1.23.0",
+        "1fef64cb25e19cfbbb8d8ab1944badd14acd5cb3006dd9f4751b65f496556deb",
     ),
     (
         "skill",
         "maestro-audit",
-        "1.5.0",
-        "5ca39619d1a3c3c324b7aefd6b7d2783f181e6662568418d4a28661820fc35bd",
+        "1.6.0",
+        "9678ecd860dbba971a4a250b361473c6db372f37ff4cee8813a56976953a2eb8",
     ),
     (
         "hook",
@@ -326,7 +326,9 @@ fn every_shipped_skill_explains_droid_session_identity() {
             .unwrap_or_else(|_| panic!("shipped skill {} SKILL.md is not UTF-8", skill.name));
         assert!(
             contents.contains("## Droid Session Identity")
-                && contents.contains("read `session_id` from the hook JSON")
+                && contents.contains("common `session_id` field")
+                && contents.contains("hook JSON stdin")
+                && contents.contains("does not fall back")
                 && contents.contains("Do not rely on a `DROID_SESSION_ID` env var"),
             "shipped skill {} must explain Droid hook JSON session_id attribution",
             skill.name,

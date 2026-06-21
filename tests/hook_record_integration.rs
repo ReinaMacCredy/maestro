@@ -37,9 +37,18 @@ fn maestro_record_clean_env_with(
     payload: &str,
     envs: &[(&str, &str)],
 ) -> std::process::Output {
+    maestro_record_args_clean_env_with(cwd, &["hook", "record"], payload, envs)
+}
+
+fn maestro_record_args_clean_env_with(
+    cwd: &Path,
+    args: &[&str],
+    payload: &str,
+    envs: &[(&str, &str)],
+) -> std::process::Output {
     let mut command = Command::new(env!("CARGO_BIN_EXE_maestro"));
     command
-        .args(["hook", "record"])
+        .args(args)
         .current_dir(cwd)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -314,6 +323,85 @@ fn droid_hook_payload_session_id_wins_over_agent_env() {
     assert!(
         !cli_bucket,
         "Droid hook payload session_id must not fall back to a cli-<date> bucket"
+    );
+}
+
+#[test]
+fn droid_hook_payload_session_id_feeds_synthetic_event_flags() {
+    let repo = init_repo();
+    let output = maestro_record_args_clean_env_with(
+        repo.path(),
+        &[
+            "hook",
+            "record",
+            "--event",
+            "skill_activation",
+            "--skill",
+            "maestro-card",
+        ],
+        r#"{"session_id":"droid-synthetic-123","hook_event_name":"PostToolUse","tool_name":"Read"}"#,
+        &[],
+    );
+
+    assert!(
+        output.status.success(),
+        "synthetic event with Droid hook payload session failed\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("session: droid-synthetic-123"),
+        "verbose synthetic event should echo the Droid session id\nstdout:\n{stdout}"
+    );
+    let events = read_events(repo.path(), "droid-synthetic-123");
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0]["event_type"], "skill_activation");
+    assert_eq!(events[0]["session_id"], "droid-synthetic-123");
+
+    let runs = repo.path().join(".maestro/runs");
+    let cli_bucket = fs::read_dir(&runs)
+        .expect("invariant: runs dir should be readable")
+        .filter_map(Result::ok)
+        .any(|entry| entry.file_name().to_string_lossy().starts_with("cli-"));
+    assert!(
+        !cli_bucket,
+        "synthetic event with Droid hook payload session_id must not fall back to cli-<date>"
+    );
+}
+
+#[test]
+fn explicit_session_flag_wins_over_droid_hook_payload_session_id() {
+    let repo = init_repo();
+    let output = maestro_record_args_clean_env_with(
+        repo.path(),
+        &[
+            "hook",
+            "record",
+            "--event",
+            "skill_activation",
+            "--skill",
+            "maestro-card",
+            "--session",
+            "explicit-session-456",
+        ],
+        r#"{"session_id":"droid-synthetic-ignored","hook_event_name":"PostToolUse"}"#,
+        &[],
+    );
+
+    assert!(
+        output.status.success(),
+        "explicit synthetic event session failed\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let events = read_events(repo.path(), "explicit-session-456");
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0]["session_id"], "explicit-session-456");
+    assert!(
+        !repo
+            .path()
+            .join(".maestro/runs/droid-synthetic-ignored")
+            .exists(),
+        "explicit --session should override the Droid hook payload session_id"
     );
 }
 

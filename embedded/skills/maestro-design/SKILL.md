@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-version: 1.22.0
+version: 1.23.0
 description: "Use for design or brainstorming in a Maestro repo before implementation starts. Map current behavior, decide one fork at a time, record decisions and notes, then hand the approved contract to maestro-card."
 ---
 
@@ -10,16 +10,20 @@ Use this when the deliverable is the design of record, not code. The feature
 stays `proposed` while the contract is still editable; `feature accept` ends
 design and freezes the contract.
 
-Activate:
-`maestro hook record --event skill_activation --skill maestro-design`
+Activate with a known session id:
+`maestro hook record --event skill_activation --skill maestro-design --session <session_id>`
 
 ## Droid Session Identity
 
-Droid does not expose a normal shell session env var like `CODEX_THREAD_ID` or
-`CLAUDE_CODE_SESSION_ID`. In Droid hooks, read `session_id` from the hook JSON
-stdin and pass it to Maestro with `maestro hook record --session <session_id>`
-for synthetic events; hook payload recording keeps the payload `session_id`.
-Do not rely on a `DROID_SESSION_ID` env var unless Factory documents one later.
+Factory's Droid hook reference says hook commands receive JSON on stdin with a
+common `session_id` field. Droid does not expose a normal shell session env var
+like `CODEX_THREAD_ID` or `CLAUDE_CODE_SESSION_ID`; read `session_id` from the
+hook JSON stdin. When `maestro hook record --event ...` runs as a Droid hook,
+Maestro reads that stdin `session_id` for synthetic events; hook payload
+recording keeps the payload `session_id`. From an ordinary shell, pass
+`--session <session_id>` or skip the activation record so it does not fall back
+to `cli-YYYY-MM-DD`. Do not rely on a `DROID_SESSION_ID` env var unless Factory
+documents one later.
 
 Exact command signatures live in [reference/cli.md](reference/cli.md),
 generated from the binary. A verb or flag not listed there does not exist;

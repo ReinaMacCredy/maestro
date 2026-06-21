@@ -1,6 +1,6 @@
 ---
 name: maestro-audit
-version: 1.5.0
+version: 1.6.0
 description: "Use for read-only Maestro repo audits that propose harness backlog improvements without implementing them."
 ---
 
@@ -9,16 +9,20 @@ description: "Use for read-only Maestro repo audits that propose harness backlog
 Use this for repo-wide improvement audits. The audit is agent work; Maestro only
 stores, merges, and surfaces proposals.
 
-Activate:
-`maestro hook record --event skill_activation --skill maestro-audit`
+Activate with a known session id:
+`maestro hook record --event skill_activation --skill maestro-audit --session <session_id>`
 
 ## Droid Session Identity
 
-Droid does not expose a normal shell session env var like `CODEX_THREAD_ID` or
-`CLAUDE_CODE_SESSION_ID`. In Droid hooks, read `session_id` from the hook JSON
-stdin and pass it to Maestro with `maestro hook record --session <session_id>`
-for synthetic events; hook payload recording keeps the payload `session_id`.
-Do not rely on a `DROID_SESSION_ID` env var unless Factory documents one later.
+Factory's Droid hook reference says hook commands receive JSON on stdin with a
+common `session_id` field. Droid does not expose a normal shell session env var
+like `CODEX_THREAD_ID` or `CLAUDE_CODE_SESSION_ID`; read `session_id` from the
+hook JSON stdin. When `maestro hook record --event ...` runs as a Droid hook,
+Maestro reads that stdin `session_id` for synthetic events; hook payload
+recording keeps the payload `session_id`. From an ordinary shell, pass
+`--session <session_id>` or skip the activation record so it does not fall back
+to `cli-YYYY-MM-DD`. Do not rely on a `DROID_SESSION_ID` env var unless Factory
+documents one later.
 
 ## Stop
 
