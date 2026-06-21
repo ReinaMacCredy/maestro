@@ -39,7 +39,7 @@ fn send(from: Option<&str>, to: &str, text: &str) -> Result<()> {
     let paths = MaestroPaths::new(discover_repo_root()?);
     let me = current_card(&paths)?;
     if let Some(asserted) = from
-        && asserted != me
+        && !asserted.eq_ignore_ascii_case(&me)
     {
         bail!(
             "--from does not match current card; requested from: {asserted}; current card: {me}; touch or claim {asserted} before sending from it"
