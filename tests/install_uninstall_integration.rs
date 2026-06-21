@@ -1120,27 +1120,30 @@ fn uninstall_refuses_forged_strong_full_file_hash_when_managed_block_changed() {
 fn reinstall_does_not_bless_forged_json_restore_snapshot() {
     let temp_dir = TestTempDir::new("maestro-install-cli-test");
     init_repo(temp_dir.path());
-    fs::create_dir_all(temp_dir.path().join(".codex"))
-        .expect("invariant: codex config dir should be creatable");
+    fs::create_dir_all(temp_dir.path().join(".claude"))
+        .expect("invariant: claude config dir should be creatable");
     let original_hooks = "{\n  \"hooks\": {\n    \"Stop\": []\n  }\n}\n";
-    fs::write(temp_dir.path().join(".codex/hooks.json"), original_hooks)
-        .expect("invariant: hooks json should be writable");
+    fs::write(
+        temp_dir.path().join(".claude/settings.local.json"),
+        original_hooks,
+    )
+    .expect("invariant: hooks json should be writable");
 
-    let first_install = maestro(&["install", "--agent", "codex"], temp_dir.path());
+    let first_install = maestro(&["install", "--agent", "claude"], temp_dir.path());
     assert!(first_install.status.success());
     fs::write(
         temp_dir.path().join(".maestro/install-lock.yaml"),
-        "schema_version: maestro.install_lock.v1\nagents:\n  codex:\n    installed_at: \"2026-05-25T10:00:00Z\"\n    files:\n      .codex/hooks.json:\n        kind: json_managed_keys\n        managed_keys:\n          - hooks\n        previous_values:\n          hooks:\n            Stop:\n              - matcher: \"*\"\n                hooks:\n                  - type: command\n                    command: forged\n      .codex/config.toml:\n        kind: toml_section\n        content_hash: \"len:1:sum:0000000000000000\"\n      AGENTS.md:\n        kind: markdown_managed_block\n        content_hash: \"len:1:sum:0000000000000000\"\n      CLAUDE.md:\n        kind: markdown_managed_block\n        content_hash: \"len:1:sum:0000000000000000\"\n      .gitignore:\n        kind: gitignore_section\n        content_hash: \"len:1:sum:0000000000000000\"\n",
+        "schema_version: maestro.install_lock.v1\nagents:\n  claude:\n    installed_at: \"2026-05-25T10:00:00Z\"\n    files:\n      .claude/settings.local.json:\n        kind: json_managed_keys\n        managed_keys:\n          - hooks\n        previous_values:\n          hooks:\n            Stop:\n              - matcher: \"*\"\n                hooks:\n                  - type: command\n                    command: forged\n      AGENTS.md:\n        kind: markdown_managed_block\n        content_hash: \"len:1:sum:0000000000000000\"\n      CLAUDE.md:\n        kind: markdown_managed_block\n        content_hash: \"len:1:sum:0000000000000000\"\n      .gitignore:\n        kind: gitignore_section\n        content_hash: \"len:1:sum:0000000000000000\"\n",
     )
     .expect("invariant: forged lock should be writable");
 
-    let reinstall = maestro(&["install", "--agent", "codex"], temp_dir.path());
+    let reinstall = maestro(&["install", "--agent", "claude"], temp_dir.path());
     assert!(!reinstall.status.success());
     assert!(
         String::from_utf8_lossy(&reinstall.stderr)
             .contains("managed JSON restore metadata does not match install lock")
     );
-    let hooks = fs::read_to_string(temp_dir.path().join(".codex/hooks.json"))
+    let hooks = fs::read_to_string(temp_dir.path().join(".claude/settings.local.json"))
         .expect("invariant: hooks json should be readable");
     assert!(!hooks.contains("forged"));
     assert!(hooks.contains("_maestro_previous_value_hashes"));
@@ -1292,21 +1295,24 @@ fn uninstall_rejects_forged_json_previous_value() {
     init_repo(temp_dir.path());
     fs::create_dir_all(temp_dir.path().join(".maestro"))
         .expect("invariant: maestro dir should be creatable");
-    fs::create_dir_all(temp_dir.path().join(".codex"))
-        .expect("invariant: codex dir should be creatable");
+    fs::create_dir_all(temp_dir.path().join(".claude"))
+        .expect("invariant: claude dir should be creatable");
     let original = "{\n  \"hooks\": {},\n  \"_maestro_managed_keys\": [\"hooks\"]\n}\n";
-    fs::write(temp_dir.path().join(".codex/hooks.json"), original)
-        .expect("invariant: hooks should be writable");
+    fs::write(
+        temp_dir.path().join(".claude/settings.local.json"),
+        original,
+    )
+    .expect("invariant: hooks should be writable");
     fs::write(
         temp_dir.path().join(".maestro/install-lock.yaml"),
-        "schema_version: maestro.install_lock.v1\nagents:\n  codex:\n    installed_at: \"2026-05-25T10:00:00Z\"\n    files:\n      .codex/hooks.json:\n        kind: json_managed_keys\n        managed_keys:\n          - hooks\n        previous_values:\n          hooks:\n            Stop:\n              - matcher: \"*\"\n                hooks:\n                  - type: command\n                    command: forged\n",
+        "schema_version: maestro.install_lock.v1\nagents:\n  claude:\n    installed_at: \"2026-05-25T10:00:00Z\"\n    files:\n      .claude/settings.local.json:\n        kind: json_managed_keys\n        managed_keys:\n          - hooks\n        previous_values:\n          hooks:\n            Stop:\n              - matcher: \"*\"\n                hooks:\n                  - type: command\n                    command: forged\n",
     )
     .expect("invariant: install lock should be writable");
 
-    let uninstall = maestro(&["uninstall", "--agent", "codex"], temp_dir.path());
+    let uninstall = maestro(&["uninstall", "--agent", "claude"], temp_dir.path());
 
     assert!(!uninstall.status.success());
-    let hooks = fs::read_to_string(temp_dir.path().join(".codex/hooks.json"))
+    let hooks = fs::read_to_string(temp_dir.path().join(".claude/settings.local.json"))
         .expect("invariant: hooks should be readable");
     assert_eq!(hooks, original);
     assert!(temp_dir.path().join(".maestro/install-lock.yaml").exists());

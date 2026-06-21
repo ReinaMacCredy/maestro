@@ -37,6 +37,7 @@ pub struct MirrorPlan {
     /// Managed JSON keys for JSON mirrors.
     pub managed_keys: Vec<String>,
     managed_json: Option<Map<String, Value>>,
+    write_json_metadata: bool,
 }
 
 #[derive(Debug)]
@@ -476,7 +477,11 @@ fn contents_for_existing(
                 .clone()
                 .context("managed JSON mirror must be an object")?;
             let contents = upsert_managed_json_keys(existing, object)?;
-            add_previous_value_hashes(contents, previous_values)
+            if plan.write_json_metadata {
+                add_previous_value_hashes(contents, previous_values)
+            } else {
+                remove_json_metadata(contents)
+            }
         }
         MirrorKind::MarkdownManagedBlock | MirrorKind::Symlink => Ok(plan.contents.clone()),
     }
@@ -542,6 +547,8 @@ pub(crate) fn remove_mirrors(
                 &contents,
                 ownership,
                 install.state == super::InstallState::Removing,
+                plan.managed_json.as_ref(),
+                plan.write_json_metadata,
             )? {
                 Some(next) => next,
                 None => continue,
@@ -987,6 +994,7 @@ fn markdown(relative_path: &str, body: &str) -> MirrorPlan {
         contents: upsert_managed_block(None, ManagedBlockFormat::Markdown, body),
         managed_keys: Vec::new(),
         managed_json: None,
+        write_json_metadata: false,
     }
 }
 
@@ -997,26 +1005,44 @@ fn hash(relative_path: &str, body: &str, kind: MirrorKind) -> MirrorPlan {
         contents: upsert_managed_block(None, ManagedBlockFormat::HashComment, body),
         managed_keys: Vec::new(),
         managed_json: None,
+        write_json_metadata: false,
     }
 }
 
-fn json_keys(relative_path: &str, value: Value, managed_keys: Vec<String>) -> Result<MirrorPlan> {
+fn json_keys(
+    relative_path: &str,
+    value: Value,
+    managed_keys: Vec<String>,
+    write_json_metadata: bool,
+) -> Result<MirrorPlan> {
     let object = value
         .as_object()
         .cloned()
         .context("managed JSON mirror must be an object")?;
+    let contents = upsert_managed_json_keys(None, object.clone())?;
+    let contents = if write_json_metadata {
+        contents
+    } else {
+        remove_json_metadata(contents)?
+    };
     Ok(MirrorPlan {
         relative_path: relative_path.to_string(),
         kind: MirrorKind::JsonManagedKeys,
-        contents: upsert_managed_json_keys(None, object.clone())?,
+        contents,
         managed_keys,
         managed_json: Some(object),
+        write_json_metadata,
     })
 }
 
 fn hook_config_plan(agent: InstallAgent) -> Result<MirrorPlan> {
     let config = ManagedHookConfig::for_agent(agent);
-    json_keys(config.relative_path, config.contents, config.managed_keys)
+    json_keys(
+        config.relative_path,
+        config.contents,
+        config.managed_keys,
+        agent == InstallAgent::Claude,
+    )
 }
 
 fn claude_md_block() -> &'static str {
@@ -1094,9 +1120,6 @@ fn previous_json_values(
     let Some(existing) = existing.filter(|contents| !contents.trim().is_empty()) else {
         return Ok(BTreeMap::new());
     };
-    if existing == plan.contents {
-        return Ok(BTreeMap::new());
-    }
     let Value::Object(object) =
         serde_json::from_str::<Value>(existing).context("failed to parse existing JSON mirror")?
     else {
@@ -1107,10 +1130,15 @@ fn previous_json_values(
         .and_then(|install| install.files.get(&plan.relative_path))
         .filter(|ownership| ownership.kind == MirrorKind::JsonManagedKeys)
     {
-        validate_previous_value_hashes(&object, previous_ownership)?;
+        if plan.write_json_metadata {
+            validate_previous_value_hashes(&object, previous_ownership)?;
+        }
         return Ok(previous_ownership.previous_values.clone());
     }
-    if object.contains_key(JSON_PREVIOUS_VALUE_HASHES) {
+    if existing == plan.contents {
+        return Ok(BTreeMap::new());
+    }
+    if plan.write_json_metadata && object.contains_key(JSON_PREVIOUS_VALUE_HASHES) {
         bail!("managed JSON restore metadata has no validated install lock snapshot");
     }
 
@@ -1128,16 +1156,20 @@ fn remove_json_keys_with_restore(
     existing: &str,
     ownership: &FileOwnership,
     removing_retry: bool,
+    managed_json: Option<&Map<String, Value>>,
+    verify_restore_metadata: bool,
 ) -> Result<Option<String>> {
     let Value::Object(mut object) =
         serde_json::from_str::<Value>(existing).context("failed to parse existing JSON mirror")?
     else {
         bail!("managed JSON mirror must be an object");
     };
-    if removing_retry && json_restore_already_applied(&object, ownership) {
+    if removing_retry && json_restore_already_applied(&object, ownership, managed_json) {
         return Ok(None);
     }
-    validate_previous_value_hashes(&object, ownership)?;
+    if verify_restore_metadata {
+        validate_previous_value_hashes(&object, ownership)?;
+    }
 
     for key in &ownership.managed_keys {
         object.remove(key);
@@ -1153,13 +1185,36 @@ fn remove_json_keys_with_restore(
     Ok(Some(formatted))
 }
 
-fn json_restore_already_applied(object: &Map<String, Value>, ownership: &FileOwnership) -> bool {
+fn json_restore_already_applied(
+    object: &Map<String, Value>,
+    ownership: &FileOwnership,
+    managed_json: Option<&Map<String, Value>>,
+) -> bool {
     !object.contains_key("_maestro_managed_keys")
         && !object.contains_key(JSON_PREVIOUS_VALUE_HASHES)
-        && ownership
-            .managed_keys
-            .iter()
-            .all(|key| ownership.previous_values.contains_key(key) || !object.contains_key(key))
+        && ownership.managed_keys.iter().all(|key| {
+            match managed_json.and_then(|managed| managed.get(key)) {
+                Some(managed_value) => object.get(key) != Some(managed_value),
+                None => match ownership.previous_values.get(key) {
+                    Some(previous_value) => object.get(key) == Some(previous_value),
+                    None => !object.contains_key(key),
+                },
+            }
+        })
+}
+
+fn remove_json_metadata(contents: String) -> Result<String> {
+    let Value::Object(mut object) =
+        serde_json::from_str::<Value>(&contents).context("failed to parse managed JSON mirror")?
+    else {
+        bail!("managed JSON mirror must be an object");
+    };
+    object.remove("_maestro_managed_keys");
+    object.remove(JSON_PREVIOUS_VALUE_HASHES);
+
+    let mut formatted = serde_json::to_string_pretty(&Value::Object(object))?;
+    formatted.push('\n');
+    Ok(formatted)
 }
 
 fn add_previous_value_hashes(

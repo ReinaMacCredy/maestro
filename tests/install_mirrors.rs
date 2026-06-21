@@ -132,11 +132,35 @@ fn mirror_plan_writes_codex_hook_timeout_and_trust_related_files() {
         .find(|plan| plan.relative_path == ".codex/hooks.json")
         .expect("invariant: Codex hook plan should exist");
     assert_eq!(hook_plan.managed_keys, vec!["hooks"]);
+    assert!(!hook_plan.contents.contains("_maestro_managed_keys"));
+    assert!(
+        !hook_plan
+            .contents
+            .contains("_maestro_previous_value_hashes")
+    );
     assert_hook_shape(
         &hook_plan.contents,
         true,
         "sh \"$(git rev-parse --show-toplevel)/.maestro/hooks/record.sh\"",
     );
+}
+
+#[test]
+fn codex_install_writes_hooks_json_without_maestro_metadata_keys() {
+    let temp_dir = TestTempDir::new("maestro-install-test");
+    init_repo(temp_dir.path());
+    let paths = MaestroPaths::new(temp_dir.path().to_path_buf());
+
+    install_agent(&paths, InstallAgent::Codex).expect("invariant: mirrors should apply");
+
+    let hooks = fs::read_to_string(temp_dir.path().join(".codex/hooks.json"))
+        .expect("invariant: hooks json should be readable");
+    let parsed = serde_json::from_str::<serde_json::Value>(&hooks)
+        .expect("invariant: hooks json should parse");
+    let object = parsed
+        .as_object()
+        .expect("invariant: hooks json should be an object");
+    assert_eq!(object.keys().collect::<Vec<_>>(), vec!["hooks"]);
 }
 
 #[test]
