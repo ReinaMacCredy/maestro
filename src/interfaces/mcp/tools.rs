@@ -21,8 +21,28 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
     vec![
         tool(
             "maestro_status",
-            "Returns high-level repo state: counts of tasks by state, current claimed_by per agent, current MAESTRO_CURRENT_TASK (if set).",
+            "Returns high-level repo state, current task context, and guidance for choosing task versus card tools.",
             json!({"type":"object","properties":{}}),
+        ),
+        tool(
+            "maestro_task_next",
+            "Returns the next recommended task action as structured JSON plus raw CLI output.",
+            json!({"type":"object","properties":{}}),
+        ),
+        tool(
+            "maestro_task_create",
+            "Creates a task through the normal task lifecycle; returns a draft task.",
+            json!({"type":"object","properties":{"title":{"type":"string"},"feature_id":{"type":"string"},"lane":{"type":"string"},"risk":{"type":"string"},"checks":{"type":"array","items":{"type":"string"}},"covers":{"type":"array","items":{"type":"string"}},"project":{"type":"string"},"id_only":{"type":"boolean"}},"required":["title"]}),
+        ),
+        tool(
+            "maestro_task_explore",
+            "Moves a draft task to exploring.",
+            json!({"type":"object","properties":{"id":{"type":"string"}},"required":["id"]}),
+        ),
+        tool(
+            "maestro_task_accept",
+            "Locks task acceptance and moves the task to ready.",
+            json!({"type":"object","properties":{"id":{"type":"string"}},"required":["id"]}),
         ),
         tool(
             "maestro_task_list",
@@ -41,8 +61,13 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
         ),
         tool(
             "maestro_task_complete",
-            "Completes a task; in_progress to needs_verification; takes summary and one completion claim.",
-            json!({"type":"object","properties":{"id":{"type":"string"},"summary":{"type":"string"},"claim":{"type":"string"},"claims":{"type":"array","items":{"type":"string"},"minItems":1,"maxItems":1}},"required":["id","summary"]}),
+            "Completes a task; in_progress to needs_verification; takes summary, one or more claims, and optional proof entries.",
+            json!({"type":"object","properties":{"id":{"type":"string"},"summary":{"type":"string"},"claim":{"type":"string"},"claims":{"type":"array","items":{"type":"string"},"minItems":1},"proof":{"type":"array","items":{"type":"string"}}},"required":["id","summary"]}),
+        ),
+        tool(
+            "maestro_task_update",
+            "Records task progress without changing lifecycle state; accepts optional summary and multiple claims.",
+            json!({"type":"object","properties":{"id":{"type":"string"},"summary":{"type":"string"},"claim":{"type":"string"},"claims":{"type":"array","items":{"type":"string"}}},"required":["id"]}),
         ),
         tool(
             "maestro_task_block",
@@ -73,6 +98,46 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
             "maestro_feature_close",
             "Closes an in_progress feature; in_progress to closed; enforces the close gate.",
             json!({"type":"object","properties":{"id":{"type":"string"}},"required":["id"]}),
+        ),
+        tool(
+            "maestro_card_create",
+            "Creates a card using guided full-card-store intents: feature, task, bug, decision, followup, or chore.",
+            json!({"type":"object","properties":{"intent":{"type":"string","enum":["feature","task","bug","decision","followup","chore"]},"title":{"type":"string"},"parent":{"type":"string"},"description":{"type":"string"},"problem":{"type":"string"},"active_form":{"type":"string"},"acceptance":{"type":"string"},"project":{"type":"string"}},"required":["intent","title"]}),
+        ),
+        tool(
+            "maestro_card_list",
+            "Lists cards with optional parent, type, assignee, status, project, grep, archived, all, and json filters.",
+            json!({"type":"object","properties":{"parent":{"type":"string"},"type":{"type":"string"},"assignee":{"type":"string"},"status":{"type":"string"},"project":{"type":"string"},"grep":{"type":"string"},"archived":{"type":"boolean"},"all":{"type":"boolean"},"json":{"type":"boolean"}}}),
+        ),
+        tool(
+            "maestro_card_show",
+            "Shows one card, optionally as JSON.",
+            json!({"type":"object","properties":{"id":{"type":"string"},"json":{"type":"boolean"},"compact_json":{"type":"boolean"}},"required":["id"]}),
+        ),
+        tool(
+            "maestro_card_ready",
+            "Lists workable cards with no open blockers, optionally scoped to a feature.",
+            json!({"type":"object","properties":{"feature":{"type":"string"},"json":{"type":"boolean"},"project":{"type":"string"}}}),
+        ),
+        tool(
+            "maestro_card_claim",
+            "Claims a workable card for this session.",
+            json!({"type":"object","properties":{"id":{"type":"string"}},"required":["id"]}),
+        ),
+        tool(
+            "maestro_card_update",
+            "Updates card lifecycle fields with guided progress fields mapped to the card update CLI.",
+            json!({"type":"object","properties":{"id":{"type":"string"},"status":{"type":"string"},"title":{"type":"string"},"description":{"type":"string"},"problem":{"type":"string"},"active_form":{"type":"string"},"progress":{"type":"string"},"claim":{"type":"boolean"},"json":{"type":"boolean"}},"required":["id"]}),
+        ),
+        tool(
+            "maestro_card_close",
+            "Closes a task, bug, chore, or other non-feature work card.",
+            json!({"type":"object","properties":{"id":{"type":"string"}},"required":["id"]}),
+        ),
+        tool(
+            "maestro_card_graph",
+            "Renders a card's typed relationships, optionally as DOT.",
+            json!({"type":"object","properties":{"id":{"type":"string"},"dot":{"type":"boolean"}},"required":["id"]}),
         ),
         tool(
             "maestro_decision_list",
@@ -106,16 +171,29 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
 pub fn call_tool(paths: &MaestroPaths, name: &str, arguments: &Value) -> Result<String> {
     match name {
         "maestro_status" => status(paths),
+        "maestro_task_next" => task_next(),
+        "maestro_task_create" => task_create(arguments),
+        "maestro_task_explore" => cli(required_args(arguments, &["task", "explore"], &["id"])?),
+        "maestro_task_accept" => cli(required_args(arguments, &["task", "accept"], &["id"])?),
         "maestro_task_list" => task_list(paths, arguments),
         "maestro_task_show" => cli(optional_id_args("task", "show", arguments, "id")),
         "maestro_task_claim" => cli(required_args(arguments, &["task", "claim"], &["id"])?),
         "maestro_task_complete" => task_complete(arguments),
+        "maestro_task_update" => task_update(arguments),
         "maestro_task_block" => task_block(arguments),
         "maestro_task_unblock" => task_unblock(arguments),
         "maestro_feature_list" => feature_list(arguments),
         "maestro_feature_show" => cli(required_args(arguments, &["feature", "show"], &["id"])?),
         "maestro_feature_start" => cli(required_args(arguments, &["feature", "start"], &["id"])?),
         "maestro_feature_close" => cli(required_args(arguments, &["feature", "close"], &["id"])?),
+        "maestro_card_create" => card_create(arguments),
+        "maestro_card_list" => card_list(arguments),
+        "maestro_card_show" => card_show(arguments),
+        "maestro_card_ready" => card_ready(arguments),
+        "maestro_card_claim" => cli(required_args(arguments, &["card", "claim"], &["id"])?),
+        "maestro_card_update" => card_update(arguments),
+        "maestro_card_close" => cli(required_args(arguments, &["card", "close"], &["id"])?),
+        "maestro_card_graph" => card_graph(arguments),
         "maestro_decision_list" => decision_list(arguments),
         "maestro_decision_new" => cli(required_args(arguments, &["decision", "new"], &["title"])?),
         "maestro_verify" => cli(required_args(arguments, &["task", "verify"], &["id"])?),
@@ -177,7 +255,42 @@ fn status(paths: &MaestroPaths) -> Result<String> {
               ));
         }
     }
+    out.push_str("MCP workflow guidance:\n");
+    out.push_str("  Use maestro_task_next and maestro_task_* for the normal task progress loop.\n");
+    out.push_str("  Use maestro_card_ready, maestro_card_graph, and maestro_card_* for backlog/card lifecycle work.\n");
     Ok(out)
+}
+
+fn task_next() -> Result<String> {
+    let raw = cli(vec![
+        "task".to_string(),
+        "next".to_string(),
+        "--json".to_string(),
+    ])?;
+    let structured = serde_json::from_str::<Value>(&raw).unwrap_or_else(|_| json!({}));
+    serde_json::to_string_pretty(&json!({
+        "structured": structured,
+        "raw": raw.trim_end()
+    }))
+    .context("failed to encode task_next MCP response")
+}
+
+fn task_create(arguments: &Value) -> Result<String> {
+    let mut args = vec![
+        "task".to_string(),
+        "create".to_string(),
+        required_string(arguments, "title")?,
+    ];
+    push_optional_flag(arguments, &mut args, "feature_id", "--feature");
+    push_optional_flag(arguments, &mut args, "lane", "--lane");
+    push_optional_flag(arguments, &mut args, "risk", "--risk");
+    push_repeated_flag(arguments, &mut args, "checks", "--check")?;
+    push_repeated_flag(arguments, &mut args, "covers", "--covers")?;
+    push_optional_flag(arguments, &mut args, "project", "--project");
+    if bool_arg(arguments, "id_only") {
+        args.push("--id-only".to_string());
+    }
+    cli(args)
 }
 
 fn task_list(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
@@ -244,18 +357,34 @@ fn decision_list(arguments: &Value) -> Result<String> {
 }
 
 fn task_complete(arguments: &Value) -> Result<String> {
-    let id = required_string(arguments, "id")?;
-    let summary = required_string(arguments, "summary")?;
-    let claim = claim_arg(arguments)?;
-    cli(vec![
+    let mut args = vec![
         "task".to_string(),
         "complete".to_string(),
-        id,
+        required_string(arguments, "id")?,
         "--summary".to_string(),
-        summary,
-        "--claim".to_string(),
-        claim,
-    ])
+        required_string(arguments, "summary")?,
+    ];
+    let claims = claims_arg(arguments)?;
+    for claim in claims {
+        args.push("--claim".to_string());
+        args.push(claim);
+    }
+    push_repeated_flag(arguments, &mut args, "proof", "--proof")?;
+    cli(args)
+}
+
+fn task_update(arguments: &Value) -> Result<String> {
+    let mut args = vec![
+        "task".to_string(),
+        "update".to_string(),
+        required_string(arguments, "id")?,
+    ];
+    push_optional_flag(arguments, &mut args, "summary", "--summary");
+    for claim in optional_claims_arg(arguments)? {
+        args.push("--claim".to_string());
+        args.push(claim);
+    }
+    cli(args)
 }
 
 fn task_block(arguments: &Value) -> Result<String> {
@@ -281,6 +410,98 @@ fn task_unblock(arguments: &Value) -> Result<String> {
         "--blocker".to_string(),
         required_string(arguments, "blocker")?,
     ])
+}
+
+fn card_create(arguments: &Value) -> Result<String> {
+    let mut args = vec![
+        "card".to_string(),
+        "create".to_string(),
+        required_string(arguments, "title")?,
+        "--type".to_string(),
+        required_string(arguments, "intent")?,
+    ];
+    push_optional_flag(arguments, &mut args, "parent", "--parent");
+    push_guided_text_flag(
+        arguments,
+        &mut args,
+        &["description", "problem"],
+        "--description",
+    );
+    push_guided_text_flag(
+        arguments,
+        &mut args,
+        &["active_form", "acceptance"],
+        "--active-form",
+    );
+    push_optional_flag(arguments, &mut args, "project", "--project");
+    cli(args)
+}
+
+fn card_list(arguments: &Value) -> Result<String> {
+    let mut args = vec!["card".to_string(), "list".to_string()];
+    push_optional_flag(arguments, &mut args, "parent", "--parent");
+    push_optional_flag(arguments, &mut args, "type", "--type");
+    push_optional_flag(arguments, &mut args, "assignee", "--assignee");
+    push_optional_flag(arguments, &mut args, "status", "--status");
+    push_optional_flag(arguments, &mut args, "project", "--project");
+    push_optional_flag(arguments, &mut args, "grep", "--grep");
+    push_bool_flag(arguments, &mut args, "archived", "--archived");
+    push_bool_flag(arguments, &mut args, "all", "--all");
+    push_bool_flag(arguments, &mut args, "json", "--json");
+    cli(args)
+}
+
+fn card_show(arguments: &Value) -> Result<String> {
+    let mut args = vec![
+        "card".to_string(),
+        "show".to_string(),
+        required_string(arguments, "id")?,
+    ];
+    push_bool_flag(arguments, &mut args, "json", "--json");
+    push_bool_flag(arguments, &mut args, "compact_json", "--compact-json");
+    cli(args)
+}
+
+fn card_ready(arguments: &Value) -> Result<String> {
+    let mut args = vec!["card".to_string(), "ready".to_string()];
+    if let Some(feature) = string_arg(arguments, "feature") {
+        args.push(feature);
+    }
+    push_bool_flag(arguments, &mut args, "json", "--json");
+    push_optional_flag(arguments, &mut args, "project", "--project");
+    cli(args)
+}
+
+fn card_update(arguments: &Value) -> Result<String> {
+    let mut args = vec!["card".to_string(), "update".to_string()];
+    args.push(required_string(arguments, "id")?);
+    push_optional_flag(arguments, &mut args, "status", "--status");
+    push_optional_flag(arguments, &mut args, "title", "--title");
+    push_guided_text_flag(
+        arguments,
+        &mut args,
+        &["description", "problem"],
+        "--description",
+    );
+    push_guided_text_flag(
+        arguments,
+        &mut args,
+        &["active_form", "progress"],
+        "--active-form",
+    );
+    push_bool_flag(arguments, &mut args, "claim", "--claim");
+    push_bool_flag(arguments, &mut args, "json", "--json");
+    cli(args)
+}
+
+fn card_graph(arguments: &Value) -> Result<String> {
+    let mut args = vec![
+        "card".to_string(),
+        "graph".to_string(),
+        required_string(arguments, "id")?,
+    ];
+    push_bool_flag(arguments, &mut args, "dot", "--dot");
+    cli(args)
 }
 
 fn cli(args: Vec<String>) -> Result<String> {
@@ -325,20 +546,23 @@ fn string_arg(arguments: &Value, field: &str) -> Option<String> {
         .map(str::to_string)
 }
 
-fn claim_arg(arguments: &Value) -> Result<String> {
-    if let Some(claim) = string_arg(arguments, "claim") {
-        return Ok(claim);
-    }
-    let Some(claims) = arguments.get("claims").and_then(Value::as_array) else {
+fn claims_arg(arguments: &Value) -> Result<Vec<String>> {
+    let claims = optional_claims_arg(arguments)?;
+    if claims.is_empty() {
         bail!("missing required argument: claim");
-    };
-    if claims.len() != 1 {
-        bail!("claims must contain exactly one claim");
     }
-    claims[0]
-        .as_str()
-        .map(str::to_string)
-        .context("claims[0] must be a string")
+    Ok(claims)
+}
+
+fn optional_claims_arg(arguments: &Value) -> Result<Vec<String>> {
+    let mut claims = Vec::new();
+    if let Some(claim) = string_arg(arguments, "claim") {
+        claims.push(claim);
+    }
+    if arguments.get("claims").is_some() {
+        claims.extend(array_strings_arg(arguments, "claims")?);
+    }
+    Ok(claims)
 }
 
 fn bool_arg(arguments: &Value, field: &str) -> bool {
@@ -346,4 +570,59 @@ fn bool_arg(arguments: &Value, field: &str) -> bool {
         .get(field)
         .and_then(Value::as_bool)
         .unwrap_or(false)
+}
+
+fn push_optional_flag(arguments: &Value, args: &mut Vec<String>, field: &str, flag: &str) {
+    if let Some(value) = string_arg(arguments, field) {
+        args.push(flag.to_string());
+        args.push(value);
+    }
+}
+
+fn push_guided_text_flag(arguments: &Value, args: &mut Vec<String>, fields: &[&str], flag: &str) {
+    for field in fields {
+        if let Some(value) = string_arg(arguments, field) {
+            args.push(flag.to_string());
+            args.push(value);
+            break;
+        }
+    }
+}
+
+fn push_bool_flag(arguments: &Value, args: &mut Vec<String>, field: &str, flag: &str) {
+    if bool_arg(arguments, field) {
+        args.push(flag.to_string());
+    }
+}
+
+fn push_repeated_flag(
+    arguments: &Value,
+    args: &mut Vec<String>,
+    field: &str,
+    flag: &str,
+) -> Result<()> {
+    for value in array_strings_arg(arguments, field)? {
+        args.push(flag.to_string());
+        args.push(value);
+    }
+    Ok(())
+}
+
+fn array_strings_arg(arguments: &Value, field: &str) -> Result<Vec<String>> {
+    let Some(value) = arguments.get(field) else {
+        return Ok(Vec::new());
+    };
+    let values = value
+        .as_array()
+        .with_context(|| format!("{field} must be an array of strings"))?;
+    values
+        .iter()
+        .enumerate()
+        .map(|(index, value)| {
+            value
+                .as_str()
+                .map(str::to_string)
+                .with_context(|| format!("{field}[{index}] must be a string"))
+        })
+        .collect()
 }
