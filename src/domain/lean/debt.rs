@@ -130,7 +130,12 @@ pub fn mint_cards(paths: &MaestroPaths, markers: &[Marker]) -> Result<MintOutcom
     let mut outcome = MintOutcome::default();
     for marker in markers {
         let id = card_id(marker);
-        if card_store::resolve(paths, &id)?.is_some() {
+        // Dedup against the archive too, not just the live store: create_card keeps
+        // archived ids reserved, so a marker whose card was minted then archived must
+        // skip here -- falling through to create_card would bail and `?` the whole run.
+        let already_minted = card_store::resolve(paths, &id)?.is_some()
+            || card_store::locate_in(&paths.archive_cards_dir(), &id)?.is_some();
+        if already_minted {
             outcome.deduped += 1;
             continue;
         }
@@ -280,6 +285,61 @@ mod tests {
         assert_eq!(
             second.deduped, 2,
             "both markers dedupe against the existing cards"
+        );
+    }
+
+    #[test]
+    fn mint_dedupes_against_the_archive_and_does_not_abort_the_run() {
+        let dir = TestTempDir::new("maestro-lean-debt-archived");
+        let paths = MaestroPaths::new(dir.path());
+        let archived = Marker {
+            file: "src/a.rs".to_string(),
+            line: 10,
+            text: "cache once".to_string(),
+        };
+
+        // Mint the marker, then relocate its card into the archive (minted -> worked
+        // -> archived) while the marker stays in the code.
+        let first = mint_cards(&paths, std::slice::from_ref(&archived)).unwrap();
+        assert_eq!(first.minted.len(), 1);
+        let id = card_id(&archived);
+        let yaml = match card_store::locate(&paths, &id)
+            .unwrap()
+            .expect("the minted card is locatable")
+        {
+            card_store::CardHome::Dir(yaml) => yaml,
+            card_store::CardHome::Entry(file) => file,
+        };
+        let card_dir = yaml.parent().expect("the card dir");
+        let rel = card_dir
+            .strip_prefix(paths.cards_dir())
+            .expect("a minted card lives under the live store");
+        let dest = paths.archive_cards_dir().join(rel);
+        fs::create_dir_all(dest.parent().expect("archive parent")).unwrap();
+        fs::rename(card_dir, &dest).unwrap();
+        assert!(
+            card_store::resolve(&paths, &id).unwrap().is_none(),
+            "the archived card no longer lives in the live store"
+        );
+
+        // The archived marker (still in the code) plus a fresh one: the archived
+        // marker dedups against the archive instead of bailing, and the fresh marker
+        // after it still mints -- before the fix the archive collision `?`-aborted
+        // the whole run, dropping the fresh card.
+        let fresh = Marker {
+            file: "src/b.rs".to_string(),
+            line: 20,
+            text: "use serde".to_string(),
+        };
+        let second = mint_cards(&paths, &[archived, fresh]).unwrap();
+        assert_eq!(
+            second.deduped, 1,
+            "the archived marker dedups against the archive"
+        );
+        assert_eq!(
+            second.minted.len(),
+            1,
+            "the fresh marker still mints after the archived collision"
         );
     }
 }
