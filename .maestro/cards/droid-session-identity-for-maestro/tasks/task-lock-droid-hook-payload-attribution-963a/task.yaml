@@ -1,0 +1,59 @@
+schema_version: maestro.card.v1
+id: task-lock-droid-hook-payload-attribution-963a
+type: task
+title: Lock Droid hook payload attribution
+status: verified
+parent: droid-session-identity-for-maestro
+claimed_by: maestro
+claimed_at: 2026-06-21T02:46:59.937Z
+created_at: 2026-06-21T02:46:42.258Z
+updated_at: 2026-06-21T02:48:12.405Z
+extra:
+  schema_version: maestro.task.v2
+  claims:
+  - 'GREEN: cargo test --test hook_record_integration droid_hook_payload_session_id_wins_over_agent_env passed (1 passed, 0 failed).'
+  state_history:
+  - state: draft
+    at: 2026-06-21T02:46:42.258Z
+    by: maestro
+  - state: exploring
+    at: 2026-06-21T02:46:42.285Z
+    by: maestro
+  - state: ready
+    at: 2026-06-21T02:46:42.386Z
+    by: maestro
+  - state: in_progress
+    at: 2026-06-21T02:46:59.937Z
+    by: maestro
+  - state: needs_verification
+    at: 2026-06-21T02:48:12.388Z
+    by: maestro
+    summary: Added a focused hook integration regression for Droid-shaped payload session_id attribution; existing hook recording path already satisfied the behavior.
+    claims:
+    - 'GREEN: cargo test --test hook_record_integration droid_hook_payload_session_id_wins_over_agent_env passed (1 passed, 0 failed).'
+  - state: verified
+    at: 2026-06-21T02:48:12.405Z
+    by: maestro
+    summary: 'verification passed: 1 claim(s), 1 proof source(s)'
+  lane: normal
+  risk: medium
+  verification:
+    status: passed
+    verified_at: 2026-06-21T02:48:12.405Z
+    verified_commit: 26c44da4fae257f8e5d4ad1c5181a2ec919a4eba
+    verified_by_run: .maestro/runs/cli-2026-06-21/events.jsonl
+    contract_hash: daf6b623b314bad2bdfbfa606b30a5f86c3246b028d60d5869227dd22bd3bc9c
+    claim_checks:
+    - claim: 'GREEN: cargo test --test hook_record_integration droid_hook_payload_session_id_wins_over_agent_env passed (1 passed, 0 failed).'
+      matched: true
+      source: .maestro/runs/cli-2026-06-21/events.jsonl
+    proof_sources:
+    - kind: event
+      path: .maestro/runs/cli-2026-06-21/events.jsonl
+      hash: b12eb2d48469b8af9e25116610820a2cbb20d81ef96c8c676a7a9fef8b2a9706
+  acceptance_locked: true
+  acceptance:
+    checks:
+    - Focused hook integration proves a Droid-shaped hook JSON payload with session_id writes to the matching .maestro/runs/<session>/events.jsonl bucket.
+    locked_by: maestro
+    locked_at: 2026-06-21T02:46:42.386Z

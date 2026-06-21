@@ -36,26 +36,26 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 17] = [
     (
         "skill",
         "maestro-card",
-        "1.21.0",
-        "fcf29985d4746ef6ee826ede3645c57902ed1c8fd45d0f97d4c2f2ccf9c73256",
+        "1.22.0",
+        "460debfaa488048cd0b636e46a9d2c7713e09f238a38f2f0d0288abfd55fee40",
     ),
     (
         "skill",
         "maestro-setup",
-        "1.5.0",
-        "f0e5e09728a30478acfff3154c49bcb67e02dcfbf18e9e7f5efd20b25dee84c2",
+        "1.6.0",
+        "789173275fdcff0e5aa79c50d61e9a362dbb58c919d5ffd8c51d1b66fda0c424",
     ),
     (
         "skill",
         "maestro-design",
-        "1.21.0",
-        "f4f800a4c2bdd16d9c0c36d78b5707337bfd36fcb0c6003c346a7cb6d0f44ed3",
+        "1.22.0",
+        "ffae386f1bbf3c89572eaa9322e3612dfc4dc95b533937ac27ff40b0035e636a",
     ),
     (
         "skill",
         "maestro-audit",
-        "1.4.0",
-        "16b0cfed6c50fd4375cecf7c4a2114782fb5dbaa440b677a5b10a137bce1f6b0",
+        "1.5.0",
+        "5ca39619d1a3c3c324b7aefd6b7d2783f181e6662568418d4a28661820fc35bd",
     ),
     (
         "hook",
@@ -310,6 +310,26 @@ fn every_shipped_skill_is_recorded_in_the_guard() {
                 .any(|(group, name, _, _)| *group == "skill" && *name == skill.name),
             "shipped skill {} is missing from RESOURCE_VERSION_GUARD",
             skill.name
+        );
+    }
+}
+
+#[test]
+fn every_shipped_skill_explains_droid_session_identity() {
+    for skill in skills() {
+        let skill_md = skill
+            .files
+            .iter()
+            .find(|file| file.relative_path == "SKILL.md")
+            .unwrap_or_else(|| panic!("shipped skill {} has no SKILL.md", skill.name));
+        let contents = std::str::from_utf8(skill_md.contents)
+            .unwrap_or_else(|_| panic!("shipped skill {} SKILL.md is not UTF-8", skill.name));
+        assert!(
+            contents.contains("## Droid Session Identity")
+                && contents.contains("read `session_id` from the hook JSON")
+                && contents.contains("Do not rely on a `DROID_SESSION_ID` env var"),
+            "shipped skill {} must explain Droid hook JSON session_id attribution",
+            skill.name,
         );
     }
 }

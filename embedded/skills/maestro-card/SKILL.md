@@ -1,6 +1,6 @@
 ---
 name: maestro-card
-version: 1.21.0
+version: 1.22.0
 description: "Use for active Maestro card work: pick up and deliver work cards (claim, update, complete, verify), run the feature-card lifecycle (accept, prepare, amend, close), and capture qa-baseline/qa-slice gate evidence."
 ---
 
@@ -14,6 +14,14 @@ feature lifecycle, proof, and the QA gates. Design (`maestro-design`), audit
 
 Activate:
 `maestro hook record --event skill_activation --skill maestro-card`
+
+## Droid Session Identity
+
+Droid does not expose a normal shell session env var like `CODEX_THREAD_ID` or
+`CLAUDE_CODE_SESSION_ID`. In Droid hooks, read `session_id` from the hook JSON
+stdin and pass it to Maestro with `maestro hook record --session <session_id>`
+for synthetic events; hook payload recording keeps the payload `session_id`.
+Do not rely on a `DROID_SESSION_ID` env var unless Factory documents one later.
 
 First step in a session: run `maestro active` (pull-only) to see what other
 live sessions are working on before you claim. If a peer is on a related card,

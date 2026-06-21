@@ -1,0 +1,78 @@
+schema_version: maestro.card.v1
+id: task-document-droid-session-identity-in-839d
+type: task
+title: Document Droid session identity in shipped skills
+status: verified
+parent: droid-session-identity-for-maestro
+claimed_by: maestro
+claimed_at: 2026-06-21T02:48:26.197Z
+created_at: 2026-06-21T02:46:42.296Z
+updated_at: 2026-06-21T02:49:51.105Z
+extra:
+  schema_version: maestro.task.v2
+  blockers:
+  - id: blk-001
+    kind: task
+    blocked_ref:
+      kind: task
+      id: task-lock-droid-hook-payload-attribution-963a
+    title: Blocked by task-lock-droid-hook-payload-attribution-963a
+    reason: 'after dependency: T1 (task-lock-droid-hook-payload-attribution-963a) verified'
+    source: command
+    created_at: 2026-06-21T02:46:42.365Z
+    resolved_at: 2026-06-21T02:48:12.439Z
+  state_history:
+  - state: draft
+    at: 2026-06-21T02:46:42.296Z
+    by: maestro
+  - state: exploring
+    at: 2026-06-21T02:46:42.321Z
+    by: maestro
+  - state: exploring
+    at: 2026-06-21T02:46:42.365Z
+    by: maestro
+    summary: 'blocker added: blk-001'
+  - state: ready
+    at: 2026-06-21T02:46:42.396Z
+    by: maestro
+  - state: ready
+    at: 2026-06-21T02:48:12.439Z
+    by: maestro
+    summary: 'blocker resolved: blk-001'
+  - state: in_progress
+    at: 2026-06-21T02:48:26.197Z
+    by: maestro
+  - state: needs_verification
+    at: 2026-06-21T02:49:51.088Z
+    by: maestro
+    summary: Added Droid Session Identity guidance to every shipped Maestro skill and covered it with a focused resource test.
+    claims:
+    - 'GREEN: cargo test --test resources_version_guard every_shipped_skill_explains_droid_session_identity passed (1 passed, 0 failed).'
+  - state: verified
+    at: 2026-06-21T02:49:51.105Z
+    by: maestro
+    summary: 'verification passed: 1 claim(s), 1 proof source(s)'
+  lane: normal
+  risk: medium
+  verification:
+    status: passed
+    verified_at: 2026-06-21T02:49:51.105Z
+    verified_commit: 26c44da4fae257f8e5d4ad1c5181a2ec919a4eba
+    verified_by_run: .maestro/runs/cli-2026-06-21/events.jsonl
+    contract_hash: 1e66552b74a3c325a899c00d9df6115f3706c9946672e92a0cb9497f549342a4
+    claim_checks:
+    - claim: 'GREEN: cargo test --test resources_version_guard every_shipped_skill_explains_droid_session_identity passed (1 passed, 0 failed).'
+      matched: true
+      source: .maestro/runs/cli-2026-06-21/events.jsonl
+    proof_sources:
+    - kind: event
+      path: .maestro/runs/cli-2026-06-21/events.jsonl
+      hash: 5cca38fec5391a140fb2aea5df9e62734148d0d901cd606b23b00a235296e8b2
+  acceptance_locked: true
+  acceptance:
+    checks:
+    - Embedded Maestro skill guidance tells Droid users to read hook JSON stdin session_id and does not advertise a DROID_SESSION_ID env var.
+    locked_by: maestro
+    locked_at: 2026-06-21T02:46:42.396Z
+  claims:
+  - 'GREEN: cargo test --test resources_version_guard every_shipped_skill_explains_droid_session_identity passed (1 passed, 0 failed).'

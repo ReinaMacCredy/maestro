@@ -1,6 +1,6 @@
 ---
 name: maestro-setup
-version: 1.5.0
+version: 1.6.0
 description: "Use after Maestro init/install or doctor warnings to tune a repository harness from verified repo evidence."
 ---
 
@@ -10,6 +10,14 @@ Tune a Maestro-enabled repository harness from current repository evidence.
 
 Activate:
 `maestro hook record --event skill_activation --skill maestro-setup`
+
+## Droid Session Identity
+
+Droid does not expose a normal shell session env var like `CODEX_THREAD_ID` or
+`CLAUDE_CODE_SESSION_ID`. In Droid hooks, read `session_id` from the hook JSON
+stdin and pass it to Maestro with `maestro hook record --session <session_id>`
+for synthetic events; hook payload recording keeps the payload `session_id`.
+Do not rely on a `DROID_SESSION_ID` env var unless Factory documents one later.
 
 ## Use
 

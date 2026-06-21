@@ -1,6 +1,6 @@
 ---
 name: maestro-audit
-version: 1.4.0
+version: 1.5.0
 description: "Use for read-only Maestro repo audits that propose harness backlog improvements without implementing them."
 ---
 
@@ -11,6 +11,14 @@ stores, merges, and surfaces proposals.
 
 Activate:
 `maestro hook record --event skill_activation --skill maestro-audit`
+
+## Droid Session Identity
+
+Droid does not expose a normal shell session env var like `CODEX_THREAD_ID` or
+`CLAUDE_CODE_SESSION_ID`. In Droid hooks, read `session_id` from the hook JSON
+stdin and pass it to Maestro with `maestro hook record --session <session_id>`
+for synthetic events; hook payload recording keeps the payload `session_id`.
+Do not rely on a `DROID_SESSION_ID` env var unless Factory documents one later.
 
 ## Stop
 

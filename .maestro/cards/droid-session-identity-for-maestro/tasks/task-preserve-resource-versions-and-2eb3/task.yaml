@@ -1,0 +1,78 @@
+schema_version: maestro.card.v1
+id: task-preserve-resource-versions-and-2eb3
+type: task
+title: Preserve resource versions and validators
+status: verified
+parent: droid-session-identity-for-maestro
+claimed_by: maestro
+claimed_at: 2026-06-21T02:49:57.294Z
+created_at: 2026-06-21T02:46:42.331Z
+updated_at: 2026-06-21T03:08:44.944Z
+extra:
+  schema_version: maestro.task.v2
+  blockers:
+  - id: blk-001
+    kind: task
+    blocked_ref:
+      kind: task
+      id: task-document-droid-session-identity-in-839d
+    title: Blocked by task-document-droid-session-identity-in-839d
+    reason: 'after dependency: T2 (task-document-droid-session-identity-in-839d) verified'
+    source: command
+    created_at: 2026-06-21T02:46:42.375Z
+    resolved_at: 2026-06-21T02:49:51.136Z
+  state_history:
+  - state: draft
+    at: 2026-06-21T02:46:42.331Z
+    by: maestro
+  - state: exploring
+    at: 2026-06-21T02:46:42.355Z
+    by: maestro
+  - state: exploring
+    at: 2026-06-21T02:46:42.375Z
+    by: maestro
+    summary: 'blocker added: blk-001'
+  - state: ready
+    at: 2026-06-21T02:46:42.407Z
+    by: maestro
+  - state: ready
+    at: 2026-06-21T02:49:51.136Z
+    by: maestro
+    summary: 'blocker resolved: blk-001'
+  - state: in_progress
+    at: 2026-06-21T02:49:57.294Z
+    by: maestro
+  - state: needs_verification
+    at: 2026-06-21T03:08:44.930Z
+    by: maestro
+    summary: Updated shipped skill resource versions and guard hashes, then ran the repository validators.
+    claims:
+    - 'GREEN: cargo fmt --check, cargo check --all-targets, cargo clippy --all-targets -- -D warnings, and cargo test all passed.'
+  - state: verified
+    at: 2026-06-21T03:08:44.944Z
+    by: maestro
+    summary: 'verification passed: 1 claim(s), 1 proof source(s)'
+  lane: normal
+  risk: medium
+  verification:
+    status: passed
+    verified_at: 2026-06-21T03:08:44.944Z
+    verified_commit: 26c44da4fae257f8e5d4ad1c5181a2ec919a4eba
+    verified_by_run: .maestro/runs/cli-2026-06-21/events.jsonl
+    contract_hash: f72679bd338bf2e45710a607b3517be68833fb6cb62e978d12f3fff6dcb00fd1
+    claim_checks:
+    - claim: 'GREEN: cargo fmt --check, cargo check --all-targets, cargo clippy --all-targets -- -D warnings, and cargo test all passed.'
+      matched: true
+      source: .maestro/runs/cli-2026-06-21/events.jsonl
+    proof_sources:
+    - kind: event
+      path: .maestro/runs/cli-2026-06-21/events.jsonl
+      hash: d9e64a9f31607fbd4622b950b5f3c87cf48157643123ffa5a5b0f4179d2fc7fe
+  acceptance_locked: true
+  acceptance:
+    checks:
+    - Resource version guard rows are updated for changed shipped skills and focused validators pass.
+    locked_by: maestro
+    locked_at: 2026-06-21T02:46:42.407Z
+  claims:
+  - 'GREEN: cargo fmt --check, cargo check --all-targets, cargo clippy --all-targets -- -D warnings, and cargo test all passed.'

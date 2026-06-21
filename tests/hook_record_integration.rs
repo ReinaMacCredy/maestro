@@ -32,6 +32,38 @@ fn maestro_record(cwd: &Path, payload: &str) -> std::process::Output {
         .expect("invariant: maestro hook record should return process output")
 }
 
+fn maestro_record_clean_env_with(
+    cwd: &Path,
+    payload: &str,
+    envs: &[(&str, &str)],
+) -> std::process::Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_maestro"));
+    command
+        .args(["hook", "record"])
+        .current_dir(cwd)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    for key in SESSION_ENV_KEYS {
+        command.env_remove(key);
+    }
+    for (key, value) in envs {
+        command.env(key, value);
+    }
+    let mut child = command
+        .spawn()
+        .expect("invariant: compiled maestro binary should be runnable in hook tests");
+    child
+        .stdin
+        .as_mut()
+        .expect("invariant: piped stdin should be available")
+        .write_all(payload.as_bytes())
+        .expect("invariant: hook payload should be writable to stdin");
+    child
+        .wait_with_output()
+        .expect("invariant: maestro hook record should return process output")
+}
+
 fn maestro(cwd: &Path, args: &[&str]) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_maestro"))
         .args(args)
@@ -238,6 +270,51 @@ fn valid_event_writes_schema_and_event_type_for_session() {
         .expect("invariant: normalized hook event should include a timestamp");
     assert!(timestamp.contains('T'));
     assert!(timestamp.ends_with('Z'));
+}
+
+#[test]
+fn droid_hook_payload_session_id_wins_over_agent_env() {
+    let repo = init_repo();
+    let output = maestro_record_clean_env_with(
+        repo.path(),
+        r#"{"session_id":"droid-session-123","hook_event_name":"PostToolUse","tool_name":"Read"}"#,
+        &[
+            ("MAESTRO_SESSION_ID", "maestro-env-should-not-win"),
+            ("CODEX_THREAD_ID", "codex-env-should-not-win"),
+            ("CLAUDE_CODE_SESSION_ID", "claude-env-should-not-win"),
+        ],
+    );
+
+    assert!(
+        output.status.success(),
+        "hook record failed for Droid-shaped payload\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let events = read_events(repo.path(), "droid-session-123");
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0]["event_type"], "PostToolUse");
+    assert_eq!(events[0]["session_id"], "droid-session-123");
+
+    let runs = repo.path().join(".maestro/runs");
+    for unexpected in [
+        "maestro-env-should-not-win",
+        "codex-env-should-not-win",
+        "claude-env-should-not-win",
+        "unattributed",
+    ] {
+        assert!(
+            !runs.join(unexpected).exists(),
+            "Droid hook payload session_id should own attribution, not {unexpected}"
+        );
+    }
+    let cli_bucket = fs::read_dir(&runs)
+        .expect("invariant: runs dir should be readable")
+        .filter_map(Result::ok)
+        .any(|entry| entry.file_name().to_string_lossy().starts_with("cli-"));
+    assert!(
+        !cli_bucket,
+        "Droid hook payload session_id must not fall back to a cli-<date> bucket"
+    );
 }
 
 #[test]
