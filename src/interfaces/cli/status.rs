@@ -10,6 +10,7 @@ use crate::domain::feature::{self, FeatureRosterEntry, FeatureStatus};
 use crate::domain::task::{self, TaskRecord, TaskState};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::table;
+use crate::foundation::core::time::{timestamp_nanos, utc_now_timestamp};
 use crate::interfaces::cli::{
     ClaimArgs, GitReadout, NextArgs, StatusArgs, clean_worktree_note, feature_next_label,
     git_readout, proof_concern_line, recovery_label, render_git_line,
@@ -373,26 +374,7 @@ fn print_status(report: StatusReport, json: bool) -> Result<()> {
     if let Some(concern) = &report.proof_concern {
         println!("{concern}");
     }
-    if !report.active_features.is_empty() {
-        println!("ACTIVE FEATURES");
-        let rows: Vec<Vec<String>> = report
-            .active_features
-            .iter()
-            .map(|row| {
-                vec![
-                    row.id.clone(),
-                    row.state.clone(),
-                    row.next.clone(),
-                    row.title.clone(),
-                ]
-            })
-            .collect();
-        print!(
-            "{}",
-            table::render_table(&["FEATURE", "STATE", "NEXT", "TITLE"], &rows)
-        );
-        println!("inspect any: maestro feature show <id>");
-    }
+    print!("{}", active_features_block(&report.active_features));
     if !report.ready_to_close_features.is_empty() {
         println!("FEATURES READY TO CLOSE");
         let rows: Vec<Vec<String>> = report
@@ -608,7 +590,8 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
     };
     let proof_concern = focal_proof_concern(paths, next_action.as_ref(), &live_tasks);
     let ready_to_close_features = ready_to_close_features(&features);
-    let mut active_features = active_feature_rows(&features);
+    let now_nanos = timestamp_nanos(&utc_now_timestamp()).unwrap_or(0);
+    let mut active_features = active_feature_rows(&features, now_nanos);
     for (id, path, error, hint, _) in unreadable_features {
         warnings.push(WarningJson {
             code: "feature_unreadable".to_string(),
@@ -621,6 +604,7 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
             next: recovery_label(hint.as_deref()),
             inspect: format!("maestro feature spec {id}"),
             project: None,
+            stale_proposed: false,
         });
     }
     let harness_friction = harness::over_threshold_items(paths)?
@@ -794,7 +778,7 @@ fn ready_to_close_features(features: &[feature::FeatureView]) -> Vec<ReadyFeatur
         .collect()
 }
 
-fn active_feature_rows(features: &[feature::FeatureView]) -> Vec<FeatureRowJson> {
+fn active_feature_rows(features: &[feature::FeatureView], now_nanos: i128) -> Vec<FeatureRowJson> {
     features
         .iter()
         .filter(|view| !view.status.is_terminal())
@@ -805,8 +789,50 @@ fn active_feature_rows(features: &[feature::FeatureView]) -> Vec<FeatureRowJson>
             next: feature_next_label(view).to_string(),
             inspect: format!("maestro feature show {}", view.id),
             project: view.project.clone(),
+            stale_proposed: feature::is_stale_proposed(&view.status, &view.updated_at, now_nanos),
         })
         .collect()
+}
+
+/// Render the ACTIVE FEATURES block: a table of the features still worth a row,
+/// then a one-line collapse plus the fixed retire reminder for any stale
+/// proposed features. Stale proposed features stay in `rows` (and in
+/// `status --json`) but never render as their own row -- `feature list --all`
+/// is where they are reviewed. Returns the empty string when there is nothing
+/// to show.
+fn active_features_block(rows: &[FeatureRowJson]) -> String {
+    if rows.is_empty() {
+        return String::new();
+    }
+    let visible: Vec<&FeatureRowJson> = rows.iter().filter(|row| !row.stale_proposed).collect();
+    let stale_count = rows.len() - visible.len();
+    let mut out = String::from("ACTIVE FEATURES\n");
+    if !visible.is_empty() {
+        let table_rows: Vec<Vec<String>> = visible
+            .iter()
+            .map(|row| {
+                vec![
+                    row.id.clone(),
+                    row.state.clone(),
+                    row.next.clone(),
+                    row.title.clone(),
+                ]
+            })
+            .collect();
+        out.push_str(&table::render_table(
+            &["FEATURE", "STATE", "NEXT", "TITLE"],
+            &table_rows,
+        ));
+        out.push_str("inspect any: maestro feature show <id>\n");
+    }
+    if stale_count > 0 {
+        out.push_str(&format!(
+            "({stale_count} proposed stale hidden; feature list --all to review)\n"
+        ));
+        out.push_str(feature::RETIRE_REMINDER);
+        out.push('\n');
+    }
+    out
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -1339,6 +1365,10 @@ struct FeatureRowJson {
     next: String,
     inspect: String,
     project: Option<String>,
+    /// Render-only: a stale proposed feature is collapsed out of the human
+    /// table. Skipped from JSON so `status --json` still carries every row.
+    #[serde(skip)]
+    stale_proposed: bool,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -1349,4 +1379,91 @@ struct ReadyFeatureJson {
     total: usize,
     verified: usize,
     next_action: NextAction,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const NOW: &str = "2026-06-21T00:00:00.000Z";
+
+    fn now() -> i128 {
+        timestamp_nanos(NOW).expect("fixed now parses")
+    }
+
+    fn proposed_view(id: &str, updated_at: &str) -> feature::FeatureView {
+        feature::FeatureView {
+            id: id.to_string(),
+            title: format!("{id} title"),
+            status: FeatureStatus::Proposed,
+            counts: feature::query::FeatureTaskCounts::default(),
+            created_at: updated_at.to_string(),
+            updated_at: updated_at.to_string(),
+            description: None,
+            raw_request: None,
+            input_type: None,
+            acceptance: Vec::new(),
+            acceptance_coverage: None,
+            affected_areas: Vec::new(),
+            non_goals: Vec::new(),
+            open_questions: Vec::new(),
+            outcome: None,
+            cancel_reason: None,
+            qa_none_reason: None,
+            notes: None,
+            project: None,
+        }
+    }
+
+    #[test]
+    fn injected_now_collapses_stale_proposed_keeps_fresh() {
+        let views = vec![
+            proposed_view("stale-old", "2026-06-01T00:00:00.000Z"), // 20d -> stale
+            proposed_view("fresh-new", "2026-06-20T00:00:00.000Z"), // 1d  -> fresh
+        ];
+        let rows = active_feature_rows(&views, now());
+        assert_eq!(rows.len(), 2, "render-only collapse keeps every row in the data");
+        let block = active_features_block(&rows);
+        assert!(block.contains("fresh-new"), "fresh proposed renders as a row");
+        assert!(!block.contains("stale-old"), "stale proposed is collapsed out");
+        assert!(block.contains("(1 proposed stale hidden; feature list --all to review)"));
+        assert!(block.contains(feature::RETIRE_REMINDER));
+        assert!(block.contains("inspect any: maestro feature show <id>"));
+    }
+
+    #[test]
+    fn no_stale_block_carries_no_collapse_or_reminder() {
+        let views = vec![proposed_view("fresh", "2026-06-20T00:00:00.000Z")];
+        let block = active_features_block(&active_feature_rows(&views, now()));
+        assert!(block.contains("fresh"));
+        assert!(!block.contains("proposed stale hidden"));
+        assert!(!block.contains(feature::RETIRE_REMINDER));
+    }
+
+    #[test]
+    fn all_stale_block_collapses_with_no_table_or_inspect_line() {
+        let views = vec![
+            proposed_view("alpha", "2026-06-01T00:00:00.000Z"),
+            proposed_view("beta", "2026-05-20T00:00:00.000Z"),
+        ];
+        let block = active_features_block(&active_feature_rows(&views, now()));
+        assert!(block.contains("(2 proposed stale hidden; feature list --all to review)"));
+        assert!(block.contains(feature::RETIRE_REMINDER));
+        assert!(!block.contains("inspect any"), "no visible rows -> no inspect line");
+        assert!(!block.contains("alpha title") && !block.contains("beta title"));
+    }
+
+    #[test]
+    fn retire_reminder_is_one_const_line_regardless_of_stale_count() {
+        // ac-4: the reminder is a single const, byte-identical no matter how
+        // many proposed features are collapsed -- it never moves into a loop.
+        let one = vec![proposed_view("a", "2026-06-01T00:00:00.000Z")];
+        let many: Vec<feature::FeatureView> = (0..5)
+            .map(|i| proposed_view(&format!("f{i}"), "2026-06-01T00:00:00.000Z"))
+            .collect();
+        let block_one = active_features_block(&active_feature_rows(&one, now()));
+        let block_many = active_features_block(&active_feature_rows(&many, now()));
+        assert_eq!(block_one.matches(feature::RETIRE_REMINDER).count(), 1);
+        assert_eq!(block_many.matches(feature::RETIRE_REMINDER).count(), 1);
+    }
 }
