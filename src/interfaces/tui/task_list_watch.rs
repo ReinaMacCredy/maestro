@@ -551,7 +551,14 @@ fn load_board(
     paths: &MaestroPaths,
     focus: Option<&str>,
 ) -> Result<(Vec<card::schema::Card>, BTreeSet<String>)> {
-    let cards = card::query::scan(paths)?;
+    // Tolerate a peer mid-writing a card.yaml: the live watch loop must skip a
+    // bad/partial record and recover on the next frame, not abort on the strict
+    // scan's first malformed file the way `maestro list` does.
+    let cards: Vec<card::schema::Card> = card::query::scan_with_failures(paths)?
+        .cards
+        .into_iter()
+        .map(|(card, _)| card)
+        .collect();
     if let Some(focus) = focus {
         let known = cards
             .iter()
@@ -820,6 +827,22 @@ mod tests {
 
         assert!(output.contains("Add CSV export"));
         assert!(output.contains("needs_verification (last verify failed)"));
+    }
+
+    #[test]
+    fn load_board_skips_a_malformed_card_instead_of_aborting() {
+        use super::load_board;
+        let temp = TestTempDir::new("maestro-task-list-watch-malformed");
+        let paths = MaestroPaths::new(temp.path().to_path_buf());
+
+        // A malformed card.yaml a peer is mid-writing into the shared store.
+        let bad_dir = paths.cards_dir().join("task-bad");
+        fs::create_dir_all(&bad_dir).expect("bad card dir");
+        fs::write(bad_dir.join("card.yaml"), "not a card\n").expect("plant malformed");
+
+        // The live board's load tolerates the bad record (Ok) rather than the strict
+        // scan `?`-aborting the whole watch loop on the first malformed file.
+        load_board(&paths, None).expect("a malformed card must not abort the board");
     }
 
     use super::format_board;
