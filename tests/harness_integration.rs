@@ -388,6 +388,29 @@ fn parse_mcp_frames(bytes: &[u8]) -> Vec<JsonValue> {
     frames
 }
 
+fn run_mcp_requests(repo: &Path, requests: &[&str]) -> Vec<JsonValue> {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_maestro"))
+        .args(["mcp", "serve"])
+        .current_dir(repo)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("invariant: compiled maestro binary should run mcp serve");
+    child
+        .stdin
+        .as_mut()
+        .expect("invariant: mcp stdin should be piped")
+        .write_all(&mcp_frames(requests))
+        .expect("invariant: MCP requests should be writable");
+    drop(child.stdin.take());
+    let output = child
+        .wait_with_output()
+        .expect("invariant: mcp serve should return after stdin closes");
+    assert_success(&output, &["mcp", "serve"]);
+    parse_mcp_frames(&output.stdout)
+}
+
 /// The card's directory, located through the store probe (a pooled task's
 /// `tasks/<id>/` dir, or a flat `.maestro/cards/<id>` fixture); verification
 /// sidecars land beside the record.
@@ -1577,7 +1600,7 @@ fn mcp_serve_lists_tools_and_calls_status_over_stdio() {
     let tools = lines[1]["result"]["tools"]
         .as_array()
         .expect("invariant: tools/list should return an array");
-    assert_eq!(tools.len(), 29);
+    assert_eq!(tools.len(), 34);
     assert!(tools.iter().any(|tool| tool["name"] == "maestro_task_next"));
     assert!(
         tools
@@ -1628,6 +1651,306 @@ fn mcp_serve_lists_tools_and_calls_status_over_stdio() {
             .expect("invariant: tool response should contain text")
             .contains("MCP workflow guidance")
     );
+}
+
+#[test]
+fn mcp_lifecycle_tools_expose_schemas_and_blocked_envelope() {
+    let temp = setup_repo("maestro-mcp-lifecycle-envelope");
+    let repo = temp.path();
+    run_success(
+        repo,
+        &[
+            "feature",
+            "new",
+            "MCP envelope feature",
+            "--description",
+            "feature for MCP envelope test",
+        ],
+    );
+
+    let frames = run_mcp_requests(
+        repo,
+        &[
+            r#"{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}"#,
+            r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"maestro_feature_prepare","arguments":{"feature_id":"mcp-envelope-feature","tasks":[{"title":"work","checks":["done"],"covers":["ac-1"]}]}}}"#,
+        ],
+    );
+    let tools = frames[0]["result"]["tools"]
+        .as_array()
+        .expect("invariant: tools/list should return tools");
+    for name in [
+        "maestro_qa_baseline",
+        "maestro_feature_accept",
+        "maestro_feature_prepare",
+        "maestro_feature_verify",
+        "maestro_qa_slice",
+        "maestro_feature_close",
+    ] {
+        assert!(
+            tools.iter().any(|tool| tool["name"] == name),
+            "{name} should be listed"
+        );
+    }
+
+    let accept_schema = tools
+        .iter()
+        .find(|tool| tool["name"] == "maestro_feature_accept")
+        .expect("invariant: accept tool should be listed")["inputSchema"]
+        .clone();
+    assert_eq!(
+        accept_schema["properties"]["qa"]["oneOf"][0]["properties"]["mode"]["const"],
+        "recorded_baseline"
+    );
+    assert_eq!(
+        accept_schema["properties"]["qa"]["oneOf"][1]["properties"]["mode"]["const"],
+        "none"
+    );
+    assert!(
+        accept_schema["properties"]["qa"]["oneOf"][1]["required"]
+            .as_array()
+            .expect("invariant: required should be an array")
+            .iter()
+            .any(|item| item == "reason")
+    );
+
+    let text = frames[1]["result"]["content"][0]["text"]
+        .as_str()
+        .expect("invariant: blocked lifecycle result should be text");
+    let envelope: JsonValue =
+        serde_json::from_str(text).expect("blocked lifecycle result should be JSON");
+    assert_eq!(envelope["ok"], false);
+    assert_eq!(envelope["changed"], false);
+    assert_eq!(envelope["tool"], "maestro_feature_prepare");
+    assert_eq!(envelope["target"]["id"], "mcp-envelope-feature");
+    assert_eq!(envelope["state_before"], "proposed");
+    assert_eq!(envelope["state_after"], "proposed");
+    assert_eq!(envelope["blocked"], true);
+    assert!(envelope["reason_code"].as_str().is_some());
+    assert!(envelope["message"].as_str().is_some());
+    assert!(envelope["prerequisites"].is_array());
+    assert!(envelope["valid_next"].is_array());
+    assert!(envelope["raw"].as_str().is_some());
+}
+
+#[test]
+fn mcp_intake_lifecycle_tools_accept_and_prepare_feature() {
+    let temp = setup_repo("maestro-mcp-intake-lifecycle");
+    let repo = temp.path();
+    run_success(
+        repo,
+        &[
+            "feature",
+            "new",
+            "MCP intake feature",
+            "--description",
+            "feature for MCP intake test",
+        ],
+    );
+    run_success(
+        repo,
+        &[
+            "feature",
+            "set",
+            "mcp-intake-feature",
+            "--acceptance",
+            "MCP intake AC is covered",
+            "--area",
+            "src/interfaces/mcp/tools.rs",
+        ],
+    );
+
+    let requests = [
+        r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"maestro_qa_baseline","arguments":{"feature_id":"mcp-intake-feature","observed":"[bl-001] current intake behavior is raw CLI only"}}}"#.to_string(),
+        r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"maestro_feature_accept","arguments":{"feature_id":"mcp-intake-feature","qa":{"mode":"recorded_baseline"}}}}"#.to_string(),
+        r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"maestro_feature_prepare","arguments":{"feature_id":"mcp-intake-feature","tasks":[{"title":"MCP intake task","checks":["MCP intake AC is covered"],"covers":["ac-1"]}]}}}"#.to_string(),
+    ];
+    let request_refs = requests.iter().map(String::as_str).collect::<Vec<_>>();
+    let frames = run_mcp_requests(repo, &request_refs);
+
+    for frame in &frames {
+        let text = frame["result"]["content"][0]["text"]
+            .as_str()
+            .expect("invariant: lifecycle tool should return text");
+        let envelope: JsonValue =
+            serde_json::from_str(text).expect("lifecycle tool should return JSON");
+        assert_eq!(envelope["ok"], true, "{text}");
+        assert_eq!(envelope["blocked"], false, "{text}");
+        assert_eq!(envelope["changed"], true, "{text}");
+    }
+
+    let feature = read_card(repo, "mcp-intake-feature");
+    assert_eq!(
+        feature["status"],
+        YamlValue::String("in_progress".to_string())
+    );
+    let task_id = id_by_title(repo, "MCP intake task");
+    let task = task_record(repo, &task_id);
+    assert_eq!(task["state"], YamlValue::String("ready".to_string()));
+    assert_eq!(
+        task["covers"],
+        YamlValue::Sequence(vec![YamlValue::String("ac-1".to_string())])
+    );
+}
+
+#[test]
+fn mcp_feature_accept_rejects_invalid_qa_shapes_before_cli() {
+    let temp = setup_repo("maestro-mcp-invalid-qa");
+    let repo = temp.path();
+    run_success(repo, &["feature", "new", "MCP invalid QA"]);
+
+    let frames = run_mcp_requests(
+        repo,
+        &[
+            r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"maestro_feature_accept","arguments":{"feature_id":"mcp-invalid-qa","qa":"free text"}}}"#,
+            r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"maestro_feature_accept","arguments":{"feature_id":"mcp-invalid-qa","qa":{"mode":"recorded_baseline","reason":"not allowed"}}}}"#,
+        ],
+    );
+
+    assert!(
+        frames[0]["error"]["message"]
+            .as_str()
+            .expect("invariant: invalid QA shape should be an MCP error")
+            .contains("qa.mode")
+    );
+    assert!(
+        frames[1]["error"]["message"]
+            .as_str()
+            .expect("invariant: invalid QA reason should be an MCP error")
+            .contains("qa.reason is only valid when qa.mode is none")
+    );
+    let feature = read_card(repo, "mcp-invalid-qa");
+    assert_eq!(feature["status"], YamlValue::String("proposed".to_string()));
+}
+
+#[test]
+fn mcp_qa_lifecycle_tools_require_observed_evidence() {
+    let temp = setup_repo("maestro-mcp-qa-evidence");
+    let repo = temp.path();
+    run_success(repo, &["feature", "new", "MCP QA evidence"]);
+
+    let frames = run_mcp_requests(
+        repo,
+        &[
+            r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"maestro_qa_baseline","arguments":{"feature_id":"mcp-qa-evidence","observed":""}}}"#,
+            r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"maestro_qa_slice","arguments":{"feature_id":"mcp-qa-evidence","scenarios":["bl-001"]}}}"#,
+        ],
+    );
+
+    assert!(
+        frames[0]["error"]["message"]
+            .as_str()
+            .expect("invariant: empty observed should be an MCP error")
+            .contains("observed must not be empty")
+    );
+    assert!(
+        frames[1]["error"]["message"]
+            .as_str()
+            .expect("invariant: missing observed should be an MCP error")
+            .contains("missing required argument: observed")
+    );
+}
+
+#[test]
+fn mcp_feature_gate_tools_verify_slice_and_close_without_autoclose() {
+    let temp = setup_repo("maestro-mcp-feature-gate");
+    let repo = temp.path();
+    write_claims_only_harness(repo);
+    run_success(
+        repo,
+        &[
+            "feature",
+            "new",
+            "MCP feature gate",
+            "--description",
+            "feature for MCP feature gate test",
+        ],
+    );
+    run_success(
+        repo,
+        &[
+            "feature",
+            "set",
+            "mcp-feature-gate",
+            "--acceptance",
+            "MCP feature gate AC is covered",
+            "--area",
+            "src/interfaces/mcp/tools.rs",
+        ],
+    );
+    let intake_requests = [
+        r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"maestro_qa_baseline","arguments":{"feature_id":"mcp-feature-gate","observed":"[bl-001] feature gate currently closes only through CLI"}}}"#.to_string(),
+        r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"maestro_feature_accept","arguments":{"feature_id":"mcp-feature-gate","qa":{"mode":"recorded_baseline"}}}}"#.to_string(),
+        r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"maestro_feature_prepare","arguments":{"feature_id":"mcp-feature-gate","tasks":[{"title":"MCP feature gate task","checks":["MCP feature gate AC is covered"],"covers":["ac-1"]}]}}}"#.to_string(),
+    ];
+    let intake_refs = intake_requests
+        .iter()
+        .map(String::as_str)
+        .collect::<Vec<_>>();
+    run_mcp_requests(repo, &intake_refs);
+
+    let task_id = id_by_title(repo, "MCP feature gate task");
+    run_success(repo, &["task", "claim", &task_id]);
+    run_success(
+        repo,
+        &[
+            "task",
+            "complete",
+            &task_id,
+            "--summary",
+            "done",
+            "--claim",
+            "MCP feature gate AC is covered",
+            "--proof",
+            "MCP feature gate AC is covered",
+        ],
+    );
+
+    let close_requests = [
+        r#"{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"maestro_feature_verify","arguments":{"feature_id":"mcp-feature-gate","prove":["ac-1"],"evidence":["MCP feature gate AC is covered"]}}}"#.to_string(),
+        r#"{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"maestro_qa_slice","arguments":{"feature_id":"mcp-feature-gate","scenarios":["bl-001"],"observed":"MCP feature gate scenario still passes"}}}"#.to_string(),
+        r#"{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"maestro_feature_close","arguments":{"feature_id":"mcp-feature-gate","outcome":"MCP feature gate closed through typed MCP tools"}}}"#.to_string(),
+    ];
+    let close_refs = close_requests
+        .iter()
+        .map(String::as_str)
+        .collect::<Vec<_>>();
+    let frames = run_mcp_requests(repo, &close_refs);
+
+    let verify_text = frames[0]["result"]["content"][0]["text"]
+        .as_str()
+        .expect("invariant: verify should return text");
+    let verify_envelope: JsonValue =
+        serde_json::from_str(verify_text).expect("verify should return envelope JSON");
+    assert_eq!(verify_envelope["ok"], true, "{verify_text}");
+    assert_eq!(
+        verify_envelope["state_after"], "in_progress",
+        "{verify_text}"
+    );
+    assert!(
+        verify_envelope["valid_next"]
+            .as_array()
+            .expect("invariant: valid_next should be an array")
+            .iter()
+            .any(|entry| entry["tool"] == "maestro_feature_close"),
+        "{verify_text}"
+    );
+
+    let slice_text = frames[1]["result"]["content"][0]["text"]
+        .as_str()
+        .expect("invariant: qa slice should return text");
+    let slice_envelope: JsonValue =
+        serde_json::from_str(slice_text).expect("qa slice should return envelope JSON");
+    assert_eq!(slice_envelope["ok"], true, "{slice_text}");
+
+    let close_text = frames[2]["result"]["content"][0]["text"]
+        .as_str()
+        .expect("invariant: close should return text");
+    let close_envelope: JsonValue =
+        serde_json::from_str(close_text).expect("close should return envelope JSON");
+    assert_eq!(close_envelope["ok"], true, "{close_text}");
+    assert_eq!(close_envelope["state_after"], "closed", "{close_text}");
+    let feature = read_card(repo, "mcp-feature-gate");
+    assert_eq!(feature["status"], YamlValue::String("closed".to_string()));
 }
 
 #[test]

@@ -4,7 +4,7 @@ use std::process::Command;
 use anyhow::{Context, Result, bail};
 use serde_json::{Value, json};
 
-use crate::domain::task;
+use crate::domain::{feature, task};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::operations::harness;
 
@@ -90,14 +90,39 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
             json!({"type":"object","properties":{"id":{"type":"string"}},"required":["id"]}),
         ),
         tool(
+            "maestro_qa_baseline",
+            "Records explicit observed QA baseline evidence for a feature through the normal QA gate.",
+            json!({"type":"object","properties":{"feature_id":{"type":"string"},"observed":{"type":"string"}},"required":["feature_id","observed"]}),
+        ),
+        tool(
+            "maestro_feature_accept",
+            "Accepts a feature using an explicit QA mode and returns the lifecycle envelope.",
+            json!({"type":"object","properties":{"feature_id":{"type":"string"},"qa":{"oneOf":[{"type":"object","properties":{"mode":{"const":"recorded_baseline"}},"required":["mode"],"additionalProperties":false},{"type":"object","properties":{"mode":{"const":"none"},"reason":{"type":"string"}},"required":["mode","reason"],"additionalProperties":false}]}},"required":["feature_id","qa"]}),
+        ),
+        tool(
+            "maestro_feature_prepare",
+            "Prepares an accepted feature into a task queue and returns the lifecycle envelope.",
+            json!({"type":"object","properties":{"feature_id":{"type":"string"},"draft":{"type":"boolean"},"tasks":{"type":"array","items":{"type":"object","properties":{"title":{"type":"string"},"checks":{"type":"array","items":{"type":"string"},"minItems":1},"covers":{"type":"array","items":{"type":"string"}},"blockers":{"type":"array","items":{"type":"string"}},"after":{"type":"array","items":{"type":"string"}}},"required":["title"]}}},"required":["feature_id"]}),
+        ),
+        tool(
+            "maestro_feature_verify",
+            "Records or sweeps feature acceptance proof without auto-closing; returns close as valid_next when ready.",
+            json!({"type":"object","properties":{"feature_id":{"type":"string"},"prove":{"type":"array","items":{"type":"string"}},"evidence":{"type":"array","items":{"type":"string"}},"waive":{"type":"array","items":{"type":"string"}},"reason":{"type":"array","items":{"type":"string"}},"outcome":{"type":"string"}},"required":["feature_id"]}),
+        ),
+        tool(
+            "maestro_qa_slice",
+            "Records explicit observed QA slice evidence for a feature through the normal QA gate.",
+            json!({"type":"object","properties":{"feature_id":{"type":"string"},"scenarios":{"type":"array","items":{"type":"string"}},"observed":{"type":"string"}},"required":["feature_id","observed"]}),
+        ),
+        tool(
             "maestro_feature_start",
             "Starts a ready feature; ready to in_progress.",
             json!({"type":"object","properties":{"id":{"type":"string"}},"required":["id"]}),
         ),
         tool(
             "maestro_feature_close",
-            "Closes an in_progress feature; in_progress to closed; enforces the close gate.",
-            json!({"type":"object","properties":{"id":{"type":"string"}},"required":["id"]}),
+            "Closes an in_progress feature as a separate lifecycle step and returns the lifecycle envelope.",
+            json!({"type":"object","properties":{"feature_id":{"type":"string"},"id":{"type":"string"},"outcome":{"type":"string"},"dry_run":{"type":"boolean"}},"anyOf":[{"required":["feature_id"]},{"required":["id"]}]}),
         ),
         tool(
             "maestro_card_create",
@@ -184,8 +209,13 @@ pub fn call_tool(paths: &MaestroPaths, name: &str, arguments: &Value) -> Result<
         "maestro_task_unblock" => task_unblock(arguments),
         "maestro_feature_list" => feature_list(arguments),
         "maestro_feature_show" => cli(required_args(arguments, &["feature", "show"], &["id"])?),
+        "maestro_qa_baseline" => qa_baseline(paths, arguments),
+        "maestro_feature_accept" => feature_accept(paths, arguments),
+        "maestro_feature_prepare" => feature_prepare(paths, arguments),
+        "maestro_feature_verify" => feature_verify(paths, arguments),
+        "maestro_qa_slice" => qa_slice(paths, arguments),
         "maestro_feature_start" => cli(required_args(arguments, &["feature", "start"], &["id"])?),
-        "maestro_feature_close" => cli(required_args(arguments, &["feature", "close"], &["id"])?),
+        "maestro_feature_close" => feature_close(paths, arguments),
         "maestro_card_create" => card_create(arguments),
         "maestro_card_list" => card_list(arguments),
         "maestro_card_show" => card_show(arguments),
@@ -356,6 +386,132 @@ fn decision_list(arguments: &Value) -> Result<String> {
     cli(argv)
 }
 
+fn qa_baseline(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
+    let feature_id = feature_id_arg(arguments)?;
+    lifecycle_cli(
+        paths,
+        "maestro_qa_baseline",
+        &feature_id,
+        vec![
+            "qa".to_string(),
+            "baseline".to_string(),
+            feature_id.clone(),
+            "--observed".to_string(),
+            required_non_empty_string(arguments, "observed")?,
+        ],
+    )
+}
+
+fn feature_accept(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
+    let feature_id = feature_id_arg(arguments)?;
+    let mut args = vec![
+        "feature".to_string(),
+        "accept".to_string(),
+        feature_id.clone(),
+    ];
+    let qa = arguments
+        .get("qa")
+        .with_context(|| "missing required argument: qa")?;
+    let mode = qa
+        .get("mode")
+        .and_then(Value::as_str)
+        .with_context(|| "missing required argument: qa.mode")?;
+    match mode {
+        "recorded_baseline" => {
+            if qa.get("reason").is_some() {
+                bail!("qa.reason is only valid when qa.mode is none");
+            }
+        }
+        "none" => {
+            args.push("--qa".to_string());
+            args.push("none".to_string());
+            args.push("--reason".to_string());
+            args.push(
+                qa.get("reason")
+                    .and_then(Value::as_str)
+                    .with_context(|| "missing required argument: qa.reason")
+                    .and_then(|reason| non_empty_value("qa.reason", reason))?,
+            );
+        }
+        other => bail!("unsupported qa.mode: {other}"),
+    }
+    lifecycle_cli(paths, "maestro_feature_accept", &feature_id, args)
+}
+
+fn feature_prepare(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
+    let feature_id = feature_id_arg(arguments)?;
+    let mut args = vec![
+        "feature".to_string(),
+        "prepare".to_string(),
+        feature_id.clone(),
+    ];
+    if bool_arg(arguments, "draft") {
+        args.push("--draft".to_string());
+    } else if let Some(tasks) = arguments.get("tasks") {
+        for (index, task) in tasks
+            .as_array()
+            .with_context(|| "tasks must be an array")?
+            .iter()
+            .enumerate()
+        {
+            args.push("--task".to_string());
+            let title = task
+                .get("title")
+                .and_then(Value::as_str)
+                .with_context(|| format!("tasks[{index}].title must be a string"))?;
+            if title.contains(':') {
+                args.push(title.to_string());
+            } else {
+                args.push(format!("T{}: {title}", index + 1));
+            }
+            push_task_array_flags(task, &mut args, "checks", "--check")?;
+            push_task_array_flags(task, &mut args, "covers", "--covers")?;
+            push_task_array_flags(task, &mut args, "blockers", "--blocker")?;
+            push_task_array_flags(task, &mut args, "after", "--after")?;
+        }
+    } else {
+        args.push("--draft".to_string());
+    }
+    lifecycle_cli(paths, "maestro_feature_prepare", &feature_id, args)
+}
+
+fn feature_verify(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
+    let feature_id = feature_id_arg(arguments)?;
+    let mut args = vec![
+        "feature".to_string(),
+        "verify".to_string(),
+        feature_id.clone(),
+        "--no-close".to_string(),
+    ];
+    push_repeated_flag(arguments, &mut args, "prove", "--prove")?;
+    push_repeated_flag(arguments, &mut args, "evidence", "--evidence")?;
+    push_repeated_flag(arguments, &mut args, "waive", "--waive")?;
+    push_repeated_flag(arguments, &mut args, "reason", "--reason")?;
+    push_optional_flag(arguments, &mut args, "outcome", "--outcome");
+    lifecycle_cli(paths, "maestro_feature_verify", &feature_id, args)
+}
+
+fn qa_slice(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
+    let feature_id = feature_id_arg(arguments)?;
+    let mut args = vec!["qa".to_string(), "slice".to_string(), feature_id.clone()];
+    push_repeated_flag(arguments, &mut args, "scenarios", "--scenario")?;
+    args.push("--observed".to_string());
+    args.push(required_non_empty_string(arguments, "observed")?);
+    lifecycle_cli(paths, "maestro_qa_slice", &feature_id, args)
+}
+
+fn feature_close(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
+    let feature_id = feature_id_arg(arguments)?;
+    let mut args = vec![
+        "feature".to_string(),
+        "close".to_string(),
+        feature_id.clone(),
+    ];
+    push_optional_flag(arguments, &mut args, "outcome", "--outcome");
+    push_bool_flag(arguments, &mut args, "dry_run", "--dry-run");
+    lifecycle_cli(paths, "maestro_feature_close", &feature_id, args)
+}
+
 fn task_complete(arguments: &Value) -> Result<String> {
     let mut args = vec![
         "task".to_string(),
@@ -505,15 +661,153 @@ fn card_graph(arguments: &Value) -> Result<String> {
 }
 
 fn cli(args: Vec<String>) -> Result<String> {
+    let output = run_cli(&args)?;
+    if output.success {
+        return Ok(output.stdout);
+    }
+    bail!(
+        "maestro {} failed: {}",
+        args.join(" "),
+        output.stderr.trim()
+    );
+}
+
+struct CliRun {
+    success: bool,
+    stdout: String,
+    stderr: String,
+}
+
+fn run_cli(args: &[String]) -> Result<CliRun> {
     let output = Command::new(std::env::current_exe().context("failed to find current binary")?)
-        .args(&args)
+        .args(args)
         .output()
         .with_context(|| format!("failed to run maestro {}", args.join(" ")))?;
-    if output.status.success() {
-        return String::from_utf8(output.stdout).context("maestro stdout was not UTF-8");
+    Ok(CliRun {
+        success: output.status.success(),
+        stdout: String::from_utf8(output.stdout).context("maestro stdout was not UTF-8")?,
+        stderr: String::from_utf8(output.stderr).context("maestro stderr was not UTF-8")?,
+    })
+}
+
+fn lifecycle_cli(
+    paths: &MaestroPaths,
+    tool_name: &str,
+    feature_id: &str,
+    args: Vec<String>,
+) -> Result<String> {
+    let state_before = feature_status_label(paths, feature_id);
+    let output = run_cli(&args)?;
+    let state_after = feature_status_label(paths, feature_id);
+    let (ok, changed, blocked, reason_code, message, raw) = if output.success {
+        (
+            true,
+            true,
+            false,
+            Value::Null,
+            Value::String("ok".to_string()),
+            output.stdout.trim_end().to_string(),
+        )
+    } else {
+        let raw = output.stderr.trim().to_string();
+        (
+            false,
+            false,
+            true,
+            Value::String(lifecycle_reason_code(&raw).to_string()),
+            Value::String(lifecycle_message(&raw)),
+            raw,
+        )
+    };
+    serde_json::to_string_pretty(&json!({
+        "ok": ok,
+        "changed": changed,
+        "tool": tool_name,
+        "target": {"type": "feature", "id": feature_id},
+        "state_before": state_before,
+        "state_after": state_after,
+        "blocked": blocked,
+        "reason_code": reason_code,
+        "message": message,
+        "prerequisites": lifecycle_prerequisites(tool_name, &state_before, blocked),
+        "valid_next": lifecycle_valid_next(tool_name, feature_id, &state_before, blocked),
+        "raw": raw,
+    }))
+    .context("failed to encode lifecycle MCP response")
+}
+
+fn feature_status_label(paths: &MaestroPaths, feature_id: &str) -> String {
+    feature::status(paths, feature_id)
+        .map(|status| status.as_str().to_string())
+        .unwrap_or_else(|_| "unknown".to_string())
+}
+
+fn lifecycle_reason_code(raw: &str) -> &'static str {
+    let lowered = raw.to_ascii_lowercase();
+    if lowered.contains("not found") {
+        "not_found"
+    } else if lowered.contains("qa") || lowered.contains("baseline") {
+        "qa_gate_blocked"
+    } else if lowered.contains("state") || lowered.contains("ready") || lowered.contains("proposed")
+    {
+        "invalid_feature_state"
+    } else {
+        "lifecycle_blocked"
     }
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    bail!("maestro {} failed: {}", args.join(" "), stderr.trim());
+}
+
+fn lifecycle_message(raw: &str) -> String {
+    raw.lines()
+        .find(|line| !line.trim().is_empty())
+        .map(str::trim)
+        .unwrap_or("lifecycle command was blocked")
+        .to_string()
+}
+
+fn lifecycle_prerequisites(tool_name: &str, state_before: &str, blocked: bool) -> Vec<String> {
+    if !blocked {
+        return Vec::new();
+    }
+    match (tool_name, state_before) {
+        ("maestro_feature_prepare", "proposed") => {
+            vec!["feature must be accepted before prepare".to_string()]
+        }
+        ("maestro_feature_close", "in_progress") => {
+            vec!["feature close gate must be satisfied".to_string()]
+        }
+        _ => Vec::new(),
+    }
+}
+
+fn lifecycle_valid_next(
+    tool_name: &str,
+    feature_id: &str,
+    state_before: &str,
+    blocked: bool,
+) -> Value {
+    if !blocked {
+        return match tool_name {
+            "maestro_qa_baseline" => json!([
+                {"tool":"maestro_feature_accept","arguments":{"feature_id":feature_id,"qa":{"mode":"recorded_baseline"}}}
+            ]),
+            "maestro_feature_accept" => json!([
+                {"tool":"maestro_feature_prepare","arguments":{"feature_id":feature_id,"draft":true}}
+            ]),
+            "maestro_feature_verify" | "maestro_qa_slice" => json!([
+                {"tool":"maestro_feature_close","arguments":{"feature_id":feature_id,"outcome":"<outcome>"}}
+            ]),
+            _ => json!([]),
+        };
+    }
+    match (tool_name, state_before) {
+        ("maestro_feature_prepare", "proposed") => json!([
+            {"tool":"maestro_qa_baseline","arguments":{"feature_id":feature_id,"observed":"<observed baseline>"}}
+        ]),
+        ("maestro_feature_accept", "proposed") => json!([
+            {"tool":"maestro_qa_baseline","arguments":{"feature_id":feature_id,"observed":"<observed baseline>"}}
+        ]),
+        _ => json!([]),
+    }
 }
 
 fn optional_id_args(first: &str, second: &str, arguments: &Value, field: &str) -> Vec<String> {
@@ -537,6 +831,24 @@ fn required_args(arguments: &Value, prefix: &[&str], fields: &[&str]) -> Result<
 
 fn required_string(arguments: &Value, field: &str) -> Result<String> {
     string_arg(arguments, field).with_context(|| format!("missing required argument: {field}"))
+}
+
+fn required_non_empty_string(arguments: &Value, field: &str) -> Result<String> {
+    let value = required_string(arguments, field)?;
+    non_empty_value(field, &value)
+}
+
+fn non_empty_value(field: &str, value: &str) -> Result<String> {
+    if value.trim().is_empty() {
+        bail!("{field} must not be empty");
+    }
+    Ok(value.to_string())
+}
+
+fn feature_id_arg(arguments: &Value) -> Result<String> {
+    string_arg(arguments, "feature_id")
+        .or_else(|| string_arg(arguments, "id"))
+        .with_context(|| "missing required argument: feature_id")
 }
 
 fn string_arg(arguments: &Value, field: &str) -> Option<String> {
@@ -604,6 +916,32 @@ fn push_repeated_flag(
     for value in array_strings_arg(arguments, field)? {
         args.push(flag.to_string());
         args.push(value);
+    }
+    Ok(())
+}
+
+fn push_task_array_flags(
+    task: &Value,
+    args: &mut Vec<String>,
+    field: &str,
+    flag: &str,
+) -> Result<()> {
+    let Some(values) = task.get(field) else {
+        return Ok(());
+    };
+    for (index, value) in values
+        .as_array()
+        .with_context(|| format!("{field} must be an array"))?
+        .iter()
+        .enumerate()
+    {
+        args.push(flag.to_string());
+        args.push(
+            value
+                .as_str()
+                .with_context(|| format!("{field}[{index}] must be a string"))?
+                .to_string(),
+        );
     }
     Ok(())
 }
