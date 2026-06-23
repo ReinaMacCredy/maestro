@@ -1,6 +1,6 @@
 ---
 name: maestro-card
-version: 1.25.0
+version: 1.26.0
 description: "Use for active Maestro card work: pick up and deliver work cards (claim, update, complete, verify), run the feature-card lifecycle (accept, prepare, amend, close), and capture qa-baseline/qa-slice gate evidence."
 ---
 
@@ -42,7 +42,8 @@ Read the reference for the job at hand; they share the ground rules below.
 - Tidy a card's diff before proving it (quality cleanup, applied in place):
   [reference/simplify.md](reference/simplify.md). On a test-first card this is
   the red-green-refactor step, not a second pass.
-- Work the backlog unattended while the user is away or asleep:
+- Work the backlog unattended, including broad user goals that must first
+  compile into Maestro records while the user is away or asleep:
   [reference/loop.md](reference/loop.md)
 - Accept, prepare, amend, close, or archive a feature card after design:
   [reference/feature.md](reference/feature.md)

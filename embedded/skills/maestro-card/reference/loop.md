@@ -29,6 +29,40 @@ stop time or unit cap is required, ever; if the prompt states one ("until
 Start from the store, never from memory (the session can die; the store is the
 only durable state): `maestro status`, then `maestro card ready`.
 
+If the kickoff is a broad goal instead of a named card or accepted feature,
+infer a minimal GoalBrief before work starts:
+
+```text
+GoalBrief:
+  outcome
+  stop_condition
+  constraints
+```
+
+The GoalBrief is transient. It must compile immediately into existing Maestro
+records:
+
+- `outcome` -> proposed feature description/request, or the current accepted
+  feature if the goal clearly continues already-accepted work
+- `stop_condition` -> acceptance/check candidates and proof expectations
+- `constraints` -> non-goals, boundaries, or decision context
+
+Do not create a goal file, goal command, hidden planner state, schema, MCP
+tool, daemon, scheduler, or separate goal lifecycle. Existing feature, task,
+decision, proof, and QA gates remain the only durable contract.
+
+For a new broad goal, draft or update a proposed feature and stop at the human
+`feature accept` gate before `prepare` or implementation work. For a goal that
+is already backed by accepted/current work, continue into the card loop below.
+For an ambiguous broad goal, draft with explicit assumptions: record what you
+inferred in the feature/spec, turn material uncertainty into questions or
+decision forks, and ask first only when even a proposed feature would be
+materially misleading or permission-sensitive.
+
+Codex can run the resulting card loop directly. Claude Code should author a
+Workflow script that performs the same store-grounded sequence. Both agents use
+the same records and stop conditions.
+
 ## Loop
 
 1. `maestro card ready` -> `maestro card claim <id>` -> work the card per
