@@ -1728,6 +1728,12 @@ fn card_mutating_verbs_auto_emit_card_touch_tagged_session_and_card() {
     assert!(
         touches
             .iter()
+            .all(|event| event["agent_runtime"] == "codex"),
+        "every auto card_touch carries the resolved runtime identity: {touches:#?}"
+    );
+    assert!(
+        touches
+            .iter()
             .any(|event| event["card_id"] == Value::String(second.clone())),
         "the second card's id is bound: {touches:#?}"
     );

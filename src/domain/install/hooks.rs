@@ -46,11 +46,11 @@ fn hook_json(flavor: HookConfigFlavor) -> Value {
         let command = match flavor {
             HookConfigFlavor::Claude => json!({
                 "type": "command",
-                "command": format!("sh \"$CLAUDE_PROJECT_DIR/.maestro/hooks/{script}\""),
+                "command": format!("MAESTRO_AGENT=claude sh \"$CLAUDE_PROJECT_DIR/.maestro/hooks/{script}\""),
             }),
             HookConfigFlavor::Codex => json!({
                 "type": "command",
-                "command": format!("sh \"$(git rev-parse --show-toplevel)/.maestro/hooks/{script}\""),
+                "command": format!("MAESTRO_AGENT=codex sh \"$(git rev-parse --show-toplevel)/.maestro/hooks/{script}\""),
                 "timeout": contract.codex_timeout(),
             }),
         };
@@ -66,6 +66,58 @@ fn hook_json(flavor: HookConfigFlavor) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn installed_commands(flavor: HookConfigFlavor) -> Vec<String> {
+        let json = hook_json(flavor);
+        json.get("hooks")
+            .and_then(Value::as_object)
+            .expect("hook_json always produces a hooks object")
+            .values()
+            .flat_map(|entries| {
+                entries
+                    .as_array()
+                    .expect("hook event entry is always an array")
+                    .iter()
+            })
+            .flat_map(|entry| {
+                entry
+                    .get("hooks")
+                    .and_then(Value::as_array)
+                    .expect("hook entry always has hooks")
+                    .iter()
+            })
+            .map(|hook| {
+                hook.get("command")
+                    .and_then(Value::as_str)
+                    .expect("installed hook always has a command")
+                    .to_string()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn installed_hook_commands_stamp_runtime_identity() {
+        for command in installed_commands(HookConfigFlavor::Claude) {
+            assert!(
+                command.starts_with("MAESTRO_AGENT=claude sh "),
+                "Claude hook command must stamp MAESTRO_AGENT=claude: {command}"
+            );
+        }
+
+        for command in installed_commands(HookConfigFlavor::Codex) {
+            assert!(
+                command.starts_with("MAESTRO_AGENT=codex sh "),
+                "Codex hook command must stamp MAESTRO_AGENT=codex: {command}"
+            );
+        }
+    }
+
+    #[test]
+    fn shared_record_script_stays_agent_neutral() {
+        let script = std::fs::read_to_string("embedded/hooks/record.sh")
+            .expect("embedded hook record script is readable from the crate root");
+        assert!(!script.contains("MAESTRO_AGENT"));
+    }
 
     /// Every event the installer writes must also be accepted by the recorder;
     /// otherwise an installed hook would fire `maestro hook record` on an event

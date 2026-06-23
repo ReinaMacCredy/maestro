@@ -6,12 +6,13 @@ use std::thread;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use serde_json::Value;
+use serde_json::{Value, json};
 
 use crate::domain::run::event::{UNATTRIBUTED_SESSION, run_dir_name};
 use crate::foundation::core::managed_path::{SymlinkPolicy, managed_path};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::retention::prune_child_dirs;
+use crate::foundation::core::session::known_agent_runtime;
 
 const OPEN_EVENT_FILE_RETRIES: usize = 8;
 
@@ -39,6 +40,15 @@ pub(crate) fn append_manual_event(
     event: &Value,
 ) -> Result<()> {
     append_event_to_session_dir(paths, &run_dir_name(session_id), event)
+}
+
+pub(crate) fn insert_agent_runtime(event: &mut Value, runtime: Option<&str>) {
+    let Some(runtime) = runtime.and_then(known_agent_runtime) else {
+        return;
+    };
+    if let Some(object) = event.as_object_mut() {
+        object.insert("agent_runtime".to_string(), json!(runtime));
+    }
 }
 
 fn append_event_to_session_dir(

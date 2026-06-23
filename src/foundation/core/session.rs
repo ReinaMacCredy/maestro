@@ -22,6 +22,10 @@ pub const SESSION_ENV_KEYS: &[&str] = &[
     "CLAUDE_CODE_SESSION_ID",
 ];
 
+const AGENT_RUNTIME_ENV_KEY: &str = "MAESTRO_AGENT";
+const CLAUDE_RUNTIME_ENV_KEYS: &[&str] = &["CLAUDECODE", "CLAUDE_CODE"];
+const CODEX_RUNTIME_ENV_KEYS: &[&str] = &["CODEX_CLI", "CODEX_SANDBOX"];
+
 /// First non-empty, trimmed value among `keys`, resolved through `lookup`. Pure:
 /// the caller supplies the environment, so the key list is testable without
 /// mutating the process-global env.
@@ -38,6 +42,41 @@ fn first_present(keys: &[&str], lookup: impl Fn(&str) -> Option<String>) -> Opti
 /// The agent session id from the environment, or `None` when none is set.
 pub fn session_id_from_env() -> Option<String> {
     first_present(SESSION_ENV_KEYS, |key| env::var(key).ok())
+}
+
+pub fn known_agent_runtime(value: &str) -> Option<&'static str> {
+    let value = value.trim();
+    if value.eq_ignore_ascii_case("claude") {
+        Some("claude")
+    } else if value.eq_ignore_ascii_case("codex") {
+        Some("codex")
+    } else {
+        None
+    }
+}
+
+fn any_present(keys: &[&str], lookup: &impl Fn(&str) -> Option<String>) -> bool {
+    keys.iter()
+        .any(|key| lookup(key).is_some_and(|value| !value.trim().is_empty()))
+}
+
+fn agent_runtime_from_lookup(lookup: impl Fn(&str) -> Option<String>) -> Option<&'static str> {
+    if let Some(agent) = lookup(AGENT_RUNTIME_ENV_KEY).and_then(|value| known_agent_runtime(&value))
+    {
+        return Some(agent);
+    }
+    if any_present(CLAUDE_RUNTIME_ENV_KEYS, &lookup) {
+        return Some("claude");
+    }
+    if any_present(CODEX_RUNTIME_ENV_KEYS, &lookup) {
+        return Some("codex");
+    }
+    None
+}
+
+/// The known agent runtime for this process, if Claude or Codex can be resolved.
+pub fn agent_runtime_from_env() -> Option<&'static str> {
+    agent_runtime_from_lookup(|key| env::var(key).ok())
 }
 
 /// The first non-empty agent session id from the environment, trimmed; or a
@@ -93,5 +132,44 @@ mod tests {
             first_present(SESSION_ENV_KEYS, |_| Some("   ".to_string())),
             None
         );
+    }
+
+    fn agent_runtime_from_pairs(pairs: &[(&str, &str)]) -> Option<&'static str> {
+        agent_runtime_from_lookup(|key| {
+            pairs
+                .iter()
+                .find_map(|(name, value)| (*name == key).then(|| (*value).to_string()))
+        })
+    }
+
+    #[test]
+    fn agent_runtime_prefers_explicit_maestro_agent() {
+        let got = agent_runtime_from_pairs(&[
+            ("MAESTRO_AGENT", "  Claude  "),
+            ("CODEX_CLI", "1"),
+            ("CODEX_SANDBOX", "1"),
+        ]);
+        assert_eq!(got, Some("claude"));
+    }
+
+    #[test]
+    fn agent_runtime_uses_known_runtime_env_as_backup() {
+        assert_eq!(
+            agent_runtime_from_pairs(&[("CLAUDE_CODE", "1")]),
+            Some("claude")
+        );
+        assert_eq!(
+            agent_runtime_from_pairs(&[("CODEX_SANDBOX", "1")]),
+            Some("codex")
+        );
+    }
+
+    #[test]
+    fn agent_runtime_omits_unknown_or_blank_values() {
+        assert_eq!(
+            agent_runtime_from_pairs(&[("MAESTRO_AGENT", "gemini")]),
+            None
+        );
+        assert_eq!(agent_runtime_from_pairs(&[("CLAUDECODE", "   ")]), None);
     }
 }

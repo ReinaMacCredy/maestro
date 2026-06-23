@@ -73,7 +73,7 @@ fn mirror_plan_writes_managed_content_for_claude() {
     assert_hook_shape(
         &hook_plan.contents,
         false,
-        "sh \"$CLAUDE_PROJECT_DIR/.maestro/hooks/record.sh\"",
+        "MAESTRO_AGENT=claude sh \"$CLAUDE_PROJECT_DIR/.maestro/hooks/record.sh\"",
     );
 }
 
@@ -141,7 +141,7 @@ fn mirror_plan_writes_codex_hook_timeout_and_trust_related_files() {
     assert_hook_shape(
         &hook_plan.contents,
         true,
-        "sh \"$(git rev-parse --show-toplevel)/.maestro/hooks/record.sh\"",
+        "MAESTRO_AGENT=codex sh \"$(git rev-parse --show-toplevel)/.maestro/hooks/record.sh\"",
     );
 }
 

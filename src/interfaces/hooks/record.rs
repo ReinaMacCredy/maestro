@@ -5,6 +5,7 @@ use serde_json::Value;
 
 use crate::domain::run;
 use crate::foundation::core::paths::MaestroPaths;
+use crate::foundation::core::session::agent_runtime_from_env;
 
 pub(crate) fn record_stdin(paths: &MaestroPaths) -> Result<run::RecordOutcome> {
     let mut raw = String::new();
@@ -42,7 +43,9 @@ pub(crate) fn payload_session_id(payload: &Value) -> Option<String> {
 }
 
 pub(crate) fn record_value(paths: &MaestroPaths, payload: &Value) -> Result<run::RecordOutcome> {
-    let outcome = run::record_hook_event(paths, payload)?;
+    let mut payload = payload.clone();
+    run::insert_agent_runtime(&mut payload, agent_runtime_from_env());
+    let outcome = run::record_hook_event(paths, &payload)?;
     if let run::RecordOutcome::Ignored { event_type } = &outcome {
         match event_type {
             Some(event_type) => {

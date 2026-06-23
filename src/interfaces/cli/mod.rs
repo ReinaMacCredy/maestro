@@ -1971,27 +1971,7 @@ fn process_unique_token() -> String {
 }
 
 pub(super) fn detected_agent_hint() -> &'static str {
-    if let Ok(agent) = env::var("MAESTRO_AGENT") {
-        if agent.eq_ignore_ascii_case("claude") {
-            return "claude";
-        }
-        if agent.eq_ignore_ascii_case("codex") {
-            return "codex";
-        }
-    }
-    if env::var_os("CLAUDECODE")
-        .or_else(|| env::var_os("CLAUDE_CODE"))
-        .is_some()
-    {
-        return "claude";
-    }
-    if env::var_os("CODEX_CLI")
-        .or_else(|| env::var_os("CODEX_SANDBOX"))
-        .is_some()
-    {
-        return "codex";
-    }
-    "<claude|codex>"
+    crate::foundation::core::session::agent_runtime_from_env().unwrap_or("<claude|codex>")
 }
 
 #[cfg(test)]

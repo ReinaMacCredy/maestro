@@ -10,6 +10,7 @@ use crate::foundation::core::git;
 use crate::foundation::core::hash::sha256_prefixed;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::schema::EVENT_SCHEMA_VERSION;
+use crate::foundation::core::session::known_agent_runtime;
 use crate::foundation::core::time::utc_now_timestamp;
 
 /// Outcome of recording one hook payload.
@@ -87,6 +88,7 @@ fn normalize_event(payload: &Value) -> Option<Value> {
     }
 
     copy_string(payload, &mut event, "agent");
+    copy_agent_runtime(payload, &mut event);
     copy_string(payload, &mut event, "task_id");
     copy_string(payload, &mut event, "feature_id");
     copy_string(payload, &mut event, "card_id");
@@ -143,6 +145,14 @@ fn is_stop_event(event: &Value) -> bool {
 fn copy_string(source: &Value, target: &mut Map<String, Value>, field: &str) {
     if let Some(value) = string_field(source, field) {
         target.insert(field.to_string(), json!(value));
+    }
+}
+
+fn copy_agent_runtime(source: &Value, target: &mut Map<String, Value>) {
+    if let Some(runtime) = string_field(source, "agent_runtime")
+        .and_then(|value| known_agent_runtime(&value).map(str::to_string))
+    {
+        target.insert("agent_runtime".to_string(), json!(runtime));
     }
 }
 

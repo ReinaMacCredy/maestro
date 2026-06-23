@@ -6,6 +6,7 @@ use crate::domain::task;
 use crate::domain::{proof, run};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::schema::EVENT_SCHEMA_VERSION;
+use crate::foundation::core::session::agent_runtime_from_env;
 use crate::foundation::core::time::utc_now_timestamp;
 use crate::interfaces::cli::task_id::resolve_optional_task_id;
 use crate::interfaces::cli::{EventArgs, EventCommand};
@@ -44,6 +45,7 @@ fn intervention_event(note: String, topic: Option<String>, run: Option<String>) 
         "session_id": run_id,
         "note": note.trim(),
     });
+    run::insert_agent_runtime(&mut event, agent_runtime_from_env());
     if let Some(topic) = topic {
         event
             .as_object_mut()
@@ -79,7 +81,15 @@ fn create_event(
     // dangling event with exit 0 (T2).
     task::load_task_record(&paths.tasks_dir(), &task_id)?;
     let run = run.unwrap_or_else(super::cli_run_id);
-    proof::record_claim(&paths, &run, &task_id, message, payload, explicit_claims)?;
+    proof::record_claim(
+        &paths,
+        &run,
+        &task_id,
+        message,
+        payload,
+        explicit_claims,
+        agent_runtime_from_env(),
+    )?;
     println!("created task_proof event for run {run}");
     Ok(())
 }

@@ -5,6 +5,7 @@ use crate::domain::proof;
 use crate::domain::task;
 use crate::domain::task::{BlockerKind, BlockerTarget, TaskRecord, TaskState, TransitionDetails};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
+use crate::foundation::core::session::agent_runtime_from_env;
 use crate::foundation::core::time::utc_now_timestamp;
 use crate::interfaces::cli::query;
 use crate::interfaces::cli::status;
@@ -504,6 +505,7 @@ fn complete_task(
             Some(proof_text.clone()),
             None,
             Vec::new(),
+            agent_runtime_from_env(),
         )?;
         println!("auto: recorded task_proof event");
         println!("recorded proof ({} bytes)", proof_text.len());

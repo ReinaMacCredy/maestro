@@ -14,7 +14,9 @@ pub use active::{
     FileOverlap, Presence, SessionActivity, WarmEditor, active_sessions, active_sessions_union,
     current_bound_card, union_session_id, warm_file_overlaps,
 };
-pub(crate) use append::{append_jsonl_line, append_manual_event, open_managed_appendable};
+pub(crate) use append::{
+    append_jsonl_line, append_manual_event, insert_agent_runtime, open_managed_appendable,
+};
 pub use discovery::{RunEventLog, managed_event_logs};
 #[cfg(test)]
 pub(crate) use event::is_accepted_event;

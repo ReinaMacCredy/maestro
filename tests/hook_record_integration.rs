@@ -53,9 +53,7 @@ fn maestro_record_args_clean_env_with(
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    for key in SESSION_ENV_KEYS {
-        command.env_remove(key);
-    }
+    remove_session_and_runtime_env(&mut command);
     for (key, value) in envs {
         command.env(key, value);
     }
@@ -101,13 +99,27 @@ const SESSION_ENV_KEYS: [&str; 7] = [
     "CLAUDECODE_SESSION_ID",
     "CLAUDE_CODE_SESSION_ID",
 ];
+const RUNTIME_ENV_KEYS: [&str; 5] = [
+    "MAESTRO_AGENT",
+    "CLAUDECODE",
+    "CLAUDE_CODE",
+    "CODEX_CLI",
+    "CODEX_SANDBOX",
+];
+
+fn remove_session_and_runtime_env(command: &mut Command) {
+    for key in SESSION_ENV_KEYS {
+        command.env_remove(key);
+    }
+    for key in RUNTIME_ENV_KEYS {
+        command.env_remove(key);
+    }
+}
 
 fn maestro_without_session_env(cwd: &Path, args: &[&str]) -> std::process::Output {
     let mut command = Command::new(env!("CARGO_BIN_EXE_maestro"));
     command.args(args).current_dir(cwd);
-    for key in SESSION_ENV_KEYS {
-        command.env_remove(key);
-    }
+    remove_session_and_runtime_env(&mut command);
     command
         .output()
         .expect("invariant: compiled maestro binary should be runnable in hook tests")
@@ -282,6 +294,43 @@ fn valid_event_writes_schema_and_event_type_for_session() {
 }
 
 #[test]
+fn stdin_hook_payload_records_known_agent_runtime_without_overwriting_actor() {
+    let repo = init_repo();
+    let output = maestro_record_clean_env_with(
+        repo.path(),
+        r#"{"session_id":"runtime-stdin","event_type":"PostToolUse","agent":"maestro","agent_runtime":"<claude|codex>"}"#,
+        &[("MAESTRO_AGENT", "codex")],
+    );
+
+    assert!(
+        output.status.success(),
+        "hook record failed\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let events = read_events(repo.path(), "runtime-stdin");
+    assert_eq!(events[0]["agent"], "maestro");
+    assert_eq!(events[0]["agent_runtime"], "codex");
+}
+
+#[test]
+fn unknown_agent_runtime_is_omitted() {
+    let repo = init_repo();
+    let output = maestro_record_clean_env_with(
+        repo.path(),
+        r#"{"session_id":"runtime-unknown","event_type":"PostToolUse","agent_runtime":"<claude|codex>"}"#,
+        &[("MAESTRO_AGENT", "gemini")],
+    );
+
+    assert!(output.status.success());
+    let events = read_events(repo.path(), "runtime-unknown");
+    assert!(
+        events[0].get("agent_runtime").is_none(),
+        "unknown runtime and placeholder must be omitted: {:#?}",
+        events[0]
+    );
+}
+
+#[test]
 fn droid_hook_payload_session_id_wins_over_agent_env() {
     let repo = init_repo();
     let output = maestro_record_clean_env_with(
@@ -370,6 +419,34 @@ fn droid_hook_payload_session_id_feeds_synthetic_event_flags() {
 }
 
 #[test]
+fn synthetic_hook_event_records_backup_agent_runtime() {
+    let repo = init_repo();
+    let output = maestro_record_args_clean_env_with(
+        repo.path(),
+        &[
+            "hook",
+            "record",
+            "--event",
+            "skill_activation",
+            "--skill",
+            "maestro-card",
+            "--session",
+            "runtime-synthetic",
+        ],
+        "",
+        &[("CLAUDE_CODE", "1")],
+    );
+
+    assert!(
+        output.status.success(),
+        "synthetic hook event failed\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let events = read_events(repo.path(), "runtime-synthetic");
+    assert_eq!(events[0]["agent_runtime"], "claude");
+}
+
+#[test]
 fn explicit_session_flag_wins_over_droid_hook_payload_session_id() {
     let repo = init_repo();
     let output = maestro_record_args_clean_env_with(
@@ -428,6 +505,32 @@ fn unrecognized_event_type_is_reported_and_not_recorded() {
         !events_path.exists(),
         "an unrecognized event must not be appended to the run log"
     );
+}
+
+#[test]
+fn intervention_event_records_agent_runtime() {
+    let repo = init_repo();
+    let output = maestro_clean_env_with(
+        repo.path(),
+        &[
+            "event",
+            "intervention",
+            "--note",
+            "human corrected course",
+            "--run",
+            "runtime-intervention",
+        ],
+        &[("MAESTRO_AGENT", "claude")],
+    );
+
+    assert!(
+        output.status.success(),
+        "intervention event failed\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let events = read_events(repo.path(), "runtime-intervention");
+    assert_eq!(events[0]["event_type"], "intervention");
+    assert_eq!(events[0]["agent_runtime"], "claude");
 }
 
 #[test]

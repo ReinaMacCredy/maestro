@@ -8,6 +8,7 @@ use crate::domain::run;
 use crate::domain::task;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::schema::EVENT_SCHEMA_VERSION;
+use crate::foundation::core::session;
 use crate::foundation::core::time::utc_now_timestamp;
 
 /// List all managed `.maestro/runs/**/events.jsonl` files.
@@ -31,6 +32,7 @@ pub fn record_claim(
     message: Option<String>,
     payload: Option<String>,
     explicit_claims: Vec<String>,
+    agent_runtime: Option<&str>,
 ) -> Result<()> {
     let mut claims = task_claims(paths, task_id);
     claims.extend(explicit_claims);
@@ -51,6 +53,9 @@ pub fn record_claim(
     }
     if !claims.is_empty() {
         event["claims"] = Value::Array(claims.into_iter().map(Value::String).collect());
+    }
+    if let Some(runtime) = agent_runtime.and_then(session::known_agent_runtime) {
+        event["agent_runtime"] = Value::String(runtime.to_string());
     }
     run::append_manual_event(paths, run, &event)
 }

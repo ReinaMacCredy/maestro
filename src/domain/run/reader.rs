@@ -6,6 +6,7 @@ use anyhow::{Context, Result};
 use serde_json::Value;
 
 use crate::foundation::core::paths::MaestroPaths;
+use crate::foundation::core::session::known_agent_runtime;
 
 use super::discovery::{RunEventLog, managed_event_logs};
 use super::event::logical_session_id_from_run_path;
@@ -54,6 +55,11 @@ impl RunEvent {
     /// Agent name embedded in the event, when present.
     pub fn agent(&self) -> Option<&str> {
         self.string("agent")
+    }
+
+    /// Agent runtime identity embedded in the event, when known.
+    pub fn agent_runtime(&self) -> Option<&'static str> {
+        self.string("agent_runtime").and_then(known_agent_runtime)
     }
 
     /// Tool name embedded in the event, when present.

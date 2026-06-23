@@ -95,10 +95,12 @@ fn who_label(session_id: &str) -> &str {
     core.split('-').next().unwrap_or(core)
 }
 
-/// One compact line for the LIVE SESSIONS block: mode, bound-card title (or id,
-/// or '-'), who, and presence. The card title is joined from the live scan; a
-/// bound id absent from the scan renders `<id> (missing)` like `maestro active`.
+/// One compact line for the LIVE SESSIONS block: agent runtime, mode, bound-card
+/// title (or id, or '-'), who, and presence. The card title is joined from the
+/// live scan; a bound id absent from the scan renders `<id> (missing)` like
+/// `maestro active`.
 fn session_line(session: &SessionActivity, by_id: &BTreeMap<&str, &card::schema::Card>) -> String {
+    let agent = session.agent_runtime.as_deref().unwrap_or("-");
     let mode = session.mode.as_deref().map(mode_label).unwrap_or("-");
     let card = match session.bound_card.as_deref() {
         Some(id) => match by_id.get(id) {
@@ -108,7 +110,7 @@ fn session_line(session: &SessionActivity, by_id: &BTreeMap<&str, &card::schema:
         None => "-".to_string(),
     };
     format!(
-        "  {mode}  {card}  {} {} {}m",
+        "  {agent}  {mode}  {card}  {} {} {}m",
         who_label(&session.session_id),
         presence_label(session.presence),
         session.age_minutes,
@@ -1518,6 +1520,7 @@ mod tests {
     ) -> SessionActivity {
         SessionActivity {
             session_id: id.to_string(),
+            agent_runtime: None,
             mode: mode.map(str::to_string),
             bound_card: card.map(str::to_string),
             last_action: "card_touch".to_string(),
@@ -1556,18 +1559,17 @@ mod tests {
             .iter()
             .map(|c| (c.id.as_str(), c))
             .collect::<BTreeMap<_, _>>();
-        let line = session_line(
-            &session(
-                "f08020da-b6e9@maestro",
-                Some("maestro-design"),
-                Some("rcli"),
-                Presence::Working,
-                2,
-            ),
-            &by_id,
+        let mut session = session(
+            "f08020da-b6e9@maestro",
+            Some("maestro-design"),
+            Some("rcli"),
+            Presence::Working,
+            2,
         );
+        session.agent_runtime = Some("codex".to_string());
+        let line = session_line(&session, &by_id);
         assert_eq!(
-            line, "  design  Reduce CLI token bloat  f08020da [working] 2m",
+            line, "  codex  design  Reduce CLI token bloat  f08020da [working] 2m",
             "session line shape changed:\n{line}"
         );
     }

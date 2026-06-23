@@ -21,6 +21,43 @@ fn maestro(cwd: &Path, args: &[&str]) -> std::process::Output {
         .expect("invariant: compiled maestro binary should run in integration tests")
 }
 
+const SESSION_ENV_KEYS: [&str; 6] = [
+    "MAESTRO_SESSION_ID",
+    "MAESTRO_RUN_ID",
+    "CODEX_THREAD_ID",
+    "CLAUDE_SESSION_ID",
+    "CLAUDECODE_SESSION_ID",
+    "CLAUDE_CODE_SESSION_ID",
+];
+const RUNTIME_ENV_KEYS: [&str; 5] = [
+    "MAESTRO_AGENT",
+    "CLAUDECODE",
+    "CLAUDE_CODE",
+    "CODEX_CLI",
+    "CODEX_SANDBOX",
+];
+
+fn maestro_clean_env_with(
+    cwd: &Path,
+    args: &[&str],
+    envs: &[(&str, &str)],
+) -> std::process::Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_maestro"));
+    command.args(args).current_dir(cwd);
+    for key in SESSION_ENV_KEYS {
+        command.env_remove(key);
+    }
+    for key in RUNTIME_ENV_KEYS {
+        command.env_remove(key);
+    }
+    for (key, value) in envs {
+        command.env(key, value);
+    }
+    command
+        .output()
+        .expect("invariant: compiled maestro binary should run in integration tests")
+}
+
 fn assert_success(output: &std::process::Output, args: &[&str]) {
     assert!(
         output.status.success(),
@@ -326,6 +363,14 @@ fn write_event(repo: &Path, task_id: &str, message: &str) {
         format!("{{\"task_id\":\"{task_id}\",\"kind\":\"proof\",\"message\":\"{message}\"}}\n"),
     )
     .expect("invariant: events.jsonl should be writable");
+}
+
+fn read_run_events(repo: &Path, run: &str) -> Vec<Value> {
+    let raw = fs::read_to_string(repo.join(".maestro/runs").join(run).join("events.jsonl"))
+        .expect("invariant: events.jsonl should be readable");
+    raw.lines()
+        .map(|line| serde_json::from_str(line).expect("invariant: event line should be JSON"))
+        .collect()
 }
 
 fn write_feature_baseline(repo: &Path, feature_id: &str) {
@@ -1304,7 +1349,7 @@ fn event_create_writes_task_proof_for_verification() {
     let repo = temp.path();
     create_completed_task(repo, "implemented event create proof");
 
-    let create = maestro(
+    let create = maestro_clean_env_with(
         repo,
         &[
             "event",
@@ -1316,11 +1361,67 @@ fn event_create_writes_task_proof_for_verification() {
             "--run",
             "manual-test",
         ],
+        &[("MAESTRO_AGENT", "codex")],
     );
     assert_success(&create, &["event", "create"]);
+    let events = read_run_events(repo, "manual-test");
+    assert_eq!(events[0]["event"], "task_proof");
+    assert_eq!(events[0]["agent_runtime"], "codex");
     let verify = maestro(repo, &["verify", "task-001"]);
     assert_success(&verify, &["verify", "task-001"]);
     assert_eq!(verification_json(repo, "task-001")["status"], "passed");
+}
+
+#[test]
+fn task_complete_auto_proof_records_agent_runtime() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    let create = maestro(repo, &["task", "create", "Runtime proof"]);
+    assert_success(&create, &["task", "create", "Runtime proof"]);
+    let id = id_by_title(repo, "Runtime proof");
+    for args in [
+        vec![
+            "task",
+            "set",
+            id.as_str(),
+            "--check",
+            "runtime proof verified",
+        ],
+        vec!["task", "explore", id.as_str()],
+        vec!["task", "accept", id.as_str()],
+        vec!["task", "claim", id.as_str()],
+    ] {
+        let output = maestro(repo, &args);
+        assert_success(&output, &args);
+    }
+
+    let complete = maestro_clean_env_with(
+        repo,
+        &[
+            "task",
+            "complete",
+            &id,
+            "--summary",
+            "runtime proof complete",
+            "--claim",
+            "runtime proof complete",
+            "--proof",
+            "runtime proof complete",
+        ],
+        &[
+            ("MAESTRO_SESSION_ID", "complete-runtime"),
+            ("MAESTRO_AGENT", "claude"),
+        ],
+    );
+    assert_success(&complete, &["task", "complete", "<id>"]);
+
+    let events = read_run_events(repo, "complete-runtime");
+    let proof_event = events
+        .iter()
+        .find(|event| event["event"] == "task_proof")
+        .expect("task complete should record a task_proof event");
+    assert_eq!(proof_event["agent_runtime"], "claude");
 }
 
 #[test]

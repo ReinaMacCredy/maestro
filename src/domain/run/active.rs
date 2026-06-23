@@ -42,6 +42,8 @@ pub enum Presence {
 pub struct SessionActivity {
     /// Logical session id (the run bucket).
     pub session_id: String,
+    /// Agent runtime identity (`codex`/`claude`) observed in this session, when known.
+    pub agent_runtime: Option<String>,
     /// Skill from the session's latest `skill_activation`, when any.
     pub mode: Option<String>,
     /// Card id from the session's latest `card_touch`, when any.
@@ -60,6 +62,7 @@ pub struct SessionActivity {
 #[derive(Default)]
 struct Accumulator {
     overall: Option<(i128, String, String)>,
+    agent_runtime: Option<(i128, String)>,
     skill: Option<(i128, String)>,
     card: Option<(i128, String)>,
 }
@@ -82,6 +85,16 @@ impl Accumulator {
             .is_none_or(|(seen, _)| ts_nanos >= *seen)
         {
             self.skill = Some((ts_nanos, skill.to_string()));
+        }
+    }
+
+    fn observe_agent_runtime(&mut self, ts_nanos: i128, agent_runtime: &str) {
+        if self
+            .agent_runtime
+            .as_ref()
+            .is_none_or(|(seen, _)| ts_nanos >= *seen)
+        {
+            self.agent_runtime = Some((ts_nanos, agent_runtime.to_string()));
         }
     }
 
@@ -136,6 +149,9 @@ pub fn active_sessions_union(roots: &[MaestroPaths], now: &str) -> Result<Vec<Se
                 .unwrap_or("<unknown>");
             let acc = by_session.entry(session_id).or_default();
             acc.observe_overall(ts_nanos, event_type, ts);
+            if let Some(agent_runtime) = event.agent_runtime() {
+                acc.observe_agent_runtime(ts_nanos, agent_runtime);
+            }
             if event.is_event_type("skill_activation")
                 && let Some(skill) = event.skill_name()
             {
@@ -161,6 +177,7 @@ pub fn active_sessions_union(roots: &[MaestroPaths], now: &str) -> Result<Vec<Se
             last_nanos,
             SessionActivity {
                 session_id,
+                agent_runtime: acc.agent_runtime.map(|(_, agent_runtime)| agent_runtime),
                 mode: acc.skill.map(|(_, skill)| skill),
                 bound_card: acc.card.map(|(_, card)| card),
                 last_action,

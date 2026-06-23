@@ -155,6 +155,7 @@ fn peer_terminal(by_id: &HashMap<&str, &card::schema::Card>, peer: &str) -> bool
 
 /// The display cells for one session row, in column order.
 struct Cells {
+    agent: String,
     session: String,
     mode: String,
     card: String,
@@ -180,6 +181,7 @@ fn render_table(
         .collect();
 
     let headers = [
+        "AGENT",
         "SESSION",
         "MODE",
         "CARD",
@@ -197,6 +199,7 @@ fn render_table(
 impl Cells {
     fn into_columns(self) -> Vec<String> {
         vec![
+            self.agent,
             self.session,
             self.mode,
             self.card,
@@ -240,6 +243,7 @@ fn cells_for(
     };
 
     Cells {
+        agent: row.agent_runtime.as_deref().unwrap_or("-").to_string(),
         session: row.session_id.clone(),
         mode: row.mode.as_deref().map(mode_label).unwrap_or_else(dash),
         card,
@@ -557,6 +561,7 @@ mod tests {
     fn row(session: &str, bound: Option<&str>) -> SessionActivity {
         SessionActivity {
             session_id: session.to_string(),
+            agent_runtime: None,
             mode: None,
             bound_card: bound.map(str::to_string),
             last_action: "card_touch".to_string(),

@@ -66,6 +66,12 @@ fn skill_event(session: &str, skill: &str, ts: &str) -> String {
     )
 }
 
+fn skill_runtime_event(session: &str, skill: &str, runtime: &str, ts: &str) -> String {
+    format!(
+        r#"{{"event_type":"skill_activation","session_id":"{session}","skill_name":"{skill}","agent_runtime":"{runtime}","ts":"{ts}"}}"#
+    )
+}
+
 fn card_touch_event(session: &str, card: &str, ts: &str) -> String {
     format!(
         r#"{{"event_type":"card_touch","session_id":"{session}","card_id":"{card}","ts":"{ts}"}}"#
@@ -139,7 +145,7 @@ fn active_lists_live_sessions_with_enriched_rows_and_you_marker() {
         repo,
         "peer-sess",
         &[
-            skill_event("peer-sess", "maestro-card", &recent),
+            skill_runtime_event("peer-sess", "maestro-card", "codex", &ts_minutes_ago(2)),
             card_touch_event("peer-sess", "peer-topic", &recent),
         ],
     );
@@ -157,8 +163,17 @@ fn active_lists_live_sessions_with_enriched_rows_and_you_marker() {
 
     assert!(out.contains("peer-sess"), "peer row present\n{out}");
     assert!(out.contains("you-sess"), "running row present\n{out}");
+    let header = line_with(&out, "AGENT");
+    assert!(
+        header.find("AGENT").unwrap() < header.find("SESSION").unwrap(),
+        "AGENT column should render before SESSION\n{out}"
+    );
 
     let peer = line_with(&out, "peer-sess");
+    assert!(
+        peer.trim_start().starts_with("codex"),
+        "latest non-empty runtime survives later missing event\n{out}"
+    );
     assert!(
         peer.contains("card"),
         "peer mode (maestro-card -> card)\n{out}"
@@ -171,6 +186,10 @@ fn active_lists_live_sessions_with_enriched_rows_and_you_marker() {
     );
 
     let you = line_with(&out, "you-sess");
+    assert!(
+        you.trim_start().starts_with('-'),
+        "legacy row without agent_runtime renders dash\n{out}"
+    );
     assert!(
         you.contains("design"),
         "running mode (maestro-design)\n{out}"
