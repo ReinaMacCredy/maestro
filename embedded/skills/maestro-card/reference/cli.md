@@ -1,51 +1,16 @@
-<!-- maestro:cli-reference-version: 1.0.0 -->
-<!-- maestro:cli-reference-sha256: 1e430ad98cc47b7605afbab816f806982629c285e83ceda6547f21ee966ca896 -->
+<!-- maestro:cli-reference-version: 1.1.0 -->
+<!-- maestro:cli-reference-sha256: f4a7b8f4dfdf0a15341c05982161e7e5df6730f23954e64a4ee98814fe3c3c81 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
-Authoritative signatures generated from the binary's clap model.
-Every verb and flag is listed; a spelling not found here does not exist.
+Authoritative signatures generated from the binary's clap model,
+filtered for the `maestro-card` skill. Every listed verb and flag is exact;
+a spelling not found here is outside this skill's CLI surface.
 `<X>` required, `[X]` optional, `...` repeatable.
-
-## maestro init
-
-- `maestro init [--dry-run] [--merge] [--force] [--yes]` -- Scaffold .maestro/ and extract bundled resources into this repo
-
-## maestro install
-
-- `maestro install [AGENT] [--agent <AGENT>]` -- Install maestro hooks and config for an agent (claude, codex)
-
-## maestro upgrade
-
-- `maestro upgrade [--check] [--verbose] [--force]` -- Upgrade the maestro binary and refresh bundled resources
-
-## maestro sync
-
-- `maestro sync [--dry-run] [--global-skills]` -- Resync bundled resources to this binary's versions (offline)
-
-## maestro uninstall
-
-- `maestro uninstall [AGENT] [--agent <AGENT>]` -- Remove maestro hooks and config for an agent
-
-## maestro doctor
-
-- `maestro doctor` -- Diagnose the maestro installation and report problems
-
-## maestro shell-init
-
-- `maestro shell-init` -- Print the shell init snippet for maestro
 
 ## maestro status
 
 - `maestro status [--json]` -- Show the repo's current agent handoff and next action
-
-## maestro next
-
-- `maestro next [--json] [--run] [--loop] [--max-steps <MAX_STEPS>]` -- Show or run the next safe agent action
-
-## maestro resume
-
-- `maestro resume [--task <TASK_ID>] [--feature <FEATURE_ID>] [--full] [--handoff] [--write] [--json]` -- Print a clean-session resume packet from current repo artifacts
 
 ## maestro task
 
@@ -77,8 +42,6 @@ Every verb and flag is listed; a spelling not found here does not exist.
 
 ## maestro feature
 
-- `maestro feature new <TITLE> [--description <DESCRIPTION>] [--question <QUESTION>]... [--project <PROJECT>] [--id-only]` -- Propose a new feature (-> proposed)
-- `maestro feature set <ID> [--acceptance <ACCEPTANCE>]... [--area <AREA>]... [--non-goal <NON_GOAL>]... [--question <QUESTION>]... [--description <DESCRIPTION>] [--request <REQUEST>] [--type <INPUT_TYPE>]` -- Author a proposed feature's contract (replace or append fields)
 - `maestro feature accept <ID> [--qa <SURFACE>] [--reason <REASON>] [--dry-run]` -- Accept a feature into ready, freezing its contract (-> ready; gated)
 - `maestro feature prepare <ID> [--from <PLAN_FILE>] [--draft] [--task <TASK>]... [--check <CHECK>]... [--covers <COVERS>]... [--blocker <BLOCKER>]... [--after <AFTER>]...` -- Prepare an accepted feature into a ready implementation queue
 - `maestro feature amend <ID> [--add-acceptance <ADD_ACCEPTANCE>]... [--add-area <ADD_AREA>]... [--add-non-goal <ADD_NON_GOAL>]... [--add-question <ADD_QUESTION>]... --reason <REASON>` -- Grow a frozen contract additively with an audit reason (ready/in_progress)
@@ -90,7 +53,6 @@ Every verb and flag is listed; a spelling not found here does not exist.
 - `maestro feature close <ID> [--outcome <OUTCOME>] [--dry-run]` -- Close an in-progress feature (-> closed; gated)
 - `maestro feature cancel <ID> --reason <REASON> [--dry-run]` -- Cancel a non-terminal feature, abandoning its live child tasks (-> cancelled)
 - `maestro feature show <ID>` -- Show a feature's status, full contract, and task counts
-- `maestro feature spec <ID> [--section <SECTION>] [--append <TEXT>] [--replace <TEXT>]` -- Render a feature's spec-of-record, or fill one section (--section with --append/--replace)
 - `maestro feature list [--all]` -- List features with their statuses and task counts
 - `maestro feature archive [ID] [--closed] [--dry-run]` -- Archive a terminal feature and its terminal child tasks (-> .maestro/archive/features)
 - `maestro feature unarchive <ID>` -- Restore an archived feature and its archived child tasks
@@ -99,13 +61,6 @@ Every verb and flag is listed; a spelling not found here does not exist.
 
 - `maestro qa baseline <ID> --observed <OBSERVED>` -- Write a feature QA baseline from explicit observed behavior
 - `maestro qa slice <ID> [--scenario <SCENARIO>]... --observed <OBSERVED>` -- Append counting QA slice evidence for baseline scenarios
-
-## maestro decision
-
-- `maestro decision new <TITLE> [--context <CONTEXT>] [--feature <FEATURE>] [--lock] [--decision <DECISION>] [--rejected <REJECTED>]... [--preview <PREVIEW>] [--supersedes <SUPERSEDES>]... [--project <PROJECT>] [--id-only]` -- Open a structured decision fork (mints a decision card)
-- `maestro decision lock <ID> --decision <DECISION> [--rejected <REJECTED>]... [--preview <PREVIEW>] [--supersedes <SUPERSEDES>]...` -- Lock an open decision with the chosen answer
-- `maestro decision show <ID>` -- Show a decision card by id
-- `maestro decision list [--all] [--feature <FEATURE>]` -- List decision cards (recent 20 by activity unless --all)
 
 ## maestro card
 
@@ -142,55 +97,7 @@ Every verb and flag is listed; a spelling not found here does not exist.
 
 - `maestro conflict <PEER> [REASON] [--clear]` -- Flag a work conflict on a peer card so it holds off (no link, no git)
 
-## maestro harness
-
-- `maestro harness list [--all]` -- List proposals (proposed + accepted; --all adds the terminal ledger)
-- `maestro harness show <ID>` -- Show a proposal's detail and history
-- `maestro harness set [--claims-only]` -- Set harness policy flags
-- `maestro harness propose --title <TITLE> --evidence <EVIDENCE>... [--topic <TOPIC>]` -- File an agent-authored repo audit proposal
-- `maestro harness apply <ID> [--check <CHECK>]...` -- Accept a proposal and spawn a linked task (-> accepted)
-- `maestro harness unapply <ID> [--reason <REASON>]` -- Undo an accepted proposal before its linked task is claimed
-- `maestro harness dismiss <ID> --reason <REASON>` -- Dismiss a noisy proposal and suppress its fingerprint
-- `maestro harness measure <ID> [--force]` -- Re-run the detector to close or revert a proposal (-> measured)
-
-## maestro query
-
-- `maestro query matrix` -- Show the feature x task matrix (FEATURE/TASK/STATE/PROOF/TITLE)
-- `maestro query friction` -- Summarize recorded run friction (events, prompts, corrections)
-- `maestro query backlog` -- List improvement backlog items (ID/TITLE)
-- `maestro query run [--since <TS>] [--json]` -- Reassemble the run trace for a window from the durable run log
-
-## maestro index
-
-- `maestro index rebuild` -- Rebuild the text index over live + archived cards from scratch
-
-## maestro mcp
-
-- `maestro mcp serve` -- Run the MCP server over stdio
-- `maestro mcp tools` -- List the MCP tool names maestro exposes
-
-## maestro hook
-
-- `maestro hook record [--event <EVENT>] [--skill <SKILL>] [--session <SESSION>]`
-
 ## maestro watch
 
 - `maestro watch [ID] [--interval <INTERVAL>]` -- Live dependency-tree board (bare) or a one-shot snapshot; optional feature-id focuses one feature
 - `maestro watch snapshot [ID]` -- Render the live board once and exit
-
-## maestro playbook
-
-- `maestro playbook [LANGUAGE]` -- Print a language code styleguide, or the index with no language
-
-## maestro loop
-
-- `maestro loop list` -- List the loop-orchestration recipes with a one-line when-to-use
-- `maestro loop show <NAME>` -- Print one recipe verbatim
-
-## maestro lean
-
-- `maestro lean [TARGET] [--card]` -- Lean reach-ladder tooling: show/set the session strictness mode, emit review/audit guidance, or harvest debt markers
-
-## maestro version
-
-- `maestro version` -- Print the maestro version and binary path

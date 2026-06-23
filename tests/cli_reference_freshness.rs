@@ -10,7 +10,7 @@ use std::path::PathBuf;
 
 use maestro::domain::skills::catalog::skills;
 use maestro::interfaces::cli::reference::{
-    REGENERATE_COMMAND, render_cli_reference, verify_self_check,
+    REGENERATE_COMMAND, render_cli_reference_for_skill, verify_self_check,
 };
 
 fn cli_md_path(skill: &str) -> PathBuf {
@@ -22,8 +22,8 @@ fn cli_md_path(skill: &str) -> PathBuf {
 
 #[test]
 fn every_embedded_skill_ships_a_cli_md_matching_the_clap_model() {
-    let expected = render_cli_reference();
     for skill in skills() {
+        let expected = render_cli_reference_for_skill(skill.name);
         let path = cli_md_path(skill.name);
         let committed = fs::read_to_string(&path).unwrap_or_else(|error| {
             panic!(
@@ -57,8 +57,8 @@ fn every_committed_cli_md_passes_its_header_self_check() {
 #[test]
 #[ignore = "writes embedded/skills/*/reference/cli.md; run after a CLI change"]
 fn regenerate_cli_md() {
-    let content = render_cli_reference();
     for skill in skills() {
+        let content = render_cli_reference_for_skill(skill.name);
         let path = cli_md_path(skill.name);
         let parent = path.parent().expect("cli.md path always has a parent");
         fs::create_dir_all(parent)

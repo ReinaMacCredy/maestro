@@ -5,7 +5,7 @@ the QA baseline and slice evidence in `qa.md` prove the feature gates.
 
 ## Use
 
-- Author or inspect a feature: `new`, `set`, `show`, `spec`, `list`.
+- Inspect a feature after design: `show`, `list`.
 - Freeze a proposed contract: `accept`.
 - Turn an accepted contract into work cards: `prepare`.
 - Grow a frozen contract: `amend`.
@@ -21,14 +21,13 @@ maestro_qa_baseline -> maestro_feature_accept -> maestro_feature_prepare
 maestro_feature_verify -> maestro_qa_slice -> maestro_feature_close
 ```
 
-Use the CLI for authoring and maintenance verbs not yet exposed as MCP tools
-(`feature new`, `feature set`, `feature spec`, `feature amend`, archive and
-unarchive), or when MCP is unavailable. Signatures: [mcp.md](mcp.md),
+Use the CLI for lifecycle and maintenance verbs not yet exposed as MCP tools
+(`feature amend`, archive, and unarchive), or when MCP is unavailable. Design
+authoring (`feature new`, `feature set`, and `feature spec`) belongs in
+`maestro-design`. MCP tool schemas come from the host; CLI signatures live in
 [cli.md](cli.md).
 
 ```sh
-maestro feature new               # -> proposed
-maestro feature set               # author acceptance and affected areas
 maestro feature accept            # -> ready, requires qa-baseline
 maestro feature prepare --draft   # reviewable child-task plan
 maestro feature prepare --from    # create/explore/accept tasks from a plan file
@@ -36,20 +35,19 @@ maestro feature close              # -> closed, requires qa-slice; --outcome req
 maestro card archive <id>         # terminal features only; archives children too
 ```
 
-`set` works only while `proposed`. Repeating a base field replaces its full
-list; the `--add-*` spellings append to an existing list without resending
-it. After accept, use `feature amend`.
+Design owns proposed-contract authoring. After accept, use `feature amend` to
+append to an existing list without resending it.
 
 Use `feature show <id>` for the everyday lifecycle summary. Use
-`feature spec <id>` when the agent needs the narrative spec, open decisions,
-locked decisions, contract, and recent notes in one view. Open decisions are
-for real forks; `--question` is for loose questions not yet forks.
+`feature list` to orient across live feature cards. Open decisions are for real
+forks; `--question` is for loose questions not yet forks, both handled in
+`maestro-design`.
 
-At the approval moment, record constraints before `accept`. Scope constraints go
-into the frozen contract with `feature set <id> --add-non-goal "<constraint>"`.
-Directive or sequencing constraints, plus the dated authorization line, go into
-one `maestro card note <id> "<date + authorization + constraints>"`. Then run
-`feature accept`; `accept` itself does not grow approval fields.
+At the approval moment, record directive or sequencing constraints, plus the
+dated authorization line, in one `maestro card note <id> "<date + authorization
++ constraints>"`. If the approval changes scope before accept, return to
+`maestro-design` to update the proposed contract first. Then run `feature
+accept`; `accept` itself does not grow approval fields.
 
 `prepare --from` expects a visible plan:
 
@@ -122,7 +120,7 @@ show feature-fan-out`.
 
 - Do not hand-edit `card.yaml` or `qa.md`. Use verbs so guards and the amend
   audit trail stay intact.
-- Do not use `set` after accept; use `amend`.
+- Do not reshape the accepted contract from this skill; use additive `amend`.
 - Do not cancel a feature you only mean to pause. `cancel` is terminal and
   abandons live child work.
 - Do not close around QA blockers. Fix the work, baseline, or slice evidence.

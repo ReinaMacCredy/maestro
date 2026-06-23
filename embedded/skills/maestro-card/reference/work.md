@@ -30,7 +30,8 @@ maestro_verify
 
 Use `maestro_card_ready`, `maestro_card_list`, and `maestro_card_show` for
 orientation. Use the CLI loop below when MCP is unavailable or a needed verb is
-not exposed as an MCP tool. Signatures: [mcp.md](mcp.md), [cli.md](cli.md).
+not exposed as an MCP tool. MCP tool schemas come from the host; CLI
+signatures live in [cli.md](cli.md).
 
 ```sh
 maestro task create        # mint the card; seed --check with the observable result

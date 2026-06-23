@@ -1,6 +1,6 @@
 ---
 name: maestro-card
-version: 1.24.0
+version: 1.25.0
 description: "Use for active Maestro card work: pick up and deliver work cards (claim, update, complete, verify), run the feature-card lifecycle (accept, prepare, amend, close), and capture qa-baseline/qa-slice gate evidence."
 ---
 
@@ -14,18 +14,6 @@ feature lifecycle, proof, and the QA gates. Design (`maestro-design`), audit
 
 Activate with a known session id:
 `maestro hook record --event skill_activation --skill maestro-card --session <session_id>`
-
-## Droid Session Identity
-
-Factory's Droid hook reference says hook commands receive JSON on stdin with a
-common `session_id` field. Droid does not expose a normal shell session env var
-like `CODEX_THREAD_ID` or `CLAUDE_CODE_SESSION_ID`; read `session_id` from the
-hook JSON stdin. When `maestro hook record --event ...` runs as a Droid hook,
-Maestro reads that stdin `session_id` for synthetic events; hook payload
-recording keeps the payload `session_id`. From an ordinary shell, pass
-`--session <session_id>` or skip the activation record so it does not fall back
-to `cli-YYYY-MM-DD`. Do not rely on a `DROID_SESSION_ID` env var unless Factory
-documents one later.
 
 First step in a session: run `maestro active` (pull-only) to see what other
 live sessions are working on before you claim. If a peer is on a related card,
@@ -56,7 +44,7 @@ Read the reference for the job at hand; they share the ground rules below.
   the red-green-refactor step, not a second pass.
 - Work the backlog unattended while the user is away or asleep:
   [reference/loop.md](reference/loop.md)
-- Author, accept, prepare, amend, close, or archive a feature card:
+- Accept, prepare, amend, close, or archive a feature card after design:
   [reference/feature.md](reference/feature.md)
 - Prove a claim, repair failed proof, or verify adversarially:
   [reference/verify.md](reference/verify.md)
@@ -68,10 +56,9 @@ Read the reference for the job at hand; they share the ground rules below.
 ## Shared Ground
 
 - Prefer native Maestro MCP tools for lifecycle reads and writes when the host
-  exposes them. Exact tool names and argument shapes live in
-  [reference/mcp.md](reference/mcp.md). Use CLI commands when MCP is
-  unavailable, for verbs not yet exposed as MCP tools, or when debugging
-  install/sync/MCP server setup.
+  exposes them. The host-loaded tool schema is authoritative. Use CLI commands
+  when MCP is unavailable, for verbs not yet exposed as MCP tools, or when
+  debugging unsupported behavior.
 - Exact command signatures live in [reference/cli.md](reference/cli.md),
   generated from the binary. A verb or flag not listed there does not exist;
   read it instead of probing `--help`. CLI remains the compatibility and
@@ -103,17 +90,15 @@ Read the reference for the job at hand; they share the ground rules below.
 
 ## External intake
 
-When the user brings a spec, plan, or PRD authored elsewhere, the agent does
-the conversion; there is no CLI parser for external documents.
+When the user brings a spec, plan, or PRD authored elsewhere, route open forks
+through `maestro-design` first. This skill consumes the approved contract and
+drives the active lifecycle; there is no CLI parser for external documents.
 
-1. `maestro feature new "<title>" --description "<problem>"`, then copy the
-   document verbatim: `cp <doc> .maestro/cards/<id>/request.md`.
-2. `maestro feature set <id> --request "distilled from request.md (<doc
-   title>)" --type prd` (`prd`, `spec`, or `plan`), then author
-   acceptance, areas, and non-goals through `feature set`.
-3. Rewrite the document's bullets into observable acceptance criteria; never
-   copy narrative lines as acceptance. The verbatim text stays in
-   `request.md`; the contract carries only checkable behavior.
+1. Use `maestro-design` to create the feature, preserve the source text, decide
+   open forks, and author observable acceptance criteria.
+2. Return here after the contract is stable.
+3. Run `qa-baseline`, `feature accept`, `feature prepare`, work, verify,
+   `qa-slice`, and `feature close`.
 
 `request.md` travels with the card through archive and unarchive.
 

@@ -11,7 +11,7 @@ use crate::foundation::core::hash::sha256_hex;
 use crate::interfaces::cli::Cli;
 
 /// Format version of the generated reference, stamped in the header.
-pub const CLI_REFERENCE_FORMAT_VERSION: &str = "1.0.0";
+pub const CLI_REFERENCE_FORMAT_VERSION: &str = "1.1.0";
 
 /// First body line; everything from here on is covered by the header's
 /// sha256 self-check stamp.
@@ -24,21 +24,48 @@ pub const REGENERATE_COMMAND: &str =
 /// Render the full reference: a version-stamped self-checking header plus one
 /// signature bullet per invokable command.
 pub fn render_cli_reference() -> String {
+    render_cli_reference_with_scope(None, CommandScope::full())
+}
+
+/// Render the skill-specific reference for one bundled Maestro skill.
+///
+/// Unknown skill names fall back to the full reference so the renderer remains
+/// usable for diagnostics outside the bundled catalog.
+pub fn render_cli_reference_for_skill(skill: &str) -> String {
+    render_cli_reference_with_scope(Some(skill), CommandScope::for_skill(skill))
+}
+
+fn render_cli_reference_with_scope(skill: Option<&str>, scope: CommandScope) -> String {
     let mut cmd = Cli::command();
     cmd.build();
 
     let mut body = String::new();
     body.push_str(BODY_HEADING);
     body.push('\n');
-    body.push_str(
-        "\nAuthoritative signatures generated from the binary's clap model.\n\
-         Every verb and flag is listed; a spelling not found here does not exist.\n\
-         `<X>` required, `[X]` optional, `...` repeatable.\n",
-    );
+    match skill {
+        Some(skill) => body.push_str(&format!(
+            "\nAuthoritative signatures generated from the binary's clap model,\n\
+             filtered for the `{skill}` skill. Every listed verb and flag is exact;\n\
+             a spelling not found here is outside this skill's CLI surface.\n\
+             `<X>` required, `[X]` optional, `...` repeatable.\n"
+        )),
+        None => body.push_str(
+            "\nAuthoritative signatures generated from the binary's clap model.\n\
+             Every verb and flag is listed; a spelling not found here does not exist.\n\
+             `<X>` required, `[X]` optional, `...` repeatable.\n",
+        ),
+    }
     for sub in cmd.get_subcommands().filter(|sub| is_rendered(sub)) {
-        body.push_str(&format!("\n## maestro {}\n\n", sub.get_name()));
         let mut lines = Vec::new();
-        collect_invocation_lines(sub, &format!("maestro {}", sub.get_name()), &mut lines);
+        let path = format!("maestro {}", sub.get_name());
+        if !scope.visits(&path) {
+            continue;
+        }
+        collect_invocation_lines(sub, &path, &mut lines, scope);
+        if lines.is_empty() {
+            continue;
+        }
+        body.push_str(&format!("\n## maestro {}\n\n", sub.get_name()));
         for line in lines {
             body.push_str(&line);
             body.push('\n');
@@ -53,6 +80,161 @@ pub fn render_cli_reference() -> String {
          {body}"
     )
 }
+
+#[derive(Clone, Copy)]
+struct CommandScope {
+    paths: Option<&'static [&'static str]>,
+}
+
+impl CommandScope {
+    fn full() -> Self {
+        Self { paths: None }
+    }
+
+    fn for_skill(skill: &str) -> Self {
+        let paths = match skill {
+            "maestro-audit" => Some(MAESTRO_AUDIT_COMMANDS),
+            "maestro-card" => Some(MAESTRO_CARD_COMMANDS),
+            "maestro-design" => Some(MAESTRO_DESIGN_COMMANDS),
+            "maestro-setup" => Some(MAESTRO_SETUP_COMMANDS),
+            _ => None,
+        };
+        Self { paths }
+    }
+
+    fn includes(&self, path: &str) -> bool {
+        self.paths
+            .map(|paths| paths.contains(&path))
+            .unwrap_or(true)
+    }
+
+    fn visits(&self, path: &str) -> bool {
+        self.paths
+            .map(|paths| {
+                let descendant_prefix = format!("{path} ");
+                paths
+                    .iter()
+                    .any(|allowed| *allowed == path || allowed.starts_with(&descendant_prefix))
+            })
+            .unwrap_or(true)
+    }
+}
+
+const MAESTRO_CARD_COMMANDS: &[&str] = &[
+    "maestro status",
+    "maestro active",
+    "maestro task create",
+    "maestro task set",
+    "maestro task explore",
+    "maestro task accept",
+    "maestro task claim",
+    "maestro task complete",
+    "maestro task verify",
+    "maestro task next",
+    "maestro task note",
+    "maestro task update",
+    "maestro task block",
+    "maestro task unblock",
+    "maestro task reject",
+    "maestro task abandon",
+    "maestro task supersede",
+    "maestro task show",
+    "maestro task list",
+    "maestro task watch",
+    "maestro task proof",
+    "maestro task doctor",
+    "maestro event create",
+    "maestro event intervention",
+    "maestro feature accept",
+    "maestro feature prepare",
+    "maestro feature amend",
+    "maestro feature start",
+    "maestro feature verify",
+    "maestro feature proof add",
+    "maestro feature proof waive",
+    "maestro feature note",
+    "maestro feature close",
+    "maestro feature cancel",
+    "maestro feature show",
+    "maestro feature list",
+    "maestro feature archive",
+    "maestro feature unarchive",
+    "maestro qa baseline",
+    "maestro qa slice",
+    "maestro card ready",
+    "maestro card list",
+    "maestro card dep add",
+    "maestro card dep remove",
+    "maestro card archive",
+    "maestro card claim",
+    "maestro card assign",
+    "maestro card note",
+    "maestro card create",
+    "maestro card show",
+    "maestro card update",
+    "maestro card close",
+    "maestro card graph",
+    "maestro link add",
+    "maestro link remove",
+    "maestro msg send",
+    "maestro msg read",
+    "maestro msg list",
+    "maestro conflict",
+    "maestro watch",
+    "maestro watch snapshot",
+];
+
+const MAESTRO_DESIGN_COMMANDS: &[&str] = &[
+    "maestro status",
+    "maestro active",
+    "maestro feature new",
+    "maestro feature set",
+    "maestro feature show",
+    "maestro feature spec",
+    "maestro feature list",
+    "maestro decision new",
+    "maestro decision lock",
+    "maestro decision show",
+    "maestro decision list",
+    "maestro card list",
+    "maestro card show",
+    "maestro link add",
+    "maestro link remove",
+    "maestro msg send",
+    "maestro msg read",
+    "maestro msg list",
+];
+
+const MAESTRO_AUDIT_COMMANDS: &[&str] = &[
+    "maestro status",
+    "maestro active",
+    "maestro task show",
+    "maestro task list",
+    "maestro feature show",
+    "maestro feature list",
+    "maestro decision show",
+    "maestro decision list",
+    "maestro card list",
+    "maestro card show",
+    "maestro harness list",
+    "maestro harness show",
+    "maestro harness propose",
+    "maestro query matrix",
+    "maestro query friction",
+    "maestro query backlog",
+];
+
+const MAESTRO_SETUP_COMMANDS: &[&str] = &[
+    "maestro init",
+    "maestro install",
+    "maestro upgrade",
+    "maestro sync",
+    "maestro uninstall",
+    "maestro doctor",
+    "maestro shell-init",
+    "maestro status",
+    "maestro active",
+];
 
 /// Check the header's sha256 stamp against the body it covers, so a hand edit
 /// is caught even without regenerating from the clap model.
@@ -80,19 +262,27 @@ pub fn verify_self_check(content: &str) -> Result<(), String> {
 }
 
 /// Append one `- \`signature\` -- about` bullet per invokable command under `cmd`.
-fn collect_invocation_lines(cmd: &Command, path: &str, lines: &mut Vec<String>) {
+fn collect_invocation_lines(
+    cmd: &Command,
+    path: &str,
+    lines: &mut Vec<String>,
+    scope: CommandScope,
+) {
     let subs: Vec<&Command> = cmd
         .get_subcommands()
         .filter(|sub| is_rendered(sub))
         .collect();
-    if subs.is_empty() || has_visible_invocation_args(cmd) {
+    if scope.includes(path) && (subs.is_empty() || has_visible_invocation_args(cmd)) {
         lines.push(signature_line(cmd, path));
         if subs.is_empty() {
             return;
         }
     }
     for sub in subs {
-        collect_invocation_lines(sub, &format!("{path} {}", sub.get_name()), lines);
+        let child_path = format!("{path} {}", sub.get_name());
+        if scope.visits(&child_path) {
+            collect_invocation_lines(sub, &child_path, lines, scope);
+        }
     }
 }
 
@@ -293,6 +483,39 @@ mod tests {
         assert!(reference.contains("maestro mcp tools"), "{reference}");
         assert!(!reference.contains("maestro mcp stdin"), "{reference}");
         assert!(!reference.contains("maestro mcp list"), "{reference}");
+    }
+
+    #[test]
+    fn skill_scopes_render_filtered_exact_signatures() {
+        let card = render_cli_reference_for_skill("maestro-card");
+        assert!(card.contains("maestro task complete <ID>"), "{card}");
+        assert!(card.contains("maestro feature prepare <ID>"), "{card}");
+        assert!(card.contains("maestro qa slice <ID>"), "{card}");
+        assert!(card.contains("maestro card graph"), "{card}");
+        assert!(!card.contains("maestro init"), "{card}");
+        assert!(!card.contains("maestro mcp serve"), "{card}");
+        assert!(!card.contains("maestro harness propose"), "{card}");
+
+        let design = render_cli_reference_for_skill("maestro-design");
+        assert!(design.contains("maestro feature spec <ID>"), "{design}");
+        assert!(design.contains("maestro decision lock <ID>"), "{design}");
+        assert!(design.contains("maestro card show <ID>"), "{design}");
+        assert!(!design.contains("maestro task complete"), "{design}");
+        assert!(!design.contains("maestro qa baseline"), "{design}");
+
+        let audit = render_cli_reference_for_skill("maestro-audit");
+        assert!(audit.contains("maestro harness propose"), "{audit}");
+        assert!(audit.contains("maestro query friction"), "{audit}");
+        assert!(audit.contains("maestro card show <ID>"), "{audit}");
+        assert!(!audit.contains("maestro card update"), "{audit}");
+        assert!(!audit.contains("maestro harness apply"), "{audit}");
+
+        let setup = render_cli_reference_for_skill("maestro-setup");
+        assert!(setup.contains("maestro init [--dry-run]"), "{setup}");
+        assert!(setup.contains("maestro install"), "{setup}");
+        assert!(setup.contains("maestro doctor"), "{setup}");
+        assert!(!setup.contains("maestro task claim"), "{setup}");
+        assert!(!setup.contains("maestro decision new"), "{setup}");
     }
 
     #[test]

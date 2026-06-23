@@ -14,7 +14,6 @@
 use include_dir::{Dir, include_dir};
 use maestro::domain::skills::catalog::skills;
 use maestro::foundation::core::hash::sha256_hex;
-use maestro::interfaces::mcp::tools::tool_definitions;
 
 /// The shipped schema contract packs (WS5 / D6.2-B), one directory per artifact
 /// family. Included here directly, independent of the runtime catalog, so the
@@ -31,33 +30,31 @@ const RECOVERY_MD: &str = include_str!("../embedded/harness/RECOVERY.md");
 
 /// The shipped code playbook, served from the binary instead of extracted.
 static PLAYBOOK_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/embedded/playbook");
-const MAESTRO_CARD_MCP_MD: &str = include_str!("../embedded/skills/maestro-card/reference/mcp.md");
-
 /// `(group, name, shipped version, sha256 tree-hash of the resource files)`.
 const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 17] = [
     (
         "skill",
         "maestro-card",
-        "1.24.0",
-        "b5fcec99e04c935227ff1e5b4c2924a5365532e92265e9f987e5858b7bb34072",
+        "1.25.0",
+        "9bd28777cd76d2b5be7a3b29202b9d8fbc6fe9d3136abf8ff263f14e74611971",
     ),
     (
         "skill",
         "maestro-setup",
-        "1.7.0",
-        "9793213f0c5458b1cee7b044907483c38268bd15cdd89264d7e6245c698728c0",
+        "1.8.0",
+        "5bd03a80a33e7b6269921786103594b44d9446263231a6ac0885db0e8735d617",
     ),
     (
         "skill",
         "maestro-design",
-        "1.24.0",
-        "c749df4bd836ebd242408dae92613bbf8118be26f9be5909a78e141a5e045c9e",
+        "1.25.0",
+        "e5150a872ff56cb29fa09654ff4317299aa9d6968063bd3bca3a021499d22bb3",
     ),
     (
         "skill",
         "maestro-audit",
-        "1.6.0",
-        "9678ecd860dbba971a4a250b361473c6db372f37ff4cee8813a56976953a2eb8",
+        "1.7.0",
+        "d5b3d32b9e0feef8b6454ea76188448b87115da8869098c6ea3bbc21a7b678f3",
     ),
     (
         "hook",
@@ -312,39 +309,6 @@ fn every_shipped_skill_is_recorded_in_the_guard() {
                 .any(|(group, name, _, _)| *group == "skill" && *name == skill.name),
             "shipped skill {} is missing from RESOURCE_VERSION_GUARD",
             skill.name
-        );
-    }
-}
-
-#[test]
-fn every_shipped_skill_explains_droid_session_identity() {
-    for skill in skills() {
-        let skill_md = skill
-            .files
-            .iter()
-            .find(|file| file.relative_path == "SKILL.md")
-            .unwrap_or_else(|| panic!("shipped skill {} has no SKILL.md", skill.name));
-        let contents = std::str::from_utf8(skill_md.contents)
-            .unwrap_or_else(|_| panic!("shipped skill {} SKILL.md is not UTF-8", skill.name));
-        assert!(
-            contents.contains("## Droid Session Identity")
-                && contents.contains("common `session_id` field")
-                && contents.contains("hook JSON stdin")
-                && contents.contains("does not fall back")
-                && contents.contains("Do not rely on a `DROID_SESSION_ID` env var"),
-            "shipped skill {} must explain Droid hook JSON session_id attribution",
-            skill.name,
-        );
-    }
-}
-
-#[test]
-fn maestro_card_mcp_reference_lists_every_shipped_tool() {
-    for tool in tool_definitions() {
-        assert!(
-            MAESTRO_CARD_MCP_MD.contains(&format!("`{}(", tool.name)),
-            "maestro-card reference/mcp.md is missing MCP tool {}",
-            tool.name
         );
     }
 }
