@@ -62,7 +62,7 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
         tool(
             "maestro_task_complete",
             "Completes a task; in_progress to needs_verification; takes summary, one or more claims, and optional proof entries.",
-            json!({"type":"object","properties":{"id":{"type":"string"},"summary":{"type":"string"},"claim":{"type":"string"},"claims":{"type":"array","items":{"type":"string"},"minItems":1},"proof":{"type":"array","items":{"type":"string"}}},"required":["id","summary"]}),
+            json!({"type":"object","properties":{"id":{"type":"string"},"summary":{"type":"string"},"claim":{"type":"string"},"claims":{"type":"array","items":{"type":"string"},"minItems":1},"proof":{"type":"array","items":{"type":"string"}}},"required":["id","summary"],"anyOf":[{"required":["claim"]},{"required":["claims"]}]}),
         ),
         tool(
             "maestro_task_update",
@@ -126,8 +126,8 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
         ),
         tool(
             "maestro_card_create",
-            "Creates a card using guided full-card-store intents: feature, task, bug, decision, followup, or chore.",
-            json!({"type":"object","properties":{"intent":{"type":"string","enum":["feature","task","bug","decision","followup","chore"]},"title":{"type":"string"},"parent":{"type":"string"},"description":{"type":"string"},"problem":{"type":"string"},"active_form":{"type":"string"},"acceptance":{"type":"string"},"project":{"type":"string"}},"required":["intent","title"]}),
+            "Creates a card using guided full-card-store intents: feature, task, bug, decision, idea, or chore.",
+            json!({"type":"object","properties":{"intent":{"type":"string","enum":["feature","task","bug","decision","idea","chore"]},"title":{"type":"string"},"parent":{"type":"string"},"description":{"type":"string"},"problem":{"type":"string"},"active_form":{"type":"string"},"acceptance":{"type":"string"},"project":{"type":"string"}},"required":["intent","title"]}),
         ),
         tool(
             "maestro_card_list",
@@ -371,15 +371,15 @@ fn sync_tool(arguments: &Value) -> Result<String> {
 }
 
 fn feature_list(arguments: &Value) -> Result<String> {
-    let mut argv = vec!["feature".to_string(), "list".to_string()];
-    if bool_arg(arguments, "all") {
-        argv.push("--all".to_string());
-    }
-    cli(argv)
+    list_with_all("feature", arguments)
 }
 
 fn decision_list(arguments: &Value) -> Result<String> {
-    let mut argv = vec!["decision".to_string(), "list".to_string()];
+    list_with_all("decision", arguments)
+}
+
+fn list_with_all(noun: &str, arguments: &Value) -> Result<String> {
+    let mut argv = vec![noun.to_string(), "list".to_string()];
     if bool_arg(arguments, "all") {
         argv.push("--all".to_string());
     }
@@ -464,10 +464,10 @@ fn feature_prepare(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
             } else {
                 args.push(format!("T{}: {title}", index + 1));
             }
-            push_task_array_flags(task, &mut args, "checks", "--check")?;
-            push_task_array_flags(task, &mut args, "covers", "--covers")?;
-            push_task_array_flags(task, &mut args, "blockers", "--blocker")?;
-            push_task_array_flags(task, &mut args, "after", "--after")?;
+            push_repeated_flag(task, &mut args, "checks", "--check")?;
+            push_repeated_flag(task, &mut args, "covers", "--covers")?;
+            push_repeated_flag(task, &mut args, "blockers", "--blocker")?;
+            push_repeated_flag(task, &mut args, "after", "--after")?;
         }
     } else {
         args.push("--draft".to_string());
@@ -697,12 +697,13 @@ fn lifecycle_cli(
     args: Vec<String>,
 ) -> Result<String> {
     let state_before = feature_status_label(paths, feature_id);
+    let dry_run = args.iter().any(|arg| arg == "--dry-run");
     let output = run_cli(&args)?;
     let state_after = feature_status_label(paths, feature_id);
     let (ok, changed, blocked, reason_code, message, raw) = if output.success {
         (
             true,
-            true,
+            !dry_run,
             false,
             Value::Null,
             Value::String("ok".to_string()),
@@ -913,35 +914,18 @@ fn push_repeated_flag(
     field: &str,
     flag: &str,
 ) -> Result<()> {
-    for value in array_strings_arg(arguments, field)? {
-        args.push(flag.to_string());
-        args.push(value);
-    }
-    Ok(())
-}
-
-fn push_task_array_flags(
-    task: &Value,
-    args: &mut Vec<String>,
-    field: &str,
-    flag: &str,
-) -> Result<()> {
-    let Some(values) = task.get(field) else {
+    let Some(value) = arguments.get(field) else {
         return Ok(());
     };
-    for (index, value) in values
+    let values = value
         .as_array()
-        .with_context(|| format!("{field} must be an array"))?
-        .iter()
-        .enumerate()
-    {
+        .with_context(|| format!("{field} must be an array of strings"))?;
+    for (index, value) in values.iter().enumerate() {
+        let value = value
+            .as_str()
+            .with_context(|| format!("{field}[{index}] must be a string"))?;
         args.push(flag.to_string());
-        args.push(
-            value
-                .as_str()
-                .with_context(|| format!("{field}[{index}] must be a string"))?
-                .to_string(),
-        );
+        args.push(value.to_string());
     }
     Ok(())
 }
