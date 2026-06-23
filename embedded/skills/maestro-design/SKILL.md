@@ -1,7 +1,7 @@
 ---
 name: maestro-design
-version: 1.25.0
-description: "Use for design or brainstorming in a Maestro repo before implementation starts. Map current behavior, decide one fork at a time, record decisions and notes, then hand the approved contract to maestro-card."
+version: 1.26.0
+description: "Use when the user wants to brainstorm, design, plan, choose wording, or decide a Maestro repo change before implementation, including HARNESS, skill, workflow, architecture, or UX decisions."
 ---
 
 # Maestro Design

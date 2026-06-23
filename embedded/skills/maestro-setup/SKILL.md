@@ -1,7 +1,7 @@
 ---
 name: maestro-setup
-version: 1.8.0
-description: "Use after Maestro init/install or doctor warnings to tune a repository harness from verified repo evidence."
+version: 1.9.0
+description: "Use when Maestro init/install/sync/doctor, global skills, hooks, harness setup, or agent integration needs diagnosis or repair."
 ---
 
 # Maestro Setup
