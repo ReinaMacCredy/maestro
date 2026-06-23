@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: f4a7b8f4dfdf0a15341c05982161e7e5df6730f23954e64a4ee98814fe3c3c81 -->
+<!-- maestro:cli-reference-sha256: 4efa83a1e44c5c05b26403a388ee30898bf8e96b0bfe568f704fb2dd24070970 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -96,6 +96,14 @@ a spelling not found here is outside this skill's CLI surface.
 ## maestro conflict
 
 - `maestro conflict <PEER> [REASON] [--clear]` -- Flag a work conflict on a peer card so it holds off (no link, no git)
+
+## maestro harness
+
+- `maestro harness list [--all]` -- List proposals (proposed + accepted; --all adds the terminal ledger)
+- `maestro harness show <ID>` -- Show a proposal's detail and history
+- `maestro harness apply <ID> [--check <CHECK>]...` -- Accept a proposal and spawn a linked task (-> accepted)
+- `maestro harness dismiss <ID> --reason <REASON>` -- Dismiss a noisy proposal and suppress its fingerprint
+- `maestro harness measure <ID> [--force]` -- Re-run the detector to close or revert a proposal (-> measured)
 
 ## maestro watch
 

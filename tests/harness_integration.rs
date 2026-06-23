@@ -7,11 +7,22 @@ use std::io::Write;
 use std::os::unix::fs as unix_fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::thread;
+use std::time::{Duration, Instant};
 
 use card_support::{card_dir, card_doc, card_record_path, id_by_title, sole_idea_id, task_record};
 use serde_json::Value as JsonValue;
 use serde_yaml::{Mapping as YamlMapping, Value as YamlValue};
 use support::TestTempDir;
+
+const BASE_HARNESS_YAML: &str = concat!(
+    "schema_version: maestro.harness.v1\n",
+    "stack:\n",
+    "  kind: generic\n",
+    "  detected_by: []\n",
+    "  verify: []\n"
+);
+const MCP_PROCESS_TIMEOUT: Duration = Duration::from_secs(10);
 
 fn maestro(cwd: &Path, args: &[&str]) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_maestro"))
@@ -67,60 +78,38 @@ fn run_success(repo: &Path, args: &[&str]) -> String {
 }
 
 fn write_empty_harness(repo: &Path) {
+    write_harness_yaml(repo, "");
+}
+
+fn write_harness_yaml(repo: &Path, extra: &str) {
     fs::write(
         repo.join(".maestro/harness/harness.yml"),
-        concat!(
-            "schema_version: maestro.harness.v1\n",
-            "stack:\n",
-            "  kind: generic\n",
-            "  detected_by: []\n",
-            "  verify: []\n"
-        ),
+        format!("{BASE_HARNESS_YAML}{extra}"),
     )
     .expect("invariant: harness should be writable");
 }
 
 fn write_claims_only_harness(repo: &Path) {
-    fs::write(
-        repo.join(".maestro/harness/harness.yml"),
-        concat!(
-            "schema_version: maestro.harness.v1\n",
-            "stack:\n",
-            "  kind: generic\n",
-            "  detected_by: []\n",
-            "  verify: []\n",
-            "claims_only_verification: true\n",
-        ),
-    )
-    .expect("invariant: harness should be writable");
+    write_harness_yaml(repo, "claims_only_verification: true\n");
 }
 
 fn write_enabled_harness(repo: &Path) {
-    fs::write(
-        repo.join(".maestro/harness/harness.yml"),
+    write_harness_yaml(
+        repo,
         concat!(
-            "schema_version: maestro.harness.v1\n",
-            "stack:\n",
-            "  kind: generic\n",
-            "  detected_by: []\n",
-            "  verify: []\n",
             "escalation:\n",
             "  enabled: true\n",
             "  warn_after: 2\n",
             "  act_after: 3\n"
         ),
-    )
-    .expect("invariant: harness should be writable");
+    );
 }
 
 fn write_audit_harness(repo: &Path, every_sessions: usize) {
-    fs::write(
-        repo.join(".maestro/harness/harness.yml"),
-        format!(
-            "schema_version: maestro.harness.v1\nstack:\n  kind: generic\n  detected_by: []\n  verify: []\naudit:\n  every_sessions: {every_sessions}\n"
-        ),
-    )
-    .expect("invariant: harness should be writable");
+    write_harness_yaml(
+        repo,
+        &format!("audit:\n  every_sessions: {every_sessions}\n"),
+    );
 }
 
 fn write_prompt_session(repo: &Path, session: &str, prompts: &[&str]) {
@@ -369,26 +358,47 @@ fn mcp_frames(values: &[&str]) -> Vec<u8> {
 }
 
 fn parse_mcp_frames(bytes: &[u8]) -> Vec<JsonValue> {
-    let raw = String::from_utf8(bytes.to_vec()).expect("invariant: MCP output should be UTF-8");
-    let mut remaining = raw.as_str();
+    let mut remaining = bytes;
     let mut frames = Vec::new();
     while !remaining.is_empty() {
-        let (header, rest) = remaining
-            .split_once("\r\n\r\n")
+        let header_end = remaining
+            .windows(4)
+            .position(|window| window == b"\r\n\r\n")
             .expect("invariant: MCP frame should include header terminator");
+        let header = std::str::from_utf8(&remaining[..header_end])
+            .expect("invariant: MCP frame header should be UTF-8");
         let length = header
             .strip_prefix("Content-Length: ")
             .expect("invariant: MCP frame should include content length")
             .parse::<usize>()
             .expect("invariant: MCP content length should parse");
-        let (body, next) = rest.split_at(length);
-        frames.push(serde_json::from_str(body).expect("invariant: MCP response JSON"));
-        remaining = next;
+        let body_start = header_end + 4;
+        let body_end = body_start + length;
+        assert!(
+            remaining.len() >= body_end,
+            "MCP frame body shorter than declared Content-Length"
+        );
+        frames.push(
+            serde_json::from_slice(&remaining[body_start..body_end])
+                .expect("invariant: MCP response JSON"),
+        );
+        remaining = &remaining[body_end..];
     }
     frames
 }
 
 fn run_mcp_requests(repo: &Path, requests: &[&str]) -> Vec<JsonValue> {
+    let output = run_mcp_bytes(repo, &mcp_frames(requests));
+    parse_mcp_frames(&output.stdout)
+}
+
+fn run_mcp_bytes(repo: &Path, input: &[u8]) -> std::process::Output {
+    let output = run_mcp_bytes_raw(repo, input);
+    assert_success(&output, &["mcp", "serve"]);
+    output
+}
+
+fn run_mcp_bytes_raw(repo: &Path, input: &[u8]) -> std::process::Output {
     let mut child = Command::new(env!("CARGO_BIN_EXE_maestro"))
         .args(["mcp", "serve"])
         .current_dir(repo)
@@ -401,14 +411,34 @@ fn run_mcp_requests(repo: &Path, requests: &[&str]) -> Vec<JsonValue> {
         .stdin
         .as_mut()
         .expect("invariant: mcp stdin should be piped")
-        .write_all(&mcp_frames(requests))
+        .write_all(input)
         .expect("invariant: MCP requests should be writable");
     drop(child.stdin.take());
-    let output = child
-        .wait_with_output()
-        .expect("invariant: mcp serve should return after stdin closes");
-    assert_success(&output, &["mcp", "serve"]);
-    parse_mcp_frames(&output.stdout)
+    let deadline = Instant::now() + MCP_PROCESS_TIMEOUT;
+    loop {
+        if child
+            .try_wait()
+            .expect("invariant: mcp serve wait should be inspectable")
+            .is_some()
+        {
+            return child
+                .wait_with_output()
+                .expect("invariant: mcp serve output should be collectible");
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let output = child
+                .wait_with_output()
+                .expect("invariant: timed out mcp serve output should be collectible");
+            panic!(
+                "maestro mcp serve timed out after {:?}\nstdout:\n{}\nstderr:\n{}",
+                MCP_PROCESS_TIMEOUT,
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
 }
 
 /// The card's directory, located through the store probe (a pooled task's
@@ -1570,33 +1600,14 @@ fn mcp_serve_lists_tools_and_calls_status_over_stdio() {
     let repo = temp.path();
     create_task(repo, "MCP visible task");
 
-    let mut child = Command::new(env!("CARGO_BIN_EXE_maestro"))
-        .args(["mcp", "serve"])
-        .current_dir(repo)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("invariant: compiled maestro binary should run mcp serve");
-    let stdin = child
-        .stdin
-        .as_mut()
-        .expect("invariant: mcp stdin should be piped");
-    stdin
-        .write_all(&mcp_frames(&[
+    let lines = run_mcp_requests(
+        repo,
+        &[
             r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"#,
             r#"{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}"#,
             r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"maestro_status","arguments":{}}}"#,
-        ]))
-        .expect("invariant: MCP requests should be writable");
-    drop(child.stdin.take());
-
-    let output = child
-        .wait_with_output()
-        .expect("invariant: mcp serve should return after stdin closes");
-    assert_success(&output, &["mcp", "serve"]);
-
-    let lines = parse_mcp_frames(&output.stdout);
+        ],
+    );
     let tools = lines[1]["result"]["tools"]
         .as_array()
         .expect("invariant: tools/list should return an array");
@@ -1637,6 +1648,28 @@ fn mcp_serve_lists_tools_and_calls_status_over_stdio() {
         tools
             .iter()
             .any(|tool| tool["name"] == "maestro_card_graph")
+    );
+    let task_complete_tool = tools
+        .iter()
+        .find(|tool| tool["name"] == "maestro_task_complete")
+        .expect("invariant: maestro_task_complete should be listed");
+    assert!(
+        !task_complete_tool["inputSchema"]["anyOf"].is_null(),
+        "maestro_task_complete schema requires claim or claims:\n{task_complete_tool}"
+    );
+    let card_create_tool = tools
+        .iter()
+        .find(|tool| tool["name"] == "maestro_card_create")
+        .expect("invariant: maestro_card_create should be listed");
+    let card_create_intents = card_create_tool["inputSchema"]["properties"]["intent"]["enum"]
+        .as_array()
+        .expect("invariant: card_create intent enum should be listed");
+    assert!(
+        card_create_intents.iter().any(|intent| intent == "idea")
+            && !card_create_intents
+                .iter()
+                .any(|intent| intent == "followup"),
+        "maestro_card_create schema advertises actual card types:\n{card_create_tool}"
     );
     assert!(tools.iter().any(|tool| tool["name"] == "maestro_sync"));
     assert!(
@@ -1908,7 +1941,8 @@ fn mcp_feature_gate_tools_verify_slice_and_close_without_autoclose() {
     let close_requests = [
         r#"{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"maestro_feature_verify","arguments":{"feature_id":"mcp-feature-gate","prove":["ac-1"],"evidence":["MCP feature gate AC is covered"]}}}"#.to_string(),
         r#"{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"maestro_qa_slice","arguments":{"feature_id":"mcp-feature-gate","scenarios":["bl-001"],"observed":"MCP feature gate scenario still passes"}}}"#.to_string(),
-        r#"{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"maestro_feature_close","arguments":{"feature_id":"mcp-feature-gate","outcome":"MCP feature gate closed through typed MCP tools"}}}"#.to_string(),
+        r#"{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"maestro_feature_close","arguments":{"feature_id":"mcp-feature-gate","dry_run":true}}}"#.to_string(),
+        r#"{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"maestro_feature_close","arguments":{"feature_id":"mcp-feature-gate","outcome":"MCP feature gate closed through typed MCP tools"}}}"#.to_string(),
     ];
     let close_refs = close_requests
         .iter()
@@ -1942,7 +1976,19 @@ fn mcp_feature_gate_tools_verify_slice_and_close_without_autoclose() {
         serde_json::from_str(slice_text).expect("qa slice should return envelope JSON");
     assert_eq!(slice_envelope["ok"], true, "{slice_text}");
 
-    let close_text = frames[2]["result"]["content"][0]["text"]
+    let dry_run_text = frames[2]["result"]["content"][0]["text"]
+        .as_str()
+        .expect("invariant: dry-run close should return text");
+    let dry_run_envelope: JsonValue =
+        serde_json::from_str(dry_run_text).expect("dry-run close should return envelope JSON");
+    assert_eq!(dry_run_envelope["ok"], true, "{dry_run_text}");
+    assert_eq!(dry_run_envelope["changed"], false, "{dry_run_text}");
+    assert_eq!(
+        dry_run_envelope["state_after"], "in_progress",
+        "{dry_run_text}"
+    );
+
+    let close_text = frames[3]["result"]["content"][0]["text"]
         .as_str()
         .expect("invariant: close should return text");
     let close_envelope: JsonValue =
@@ -1959,29 +2005,13 @@ fn mcp_task_tools_drive_normal_lifecycle_over_stdio() {
     let repo = temp.path();
     write_claims_only_harness(repo);
 
-    let mut child = Command::new(env!("CARGO_BIN_EXE_maestro"))
-        .args(["mcp", "serve"])
-        .current_dir(repo)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("invariant: compiled maestro binary should run mcp serve");
-    child
-        .stdin
-        .as_mut()
-        .expect("invariant: mcp stdin should be piped")
-        .write_all(&mcp_frames(&[
+    let first_frames = run_mcp_requests(
+        repo,
+        &[
             r#"{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}"#,
             r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"maestro_task_create","arguments":{"title":"MCP normal task","lane":"normal","risk":"low","checks":["first claim passed","second claim passed"]}}}"#,
-        ]))
-        .expect("invariant: MCP requests should be writable");
-    drop(child.stdin.take());
-    let output = child
-        .wait_with_output()
-        .expect("invariant: mcp serve should return after stdin closes");
-    assert_success(&output, &["mcp", "serve"]);
-    let first_frames = parse_mcp_frames(&output.stdout);
+        ],
+    );
     let tools = first_frames[0]["result"]["tools"]
         .as_array()
         .expect("invariant: tools/list should return tools");
@@ -2027,26 +2057,7 @@ fn mcp_task_tools_drive_normal_lifecycle_over_stdio() {
         ),
     ];
     let request_refs = requests.iter().map(String::as_str).collect::<Vec<_>>();
-    let mut child = Command::new(env!("CARGO_BIN_EXE_maestro"))
-        .args(["mcp", "serve"])
-        .current_dir(repo)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("invariant: compiled maestro binary should run mcp serve");
-    child
-        .stdin
-        .as_mut()
-        .expect("invariant: mcp stdin should be piped")
-        .write_all(&mcp_frames(&request_refs))
-        .expect("invariant: MCP requests should be writable");
-    drop(child.stdin.take());
-    let output = child
-        .wait_with_output()
-        .expect("invariant: mcp serve should return after stdin closes");
-    assert_success(&output, &["mcp", "serve"]);
-    let frames = parse_mcp_frames(&output.stdout);
+    let frames = run_mcp_requests(repo, &request_refs);
 
     let next_text = frames[2]["result"]["content"][0]["text"]
         .as_str()
@@ -2086,26 +2097,7 @@ fn mcp_card_tools_drive_lifecycle_ready_and_graph_over_stdio() {
         .iter()
         .map(String::as_str)
         .collect::<Vec<_>>();
-    let mut child = Command::new(env!("CARGO_BIN_EXE_maestro"))
-        .args(["mcp", "serve"])
-        .current_dir(repo)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("invariant: compiled maestro binary should run mcp serve");
-    child
-        .stdin
-        .as_mut()
-        .expect("invariant: mcp stdin should be piped")
-        .write_all(&mcp_frames(&first_refs))
-        .expect("invariant: MCP requests should be writable");
-    drop(child.stdin.take());
-    let output = child
-        .wait_with_output()
-        .expect("invariant: mcp serve should return after stdin closes");
-    assert_success(&output, &["mcp", "serve"]);
-    let first_frames = parse_mcp_frames(&output.stdout);
+    let first_frames = run_mcp_requests(repo, &first_refs);
     let tools = first_frames[0]["result"]["tools"]
         .as_array()
         .expect("invariant: tools/list should return tools");
@@ -2146,26 +2138,7 @@ fn mcp_card_tools_drive_lifecycle_ready_and_graph_over_stdio() {
         ),
     ];
     let request_refs = requests.iter().map(String::as_str).collect::<Vec<_>>();
-    let mut child = Command::new(env!("CARGO_BIN_EXE_maestro"))
-        .args(["mcp", "serve"])
-        .current_dir(repo)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("invariant: compiled maestro binary should run mcp serve");
-    child
-        .stdin
-        .as_mut()
-        .expect("invariant: mcp stdin should be piped")
-        .write_all(&mcp_frames(&request_refs))
-        .expect("invariant: MCP requests should be writable");
-    drop(child.stdin.take());
-    let output = child
-        .wait_with_output()
-        .expect("invariant: mcp serve should return after stdin closes");
-    assert_success(&output, &["mcp", "serve"]);
-    let frames = parse_mcp_frames(&output.stdout);
+    let frames = run_mcp_requests(repo, &request_refs);
     assert!(
         frames[0]["result"]["content"][0]["text"]
             .as_str()
@@ -2198,33 +2171,15 @@ fn mcp_decision_list_windows_by_default_and_all_reaches_full() {
         run_success(repo, &["decision", "new", &format!("MCP decision {i:02}")]);
     }
 
-    let mut child = Command::new(env!("CARGO_BIN_EXE_maestro"))
-        .args(["mcp", "serve"])
-        .current_dir(repo)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("invariant: compiled maestro binary should run mcp serve");
-    let stdin = child
-        .stdin
-        .as_mut()
-        .expect("invariant: mcp stdin should be piped");
-    stdin
-        .write_all(&mcp_frames(&[
+    let lines = run_mcp_requests(
+        repo,
+        &[
             r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"#,
             r#"{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}"#,
             r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"maestro_decision_list","arguments":{}}}"#,
             r#"{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"maestro_decision_list","arguments":{"all":true}}}"#,
-        ]))
-        .expect("invariant: MCP requests should be writable");
-    drop(child.stdin.take());
-
-    let output = child
-        .wait_with_output()
-        .expect("invariant: mcp serve should return after stdin closes");
-    assert_success(&output, &["mcp", "serve"]);
-    let lines = parse_mcp_frames(&output.stdout);
+        ],
+    );
 
     // ac-5: the tool advertises the `all` boolean param.
     let tools = lines[1]["result"]["tools"]
@@ -2282,33 +2237,16 @@ fn mcp_serve_handles_json_rpc_batches_over_stdio_frames() {
     let repo = temp.path();
     create_task(repo, "MCP batch task");
 
-    let mut child = Command::new(env!("CARGO_BIN_EXE_maestro"))
-        .args(["mcp", "serve"])
-        .current_dir(repo)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("invariant: compiled maestro binary should run mcp serve");
-    child
-        .stdin
-        .as_mut()
-        .expect("invariant: mcp stdin should be piped")
-        .write_all(&mcp_frames(&[concat!(
+    let frames = run_mcp_requests(
+        repo,
+        &[concat!(
             "[",
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}},",
             "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\",\"params\":{}},",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"maestro_status\",\"arguments\":{}}}",
             "]"
-        )]))
-        .expect("invariant: MCP requests should be writable");
-    drop(child.stdin.take());
-
-    let output = child
-        .wait_with_output()
-        .expect("invariant: mcp serve should return after stdin closes");
-    assert_success(&output, &["mcp", "serve"]);
-    let frames = parse_mcp_frames(&output.stdout);
+        )],
+    );
     assert_eq!(frames.len(), 1);
     let batch = frames[0]
         .as_array()
@@ -2324,29 +2262,10 @@ fn mcp_serve_uses_content_length_framing() {
     let repo = temp.path();
     create_task(repo, "MCP visible task");
 
-    let mut child = Command::new(env!("CARGO_BIN_EXE_maestro"))
-        .args(["mcp", "serve"])
-        .current_dir(repo)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("invariant: compiled maestro binary should run mcp serve");
-    let stdin = child
-        .stdin
-        .as_mut()
-        .expect("invariant: mcp stdin should be piped");
-    stdin
-        .write_all(&mcp_frames(&[
-            r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"#,
-        ]))
-        .expect("invariant: MCP requests should be writable");
-    drop(child.stdin.take());
-
-    let output = child
-        .wait_with_output()
-        .expect("invariant: mcp serve should return after stdin closes");
-    assert_success(&output, &["mcp", "serve"]);
+    let output = run_mcp_bytes(
+        repo,
+        &mcp_frames(&[r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"#]),
+    );
     assert!(
         String::from_utf8(output.stdout.clone())
             .expect("invariant: MCP output should be UTF-8")
@@ -2357,30 +2276,37 @@ fn mcp_serve_uses_content_length_framing() {
 }
 
 #[test]
+fn mcp_frame_parser_uses_content_length_as_bytes() {
+    let frames = parse_mcp_frames(&mcp_frames(&[r#"{"message":"déjà vu"}"#]));
+
+    assert_eq!(frames[0]["message"], "déjà vu");
+}
+
+#[test]
+fn mcp_serve_rejects_oversized_content_length_before_body_allocation() {
+    let temp = setup_repo("maestro-mcp-oversized-frame");
+    let repo = temp.path();
+    let oversized = format!("Content-Length: {}\r\n\r\n", 1024 * 1024 + 1);
+
+    let output = run_mcp_bytes_raw(repo, oversized.as_bytes());
+
+    assert!(!output.status.success(), "oversized MCP frame should fail");
+    assert!(
+        stderr(&output).contains("MCP frame exceeds maximum size"),
+        "stderr should explain the frame limit:\n{}",
+        stderr(&output)
+    );
+}
+
+#[test]
 fn mcp_serve_accepts_newline_delimited_json_rpc() {
     let temp = setup_repo("maestro-mcp-line-json");
     let repo = temp.path();
 
-    let mut child = Command::new(env!("CARGO_BIN_EXE_maestro"))
-        .args(["mcp", "serve"])
-        .current_dir(repo)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("invariant: compiled maestro binary should run mcp serve");
-    child
-        .stdin
-        .as_mut()
-        .expect("invariant: mcp stdin should be piped")
-        .write_all(b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}\n")
-        .expect("invariant: MCP request should be writable");
-    drop(child.stdin.take());
-
-    let output = child
-        .wait_with_output()
-        .expect("invariant: mcp serve should return after stdin closes");
-    assert_success(&output, &["mcp", "serve"]);
+    let output = run_mcp_bytes(
+        repo,
+        b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}\n",
+    );
     let frames = parse_mcp_frames(&output.stdout);
     assert!(
         frames[0]["result"]["tools"]
@@ -2396,26 +2322,10 @@ fn mcp_serve_accepts_list_method_alias() {
     let temp = setup_repo("maestro-mcp-list-method");
     let repo = temp.path();
 
-    let mut child = Command::new(env!("CARGO_BIN_EXE_maestro"))
-        .args(["mcp", "serve"])
-        .current_dir(repo)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("invariant: compiled maestro binary should run mcp serve");
-    child
-        .stdin
-        .as_mut()
-        .expect("invariant: mcp stdin should be piped")
-        .write_all(b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"list\",\"params\":{}}\n")
-        .expect("invariant: MCP request should be writable");
-    drop(child.stdin.take());
-
-    let output = child
-        .wait_with_output()
-        .expect("invariant: mcp serve should return after stdin closes");
-    assert_success(&output, &["mcp", "serve"]);
+    let output = run_mcp_bytes(
+        repo,
+        b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"list\",\"params\":{}}\n",
+    );
     let frames = parse_mcp_frames(&output.stdout);
     assert!(
         frames[0]["result"]["tools"]
@@ -2431,33 +2341,15 @@ fn mcp_serve_reports_invalid_requests_without_running_tools() {
     let temp = setup_repo("maestro-mcp-invalid");
     let repo = temp.path();
 
-    let mut child = Command::new(env!("CARGO_BIN_EXE_maestro"))
-        .args(["mcp", "serve"])
-        .current_dir(repo)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("invariant: compiled maestro binary should run mcp serve");
-    child
-        .stdin
-        .as_mut()
-        .expect("invariant: mcp stdin should be piped")
-        .write_all(&mcp_frames(&[
+    let lines = run_mcp_requests(
+        repo,
+        &[
             r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{}}"#,
             r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"missing_tool","arguments":{}}}"#,
             r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"maestro_task_complete","arguments":{"id":"task-001","summary":"done","claims":["one",2]}}}"#,
             r#"{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}"#,
-        ]))
-        .expect("invariant: MCP requests should be writable");
-    drop(child.stdin.take());
-
-    let output = child
-        .wait_with_output()
-        .expect("invariant: mcp serve should return after stdin closes");
-    assert_success(&output, &["mcp", "serve"]);
-
-    let lines = parse_mcp_frames(&output.stdout);
+        ],
+    );
     assert_eq!(lines.len(), 3);
     assert_eq!(lines[0]["error"]["code"], -32602);
     assert!(

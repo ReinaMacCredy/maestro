@@ -6,6 +6,8 @@ use serde_json::{Value, json};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::interfaces::mcp::tools::{call_tool, tool_definitions};
 
+const MAX_MCP_FRAME_BYTES: usize = 1024 * 1024;
+
 /// Run the stdio MCP JSON-RPC server.
 pub fn serve() -> Result<()> {
     let repo_root = discover_repo_root()?;
@@ -69,6 +71,9 @@ fn read_frame(reader: &mut impl BufRead) -> Result<Option<String>> {
     let Some(content_length) = content_length else {
         bail!("missing MCP Content-Length header");
     };
+    if content_length > MAX_MCP_FRAME_BYTES {
+        bail!("MCP frame exceeds maximum size of {MAX_MCP_FRAME_BYTES} bytes");
+    }
     let mut body = vec![0; content_length];
     reader
         .read_exact(&mut body)

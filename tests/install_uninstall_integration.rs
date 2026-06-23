@@ -1318,6 +1318,32 @@ fn uninstall_rejects_forged_json_previous_value() {
     assert!(temp_dir.path().join(".maestro/install-lock.yaml").exists());
 }
 
+#[test]
+fn uninstall_rejects_codex_forged_json_previous_value() {
+    let temp_dir = TestTempDir::new("maestro-install-cli-test");
+    init_repo(temp_dir.path());
+    fs::create_dir_all(temp_dir.path().join(".maestro"))
+        .expect("invariant: maestro dir should be creatable");
+    fs::create_dir_all(temp_dir.path().join(".codex"))
+        .expect("invariant: codex dir should be creatable");
+    let original = "{\n  \"hooks\": {},\n  \"_maestro_managed_keys\": [\"hooks\"]\n}\n";
+    fs::write(temp_dir.path().join(".codex/hooks.json"), original)
+        .expect("invariant: hooks should be writable");
+    fs::write(
+        temp_dir.path().join(".maestro/install-lock.yaml"),
+        "schema_version: maestro.install_lock.v1\nagents:\n  codex:\n    installed_at: \"2026-05-25T10:00:00Z\"\n    files:\n      .codex/hooks.json:\n        kind: json_managed_keys\n        managed_keys:\n          - hooks\n        previous_values:\n          hooks:\n            Stop:\n              - matcher: \"*\"\n                hooks:\n                  - type: command\n                    command: forged\n",
+    )
+    .expect("invariant: install lock should be writable");
+
+    let uninstall = maestro(&["uninstall", "--agent", "codex"], temp_dir.path());
+
+    assert!(!uninstall.status.success());
+    let hooks = fs::read_to_string(temp_dir.path().join(".codex/hooks.json"))
+        .expect("invariant: hooks should be readable");
+    assert_eq!(hooks, original);
+    assert!(temp_dir.path().join(".maestro/install-lock.yaml").exists());
+}
+
 #[cfg(unix)]
 #[test]
 fn uninstall_rejects_symlinked_managed_directory() {

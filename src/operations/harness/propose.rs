@@ -1,10 +1,10 @@
 use std::collections::BTreeSet;
-use std::fs;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
 
 use crate::domain::card::schema::Card;
+use crate::domain::card::store as card_store;
 use crate::domain::harness::backlog;
 use crate::domain::harness::{
     BacklogConfig, BacklogItem, EscalationPolicy, HistoryEntry, is_state_detector,
@@ -371,6 +371,8 @@ pub fn apply(paths: &MaestroPaths, id: &str, checks: Vec<String>) -> Result<Appl
         TransitionDetails::default(),
     )?;
     let task = task::accept_task(&paths.tasks_dir(), &task.id, actor, &now)?;
+    let spawned_task = card_store::resolve(paths, &task.id)?
+        .with_context(|| format!("spawned task {} disappeared before backlog save", task.id))?;
     item.status = "accepted".to_string();
     item.spawned_task = Some(task.id.clone());
     item.history.push(HistoryEntry {
@@ -381,7 +383,7 @@ pub fn apply(paths: &MaestroPaths, id: &str, checks: Vec<String>) -> Result<Appl
     });
     let accepted = item.clone();
     if let Err(error) = backlog::save_with_snapshot(paths, &snapshot.backlog, &snapshot) {
-        let rollback = rollback_spawned_task(paths, &task.id);
+        let rollback = rollback_spawned_task(&spawned_task);
         return Err(save_failure_after_spawn(error, rollback, &task.id));
     }
     persist_detect_stamp(paths, &escalation)?;
@@ -392,13 +394,9 @@ pub fn apply(paths: &MaestroPaths, id: &str, checks: Vec<String>) -> Result<Appl
     })
 }
 
-fn rollback_spawned_task(paths: &MaestroPaths, task_id: &str) -> Result<()> {
-    let task_yaml = task::task_yaml_path(&paths.tasks_dir(), task_id)?;
-    let task_dir = task_yaml
-        .parent()
-        .ok_or_else(|| anyhow::anyhow!("task path has no parent: {}", task_yaml.display()))?;
-    fs::remove_dir_all(task_dir)
-        .with_context(|| format!("failed to roll back spawned task {}", task_dir.display()))
+fn rollback_spawned_task(spawned_task: &card_store::ResolvedCard) -> Result<()> {
+    card_store::remove_resolved(spawned_task)
+        .with_context(|| format!("failed to roll back spawned task {}", spawned_task.card.id))
 }
 
 /// Compose the error for a `save_with_snapshot` failure that follows spawning a
@@ -747,6 +745,10 @@ fn field_or_default<'a>(value: &'a str, fallback: &'a str) -> &'a str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use std::path::PathBuf;
+    use std::process;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     const SAVE_ERROR: &str = ".maestro/cards/card-a1b2c3/card.yaml is being written by another Maestro process; re-run the command";
 
@@ -786,5 +788,67 @@ mod tests {
             rendered.contains("permission denied removing task dir"),
             "rollback cause must be attached: {rendered}"
         );
+    }
+
+    #[test]
+    fn rollback_spawned_task_rejects_stale_task_snapshot() {
+        let repo = temp_repo("maestro-harness-rollback-stale");
+        let paths = MaestroPaths::new(&repo);
+        fs::create_dir(repo.join(".git")).expect("invariant: git marker should be creatable");
+        let now = "2026-06-23T00:00:00Z".to_string();
+        let task = task::create_task(
+            &paths.tasks_dir(),
+            "Rollback stale task",
+            task::CreateTaskOptions {
+                feature: None,
+                covers: Vec::new(),
+                lane: None,
+                risk: None,
+                checks: vec!["done".to_string()],
+                project: None,
+                created_at: now.clone(),
+            },
+        )
+        .expect("invariant: task should be creatable");
+        task::transition_task(
+            &paths.tasks_dir(),
+            &task.id,
+            TaskState::Exploring,
+            "test",
+            &now,
+            TransitionDetails::default(),
+        )
+        .expect("invariant: task should transition");
+        let task = task::accept_task(&paths.tasks_dir(), &task.id, "test", &now)
+            .expect("invariant: task should be accepted");
+        let resolved = card_store::resolve(&paths, &task.id)
+            .expect("invariant: task should resolve")
+            .expect("invariant: task should exist");
+        let mut edited =
+            fs::read_to_string(resolved.path()).expect("invariant: task record should be readable");
+        edited.push_str("\n# concurrent edit\n");
+        fs::write(resolved.path(), edited).expect("invariant: task record should be writable");
+
+        let error = rollback_spawned_task(&resolved).expect_err("stale task must not be deleted");
+
+        assert!(
+            format!("{error:#}").contains("changed since it was read"),
+            "stale rollback should surface the CAS error: {error:#}"
+        );
+        assert!(
+            resolved.path().exists(),
+            "stale rollback must leave the concurrently edited task"
+        );
+        let _ = fs::remove_dir_all(repo);
+    }
+
+    fn temp_repo(prefix: &str) -> PathBuf {
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("invariant: system clock should be after the Unix epoch")
+            .as_nanos();
+        let repo = std::env::temp_dir().join(format!("{prefix}-{}-{timestamp}", process::id()));
+        fs::create_dir(&repo).expect("invariant: temp repo should be creatable");
+        repo
     }
 }

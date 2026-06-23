@@ -174,6 +174,11 @@ const MAESTRO_CARD_COMMANDS: &[&str] = &[
     "maestro card update",
     "maestro card close",
     "maestro card graph",
+    "maestro harness list",
+    "maestro harness show",
+    "maestro harness apply",
+    "maestro harness measure",
+    "maestro harness dismiss",
     "maestro link add",
     "maestro link remove",
     "maestro msg send",
@@ -219,6 +224,8 @@ const MAESTRO_AUDIT_COMMANDS: &[&str] = &[
     "maestro harness list",
     "maestro harness show",
     "maestro harness propose",
+    "maestro harness apply",
+    "maestro lean",
     "maestro query matrix",
     "maestro query friction",
     "maestro query backlog",
@@ -505,10 +512,11 @@ mod tests {
 
         let audit = render_cli_reference_for_skill("maestro-audit");
         assert!(audit.contains("maestro harness propose"), "{audit}");
+        assert!(audit.contains("maestro harness apply"), "{audit}");
+        assert!(audit.contains("maestro lean [TARGET]"), "{audit}");
         assert!(audit.contains("maestro query friction"), "{audit}");
         assert!(audit.contains("maestro card show <ID>"), "{audit}");
         assert!(!audit.contains("maestro card update"), "{audit}");
-        assert!(!audit.contains("maestro harness apply"), "{audit}");
 
         let setup = render_cli_reference_for_skill("maestro-setup");
         assert!(setup.contains("maestro init [--dry-run]"), "{setup}");

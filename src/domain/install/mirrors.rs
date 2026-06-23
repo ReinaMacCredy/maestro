@@ -1167,6 +1167,9 @@ fn remove_json_keys_with_restore(
     if removing_retry && json_restore_already_applied(&object, ownership, managed_json) {
         return Ok(None);
     }
+    if !verify_restore_metadata && !ownership.previous_values.is_empty() {
+        validate_metadata_free_restore_source(&object, ownership, managed_json)?;
+    }
     if verify_restore_metadata {
         validate_previous_value_hashes(&object, ownership)?;
     }
@@ -1183,6 +1186,22 @@ fn remove_json_keys_with_restore(
     let mut formatted = serde_json::to_string_pretty(&Value::Object(object))?;
     formatted.push('\n');
     Ok(Some(formatted))
+}
+
+fn validate_metadata_free_restore_source(
+    object: &Map<String, Value>,
+    ownership: &FileOwnership,
+    managed_json: Option<&Map<String, Value>>,
+) -> Result<()> {
+    let Some(managed_json) = managed_json else {
+        bail!("managed JSON restore values cannot be verified");
+    };
+    for key in &ownership.managed_keys {
+        if object.get(key) != managed_json.get(key) {
+            bail!("managed JSON restore values cannot be verified");
+        }
+    }
+    Ok(())
 }
 
 fn json_restore_already_applied(
