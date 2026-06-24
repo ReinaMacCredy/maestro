@@ -61,9 +61,11 @@ fn any_present(keys: &[&str], lookup: &impl Fn(&str) -> Option<String>) -> bool 
 }
 
 fn agent_runtime_from_lookup(lookup: impl Fn(&str) -> Option<String>) -> Option<&'static str> {
-    if let Some(agent) = lookup(AGENT_RUNTIME_ENV_KEY).and_then(|value| known_agent_runtime(&value))
+    if let Some(agent) = lookup(AGENT_RUNTIME_ENV_KEY)
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
     {
-        return Some(agent);
+        return known_agent_runtime(&agent);
     }
     if any_present(CLAUDE_RUNTIME_ENV_KEYS, &lookup) {
         return Some("claude");
@@ -167,8 +169,12 @@ mod tests {
     #[test]
     fn agent_runtime_omits_unknown_or_blank_values() {
         assert_eq!(
-            agent_runtime_from_pairs(&[("MAESTRO_AGENT", "gemini")]),
+            agent_runtime_from_pairs(&[("MAESTRO_AGENT", "gemini"), ("CODEX_SANDBOX", "1")]),
             None
+        );
+        assert_eq!(
+            agent_runtime_from_pairs(&[("MAESTRO_AGENT", "   "), ("CODEX_SANDBOX", "1")]),
+            Some("codex")
         );
         assert_eq!(agent_runtime_from_pairs(&[("CLAUDECODE", "   ")]), None);
     }

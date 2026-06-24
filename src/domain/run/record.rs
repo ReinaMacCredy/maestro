@@ -28,8 +28,12 @@ pub enum RecordOutcome {
 }
 
 /// Normalize and append one hook payload into the managed Run event log.
-pub fn record_hook_event(paths: &MaestroPaths, payload: &Value) -> Result<RecordOutcome> {
-    let Some(mut event) = normalize_event(payload) else {
+pub fn record_hook_event(
+    paths: &MaestroPaths,
+    payload: &Value,
+    agent_runtime: Option<&str>,
+) -> Result<RecordOutcome> {
+    let Some(mut event) = normalize_event(payload, agent_runtime) else {
         return Ok(RecordOutcome::Ignored {
             event_type: event_type(payload),
         });
@@ -69,7 +73,7 @@ pub fn record_hook_event(paths: &MaestroPaths, payload: &Value) -> Result<Record
     })
 }
 
-fn normalize_event(payload: &Value) -> Option<Value> {
+fn normalize_event(payload: &Value, agent_runtime: Option<&str>) -> Option<Value> {
     let event_type = event_type(payload)?;
     if !is_accepted_event(&event_type) {
         return None;
@@ -88,7 +92,7 @@ fn normalize_event(payload: &Value) -> Option<Value> {
     }
 
     copy_string(payload, &mut event, "agent");
-    copy_agent_runtime(payload, &mut event);
+    copy_agent_runtime(agent_runtime, &mut event);
     copy_string(payload, &mut event, "task_id");
     copy_string(payload, &mut event, "feature_id");
     copy_string(payload, &mut event, "card_id");
@@ -148,10 +152,8 @@ fn copy_string(source: &Value, target: &mut Map<String, Value>, field: &str) {
     }
 }
 
-fn copy_agent_runtime(source: &Value, target: &mut Map<String, Value>) {
-    if let Some(runtime) = string_field(source, "agent_runtime")
-        .and_then(|value| known_agent_runtime(&value).map(str::to_string))
-    {
+fn copy_agent_runtime(runtime: Option<&str>, target: &mut Map<String, Value>) {
+    if let Some(runtime) = runtime.and_then(known_agent_runtime) {
         target.insert("agent_runtime".to_string(), json!(runtime));
     }
 }
@@ -195,7 +197,7 @@ mod tests {
             "tool_name": "Edit",
             "tool_input": {"file_path": "src/auth/login.rs", "old_string": "a", "new_string": "b"},
         });
-        let event = normalize_event(&payload).expect("Edit PostToolUse is an accepted event");
+        let event = normalize_event(&payload, None).expect("Edit PostToolUse is an accepted event");
         let object = event.as_object().expect("normalized event is an object");
         assert_eq!(
             object.get("file_path").and_then(Value::as_str),
@@ -215,12 +217,39 @@ mod tests {
             "session_id": "cli-test",
             "scope_paths": ["src/interfaces/cli/status.rs", " ", "tests/status.rs"],
         });
-        let event = normalize_event(&payload).expect("scope declarations are accepted");
+        let event = normalize_event(&payload, None).expect("scope declarations are accepted");
         let object = event.as_object().expect("normalized event is an object");
         assert_eq!(
             object.get("scope_paths"),
             Some(&json!(["src/interfaces/cli/status.rs", "tests/status.rs"])),
             "declared path scopes stay visible to active-session overlap checks"
+        );
+    }
+
+    #[test]
+    fn agent_runtime_comes_from_recorder_not_payload() {
+        let payload = json!({
+            "event_type": "PostToolUse",
+            "session_id": "cli-test",
+            "agent_runtime": "codex",
+        });
+        let untrusted_only = normalize_event(&payload, None).expect("accepted event");
+        assert!(
+            !untrusted_only
+                .as_object()
+                .expect("object")
+                .contains_key("agent_runtime"),
+            "incoming hook payload must not be trusted for runtime attribution"
+        );
+
+        let trusted = normalize_event(&payload, Some("claude")).expect("accepted event");
+        assert_eq!(
+            trusted
+                .as_object()
+                .expect("object")
+                .get("agent_runtime")
+                .and_then(Value::as_str),
+            Some("claude")
         );
     }
 
@@ -232,7 +261,7 @@ mod tests {
             "tool_name": "Bash",
             "tool_input": {"command": "cargo test"},
         });
-        let event = normalize_event(&payload).expect("Bash PostToolUse is an accepted event");
+        let event = normalize_event(&payload, None).expect("Bash PostToolUse is an accepted event");
         let object = event.as_object().expect("normalized event is an object");
         assert!(
             !object.contains_key("file_path"),
@@ -249,7 +278,7 @@ mod tests {
             "tool_name": "Edit",
             "tool_input": {"file_path": "   "},
         });
-        let event = normalize_event(&payload).expect("accepted event");
+        let event = normalize_event(&payload, None).expect("accepted event");
         assert!(
             !event.as_object().expect("object").contains_key("file_path"),
             "a blank file_path is dropped"

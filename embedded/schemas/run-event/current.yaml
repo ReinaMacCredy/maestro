@@ -16,6 +16,7 @@ contracts:
       - event_type
       - session_id
       - agent
+      - agent_runtime
       - task_id
       - feature_id
       - tool_name

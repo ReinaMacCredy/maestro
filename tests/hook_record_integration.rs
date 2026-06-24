@@ -317,15 +317,15 @@ fn unknown_agent_runtime_is_omitted() {
     let repo = init_repo();
     let output = maestro_record_clean_env_with(
         repo.path(),
-        r#"{"session_id":"runtime-unknown","event_type":"PostToolUse","agent_runtime":"<claude|codex>"}"#,
-        &[("MAESTRO_AGENT", "gemini")],
+        r#"{"session_id":"runtime-unknown","event_type":"PostToolUse","agent_runtime":"codex"}"#,
+        &[("MAESTRO_AGENT", "gemini"), ("CODEX_SANDBOX", "1")],
     );
 
     assert!(output.status.success());
     let events = read_events(repo.path(), "runtime-unknown");
     assert!(
         events[0].get("agent_runtime").is_none(),
-        "unknown runtime and placeholder must be omitted: {:#?}",
+        "unknown explicit runtime and payload runtime claims must be omitted: {:#?}",
         events[0]
     );
 }

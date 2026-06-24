@@ -43,9 +43,7 @@ pub(crate) fn payload_session_id(payload: &Value) -> Option<String> {
 }
 
 pub(crate) fn record_value(paths: &MaestroPaths, payload: &Value) -> Result<run::RecordOutcome> {
-    let mut payload = payload.clone();
-    run::insert_agent_runtime(&mut payload, agent_runtime_from_env());
-    let outcome = run::record_hook_event(paths, &payload)?;
+    let outcome = run::record_hook_event(paths, payload, agent_runtime_from_env())?;
     if let run::RecordOutcome::Ignored { event_type } = &outcome {
         match event_type {
             Some(event_type) => {
