@@ -41,8 +41,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 17] = [
     (
         "skill",
         "maestro-setup",
-        "1.9.0",
-        "9d19bad82ddac0e69b54afdb57998dd23206c5374dc4a0bc0bb555feee39e53d",
+        "1.10.0",
+        "ee7929f04384d8a23e345252088bd6bf0a4baa44f3be1b1796f23184e6622a3a",
     ),
     (
         "skill",

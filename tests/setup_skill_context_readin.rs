@@ -61,3 +61,32 @@ fn setup_skill_is_read_in_only() {
         "must forbid writing managed guidance into sub-project specs"
     );
 }
+
+#[test]
+fn setup_skill_has_low_token_update_path_for_initialized_repos() {
+    let md = setup_skill_md();
+    assert!(
+        md.contains("already initialized"),
+        "must name the already-initialized setup update path"
+    );
+    for command in [
+        "maestro sync --dry-run",
+        "maestro sync`",
+        "maestro sync --global-skills",
+        "maestro doctor",
+        "maestro status",
+    ] {
+        assert!(
+            md.contains(command),
+            "setup update path must mention {command}"
+        );
+    }
+    assert!(
+        md.contains("minimal repeated token cost"),
+        "must state the token-budget reason for the path"
+    );
+    assert!(
+        md.contains("report only changed resources"),
+        "must keep rerun reporting changed-only"
+    );
+}
