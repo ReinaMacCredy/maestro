@@ -122,6 +122,21 @@ impl MaestroPaths {
         self.index_dir().join("text.json")
     }
 
+    /// Return the unified grep/search index directory.
+    pub fn search_index_dir(&self) -> PathBuf {
+        self.index_dir().join("search")
+    }
+
+    /// Return the unified grep/search manifest file.
+    pub fn search_manifest_file(&self) -> PathBuf {
+        self.search_index_dir().join("manifest.json")
+    }
+
+    /// Return the Maestro-memory shard used by `maestro grep`.
+    pub fn memory_shard_file(&self) -> PathBuf {
+        self.search_index_dir().join("memory.shard")
+    }
+
     /// Return the install lockfile path.
     pub fn install_lock_file(&self) -> PathBuf {
         self.maestro_dir().join("install-lock.yaml")

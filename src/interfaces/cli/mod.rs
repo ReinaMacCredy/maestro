@@ -22,6 +22,7 @@ pub mod decision;
 pub mod doctor;
 pub mod event;
 pub mod feature;
+pub mod grep;
 pub mod harness;
 pub mod hook;
 pub mod index;
@@ -284,6 +285,11 @@ pub enum RootCommand {
     Feature(FeatureArgs),
     #[command(about = "Record feature QA baseline and slice evidence")]
     Qa(QaArgs),
+    #[command(
+        about = "Search Maestro memory and source with the indexed grep engine",
+        after_help = "Examples:\n  maestro grep runtime\n  maestro grep --json 'runtime corpus:memory type:decision'\n  maestro grep 'why agent runtime'"
+    )]
+    Grep(GrepArgs),
     #[command(about = "Create, show, and list decision cards in the card store")]
     Decision(DecisionArgs),
     #[command(
@@ -1673,10 +1679,24 @@ pub struct IndexArgs {
 #[derive(Debug, Subcommand)]
 pub enum IndexCommand {
     #[command(
-        about = "Rebuild the text index over live + archived cards from scratch",
+        about = "Rebuild local derived indexes from scratch",
         after_help = "The archive is maestro's memory: list --grep [--archived] searches it,\nand the index keeps that search fast as the store grows. The index is\nlocal derived state (.maestro/index/); reads fall back to a plain scan\nwhenever it is missing or stale, so rebuilding is recovery, not setup."
     )]
-    Rebuild,
+    Rebuild {
+        /// Rebuild only the Maestro-memory grep shard.
+        #[arg(long)]
+        memory: bool,
+    },
+}
+
+#[derive(Debug, Args)]
+pub struct GrepArgs {
+    /// Emit an additive-only maestro.grep.v1 JSON envelope.
+    #[arg(long)]
+    pub json: bool,
+    /// Query string. Multiple shell words are joined with spaces.
+    #[arg(required = true, num_args = 1.., value_name = "QUERY")]
+    pub query: Vec<String>,
 }
 
 #[derive(Debug, Args)]
@@ -1777,6 +1797,7 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Event(args) => event::run(args),
         RootCommand::Feature(args) => feature::run(args),
         RootCommand::Qa(args) => qa::run(args),
+        RootCommand::Grep(args) => grep::run(args),
         RootCommand::Decision(args) => decision::run(args),
         RootCommand::Card(args) => match args.command {
             CardCommand::Ready(args) => card::ready(args),

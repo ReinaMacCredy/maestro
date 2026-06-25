@@ -33,6 +33,7 @@ const DOMAIN_FACADES: &[&str] = &[
     "playbook",
     "proof",
     "run",
+    "search",
     "skills",
     "task",
 ];
@@ -1256,6 +1257,7 @@ fn transitional_public_surfaces_match_phase_policy() {
             "proof",
             "run",
             "schema_contracts",
+            "search",
             "skills",
             "task",
         ],

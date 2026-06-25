@@ -15,5 +15,6 @@ pub mod playbook;
 pub mod proof;
 pub mod run;
 pub mod schema_contracts;
+pub mod search;
 pub mod skills;
 pub mod task;
