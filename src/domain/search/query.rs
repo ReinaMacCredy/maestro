@@ -203,12 +203,16 @@ pub fn parse(raw: &str) -> Result<ParsedQuery, SearchDiagnostic> {
             "negation must precede a term, regex, filter, or parenthesized expression",
         ));
     }
-    let expr = parse_expr(&expr_atoms)?;
+    let expr = if expr_atoms.is_empty() && filters.sym.is_some() {
+        QueryExpr::And(Vec::new())
+    } else {
+        parse_expr(&expr_atoms)?
+    };
 
-    if terms.is_empty() && regexes.is_empty() {
+    if terms.is_empty() && regexes.is_empty() && filters.sym.is_none() {
         return Err(SearchDiagnostic::error(
             "empty_query",
-            "maestro grep needs at least one text term or /regex/ atom",
+            "maestro grep needs at least one text term, /regex/ atom, or sym:<name>",
         ));
     }
 
@@ -481,6 +485,14 @@ mod tests {
         assert_eq!(parsed.filters.excluded_file_globs, vec!["tests/*"]);
         assert_eq!(parsed.filters.lang.as_deref(), Some("rust"));
         assert!(matches!(parsed.expr, QueryExpr::Or(_)));
+    }
+
+    #[test]
+    fn parses_sym_only_source_query() {
+        let parsed = parse("sym:TaskRegistry corpus:source").expect("sym query should parse");
+        assert_eq!(parsed.filters.sym.as_deref(), Some("TaskRegistry"));
+        assert!(parsed.terms.is_empty());
+        assert!(parsed.regexes.is_empty());
     }
 
     #[test]

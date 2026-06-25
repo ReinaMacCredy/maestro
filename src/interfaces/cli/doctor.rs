@@ -9,6 +9,7 @@ use crate::domain::feature;
 use crate::domain::harness::HarnessConfig;
 use crate::domain::install::{InstallLock, InstallState, MirrorKind};
 use crate::domain::run;
+use crate::domain::search;
 use crate::domain::skills;
 use crate::domain::task;
 use crate::foundation::core::error::MaestroError;
@@ -135,6 +136,7 @@ fn doctor_report(paths: &MaestroPaths) -> Result<DoctorReport> {
         warnings.extend(card::query::unknown_field_warnings(paths, &scan.cards));
     }
     check_install(paths, &mut checks, &mut errors);
+    check_search(paths, &mut checks, &mut warnings);
     check_global_skills(&mut checks, &mut warnings, &mut errors);
 
     match recordless_task_dir_warnings(paths) {
@@ -344,6 +346,45 @@ fn check_decisions(
             report.structured_count, report.legacy_count
         ),
     });
+}
+
+fn check_search(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, warnings: &mut Vec<String>) {
+    let health = search::source_index_health(paths);
+    if health.source_shard_present {
+        checks.push(DoctorCheck {
+            name: "search-index",
+            detail: format!(
+                "{} source file(s), {} outline entries",
+                health.indexed_files, health.outline_entries
+            ),
+        });
+    } else {
+        warnings.push(
+            "search source shard missing or stale; run `maestro index rebuild --source`"
+                .to_string(),
+        );
+    }
+
+    checks.push(DoctorCheck {
+        name: "search-outline",
+        detail: format!(
+            "{} entries, languages: {}",
+            health.outline_entries,
+            health.supported_outline_languages.join(", ")
+        ),
+    });
+
+    if health.ctags_status.available {
+        checks.push(DoctorCheck {
+            name: "search-ctags",
+            detail: format!("{} symbol definition(s)", health.ctags_symbols),
+        });
+    } else {
+        checks.push(DoctorCheck {
+            name: "search-ctags",
+            detail: format!("optional missing: {}", health.ctags_status.message),
+        });
+    }
 }
 
 /// Verify that the files an installed agent owns still exist on disk. A bare

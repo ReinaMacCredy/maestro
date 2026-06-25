@@ -43,6 +43,15 @@ pub fn run(args: IndexArgs) -> Result<()> {
                     "  files: {} indexed, {} skipped",
                     report.indexed_files, report.skipped_files
                 );
+                println!("  outline entries: {}", report.outline_entries);
+                if report.ctags_status.available {
+                    println!("  ctags symbols: {}", report.ctags_symbols);
+                } else {
+                    println!(
+                        "  ctags: optional missing ({})",
+                        report.ctags_status.message
+                    );
+                }
                 for (reason, count) in &report.skipped_by_reason {
                     println!("  skipped {reason}: {count}");
                 }

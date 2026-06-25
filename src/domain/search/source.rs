@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::path::{Component, Path};
+use std::process::Command;
 use std::time::UNIX_EPOCH;
 
 use anyhow::{Context, Result, bail};
@@ -7,6 +8,7 @@ use regex::{Regex, RegexBuilder};
 use serde::{Deserialize, Serialize};
 
 use crate::domain::search::memory;
+use crate::domain::search::outline::{self, OutlineEntry};
 use crate::domain::search::query::{self, ParsedQuery, QueryAtom, QueryExpr};
 use crate::domain::search::types::{
     DiagnosticSeverity, GrepEnvelope, MatchSpan, ScoreReason, SearchCorpus, SearchDiagnostic,
@@ -16,17 +18,39 @@ use crate::foundation::core::fs::ensure_dir;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::safe_write::write_atomic;
 
-const SOURCE_SHARD_SCHEMA_VERSION: &str = "source-shard.v1";
-const SOURCE_SHARD_MAGIC: &[u8] = b"MAESTRO_SOURCE_SHARD_V1\n";
+const SOURCE_SHARD_SCHEMA_VERSION: &str = "source-shard.v2";
+const SOURCE_SHARD_MAGIC: &[u8] = b"MAESTRO_SOURCE_SHARD_V2\n";
 const MAX_SOURCE_BYTES: u64 = 5 * 1024 * 1024;
 const MAX_SOURCE_LINES: usize = 80_000;
+const OUTLINE_KINDS: &[&str] = &[
+    "function", "method", "struct", "enum", "trait", "impl", "field", "import", "export", "module",
+];
 
 #[derive(Debug, Serialize)]
 pub struct SourceRebuildReport {
     pub indexed_files: usize,
+    pub outline_entries: usize,
+    pub ctags_symbols: usize,
+    pub ctags_status: CtagsStatus,
     pub skipped_files: usize,
     pub skipped_by_reason: BTreeMap<String, usize>,
     pub representative_skips: Vec<SourceSkip>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CtagsStatus {
+    pub available: bool,
+    pub message: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SourceIndexHealth {
+    pub source_shard_present: bool,
+    pub indexed_files: usize,
+    pub outline_entries: usize,
+    pub ctags_symbols: usize,
+    pub ctags_status: CtagsStatus,
+    pub supported_outline_languages: Vec<&'static str>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -40,6 +64,9 @@ struct SourceShard {
     schema_version: String,
     manifest: Vec<ManifestEntry>,
     files: Vec<SourceFile>,
+    outline_entries: Vec<OutlineEntry>,
+    symbols: Vec<SymbolEntry>,
+    ctags_status: CtagsStatus,
     postings: BTreeMap<String, Vec<SourcePosting>>,
     skipped: Vec<SourceSkip>,
 }
@@ -64,6 +91,15 @@ struct SourcePosting {
     path: String,
     line: u64,
     byte_start: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+struct SymbolEntry {
+    path: String,
+    name: String,
+    kind: String,
+    line: u64,
+    signature: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -129,6 +165,7 @@ pub fn rebuild_source(paths: &MaestroPaths) -> Result<SourceRebuildReport> {
     let mut skipped = Vec::new();
     let candidates = source_manifest(paths, &mut skipped)?;
     let mut files = Vec::new();
+    let mut outline_entries = Vec::new();
     let mut postings: BTreeMap<String, Vec<SourcePosting>> = BTreeMap::new();
 
     for entry in &candidates {
@@ -166,20 +203,32 @@ pub fn rebuild_source(paths: &MaestroPaths) -> Result<SourceRebuildReport> {
                 byte_start,
             });
         }
+        let language = language_for_path(&entry.path).to_string();
+        outline_entries.extend(outline::extract_outline(&entry.path, &language, &contents));
         files.push(SourceFile {
             path: entry.path.clone(),
-            language: language_for_path(&entry.path).to_string(),
+            language,
             contents,
             line_offsets,
             trigram_count,
         });
     }
 
-    let report = report(files.len(), &skipped);
+    let (ctags_status, symbols) = collect_ctags(paths, &candidates);
+    let report = report(
+        files.len(),
+        outline_entries.len(),
+        symbols.len(),
+        ctags_status.clone(),
+        &skipped,
+    );
     let shard = SourceShard {
         schema_version: SOURCE_SHARD_SCHEMA_VERSION.to_string(),
         manifest: candidates,
         files,
+        outline_entries,
+        symbols,
+        ctags_status,
         postings,
         skipped,
     };
@@ -188,27 +237,41 @@ pub fn rebuild_source(paths: &MaestroPaths) -> Result<SourceRebuildReport> {
     Ok(report)
 }
 
-fn grep_source_parsed(paths: &MaestroPaths, raw_query: &str, parsed: &ParsedQuery) -> GrepEnvelope {
-    if let Some(invalid) = parsed
-        .filters
-        .kinds
-        .iter()
-        .find(|kind| kind.as_str() != "file")
+pub fn source_index_health(paths: &MaestroPaths) -> SourceIndexHealth {
+    let supported_outline_languages = outline::extractor_health().supported_languages;
+    match std::fs::read(paths.source_shard_file())
+        .ok()
+        .and_then(|bytes| decode_shard(&bytes).ok())
     {
+        Some(shard) if shard.schema_version == SOURCE_SHARD_SCHEMA_VERSION => SourceIndexHealth {
+            source_shard_present: true,
+            indexed_files: shard.files.len(),
+            outline_entries: shard.outline_entries.len(),
+            ctags_symbols: shard.symbols.len(),
+            ctags_status: shard.ctags_status,
+            supported_outline_languages,
+        },
+        _ => SourceIndexHealth {
+            source_shard_present: false,
+            indexed_files: 0,
+            outline_entries: 0,
+            ctags_symbols: 0,
+            ctags_status: current_ctags_status(),
+            supported_outline_languages,
+        },
+    }
+}
+
+fn grep_source_parsed(paths: &MaestroPaths, raw_query: &str, parsed: &ParsedQuery) -> GrepEnvelope {
+    if let Some(invalid) = parsed.filters.kinds.iter().find(|kind| {
+        let kind = kind.as_str();
+        kind != "file" && !OUTLINE_KINDS.contains(&kind)
+    }) {
         return GrepEnvelope::error(
             raw_query,
             SearchDiagnostic::error(
                 "invalid_type",
-                format!("type:{invalid} is not a source result kind in this slice"),
-            ),
-        );
-    }
-    if parsed.filters.sym.is_some() {
-        return GrepEnvelope::error(
-            raw_query,
-            SearchDiagnostic::error(
-                "symbol_index_unavailable",
-                "sym: ships with the outline/symbols slice",
+                format!("type:{invalid} is not a source result kind"),
             ),
         );
     }
@@ -233,9 +296,16 @@ fn grep_source_parsed(paths: &MaestroPaths, raw_query: &str, parsed: &ParsedQuer
         },
     };
 
-    let hits = match search_shard(&shard, parsed) {
-        Ok(hits) => hits,
-        Err(diagnostic) => return GrepEnvelope::error(raw_query, diagnostic),
+    let hits = if parsed.filters.sym.is_some() {
+        match search_symbols(&shard, parsed) {
+            Ok(hits) => hits,
+            Err(diagnostic) => return GrepEnvelope::error(raw_query, diagnostic),
+        }
+    } else {
+        match search_shard(&shard, parsed) {
+            Ok(hits) => hits,
+            Err(diagnostic) => return GrepEnvelope::error(raw_query, diagnostic),
+        }
     };
     GrepEnvelope::success(raw_query, hits, parsed.explicit_filter_overrides.clone())
 }
@@ -259,57 +329,151 @@ fn search_shard(
 ) -> Result<Vec<SearchHit>, SearchDiagnostic> {
     let case_sensitive = query::literal_case_sensitive(parsed);
     let mut hits = Vec::new();
-    for file in &shard.files {
-        if !source_filters_match(file, parsed)? {
-            continue;
+
+    if wants_file_hits(parsed) {
+        for file in &shard.files {
+            if !source_filters_match(file, parsed)? {
+                continue;
+            }
+            if !evaluate_expr(&parsed.expr, &file.contents, case_sensitive)? {
+                continue;
+            }
+            let Some(first_match) = first_positive_match(file, parsed, case_sensitive)? else {
+                continue;
+            };
+            let score = source_score(file, &first_match, parsed);
+            hits.push(SearchHit {
+                rank: 0,
+                corpus: SearchCorpus::Source,
+                kind: "file".to_string(),
+                id: file.path.clone(),
+                path: Some(file.path.clone()),
+                line: Some(first_match.line),
+                title: file.path.clone(),
+                snippet: first_match.snippet,
+                score,
+                score_reasons: vec![
+                    ScoreReason {
+                        factor: first_match.factor.to_string(),
+                        value: 1.0,
+                        detail: "confirmed against stored source contents".to_string(),
+                    },
+                    ScoreReason {
+                        factor: "trigram_shard".to_string(),
+                        value: file.trigram_count as f64,
+                        detail: "source shard stores positional trigram postings".to_string(),
+                    },
+                ],
+                opener: Some(format!("{}:{}", file.path, first_match.line)),
+                archived: false,
+                feature: None,
+                parent: None,
+                symbol_kind: None,
+                match_spans: vec![MatchSpan::Source {
+                    line: first_match.line,
+                    byte_start: first_match.byte_start,
+                    byte_end: first_match.byte_end,
+                }],
+            });
         }
-        if !evaluate_expr(&parsed.expr, &file.contents, case_sensitive)? {
-            continue;
-        }
-        let Some(first_match) = first_positive_match(file, parsed, case_sensitive)? else {
-            continue;
-        };
-        let score = source_score(file, &first_match, parsed);
-        hits.push(SearchHit {
-            rank: 0,
-            corpus: SearchCorpus::Source,
-            kind: "file".to_string(),
-            id: file.path.clone(),
-            path: Some(file.path.clone()),
-            line: Some(first_match.line),
-            title: file.path.clone(),
-            snippet: first_match.snippet,
-            score,
-            score_reasons: vec![
-                ScoreReason {
-                    factor: first_match.factor.to_string(),
-                    value: 1.0,
-                    detail: "confirmed against stored source contents".to_string(),
-                },
-                ScoreReason {
-                    factor: "trigram_shard".to_string(),
-                    value: file.trigram_count as f64,
-                    detail: "source shard stores positional trigram postings".to_string(),
-                },
-            ],
-            opener: Some(format!("{}:{}", file.path, first_match.line)),
-            archived: false,
-            feature: None,
-            parent: None,
-            symbol_kind: None,
-            match_spans: vec![MatchSpan::Source {
-                line: first_match.line,
-                byte_start: first_match.byte_start,
-                byte_end: first_match.byte_end,
-            }],
-        });
     }
+
+    if wants_outline_hits(parsed) {
+        for entry in &shard.outline_entries {
+            let Some(file) = shard.files.iter().find(|file| file.path == entry.file) else {
+                continue;
+            };
+            if !source_filters_match(file, parsed)? || !outline_type_matches(entry, parsed) {
+                continue;
+            }
+            let searchable = outline_search_text(entry);
+            if !evaluate_expr(&parsed.expr, &searchable, case_sensitive)? {
+                continue;
+            }
+            let Some(first_match) =
+                outline_first_match(entry, &searchable, parsed, case_sensitive)?
+            else {
+                continue;
+            };
+            hits.push(outline_hit(entry, &first_match, parsed));
+        }
+    }
+
     hits.sort_by(|a, b| {
         b.score
             .total_cmp(&a.score)
             .then_with(|| a.path.cmp(&b.path))
             .then_with(|| a.line.cmp(&b.line))
     });
+    for (idx, hit) in hits.iter_mut().enumerate() {
+        hit.rank = idx + 1;
+    }
+    Ok(hits)
+}
+
+fn search_symbols(
+    shard: &SourceShard,
+    parsed: &ParsedQuery,
+) -> Result<Vec<SearchHit>, SearchDiagnostic> {
+    if !shard.ctags_status.available {
+        return Err(SearchDiagnostic::error(
+            "ctags_unavailable",
+            format!(
+                "{}; install universal-ctags and run `maestro index rebuild --source` for sym:",
+                shard.ctags_status.message
+            ),
+        ));
+    }
+    let Some(symbol) = parsed.filters.sym.as_deref() else {
+        return Ok(Vec::new());
+    };
+    let mut hits = Vec::new();
+    for symbol_entry in &shard.symbols {
+        if !symbol_entry.name.eq_ignore_ascii_case(symbol) {
+            continue;
+        }
+        if let Some(file) = shard
+            .files
+            .iter()
+            .find(|file| file.path == symbol_entry.path)
+            && !source_filters_match(file, parsed)?
+        {
+            continue;
+        }
+        hits.push(SearchHit {
+            rank: 0,
+            corpus: SearchCorpus::Source,
+            kind: "symbol".to_string(),
+            id: format!(
+                "{}:{}:{}",
+                symbol_entry.path, symbol_entry.kind, symbol_entry.name
+            ),
+            path: Some(symbol_entry.path.clone()),
+            line: Some(symbol_entry.line),
+            title: symbol_entry.name.clone(),
+            snippet: symbol_entry
+                .signature
+                .clone()
+                .unwrap_or_else(|| symbol_entry.name.clone()),
+            score: 0.95,
+            score_reasons: vec![ScoreReason {
+                factor: "ctags_definition".to_string(),
+                value: 1.0,
+                detail: "definition returned from universal-ctags JSON output".to_string(),
+            }],
+            opener: Some(format!("{}:{}", symbol_entry.path, symbol_entry.line)),
+            archived: false,
+            feature: None,
+            parent: None,
+            symbol_kind: Some(symbol_entry.kind.clone()),
+            match_spans: vec![MatchSpan::Source {
+                line: symbol_entry.line,
+                byte_start: 0,
+                byte_end: 0,
+            }],
+        });
+    }
+    hits.sort_by(|a, b| a.path.cmp(&b.path).then_with(|| a.line.cmp(&b.line)));
     for (idx, hit) in hits.iter_mut().enumerate() {
         hit.rank = idx + 1;
     }
@@ -340,6 +504,133 @@ fn source_filters_match(file: &SourceFile, parsed: &ParsedQuery) -> Result<bool,
         return Ok(false);
     }
     Ok(true)
+}
+
+fn wants_file_hits(parsed: &ParsedQuery) -> bool {
+    parsed.filters.kinds.is_empty() || parsed.filters.kinds.iter().any(|kind| kind == "file")
+}
+
+fn wants_outline_hits(parsed: &ParsedQuery) -> bool {
+    parsed
+        .filters
+        .kinds
+        .iter()
+        .any(|kind| OUTLINE_KINDS.contains(&kind.as_str()))
+}
+
+fn outline_type_matches(entry: &OutlineEntry, parsed: &ParsedQuery) -> bool {
+    parsed.filters.kinds.is_empty()
+        || parsed
+            .filters
+            .kinds
+            .iter()
+            .any(|kind| kind == &entry.outline_kind)
+}
+
+fn outline_search_text(entry: &OutlineEntry) -> String {
+    let mut text = format!(
+        "{} {} {} {}",
+        entry.name, entry.outline_kind, entry.signature, entry.file
+    );
+    if let Some(parent) = &entry.parent {
+        text.push(' ');
+        text.push_str(parent);
+    }
+    for member in &entry.members {
+        text.push(' ');
+        text.push_str(member);
+    }
+    text
+}
+
+fn outline_first_match(
+    entry: &OutlineEntry,
+    searchable: &str,
+    parsed: &ParsedQuery,
+    case_sensitive: bool,
+) -> Result<Option<SourceMatch>, SearchDiagnostic> {
+    for pattern in &parsed.regexes {
+        let regex = regex_for(pattern, case_sensitive)?;
+        if let Some(mat) = regex.find(searchable) {
+            return Ok(Some(outline_match(entry, mat.start(), mat.end(), "regex")));
+        }
+    }
+    for term in &parsed.terms {
+        if let Some((start, end)) = find_literal(searchable, term, case_sensitive) {
+            return Ok(Some(outline_match(entry, start, end, "outline")));
+        }
+    }
+    Ok(None)
+}
+
+fn outline_match(
+    entry: &OutlineEntry,
+    relative_start: usize,
+    relative_end: usize,
+    factor: &'static str,
+) -> SourceMatch {
+    SourceMatch {
+        byte_start: entry.range.start_byte.saturating_add(relative_start),
+        byte_end: entry.range.start_byte.saturating_add(relative_end),
+        line: entry.range.start_line,
+        snippet: entry.signature.clone(),
+        factor,
+    }
+}
+
+fn outline_hit(entry: &OutlineEntry, first_match: &SourceMatch, parsed: &ParsedQuery) -> SearchHit {
+    let mut score: f64 = 0.70;
+    if parsed
+        .terms
+        .iter()
+        .any(|term| term.eq_ignore_ascii_case(&entry.name))
+    {
+        score += 0.15;
+    }
+    if parsed
+        .filters
+        .kinds
+        .iter()
+        .any(|kind| kind == &entry.outline_kind)
+    {
+        score += 0.10;
+    }
+    if entry.exported {
+        score += 0.03;
+    }
+    SearchHit {
+        rank: 0,
+        corpus: SearchCorpus::Source,
+        kind: "outline".to_string(),
+        id: format!("{}:{}:{}", entry.file, entry.outline_kind, entry.name),
+        path: Some(entry.file.clone()),
+        line: Some(entry.range.start_line),
+        title: entry.name.clone(),
+        snippet: entry.signature.clone(),
+        score: score.min(1.0),
+        score_reasons: vec![
+            ScoreReason {
+                factor: first_match.factor.to_string(),
+                value: 1.0,
+                detail: "confirmed against source outline entry".to_string(),
+            },
+            ScoreReason {
+                factor: "outline_kind".to_string(),
+                value: 1.0,
+                detail: entry.outline_kind.clone(),
+            },
+        ],
+        opener: Some(format!("{}:{}", entry.file, entry.range.start_line)),
+        archived: false,
+        feature: None,
+        parent: entry.parent.clone(),
+        symbol_kind: Some(entry.outline_kind.clone()),
+        match_spans: vec![MatchSpan::Source {
+            line: first_match.line,
+            byte_start: first_match.byte_start,
+            byte_end: first_match.byte_end,
+        }],
+    }
 }
 
 fn evaluate_expr(
@@ -707,13 +998,127 @@ fn language_for_path(path: &str) -> &'static str {
     }
 }
 
-fn report(indexed_files: usize, skipped: &[SourceSkip]) -> SourceRebuildReport {
+fn collect_ctags(
+    paths: &MaestroPaths,
+    manifest: &[ManifestEntry],
+) -> (CtagsStatus, Vec<SymbolEntry>) {
+    let status = current_ctags_status();
+    if !status.available {
+        return (status, Vec::new());
+    }
+
+    let mut command = Command::new("ctags");
+    command
+        .current_dir(paths.repo_root())
+        .arg("--output-format=json")
+        .arg("--fields=+n")
+        .arg("-f")
+        .arg("-");
+    for entry in manifest {
+        command.arg(&entry.path);
+    }
+
+    let output = match command.output() {
+        Ok(output) => output,
+        Err(error) => {
+            return (
+                CtagsStatus {
+                    available: false,
+                    message: format!("ctags failed to run: {error}"),
+                },
+                Vec::new(),
+            );
+        }
+    };
+    if !output.status.success() {
+        return (
+            CtagsStatus {
+                available: false,
+                message: format!(
+                    "ctags failed: {}",
+                    String::from_utf8_lossy(&output.stderr).trim()
+                ),
+            },
+            Vec::new(),
+        );
+    }
+
+    let mut symbols = Vec::new();
+    for line in String::from_utf8_lossy(&output.stdout).lines() {
+        let Ok(value) = serde_json::from_str::<serde_json::Value>(line) else {
+            continue;
+        };
+        let Some(name) = value.get("name").and_then(serde_json::Value::as_str) else {
+            continue;
+        };
+        let Some(path) = value.get("path").and_then(serde_json::Value::as_str) else {
+            continue;
+        };
+        let kind = value
+            .get("kind")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("symbol")
+            .to_string();
+        symbols.push(SymbolEntry {
+            path: relative_label(Path::new(path), paths.repo_root()),
+            name: name.to_string(),
+            kind,
+            line: value
+                .get("line")
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(1),
+            signature: value
+                .get("pattern")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string),
+        });
+    }
+
+    (
+        CtagsStatus {
+            available: true,
+            message: "universal-ctags available".to_string(),
+        },
+        symbols,
+    )
+}
+
+fn current_ctags_status() -> CtagsStatus {
+    match Command::new("ctags").arg("--version").output() {
+        Ok(output) if output.status.success() => CtagsStatus {
+            available: true,
+            message: "universal-ctags available".to_string(),
+        },
+        Ok(output) => CtagsStatus {
+            available: false,
+            message: format!(
+                "ctags not usable: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            ),
+        },
+        Err(_) => CtagsStatus {
+            available: false,
+            message: "ctags optional missing".to_string(),
+        },
+    }
+}
+
+fn report(
+    indexed_files: usize,
+    outline_entries: usize,
+    ctags_symbols: usize,
+    ctags_status: CtagsStatus,
+    skipped: &[SourceSkip],
+) -> SourceRebuildReport {
     let mut skipped_by_reason = BTreeMap::new();
     for skip in skipped {
         *skipped_by_reason.entry(skip.reason.clone()).or_insert(0) += 1;
     }
     SourceRebuildReport {
         indexed_files,
+        outline_entries,
+        ctags_symbols,
+        ctags_status,
         skipped_files: skipped.len(),
         skipped_by_reason,
         representative_skips: skipped.iter().take(8).cloned().collect(),
