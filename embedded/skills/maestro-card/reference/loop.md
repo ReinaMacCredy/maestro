@@ -21,8 +21,8 @@ report.
 The human says some form of "keep working / work the backlog while I'm away"
 and leaves. Carry forward the work they were on — continue the current feature
 and its cards, do not abandon them for a fresh queue. A feature just
-brainstormed is taken end-to-end only after the human's one `feature accept`
-(the gate); then `feature prepare` mints its tasks and the loop works them. No
+brainstormed is taken end-to-end only after the human's `feature finalize` and
+`feature accept` gates; then `feature prepare` mints its tasks and the loop works them. No
 stop time or unit cap is required, ever; if the prompt states one ("until
 07:00", "max 5 cards"), honor it, never ask for one.
 
@@ -52,8 +52,8 @@ tool, daemon, scheduler, or separate goal lifecycle. Existing feature, task,
 decision, proof, and QA gates remain the only durable contract.
 
 For a new broad goal, draft or update a proposed feature and stop at the human
-`feature accept` gate before `prepare` or implementation work. For a goal that
-is already backed by accepted/current work, continue into the card loop below.
+`feature finalize` / `feature accept` gates before `prepare` or implementation
+work. For a goal that is already backed by accepted/current work, continue into the card loop below.
 For an ambiguous broad goal, draft with explicit assumptions: record what you
 inferred in the feature/spec, turn material uncertainty into questions or
 decision forks, and ask first only when even a proposed feature would be
@@ -97,10 +97,10 @@ and move on.
 Night MAY: `claim`, work, `complete`, `verify`, `prepare`, `note`, `block`,
 local per-step commits on the feature branch.
 
-Night NEVER: `feature accept`, `feature close`, `archive`, push, tag,
+Night NEVER: `feature finalize`, `feature accept`, `feature close`, `archive`, push, tag,
 publish, destructive git operations, hand-editing `card.yaml` or guarded
-sidecars. `accept` and `close` are the human's gates: contracts are frozen
-and declared delivered only while someone is awake.
+sidecars. `finalize`, `accept`, and `close` are the human's gates: handoffs are
+cleaned, contracts are frozen, and delivery is declared only while someone is awake.
 
 ## Report
 

@@ -35,8 +35,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 17] = [
     (
         "skill",
         "maestro-card",
-        "1.27.0",
-        "7568aac4e23274c1f6ffdc8d4ee45d54e6ffc5ef09f62811f651b4a40948a856",
+        "1.28.0",
+        "833b2ab6186f4e396af8dc41a0d7f8187b8ff505948688982baa2c96b1fe4715",
     ),
     (
         "skill",
@@ -47,8 +47,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 17] = [
     (
         "skill",
         "maestro-design",
-        "1.26.0",
-        "b488040d841840cbca82e14ac60616f0b1de4d8d927eaa3969ab1597ce766e0f",
+        "1.27.0",
+        "7eeca7858ab1df4c13a05da3b73d5b413ca71da5734147a20b6a78ad00221bcc",
     ),
     (
         "skill",

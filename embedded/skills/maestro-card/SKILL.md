@@ -1,6 +1,6 @@
 ---
 name: maestro-card
-version: 1.27.0
+version: 1.28.0
 description: "Use when the user wants to implement, fix, verify, QA, close, release, or continue active Maestro card/feature/task work after design is approved."
 ---
 
@@ -45,7 +45,7 @@ Read the reference for the job at hand; they share the ground rules below.
 - Work the backlog unattended, including broad user goals that must first
   compile into Maestro records while the user is away or asleep:
   [reference/loop.md](reference/loop.md)
-- Accept, prepare, amend, close, or archive a feature card after design:
+- Finalize, accept, prepare, amend, close, or archive a feature card after design:
   [reference/feature.md](reference/feature.md)
 - Prove a claim, repair failed proof, or verify adversarially:
   [reference/verify.md](reference/verify.md)
@@ -98,12 +98,13 @@ drives the active lifecycle; there is no CLI parser for external documents.
 1. Use `maestro-design` to create the feature, preserve the source text, decide
    open forks, and author observable acceptance criteria.
 2. Return here after the contract is stable.
-3. Run `qa-baseline`, `feature accept`, `feature prepare`, work, verify,
+3. Read `.maestro/cards/<id>/handoff.md` first. If it is missing or stale, run
+   `maestro feature finalize <id>`.
+4. Run `qa-baseline`, `feature accept`, `feature prepare`, work, verify,
    `qa-slice`, and `feature close`.
 
 `request.md` travels with the card through archive and unarchive.
 
 ## Pipeline
 
-`maestro-design -> [maestro-card: qa-baseline -> feature accept -> prepare ->
-work -> verify -> qa-slice -> feature close]`
+`maestro-design -> feature finalize -> [maestro-card: qa-baseline -> feature accept -> prepare -> work -> verify -> qa-slice -> feature close]`

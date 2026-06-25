@@ -56,6 +56,8 @@ Never message a running verifier with new context. Start a fresh verifier.
 
 ## Feature QA
 
+- Accept or prepare blocker says `handoff` -> run
+  `maestro feature finalize <id>`, then retry the blocked command.
 - Accept blocker says `qa-baseline` -> write `.maestro/cards/<id>/qa.md` with
   [qa-baseline.md](qa-baseline.md), then rerun accept.
 - Close blocker says `qa-slice` -> append counting slices to the fenced

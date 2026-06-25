@@ -1,14 +1,15 @@
 ---
 name: maestro-design
-version: 1.26.0
+version: 1.27.0
 description: "Use when the user wants to brainstorm, design, plan, choose wording, or decide a Maestro repo change before implementation, including HARNESS, skill, workflow, architecture, or UX decisions."
 ---
 
 # Maestro Design
 
 Use this when the deliverable is the design of record, not code. The feature
-stays `proposed` while the contract is still editable; `feature accept` ends
-design and freezes the contract.
+stays `proposed` while the contract is still editable; `feature finalize`
+writes the clean continuation handoff, and `feature accept` later freezes the
+contract.
 
 Activate with a known session id:
 `maestro hook record --event skill_activation --skill maestro-design --session <session_id>`
@@ -75,6 +76,10 @@ maestro never auto-reads or auto-replies; you do.
    fork is opened as a decision and removed from questions.
 9. Author the implementation contract only after decisions are stable:
    `maestro feature set <id> --acceptance "<observable behavior>" --area "<surface>"`.
+10. When design is done, write the canonical clean handoff:
+   `maestro feature finalize <id>`. The next agent starts at
+   `.maestro/cards/<id>/handoff.md`; raw `spec.md`, `notes.md`, and decision
+   cards stay preserved for audit.
 
 ## Taste Forks
 
@@ -107,18 +112,21 @@ harness. Preserve the answer, not the code.
 - Do not keep a contradicted decision silently. Reopen or supersede it in the
   Decision record.
 - Do not resume from chat memory. Resume from `maestro feature spec <id>`,
-  `.maestro/cards/<id>/notes.md`, and `maestro decision list --feature <id>`
-  (the bare list windows to recent decisions, so scope it to your feature).
+  `.maestro/cards/<id>/handoff.md` first when it exists, then raw
+  `spec.md`, `notes.md`, and `maestro decision list --feature <id>` for audit
+  or deeper context (the bare list windows to recent decisions, so scope it to
+  your feature).
 
 ## Hand-off
 
-Pipeline: `[maestro-design] -> maestro-card (qa-baseline -> feature accept -> prepare -> work -> verify -> qa-slice -> feature close)`
+Pipeline: `[maestro-design: feature finalize] -> maestro-card (qa-baseline -> feature accept -> prepare -> work -> verify -> qa-slice -> feature close)`
 
-Next: decisions locked and contract authored -> `maestro-card` (its
-qa-baseline reference, then `feature accept`). The hand-off is this skill
-boundary, crossed once here; it is not a lifecycle gate. When the user
-authorizes building, do not re-ask -- flow straight through accept -> prepare
--> work.
+Next: decisions locked and contract authored -> run `maestro feature finalize
+<id>`, then hand to `maestro-card` (its qa-baseline reference, then
+`feature accept`). The hand-off is a lifecycle gate: `feature accept` and
+`feature prepare` fail when `.maestro/cards/<id>/handoff.md` is missing or
+stale. When the user authorizes building, do not re-ask -- flow straight
+through finalize -> qa-baseline -> accept -> prepare -> work.
 
 If another session is live as you cross into implementation, follow the
 conflict-handoff protocol in HARNESS.md (worktree-isolate; link + `maestro

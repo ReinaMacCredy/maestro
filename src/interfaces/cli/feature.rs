@@ -68,6 +68,7 @@ pub fn run(args: FeatureArgs) -> Result<()> {
                 edit_acceptance: paired_acceptance_edits(edit_acceptance, text)?,
             },
         ),
+        FeatureCommand::Finalize { id } => finalize_feature(&paths, &id),
         FeatureCommand::Accept {
             id,
             qa,
@@ -237,6 +238,21 @@ fn accept_feature(
         (Some(other), _) => bail!("unsupported --qa value `{other}`; only `--qa none` is accepted"),
         (None, Some(_)) => bail!("--reason requires --qa none"),
     }
+}
+
+fn finalize_feature(paths: &MaestroPaths, id: &str) -> Result<()> {
+    let report = feature::finalize(paths, id)?;
+    super::emit_card_touch(paths, id);
+    println!("finalized {}", report.id);
+    println!("handoff: {}", report.path.display());
+    println!("source_sha256: {}", report.fingerprint);
+    if !report.next_commands.is_empty() {
+        println!("next:");
+        for command in report.next_commands {
+            println!("  {command}");
+        }
+    }
+    Ok(())
 }
 
 fn prepare_feature(
@@ -733,7 +749,7 @@ fn set_feature(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> Result<(
     let report = feature::set_with_report(paths, id, edits)?;
     super::emit_card_touch(paths, id);
     print_set_report(id, &report);
-    println!("next: maestro feature accept {id}");
+    println!("next: maestro feature finalize {id}");
     if !report.view.open_questions.is_empty() {
         println!(
             "fork hint: open real forks with `maestro decision new \"<title>\" --feature {id} --context \"<why>\"`; keep --question for loose questions"
@@ -1546,11 +1562,11 @@ fn stale_reveal_block(stale: &[&feature::FeatureView], now_nanos: i128) -> Strin
 }
 
 /// The happy-path build command for a stale proposed feature: keep authoring
-/// the contract while it is incomplete, otherwise freeze it. Mirrors the
+/// the contract while it is incomplete, otherwise finalize it. Mirrors the
 /// proposed branch of `feature_next_label`, rendered as a runnable command.
 fn stale_build_hint(view: &feature::FeatureView) -> String {
     if !view.acceptance.is_empty() && !view.affected_areas.is_empty() {
-        format!("maestro feature accept {}", view.id)
+        format!("maestro feature finalize {}", view.id)
     } else {
         format!("maestro feature set {}", view.id)
     }
@@ -1641,7 +1657,7 @@ mod tests {
         assert!(block.contains("build:  maestro feature set incomplete-feat"));
         assert!(block.contains("ready-feat"));
         assert!(block.contains("proposed [stale 30d]"));
-        assert!(block.contains("build:  maestro feature accept ready-feat"));
+        assert!(block.contains("build:  maestro feature finalize ready-feat"));
         assert!(block.contains(
             "retire: maestro feature cancel incomplete-feat --reason \"...\"  then  maestro feature archive incomplete-feat"
         ));
@@ -1671,10 +1687,10 @@ mod tests {
     }
 
     #[test]
-    fn build_hint_is_set_until_contract_complete_then_accept() {
+    fn build_hint_is_set_until_contract_complete_then_finalize() {
         let incomplete = proposed_view("f", "2026-06-01T00:00:00.000Z", false);
         let complete = proposed_view("f", "2026-06-01T00:00:00.000Z", true);
         assert_eq!(stale_build_hint(&incomplete), "maestro feature set f");
-        assert_eq!(stale_build_hint(&complete), "maestro feature accept f");
+        assert_eq!(stale_build_hint(&complete), "maestro feature finalize f");
     }
 }

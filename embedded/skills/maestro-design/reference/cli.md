@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: 827020434d270658e14e88eeedc6775e29150f41df217d58e7879d60c4c3fa62 -->
+<!-- maestro:cli-reference-sha256: eeb70e322a233f30b649dd787d372c007c24b9f8604e85f102c6cb57b4403561 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -16,6 +16,7 @@ a spelling not found here is outside this skill's CLI surface.
 
 - `maestro feature new <TITLE> [--description <DESCRIPTION>] [--question <QUESTION>]... [--project <PROJECT>] [--id-only]` -- Propose a new feature (-> proposed)
 - `maestro feature set <ID> [--acceptance <ACCEPTANCE>]... [--area <AREA>]... [--non-goal <NON_GOAL>]... [--question <QUESTION>]... [--description <DESCRIPTION>] [--request <REQUEST>] [--type <INPUT_TYPE>]` -- Author a proposed feature's contract (replace or append fields)
+- `maestro feature finalize <ID>` -- Write or refresh the clean design handoff before accept/prepare
 - `maestro feature show <ID>` -- Show a feature's status, full contract, and task counts
 - `maestro feature spec <ID> [--section <SECTION>] [--append <TEXT>] [--replace <TEXT>]` -- Render a feature's spec-of-record, or fill one section (--section with --append/--replace)
 - `maestro feature list [--all]` -- List features with their statuses and task counts

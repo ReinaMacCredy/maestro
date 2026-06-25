@@ -6,6 +6,8 @@ behavior oracle for `feature close`, not a list of tests.
 ## Use
 
 - `maestro feature accept` is blocked on missing or empty `qa.md`.
+- `maestro feature accept` also requires a fresh `handoff.md`; when the
+  blocker names handoff, run `maestro feature finalize <id>` first.
 - A behavioral amend added acceptance or area and the baseline must be fresh.
 - The feature touches user-visible, data, security, persistence,
   compatibility, release, or workflow behavior.
@@ -116,4 +118,5 @@ amend_log_position: 0
 
 ## Hand-off
 
-Next: baseline written -> [feature.md](feature.md) for `feature accept`.
+Next: baseline written -> [feature.md](feature.md) for `feature finalize`
+when needed, then `feature accept`.

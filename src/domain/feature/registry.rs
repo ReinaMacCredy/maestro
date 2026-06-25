@@ -27,6 +27,8 @@ use crate::domain::card::fold;
 use crate::domain::card::query as card_query;
 use crate::domain::card::schema::{Card, CardType};
 use crate::domain::card::store::{self as card_store, CardSnapshot};
+use crate::domain::decisions;
+use crate::domain::decisions::schema::{DecisionRecord, DecisionStatus};
 use crate::domain::feature::qa;
 use crate::domain::feature::query::{
     FeatureTaskCounts, count_tasks_by_feature, count_tasks_by_feature_in_entries,
@@ -42,11 +44,18 @@ use crate::domain::task::{self, TaskEntry, TaskState, TransitionDetails};
 use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::fs::{append_text_file, read_to_string_if_exists};
 use crate::foundation::core::git;
+use crate::foundation::core::hash::sha256_hex;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::safe_write::write_string_atomic;
 use crate::foundation::core::schema::FEATURE_SCHEMA_VERSION;
 use crate::foundation::core::slug::slugify_ascii;
 use crate::foundation::core::time::utc_now_timestamp;
+
+const HANDOFF_FILE: &str = "handoff.md";
+const HANDOFF_VERSION: &str = "1";
+const HANDOFF_VERSION_MARKER: &str = "<!-- maestro:feature-handoff-version: ";
+const HANDOFF_HASH_MARKER: &str = "<!-- maestro:feature-handoff-source-sha256: ";
+const HANDOFF_GENERATED_MARKER: &str = "<!-- maestro:feature-handoff-generated-at: ";
 
 /// A feature joined with its non-persisted task counts, ready for display.
 ///
@@ -205,6 +214,15 @@ pub struct SetReport {
     pub replaced: ContractChangeCounts,
     pub added: ContractChangeCounts,
     pub edited_acceptance: usize,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FinalizeReport {
+    pub id: String,
+    pub path: PathBuf,
+    pub fingerprint: String,
+    pub generated_at: String,
+    pub next_commands: Vec<String>,
 }
 
 /// Append-only additions applied by `feature amend` (Ready / InProgress).
@@ -421,6 +439,313 @@ pub fn set_with_report(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> 
     })
 }
 
+pub fn finalize(paths: &MaestroPaths, id: &str) -> Result<FinalizeReport> {
+    let record = load_record(paths, id)?;
+    match record.status {
+        FeatureStatus::Proposed | FeatureStatus::Ready => {}
+        FeatureStatus::InProgress => bail!(
+            "cannot finalize {id} — implementation is already in progress; inspect `.maestro/cards/{id}/handoff.md` and `maestro feature show {id}`"
+        ),
+        FeatureStatus::Closed | FeatureStatus::Cancelled => bail!(
+            "cannot finalize {id} — terminal (status: {})",
+            record.status.as_str()
+        ),
+    }
+
+    let sources = handoff_sources(paths, &record)?;
+    let generated_at = utc_now_timestamp();
+    let next_commands = handoff_next_commands(paths, &record)?;
+    let contents = render_handoff(&record, &sources, &generated_at, &next_commands);
+    let path = feature_sidecar_dir(paths, &record.id).join(HANDOFF_FILE);
+    write_string_atomic(&path, &contents)
+        .with_context(|| format!("failed to write {}", path.display()))?;
+    Ok(FinalizeReport {
+        id: record.id,
+        path,
+        fingerprint: sources.fingerprint,
+        generated_at,
+        next_commands,
+    })
+}
+
+pub fn handoff_gap(paths: &MaestroPaths, id: &str) -> Result<Option<String>> {
+    let record = load_record(paths, id)?;
+    handoff_gap_for_record(paths, &record)
+}
+
+fn handoff_gap_for_record(paths: &MaestroPaths, record: &FeatureRecord) -> Result<Option<String>> {
+    let sources = handoff_sources(paths, record)?;
+    let path = feature_sidecar_dir(paths, &record.id).join(HANDOFF_FILE);
+    let Some(contents) = read_to_string_if_exists(&path)? else {
+        return Ok(Some(handoff_gate_gap(
+            &record.id,
+            "missing",
+            ".maestro/cards/<id>/handoff.md does not exist",
+        )));
+    };
+    let Some(found) = handoff_source_fingerprint_from_contents(&contents) else {
+        return Ok(Some(handoff_gate_gap(
+            &record.id,
+            "stale",
+            ".maestro/cards/<id>/handoff.md has no source fingerprint",
+        )));
+    };
+    if found == sources.fingerprint {
+        return Ok(None);
+    }
+    Ok(Some(handoff_gate_gap(
+        &record.id,
+        "stale",
+        "design source fingerprint changed",
+    )))
+}
+
+fn handoff_gate_gap(id: &str, state: &str, detail: &str) -> String {
+    format!(
+        "handoff (.maestro/cards/{id}/handoff.md {state}: {detail})\n    fix: maestro feature finalize {id}"
+    )
+}
+
+struct HandoffSources {
+    spec: Option<String>,
+    notes: Option<String>,
+    decisions: Vec<DecisionRecord>,
+    fingerprint: String,
+}
+
+fn handoff_sources(paths: &MaestroPaths, record: &FeatureRecord) -> Result<HandoffSources> {
+    let sidecar_dir = feature_sidecar_dir(paths, &record.id);
+    let spec = read_to_string_if_exists(sidecar_dir.join("spec.md"))?;
+    let notes = read_to_string_if_exists(sidecar_dir.join("notes.md"))?;
+    let decisions = decisions::decisions_for_feature(paths, &record.id)?;
+    let fingerprint =
+        handoff_source_fingerprint(record, spec.as_deref(), notes.as_deref(), &decisions);
+    Ok(HandoffSources {
+        spec,
+        notes,
+        decisions,
+        fingerprint,
+    })
+}
+
+fn handoff_source_fingerprint(
+    record: &FeatureRecord,
+    spec: Option<&str>,
+    notes: Option<&str>,
+    decisions: &[DecisionRecord],
+) -> String {
+    let mut source = String::new();
+    push_source_field(&mut source, "format", HANDOFF_VERSION);
+    push_source_field(&mut source, "id", &record.id);
+    push_source_field(&mut source, "title", &record.title);
+    push_source_optional_field(&mut source, "description", record.description.as_deref());
+    push_source_optional_field(&mut source, "raw_request", record.raw_request.as_deref());
+    push_source_optional_field(&mut source, "input_type", record.input_type.as_deref());
+    push_source_list(&mut source, "acceptance", &record.acceptance);
+    push_source_list(&mut source, "affected_areas", &record.affected_areas);
+    push_source_list(&mut source, "non_goals", &record.non_goals);
+    push_source_list(&mut source, "open_questions", &record.open_questions);
+    push_source_optional_field(&mut source, "spec.md", spec);
+    push_source_optional_field(&mut source, "notes.md", notes);
+    source.push_str("decisions\n");
+    for decision in decisions {
+        push_source_field(&mut source, "decision.id", &decision.id);
+        push_source_field(&mut source, "decision.title", &decision.title);
+        push_source_field(&mut source, "decision.status", decision.status.as_str());
+        push_source_optional_field(&mut source, "decision.context", decision.context.as_deref());
+        push_source_optional_field(
+            &mut source,
+            "decision.decision",
+            decision.decision.as_deref(),
+        );
+        push_source_list(&mut source, "decision.rejected", &decision.rejected);
+        push_source_optional_field(&mut source, "decision.preview", decision.preview.as_deref());
+        push_source_list(&mut source, "decision.supersedes", &decision.supersedes);
+        push_source_optional_field(
+            &mut source,
+            "decision.superseded_by",
+            decision.superseded_by.as_deref(),
+        );
+        push_source_field(&mut source, "decision.created_at", &decision.created_at);
+        push_source_optional_field(
+            &mut source,
+            "decision.locked_at",
+            decision.locked_at.as_deref(),
+        );
+    }
+    sha256_hex(source.as_bytes())
+}
+
+fn push_source_field(out: &mut String, name: &str, value: &str) {
+    out.push_str(name);
+    out.push('\0');
+    out.push_str(&value.len().to_string());
+    out.push('\0');
+    out.push_str(value);
+    out.push('\n');
+}
+
+fn push_source_optional_field(out: &mut String, name: &str, value: Option<&str>) {
+    match value {
+        Some(value) => push_source_field(out, name, value),
+        None => push_source_field(out, name, "<missing>"),
+    }
+}
+
+fn push_source_list(out: &mut String, name: &str, values: &[String]) {
+    push_source_field(out, &format!("{name}.len"), &values.len().to_string());
+    for value in values {
+        push_source_field(out, name, value);
+    }
+}
+
+fn handoff_source_fingerprint_from_contents(contents: &str) -> Option<String> {
+    contents.lines().find_map(|line| {
+        let value = line.strip_prefix(HANDOFF_HASH_MARKER)?;
+        value.strip_suffix(" -->").map(str::to_string)
+    })
+}
+
+fn handoff_next_commands(paths: &MaestroPaths, record: &FeatureRecord) -> Result<Vec<String>> {
+    let commands = match record.status {
+        FeatureStatus::Proposed
+            if qa::baseline_present(&feature_sidecar_dir(paths, &record.id))? =>
+        {
+            vec![format!("maestro feature accept {}", record.id)]
+        }
+        FeatureStatus::Proposed => vec![
+            format!(
+                "maestro qa baseline {} --observed \"<current behavior>\"",
+                record.id
+            ),
+            format!("maestro feature accept {}", record.id),
+        ],
+        FeatureStatus::Ready => vec![format!("maestro feature prepare {} --draft", record.id)],
+        FeatureStatus::InProgress => vec![format!("maestro feature verify {}", record.id)],
+        FeatureStatus::Closed | FeatureStatus::Cancelled => {
+            vec![format!("maestro card archive {}", record.id)]
+        }
+    };
+    Ok(commands)
+}
+
+fn render_handoff(
+    record: &FeatureRecord,
+    sources: &HandoffSources,
+    generated_at: &str,
+    next_commands: &[String],
+) -> String {
+    let mut out = String::new();
+    out.push_str(&format!("{HANDOFF_VERSION_MARKER}{HANDOFF_VERSION} -->\n"));
+    out.push_str(&format!(
+        "{HANDOFF_HASH_MARKER}{} -->\n",
+        sources.fingerprint
+    ));
+    out.push_str(&format!("{HANDOFF_GENERATED_MARKER}{generated_at} -->\n\n"));
+    out.push_str(&format!("# {} Handoff\n\n", record.title));
+    out.push_str("## Status\n\n");
+    out.push_str(&format!("- Feature: `{}`\n", record.id));
+    out.push_str(&format!("- Status: `{}`\n", record.status.as_str()));
+    out.push_str(&format!("- Generated: `{generated_at}`\n\n"));
+
+    out.push_str("## Continue\n\n");
+    for command in next_commands {
+        out.push_str(&format!("- `{command}`\n"));
+    }
+    out.push_str("\n## Locked Decisions\n\n");
+    let locked = sources
+        .decisions
+        .iter()
+        .filter(|decision| decision.status == DecisionStatus::Locked)
+        .collect::<Vec<_>>();
+    if locked.is_empty() {
+        out.push_str("- None recorded.\n");
+    } else {
+        for decision in locked {
+            if let Some(answer) = decision.decision.as_deref() {
+                out.push_str(&format!(
+                    "- `{}`: {} — {}\n",
+                    decision.id, decision.title, answer
+                ));
+            } else {
+                out.push_str(&format!("- `{}`: {}\n", decision.id, decision.title));
+            }
+        }
+    }
+
+    out.push_str("\n## Open Questions And Blockers\n\n");
+    let mut wrote_blocker = false;
+    for question in &record.open_questions {
+        out.push_str(&format!("- Open question: {question}\n"));
+        wrote_blocker = true;
+    }
+    for decision in sources
+        .decisions
+        .iter()
+        .filter(|decision| decision.status == DecisionStatus::Open)
+    {
+        out.push_str(&format!(
+            "- Open decision `{}`: {}\n",
+            decision.id, decision.title
+        ));
+        wrote_blocker = true;
+    }
+    if !wrote_blocker {
+        out.push_str("- None recorded.\n");
+    }
+
+    out.push_str("\n## Acceptance Criteria\n\n");
+    if record.acceptance.is_empty() {
+        out.push_str("- None recorded.\n");
+    } else {
+        for (index, item) in record.acceptance.iter().enumerate() {
+            out.push_str(&format!(
+                "- `{}`: {item}\n",
+                verification::acceptance_id(index)
+            ));
+        }
+    }
+
+    out.push_str("\n## Affected Areas\n\n");
+    push_handoff_list(&mut out, &record.affected_areas);
+
+    out.push_str("\n## Non-Goals\n\n");
+    push_handoff_list(&mut out, &record.non_goals);
+
+    out.push_str("\n## Audit Trail\n\n");
+    out.push_str(&format!("- Spec: `.maestro/cards/{}/spec.md`", record.id));
+    if sources.spec.is_none() {
+        out.push_str(" (missing)");
+    }
+    out.push('\n');
+    out.push_str(&format!("- Notes: `.maestro/cards/{}/notes.md`", record.id));
+    if sources.notes.is_none() {
+        out.push_str(" (missing)");
+    }
+    out.push('\n');
+    out.push_str(&format!(
+        "- Decisions: `maestro decision list --feature {}`\n",
+        record.id
+    ));
+    for decision in &sources.decisions {
+        out.push_str(&format!(
+            "  - `{}`: `.maestro/cards/{}/card.yaml`\n",
+            decision.id, decision.id
+        ));
+    }
+    out
+}
+
+fn push_handoff_list(out: &mut String, values: &[String]) {
+    if values.is_empty() {
+        out.push_str("- None recorded.\n");
+        return;
+    }
+    for value in values {
+        out.push_str(&format!("- {value}\n"));
+    }
+}
+
 /// Accept a feature: `Proposed → Ready`, gated on a complete contract (D2).
 ///
 /// Phase A gate: `acceptance` and `affected_areas` both non-empty. (The
@@ -505,6 +830,9 @@ fn accept_inner(
         gaps.push(format!(
             "affected_areas (0 areas) — fix: maestro feature set {id} --area \"<surface>\""
         ));
+    }
+    if let Some(gap) = handoff_gap_for_record(paths, &record)? {
+        gaps.push(gap);
     }
     // F — a captured behavior baseline is a precondition of accept (before edits).
     let feat_dir = feature_sidecar_dir(paths, id);

@@ -6,6 +6,7 @@ the QA baseline and slice evidence in `qa.md` prove the feature gates.
 ## Use
 
 - Inspect a feature after design: `show`, `list`.
+- Finalize a clean design handoff: `finalize`.
 - Freeze a proposed contract: `accept`.
 - Turn an accepted contract into work cards: `prepare`.
 - Grow a frozen contract: `amend`.
@@ -17,17 +18,18 @@ For feature lifecycle work after the design contract is authored, prefer native
 MCP when available:
 
 ```text
-maestro_qa_baseline -> maestro_feature_accept -> maestro_feature_prepare
+maestro feature finalize <id> -> maestro_qa_baseline -> maestro_feature_accept -> maestro_feature_prepare
 maestro_feature_verify -> maestro_qa_slice -> maestro_feature_close
 ```
 
 Use the CLI for lifecycle and maintenance verbs not yet exposed as MCP tools
-(`feature amend`, archive, and unarchive), or when MCP is unavailable. Design
+(`feature finalize`, `feature amend`, archive, and unarchive), or when MCP is unavailable. Design
 authoring (`feature new`, `feature set`, and `feature spec`) belongs in
 `maestro-design`. MCP tool schemas come from the host; CLI signatures live in
 [cli.md](cli.md).
 
 ```sh
+maestro feature finalize <id>    # writes/refreshes .maestro/cards/<id>/handoff.md
 maestro feature accept            # -> ready, requires qa-baseline
 maestro feature prepare --draft   # reviewable child-task plan
 maestro feature prepare --from    # create/explore/accept tasks from a plan file
@@ -43,11 +45,17 @@ Use `feature show <id>` for the everyday lifecycle summary. Use
 forks; `--question` is for loose questions not yet forks, both handled in
 `maestro-design`.
 
-At the approval moment, record directive or sequencing constraints, plus the
+At the approval moment, read `.maestro/cards/<id>/handoff.md` first. It is the
+clean continuation index; use raw `spec.md`, `notes.md`, and
+`maestro decision list --feature <id>` only for audit or deeper context. If
+the handoff is missing or stale, run `maestro feature finalize <id>`.
+
+Record directive or sequencing constraints, plus the
 dated authorization line, in one `maestro card note <id> "<date + authorization
 + constraints>"`. If the approval changes scope before accept, return to
-`maestro-design` to update the proposed contract first. Then run `feature
-accept`; `accept` itself does not grow approval fields.
+`maestro-design` to update the proposed contract first, then rerun
+`feature finalize`. Then run `feature accept`; `accept` itself does not grow
+approval fields.
 
 `prepare --from` expects a visible plan:
 
@@ -65,13 +73,14 @@ check: GET /articles satisfies the API contract
 Prepare starts the feature only when at least one child task is accepted and
 unblocked.
 
-When the user authorizes building, flow straight through -- `accept`, then
-`prepare --from`, then work -- with no implement-now/stop confirmation between
-steps; the authorization already chose to build. Decompose the contract into
-dependency-ordered tasks yourself (the auto `--draft` lumps every criterion
-into one), mint them in one `prepare --from`, then report the split. `ready`
-and the `prepare` verb stay for the explicit freeze-and-park path: accept a
-contract, stop, and decompose later when asked.
+When the user authorizes building, flow straight through -- `finalize`,
+`qa-baseline`, `accept`, then `prepare --from`, then work -- with no
+implement-now/stop confirmation between steps; the authorization already chose
+to build. Decompose the contract into dependency-ordered tasks yourself (the
+auto `--draft` lumps every criterion into one), mint them in one
+`prepare --from`, then report the split. `ready` and the `prepare` verb stay
+for the explicit freeze-and-park path: accept a contract, stop, and decompose
+later when asked.
 
 ## Gates
 
@@ -79,6 +88,7 @@ Accept passes only when the feature has:
 
 - at least one acceptance criterion
 - at least one affected area
+- a fresh `.maestro/cards/<id>/handoff.md` from `maestro feature finalize <id>`
 - a non-empty `.maestro/cards/<id>/qa.md` from
   [qa-baseline.md](qa-baseline.md)
 

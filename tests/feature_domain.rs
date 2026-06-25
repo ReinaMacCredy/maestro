@@ -63,6 +63,8 @@ fn author_contract(paths: &MaestroPaths, id: &str) {
         "---\namend_log_position: 0\n---\n\n### QA Baseline Contract\n\n- Baseline gaps:\n  - none (no behavioral surface)\n",
     )
     .expect("invariant: qa.md should be writable");
+
+    feature::finalize(paths, id).expect("invariant: finalize should write a fresh handoff");
 }
 
 fn verify_contract(paths: &MaestroPaths, id: &str) {
@@ -231,6 +233,7 @@ fn verify_rejects_unknown_acceptance_evidence_kind() {
         },
     )
     .expect("invariant: set should succeed");
+    feature::finalize(&paths, "billing-csv").expect("invariant: finalize should succeed");
     feature::accept_with_qa_none(&paths, "billing-csv", "domain test", false)
         .expect("invariant: feature may be accepted");
     feature::start(&paths, "billing-csv").expect("invariant: started features may be verified");
