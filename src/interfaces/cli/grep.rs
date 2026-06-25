@@ -29,16 +29,28 @@ fn render_human(hits: &[search::SearchHit]) {
         return;
     }
     for hit in hits {
+        let target = hit_target(hit);
         println!(
-            "{}:{}:{}  score {:.2}",
+            "{}. {}:{} {} score={:.2} {}",
+            hit.rank,
             hit.corpus.as_str(),
             hit.kind,
-            hit.id,
-            hit.score
+            target,
+            hit.score,
+            hit.title
         );
         println!("  {}", hit.snippet);
         if let Some(opener) = &hit.opener {
             println!("  open: {opener}");
         }
+    }
+}
+
+fn hit_target(hit: &search::SearchHit) -> String {
+    match (&hit.path, hit.line) {
+        (Some(path), Some(line)) if hit.corpus == search::types::SearchCorpus::Source => {
+            format!("{path}:{line}")
+        }
+        _ => hit.id.clone(),
     }
 }

@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use tree_sitter::{Language, Node, Parser};
 
+pub(crate) const OUTLINE_EXTRACTOR_VERSION: &str = "maestro.outline.v1";
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct OutlineEntry {
     pub file: String,

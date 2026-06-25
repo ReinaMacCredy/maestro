@@ -10,10 +10,11 @@ use crate::domain::card::schema::{Card, CardType};
 use crate::domain::card::store::is_dir_backed;
 use crate::domain::run;
 use crate::domain::search::intent;
+use crate::domain::search::lock;
 use crate::domain::search::query::{self, ParsedQuery};
 use crate::domain::search::types::{
     GrepEnvelope, MatchSpan, ScoreReason, SearchCorpus, SearchDiagnostic, SearchDocument,
-    SearchHit, SearchSegment,
+    SearchFreshness, SearchHit, SearchSegment,
 };
 use crate::foundation::core::fs::ensure_dir;
 use crate::foundation::core::paths::MaestroPaths;
@@ -30,6 +31,12 @@ pub struct MemoryRebuildReport {
     pub live_docs: usize,
     pub archived_docs: usize,
     pub run_evidence_docs: usize,
+}
+
+struct LoadedMemoryShard {
+    shard: MemoryShard,
+    freshness: SearchFreshness,
+    diagnostics: Vec<SearchDiagnostic>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -54,6 +61,11 @@ struct SearchManifest {
 }
 
 pub fn rebuild_memory(paths: &MaestroPaths) -> Result<MemoryRebuildReport> {
+    let _guard = lock::acquire_writer(paths)?;
+    rebuild_memory_unlocked(paths)
+}
+
+pub(crate) fn rebuild_memory_unlocked(paths: &MaestroPaths) -> Result<MemoryRebuildReport> {
     let live = card_query::scan_with_paths(paths)?;
     let archived = card_query::scan_dir_with_paths(&paths.archive_cards_dir())?;
     let run_evidence = run::load_run_evidence(paths)?;
@@ -100,21 +112,23 @@ pub(crate) fn grep_memory_parsed(
     parsed: &ParsedQuery,
 ) -> GrepEnvelope {
     if parsed.filters.corpus.as_deref() == Some("source") {
-        return GrepEnvelope::error(
+        return GrepEnvelope::error_with_overrides(
             raw_query,
             SearchDiagnostic::error(
                 "source_corpus_unavailable",
                 "source corpus is not enabled in the memory-core slice",
             ),
+            parsed.explicit_filter_overrides.clone(),
         );
     }
     if !parsed.regexes.is_empty() {
-        return GrepEnvelope::error(
+        return GrepEnvelope::error_with_overrides(
             raw_query,
             SearchDiagnostic::error(
                 "invalid_filter",
                 "regex atoms search source contents; use corpus:source or remove corpus:memory",
             ),
+            parsed.explicit_filter_overrides.clone(),
         );
     }
     if let Some(invalid) = parsed
@@ -123,36 +137,68 @@ pub(crate) fn grep_memory_parsed(
         .iter()
         .find(|kind| !is_memory_kind(kind))
     {
-        return GrepEnvelope::error(
+        return GrepEnvelope::error_with_overrides(
             raw_query,
             SearchDiagnostic::error(
                 "invalid_type",
                 format!("type:{invalid} is not a Maestro-memory result kind"),
             ),
+            parsed.explicit_filter_overrides.clone(),
         );
     }
 
-    let shard = match load_fresh(paths) {
-        Ok(shard) => shard,
-        Err(_) => match rebuild_memory(paths).and_then(|_| load_fresh(paths)) {
-            Ok(shard) => shard,
-            Err(error) => {
-                return GrepEnvelope::error(
-                    raw_query,
-                    SearchDiagnostic {
-                        severity: crate::domain::search::types::DiagnosticSeverity::Error,
-                        code: "memory_shard_unavailable".to_string(),
-                        message: format!("memory shard unavailable: {error}"),
-                        corpus: Some(SearchCorpus::Memory),
-                        path: Some(".maestro/index/search/memory.shard".to_string()),
-                        retryable: Some(true),
-                    },
-                );
-            }
-        },
+    let loaded = match load_for_query(paths) {
+        Ok(loaded) => loaded,
+        Err(diagnostic) => {
+            return GrepEnvelope::error_with_overrides(
+                raw_query,
+                diagnostic,
+                parsed.explicit_filter_overrides.clone(),
+            );
+        }
     };
-    let hits = score_documents(&shard.docs, parsed);
-    GrepEnvelope::success(raw_query, hits, parsed.explicit_filter_overrides.clone())
+    let hits = score_documents(&loaded.shard.docs, parsed);
+    let mut envelope =
+        GrepEnvelope::success(raw_query, hits, parsed.explicit_filter_overrides.clone())
+            .with_freshness(vec![loaded.freshness]);
+    envelope.diagnostics = loaded.diagnostics;
+    envelope
+}
+
+fn load_for_query(paths: &MaestroPaths) -> Result<LoadedMemoryShard, SearchDiagnostic> {
+    match load_fresh(paths) {
+        Ok(shard) => Ok(LoadedMemoryShard {
+            freshness: memory_freshness(&shard, false),
+            shard,
+            diagnostics: Vec::new(),
+        }),
+        Err(error) => {
+            let repair_reason = error.to_string();
+            let _guard = lock::try_acquire_writer(paths)?;
+            match rebuild_memory_unlocked(paths).and_then(|_| load_fresh(paths)) {
+                Ok(shard) => Ok(LoadedMemoryShard {
+                    freshness: memory_freshness(&shard, true),
+                    shard,
+                    diagnostics: vec![SearchDiagnostic::info(
+                        "memory_shard_repaired",
+                        format!(
+                            "memory shard was stale or corrupt and was rebuilt before answering: {repair_reason}"
+                        ),
+                    )
+                    .with_corpus(SearchCorpus::Memory)
+                    .with_path(".maestro/index/search/memory.shard")
+                    .with_retryable(false)],
+                }),
+                Err(error) => Err(SearchDiagnostic::error(
+                    "memory_shard_unavailable",
+                    format!("memory shard unavailable: {error}"),
+                )
+                .with_corpus(SearchCorpus::Memory)
+                .with_path(".maestro/index/search/memory.shard")
+                .with_retryable(true)),
+            }
+        }
+    }
 }
 
 fn load_fresh(paths: &MaestroPaths) -> Result<MemoryShard> {
@@ -176,6 +222,26 @@ fn write_search_manifest(paths: &MaestroPaths, memory_docs: usize) -> Result<()>
     let contents =
         serde_json::to_string_pretty(&manifest).context("failed to serialize search manifest")?;
     write_string_atomic(paths.search_manifest_file(), &contents)
+}
+
+fn memory_freshness(shard: &MemoryShard, repaired: bool) -> SearchFreshness {
+    SearchFreshness {
+        corpus: SearchCorpus::Memory,
+        shard: ".maestro/index/search/memory.shard".to_string(),
+        fresh: true,
+        repaired,
+        schema_version: shard.schema_version.clone(),
+        manifest_entries: shard.manifest.len(),
+        vocabulary_version: intent::SYMBOLIC_VOCABULARY_VERSION.to_string(),
+        artifact_graph_version: intent::ARTIFACT_GRAPH_VERSION.to_string(),
+        outline_extractor_version: None,
+        documents: Some(shard.docs.len()),
+        indexed_files: None,
+        outline_entries: None,
+        ctags_symbols: None,
+        skipped_files: None,
+        skipped_by_reason: BTreeMap::new(),
+    }
 }
 
 fn encode_shard(shard: &MemoryShard) -> Result<Vec<u8>> {

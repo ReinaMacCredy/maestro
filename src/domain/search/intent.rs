@@ -3,6 +3,9 @@ use std::cmp::Ordering;
 use crate::domain::search::query::ParsedQuery;
 use crate::domain::search::types::{ScoreReason, SearchCorpus, SearchHit};
 
+pub(crate) const SYMBOLIC_VOCABULARY_VERSION: &str = "maestro.symbolic-vocabulary.v1";
+pub(crate) const ARTIFACT_GRAPH_VERSION: &str = "maestro.artifact-graph.v1";
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum IntentKind {
     Memory,

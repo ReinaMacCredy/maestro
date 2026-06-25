@@ -8,12 +8,13 @@ use regex::{Regex, RegexBuilder};
 use serde::{Deserialize, Serialize};
 
 use crate::domain::search::intent::{self, IntentDecision};
+use crate::domain::search::lock;
 use crate::domain::search::memory;
 use crate::domain::search::outline::{self, OutlineEntry};
 use crate::domain::search::query::{self, ParsedQuery, QueryAtom, QueryExpr};
 use crate::domain::search::types::{
     DiagnosticSeverity, GrepEnvelope, MatchSpan, ScoreReason, SearchCorpus, SearchDiagnostic,
-    SearchHit,
+    SearchFreshness, SearchHit,
 };
 use crate::foundation::core::fs::ensure_dir;
 use crate::foundation::core::paths::MaestroPaths;
@@ -119,6 +120,12 @@ struct SourceMatch {
     factor: &'static str,
 }
 
+struct LoadedSourceShard {
+    shard: SourceShard,
+    freshness: SearchFreshness,
+    diagnostics: Vec<SearchDiagnostic>,
+}
+
 pub fn grep(paths: &MaestroPaths, raw_query: &str) -> GrepEnvelope {
     let parsed = match query::parse(raw_query) {
         Ok(parsed) => parsed,
@@ -127,12 +134,13 @@ pub fn grep(paths: &MaestroPaths, raw_query: &str) -> GrepEnvelope {
     let decision = intent::classify(&parsed);
 
     if parsed.filters.corpus.as_deref() == Some("memory") && has_source_only_filter(&parsed) {
-        return GrepEnvelope::error(
+        return GrepEnvelope::error_with_overrides(
             raw_query,
             SearchDiagnostic::error(
                 "invalid_filter",
                 "source filters cannot be combined with corpus:memory",
             ),
+            parsed.explicit_filter_overrides.clone(),
         );
     }
 
@@ -181,18 +189,29 @@ fn grep_mixed(
 ) -> GrepEnvelope {
     let memory_envelope = memory::grep_memory_parsed(paths, raw_query, parsed);
     let source_envelope = grep_source_parsed(paths, raw_query, parsed);
+    if lock::is_lock_contention(&memory_envelope) {
+        return memory_envelope;
+    }
+    if lock::is_lock_contention(&source_envelope) {
+        return source_envelope;
+    }
     let mut diagnostics = Vec::new();
     let mut hits = Vec::new();
+    let mut freshness = Vec::new();
 
     if memory_envelope.ok {
+        freshness.extend(memory_envelope.freshness);
         hits.extend(memory_envelope.hits);
     } else {
         diagnostics.extend(memory_envelope.diagnostics);
+        freshness.extend(memory_envelope.freshness);
     }
     if source_envelope.ok {
+        freshness.extend(source_envelope.freshness);
         hits.extend(source_envelope.hits);
     } else {
         diagnostics.extend(source_envelope.diagnostics);
+        freshness.extend(source_envelope.freshness);
     }
 
     if hits.is_empty() && !diagnostics.is_empty() {
@@ -209,6 +228,7 @@ fn grep_mixed(
     );
     envelope.partial = !diagnostics.is_empty();
     envelope.diagnostics = diagnostics;
+    envelope.freshness = freshness;
     envelope
 }
 
@@ -223,6 +243,11 @@ fn with_intent(mut envelope: GrepEnvelope, decision: &IntentDecision) -> GrepEnv
 }
 
 pub fn rebuild_source(paths: &MaestroPaths) -> Result<SourceRebuildReport> {
+    let _guard = lock::acquire_writer(paths)?;
+    rebuild_source_unlocked(paths)
+}
+
+pub(crate) fn rebuild_source_unlocked(paths: &MaestroPaths) -> Result<SourceRebuildReport> {
     let mut skipped = Vec::new();
     let candidates = source_manifest(paths, &mut skipped)?;
     let mut files = Vec::new();
@@ -332,47 +357,98 @@ pub(crate) fn grep_source_parsed(
         let kind = kind.as_str();
         kind != "file" && !OUTLINE_KINDS.contains(&kind)
     }) {
-        return GrepEnvelope::error(
+        return GrepEnvelope::error_with_overrides(
             raw_query,
             SearchDiagnostic::error(
                 "invalid_type",
                 format!("type:{invalid} is not a source result kind"),
             ),
+            parsed.explicit_filter_overrides.clone(),
         );
     }
 
-    let shard = match load_fresh(paths) {
-        Ok(shard) => shard,
-        Err(_) => match rebuild_source(paths).and_then(|_| load_fresh(paths)) {
-            Ok(shard) => shard,
-            Err(error) => {
-                return GrepEnvelope::error(
-                    raw_query,
-                    SearchDiagnostic {
-                        severity: DiagnosticSeverity::Error,
-                        code: "source_shard_unavailable".to_string(),
-                        message: format!("source shard unavailable: {error}"),
-                        corpus: Some(SearchCorpus::Source),
-                        path: Some(".maestro/index/search/source.shard".to_string()),
-                        retryable: Some(true),
-                    },
-                );
-            }
-        },
+    let loaded = match load_for_query(paths) {
+        Ok(loaded) => loaded,
+        Err(diagnostic) => {
+            return GrepEnvelope::error_with_overrides(
+                raw_query,
+                diagnostic,
+                parsed.explicit_filter_overrides.clone(),
+            );
+        }
     };
 
     let hits = if parsed.filters.sym.is_some() {
-        match search_symbols(&shard, parsed) {
+        match search_symbols(&loaded.shard, parsed) {
             Ok(hits) => hits,
-            Err(diagnostic) => return GrepEnvelope::error(raw_query, diagnostic),
+            Err(diagnostic) => {
+                let mut envelope = GrepEnvelope::error_with_overrides(
+                    raw_query,
+                    diagnostic,
+                    parsed.explicit_filter_overrides.clone(),
+                )
+                .with_freshness(vec![loaded.freshness]);
+                envelope.diagnostics.extend(loaded.diagnostics);
+                return envelope;
+            }
         }
     } else {
-        match search_shard(&shard, parsed) {
+        match search_shard(&loaded.shard, parsed) {
             Ok(hits) => hits,
-            Err(diagnostic) => return GrepEnvelope::error(raw_query, diagnostic),
+            Err(diagnostic) => {
+                let mut envelope = GrepEnvelope::error_with_overrides(
+                    raw_query,
+                    diagnostic,
+                    parsed.explicit_filter_overrides.clone(),
+                )
+                .with_freshness(vec![loaded.freshness]);
+                envelope.diagnostics.extend(loaded.diagnostics);
+                return envelope;
+            }
         }
     };
-    GrepEnvelope::success(raw_query, hits, parsed.explicit_filter_overrides.clone())
+    let mut envelope =
+        GrepEnvelope::success(raw_query, hits, parsed.explicit_filter_overrides.clone())
+            .with_freshness(vec![loaded.freshness]);
+    envelope.diagnostics = loaded.diagnostics;
+    envelope
+}
+
+fn load_for_query(paths: &MaestroPaths) -> Result<LoadedSourceShard, SearchDiagnostic> {
+    match load_fresh(paths) {
+        Ok(shard) => Ok(LoadedSourceShard {
+            freshness: source_freshness(&shard, false),
+            shard,
+            diagnostics: Vec::new(),
+        }),
+        Err(error) => {
+            let repair_reason = error.to_string();
+            let _guard = lock::try_acquire_writer(paths)?;
+            match rebuild_source_unlocked(paths).and_then(|_| load_fresh(paths)) {
+                Ok(shard) => Ok(LoadedSourceShard {
+                    freshness: source_freshness(&shard, true),
+                    shard,
+                    diagnostics: vec![SearchDiagnostic::info(
+                        "source_shard_repaired",
+                        format!(
+                            "source shard was stale or corrupt and was rebuilt before answering: {repair_reason}"
+                        ),
+                    )
+                    .with_corpus(SearchCorpus::Source)
+                    .with_path(".maestro/index/search/source.shard")
+                    .with_retryable(false)],
+                }),
+                Err(error) => Err(SearchDiagnostic {
+                    severity: DiagnosticSeverity::Error,
+                    code: "source_shard_unavailable".to_string(),
+                    message: format!("source shard unavailable: {error}"),
+                    corpus: Some(SearchCorpus::Source),
+                    path: Some(".maestro/index/search/source.shard".to_string()),
+                    retryable: Some(true),
+                }),
+            }
+        }
+    }
 }
 
 fn load_fresh(paths: &MaestroPaths) -> Result<SourceShard> {
@@ -386,6 +462,26 @@ fn load_fresh(paths: &MaestroPaths) -> Result<SourceShard> {
         bail!("source shard manifest is stale");
     }
     Ok(shard)
+}
+
+fn source_freshness(shard: &SourceShard, repaired: bool) -> SearchFreshness {
+    SearchFreshness {
+        corpus: SearchCorpus::Source,
+        shard: ".maestro/index/search/source.shard".to_string(),
+        fresh: true,
+        repaired,
+        schema_version: shard.schema_version.clone(),
+        manifest_entries: shard.manifest.len(),
+        vocabulary_version: intent::SYMBOLIC_VOCABULARY_VERSION.to_string(),
+        artifact_graph_version: intent::ARTIFACT_GRAPH_VERSION.to_string(),
+        outline_extractor_version: Some(outline::OUTLINE_EXTRACTOR_VERSION.to_string()),
+        documents: None,
+        indexed_files: Some(shard.files.len()),
+        outline_entries: Some(shard.outline_entries.len()),
+        ctags_symbols: Some(shard.symbols.len()),
+        skipped_files: Some(shard.skipped.len()),
+        skipped_by_reason: skipped_by_reason(&shard.skipped),
+    }
 }
 
 fn search_shard(
@@ -636,8 +732,8 @@ fn outline_match(
     factor: &'static str,
 ) -> SourceMatch {
     SourceMatch {
-        byte_start: entry.range.start_byte.saturating_add(relative_start),
-        byte_end: entry.range.start_byte.saturating_add(relative_end),
+        byte_start: relative_start,
+        byte_end: relative_end,
         line: entry.range.start_line,
         snippet: entry.signature.clone(),
         factor,
@@ -776,9 +872,10 @@ fn source_match(
     factor: &'static str,
 ) -> SourceMatch {
     let line = line_for_byte(&file.line_offsets, byte_start);
+    let line_start = line_start_for_byte(&file.line_offsets, byte_start);
     SourceMatch {
-        byte_start,
-        byte_end,
+        byte_start: byte_start.saturating_sub(line_start),
+        byte_end: byte_end.saturating_sub(line_start),
         line,
         snippet: line_snippet(&file.contents, byte_start),
         factor,
@@ -898,6 +995,17 @@ fn line_for_byte(offsets: &[LineOffset], byte: usize) -> u64 {
         line = offset.line;
     }
     line
+}
+
+fn line_start_for_byte(offsets: &[LineOffset], byte: usize) -> usize {
+    let mut line_start = 0;
+    for offset in offsets {
+        if offset.byte_start > byte {
+            break;
+        }
+        line_start = offset.byte_start;
+    }
+    line_start
 }
 
 fn trigrams(contents: &str) -> Vec<(String, usize)> {
@@ -1211,19 +1319,23 @@ fn report(
     ctags_status: CtagsStatus,
     skipped: &[SourceSkip],
 ) -> SourceRebuildReport {
-    let mut skipped_by_reason = BTreeMap::new();
-    for skip in skipped {
-        *skipped_by_reason.entry(skip.reason.clone()).or_insert(0) += 1;
-    }
     SourceRebuildReport {
         indexed_files,
         outline_entries,
         ctags_symbols,
         ctags_status,
         skipped_files: skipped.len(),
-        skipped_by_reason,
+        skipped_by_reason: skipped_by_reason(skipped),
         representative_skips: skipped.iter().take(8).cloned().collect(),
     }
+}
+
+fn skipped_by_reason(skipped: &[SourceSkip]) -> BTreeMap<String, usize> {
+    let mut by_reason = BTreeMap::new();
+    for skip in skipped {
+        *by_reason.entry(skip.reason.clone()).or_insert(0) += 1;
+    }
+    by_reason
 }
 
 fn glob_matches(pattern: &str, path: &str) -> bool {

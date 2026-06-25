@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -104,6 +106,32 @@ impl SearchDiagnostic {
             retryable: Some(false),
         }
     }
+
+    pub fn info(code: &str, message: impl Into<String>) -> Self {
+        Self {
+            severity: DiagnosticSeverity::Info,
+            code: code.to_string(),
+            message: message.into(),
+            corpus: None,
+            path: None,
+            retryable: None,
+        }
+    }
+
+    pub fn with_corpus(mut self, corpus: SearchCorpus) -> Self {
+        self.corpus = Some(corpus);
+        self
+    }
+
+    pub fn with_path(mut self, path: impl Into<String>) -> Self {
+        self.path = Some(path.into());
+        self
+    }
+
+    pub fn with_retryable(mut self, retryable: bool) -> Self {
+        self.retryable = Some(retryable);
+        self
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -112,6 +140,32 @@ pub enum DiagnosticSeverity {
     Info,
     Warning,
     Error,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct SearchFreshness {
+    pub corpus: SearchCorpus,
+    pub shard: String,
+    pub fresh: bool,
+    pub repaired: bool,
+    pub schema_version: String,
+    pub manifest_entries: usize,
+    pub vocabulary_version: String,
+    pub artifact_graph_version: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub outline_extractor_version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub documents: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub indexed_files: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub outline_entries: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ctags_symbols: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub skipped_files: Option<usize>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub skipped_by_reason: BTreeMap<String, usize>,
 }
 
 #[derive(Debug, Serialize)]
@@ -127,6 +181,9 @@ pub struct GrepEnvelope {
     pub partial: bool,
     pub hits: Vec<SearchHit>,
     pub diagnostics: Vec<SearchDiagnostic>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<SearchDiagnostic>,
+    pub freshness: Vec<SearchFreshness>,
 }
 
 impl GrepEnvelope {
@@ -163,6 +220,8 @@ impl GrepEnvelope {
             partial: false,
             hits,
             diagnostics: Vec::new(),
+            error: None,
+            freshness: Vec::new(),
         }
     }
 
@@ -186,10 +245,20 @@ impl GrepEnvelope {
             partial: false,
             hits,
             diagnostics: Vec::new(),
+            error: None,
+            freshness: Vec::new(),
         }
     }
 
     pub fn error(query: &str, diagnostic: SearchDiagnostic) -> Self {
+        Self::error_with_overrides(query, diagnostic, Vec::new())
+    }
+
+    pub fn error_with_overrides(
+        query: &str,
+        diagnostic: SearchDiagnostic,
+        overrides: Vec<String>,
+    ) -> Self {
         Self {
             version: 1,
             schema: "maestro.grep.v1",
@@ -198,10 +267,17 @@ impl GrepEnvelope {
             intent: None,
             intent_confidence: None,
             intent_reasons: Vec::new(),
-            explicit_filter_overrides: Vec::new(),
+            explicit_filter_overrides: overrides,
             partial: false,
             hits: Vec::new(),
-            diagnostics: vec![diagnostic],
+            diagnostics: vec![diagnostic.clone()],
+            error: Some(diagnostic),
+            freshness: Vec::new(),
         }
+    }
+
+    pub fn with_freshness(mut self, freshness: Vec<SearchFreshness>) -> Self {
+        self.freshness = freshness;
+        self
     }
 }

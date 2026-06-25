@@ -10,14 +10,21 @@ pub fn run(args: IndexArgs) -> Result<()> {
     let paths = MaestroPaths::new(repo_root);
 
     match args.command {
-        IndexCommand::Rebuild { memory, source } => {
-            let rebuild_cards = !memory && !source;
-            let rebuild_memory = memory || !source;
-            let rebuild_source = source || !memory;
+        IndexCommand::Rebuild {
+            memory,
+            source,
+            cards,
+        } => {
+            let rebuild_all = !memory && !source && !cards;
+            let rebuild_cards = cards || rebuild_all;
+            let rebuild_memory = memory || cards || rebuild_all;
+            let rebuild_source = source || rebuild_all;
+            let _guard = search::acquire_writer(&paths)?;
 
             if rebuild_cards {
                 let report = card::index::rebuild(&paths)?;
-                println!("text index rebuilt");
+                println!("cards compatibility index rebuilt");
+                println!("  text index rebuilt");
                 println!(
                     "  docs: {} ({} live, {} archived)",
                     report.live_docs + report.archived_docs,
@@ -28,7 +35,7 @@ pub fn run(args: IndexArgs) -> Result<()> {
                 println!("next: maestro card list --grep <word> [--archived]");
             }
             if rebuild_memory {
-                let report = search::rebuild_memory(&paths)?;
+                let report = search::rebuild_memory_unlocked(&paths)?;
                 println!("memory shard rebuilt");
                 println!(
                     "  docs: {} ({} live cards, {} archived cards, {} run evidence)",
@@ -37,7 +44,7 @@ pub fn run(args: IndexArgs) -> Result<()> {
                 println!("  file: .maestro/index/search/memory.shard");
             }
             if rebuild_source {
-                let report = search::rebuild_source(&paths)?;
+                let report = search::rebuild_source_unlocked(&paths)?;
                 println!("source shard rebuilt");
                 println!(
                     "  files: {} indexed, {} skipped",

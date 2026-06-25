@@ -1700,11 +1700,14 @@ pub enum IndexCommand {
     )]
     Rebuild {
         /// Rebuild only the Maestro-memory grep shard.
-        #[arg(long)]
+        #[arg(long, conflicts_with_all = ["source", "cards"])]
         memory: bool,
         /// Rebuild only the repo-source grep shard.
-        #[arg(long)]
+        #[arg(long, conflicts_with_all = ["memory", "cards"])]
         source: bool,
+        /// Rebuild the legacy card grep text index plus the memory/card shard.
+        #[arg(long, conflicts_with_all = ["memory", "source"])]
+        cards: bool,
     },
 }
 

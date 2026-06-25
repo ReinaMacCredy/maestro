@@ -142,6 +142,11 @@ impl MaestroPaths {
         self.search_index_dir().join("source.shard")
     }
 
+    /// Return the unified grep/search writer lock file.
+    pub fn search_writer_lock_file(&self) -> PathBuf {
+        self.search_index_dir().join("write.lock")
+    }
+
     /// Return the install lockfile path.
     pub fn install_lock_file(&self) -> PathBuf {
         self.maestro_dir().join("install-lock.yaml")
