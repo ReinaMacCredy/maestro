@@ -316,7 +316,7 @@ pub enum RootCommand {
     Dep(DepArgs),
     #[command(
         about = "Show what other live sessions are doing (cross-session awareness)",
-        after_help = "Examples:\n  maestro active               # live sessions, newest first\n  maestro active --all         # include stale sessions beyond the window"
+        after_help = "Examples:\n  maestro active               # live sessions, newest first\n  maestro active --all         # include stale sessions beyond the window\n  maestro active release task-abc --reason \"handoff\""
     )]
     Active(ActiveArgs),
     #[command(
@@ -562,12 +562,27 @@ pub struct NextArgs {
 
 #[derive(Debug, Args)]
 pub struct ActiveArgs {
+    #[command(subcommand)]
+    pub command: Option<ActiveCommand>,
     /// Include stale sessions (last event beyond the live window), hidden by default.
     #[arg(long)]
     pub all: bool,
     /// Print explicit link/message/conflict suggestions without mutating links.
     #[arg(long)]
     pub connect: bool,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ActiveCommand {
+    #[command(about = "Release this session's ownership of a card without changing card status")]
+    Release(ActiveReleaseArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct ActiveReleaseArgs {
+    pub card_id: String,
+    #[arg(long, help = "Why this session is yielding the card")]
+    pub reason: String,
 }
 
 #[derive(Debug, Args)]
@@ -1927,6 +1942,54 @@ pub(super) fn emit_card_touch(paths: &MaestroPaths, card_id: &str) {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum OwnershipReleaseStatus {
+    Released,
+    Done,
+}
+
+impl OwnershipReleaseStatus {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Released => "released",
+            Self::Done => "done",
+        }
+    }
+}
+
+pub(super) fn emit_ownership_acquire(paths: &MaestroPaths, card_id: &str) {
+    let payload = serde_json::json!({
+        "event": "ownership_acquire",
+        "session_id": cli_run_id(),
+        "card_id": card_id,
+        "agent": actor(),
+    });
+    if let Err(error) = record::record_value(paths, &payload) {
+        eprintln!("maestro: ownership_acquire run-event note failed: {error:#}");
+    }
+}
+
+pub(super) fn emit_ownership_release(
+    paths: &MaestroPaths,
+    card_id: &str,
+    status: OwnershipReleaseStatus,
+    reason: Option<&str>,
+) {
+    let mut payload = serde_json::json!({
+        "event": "ownership_release",
+        "session_id": cli_run_id(),
+        "card_id": card_id,
+        "agent": actor(),
+        "status": status.as_str(),
+    });
+    if let Some(reason) = reason {
+        payload["reason"] = serde_json::json!(reason);
+    }
+    if let Err(error) = record::record_value(paths, &payload) {
+        eprintln!("maestro: ownership_release run-event note failed: {error:#}");
+    }
+}
+
 /// The card the running session is currently working: the `card_id` of the last
 /// `card_touch` in this session's OWN run log (D3). Best-effort and read-only --
 /// the `msg` verbs and the inbox banner use it to resolve "my card" without the
@@ -2015,6 +2078,16 @@ mod tests {
         }
     }
 
+    fn parse_active(argv: &[&str]) -> ActiveArgs {
+        match Cli::try_parse_from(argv)
+            .unwrap_or_else(|e| panic!("parse {argv:?}: {e}"))
+            .command
+        {
+            RootCommand::Active(args) => args,
+            other => panic!("expected active, got {other:?}"),
+        }
+    }
+
     #[test]
     fn resolve_claim_session_prefers_the_maestro_session_override() {
         let got = resolve_claim_session(
@@ -2097,6 +2170,30 @@ mod tests {
         assert!(recipe.contains("[merge-busy]"));
         assert!(recipe.contains("git merge --ff-only <branch>"));
         assert!(recipe.contains("maestro never does"));
+    }
+
+    #[test]
+    fn active_release_command_requires_card_and_reason() {
+        let args = parse_active(&[
+            "maestro",
+            "active",
+            "release",
+            "task-owned",
+            "--reason",
+            "handoff",
+        ]);
+        match args.command {
+            Some(ActiveCommand::Release(release)) => {
+                assert_eq!(release.card_id, "task-owned");
+                assert_eq!(release.reason, "handoff");
+            }
+            other => panic!("expected active release, got {other:?}"),
+        }
+
+        assert!(
+            Cli::try_parse_from(["maestro", "active", "release", "task-owned"]).is_err(),
+            "release must record an explicit reason"
+        );
     }
 
     #[test]

@@ -1711,6 +1711,12 @@ fn task_verify_ignores_symlinked_runs_root() {
     )
     .expect("invariant: external events should be writable");
     let runs_dir = repo.join(".maestro/runs");
+    // Lifecycle commands now emit ownership events into the local run log.
+    // Remove that legitimate log before replacing the root with the symlink
+    // this test is specifically exercising.
+    if runs_dir.exists() {
+        fs::remove_dir_all(&runs_dir).expect("invariant: runs dir should be removable");
+    }
     unix_fs::symlink(external.path(), &runs_dir)
         .expect("invariant: symlinked runs root should be creatable");
 

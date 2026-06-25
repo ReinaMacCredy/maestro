@@ -98,6 +98,7 @@ fn normalize_event(payload: &Value, agent_runtime: Option<&str>) -> Option<Value
     copy_string(payload, &mut event, "card_id");
     copy_string(payload, &mut event, "tool_name");
     copy_string(payload, &mut event, "status");
+    copy_string(payload, &mut event, "reason");
     copy_string(payload, &mut event, "permission_decision");
     copy_string(payload, &mut event, "skill_name");
     copy_string(payload, &mut event, "activation_mode");

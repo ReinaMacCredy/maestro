@@ -74,7 +74,11 @@ fn truncate(value: &str, max: usize) -> String {
 fn presence_label(presence: Presence) -> &'static str {
     match presence {
         Presence::Working => "[working]",
+        Presence::QuietWorking => "[quiet-working]",
         Presence::Waiting => "[waiting]",
+        Presence::Released => "[idle/released]",
+        Presence::Done => "[done]",
+        Presence::Unconfirmed => "[unconfirmed]",
         Presence::Idle => "[idle]",
         Presence::Stale => "[stale]",
     }

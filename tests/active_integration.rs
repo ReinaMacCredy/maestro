@@ -78,6 +78,12 @@ fn card_touch_event(session: &str, card: &str, ts: &str) -> String {
     )
 }
 
+fn ownership_acquire_event(session: &str, card: &str, ts: &str) -> String {
+    format!(
+        r#"{{"event_type":"ownership_acquire","session_id":"{session}","card_id":"{card}","ts":"{ts}"}}"#
+    )
+}
+
 fn stop_event(session: &str, ts: &str) -> String {
     format!(r#"{{"event_type":"Stop","session_id":"{session}","ts":"{ts}"}}"#)
 }
@@ -317,6 +323,239 @@ fn recent_stop_reads_as_waiting_not_excluded() {
     assert!(
         line_with(&out, "stop-sess").contains("[waiting]"),
         "recent Stop -> waiting\n{out}"
+    );
+}
+
+#[test]
+fn ownership_events_keep_quiet_and_unconfirmed_sessions_visible() {
+    let temp = cards_repo("active-ownership-states");
+    let repo = temp.path();
+    let owned = create_id(repo, &["-t", "task", "Owned card"]);
+    let touched = create_id(repo, &["-t", "task", "Touched only"]);
+    let old_owned = create_id(repo, &["-t", "task", "Old owned"]);
+    clear_runs(repo);
+
+    seed_run(
+        repo,
+        "owned-sess",
+        &[ownership_acquire_event(
+            "owned-sess",
+            &owned,
+            &ts_minutes_ago(10),
+        )],
+    );
+    seed_run(
+        repo,
+        "touch-sess",
+        &[card_touch_event(
+            "touch-sess",
+            &touched,
+            &ts_minutes_ago(10),
+        )],
+    );
+    seed_run(
+        repo,
+        "old-owned-sess",
+        &[ownership_acquire_event(
+            "old-owned-sess",
+            &old_owned,
+            &ts_minutes_ago(121),
+        )],
+    );
+
+    let out = run(repo, &[], &["active"]);
+
+    assert!(
+        line_with(&out, "owned-sess").contains("[quiet-working"),
+        "owned quiet session stays owned\n{out}"
+    );
+    assert!(
+        line_with(&out, "touch-sess").contains("[idle"),
+        "card_touch alone remains recency-idle context\n{out}"
+    );
+    assert!(
+        line_with(&out, "old-owned-sess").contains("[unconfirmed"),
+        "owned session past two hours is still visible by default\n{out}"
+    );
+}
+
+#[test]
+fn active_release_records_release_without_changing_card_status() {
+    let temp = cards_repo("active-release-command");
+    let repo = temp.path();
+    let task = create_id(repo, &["-t", "task", "Release me"]);
+    clear_runs(repo);
+
+    let out = run(
+        repo,
+        &[("MAESTRO_SESSION_ID", "owner-sess")],
+        &["active", "release", &task, "--reason", "handoff"],
+    );
+    assert!(
+        out.contains("released") && out.contains("idle/released"),
+        "release command receipt\n{out}"
+    );
+
+    let active = run(repo, &[], &["active"]);
+    assert!(
+        line_with(&active, "owner-sess").contains("[idle/released"),
+        "release event is visible as idle/released\n{active}"
+    );
+
+    let show = run(repo, &[], &["card", "show", &task]);
+    let first = show.lines().next().unwrap_or_default();
+    assert!(
+        first.contains("open"),
+        "active release must not change card lifecycle status\n{show}"
+    );
+}
+
+#[test]
+fn task_claim_and_complete_emit_ownership_lifecycle() {
+    let temp = cards_repo("active-task-lifecycle");
+    let repo = temp.path();
+    run(repo, &[], &["create", "-t", "feature", "Lifecycle feature"]);
+    let task = create_id(
+        repo,
+        &[
+            "-t",
+            "task",
+            "Lifecycle task",
+            "--parent",
+            "lifecycle-feature",
+        ],
+    );
+    run(repo, &[], &["task", "set", &task, "--check", "done"]);
+    run(repo, &[], &["task", "explore", &task]);
+    run(repo, &[], &["task", "accept", &task]);
+    clear_runs(repo);
+
+    run(
+        repo,
+        &[("MAESTRO_SESSION_ID", "owner-sess")],
+        &["task", "claim", &task],
+    );
+    let claimed = run(repo, &[], &["active"]);
+    assert!(
+        line_with(&claimed, "owner-sess").contains("[working]"),
+        "task claim starts ownership\n{claimed}"
+    );
+
+    run(
+        repo,
+        &[("MAESTRO_SESSION_ID", "owner-sess")],
+        &[
+            "task",
+            "complete",
+            &task,
+            "--summary",
+            "done",
+            "--claim",
+            "GREEN: done",
+            "--proof",
+            "GREEN: done",
+        ],
+    );
+    let completed = run(repo, &[], &["active"]);
+    assert!(
+        line_with(&completed, "owner-sess").contains("[done"),
+        "successful task complete releases ownership as done\n{completed}"
+    );
+}
+
+fn create_ready_feature(repo: &Path, title: &str, slug: &str) {
+    run(repo, &[], &["feature", "new", title]);
+    run(
+        repo,
+        &[],
+        &[
+            "feature",
+            "set",
+            slug,
+            "--acceptance",
+            "observable behavior works",
+            "--area",
+            "active ownership",
+        ],
+    );
+    run(
+        repo,
+        &[],
+        &[
+            "feature",
+            "accept",
+            slug,
+            "--qa",
+            "none",
+            "--reason",
+            "integration coverage",
+        ],
+    );
+}
+
+#[test]
+fn feature_prepare_start_and_close_emit_ownership_lifecycle() {
+    let temp = cards_repo("active-feature-lifecycle");
+    let repo = temp.path();
+
+    create_ready_feature(repo, "Prepared Feature", "prepared-feature");
+    clear_runs(repo);
+    run(
+        repo,
+        &[("MAESTRO_SESSION_ID", "prepare-sess")],
+        &[
+            "feature",
+            "prepare",
+            "prepared-feature",
+            "--task",
+            "T1: Build child",
+            "--check",
+            "done",
+            "--covers",
+            "ac-1",
+        ],
+    );
+    let prepared = run(repo, &[], &["active"]);
+    assert!(
+        line_with(&prepared, "prepare-sess").contains("[working]"),
+        "feature prepare starts ownership\n{prepared}"
+    );
+
+    create_ready_feature(repo, "Closable Feature", "closable-feature");
+    clear_runs(repo);
+    run(
+        repo,
+        &[("MAESTRO_SESSION_ID", "close-sess")],
+        &["feature", "start", "closable-feature"],
+    );
+    let started = run(repo, &[], &["active"]);
+    assert!(
+        line_with(&started, "close-sess").contains("[working]"),
+        "feature start starts ownership\n{started}"
+    );
+    run(
+        repo,
+        &[("MAESTRO_SESSION_ID", "close-sess")],
+        &[
+            "feature",
+            "verify",
+            "closable-feature",
+            "--prove",
+            "ac-1",
+            "--evidence",
+            "observed in integration test",
+            "--no-close",
+        ],
+    );
+    run(
+        repo,
+        &[("MAESTRO_SESSION_ID", "close-sess")],
+        &["feature", "close", "closable-feature", "--outcome", "done"],
+    );
+    let closed = run(repo, &[], &["active"]);
+    assert!(
+        line_with(&closed, "close-sess").contains("[done"),
+        "feature close releases ownership as done\n{closed}"
     );
 }
 

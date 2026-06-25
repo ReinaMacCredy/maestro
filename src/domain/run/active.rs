@@ -3,8 +3,8 @@
 //! `maestro active` renders this; the model itself is pure. Given the managed
 //! run logs and an injected `now`, it returns one row per session bucket with
 //! that session's mode, bound card, last action, age, and presence label.
-//! Liveness rests on the recency and kind of the last event, never on a daemon
-//! (decision `dec-liveness-recency-of-last-event-activity-b77b`).
+//! Explicit ownership events keep a card live until release; ordinary context
+//! events still use recency-only liveness.
 
 use std::cmp::Reverse;
 use std::collections::BTreeMap;
@@ -23,14 +23,25 @@ use super::reader::{RunEvent, visit_event_log, visit_managed_events};
 const LIVE_THRESHOLD_MINUTES: u64 = 5;
 /// Minutes within which an idle session is still shown without `--all`.
 const WINDOW_MINUTES: u64 = 30;
+/// Minutes after which an owned but silent session is still owned, but no longer
+/// fresh enough to trust without confirmation.
+const OWNED_UNCONFIRMED_MINUTES: u64 = 120;
 
 /// Presence label derived from the last event's age and kind.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Presence {
     /// Last event is a non-Stop event within the live threshold (mid-task).
     Working,
+    /// Ownership is still active, but the owner has been quiet past the live threshold.
+    QuietWorking,
     /// Last event is a Stop within the live threshold (idling, open to coordinate).
     Waiting,
+    /// Ownership was explicitly yielded without changing the card lifecycle.
+    Released,
+    /// Ownership ended because the card reached its done/closed path.
+    Done,
+    /// Ownership is still active, but the owner has been silent past the confidence window.
+    Unconfirmed,
     /// Last event is older than the live threshold but within the window.
     Idle,
     /// Last event is beyond the window; hidden unless `--all`.
@@ -46,7 +57,7 @@ pub struct SessionActivity {
     pub agent_runtime: Option<String>,
     /// Skill from the session's latest `skill_activation`, when any.
     pub mode: Option<String>,
-    /// Card id from the session's latest `card_touch`, when any.
+    /// Card id to display for the session: active ownership first, then context binding.
     pub bound_card: Option<String>,
     /// Normalized event type of the session's latest event.
     pub last_action: String,
@@ -65,6 +76,21 @@ struct Accumulator {
     agent_runtime: Option<(i128, String)>,
     skill: Option<(i128, String)>,
     card: Option<(i128, String)>,
+    ownership: Option<OwnershipObservation>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum OwnershipState {
+    Active,
+    Released,
+    Done,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct OwnershipObservation {
+    ts_nanos: i128,
+    card_id: String,
+    state: OwnershipState,
 }
 
 impl Accumulator {
@@ -101,6 +127,33 @@ impl Accumulator {
     fn observe_card(&mut self, ts_nanos: i128, card: &str) {
         if self.card.as_ref().is_none_or(|(seen, _)| ts_nanos >= *seen) {
             self.card = Some((ts_nanos, card.to_string()));
+        }
+    }
+
+    fn observe_ownership(&mut self, ts_nanos: i128, event: &RunEvent) {
+        let Some(card_id) = event.card_id() else {
+            return;
+        };
+        let state = if event.is_event_type("ownership_acquire") {
+            OwnershipState::Active
+        } else if event.is_event_type("ownership_release") {
+            match event.status() {
+                Some("done") => OwnershipState::Done,
+                _ => OwnershipState::Released,
+            }
+        } else {
+            return;
+        };
+        if self
+            .ownership
+            .as_ref()
+            .is_none_or(|seen| ts_nanos >= seen.ts_nanos)
+        {
+            self.ownership = Some(OwnershipObservation {
+                ts_nanos,
+                card_id: card_id.to_string(),
+                state,
+            });
         }
     }
 }
@@ -162,26 +215,30 @@ pub fn active_sessions_union(roots: &[MaestroPaths], now: &str) -> Result<Vec<Se
             {
                 acc.observe_card(ts_nanos, card);
             }
+            acc.observe_ownership(ts_nanos, event);
             Ok(())
         })?;
     }
 
     let mut rows: Vec<(i128, SessionActivity)> = Vec::new();
     for (session_id, acc) in by_session {
-        let Some((last_nanos, last_action, last_ts)) = acc.overall else {
+        let Some((last_nanos, last_action, last_ts)) = acc.overall.as_ref() else {
             continue;
         };
+        let last_nanos = *last_nanos;
         let age_minutes = age_minutes_between(last_nanos, now_nanos);
-        let presence = classify(age_minutes, &last_action);
+        let presence =
+            classify_with_ownership(age_minutes, last_action, acc.ownership.as_ref(), last_nanos);
+        let bound_card = display_card(&acc, last_nanos);
         rows.push((
             last_nanos,
             SessionActivity {
                 session_id,
                 agent_runtime: acc.agent_runtime.map(|(_, agent_runtime)| agent_runtime),
                 mode: acc.skill.map(|(_, skill)| skill),
-                bound_card: acc.card.map(|(_, card)| card),
-                last_action,
-                last_ts,
+                bound_card,
+                last_action: last_action.clone(),
+                last_ts: last_ts.clone(),
                 age_minutes,
                 presence,
             },
@@ -510,6 +567,51 @@ fn age_minutes_between(then_nanos: i128, now_nanos: i128) -> u64 {
     (elapsed / NANOS_PER_MINUTE) as u64
 }
 
+fn display_card(acc: &Accumulator, last_nanos: i128) -> Option<String> {
+    match acc.ownership.as_ref() {
+        Some(ownership) if ownership.state == OwnershipState::Active => {
+            Some(ownership.card_id.clone())
+        }
+        Some(ownership) if ownership.ts_nanos >= last_nanos => Some(ownership.card_id.clone()),
+        _ => acc.card.as_ref().map(|(_, card)| card.clone()),
+    }
+}
+
+fn classify_with_ownership(
+    age_minutes: u64,
+    last_action: &str,
+    ownership: Option<&OwnershipObservation>,
+    last_nanos: i128,
+) -> Presence {
+    match ownership {
+        Some(OwnershipObservation {
+            state: OwnershipState::Active,
+            ..
+        }) => classify_owned(age_minutes),
+        Some(OwnershipObservation {
+            ts_nanos,
+            state: OwnershipState::Released,
+            ..
+        }) if *ts_nanos >= last_nanos && age_minutes <= WINDOW_MINUTES => Presence::Released,
+        Some(OwnershipObservation {
+            ts_nanos,
+            state: OwnershipState::Done,
+            ..
+        }) if *ts_nanos >= last_nanos && age_minutes <= WINDOW_MINUTES => Presence::Done,
+        _ => classify(age_minutes, last_action),
+    }
+}
+
+fn classify_owned(age_minutes: u64) -> Presence {
+    if age_minutes < LIVE_THRESHOLD_MINUTES {
+        Presence::Working
+    } else if age_minutes <= OWNED_UNCONFIRMED_MINUTES {
+        Presence::QuietWorking
+    } else {
+        Presence::Unconfirmed
+    }
+}
+
 /// Apply the activity-aware liveness rule. A recent Stop means the session just
 /// finished a turn and is waiting for its human, so it stays live as `Waiting`;
 /// any other recent event is `Working`. This generalizes the locked decision's
@@ -652,6 +754,167 @@ mod tests {
             "a recent non-Stop card_touch keeps the session live"
         );
         assert_eq!(touch.bound_card.as_deref(), Some("card-zed"));
+    }
+
+    #[test]
+    fn card_touch_does_not_start_ownership_liveness() {
+        let dir = TestTempDir::new("maestro-active-cardtouch-context");
+        let root = dir.path();
+        seed(
+            root,
+            "s-touch",
+            &[
+                r#"{"event_type":"card_touch","session_id":"s-touch","card_id":"card-zed","ts":"2026-06-14T11:50:00.000Z"}"#,
+            ],
+        );
+
+        let rows = active_sessions(&MaestroPaths::new(root.to_path_buf()), NOW)
+            .expect("active_sessions should read the seeded log");
+
+        let touch = row(&rows, "s-touch");
+        assert_eq!(
+            touch.presence,
+            Presence::Idle,
+            "an old card_touch is context only; it must not keep ownership alive"
+        );
+        assert_eq!(touch.bound_card.as_deref(), Some("card-zed"));
+        assert_eq!(touch.age_minutes, 10);
+    }
+
+    #[test]
+    fn ownership_acquire_keeps_quiet_session_working() {
+        let dir = TestTempDir::new("maestro-active-owned-quiet");
+        let root = dir.path();
+        seed(
+            root,
+            "s-owned",
+            &[
+                r#"{"event_type":"ownership_acquire","session_id":"s-owned","card_id":"task-owned","ts":"2026-06-14T11:50:00.000Z"}"#,
+            ],
+        );
+        seed(
+            root,
+            "s-boundary",
+            &[
+                r#"{"event_type":"ownership_acquire","session_id":"s-boundary","card_id":"task-boundary","ts":"2026-06-14T11:55:00.000Z"}"#,
+            ],
+        );
+
+        let rows = active_sessions(&MaestroPaths::new(root.to_path_buf()), NOW)
+            .expect("active_sessions should read the seeded log");
+
+        let owned = row(&rows, "s-owned");
+        assert_eq!(owned.presence, Presence::QuietWorking);
+        assert_eq!(owned.bound_card.as_deref(), Some("task-owned"));
+        assert_eq!(owned.age_minutes, 10);
+
+        let boundary = row(&rows, "s-boundary");
+        assert_eq!(
+            boundary.presence,
+            Presence::QuietWorking,
+            "ownership becomes quiet-working at the five minute boundary"
+        );
+        assert_eq!(boundary.age_minutes, 5);
+    }
+
+    #[test]
+    fn owned_session_becomes_unconfirmed_after_two_hours_without_release() {
+        let dir = TestTempDir::new("maestro-active-owned-unconfirmed");
+        let root = dir.path();
+        seed(
+            root,
+            "s-owned",
+            &[
+                r#"{"event_type":"ownership_acquire","session_id":"s-owned","card_id":"task-owned","ts":"2026-06-14T09:59:00.000Z"}"#,
+            ],
+        );
+
+        let rows = active_sessions(&MaestroPaths::new(root.to_path_buf()), NOW)
+            .expect("active_sessions should read the seeded log");
+
+        let owned = row(&rows, "s-owned");
+        assert_eq!(owned.presence, Presence::Unconfirmed);
+        assert_eq!(
+            owned.bound_card.as_deref(),
+            Some("task-owned"),
+            "unconfirmed still names the owned card instead of freeing it"
+        );
+        assert_eq!(owned.age_minutes, 121);
+    }
+
+    #[test]
+    fn ownership_release_states_are_explicit() {
+        let dir = TestTempDir::new("maestro-active-owned-release");
+        let root = dir.path();
+        seed(
+            root,
+            "s-released",
+            &[
+                r#"{"event_type":"ownership_acquire","session_id":"s-released","card_id":"task-released","ts":"2026-06-14T11:40:00.000Z"}"#,
+                r#"{"event_type":"ownership_release","session_id":"s-released","card_id":"task-released","status":"released","ts":"2026-06-14T11:58:00.000Z"}"#,
+            ],
+        );
+        seed(
+            root,
+            "s-done",
+            &[
+                r#"{"event_type":"ownership_acquire","session_id":"s-done","card_id":"task-done","ts":"2026-06-14T11:40:00.000Z"}"#,
+                r#"{"event_type":"ownership_release","session_id":"s-done","card_id":"task-done","status":"done","ts":"2026-06-14T11:57:00.000Z"}"#,
+            ],
+        );
+        seed(
+            root,
+            "s-old-done",
+            &[
+                r#"{"event_type":"ownership_acquire","session_id":"s-old-done","card_id":"task-old-done","ts":"2026-06-14T11:00:00.000Z"}"#,
+                r#"{"event_type":"ownership_release","session_id":"s-old-done","card_id":"task-old-done","status":"done","ts":"2026-06-14T11:20:00.000Z"}"#,
+            ],
+        );
+
+        let rows = active_sessions(&MaestroPaths::new(root.to_path_buf()), NOW)
+            .expect("active_sessions should read the seeded logs");
+
+        let released = row(&rows, "s-released");
+        assert_eq!(released.presence, Presence::Released);
+        assert_eq!(released.bound_card.as_deref(), Some("task-released"));
+
+        let done = row(&rows, "s-done");
+        assert_eq!(done.presence, Presence::Done);
+        assert_eq!(done.bound_card.as_deref(), Some("task-done"));
+
+        let old_done = row(&rows, "s-old-done");
+        assert_eq!(
+            old_done.presence,
+            Presence::Stale,
+            "old release/done rows should age out like ordinary finished sessions"
+        );
+        assert_eq!(old_done.bound_card.as_deref(), Some("task-old-done"));
+    }
+
+    #[test]
+    fn stop_event_does_not_release_owned_session() {
+        let dir = TestTempDir::new("maestro-active-owned-stop");
+        let root = dir.path();
+        seed(
+            root,
+            "s-owned",
+            &[
+                r#"{"event_type":"ownership_acquire","session_id":"s-owned","card_id":"task-owned","ts":"2026-06-14T11:40:00.000Z"}"#,
+                r#"{"event_type":"Stop","session_id":"s-owned","ts":"2026-06-14T11:59:00.000Z"}"#,
+            ],
+        );
+
+        let rows = active_sessions(&MaestroPaths::new(root.to_path_buf()), NOW)
+            .expect("active_sessions should read the seeded log");
+
+        let owned = row(&rows, "s-owned");
+        assert_eq!(
+            owned.presence,
+            Presence::Working,
+            "Stop is a latest event but not an ownership release"
+        );
+        assert_eq!(owned.bound_card.as_deref(), Some("task-owned"));
+        assert_eq!(owned.last_action, "Stop");
     }
 
     #[test]
