@@ -1,5 +1,6 @@
 //! Indexed grep/search domain.
 
+mod intent;
 pub mod memory;
 mod outline;
 pub mod query;

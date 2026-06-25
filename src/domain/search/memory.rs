@@ -9,6 +9,7 @@ use crate::domain::card::query::{self as card_query, body_of};
 use crate::domain::card::schema::{Card, CardType};
 use crate::domain::card::store::is_dir_backed;
 use crate::domain::run;
+use crate::domain::search::intent;
 use crate::domain::search::query::{self, ParsedQuery};
 use crate::domain::search::types::{
     GrepEnvelope, MatchSpan, ScoreReason, SearchCorpus, SearchDiagnostic, SearchDocument,
@@ -90,12 +91,29 @@ pub fn grep_memory(paths: &MaestroPaths, raw_query: &str) -> GrepEnvelope {
         Ok(parsed) => parsed,
         Err(diagnostic) => return GrepEnvelope::error(raw_query, diagnostic),
     };
+    grep_memory_parsed(paths, raw_query, &parsed)
+}
+
+pub(crate) fn grep_memory_parsed(
+    paths: &MaestroPaths,
+    raw_query: &str,
+    parsed: &ParsedQuery,
+) -> GrepEnvelope {
     if parsed.filters.corpus.as_deref() == Some("source") {
         return GrepEnvelope::error(
             raw_query,
             SearchDiagnostic::error(
                 "source_corpus_unavailable",
                 "source corpus is not enabled in the memory-core slice",
+            ),
+        );
+    }
+    if !parsed.regexes.is_empty() {
+        return GrepEnvelope::error(
+            raw_query,
+            SearchDiagnostic::error(
+                "invalid_filter",
+                "regex atoms search source contents; use corpus:source or remove corpus:memory",
             ),
         );
     }
@@ -133,7 +151,7 @@ pub fn grep_memory(paths: &MaestroPaths, raw_query: &str) -> GrepEnvelope {
             }
         },
     };
-    let hits = score_documents(&shard.docs, &parsed);
+    let hits = score_documents(&shard.docs, parsed);
     GrepEnvelope::success(raw_query, hits, parsed.explicit_filter_overrides.clone())
 }
 
@@ -342,40 +360,162 @@ fn score_document(
     parsed: &ParsedQuery,
     case_sensitive: bool,
 ) -> Option<SearchHit> {
+    if parsed
+        .excluded_terms
+        .iter()
+        .any(|term| document_contains(doc, term, case_sensitive))
+    {
+        return None;
+    }
+
+    let required_terms = required_terms(parsed);
     let mut score = 0.0;
     let mut reasons = Vec::new();
     let mut chosen_snippet = None;
     let mut spans = Vec::new();
+    let mut exact_match = false;
+    let mut exact_terms = Vec::new();
 
     for term in &parsed.terms {
-        let mut matched_term = false;
-        for segment in &doc.segments {
-            if let Some((start, end)) = find_term(&segment.text, term, case_sensitive) {
-                let weight = field_weight(&segment.field);
-                score += weight;
-                matched_term = true;
-                if chosen_snippet.is_none() {
-                    chosen_snippet = Some(snippet(&segment.text, start, end));
-                }
-                spans.push(MatchSpan::Memory {
-                    segment_id: segment.id.clone(),
-                    byte_start: start,
-                    byte_end: end,
-                });
-                reasons.push(ScoreReason {
-                    factor: "lexical".to_string(),
-                    value: weight,
-                    detail: format!("{} match", segment.field),
-                });
-                break;
-            }
+        if term.eq_ignore_ascii_case(&doc.id) {
+            exact_match = true;
+            exact_terms.push(term.clone());
+            score += 4.0;
+            chosen_snippet.get_or_insert_with(|| doc.title.clone());
+            reasons.push(ScoreReason {
+                factor: "exact_id".to_string(),
+                value: 4.0,
+                detail: "query exactly matched the Maestro card id".to_string(),
+            });
         }
-        if !matched_term {
+        if term.eq_ignore_ascii_case(&doc.title) {
+            exact_match = true;
+            exact_terms.push(term.clone());
+            score += 3.5;
+            chosen_snippet.get_or_insert_with(|| doc.title.clone());
+            reasons.push(ScoreReason {
+                factor: "exact_title".to_string(),
+                value: 3.5,
+                detail: "query exactly matched the Maestro title".to_string(),
+            });
+        }
+        if doc
+            .path
+            .as_deref()
+            .is_some_and(|path| path.eq_ignore_ascii_case(term))
+        {
+            exact_match = true;
+            exact_terms.push(term.clone());
+            score += 3.0;
+            chosen_snippet
+                .get_or_insert_with(|| doc.path.clone().unwrap_or_else(|| doc.title.clone()));
+            reasons.push(ScoreReason {
+                factor: "exact_path".to_string(),
+                value: 3.0,
+                detail: "query exactly matched the Maestro artifact path".to_string(),
+            });
+        }
+        if term.split_whitespace().count() > 1
+            && let Some(found) = best_segment_match(doc, term, case_sensitive)
+        {
+            score += 1.2;
+            chosen_snippet
+                .get_or_insert_with(|| snippet(&found.segment.text, found.start, found.end));
+            spans.push(MatchSpan::Memory {
+                segment_id: found.segment.id.clone(),
+                byte_start: found.start,
+                byte_end: found.end,
+            });
+            reasons.push(ScoreReason {
+                factor: "phrase".to_string(),
+                value: 1.2,
+                detail: format!("quoted phrase matched {}", found.segment.field),
+            });
+        }
+    }
+
+    for term in &required_terms {
+        if exact_terms
+            .iter()
+            .any(|exact| exact.eq_ignore_ascii_case(term))
+        {
+            continue;
+        }
+        if let Some(found) = best_segment_match(doc, term, case_sensitive) {
+            let weight = field_weight(&found.segment.field);
+            let value = bm25_like_value(term, &found.segment.text, weight);
+            score += value;
+            if chosen_snippet.is_none() {
+                chosen_snippet = Some(snippet(&found.segment.text, found.start, found.end));
+            }
+            spans.push(MatchSpan::Memory {
+                segment_id: found.segment.id.clone(),
+                byte_start: found.start,
+                byte_end: found.end,
+            });
+            reasons.push(ScoreReason {
+                factor: "lexical".to_string(),
+                value,
+                detail: format!("BM25-like {} match", found.segment.field),
+            });
+        } else if let Some((alias, found)) = alias_match(doc, term, case_sensitive) {
+            let value = 0.45 * field_weight(&found.segment.field);
+            score += value;
+            if chosen_snippet.is_none() {
+                chosen_snippet = Some(snippet(&found.segment.text, found.start, found.end));
+            }
+            spans.push(MatchSpan::Memory {
+                segment_id: found.segment.id.clone(),
+                byte_start: found.start,
+                byte_end: found.end,
+            });
+            reasons.push(ScoreReason {
+                factor: "domain_alias".to_string(),
+                value,
+                detail: format!("{term} expanded to {alias}"),
+            });
+        } else {
             return None;
         }
     }
 
-    let max = (parsed.terms.len() as f64 * 2.0).max(1.0);
+    if required_terms.is_empty() && !exact_match && reasons.is_empty() {
+        return None;
+    }
+
+    if !required_terms.is_empty() && proximity_match(doc, &required_terms, case_sensitive) {
+        score += 0.35;
+        reasons.push(ScoreReason {
+            factor: "proximity".to_string(),
+            value: 0.35,
+            detail: "meaningful query terms appeared close together".to_string(),
+        });
+    }
+
+    if has_memory_intent_term(parsed) || !required_terms.is_empty() {
+        let value = artifact_type_weight(&doc.kind);
+        score += value;
+        reasons.push(ScoreReason {
+            factor: "artifact_type".to_string(),
+            value,
+            detail: format!("{} is a Maestro-memory artifact", doc.kind),
+        });
+    }
+
+    if doc.kind == "feature" || doc.parent.is_some() || doc.feature.is_some() {
+        score += 0.15;
+        reasons.push(ScoreReason {
+            factor: "maestro_graph".to_string(),
+            value: 0.15,
+            detail: "card participates in the Maestro feature/task graph".to_string(),
+        });
+    }
+
+    let max = (required_terms.len().max(1) as f64 * 2.4) + 2.0;
+    let mut normalized = (score / max).min(1.0);
+    if exact_match {
+        normalized = normalized.max(0.98);
+    }
     Some(SearchHit {
         rank: 0,
         corpus: doc.corpus,
@@ -385,7 +525,7 @@ fn score_document(
         line: None,
         title: doc.title.clone(),
         snippet: chosen_snippet.unwrap_or_else(|| doc.title.clone()),
-        score: (score / max).min(1.0),
+        score: normalized,
         score_reasons: reasons,
         opener: doc.opener.clone(),
         archived: doc.archived,
@@ -396,12 +536,167 @@ fn score_document(
     })
 }
 
+struct SegmentMatch<'a> {
+    segment: &'a SearchSegment,
+    start: usize,
+    end: usize,
+}
+
 fn field_weight(field: &str) -> f64 {
     match field {
         "title" => 2.0,
         "spec.md" | "notes.md" | "qa.md" => 1.5,
         _ => 1.0,
     }
+}
+
+fn bm25_like_value(term: &str, text: &str, weight: f64) -> f64 {
+    let length_norm = 1.0 + (text.split_whitespace().count() as f64 / 180.0);
+    let term_weight = 1.0 + (term.chars().count().min(16) as f64 / 32.0);
+    (weight * term_weight) / length_norm
+}
+
+fn required_terms(parsed: &ParsedQuery) -> Vec<String> {
+    parsed
+        .terms
+        .iter()
+        .flat_map(|term| term.split_whitespace())
+        .map(|term| term.trim_matches(|ch: char| ch == '"' || ch == '\'' || ch == '`'))
+        .filter(|term| !term.is_empty())
+        .filter(|term| !is_stopword(term))
+        .map(str::to_string)
+        .collect()
+}
+
+fn is_stopword(term: &str) -> bool {
+    matches!(
+        term.to_ascii_lowercase().as_str(),
+        "a" | "an"
+            | "and"
+            | "are"
+            | "did"
+            | "do"
+            | "does"
+            | "for"
+            | "how"
+            | "in"
+            | "is"
+            | "it"
+            | "of"
+            | "on"
+            | "or"
+            | "should"
+            | "the"
+            | "to"
+            | "was"
+            | "we"
+            | "were"
+            | "what"
+            | "when"
+            | "where"
+            | "who"
+            | "why"
+            | "with"
+    )
+}
+
+fn has_memory_intent_term(parsed: &ParsedQuery) -> bool {
+    parsed
+        .terms
+        .iter()
+        .flat_map(|term| term.split_whitespace())
+        .any(|term| {
+            matches!(
+                term.to_ascii_lowercase().as_str(),
+                "why"
+                    | "workflow"
+                    | "decision"
+                    | "decisions"
+                    | "proof"
+                    | "proofs"
+                    | "history"
+                    | "rationale"
+                    | "notes"
+                    | "note"
+                    | "evidence"
+            )
+        })
+}
+
+fn artifact_type_weight(kind: &str) -> f64 {
+    match kind {
+        "decision" => 0.50,
+        "feature" => 0.42,
+        "task" => 0.34,
+        "run_evidence" => 0.28,
+        _ => 0.24,
+    }
+}
+
+fn best_segment_match<'a>(
+    doc: &'a SearchDocument,
+    term: &str,
+    case_sensitive: bool,
+) -> Option<SegmentMatch<'a>> {
+    doc.segments.iter().find_map(|segment| {
+        find_term(&segment.text, term, case_sensitive).map(|(start, end)| SegmentMatch {
+            segment,
+            start,
+            end,
+        })
+    })
+}
+
+fn alias_match<'a>(
+    doc: &'a SearchDocument,
+    term: &str,
+    case_sensitive: bool,
+) -> Option<(&'static str, SegmentMatch<'a>)> {
+    aliases_for(term).iter().find_map(|alias| {
+        best_segment_match(doc, alias, case_sensitive).map(|found| (*alias, found))
+    })
+}
+
+fn aliases_for(term: &str) -> &'static [&'static str] {
+    match term.to_ascii_lowercase().as_str() {
+        "decision" | "decisions" => &["rationale", "decided", "because"],
+        "proof" | "proofs" => &["evidence", "verification", "verify", "claim"],
+        "history" => &["notes", "timeline", "decisions", "proof"],
+        "workflow" => &["task", "feature", "status", "handoff"],
+        "runtime" => &["session"],
+        _ => &[],
+    }
+}
+
+fn proximity_match(doc: &SearchDocument, terms: &[String], case_sensitive: bool) -> bool {
+    if terms.len() < 2 {
+        return false;
+    }
+    doc.segments.iter().any(|segment| {
+        let mut positions = Vec::new();
+        for term in terms {
+            let Some((start, _)) = find_term(&segment.text, term, case_sensitive) else {
+                return false;
+            };
+            positions.push(start);
+        }
+        let min = positions.iter().min().copied().unwrap_or_default();
+        let max = positions.iter().max().copied().unwrap_or_default();
+        max.saturating_sub(min) <= 120
+    })
+}
+
+fn document_contains(doc: &SearchDocument, term: &str, case_sensitive: bool) -> bool {
+    doc.id.eq_ignore_ascii_case(term)
+        || doc.title.eq_ignore_ascii_case(term)
+        || doc
+            .path
+            .as_deref()
+            .is_some_and(|path| find_term(path, term, case_sensitive).is_some())
+        || doc
+            .segments
+            .iter()
+            .any(|segment| find_term(&segment.text, term, case_sensitive).is_some())
 }
 
 fn find_term(text: &str, term: &str, case_sensitive: bool) -> Option<(usize, usize)> {
@@ -433,10 +728,7 @@ fn snippet(text: &str, start: usize, end: usize) -> String {
 }
 
 fn is_memory_kind(kind: &str) -> bool {
-    matches!(
-        kind,
-        "card" | "decision" | "feature" | "task" | "proof" | "qa" | "run_summary" | "run_evidence"
-    )
+    intent::is_memory_kind(kind)
 }
 
 fn manifest(paths: &MaestroPaths) -> Result<Vec<ManifestEntry>> {

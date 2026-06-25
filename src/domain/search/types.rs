@@ -166,6 +166,29 @@ impl GrepEnvelope {
         }
     }
 
+    pub fn success_with_intent(
+        query: &str,
+        hits: Vec<SearchHit>,
+        overrides: Vec<String>,
+        intent: &str,
+        confidence: &str,
+        reasons: Vec<String>,
+    ) -> Self {
+        Self {
+            version: 1,
+            schema: "maestro.grep.v1",
+            ok: true,
+            query: query.to_string(),
+            intent: Some(intent.to_string()),
+            intent_confidence: Some(confidence.to_string()),
+            intent_reasons: reasons,
+            explicit_filter_overrides: overrides,
+            partial: false,
+            hits,
+            diagnostics: Vec::new(),
+        }
+    }
+
     pub fn error(query: &str, diagnostic: SearchDiagnostic) -> Self {
         Self {
             version: 1,

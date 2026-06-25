@@ -7,6 +7,7 @@ use anyhow::{Context, Result, bail};
 use regex::{Regex, RegexBuilder};
 use serde::{Deserialize, Serialize};
 
+use crate::domain::search::intent::{self, IntentDecision};
 use crate::domain::search::memory;
 use crate::domain::search::outline::{self, OutlineEntry};
 use crate::domain::search::query::{self, ParsedQuery, QueryAtom, QueryExpr};
@@ -123,27 +124,28 @@ pub fn grep(paths: &MaestroPaths, raw_query: &str) -> GrepEnvelope {
         Ok(parsed) => parsed,
         Err(diagnostic) => return GrepEnvelope::error(raw_query, diagnostic),
     };
+    let decision = intent::classify(&parsed);
 
-    if should_use_source(&parsed) {
-        if parsed.filters.corpus.as_deref() == Some("memory") && has_source_filter(&parsed) {
-            return GrepEnvelope::error(
-                raw_query,
-                SearchDiagnostic::error(
-                    "invalid_filter",
-                    "source filters cannot be combined with corpus:memory",
-                ),
-            );
-        }
-        grep_source_parsed(paths, raw_query, &parsed)
-    } else {
-        memory::grep_memory(paths, raw_query)
+    if parsed.filters.corpus.as_deref() == Some("memory") && has_source_only_filter(&parsed) {
+        return GrepEnvelope::error(
+            raw_query,
+            SearchDiagnostic::error(
+                "invalid_filter",
+                "source filters cannot be combined with corpus:memory",
+            ),
+        );
     }
-}
 
-fn should_use_source(parsed: &ParsedQuery) -> bool {
-    parsed.filters.corpus.as_deref() == Some("source")
-        || has_source_filter(parsed)
-        || !parsed.regexes.is_empty()
+    match decision.route {
+        Some(SearchCorpus::Memory) => with_intent(
+            memory::grep_memory_parsed(paths, raw_query, &parsed),
+            &decision,
+        ),
+        Some(SearchCorpus::Source) => {
+            with_intent(grep_source_parsed(paths, raw_query, &parsed), &decision)
+        }
+        None => grep_mixed(paths, raw_query, &parsed, &decision),
+    }
 }
 
 fn has_source_filter(parsed: &ParsedQuery) -> bool {
@@ -153,12 +155,71 @@ fn has_source_filter(parsed: &ParsedQuery) -> bool {
         || parsed.filters.sym.is_some()
 }
 
+fn has_source_only_filter(parsed: &ParsedQuery) -> bool {
+    has_source_filter(parsed)
+        || !parsed.regexes.is_empty()
+        || parsed
+            .filters
+            .kinds
+            .iter()
+            .any(|kind| intent::is_source_kind(kind))
+}
+
 pub fn grep_source(paths: &MaestroPaths, raw_query: &str) -> GrepEnvelope {
     let parsed = match query::parse(raw_query) {
         Ok(parsed) => parsed,
         Err(diagnostic) => return GrepEnvelope::error(raw_query, diagnostic),
     };
     grep_source_parsed(paths, raw_query, &parsed)
+}
+
+fn grep_mixed(
+    paths: &MaestroPaths,
+    raw_query: &str,
+    parsed: &ParsedQuery,
+    decision: &IntentDecision,
+) -> GrepEnvelope {
+    let memory_envelope = memory::grep_memory_parsed(paths, raw_query, parsed);
+    let source_envelope = grep_source_parsed(paths, raw_query, parsed);
+    let mut diagnostics = Vec::new();
+    let mut hits = Vec::new();
+
+    if memory_envelope.ok {
+        hits.extend(memory_envelope.hits);
+    } else {
+        diagnostics.extend(memory_envelope.diagnostics);
+    }
+    if source_envelope.ok {
+        hits.extend(source_envelope.hits);
+    } else {
+        diagnostics.extend(source_envelope.diagnostics);
+    }
+
+    if hits.is_empty() && !diagnostics.is_empty() {
+        return GrepEnvelope::error(raw_query, diagnostics.remove(0));
+    }
+
+    let mut envelope = GrepEnvelope::success_with_intent(
+        raw_query,
+        intent::rerank(hits, decision.kind),
+        parsed.explicit_filter_overrides.clone(),
+        decision.kind.as_str(),
+        decision.confidence,
+        decision.reasons.clone(),
+    );
+    envelope.partial = !diagnostics.is_empty();
+    envelope.diagnostics = diagnostics;
+    envelope
+}
+
+fn with_intent(mut envelope: GrepEnvelope, decision: &IntentDecision) -> GrepEnvelope {
+    if envelope.ok {
+        envelope.intent = Some(decision.kind.as_str().to_string());
+        envelope.intent_confidence = Some(decision.confidence.to_string());
+        envelope.intent_reasons = decision.reasons.clone();
+        envelope.hits = intent::rerank(envelope.hits, decision.kind);
+    }
+    envelope
 }
 
 pub fn rebuild_source(paths: &MaestroPaths) -> Result<SourceRebuildReport> {
@@ -262,7 +323,11 @@ pub fn source_index_health(paths: &MaestroPaths) -> SourceIndexHealth {
     }
 }
 
-fn grep_source_parsed(paths: &MaestroPaths, raw_query: &str, parsed: &ParsedQuery) -> GrepEnvelope {
+pub(crate) fn grep_source_parsed(
+    paths: &MaestroPaths,
+    raw_query: &str,
+    parsed: &ParsedQuery,
+) -> GrepEnvelope {
     if let Some(invalid) = parsed.filters.kinds.iter().find(|kind| {
         let kind = kind.as_str();
         kind != "file" && !OUTLINE_KINDS.contains(&kind)
@@ -335,7 +400,8 @@ fn search_shard(
             if !source_filters_match(file, parsed)? {
                 continue;
             }
-            if !evaluate_expr(&parsed.expr, &file.contents, case_sensitive)? {
+            let searchable = file_search_text(file);
+            if !evaluate_expr(&parsed.expr, &searchable, case_sensitive)? {
                 continue;
             }
             let Some(first_match) = first_positive_match(file, parsed, case_sensitive)? else {
@@ -675,13 +741,32 @@ fn first_positive_match(
         if let Some(mat) = regex.find(&file.contents) {
             return Ok(Some(source_match(file, mat.start(), mat.end(), "regex")));
         }
+        if let Some(mat) = regex.find(&file.path) {
+            return Ok(Some(path_match(file, mat.start(), mat.end())));
+        }
     }
     for term in &parsed.terms {
+        if is_path_like_term(term)
+            && let Some((start, end)) = find_literal(&file.path, term, case_sensitive)
+        {
+            return Ok(Some(path_match(file, start, end)));
+        }
         if let Some((start, end)) = find_literal(&file.contents, term, case_sensitive) {
             return Ok(Some(source_match(file, start, end, "lexical")));
         }
+        if let Some((start, end)) = find_literal(&file.path, term, case_sensitive) {
+            return Ok(Some(path_match(file, start, end)));
+        }
     }
     Ok(None)
+}
+
+fn is_path_like_term(term: &str) -> bool {
+    term.contains('/') || std::path::Path::new(term).extension().is_some()
+}
+
+fn file_search_text(file: &SourceFile) -> String {
+    format!("{}\n{}", file.path, file.contents)
 }
 
 fn source_match(
@@ -697,6 +782,16 @@ fn source_match(
         line,
         snippet: line_snippet(&file.contents, byte_start),
         factor,
+    }
+}
+
+fn path_match(file: &SourceFile, byte_start: usize, byte_end: usize) -> SourceMatch {
+    SourceMatch {
+        byte_start,
+        byte_end,
+        line: 1,
+        snippet: file.path.clone(),
+        factor: "exact_path",
     }
 }
 
@@ -721,6 +816,9 @@ fn source_score(file: &SourceFile, first_match: &SourceMatch, parsed: &ParsedQue
     if first_match.factor == "regex" {
         score += 0.10;
     }
+    if first_match.factor == "exact_path" {
+        score += 0.35;
+    }
     score.min(1.0)
 }
 
@@ -744,6 +842,9 @@ fn find_literal(text: &str, needle: &str, case_sensitive: bool) -> Option<(usize
         .map(|(idx, ch)| (idx, ch.to_lowercase().collect::<String>()))
         .collect();
     for start_idx in 0..chars.len() {
+        if chars.len().saturating_sub(start_idx) < needle_chars.len() {
+            continue;
+        }
         if chars[start_idx..]
             .iter()
             .zip(needle_chars.iter())
@@ -1196,6 +1297,10 @@ mod tests {
         let found = find_literal(text, "CAFÉ", false).expect("unicode case-insensitive match");
         assert_eq!(&text[found.0..found.1], "café");
         assert_eq!(found.0, 3);
+        assert_eq!(
+            find_literal("tiny suffix s", "src/domain/search/source.rs", false),
+            None
+        );
     }
 
     #[test]
