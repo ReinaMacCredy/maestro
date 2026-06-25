@@ -103,7 +103,7 @@ fn init_agent_handoff_uses_detected_agent_or_choice_fallback() {
     let fallback_stdout =
         String::from_utf8(fallback_output.stdout).expect("invariant: stdout should be UTF-8");
     assert!(
-        fallback_stdout.contains("wire agent: maestro install --agent <claude|codex>"),
+        fallback_stdout.contains("wire agent: maestro install --agent <claude|codex|droid>"),
         "{fallback_stdout}"
     );
 

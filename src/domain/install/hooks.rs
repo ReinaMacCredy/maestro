@@ -24,6 +24,11 @@ impl ManagedHookConfig {
                 contents: hook_json(HookConfigFlavor::Codex),
                 managed_keys: vec!["hooks".to_string()],
             },
+            InstallAgent::Droid => Self {
+                relative_path: ".factory/hooks.json",
+                contents: hook_json(HookConfigFlavor::Droid),
+                managed_keys: vec!["hooks".to_string()],
+            },
         }
     }
 }
@@ -32,6 +37,7 @@ impl ManagedHookConfig {
 enum HookConfigFlavor {
     Claude,
     Codex,
+    Droid,
 }
 
 fn hook_json(flavor: HookConfigFlavor) -> Value {
@@ -52,6 +58,10 @@ fn hook_json(flavor: HookConfigFlavor) -> Value {
                 "type": "command",
                 "command": format!("MAESTRO_AGENT=codex sh \"$(git rev-parse --show-toplevel)/.maestro/hooks/{script}\""),
                 "timeout": contract.codex_timeout(),
+            }),
+            HookConfigFlavor::Droid => json!({
+                "type": "command",
+                "command": format!("MAESTRO_AGENT=droid sh \"$FACTORY_PROJECT_DIR/.maestro/hooks/{script}\""),
             }),
         };
         hooks.insert(
@@ -104,11 +114,16 @@ mod tests {
             );
         }
 
-        for command in installed_commands(HookConfigFlavor::Codex) {
-            assert!(
-                command.starts_with("MAESTRO_AGENT=codex sh "),
-                "Codex hook command must stamp MAESTRO_AGENT=codex: {command}"
-            );
+        for (flavor, runtime) in [
+            (HookConfigFlavor::Codex, "codex"),
+            (HookConfigFlavor::Droid, "droid"),
+        ] {
+            for command in installed_commands(flavor) {
+                assert!(
+                    command.starts_with(&format!("MAESTRO_AGENT={runtime} sh ")),
+                    "{flavor:?} hook command must stamp MAESTRO_AGENT={runtime}: {command}"
+                );
+            }
         }
     }
 
@@ -127,7 +142,11 @@ mod tests {
     /// are ever added to `embedded/hooks/events.yaml`.
     #[test]
     fn installed_events_are_accepted_by_the_recorder() {
-        for flavor in [HookConfigFlavor::Claude, HookConfigFlavor::Codex] {
+        for flavor in [
+            HookConfigFlavor::Claude,
+            HookConfigFlavor::Codex,
+            HookConfigFlavor::Droid,
+        ] {
             let json = hook_json(flavor);
             let hooks = json
                 .get("hooks")

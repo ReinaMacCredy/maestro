@@ -50,6 +50,8 @@ pub fn known_agent_runtime(value: &str) -> Option<&'static str> {
         Some("claude")
     } else if value.eq_ignore_ascii_case("codex") {
         Some("codex")
+    } else if value.eq_ignore_ascii_case("droid") {
+        Some("droid")
     } else {
         None
     }
@@ -76,7 +78,7 @@ fn agent_runtime_from_lookup(lookup: impl Fn(&str) -> Option<String>) -> Option<
     None
 }
 
-/// The known agent runtime for this process, if Claude or Codex can be resolved.
+/// The known agent runtime for this process, if a supported CLI can be resolved.
 pub fn agent_runtime_from_env() -> Option<&'static str> {
     agent_runtime_from_lookup(|key| env::var(key).ok())
 }

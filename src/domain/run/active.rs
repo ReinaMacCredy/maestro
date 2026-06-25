@@ -42,7 +42,7 @@ pub enum Presence {
 pub struct SessionActivity {
     /// Logical session id (the run bucket).
     pub session_id: String,
-    /// Agent runtime identity (`codex`/`claude`) observed in this session, when known.
+    /// Agent runtime identity observed in this session, when known.
     pub agent_runtime: Option<String>,
     /// Skill from the session's latest `skill_activation`, when any.
     pub mode: Option<String>,

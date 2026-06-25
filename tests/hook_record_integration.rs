@@ -298,7 +298,7 @@ fn stdin_hook_payload_records_known_agent_runtime_without_overwriting_actor() {
     let repo = init_repo();
     let output = maestro_record_clean_env_with(
         repo.path(),
-        r#"{"session_id":"runtime-stdin","event_type":"PostToolUse","agent":"maestro","agent_runtime":"<claude|codex>"}"#,
+        r#"{"session_id":"runtime-stdin","event_type":"PostToolUse","agent":"maestro","agent_runtime":"<claude|codex|droid>"}"#,
         &[("MAESTRO_AGENT", "codex")],
     );
 
@@ -372,6 +372,31 @@ fn droid_hook_payload_session_id_wins_over_agent_env() {
     assert!(
         !cli_bucket,
         "Droid hook payload session_id must not fall back to a cli-<date> bucket"
+    );
+}
+
+#[test]
+fn droid_stamped_hook_records_runtime_without_payload_agent() {
+    let repo = init_repo();
+    let output = maestro_record_clean_env_with(
+        repo.path(),
+        r#"{"session_id":"droid-runtime-123","hook_event_name":"PostToolUse","tool_name":"Read"}"#,
+        &[("MAESTRO_AGENT", "droid")],
+    );
+
+    assert!(
+        output.status.success(),
+        "hook record failed for Droid runtime\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let events = read_events(repo.path(), "droid-runtime-123");
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0]["session_id"], "droid-runtime-123");
+    assert_eq!(events[0]["agent_runtime"], "droid");
+    assert!(
+        events[0].get("agent").is_none(),
+        "Droid runtime support must not require or synthesize an agent actor field: {:#?}",
+        events[0]
     );
 }
 

@@ -492,6 +492,7 @@ pub struct SyncArgs {
 pub enum Agent {
     Claude,
     Codex,
+    Droid,
 }
 
 #[derive(Debug, Args)]
@@ -1995,7 +1996,7 @@ fn process_unique_token() -> String {
 }
 
 pub(super) fn detected_agent_hint() -> &'static str {
-    crate::foundation::core::session::agent_runtime_from_env().unwrap_or("<claude|codex>")
+    crate::foundation::core::session::agent_runtime_from_env().unwrap_or("<claude|codex|droid>")
 }
 
 #[cfg(test)]

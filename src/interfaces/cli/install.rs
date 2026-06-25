@@ -28,10 +28,16 @@ pub fn run(args: AgentArgs) -> Result<()> {
             println!("repair, then rerun `maestro sync --global-skills`");
         }
     }
-    if agent.requires_manual_hook_approval() {
-        println!("Run /hooks in Codex to approve the maestro hook.");
-    } else {
-        println!("Claude hooks are active automatically; no approval step needed.");
+    match agent {
+        install::InstallAgent::Claude => {
+            println!("Claude hooks are active automatically; no approval step needed.");
+        }
+        install::InstallAgent::Codex => {
+            println!("Run /hooks in Codex to approve the maestro hook.");
+        }
+        install::InstallAgent::Droid => {
+            println!("Droid hooks were written to .factory/hooks.json.");
+        }
     }
 
     Ok(())
@@ -42,6 +48,7 @@ impl From<Agent> for install::InstallAgent {
         match agent {
             Agent::Claude => install::InstallAgent::Claude,
             Agent::Codex => install::InstallAgent::Codex,
+            Agent::Droid => install::InstallAgent::Droid,
         }
     }
 }

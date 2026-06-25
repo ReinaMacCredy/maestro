@@ -1566,10 +1566,10 @@ mod tests {
             Presence::Working,
             2,
         );
-        session.agent_runtime = Some("codex".to_string());
+        session.agent_runtime = Some("droid".to_string());
         let line = session_line(&session, &by_id);
         assert_eq!(
-            line, "  codex  design  Reduce CLI token bloat  f08020da [working] 2m",
+            line, "  droid  design  Reduce CLI token bloat  f08020da [working] 2m",
             "session line shape changed:\n{line}"
         );
     }

@@ -108,10 +108,12 @@ fn install_writes_nested_gitignore_and_root_agent_settings_block() {
     );
     assert!(!maestro_gitignore.contains(".claude/settings.local.json"));
     assert!(!maestro_gitignore.contains(".codex/hooks.json"));
+    assert!(!maestro_gitignore.contains(".factory/hooks.json"));
     let root_gitignore = fs::read_to_string(temp_dir.path().join(".gitignore"))
         .expect("invariant: root .gitignore should be written");
     assert!(root_gitignore.contains(".claude/settings.local.json"));
     assert!(root_gitignore.contains(".codex/hooks.json"));
+    assert!(root_gitignore.contains(".factory/hooks.json"));
     assert!(
         !root_gitignore.contains(".maestro/runs/") && !root_gitignore.contains("runs/"),
         "root .gitignore must not carry maestro-internal paths: {root_gitignore}"
@@ -136,7 +138,7 @@ fn install_migrates_legacy_root_gitignore_block_and_preserves_user_lines() {
     let legacy = upsert_managed_block(
         Some("/target/\n.DS_Store\n"),
         ManagedBlockFormat::HashComment,
-        "# Maestro local-only paths\n.maestro/runs/\n.claude/settings.local.json\n.codex/hooks.json",
+        "# Maestro local-only paths\n.maestro/runs/\n.claude/settings.local.json\n.codex/hooks.json\n.factory/hooks.json",
     );
     fs::write(&root_gitignore, &legacy)
         .expect("invariant: legacy root .gitignore should be writable");
@@ -160,6 +162,7 @@ fn install_migrates_legacy_root_gitignore_block_and_preserves_user_lines() {
     );
     assert!(root.contains(".claude/settings.local.json"), "{root}");
     assert!(root.contains(".codex/hooks.json"), "{root}");
+    assert!(root.contains(".factory/hooks.json"), "{root}");
     assert!(
         root.contains("/target/") && root.contains(".DS_Store"),
         "user-managed lines outside the markers must be preserved: {root}"
@@ -198,6 +201,7 @@ fn install_migration_rewrites_root_gitignore_that_held_only_the_maestro_block() 
     assert!(!root.contains(".maestro/runs/"), "{root}");
     assert!(root.contains(".claude/settings.local.json"), "{root}");
     assert!(root.contains(".codex/hooks.json"), "{root}");
+    assert!(root.contains(".factory/hooks.json"), "{root}");
 }
 
 #[test]
@@ -231,7 +235,7 @@ fn uninstall_handles_legacy_root_gitignore_lock_entry() {
         upsert_managed_block(
             None,
             ManagedBlockFormat::HashComment,
-            "# Maestro local-only paths\n.maestro/runs/\n.claude/settings.local.json\n.codex/hooks.json",
+            "# Maestro local-only paths\n.maestro/runs/\n.claude/settings.local.json\n.codex/hooks.json\n.factory/hooks.json",
         ),
     )
     .expect("invariant: legacy root .gitignore should be writable");
@@ -424,6 +428,29 @@ fn install_codex_prints_manual_hooks_reminder() {
     assert!(stdout.contains("+++ b/.codex/hooks.json"));
     assert!(stdout.contains("Run /hooks in Codex"));
     assert!(temp_dir.path().join(".codex/hooks.json").is_file());
+}
+
+#[test]
+fn install_droid_writes_project_factory_hooks() {
+    let temp_dir = TestTempDir::new("maestro-install-cli-test");
+    init_repo(temp_dir.path());
+
+    let output = maestro(&["install", "--agent", "droid"], temp_dir.path());
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8(output.stdout).expect("invariant: stdout should be UTF-8");
+    assert!(stdout.contains("--- a/.factory/hooks.json"), "{stdout}");
+    assert!(stdout.contains("+++ b/.factory/hooks.json"), "{stdout}");
+    assert!(stdout.contains("Droid hooks were written to .factory/hooks.json"));
+    assert!(temp_dir.path().join(".factory/hooks.json").is_file());
+    assert!(
+        !temp_dir.path().join("home/.factory/hooks.json").exists(),
+        "Droid install must not write user-global Factory hooks"
+    );
 }
 
 #[test]
@@ -1157,7 +1184,7 @@ fn uninstall_accepts_legacy_root_gitignore_lock_missing_nested_gitignore() {
     let legacy = upsert_managed_block(
         Some("/target/\n"),
         ManagedBlockFormat::HashComment,
-        "# Maestro local-only paths\n.maestro/runs/\n.claude/settings.local.json\n.codex/hooks.json",
+        "# Maestro local-only paths\n.maestro/runs/\n.claude/settings.local.json\n.codex/hooks.json\n.factory/hooks.json",
     );
     fs::write(&root_gitignore, legacy).expect("invariant: legacy root .gitignore writes");
     fs::create_dir_all(temp_dir.path().join(".maestro"))

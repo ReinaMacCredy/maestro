@@ -26,6 +26,8 @@ pub enum InstallAgent {
     Claude,
     /// Codex CLI.
     Codex,
+    /// Factory Droid CLI.
+    Droid,
 }
 
 impl InstallAgent {
@@ -34,6 +36,7 @@ impl InstallAgent {
         match self {
             Self::Claude => "claude",
             Self::Codex => "codex",
+            Self::Droid => "droid",
         }
     }
 

@@ -151,6 +151,7 @@ pub fn mirror_plan(agent: InstallAgent) -> Result<Vec<MirrorPlan>> {
 
     match agent {
         InstallAgent::Claude => plans.push(hook_config_plan(agent)?),
+        InstallAgent::Droid => plans.push(hook_config_plan(agent)?),
         InstallAgent::Codex => {
             plans.push(hook_config_plan(agent)?);
             plans.push(hash(
@@ -1064,7 +1065,7 @@ fn maestro_gitignore_block() -> &'static str {
 }
 
 fn agent_settings_gitignore_block() -> &'static str {
-    "# Maestro local agent settings\n.claude/settings.local.json\n.codex/hooks.json"
+    "# Maestro local agent settings\n.claude/settings.local.json\n.codex/hooks.json\n.factory/hooks.json"
 }
 
 /// Strip an obsolete maestro-internal block from the repo-root `.gitignore`.

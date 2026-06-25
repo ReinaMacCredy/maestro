@@ -145,7 +145,7 @@ fn active_lists_live_sessions_with_enriched_rows_and_you_marker() {
         repo,
         "peer-sess",
         &[
-            skill_runtime_event("peer-sess", "maestro-card", "codex", &ts_minutes_ago(2)),
+            skill_runtime_event("peer-sess", "maestro-card", "droid", &ts_minutes_ago(2)),
             card_touch_event("peer-sess", "peer-topic", &recent),
         ],
     );
@@ -171,7 +171,7 @@ fn active_lists_live_sessions_with_enriched_rows_and_you_marker() {
 
     let peer = line_with(&out, "peer-sess");
     assert!(
-        peer.trim_start().starts_with("codex"),
+        peer.trim_start().starts_with("droid"),
         "latest non-empty runtime survives later missing event\n{out}"
     );
     assert!(

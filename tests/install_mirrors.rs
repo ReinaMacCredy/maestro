@@ -46,12 +46,14 @@ fn mirror_plan_writes_managed_content_for_claude() {
             .contains(".claude/settings.local.json")
     );
     assert!(!gitignore_plan.contents.contains(".codex/hooks.json"));
+    assert!(!gitignore_plan.contents.contains(".factory/hooks.json"));
     assert!(
         root_gitignore_plan
             .contents
             .contains(".claude/settings.local.json")
     );
     assert!(root_gitignore_plan.contents.contains(".codex/hooks.json"));
+    assert!(root_gitignore_plan.contents.contains(".factory/hooks.json"));
     assert!(!root_gitignore_plan.contents.contains(".maestro/runs/"));
     assert!(!root_gitignore_plan.contents.contains("runs/"));
     // `playbook/` stays tracked for the peer feature.
@@ -83,7 +85,11 @@ fn mirror_plan_wraps_both_markdown_mirrors_in_maestro_markers() {
     // for either agent -- CLAUDE.md @-imports HARNESS.md, AGENTS.md uses the
     // Read-first line, both wrapped in the markdown markers so sync can find
     // and refresh them later.
-    for agent in [InstallAgent::Claude, InstallAgent::Codex] {
+    for agent in [
+        InstallAgent::Claude,
+        InstallAgent::Codex,
+        InstallAgent::Droid,
+    ] {
         let plans = mirror_plan(agent).expect("invariant: mirror plan should build");
         let claude = plans
             .iter()
@@ -146,6 +152,28 @@ fn mirror_plan_writes_codex_hook_timeout_and_trust_related_files() {
 }
 
 #[test]
+fn mirror_plan_writes_droid_project_factory_hooks() {
+    let plans = mirror_plan(InstallAgent::Droid).expect("invariant: mirror plan should build");
+
+    let hook_plan = plans
+        .iter()
+        .find(|plan| plan.relative_path == ".factory/hooks.json")
+        .expect("invariant: Droid hook plan should exist");
+    assert_eq!(hook_plan.managed_keys, vec!["hooks"]);
+    assert!(!hook_plan.contents.contains("_maestro_managed_keys"));
+    assert!(
+        !hook_plan
+            .contents
+            .contains("_maestro_previous_value_hashes")
+    );
+    assert_hook_shape(
+        &hook_plan.contents,
+        false,
+        "MAESTRO_AGENT=droid sh \"$FACTORY_PROJECT_DIR/.maestro/hooks/record.sh\"",
+    );
+}
+
+#[test]
 fn codex_install_writes_hooks_json_without_maestro_metadata_keys() {
     let temp_dir = TestTempDir::new("maestro-install-test");
     init_repo(temp_dir.path());
@@ -161,6 +189,42 @@ fn codex_install_writes_hooks_json_without_maestro_metadata_keys() {
         .as_object()
         .expect("invariant: hooks json should be an object");
     assert_eq!(object.keys().collect::<Vec<_>>(), vec!["hooks"]);
+}
+
+#[test]
+fn droid_install_preserves_unrelated_factory_hooks() {
+    let temp_dir = TestTempDir::new("maestro-install-test");
+    init_repo(temp_dir.path());
+    fs::create_dir_all(temp_dir.path().join(".factory"))
+        .expect("invariant: factory dir should be writable");
+    fs::write(
+        temp_dir.path().join(".factory/hooks.json"),
+        r#"{"hooksDisabled":false,"custom":{"keep":true}}"#,
+    )
+    .expect("invariant: user factory hooks should be writable");
+    let paths = MaestroPaths::new(temp_dir.path().to_path_buf());
+
+    install_agent(&paths, InstallAgent::Droid).expect("invariant: mirrors should apply");
+
+    let hooks = fs::read_to_string(temp_dir.path().join(".factory/hooks.json"))
+        .expect("invariant: Droid hooks json should be readable");
+    let parsed = serde_json::from_str::<serde_json::Value>(&hooks)
+        .expect("invariant: hooks json should parse");
+    assert_eq!(parsed["hooksDisabled"], false);
+    assert_eq!(parsed["custom"]["keep"], true);
+    assert!(
+        parsed.get("hooks").is_some(),
+        "Droid hooks should be installed"
+    );
+    let lock = InstallLock::load(&paths.install_lock_file()).expect("install lock should load");
+    let droid = lock
+        .agents
+        .get("droid")
+        .expect("Droid install should be recorded");
+    assert_eq!(
+        droid.files[".factory/hooks.json"].managed_keys,
+        vec!["hooks"]
+    );
 }
 
 #[test]
