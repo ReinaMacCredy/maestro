@@ -137,6 +137,11 @@ impl MaestroPaths {
         self.search_index_dir().join("memory.shard")
     }
 
+    /// Return the repo-source shard used by `maestro grep`.
+    pub fn source_shard_file(&self) -> PathBuf {
+        self.search_index_dir().join("source.shard")
+    }
+
     /// Return the install lockfile path.
     pub fn install_lock_file(&self) -> PathBuf {
         self.maestro_dir().join("install-lock.yaml")

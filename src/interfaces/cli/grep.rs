@@ -8,7 +8,7 @@ pub fn run(args: GrepArgs) -> Result<()> {
     let repo_root = discover_repo_root()?;
     let paths = MaestroPaths::new(repo_root);
     let query = args.query.join(" ");
-    let envelope = search::grep_memory(&paths, &query);
+    let envelope = search::grep(&paths, &query);
 
     if args.json {
         println!("{}", serde_json::to_string(&envelope)?);

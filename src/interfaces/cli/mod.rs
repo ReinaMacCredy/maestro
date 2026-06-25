@@ -1686,6 +1686,9 @@ pub enum IndexCommand {
         /// Rebuild only the Maestro-memory grep shard.
         #[arg(long)]
         memory: bool,
+        /// Rebuild only the repo-source grep shard.
+        #[arg(long)]
+        source: bool,
     },
 }
 

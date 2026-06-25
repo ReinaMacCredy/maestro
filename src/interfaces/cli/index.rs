@@ -10,8 +10,12 @@ pub fn run(args: IndexArgs) -> Result<()> {
     let paths = MaestroPaths::new(repo_root);
 
     match args.command {
-        IndexCommand::Rebuild { memory } => {
-            if !memory {
+        IndexCommand::Rebuild { memory, source } => {
+            let rebuild_cards = !memory && !source;
+            let rebuild_memory = memory || !source;
+            let rebuild_source = source || !memory;
+
+            if rebuild_cards {
                 let report = card::index::rebuild(&paths)?;
                 println!("text index rebuilt");
                 println!(
@@ -23,13 +27,30 @@ pub fn run(args: IndexArgs) -> Result<()> {
                 println!("  file: .maestro/index/text.json");
                 println!("next: maestro card list --grep <word> [--archived]");
             }
-            let report = search::rebuild_memory(&paths)?;
-            println!("memory shard rebuilt");
-            println!(
-                "  docs: {} ({} live cards, {} archived cards, {} run evidence)",
-                report.docs, report.live_docs, report.archived_docs, report.run_evidence_docs
-            );
-            println!("  file: .maestro/index/search/memory.shard");
+            if rebuild_memory {
+                let report = search::rebuild_memory(&paths)?;
+                println!("memory shard rebuilt");
+                println!(
+                    "  docs: {} ({} live cards, {} archived cards, {} run evidence)",
+                    report.docs, report.live_docs, report.archived_docs, report.run_evidence_docs
+                );
+                println!("  file: .maestro/index/search/memory.shard");
+            }
+            if rebuild_source {
+                let report = search::rebuild_source(&paths)?;
+                println!("source shard rebuilt");
+                println!(
+                    "  files: {} indexed, {} skipped",
+                    report.indexed_files, report.skipped_files
+                );
+                for (reason, count) in &report.skipped_by_reason {
+                    println!("  skipped {reason}: {count}");
+                }
+                for skip in &report.representative_skips {
+                    println!("  skip example: {} ({})", skip.path, skip.reason);
+                }
+                println!("  file: .maestro/index/search/source.shard");
+            }
             println!("next: maestro grep <query>");
             Ok(())
         }

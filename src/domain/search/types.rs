@@ -136,7 +136,14 @@ impl GrepEnvelope {
             schema: "maestro.grep.v1",
             ok: true,
             query: query.to_string(),
-            intent: Some("memory".to_string()),
+            intent: Some(
+                if hits.iter().all(|hit| hit.corpus == SearchCorpus::Source) {
+                    "source"
+                } else {
+                    "memory"
+                }
+                .to_string(),
+            ),
             intent_confidence: Some(
                 if overrides.iter().any(|item| item == "corpus") {
                     "high"
@@ -146,7 +153,9 @@ impl GrepEnvelope {
                 .to_string(),
             ),
             intent_reasons: if overrides.iter().any(|item| item == "corpus") {
-                vec!["explicit corpus:memory".to_string()]
+                vec!["explicit corpus filter".to_string()]
+            } else if hits.iter().all(|hit| hit.corpus == SearchCorpus::Source) {
+                vec!["source-shaped query uses source shard".to_string()]
             } else {
                 vec!["memory shard available; source shard not enabled in this slice".to_string()]
             },
