@@ -104,6 +104,7 @@ fn normalize_event(payload: &Value, agent_runtime: Option<&str>) -> Option<Value
     copy_string(payload, &mut event, "activation_mode");
     copy_string_array(payload, &mut event, "scope_paths");
     copy_number(payload, &mut event, "duration_ms");
+    copy_autonomy_fields(&event_type, payload, &mut event);
 
     if let Some(tool_input) = payload.get("tool_input") {
         event.insert("tool_input_hash".to_string(), json!(hash_value(tool_input)));
@@ -150,6 +151,28 @@ fn is_stop_event(event: &Value) -> bool {
 fn copy_string(source: &Value, target: &mut Map<String, Value>, field: &str) {
     if let Some(value) = string_field(source, field) {
         target.insert(field.to_string(), json!(value));
+    }
+}
+
+fn copy_autonomy_fields(event_type: &str, source: &Value, target: &mut Map<String, Value>) {
+    match normalized_event_type(event_type) {
+        "autonomy_start" => {
+            copy_string(source, target, "authority_ref");
+            copy_string(source, target, "authority_summary");
+            copy_string(source, target, "prompt_hash");
+            copy_string_array(source, target, "hard_stops");
+        }
+        "autonomy_action" => {
+            copy_string(source, target, "action");
+            copy_string(source, target, "target_kind");
+            copy_string(source, target, "target_id");
+            copy_string(source, target, "authority_ref");
+            copy_string(source, target, "before_state");
+            copy_string(source, target, "command");
+            copy_string(source, target, "result");
+            copy_string(source, target, "after_state");
+        }
+        _ => {}
     }
 }
 
@@ -224,6 +247,90 @@ mod tests {
             object.get("scope_paths"),
             Some(&json!(["src/interfaces/cli/status.rs", "tests/status.rs"])),
             "declared path scopes stay visible to active-session overlap checks"
+        );
+    }
+
+    #[test]
+    fn normalizes_autonomy_start_authority_fields_without_raw_prompt() {
+        let payload = json!({
+            "event_type": "autonomy_start",
+            "session_id": "night-run",
+            "authority_ref": "run:night-run",
+            "authority_summary": "full local autonomy; hard stops preserved",
+            "prompt_hash": "sha256:abc123",
+            "prompt": "raw user prompt should not be persisted",
+            "hard_stops": ["push", " ", "archive", "destructive git"],
+        });
+        let event = normalize_event(&payload, None).expect("autonomy_start is accepted");
+        let object = event.as_object().expect("normalized event is an object");
+
+        assert_eq!(
+            object.get("event_type").and_then(Value::as_str),
+            Some("autonomy_start")
+        );
+        assert_eq!(
+            object.get("authority_ref").and_then(Value::as_str),
+            Some("run:night-run")
+        );
+        assert_eq!(
+            object.get("prompt_hash").and_then(Value::as_str),
+            Some("sha256:abc123")
+        );
+        assert_eq!(
+            object.get("hard_stops"),
+            Some(&json!(["push", "archive", "destructive git"]))
+        );
+        assert!(
+            !object.contains_key("prompt"),
+            "raw prompt text must stay out of autonomy_start"
+        );
+    }
+
+    #[test]
+    fn normalizes_autonomy_action_reconstruction_fields_without_card_snapshots() {
+        let before_snapshot = ["before", "card", "snapshot"].join("_");
+        let after_snapshot = ["after", "card", "snapshot"].join("_");
+        let mut payload = json!({
+            "event_type": "autonomy_action",
+            "session_id": "night-run",
+            "action": "feature_close",
+            "target_kind": "feature",
+            "target_id": "grep-source-shard",
+            "authority_ref": "run:night-run",
+            "before_state": "in_progress",
+            "command": "maestro feature close grep-source-shard --outcome <redacted>",
+            "result": "closed",
+            "after_state": "closed",
+        });
+        payload
+            .as_object_mut()
+            .expect("payload is an object")
+            .insert(before_snapshot.clone(), json!({"status": "in_progress"}));
+        payload
+            .as_object_mut()
+            .expect("payload is an object")
+            .insert(after_snapshot.clone(), json!({"status": "closed"}));
+        let event = normalize_event(&payload, None).expect("autonomy_action is accepted");
+        let object = event.as_object().expect("normalized event is an object");
+
+        for (field, expected) in [
+            ("action", "feature_close"),
+            ("target_kind", "feature"),
+            ("target_id", "grep-source-shard"),
+            ("authority_ref", "run:night-run"),
+            ("before_state", "in_progress"),
+            (
+                "command",
+                "maestro feature close grep-source-shard --outcome <redacted>",
+            ),
+            ("result", "closed"),
+            ("after_state", "closed"),
+        ] {
+            assert_eq!(object.get(field).and_then(Value::as_str), Some(expected));
+        }
+        assert!(
+            !object.contains_key(&before_snapshot) && !object.contains_key(&after_snapshot),
+            "autonomy events are reconstruction records, not full card snapshots"
         );
     }
 

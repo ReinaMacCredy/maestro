@@ -807,6 +807,57 @@ fn query_run_rejects_an_all_digit_since_as_not_rfc3339() {
 }
 
 #[test]
+fn query_run_reports_autonomy_ledger_actions() {
+    let temp = setup_repo("maestro-query-run-autonomy");
+    let repo = temp.path();
+    let run_dir = repo.join(".maestro/runs/night-run");
+    fs::create_dir_all(&run_dir).expect("invariant: run dir should be creatable");
+    fs::write(
+        run_dir.join("events.jsonl"),
+        concat!(
+            "{\"schema_version\":\"maestro.event.v1\",\"ts\":\"2026-06-26T00:00:00Z\",\"event_type\":\"autonomy_start\",\"session_id\":\"night-run\",\"authority_ref\":\"run:night-run\",\"authority_summary\":\"full local autonomy\",\"prompt_hash\":\"sha256:abc\",\"hard_stops\":[\"push\",\"archive\"]}\n",
+            "{\"schema_version\":\"maestro.event.v1\",\"ts\":\"2026-06-26T00:01:00Z\",\"event_type\":\"autonomy_action\",\"session_id\":\"night-run\",\"action\":\"feature_close\",\"target_kind\":\"feature\",\"target_id\":\"grep-source-shard\",\"authority_ref\":\"run:night-run\",\"before_state\":\"verified\",\"command\":\"maestro feature close grep-source-shard --outcome <redacted>\",\"result\":\"closed\",\"after_state\":\"closed\"}\n",
+            "{\"schema_version\":\"maestro.event.v1\",\"ts\":\"2026-06-26T00:02:00Z\",\"event_type\":\"autonomy_action\",\"session_id\":\"night-run\",\"action\":\"hard_stop\",\"target_kind\":\"task\",\"target_id\":\"task-secret\",\"authority_ref\":\"run:night-run\",\"before_state\":\"blocked\",\"command\":\"<not run>\",\"result\":\"hard_stop\",\"after_state\":\"blocked\"}\n",
+        ),
+    )
+    .expect("invariant: events should be writable");
+
+    let text = run_success(repo, &["query", "run", "--since", "2026-06-26T00:00:00Z"]);
+    assert!(text.contains("AUTONOMY"), "{text}");
+    assert!(
+        text.contains("counts: actions=2 blocked=0 hard_stops=1 local_closes=1"),
+        "{text}"
+    );
+    assert!(
+        text.contains("ledger path: .maestro/runs/night-run/events.jsonl"),
+        "{text}"
+    );
+    assert!(text.contains("feature_close"), "{text}");
+    assert!(text.contains("feature:grep-source-shard"), "{text}");
+    assert!(
+        text.contains("maestro feature close grep-source-shard --outcome <redacted>"),
+        "{text}"
+    );
+
+    let json = run_success(
+        repo,
+        &["query", "run", "--since", "2026-06-26T00:00:00Z", "--json"],
+    );
+    let parsed: serde_json::Value = serde_json::from_str(&json).expect("query run emits JSON");
+    assert_eq!(parsed["autonomy"]["started"], true);
+    assert_eq!(parsed["autonomy"]["local_close_count"], 1);
+    assert_eq!(parsed["autonomy"]["hard_stop_count"], 1);
+    assert_eq!(
+        parsed["autonomy"]["ledger_paths"][0],
+        ".maestro/runs/night-run/events.jsonl"
+    );
+    assert_eq!(
+        parsed["autonomy"]["actions"][0]["target_id"],
+        "grep-source-shard"
+    );
+}
+
+#[test]
 fn query_views_scan_current_artifacts_without_writing_cache_files() {
     let temp = setup_repo("maestro-query-views");
     let repo = temp.path();

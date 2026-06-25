@@ -1,6 +1,6 @@
 ---
 name: maestro-card
-version: 1.27.0
+version: 1.28.0
 description: "Use when the user wants to implement, fix, verify, QA, close, release, or continue active Maestro card/feature/task work after design is approved."
 ---
 

@@ -411,6 +411,7 @@ fn run_domain_facade_does_not_publish_leaf_modules() {
     let run_facade = read_source_file(Path::new("src/domain/run/mod.rs"));
     for leaf in [
         "append",
+        "autonomy",
         "discovery",
         "evidence",
         "event",
@@ -431,6 +432,7 @@ fn run_domain_facade_does_not_publish_leaf_modules() {
         BTreeSet::from([
             "active_sessions".to_string(),
             "active_sessions_union".to_string(),
+            "assemble_autonomy_report".to_string(),
             "assemble_trace".to_string(),
             "current_bound_card".to_string(),
             "hook_event_contract".to_string(),
@@ -441,6 +443,8 @@ fn run_domain_facade_does_not_publish_leaf_modules() {
             "visit_managed_events".to_string(),
             "warm_file_overlaps".to_string(),
             "write_evidence_for_session".to_string(),
+            "AutonomyActionRow".to_string(),
+            "AutonomyReport".to_string(),
             "FileOverlap".to_string(),
             "HookEventContract".to_string(),
             "Presence".to_string(),

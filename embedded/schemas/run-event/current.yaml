@@ -24,6 +24,18 @@ contracts:
       - permission_decision
       - skill_name
       - activation_mode
+      - scope_paths
+      - authority_ref
+      - authority_summary
+      - prompt_hash
+      - hard_stops
+      - action
+      - target_kind
+      - target_id
+      - before_state
+      - command               # normalized/redacted command for autonomy_action only
+      - result
+      - after_state
       - duration_ms
       - tool_input_hash
       - file_path             # edited path kept from Edit/Write tool_input for warm-file overlap
