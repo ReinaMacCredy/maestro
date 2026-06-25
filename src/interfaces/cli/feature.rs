@@ -130,6 +130,8 @@ pub fn run(args: FeatureArgs) -> Result<()> {
         ),
         FeatureCommand::Start { id } => {
             let report = feature::start(&paths, &id)?;
+            super::emit_card_touch(&paths, &id);
+            super::emit_ownership_acquire(&paths, &id);
             print_note(report.note)?;
             print_uncovered_acceptance_warning(&paths, &id, CoverageFix::Locked)
         }
@@ -270,6 +272,8 @@ fn prepare_feature(
         (Some(plan_file), false, false) => {
             let actor = super::actor();
             let report = feature_prepare::prepare_from_file(paths, id, plan_file, &actor)?;
+            super::emit_card_touch(paths, id);
+            super::emit_ownership_acquire(paths, id);
             print_prepare_report(&report);
             print_uncovered_acceptance_warning(paths, id, CoverageFix::Locked)?;
             Ok(())
@@ -292,6 +296,8 @@ fn prepare_feature(
             write_string_atomic(&path, &plan)?;
             let actor = super::actor();
             let report = feature_prepare::prepare_from_file(paths, id, &path, &actor)?;
+            super::emit_card_touch(paths, id);
+            super::emit_ownership_acquire(paths, id);
             print_prepare_report(&report);
             print_uncovered_acceptance_warning(paths, id, CoverageFix::Locked)?;
             Ok(())
@@ -507,6 +513,14 @@ fn after_prove_autoclose(
         let outcome = Some(outcome.unwrap_or_else(|| default_close_outcome(sweep.as_ref())));
         println!("close-ready: auto-closing (full verify suite + close)");
         let report = feature_close::close(paths, id, outcome, false)?;
+        if report.changed && report.status == FeatureStatus::Closed {
+            super::emit_ownership_release(
+                paths,
+                &report.id,
+                super::OwnershipReleaseStatus::Done,
+                Some("feature close"),
+            );
+        }
         println!("{}", report.note);
         print_close_receipt(paths, &report)?;
         return Ok(());
@@ -905,6 +919,12 @@ fn close_feature(
             report.id
         );
     } else if report.changed && report.status == FeatureStatus::Closed {
+        super::emit_ownership_release(
+            paths,
+            &report.id,
+            super::OwnershipReleaseStatus::Done,
+            Some("feature close"),
+        );
         print_close_receipt(paths, &report)?;
     } else {
         println!("inspect: maestro feature show {}", report.id);

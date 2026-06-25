@@ -1,7 +1,7 @@
-//! `maestro active`: a pull-only view of what other live sessions are doing,
-//! indexed by run-event liveness and enriched from the card store.
+//! `maestro active`: a view of what other live sessions are doing, indexed by
+//! run-event liveness and enriched from the card store.
 //!
-//! The verb never writes and never creates a link edge -- it reads
+//! The default view never writes and never creates a link edge -- it reads
 //! `run::active_sessions`, joins each bound card's title/status/progress from a
 //! single card scan, prints one row per session, and emits a copy-pasteable
 //! `maestro link add` hint the agent decides whether to run
@@ -9,7 +9,7 @@
 
 use std::collections::HashMap;
 
-use anyhow::Result;
+use anyhow::{Result, bail};
 
 use crate::domain::card;
 use crate::domain::gate_lock;
@@ -18,7 +18,10 @@ use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::table;
 use crate::foundation::core::time::utc_now_timestamp;
 use crate::interfaces::cli::worktree_roots;
-use crate::interfaces::cli::{ActiveArgs, merge_busy_advisory, stale_merge_advisory};
+use crate::interfaces::cli::{
+    ActiveArgs, ActiveCommand, ActiveReleaseArgs, OwnershipReleaseStatus, merge_busy_advisory,
+    stale_merge_advisory,
+};
 
 /// Max width for the bound-card title column; longer titles truncate to keep one
 /// scannable line per session (row width is a tunable detail, not locked by D5).
@@ -26,6 +29,17 @@ const CARD_WIDTH: usize = 28;
 
 pub fn run(args: ActiveArgs) -> Result<()> {
     let paths = MaestroPaths::new(discover_repo_root()?);
+    let ActiveArgs {
+        command,
+        all,
+        connect,
+    } = args;
+    if let Some(command) = command {
+        return match command {
+            ActiveCommand::Release(release) => release_ownership(&paths, release),
+        };
+    }
+
     let now = utc_now_timestamp();
     let roots = worktree_roots(&paths);
     let rows = run::active_sessions_union(&roots, &now)?;
@@ -64,7 +78,7 @@ pub fn run(args: ActiveArgs) -> Result<()> {
 
     let shown: Vec<&SessionActivity> = rows
         .iter()
-        .filter(|row| args.all || row.presence != Presence::Stale)
+        .filter(|row| all || row.presence != Presence::Stale)
         .collect();
     let hidden_stale = rows.len() - shown.len();
 
@@ -89,7 +103,23 @@ pub fn run(args: ActiveArgs) -> Result<()> {
         println!("({hidden_stale} stale hidden; --all to show)");
     }
 
-    render_link_hint(&shown, &by_id, &me, your_card, args.connect);
+    render_link_hint(&shown, &by_id, &me, your_card, connect);
+    Ok(())
+}
+
+fn release_ownership(paths: &MaestroPaths, args: ActiveReleaseArgs) -> Result<()> {
+    card::store::validate_card_id(&args.card_id)?;
+    let reason = args.reason.trim();
+    if reason.is_empty() {
+        bail!("--reason must not be empty");
+    }
+    super::emit_ownership_release(
+        paths,
+        &args.card_id,
+        OwnershipReleaseStatus::Released,
+        Some(reason),
+    );
+    println!("released {} -> idle/released", args.card_id);
     Ok(())
 }
 
@@ -314,7 +344,11 @@ fn mode_label(skill: &str) -> String {
 fn presence_label(presence: Presence, age_minutes: u64) -> String {
     match presence {
         Presence::Working => "[working]".to_string(),
+        Presence::QuietWorking => format!("[quiet-working {age_minutes}m]"),
         Presence::Waiting => "[waiting]".to_string(),
+        Presence::Released => format!("[idle/released {age_minutes}m]"),
+        Presence::Done => format!("[done {age_minutes}m]"),
+        Presence::Unconfirmed => format!("[unconfirmed {age_minutes}m]"),
         Presence::Idle => format!("[idle {age_minutes}m]"),
         Presence::Stale => format!("[stale {age_minutes}m]"),
     }
@@ -671,5 +705,20 @@ mod tests {
         );
         // singular peer -> "session", not "sessions"
         assert!(worktree_advisory_text(1, "task-2").contains("1 other live session:"));
+    }
+
+    #[test]
+    fn presence_labels_include_ownership_states_with_age_evidence() {
+        assert_eq!(presence_label(Presence::Working, 0), "[working]");
+        assert_eq!(
+            presence_label(Presence::QuietWorking, 10),
+            "[quiet-working 10m]"
+        );
+        assert_eq!(presence_label(Presence::Released, 3), "[idle/released 3m]");
+        assert_eq!(presence_label(Presence::Done, 4), "[done 4m]");
+        assert_eq!(
+            presence_label(Presence::Unconfirmed, 121),
+            "[unconfirmed 121m]"
+        );
     }
 }

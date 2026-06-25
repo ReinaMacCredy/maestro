@@ -458,10 +458,13 @@ fn query_friction(paths: &MaestroPaths) -> Result<()> {
             .or_else(|| event.alias_kind())
             .unwrap_or("<unknown>")
             .to_string();
-        // card_touch is the session->card binding auto-emitted for `maestro
-        // active` (D3), not a session-friction signal; counting it would inflate
-        // the telemetry in step with routine work, so it stays out of every tally.
-        if kind == "card_touch" {
+        // Binding/ownership events are auto-emitted for cross-session awareness,
+        // not session-friction signals; counting them would inflate telemetry in
+        // step with routine work, so they stay out of every tally.
+        if matches!(
+            kind.as_str(),
+            "card_touch" | "ownership_acquire" | "ownership_release"
+        ) {
             return Ok(());
         }
         events += 1;

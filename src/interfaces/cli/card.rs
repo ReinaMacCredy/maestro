@@ -232,6 +232,7 @@ pub fn claim(args: ClaimArgs) -> Result<()> {
     let identity = claim_identity();
     let outcome = card::edit::claim(&paths, &args.id, &identity, &utc_now_timestamp())?;
     super::emit_card_touch(&paths, &args.id);
+    super::emit_ownership_acquire(&paths, &args.id);
     print_claim_outcome(&args.id, &identity, &outcome);
     nudge_if_holding_other_in_progress(&paths, &identity, &args.id);
     Ok(())
@@ -601,6 +602,7 @@ pub fn update(args: UpdateArgs) -> Result<()> {
     // `update --claim` shares the claim seam, so it shares the focus nudge. The
     // advisory is STDERR-only, so it is safe to emit before the JSON return.
     if let Some((identity, _)) = claim_outcome.as_ref() {
+        super::emit_ownership_acquire(&paths, id);
         nudge_if_holding_other_in_progress(&paths, identity, id);
     }
     if args.json {
@@ -646,6 +648,12 @@ pub fn close(args: CloseArgs) -> Result<()> {
     c.status = "closed".to_string();
     c.updated_at = utc_now_timestamp();
     card::store::save_resolved(&c, &resolved)?;
+    super::emit_ownership_release(
+        &paths,
+        &args.id,
+        super::OwnershipReleaseStatus::Done,
+        Some("card close"),
+    );
     println!("closed {}", args.id);
     Ok(())
 }

@@ -359,6 +359,8 @@ fn claim_task(paths: &MaestroPaths, id: &str, actor: &str) -> Result<()> {
     let now = utc_now_timestamp();
     let task = task::claim_task(&paths.tasks_dir(), id, actor, &now)?;
     let checks = task::load_task_checks(&paths.tasks_dir(), &task)?;
+    super::emit_card_touch(paths, &task.id);
+    super::emit_ownership_acquire(paths, &task.id);
     println!("updated {} -> {}", task.id, task.state.as_str());
     print_verify_block(&task, &checks);
     println!("finish with proof:");
@@ -380,6 +382,8 @@ fn claim_next_task(paths: &MaestroPaths, actor: &str) -> Result<()> {
     let now = utc_now_timestamp();
     let task = task::claim_task(&paths.tasks_dir(), &next.id, actor, &now)?;
     let checks = task::load_task_checks(&paths.tasks_dir(), &task)?;
+    super::emit_card_touch(paths, &task.id);
+    super::emit_ownership_acquire(paths, &task.id);
     println!("claimed {} -> {}", task.id, task.state.as_str());
     print_claim_next_context(paths, &task)?;
     println!("title: {}", task.title);
@@ -513,6 +517,12 @@ fn complete_task(
     println!("auto: maestro task verify {}", task.id);
     match verify::run_for_task(paths, &task.id, actor) {
         Ok(()) => {
+            super::emit_ownership_release(
+                paths,
+                &task.id,
+                super::OwnershipReleaseStatus::Done,
+                Some("task complete"),
+            );
             status::print_harness_friction_epilogue(paths)?;
             Ok(())
         }
