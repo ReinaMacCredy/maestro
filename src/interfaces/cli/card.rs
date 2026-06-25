@@ -1,10 +1,9 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::{Result, anyhow};
 use serde::Serialize;
 
-use crate::domain::card;
-use crate::domain::feature;
+use crate::domain::{card, feature, search};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::slug::slugify_ascii;
 use crate::foundation::core::time::utc_now_timestamp;
@@ -80,10 +79,9 @@ pub fn list(args: ListArgs) -> Result<()> {
         status,
     };
     let grep = args.grep.as_deref();
-    // The text index narrows grep to a superset of possible matches (R6);
-    // `None` -- term too short, index missing and unrebuildable -- falls back
-    // to the plain scan, so results never depend on the index.
-    let candidates = grep.and_then(|term| card::index::candidates(&paths, term));
+    // Search indexes narrow grep to a superset of possible matches; `None` --
+    // term too short or indexes unavailable -- falls back to the plain scan.
+    let candidates = grep.and_then(|term| grep_candidates(&paths, term));
     let candidates = candidates.as_ref();
     let live = card::query::scan_with_paths(&paths)?;
     let archived = if args.archived {
@@ -133,6 +131,17 @@ pub fn list(args: ListArgs) -> Result<()> {
         render_list(&rows, hidden, args.archived);
     }
     Ok(())
+}
+
+fn grep_candidates(paths: &MaestroPaths, term: &str) -> Option<BTreeSet<String>> {
+    let mut candidates = search::card_list_grep_candidates(paths, term);
+    if let Some(text_candidates) = card::index::candidates(paths, term) {
+        match &mut candidates {
+            Some(candidates) => candidates.extend(text_candidates),
+            None => candidates = Some(text_candidates),
+        }
+    }
+    candidates
 }
 
 /// Execute `maestro dep add <child> <parent>`: author a blocking edge so the

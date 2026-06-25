@@ -553,6 +553,124 @@ fn list_grep_searches_live_cards_and_archived_extends_to_the_archive() {
     );
 }
 
+/// `card list --grep` may use the unified memory shard as an accelerator, but
+/// must keep the legacy exact card predicate, row order, human rows, and JSON
+/// envelope. Rich alias recall belongs to `maestro grep`, not card-list grep.
+#[test]
+fn list_grep_uses_unified_candidates_without_alias_ranking_or_source_leakage() {
+    let temp = cards_repo("s2-grep-card-list-compat");
+    let repo = temp.path();
+    let memory_shard = repo.join(".maestro/index/search/memory.shard");
+    fs::create_dir_all(repo.join("src")).expect("invariant: src dir should be creatable");
+    fs::write(
+        repo.join("src/runtime_source.rs"),
+        "fn sourceonly_runtime_symbol() {}\n",
+    )
+    .expect("invariant: source fixture should be writable");
+
+    run(
+        repo,
+        &[
+            "create",
+            "-t",
+            "task",
+            "Alpha runtime literal",
+            "--description",
+            "contains the exact runtime token",
+        ],
+    );
+    run(
+        repo,
+        &[
+            "create",
+            "-t",
+            "task",
+            "Session alias only",
+            "--description",
+            "contains session without the queried word",
+        ],
+    );
+    run(
+        repo,
+        &[
+            "create",
+            "-t",
+            "task",
+            "Zulu runtime literal",
+            "--description",
+            "another exact runtime token",
+        ],
+    );
+    let alpha_id = id_by_title(repo, "Alpha runtime literal");
+    let alias_id = id_by_title(repo, "Session alias only");
+    let zulu_id = id_by_title(repo, "Zulu runtime literal");
+
+    let unfiltered = run(repo, &["list", "--type", "task"]);
+    assert!(
+        !memory_shard.exists(),
+        "no memory shard before card-list grep"
+    );
+
+    let filtered = run(repo, &["list", "--grep", "runtime"]);
+    assert!(
+        memory_shard.exists(),
+        "card-list grep should consult the unified memory shard as an accelerator"
+    );
+    assert!(filtered.contains(&alpha_id), "{filtered}");
+    assert!(filtered.contains(&zulu_id), "{filtered}");
+    assert!(
+        !filtered.contains(&alias_id),
+        "card-list grep is exact substring, not alias recall:\n{filtered}"
+    );
+    assert!(
+        !filtered.contains("runtime_source.rs"),
+        "card-list grep never renders source hits:\n{filtered}"
+    );
+    assert_eq!(
+        unfiltered.find(&alpha_id).unwrap() < unfiltered.find(&zulu_id).unwrap(),
+        filtered.find(&alpha_id).unwrap() < filtered.find(&zulu_id).unwrap(),
+        "card-list grep preserves scan/list order instead of ranked grep order"
+    );
+
+    let source_only = run(repo, &["list", "--grep", "sourceonly"]);
+    assert!(source_only.contains("no cards match"), "{source_only}");
+    assert!(
+        !source_only.contains("runtime_source.rs"),
+        "source-only terms do not become card-list rows:\n{source_only}"
+    );
+
+    let json_out = run(repo, &["list", "--grep", "runtime", "--json"]);
+    let json: Value = serde_json::from_str(&json_out).expect("list output should be JSON");
+    assert_eq!(json["schema"], "maestro.list.v1");
+    let cards = json["cards"].as_array().expect("cards should be an array");
+    assert_eq!(cards.len(), 2, "{json:#}");
+    assert_eq!(cards[0]["id"], alpha_id);
+    assert_eq!(cards[1]["id"], zulu_id);
+    assert!(
+        cards
+            .iter()
+            .all(|card| card.get("corpus").is_none() && card.get("score_reasons").is_none()),
+        "list JSON envelope must not grow grep-ranking/source fields:\n{json:#}"
+    );
+
+    let rich = run(repo, &["grep", "--json", "runtime corpus:memory"]);
+    let rich_json: Value = serde_json::from_str(&rich).expect("grep output should be JSON");
+    let alias_hit = rich_json["hits"]
+        .as_array()
+        .expect("grep hits should be an array")
+        .iter()
+        .find(|hit| hit["id"] == alias_id)
+        .unwrap_or_else(|| panic!("maestro grep should keep alias recall:\n{rich_json:#}"));
+    assert!(
+        alias_hit["score_reasons"]
+            .as_array()
+            .expect("score reasons should be an array")
+            .iter()
+            .any(|reason| reason["factor"] == "domain_alias"),
+        "rich grep, not card-list grep, owns alias recall:\n{rich_json:#}"
+    );
+}
+
 /// SPEC-archive-memory-2 R2: `maestro archive --loose` sweeps terminal
 /// parentless cards -- closed loose tasks/ideas and superseded decisions --
 /// into the archive with one INDEX.md lid line per swept card. A locked loose

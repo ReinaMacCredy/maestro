@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::time::UNIX_EPOCH;
 
@@ -106,6 +106,25 @@ pub fn grep_memory(paths: &MaestroPaths, raw_query: &str) -> GrepEnvelope {
     grep_memory_parsed(paths, raw_query, &parsed)
 }
 
+pub fn card_list_grep_candidates(paths: &MaestroPaths, term: &str) -> Option<BTreeSet<String>> {
+    if term.chars().count() < 3 {
+        return None;
+    }
+
+    let needle = term.to_lowercase();
+    let loaded = load_for_query(paths).ok()?;
+    Some(
+        loaded
+            .shard
+            .docs
+            .iter()
+            .filter(|doc| doc.kind != "run_evidence")
+            .filter(|doc| card_list_doc_contains(doc, &needle))
+            .map(|doc| doc.id.clone())
+            .collect(),
+    )
+}
+
 pub(crate) fn grep_memory_parsed(
     paths: &MaestroPaths,
     raw_query: &str,
@@ -199,6 +218,14 @@ fn load_for_query(paths: &MaestroPaths) -> Result<LoadedMemoryShard, SearchDiagn
             }
         }
     }
+}
+
+fn card_list_doc_contains(doc: &SearchDocument, needle: &str) -> bool {
+    doc.title.to_lowercase().contains(needle)
+        || doc
+            .segments
+            .iter()
+            .any(|segment| segment.text.to_lowercase().contains(needle))
 }
 
 fn load_fresh(paths: &MaestroPaths) -> Result<MemoryShard> {
