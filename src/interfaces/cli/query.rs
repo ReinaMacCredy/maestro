@@ -532,23 +532,26 @@ fn query_run(paths: &MaestroPaths, since: Option<&str>, json: bool) -> Result<()
     };
 
     let trace = run::assemble_trace(paths, cutoff_nanos)?;
+    let autonomy = run::assemble_autonomy_report(paths, cutoff_nanos)?;
     let status = compute_run_status(paths, trace.last_activity.as_deref(), now_nanos)?;
 
     if json {
+        let verdict = status.verdict();
         let report = serde_json::json!({
             "window": window,
             "now": now,
             "trace": trace,
             "status": status,
+            "autonomy": autonomy,
             // The interruption inference is a method on RunStatus, not a serialized
             // field; surface it so the JSON consumer gets the same honest verdict
             // the text render prints.
-            "verdict": status.verdict(),
+            "verdict": verdict,
         });
         println!("{}", serde_json::to_string(&report)?);
         return Ok(());
     }
-    render_run_text(&window, &trace, &status);
+    render_run_text(&window, &trace, &status, &autonomy);
     Ok(())
 }
 
@@ -588,7 +591,13 @@ fn compute_run_status(
     })
 }
 
-fn render_run_text(window: &str, trace: &run::RunTrace, status: &run::RunStatus) {
+fn render_run_text(
+    window: &str,
+    trace: &run::RunTrace,
+    status: &run::RunStatus,
+    autonomy: &run::AutonomyReport,
+) {
+    let verdict = status.verdict();
     println!("RUN TRACE ({window})");
     println!(
         "sessions: {}  cards touched: {}",
@@ -623,7 +632,44 @@ fn render_run_text(window: &str, trace: &run::RunTrace, status: &run::RunStatus)
         "current state at trace time: ready={} accepted-without-tasks={} proposed={}",
         status.ready, status.accepted_without_tasks, status.proposed
     );
-    println!("{}", status.verdict());
+    if !autonomy.is_empty() {
+        println!();
+        println!("AUTONOMY");
+        println!("stop reason: {verdict}");
+        println!(
+            "counts: actions={} blocked={} hard_stops={} local_closes={}",
+            autonomy.actions.len(),
+            autonomy.blocked_count,
+            autonomy.hard_stop_count,
+            autonomy.local_close_count
+        );
+        if !autonomy.ledger_paths.is_empty() {
+            println!("ledger path: {}", autonomy.ledger_paths.join(", "));
+        }
+        if let Some(authority) = &autonomy.authority_ref {
+            println!("authority: {authority}");
+        }
+        if !autonomy.actions.is_empty() {
+            let rows: Vec<Vec<String>> = autonomy
+                .actions
+                .iter()
+                .map(|action| {
+                    vec![
+                        action.at.clone(),
+                        action.action.clone(),
+                        format!("{}:{}", action.target_kind, action.target_id),
+                        action.result.clone(),
+                        action.command.clone(),
+                    ]
+                })
+                .collect();
+            print!(
+                "{}",
+                table::render_table(&["AT", "ACTION", "TARGET", "RESULT", "COMMAND"], &rows)
+            );
+        }
+    }
+    println!("{verdict}");
 }
 
 #[derive(Debug)]

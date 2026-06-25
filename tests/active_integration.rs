@@ -15,6 +15,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use card_support::cards_repo;
 use maestro::foundation::core::time::format_utc_seconds_rfc3339_millis;
+use serde_json::Value;
 
 /// Mint a card and return its id, captured from `create --id-only`.
 fn create_id(repo: &Path, args: &[&str]) -> String {
@@ -105,6 +106,35 @@ fn clear_runs(repo: &Path) {
     if runs.exists() {
         fs::remove_dir_all(&runs).expect("invariant: runs dir should be removable");
     }
+}
+
+fn age_session(repo: &Path, session: &str, minutes: u64) {
+    let path = repo
+        .join(".maestro/runs")
+        .join(session)
+        .join("events.jsonl");
+    let ts = ts_minutes_ago(minutes);
+    let aged = fs::read_to_string(&path)
+        .expect("invariant: session event log should exist")
+        .lines()
+        .map(|line| {
+            let mut value: Value =
+                serde_json::from_str(line).expect("invariant: event log line should be JSON");
+            value["ts"] = Value::String(ts.clone());
+            serde_json::to_string(&value).expect("invariant: event log line should serialize")
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    fs::write(path, format!("{aged}\n")).expect("invariant: aged event log should be writable");
+}
+
+fn run_log(repo: &Path, session: &str) -> String {
+    fs::read_to_string(
+        repo.join(".maestro/runs")
+            .join(session)
+            .join("events.jsonl"),
+    )
+    .expect("invariant: session event log should exist")
 }
 
 fn line_with<'a>(output: &'a str, needle: &str) -> &'a str {
@@ -376,6 +406,156 @@ fn ownership_events_keep_quiet_and_unconfirmed_sessions_visible() {
     assert!(
         line_with(&out, "old-owned-sess").contains("[unconfirmed"),
         "owned session past two hours is still visible by default\n{out}"
+    );
+}
+
+#[test]
+fn design_mutations_acquire_ownership_so_quiet_design_is_not_idle() {
+    let temp = cards_repo("active-design-mutations-own");
+    let repo = temp.path();
+    clear_runs(repo);
+
+    run(
+        repo,
+        &[("MAESTRO_SESSION_ID", "design-sess")],
+        &[
+            "feature",
+            "new",
+            "Design Owned",
+            "--description",
+            "map current state",
+        ],
+    );
+    run(
+        repo,
+        &[("MAESTRO_SESSION_ID", "design-sess")],
+        &[
+            "feature",
+            "set",
+            "design-owned",
+            "--question",
+            "Which ownership boundary?",
+        ],
+    );
+    run(
+        repo,
+        &[("MAESTRO_SESSION_ID", "design-sess")],
+        &[
+            "decision",
+            "new",
+            "Adopt explicit ownership",
+            "--feature",
+            "design-owned",
+        ],
+    );
+    run(
+        repo,
+        &[("MAESTRO_SESSION_ID", "design-sess")],
+        &[
+            "feature",
+            "spec",
+            "design-owned",
+            "--section",
+            "Current state",
+            "--append",
+            "Observed card_touch-only idle drift.",
+        ],
+    );
+
+    let events = run_log(repo, "design-sess");
+    assert!(
+        events.contains(r#""event_type":"ownership_acquire""#),
+        "design mutations should acquire ownership\n{events}"
+    );
+    age_session(repo, "design-sess", 10);
+
+    let active = run(repo, &[], &["active"]);
+    let line = line_with(&active, "design-sess");
+    assert!(
+        line.contains("[quiet-working"),
+        "quiet design owner should not fall back to idle\n{active}"
+    );
+    assert!(
+        !line.contains("[idle"),
+        "ownership-acquired design work must not render idle\n{active}"
+    );
+}
+
+#[test]
+fn generic_card_mutations_acquire_ownership_without_claim() {
+    let temp = cards_repo("active-card-mutations-own");
+    let repo = temp.path();
+    clear_runs(repo);
+
+    let card = run(
+        repo,
+        &[("MAESTRO_SESSION_ID", "card-sess")],
+        &["create", "-t", "bug", "Owned Bug", "--id-only"],
+    )
+    .trim()
+    .to_string();
+    run(
+        repo,
+        &[("MAESTRO_SESSION_ID", "card-sess")],
+        &["note", &card, "captured repro"],
+    );
+    run(
+        repo,
+        &[("MAESTRO_SESSION_ID", "card-sess")],
+        &["card", "update", &card, "--description", "write path"],
+    );
+
+    let events = run_log(repo, "card-sess");
+    assert!(
+        events.contains(r#""event_type":"ownership_acquire""#),
+        "generic card mutations should acquire ownership\n{events}"
+    );
+    age_session(repo, "card-sess", 10);
+
+    let active = run(repo, &[], &["active"]);
+    let line = line_with(&active, "card-sess");
+    assert!(
+        line.contains("[quiet-working"),
+        "quiet card mutation owner should not fall back to idle\n{active}"
+    );
+}
+
+#[test]
+fn generic_card_status_updates_release_instead_of_reacquire() {
+    let temp = cards_repo("active-card-status-release");
+    let repo = temp.path();
+    clear_runs(repo);
+
+    let card = run(
+        repo,
+        &[("MAESTRO_SESSION_ID", "status-sess")],
+        &["create", "-t", "bug", "Closable Bug", "--id-only"],
+    )
+    .trim()
+    .to_string();
+    run(
+        repo,
+        &[("MAESTRO_SESSION_ID", "status-sess")],
+        &["card", "update", &card, "--status", "closed"],
+    );
+
+    let events = run_log(repo, "status-sess");
+    let acquire = events
+        .find(r#""event_type":"ownership_acquire""#)
+        .expect("invariant: create should acquire ownership");
+    let release = events
+        .rfind(r#""event_type":"ownership_release""#)
+        .expect("status close should release ownership");
+    assert!(
+        release > acquire && events.contains(r#""status":"done""#),
+        "terminal status updates should release after the acquire\n{events}"
+    );
+
+    let active = run(repo, &[], &["active"]);
+    let line = line_with(&active, "status-sess");
+    assert!(
+        line.contains("[done") && !line.contains("[quiet-working"),
+        "terminal status update must not leave the session working\n{active}"
     );
 }
 

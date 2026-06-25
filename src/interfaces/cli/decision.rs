@@ -148,7 +148,7 @@ fn lock_decision(
 /// A global decision has no feature, so nothing is bound.
 fn emit_feature_touch(paths: &MaestroPaths, record: &decisions::schema::DecisionRecord) {
     if let Some(feature_id) = record.feature.as_deref() {
-        super::emit_card_touch(paths, feature_id);
+        super::emit_work_touch(paths, feature_id);
     }
 }
 

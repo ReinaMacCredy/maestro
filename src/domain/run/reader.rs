@@ -139,6 +139,50 @@ impl RunEvent {
         self.string("topic")
     }
 
+    pub fn authority_ref(&self) -> Option<&str> {
+        self.string("authority_ref")
+    }
+
+    pub fn authority_summary(&self) -> Option<&str> {
+        self.string("authority_summary")
+    }
+
+    pub fn prompt_hash(&self) -> Option<&str> {
+        self.string("prompt_hash")
+    }
+
+    pub fn hard_stops(&self) -> Vec<&str> {
+        self.string_array("hard_stops")
+    }
+
+    pub fn autonomy_action(&self) -> Option<&str> {
+        self.string("action")
+    }
+
+    pub fn target_kind(&self) -> Option<&str> {
+        self.string("target_kind")
+    }
+
+    pub fn target_id(&self) -> Option<&str> {
+        self.string("target_id")
+    }
+
+    pub fn before_state(&self) -> Option<&str> {
+        self.string("before_state")
+    }
+
+    pub fn command(&self) -> Option<&str> {
+        self.string("command")
+    }
+
+    pub fn result(&self) -> Option<&str> {
+        self.string("result")
+    }
+
+    pub fn after_state(&self) -> Option<&str> {
+        self.string("after_state")
+    }
+
     /// Proof claim list, when present.
     pub fn claims(&self) -> Vec<String> {
         self.value
@@ -158,6 +202,16 @@ impl RunEvent {
 
     fn string(&self, field: &str) -> Option<&str> {
         self.value.get(field).and_then(Value::as_str)
+    }
+
+    fn string_array(&self, field: &str) -> Vec<&str> {
+        self.value
+            .get(field)
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .collect()
     }
 }
 

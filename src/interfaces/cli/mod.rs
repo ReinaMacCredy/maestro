@@ -1974,6 +1974,11 @@ pub(super) fn emit_ownership_acquire(paths: &MaestroPaths, card_id: &str) {
     }
 }
 
+pub(super) fn emit_work_touch(paths: &MaestroPaths, card_id: &str) {
+    emit_card_touch(paths, card_id);
+    emit_ownership_acquire(paths, card_id);
+}
+
 pub(super) fn emit_ownership_release(
     paths: &MaestroPaths,
     card_id: &str,

@@ -74,18 +74,19 @@ pub(crate) fn is_accepted_event(event_type: &str) -> bool {
         .events
         .iter()
         .any(|event| event.as_str() == event_type)
-          // SkillActivation, card_touch, and ownership events are CLI-synthesized,
-          // not hook events, so they are accepted here without being part of the
-          // installed hook contract.
-          || matches!(
-              event_type,
-              "SkillActivation"
-                  | "skill_activation"
-                  | "card_touch"
-                  | "ownership_acquire"
-                  | "ownership_release"
-                  | "scope_declaration"
-          )
+        // These events are CLI/manual synthesized, not installed hook events,
+        // so they are accepted here without joining the installed hook contract.
+        || matches!(
+            event_type,
+            "SkillActivation"
+                | "skill_activation"
+                | "card_touch"
+                | "ownership_acquire"
+                | "ownership_release"
+                | "scope_declaration"
+                | "autonomy_start"
+                | "autonomy_action"
+        )
 }
 
 /// Normalize event aliases into the persisted event type.
@@ -208,6 +209,8 @@ mod tests {
         assert!(is_accepted_event("card_touch"));
         assert!(is_accepted_event("ownership_acquire"));
         assert!(is_accepted_event("ownership_release"));
+        assert!(is_accepted_event("autonomy_start"));
+        assert!(is_accepted_event("autonomy_action"));
     }
 
     #[test]

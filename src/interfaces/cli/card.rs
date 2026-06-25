@@ -240,8 +240,7 @@ pub fn claim(args: ClaimArgs) -> Result<()> {
     };
     let identity = claim_identity();
     let outcome = card::edit::claim(&paths, &args.id, &identity, &utc_now_timestamp())?;
-    super::emit_card_touch(&paths, &args.id);
-    super::emit_ownership_acquire(&paths, &args.id);
+    super::emit_work_touch(&paths, &args.id);
     print_claim_outcome(&args.id, &identity, &outcome);
     nudge_if_holding_other_in_progress(&paths, &identity, &args.id);
     Ok(())
@@ -326,7 +325,7 @@ pub fn note(args: NoteArgs) -> Result<()> {
         return Ok(());
     };
     let created = card::edit::append_note(&paths, &args.id, &args.text, &utc_now_timestamp())?;
-    super::emit_card_touch(&paths, &args.id);
+    super::emit_work_touch(&paths, &args.id);
     if created {
         println!("noted {} (notes.md created)", args.id);
     } else {
@@ -415,7 +414,7 @@ pub fn create(args: CreateArgs) -> Result<()> {
         new_card.active_form = args.active_form.clone();
         new_card.project = project.clone();
         card::store::create_card(&paths, &new_card)?;
-        super::emit_card_touch(&paths, &id);
+        super::emit_work_touch(&paths, &id);
         if args.id_only {
             println!("{id}");
         } else {
@@ -607,11 +606,10 @@ pub fn update(args: UpdateArgs) -> Result<()> {
     if c != resolved.card {
         card::store::save_resolved(&c, &resolved)?;
     }
-    super::emit_card_touch(&paths, id);
+    emit_update_liveness(&paths, id, args.status.as_deref());
     // `update --claim` shares the claim seam, so it shares the focus nudge. The
     // advisory is STDERR-only, so it is safe to emit before the JSON return.
     if let Some((identity, _)) = claim_outcome.as_ref() {
-        super::emit_ownership_acquire(&paths, id);
         nudge_if_holding_other_in_progress(&paths, identity, id);
     }
     if args.json {
@@ -625,6 +623,24 @@ pub fn update(args: UpdateArgs) -> Result<()> {
         print_claim_outcome(id, &identity, &outcome);
     }
     Ok(())
+}
+
+fn emit_update_liveness(paths: &MaestroPaths, id: &str, status: Option<&str>) {
+    match status.and_then(card::query::coarse_of) {
+        Some(card::query::Coarse::Open) => super::emit_ownership_release(
+            paths,
+            id,
+            super::OwnershipReleaseStatus::Released,
+            Some("card update status"),
+        ),
+        Some(card::query::Coarse::Closed) => super::emit_ownership_release(
+            paths,
+            id,
+            super::OwnershipReleaseStatus::Done,
+            Some("card update status"),
+        ),
+        _ => super::emit_work_touch(paths, id),
+    }
 }
 
 /// Execute `maestro close <id>`: move the card to the uniform terminal status

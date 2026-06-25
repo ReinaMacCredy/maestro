@@ -2,6 +2,7 @@
 
 mod active;
 mod append;
+mod autonomy;
 mod discovery;
 mod event;
 mod evidence;
@@ -17,6 +18,7 @@ pub use active::{
 pub(crate) use append::{
     append_jsonl_line, append_manual_event, insert_agent_runtime, open_managed_appendable,
 };
+pub use autonomy::{AutonomyActionRow, AutonomyReport, assemble_autonomy_report};
 pub use discovery::{RunEventLog, managed_event_logs};
 #[cfg(test)]
 pub(crate) use event::is_accepted_event;
