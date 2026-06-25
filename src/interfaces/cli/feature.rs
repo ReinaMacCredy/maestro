@@ -75,6 +75,9 @@ pub fn run(args: FeatureArgs) -> Result<()> {
             dry_run,
         } => {
             let report = accept_feature(&paths, &id, qa, reason, dry_run)?;
+            if !dry_run && report.changed {
+                super::emit_work_touch(&paths, &report.id);
+            }
             print_note(report.note)?;
             if report.changed && report.status == FeatureStatus::Ready {
                 println!("next: maestro feature prepare {} --draft", report.id);
@@ -130,8 +133,7 @@ pub fn run(args: FeatureArgs) -> Result<()> {
         ),
         FeatureCommand::Start { id } => {
             let report = feature::start(&paths, &id)?;
-            super::emit_card_touch(&paths, &id);
-            super::emit_ownership_acquire(&paths, &id);
+            super::emit_work_touch(&paths, &id);
             print_note(report.note)?;
             print_uncovered_acceptance_warning(&paths, &id, CoverageFix::Locked)
         }
@@ -176,6 +178,7 @@ pub fn run(args: FeatureArgs) -> Result<()> {
         },
         FeatureCommand::Note { id, text } => {
             let report = feature::note(&paths, &id, &text)?;
+            super::emit_work_touch(&paths, &report.id);
             if report.created {
                 println!("noted {} (notes.md created)", report.id);
             } else {
@@ -272,8 +275,7 @@ fn prepare_feature(
         (Some(plan_file), false, false) => {
             let actor = super::actor();
             let report = feature_prepare::prepare_from_file(paths, id, plan_file, &actor)?;
-            super::emit_card_touch(paths, id);
-            super::emit_ownership_acquire(paths, id);
+            super::emit_work_touch(paths, id);
             print_prepare_report(&report);
             print_uncovered_acceptance_warning(paths, id, CoverageFix::Locked)?;
             Ok(())
@@ -296,8 +298,7 @@ fn prepare_feature(
             write_string_atomic(&path, &plan)?;
             let actor = super::actor();
             let report = feature_prepare::prepare_from_file(paths, id, &path, &actor)?;
-            super::emit_card_touch(paths, id);
-            super::emit_ownership_acquire(paths, id);
+            super::emit_work_touch(paths, id);
             print_prepare_report(&report);
             print_uncovered_acceptance_warning(paths, id, CoverageFix::Locked)?;
             Ok(())
@@ -419,6 +420,7 @@ fn verify_feature(
     );
     let report = feature::verify_feature(paths, id, updates)?;
     if let Some(recorded) = report.recorded {
+        super::emit_work_touch(paths, &report.feature_id);
         println!("recorded {recorded}");
         return after_prove_autoclose(paths, &report.feature_id, no_close, outcome);
     }
@@ -709,7 +711,7 @@ fn new_feature(
             },
         )?;
     }
-    super::emit_card_touch(paths, &id);
+    super::emit_work_touch(paths, &id);
     if id_only {
         println!("{id}");
         return Ok(());
@@ -731,7 +733,7 @@ fn set_feature(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> Result<(
         );
     }
     let report = feature::set_with_report(paths, id, edits)?;
-    super::emit_card_touch(paths, id);
+    super::emit_work_touch(paths, id);
     print_set_report(id, &report);
     println!("next: maestro feature accept {id}");
     if !report.view.open_questions.is_empty() {
@@ -856,7 +858,9 @@ fn amend_feature(
             "no values to amend\n  maestro feature amend {id} --add-acceptance \"<criterion>\" --reason \"<why>\"\n  add-flags: --add-acceptance --add-area --add-non-goal --add-question"
         );
     }
-    print_note(feature::amend(paths, id, additions, reason)?.note)
+    let note = feature::amend(paths, id, additions, reason)?.note;
+    super::emit_work_touch(paths, id);
+    print_note(note)
 }
 
 fn cancel_feature(paths: &MaestroPaths, id: &str, reason: &str, dry_run: bool) -> Result<()> {
@@ -1159,7 +1163,7 @@ fn write_feature_spec(
     replace: bool,
 ) -> Result<()> {
     let report = feature::write_spec_section(paths, id, section, text, replace)?;
-    super::emit_card_touch(paths, id);
+    super::emit_work_touch(paths, id);
     let verb = if replace { "replaced" } else { "appended to" };
     let created = if report.created_section {
         " (new section)"
