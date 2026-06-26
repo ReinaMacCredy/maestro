@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-version: 1.29.0
+version: 1.30.0
 description: "Use when the user wants to brainstorm, design, plan, choose wording, or decide a workflow, skill, harness, card/task/feature, architecture, UX, or agent-process change in a project using Maestro before implementation."
 ---
 
@@ -14,18 +14,18 @@ contract.
 Maestro work has three levels:
 
 ```text
-High = container Card
-Mid  = workflow/lifecycle Card
+High = Card
+Mid  = CardKind / workflow kind
 Low  = Task
 ```
 
-Feature is the usual high container. Bug, Chore, Custom, Decision, Idea, and
-Progress are mid workflow/lifecycle cards. A Task is the low executable unit,
-not a CardType in the target model; legacy `type: task` cards stay readable for
-compatibility. For tiny same-session work, design toward the low-ceremony
-`task add/start/done/list` surface backed by a Progress card's `progress.yml`.
-Use facets (`spec.md`, `qa.md`, `notes.md`) for any card type that needs
-contract, evidence, or history, not only features.
+Card is the only high-level durable work object. Feature, Bug, Chore, Custom,
+Decision, Idea, and Progress are CardKinds / workflow kinds on cards. A Task is
+the low executable unit, not a CardType in the target model; legacy `type: task`
+cards stay readable for compatibility. For tiny same-session work, design
+toward the low-ceremony `task add/start/done/list` surface backed by a Progress
+card's `progress.yml`. Use facets (`spec.md`, `qa.md`, `notes.md`) for any card
+type that needs contract, evidence, or history, not only features.
 
 Activate with a known session id:
 `maestro hook record --event skill_activation --skill maestro-design --session <session_id>`
@@ -53,7 +53,10 @@ never auto-links. Linked cards exchange messages with `maestro msg send
 <their-card> "<text>"` and `maestro msg read`; an `[inbox] N new` line on
 STDERR before any command means a linked peer is waiting. Act on the banner
 before unrelated work and run `maestro msg read`, as maestro-card already does.
-Reply when the message poses a question or needs a decision; an FYI needs no reply.
+Inbox is advisory coordination: it can suggest a cross-card Task dependency,
+but it never blocks execution by itself. Record explicit Task
+blockers/dependencies when ordering matters. Reply when the message poses a
+question or needs a decision; an FYI needs no reply.
 maestro never auto-reads or auto-replies; you do.
 
 ## Do

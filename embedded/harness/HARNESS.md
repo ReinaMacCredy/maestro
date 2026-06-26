@@ -1,5 +1,5 @@
 ---
-version: 1.24.0
+version: 1.26.0
 ---
 
 # Maestro Harness Protocol
@@ -11,11 +11,12 @@ Maestro is a loop harness: low-level Tasks are the executable loop; verify + qa
 are the stop hook (no unbacked claim lands); decisions + friction + skills are
 the compounding memory; `maestro loop` lists the orchestration recipes.
 
-Work has three levels: High container Cards, Mid workflow/lifecycle Cards, and
-Low Tasks. Progress is a lightweight Mid card that stores many Low Tasks in
-`progress.yml`; use it through `maestro task add/start/done/list` for small
-work. Tasks are executable units, not target CardTypes; legacy `type: task`
-cards remain readable for compatibility.
+Work has three levels: High = Card, Mid = CardKind / workflow kind, and Low =
+Task. Feature, Bug, Chore, Custom, Decision, Idea, and Progress are CardKinds,
+not separate high-level objects. Progress is a lightweight CardKind that stores
+many Low Tasks in `progress.yml`; use it through `maestro task
+add/start/done/list` for small work. Tasks are executable units, not target
+CardTypes; legacy `type: task` cards remain readable for compatibility.
 
 ## Shared protocol (all agents)
 1. Start with `maestro status`; honor MAESTRO_CURRENT_TASK env or `maestro task show <id>` when a current task is set.
@@ -33,7 +34,15 @@ cards remain readable for compatibility.
 7. Hooks auto-record your tool calls as proof. Verification matches each `--claim` against recorded or inline proof - an empty or unbacked claim fails.
 8. When the user corrects your behavior, record it with
    `maestro event intervention --note "<what was wrong>"`.
-9. Before proposing an idea or re-opening a settled question, run `maestro card list --grep <topic> --archived` and cite any precedent card in the proposal.
+9. Before proposing an idea or re-opening a settled question, search precedent
+   with `maestro grep "<topic> corpus:memory"` and cite the best matching card,
+   decision, task, proof, or note. Use `maestro card list --grep <topic>
+   --archived` only when the user asks for exact card rows, you are verifying
+   legacy card-list behavior, or unified grep is too broad or surprising.
+10. Linked-card inbox messages are advisory coordination signals only. They may
+    suggest a cross-card task order, but they do not block execution. When order
+    matters, record an explicit Task blocker/dependency; readiness, next, claim,
+    and verification gates consult Task blockers, not messages or unread state.
 
 ## Code style
 

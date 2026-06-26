@@ -1,8 +1,8 @@
 # Task Work
 
 The work loop for executable Tasks. A Task is the atomic unit of implementation.
-Cards are higher-level records: Feature is the high contract container; Bug,
-Chore, Custom, Decision, Idea, and Progress are mid workflow/lifecycle records.
+Cards are the high-level durable work objects. Feature, Bug, Chore, Custom,
+Decision, Idea, and Progress are CardKinds / workflow kinds on those cards.
 Progress is the lightweight Task container for small same-session work.
 
 ## Use
@@ -271,6 +271,13 @@ Coordinate or reply with `maestro msg send <their-card> "<text>"`: the sender
 is your current card, and a send is rejected unless the pair is still linked.
 Reply when the message poses a question or needs a decision; an FYI needs no reply.
 Messaging is pull-only -- nothing reaches the peer until that agent reads.
+
+Inbox messages are advisory coordination signals. They may surface a possible
+cross-card task order, but they do not block execution and are not dependency
+records. If order matters, record an explicit Task blocker, for example
+`maestro task block <dependent-task> --reason "<why>" --by <blocking-task>`.
+Readiness, `task next`, claiming, and verification consult Task blockers, not
+messages or unread state.
 
 ## Stop
 

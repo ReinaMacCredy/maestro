@@ -31,8 +31,8 @@ Everything is repo-local and reviewable in a diff.
 maestro uses a three-level work model:
 
 ```text
-High = container card
-Mid  = workflow/lifecycle card
+High = card
+Mid  = CardKind / workflow kind
 Low  = task
 ```
 
@@ -41,12 +41,12 @@ is the atomic executable progress unit. A **facet** is an optional sidecar that
 describes or proves a card.
 
 Cards live under `.maestro/cards/<id>/`; `card.yaml` carries identity, type,
-state, parent, ownership, links, and timestamps. Feature cards are high-level
-containers. Bug, Chore, Custom, Decision, Idea, and Progress cards are mid-level
-workflow records. Progress is the lightweight Mid card for small work: its
-`progress.yml` stores many Low Tasks compactly without requiring the full
-feature pipeline. Facets such as `spec.md`, `qa.md`, and `notes.md` are optional
-sidecars for any card type that needs contract, evidence, or history.
+state, parent, ownership, links, and timestamps. Feature, Bug, Chore, Custom,
+Decision, Idea, and Progress are CardKinds / workflow kinds on cards, not
+separate high-level objects. Progress is the lightweight CardKind for small
+work: its `progress.yml` stores many Low Tasks compactly without requiring the
+full feature pipeline. Facets such as `spec.md`, `qa.md`, and `notes.md` are
+optional sidecars for any card type that needs contract, evidence, or history.
 
 ![Maestro card model](docs/readme/maestro-card-model.png)
 
@@ -63,10 +63,10 @@ layer on top of the same card and task records.
 ## How It Works
 
 Cards are durable planning/governance records; Tasks are durable executable
-progress records. The agent orients around High and Mid Cards, uses flat card
-queries for card context, and uses `maestro task ...` for Low-level executable
-work. Typed lifecycle verbs still gate feature contracts, decision locks, proof,
-QA, and harness measurement.
+progress records. The agent orients around Cards, uses flat card queries for
+card context, and uses `maestro task ...` for Low-level executable work. Typed
+lifecycle verbs still gate feature contracts, decision locks, proof, QA, and
+harness measurement.
 
 ```mermaid
 flowchart LR
@@ -97,12 +97,12 @@ The card type controls which lifecycle verbs are valid:
 
 | Type | Level | Role | Main verbs |
 | --- | --- | --- | --- |
-| `feature` | High Card | Product contract and parent container | `feature accept`, `feature prepare`, `feature verify`, `feature close`, `archive` |
-| `bug` / `chore` / `custom` | Mid Card | Workflow cards with their own lifecycle and optional facets | card/task lifecycle verbs, proof and close flows when gated |
-| `progress` | Mid Card | Lightweight container for compact Low Tasks in `progress.yml` | `task add`, `task list`, `task start`, `task done` over Progress-backed tasks |
-| legacy `task` cards | Mid Card compatibility | Compatibility implementation cards | `ready`, `claim`, `task complete`, `task verify`, `close` |
-| `idea` | Mid Card | Harness/self-improvement proposal | `harness list`, `harness apply`, `harness dismiss`, `harness measure` |
-| `decision` | Mid Card | Durable reasoning record | `decision new`, `decision lock`, `decision show` |
+| `feature` | CardKind | Product contract and parent container | `feature accept`, `feature prepare`, `feature verify`, `feature close`, `archive` |
+| `bug` / `chore` / `custom` | CardKind | Workflow cards with their own lifecycle and optional facets | card/task lifecycle verbs, proof and close flows when gated |
+| `progress` | CardKind | Lightweight container for compact Low Tasks in `progress.yml` | `task add`, `task list`, `task start`, `task done` over Progress-backed tasks |
+| legacy `task` cards | Compatibility | Compatibility implementation cards | `ready`, `claim`, `task complete`, `task verify`, `close` |
+| `idea` | CardKind | Harness/self-improvement proposal | `harness list`, `harness apply`, `harness dismiss`, `harness measure` |
+| `decision` | CardKind | Durable reasoning record | `decision new`, `decision lock`, `decision show` |
 | Low Task | Task | Executable unit with `card_id` and blocker metadata | task list/start/done, verify/proof when required |
 
 `parent` is hierarchy, not an execution blocker. Task readiness is computed from
@@ -258,7 +258,9 @@ or touch a card before sending. `msg send` confirms the route as
 `sent to <their-card> (from <your-card>)`. `msg read [card]` prints recent seen context plus unread
 partner messages and advances this card's cursor. `msg list [card]` shows either a channel overview
 (`your unread`, peer read-through when known, and last-message direction) or one partner's full
-timeline.
+timeline. `msg read` and scoped `msg list <card>` also remind agents that inbox messages are
+advisory only: they can suggest cross-card Task order, but execution is gated only by explicit Task
+blockers such as `maestro task block <dependent-task> --by <blocking-task>`.
 
 Channels live under `.maestro/channels/` as gitignored machine-local state: a JSONL file per linked
 pair plus per-card cursor files. If your current card has unread messages on still-linked channels,

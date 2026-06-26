@@ -23,6 +23,7 @@ use crate::interfaces::cli::{MsgArgs, MsgCommand, worktree_roots};
 /// How many already-seen partner messages a read prints as context above the
 /// unread block (`dec-msg-verbs-read-model-send-link-gated-52f6`).
 const CONTEXT_LIMIT: usize = 5;
+const TASK_ORDERING_HINT: &str = "hint: inbox is advisory; enforce ordering with explicit task blockers: maestro task block <id> --by <task-id>";
 
 pub fn run(args: MsgArgs) -> Result<()> {
     match args.command {
@@ -191,6 +192,9 @@ fn list(scope: Option<&str>) -> Result<()> {
                 };
                 println!("  {who}  {}  {}", message.ts, message.text);
             }
+            if !channel.messages.is_empty() {
+                print_task_ordering_hint();
+            }
             channel::set_cursor_to_latest(&paths, channel, &me)?;
         }
     }
@@ -225,9 +229,14 @@ fn read_channel(paths: &MaestroPaths, me: &str, channel: &Channel) -> Result<()>
                 message.text
             );
         }
+        print_task_ordering_hint();
     }
     channel::set_cursor_to_latest(paths, channel, me)?;
     Ok(())
+}
+
+fn print_task_ordering_hint() {
+    println!("  {TASK_ORDERING_HINT}");
 }
 
 /// The per-line speaker prefix for a read/list line. A pair channel has none (the

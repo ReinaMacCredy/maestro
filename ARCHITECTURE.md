@@ -2,7 +2,8 @@
 
 **Status:** as-built, 2026-06-26. §2 describes the shipped card/task model (the
 unified card store from `SPEC-beads-model.md`, updated with the D17 Progress card
-model). §3 records what the rewrite collapsed and the deviations kept.
+model and the Card/CardKind/Task taxonomy). §3 records what the rewrite
+collapsed and the deviations kept.
 
 Related: `./AGENTS.md` (working rules). The full design history (SPEC-beads-model and
 its decision log) lives in untracked working notes, archived after close.
@@ -35,8 +36,8 @@ Four layers; dependencies point one way: **interfaces -> operations -> domain ->
 Maestro uses three work levels:
 
 ```text
-High = container Card
-Mid  = workflow/lifecycle Card
+High = Card
+Mid  = CardKind / workflow kind
 Low  = Task
 ```
 
@@ -62,10 +63,10 @@ generic CARD CORE  -- never changes when a type is added/altered
         ├ card store: placement · id prefix · save basis · reconcile
         ├ card query/edit/CLI: ready/list filters · type hints · close guards
         └ domain lifecycles:
-             feature  (proposed->ready->in_progress->closed, +cancelled) high container
-             progress (in_progress card + progress.yml TaskRecord rows) lightweight mid card
+             feature  (proposed->ready->in_progress->closed, +cancelled) CardKind
+             progress (in_progress card + progress.yml TaskRecord rows) lightweight CardKind
              task     (legacy card-backed TaskRecord compatibility)
-             bug/chore/custom (mid workflow cards that own TaskRecord work)
+             bug/chore/custom (workflow CardKinds that own TaskRecord work)
              idea     (proposed->accepted->measured, +dismissed)
              decision (open->locked, +superseded)
 ```
@@ -117,14 +118,17 @@ site to be reviewed by the compiler.
   (`claim`/`show`/`note`/`dep add`/`archive`), emoji-free, `--json` parity.
 - **edges:** `parent` · structured blockers (`dep add <child> <blocker>`) · `related` ·
   `supersedes` (non-blocking).
+- **linked-card inbox:** `related` links expose an inbox/message coordination
+  channel. Messages are advisory only: they can suggest cross-card task order,
+  but readiness, next, claim, and verification consult explicit Task
+  blockers/dependencies, not inbox unread state.
 - **skills:** one bundled `maestro-card` skill (router `SKILL.md` +
   `reference/{work,feature,verify,qa-baseline,qa-slice}.md`) covers the active-work
   cluster; `maestro-setup` / `maestro-design` / `maestro-audit` stay separate.
 
-Type mapping: feature -> `type:feature` (high container) · custom/bug/chore ->
-mid workflow containers · progress -> lightweight mid card with `progress.yml` ·
-legacy task card -> `type:task` · harness item -> `type:idea` · decision ->
-`type:decision`.
+Type mapping: feature -> `type:feature` CardKind · custom/bug/chore -> workflow
+CardKinds · progress -> lightweight CardKind with `progress.yml` · legacy task
+card -> `type:task` · harness item -> `type:idea` · decision -> `type:decision`.
 
 ---
 

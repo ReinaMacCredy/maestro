@@ -1780,6 +1780,144 @@ fn msg_send_echoes_sender_and_list_shows_direction() {
 }
 
 #[test]
+fn linked_inbox_is_advisory_and_explicit_task_blocker_is_the_execution_gate() {
+    let temp = cards_repo("s2-msg-advisory-task-gate");
+    let repo = temp.path();
+
+    maestro_in_session(repo, "setup", &["create", "-t", "chore", "Api card"]);
+    let api = id_by_title(repo, "Api card");
+    maestro_in_session(repo, "setup", &["create", "-t", "chore", "Ui card"]);
+    let ui = id_by_title(repo, "Ui card");
+    maestro_in_session(repo, "setup", &["link", "add", &api, &ui]);
+
+    maestro_in_session(repo, "api", &["note", &api, "bind"]);
+    maestro_in_session(
+        repo,
+        "api",
+        &["msg", "send", &ui, "API endpoint is done; UI can wire data"],
+    );
+
+    maestro_in_session(repo, "ui", &["note", &ui, "bind"]);
+    let read = maestro_in_session(repo, "ui", &["msg", "read"]);
+    assert!(
+        read.status.success(),
+        "msg read should succeed\nstderr:\n{}",
+        String::from_utf8_lossy(&read.stderr)
+    );
+    let read_out = String::from_utf8_lossy(&read.stdout);
+    assert!(
+        read_out.contains("inbox is advisory")
+            && read_out.contains("maestro task block <id> --by <task-id>"),
+        "msg read should explain that messages are advisory and task blockers enforce order:\n{read_out}"
+    );
+    let list = maestro_in_session(repo, "ui", &["msg", "list", &api]);
+    assert!(
+        list.status.success(),
+        "msg list should succeed\nstderr:\n{}",
+        String::from_utf8_lossy(&list.stderr)
+    );
+    let list_out = String::from_utf8_lossy(&list.stdout);
+    assert!(
+        list_out.contains("inbox is advisory")
+            && list_out.contains("maestro task block <id> --by <task-id>"),
+        "msg list should carry the same advisory boundary:\n{list_out}"
+    );
+
+    maestro_in_session(repo, "api", &["msg", "send", &ui, "second advisory"]);
+    let add = maestro_in_session(repo, "ui", &["task", "add", "Wire UI", "--id-only"]);
+    assert!(
+        add.status.success(),
+        "unread inbox must not block task add\nstderr:\n{}",
+        String::from_utf8_lossy(&add.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&add.stderr).contains("[inbox]"),
+        "task add should still surface the unread inbox banner without blocking:\n{}",
+        String::from_utf8_lossy(&add.stderr)
+    );
+    let wire_ui = String::from_utf8(add.stdout)
+        .expect("task id should be UTF-8")
+        .trim()
+        .to_string();
+
+    let next = maestro_in_session(repo, "ui", &["task", "next"]);
+    assert!(
+        next.status.success(),
+        "unread inbox must not block task next\nstderr:\n{}",
+        String::from_utf8_lossy(&next.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&next.stdout).contains(&wire_ui),
+        "task next should still point at the ready task while inbox is unread:\n{}",
+        String::from_utf8_lossy(&next.stdout)
+    );
+
+    let start = maestro_in_session(repo, "ui", &["task", "start", &wire_ui]);
+    assert!(
+        start.status.success(),
+        "unread inbox must not block task start\nstderr:\n{}",
+        String::from_utf8_lossy(&start.stderr)
+    );
+    let done = maestro_in_session(
+        repo,
+        "ui",
+        &["task", "done", &wire_ui, "--summary", "wired UI"],
+    );
+    assert!(
+        done.status.success(),
+        "unread inbox must not block low-ceremony task verification\nstderr:\n{}",
+        String::from_utf8_lossy(&done.stderr)
+    );
+
+    let endpoint = String::from_utf8(
+        maestro_in_session(
+            repo,
+            "ui",
+            &["task", "add", "Implement endpoint", "--id-only"],
+        )
+        .stdout,
+    )
+    .expect("task id should be UTF-8")
+    .trim()
+    .to_string();
+    let blocked_ui = String::from_utf8(
+        maestro_in_session(repo, "ui", &["task", "add", "Blocked UI", "--id-only"]).stdout,
+    )
+    .expect("task id should be UTF-8")
+    .trim()
+    .to_string();
+    let block = maestro_in_session(
+        repo,
+        "ui",
+        &[
+            "task",
+            "block",
+            &blocked_ui,
+            "--reason",
+            "waiting on endpoint",
+            "--by",
+            &endpoint,
+        ],
+    );
+    assert!(
+        block.status.success(),
+        "explicit task blocker should be recordable\nstderr:\n{}",
+        String::from_utf8_lossy(&block.stderr)
+    );
+
+    let blocked_start = maestro_in_session(repo, "ui", &["task", "start", &blocked_ui]);
+    assert!(
+        !blocked_start.status.success(),
+        "explicit task blocker must block task start"
+    );
+    assert!(
+        String::from_utf8_lossy(&blocked_start.stderr).contains("unresolved blockers"),
+        "explicit blocker failure should name unresolved blockers:\n{}",
+        String::from_utf8_lossy(&blocked_start.stderr)
+    );
+}
+
+#[test]
 fn msg_send_from_asserts_current_card_without_impersonating() {
     let temp = cards_repo("s2-msg-from-assertion");
     let repo = temp.path();

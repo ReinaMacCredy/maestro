@@ -1,17 +1,19 @@
 ---
 name: maestro-card
-version: 1.32.0
+version: 1.33.0
 description: "Use when the user wants to implement, fix, verify, QA, close, release, or continue work tracked by Maestro cards/features/tasks in a project using Maestro after design is approved."
 ---
 
 # Maestro Card
 
-Maestro uses three work levels: high container Cards, mid workflow/lifecycle
-Cards, and low executable Tasks. Progress is a lightweight mid card that stores
-many low Tasks in `progress.yml`; legacy `type: task` cards remain readable for
-compatibility. This skill covers the active-work cluster: the task work loop,
-card/feature lifecycle, proof, and QA gates. Design (`maestro-design`), audit
-(`maestro-audit`), and setup (`maestro-setup`) have their own skills.
+Maestro uses three work levels: High = Card, Mid = CardKind / workflow kind,
+and Low = Task. Feature, Bug, Chore, Custom, Decision, Idea, and Progress are
+CardKinds, not separate high-level objects. Progress is a lightweight CardKind
+that stores many low Tasks in `progress.yml`; legacy `type: task` cards remain
+readable for compatibility. This skill covers the active-work cluster: the task
+work loop, card/feature lifecycle, proof, and QA gates. Design
+(`maestro-design`), audit (`maestro-audit`), and setup (`maestro-setup`) have
+their own skills.
 
 Activate with a known session id:
 `maestro hook record --event skill_activation --skill maestro-card --session <session_id>`
@@ -23,7 +25,10 @@ auto-links. Once linked, coordinate through the channel: `maestro msg send
 <their-card> "<text>"` and `maestro msg read`. An `[inbox] N new (...) ->
 maestro msg read` line on STDERR before any command means a linked peer is
 waiting -- clear it with `maestro msg read` (see [reference/work.md](reference/work.md)).
-Reply when the message poses a question or needs a decision; an FYI needs no reply.
+Inbox messages are advisory coordination only: they can suggest an ordering
+relationship, but they do not block work. Record an explicit Task blocker when
+execution order matters. Reply when the message poses a question or needs a
+decision; an FYI needs no reply.
 When any other session is live as you start implementing, follow the
 conflict-handoff protocol in HARNESS.md: worktree-isolate, link + `maestro
 conflict` on a file you will share, merge back then `--clear`. The full dance
