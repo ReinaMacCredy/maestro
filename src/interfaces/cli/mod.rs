@@ -391,6 +391,7 @@ pub enum RootCommand {
     #[command(about = "Hook entry points invoked by the agent harness")]
     Hook(HookArgs),
     #[command(
+        hide = true,
         about = "Read-only Mission Control dashboard (preview, JSON, render-check)",
         after_help = "Examples:\n  maestro mission-control --preview --size 120x40 --format plain\n  maestro mission-control --json\n  maestro mission-control --render-check --size 120x40"
     )]
@@ -1836,6 +1837,9 @@ pub struct MissionControlArgs {
     /// Output the current Mission Control snapshot as JSON.
     #[arg(long, conflicts_with_all = ["preview", "screen", "render_check", "format", "size"])]
     pub json: bool,
+    /// Renderer to use for preview/render-check; no flags default to the restored OpenTUI app.
+    #[arg(long, value_enum)]
+    pub renderer: Option<MissionControlRenderer>,
     /// Render a read-only preview frame. Omit value for the dashboard.
     #[arg(long, num_args = 0..=1, default_missing_value = "dashboard")]
     pub preview: Option<Option<String>>,
@@ -1860,6 +1864,12 @@ pub struct MissionControlArgs {
 pub enum MissionControlFormat {
     Plain,
     Ansi,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+pub enum MissionControlRenderer {
+    Rust,
+    Opentui,
 }
 
 #[derive(Debug, Args)]
@@ -2355,6 +2365,7 @@ mod tests {
         assert_eq!(preview.preview, Some(Some("dashboard".to_string())));
         assert_eq!(preview.size.as_deref(), Some("120x40"));
         assert_eq!(preview.format, Some(MissionControlFormat::Plain));
+        assert_eq!(preview.renderer, None);
 
         let cards = parse_mission_control(&[
             "maestro",
@@ -2366,6 +2377,16 @@ mod tests {
         ]);
         assert_eq!(cards.screen.as_deref(), Some("cards"));
         assert_eq!(cards.feature.as_deref(), Some("feat-x"));
+
+        let opentui = parse_mission_control(&[
+            "maestro",
+            "mission-control",
+            "--renderer",
+            "opentui",
+            "--preview",
+            "tasks",
+        ]);
+        assert_eq!(opentui.renderer, Some(MissionControlRenderer::Opentui));
 
         let json = parse_mission_control(&["maestro", "mission-control", "--json"]);
         assert!(json.json);

@@ -59,7 +59,6 @@ fn root_help_lists_top_level_commands() {
             "query",
             "mcp",
             "hook",
-            "mission-control",
             "watch",
             "version",
         ],
@@ -86,6 +85,7 @@ fn root_help_lists_top_level_commands() {
         "  verify ",
         "  migrate ",
         "  migrate-v2 ",
+        "  mission-control ",
     ] {
         assert!(
             !command_section.contains(hidden),
