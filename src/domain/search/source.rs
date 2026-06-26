@@ -69,7 +69,6 @@ struct SourceShard {
     outline_entries: Vec<OutlineEntry>,
     symbols: Vec<SymbolEntry>,
     ctags_status: CtagsStatus,
-    postings: BTreeMap<String, Vec<SourcePosting>>,
     skipped: Vec<SourceSkip>,
 }
 
@@ -79,18 +78,10 @@ struct SourceFile {
     language: String,
     contents: String,
     line_offsets: Vec<LineOffset>,
-    trigram_count: usize,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 struct LineOffset {
-    line: u64,
-    byte_start: usize,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-struct SourcePosting {
-    path: String,
     line: u64,
     byte_start: usize,
 }
@@ -252,12 +243,18 @@ pub(crate) fn rebuild_source_unlocked(paths: &MaestroPaths) -> Result<SourceRebu
     let candidates = source_manifest(paths, &mut skipped)?;
     let mut files = Vec::new();
     let mut outline_entries = Vec::new();
-    let mut postings: BTreeMap<String, Vec<SourcePosting>> = BTreeMap::new();
 
     for entry in &candidates {
         let path = paths.repo_root().join(&entry.path);
         let bytes = std::fs::read(&path)
             .with_context(|| format!("failed to read source candidate {}", entry.path))?;
+        if bytes.contains(&0) {
+            skipped.push(SourceSkip {
+                path: entry.path.clone(),
+                reason: "binary".to_string(),
+            });
+            continue;
+        }
         let contents = match String::from_utf8(bytes) {
             Ok(contents) => contents,
             Err(_) => {
@@ -280,15 +277,6 @@ pub(crate) fn rebuild_source_unlocked(paths: &MaestroPaths) -> Result<SourceRebu
             continue;
         }
         let line_offsets = line_offsets(&contents);
-        let mut trigram_count = 0;
-        for (trigram, byte_start) in trigrams(&contents) {
-            trigram_count += 1;
-            postings.entry(trigram).or_default().push(SourcePosting {
-                path: entry.path.clone(),
-                line: line_for_byte(&line_offsets, byte_start),
-                byte_start,
-            });
-        }
         let language = language_for_path(&entry.path).to_string();
         outline_entries.extend(outline::extract_outline(&entry.path, &language, &contents));
         files.push(SourceFile {
@@ -296,11 +284,10 @@ pub(crate) fn rebuild_source_unlocked(paths: &MaestroPaths) -> Result<SourceRebu
             language,
             contents,
             line_offsets,
-            trigram_count,
         });
     }
 
-    let (ctags_status, symbols) = collect_ctags(paths, &candidates);
+    let (ctags_status, symbols) = collect_ctags(paths, &files);
     let report = report(
         files.len(),
         outline_entries.len(),
@@ -315,7 +302,6 @@ pub(crate) fn rebuild_source_unlocked(paths: &MaestroPaths) -> Result<SourceRebu
         outline_entries,
         symbols,
         ctags_status,
-        postings,
         skipped,
     };
     ensure_dir(paths.search_index_dir())?;
@@ -514,18 +500,11 @@ fn search_shard(
                 title: file.path.clone(),
                 snippet: first_match.snippet,
                 score,
-                score_reasons: vec![
-                    ScoreReason {
-                        factor: first_match.factor.to_string(),
-                        value: 1.0,
-                        detail: "confirmed against stored source contents".to_string(),
-                    },
-                    ScoreReason {
-                        factor: "trigram_shard".to_string(),
-                        value: file.trigram_count as f64,
-                        detail: "source shard stores positional trigram postings".to_string(),
-                    },
-                ],
+                score_reasons: vec![ScoreReason {
+                    factor: first_match.factor.to_string(),
+                    value: 1.0,
+                    detail: "confirmed against stored source contents".to_string(),
+                }],
                 opener: Some(format!("{}:{}", file.path, first_match.line)),
                 archived: false,
                 feature: None,
@@ -1008,19 +987,6 @@ fn line_start_for_byte(offsets: &[LineOffset], byte: usize) -> usize {
     line_start
 }
 
-fn trigrams(contents: &str) -> Vec<(String, usize)> {
-    let chars: Vec<(usize, char)> = contents.char_indices().collect();
-    let mut result = Vec::new();
-    for window in chars.windows(3) {
-        let trigram = window
-            .iter()
-            .flat_map(|(_, ch)| ch.to_lowercase())
-            .collect::<String>();
-        result.push((trigram, window[0].0));
-    }
-    result
-}
-
 fn encode_shard(shard: &SourceShard) -> Result<Vec<u8>> {
     let mut bytes = SOURCE_SHARD_MAGIC.to_vec();
     let payload = serde_json::to_vec(shard).context("failed to serialize source shard")?;
@@ -1123,22 +1089,6 @@ fn collect_source_files(
             });
             continue;
         }
-        let bytes = std::fs::read(&path)
-            .with_context(|| format!("failed to inspect source candidate {}", path.display()))?;
-        if bytes.contains(&0) {
-            skipped.push(SourceSkip {
-                path: rel,
-                reason: "binary".to_string(),
-            });
-            continue;
-        }
-        if std::str::from_utf8(&bytes).is_err() {
-            skipped.push(SourceSkip {
-                path: rel,
-                reason: "binary".to_string(),
-            });
-            continue;
-        }
         entries.push(ManifestEntry {
             path: rel,
             mtime_ns: modified_ns(&metadata),
@@ -1207,10 +1157,7 @@ fn language_for_path(path: &str) -> &'static str {
     }
 }
 
-fn collect_ctags(
-    paths: &MaestroPaths,
-    manifest: &[ManifestEntry],
-) -> (CtagsStatus, Vec<SymbolEntry>) {
+fn collect_ctags(paths: &MaestroPaths, files: &[SourceFile]) -> (CtagsStatus, Vec<SymbolEntry>) {
     let status = current_ctags_status();
     if !status.available {
         return (status, Vec::new());
@@ -1223,8 +1170,8 @@ fn collect_ctags(
         .arg("--fields=+n")
         .arg("-f")
         .arg("-");
-    for entry in manifest {
-        command.arg(&entry.path);
+    for file in files {
+        command.arg(&file.path);
     }
 
     let output = match command.output() {

@@ -297,11 +297,14 @@ pub fn prepare_card_from_file(
 
     match result {
         Ok(report) => {
-            let draft_path = paths.cards_dir().join(&card.id).join("prepare-draft.md");
-            if same_path(plan_path, &draft_path) && draft_path.exists() {
-                fs::remove_file(&draft_path)
-                    .with_context(|| format!("failed to remove {}", draft_path.display()))?;
-            }
+            let prepare_dir = paths.cards_dir().join(&card.id);
+            remove_owned_prepare_file(
+                plan_path,
+                &[
+                    prepare_dir.join("prepare-draft.md"),
+                    prepare_dir.join("prepare-inline.md"),
+                ],
+            )?;
             Ok(report)
         }
         Err(error) => {
@@ -442,11 +445,14 @@ fn prepare_from_file_with_blocker(
 
     match result {
         Ok(report) => {
-            let draft_path = feature::feature_sidecar_dir(paths, &view.id).join("prepare-draft.md");
-            if same_path(plan_path, &draft_path) && draft_path.exists() {
-                fs::remove_file(&draft_path)
-                    .with_context(|| format!("failed to remove {}", draft_path.display()))?;
-            }
+            let prepare_dir = feature::feature_sidecar_dir(paths, &view.id);
+            remove_owned_prepare_file(
+                plan_path,
+                &[
+                    prepare_dir.join("prepare-draft.md"),
+                    prepare_dir.join("prepare-inline.md"),
+                ],
+            )?;
             Ok(report)
         }
         Err(error) => {
@@ -461,6 +467,17 @@ fn prepare_from_file_with_blocker(
 fn same_path(left: &Path, right: &Path) -> bool {
     left.canonicalize().unwrap_or_else(|_| left.to_path_buf())
         == right.canonicalize().unwrap_or_else(|_| right.to_path_buf())
+}
+
+fn remove_owned_prepare_file(plan_path: &Path, owned_paths: &[PathBuf]) -> Result<()> {
+    for owned_path in owned_paths {
+        if same_path(plan_path, owned_path) && owned_path.exists() {
+            fs::remove_file(owned_path)
+                .with_context(|| format!("failed to remove {}", owned_path.display()))?;
+            break;
+        }
+    }
+    Ok(())
 }
 
 /// Resolve prepare-generated `after:` blockers once their prerequisite task verifies.

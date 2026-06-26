@@ -267,6 +267,12 @@ fn feature_prepare_task_helper_creates_validated_task() {
     let out = stdout(maestro(&args, repo), &args);
 
     assert!(out.contains("prepared 1 task(s)"), "{out}");
+    assert!(
+        !repo
+            .join(".maestro/cards/report-builder/prepare-inline.md")
+            .exists(),
+        "inline feature prepare file should be cleaned up after a successful prepare"
+    );
     let list = stdout(
         maestro(&["task", "list", "--feature", "report-builder"], repo),
         &["task", "list"],

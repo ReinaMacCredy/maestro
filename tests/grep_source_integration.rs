@@ -1,6 +1,8 @@
 mod support;
 
 use std::fs;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::Command;
 
@@ -235,6 +237,15 @@ fn grep_source_json_supports_regex_file_lang_case_or_and_negation() {
     assert_eq!(json["hits"][0]["path"], "src/app.py");
     assert_eq!(json["hits"][0]["line"], 1);
     assert_eq!(json["hits"][0]["match_spans"][0]["line"], 1);
+    let score_reasons = json["hits"][0]["score_reasons"]
+        .as_array()
+        .expect("score reasons should be an array");
+    assert!(
+        score_reasons
+            .iter()
+            .all(|reason| reason["factor"] != "trigram_shard"),
+        "{score_reasons:#?}"
+    );
 
     let out = stdout(
         maestro(
@@ -263,6 +274,47 @@ fn grep_source_json_supports_regex_file_lang_case_or_and_negation() {
     );
     let json: Value = serde_json::from_str(&out).expect("grep output should be JSON");
     assert_eq!(json["hits"][0]["path"], "src/lib.rs");
+}
+
+#[cfg(unix)]
+#[test]
+fn grep_source_fresh_query_does_not_read_source_files() {
+    let temp = source_repo("grep-source-fresh-metadata-only");
+    let repo = temp.path();
+    stdout(
+        maestro(&["index", "rebuild", "--source"], repo),
+        &["index", "rebuild", "--source"],
+    );
+
+    let guarded = repo.join("src/app.py");
+    let mut permissions = fs::metadata(&guarded)
+        .expect("guarded file metadata should read")
+        .permissions();
+    permissions.set_mode(0o000);
+    fs::set_permissions(&guarded, permissions).expect("guarded file should become unreadable");
+
+    let out = stdout(
+        maestro(
+            &[
+                "grep",
+                "--json",
+                "HTTPServer corpus:source lang:rust file:src/lib.rs",
+            ],
+            repo,
+        ),
+        &["grep", "--json", "fresh source metadata-only"],
+    );
+
+    let mut permissions = fs::metadata(&guarded)
+        .expect("guarded file metadata should still read")
+        .permissions();
+    permissions.set_mode(0o644);
+    fs::set_permissions(&guarded, permissions).expect("guarded file permissions restore");
+
+    let json: Value = serde_json::from_str(&out).expect("grep output should be JSON");
+    assert_eq!(json["ok"], true);
+    assert_eq!(json["hits"][0]["path"], "src/lib.rs");
+    assert_eq!(json["freshness"][0]["repaired"], false);
 }
 
 #[test]

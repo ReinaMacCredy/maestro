@@ -300,6 +300,14 @@ fn bug_card_prepares_owned_tasks_and_closes_after_verification() {
         ],
     );
     assert!(prepared.contains("prepared 1 task(s)"), "{prepared}");
+    assert!(
+        !repo
+            .join(".maestro/cards")
+            .join(&bug_id)
+            .join("prepare-inline.md")
+            .exists(),
+        "inline card prepare file should be cleaned up after a successful prepare"
+    );
     let task_id = id_by_title(repo, "Patch parser panic");
     assert_eq!(
         card_doc(repo, &task_id)["parent"].as_str(),

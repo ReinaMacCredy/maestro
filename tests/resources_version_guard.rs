@@ -126,7 +126,7 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 18] = [
         "schema",
         "run-event",
         "maestro.event.v1",
-        "2548ba74e1721d8d1ef21f959aa8216732cc39dd1ba07cf3578957ab23e98bc4",
+        "a198f7c744a5b0afbd8edf6be8ad84f181c2a80350e2bec57b8b168234d8b304",
     ),
     (
         "schema",

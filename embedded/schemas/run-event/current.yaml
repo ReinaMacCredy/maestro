@@ -19,8 +19,10 @@ contracts:
       - agent_runtime
       - task_id
       - feature_id
+      - card_id
       - tool_name
       - status
+      - reason
       - permission_decision
       - skill_name
       - activation_mode
