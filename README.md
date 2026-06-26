@@ -28,30 +28,32 @@ Everything is repo-local and reviewable in a diff.
 
 ## Card model
 
-maestro's durable unit is a **card**. Features, tasks, bugs, chores, ideas, and
-decisions all live under `.maestro/cards/<id>/`; `card.yaml` carries the typed
-state, parent, dependencies, claim, and timestamps, while sidecars such as
-`spec.md`, `qa.md`, and `notes.md` carry the human-readable contract and evidence.
+maestro's durable work model has three levels. **High Cards** organize larger
+work, **Mid Cards** carry workflow and lifecycle, and **Low Tasks** are the
+executable units an agent actually runs. Cards live under
+`.maestro/cards/<id>/`; `card.yaml` carries identity, type, state, parent,
+ownership, links, and timestamps.
 
 ![Maestro card model](docs/readme/maestro-card-model.png)
 
-Feature cards are the containers. Workable cards (`task`, `bug`, `chore`) dock
-under a feature through `parent`, enter `maestro ready` when their blocking
-dependencies are closed, and can be claimed by an agent session. Ideas and
-decisions are cards too, but they keep their own typed lifecycle verbs through
-the harness and decision flows.
+Feature cards are High containers. Bug, chore, custom, decision, and progress
+cards are Mid workflow or record cards. Progress is the lightweight Mid card for
+small work: its `progress.yml` stores many Low Tasks compactly without requiring
+the full feature pipeline. Facets such as `spec.md`, `qa.md`, and `notes.md` are
+optional sidecars for any card that needs contract, evidence, or history.
 
-The flat query verbs give agents a Beads-style operating surface:
-`maestro ready`, `maestro list`, `maestro show`, `maestro claim`,
-`maestro note`, `maestro dep`, and `maestro archive`. When several sessions are
+Tasks are not CardTypes. They are executable records with `card_id` ownership
+and `depends_on` ordering, and they use Task lifecycle semantics for claim,
+blocking, handoff, proof, and done/verified state. When several sessions are
 working at once, `maestro active`, `maestro link`, and `maestro msg` add the
-cross-agent coordination layer on top of the same cards.
+cross-agent coordination layer on top of the same card and task records.
 
 ## How It Works
 
-Everything durable is a card. The agent uses flat card queries to find and claim work, then
-uses typed lifecycle verbs only where gates matter: feature contract gates, task proof gates,
-decision locks, and harness measurement.
+Cards hold durable context and lifecycle. Tasks carry executable progress. The
+agent orients around High and Mid Cards, then uses Task verbs for the Low-level
+work; typed lifecycle verbs still gate feature contracts, decision locks,
+proof, QA, and harness measurement.
 
 ```mermaid
 flowchart LR
@@ -59,36 +61,38 @@ flowchart LR
     B --> C[spec.md + qa.md]
     C --> D[feature accept]
     D --> E[feature prepare]
-    E --> F[work cards]
-    F --> G[maestro ready]
-    G --> H[maestro claim]
-    H --> I[task complete with proof]
-    I --> J[task verify]
-    J --> K[feature verify + close]
-    K --> L[archive card tree]
+    E --> F[progress / bug / chore / custom card]
+    F --> G[progress.yml or owned task storage]
+    G --> H[maestro task list]
+    H --> I[maestro task start]
+    I --> J[maestro task done or proof]
+    J --> K[task verify when gated]
+    K --> L[feature verify + close]
+    L --> M[archive card tree]
 
-    R[run events + hooks] --> I
+    R[run events + hooks] --> J
 
     subgraph Harness loop
-        M[friction recurs] --> N[idea card]
-        N --> O[harness apply]
-        O --> P[work card]
-        P --> Q[harness measure]
+        N[friction recurs] --> O[idea card]
+        O --> P[harness apply]
+        P --> Q[progress-backed tasks]
+        Q --> S[harness measure]
     end
 ```
 
-The card type controls which verbs are valid:
+The card type controls which lifecycle verbs are valid:
 
-| Type | Role | Main verbs |
-| --- | --- | --- |
-| `feature` | Product contract and parent container | `feature accept`, `feature prepare`, `feature verify`, `feature close`, `archive` |
-| `task` / `bug` / `chore` | Workable implementation cards | `ready`, `claim`, `task complete`, `task verify`, `close` |
-| `idea` | Harness/self-improvement proposal | `harness list`, `harness apply`, `harness dismiss`, `harness measure` |
-| `decision` | Durable reasoning record | `decision new`, `decision lock`, `decision show` |
+| Type | Level | Role | Main verbs |
+| --- | --- | --- | --- |
+| `feature` | High Card | Product contract and parent container | `feature accept`, `feature prepare`, `feature verify`, `feature close`, `archive` |
+| `bug` / `chore` / `custom` | Mid Card | Workflow cards with their own lifecycle and optional facets | card/task lifecycle verbs, proof and close flows when gated |
+| `progress` | Mid Card | Lightweight container for compact Low Tasks in `progress.yml` | `task list`, `task start`, `task done` over Progress-backed tasks |
+| `decision` | Mid Card | Durable reasoning record | `decision new`, `decision lock`, `decision show` |
+| Low Task | Task | Executable unit with `card_id` and `depends_on` | task list/start/done, verify/proof when required |
 
-`parent` is hierarchy, not a blocker. A card appears in `ready` only when it is workable
-and every `blocks` dependency is closed. `related` carries context without blocking the
-board and also gates linked-card messaging; `supersedes` records replacement history.
+`parent` is hierarchy, not an execution blocker. Task readiness is computed from
+Task status and satisfied `depends_on` edges. `related` carries context without
+blocking the board, and `supersedes` records replacement history.
 
 ## Install
 
