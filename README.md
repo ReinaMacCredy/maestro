@@ -40,36 +40,33 @@ A **card** owns identity, container/lifecycle state, and governance. A **task**
 is the atomic executable progress unit. A **facet** is an optional sidecar that
 describes or proves a card.
 
-Feature cards are high-level containers. Bug, Chore, Custom, Decision, Idea, and
-Progress cards are mid-level workflow records. Tasks are not CardTypes; they live
-inside card-backed task records for legacy/gated work or inside a Progress card's
-`progress.yml` for low-ceremony small work. `card.yaml` carries typed state,
-parent, dependencies, claim, and timestamps; facets such as `spec.md`, `qa.md`,
-and `notes.md` are optional sidecars for any card type that needs contract,
-evidence, or history.
+Cards live under `.maestro/cards/<id>/`; `card.yaml` carries identity, type,
+state, parent, ownership, links, and timestamps. Feature cards are high-level
+containers. Bug, Chore, Custom, Decision, Idea, and Progress cards are mid-level
+workflow records. Progress is the lightweight Mid card for small work: its
+`progress.yml` stores many Low Tasks compactly without requiring the full
+feature pipeline. Facets such as `spec.md`, `qa.md`, and `notes.md` are optional
+sidecars for any card type that needs contract, evidence, or history.
 
 ![Maestro card model](docs/readme/maestro-card-model.png)
 
-Feature cards are the largest containers. Legacy workable cards (`task`, `bug`,
-`chore`) remain readable and claimable for compatibility. New low-ceremony work
-uses `maestro task add/start/done/list`; Maestro creates or reuses a Progress
-card under `.maestro/cards/<progress-id>/` and stores many low-level Tasks in
-`progress.yml`. Ideas and decisions are cards too, but they keep their own typed
-lifecycle verbs through the harness and decision flows.
-
-The flat query verbs give agents a Beads-style operating surface:
-`maestro ready`, `maestro list`, `maestro show`, `maestro claim`,
-`maestro note`, `maestro dep`, and `maestro archive`. When several sessions are
-working at once, `maestro active`, `maestro link`, and `maestro msg` add the
-cross-agent coordination layer on top of the same cards.
+Tasks are not CardTypes. They live inside card-backed task records for
+legacy/gated work or inside a Progress card's `progress.yml` for low-ceremony
+small work. New low-ceremony work uses `maestro task add/start/done/list`;
+legacy workable cards (`task`, `bug`, `chore`) remain readable and claimable for
+compatibility. Tasks carry `card_id` ownership and dependency/blocker metadata,
+and they use Task lifecycle semantics for claim, blocking, handoff, proof, and
+done/verified state. When several sessions are working at once, `maestro
+active`, `maestro link`, and `maestro msg` add the cross-agent coordination
+layer on top of the same card and task records.
 
 ## How It Works
 
 Cards are durable planning/governance records; Tasks are durable executable
-progress records. The agent uses flat card queries for card containers and
-`maestro task ...` for executable work, then uses typed lifecycle verbs where
-gates matter: feature contract gates, task proof gates, decision locks, and
-harness measurement.
+progress records. The agent orients around High and Mid Cards, uses flat card
+queries for card context, and uses `maestro task ...` for Low-level executable
+work. Typed lifecycle verbs still gate feature contracts, decision locks, proof,
+QA, and harness measurement.
 
 ```mermaid
 flowchart LR
@@ -77,38 +74,40 @@ flowchart LR
     B --> C[spec.md + qa.md]
     C --> D[feature accept]
     D --> E[feature prepare]
-    E --> F[low tasks]
-    F --> G[maestro task next/list]
-    G --> H[maestro task start]
-    H --> I[task complete with proof]
-    I --> J[task verify]
-    J --> K[feature verify + close]
-    K --> L[archive card tree]
+    E --> F[progress / bug / chore / custom card]
+    F --> G[progress.yml or owned task storage]
+    G --> H[maestro task list]
+    H --> I[maestro task start]
+    I --> J[maestro task done or proof]
+    J --> K[task verify when gated]
+    K --> L[feature verify + close]
+    L --> M[archive card tree]
 
-    R[run events + hooks] --> I
+    R[run events + hooks] --> J
 
     subgraph Harness loop
-        M[friction recurs] --> N[idea card]
-        N --> O[harness apply]
-        O --> P[work card]
-        P --> Q[harness measure]
+        N[friction recurs] --> O[idea card]
+        O --> P[harness apply]
+        P --> Q[progress-backed tasks]
+        Q --> S[harness measure]
     end
 ```
 
-The card type controls which verbs are valid:
+The card type controls which lifecycle verbs are valid:
 
-| Type | Role | Main verbs |
-| --- | --- | --- |
-| `feature` | Product contract and high-level container | `feature accept`, `feature prepare`, `feature verify`, `feature close`, `archive` |
-| `progress` | Lightweight mid-level card holding many low-level Tasks in `progress.yml` | `task add`, `task start`, `task done`, `task list` |
-| `bug` / `chore` / `custom` | Mid-level workflow cards that can own Tasks and optional facets | `card prepare`, `task complete`, `task verify`, `card close` |
-| legacy `task` cards | Compatibility implementation cards | `ready`, `claim`, `task complete`, `task verify`, `close` |
-| `idea` | Harness/self-improvement proposal | `harness list`, `harness apply`, `harness dismiss`, `harness measure` |
-| `decision` | Durable reasoning record | `decision new`, `decision lock`, `decision show` |
+| Type | Level | Role | Main verbs |
+| --- | --- | --- | --- |
+| `feature` | High Card | Product contract and parent container | `feature accept`, `feature prepare`, `feature verify`, `feature close`, `archive` |
+| `bug` / `chore` / `custom` | Mid Card | Workflow cards with their own lifecycle and optional facets | card/task lifecycle verbs, proof and close flows when gated |
+| `progress` | Mid Card | Lightweight container for compact Low Tasks in `progress.yml` | `task add`, `task list`, `task start`, `task done` over Progress-backed tasks |
+| legacy `task` cards | Mid Card compatibility | Compatibility implementation cards | `ready`, `claim`, `task complete`, `task verify`, `close` |
+| `idea` | Mid Card | Harness/self-improvement proposal | `harness list`, `harness apply`, `harness dismiss`, `harness measure` |
+| `decision` | Mid Card | Durable reasoning record | `decision new`, `decision lock`, `decision show` |
+| Low Task | Task | Executable unit with `card_id` and blocker metadata | task list/start/done, verify/proof when required |
 
-`parent` is hierarchy, not a blocker. A card appears in `ready` only when it is workable
-and every `blocks` dependency is closed. `related` carries context without blocking the
-board and also gates linked-card messaging; `supersedes` records replacement history.
+`parent` is hierarchy, not an execution blocker. Task readiness is computed from
+Task status and resolved blocker metadata. `related` carries context without
+blocking the board, and `supersedes` records replacement history.
 
 ## Install
 
