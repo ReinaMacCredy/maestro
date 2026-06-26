@@ -926,7 +926,7 @@ fn per_type_verbs_hint(card_type: card::schema::CardType) -> &'static str {
 fn parse_card_type(word: &str) -> Result<card::schema::CardType> {
     card::schema::CardType::parse(word).ok_or_else(|| {
         anyhow!(
-            "unknown --type {word:?}; expected feature, custom, task, bug, chore, idea, or decision"
+            "unknown --type {word:?}; expected feature, custom, progress, task, bug, chore, idea, or decision"
         )
     })
 }

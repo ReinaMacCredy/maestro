@@ -115,6 +115,86 @@ fn create_mints_a_card_and_show_round_trips_it() {
 }
 
 #[test]
+fn legacy_workable_cards_remain_readable_after_progress_card_addition() {
+    let temp = cards_repo("legacy-workable-readable");
+    let repo = temp.path();
+
+    run(repo, &["create", "-t", "task", "Legacy task card"]);
+    run(repo, &["create", "-t", "bug", "Legacy bug card"]);
+    run(repo, &["create", "-t", "chore", "Legacy chore card"]);
+    let task_id = id_by_title(repo, "Legacy task card");
+    let bug_id = id_by_title(repo, "Legacy bug card");
+    let chore_id = id_by_title(repo, "Legacy chore card");
+
+    let tasks = run(repo, &["list", "--type", "task"]);
+    assert!(
+        tasks.contains(&task_id),
+        "task card remains listable:\n{tasks}"
+    );
+    assert!(
+        !tasks.contains(&bug_id) && !tasks.contains(&chore_id),
+        "--type task still filters to task cards only:\n{tasks}"
+    );
+
+    for (id, kind) in [
+        (task_id.as_str(), "task"),
+        (bug_id.as_str(), "bug"),
+        (chore_id.as_str(), "chore"),
+    ] {
+        let shown = run(repo, &["show", id]);
+        assert!(
+            shown.contains(kind) && shown.contains(id),
+            "{kind} card remains readable:\n{shown}"
+        );
+    }
+
+    let ready = run(repo, &["ready"]);
+    assert!(
+        ready.contains(&task_id) && ready.contains(&bug_id) && ready.contains(&chore_id),
+        "legacy workable cards remain on the ready board:\n{ready}"
+    );
+}
+
+#[test]
+fn progress_card_queries_show_progress_card_and_task_list_shows_low_tasks() {
+    let temp = cards_repo("progress-card-query");
+    let repo = temp.path();
+
+    let task_id = run(repo, &["task", "add", "Fix typo", "--id-only"])
+        .trim()
+        .to_string();
+    let progress_id = id_by_title(repo, "Progress for maestro");
+
+    let progress_cards = run(repo, &["list", "--type", "progress"]);
+    assert!(
+        progress_cards.contains(&progress_id) && progress_cards.contains("Progress for maestro"),
+        "progress cards are queryable by type:\n{progress_cards}"
+    );
+    assert!(
+        !progress_cards.contains(&task_id),
+        "low-level tasks stay inside progress.yml, not card list rows:\n{progress_cards}"
+    );
+
+    let shown = run(repo, &["show", &progress_id]);
+    assert!(
+        shown.contains("progress") && shown.contains(&progress_id),
+        "show renders the progress card:\n{shown}"
+    );
+
+    let tasks = run(repo, &["task", "list"]);
+    assert!(
+        tasks.contains(&task_id) && tasks.contains("Fix typo"),
+        "task list renders low-level progress tasks:\n{tasks}"
+    );
+
+    let ready = run(repo, &["ready"]);
+    assert!(
+        !ready.contains(&progress_id) && !ready.contains(&task_id),
+        "progress cards and their low tasks do not enter the legacy card ready board:\n{ready}"
+    );
+}
+
+#[test]
 fn custom_card_requires_kind_prepares_owned_tasks_and_closes_after_verification() {
     let temp = cards_repo("custom-card-container-flow");
     let repo = temp.path();
