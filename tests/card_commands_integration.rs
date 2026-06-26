@@ -46,6 +46,23 @@ fn run_err(cwd: &Path, args: &[&str]) -> String {
     String::from_utf8_lossy(&output.stderr).into_owned()
 }
 
+fn write_claims_only_harness(repo: &Path) {
+    let harness = repo.join(".maestro/harness");
+    fs::create_dir_all(&harness).expect("invariant: harness dir should be creatable");
+    fs::write(
+        harness.join("harness.yml"),
+        concat!(
+            "schema_version: maestro.harness.v1\n",
+            "stack:\n",
+            "  kind: generic\n",
+            "  detected_by: []\n",
+            "  verify: []\n",
+            "claims_only_verification: true\n",
+        ),
+    )
+    .expect("invariant: harness should be writable");
+}
+
 #[test]
 fn create_mints_a_card_and_show_round_trips_it() {
     let temp = cards_repo("s2-create-show");
@@ -95,6 +112,172 @@ fn create_mints_a_card_and_show_round_trips_it() {
         shown.contains("(unclaimed)"),
         "a new card is unclaimed:\n{shown}"
     );
+}
+
+#[test]
+fn custom_card_requires_kind_prepares_owned_tasks_and_closes_after_verification() {
+    let temp = cards_repo("custom-card-container-flow");
+    let repo = temp.path();
+    write_claims_only_harness(repo);
+
+    let missing_kind = run_err(repo, &["card", "create", "-t", "custom", "Inbox polish"]);
+    assert!(
+        missing_kind.contains("custom cards require --kind"),
+        "{missing_kind}"
+    );
+
+    let created = run(
+        repo,
+        &[
+            "card",
+            "create",
+            "-t",
+            "custom",
+            "--kind",
+            "ui",
+            "Inbox polish",
+        ],
+    );
+    assert!(created.contains("(custom)"), "{created}");
+    let custom_id = id_by_title(repo, "Inbox polish");
+    assert!(
+        custom_id.starts_with("custom-inbox-polish-"),
+        "custom card id carries custom prefix: {custom_id}"
+    );
+    let custom = card_doc(repo, &custom_id);
+    assert_eq!(custom["type"].as_str(), Some("custom"));
+    assert_eq!(custom["status"].as_str(), Some("proposed"));
+    assert_eq!(custom["extra"]["kind"].as_str(), Some("ui"));
+
+    let prepared = run(
+        repo,
+        &[
+            "card",
+            "prepare",
+            &custom_id,
+            "--task",
+            "T1: Build inbox UI",
+            "--check",
+            "inbox UI renders",
+        ],
+    );
+    assert!(prepared.contains("prepared 1 task(s)"), "{prepared}");
+    let task_id = id_by_title(repo, "Build inbox UI");
+    assert_eq!(
+        card_doc(repo, &task_id)["parent"].as_str(),
+        Some(custom_id.as_str())
+    );
+
+    let close_before_verify = run_err(repo, &["card", "close", &custom_id]);
+    assert!(
+        close_before_verify.contains("owned task(s) are not verified"),
+        "{close_before_verify}"
+    );
+
+    run(repo, &["task", "claim", &task_id]);
+    run(
+        repo,
+        &[
+            "task",
+            "complete",
+            &task_id,
+            "--summary",
+            "built inbox UI",
+            "--claim",
+            "inbox UI renders",
+            "--proof",
+            "inbox UI renders",
+        ],
+    );
+
+    let closed = run(repo, &["card", "close", &custom_id]);
+    assert!(closed.contains("closed"), "{closed}");
+    let custom = card_doc(repo, &custom_id);
+    assert_eq!(custom["status"].as_str(), Some("closed"));
+}
+
+#[test]
+fn bug_card_prepares_owned_tasks_and_closes_after_verification() {
+    let temp = cards_repo("bug-card-container-flow");
+    let repo = temp.path();
+    write_claims_only_harness(repo);
+
+    run(repo, &["card", "create", "-t", "bug", "Fix parser panic"]);
+    let bug_id = id_by_title(repo, "Fix parser panic");
+
+    let prepared = run(
+        repo,
+        &[
+            "card",
+            "prepare",
+            &bug_id,
+            "--task",
+            "T1: Patch parser panic",
+            "--check",
+            "parser no longer panics",
+        ],
+    );
+    assert!(prepared.contains("prepared 1 task(s)"), "{prepared}");
+    let task_id = id_by_title(repo, "Patch parser panic");
+    assert_eq!(
+        card_doc(repo, &task_id)["parent"].as_str(),
+        Some(bug_id.as_str())
+    );
+
+    let close_before_verify = run_err(repo, &["card", "close", &bug_id]);
+    assert!(
+        close_before_verify.contains("owned task(s) are not verified"),
+        "{close_before_verify}"
+    );
+
+    run(repo, &["task", "claim", &task_id]);
+    run(
+        repo,
+        &[
+            "task",
+            "complete",
+            &task_id,
+            "--summary",
+            "patched parser panic",
+            "--claim",
+            "parser no longer panics",
+            "--proof",
+            "parser no longer panics",
+        ],
+    );
+
+    let closed = run(repo, &["card", "close", &bug_id]);
+    assert!(closed.contains("closed"), "{closed}");
+    let bug = card_doc(repo, &bug_id);
+    assert_eq!(bug["status"].as_str(), Some("closed"));
+}
+
+#[test]
+fn chore_card_with_owned_simple_tasks_closes_after_tasks_are_done() {
+    let temp = cards_repo("chore-owned-task-close");
+    let repo = temp.path();
+
+    run(repo, &["card", "create", "-t", "chore", "Clean docs"]);
+    let chore_id = id_by_title(repo, "Clean docs");
+    run(
+        repo,
+        &["task", "add", "--card", &chore_id, "Fix README heading"],
+    );
+    let task_id = id_by_title(repo, "Fix README heading");
+
+    let close_before_done = run_err(repo, &["card", "close", &chore_id]);
+    assert!(
+        close_before_done.contains("owned task(s) are not verified"),
+        "{close_before_done}"
+    );
+
+    run(repo, &["task", "start", &task_id]);
+    run(repo, &["task", "done", &task_id]);
+
+    let closed = run(repo, &["card", "close", &chore_id]);
+    assert!(closed.contains("closed"), "{closed}");
+    let chore = card_doc(repo, &chore_id);
+    assert_eq!(chore["status"].as_str(), Some("closed"));
 }
 
 #[test]
@@ -1607,8 +1790,8 @@ fn create_validates_the_parent_dock() {
         &["create", "-t", "task", "Child", "--parent", &task_id],
     );
     assert!(
-        non_feature.contains("not a feature"),
-        "a non-feature parent is refused:\n{non_feature}"
+        non_feature.contains("not a card container"),
+        "a non-container parent is refused:\n{non_feature}"
     );
 
     run(repo, &["create", "-t", "feature", "CSV export"]);

@@ -81,6 +81,96 @@ fn setup_repo() -> TestTempDir {
 }
 
 #[test]
+fn task_add_start_done_is_low_ceremony_and_verifies_simple_completion() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    let add = maestro(repo, &["task", "add", "fix typo", "--id-only"]);
+    assert_success(&add, &["task", "add", "fix typo", "--id-only"]);
+    let id = stdout(&add).trim().to_string();
+    assert!(
+        id.starts_with("task-fix-typo-"),
+        "simple task uses task id prefix: {id}"
+    );
+
+    let shown = stdout(&maestro(repo, &["task", "show", &id]));
+    assert!(shown.contains("state: ready"), "{shown}");
+
+    let start = maestro_with_env(
+        repo,
+        &["task", "start", &id],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    );
+    assert_success(&start, &["task", "start", &id]);
+    let mine = stdout(&maestro_with_env(
+        repo,
+        &["task", "list", "--mine"],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    ));
+    assert!(mine.contains(&id), "{mine}");
+
+    let done = maestro_with_env(
+        repo,
+        &["task", "done", &id, "--summary", "fixed typo"],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    );
+    assert_success(&done, &["task", "done", &id]);
+
+    let record = task_record(repo, &id);
+    assert_eq!(record["state"], Value::String("verified".to_string()));
+    assert_eq!(record["verification"]["claims_only"], Value::Bool(true));
+    assert_eq!(
+        record["verification"]["claim_checks"][0]["source"],
+        Value::String("task done".to_string())
+    );
+}
+
+#[test]
+fn task_done_refuses_tasks_with_explicit_verification_gates() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    assert_success(
+        &maestro(
+            repo,
+            &[
+                "task",
+                "create",
+                "Needs proof",
+                "--check",
+                "observable proof exists",
+            ],
+        ),
+        &[
+            "task",
+            "create",
+            "Needs proof",
+            "--check",
+            "observable proof exists",
+        ],
+    );
+    let id = id_by_title(repo, "Needs proof");
+    for args in [
+        vec!["task", "explore", id.as_str()],
+        vec!["task", "accept", id.as_str()],
+        vec!["task", "claim", id.as_str()],
+    ] {
+        assert_success(&maestro(repo, &args), &args);
+    }
+
+    let done = maestro(repo, &["task", "done", &id]);
+    assert_failure(&done, &["task", "done", &id]);
+    let message = stderr(&done);
+    assert!(
+        message.contains("explicit verification gate") && message.contains("maestro task complete"),
+        "task done must point gated work at the proof path: {message}"
+    );
+
+    let record = task_record(repo, &id);
+    assert_eq!(record["state"], Value::String("in_progress".to_string()));
+}
+
+#[test]
 fn create_explore_accept_claim_complete_flow_updates_task_record() {
     let temp = setup_repo();
     let repo = temp.path();

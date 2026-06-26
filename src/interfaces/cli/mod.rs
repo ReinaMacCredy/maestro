@@ -611,6 +611,8 @@ pub enum CardCommand {
     Note(NoteArgs),
     #[command(about = "Create a card of any type")]
     Create(CreateArgs),
+    #[command(about = "Prepare a card container into owned tasks")]
+    Prepare(CardPrepareArgs),
     #[command(about = "Show a card's header, edges, and body")]
     Show(ShowArgs),
     #[command(about = "Update a card's status, title, description, or claim")]
@@ -648,7 +650,7 @@ pub struct ListArgs {
     /// Only cards whose parent is this card id.
     #[arg(long, value_name = "PARENT")]
     pub parent: Option<String>,
-    /// Only cards of this type (feature, task, bug, chore, idea, decision).
+    /// Only cards of this type (feature, custom, task, bug, chore, idea, decision).
     #[arg(long = "type", value_name = "TYPE")]
     pub card_type: Option<String>,
     /// Only cards whose advisory assignee hint OR actual claim is this agent or
@@ -699,11 +701,27 @@ pub struct ResumeArgs {
 
 #[derive(Debug, Subcommand)]
 pub enum TaskCommand {
+    #[command(about = "Add a low-ceremony task ready to start")]
+    Add {
+        title: String,
+        #[arg(long, help = "Attach this simple task to a Chore card")]
+        card: Option<String>,
+        #[arg(long, help = "Project/service scope stored on the card")]
+        project: Option<String>,
+        #[arg(long, help = "Print only the new task id on stdout")]
+        id_only: bool,
+    },
     #[command(about = "Create a task (-> draft)")]
     Create {
         title: String,
         #[arg(long)]
         feature: Option<String>,
+        #[arg(
+            long,
+            conflicts_with = "feature",
+            help = "Attach this task to a card container"
+        )]
+        card: Option<String>,
         #[arg(long)]
         lane: Option<String>,
         #[arg(long)]
@@ -765,6 +783,14 @@ pub enum TaskCommand {
         id: Option<String>,
         #[arg(long, help = "Claim the next safe ready task")]
         next: bool,
+    },
+    #[command(alias = "begin", about = "Start a ready task (alias for claim)")]
+    Start { id: String },
+    #[command(about = "Mark a low-ceremony task done when it has no explicit gate")]
+    Done {
+        id: String,
+        #[arg(long, help = "Completion summary stored in task history")]
+        summary: Option<String>,
     },
     #[command(about = "Submit work for verification (-> needs_verification)")]
     Complete {
@@ -848,6 +874,8 @@ pub enum TaskCommand {
         feature: Option<String>,
         #[arg(long)]
         ready: bool,
+        #[arg(long, help = "Only tasks claimed by this actor")]
+        mine: bool,
         #[arg(
             long,
             help = "Include terminal/done tasks (verified, rejected, abandoned, superseded) and archived ones"
@@ -1366,7 +1394,7 @@ pub struct NoteArgs {
 
 #[derive(Debug, Args)]
 pub struct CreateArgs {
-    /// Card type: feature, task, bug, chore, idea, or decision.
+    /// Card type: feature, custom, task, bug, chore, idea, or decision.
     #[arg(short = 't', long = "type", value_name = "TYPE")]
     pub card_type: String,
     /// One or more card titles; each title mints a card. A single title is the
@@ -1387,9 +1415,41 @@ pub struct CreateArgs {
     /// Project/service scope stored on the card (does not affect readiness).
     #[arg(long, value_name = "PROJECT")]
     pub project: Option<String>,
+    /// Required custom kind when `--type custom`; team vocabulary such as ui,
+    /// docs, release, ops, security, or migration.
+    #[arg(long, value_name = "KIND")]
+    pub kind: Option<String>,
     /// Print only the new card ids on stdout, one per line.
     #[arg(long)]
     pub id_only: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct CardPrepareArgs {
+    /// The card container to prepare.
+    #[arg(value_name = "ID")]
+    pub id: String,
+    /// Read explicit task plan file.
+    #[arg(long = "from", value_name = "PLAN_FILE")]
+    pub from: Option<PathBuf>,
+    /// Create or point to the card prepare draft file.
+    #[arg(long, conflicts_with = "from")]
+    pub draft: bool,
+    /// Structured task entry, e.g. T1: Add parser.
+    #[arg(long = "task", conflicts_with_all = ["from", "draft"])]
+    pub task: Vec<String>,
+    /// Task check for --task entries.
+    #[arg(long = "check", requires = "task")]
+    pub check: Vec<String>,
+    /// Acceptance id covered by --task.
+    #[arg(long = "covers", requires = "task")]
+    pub covers: Vec<String>,
+    /// Blocker line for --task.
+    #[arg(long = "blocker", requires = "task")]
+    pub blocker: Vec<String>,
+    /// Dependency ref for --task.
+    #[arg(long = "after", requires = "task")]
+    pub after: Vec<String>,
 }
 
 #[derive(Debug, Args)]
@@ -1832,6 +1892,7 @@ pub fn run(cli: Cli) -> Result<()> {
             CardCommand::Assign(args) => card::assign(args),
             CardCommand::Note(args) => card::note(args),
             CardCommand::Create(args) => card::create(args),
+            CardCommand::Prepare(args) => card::prepare(args),
             CardCommand::Show(args) => card::show(args),
             CardCommand::Update(args) => card::update(args),
             CardCommand::Close(args) => card::close(args),

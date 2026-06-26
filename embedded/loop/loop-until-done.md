@@ -24,7 +24,7 @@ ones remain.
 2. Capture immediately: turn each new finding into a card *before* working it,
    so it survives context loss.
 
-       maestro card create "<finding>" -t <task|bug>
+       maestro task add "<finding>"
 
 3. Work the ready cards: `claim -> work -> task complete --proof -> task verify`.
 4. Re-check the stop condition. Not met -> loop.

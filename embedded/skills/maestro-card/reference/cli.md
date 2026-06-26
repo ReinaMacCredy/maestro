@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: 4fb2b1a6575a8e835d61d53d8dda4838ad701b0d49ee6325c6258ec5d8f3c409 -->
+<!-- maestro:cli-reference-sha256: 16b6ae1d88ee62d140407dcb7eedb8de47cadd434703f4ccc2318e5ddd77083a -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -14,7 +14,7 @@ a spelling not found here is outside this skill's CLI surface.
 
 ## maestro task
 
-- `maestro task create <TITLE> [--feature <FEATURE>] [--lane <LANE>] [--risk <RISK>] [--check <CHECK>]... [--covers <COVERS>]... [--project <PROJECT>] [--id-only]` -- Create a task (-> draft)
+- `maestro task create <TITLE> [--feature <FEATURE>] [--card <CARD>] [--lane <LANE>] [--risk <RISK>] [--check <CHECK>]... [--covers <COVERS>]... [--project <PROJECT>] [--id-only]` -- Create a task (-> draft)
 - `maestro task set <ID> [--check <CHECK>]... [--feature <FEATURE>] [--no-feature] [--covers <COVERS>]... [--verify-command <VERIFY_COMMAND>] [--clear-verify-command]` -- Author task checks or change its feature link
 - `maestro task explore <ID>` -- Move a draft into exploring (-> exploring)
 - `maestro task accept <ID>` -- Lock acceptance and mark the task ready (-> ready)
@@ -30,7 +30,7 @@ a spelling not found here is outside this skill's CLI surface.
 - `maestro task abandon <ID> --reason <REASON>` -- Terminally abandon a task (-> abandoned)
 - `maestro task supersede <ID> --by <BY> --reason <REASON>` -- Replace a task with another (-> superseded)
 - `maestro task show [ID]` -- Show a task's detail: state, claim, blockers
-- `maestro task list [--blocked] [--blocked-by <BLOCKED_BY>] [--blocks <BLOCKS>] [--feature <FEATURE>] [--ready] [--all] [--interval <INTERVAL>]` -- List tasks, with optional filters
+- `maestro task list [--blocked] [--blocked-by <BLOCKED_BY>] [--blocks <BLOCKS>] [--feature <FEATURE>] [--ready] [--mine] [--all] [--interval <INTERVAL>]` -- List tasks, with optional filters
 - `maestro task watch [ID] [--interval <INTERVAL>]` -- Watch tasks live, refreshing on an interval
 - `maestro task proof [TASK_ID] [--task-id <TASK_ID>]` -- Show a task's proof status
 - `maestro task doctor` -- Check the task blocker graph for cycles and dangling refs
@@ -73,7 +73,7 @@ a spelling not found here is outside this skill's CLI surface.
 - `maestro card claim <ID>` -- Claim a workable card for this session
 - `maestro card assign <ID> [WHO] [--clear]` -- Suggest an owner for a workable card (advisory; never blocks a claim)
 - `maestro card note <ID> <TEXT>` -- Append a dated note to a card's notes.md
-- `maestro card create <TITLE>... -t|--type <TYPE> [--parent <PARENT>] [--description <TEXT>] [--active-form <TEXT>] [--project <PROJECT>] [--id-only]` -- Create a card of any type
+- `maestro card create <TITLE>... -t|--type <TYPE> [--parent <PARENT>] [--description <TEXT>] [--active-form <TEXT>] [--project <PROJECT>] [--kind <KIND>] [--id-only]` -- Create a card of any type
 - `maestro card show <ID> [--json] [--compact-json]` -- Show a card's header, edges, and body
 - `maestro card update [ID] [--status <STATUS>] [--title <TITLE>] [--description <TEXT>] [--active-form <TEXT>] [--claim] [--json]` -- Update a card's status, title, description, or claim
 - `maestro card close <ID>` -- Close a card: status -> closed

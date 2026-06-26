@@ -1,5 +1,6 @@
 use anyhow::{Context, Result, bail};
 
+use crate::domain::card;
 use crate::domain::feature;
 use crate::domain::proof;
 use crate::domain::task;
@@ -25,9 +26,16 @@ pub fn run(args: TaskArgs) -> Result<()> {
     let actor = super::actor();
 
     match args.command {
+        TaskCommand::Add {
+            title,
+            card,
+            project,
+            id_only,
+        } => add_task(&paths, &title, card, project, id_only, &actor),
         TaskCommand::Create {
             title,
             feature,
+            card,
             covers,
             lane,
             risk,
@@ -35,7 +43,7 @@ pub fn run(args: TaskArgs) -> Result<()> {
             project,
             id_only,
         } => create_task(
-            &paths, &title, feature, covers, lane, risk, check, project, id_only,
+            &paths, &title, feature, card, covers, lane, risk, check, project, id_only,
         ),
         TaskCommand::Set {
             id,
@@ -66,6 +74,8 @@ pub fn run(args: TaskArgs) -> Result<()> {
             }
             (None, false) => bail!("task claim requires <id> or --next"),
         },
+        TaskCommand::Start { id } => claim_task(&paths, &id, &actor),
+        TaskCommand::Done { id, summary } => done_task(&paths, &id, summary, &actor),
         TaskCommand::Complete {
             id,
             summary,
@@ -138,6 +148,7 @@ pub fn run(args: TaskArgs) -> Result<()> {
             blocks,
             feature,
             ready,
+            mine,
             all,
             watch,
             interval,
@@ -149,10 +160,12 @@ pub fn run(args: TaskArgs) -> Result<()> {
                 blocks,
                 feature,
                 ready,
+                mine,
                 all,
                 watch,
                 interval,
             },
+            &actor,
         ),
         TaskCommand::Watch { id, interval } => watch_tasks(&paths, id, interval),
         TaskCommand::Proof {
@@ -174,6 +187,7 @@ fn create_task(
     paths: &MaestroPaths,
     title: &str,
     feature: Option<String>,
+    card: Option<String>,
     covers: Vec<String>,
     lane: Option<String>,
     risk: Option<String>,
@@ -181,16 +195,14 @@ fn create_task(
     project: Option<String>,
     id_only: bool,
 ) -> Result<()> {
-    if let Some(target) = feature.as_deref() {
-        guard_feature_target(paths, target)?;
-    }
+    let parent = resolve_task_parent(paths, feature, card)?;
     let project = super::resolve_project(project, paths)?;
     let now = utc_now_timestamp();
     let task = task::create_task(
         &paths.tasks_dir(),
         title,
         task::CreateTaskOptions {
-            feature,
+            feature: parent,
             covers,
             lane,
             risk,
@@ -206,6 +218,49 @@ fn create_task(
     }
     let checks = task::load_task_checks(&paths.tasks_dir(), &task)?;
     print_task_create_handoff(&task, &checks);
+    Ok(())
+}
+
+fn add_task(
+    paths: &MaestroPaths,
+    title: &str,
+    card: Option<String>,
+    project: Option<String>,
+    id_only: bool,
+    actor: &str,
+) -> Result<()> {
+    let card = match card {
+        Some(card_id) => Some(guard_simple_task_card(paths, &card_id)?),
+        None => None,
+    };
+    let project = super::resolve_project(project, paths)?;
+    let task = task::add_simple_task(
+        &paths.tasks_dir(),
+        title,
+        card,
+        project,
+        utc_now_timestamp(),
+        actor,
+    )?;
+    if id_only {
+        println!("{}", task.id);
+    } else {
+        println!("added {} ({})", task.id, task.state.as_str());
+        println!("next: maestro task start {}", task.id);
+    }
+    Ok(())
+}
+
+fn done_task(paths: &MaestroPaths, id: &str, summary: Option<String>, actor: &str) -> Result<()> {
+    let task =
+        task::complete_simple_task(&paths.tasks_dir(), id, actor, &utc_now_timestamp(), summary)?;
+    super::emit_ownership_release(
+        paths,
+        &task.id,
+        super::OwnershipReleaseStatus::Done,
+        Some("task done"),
+    );
+    println!("done {} -> {}", task.id, task.state.as_str());
     Ok(())
 }
 
@@ -321,9 +376,50 @@ fn guard_feature_link(paths: &MaestroPaths, id: &str, target: Option<&str>) -> R
     Ok(())
 }
 
-/// Validate that a feature-link TARGET exists and is non-terminal. Shared by
-/// `task create --feature` and `task set --feature` so neither can persist a
-/// dangling or settled link.
+fn resolve_task_parent(
+    paths: &MaestroPaths,
+    feature: Option<String>,
+    card: Option<String>,
+) -> Result<Option<String>> {
+    match (feature, card) {
+        (Some(_), Some(_)) => bail!("use --feature or --card, not both"),
+        (Some(feature_id), None) => {
+            guard_feature_target(paths, &feature_id)?;
+            Ok(Some(feature_id))
+        }
+        (None, Some(card_id)) => {
+            guard_card_target(paths, &card_id)?;
+            Ok(Some(card_id))
+        }
+        (None, None) => Ok(None),
+    }
+}
+
+/// Validate that a card ownership target exists, owns task storage, and is not
+/// terminal at the coarse board level. Shared by task create/set so neither can
+/// persist a dangling or settled link.
+fn guard_card_target(paths: &MaestroPaths, target: &str) -> Result<()> {
+    card::store::validate_card_id(target)?;
+    let card = card::store::resolve(paths, target)?
+        .map(|resolved| resolved.card)
+        .with_context(|| format!("target card `{target}` not found"))?;
+    if !card.card_type.owns_task_container() {
+        bail!(
+            "target card {target} is a {}, not a task-owning card container",
+            card.card_type.as_str()
+        );
+    }
+    if card::query::coarse_of(&card.status) == Some(card::query::Coarse::Closed) {
+        bail!(
+            "target card {target} is {}; tasks cannot be attached to a terminal card",
+            card.status
+        );
+    }
+    Ok(())
+}
+
+/// Preserve the old `--feature` promise: this spelling must name a Feature, not
+/// any card container.
 fn guard_feature_target(paths: &MaestroPaths, target: &str) -> Result<()> {
     let view = feature::show(paths, target).with_context(|| {
         format!("target feature `{target}` not found; create it with `maestro feature new`")
@@ -335,6 +431,24 @@ fn guard_feature_target(paths: &MaestroPaths, target: &str) -> Result<()> {
         );
     }
     Ok(())
+}
+
+fn guard_simple_task_card(paths: &MaestroPaths, card_id: &str) -> Result<String> {
+    card::store::validate_card_id(card_id)?;
+    let card = card::store::resolve(paths, card_id)?
+        .map(|resolved| resolved.card)
+        .with_context(|| format!("target card `{card_id}` not found"))?;
+    if card.card_type != card::schema::CardType::Chore {
+        bail!(
+            "task add --card is only for simple Chore cards; {} is a {} card",
+            card.id,
+            card.card_type.as_str()
+        );
+    }
+    if card::query::coarse_of(&card.status) == Some(card::query::Coarse::Closed) {
+        bail!("target chore {card_id} is terminal; create a new chore or task instead");
+    }
+    Ok(card_id.to_string())
 }
 
 fn accept_task(paths: &MaestroPaths, id: &str, actor: &str) -> Result<()> {
@@ -841,15 +955,16 @@ struct TaskListFilters {
     blocks: Option<String>,
     feature: Option<String>,
     ready: bool,
+    mine: bool,
     all: bool,
     watch: bool,
     interval: Option<u64>,
 }
 
-fn list_tasks(paths: &MaestroPaths, filters: TaskListFilters) -> Result<()> {
+fn list_tasks(paths: &MaestroPaths, filters: TaskListFilters, actor: &str) -> Result<()> {
     if filters.watch {
         return task_list_watch::run(filters.interval.unwrap_or(2), || {
-            let tasks = filtered_tasks(paths, &filters)?;
+            let tasks = filtered_tasks(paths, &filters, actor)?;
             task_list_watch::render_snapshot(paths, &tasks)
         });
     }
@@ -866,7 +981,10 @@ fn list_tasks(paths: &MaestroPaths, filters: TaskListFilters) -> Result<()> {
         archived_ids.extend(archived.iter().map(|t| t.id.clone()));
         all_tasks.extend(archived);
     }
-    let shown = task::filter_tasks(all_tasks.clone(), &task_filter(&filters, filters.all));
+    let shown = task::filter_tasks(
+        all_tasks.clone(),
+        &task_filter(&filters, filters.all, actor),
+    );
     if shown.is_empty() {
         // Match `harness list` / `decision list`: an empty result says so
         // instead of leaving a bare header (T8).
@@ -884,7 +1002,7 @@ fn list_tasks(paths: &MaestroPaths, filters: TaskListFilters) -> Result<()> {
         println!("inspect any: maestro task show <id>");
     }
     if !filters.all {
-        let with_terminal = task::filter_tasks(all_tasks, &task_filter(&filters, true));
+        let with_terminal = task::filter_tasks(all_tasks, &task_filter(&filters, true, actor));
         let hidden = with_terminal.len() - shown.len();
         if hidden > 0 {
             println!("# {hidden} terminal task(s) hidden; use --all to include");
@@ -895,14 +1013,14 @@ fn list_tasks(paths: &MaestroPaths, filters: TaskListFilters) -> Result<()> {
 
 /// Build a [`task::TaskFilter`] from the CLI flags, choosing whether terminal
 /// tasks are kept (used for the shown set and, with `true`, the hidden count).
-fn task_filter(filters: &TaskListFilters, include_terminal: bool) -> task::TaskFilter {
+fn task_filter(filters: &TaskListFilters, include_terminal: bool, actor: &str) -> task::TaskFilter {
     task::TaskFilter {
         ready: filters.ready,
         blocked: filters.blocked,
         blocked_by: filters.blocked_by.clone(),
         blocks: filters.blocks.clone(),
         feature_id: filters.feature.clone(),
-        claimed_by: None,
+        claimed_by: filters.mine.then(|| actor.to_string()),
         include_terminal,
     }
 }
@@ -920,9 +1038,16 @@ fn watch_tasks(paths: &MaestroPaths, id: Option<String>, interval: Option<u64>) 
 /// Feed for the live `task list --watch` view. Unlike the static list it shows
 /// every state (including terminal): the watch is a live monitor where seeing a
 /// task reach `verified` is the point, mirroring `task watch <id>`.
-fn filtered_tasks(paths: &MaestroPaths, filters: &TaskListFilters) -> Result<Vec<TaskRecord>> {
+fn filtered_tasks(
+    paths: &MaestroPaths,
+    filters: &TaskListFilters,
+    actor: &str,
+) -> Result<Vec<TaskRecord>> {
     let tasks = task::load_task_records(&paths.tasks_dir())?;
-    Ok(task::filter_tasks(tasks, &task_filter(filters, true)))
+    Ok(task::filter_tasks(
+        tasks,
+        &task_filter(filters, true, actor),
+    ))
 }
 
 fn doctor_tasks(paths: &MaestroPaths) -> Result<()> {

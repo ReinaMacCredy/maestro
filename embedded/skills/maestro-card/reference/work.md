@@ -1,14 +1,15 @@
-# Work Cards
+# Task Work
 
-The work loop for task/bug/chore cards. A work card is the proof-gated unit of
-implementation; a feature card is the product contract it may deliver against.
+The work loop for executable Tasks. A Task is the atomic unit of implementation;
+a Card (`feature`, `bug`, `chore`, `custom`) is the container or product
+contract it may deliver against.
 
 ## Use
 
 - Find work: `maestro card ready`, `maestro card list --parent <feature>`.
 - Create or prepare work: `task create`, `task explore`, `task accept`.
 - Pick up work: `task claim --next` (sequenced queue with dependency context)
-  or `maestro card claim <id>` (any ready card).
+  or `maestro task start <id>` / `maestro task claim <id>` for one ready task.
 - Record progress: `task update --summary` and/or `--claim`;
   `maestro card note <id> "<text>"` for running notes.
 - Finish work: `task complete --summary --claim --proof`, then verify.
@@ -19,8 +20,7 @@ implementation; a feature card is the product contract it may deliver against.
 
 ## Do
 
-When native Maestro MCP tools are available, use them for the normal work-card
-loop:
+When native Maestro MCP tools are available, use them for the normal Task loop:
 
 ```text
 maestro_task_create -> maestro_task_explore -> maestro_task_accept
@@ -89,58 +89,53 @@ twice. Skip the assessment only for a purely non-code (docs/config) diff or a
 `--lane light` card (nothing to clean, or the change is itself the cleanup),
 and name that reason in the completion summary.
 
-## Cards As A Lightweight Todo List
+## Simple Task Board
 
-For simple work that does not need the full
-feature->accept->verify->close pipeline, the gate-free `card` verbs are a
-Claude-task-tool-style todo tracker. The whole loop is three verbs:
+For simple work that does not need the full feature/card pipeline, use the
+low-ceremony Task surface. There is no `todo` namespace and no task-specific
+second lifecycle.
 
-MCP: `maestro_card_create` -> `maestro_card_claim` -> `maestro_card_close`.
+MCP: `maestro_task_add` -> `maestro_task_start` -> `maestro_task_done`.
 
 ```sh
-maestro card create -t task "first thing" "second thing" "third thing"  # batch-mint N open todos
-maestro card claim <id>     # start one: marks it in_progress and takes ownership
-maestro card close <id>     # finish it
+maestro task add "fix typo"      # creates a ready standalone Task
+maestro task start <id>          # marks it in_progress and takes ownership
+maestro task done <id>           # verifies it with simple-completion evidence
 ```
 
-`card create` takes one or more titles and mints one open card each; pass
-`--id-only` to capture the ids for scripting (one per line). `--parent` and
-`-t/--type` apply to every card in a batch; per-card text
-(`--description`, `--active-form`) is one card's, so set it later with
-`card update <id>`. No `feature`, `accept`, `verify`, or proof is involved --
-these are plain todos.
+`task add` is for standalone small work. It creates a Task that is immediately
+ready to start, and `--id-only` prints only the new id. For simple Chore-owned
+work, attach it with `--card <chore-id>`. Feature, Bug, and Custom card work
+should be prepared into Tasks through the card/feature prepare path.
 
 Focus discipline (the task tool's one-active-item rule):
 
-- `claim` is the "start before working" step. It records you as the owner and
-  moves the card to `in_progress` in one move -- use it, not
-  `card update --status in_progress` (which leaves the card unowned).
-- Keep one card `in_progress` per session at a time. If you claim a second
-  while one is still active, `claim` prints a STDERR advisory naming the
-  already-active card; it never blocks, so close or pause the first when you
-  switch.
-- `close` when the work is done.
+- `task start` is the "start before working" step. It records ownership and
+  moves the Task to `in_progress` in one move.
+- Keep one Task `in_progress` per session at a time. If another task is active,
+  the active board surfaces it; finish or pause the first when you switch.
+- `task done` only works for low-ceremony standalone or Chore-owned Tasks with
+  no explicit verification gate. If a Task has checks, a verify command, or
+  belongs to Feature/Bug/Custom work, use `task complete --summary --claim
+  --proof`, then `task verify`.
 
-Scoped todo view -- the same `list` filters narrow to your todos:
+Board view:
 
 ```sh
-maestro card list --type task --status open          # the backlog (pending)
-maestro card list --type task --status in_progress   # what is being worked
-maestro card list --assignee "<agent>#<session>"     # just yours
+maestro task list             # live Tasks; done hidden
+maestro task list --mine      # only Tasks claimed by this actor
+maestro task list --all       # include done/terminal history
 ```
 
-The model maps 1:1 to the task tool, so the board reads the same way:
+The board reads:
 
 | task tool   | maestro status | board glyph        |
 | ----------- | -------------- | ------------------ |
-| pending     | `open`         | `○` (ready)   |
+| pending     | `ready`        | `○` (ready)   |
 | in_progress | `in_progress`  | `◐` (active)  |
-| completed   | `closed`       | `✓` (done)    |
+| completed   | `verified`     | `✓` (done)    |
 
-`maestro watch` renders the board live. A card given `--active-form "<doing
-X>"` shows that present-tense label on its active row in place of the title
-(display-only, like the task tool's activeForm); set it at `create` for a
-single card or later with `card update <id> --active-form "..."`.
+`maestro watch` renders the board live.
 
 ## Evidence Gate
 

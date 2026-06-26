@@ -2,15 +2,18 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::{Result, anyhow};
 use serde::Serialize;
+use serde_yaml::Value;
 
-use crate::domain::{card, feature, search};
+use crate::domain::{card, feature, search, task};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
+use crate::foundation::core::safe_write::write_string_atomic;
 use crate::foundation::core::slug::slugify_ascii;
 use crate::foundation::core::time::utc_now_timestamp;
 use crate::interfaces::cli::{
-    ArchiveArgs, AssignArgs, ClaimArgs, CloseArgs, CreateArgs, DepArgs, DepCommand, LinkArgs,
-    LinkCommand, ListArgs, NoteArgs, ReadyArgs, ShowArgs, UpdateArgs,
+    ArchiveArgs, AssignArgs, CardPrepareArgs, ClaimArgs, CloseArgs, CreateArgs, DepArgs,
+    DepCommand, LinkArgs, LinkCommand, ListArgs, NoteArgs, ReadyArgs, ShowArgs, UpdateArgs,
 };
+use crate::operations::feature_prepare;
 
 const READY_JSON_SCHEMA: &str = "maestro.ready.v1";
 const LIST_JSON_SCHEMA: &str = "maestro.list.v1";
@@ -348,6 +351,18 @@ pub fn create(args: CreateArgs) -> Result<()> {
         return Ok(());
     };
     let card_type = parse_card_type(&args.card_type)?;
+    let custom_kind = match (card_type, args.kind.as_deref()) {
+        (card::schema::CardType::Custom, Some(kind)) if !kind.trim().is_empty() => {
+            Some(kind.trim().to_string())
+        }
+        (card::schema::CardType::Custom, _) => {
+            return Err(anyhow!("custom cards require --kind <kind>"));
+        }
+        (_, Some(_)) => {
+            return Err(anyhow!("--kind is only valid with --type custom"));
+        }
+        _ => None,
+    };
     let batch = args.titles.len() > 1;
     // Refuse per-card text in batch mode before minting anything, so a batch
     // create is all-or-nothing: a single shared description/active-form cannot be
@@ -382,6 +397,11 @@ pub fn create(args: CreateArgs) -> Result<()> {
                     "a feature card cannot take --parent; features are top-level containers"
                 ));
             }
+            if card_type == card::schema::CardType::Custom {
+                return Err(anyhow!(
+                    "a custom card cannot take --parent; custom cards are top-level containers"
+                ));
+            }
             card::store::validate_card_id(&parent)?;
             let parent_card = card::store::resolve(&paths, &parent)?
                 .map(|resolved| resolved.card)
@@ -391,9 +411,9 @@ pub fn create(args: CreateArgs) -> Result<()> {
                          (`maestro create -t feature \"<title>\"`)"
                     )
                 })?;
-            if parent_card.card_type != card::schema::CardType::Feature {
+            if !parent_card.card_type.owns_task_container() {
                 return Err(anyhow!(
-                    "parent {parent} is a {}, not a feature; cards dock under feature parents",
+                    "parent {parent} is a {}, not a card container; child cards dock under feature, bug, chore, or custom parents",
                     parent_card.card_type.as_str()
                 ));
             }
@@ -408,11 +428,21 @@ pub fn create(args: CreateArgs) -> Result<()> {
             card::schema::CardType::Feature => slugify_ascii(title),
             _ => card::store::mint_card_id(&paths, card_type, title),
         };
-        let mut new_card = card::schema::Card::new(&id, card_type, title, "open", &now);
+        let initial_status = match card_type {
+            card::schema::CardType::Bug | card::schema::CardType::Custom => "proposed",
+            _ => "open",
+        };
+        let mut new_card = card::schema::Card::new(&id, card_type, title, initial_status, &now);
         new_card.parent = parent.clone();
         new_card.description = args.description.clone();
         new_card.active_form = args.active_form.clone();
         new_card.project = project.clone();
+        if let Some(kind) = custom_kind.as_deref() {
+            new_card.extra.insert(
+                Value::String("kind".to_string()),
+                Value::String(kind.to_string()),
+            );
+        }
         card::store::create_card(&paths, &new_card)?;
         super::emit_work_touch(&paths, &id);
         if args.id_only {
@@ -422,6 +452,135 @@ pub fn create(args: CreateArgs) -> Result<()> {
         }
     }
     Ok(())
+}
+
+pub fn prepare(args: CardPrepareArgs) -> Result<()> {
+    let Some(paths) = card_paths()? else {
+        return Ok(());
+    };
+    let has_inline_tasks = !args.task.is_empty();
+    match (args.from.as_deref(), args.draft, has_inline_tasks) {
+        (Some(_), true, _) => Err(anyhow!(
+            "use either --from <plan-file> or --draft, not both"
+        )),
+        (Some(_), _, true) => Err(anyhow!("use either --from <plan-file> or --task, not both")),
+        (_, true, true) => Err(anyhow!("use either --draft or --task, not both")),
+        (None, false, false) => Err(anyhow!(
+            "card prepare requires --from <plan-file>, --draft, or --task\n  maestro card prepare {} --draft\n  maestro card prepare {} --from <plan-file>\n  maestro card prepare {} --task \"T1: <title>\" --check \"<observable result>\"",
+            args.id,
+            args.id,
+            args.id
+        )),
+        (None, true, false) => {
+            let report = feature_prepare::write_card_draft(&paths, &args.id)?;
+            if report.written {
+                println!("wrote {}", report.path.display());
+            } else {
+                println!("draft exists: {}", report.path.display());
+            }
+            println!("review and run:");
+            println!(
+                "  maestro card prepare {} --from {}",
+                args.id,
+                report.path.display()
+            );
+            Ok(())
+        }
+        (Some(plan_file), false, false) => {
+            let actor = super::actor();
+            let report =
+                feature_prepare::prepare_card_from_file(&paths, &args.id, plan_file, &actor)?;
+            super::emit_work_touch(&paths, &args.id);
+            print_card_prepare_report(&report);
+            Ok(())
+        }
+        (None, false, true) => {
+            if args.check.iter().any(|check| check.trim().is_empty()) {
+                return Err(anyhow!("--check must not be empty"));
+            }
+            if args.check.is_empty() {
+                return Err(anyhow!("--task requires at least one --check"));
+            }
+            let plan = inline_prepare_plan(
+                &args.task,
+                &args.check,
+                &args.covers,
+                &args.blocker,
+                &args.after,
+            )?;
+            let path = paths.cards_dir().join(&args.id).join("prepare-inline.md");
+            write_string_atomic(&path, &plan)?;
+            let actor = super::actor();
+            let report = feature_prepare::prepare_card_from_file(&paths, &args.id, &path, &actor)?;
+            super::emit_work_touch(&paths, &args.id);
+            print_card_prepare_report(&report);
+            Ok(())
+        }
+    }
+}
+
+fn inline_prepare_plan(
+    tasks: &[String],
+    checks: &[String],
+    covers: &[String],
+    blockers: &[String],
+    after: &[String],
+) -> Result<String> {
+    let mut plan = String::new();
+    for task in tasks {
+        let task = task.trim();
+        if task.is_empty() {
+            return Err(anyhow!("--task must not be empty"));
+        }
+        plan.push_str("## Task ");
+        plan.push_str(task);
+        plan.push('\n');
+        if !covers.is_empty() {
+            plan.push_str("covers: ");
+            plan.push_str(&covers.join(", "));
+            plan.push('\n');
+        }
+        for check in checks {
+            plan.push_str("check: ");
+            plan.push_str(check);
+            plan.push('\n');
+        }
+        for blocker in blockers {
+            plan.push_str("blocker: ");
+            plan.push_str(blocker);
+            plan.push('\n');
+        }
+        if !after.is_empty() {
+            plan.push_str("after: ");
+            plan.push_str(&after.join(", "));
+            plan.push('\n');
+        }
+        plan.push('\n');
+    }
+    Ok(plan)
+}
+
+fn print_card_prepare_report(report: &feature_prepare::PrepareReport) {
+    println!("prepared {} task(s)", report.task_count);
+    if report.started {
+        println!("started {} -> in_progress", report.feature_id);
+    } else if report.remained_ready {
+        println!("card remains ready");
+    }
+    println!("prepared:");
+    for task in &report.prepared {
+        let status = if task.blocked { "blocked" } else { "ready" };
+        println!("  {}  {:<7} {}", task.id, status, task.title);
+    }
+    if !report.blockers.is_empty() {
+        println!("blockers:");
+        for blocker in &report.blockers {
+            println!(
+                "  {} -> {} ({})",
+                blocker.task_id, blocker.blocker_id, blocker.reason
+            );
+        }
+    }
 }
 
 /// Execute `maestro show <id>`: the card's header, parent, edges, and body (DN9).
@@ -656,6 +815,13 @@ pub fn close(args: CloseArgs) -> Result<()> {
         return Ok(());
     };
     let mut c = resolved.card.clone();
+    if c.card_type == card::schema::CardType::Custom
+        || ((c.card_type == card::schema::CardType::Bug
+            || c.card_type == card::schema::CardType::Chore)
+            && card_has_owned_tasks(&paths, &c.id)?)
+    {
+        return close_task_container_card(&paths, &resolved, &mut c);
+    }
     // SPEC E3: only task/bug/chore are closeable; feature/idea/decision keep
     // their per-type terminal verbs (and their gates).
     if !c.card_type.workable() {
@@ -683,12 +849,66 @@ pub fn close(args: CloseArgs) -> Result<()> {
     Ok(())
 }
 
+fn card_has_owned_tasks(paths: &MaestroPaths, id: &str) -> Result<bool> {
+    Ok(task::load_task_records(&paths.tasks_dir())?
+        .into_iter()
+        .any(|task| task.feature_id.as_deref() == Some(id)))
+}
+
+fn close_task_container_card(
+    paths: &MaestroPaths,
+    resolved: &card::store::ResolvedCard,
+    c: &mut card::schema::Card,
+) -> Result<()> {
+    if card::query::coarse_of(&c.status) == Some(card::query::Coarse::Closed) {
+        println!("{} is already closed (status: {})", c.id, c.status);
+        return Ok(());
+    }
+    let owned: Vec<task::TaskRecord> = task::load_task_records(&paths.tasks_dir())?
+        .into_iter()
+        .filter(|task| task.feature_id.as_deref() == Some(c.id.as_str()))
+        .collect();
+    if owned.is_empty() {
+        return Err(anyhow!(
+            "cannot close {} -- a {} card closes through owned tasks; add or prepare tasks first",
+            c.id,
+            c.card_type.as_str()
+        ));
+    }
+    let unfinished: Vec<String> = owned
+        .iter()
+        .filter(|task| task.state != task::TaskState::Verified)
+        .map(|task| format!("{} ({})", task.id, task.state.as_str()))
+        .collect();
+    if !unfinished.is_empty() {
+        return Err(anyhow!(
+            "cannot close {} -- owned task(s) are not verified: {}",
+            c.id,
+            unfinished.join(", ")
+        ));
+    }
+    c.status = "closed".to_string();
+    c.updated_at = utc_now_timestamp();
+    card::store::save_resolved(c, resolved)?;
+    super::emit_ownership_release(
+        paths,
+        &c.id,
+        super::OwnershipReleaseStatus::Done,
+        Some("card close"),
+    );
+    println!("closed {}", c.id);
+    Ok(())
+}
+
 /// Where to send a non-workable card's lifecycle instead of `close`/`update
 /// --status` (SPEC E3: feature/idea/decision keep per-type terminal verbs).
 fn per_type_verbs_hint(card_type: card::schema::CardType) -> &'static str {
     match card_type {
         card::schema::CardType::Feature => {
             "use `maestro feature close` or `maestro feature cancel`"
+        }
+        card::schema::CardType::Custom => {
+            "prepare it into tasks, then close it through its container pipeline"
         }
         card::schema::CardType::Decision => "use `maestro decision lock`",
         card::schema::CardType::Idea => "use `maestro harness apply/dismiss/measure`",
@@ -702,7 +922,9 @@ fn per_type_verbs_hint(card_type: card::schema::CardType) -> &'static str {
 /// `create` and `list`.
 fn parse_card_type(word: &str) -> Result<card::schema::CardType> {
     card::schema::CardType::parse(word).ok_or_else(|| {
-        anyhow!("unknown --type {word:?}; expected feature, task, bug, chore, idea, or decision")
+        anyhow!(
+            "unknown --type {word:?}; expected feature, custom, task, bug, chore, idea, or decision"
+        )
     })
 }
 

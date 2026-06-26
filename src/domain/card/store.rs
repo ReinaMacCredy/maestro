@@ -158,7 +158,8 @@ static CREATION_COUNTER: AtomicU64 = AtomicU64::new(0);
 /// D1b): a feature named like a generated card would re-merge the namespaces
 /// the prefix exists to separate. Legacy `card-<hex>` ids are not minted
 /// anymore but stay valid forever (D3).
-pub(crate) const GENERATED_ID_PREFIXES: &[&str] = &["task-", "bug-", "chore-", "dec-", "idea-"];
+pub(crate) const GENERATED_ID_PREFIXES: &[&str] =
+    &["task-", "bug-", "chore-", "custom-", "dec-", "idea-"];
 
 /// The id prefix a generated card carries for its type (D1b): the type word,
 /// with `decision` shortened to `dec`. Features mint no generated id (their id
@@ -166,6 +167,7 @@ pub(crate) const GENERATED_ID_PREFIXES: &[&str] = &["task-", "bug-", "chore-", "
 fn type_prefix(card_type: CardType) -> Option<&'static str> {
     match card_type {
         CardType::Feature => None,
+        CardType::Custom => Some("custom"),
         CardType::Task => Some("task"),
         CardType::Bug => Some("bug"),
         CardType::Chore => Some("chore"),
@@ -392,18 +394,20 @@ impl CardHome {
 pub fn home_for_new(paths: &MaestroPaths, card: &Card) -> Result<CardHome> {
     validate_card_id(&card.id)?;
     Ok(match card.card_type {
-        CardType::Feature => {
+        CardType::Feature | CardType::Custom => {
             if RESERVED_CONTAINER_NAMES.contains(&card.id.as_str()) {
                 bail!(
-                    "feature id {} is reserved by the card store layout",
+                    "{} id {} is reserved by the card store layout",
+                    card.card_type.as_str(),
                     card.id
                 );
             }
             // D1b: the generated-id prefixes are reserved, so a feature can
             // never look like a minted task/bug/chore/dec/idea id.
-            if let Some(prefix) = GENERATED_ID_PREFIXES
-                .iter()
-                .find(|prefix| card.id.starts_with(*prefix))
+            if card.card_type == CardType::Feature
+                && let Some(prefix) = GENERATED_ID_PREFIXES
+                    .iter()
+                    .find(|prefix| card.id.starts_with(*prefix))
             {
                 bail!(
                     "feature id {} starts with the reserved generated-id prefix {prefix}; pick another name",
@@ -445,7 +449,7 @@ fn container_dir(paths: &MaestroPaths, parent: Option<&str>) -> Result<PathBuf> 
     validate_card_id(parent)?;
     let yaml = root.join(parent).join(CARD_FILE);
     match load(&yaml)? {
-        Some(card) if card.card_type == CardType::Feature => Ok(root.join(parent)),
+        Some(card) if card.card_type.owns_task_container() => Ok(root.join(parent)),
         _ => Ok(root),
     }
 }

@@ -32,7 +32,12 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
         tool(
             "maestro_task_create",
             "Creates a task through the normal task lifecycle; returns a draft task.",
-            json!({"type":"object","properties":{"title":{"type":"string"},"feature_id":{"type":"string"},"lane":{"type":"string"},"risk":{"type":"string"},"checks":{"type":"array","items":{"type":"string"}},"covers":{"type":"array","items":{"type":"string"}},"project":{"type":"string"},"id_only":{"type":"boolean"}},"required":["title"]}),
+            json!({"type":"object","properties":{"title":{"type":"string"},"feature_id":{"type":"string"},"card_id":{"type":"string"},"lane":{"type":"string"},"risk":{"type":"string"},"checks":{"type":"array","items":{"type":"string"}},"covers":{"type":"array","items":{"type":"string"}},"project":{"type":"string"},"id_only":{"type":"boolean"}},"required":["title"]}),
+        ),
+        tool(
+            "maestro_task_add",
+            "Adds a low-ceremony task ready to start; optional card_id is limited to Chore cards.",
+            json!({"type":"object","properties":{"title":{"type":"string"},"card_id":{"type":"string"},"project":{"type":"string"},"id_only":{"type":"boolean"}},"required":["title"]}),
         ),
         tool(
             "maestro_task_explore",
@@ -58,6 +63,16 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
             "maestro_task_claim",
             "Claims a task; sets claimed_by; auto-progresses ready to in_progress.",
             json!({"type":"object","properties":{"id":{"type":"string"}},"required":["id"]}),
+        ),
+        tool(
+            "maestro_task_start",
+            "Starts a ready task; alias for task claim.",
+            json!({"type":"object","properties":{"id":{"type":"string"}},"required":["id"]}),
+        ),
+        tool(
+            "maestro_task_done",
+            "Marks a low-ceremony standalone or Chore-owned task done when no explicit verification gate exists.",
+            json!({"type":"object","properties":{"id":{"type":"string"},"summary":{"type":"string"}},"required":["id"]}),
         ),
         tool(
             "maestro_task_complete",
@@ -126,8 +141,13 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
         ),
         tool(
             "maestro_card_create",
-            "Creates a card using guided full-card-store intents: feature, task, bug, decision, idea, or chore.",
-            json!({"type":"object","properties":{"intent":{"type":"string","enum":["feature","task","bug","decision","idea","chore"]},"title":{"type":"string"},"parent":{"type":"string"},"description":{"type":"string"},"problem":{"type":"string"},"active_form":{"type":"string"},"acceptance":{"type":"string"},"project":{"type":"string"}},"required":["intent","title"]}),
+            "Creates a card container or record using guided full-card-store intents: feature, custom, bug, decision, idea, or chore. Atomic work uses maestro_task_add/create.",
+            json!({"type":"object","properties":{"intent":{"type":"string","enum":["feature","custom","bug","decision","idea","chore"]},"title":{"type":"string"},"kind":{"type":"string"},"parent":{"type":"string"},"description":{"type":"string"},"problem":{"type":"string"},"active_form":{"type":"string"},"acceptance":{"type":"string"},"project":{"type":"string"}},"required":["intent","title"]}),
+        ),
+        tool(
+            "maestro_card_prepare",
+            "Prepares a card container into owned tasks using the same plan shape as feature prepare.",
+            json!({"type":"object","properties":{"card_id":{"type":"string"},"draft":{"type":"boolean"},"tasks":{"type":"array","items":{"type":"object","properties":{"title":{"type":"string"},"checks":{"type":"array","items":{"type":"string"},"minItems":1},"covers":{"type":"array","items":{"type":"string"}},"blockers":{"type":"array","items":{"type":"string"}},"after":{"type":"array","items":{"type":"string"}}},"required":["title"]}}},"required":["card_id"]}),
         ),
         tool(
             "maestro_card_list",
@@ -156,7 +176,7 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
         ),
         tool(
             "maestro_card_close",
-            "Closes a task, bug, chore, or other non-feature work card.",
+            "Closes a legacy task card or a Bug/Chore/Custom container whose owned tasks are verified.",
             json!({"type":"object","properties":{"id":{"type":"string"}},"required":["id"]}),
         ),
         tool(
@@ -198,11 +218,14 @@ pub fn call_tool(paths: &MaestroPaths, name: &str, arguments: &Value) -> Result<
         "maestro_status" => status(paths),
         "maestro_task_next" => task_next(),
         "maestro_task_create" => task_create(arguments),
+        "maestro_task_add" => task_add(arguments),
         "maestro_task_explore" => cli(required_args(arguments, &["task", "explore"], &["id"])?),
         "maestro_task_accept" => cli(required_args(arguments, &["task", "accept"], &["id"])?),
         "maestro_task_list" => task_list(paths, arguments),
         "maestro_task_show" => cli(optional_id_args("task", "show", arguments, "id")),
         "maestro_task_claim" => cli(required_args(arguments, &["task", "claim"], &["id"])?),
+        "maestro_task_start" => cli(required_args(arguments, &["task", "start"], &["id"])?),
+        "maestro_task_done" => task_done(arguments),
         "maestro_task_complete" => task_complete(arguments),
         "maestro_task_update" => task_update(arguments),
         "maestro_task_block" => task_block(arguments),
@@ -217,6 +240,7 @@ pub fn call_tool(paths: &MaestroPaths, name: &str, arguments: &Value) -> Result<
         "maestro_feature_start" => cli(required_args(arguments, &["feature", "start"], &["id"])?),
         "maestro_feature_close" => feature_close(paths, arguments),
         "maestro_card_create" => card_create(arguments),
+        "maestro_card_prepare" => card_prepare(paths, arguments),
         "maestro_card_list" => card_list(arguments),
         "maestro_card_show" => card_show(arguments),
         "maestro_card_ready" => card_ready(arguments),
@@ -312,6 +336,7 @@ fn task_create(arguments: &Value) -> Result<String> {
         required_string(arguments, "title")?,
     ];
     push_optional_flag(arguments, &mut args, "feature_id", "--feature");
+    push_optional_flag(arguments, &mut args, "card_id", "--card");
     push_optional_flag(arguments, &mut args, "lane", "--lane");
     push_optional_flag(arguments, &mut args, "risk", "--risk");
     push_repeated_flag(arguments, &mut args, "checks", "--check")?;
@@ -320,6 +345,30 @@ fn task_create(arguments: &Value) -> Result<String> {
     if bool_arg(arguments, "id_only") {
         args.push("--id-only".to_string());
     }
+    cli(args)
+}
+
+fn task_add(arguments: &Value) -> Result<String> {
+    let mut args = vec![
+        "task".to_string(),
+        "add".to_string(),
+        required_string(arguments, "title")?,
+    ];
+    push_optional_flag(arguments, &mut args, "card_id", "--card");
+    push_optional_flag(arguments, &mut args, "project", "--project");
+    if bool_arg(arguments, "id_only") {
+        args.push("--id-only".to_string());
+    }
+    cli(args)
+}
+
+fn task_done(arguments: &Value) -> Result<String> {
+    let mut args = vec![
+        "task".to_string(),
+        "done".to_string(),
+        required_string(arguments, "id")?,
+    ];
+    push_optional_flag(arguments, &mut args, "summary", "--summary");
     cli(args)
 }
 
@@ -475,6 +524,39 @@ fn feature_prepare(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
     lifecycle_cli(paths, "maestro_feature_prepare", &feature_id, args)
 }
 
+fn card_prepare(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
+    let card_id = required_string(arguments, "card_id")?;
+    let mut args = vec!["card".to_string(), "prepare".to_string(), card_id.clone()];
+    if bool_arg(arguments, "draft") {
+        args.push("--draft".to_string());
+    } else if let Some(tasks) = arguments.get("tasks") {
+        for (index, task) in tasks
+            .as_array()
+            .with_context(|| "tasks must be an array")?
+            .iter()
+            .enumerate()
+        {
+            args.push("--task".to_string());
+            let title = task
+                .get("title")
+                .and_then(Value::as_str)
+                .with_context(|| format!("tasks[{index}].title must be a string"))?;
+            if title.contains(':') {
+                args.push(title.to_string());
+            } else {
+                args.push(format!("T{}: {title}", index + 1));
+            }
+            push_repeated_flag(task, &mut args, "checks", "--check")?;
+            push_repeated_flag(task, &mut args, "covers", "--covers")?;
+            push_repeated_flag(task, &mut args, "blockers", "--blocker")?;
+            push_repeated_flag(task, &mut args, "after", "--after")?;
+        }
+    } else {
+        args.push("--draft".to_string());
+    }
+    lifecycle_cli(paths, "maestro_card_prepare", &card_id, args)
+}
+
 fn feature_verify(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
     let feature_id = feature_id_arg(arguments)?;
     let mut args = vec![
@@ -577,6 +659,7 @@ fn card_create(arguments: &Value) -> Result<String> {
         required_string(arguments, "intent")?,
     ];
     push_optional_flag(arguments, &mut args, "parent", "--parent");
+    push_optional_flag(arguments, &mut args, "kind", "--kind");
     push_guided_text_flag(
         arguments,
         &mut args,
