@@ -1,6 +1,6 @@
 ---
 name: maestro-card
-version: 1.29.0
+version: 1.30.0
 description: "Use when the user wants to implement, fix, verify, QA, close, release, or continue active Maestro card/feature/task work after design is approved."
 ---
 
@@ -90,8 +90,13 @@ Read the reference for the job at hand; they share the ground rules below.
   `.maestro/archive/`; the user's word "close" on a terminal card is the
   explicit intent to archive, but archive is never an automatic side effect of
   close/cancel, and a non-terminal feature is never archived.
-- When the user corrects your behavior, record it:
-  `maestro event intervention --note "<what was wrong>" [--topic <slug>]`.
+- When the user corrects or steers active work, do not pause just because they
+  corrected you. If the correction is clear, record it with `maestro event
+  intervention --note "<what changed>" [--topic <slug>]` and apply it. If it is
+  unclear but low-risk, state the assumption, record it, and continue. Ask only
+  when the ambiguity can change scope, contract, schema, lifecycle, release
+  behavior, or other hard-to-reverse work. Full routing lives in
+  [reference/work.md](reference/work.md).
 
 ## External intake
 

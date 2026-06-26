@@ -35,8 +35,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 17] = [
     (
         "skill",
         "maestro-card",
-        "1.29.0",
-        "4497eb300eccac7fe8ce1869e54e8c515d44c6599b3e0b213b5efd0ac84a5182",
+        "1.30.0",
+        "bfed7941914afee0f607ad488712c65520101bd9ac3bb8114203a6d63e712f97",
     ),
     (
         "skill",

@@ -89,6 +89,34 @@ twice. Skip the assessment only for a purely non-code (docs/config) diff or a
 `--lane light` card (nothing to clean, or the change is itself the cleanup),
 and name that reason in the completion summary.
 
+## User Steering During Work
+
+User corrections are durable steering, not loose chat. Do not pause just
+because the user corrected you. Pause only when the correction is ambiguous and
+continuing could create wrong or hard-to-reverse work.
+
+Classify and continue by risk:
+
+| Signal | Action |
+| --- | --- |
+| Clear correction | Record `maestro event intervention --note "<correction>"`, update the current Task/Card if needed, and keep moving. |
+| Unclear but low-risk | State the assumption, record it, and continue. |
+| Unclear and scope/risk-changing | Ask one concise question before changing scope, contract, schema, lifecycle, release behavior, or deleting/overwriting work. |
+
+Route the correction to the durable place it changes truth:
+
+- Current execution detail -> `maestro task update <id> --summary ...` or
+  `maestro task note <id> ...`.
+- New executable work -> create a new Task under the same Card.
+- Parent scope or acceptance changes -> amend the parent Feature/Card contract;
+  do not silently rewrite the current Task.
+- Fork/choice -> create or lock a Decision Card.
+- Behavior gap -> record QA evidence, then create a Bug or Task when it needs
+  executable follow-up.
+
+Do not create a "next task" for every correction. Create the next Task only
+when the correction is separate executable work.
+
 ## Simple Task Board
 
 For simple work that does not need the full feature/card pipeline, use the
