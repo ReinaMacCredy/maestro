@@ -270,7 +270,8 @@ interface ModalLayerProps {
 
 function ModalLayer({ modal, state, layout, theme }: ModalLayerProps) {
   const eyebrowLines = "eyebrow" in modal && modal.eyebrow ? modal.eyebrow.split("\n") : [];
-  const paletteOrigin = modal.mode === "palette" || modal.returnTarget === "command-palette";
+  const forceSolidPanels = modal.mode === "split" && modal.solidPanels === true;
+  const paletteOrigin = !forceSolidPanels && (modal.mode === "palette" || modal.returnTarget === "command-palette");
   const modalBackgroundColor = paletteOrigin
     ? theme.paletteModalBg
     : theme.modalBg;
@@ -287,44 +288,44 @@ function ModalLayer({ modal, state, layout, theme }: ModalLayerProps) {
       height={layout.height}
       border
       flexDirection="column"
-        backgroundColor={modalBackgroundColor}
-        paddingLeft={1}
-        paddingRight={1}
-      >
-          {shouldFillSurface ? <ModalSurfaceFill width={layout.width - 2} height={layout.height - 2} /> : null}
-            <box width="100%" flexDirection="row" alignItems="center">
-            {modal.mode === "palette" ? (
-              <>
-                <SafeText fg={OPEN_TUI_THEME.text} attributes={TextAttributes.BOLD}>
-                  {composePaletteHeaderTitle(modal.title, escapeText, contentWidth)}
-                </SafeText>
-                <SafeText fg={OPEN_TUI_THEME.muted}>{composePaletteHeaderEscape(escapeText, contentWidth)}</SafeText>
-              </>
-            ) : (
-              <>
-                <box flexGrow={1}>
-                <SafeText fg={OPEN_TUI_THEME.accent} attributes={TextAttributes.BOLD}>{modal.title}</SafeText>
-              </box>
-              <SafeText fg={OPEN_TUI_THEME.muted}>{escapeText}</SafeText>
-            </>
-          )}
-        </box>
+      backgroundColor={modalBackgroundColor}
+      paddingLeft={1}
+      paddingRight={1}
+    >
+      {shouldFillSurface ? <ModalSurfaceFill width={layout.width - 2} height={layout.height - 2} /> : null}
+      <box width="100%" flexDirection="row" alignItems="center">
+        {modal.mode === "palette" ? (
+          <>
+            <SafeText fg={OPEN_TUI_THEME.text} attributes={TextAttributes.BOLD}>
+              {composePaletteHeaderTitle(modal.title, escapeText, contentWidth)}
+            </SafeText>
+            <SafeText fg={OPEN_TUI_THEME.muted}>{composePaletteHeaderEscape(escapeText, contentWidth)}</SafeText>
+          </>
+        ) : (
+          <>
+            <box flexGrow={1}>
+              <SafeText fg={OPEN_TUI_THEME.accent} attributes={TextAttributes.BOLD}>{modal.title}</SafeText>
+            </box>
+            <SafeText fg={OPEN_TUI_THEME.muted}>{escapeText}</SafeText>
+          </>
+        )}
+      </box>
 
       {eyebrowLines.map((line, index) => (
         <SafeText key={index} fg={OPEN_TUI_THEME.muted}>{line}</SafeText>
       ))}
 
-          {modal.mode === "split" ? (
-              <SplitModalBody
-                modal={modal}
-                width={layout.width}
-                height={layout.height}
-                theme={theme}
-                transparentPanels={paletteOrigin && theme.paletteModalBg === undefined}
-              />
-            ) : modal.mode === "info" ? (
-              <InfoModalBody modal={modal} />
-            ) : modal.mode === "palette" ? (
+      {modal.mode === "split" ? (
+        <SplitModalBody
+          modal={modal}
+          width={layout.width}
+          height={layout.height}
+          theme={theme}
+          transparentPanels={!forceSolidPanels && paletteOrigin && theme.paletteModalBg === undefined}
+        />
+      ) : modal.mode === "info" ? (
+        <InfoModalBody modal={modal} />
+      ) : modal.mode === "palette" ? (
           <PaletteModalBody modal={modal} contentWidth={contentWidth} />
         ) : (
           <MenuModalBody modal={modal} />
@@ -401,45 +402,81 @@ function InfoModalBody({ modal }: { readonly modal: InfoModalOptions }) {
 function SplitModalBody({
   modal,
   width,
+  height,
   theme,
   transparentPanels,
-  }: {
-      readonly modal: SplitModalOptions;
-      readonly width: number;
-      readonly height: number;
-    readonly theme: ReturnType<typeof resolveMissionControlTheme>;
-      readonly transparentPanels: boolean;
-    }) {
+}: {
+  readonly modal: SplitModalOptions;
+  readonly width: number;
+  readonly height: number;
+  readonly theme: ReturnType<typeof resolveMissionControlTheme>;
+  readonly transparentPanels: boolean;
+}) {
   const ratio = modal.renderSpec.layout.splitRatio ?? [46, 54];
   const total = ratio[0] + ratio[1];
   const leftWidth = Math.max(18, Math.floor((width - 3) * ratio[0] / total));
   const rightWidth = Math.max(18, width - 3 - leftWidth);
   const items = modal.items.map((item) => normalizeSplitModalRow(item));
 
-  return (
-    <box width="100%" flexGrow={1} flexDirection="row" marginTop={1}>
-              <box width={leftWidth} height="100%" border title={modal.listTitle ?? "List"} paddingLeft={1} paddingRight={1} backgroundColor={transparentPanels ? undefined : theme.modalPanelBg}>
+  if (modal.stackedPanels === true) {
+    const listHeight = Math.max(6, Math.floor((height - 8) * 0.56));
+    const listRowLimit = Math.max(1, listHeight - 2);
+    const visibleItems = items.slice(0, listRowLimit);
+    return (
+      <box width="100%" flexGrow={1} flexDirection="column" marginTop={1}>
+        <box width="100%" height={listHeight} border title={modal.listTitle ?? "List"} paddingLeft={1} paddingRight={1} backgroundColor={theme.modalPanelBg}>
           <box width="100%" height="100%" flexDirection="column">
-            {items.length === 0 ? (
+            {visibleItems.length === 0 ? (
               <SafeText fg={OPEN_TUI_THEME.muted}>{modal.emptyLabel ?? "No items"}</SafeText>
-            ) : items.map((item, index) => (
-                <ModalRowView
-                  key={index}
-                  row={item}
-                  selected={index === modal.selectedIndex}
-                  paletteSelection={modal.returnTarget === "command-palette"}
-                />
-              ))}
+            ) : visibleItems.map((item, index) => (
+              <ModalRowView
+                key={index}
+                row={item}
+                selected={index === modal.selectedIndex}
+                paletteSelection={false}
+                backgroundColor={theme.modalPanelBg}
+              />
+            ))}
           </box>
-      </box>
-        <box width={1} />
-              <box width={rightWidth} height="100%" border title={modal.detailTitle ?? "Detail"} paddingLeft={1} paddingRight={1} backgroundColor={transparentPanels ? undefined : theme.modalPanelBg}>
+        </box>
+        <box height={1} />
+        <box width="100%" flexGrow={1} border title={modal.detailTitle ?? "Detail"} paddingLeft={1} paddingRight={1} backgroundColor={theme.modalPanelBg}>
           <box width="100%" height="100%" flexDirection="column">
             {modal.detailItems.length === 0 ? (
               <SafeText fg={OPEN_TUI_THEME.muted}>No details</SafeText>
             ) : modal.detailItems.map((item, index) => (
-              <InfoItemView key={index} item={item} />
+              <InfoItemView key={index} item={item} backgroundColor={theme.modalPanelBg} />
             ))}
+          </box>
+        </box>
+      </box>
+    );
+  }
+
+  return (
+    <box width="100%" flexGrow={1} flexDirection="row" marginTop={1}>
+      <box width={leftWidth} height="100%" border title={modal.listTitle ?? "List"} paddingLeft={1} paddingRight={1} backgroundColor={transparentPanels ? undefined : theme.modalPanelBg}>
+        <box width="100%" height="100%" flexDirection="column">
+          {items.length === 0 ? (
+            <SafeText fg={OPEN_TUI_THEME.muted}>{modal.emptyLabel ?? "No items"}</SafeText>
+          ) : items.map((item, index) => (
+            <ModalRowView
+              key={index}
+              row={item}
+              selected={index === modal.selectedIndex}
+              paletteSelection={modal.returnTarget === "command-palette"}
+            />
+          ))}
+        </box>
+      </box>
+      <box width={1} />
+      <box width={rightWidth} height="100%" border title={modal.detailTitle ?? "Detail"} paddingLeft={1} paddingRight={1} backgroundColor={transparentPanels ? undefined : theme.modalPanelBg}>
+        <box width="100%" height="100%" flexDirection="column">
+          {modal.detailItems.length === 0 ? (
+            <SafeText fg={OPEN_TUI_THEME.muted}>No details</SafeText>
+          ) : modal.detailItems.map((item, index) => (
+            <InfoItemView key={index} item={item} />
+          ))}
         </box>
       </box>
     </box>
@@ -450,10 +487,12 @@ function ModalRowView({
   row,
   selected,
   paletteSelection,
+  backgroundColor,
 }: {
   readonly row: NormalizedModalRow;
   readonly selected: boolean;
   readonly paletteSelection?: boolean;
+  readonly backgroundColor?: string;
 }) {
   const selectedFg = paletteSelection
     ? OPEN_TUI_THEME.paletteSelectionFg
@@ -469,7 +508,7 @@ function ModalRowView({
       {row.section ? (
         <SafeText fg={OPEN_TUI_THEME.muted} attributes={TextAttributes.BOLD}>{row.section}</SafeText>
       ) : null}
-      <box width="100%" backgroundColor={selected ? selectedBg : undefined}>
+      <box width="100%" backgroundColor={selected ? selectedBg : backgroundColor}>
         <SafeText fg={fg} attributes={selected ? TextAttributes.BOLD : row.style === "block" ? TextAttributes.BOLD : undefined}>{`${row.label}${detail}${hint}`}</SafeText>
       </box>
     </box>
@@ -522,7 +561,13 @@ function PaletteModalRowView({
     );
   }
 
-function InfoItemView({ item }: { readonly item: ModalInfoItem }) {
+function InfoItemView({
+  item,
+  backgroundColor,
+}: {
+  readonly item: ModalInfoItem;
+  readonly backgroundColor?: string;
+}) {
   const prefix = item.detail ? `${item.text}: ${item.detail}` : item.text;
   const attributes = item.style === "block" ? TextAttributes.BOLD : item.tone === "accent" ? TextAttributes.BOLD : undefined;
   return (
@@ -530,7 +575,9 @@ function InfoItemView({ item }: { readonly item: ModalInfoItem }) {
       {item.section ? (
         <SafeText fg={OPEN_TUI_THEME.muted} attributes={TextAttributes.BOLD}>{item.section}</SafeText>
       ) : null}
-      <SafeText fg={toneColor(item.tone)} attributes={attributes}>{prefix}</SafeText>
+      <box width="100%" backgroundColor={backgroundColor}>
+        <SafeText fg={toneColor(item.tone)} attributes={attributes}>{prefix}</SafeText>
+      </box>
     </box>
   );
 }

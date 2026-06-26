@@ -129,6 +129,8 @@ export interface SplitModalOptions {
   readonly eyebrow?: string;
   readonly listTitle?: string;
   readonly detailTitle?: string;
+  readonly solidPanels?: boolean;
+  readonly stackedPanels?: boolean;
   readonly items: readonly SplitModalRow[];
   readonly selectedIndex: number;
   readonly detailItems: readonly ModalInfoItem[];
@@ -318,7 +320,7 @@ export function buildOverlayRenderSpec(kind: OverlayModalKind): OverlayRenderSpe
         chrome: STANDARD_CHROME,
         selection: STANDARD_SELECTION,
         text: STANDARD_TEXT,
-        layout: { ...WIDE_LAYOUT, splitRatio: [36, 64] },
+        layout: { ...WIDE_LAYOUT, preferredWidth: 112, minWidth: 104, splitRatio: [58, 42] },
       };
     case "timeline":
       return {

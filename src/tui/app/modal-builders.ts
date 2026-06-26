@@ -19,8 +19,10 @@ import {
   type ModalInfoItem,
   type ModalOptions,
 } from "../shared/modal-model.js";
+import { truncate } from "../shared/format.js";
 import { getValidFeatureTransitions } from "@/shared/domain/legacy-mission";
 import { TASK_STATUSES } from "@/shared/domain/task";
+import type { TaskBoardItem } from "../state/screen-types.js";
 import { FEATURE_STATUS_LABEL, FEATURE_TASK_STATUS_LABEL, TASK_STATUS_COLUMN_LABEL, AGENT_STATUS_LABEL } from "../shared/theme.js";
   import {
     getConfigRowsForTab,
@@ -293,6 +295,20 @@ type TimelineModalState = AppState & { modal: Extract<AppState["modal"], { kind:
 type PrincipleReviewModalState = AppState & { modal: Extract<AppState["modal"], { kind: "principle-review" }> };
 type AutopilotModalState = AppState & { modal: Extract<AppState["modal"], { kind: "autopilot" }> };
 
+const TASK_TABLE_WIDTH = 76;
+const TASK_TABLE_STATUS_WIDTH = 4;
+const TASK_TABLE_PRIORITY_WIDTH = 3;
+const TASK_TABLE_ID_WIDTH = 6;
+const TASK_TABLE_EVIDENCE_WIDTH = 2;
+const TASK_TABLE_BLOCKER_WIDTH = 2;
+const TASK_TABLE_TITLE_WIDTH = TASK_TABLE_WIDTH
+  - TASK_TABLE_STATUS_WIDTH
+  - TASK_TABLE_PRIORITY_WIDTH
+  - TASK_TABLE_ID_WIDTH
+  - TASK_TABLE_EVIDENCE_WIDTH
+  - TASK_TABLE_BLOCKER_WIDTH
+  - 5;
+
 function buildAgentGridModal(
   state: AgentGridModalState,
   returnTarget: "command-palette" | undefined,
@@ -432,34 +448,101 @@ function buildTaskBoardModal(
     title: "Task Board",
     eyebrow: columnTabs,
     listTitle: TASK_STATUS_COLUMN_LABEL[col],
+    solidPanels: true,
+    stackedPanels: true,
     items: items.length > 0
-      ? items.map((item) => ({
-          label: item.title,
-          detail: item.assignee ? `@${item.assignee}` : undefined,
-          hint: item.id,
-        }))
-      : [{ label: `No ${TASK_STATUS_COLUMN_LABEL[col].toLowerCase()} tasks`, selectable: false, tone: "muted" as const }],
-    selectedIndex: Math.min(state.modal.selectedIndex, Math.max(0, items.length - 1)),
+      ? [
+          {
+            label: formatTaskTableHeader(),
+            selectable: false,
+            tone: "muted" as const,
+          },
+          ...items.map((item) => ({
+            label: formatTaskTableRow(item),
+          })),
+        ]
+      : [{
+          label: `No ${TASK_STATUS_COLUMN_LABEL[col].toLowerCase()} tasks`,
+          selectable: false,
+          tone: "muted" as const,
+        }],
+    selectedIndex: items.length > 0
+      ? Math.min(state.modal.selectedIndex + 1, items.length)
+      : 0,
     detailItems: selected
       ? [
-          { text: selected.title },
+          ...wrapTaskDetailText(selected.title).map((text) => ({ text })),
           { text: `ID: ${selected.id}` },
-          { text: `Priority: ${selected.priority}` },
+          { text: `Priority: ${selected.priority}  Evidence: ${selected.evidenceCount}  Blockers: ${selected.blockedByCount}` },
           ...(selected.assignee ? [{ text: `Assignee: ${selected.assignee}` }] : []),
-          ...(selected.labels.length > 0 ? [{ text: `Labels: ${selected.labels.join(", ")}` }] : []),
-          ...(selected.blockedByCount > 0 ? [{ text: `Blocked by: ${selected.blockedByCount}` }] : []),
-          { text: `Evidence: ${selected.evidenceCount} recorded`, section: "Evidence" },
-          ...(selected.recentEvidence.length > 0
-            ? selected.recentEvidence.map((ev) => ({
-                text: `${ev.created_at}  ${ev.kind}  ${ev.witness_level}`,
-              }))
-            : [{ text: "(no evidence)" }]),
         ]
       : [{ text: "Select a task to view details" }],
     footer: `Tab/[/] columns -- ${buildListOverlayFooter(returnTarget)}`,
     returnTarget,
     renderSpec: buildOverlayRenderSpec("task-board"),
   };
+}
+
+function formatTaskTableHeader(): string {
+  return [
+    padTaskCell("ST", TASK_TABLE_STATUS_WIDTH),
+    padTaskCell("PRI", TASK_TABLE_PRIORITY_WIDTH),
+    padTaskCell("TASK", TASK_TABLE_TITLE_WIDTH),
+    padTaskCell("ID", TASK_TABLE_ID_WIDTH),
+    padTaskCell("EV", TASK_TABLE_EVIDENCE_WIDTH),
+    padTaskCell("BL", TASK_TABLE_BLOCKER_WIDTH),
+  ].join(" ");
+}
+
+function formatTaskTableRow(item: TaskBoardItem): string {
+  const shortId = item.id.split("-").at(-1) ?? item.id;
+  return [
+    padTaskCell(formatTaskTableStatus(item.status), TASK_TABLE_STATUS_WIDTH),
+    padTaskCell(formatTaskPriority(item.priority), TASK_TABLE_PRIORITY_WIDTH),
+    padTaskCell(item.title, TASK_TABLE_TITLE_WIDTH),
+    padTaskCell(shortId, TASK_TABLE_ID_WIDTH),
+    padTaskCell(String(item.evidenceCount), TASK_TABLE_EVIDENCE_WIDTH, "end"),
+    padTaskCell(String(item.blockedByCount), TASK_TABLE_BLOCKER_WIDTH, "end"),
+  ].join(" ");
+}
+
+function padTaskCell(text: string, width: number, justify: "start" | "end" = "start"): string {
+  const clipped = truncate(text, width);
+  return justify === "end" ? clipped.padStart(width) : clipped.padEnd(width);
+}
+
+function formatTaskTableStatus(status: TaskBoardItem["status"]): string {
+  switch (status) {
+    case "pending":
+      return "RDY";
+    case "in_progress":
+      return "RUN";
+    case "completed":
+      return "DONE";
+  }
+}
+
+function formatTaskPriority(priority: TaskBoardItem["priority"]): string {
+  const text = String(priority);
+  return text.length === 0 ? "-" : text.slice(0, 1).toUpperCase();
+}
+
+function wrapTaskDetailText(text: string): readonly string[] {
+  const width = 72;
+  const words = text.split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let line = "";
+  for (const word of words) {
+    const candidate = line.length === 0 ? word : `${line} ${word}`;
+    if (candidate.length <= width) {
+      line = candidate;
+      continue;
+    }
+    if (line.length > 0) lines.push(line);
+    line = word.length > width ? truncate(word, width) : word;
+  }
+  if (line.length > 0) lines.push(line);
+  return lines.length > 0 ? lines : [text];
 }
 
 function buildTimelineModal(
