@@ -184,6 +184,9 @@ pub fn add_simple_task(
     }
     let paths = lookup::paths_for_tasks_dir(tasks_dir)
         .context("cannot resolve maestro paths from tasks dir")?;
+    if card_id.is_none() {
+        return progress::add_simple_task(&paths, title, project, created_at, actor);
+    }
     let id = card_store::mint_card_id(&paths, CardType::Task, title);
     let mut task = TaskRecord::draft(&id, title, &created_at);
     task.feature_id = card_id;
@@ -225,6 +228,9 @@ pub fn task_yaml_path(tasks_dir: &Path, id: &str) -> Result<PathBuf> {
     let paths = lookup::paths_for_tasks_dir(tasks_dir)
         .context("cannot resolve maestro paths from tasks dir")?;
     let Some(home) = card_store::locate(&paths, id)? else {
+        if let Some((_, snapshot, _)) = progress::load_task_with_snapshot(&paths, id)? {
+            return Ok(snapshot.path);
+        }
         bail!("task not found: {id}");
     };
     Ok(home.path().to_path_buf())
@@ -736,6 +742,15 @@ pub fn set_feature(
     at: &str,
 ) -> Result<TaskRecord> {
     let (mut task, snapshot, _) = lookup::load_task_with_snapshot(tasks_dir, id)?;
+    if matches!(snapshot, template::TaskSnapshot::Progress(_)) {
+        if task.feature_id == feature {
+            return Ok(task);
+        }
+        bail!(
+            "task {} lives inside progress.yml; lift it into a card-backed task before attaching it to a feature or card",
+            task.id
+        );
+    }
     if feature_link_is_settled(&task.state) {
         bail!(
             "task {} is {}; its feature link is settled history and cannot change",

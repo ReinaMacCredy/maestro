@@ -2,7 +2,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 use crate::domain::card::store::ResolvedCard;
-use crate::domain::task::cards;
+use crate::domain::task::{cards, progress};
 use crate::foundation::core::schema::TASK_SCHEMA_VERSION;
 use crate::foundation::core::slug::slugify_ascii;
 
@@ -239,6 +239,7 @@ pub struct AcceptanceFile {
 #[derive(Clone, Debug, PartialEq)]
 pub enum TaskSnapshot {
     Card(Box<ResolvedCard>),
+    Progress(Box<progress::ProgressTaskSnapshot>),
 }
 
 impl TaskRecord {
@@ -300,6 +301,7 @@ impl AcceptanceFile {
 pub fn save_task_with_snapshot(task: &TaskRecord, snapshot: &TaskSnapshot) -> Result<()> {
     match snapshot {
         TaskSnapshot::Card(resolved) => cards::save(task, resolved),
+        TaskSnapshot::Progress(snapshot) => progress::save_task_with_snapshot(task, snapshot),
     }
 }
 

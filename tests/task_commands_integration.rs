@@ -3,7 +3,7 @@ mod support;
 
 use std::fs;
 use std::os::unix::fs as unix_fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use card_support::{card_dir, card_doc, card_record_path, id_by_title, task_record};
@@ -57,6 +57,30 @@ fn stderr(output: &std::process::Output) -> String {
     String::from_utf8(output.stderr.clone()).expect("invariant: stderr should be UTF-8")
 }
 
+fn progress_task_record(repo: &Path, id: &str) -> (PathBuf, Value) {
+    let cards = repo.join(".maestro/cards");
+    for entry in fs::read_dir(&cards).expect("invariant: cards dir should be readable") {
+        let dir = entry
+            .expect("invariant: cards dir entry should read")
+            .path();
+        let progress_path = dir.join("progress.yml");
+        if !progress_path.exists() {
+            continue;
+        }
+        let progress: Value = serde_yaml::from_str(
+            &fs::read_to_string(&progress_path).expect("invariant: progress.yml should read"),
+        )
+        .expect("invariant: progress.yml should parse");
+        if let Some(task) = progress["tasks"]
+            .as_sequence()
+            .and_then(|tasks| tasks.iter().find(|task| task["id"] == id))
+        {
+            return (dir, task.clone());
+        }
+    }
+    panic!("no progress task {id} under {}", cards.display());
+}
+
 /// A card-mode repo: `.maestro/cards/` exists so `store_mode` resolves to Cards,
 /// plus the generic claims-only harness the task verbs read for verification gating.
 fn setup_repo() -> TestTempDir {
@@ -81,7 +105,7 @@ fn setup_repo() -> TestTempDir {
 }
 
 #[test]
-fn task_add_start_done_is_low_ceremony_and_verifies_simple_completion() {
+fn task_progress_cli_flow_add_start_done_is_low_ceremony_and_verifies_simple_completion() {
     let temp = setup_repo();
     let repo = temp.path();
 
@@ -95,6 +119,22 @@ fn task_add_start_done_is_low_ceremony_and_verifies_simple_completion() {
 
     let shown = stdout(&maestro(repo, &["task", "show", &id]));
     assert!(shown.contains("state: ready"), "{shown}");
+    let (progress_dir, progress_task) = progress_task_record(repo, &id);
+    assert_eq!(progress_task["state"], Value::String("ready".to_string()));
+    assert_eq!(
+        card_doc(
+            repo,
+            progress_dir
+                .file_name()
+                .and_then(|name| name.to_str())
+                .expect("invariant: progress card dir has UTF-8 name")
+        )["type"],
+        Value::String("progress".to_string())
+    );
+    assert!(
+        !repo.join(".maestro/cards/tasks").join(&id).exists(),
+        "bare task add should write progress.yml, not a legacy task-card home"
+    );
 
     let start = maestro_with_env(
         repo,
@@ -116,7 +156,7 @@ fn task_add_start_done_is_low_ceremony_and_verifies_simple_completion() {
     );
     assert_success(&done, &["task", "done", &id]);
 
-    let record = task_record(repo, &id);
+    let (_, record) = progress_task_record(repo, &id);
     assert_eq!(record["state"], Value::String("verified".to_string()));
     assert_eq!(record["verification"]["claims_only"], Value::Bool(true));
     assert_eq!(

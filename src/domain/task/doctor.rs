@@ -5,9 +5,9 @@ use anyhow::{Context, Result};
 
 use crate::domain::card::schema::Card;
 use crate::domain::decisions;
-use crate::domain::task::cards;
 use crate::domain::task::lookup::paths_for_tasks_dir;
 use crate::domain::task::template::{BlockerKind, TaskRecord};
+use crate::domain::task::{cards, progress};
 use crate::foundation::core::paths::MaestroPaths;
 
 /// Result of scanning task blocker references.
@@ -46,10 +46,16 @@ pub fn load_task_records(tasks_dir: &Path) -> Result<Vec<TaskRecord>> {
 pub fn load_task_entries(tasks_dir: &Path) -> Result<Vec<TaskEntry>> {
     let paths =
         paths_for_tasks_dir(tasks_dir).context("cannot resolve maestro paths from tasks dir")?;
-    Ok(cards::scan(&paths)?
+    let mut entries: Vec<TaskEntry> = cards::scan(&paths)?
         .into_iter()
         .map(|(task, task_dir)| TaskEntry { task, task_dir })
-        .collect())
+        .collect();
+    entries.extend(
+        progress::scan(&paths)?
+            .into_iter()
+            .map(|(task, task_dir)| TaskEntry { task, task_dir }),
+    );
+    Ok(entries)
 }
 
 /// [`load_task_entries`] over the archived card tree (`archive/cards/`), for
