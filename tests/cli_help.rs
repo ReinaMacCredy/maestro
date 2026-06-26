@@ -59,6 +59,7 @@ fn root_help_lists_top_level_commands() {
             "query",
             "mcp",
             "hook",
+            "mission-control",
             "watch",
             "version",
         ],

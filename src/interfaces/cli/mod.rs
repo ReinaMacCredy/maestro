@@ -32,6 +32,7 @@ pub mod lean;
 pub mod loop_recipes;
 pub mod mcp;
 pub mod migrate;
+pub mod mission_control;
 pub mod msg;
 pub mod playbook;
 pub mod qa;
@@ -389,6 +390,11 @@ pub enum RootCommand {
     Mcp(McpArgs),
     #[command(about = "Hook entry points invoked by the agent harness")]
     Hook(HookArgs),
+    #[command(
+        about = "Read-only Mission Control dashboard (preview, JSON, render-check)",
+        after_help = "Examples:\n  maestro mission-control --preview --size 120x40 --format plain\n  maestro mission-control --json\n  maestro mission-control --render-check --size 120x40"
+    )]
+    MissionControl(MissionControlArgs),
     #[command(
         about = "Live dependency-tree board (bare) or a one-shot snapshot; optional feature-id focuses one feature",
         after_help = "Examples:\n  maestro watch                 # live board, all features with open work\n  maestro watch <feature-id>    # live board focused on one feature\n  maestro watch snapshot        # render one frame and exit\n  maestro watch snapshot <feature-id>"
@@ -1826,6 +1832,37 @@ pub enum WatchCommand {
 }
 
 #[derive(Debug, Args)]
+pub struct MissionControlArgs {
+    /// Output the current Mission Control snapshot as JSON.
+    #[arg(long, conflicts_with_all = ["preview", "screen", "render_check", "format", "size"])]
+    pub json: bool,
+    /// Render a read-only preview frame. Omit value for the dashboard.
+    #[arg(long, num_args = 0..=1, default_missing_value = "dashboard")]
+    pub preview: Option<Option<String>>,
+    /// Alias for --preview <screen>, intended for programmatic callers.
+    #[arg(long, conflicts_with = "preview")]
+    pub screen: Option<String>,
+    /// Select a feature/card id for dashboard or cards previews.
+    #[arg(long)]
+    pub feature: Option<String>,
+    /// Render dimensions, e.g. 120x40.
+    #[arg(long)]
+    pub size: Option<String>,
+    /// Output format for preview frames.
+    #[arg(long, value_enum)]
+    pub format: Option<MissionControlFormat>,
+    /// Validate supported preview screens and report JSON.
+    #[arg(long, conflicts_with_all = ["json", "preview", "screen", "feature", "format"])]
+    pub render_check: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+pub enum MissionControlFormat {
+    Plain,
+    Ansi,
+}
+
+#[derive(Debug, Args)]
 pub struct HookArgs {
     #[command(subcommand)]
     pub command: HookCommand,
@@ -1918,6 +1955,7 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Index(args) => index::run(args),
         RootCommand::Mcp(args) => mcp::run(args),
         RootCommand::Hook(args) => hook::run(args),
+        RootCommand::MissionControl(args) => mission_control::run(args),
         RootCommand::Watch(args) => watch::run(args),
         RootCommand::Verify { id } => verify::run(id),
         RootCommand::Playbook(args) => playbook::run(args),
@@ -2149,6 +2187,16 @@ mod tests {
         }
     }
 
+    fn parse_mission_control(argv: &[&str]) -> MissionControlArgs {
+        match Cli::try_parse_from(argv)
+            .unwrap_or_else(|e| panic!("parse {argv:?}: {e}"))
+            .command
+        {
+            RootCommand::MissionControl(args) => args,
+            other => panic!("expected mission-control, got {other:?}"),
+        }
+    }
+
     fn parse_active(argv: &[&str]) -> ActiveArgs {
         match Cli::try_parse_from(argv)
             .unwrap_or_else(|e| panic!("parse {argv:?}: {e}"))
@@ -2291,6 +2339,45 @@ mod tests {
 
         let interval = parse_watch(&["maestro", "watch", "--interval", "5"]);
         assert_eq!(interval.interval, Some(5));
+    }
+
+    #[test]
+    fn mission_control_parse_matrix() {
+        let preview = parse_mission_control(&[
+            "maestro",
+            "mission-control",
+            "--preview",
+            "--size",
+            "120x40",
+            "--format",
+            "plain",
+        ]);
+        assert_eq!(preview.preview, Some(Some("dashboard".to_string())));
+        assert_eq!(preview.size.as_deref(), Some("120x40"));
+        assert_eq!(preview.format, Some(MissionControlFormat::Plain));
+
+        let cards = parse_mission_control(&[
+            "maestro",
+            "mission-control",
+            "--screen",
+            "cards",
+            "--feature",
+            "feat-x",
+        ]);
+        assert_eq!(cards.screen.as_deref(), Some("cards"));
+        assert_eq!(cards.feature.as_deref(), Some("feat-x"));
+
+        let json = parse_mission_control(&["maestro", "mission-control", "--json"]);
+        assert!(json.json);
+
+        let render_check = parse_mission_control(&[
+            "maestro",
+            "mission-control",
+            "--render-check",
+            "--size",
+            "120x40",
+        ]);
+        assert!(render_check.render_check);
     }
 
     #[test]
