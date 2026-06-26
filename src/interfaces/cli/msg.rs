@@ -13,6 +13,8 @@
 //! the running card is under that feature (membership is the live parent edge;
 //! there is no reparent verb, so it ends only when the feature goes terminal).
 
+use std::collections::BTreeSet;
+
 use anyhow::{Result, anyhow, bail};
 
 use crate::domain::card;
@@ -55,6 +57,10 @@ fn send(from: Option<&str>, to: &str, text: &str) -> Result<()> {
             None => Err(anyhow!("no card {to} to message")),
         };
     };
+
+    if target.card().card_type == card::schema::CardType::Task {
+        reject_task_inbox_endpoint(&paths, &me, &me_card, target.card())?;
+    }
 
     // A send addressed to a live feature card is a broadcast to its members, not
     // a pairwise message: dispatch before the link gate.
@@ -107,17 +113,25 @@ fn read(scope: Option<&str>) -> Result<()> {
     let me = current_card(&paths)?;
     let me_card = resolve_card(&paths, &me)?;
     let channels = visible_channels_union(&paths, &me_card)?;
+    let legacy_channels = legacy_task_channels_union(&paths, &me_card)?;
     let selected: Vec<&Channel> = channels
         .iter()
         .filter(|channel| scope.is_none_or(|target| channel.address(&me) == target))
         .collect();
+    let selected_legacy: Vec<&LegacyTaskChannel> = legacy_channels
+        .iter()
+        .filter(|channel| scope.is_none_or(|target| channel.matches_scope(target)))
+        .collect();
 
-    if selected.is_empty() {
+    if selected.is_empty() && selected_legacy.is_empty() {
         println!("{}", empty_note(scope));
         return Ok(());
     }
     for channel in selected {
         read_channel(&paths, &me, channel)?;
+    }
+    for channel in selected_legacy {
+        read_legacy_task_channel(&paths, &me, channel)?;
     }
     Ok(())
 }
@@ -131,10 +145,16 @@ fn list(scope: Option<&str>) -> Result<()> {
     let me_card = resolve_card(&paths, &me)?;
     let mut channels = visible_channels_union(&paths, &me_card)?;
     channels.sort_by(|a, b| a.address(&me).cmp(b.address(&me)));
+    let mut legacy_channels = legacy_task_channels_union(&paths, &me_card)?;
+    legacy_channels.sort_by(|a, b| {
+        a.partner
+            .cmp(&b.partner)
+            .then_with(|| a.task_id.cmp(&b.task_id))
+    });
 
     match scope {
         None => {
-            if channels.is_empty() {
+            if channels.is_empty() && legacy_channels.is_empty() {
                 println!("{}", empty_note(None));
                 return Ok(());
             }
@@ -172,30 +192,39 @@ fn list(scope: Option<&str>) -> Result<()> {
                     }
                 }
             }
+            for channel in &legacy_channels {
+                let at = cursor(&paths, &channel.channel, &me)?;
+                let unread = channel.channel.unread(&me, at.as_deref()).len();
+                let last = channel
+                    .channel
+                    .messages
+                    .last()
+                    .map_or("-", |message| message.ts.as_str());
+                println!(
+                    "legacy task-addressed channel about {} with {}  your unread: {}  last {} (read-only; reply via parent Card {})",
+                    channel.task_id, channel.partner, unread, last, me
+                );
+            }
         }
         Some(target) => {
-            let Some(channel) = channels.iter().find(|c| c.address(&me) == target) else {
+            let selected: Vec<&Channel> = channels
+                .iter()
+                .filter(|channel| channel.address(&me) == target)
+                .collect();
+            let selected_legacy: Vec<&LegacyTaskChannel> = legacy_channels
+                .iter()
+                .filter(|channel| channel.matches_scope(target))
+                .collect();
+            if selected.is_empty() && selected_legacy.is_empty() {
                 println!("{}", empty_note(scope));
                 return Ok(());
-            };
-            println!("{target}:");
-            for message in &channel.messages {
-                // A feature thread labels each non-self line with its real sender;
-                // a pair thread labels the partner's lines with the partner id.
-                let who: &str = if message.from_card == me {
-                    "you"
-                } else {
-                    match &channel.kind {
-                        ChannelKind::Pair(_) => target,
-                        ChannelKind::Feature(_) => message.from_card.as_str(),
-                    }
-                };
-                println!("  {who}  {}  {}", message.ts, message.text);
             }
-            if !channel.messages.is_empty() {
-                print_task_ordering_hint();
+            for channel in selected {
+                list_channel_timeline(&paths, &me, target, channel)?;
             }
-            channel::set_cursor_to_latest(&paths, channel, &me)?;
+            for channel in selected_legacy {
+                list_legacy_task_channel(&paths, &me, channel)?;
+            }
         }
     }
     Ok(())
@@ -233,6 +262,105 @@ fn read_channel(paths: &MaestroPaths, me: &str, channel: &Channel) -> Result<()>
     }
     channel::set_cursor_to_latest(paths, channel, me)?;
     Ok(())
+}
+
+fn read_legacy_task_channel(
+    paths: &MaestroPaths,
+    me: &str,
+    channel: &LegacyTaskChannel,
+) -> Result<()> {
+    let at = cursor(paths, &channel.channel, me)?;
+    let unread = channel.channel.unread(me, at.as_deref());
+    let seen = channel
+        .channel
+        .seen_context(me, at.as_deref(), CONTEXT_LIMIT);
+
+    println!(
+        "legacy task-addressed channel about {} with {} (read-only; reply via parent Card {}):",
+        channel.task_id, channel.partner, me
+    );
+    for message in &seen {
+        println!(
+            "  . {}  {}  {}",
+            legacy_line_speaker(me, message),
+            message.ts,
+            message.text
+        );
+    }
+    if unread.is_empty() {
+        println!("  (no new messages)");
+    } else {
+        for message in &unread {
+            println!(
+                "  * {}  {}  {}",
+                legacy_line_speaker(me, message),
+                message.ts,
+                message.text
+            );
+        }
+        print_task_ordering_hint();
+    }
+    channel::set_cursor_to_latest(paths, &channel.channel, me)?;
+    Ok(())
+}
+
+fn list_channel_timeline(
+    paths: &MaestroPaths,
+    me: &str,
+    target: &str,
+    channel: &Channel,
+) -> Result<()> {
+    println!("{target}:");
+    for message in &channel.messages {
+        // A feature thread labels each non-self line with its real sender; a pair
+        // thread labels the partner's lines with the partner id.
+        let who: &str = if message.from_card == me {
+            "you"
+        } else {
+            match &channel.kind {
+                ChannelKind::Pair(_) => target,
+                ChannelKind::Feature(_) => message.from_card.as_str(),
+            }
+        };
+        println!("  {who}  {}  {}", message.ts, message.text);
+    }
+    if !channel.messages.is_empty() {
+        print_task_ordering_hint();
+    }
+    channel::set_cursor_to_latest(paths, channel, me)?;
+    Ok(())
+}
+
+fn list_legacy_task_channel(
+    paths: &MaestroPaths,
+    me: &str,
+    channel: &LegacyTaskChannel,
+) -> Result<()> {
+    println!(
+        "legacy task-addressed channel about {} with {} (read-only; reply via parent Card {}):",
+        channel.task_id, channel.partner, me
+    );
+    for message in &channel.channel.messages {
+        println!(
+            "  {}  {}  {}",
+            legacy_line_speaker(me, message),
+            message.ts,
+            message.text
+        );
+    }
+    if !channel.channel.messages.is_empty() {
+        print_task_ordering_hint();
+    }
+    channel::set_cursor_to_latest(paths, &channel.channel, me)?;
+    Ok(())
+}
+
+fn legacy_line_speaker<'a>(me: &str, message: &'a Message) -> &'a str {
+    if message.from_card == me {
+        "you"
+    } else {
+        message.from_card.as_str()
+    }
 }
 
 fn print_task_ordering_hint() {
@@ -283,6 +411,16 @@ pub(super) fn inbox_banner() -> Result<()> {
             counts.push((channel.address(&me).to_string(), unread));
         }
     }
+    for channel in legacy_task_channels_union(&paths, &me_card.card)? {
+        let at = cursor(&paths, &channel.channel, &me)?;
+        let unread = channel.channel.unread(&me, at.as_deref()).len();
+        if unread > 0 {
+            counts.push((
+                format!("legacy task {} with {}", channel.task_id, channel.partner),
+                unread,
+            ));
+        }
+    }
     if counts.is_empty() {
         return Ok(());
     }
@@ -325,6 +463,62 @@ fn visible_channels_union(paths: &MaestroPaths, me: &card::schema::Card) -> Resu
     Ok(visible)
 }
 
+struct LegacyTaskChannel {
+    task_id: String,
+    partner: String,
+    channel: Channel,
+}
+
+impl LegacyTaskChannel {
+    fn matches_scope(&self, target: &str) -> bool {
+        self.partner == target || self.task_id == target
+    }
+}
+
+/// Read-only compatibility for old transitional channels that were addressed to
+/// a child Task id. New sends to Task ids are rejected, but a parent Card still
+/// needs a recovery surface for history that already exists on disk.
+fn legacy_task_channels_union(
+    paths: &MaestroPaths,
+    me: &card::schema::Card,
+) -> Result<Vec<LegacyTaskChannel>> {
+    let roots = worktree_roots(paths);
+    let mut seen = BTreeSet::new();
+    let mut visible = Vec::new();
+    let mut task_ids = BTreeSet::new();
+    for card in card::query::scan(paths)?
+        .into_iter()
+        .chain(card::query::scan_dir(&paths.archive_cards_dir())?)
+    {
+        if card.card_type == card::schema::CardType::Task
+            && card.parent.as_deref() == Some(me.id.as_str())
+        {
+            task_ids.insert(card.id);
+        }
+    }
+
+    for task_id in task_ids {
+        for channel in channel::channels_for_union(&roots, &task_id)? {
+            let Some(partner) = channel
+                .pair_partner(&task_id)
+                .map(std::string::ToString::to_string)
+            else {
+                continue;
+            };
+            if !seen.insert((task_id.clone(), channel.key.clone())) {
+                continue;
+            }
+            visible.push(LegacyTaskChannel {
+                task_id: task_id.clone(),
+                partner,
+                channel,
+            });
+        }
+    }
+
+    Ok(visible)
+}
+
 fn cursor(paths: &MaestroPaths, channel: &Channel, me: &str) -> Result<Option<String>> {
     channel::cursor_union(&worktree_roots(paths), &channel.key, me)
 }
@@ -358,6 +552,12 @@ enum CardPresence {
 }
 
 impl CardPresence {
+    fn card(&self) -> &card::schema::Card {
+        match self {
+            Self::Live(card) | Self::Archived(card) => card,
+        }
+    }
+
     fn terminal_status(&self) -> Option<&str> {
         match self {
             Self::Live(card)
@@ -382,4 +582,33 @@ fn resolve_live_or_archived_card(paths: &MaestroPaths, id: &str) -> Result<Optio
     }
     Ok(card::store::resolve_in(&paths.archive_cards_dir(), id)?
         .map(|resolved| CardPresence::Archived(resolved.card)))
+}
+
+fn reject_task_inbox_endpoint(
+    paths: &MaestroPaths,
+    me: &str,
+    me_card: &card::schema::Card,
+    task: &card::schema::Card,
+) -> Result<()> {
+    let Some(parent) = task.parent.as_deref() else {
+        bail!(
+            "Task {} is not a message inbox endpoint.\nNo owning parent Card is recorded; create or choose the Card that owns this work, then message that Card.\nFor execution ordering, use an explicit Task blocker: maestro task block {} --by <dependency-task-id>",
+            task.id,
+            task.id
+        );
+    };
+
+    let link_guidance = if card::query::pair_linked(paths, me_card, parent)? {
+        String::new()
+    } else {
+        format!("\nFirst link the Cards:\n  maestro link add {me} {parent}")
+    };
+    bail!(
+        "Task {} is not a message inbox endpoint.\nOwning parent Card: {}{}\nSend advisory coordination to the parent Card:\n  maestro msg send {} <text>\nFor execution ordering, use an explicit Task blocker:\n  maestro task block {} --by <dependency-task-id>",
+        task.id,
+        parent,
+        link_guidance,
+        parent,
+        task.id
+    );
 }

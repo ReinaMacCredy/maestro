@@ -12,6 +12,8 @@ use std::path::Path;
 use std::process::{Command, Output};
 
 use card_support::{card_doc, cards_repo, id_by_title};
+use maestro::domain::channel;
+use maestro::foundation::core::paths::MaestroPaths;
 use serde_json::Value;
 use support::TestTempDir;
 
@@ -1914,6 +1916,125 @@ fn linked_inbox_is_advisory_and_explicit_task_blocker_is_the_execution_gate() {
         String::from_utf8_lossy(&blocked_start.stderr).contains("unresolved blockers"),
         "explicit blocker failure should name unresolved blockers:\n{}",
         String::from_utf8_lossy(&blocked_start.stderr)
+    );
+}
+
+#[test]
+fn msg_send_to_task_rejects_with_parent_link_and_blocker_guidance() {
+    let temp = cards_repo("s2-msg-task-endpoint-reject");
+    let repo = temp.path();
+
+    maestro_in_session(repo, "setup", &["create", "-t", "chore", "Sender card"]);
+    let sender = id_by_title(repo, "Sender card");
+    maestro_in_session(repo, "setup", &["create", "-t", "chore", "Workflow card"]);
+    let workflow = id_by_title(repo, "Workflow card");
+    maestro_in_session(
+        repo,
+        "setup",
+        &["create", "-t", "task", "Low task", "--parent", &workflow],
+    );
+    let task = id_by_title(repo, "Low task");
+    maestro_in_session(repo, "setup", &["link", "add", &sender, &task]);
+
+    maestro_in_session(repo, "sender", &["note", &sender, "bind"]);
+    let rejected = maestro_in_session(repo, "sender", &["msg", "send", &task, "wrong layer"]);
+    assert!(
+        !rejected.status.success(),
+        "direct Task-addressed message should fail"
+    );
+    let err = String::from_utf8_lossy(&rejected.stderr);
+    assert!(
+        err.contains(&format!("Task {task} is not a message inbox endpoint")),
+        "error names the rejected Task endpoint:\n{err}"
+    );
+    assert!(
+        err.contains(&format!("Owning parent Card: {workflow}")),
+        "error names the owning parent Card:\n{err}"
+    );
+    assert!(
+        err.contains(&format!("maestro link add {sender} {workflow}")),
+        "unlinked parent guidance starts with the Card link:\n{err}"
+    );
+    assert!(
+        err.contains(&format!("maestro msg send {workflow} <text>")),
+        "error directs advisory coordination to the parent Card:\n{err}"
+    );
+    assert!(
+        err.contains(&format!(
+            "maestro task block {task} --by <dependency-task-id>"
+        )),
+        "error directs ordering to explicit Task blockers:\n{err}"
+    );
+}
+
+#[test]
+fn parent_card_surfaces_legacy_task_addressed_channels_read_only() {
+    let temp = cards_repo("s2-msg-legacy-task-channel");
+    let repo = temp.path();
+
+    maestro_in_session(repo, "setup", &["create", "-t", "chore", "Sender card"]);
+    let sender = id_by_title(repo, "Sender card");
+    maestro_in_session(repo, "setup", &["create", "-t", "chore", "Workflow card"]);
+    let workflow = id_by_title(repo, "Workflow card");
+    maestro_in_session(
+        repo,
+        "setup",
+        &["create", "-t", "task", "Low task", "--parent", &workflow],
+    );
+    let task = id_by_title(repo, "Low task");
+
+    let paths = MaestroPaths::new(repo);
+    channel::send(
+        &paths,
+        &sender,
+        &task,
+        "legacy-session",
+        "old task-addressed note",
+    )
+    .expect("legacy fixture channel should be writable");
+
+    maestro_in_session(repo, "workflow", &["note", &workflow, "bind"]);
+    let listed = maestro_in_session(repo, "workflow", &["msg", "list"]);
+    assert!(
+        listed.status.success(),
+        "parent msg list should succeed\nstderr:\n{}",
+        String::from_utf8_lossy(&listed.stderr)
+    );
+    let list_out = String::from_utf8_lossy(&listed.stdout);
+    assert!(
+        list_out.contains("legacy task-addressed channel")
+            && list_out.contains(&task)
+            && list_out.contains(&sender)
+            && list_out.contains("read-only")
+            && list_out.contains(&format!("reply via parent Card {workflow}")),
+        "parent list should show legacy task-addressed history as read-only:\n{list_out}"
+    );
+
+    let read = maestro_in_session(repo, "workflow", &["msg", "read"]);
+    assert!(
+        read.status.success(),
+        "parent msg read should succeed\nstderr:\n{}",
+        String::from_utf8_lossy(&read.stderr)
+    );
+    let read_out = String::from_utf8_lossy(&read.stdout);
+    assert!(
+        read_out.contains("legacy task-addressed channel")
+            && read_out.contains("old task-addressed note")
+            && read_out.contains("inbox is advisory"),
+        "parent read should surface the legacy message and keep advisory ordering guidance:\n{read_out}"
+    );
+
+    let scoped = maestro_in_session(repo, "workflow", &["msg", "list", &sender]);
+    assert!(
+        scoped.status.success(),
+        "scoped parent msg list should succeed\nstderr:\n{}",
+        String::from_utf8_lossy(&scoped.stderr)
+    );
+    let scoped_out = String::from_utf8_lossy(&scoped.stdout);
+    assert!(
+        scoped_out.contains("legacy task-addressed channel")
+            && scoped_out.contains("old task-addressed note"),
+        "scoped list should recover the same legacy channel by partner:\n{scoped_out}"
     );
 }
 
