@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use anyhow::{Result, bail};
 use serde::Serialize;
 
-use crate::domain::card::{self, schema::Card};
+use crate::domain::card;
 use crate::domain::proof;
 use crate::domain::run::{self, Presence};
 use crate::domain::task;
@@ -184,23 +184,51 @@ pub struct RenderCheckScreen {
     pub error: Option<String>,
 }
 
+#[derive(Clone, Debug)]
+struct CardView {
+    id: String,
+    title: String,
+    status: String,
+    parent: Option<String>,
+    claimed_by: Option<String>,
+    state: Option<card::query::RowState>,
+    is_feature: bool,
+}
+
 pub fn snapshot(paths: &MaestroPaths) -> Result<MissionControlSnapshot> {
-    let cards = scan_cards(paths)?;
-    let blocked_ids = blocked_ids(&cards);
+    let mut cards: Vec<_> = card::query::scan_with_failures(paths)?
+        .cards
+        .into_iter()
+        .map(|(card, _)| card)
+        .collect();
+    cards.sort_by(|left, right| left.id.cmp(&right.id));
+    let blocked_ids: BTreeSet<String> = card::query::blocked(&cards)
+        .into_iter()
+        .map(|card| card.id.clone())
+        .collect();
     let sessions = active_sessions(paths);
     let git = git::snapshot(paths.repo_root()).ok();
-    let features = feature_snapshots(&cards, &blocked_ids);
-    let tasks = task_snapshots(&cards, &blocked_ids);
-    let counts = card::query::RowStateCounts::from_cards(cards.iter(), &blocked_ids);
+    let views: Vec<CardView> = cards
+        .iter()
+        .map(|card| CardView {
+            id: card.id.clone(),
+            title: card.title.clone(),
+            status: card.status.clone(),
+            parent: card.parent.clone(),
+            claimed_by: card.claimed_by.clone(),
+            state: card::query::classify(card, &blocked_ids),
+            is_feature: card::query::feature_of(card).is_some_and(|feature| feature == card.id),
+        })
+        .collect();
+    let features = feature_snapshots(&views);
+    let tasks = task_snapshots(&views);
+    let counts = counts_from_views(views.iter());
     let proof = proof_snapshot(
         paths,
         git.as_ref().and_then(|git| git.head.clone()),
         &counts,
     )?;
-    let feature_count = cards
-        .iter()
-        .filter(|card| card.card_type == card::schema::CardType::Feature)
-        .count();
+    let feature_count = views.iter().filter(|card| card.is_feature).count();
     Ok(MissionControlSnapshot {
         schema: SNAPSHOT_SCHEMA,
         mode: "home",
@@ -288,23 +316,6 @@ pub fn render_check(
     })
 }
 
-fn scan_cards(paths: &MaestroPaths) -> Result<Vec<Card>> {
-    let mut cards: Vec<Card> = card::query::scan_with_failures(paths)?
-        .cards
-        .into_iter()
-        .map(|(card, _)| card)
-        .collect();
-    cards.sort_by(|left, right| left.id.cmp(&right.id));
-    Ok(cards)
-}
-
-fn blocked_ids(cards: &[Card]) -> BTreeSet<String> {
-    card::query::blocked(cards)
-        .into_iter()
-        .map(|card| card.id.clone())
-        .collect()
-}
-
 fn active_sessions(paths: &MaestroPaths) -> Vec<SessionSnapshot> {
     let roots = crate::interfaces::cli::worktree_roots(paths);
     let now = utc_now_timestamp();
@@ -324,10 +335,10 @@ fn active_sessions(paths: &MaestroPaths) -> Vec<SessionSnapshot> {
         .collect()
 }
 
-fn feature_snapshots(cards: &[Card], blocked_ids: &BTreeSet<String>) -> Vec<FeatureSnapshot> {
-    let mut children: BTreeMap<&str, Vec<&Card>> = BTreeMap::new();
+fn feature_snapshots(cards: &[CardView]) -> Vec<FeatureSnapshot> {
+    let mut children: BTreeMap<&str, Vec<&CardView>> = BTreeMap::new();
     for card in cards {
-        if card.card_type.workable()
+        if card.state.is_some()
             && let Some(parent) = card.parent.as_deref()
         {
             children.entry(parent).or_default().push(card);
@@ -335,14 +346,13 @@ fn feature_snapshots(cards: &[Card], blocked_ids: &BTreeSet<String>) -> Vec<Feat
     }
     cards
         .iter()
-        .filter(|card| card.card_type == card::schema::CardType::Feature)
+        .filter(|card| card.is_feature)
         .map(|feature| {
-            let counts = card::query::RowStateCounts::from_cards(
+            let counts = counts_from_views(
                 children
                     .get(feature.id.as_str())
                     .into_iter()
                     .flat_map(|children| children.iter().copied()),
-                blocked_ids,
             );
             FeatureSnapshot {
                 id: feature.id.clone(),
@@ -359,12 +369,11 @@ fn feature_snapshots(cards: &[Card], blocked_ids: &BTreeSet<String>) -> Vec<Feat
         .collect()
 }
 
-fn task_snapshots(cards: &[Card], blocked_ids: &BTreeSet<String>) -> Vec<TaskSnapshot> {
+fn task_snapshots(cards: &[CardView]) -> Vec<TaskSnapshot> {
     cards
         .iter()
-        .filter(|card| card.card_type.workable())
         .filter_map(|card| {
-            card::query::classify(card, blocked_ids).map(|state| TaskSnapshot {
+            card.state.map(|state| TaskSnapshot {
                 id: card.id.clone(),
                 title: card.title.clone(),
                 status: card.status.clone(),
@@ -374,6 +383,23 @@ fn task_snapshots(cards: &[Card], blocked_ids: &BTreeSet<String>) -> Vec<TaskSna
             })
         })
         .collect()
+}
+
+fn counts_from_views<'a>(
+    cards: impl IntoIterator<Item = &'a CardView>,
+) -> card::query::RowStateCounts {
+    let mut counts = card::query::RowStateCounts::default();
+    for card in cards {
+        match card.state {
+            Some(card::query::RowState::Done) => counts.done += 1,
+            Some(card::query::RowState::Blocked) => counts.blocked += 1,
+            Some(card::query::RowState::NeedsVerification) => counts.needs_verification += 1,
+            Some(card::query::RowState::Active) => counts.active += 1,
+            Some(card::query::RowState::Ready) => counts.ready += 1,
+            None => {}
+        }
+    }
+    counts
 }
 
 fn proof_snapshot(
