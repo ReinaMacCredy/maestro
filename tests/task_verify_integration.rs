@@ -584,6 +584,10 @@ fn feature_task_with_no_falsifier_verifies_on_claims_without_running_the_stack_s
     );
     write_feature_baseline(repo, "csv-export");
     assert_success(
+        &maestro(repo, &["feature", "finalize", "csv-export"]),
+        &["feature", "finalize", "csv-export"],
+    );
+    assert_success(
         &maestro(repo, &["feature", "accept", "csv-export"]),
         &["feature", "accept", "csv-export"],
     );
@@ -690,6 +694,10 @@ fn task_verify_warns_when_after_dependency_cleanup_fails_after_apply() {
         &["feature", "set", "cleanup-dependency"],
     );
     write_feature_baseline(repo, "cleanup-dependency");
+    assert_success(
+        &maestro(repo, &["feature", "finalize", "cleanup-dependency"]),
+        &["feature", "finalize", "cleanup-dependency"],
+    );
     assert_success(
         &maestro(repo, &["feature", "accept", "cleanup-dependency"]),
         &["feature", "accept", "cleanup-dependency"],

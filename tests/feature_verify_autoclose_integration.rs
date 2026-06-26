@@ -71,6 +71,10 @@ fn started_feature_two_acceptances(repo: &Path, id: &str) {
     )
     .expect("invariant: qa.md should be writable");
     stdout(
+        maestro(&["feature", "finalize", id], repo),
+        &["feature", "finalize"],
+    );
+    stdout(
         maestro(&["feature", "accept", id], repo),
         &["feature", "accept"],
     );

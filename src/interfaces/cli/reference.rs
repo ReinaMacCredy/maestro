@@ -145,6 +145,7 @@ const MAESTRO_CARD_COMMANDS: &[&str] = &[
     "maestro task doctor",
     "maestro event create",
     "maestro event intervention",
+    "maestro feature finalize",
     "maestro feature accept",
     "maestro feature prepare",
     "maestro feature amend",
@@ -194,6 +195,7 @@ const MAESTRO_DESIGN_COMMANDS: &[&str] = &[
     "maestro active",
     "maestro feature new",
     "maestro feature set",
+    "maestro feature finalize",
     "maestro feature show",
     "maestro feature spec",
     "maestro feature list",
@@ -496,6 +498,7 @@ mod tests {
     fn skill_scopes_render_filtered_exact_signatures() {
         let card = render_cli_reference_for_skill("maestro-card");
         assert!(card.contains("maestro task complete <ID>"), "{card}");
+        assert!(card.contains("maestro feature finalize <ID>"), "{card}");
         assert!(card.contains("maestro feature prepare <ID>"), "{card}");
         assert!(card.contains("maestro qa slice <ID>"), "{card}");
         assert!(card.contains("maestro card graph"), "{card}");
@@ -505,6 +508,7 @@ mod tests {
 
         let design = render_cli_reference_for_skill("maestro-design");
         assert!(design.contains("maestro feature spec <ID>"), "{design}");
+        assert!(design.contains("maestro feature finalize <ID>"), "{design}");
         assert!(design.contains("maestro decision lock <ID>"), "{design}");
         assert!(design.contains("maestro card show <ID>"), "{design}");
         assert!(!design.contains("maestro task complete"), "{design}");

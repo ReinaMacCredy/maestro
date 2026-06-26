@@ -130,6 +130,10 @@ fn feature_verify_sweeps_acceptance_contract() {
     ];
     stdout(maestro(&set_args, temp_dir.path()), &set_args);
     stdout(
+        maestro(&["feature", "finalize", "contract-sweep"], temp_dir.path()),
+        &["feature", "finalize", "contract-sweep"],
+    );
+    stdout(
         maestro(
             &[
                 "feature",
@@ -308,6 +312,13 @@ fn feature_contract_display_warnings_waivers_and_stale_sweep() {
         "--reason",
         "contract display test",
     ];
+    stdout(
+        maestro(
+            &["feature", "finalize", "coverage-display"],
+            temp_dir.path(),
+        ),
+        &["feature", "finalize", "coverage-display"],
+    );
     stdout(maestro(&accept_args, temp_dir.path()), &accept_args);
 
     let create_args = [
@@ -564,7 +575,7 @@ fn feature_guarded_lifecycle_via_cli() {
     assert!(accept_stderr.contains("target: .maestro/cards/billing-csv-export/qa.md"));
     assert!(accept_stderr.contains("retry: maestro feature accept billing-csv-export"));
 
-    // author the contract, then accept freezes it.
+    // Author the contract, finalize the clean handoff, then accept freezes it.
     let set_args = [
         "feature",
         "set",
@@ -579,7 +590,7 @@ fn feature_guarded_lifecycle_via_cli() {
     assert!(set_output.contains("areas=1"));
     // Footer is a single next: pointer, not the old next:/or:/then: trio.
     assert!(
-        set_output.contains("next: maestro feature accept billing-csv-export"),
+        set_output.contains("next: maestro feature finalize billing-csv-export"),
         "{set_output}"
     );
     assert!(
@@ -640,6 +651,21 @@ fn feature_guarded_lifecycle_via_cli() {
     let cards_dir = temp_dir.path().join(".maestro/cards");
     write_baseline(&cards_dir, "billing-csv-export");
     write_qa_slice(&cards_dir, "billing-csv-export");
+    let finalize_args = ["feature", "finalize", "billing-csv-export"];
+    let finalize_output = stdout(maestro(&finalize_args, temp_dir.path()), &finalize_args);
+    assert!(
+        finalize_output.contains("finalized billing-csv-export"),
+        "{finalize_output}"
+    );
+    let handoff = fs::read_to_string(cards_dir.join("billing-csv-export/handoff.md"))
+        .expect("handoff should be written");
+    assert!(
+        handoff.contains("# Billing CSV export Handoff"),
+        "{handoff}"
+    );
+    assert!(handoff.contains("## Locked Decisions"), "{handoff}");
+    assert!(handoff.contains("## Acceptance Criteria"), "{handoff}");
+    assert!(handoff.contains("## Audit Trail"), "{handoff}");
 
     let dry_args = ["feature", "accept", "billing-csv-export", "--dry-run"];
     let dry_output = stdout(maestro(&dry_args, temp_dir.path()), &dry_args);
@@ -710,6 +736,95 @@ fn feature_guarded_lifecycle_via_cli() {
 }
 
 #[test]
+fn feature_finalize_writes_handoff_and_gates_accept_prepare() {
+    let temp_dir = TestTempDir::new("maestro-feature-finalize-gate");
+    init_git_marker(temp_dir.path());
+    stdout(
+        maestro(&["init", "--yes"], temp_dir.path()),
+        &["init", "--yes"],
+    );
+    stdout(
+        maestro(&["feature", "new", "Clean handoff"], temp_dir.path()),
+        &["feature", "new", "Clean handoff"],
+    );
+    let set_args = [
+        "feature",
+        "set",
+        "clean-handoff",
+        "--acceptance",
+        "handoff exists",
+        "--area",
+        "feature lifecycle",
+    ];
+    stdout(maestro(&set_args, temp_dir.path()), &set_args);
+    let cards_dir = temp_dir.path().join(".maestro/cards");
+    write_baseline(&cards_dir, "clean-handoff");
+
+    let accept_args = ["feature", "accept", "clean-handoff"];
+    let missing = assert_failure(maestro(&accept_args, temp_dir.path()), &accept_args);
+    assert!(
+        missing.contains(".maestro/cards/clean-handoff/handoff.md missing"),
+        "{missing}"
+    );
+    assert!(
+        missing.contains("fix: maestro feature finalize clean-handoff"),
+        "{missing}"
+    );
+
+    let finalize_args = ["feature", "finalize", "clean-handoff"];
+    let finalized = stdout(maestro(&finalize_args, temp_dir.path()), &finalize_args);
+    assert!(finalized.contains("finalized clean-handoff"), "{finalized}");
+    assert!(finalized.contains("source_sha256:"), "{finalized}");
+    let handoff_path = cards_dir.join("clean-handoff/handoff.md");
+    let handoff = fs::read_to_string(&handoff_path).expect("handoff should be readable");
+    assert!(
+        handoff.contains("<!-- maestro:feature-handoff-source-sha256:"),
+        "{handoff}"
+    );
+    assert!(handoff.contains("`ac-1`: handoff exists"), "{handoff}");
+    assert!(
+        handoff.contains("`.maestro/cards/clean-handoff/spec.md`"),
+        "{handoff}"
+    );
+
+    let spec_args = [
+        "feature",
+        "spec",
+        "clean-handoff",
+        "--section",
+        "Problem",
+        "--append",
+        "new source detail",
+    ];
+    stdout(maestro(&spec_args, temp_dir.path()), &spec_args);
+    let stale = assert_failure(maestro(&accept_args, temp_dir.path()), &accept_args);
+    assert!(stale.contains("handoff.md stale"), "{stale}");
+    assert!(
+        stale.contains("fix: maestro feature finalize clean-handoff"),
+        "{stale}"
+    );
+
+    stdout(maestro(&finalize_args, temp_dir.path()), &finalize_args);
+    stdout(maestro(&accept_args, temp_dir.path()), &accept_args);
+
+    fs::remove_file(&handoff_path).expect("handoff should be removable for gate test");
+    let prepare_args = ["feature", "prepare", "clean-handoff", "--draft"];
+    let prepare_missing = assert_failure(maestro(&prepare_args, temp_dir.path()), &prepare_args);
+    assert!(
+        prepare_missing.contains("cannot prepare clean-handoff"),
+        "{prepare_missing}"
+    );
+    assert!(
+        prepare_missing.contains("fix: maestro feature finalize clean-handoff"),
+        "{prepare_missing}"
+    );
+
+    stdout(maestro(&finalize_args, temp_dir.path()), &finalize_args);
+    let draft = stdout(maestro(&prepare_args, temp_dir.path()), &prepare_args);
+    assert!(draft.contains("prepare-draft.md"), "{draft}");
+}
+
+#[test]
 fn feature_authoring_append_flags_are_proposed_only() {
     let temp_dir = TestTempDir::new("maestro-feature-authoring-ergonomics");
     init_git_marker(temp_dir.path());
@@ -772,6 +887,10 @@ fn feature_authoring_append_flags_are_proposed_only() {
         "--reason",
         "contract-only test",
     ];
+    stdout(
+        maestro(&["feature", "finalize", "authoring-ux"], temp_dir.path()),
+        &["feature", "finalize", "authoring-ux"],
+    );
     stdout(maestro(&accept_args, temp_dir.path()), &accept_args);
     let late_args = [
         "feature",
@@ -966,6 +1085,10 @@ fn feature_verify_rejects_unstarted_features_without_recording_proof() {
         "--reason",
         "no runtime surface",
     ];
+    stdout(
+        maestro(&["feature", "finalize", "proposed-verify"], root),
+        &["feature", "finalize", "proposed-verify"],
+    );
     stdout(maestro(&accept_args, root), &accept_args);
     let ready = feature_record(root, "proposed-verify");
 
@@ -1009,6 +1132,10 @@ fn feature_verify_records_repeatable_paired_proofs_atomically() {
         "feature workflow",
     ];
     stdout(maestro(&set_args, root), &set_args);
+    stdout(
+        maestro(&["feature", "finalize", "batch-proof"], root),
+        &["feature", "finalize", "batch-proof"],
+    );
     let accept_args = [
         "feature",
         "accept",
@@ -1241,6 +1368,13 @@ fn feature_cancel_via_cli_cascades_to_live_tasks() {
     stdout(maestro(&set_args, temp_dir.path()), &set_args);
     let cards_dir = temp_dir.path().join(".maestro/cards");
     write_baseline(&cards_dir, "billing-csv-export");
+    stdout(
+        maestro(
+            &["feature", "finalize", "billing-csv-export"],
+            temp_dir.path(),
+        ),
+        &["feature", "finalize", "billing-csv-export"],
+    );
     stdout(
         maestro(
             &["feature", "accept", "billing-csv-export"],
@@ -2413,6 +2547,10 @@ fn create_qa_none_feature(root: &Path, title: &str, slug: &str) {
         "feature workflow",
     ];
     stdout(maestro(&set_args, root), &set_args);
+    stdout(
+        maestro(&["feature", "finalize", slug], root),
+        &["feature", "finalize", slug],
+    );
     let accept_args = [
         "feature",
         "accept",
@@ -2522,6 +2660,10 @@ fn close_feature(root: &Path, title: &str, slug: &str, child: &str) {
     write_baseline(&cards_dir, slug);
     write_qa_slice(&cards_dir, slug);
     stdout(
+        maestro(&["feature", "finalize", slug], root),
+        &["feature", "finalize", slug],
+    );
+    stdout(
         maestro(&["feature", "accept", slug], root),
         &["feature", "accept", slug],
     );
@@ -2615,6 +2757,10 @@ fn feature_archive_cascades_children_with_qa_and_round_trips() {
     let cards_dir = root.join(".maestro/cards");
     write_baseline(&cards_dir, "billing-csv-export");
     write_qa_slice(&cards_dir, "billing-csv-export");
+    stdout(
+        maestro(&["feature", "finalize", "billing-csv-export"], root),
+        &["feature", "finalize", "billing-csv-export"],
+    );
     stdout(
         maestro(&["feature", "accept", "billing-csv-export"], root),
         &["feature", "accept", "billing-csv-export"],
@@ -2741,6 +2887,10 @@ fn feature_archive_moves_terminal_child_cards_with_feature() {
     stdout(maestro(&set_args, root), &set_args);
     let cards_dir = root.join(".maestro/cards");
     write_baseline(&cards_dir, "billing-csv-export");
+    stdout(
+        maestro(&["feature", "finalize", "billing-csv-export"], root),
+        &["feature", "finalize", "billing-csv-export"],
+    );
     stdout(
         maestro(&["feature", "accept", "billing-csv-export"], root),
         &["feature", "accept", "billing-csv-export"],
@@ -2904,6 +3054,10 @@ fn feature_archive_closed_sweeps_terminal_features() {
     ];
     stdout(maestro(&set_gamma, root), &set_gamma);
     write_baseline(&root.join(".maestro/cards"), "gamma-export");
+    stdout(
+        maestro(&["feature", "finalize", "gamma-export"], root),
+        &["feature", "finalize", "gamma-export"],
+    );
     stdout(
         maestro(&["feature", "accept", "gamma-export"], root),
         &["feature", "accept", "gamma-export"],

@@ -22,12 +22,12 @@ autonomy, replenishment, stops, audit ledger, boundaries, and the report.
 The human says some form of "keep working / work the backlog while I'm away"
 and leaves. Carry forward the work they were on - continue the current feature
 and its cards, do not abandon them for a fresh queue. In full-autonomy mode the
-away prompt is the local authorization to accept proposed contracts, prepare
-tasks, unblock local Maestro blockers, add dependencies when covered by the
-accepted contract or blocker authority, work, verify, commit locally, and close
-locally verified features without another human response. No stop time or unit
-cap is required, ever; if the prompt states one ("until 07:00", "max 5 cards"),
-honor it, never ask for one.
+away prompt is the local authorization to finalize clean handoffs, accept
+proposed contracts, prepare tasks, unblock local Maestro blockers, add
+dependencies when covered by the accepted contract or blocker authority, work,
+verify, commit locally, and close locally verified features without another
+human response. No stop time or unit cap is required, ever; if the prompt
+states one ("until 07:00", "max 5 cards"), honor it, never ask for one.
 
 Start from the store, never from memory (the session can die; the store is the
 only durable state): `maestro status`, then `maestro card ready`.
@@ -54,14 +54,15 @@ Do not create a goal file, goal command, hidden planner state, schema, MCP
 tool, daemon, scheduler, or separate goal lifecycle. Existing feature, task,
 decision, proof, and QA gates remain the only durable contract.
 
-For a new broad goal, draft or update a proposed feature, then accept it locally
-when the contract is explicit enough for Maestro's normal `feature accept` gate
-to pass. For a goal already backed by proposed, ready, or current work,
-continue into the card loop below. For an ambiguous broad goal, draft with
-explicit assumptions: record what you inferred in the feature/spec, turn
-material uncertainty into questions or decision forks, and hard stop only when
-even a proposed feature would be materially misleading, permission-sensitive,
-or outside the hard-stop boundary.
+For a new broad goal, draft or update a proposed feature, run
+`feature finalize` to write the clean handoff, then accept it locally when the
+contract is explicit enough for Maestro's normal `feature accept` gate to pass.
+For a goal already backed by proposed, ready, or current work, continue into the
+card loop below. For an ambiguous broad goal, draft with explicit assumptions:
+record what you inferred in the feature/spec, turn material uncertainty into
+questions or decision forks, and hard stop only when even a proposed feature
+would be materially misleading, permission-sensitive, or outside the hard-stop
+boundary.
 
 Codex can run the resulting card loop directly. Claude Code should author a
 Workflow script that performs the same store-grounded sequence. Both agents use
@@ -110,11 +111,11 @@ the same records and stop conditions.
 
 ## Boundaries
 
-Night MAY: `feature accept`, `feature prepare`, `task unblock` for local
-Maestro blockers, dependency additions covered by the accepted contract or
-blocker authority, `claim`, work, `complete`, `verify`, `note`, `block`, local
-per-step commits on the feature branch, QA-slice, and `feature close` for
-locally verified features.
+Night MAY: `feature finalize`, `feature accept`, `feature prepare`,
+`task unblock` for local Maestro blockers, dependency additions covered by the
+accepted contract or blocker authority, `claim`, work, `complete`, `verify`,
+`note`, `block`, local per-step commits on the feature branch, QA-slice, and
+`feature close` for locally verified features.
 
 Night NEVER: push, tag, publish, archive, destructive git operations, secret
 rotation, bypassing a platform/tool approval failure, or hand-editing

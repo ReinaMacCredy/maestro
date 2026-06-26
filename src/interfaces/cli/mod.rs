@@ -63,7 +63,7 @@ pub(crate) fn feature_next_label(view: &FeatureView) -> &'static str {
         FeatureStatus::Proposed
             if !view.acceptance.is_empty() && !view.affected_areas.is_empty() =>
         {
-            "template: qa_baseline"
+            "run: finalize_feature"
         }
         FeatureStatus::Proposed => "template: set_contract",
         FeatureStatus::Ready => "run: prepare_feature",
@@ -1066,6 +1066,8 @@ pub enum FeatureCommand {
         )]
         input_type: Option<String>,
     },
+    #[command(about = "Write or refresh the clean design handoff before accept/prepare")]
+    Finalize { id: String },
     #[command(about = "Accept a feature into ready, freezing its contract (-> ready; gated)")]
     Accept {
         id: String,

@@ -63,6 +63,7 @@ struct PlanTask {
 pub fn write_draft(paths: &MaestroPaths, feature_id: &str) -> Result<DraftReport> {
     let view = feature::show(paths, feature_id)?;
     guard_feature_can_prepare(&view.status, &view.id)?;
+    guard_fresh_handoff(paths, &view.id)?;
     let path = feature::feature_sidecar_dir(paths, &view.id).join("prepare-draft.md");
     if path.exists() {
         return Ok(DraftReport {
@@ -321,6 +322,7 @@ fn prepare_from_file_with_blocker(
 ) -> Result<PrepareReport> {
     let view = feature::show(paths, feature_id)?;
     guard_feature_can_prepare(&view.status, &view.id)?;
+    guard_fresh_handoff(paths, &view.id)?;
     guard_no_existing_child_tasks(paths, &view.id)?;
 
     let contents = fs::read_to_string(plan_path)
@@ -500,7 +502,7 @@ fn guard_feature_can_prepare(status: &FeatureStatus, feature_id: &str) -> Result
         FeatureStatus::Ready | FeatureStatus::InProgress => Ok(()),
         FeatureStatus::Proposed => {
             bail!(
-                "cannot prepare {feature_id} — not accepted; run `maestro feature accept {feature_id}` first"
+                "cannot prepare {feature_id} — not accepted; run `maestro feature finalize {feature_id}` then `maestro feature accept {feature_id}` first"
             )
         }
         FeatureStatus::Closed | FeatureStatus::Cancelled => {
@@ -548,6 +550,13 @@ fn guard_card_can_prepare(card: &Card) -> Result<()> {
             card.id,
             card.status
         );
+    }
+    Ok(())
+}
+
+fn guard_fresh_handoff(paths: &MaestroPaths, feature_id: &str) -> Result<()> {
+    if let Some(gap) = feature::handoff_gap(paths, feature_id)? {
+        bail!("cannot prepare {feature_id} — design handoff is not fresh:\n  {gap}");
     }
     Ok(())
 }
@@ -951,6 +960,7 @@ mod tests {
             "---\namend_log_position: 0\n---\n\nbaseline\n",
         )
         .expect("invariant: baseline should be writable");
+        feature::finalize(&paths, &feature_id).expect("invariant: handoff should be fresh");
         feature::accept(&paths, &feature_id, false).expect("invariant: feature should be ready");
         let plan = root.join("prepare.md");
         fs::write(

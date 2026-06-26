@@ -76,6 +76,13 @@ fn write_baseline(repo: &Path, id: &str, position: usize, scenario_ids: &[&str])
     .expect("invariant: qa.md should be writable");
 }
 
+fn finalize(repo: &Path, id: &str) {
+    stdout(
+        maestro(&["feature", "finalize", id], repo),
+        &["feature", "finalize", id],
+    );
+}
+
 fn write_qa_slices(repo: &Path, id: &str, covered: &[&str]) {
     let slices = covered
         .iter()
@@ -159,6 +166,10 @@ fn qa_baseline_helper_writes_acceptance_baseline() {
         "{qa}"
     );
     stdout(
+        maestro(&["feature", "finalize", "report-builder"], repo),
+        &["feature", "finalize"],
+    );
+    stdout(
         maestro(&["feature", "accept", "report-builder"], repo),
         &["feature", "accept"],
     );
@@ -196,6 +207,7 @@ fn feature_proof_add_records_explicit_evidence() {
     let repo = temp.path();
     init_and_author(repo, "report-builder", "Report builder");
     write_baseline(repo, "report-builder", 0, &["bl-001"]);
+    finalize(repo, "report-builder");
     stdout(
         maestro(&["feature", "accept", "report-builder"], repo),
         &["feature", "accept"],
@@ -235,6 +247,7 @@ fn feature_prepare_task_helper_creates_validated_task() {
     let repo = temp.path();
     init_and_author(repo, "report-builder", "Report builder");
     write_baseline(repo, "report-builder", 0, &["bl-001"]);
+    finalize(repo, "report-builder");
     stdout(
         maestro(&["feature", "accept", "report-builder"], repo),
         &["feature", "accept"],
@@ -268,6 +281,7 @@ fn feature_qa_gates_via_cli() {
     init_and_author(repo, "report-builder", "Report builder");
 
     // F — accept blocks until a baseline is captured (before edits).
+    finalize(repo, "report-builder");
     let accept = ["feature", "accept", "report-builder"];
     let stderr = assert_failure(maestro(&accept, repo), &accept);
     assert!(
@@ -294,6 +308,7 @@ fn feature_qa_gates_via_cli() {
     );
 
     write_baseline(repo, "report-builder", 0, &["bl-001"]);
+    finalize(repo, "report-builder");
     let accepted = stdout(maestro(&accept, repo), &accept);
     assert!(accepted.contains("accepted report-builder"));
     stdout(
@@ -398,6 +413,7 @@ fn accept_words_a_blank_baseline_as_empty_not_missing() {
     fs::write(feature_dir(repo, "report-builder").join("qa.md"), "   \n\n")
         .expect("invariant: qa.md should be writable");
 
+    finalize(repo, "report-builder");
     let accept = ["feature", "accept", "report-builder"];
     let stderr = assert_failure(maestro(&accept, repo), &accept);
     assert!(
@@ -425,6 +441,7 @@ fn qa_none_accept_skips_gates_until_a_behavioral_amend_requires_a_fresh_declarat
         "--reason",
         "config-only, no behavior",
     ];
+    finalize(repo, "config-cleanup");
     let accepted = stdout(maestro(&accept, repo), &accept);
     assert!(accepted.contains("accepted config-cleanup"), "{accepted}");
     assert!(
@@ -499,6 +516,7 @@ fn non_goal_amend_does_not_block_close_via_cli() {
     init_and_author(repo, "report-builder", "Report builder");
 
     write_baseline(repo, "report-builder", 0, &["bl-001"]);
+    finalize(repo, "report-builder");
     stdout(
         maestro(&["feature", "accept", "report-builder"], repo),
         &["feature", "accept"],
@@ -542,6 +560,7 @@ fn qa_none_survives_a_non_behavioral_amend_without_redeclaring() {
         "--reason",
         "config-only, no behavior",
     ];
+    finalize(repo, "config-cleanup");
     assert!(
         stdout(maestro(&accept, repo), &accept).contains("accepted config-cleanup"),
         "qa: none accept should pass with no baseline"
