@@ -298,11 +298,11 @@ export function buildOverlayRenderSpec(kind: OverlayModalKind): OverlayRenderSpe
     case "dispatch":
       return {
         family: "split",
-        sizePreset: "standard",
+        sizePreset: "wide",
         chrome: STANDARD_CHROME,
         selection: STANDARD_SELECTION,
         text: STANDARD_TEXT,
-        layout: { ...STANDARD_LAYOUT, splitRatio: [44, 56] },
+        layout: { ...WIDE_LAYOUT, preferredWidth: 112, minWidth: 104, splitRatio: [58, 42] },
       };
     case "event-stream":
       return {

@@ -308,6 +308,10 @@ const TASK_TABLE_TITLE_WIDTH = TASK_TABLE_WIDTH
   - TASK_TABLE_EVIDENCE_WIDTH
   - TASK_TABLE_BLOCKER_WIDTH
   - 5;
+const DISPATCH_TABLE_STATUS_WIDTH = 4;
+const DISPATCH_TABLE_TITLE_WIDTH = 48;
+const DISPATCH_TABLE_ID_WIDTH = 6;
+const DISPATCH_TABLE_AGENT_WIDTH = 10;
 
 function buildAgentGridModal(
   state: AgentGridModalState,
@@ -369,17 +373,27 @@ function buildDispatchModal(
         : phase === "generated"
           ? "Prompt generated."
           : "Error during generation.",
+    solidPanels: true,
+    stackedPanels: true,
     items: queue.length > 0
-      ? queue.map((item) => ({
-          label: item.featureTitle,
-          detail: `${item.agentType} -- ${item.milestoneTitle}`,
-          hint: item.featureId,
-        }))
+      ? [
+          {
+            label: formatDispatchTableHeader(),
+            selectable: false,
+            tone: "muted" as const,
+          },
+          ...queue.map((item) => ({
+            label: formatDispatchTableRow(item),
+          })),
+        ]
       : [{ label: "No features ready for dispatch", selectable: false, tone: "muted" as const }],
-    selectedIndex: Math.min(state.modal.selectedIndex, Math.max(0, queue.length - 1)),
+    selectedIndex: queue.length > 0
+      ? Math.min(state.modal.selectedIndex + 1, queue.length)
+      : 0,
     detailItems: selected
       ? [
-          { text: `Feature: ${selected.featureId}`, detail: selected.featureTitle },
+          ...wrapTaskDetailText(selected.featureTitle).map((text) => ({ text })),
+          { text: `ID: ${selected.featureId}` },
           { text: `Milestone: ${selected.milestoneTitle} (#${selected.milestoneOrder})` },
           { text: `Agent: ${formatAgentLabel(selected.agentType)}` },
         ]
@@ -388,6 +402,25 @@ function buildDispatchModal(
     returnTarget,
     renderSpec: buildOverlayRenderSpec("dispatch"),
   };
+}
+
+function formatDispatchTableHeader(): string {
+  return [
+    padTaskCell("ST", DISPATCH_TABLE_STATUS_WIDTH),
+    padTaskCell("TASK", DISPATCH_TABLE_TITLE_WIDTH),
+    padTaskCell("ID", DISPATCH_TABLE_ID_WIDTH),
+    padTaskCell("AGENT", DISPATCH_TABLE_AGENT_WIDTH),
+  ].join(" ");
+}
+
+function formatDispatchTableRow(item: NonNullable<AppState["snapshot"]["dispatchQueue"]>[number]): string {
+  const shortId = item.featureId.split("-").at(-1) ?? item.featureId;
+  return [
+    padTaskCell("RDY", DISPATCH_TABLE_STATUS_WIDTH),
+    padTaskCell(item.featureTitle, DISPATCH_TABLE_TITLE_WIDTH),
+    padTaskCell(shortId, DISPATCH_TABLE_ID_WIDTH),
+    padTaskCell(formatAgentLabel(item.agentType), DISPATCH_TABLE_AGENT_WIDTH),
+  ].join(" ");
 }
 
 function buildEventStreamModal(
