@@ -17,6 +17,7 @@ pub(crate) mod display;
 pub(crate) mod doctor;
 pub(crate) mod lifecycle;
 pub(crate) mod lookup;
+pub mod progress;
 pub(crate) mod template;
 
 pub use blockers::has_unresolved_blockers;
@@ -108,7 +109,9 @@ impl BlockerTarget {
         match card.map(|card| card.card_type) {
             Some(CardType::Task | CardType::Bug | CardType::Chore) => Ok(Self::Task(by)),
             Some(CardType::Decision) => Ok(Self::Decision(by)),
-            Some(kind @ (CardType::Feature | CardType::Custom | CardType::Idea)) => bail!(
+            Some(
+                kind @ (CardType::Feature | CardType::Custom | CardType::Progress | CardType::Idea),
+            ) => bail!(
                 "cannot block on {by}: it is a {} card, not a task or decision\n  record the dependency as a card edge instead: maestro card dep add <task> {by}",
                 kind.as_str()
             ),

@@ -6,6 +6,8 @@ pub const FEATURE_SCHEMA_VERSION: &str = "maestro.feature.v2";
 pub const TASK_SCHEMA_VERSION: &str = "maestro.task.v2";
 /// Schema version for `.maestro/cards/<id>/card.yaml`.
 pub const CARD_SCHEMA_VERSION: &str = "maestro.card.v1";
+/// Schema version for `.maestro/cards/<progress-id>/progress.yml`.
+pub const PROGRESS_SCHEMA_VERSION: &str = "maestro.progress.v1";
 /// Schema version for run metadata.
 pub const RUN_SCHEMA_VERSION: &str = "maestro.run.v1";
 /// Schema version for hook events.
@@ -33,6 +35,7 @@ pub const ALL_SCHEMA_VERSIONS: &[&str] = &[
     FEATURE_SCHEMA_VERSION,
     TASK_SCHEMA_VERSION,
     CARD_SCHEMA_VERSION,
+    PROGRESS_SCHEMA_VERSION,
     RUN_SCHEMA_VERSION,
     EVENT_SCHEMA_VERSION,
     DECISIONS_SCHEMA_VERSION,

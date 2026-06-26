@@ -393,7 +393,7 @@ fn document_for_run_evidence(record: &run::RunEvidenceRecord) -> SearchDocument 
 fn memory_kind_for_card(card: &Card) -> &'static str {
     match card.card_type {
         CardType::Feature => "feature",
-        CardType::Custom => "card",
+        CardType::Custom | CardType::Progress => "card",
         CardType::Task | CardType::Bug | CardType::Chore => "task",
         CardType::Decision => "decision",
         CardType::Idea => "card",

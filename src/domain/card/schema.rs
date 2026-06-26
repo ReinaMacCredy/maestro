@@ -119,6 +119,7 @@ impl Card {
 pub enum CardType {
     Feature,
     Custom,
+    Progress,
     Task,
     Bug,
     Chore,
@@ -132,6 +133,7 @@ impl CardType {
         match self {
             Self::Feature => "feature",
             Self::Custom => "custom",
+            Self::Progress => "progress",
             Self::Task => "task",
             Self::Bug => "bug",
             Self::Chore => "chore",
@@ -147,6 +149,7 @@ impl CardType {
         match word {
             "feature" => Some(Self::Feature),
             "custom" => Some(Self::Custom),
+            "progress" => Some(Self::Progress),
             "task" => Some(Self::Task),
             "bug" => Some(Self::Bug),
             "chore" => Some(Self::Chore),
@@ -289,6 +292,8 @@ mod tests {
             CardType::Task,
             CardType::Bug,
             CardType::Chore,
+            CardType::Custom,
+            CardType::Progress,
             CardType::Idea,
             CardType::Decision,
         ] {

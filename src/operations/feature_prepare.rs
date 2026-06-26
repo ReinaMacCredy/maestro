@@ -534,7 +534,7 @@ fn guard_card_can_prepare(card: &Card) -> Result<()> {
         CardType::Feature => {
             return Ok(());
         }
-        CardType::Task | CardType::Decision | CardType::Idea => {
+        CardType::Task | CardType::Progress | CardType::Decision | CardType::Idea => {
             bail!(
                 "cannot prepare {} — a {} card does not own executable tasks",
                 card.id,

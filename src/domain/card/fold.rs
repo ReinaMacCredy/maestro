@@ -248,6 +248,7 @@ pub(crate) fn payload_pack_fields(
     let family = match card_type {
         CardType::Feature => "feature",
         CardType::Custom => return None,
+        CardType::Progress => return None,
         CardType::Task | CardType::Bug | CardType::Chore => "task",
         CardType::Idea => "backlog",
         CardType::Decision => "decision",

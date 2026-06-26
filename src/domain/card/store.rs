@@ -158,8 +158,15 @@ static CREATION_COUNTER: AtomicU64 = AtomicU64::new(0);
 /// D1b): a feature named like a generated card would re-merge the namespaces
 /// the prefix exists to separate. Legacy `card-<hex>` ids are not minted
 /// anymore but stay valid forever (D3).
-pub(crate) const GENERATED_ID_PREFIXES: &[&str] =
-    &["task-", "bug-", "chore-", "custom-", "dec-", "idea-"];
+pub(crate) const GENERATED_ID_PREFIXES: &[&str] = &[
+    "task-",
+    "bug-",
+    "chore-",
+    "custom-",
+    "progress-",
+    "dec-",
+    "idea-",
+];
 
 /// The id prefix a generated card carries for its type (D1b): the type word,
 /// with `decision` shortened to `dec`. Features mint no generated id (their id
@@ -168,6 +175,7 @@ fn type_prefix(card_type: CardType) -> Option<&'static str> {
     match card_type {
         CardType::Feature => None,
         CardType::Custom => Some("custom"),
+        CardType::Progress => Some("progress"),
         CardType::Task => Some("task"),
         CardType::Bug => Some("bug"),
         CardType::Chore => Some("chore"),
@@ -394,7 +402,7 @@ impl CardHome {
 pub fn home_for_new(paths: &MaestroPaths, card: &Card) -> Result<CardHome> {
     validate_card_id(&card.id)?;
     Ok(match card.card_type {
-        CardType::Feature | CardType::Custom => {
+        CardType::Feature | CardType::Custom | CardType::Progress => {
             if RESERVED_CONTAINER_NAMES.contains(&card.id.as_str()) {
                 bail!(
                     "{} id {} is reserved by the card store layout",
@@ -967,6 +975,10 @@ mod tests {
             mint_card_id(&paths, CardType::Bug, "Fix ordering race")
                 .starts_with("bug-fix-ordering-race-")
         );
+        assert!(
+            mint_card_id(&paths, CardType::Progress, "Docs cleanup")
+                .starts_with("progress-docs-cleanup-")
+        );
         assert!(mint_card_id(&paths, CardType::Idea, "grep").starts_with("idea-grep-"));
 
         // The slug caps at a word boundary so ls stays readable.
@@ -989,6 +1001,24 @@ mod tests {
             .strip_prefix("chore-")
             .unwrap_or_else(|| panic!("{bare}"));
         assert_eq!(tail.len(), 4, "slug-less id is prefix + tail: {bare}");
+
+        let _ = std::fs::remove_dir_all(paths.cards_dir());
+    }
+
+    #[test]
+    fn card_progress_type_is_dir_backed_and_not_a_work_pool_entry() {
+        let paths = temp_cards_repo("card-progress-home");
+        let root = paths.cards_dir();
+        let progress = typed_card("progress-doc-cleanup-019f", CardType::Progress, None);
+
+        assert_eq!(
+            home_for_new(&paths, &progress).expect("progress home resolves"),
+            CardHome::Dir(root.join("progress-doc-cleanup-019f").join("card.yaml"))
+        );
+        assert!(
+            !CardType::Progress.workable(),
+            "progress is a workflow card, not a legacy claimable work card"
+        );
 
         let _ = std::fs::remove_dir_all(paths.cards_dir());
     }

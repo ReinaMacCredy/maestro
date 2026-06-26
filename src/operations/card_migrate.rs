@@ -172,8 +172,7 @@ pub fn run(paths: &MaestroPaths, now: &str) -> Result<CardMigrateReport> {
 
 fn tally(report: &mut CardMigrateReport, card_type: CardType) {
     match card_type {
-        CardType::Feature => report.features += 1,
-        CardType::Custom => report.features += 1,
+        CardType::Feature | CardType::Custom | CardType::Progress => report.features += 1,
         CardType::Decision => report.decisions += 1,
         CardType::Idea => report.ideas += 1,
         CardType::Task | CardType::Bug | CardType::Chore => report.tasks += 1,
@@ -380,7 +379,7 @@ fn rewrite_refs(pending: &mut [PendingCard], remap: &HashMap<String, String>) {
             }
             CardType::Decision => rewrite_decision_refs(&mut entry.card.extra, remap),
             CardType::Idea => rewrite_idea_refs(&mut entry.card.extra, remap),
-            CardType::Feature | CardType::Custom => {}
+            CardType::Feature | CardType::Custom | CardType::Progress => {}
         }
     }
 }

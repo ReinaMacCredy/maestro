@@ -910,6 +910,9 @@ fn per_type_verbs_hint(card_type: card::schema::CardType) -> &'static str {
         card::schema::CardType::Custom => {
             "prepare it into tasks, then close it through its container pipeline"
         }
+        card::schema::CardType::Progress => {
+            "finish its progress tasks before closing the progress card"
+        }
         card::schema::CardType::Decision => "use `maestro decision lock`",
         card::schema::CardType::Idea => "use `maestro harness apply/dismiss/measure`",
         card::schema::CardType::Task
