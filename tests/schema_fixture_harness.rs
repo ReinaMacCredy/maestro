@@ -80,6 +80,41 @@ fn seed_entries(repo: &Path, file: &str, fixtures: &[(&str, &str)]) -> PathBuf {
     path
 }
 
+#[test]
+fn run_event_fixture_identity_is_runtime_neutral() {
+    let bytes = fixture("run-event", "current-events.jsonl");
+    let text = std::str::from_utf8(bytes).expect("run-event fixture is UTF-8 JSONL");
+    let mut saw_runtime = false;
+
+    for (index, line) in text.lines().enumerate() {
+        let event: serde_json::Value = serde_json::from_str(line)
+            .unwrap_or_else(|error| panic!("line {} parses as JSON: {error}", index + 1));
+        for field in ["agent", "agent_runtime"] {
+            let Some(value) = event.get(field).and_then(serde_json::Value::as_str) else {
+                continue;
+            };
+            if field == "agent_runtime" {
+                saw_runtime = true;
+            }
+            assert!(
+                value.starts_with("fixture-"),
+                "run-event fixtures use neutral identity fields; line {} {field}={value:?}",
+                index + 1
+            );
+            assert!(
+                !matches!(value, "codex" | "claude" | "droid"),
+                "run-event fixtures must not hardcode a real agent runtime; line {} {field}={value:?}",
+                index + 1
+            );
+        }
+    }
+
+    assert!(
+        saw_runtime,
+        "run-event fixture should still cover agent_runtime"
+    );
+}
+
 /// Every store-backed family's fixtures, seeded into one card-mode repo, read
 /// through the real CLI entry points; afterwards every seeded byte must be
 /// untouched (matrix item 4: reading is never a rewrite).
