@@ -1,7 +1,7 @@
 ---
 name: maestro-design
-version: 1.27.0
-description: "Use when the user wants to brainstorm, design, plan, choose wording, or decide a Maestro repo change before implementation, including HARNESS, skill, workflow, architecture, or UX decisions."
+version: 1.28.0
+description: "Use when the user wants to brainstorm, design, plan, choose wording, or decide a workflow, skill, harness, card/task/feature, architecture, UX, or agent-process change in a project using Maestro before implementation."
 ---
 
 # Maestro Design

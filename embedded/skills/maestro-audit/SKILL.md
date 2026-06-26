@@ -1,7 +1,7 @@
 ---
 name: maestro-audit
-version: 1.8.0
-description: "Use when the user wants a read-only Maestro repo audit, review, backlog proposal, or harness improvement finding without applying fixes."
+version: 1.9.0
+description: "Use when the user wants a read-only audit, code review, backlog proposal, or harness improvement finding for a project using Maestro, without applying fixes."
 ---
 
 # Maestro Audit
