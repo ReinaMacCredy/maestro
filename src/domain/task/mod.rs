@@ -108,7 +108,7 @@ impl BlockerTarget {
         match card.map(|card| card.card_type) {
             Some(CardType::Task | CardType::Bug | CardType::Chore) => Ok(Self::Task(by)),
             Some(CardType::Decision) => Ok(Self::Decision(by)),
-            Some(kind @ (CardType::Feature | CardType::Idea)) => bail!(
+            Some(kind @ (CardType::Feature | CardType::Custom | CardType::Idea)) => bail!(
                 "cannot block on {by}: it is a {} card, not a task or decision\n  record the dependency as a card edge instead: maestro card dep add <task> {by}",
                 kind.as_str()
             ),
@@ -160,6 +160,35 @@ pub fn create_task(
     }
     task.acceptance = AcceptanceFile::new(&id, options.checks);
     cards::create(&paths, &task, options.project)?;
+    Ok(task)
+}
+
+/// Create a standalone low-ceremony task that is immediately ready to start.
+///
+/// This is the `task add` path: no feature/card gate, no acceptance checks, and
+/// no separate lifecycle. The record still uses the normal Task state machine
+/// once work starts.
+pub fn add_simple_task(
+    tasks_dir: &Path,
+    title: &str,
+    card_id: Option<String>,
+    project: Option<String>,
+    created_at: String,
+    actor: &str,
+) -> Result<TaskRecord> {
+    if title.trim().is_empty() {
+        bail!("task title must not be empty");
+    }
+    let paths = lookup::paths_for_tasks_dir(tasks_dir)
+        .context("cannot resolve maestro paths from tasks dir")?;
+    let id = card_store::mint_card_id(&paths, CardType::Task, title);
+    let mut task = TaskRecord::draft(&id, title, &created_at);
+    task.feature_id = card_id;
+    task.state = TaskState::Ready;
+    task.acceptance_locked = true;
+    task.acceptance.locked_by = Some(actor.to_string());
+    task.acceptance.locked_at = Some(created_at.clone());
+    cards::create(&paths, &task, project)?;
     Ok(task)
 }
 
@@ -291,8 +320,25 @@ pub fn filter_tasks(mut tasks: Vec<TaskRecord>, filter: &TaskFilter) -> Vec<Task
         tasks.retain(|task| blocking_ids.contains(&task.id));
     }
 
-    tasks.sort_by(|left, right| left.id.cmp(&right.id));
+    tasks.sort_by(|left, right| {
+        task_list_priority(left)
+            .cmp(&task_list_priority(right))
+            .then_with(|| left.id.cmp(&right.id))
+    });
     tasks
+}
+
+fn task_list_priority(task: &TaskRecord) -> u8 {
+    match task.state {
+        TaskState::InProgress => 0,
+        TaskState::NeedsVerification => 1,
+        TaskState::Ready => 2,
+        TaskState::Draft | TaskState::Exploring => 3,
+        TaskState::Verified
+        | TaskState::Rejected
+        | TaskState::Abandoned
+        | TaskState::Superseded => 4,
+    }
 }
 
 /// Return per-task verification durations for loaded task entries.
@@ -430,6 +476,104 @@ pub fn claim_task(tasks_dir: &Path, id: &str, actor: &str, claimed_at: &str) -> 
     )?;
     template::save_task_with_snapshot(&task, &snapshot)?;
     Ok(task)
+}
+
+/// Complete a low-ceremony standalone task without bypassing explicit gates.
+///
+/// The shortcut is intentionally narrow: a task with a card/feature owner,
+/// checks, blockers, or an explicit verify command must use the normal
+/// `complete` -> `verify` path.
+pub fn complete_simple_task(
+    tasks_dir: &Path,
+    id: &str,
+    actor: &str,
+    completed_at: &str,
+    summary: Option<String>,
+) -> Result<TaskRecord> {
+    let (mut task, snapshot, _) = lookup::load_task_with_snapshot(tasks_dir, id)?;
+    let paths = lookup::paths_for_tasks_dir(tasks_dir)
+        .context("cannot resolve maestro paths from tasks dir")?;
+    guard_simple_done_allowed(&paths, &task)?;
+    let summary = summary.unwrap_or_else(|| "marked done".to_string());
+    let claim = format!("simple completion: {summary}");
+    lifecycle::transition(
+        &mut task,
+        TaskState::NeedsVerification,
+        actor,
+        completed_at,
+        TransitionDetails {
+            summary: Some(summary.clone()),
+            claims: vec![claim.clone()],
+            ..TransitionDetails::default()
+        },
+    )?;
+    apply_verification_outcome(
+        &mut task,
+        VerificationOutcome::Passed(VerificationPassed {
+            binding: VerificationBinding {
+                status: Some(VerificationStatus::Passed),
+                verified_at: Some(completed_at.to_string()),
+                claim_checks: vec![ClaimCheckReceipt {
+                    claim,
+                    matched: true,
+                    source: Some("task done".to_string()),
+                }],
+                claims_only: true,
+                ..VerificationBinding::default()
+            },
+            summary: "simple task done: no explicit verification gate".to_string(),
+        }),
+        actor,
+        completed_at,
+    );
+    template::save_task_with_snapshot(&task, &snapshot)?;
+    Ok(task)
+}
+
+fn guard_simple_done_allowed(paths: &MaestroPaths, task: &TaskRecord) -> Result<()> {
+    if task.state == TaskState::Verified {
+        bail!("task {} is already done", task.id);
+    }
+    if task.state != TaskState::InProgress {
+        bail!(
+            "task {} is {}; run `maestro task start {}` before `maestro task done`",
+            task.id,
+            task.state.as_str(),
+            task.id
+        );
+    }
+    if let Some(card_id) = task.feature_id.as_deref() {
+        let Some(card) = card_store::resolve(paths, card_id)?.map(|resolved| resolved.card) else {
+            bail!(
+                "task {} belongs to missing card {}; repair the card link before marking it done",
+                task.id,
+                card_id
+            );
+        };
+        if card.card_type != CardType::Chore {
+            bail!(
+                "task {} belongs to a {} card; use `maestro task complete {} --summary \"<summary>\" --claim \"<claim>\" --proof \"<observed evidence>\"`",
+                task.id,
+                card.card_type.as_str(),
+                task.id
+            );
+        }
+    }
+    if !task.acceptance.checks.is_empty() || task.verify_command.is_some() {
+        bail!(
+            "task {} has an explicit verification gate; use `maestro task complete {} --summary \"<summary>\" --claim \"<claim>\" --proof \"<observed evidence>\"`",
+            task.id,
+            task.id
+        );
+    }
+    if has_unresolved_blockers(task) {
+        bail!(
+            "task {} has unresolved blockers; run `maestro task show {}`",
+            task.id,
+            task.id
+        );
+    }
+    Ok(())
 }
 
 /// Author a task's execution `checks` (C1), replacing the current list.

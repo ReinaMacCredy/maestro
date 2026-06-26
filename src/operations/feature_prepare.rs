@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
+use crate::domain::card::schema::{Card, CardType};
 use crate::domain::card::store as card_store;
 use crate::domain::feature::{self, FeatureStatus};
 use crate::domain::task::{self, BlockerTarget, TaskRecord, TaskState, TransitionDetails};
@@ -118,6 +119,197 @@ pub fn prepare_from_file(
     actor: &str,
 ) -> Result<PrepareReport> {
     prepare_from_file_with_blocker(paths, feature_id, plan_path, actor, block_prepared_task)
+}
+
+/// Write or point to a generic card-container preparation plan file. Feature
+/// cards delegate to the feature-specific gate; Bug/Custom/Chore containers use
+/// the same plan syntax without requiring the feature accept ceremony.
+pub fn write_card_draft(paths: &MaestroPaths, card_id: &str) -> Result<DraftReport> {
+    let resolved = load_prepare_container(paths, card_id)?;
+    if resolved.card_type == CardType::Feature {
+        return write_draft(paths, card_id);
+    }
+    guard_card_can_prepare(&resolved)?;
+    let path = paths
+        .cards_dir()
+        .join(&resolved.id)
+        .join("prepare-draft.md");
+    if path.exists() {
+        return Ok(DraftReport {
+            path,
+            written: false,
+        });
+    }
+    let parent = path
+        .parent()
+        .with_context(|| format!("failed to determine parent for {}", path.display()))?;
+    ensure_dir(parent)?;
+    let template = format!(
+        "# Prepare plan for {}\n\n\
+         # Review before applying. Split this card into executable tasks; add\n\
+         # blocker: lines only for real approvals or external waits.\n\n\
+         ## Task T1: Implement accepted behavior\n\
+         check: observable behavior passes through the real entry point\n",
+        resolved.id
+    );
+    write_string_atomic(&path, &template)
+        .with_context(|| format!("failed to write {}", path.display()))?;
+    Ok(DraftReport {
+        path,
+        written: true,
+    })
+}
+
+/// Prepare a non-feature card container into owned Tasks, using the same plan
+/// grammar and task lifecycle as feature preparation.
+pub fn prepare_card_from_file(
+    paths: &MaestroPaths,
+    card_id: &str,
+    plan_path: &Path,
+    actor: &str,
+) -> Result<PrepareReport> {
+    let resolved = card_store::resolve(paths, card_id)?
+        .with_context(|| format!("card {card_id} not found"))?;
+    let card = resolved.card.clone();
+    if card.card_type == CardType::Feature {
+        return prepare_from_file(paths, card_id, plan_path, actor);
+    }
+    guard_card_can_prepare(&card)?;
+    guard_no_existing_child_tasks(paths, &card.id)?;
+
+    let contents = fs::read_to_string(plan_path)
+        .with_context(|| format!("failed to read {}", plan_path.display()))?;
+    let plan = parse_plan(&contents)?;
+    validate_plan(&plan)?;
+
+    let mut created = Vec::with_capacity(plan.len());
+    let result = (|| -> Result<PrepareReport> {
+        let mut id_by_local_ref = BTreeMap::new();
+        for (index, item) in plan.iter().enumerate() {
+            let now = utc_now_timestamp();
+            let task = task::create_task(
+                &paths.tasks_dir(),
+                &item.title,
+                task::CreateTaskOptions {
+                    feature: Some(card.id.clone()),
+                    covers: item.covers.clone(),
+                    lane: None,
+                    risk: None,
+                    checks: item.checks.clone(),
+                    project: card.project.clone(),
+                    created_at: now,
+                },
+            )?;
+            let now = utc_now_timestamp();
+            let task = task::transition_task(
+                &paths.tasks_dir(),
+                &task.id,
+                TaskState::Exploring,
+                actor,
+                &now,
+                TransitionDetails::default(),
+            )?;
+            let local_ref = item
+                .local_id
+                .clone()
+                .unwrap_or_else(|| format!("@{}", index + 1));
+            id_by_local_ref.insert(local_ref, task.id.clone());
+            created.push(task);
+        }
+
+        let mut blockers = Vec::new();
+        for (index, item) in plan.iter().enumerate() {
+            let task_id = task_id_for_item(index, item, &id_by_local_ref)?;
+            for reason in &item.blockers {
+                blockers.push(block_prepared_task(
+                    paths,
+                    &task_id,
+                    reason,
+                    BlockerTarget::Human,
+                    actor,
+                )?);
+            }
+            for after in &item.after {
+                let predecessor = id_by_local_ref
+                    .get(after)
+                    .with_context(|| format!("after reference `{after}` was not prepared"))?;
+                let reason =
+                    format!("{AFTER_DEPENDENCY_REASON_PREFIX} {after} ({predecessor}) verified");
+                blockers.push(block_prepared_task(
+                    paths,
+                    &task_id,
+                    &reason,
+                    BlockerTarget::Task(predecessor.clone()),
+                    actor,
+                )?);
+            }
+        }
+
+        let mut accepted = Vec::with_capacity(created.len());
+        for task in &created {
+            let now = utc_now_timestamp();
+            accepted.push(task::accept_task(
+                &paths.tasks_dir(),
+                &task.id,
+                actor,
+                &now,
+            )?);
+        }
+
+        let prepared = reload_created_tasks(paths, &accepted)?;
+        let ready_count = prepared
+            .iter()
+            .filter(|task| task.state == TaskState::Ready && !task::has_unresolved_blockers(task))
+            .count();
+        let blocked_count = prepared
+            .iter()
+            .filter(|task| task::has_unresolved_blockers(task))
+            .count();
+        if ready_count > 0 {
+            let mut updated = card.clone();
+            updated.status = "in_progress".to_string();
+            updated.updated_at = utc_now_timestamp();
+            card_store::save_resolved(&updated, &resolved)?;
+        }
+
+        Ok(PrepareReport {
+            feature_id: card.id.clone(),
+            task_count: prepared.len(),
+            ready_count,
+            blocked_count,
+            started: ready_count > 0,
+            remained_ready: ready_count == 0,
+            prepared: prepared
+                .into_iter()
+                .map(|task| {
+                    let blocked = task::has_unresolved_blockers(&task);
+                    PreparedTask {
+                        id: task.id,
+                        title: task.title,
+                        blocked,
+                    }
+                })
+                .collect(),
+            blockers,
+        })
+    })();
+
+    match result {
+        Ok(report) => {
+            let draft_path = paths.cards_dir().join(&card.id).join("prepare-draft.md");
+            if same_path(plan_path, &draft_path) && draft_path.exists() {
+                fs::remove_file(&draft_path)
+                    .with_context(|| format!("failed to remove {}", draft_path.display()))?;
+            }
+            Ok(report)
+        }
+        Err(error) => {
+            rollback_created_tasks(paths, &created).with_context(|| {
+                format!("failed to roll back partial prepare after error: {error}")
+            })?;
+            Err(error)
+        }
+    }
 }
 
 fn prepare_from_file_with_blocker(
@@ -318,6 +510,46 @@ fn guard_feature_can_prepare(status: &FeatureStatus, feature_id: &str) -> Result
             )
         }
     }
+}
+
+fn load_prepare_container(paths: &MaestroPaths, card_id: &str) -> Result<Card> {
+    card_store::validate_card_id(card_id)?;
+    let card = card_store::resolve(paths, card_id)?
+        .map(|resolved| resolved.card)
+        .with_context(|| format!("card {card_id} not found"))?;
+    if !card.card_type.owns_task_container() {
+        bail!(
+            "cannot prepare {card_id} — a {} card does not own executable tasks",
+            card.card_type.as_str()
+        );
+    }
+    Ok(card)
+}
+
+fn guard_card_can_prepare(card: &Card) -> Result<()> {
+    match card.card_type {
+        CardType::Bug | CardType::Chore | CardType::Custom => {}
+        CardType::Feature => {
+            return Ok(());
+        }
+        CardType::Task | CardType::Decision | CardType::Idea => {
+            bail!(
+                "cannot prepare {} — a {} card does not own executable tasks",
+                card.id,
+                card.card_type.as_str()
+            );
+        }
+    }
+    if crate::domain::card::query::coarse_of(&card.status)
+        == Some(crate::domain::card::query::Coarse::Closed)
+    {
+        bail!(
+            "cannot prepare {} — terminal (status: {})",
+            card.id,
+            card.status
+        );
+    }
+    Ok(())
 }
 
 fn guard_no_existing_child_tasks(paths: &MaestroPaths, feature_id: &str) -> Result<()> {

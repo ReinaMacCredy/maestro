@@ -112,12 +112,13 @@ impl Card {
     }
 }
 
-/// The card type set (SPEC DN2, LOCKED). Two levels: `feature` containers and
-/// the work/idea/decision leaves.
+/// The card type set (SPEC DN2, LOCKED). `custom` is a bounded container type;
+/// team-specific custom vocabulary lives in `extra.kind`, not as enum values.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CardType {
     Feature,
+    Custom,
     Task,
     Bug,
     Chore,
@@ -130,6 +131,7 @@ impl CardType {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Feature => "feature",
+            Self::Custom => "custom",
             Self::Task => "task",
             Self::Bug => "bug",
             Self::Chore => "chore",
@@ -144,6 +146,7 @@ impl CardType {
     pub fn parse(word: &str) -> Option<Self> {
         match word {
             "feature" => Some(Self::Feature),
+            "custom" => Some(Self::Custom),
             "task" => Some(Self::Task),
             "bug" => Some(Self::Bug),
             "chore" => Some(Self::Chore),
@@ -153,12 +156,17 @@ impl CardType {
         }
     }
 
-    /// Whether cards of this type are "worked" through the type-agnostic verbs:
-    /// they enter `ready`, are claimable, and close via the work lifecycle (SPEC
-    /// E3, LOCKED = task/bug/chore). Feature/idea/decision keep their own verbs
-    /// and never appear in `ready`.
+    /// Whether cards of this type are legacy executable work cards: they enter
+    /// `ready`, are claimable, and close via the work lifecycle. New Task
+    /// surface verbs are preferred for atomic work, but existing repositories
+    /// still use task/bug/chore cards directly.
     pub fn workable(&self) -> bool {
         matches!(self, Self::Task | Self::Bug | Self::Chore)
+    }
+
+    /// Whether a native card of this type owns child task storage and facets.
+    pub fn owns_task_container(&self) -> bool {
+        matches!(self, Self::Feature | Self::Bug | Self::Chore | Self::Custom)
     }
 
     /// Merge a re-detected `incoming` card into its `existing` counterpart when

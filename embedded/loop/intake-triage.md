@@ -30,7 +30,8 @@ against existing cards before creating anything.
 
 ## Mint: real work through the verbs
 
-    maestro card create "<title>" -t <task|bug|chore>  # new, actionable
+    maestro task add "<title>"                         # small atomic work
+    maestro card create -t bug "<title>"               # larger bug container
     maestro task block <id> --reason "<why>"           # needs a decision/escalation
 
 ## Stop

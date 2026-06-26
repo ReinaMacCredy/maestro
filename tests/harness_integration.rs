@@ -1611,13 +1611,20 @@ fn mcp_serve_lists_tools_and_calls_status_over_stdio() {
     let tools = lines[1]["result"]["tools"]
         .as_array()
         .expect("invariant: tools/list should return an array");
-    assert_eq!(tools.len(), 34);
+    assert_eq!(tools.len(), 38);
     assert!(tools.iter().any(|tool| tool["name"] == "maestro_task_next"));
     assert!(
         tools
             .iter()
             .any(|tool| tool["name"] == "maestro_task_create")
     );
+    assert!(tools.iter().any(|tool| tool["name"] == "maestro_task_add"));
+    assert!(
+        tools
+            .iter()
+            .any(|tool| tool["name"] == "maestro_task_start")
+    );
+    assert!(tools.iter().any(|tool| tool["name"] == "maestro_task_done"));
     assert!(
         tools
             .iter()
@@ -1661,6 +1668,11 @@ fn mcp_serve_lists_tools_and_calls_status_over_stdio() {
         .iter()
         .find(|tool| tool["name"] == "maestro_card_create")
         .expect("invariant: maestro_card_create should be listed");
+    assert!(
+        tools
+            .iter()
+            .any(|tool| tool["name"] == "maestro_card_prepare")
+    );
     let card_create_intents = card_create_tool["inputSchema"]["properties"]["intent"]["enum"]
         .as_array()
         .expect("invariant: card_create intent enum should be listed");

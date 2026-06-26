@@ -1,15 +1,16 @@
 ---
 name: maestro-card
-version: 1.28.0
+version: 1.29.0
 description: "Use when the user wants to implement, fix, verify, QA, close, release, or continue active Maestro card/feature/task work after design is approved."
 ---
 
 # Maestro Card
 
-Everything in a Maestro repo is a card in one flat store
-(`.maestro/cards/<id>/card.yaml`): features, tasks, bugs, chores, ideas, and
-decisions. This skill covers the active-work cluster: the work loop, the
-feature lifecycle, proof, and the QA gates. Design (`maestro-design`), audit
+Maestro splits planning containers from executable work. Cards are the
+mid/high-level containers and records (`feature`, `bug`, `chore`, `custom`,
+`decision`, plus backlog ideas); Tasks are the atomic executable units. This
+skill covers the active-work cluster: the task work loop, card/feature
+lifecycle, proof, and QA gates. Design (`maestro-design`), audit
 (`maestro-audit`), and setup (`maestro-setup`) have their own skills.
 
 Activate with a known session id:
@@ -32,13 +33,13 @@ conflict` on a file you will share, merge back then `--clear`. The full dance
 
 Read the reference for the job at hand; they share the ground rules below.
 
-- Pick up, progress, finish, or unblock a work card (task/bug/chore):
+- Pick up, progress, finish, or unblock executable Tasks:
   [reference/work.md](reference/work.md). Its implement step is test-first
-  (red-green-refactor) whenever the card's `--check` names observable
+  (red-green-refactor) whenever the task's `--check` names observable
   behavior: [reference/tdd.md](reference/tdd.md).
-- Track simple work as a lightweight todo list (batch `card create` -> `claim`
-  -> `close`, no feature/accept/verify), Claude-task-tool style: the "Cards As
-  A Lightweight Todo List" section of [reference/work.md](reference/work.md).
+- Track simple work with the low-ceremony Task surface (`task add` -> `task
+  start` -> `task done`, no separate todo namespace): the "Simple Task Board"
+  section of [reference/work.md](reference/work.md).
 - Tidy a card's diff before proving it (quality cleanup, applied in place):
   [reference/simplify.md](reference/simplify.md). On a test-first card this is
   the red-green-refactor step, not a second pass.
@@ -64,21 +65,24 @@ Read the reference for the job at hand; they share the ground rules below.
   generated from the binary. A verb or flag not listed there does not exist;
   read it instead of probing `--help`. CLI remains the compatibility and
   human-facing contract; MCP is the agent ergonomic contract.
-- Discover work with the card verbs: `maestro card ready`, `maestro card list`,
-  `maestro card show`. Take and annotate work with `maestro card claim`,
-  `maestro card note`, and `maestro card dep add`.
+- Discover executable work with `maestro task list`, `maestro task next`, and
+  `maestro card list` for card-container context. Take and annotate tasks with
+  `maestro task start`/`maestro task claim`, `maestro task update`, and
+  `maestro task note`.
 - Ids are stable and opaque (`card-<hash>`; features keep their creation
   slug). The dotted alias `show` prints is display-only; never address a card
   with it.
-- Never chain a guessed id: use only ids read from verb output (`card create
-  --id-only`, `card ready`, `card list`, `card show`). When a lookup misses, re-list and
-  read the real id; do not retry spelling variations.
+- Never chain a guessed id: use only ids read from verb output (`task add
+  --id-only`, `task list`, `card list`, `card show`). When a lookup misses,
+  re-list and read the real id; do not retry spelling variations.
 - Do not hand-edit `card.yaml` or the verb-guarded sidecars (`qa.md`,
   state history). Use verbs so gates and audit trails stay intact.
-- Terminal words are per type — feature `closed`/`cancelled`, work
+- Terminal words are per type — feature `closed`/`cancelled`, task
   `verified`/`rejected`/`abandoned`/`superseded`, decision
-  `locked`/`superseded`, loose task/bug/chore `closed` — and all of them read
-  as coarse `closed` on the board. `maestro card close` fits only task/bug/chore.
+  `locked`/`superseded`, and Bug/Chore/Custom card containers `closed` after
+  owned tasks verify — and all of them read as coarse `closed` on the board.
+  `maestro card close` fits only legacy task cards or task-owning
+  Bug/Chore/Custom containers whose owned tasks are verified.
   When the user says "close" a feature, branch on its state: a live feature
   means `feature close` or `feature cancel`; a feature already terminal
   (closed/cancelled) means archive it — run `maestro card archive <id>` directly,

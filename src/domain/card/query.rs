@@ -689,6 +689,7 @@ mod tests {
         assert!(CardType::Bug.workable());
         assert!(CardType::Chore.workable());
         assert!(!CardType::Feature.workable());
+        assert!(!CardType::Custom.workable());
         assert!(!CardType::Idea.workable());
         assert!(!CardType::Decision.workable());
     }

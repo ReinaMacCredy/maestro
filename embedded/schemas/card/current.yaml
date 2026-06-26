@@ -8,7 +8,7 @@ contracts:
     stamp: file               # every card document/entry stamps its own envelope version
     carrier: file
     format: yaml
-    home: .maestro/cards/<id>/card.yaml, pooled task.yaml files, and roster entries
+    home: .maestro/cards/<id>/card.yaml containers, pooled legacy task.yaml files, and roster entries
     model: src/domain/card/schema.rs::Card
     fields:
       - schema_version
