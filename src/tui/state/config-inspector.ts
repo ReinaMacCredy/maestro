@@ -1,5 +1,10 @@
 import type { Feature } from "@/shared/domain/legacy-mission";
-import { listIgnoredProjectConfigKeys, isGlobalOnlyConfigKey } from "@/tui/shared/ui-config.js";
+import {
+  MISSION_CONTROL_BACKGROUND_OPTIONS,
+  formatMissionControlBackgroundMode,
+  isGlobalOnlyConfigKey,
+  listIgnoredProjectConfigKeys,
+} from "@/tui/shared/ui-config.js";
 import type { DoctorCheck } from "@/infra/domain/status-types.js";
 import type { MaestroConfig } from "@/infra/domain/config-types.js";
 import type { ConfigScope, ConfigLayers } from "@/infra/ports/config.port.js";
@@ -451,8 +456,8 @@ function getEditMeta(
   if (keyPath === "ui.missionControl.backgroundMode") {
     return {
       editKind: "enum",
-      options: ["solid", "terminal"],
-      description: "Choose whether Mission Control paints solid panel backgrounds or uses the terminal background.",
+      options: MISSION_CONTROL_BACKGROUND_OPTIONS,
+      description: "Choose transparency or the current Mission Control theme.",
     };
   }
 
@@ -530,13 +535,13 @@ function getRowCopy(keyPath: string, tab: MissionControlConfigTab | "project" | 
   switch (keyPath) {
     case "ui.missionControl.backgroundMode":
       return {
-        label: "Background mode",
+        label: "Theme",
         summary: tab === "project"
           ? "This setting is global-only. Project config values are ignored."
-          : "Choose whether Mission Control uses solid panel fills or the terminal background.",
+          : "Choose whether Mission Control uses transparency or the current theme.",
         impactText: tab === "project"
           ? "Move this value to global config if you want it to affect Mission Control."
-          : "Terminal mode shows your terminal background through normal dashboard chrome; modals stay solid.",
+          : "Transparency is the default; current theme keeps the solid dashboard colors.",
         section: tab === "overview" ? "Quick settings" : undefined,
       };
     case "memory.enabled":
@@ -662,7 +667,9 @@ function displayValueForKey(
   value: unknown,
 ): string {
   const raw = stringifyConfigValue(keyPath, editKind, value);
-  if (keyPath === "ui.missionControl.backgroundMode" && raw === "terminal") return "terminal background";
+  if (keyPath === "ui.missionControl.backgroundMode") {
+    return formatMissionControlBackgroundMode(raw);
+  }
   if (keyPath === "memory.learnings.compile_threshold" && raw !== "unset") return `${raw} entries`;
   if (keyPath === "memory.learnings.max_age_days" && raw !== "unset") return `${raw} days`;
   return raw;

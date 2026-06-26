@@ -19,6 +19,10 @@ import type {
   MissionControlSnapshot,
   TaskPreviewPane,
 } from "@/tui/state/types.js";
+import {
+  MISSION_CONTROL_BACKGROUND_OPTIONS,
+  formatMissionControlBackgroundMode,
+} from "@/tui/shared/ui-config.js";
 
 export interface RustMissionControlSnapshot {
   readonly schema: "maestro.mission_control.snapshot.v1";
@@ -180,7 +184,7 @@ export function adaptRustSnapshot(snapshot: RustMissionControlSnapshot): Mission
       gitAvailable: snapshot.repo.branch !== null,
       checks,
       missionDirectory: `${snapshot.repo.root}/.maestro`,
-      backgroundMode: "solid",
+      backgroundMode: "transparent",
     },
     configInspector,
     progressLog: events,
@@ -346,11 +350,13 @@ function buildConfigInspector(
     CONFIG_TABS.map((tab) => [tab, [] as MissionControlConfigRow[]]),
   ) as Record<MissionControlConfigTab, MissionControlConfigRow[]>;
   rowsByTab.overview = [
+    themeRow(),
     readonlyRow("repo.root", "Repo", snapshot.repo.root, "Current workspace root"),
     readonlyRow("repo.branch", "Branch", snapshot.repo.branch ?? "(detached)", "Current git branch"),
     readonlyRow("config.source", "Source", snapshot.config.source, "Rust snapshot provider"),
   ];
   rowsByTab.effective = [
+    themeRow(),
     readonlyRow("renderer", "Renderer", "TypeScript/OpenTUI", "Restored frontend renderer"),
     readonlyRow("readOnly", "Read only", String(snapshot.config.read_only), "Preview paths do not mutate card artifacts"),
   ];
@@ -378,6 +384,29 @@ function buildConfigInspector(
     projectPath: `${snapshot.repo.root}/.maestro`,
     globalPath: "",
     errors: [],
+  };
+}
+
+function themeRow(): MissionControlConfigRow {
+  const value = "transparent";
+  const display = formatMissionControlBackgroundMode(value);
+  return {
+    ...readonlyRow(
+      "ui.missionControl.backgroundMode",
+      "Theme",
+      value,
+      "Transparency is the default; current theme keeps the solid dashboard colors.",
+      "default",
+    ),
+    displayValueText: display,
+    editKind: "enum",
+    editKindLabel: "choice",
+    options: MISSION_CONTROL_BACKGROUND_OPTIONS,
+    description: "Choose transparency or the current Mission Control theme.",
+    effectiveValueText: value,
+    effectiveDisplayValueText: display,
+    defaultValueText: value,
+    defaultDisplayValueText: display,
   };
 }
 

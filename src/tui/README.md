@@ -30,7 +30,8 @@ only renders data that Rust has already projected.
   interactive OpenTUI modes.
 - `src/tui/current-snapshot.ts`: adapter from
   `maestro.mission_control.snapshot.v1` to the old TypeScript
-  `MissionControlSnapshot` view model.
+  `MissionControlSnapshot` view model. It sets the default TUI background mode
+  to `transparent`.
 - `src/tui/state/reducer.ts`: restored old UI state machine.
 - `src/tui/opentui/**`: restored old OpenTUI render loop, preview capture, and
   components.
@@ -50,6 +51,17 @@ Safe inspection paths:
 The restored interactive code still contains old action paths, but the
 compatibility write functions throw read-only errors. Do not hide durable writes
 inside `current-snapshot.ts`, preview rendering, or config/proof adapters.
+
+## Theme Settings
+
+Mission Control currently exposes one background theme setting:
+
+- `transparent`: default. The terminal background shows through normal dashboard
+  chrome.
+- `current`: uses the current solid Mission Control panel colors.
+
+Legacy config values still map cleanly: `terminal` becomes `transparent`, and
+`solid` becomes `current`.
 
 ## Editing Guide
 

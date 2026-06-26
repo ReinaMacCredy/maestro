@@ -1,7 +1,16 @@
-export type MissionControlBackgroundMode = "solid" | "terminal";
+export type MissionControlBackgroundMode = "transparent" | "current";
+export type MissionControlBackgroundModeInput =
+  | MissionControlBackgroundMode
+  | "solid"
+  | "terminal";
+
+export const MISSION_CONTROL_BACKGROUND_OPTIONS = [
+  "transparent",
+  "current",
+] as const satisfies readonly MissionControlBackgroundMode[];
 
 export interface MissionControlUiConfig {
-  readonly backgroundMode?: MissionControlBackgroundMode;
+  readonly backgroundMode?: MissionControlBackgroundModeInput;
 }
 
 export interface UiConfig {
@@ -42,7 +51,30 @@ export function listIgnoredProjectConfigKeys(
 }
 
 export function getMissionControlBackgroundMode(config: {
-  ui?: { missionControl?: { backgroundMode?: MissionControlBackgroundMode } };
+  ui?: { missionControl?: { backgroundMode?: MissionControlBackgroundModeInput } };
 }): MissionControlBackgroundMode {
-  return config.ui?.missionControl?.backgroundMode ?? "solid";
+  return normalizeMissionControlBackgroundMode(config.ui?.missionControl?.backgroundMode);
+}
+
+export function normalizeMissionControlBackgroundMode(
+  value: MissionControlBackgroundModeInput | string | undefined,
+): MissionControlBackgroundMode {
+  switch (value) {
+    case "current":
+    case "solid":
+      return "current";
+    case "transparent":
+    case "terminal":
+    case undefined:
+      return "transparent";
+    default:
+      return "transparent";
+  }
+}
+
+export function formatMissionControlBackgroundMode(
+  value: MissionControlBackgroundModeInput | string | undefined,
+): string {
+  const mode = normalizeMissionControlBackgroundMode(value);
+  return mode === "transparent" ? "Transparency (default)" : "Current theme";
 }
