@@ -1,0 +1,18 @@
+# Schema contract for the D17 progress sidecar family.
+# src/domain/schema_contracts validates this pack against the Rust constants;
+# any edit trips tests/resources_version_guard.rs so it is acknowledged.
+family: progress
+contracts:
+  - name: progress
+    schema_version: maestro.progress.v1
+    stamp: file
+    carrier: file
+    format: yaml
+    home: .maestro/cards/<progress-id>/progress.yml
+    model: src/domain/task/progress.rs::ProgressFile
+    fields:
+      - schema_version
+      - session_id
+      - agent
+      - current_task
+      - tasks

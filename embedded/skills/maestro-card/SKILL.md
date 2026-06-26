@@ -1,16 +1,16 @@
 ---
 name: maestro-card
-version: 1.31.0
+version: 1.32.0
 description: "Use when the user wants to implement, fix, verify, QA, close, release, or continue work tracked by Maestro cards/features/tasks in a project using Maestro after design is approved."
 ---
 
 # Maestro Card
 
-Maestro splits planning containers from executable work. Cards are the
-mid/high-level containers and records (`feature`, `bug`, `chore`, `custom`,
-`decision`, plus backlog ideas); Tasks are the atomic executable units. This
-skill covers the active-work cluster: the task work loop, card/feature
-lifecycle, proof, and QA gates. Design (`maestro-design`), audit
+Maestro uses three work levels: high container Cards, mid workflow/lifecycle
+Cards, and low executable Tasks. Progress is a lightweight mid card that stores
+many low Tasks in `progress.yml`; legacy `type: task` cards remain readable for
+compatibility. This skill covers the active-work cluster: the task work loop,
+card/feature lifecycle, proof, and QA gates. Design (`maestro-design`), audit
 (`maestro-audit`), and setup (`maestro-setup`) have their own skills.
 
 Activate with a known session id:
@@ -38,8 +38,9 @@ Read the reference for the job at hand; they share the ground rules below.
   (red-green-refactor) whenever the task's `--check` names observable
   behavior: [reference/tdd.md](reference/tdd.md).
 - Track simple work with the low-ceremony Task surface (`task add` -> `task
-  start` -> `task done`, no separate todo namespace): the "Simple Task Board"
-  section of [reference/work.md](reference/work.md).
+  start` -> `task done`, no separate todo namespace): this creates or reuses a
+  Progress card and stores low Tasks in `progress.yml`; see the "Simple Task
+  Board" section of [reference/work.md](reference/work.md).
 - Tidy a card's diff before proving it (quality cleanup, applied in place):
   [reference/simplify.md](reference/simplify.md). On a test-first card this is
   the red-green-refactor step, not a second pass.
@@ -66,7 +67,8 @@ Read the reference for the job at hand; they share the ground rules below.
   read it instead of probing `--help`. CLI remains the compatibility and
   human-facing contract; MCP is the agent ergonomic contract.
 - Discover executable work with `maestro task list`, `maestro task next`, and
-  `maestro card list` for card-container context. Take and annotate tasks with
+  `maestro card list` for card-container context. Progress-backed low Tasks
+  appear in task views; the Progress card itself appears in card views. Take and annotate tasks with
   `maestro task start`/`maestro task claim`, `maestro task update`, and
   `maestro task note`.
 - Ids are stable and opaque (`card-<hash>`; features keep their creation

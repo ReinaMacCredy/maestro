@@ -1,8 +1,8 @@
 # ARCHITECTURE
 
-**Status:** as-built, 2026-06-10. §2 describes the shipped card model (the unified
-entity selected in `SPEC-beads-model.md`, DM1 = full rewrite, implemented on the
-`card-model` branch). §3 records what the rewrite collapsed and the deviations kept.
+**Status:** as-built, 2026-06-26. §2 describes the shipped card/task model (the
+unified card store from `SPEC-beads-model.md`, updated with the D17 Progress card
+model). §3 records what the rewrite collapsed and the deviations kept.
 
 Related: `./AGENTS.md` (working rules). The full design history (SPEC-beads-model and
 its decision log) lives in untracked working notes, archived after close.
@@ -32,23 +32,40 @@ Four layers; dependencies point one way: **interfaces -> operations -> domain ->
 
 ## 2. The card model (as-built)
 
-One entity `card` replaces feature/task/harness/decision. Structure (DN10) = a generic
-**deep card core** + a closed `pub enum CardType` (`feature | task | bug | chore |
-idea | decision`). There is no `CardType` trait in the shipped model. The type seam
-is explicit exhaustive `match` dispatch at the card-store, query, edit, and CLI
-boundaries; per-type lifecycle rules stay in the owning domain modules.
+Maestro uses three work levels:
+
+```text
+High = container Card
+Mid  = workflow/lifecycle Card
+Low  = Task
+```
+
+`Card` is the durable identity, container, lifecycle, and governance record.
+`Task` is the atomic executable progress unit. `Facet` sidecars (`spec.md`,
+`qa.md`, `notes.md`) describe or prove one parent card when needed.
+
+The shipped store still uses a generic **deep card core** + a closed
+`pub enum CardType` (`feature | custom | progress | task | bug | chore | idea |
+decision`). `type: task` is retained for legacy readable/workable task cards;
+the target low-level Task abstraction is the `TaskRecord` payload used by
+card-backed task records and by Progress `progress.yml`. There is no `CardType`
+trait in the shipped model. The type seam is explicit exhaustive `match`
+dispatch at the card-store, query, edit, and CLI boundaries; per-type lifecycle
+rules stay in the owning domain modules.
 
 ```text
 generic CARD CORE  -- never changes when a type is added/altered
   schema · store(save-if-unchanged) · id-reservation · scan · archive ·
   query(ready/list) · CLI(create/show/update/dep/close)
         |  dispatch by exhaustive match on CardType
-   enum CardType: feature · task · bug · chore · idea · decision
+   enum CardType: feature · custom · progress · task(legacy) · bug · chore · idea · decision
         ├ card store: placement · id prefix · save basis · reconcile
         ├ card query/edit/CLI: ready/list filters · type hints · close guards
         └ domain lifecycles:
-             feature  (proposed->ready->in_progress->closed, +cancelled) container
-             task/bug/chore  (draft->…->verified, +rejected/abandoned/superseded)
+             feature  (proposed->ready->in_progress->closed, +cancelled) high container
+             progress (in_progress card + progress.yml TaskRecord rows) lightweight mid card
+             task     (legacy card-backed TaskRecord compatibility)
+             bug/chore/custom (mid workflow cards that own TaskRecord work)
              idea     (proposed->accepted->measured, +dismissed)
              decision (open->locked, +superseded)
 ```
@@ -59,16 +76,18 @@ multiply enough that a trait removes real duplication. Until then, exhaustive ma
 are the intended safety mechanism: adding a `CardType` variant forces every dispatch
 site to be reviewed by the compiler.
 
-- **card fields:** `id`, `type`, `status`, `parent` (feature | null), `deps[]`, `lane`,
+- **card fields:** `id`, `type`, `status`, `parent` (card id | null), `deps[]`, `lane`,
   `claimed_by = <agent>#<session>` (agent in claude | codex | future-cli), title,
-  description, acceptance, timestamps; prose (`spec.md`/`notes.md`) as **sidecar markdown**.
-- **types:** `feature | task | bug | chore | idea | decision` (2 levels; `event` /
-  3rd-level `epic` / `message` PARKED).
+  description, acceptance, timestamps; prose (`spec.md`/`notes.md`/`qa.md`) as
+  optional **facet sidecars** for any card that needs contract, evidence, or history.
+- **types:** `feature | custom | progress | task | bug | chore | idea | decision`.
+  `task` remains a compatibility card type; new low-ceremony Tasks are stored
+  under Progress cards.
 - **status:** each type stores its REAL state; a coarse `open | in_progress | closed`
   is DERIVED for the board (single source of truth, can't desync).
 - **ids:** stable and opaque after creation. Features use their creation slug; other
-  cards mint readable typed slug ids (`task-<slug>-<hex4>`, `bug-...`, `chore-...`,
-  `dec-...`, `idea-...`). Legacy `card-<hex>` ids stay valid but are not minted for
+  cards mint readable typed slug ids (`progress-<slug>-<hex4>`, `task-<slug>-<hex4>`,
+  `bug-...`, `chore-...`, `custom-...`, `dec-...`, `idea-...`). Legacy `card-<hex>` ids stay valid but are not minted for
   new non-feature cards. The dotted `<feature>.<N>` form is a **display alias**
   rendered only by `show` (marked "display only"), never a ref and never parsed —
   addressing by position broke under reparenting, so it was demoted from the original
@@ -76,7 +95,9 @@ site to be reviewed by the compiler.
 - **storage (one card store, feature is just a card):**
   ```text
   .maestro/cards/<feature>/card.yaml                    # feature container card
-  .maestro/cards/<feature>/{spec.md,notes.md,qa.md}     # feature prose + QA
+  .maestro/cards/<feature>/{spec.md,notes.md,qa.md}     # feature facets
+  .maestro/cards/<progress>/card.yaml                   # lightweight progress card
+  .maestro/cards/<progress>/progress.yml                # low-level TaskRecord rows
   .maestro/cards/<feature>/tasks/<task>/task.yaml       # task/bug/chore cards
   .maestro/cards/<feature>/decisions.yaml               # decision entries
   .maestro/cards/tasks/<task>/task.yaml                 # parentless task/bug/chore cards
@@ -86,9 +107,11 @@ site to be reviewed by the compiler.
   .maestro/archive/cards/
   ```
   Folds the old `features/` + `tasks/` + `harness/backlog.yaml` + `decisions/` trees
-  into one store (`maestro migrate` remints v1 repos). Task-family records keep
-  per-card dirs for contention-free work; decisions and ideas are entry-backed where
-  their owning domain still treats them as rosters. (NOT Dolt; file-native.)
+  into one store (`maestro migrate` remints v1 repos). Legacy task-family cards keep
+  per-card dirs for compatibility and contention-free gated work; Progress cards keep
+  small same-session TaskRecord rows in one `progress.yml`. Decisions and ideas are
+  entry-backed where their owning domain still treats them as rosters. (NOT Dolt;
+  file-native.)
 - **management:** global QUERY, not directory navigation — `maestro ready [<feature>]`,
   `maestro list --parent --type --assignee --status`, beads-style verbs
   (`claim`/`show`/`note`/`dep add`/`archive`), emoji-free, `--json` parity.
@@ -98,8 +121,10 @@ site to be reviewed by the compiler.
   `reference/{work,feature,verify,qa-baseline,qa-slice}.md`) covers the active-work
   cluster; `maestro-setup` / `maestro-design` / `maestro-audit` stay separate.
 
-Type mapping: feature -> `type:feature` (container) · task -> `type:task` ·
-harness item -> `type:idea` · decision -> `type:decision` · plus new `bug`/`chore`.
+Type mapping: feature -> `type:feature` (high container) · custom/bug/chore ->
+mid workflow containers · progress -> lightweight mid card with `progress.yml` ·
+legacy task card -> `type:task` · harness item -> `type:idea` · decision ->
+`type:decision`.
 
 ---
 

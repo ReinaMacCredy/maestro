@@ -26,12 +26,13 @@ fn catalog_serves_every_artifact_matrix_family() {
             "feature",
             "harness",
             "install",
+            "progress",
             "proof",
             "run-event",
             "run-evidence",
             "task",
         ],
-        "the catalog must cover exactly the 10 artifact-matrix families"
+        "the catalog must cover exactly the 11 artifact-matrix families"
     );
 }
 

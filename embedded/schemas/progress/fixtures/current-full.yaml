@@ -1,0 +1,50 @@
+schema_version: maestro.progress.v1
+session_id: 019f0169-example
+agent: codex
+current_task: task-build-ui-18ac
+tasks:
+  - schema_version: maestro.task.v2
+    id: task-fix-typo-a83f
+    title: fix typo in README
+    lane: normal
+    risk: medium
+    state: verified
+    acceptance_locked: true
+    acceptance:
+      locked_by: codex#019f0169-example
+      locked_at: 2026-06-26T00:00:00.000Z
+    claims:
+      - "simple completion: fixed typo"
+    verification:
+      status: passed
+      verified_at: 2026-06-26T00:05:00.000Z
+      claim_checks:
+        - claim: "simple completion: fixed typo"
+          matched: true
+          source: task done
+      claims_only: true
+    created_at: 2026-06-26T00:00:00.000Z
+    updated_at: 2026-06-26T00:05:00.000Z
+  - schema_version: maestro.task.v2
+    id: task-build-ui-18ac
+    title: build UI using endpoint
+    lane: normal
+    risk: medium
+    state: in_progress
+    acceptance_locked: true
+    acceptance:
+      locked_by: codex#019f0169-example
+      locked_at: 2026-06-26T00:10:00.000Z
+    blockers:
+      - id: blk-001
+        kind: task
+        blocked_ref:
+          kind: task
+          id: task-build-api-77b2
+        title: Blocked by task-build-api-77b2
+        reason: API endpoint must exist before UI wiring
+        source: command
+        created_at: 2026-06-26T00:12:00.000Z
+    verification: {}
+    created_at: 2026-06-26T00:10:00.000Z
+    updated_at: 2026-06-26T00:12:00.000Z

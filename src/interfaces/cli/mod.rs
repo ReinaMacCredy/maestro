@@ -650,7 +650,7 @@ pub struct ListArgs {
     /// Only cards whose parent is this card id.
     #[arg(long, value_name = "PARENT")]
     pub parent: Option<String>,
-    /// Only cards of this type (feature, custom, task, bug, chore, idea, decision).
+    /// Only cards of this type (feature, custom, progress, task, bug, chore, idea, decision).
     #[arg(long = "type", value_name = "TYPE")]
     pub card_type: Option<String>,
     /// Only cards whose advisory assignee hint OR actual claim is this agent or
@@ -1394,7 +1394,7 @@ pub struct NoteArgs {
 
 #[derive(Debug, Args)]
 pub struct CreateArgs {
-    /// Card type: feature, custom, task, bug, chore, idea, or decision.
+    /// Card type: feature, custom, progress, task, bug, chore, idea, or decision.
     #[arg(short = 't', long = "type", value_name = "TYPE")]
     pub card_type: String,
     /// One or more card titles; each title mints a card. A single title is the

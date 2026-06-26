@@ -28,18 +28,34 @@ Everything is repo-local and reviewable in a diff.
 
 ## Card model
 
-maestro's durable unit is a **card**. Features, tasks, bugs, chores, ideas, and
-decisions all live under `.maestro/cards/<id>/`; `card.yaml` carries the typed
-state, parent, dependencies, claim, and timestamps, while sidecars such as
-`spec.md`, `qa.md`, and `notes.md` carry the human-readable contract and evidence.
+maestro uses a three-level work model:
+
+```text
+High = container card
+Mid  = workflow/lifecycle card
+Low  = task
+```
+
+A **card** owns identity, container/lifecycle state, and governance. A **task**
+is the atomic executable progress unit. A **facet** is an optional sidecar that
+describes or proves a card.
+
+Feature cards are high-level containers. Bug, Chore, Custom, Decision, Idea, and
+Progress cards are mid-level workflow records. Tasks are not CardTypes; they live
+inside card-backed task records for legacy/gated work or inside a Progress card's
+`progress.yml` for low-ceremony small work. `card.yaml` carries typed state,
+parent, dependencies, claim, and timestamps; facets such as `spec.md`, `qa.md`,
+and `notes.md` are optional sidecars for any card type that needs contract,
+evidence, or history.
 
 ![Maestro card model](docs/readme/maestro-card-model.png)
 
-Feature cards are the containers. Workable cards (`task`, `bug`, `chore`) dock
-under a feature through `parent`, enter `maestro ready` when their blocking
-dependencies are closed, and can be claimed by an agent session. Ideas and
-decisions are cards too, but they keep their own typed lifecycle verbs through
-the harness and decision flows.
+Feature cards are the largest containers. Legacy workable cards (`task`, `bug`,
+`chore`) remain readable and claimable for compatibility. New low-ceremony work
+uses `maestro task add/start/done/list`; Maestro creates or reuses a Progress
+card under `.maestro/cards/<progress-id>/` and stores many low-level Tasks in
+`progress.yml`. Ideas and decisions are cards too, but they keep their own typed
+lifecycle verbs through the harness and decision flows.
 
 The flat query verbs give agents a Beads-style operating surface:
 `maestro ready`, `maestro list`, `maestro show`, `maestro claim`,
@@ -49,9 +65,11 @@ cross-agent coordination layer on top of the same cards.
 
 ## How It Works
 
-Everything durable is a card. The agent uses flat card queries to find and claim work, then
-uses typed lifecycle verbs only where gates matter: feature contract gates, task proof gates,
-decision locks, and harness measurement.
+Cards are durable planning/governance records; Tasks are durable executable
+progress records. The agent uses flat card queries for card containers and
+`maestro task ...` for executable work, then uses typed lifecycle verbs where
+gates matter: feature contract gates, task proof gates, decision locks, and
+harness measurement.
 
 ```mermaid
 flowchart LR
@@ -59,9 +77,9 @@ flowchart LR
     B --> C[spec.md + qa.md]
     C --> D[feature accept]
     D --> E[feature prepare]
-    E --> F[work cards]
-    F --> G[maestro ready]
-    G --> H[maestro claim]
+    E --> F[low tasks]
+    F --> G[maestro task next/list]
+    G --> H[maestro task start]
     H --> I[task complete with proof]
     I --> J[task verify]
     J --> K[feature verify + close]
@@ -81,8 +99,10 @@ The card type controls which verbs are valid:
 
 | Type | Role | Main verbs |
 | --- | --- | --- |
-| `feature` | Product contract and parent container | `feature accept`, `feature prepare`, `feature verify`, `feature close`, `archive` |
-| `task` / `bug` / `chore` | Workable implementation cards | `ready`, `claim`, `task complete`, `task verify`, `close` |
+| `feature` | Product contract and high-level container | `feature accept`, `feature prepare`, `feature verify`, `feature close`, `archive` |
+| `progress` | Lightweight mid-level card holding many low-level Tasks in `progress.yml` | `task add`, `task start`, `task done`, `task list` |
+| `bug` / `chore` / `custom` | Mid-level workflow cards that can own Tasks and optional facets | `card prepare`, `task complete`, `task verify`, `card close` |
+| legacy `task` cards | Compatibility implementation cards | `ready`, `claim`, `task complete`, `task verify`, `close` |
 | `idea` | Harness/self-improvement proposal | `harness list`, `harness apply`, `harness dismiss`, `harness measure` |
 | `decision` | Durable reasoning record | `decision new`, `decision lock`, `decision show` |
 
@@ -493,13 +513,19 @@ editable design state; `accept` freezes the contract into `ready` and requires a
 card under `.maestro/cards/<id>/`: `card.yaml` holds typed state, `qa.md` holds the behavior baseline
 and slices block, `spec.md` is the design write-up, and `notes.md` accumulates the running design log.
 
-### Work Cards Gated by Proof
+### Tasks and Work Cards Gated by Proof
 
-`task`, `bug`, and `chore` are the workable card types. They can be discovered with `maestro ready`,
-claimed with `maestro claim <id>`, blocked with `maestro dep add <child> <blocker>`, and closed with
-the proof-gated task flow. Typed task verbs still own proof: `task complete` records the summary,
-claim, and observed proof, then `task verify` checks that evidence before the card counts as done.
-The result is that "done" is always backed by evidence you can open.
+Low-level Tasks are the executable units. For small work, `maestro task add`
+creates a ready Task inside a Progress card's `progress.yml`; `task start`
+claims it, and `task done` verifies simple completion when no explicit gate is
+attached. For gated or card-owned work, `task complete` records the summary,
+claim, and observed proof, then `task verify` checks that evidence before the
+Task counts as done.
+
+Legacy `task`, `bug`, and `chore` cards remain workable card types. They can be
+discovered with `maestro ready`, claimed with `maestro claim <id>`, blocked with
+`maestro dep add <child> <blocker>`, and closed after their proof-gated work is
+done. The result is that "done" is always backed by evidence you can open.
 
 ### QA: baseline and slices
 

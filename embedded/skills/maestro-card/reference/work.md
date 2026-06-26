@@ -1,8 +1,9 @@
 # Task Work
 
-The work loop for executable Tasks. A Task is the atomic unit of implementation;
-a Card (`feature`, `bug`, `chore`, `custom`) is the container or product
-contract it may deliver against.
+The work loop for executable Tasks. A Task is the atomic unit of implementation.
+Cards are higher-level records: Feature is the high contract container; Bug,
+Chore, Custom, Decision, Idea, and Progress are mid workflow/lifecycle records.
+Progress is the lightweight Task container for small same-session work.
 
 ## Use
 
@@ -126,15 +127,24 @@ second lifecycle.
 MCP: `maestro_task_add` -> `maestro_task_start` -> `maestro_task_done`.
 
 ```sh
-maestro task add "fix typo"      # creates a ready standalone Task
+maestro task add "fix typo"      # creates a ready Task inside progress.yml
 maestro task start <id>          # marks it in_progress and takes ownership
 maestro task done <id>           # verifies it with simple-completion evidence
 ```
 
-`task add` is for standalone small work. It creates a Task that is immediately
-ready to start, and `--id-only` prints only the new id. For simple Chore-owned
-work, attach it with `--card <chore-id>`. Feature, Bug, and Custom card work
-should be prepared into Tasks through the card/feature prepare path.
+`task add` is for small work. It creates or reuses the current actor's Progress
+card under `.maestro/cards/<progress-id>/` and appends a TaskRecord row to
+`progress.yml`. The Task is immediately ready to start, and `--id-only` prints
+only the new Task id. For simple Chore-owned work, attach it with `--card
+<chore-id>`; that path remains card-backed for compatibility. Feature, Bug, and
+Custom card work should be prepared into Tasks through the card/feature prepare
+path.
+
+Progress is still a card, but the rows inside `progress.yml` are Tasks, not
+CardTypes. Keep a Task in Progress while it only needs executable tracking. Lift
+it into a card-backed Task/Bug/Custom/Chore when it needs its own lifecycle
+record, facets (`spec.md`, `qa.md`, `notes.md`), discussion/history, child
+tasks, product/defect/custom identity, or governance beyond execution.
 
 Focus discipline (the task tool's one-active-item rule):
 
@@ -154,6 +164,10 @@ maestro task list             # live Tasks; done hidden
 maestro task list --mine      # only Tasks claimed by this actor
 maestro task list --all       # include done/terminal history
 ```
+
+`maestro task list` includes Progress-backed Tasks and legacy card-backed Tasks.
+`maestro card list --type progress` shows the Progress card itself; low Tasks do
+not appear as card rows.
 
 The board reads:
 

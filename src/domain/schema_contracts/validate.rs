@@ -12,7 +12,8 @@ use serde_yaml::Value as YamlValue;
 use crate::foundation::core::schema::{
     CARD_SCHEMA_VERSION, EVENT_SCHEMA_VERSION, FEATURE_SCHEMA_VERSION,
     GLOBAL_SKILLS_LOCK_SCHEMA_VERSION, HARNESS_SCHEMA_VERSION, INSTALL_LOCK_SCHEMA_VERSION,
-    RUN_EVIDENCE_SCHEMA_VERSION, TASK_SCHEMA_VERSION, VERIFICATION_SCHEMA_VERSION,
+    PROGRESS_SCHEMA_VERSION, RUN_EVIDENCE_SCHEMA_VERSION, TASK_SCHEMA_VERSION,
+    VERIFICATION_SCHEMA_VERSION,
 };
 
 use super::catalog::{ContractSpec, SchemaPack, VersionClass, pack, packs};
@@ -33,6 +34,7 @@ const EXPECTED_CURRENT: &[(&str, &[&str])] = &[
             GLOBAL_SKILLS_LOCK_SCHEMA_VERSION,
         ],
     ),
+    ("progress", &[PROGRESS_SCHEMA_VERSION]),
     ("proof", &[VERIFICATION_SCHEMA_VERSION]),
     ("run-event", &[EVENT_SCHEMA_VERSION]),
     ("run-evidence", &[RUN_EVIDENCE_SCHEMA_VERSION]),

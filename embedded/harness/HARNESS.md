@@ -1,5 +1,5 @@
 ---
-version: 1.23.0
+version: 1.24.0
 ---
 
 # Maestro Harness Protocol
@@ -7,9 +7,15 @@ version: 1.23.0
 You are an agent working in a repo that
 uses Maestro. Follow these rules.
 
-Maestro is a loop harness: tasks are the loop; verify + qa are the stop hook (no
-unbacked claim lands); decisions + friction + skills are the compounding memory;
-`maestro loop` lists the orchestration recipes.
+Maestro is a loop harness: low-level Tasks are the executable loop; verify + qa
+are the stop hook (no unbacked claim lands); decisions + friction + skills are
+the compounding memory; `maestro loop` lists the orchestration recipes.
+
+Work has three levels: High container Cards, Mid workflow/lifecycle Cards, and
+Low Tasks. Progress is a lightweight Mid card that stores many Low Tasks in
+`progress.yml`; use it through `maestro task add/start/done/list` for small
+work. Tasks are executable units, not target CardTypes; legacy `type: task`
+cards remain readable for compatibility.
 
 ## Shared protocol (all agents)
 1. Start with `maestro status`; honor MAESTRO_CURRENT_TASK env or `maestro task show <id>` when a current task is set.
@@ -89,6 +95,12 @@ Make a task claimable (intake):
     maestro task create   # -> draft; seed --check with the observable result
     maestro task explore  # -> exploring
     maestro task accept   # locks acceptance -> ready
+
+Small work without full card ceremony:
+
+    maestro task add      # creates/reuses a Progress card, appends a ready Task
+    maestro task start    # -> in_progress, records ownership
+    maestro task done     # simple claims-only verification when no gate is attached
 
 Execute:
 

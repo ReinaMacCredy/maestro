@@ -8,7 +8,7 @@ contracts:
     stamp: payload            # the version stamp lives inside card `extra`
     carrier: card-extra       # on disk: card envelope with the payload under `extra`
     format: yaml
-    home: .maestro/cards/<feature>/tasks/<task>/task.yaml and .maestro/cards/tasks/<task>/task.yaml
+    home: .maestro/cards/<feature>/tasks/<task>/task.yaml, .maestro/cards/tasks/<task>/task.yaml, and rows inside .maestro/cards/<progress-id>/progress.yml
     model: src/domain/task/template.rs::TaskRecord
     fields:
       - schema_version

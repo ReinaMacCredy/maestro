@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-version: 1.28.0
+version: 1.29.0
 description: "Use when the user wants to brainstorm, design, plan, choose wording, or decide a workflow, skill, harness, card/task/feature, architecture, UX, or agent-process change in a project using Maestro before implementation."
 ---
 
@@ -10,6 +10,22 @@ Use this when the deliverable is the design of record, not code. The feature
 stays `proposed` while the contract is still editable; `feature finalize`
 writes the clean continuation handoff, and `feature accept` later freezes the
 contract.
+
+Maestro work has three levels:
+
+```text
+High = container Card
+Mid  = workflow/lifecycle Card
+Low  = Task
+```
+
+Feature is the usual high container. Bug, Chore, Custom, Decision, Idea, and
+Progress are mid workflow/lifecycle cards. A Task is the low executable unit,
+not a CardType in the target model; legacy `type: task` cards stay readable for
+compatibility. For tiny same-session work, design toward the low-ceremony
+`task add/start/done/list` surface backed by a Progress card's `progress.yml`.
+Use facets (`spec.md`, `qa.md`, `notes.md`) for any card type that needs
+contract, evidence, or history, not only features.
 
 Activate with a known session id:
 `maestro hook record --event skill_activation --skill maestro-design --session <session_id>`

@@ -31,12 +31,12 @@ const RECOVERY_MD: &str = include_str!("../embedded/harness/RECOVERY.md");
 /// The shipped code playbook, served from the binary instead of extracted.
 static PLAYBOOK_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/embedded/playbook");
 /// `(group, name, shipped version, sha256 tree-hash of the resource files)`.
-const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 17] = [
+const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 18] = [
     (
         "skill",
         "maestro-card",
-        "1.31.0",
-        "26b685276ab8547586d2cede4de4c189f0527ee5037d91ec91d036febbb91bcf",
+        "1.32.0",
+        "88ee7a23d71f9e55c5b469b2739ea2a2a8c0f4dc6056d6072416284a162f76ed",
     ),
     (
         "skill",
@@ -47,8 +47,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 17] = [
     (
         "skill",
         "maestro-design",
-        "1.28.0",
-        "fac9f668dbb2253dd605818833ca2c8e26e7e70750db93175946185652a99260",
+        "1.29.0",
+        "ab63e95514e209dc0deb4deffd89cde8687afb80e19e1a2766138aa83b37cd73",
     ),
     (
         "skill",
@@ -65,8 +65,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 17] = [
     (
         "harness",
         "HARNESS.md",
-        "1.23.0",
-        "be547b832270db98aa7c3d8dc29ca7c83718c9ea6b2a1364fb61800360f53a1d",
+        "1.24.0",
+        "3d955e8c5a9df71b90dae471587b8d2d633efbde9dde788e67194d596dd4061a",
     ),
     (
         "playbook",
@@ -112,6 +112,12 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 17] = [
     ),
     (
         "schema",
+        "progress",
+        "maestro.progress.v1",
+        "864b03a06f8d2df393ea57ca58b76693d46300642e76dec12e4a8af1d5e0dd1b",
+    ),
+    (
+        "schema",
         "proof",
         "maestro.verification.v1",
         "5122fac7ed7f4e40fcd122eb8e47da895d58a851fa62e47443414da64f799a6a",
@@ -132,7 +138,7 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 17] = [
         "schema",
         "task",
         "maestro.task.v2",
-        "4cd0e80ef00d83f69df3a266211cf316f1215e57f37f5a3a36057151f13df9a0",
+        "d35809c1633705fada87130277291d1730dd40ab4a2e56ff70344e7e2897e8af",
     ),
 ];
 
