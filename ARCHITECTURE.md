@@ -24,10 +24,10 @@ Four layers; dependencies point one way: **interfaces -> operations -> domain ->
 ### Deep primitives (small interface, much hidden behavior) — `foundation/core`
 - `write_string_if_unchanged` — content-hash compare-and-swap + `.{name}.write-lock` marker, 15-min stale reclaim — `fs.rs:121`
 - `try_reserve_marker_dir` + `DirReservation` — atomic id reservation via `.alloc-` marker dir, RAII cleanup on drop (`ALLOC_MARKER_PREFIX` `fs.rs:30`) — `fs.rs:33`
-- `write_new_dir_atomic` — build in a temp root, publish by rename — `fs.rs:229`
+- `write_new_dir_atomic` — build in a temp root, publish by rename — `fs.rs:291`
 - `append_text_file` — append-once / create-new, trailing-newline repair — `fs.rs:51`
 - `child_dirs` — symlink-safe directory walk — `fs.rs:324`
-- `write_string_atomic` — temp-sibling + rename + parent fsync — `safe_write.rs`
+- `write_string_atomic` — temp-sibling + rename without blocking fsync on the hot path — `safe_write.rs`
 
 ---
 
