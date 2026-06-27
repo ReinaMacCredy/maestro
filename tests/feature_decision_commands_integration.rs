@@ -4,7 +4,9 @@ mod support;
 use std::fs;
 use std::os::unix::fs as unix_fs;
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Output, Stdio};
+use std::thread;
+use std::time::{Duration, Instant};
 
 use card_support::{
     card_dir, card_doc, card_record_path, id_by_title, seed_optional_string, seed_string,
@@ -21,6 +23,34 @@ fn maestro(args: &[&str], cwd: &Path) -> std::process::Output {
         .current_dir(cwd)
         .output()
         .expect("invariant: compiled maestro binary should be runnable in integration tests")
+}
+
+fn maestro_with_timeout(args: &[String], cwd: &Path, timeout: Duration) -> Output {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_maestro"))
+        .args(args)
+        .current_dir(cwd)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("invariant: compiled maestro binary should be runnable in integration tests");
+    let started = Instant::now();
+    loop {
+        if child
+            .try_wait()
+            .expect("invariant: child status should be readable")
+            .is_some()
+        {
+            return child
+                .wait_with_output()
+                .expect("invariant: completed child output should be readable");
+        }
+        if started.elapsed() >= timeout {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("maestro {args:?} did not finish within {timeout:?}");
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
 }
 
 fn init_git_marker(repo: &Path) {
@@ -115,6 +145,94 @@ fn assert_dated_note_line(notes: &str, expected_text: &str) {
     assert_eq!(&line[4..5], "-", "{line}");
     assert_eq!(&line[7..8], "-", "{line}");
     assert_eq!(&line[10..12], "  ", "{line}");
+}
+
+#[test]
+fn feature_set_large_contract_edit_finishes_under_timeout() {
+    let temp_dir = TestTempDir::new("maestro-feature-set-large-contract");
+    init_git_marker(temp_dir.path());
+    stdout(
+        maestro(&["init", "--yes"], temp_dir.path()),
+        &["init", "--yes"],
+    );
+    stdout(
+        maestro(&["feature", "new", "Large Contract"], temp_dir.path()),
+        &["feature", "new", "Large Contract"],
+    );
+
+    let mut args = vec![
+        "feature".to_string(),
+        "set".to_string(),
+        "large-contract".to_string(),
+        "--clear-questions".to_string(),
+    ];
+    for index in 0..80 {
+        args.push("--acceptance".to_string());
+        args.push(format!(
+            "acceptance item {index}: the delivered behavior is observable and specific"
+        ));
+    }
+    for index in 0..24 {
+        args.push("--area".to_string());
+        args.push(format!("affected surface {index}"));
+    }
+    for index in 0..24 {
+        args.push("--non-goal".to_string());
+        args.push(format!("non-goal {index}: intentionally out of scope"));
+    }
+
+    let output = maestro_with_timeout(&args, temp_dir.path(), Duration::from_secs(5));
+    assert!(
+        output.status.success(),
+        "large feature set failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let output = String::from_utf8(output.stdout).expect("invariant: stdout should be UTF-8");
+    assert!(
+        output.contains("totals: acceptance=80, areas=24, non_goals=24, questions=0"),
+        "{output}"
+    );
+}
+
+#[test]
+fn feature_set_fails_fast_when_card_write_lock_is_held() {
+    let temp_dir = TestTempDir::new("maestro-feature-set-held-write-lock");
+    init_git_marker(temp_dir.path());
+    stdout(
+        maestro(&["init", "--yes"], temp_dir.path()),
+        &["init", "--yes"],
+    );
+    stdout(
+        maestro(&["feature", "new", "Held Write Lock"], temp_dir.path()),
+        &["feature", "new", "Held Write Lock"],
+    );
+    fs::create_dir(
+        temp_dir
+            .path()
+            .join(".maestro/cards/held-write-lock/.card.yaml.write-lock"),
+    )
+    .expect("invariant: held write-lock marker should be creatable");
+
+    let args = vec![
+        "feature".to_string(),
+        "set".to_string(),
+        "held-write-lock".to_string(),
+        "--acceptance".to_string(),
+        "bounded write lock failure".to_string(),
+    ];
+    let output = maestro_with_timeout(&args, temp_dir.path(), Duration::from_secs(2));
+    assert!(
+        !output.status.success(),
+        "feature set unexpectedly succeeded\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stderr = String::from_utf8(output.stderr).expect("invariant: stderr should be UTF-8");
+    assert!(
+        stderr.contains("is being written by another Maestro process; re-run the command"),
+        "{stderr}"
+    );
 }
 
 #[test]

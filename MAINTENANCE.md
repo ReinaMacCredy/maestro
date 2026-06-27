@@ -276,6 +276,9 @@ At minimum for release-adjacent changes:
 - Run `cargo doc --no-deps` when public docs or public Rust APIs changed.
 - Run Update, Install, Skills, and Migration tests when release behavior affects
   installed files, bundled skills, update detection, or artifact migration.
+- Install the freshly built local binary with `scripts/install-local.sh`, not
+  `cp`, so running `~/.local/bin/maestro` processes keep their old executable
+  inode and new invocations see an atomic replacement.
 
 Do not document or run a legacy release command unless it exists in the current
 Rust repo and has been verified in the current session.
