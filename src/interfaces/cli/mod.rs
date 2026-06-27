@@ -409,8 +409,8 @@ pub enum RootCommand {
     )]
     Playbook(PlaybookArgs),
     #[command(
-        about = "Print a loop-orchestration recipe, or the index with no recipe",
-        after_help = "Examples:\n  maestro loop                      # list the recipes\n  maestro loop list                 # same as above\n  maestro loop show feature-fan-out # print one recipe"
+        about = "Print a loop recipe or mint one sidecar work lease",
+        after_help = "Examples:\n  maestro loop                      # list the recipes\n  maestro loop list                 # same as above\n  maestro loop show feature-fan-out # print one recipe\n  maestro loop work-lease --json    # claim one ready card and print the worker contract"
     )]
     Loop(LoopArgs),
     #[command(
@@ -525,6 +525,45 @@ pub enum LoopCommand {
         #[arg(value_name = "NAME")]
         name: String,
     },
+    #[command(about = "Claim one ready card and print a sidecar worker contract as JSON")]
+    WorkLease(Box<WorkLeaseArgs>),
+}
+
+#[derive(Debug, Args)]
+pub struct WorkLeaseArgs {
+    /// Accepted for explicit machine use; output is always JSON.
+    #[arg(long)]
+    pub json: bool,
+    /// Only cards whose stored project scope equals this value.
+    #[arg(long, value_name = "PROJECT")]
+    pub project: Option<String>,
+    /// Restrict to cards parented to this feature id (one level).
+    #[arg(long, value_name = "FEATURE")]
+    pub feature: Option<String>,
+    /// Authority record id or prompt/card reference for external ship actions.
+    #[arg(long, value_name = "REF")]
+    pub authority_ref: Option<String>,
+    /// Compact human-readable summary of the granted run-scoped authority.
+    #[arg(long, value_name = "SUMMARY")]
+    pub authority_summary: Option<String>,
+    /// Scope covered by external ship authority, e.g. branch, feature, or repo.
+    #[arg(long, value_name = "SCOPE")]
+    pub authority_scope: Option<String>,
+    /// Target covered by external ship authority, e.g. branch name or release id.
+    #[arg(long, value_name = "TARGET")]
+    pub authority_target: Option<String>,
+    /// External ship action allowed by authority; repeat for each action.
+    #[arg(long = "allow-external-action", value_name = "ACTION")]
+    pub allow_external_actions: Vec<String>,
+    /// Evidence required before using external ship authority; repeatable.
+    #[arg(long = "required-evidence", value_name = "EVIDENCE")]
+    pub required_evidence: Vec<String>,
+    /// Authority expiry timestamp in Maestro event time format.
+    #[arg(long, value_name = "TIMESTAMP")]
+    pub authority_expires_at: Option<String>,
+    /// Hard stop named by the authority; repeatable.
+    #[arg(long = "authority-hard-stop", value_name = "STOP")]
+    pub authority_hard_stops: Vec<String>,
 }
 
 #[derive(Debug, Args)]

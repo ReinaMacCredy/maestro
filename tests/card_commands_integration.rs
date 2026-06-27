@@ -11,7 +11,7 @@ use std::fs;
 use std::path::Path;
 use std::process::{Command, Output};
 
-use card_support::{card_doc, cards_repo, id_by_title};
+use card_support::{card_doc, card_record_path, cards_repo, id_by_title};
 use maestro::domain::channel;
 use maestro::foundation::core::paths::MaestroPaths;
 use serde_json::Value;
@@ -23,6 +23,7 @@ fn maestro(cwd: &Path, args: &[&str]) -> Output {
         .current_dir(cwd)
         .env("MAESTRO_AGENT", "codex")
         .env("MAESTRO_SESSION", "s1")
+        .env("MAESTRO_AUTO_UPDATE", "0")
         .output()
         .expect("invariant: compiled maestro binary should run in integration tests")
 }
@@ -2322,6 +2323,7 @@ fn maestro_in_session(cwd: &Path, session: &str, args: &[&str]) -> Output {
         .current_dir(cwd)
         .env("MAESTRO_AGENT", "codex")
         .env("MAESTRO_SESSION_ID", session)
+        .env("MAESTRO_AUTO_UPDATE", "0")
         .output()
         .expect("invariant: compiled maestro binary should run in integration tests")
 }
@@ -2518,6 +2520,7 @@ fn run_as(cwd: &Path, agent: &str, session: &str, args: &[&str]) -> (bool, Strin
         .current_dir(cwd)
         .env("MAESTRO_AGENT", agent)
         .env("MAESTRO_SESSION", session)
+        .env("MAESTRO_AUTO_UPDATE", "0")
         .output()
         .expect("invariant: compiled maestro binary should run in integration tests");
     (
@@ -2525,6 +2528,209 @@ fn run_as(cwd: &Path, agent: &str, session: &str, args: &[&str]) -> (bool, Strin
         String::from_utf8_lossy(&output.stdout).into_owned(),
         String::from_utf8_lossy(&output.stderr).into_owned(),
     )
+}
+
+fn run_lease_as_json(cwd: &Path, agent: &str, session: &str, args: &[&str]) -> Value {
+    let output = Command::new(env!("CARGO_BIN_EXE_maestro"))
+        .args(args)
+        .current_dir(cwd)
+        .env("MAESTRO_AGENT", agent)
+        .env("MAESTRO_SESSION", session)
+        .env("MAESTRO_RUN_ID", session)
+        .env("MAESTRO_AUTO_UPDATE", "0")
+        .output()
+        .expect("invariant: compiled maestro binary should run in integration tests");
+    assert!(
+        output.status.success(),
+        "maestro {args:?} failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    serde_json::from_slice(&output.stdout).unwrap_or_else(|error| {
+        panic!(
+            "work lease stdout should parse as JSON ({error})\nstdout:\n{}",
+            String::from_utf8_lossy(&output.stdout)
+        )
+    })
+}
+
+fn set_card_claim(repo: &Path, id: &str, claimed_by: &str, claimed_at: &str) {
+    let path = card_record_path(repo, id);
+    let raw = fs::read_to_string(&path).expect("card record should be readable");
+    let mut doc: serde_yaml::Value =
+        serde_yaml::from_str(&raw).expect("card record should parse as yaml");
+    let map = doc
+        .as_mapping_mut()
+        .expect("dir-backed card should be a yaml mapping");
+    map.insert(
+        serde_yaml::Value::String("claimed_by".to_string()),
+        serde_yaml::Value::String(claimed_by.to_string()),
+    );
+    map.insert(
+        serde_yaml::Value::String("claimed_at".to_string()),
+        serde_yaml::Value::String(claimed_at.to_string()),
+    );
+    fs::write(
+        &path,
+        serde_yaml::to_string(&doc).expect("updated card record should serialize"),
+    )
+    .expect("updated card record should be writable");
+}
+
+#[test]
+fn loop_work_lease_claims_one_ready_card_and_returns_worker_contract() {
+    let temp = cards_repo("loop-work-lease-happy");
+    let repo = temp.path();
+
+    let first = run(repo, &["create", "-t", "task", "Lease first", "--id-only"]);
+    let first = first.trim().to_string();
+    let second = run(repo, &["create", "-t", "task", "Lease second", "--id-only"]);
+    let second = second.trim().to_string();
+
+    let lease = run_lease_as_json(
+        repo,
+        "codex",
+        "lease-happy",
+        &["loop", "work-lease", "--json"],
+    );
+
+    assert_eq!(lease["schema"], "maestro.work_lease.v1");
+    assert_eq!(lease["version"], 1);
+    assert_eq!(lease["status"], "leased");
+    let leased_id = lease["selected_card"]["id"]
+        .as_str()
+        .expect("leased card id should be present");
+    assert!(
+        leased_id == first || leased_id == second,
+        "lease should pick one ready card, got {leased_id}"
+    );
+    assert_eq!(card_doc(repo, leased_id)["status"], "in_progress");
+    assert_eq!(card_doc(repo, leased_id)["claimed_by"], "codex#lease-happy");
+    assert_eq!(lease["claim"]["claimed_by"], "codex#lease-happy");
+    assert_eq!(lease["lease"]["stale_after_seconds"], 900);
+    assert_eq!(lease["selected_action"]["kind"], "work_card");
+    assert_eq!(lease["ship_authority"]["status"], "absent");
+    assert_eq!(lease["ship_authority"]["external_ship_allowed"], false);
+    assert!(lease["recurrence_guard"]["required"].as_bool().unwrap());
+    assert!(
+        lease["allowed_follow_up_verbs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|verb| verb == "maestro query run --json"),
+        "lease should expose reconcile/read handles: {lease:#}"
+    );
+    assert!(
+        lease["worker_prompt"]
+            .as_str()
+            .unwrap()
+            .contains("Do not push"),
+        "absent ship authority should fail closed in worker prompt"
+    );
+
+    let run_log = fs::read_to_string(repo.join(".maestro/runs/lease-happy/events.jsonl"))
+        .expect("work lease should leave durable run evidence");
+    assert!(
+        run_log.contains("\"event_type\":\"ownership_acquire\"")
+            && run_log.contains("\"action\":\"work_lease_acquire\""),
+        "lease acquisition should be inspectable in run events:\n{run_log}"
+    );
+}
+
+#[test]
+fn loop_work_lease_no_ready_work_returns_dry_json_without_card_mutation() {
+    let temp = cards_repo("loop-work-lease-dry");
+    let repo = temp.path();
+    let before = fs::read_dir(repo.join(".maestro/cards"))
+        .expect("cards dir should be readable")
+        .count();
+
+    let lease = run_lease_as_json(
+        repo,
+        "codex",
+        "lease-dry",
+        &["loop", "work-lease", "--json"],
+    );
+
+    assert_eq!(lease["status"], "dry");
+    assert_eq!(lease["reason"], "no ready cards matched this lease scope");
+    assert!(lease.get("selected_card").is_none());
+    let after = fs::read_dir(repo.join(".maestro/cards"))
+        .expect("cards dir should be readable")
+        .count();
+    assert_eq!(before, after, "dry lease should not mutate cards");
+}
+
+#[test]
+fn loop_work_lease_does_not_steal_live_claims() {
+    let temp = cards_repo("loop-work-lease-live-claim");
+    let repo = temp.path();
+    let held = run(repo, &["create", "-t", "task", "Held live", "--id-only"]);
+    let held = held.trim().to_string();
+    set_card_claim(repo, &held, "claude#live", "2999-01-01T00:00:00.000Z");
+
+    let lease = run_lease_as_json(
+        repo,
+        "codex",
+        "lease-contend",
+        &["loop", "work-lease", "--json"],
+    );
+
+    assert_eq!(lease["status"], "blocked");
+    assert_eq!(lease["blocked_cards"][0]["id"], held);
+    assert_eq!(card_doc(repo, &held)["claimed_by"], "claude#live");
+    assert_eq!(card_doc(repo, &held)["status"], "open");
+}
+
+#[test]
+fn loop_work_lease_reclaims_stale_claims_with_existing_claim_policy() {
+    let temp = cards_repo("loop-work-lease-stale-claim");
+    let repo = temp.path();
+    let held = run(repo, &["create", "-t", "task", "Held stale", "--id-only"]);
+    let held = held.trim().to_string();
+    set_card_claim(repo, &held, "claude#old", "2020-01-01T00:00:00.000Z");
+
+    let lease = run_lease_as_json(
+        repo,
+        "codex",
+        "lease-stale",
+        &["loop", "work-lease", "--json"],
+    );
+
+    assert_eq!(lease["status"], "leased");
+    assert_eq!(lease["selected_card"]["id"], held);
+    assert_eq!(lease["claim"]["outcome"], "reclaimed_stale");
+    assert_eq!(card_doc(repo, &held)["claimed_by"], "codex#lease-stale");
+    assert_eq!(card_doc(repo, &held)["status"], "in_progress");
+}
+
+#[test]
+fn loop_work_lease_partial_ship_authority_fails_closed() {
+    let temp = cards_repo("loop-work-lease-authority");
+    let repo = temp.path();
+
+    let lease = run_lease_as_json(
+        repo,
+        "codex",
+        "lease-authority",
+        &[
+            "loop",
+            "work-lease",
+            "--json",
+            "--authority-ref",
+            "prompt:night",
+            "--allow-external-action",
+            "push",
+        ],
+    );
+
+    assert_eq!(lease["status"], "dry");
+    assert_eq!(lease["ship_authority"]["status"], "ambiguous");
+    assert_eq!(lease["ship_authority"]["external_ship_allowed"], false);
+    assert_eq!(
+        lease["ship_authority"]["reason"],
+        "partial ship authority is not enough; provide ref, summary, scope, target, allowed external actions, and required evidence"
+    );
 }
 
 #[test]

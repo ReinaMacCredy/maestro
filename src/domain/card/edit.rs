@@ -16,7 +16,8 @@ use crate::foundation::core::time::timestamp_nanos;
 /// A claim older than this is stale and may be re-claimed (SPEC O2). Reuses the
 /// 15-minute write-lock staleness precedent (`fs.rs` `STALE_WRITE_LOCK_AGE`); a
 /// dead session must never pin a card forever (SPEC E6).
-const STALE_CLAIM_AGE_NANOS: i128 = 15 * 60 * 1_000_000_000;
+pub const STALE_CLAIM_AGE_SECONDS: u64 = 15 * 60;
+const STALE_CLAIM_AGE_NANOS: i128 = STALE_CLAIM_AGE_SECONDS as i128 * 1_000_000_000;
 
 /// Add a `blocks` edge so `child` waits on `parent` (SPEC E1/DN6: the edge is
 /// stored on the dependent and gates only its `ready`). Mirrors

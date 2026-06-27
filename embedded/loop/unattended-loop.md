@@ -7,10 +7,11 @@
 >> locally verified features. Stay grounded in the maestro card store, not chat
 >> memory: the feature and cards you're on now, then `maestro card ready`, then
 >> proposed/ready features you can accept or prepare.
->> HARD STOP: push/tag/publish/archive, destructive git, secret rotation, or a
->> platform/tool approval failure. End with the autonomy report.
+>> HARD STOP: any push/tag/publish/release/archive action not granted by an
+>> explicit bounded run-scoped ship authority, destructive git, secret rotation,
+>> or a platform/tool approval failure. End with the autonomy report.
 
-WHEN: human away/asleep -- keep going on the current work and loop the card store under full local autonomy until done.
+WHEN: human says "use loop", "keep looping", away/asleep wording, or work-while-away wording -- keep going on the current work and loop the card store under full local autonomy until done.
 
 The away-mode of the work loop: one long-lived session works the card store
 until done. This is the orchestration *shape*; the full driver POLICY
@@ -24,9 +25,11 @@ Per unit of work this adds nothing: every card is claimed, worked, and verified
 exactly per `work.md`, test-first default included.
 
 1. Start from the store, never from memory: `maestro status`, then
-   `maestro card ready`.
-2. `maestro card claim <id>` -> work -> `task complete --summary --claim --proof` ->
-   `maestro task verify <id>`.
+   `maestro loop work-lease --json`.
+2. Parse the returned sidecar contract. If `status=leased`, work exactly the
+   returned `selected_card`: `task complete --summary --claim --proof` ->
+   `maestro task verify <id>`. If `status=dry` or `status=blocked`, reconcile
+   from the returned inspect handles and do not launch a worker.
 3. Commit each verified slice locally on the feature branch. Never push.
 4. Before crossing a local autonomy gate, record/reconstruct run evidence:
    `autonomy_start` for run authority and `autonomy_action` for accept,
@@ -43,17 +46,23 @@ exactly per `work.md`, test-first default included.
 - MAY: `feature accept`, `feature prepare`, `task unblock` for local Maestro
   blockers, `claim`, work, `complete`, `verify`, `note`, `block`, local
   per-slice commits, QA-slice, and local `feature close`.
-- NEVER: push, tag, publish, archive, destructive git, secret rotation,
+- NEVER without explicit bounded run-scoped ship authority: push, tag, release,
+  publish, archive, or any external ship action.
+- NEVER even with ship authority: destructive git, secret rotation,
   platform/tool approval bypass, or guarded sidecar edits.
+- If the loop fixes a loop-discovered issue, completion/ship needs durable
+  recurrence-guard evidence: regression test, proof gate, QA checklist, harness
+  rule, skill guidance update, or locked decision.
 
 Full policy and exact ledger/report fields -> maestro-card `reference/loop.md`.
 
 ## Scheduler variant
 
 An external scheduler (cron, launchd, a cloud schedule) can replace the
-long-lived session: each firing runs ONE iteration, then exits, cold-starting
-from the store with `maestro resume`. `claim` guards overlapping firings.
-Maestro itself never schedules anything.
+long-lived session: each firing runs `maestro loop work-lease --json`, launches
+at most one worker from the returned contract, then exits, cold-starting from
+the store with `maestro resume`. `claim` guards overlapping firings. Maestro
+itself never schedules anything.
 
 ## Stop
 

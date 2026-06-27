@@ -1,7 +1,7 @@
 ---
 name: maestro-card
-version: 1.33.0
-description: "Use when the user wants to implement, fix, verify, QA, close, release, or continue work tracked by Maestro cards/features/tasks in a project using Maestro after design is approved."
+version: 1.34.0
+description: "Use when the user wants to implement, fix, verify, QA, close, release, continue, use loop, keep looping, work while away, or work while asleep on Maestro cards/features/tasks in a project using Maestro after design is approved."
 ---
 
 # Maestro Card
@@ -49,8 +49,10 @@ Read the reference for the job at hand; they share the ground rules below.
 - Tidy a card's diff before proving it (quality cleanup, applied in place):
   [reference/simplify.md](reference/simplify.md). On a test-first card this is
   the red-green-refactor step, not a second pass.
-- Work the backlog unattended, including broad user goals that must first
-  compile into Maestro records while the user is away or asleep:
+- Work the backlog unattended, including "use loop", "keep looping",
+  "I am going away", "I am going to sleep", "work while I am away", or broad
+  user goals that must first compile into Maestro records while the user is
+  away or asleep:
   [reference/loop.md](reference/loop.md)
 - Finalize, accept, prepare, amend, close, or archive a feature card after design:
   [reference/feature.md](reference/feature.md)

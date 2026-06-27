@@ -7,8 +7,9 @@
 >> locally verified features. Stay grounded in the maestro card store, not chat
 >> memory: the feature and cards you're on now, then `maestro card ready`, then
 >> proposed/ready features you can accept or prepare.
->> HARD STOP: push/tag/publish/archive, destructive git, secret rotation, or a
->> platform/tool approval failure. End with the autonomy report.
+>> HARD STOP: any push/tag/publish/release/archive action not granted by an
+>> explicit bounded run-scoped ship authority, destructive git, secret rotation,
+>> or a platform/tool approval failure. End with the autonomy report.
 
 The away mode of the work loop: one long-lived session carries the current
 work forward and works the card store until done while the human is away. Per
@@ -19,18 +20,26 @@ autonomy, replenishment, stops, audit ledger, boundaries, and the report.
 
 ## Kickoff
 
-The human says some form of "keep working / work the backlog while I'm away"
-and leaves. Carry forward the work they were on - continue the current feature
-and its cards, do not abandon them for a fresh queue. In full-autonomy mode the
-away prompt is the local authorization to finalize clean handoffs, accept
-proposed contracts, prepare tasks, unblock local Maestro blockers, add
-dependencies when covered by the accepted contract or blocker authority, work,
-verify, commit locally, and close locally verified features without another
-human response. No stop time or unit cap is required, ever; if the prompt
-states one ("until 07:00", "max 5 cards"), honor it, never ask for one.
+The human says some form of "use loop", "keep looping", "I am going away",
+"I am going to sleep", "work while I am away", or "work the backlog while I'm
+away" and leaves. Carry forward the work they were on - continue the current
+feature and its cards, do not abandon them for a fresh queue. In
+full-autonomy mode the away prompt is the local authorization to finalize
+clean handoffs, accept proposed contracts, prepare tasks, unblock local
+Maestro blockers, add dependencies when covered by the accepted contract or
+blocker authority, work, verify, commit locally, and close locally verified
+features without another human response. No stop time or unit cap is required,
+ever; if the prompt states one ("until 07:00", "max 5 cards"), honor it,
+never ask for one.
 
 Start from the store, never from memory (the session can die; the store is the
-only durable state): `maestro status`, then `maestro card ready`.
+only durable state): `maestro status`, then `maestro loop work-lease --json`.
+`work-lease` is one sidecar tick: it selects one ready card in the requested
+scope, claims it through the normal card claim policy, emits the existing
+work-touch run evidence, and prints the bounded worker contract. It never
+launches a worker, sleeps, polls, owns a queue, or schedules the next tick.
+Long-lived agents may call it before each unit; an external sidecar may call it
+once per cron/launchd/cloud firing.
 
 If the kickoff is a broad goal instead of a named card or accepted feature,
 infer a minimal GoalBrief before work starts:
@@ -75,11 +84,14 @@ the same records and stop conditions.
    Authority is run-scoped: it ends on dry stop, hard stop, terminal report, or
    a stale/abandoned run. It is not a repo mode, card mode, config flag, daemon,
    or scheduler.
-2. `maestro card ready` -> `maestro card claim <id>` -> work the card per
-   [work.md](work.md). The test-first rule applies unchanged: an observable
-   `--check` is worked test-first; a skip is valid only for a non-behavioral
-   check or an explore/spike lane, and the skip note names which. Skips are
-   surfaced in the report.
+2. `maestro loop work-lease --json` -> read the returned `selected_card` and
+   `worker_prompt` -> work the card per [work.md](work.md). The returned JSON
+   includes the card id, claim identity, stale-claim policy, allowed follow-up
+   verbs, hard stops, recurrence-guard requirement, inspect/reconcile handles,
+   run-event path, and ship authority status. The test-first rule applies
+   unchanged: an observable `--check` is worked test-first; a skip is valid
+   only for a non-behavioral check or an explore/spike lane, and the skip note
+   names which. Skips are surfaced in the report.
 3. Finish with `task complete --summary --claim --proof`, then
    `maestro task verify <id>`.
 4. Commit each verified slice locally on the feature branch. Never push.
@@ -96,7 +108,10 @@ the same records and stop conditions.
 7. A feature whose children are all verified may be closed locally when the
    normal QA-slice and `feature close` gates pass. Record the local close as an
    `autonomy_action`. This is local delivery only: no push, tag, release,
-   publish, archive, or external announcement.
+   publish, archive, or external announcement unless the original prompt or
+   accepted card contract granted explicit run-scoped ship authority naming
+   scope, target, allowed external actions, hard stops, and required evidence.
+   Absent, partial, stale, or overbroad authority fails closed.
 8. When nothing is workable, acceptable, preparable, unblockable, or closable
    inside the hard-stop boundary, stop and write the report.
 
@@ -117,10 +132,17 @@ accepted contract or blocker authority, `claim`, work, `complete`, `verify`,
 `note`, `block`, local per-step commits on the feature branch, QA-slice, and
 `feature close` for locally verified features.
 
-Night NEVER: push, tag, publish, archive, destructive git operations, secret
-rotation, bypassing a platform/tool approval failure, or hand-editing
-`card.yaml` or guarded sidecars. Platform/tool approval failures are hard
-stops even under full local autonomy.
+Night NEVER without explicit bounded run-scoped ship authority: push, tag,
+release, publish, archive, or any external ship action. Night NEVER even with
+ship authority: destructive git operations, secret rotation, bypassing a
+platform/tool approval failure, or hand-editing `card.yaml` or guarded
+sidecars. Platform/tool approval failures are hard stops even under full local
+autonomy.
+
+If the autonomous worker fixes an issue discovered during the loop, it must
+record a durable recurrence guard before completion or ship: a regression
+test, proof gate, QA checklist entry, harness friction rule, skill guidance
+update, or locked decision. The final report names the guard evidence.
 
 Autonomy evidence is an audit layer only. The normal card, feature, task, QA,
 proof, decision, and run stores remain authoritative. If ledger text and card
@@ -152,12 +174,14 @@ and run events carry the durable evidence. `maestro query run` and
 
 An external scheduler (cron, launchd, a cloud schedule) can replace the
 long-lived session: each firing runs ONE iteration of the loop above, then
-exits. The card store and run ledger are the only state between firings -
-cold-start with `maestro resume` - and `claim` already guards overlapping
-firings against double work. A firing that dies mid-card leaves its claim
-behind; the next firing reclaims it once the claim crosses the existing 15-min
-stale TTL - the same timeout that frees any abandoned claim, not a new
-mechanism. Rebuild the night's account from durable state with
+exits. The sidecar tick is `maestro loop work-lease --json`; parse the JSON,
+launch at most one worker from the returned contract, then stop until the next
+external tick. The card store and run ledger are the only state between
+firings - cold-start with `maestro resume` - and `claim` already guards
+overlapping firings against double work. A firing that dies mid-card leaves
+its claim behind; the next firing reclaims it once the claim crosses the
+existing 15-min stale TTL - the same timeout that frees any abandoned claim,
+not a new mechanism. Rebuild the night's account from durable state with
 `maestro query run` (its `--json` carries the per-card trace, autonomy summary,
 ledger paths, and an honest interruption verdict); never reconstruct the
 report from a dead firing's memory. Maestro itself never schedules anything.

@@ -35,8 +35,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 18] = [
     (
         "skill",
         "maestro-card",
-        "1.33.0",
-        "cce8bb5503dcaa65ea9a8c17e5ba84fdaa6e9f178f46a17f0fea4352486db11a",
+        "1.34.0",
+        "ea9b612d403aaa940ccbf7659ff73dee6d56d29dde720ea9702ca3bfab9f0eec",
     ),
     (
         "skill",
@@ -276,6 +276,32 @@ fn every_recorded_guard_entry_maps_to_a_shipped_resource() {
             ),
             other => panic!("unknown resource group {other} in RESOURCE_VERSION_GUARD"),
         }
+    }
+}
+
+#[test]
+fn maestro_card_skill_keeps_explicit_unattended_loop_triggers() {
+    let skill = skills()
+        .iter()
+        .find(|skill| skill.name == "maestro-card")
+        .expect("maestro-card skill should ship");
+    let mut body = String::new();
+    for file in &skill.files {
+        body.push_str(&String::from_utf8_lossy(file.contents));
+        body.push('\n');
+    }
+    for phrase in [
+        "use loop",
+        "keep looping",
+        "I am going away",
+        "I am going to sleep",
+        "work while I am away",
+        "maestro loop work-lease --json",
+    ] {
+        assert!(
+            body.contains(phrase),
+            "maestro-card guidance must retain trigger phrase {phrase:?}"
+        );
     }
 }
 
