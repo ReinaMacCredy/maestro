@@ -4,7 +4,7 @@ use std::process::Command;
 use anyhow::{Context, Result, bail};
 use serde_json::{Value, json};
 
-use crate::domain::{feature, task};
+use crate::domain::{card, feature, task};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::operations::harness;
 
@@ -440,6 +440,7 @@ fn qa_baseline(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
     lifecycle_cli(
         paths,
         "maestro_qa_baseline",
+        "feature",
         &feature_id,
         vec![
             "qa".to_string(),
@@ -484,7 +485,13 @@ fn feature_accept(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
         }
         other => bail!("unsupported qa.mode: {other}"),
     }
-    lifecycle_cli(paths, "maestro_feature_accept", &feature_id, args)
+    lifecycle_cli(
+        paths,
+        "maestro_feature_accept",
+        "feature",
+        &feature_id,
+        args,
+    )
 }
 
 fn feature_prepare(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
@@ -521,7 +528,13 @@ fn feature_prepare(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
     } else {
         args.push("--draft".to_string());
     }
-    lifecycle_cli(paths, "maestro_feature_prepare", &feature_id, args)
+    lifecycle_cli(
+        paths,
+        "maestro_feature_prepare",
+        "feature",
+        &feature_id,
+        args,
+    )
 }
 
 fn card_prepare(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
@@ -554,7 +567,7 @@ fn card_prepare(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
     } else {
         args.push("--draft".to_string());
     }
-    lifecycle_cli(paths, "maestro_card_prepare", &card_id, args)
+    lifecycle_cli(paths, "maestro_card_prepare", "card", &card_id, args)
 }
 
 fn feature_verify(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
@@ -570,7 +583,13 @@ fn feature_verify(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
     push_repeated_flag(arguments, &mut args, "waive", "--waive")?;
     push_repeated_flag(arguments, &mut args, "reason", "--reason")?;
     push_optional_flag(arguments, &mut args, "outcome", "--outcome");
-    lifecycle_cli(paths, "maestro_feature_verify", &feature_id, args)
+    lifecycle_cli(
+        paths,
+        "maestro_feature_verify",
+        "feature",
+        &feature_id,
+        args,
+    )
 }
 
 fn qa_slice(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
@@ -579,7 +598,7 @@ fn qa_slice(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
     push_repeated_flag(arguments, &mut args, "scenarios", "--scenario")?;
     args.push("--observed".to_string());
     args.push(required_non_empty_string(arguments, "observed")?);
-    lifecycle_cli(paths, "maestro_qa_slice", &feature_id, args)
+    lifecycle_cli(paths, "maestro_qa_slice", "feature", &feature_id, args)
 }
 
 fn feature_close(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
@@ -591,7 +610,7 @@ fn feature_close(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
     ];
     push_optional_flag(arguments, &mut args, "outcome", "--outcome");
     push_bool_flag(arguments, &mut args, "dry_run", "--dry-run");
-    lifecycle_cli(paths, "maestro_feature_close", &feature_id, args)
+    lifecycle_cli(paths, "maestro_feature_close", "feature", &feature_id, args)
 }
 
 fn task_complete(arguments: &Value) -> Result<String> {
@@ -776,13 +795,14 @@ fn run_cli(args: &[String]) -> Result<CliRun> {
 fn lifecycle_cli(
     paths: &MaestroPaths,
     tool_name: &str,
-    feature_id: &str,
+    target_type: &str,
+    target_id: &str,
     args: Vec<String>,
 ) -> Result<String> {
-    let state_before = feature_status_label(paths, feature_id);
+    let state_before = lifecycle_status_label(paths, target_type, target_id);
     let dry_run = args.iter().any(|arg| arg == "--dry-run");
     let output = run_cli(&args)?;
-    let state_after = feature_status_label(paths, feature_id);
+    let state_after = lifecycle_status_label(paths, target_type, target_id);
     let (ok, changed, blocked, reason_code, message, raw) = if output.success {
         (
             true,
@@ -807,23 +827,31 @@ fn lifecycle_cli(
         "ok": ok,
         "changed": changed,
         "tool": tool_name,
-        "target": {"type": "feature", "id": feature_id},
+        "target": {"type": target_type, "id": target_id},
         "state_before": state_before,
         "state_after": state_after,
         "blocked": blocked,
         "reason_code": reason_code,
         "message": message,
-        "prerequisites": lifecycle_prerequisites(tool_name, &state_before, blocked),
-        "valid_next": lifecycle_valid_next(tool_name, feature_id, &state_before, blocked),
+        "prerequisites": lifecycle_prerequisites(tool_name, target_type, &state_before, blocked),
+        "valid_next": lifecycle_valid_next(tool_name, target_type, target_id, &state_before, blocked),
         "raw": raw,
     }))
     .context("failed to encode lifecycle MCP response")
 }
 
-fn feature_status_label(paths: &MaestroPaths, feature_id: &str) -> String {
-    feature::status(paths, feature_id)
-        .map(|status| status.as_str().to_string())
-        .unwrap_or_else(|_| "unknown".to_string())
+fn lifecycle_status_label(paths: &MaestroPaths, target_type: &str, target_id: &str) -> String {
+    match target_type {
+        "feature" => feature::status(paths, target_id)
+            .map(|status| status.as_str().to_string())
+            .unwrap_or_else(|_| "unknown".to_string()),
+        "card" => card::store::resolve(paths, target_id)
+            .ok()
+            .flatten()
+            .map(|resolved| resolved.card.status)
+            .unwrap_or_else(|| "unknown".to_string()),
+        _ => "unknown".to_string(),
+    }
 }
 
 fn lifecycle_reason_code(raw: &str) -> &'static str {
@@ -848,15 +876,20 @@ fn lifecycle_message(raw: &str) -> String {
         .to_string()
 }
 
-fn lifecycle_prerequisites(tool_name: &str, state_before: &str, blocked: bool) -> Vec<String> {
+fn lifecycle_prerequisites(
+    tool_name: &str,
+    target_type: &str,
+    state_before: &str,
+    blocked: bool,
+) -> Vec<String> {
     if !blocked {
         return Vec::new();
     }
-    match (tool_name, state_before) {
-        ("maestro_feature_prepare", "proposed") => {
+    match (tool_name, target_type, state_before) {
+        ("maestro_feature_prepare", "feature", "proposed") => {
             vec!["feature must be accepted before prepare".to_string()]
         }
-        ("maestro_feature_close", "in_progress") => {
+        ("maestro_feature_close", "feature", "in_progress") => {
             vec!["feature close gate must be satisfied".to_string()]
         }
         _ => Vec::new(),
@@ -865,30 +898,34 @@ fn lifecycle_prerequisites(tool_name: &str, state_before: &str, blocked: bool) -
 
 fn lifecycle_valid_next(
     tool_name: &str,
-    feature_id: &str,
+    target_type: &str,
+    target_id: &str,
     state_before: &str,
     blocked: bool,
 ) -> Value {
+    if target_type != "feature" {
+        return json!([]);
+    }
     if !blocked {
         return match tool_name {
             "maestro_qa_baseline" => json!([
-                {"tool":"maestro_feature_accept","arguments":{"feature_id":feature_id,"qa":{"mode":"recorded_baseline"}}}
+                {"tool":"maestro_feature_accept","arguments":{"feature_id":target_id,"qa":{"mode":"recorded_baseline"}}}
             ]),
             "maestro_feature_accept" => json!([
-                {"tool":"maestro_feature_prepare","arguments":{"feature_id":feature_id,"draft":true}}
+                {"tool":"maestro_feature_prepare","arguments":{"feature_id":target_id,"draft":true}}
             ]),
             "maestro_feature_verify" | "maestro_qa_slice" => json!([
-                {"tool":"maestro_feature_close","arguments":{"feature_id":feature_id,"outcome":"<outcome>"}}
+                {"tool":"maestro_feature_close","arguments":{"feature_id":target_id,"outcome":"<outcome>"}}
             ]),
             _ => json!([]),
         };
     }
     match (tool_name, state_before) {
         ("maestro_feature_prepare", "proposed") => json!([
-            {"tool":"maestro_qa_baseline","arguments":{"feature_id":feature_id,"observed":"<observed baseline>"}}
+            {"tool":"maestro_qa_baseline","arguments":{"feature_id":target_id,"observed":"<observed baseline>"}}
         ]),
         ("maestro_feature_accept", "proposed") => json!([
-            {"tool":"maestro_qa_baseline","arguments":{"feature_id":feature_id,"observed":"<observed baseline>"}}
+            {"tool":"maestro_qa_baseline","arguments":{"feature_id":target_id,"observed":"<observed baseline>"}}
         ]),
         _ => json!([]),
     }

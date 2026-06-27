@@ -345,6 +345,34 @@ fn doctor_and_task_doctor_fail_on_bad_blocker_graph() {
 }
 
 #[test]
+fn doctor_and_task_doctor_fail_on_progress_task_bad_blocker_graph() {
+    let temp = setup_repo("maestro-doctor-progress-bad-blockers");
+    let repo = temp.path();
+
+    let add = maestro(repo, &["task", "add", "Progress self blocked", "--id-only"]);
+    assert_success(&add, &["task", "add", "Progress self blocked", "--id-only"]);
+    let task_id = stdout(&add).trim().to_string();
+    let block = [
+        "task",
+        "block",
+        &task_id,
+        "--reason",
+        "waiting for itself",
+        "--by",
+        &task_id,
+    ];
+    assert_success(&maestro(repo, &block), &block);
+
+    let doctor = maestro(repo, &["doctor"]);
+    assert_failure(&doctor, &["doctor"]);
+    assert!(stderr(&doctor).contains("self-blocking blocker"));
+
+    let task_doctor = maestro(repo, &["task", "doctor"]);
+    assert_failure(&task_doctor, &["task", "doctor"]);
+    assert!(stderr(&task_doctor).contains("self-blocking blocker"));
+}
+
+#[test]
 fn doctor_fails_on_blocker_cycles() {
     let temp = setup_repo("maestro-doctor-blocker-cycle");
     let repo = temp.path();

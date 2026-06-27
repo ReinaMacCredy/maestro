@@ -67,6 +67,12 @@ fn render_applied_verification(
                     verification.task_id, verification.claim_count, verification.proof_source_count
                 );
             }
+            super::emit_ownership_release(
+                paths,
+                &verification.task_id,
+                super::OwnershipReleaseStatus::Done,
+                Some("task verify"),
+            );
             render_verified_handoff(paths, &verification.task_id)
         }
         proof::TaskVerificationStatus::Failed => {

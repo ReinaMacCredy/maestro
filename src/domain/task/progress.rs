@@ -160,23 +160,40 @@ pub fn load_task_with_snapshot(
 pub fn scan(paths: &MaestroPaths) -> Result<Vec<(TaskRecord, PathBuf)>> {
     let mut records = Vec::new();
     for (card, card_path) in query::scan_dir_with_paths(&paths.cards_dir())? {
-        if card.card_type != CardType::Progress {
-            continue;
-        }
-        let Some(progress_dir) = card_path.parent() else {
-            continue;
-        };
-        let path = progress_dir.join(PROGRESS_FILE);
-        if let Some(progress) = load_with_snapshot(&path)?.progress {
-            records.extend(
-                progress
-                    .tasks
-                    .into_iter()
-                    .map(|task| (task, progress_dir.to_path_buf())),
-            );
-        }
+        collect_tasks_from_progress_card(&mut records, &card, &card_path)?;
     }
     Ok(records)
+}
+
+pub(crate) fn scan_in_cards(cards: &[(Card, PathBuf)]) -> Result<Vec<(TaskRecord, PathBuf)>> {
+    let mut records = Vec::new();
+    for (card, card_path) in cards {
+        collect_tasks_from_progress_card(&mut records, card, card_path)?;
+    }
+    Ok(records)
+}
+
+fn collect_tasks_from_progress_card(
+    records: &mut Vec<(TaskRecord, PathBuf)>,
+    card: &Card,
+    card_path: &Path,
+) -> Result<()> {
+    if card.card_type != CardType::Progress {
+        return Ok(());
+    }
+    let Some(progress_dir) = card_path.parent() else {
+        return Ok(());
+    };
+    let path = progress_dir.join(PROGRESS_FILE);
+    if let Some(progress) = load_with_snapshot(&path)?.progress {
+        records.extend(
+            progress
+                .tasks
+                .into_iter()
+                .map(|task| (task, progress_dir.to_path_buf())),
+        );
+    }
+    Ok(())
 }
 
 pub fn save_task_with_snapshot(task: &TaskRecord, snapshot: &ProgressTaskSnapshot) -> Result<()> {

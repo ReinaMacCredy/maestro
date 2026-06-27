@@ -50,6 +50,17 @@ fn run(repo: &Path, env: &[(&str, &str)], args: &[&str]) -> String {
     String::from_utf8(output.stdout).expect("invariant: stdout should be UTF-8")
 }
 
+fn run_failure(repo: &Path, env: &[(&str, &str)], args: &[&str]) -> String {
+    let output = maestro(repo, env, args);
+    assert!(
+        !output.status.success(),
+        "maestro {args:?} unexpectedly succeeded\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8(output.stderr).expect("invariant: stderr should be UTF-8")
+}
+
 /// An RFC3339 millis timestamp `minutes` before the wall clock, comfortably
 /// inside its liveness band so the test does not flake as the clock ticks
 /// between seeding and the binary run.
@@ -640,6 +651,130 @@ fn task_claim_and_complete_emit_ownership_lifecycle() {
     assert!(
         line_with(&completed, "owner-sess").contains("[done"),
         "successful task complete releases ownership as done\n{completed}"
+    );
+}
+
+#[test]
+fn direct_task_verify_after_recovery_releases_ownership() {
+    let temp = cards_repo("active-task-verify-release");
+    let repo = temp.path();
+    run(repo, &[], &["create", "-t", "feature", "Verify feature"]);
+    let task = create_id(
+        repo,
+        &[
+            "-t",
+            "task",
+            "Verify release task",
+            "--parent",
+            "verify-feature",
+        ],
+    );
+    run(repo, &[], &["task", "set", &task, "--check", "done"]);
+    run(repo, &[], &["task", "explore", &task]);
+    run(repo, &[], &["task", "accept", &task]);
+    clear_runs(repo);
+
+    run(
+        repo,
+        &[("MAESTRO_SESSION_ID", "verify-sess")],
+        &["task", "claim", &task],
+    );
+    run_failure(
+        repo,
+        &[("MAESTRO_SESSION_ID", "verify-sess")],
+        &[
+            "task",
+            "complete",
+            &task,
+            "--summary",
+            "done",
+            "--claim",
+            "UNIQUE-CLAIM-TOKEN",
+        ],
+    );
+    run(
+        repo,
+        &[("MAESTRO_SESSION_ID", "verify-sess")],
+        &[
+            "event",
+            "create",
+            "--task-id",
+            &task,
+            "--message",
+            "UNIQUE-CLAIM-TOKEN",
+            "--claim",
+            "UNIQUE-CLAIM-TOKEN",
+        ],
+    );
+    run(
+        repo,
+        &[("MAESTRO_SESSION_ID", "verify-sess")],
+        &["task", "verify", &task],
+    );
+
+    let active = run(repo, &[], &["active"]);
+    assert!(
+        line_with(&active, "verify-sess").contains("[done"),
+        "direct task verify should release ownership as done\n{active}"
+    );
+}
+
+#[test]
+fn terminal_task_transitions_release_ownership() {
+    let temp = cards_repo("active-task-terminal-release");
+    let repo = temp.path();
+    let rejected = create_id(repo, &["-t", "task", "Reject owned"]);
+    run(
+        repo,
+        &[],
+        &["task", "set", &rejected, "--check", "not used"],
+    );
+    run(repo, &[], &["task", "explore", &rejected]);
+    run(repo, &[], &["task", "accept", &rejected]);
+    clear_runs(repo);
+    run(
+        repo,
+        &[("MAESTRO_SESSION_ID", "reject-sess")],
+        &["task", "claim", &rejected],
+    );
+    run(
+        repo,
+        &[("MAESTRO_SESSION_ID", "reject-sess")],
+        &["task", "reject", &rejected, "--reason", "invalid"],
+    );
+
+    let old = create_id(repo, &["-t", "task", "Superseded owned"]);
+    let new = create_id(repo, &["-t", "task", "Replacement task"]);
+    run(repo, &[], &["task", "set", &old, "--check", "not used"]);
+    run(repo, &[], &["task", "explore", &old]);
+    run(repo, &[], &["task", "accept", &old]);
+    run(
+        repo,
+        &[("MAESTRO_SESSION_ID", "supersede-sess")],
+        &["task", "claim", &old],
+    );
+    run(
+        repo,
+        &[("MAESTRO_SESSION_ID", "supersede-sess")],
+        &[
+            "task",
+            "supersede",
+            &old,
+            "--by",
+            &new,
+            "--reason",
+            "replaced",
+        ],
+    );
+
+    let active = run(repo, &[], &["active"]);
+    assert!(
+        line_with(&active, "reject-sess").contains("[done"),
+        "reject should release ownership as done\n{active}"
+    );
+    assert!(
+        line_with(&active, "supersede-sess").contains("[done"),
+        "supersede should release ownership as done\n{active}"
     );
 }
 

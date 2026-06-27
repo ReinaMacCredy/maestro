@@ -1171,7 +1171,7 @@ fn collect_ctags(paths: &MaestroPaths, files: &[SourceFile]) -> (CtagsStatus, Ve
         .arg("-f")
         .arg("-");
     for file in files {
-        command.arg(&file.path);
+        command.arg(ctags_file_arg(&file.path));
     }
 
     let output = match command.output() {
@@ -1237,6 +1237,14 @@ fn collect_ctags(paths: &MaestroPaths, files: &[SourceFile]) -> (CtagsStatus, Ve
         },
         symbols,
     )
+}
+
+fn ctags_file_arg(path: &str) -> String {
+    if path.starts_with('-') {
+        format!("./{path}")
+    } else {
+        path.to_string()
+    }
 }
 
 fn current_ctags_status() -> CtagsStatus {
@@ -1367,5 +1375,11 @@ mod tests {
         assert!(glob_matches("src/*.rs", "src/lib.rs"));
         assert!(!glob_matches("src/*.rs", "src/bin/main.rs"));
         assert!(glob_matches("src/**/*.rs", "src/bin/main.rs"));
+    }
+
+    #[test]
+    fn ctags_file_arg_disarms_leading_dash_paths() {
+        assert_eq!(ctags_file_arg("--options=evil"), "./--options=evil");
+        assert_eq!(ctags_file_arg("src/-normal.rs"), "src/-normal.rs");
     }
 }

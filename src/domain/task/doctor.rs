@@ -58,6 +58,14 @@ pub fn load_task_entries(tasks_dir: &Path) -> Result<Vec<TaskEntry>> {
     Ok(entries)
 }
 
+/// Load task records embedded in progress cards only.
+pub fn load_progress_task_entries(paths: &MaestroPaths) -> Result<Vec<TaskEntry>> {
+    Ok(progress::scan(paths)?
+        .into_iter()
+        .map(|(task, task_dir)| TaskEntry { task, task_dir })
+        .collect())
+}
+
 /// [`load_task_entries`] over the archived card tree (`archive/cards/`), for
 /// the archived feature reads -- the live loader above never sees an archived
 /// card, so archived task counts must scan the archive tree explicitly.
@@ -88,7 +96,12 @@ pub fn check_blocker_graph_in_cards(
     paths: &MaestroPaths,
     cards: &[(Card, std::path::PathBuf)],
 ) -> Result<TaskDoctorReport> {
-    let tasks = cards::records_in_cards(cards)?;
+    let mut tasks = cards::records_in_cards(cards)?;
+    tasks.extend(
+        progress::scan_in_cards(cards)?
+            .into_iter()
+            .map(|(task, _task_dir)| task),
+    );
     graph_report(Some(paths), &tasks)
 }
 

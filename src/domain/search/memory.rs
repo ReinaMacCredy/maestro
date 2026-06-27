@@ -16,6 +16,7 @@ use crate::domain::search::types::{
     GrepEnvelope, MatchSpan, ScoreReason, SearchCorpus, SearchDiagnostic, SearchDocument,
     SearchFreshness, SearchHit, SearchSegment,
 };
+use crate::domain::task;
 use crate::foundation::core::fs::ensure_dir;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::safe_write::{write_atomic, write_string_atomic};
@@ -76,6 +77,9 @@ pub(crate) fn rebuild_memory_unlocked(paths: &MaestroPaths) -> Result<MemoryRebu
     }
     for (card, path) in &archived {
         docs.push(document_for_card(card, path, true)?);
+    }
+    for entry in task::load_progress_task_entries(paths)? {
+        docs.push(document_for_progress_task(&entry.task, &entry.task_dir)?);
     }
     for record in &run_evidence.records {
         docs.push(document_for_run_evidence(record));
@@ -320,7 +324,7 @@ fn document_for_card(card: &Card, path: &Path, archived: bool) -> Result<SearchD
     {
         for sidecar in MEMORY_SIDECARS {
             let sidecar_path = dir.join(sidecar);
-            if let Ok(text) = std::fs::read_to_string(&sidecar_path) {
+            if let Ok(Some(text)) = read_regular_sidecar(&sidecar_path) {
                 segments.push(SearchSegment {
                     id: sidecar.trim_end_matches(".md").replace('.', "_"),
                     field: sidecar.to_string(),
@@ -346,6 +350,60 @@ fn document_for_card(card: &Card, path: &Path, archived: bool) -> Result<SearchD
             .clone()
             .filter(|_| card.card_type != CardType::Feature),
         parent: card.parent.clone(),
+        fields,
+        segments,
+    })
+}
+
+fn document_for_progress_task(
+    task: &task::TaskRecord,
+    progress_dir: &Path,
+) -> Result<SearchDocument> {
+    let mut fields = BTreeMap::new();
+    fields.insert("status".to_string(), task.state.as_str().to_string());
+    if let Some(project) = &task.project {
+        fields.insert("project".to_string(), project.clone());
+    }
+    if let Some(claimed_by) = &task.claimed_by {
+        fields.insert("claimed_by".to_string(), claimed_by.clone());
+    }
+    if let Some(feature_id) = &task.feature_id {
+        fields.insert("feature".to_string(), feature_id.clone());
+    }
+    let mut segments = vec![SearchSegment {
+        id: "title".to_string(),
+        field: "title".to_string(),
+        text: task.title.clone(),
+    }];
+    if !task.acceptance.checks.is_empty() {
+        segments.push(SearchSegment {
+            id: "acceptance".to_string(),
+            field: "acceptance".to_string(),
+            text: task.acceptance.checks.join("\n"),
+        });
+    }
+    segments.push(SearchSegment {
+        id: "record".to_string(),
+        field: "progress.yml".to_string(),
+        text: serde_yaml::to_string(task).context("failed to serialize progress task")?,
+    });
+
+    Ok(SearchDocument {
+        id: task.id.clone(),
+        corpus: SearchCorpus::Memory,
+        kind: "task".to_string(),
+        title: task.title.clone(),
+        path: Some(relative_label(
+            &progress_dir.join(task::PROGRESS_FILE),
+            &std::env::current_dir().unwrap_or_default(),
+        )),
+        opener: Some(format!("maestro task show {}", task.id)),
+        archived: false,
+        feature: task.feature_id.clone(),
+        parent: progress_dir
+            .file_name()
+            .and_then(|name| name.to_str())
+            .map(str::to_string),
         fields,
         segments,
     })
@@ -388,6 +446,18 @@ fn document_for_run_evidence(record: &run::RunEvidenceRecord) -> SearchDocument 
             text: body,
         }],
     }
+}
+
+fn read_regular_sidecar(path: &Path) -> Result<Option<String>> {
+    let Ok(metadata) = std::fs::symlink_metadata(path) else {
+        return Ok(None);
+    };
+    if !metadata.is_file() {
+        return Ok(None);
+    }
+    std::fs::read_to_string(path)
+        .map(Some)
+        .with_context(|| format!("failed to read {}", path.display()))
 }
 
 fn memory_kind_for_card(card: &Card) -> &'static str {
@@ -795,14 +865,38 @@ fn document_contains(doc: &SearchDocument, term: &str, case_sensitive: bool) -> 
 
 fn find_term(text: &str, term: &str, case_sensitive: bool) -> Option<(usize, usize)> {
     if case_sensitive {
-        text.find(term).map(|start| (start, start + term.len()))
-    } else {
-        let haystack = text.to_lowercase();
-        let needle = term.to_lowercase();
-        haystack
-            .find(&needle)
-            .map(|start| (start, start + needle.len()))
+        return text.find(term).map(|start| (start, start + term.len()));
     }
+    let needle_chars = lowercase_chars(term);
+    if needle_chars.is_empty() {
+        return None;
+    }
+    let chars: Vec<(usize, String)> = text
+        .char_indices()
+        .map(|(idx, ch)| (idx, ch.to_lowercase().collect::<String>()))
+        .collect();
+    for start_idx in 0..chars.len() {
+        if chars.len().saturating_sub(start_idx) < needle_chars.len() {
+            continue;
+        }
+        if chars[start_idx..]
+            .iter()
+            .zip(needle_chars.iter())
+            .all(|((_, hay), needle)| hay == needle)
+        {
+            let byte_start = chars[start_idx].0;
+            let end_char_idx = start_idx + needle_chars.len();
+            let byte_end = chars.get(end_char_idx).map_or(text.len(), |(idx, _)| *idx);
+            return Some((byte_start, byte_end));
+        }
+    }
+    None
+}
+
+fn lowercase_chars(text: &str) -> Vec<String> {
+    text.chars()
+        .map(|ch| ch.to_lowercase().collect::<String>())
+        .collect()
 }
 
 fn snippet(text: &str, start: usize, end: usize) -> String {
@@ -941,5 +1035,13 @@ mod tests {
         assert_eq!(hits[0].kind, "decision");
         assert_eq!(hits[0].score_reasons[0].factor, "lexical");
         assert!(!hits[0].match_spans.is_empty());
+    }
+
+    #[test]
+    fn memory_literal_search_returns_original_byte_offsets() {
+        let text = "İ proof marker";
+        let found = find_term(text, "proof", false).expect("match after case-expanding char");
+        assert_eq!(&text[found.0..found.1], "proof");
+        assert_eq!(snippet(text, found.0, found.1), text);
     }
 }

@@ -1,6 +1,8 @@
 mod support;
 
 use std::fs;
+#[cfg(unix)]
+use std::os::unix::fs as unix_fs;
 use std::path::Path;
 use std::process::Command;
 
@@ -103,6 +105,132 @@ fn grep_memory_json_returns_feature_hit_from_indexed_sidecar() {
             .contains("proof")
     );
     assert!(repo.join(".maestro/index/search/memory.shard").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn grep_memory_ignores_symlinked_sidecars() {
+    let temp = cards_repo("grep-memory-sidecar-symlink");
+    let repo = temp.path();
+    let id = stdout(
+        maestro(
+            &[
+                "feature",
+                "new",
+                "Symlinked Sidecar",
+                "--description",
+                "feature with an unsafe sidecar",
+                "--id-only",
+            ],
+            repo,
+        ),
+        &["feature", "new"],
+    )
+    .trim()
+    .to_string();
+    let secret = temp.path().join("outside-secret.txt");
+    fs::write(&secret, "sidecar-secret-token").expect("secret fixture should be writable");
+    let sidecar = repo.join(".maestro/cards").join(&id).join("spec.md");
+    let _ = fs::remove_file(&sidecar);
+    unix_fs::symlink(&secret, &sidecar).expect("sidecar symlink should be creatable");
+
+    let out = stdout(
+        maestro(
+            &["grep", "--json", "sidecar-secret-token corpus:memory"],
+            repo,
+        ),
+        &["grep", "--json", "sidecar-secret-token corpus:memory"],
+    );
+    let json: Value = serde_json::from_str(&out).expect("grep output should be JSON");
+    assert_eq!(
+        json["hits"]
+            .as_array()
+            .expect("hits should be an array")
+            .len(),
+        0
+    );
+}
+
+#[test]
+fn grep_memory_handles_unicode_casefold_offsets() {
+    let temp = cards_repo("grep-memory-unicode-offsets");
+    let repo = temp.path();
+    let id = stdout(
+        maestro(
+            &[
+                "feature",
+                "new",
+                "Unicode Sidecar",
+                "--description",
+                "feature with non-ascii text",
+                "--id-only",
+            ],
+            repo,
+        ),
+        &["feature", "new"],
+    )
+    .trim()
+    .to_string();
+    stdout(
+        maestro(
+            &[
+                "feature",
+                "spec",
+                &id,
+                "--section",
+                "Problem",
+                "--append",
+                "İ proof marker remains searchable",
+            ],
+            repo,
+        ),
+        &["feature", "spec"],
+    );
+
+    let out = stdout(
+        maestro(
+            &["grep", "--json", "proof corpus:memory type:feature"],
+            repo,
+        ),
+        &["grep", "--json", "proof corpus:memory type:feature"],
+    );
+    let json: Value = serde_json::from_str(&out).expect("grep output should be JSON");
+    assert_eq!(json["hits"][0]["id"], id);
+    assert!(
+        json["hits"][0]["snippet"]
+            .as_str()
+            .expect("snippet should be text")
+            .contains("proof")
+    );
+}
+
+#[test]
+fn grep_memory_indexes_progress_tasks_as_tasks() {
+    let temp = cards_repo("grep-memory-progress-task");
+    let repo = temp.path();
+    let id = stdout(
+        maestro(&["task", "add", "Progress grep task", "--id-only"], repo),
+        &["task", "add", "--id-only"],
+    )
+    .trim()
+    .to_string();
+
+    let out = stdout(
+        maestro(
+            &["grep", "--json", "Progress corpus:memory type:task"],
+            repo,
+        ),
+        &["grep", "--json", "Progress corpus:memory type:task"],
+    );
+    let json: Value = serde_json::from_str(&out).expect("grep output should be JSON");
+    assert!(
+        json["hits"]
+            .as_array()
+            .expect("hits should be an array")
+            .iter()
+            .any(|hit| hit["id"] == id && hit["kind"] == "task"),
+        "progress task should be indexed as a memory task:\n{json:#}"
+    );
 }
 
 #[test]

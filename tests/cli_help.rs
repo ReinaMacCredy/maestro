@@ -135,6 +135,11 @@ fn top_level_help_fills_descriptions_and_examples() {
             "expected `{command} --help` to carry an Examples block with real invocations\n{help}"
         );
     }
+
+    assert_contains_all(
+        &maestro(&["--help"]),
+        &["Install maestro hooks and config for an agent (claude, codex, droid)"],
+    );
 }
 
 #[test]

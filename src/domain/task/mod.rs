@@ -24,9 +24,11 @@ pub use blockers::has_unresolved_blockers;
 pub use display::{render_task, render_task_list, render_task_list_with_missing_checks};
 pub use doctor::{
     TaskDoctorReport, TaskEntry, check_blocker_graph, check_blocker_graph_in_cards,
-    load_archived_task_entries, load_task_entries, load_task_records, render_report,
+    load_archived_task_entries, load_progress_task_entries, load_task_entries, load_task_records,
+    render_report,
 };
 pub use lifecycle::TransitionDetails;
+pub use progress::PROGRESS_FILE;
 pub use template::{
     AcceptanceFile, Blocker, BlockerKind, BlockerRef, BlockerSource, ClaimCheckReceipt,
     ProofSourceReceipt, TaskRecord, TaskState, VerificationBinding, VerificationCommandReceipt,

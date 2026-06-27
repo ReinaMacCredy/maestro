@@ -629,12 +629,6 @@ fn complete_task(
     println!("auto: maestro task verify {}", task.id);
     match verify::run_for_task(paths, &task.id, actor) {
         Ok(()) => {
-            super::emit_ownership_release(
-                paths,
-                &task.id,
-                super::OwnershipReleaseStatus::Done,
-                Some("task complete"),
-            );
             status::print_harness_friction_epilogue(paths)?;
             Ok(())
         }
@@ -673,6 +667,12 @@ fn supersede_task(
             task_terminal_error_message(id, Some(by), &error.to_string())
         ),
     };
+    super::emit_ownership_release(
+        paths,
+        &task.id,
+        super::OwnershipReleaseStatus::Done,
+        Some("task supersede"),
+    );
     print_terminal_receipt(&task, reason, Some(by));
     Ok(())
 }
@@ -702,6 +702,12 @@ fn terminal_task(
             task_terminal_error_message(id, replacement, &error.to_string())
         ),
     };
+    super::emit_ownership_release(
+        paths,
+        &task.id,
+        super::OwnershipReleaseStatus::Done,
+        Some("task terminal"),
+    );
     print_terminal_receipt(&task, &reason, replacement);
     Ok(())
 }

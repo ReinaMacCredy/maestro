@@ -234,7 +234,7 @@ pub enum RootCommand {
         after_help = "Examples:\n  maestro init                 # scaffold .maestro/ (refuses if it already exists)\n  maestro init --yes           # idempotent: create what's missing, keep local edits\n  maestro init --dry-run       # preview the tree and extraction, write nothing\n  maestro init --force         # overwrite existing files, backing them up first"
     )]
     Init(InitArgs),
-    #[command(about = "Install maestro hooks and config for an agent (claude, codex)")]
+    #[command(about = "Install maestro hooks and config for an agent (claude, codex, droid)")]
     Install(AgentArgs),
     #[command(
         about = "Upgrade the maestro binary and refresh bundled resources",

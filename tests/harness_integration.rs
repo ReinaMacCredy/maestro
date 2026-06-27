@@ -1778,6 +1778,42 @@ fn mcp_lifecycle_tools_expose_schemas_and_blocked_envelope() {
 }
 
 #[test]
+fn mcp_card_prepare_returns_card_shaped_lifecycle_envelope() {
+    let temp = setup_repo("maestro-mcp-card-prepare-envelope");
+    let repo = temp.path();
+    let card_id = run_success(
+        repo,
+        &["create", "-t", "bug", "MCP card prepare bug", "--id-only"],
+    )
+    .trim()
+    .to_string();
+    let request = format!(
+        r#"{{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{{"name":"maestro_card_prepare","arguments":{{"card_id":"{card_id}","tasks":[{{"title":"Fix bug","checks":["bug is fixed"]}}]}}}}}}"#
+    );
+
+    let frames = run_mcp_requests(repo, &[&request]);
+    let text = frames[0]["result"]["content"][0]["text"]
+        .as_str()
+        .expect("invariant: card prepare response should be text");
+    let envelope: JsonValue =
+        serde_json::from_str(text).expect("card prepare result should be JSON");
+
+    assert_eq!(envelope["ok"], true, "{text}");
+    assert_eq!(envelope["tool"], "maestro_card_prepare");
+    assert_eq!(envelope["target"]["type"], "card");
+    assert_eq!(envelope["target"]["id"], card_id);
+    assert_ne!(envelope["state_before"], "unknown");
+    assert_eq!(
+        envelope["valid_next"]
+            .as_array()
+            .expect("valid_next should be an array")
+            .len(),
+        0,
+        "card prepare must not return feature-specific next actions: {text}"
+    );
+}
+
+#[test]
 fn mcp_intake_lifecycle_tools_accept_and_prepare_feature() {
     let temp = setup_repo("maestro-mcp-intake-lifecycle");
     let repo = temp.path();
