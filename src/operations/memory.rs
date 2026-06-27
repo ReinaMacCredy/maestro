@@ -909,9 +909,9 @@ pub fn plan_promotion(
 ) -> Result<PlanPromotionOutcome> {
     let (resolved, candidate_raw, candidate) =
         load_memory_candidate_raw(paths, &request.memory_id)?;
-    let (registry_raw, registry_hash, registry) = load_target_registry(paths)?;
+    let (_registry_raw, registry_hash, registry) = load_target_registry(paths)?;
     let contract =
-        target_contract(&registry, candidate.memory.target_surface)?.ok_or_else(|| {
+        target_contract(&registry, candidate.memory.target_surface).ok_or_else(|| {
             anyhow::anyhow!(
                 "target registry {} has no contract for {}",
                 target_registry_path(paths).display(),
@@ -1015,7 +1015,6 @@ pub fn plan_promotion(
     ensure_dir(path.parent().expect("promotion plan path has a parent"))?;
     let plan_yaml = serde_yaml::to_string(&plan).context("failed to serialize promotion plan")?;
     write_string_if_unchanged(&path, None, &plan_yaml)?;
-    drop(registry_raw);
     Ok(PlanPromotionOutcome {
         id,
         path,
@@ -1143,7 +1142,7 @@ fn apply_promotion_inner(
             plan.id
         );
     }
-    let contract = target_contract(&registry, plan.target.surface)?.ok_or_else(|| {
+    let contract = target_contract(&registry, plan.target.surface).ok_or_else(|| {
         anyhow::anyhow!(
             "target registry {} has no contract for {}",
             target_registry_path(paths).display(),
@@ -1334,11 +1333,8 @@ fn load_target_registry(paths: &MaestroPaths) -> Result<(String, String, TargetR
     Ok((raw, registry_hash, registry))
 }
 
-fn target_contract(
-    registry: &TargetRegistry,
-    surface: TargetSurface,
-) -> Result<Option<&TargetContract>> {
-    Ok(registry.surfaces.get(surface.as_str()))
+fn target_contract(registry: &TargetRegistry, surface: TargetSurface) -> Option<&TargetContract> {
+    registry.surfaces.get(surface.as_str())
 }
 
 fn validate_target_contract(surface: TargetSurface, contract: &TargetContract) -> Result<()> {
@@ -2164,7 +2160,8 @@ fn bounded_output(value: Option<String>) -> Option<String> {
     if value.len() <= LIMIT {
         Some(value)
     } else {
-        Some(format!("{}...[truncated]", &value[..LIMIT]))
+        let truncated = value.chars().take(LIMIT).collect::<String>();
+        Some(format!("{truncated}...[truncated]"))
     }
 }
 
@@ -2528,5 +2525,17 @@ mod tests {
         );
 
         cleanup(&paths);
+    }
+
+    #[test]
+    fn bounded_output_truncates_on_char_boundary() {
+        let raw = format!("{}{}", "a".repeat(4_000), "é".repeat(4));
+        let bounded = bounded_output(Some(raw)).expect("bounded output");
+
+        assert!(bounded.ends_with("...[truncated]"));
+        assert_eq!(
+            bounded.trim_end_matches("...[truncated]").chars().count(),
+            4_000
+        );
     }
 }
