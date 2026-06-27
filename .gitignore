@@ -10,6 +10,9 @@
 /target/
 **/*.rs.bk
 
+# TypeScript/OpenTUI dependencies
+/node_modules/
+
 # Maestro local cache (not covered by the managed block above)
 .maestro/
 # macOS / local noise
