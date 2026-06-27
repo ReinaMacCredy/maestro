@@ -35,6 +35,48 @@ pub struct FeatureArchiveReport {
     pub child_tasks: usize,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AutoArchiveReceipt {
+    pub feature_id: String,
+    pub tested_head: String,
+    pub authority_ref: String,
+    pub qa_result: String,
+    pub run_id: String,
+    pub event_id: String,
+    pub event_hash: String,
+    pub event_path: String,
+    pub archive_path: String,
+    pub restore_command: String,
+}
+
+/// Append the durable minimum receipt for an evidence-gated auto-archive.
+///
+/// This is intentionally separate from the older archive digest line: the digest
+/// preserves the existing archive history shape, while this line ties the move
+/// to the tested commit, authority, QA verdict, and run-ledger event.
+pub fn append_auto_archive_receipt(
+    paths: &MaestroPaths,
+    receipt: &AutoArchiveReceipt,
+) -> Result<String> {
+    validate_feature_id(&receipt.feature_id)?;
+    let date = utc_now_timestamp()[..10].to_string();
+    let line = format!(
+        "- {date} auto_archive {}: tested_head `{}`; authority `{}`; qa `{}`; run `{}`; event `{}` `{}` at `{}`; archive `{}`; restore `{}`\n",
+        receipt.feature_id,
+        index_cell(&receipt.tested_head),
+        index_cell(&receipt.authority_ref),
+        index_cell(&receipt.qa_result),
+        index_cell(&receipt.run_id),
+        index_cell(&receipt.event_id),
+        index_cell(&receipt.event_hash),
+        index_cell(&receipt.event_path),
+        index_cell(&receipt.archive_path),
+        index_cell(&receipt.restore_command),
+    );
+    append_text_file(paths.archive_index_file(), INDEX_HEADER, &line)?;
+    Ok(line)
+}
+
 /// Archive a terminal feature and its settled child cards (§5.9).
 ///
 /// Resolves the record from the live tree, or the archive tree on a sweep
@@ -419,6 +461,14 @@ fn archive_note(id: &str, dry_run: bool, feature_live: bool, archived: &[String]
         ));
     }
     parts.join("; ")
+}
+
+fn index_cell(value: &str) -> String {
+    value
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .replace('`', "'")
 }
 
 /// Compose the `feature unarchive` summary.

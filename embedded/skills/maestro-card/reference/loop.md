@@ -7,8 +7,9 @@
 >> locally verified features. Stay grounded in the maestro card store, not chat
 >> memory: the feature and cards you're on now, then `maestro card ready`, then
 >> proposed/ready features you can accept or prepare.
->> HARD STOP: push/tag/publish/archive, destructive git, secret rotation, or a
->> platform/tool approval failure. End with the autonomy report.
+>> HARD STOP: push/tag/publish, destructive git, secret rotation, archive without
+>> explicit auto-archive authority, or a platform/tool approval failure. End with
+>> the autonomy report.
 
 The away mode of the work loop: one long-lived session carries the current
 work forward and works the card store until done while the human is away. Per
@@ -95,8 +96,11 @@ the same records and stop conditions.
    `prepare --from`, and continue the loop.
 7. A feature whose children are all verified may be closed locally when the
    normal QA-slice and `feature close` gates pass. Record the local close as an
-   `autonomy_action`. This is local delivery only: no push, tag, release,
-   publish, archive, or external announcement.
+   `autonomy_action`. This is local delivery only: no push, tag, release, or
+   external announcement. Archive only when the kickoff, SPEC, or run policy
+   explicitly preauthorizes auto-archive and
+   `maestro feature auto-archive <id> --authority-ref <ref> --tested-head <sha> --qa-result pass --qa-evidence "<proof>" --run <run> --multi-agent "<disposition>"`
+   passes against the post-merge target `HEAD`.
 8. When nothing is workable, acceptable, preparable, unblockable, or closable
    inside the hard-stop boundary, stop and write the report.
 
@@ -117,10 +121,14 @@ accepted contract or blocker authority, `claim`, work, `complete`, `verify`,
 `note`, `block`, local per-step commits on the feature branch, QA-slice, and
 `feature close` for locally verified features.
 
-Night NEVER: push, tag, publish, archive, destructive git operations, secret
-rotation, bypassing a platform/tool approval failure, or hand-editing
-`card.yaml` or guarded sidecars. Platform/tool approval failures are hard
-stops even under full local autonomy.
+Night NEVER: push, tag, publish, destructive git operations, secret rotation,
+bypassing a platform/tool approval failure, archive without explicit
+auto-archive authority, or hand-editing `card.yaml` or guarded sidecars.
+Platform/tool approval failures are hard stops even under full local autonomy.
+When auto-archive is preauthorized, the owning/orchestrator session may archive
+only after worker worktrees are merged back, relevant conflicts are clear, QA
+evidence names the exact current `HEAD`, and the helper writes both the
+`auto_archive` run event and archive-index receipt.
 
 Autonomy evidence is an audit layer only. The normal card, feature, task, QA,
 proof, decision, and run stores remain authoritative. If ledger text and card
@@ -146,7 +154,8 @@ The session's final message is the report the human reads when they return:
 The report is a summary, not the record: notes, proof, card state, QA state,
 and run events carry the durable evidence. `maestro query run` and
 `maestro query run --json` rebuild the compact autonomy report from
-`autonomy_start` and `autonomy_action` events plus normal card state.
+`autonomy_start`, `autonomy_action`, and `auto_archive` events plus normal card
+state.
 
 ## Scheduler Variant
 
@@ -173,7 +182,8 @@ report from a dead firing's memory. Maestro itself never schedules anything.
 
 ## Hand-off
 
-On return, human: review the report and ledger, inspect local closes, unblock
-or reassign any hard-stop cards, and decide whether to push, tag, release,
-publish, or archive. Per-unit method -> [work.md](work.md); proof ->
-[verify.md](verify.md).
+On return, human: review the report and ledger, inspect local closes and any
+auto-archive receipts, unblock or reassign any hard-stop cards, and decide
+whether to push, tag, release, publish, or archive anything outside the
+preauthorized auto-archive gate. Per-unit method -> [work.md](work.md); proof
+-> [verify.md](verify.md).

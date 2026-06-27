@@ -9,6 +9,7 @@ use std::process::Command;
 use card_support::{
     card_dir, card_doc, card_record_path, id_by_title, seed_optional_string, seed_string,
 };
+use git2::{IndexAddOption, Repository, Signature};
 use maestro::domain::decisions::template::decision_markdown;
 use maestro::foundation::core::fs::ensure_dir;
 use serde_yaml::Value as YamlValue;
@@ -24,6 +25,47 @@ fn maestro(args: &[&str], cwd: &Path) -> std::process::Output {
 
 fn init_git_marker(repo: &Path) {
     fs::create_dir(repo.join(".git")).expect("invariant: .git marker should be creatable");
+}
+
+fn init_git_repo(repo: &Path) -> Repository {
+    Repository::init(repo).expect("invariant: git repo should initialize")
+}
+
+fn commit_all(repository: &Repository, message: &str) -> String {
+    let mut index = repository
+        .index()
+        .expect("invariant: git index should be readable");
+    index
+        .add_all(["."].iter(), IndexAddOption::DEFAULT, None)
+        .expect("invariant: git index add should succeed");
+    index
+        .write()
+        .expect("invariant: git index write should succeed");
+    let tree_id = index
+        .write_tree()
+        .expect("invariant: git tree write should succeed");
+    let tree = repository
+        .find_tree(tree_id)
+        .expect("invariant: git tree should exist");
+    let signature = Signature::now("Maestro Test", "maestro@example.test")
+        .expect("invariant: git signature should be constructable");
+    let parent = repository
+        .head()
+        .ok()
+        .and_then(|head| head.target())
+        .and_then(|oid| repository.find_commit(oid).ok());
+    let parents: Vec<&git2::Commit> = parent.iter().collect();
+    repository
+        .commit(
+            Some("HEAD"),
+            &signature,
+            &signature,
+            message,
+            &tree,
+            &parents,
+        )
+        .expect("invariant: git commit should succeed")
+        .to_string()
 }
 
 fn stdout(output: std::process::Output, args: &[&str]) -> String {
@@ -1705,6 +1747,160 @@ fn feature_archive_appends_one_digest_line_to_the_archive_index() {
     stdout(maestro(&archive_args, root), &archive_args);
     let again = fs::read_to_string(&index_path).expect("invariant: INDEX.md should exist");
     assert_eq!(index, again, "a sweep re-run appends no duplicate line");
+}
+
+#[test]
+fn feature_auto_archive_requires_exact_head_and_writes_receipts() {
+    let temp_dir = TestTempDir::new("maestro-auto-archive");
+    let root = temp_dir.path();
+    let repository = init_git_repo(root);
+    stdout(maestro(&["init", "--yes"], root), &["init", "--yes"]);
+
+    let create_args = ["feature", "new", "Billing CSV export"];
+    stdout(maestro(&create_args, root), &create_args);
+    let cancel_args = [
+        "feature",
+        "cancel",
+        "billing-csv-export",
+        "--reason",
+        "scope cut",
+    ];
+    stdout(maestro(&cancel_args, root), &cancel_args);
+    let head = commit_all(&repository, "terminal feature state");
+    let evidence = format!("cargo test exit=0 ts=2026-06-27T00:00:00Z head={head}");
+
+    let wrong_head = "0000000000000000000000000000000000000000";
+    let mismatch_args = [
+        "feature",
+        "auto-archive",
+        "billing-csv-export",
+        "--authority-ref",
+        "SPEC-auto-archive-policy:D1",
+        "--tested-head",
+        wrong_head,
+        "--qa-result",
+        "pass",
+        "--qa-evidence",
+        evidence.as_str(),
+        "--run",
+        "run-auto",
+        "--multi-agent",
+        "none",
+    ];
+    let mismatch = assert_failure(maestro(&mismatch_args, root), &mismatch_args);
+    assert!(
+        mismatch.contains("does not match current HEAD"),
+        "mismatch failure explains the tested-head gate:\n{mismatch}"
+    );
+
+    let auto_args = [
+        "feature",
+        "auto-archive",
+        "billing-csv-export",
+        "--authority-ref",
+        "SPEC-auto-archive-policy:D1",
+        "--tested-head",
+        head.as_str(),
+        "--qa-result",
+        "pass",
+        "--qa-evidence",
+        evidence.as_str(),
+        "--run",
+        "run-auto",
+        "--multi-agent",
+        "none",
+    ];
+    let output = stdout(maestro(&auto_args, root), &auto_args);
+    assert!(
+        output.contains("auto-archived billing-csv-export"),
+        "{output}"
+    );
+    assert!(output.contains(&head), "{output}");
+
+    assert!(
+        !root
+            .join(".maestro/cards/billing-csv-export/card.yaml")
+            .exists(),
+        "auto-archive removes the live feature card"
+    );
+    assert!(
+        root.join(".maestro/archive/cards/billing-csv-export/card.yaml")
+            .exists(),
+        "auto-archive moves the feature card into the archive"
+    );
+    assert!(
+        !root
+            .join(".maestro/archive/cards/billing-csv-export/auto-archive-proof.json")
+            .exists(),
+        "auto-archive must not create a proof sidecar"
+    );
+
+    let index_path = root.join(".maestro/archive/cards/INDEX.md");
+    let index = fs::read_to_string(&index_path).expect("invariant: INDEX.md should exist");
+    assert!(
+        index.contains("auto_archive billing-csv-export"),
+        "index includes the auto-archive receipt:\n{index}"
+    );
+    assert!(index.contains(&head), "index records tested head:\n{index}");
+    assert!(
+        index.contains("SPEC-auto-archive-policy:D1"),
+        "index records authority ref:\n{index}"
+    );
+    assert!(index.contains("run-auto"), "index records run id:\n{index}");
+    assert!(
+        index.contains("sha256:"),
+        "index records event hash:\n{index}"
+    );
+    assert!(
+        index.contains("maestro feature unarchive billing-csv-export"),
+        "index records restore command:\n{index}"
+    );
+
+    let event_path = root.join(".maestro/runs/run-auto/events.jsonl");
+    let events = fs::read_to_string(&event_path).expect("invariant: run event should exist");
+    let event_line = events
+        .lines()
+        .last()
+        .expect("invariant: event log should have one event");
+    let event: serde_json::Value =
+        serde_json::from_str(event_line).expect("invariant: event should be valid JSON");
+    assert_eq!(event["event_type"], "auto_archive");
+    assert_eq!(event["feature_id"], "billing-csv-export");
+    assert_eq!(event["tested_head"].as_str(), Some(head.as_str()));
+    assert_eq!(event["qa_result"], "pass");
+    assert_eq!(event["multi_agent_disposition"], "none");
+    assert_eq!(event["result"], "archived");
+    assert!(
+        event["event_hash"]
+            .as_str()
+            .is_some_and(|hash| hash.starts_with("sha256:")),
+        "event carries its hash: {event}"
+    );
+    assert_eq!(
+        event["qa_evidence"]
+            .as_array()
+            .expect("invariant: qa_evidence is an array")
+            .len(),
+        1
+    );
+
+    let query_args = ["query", "run", "--since", "1970-01-01T00:00:00Z", "--json"];
+    let query = stdout(maestro(&query_args, root), &query_args);
+    let report: serde_json::Value =
+        serde_json::from_str(query.trim()).expect("invariant: query output should be JSON");
+    let actions = report["autonomy"]["actions"]
+        .as_array()
+        .expect("invariant: autonomy actions should be an array");
+    assert!(
+        actions.iter().any(|action| {
+            action["action"] == "auto_archive"
+                && action["target_id"] == "billing-csv-export"
+                && action["result"] == "archived"
+        }),
+        "query run surfaces auto_archive action: {report}"
+    );
+
+    stdout(maestro(&["doctor"], root), &["doctor"]);
 }
 
 /// S8: `feature spec --section --append/--replace` fills the spec during

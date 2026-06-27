@@ -82,10 +82,10 @@ pub fn assemble_autonomy_report(
                 }
                 push_unique(&mut report.ledger_paths, ledger_path(paths, record.path()));
             }
-            Some("autonomy_action") => {
+            Some("autonomy_action") | Some("auto_archive") => {
                 let row = AutonomyActionRow {
                     at: ts.to_string(),
-                    action: value_or_unknown(event.autonomy_action()),
+                    action: autonomy_action_label(event.event_type(), event.autonomy_action()),
                     target_kind: value_or_unknown(event.target_kind()),
                     target_id: value_or_unknown(event.target_id()),
                     authority_ref: value_or_unknown(event.authority_ref()),
@@ -126,6 +126,13 @@ fn value_or_unknown(value: Option<&str>) -> String {
         .filter(|value| !value.is_empty())
         .unwrap_or("<unknown>")
         .to_string()
+}
+
+fn autonomy_action_label(event_type: Option<&str>, action: Option<&str>) -> String {
+    if event_type == Some("auto_archive") {
+        return "auto_archive".to_string();
+    }
+    value_or_unknown(action)
 }
 
 fn ledger_path(paths: &MaestroPaths, path: &Path) -> String {
@@ -172,12 +179,13 @@ mod tests {
         fs::write(
             run_dir.join("events.jsonl"),
             concat!(
-                "{\"schema_version\":\"maestro.event.v1\",\"ts\":\"2026-06-26T00:00:00Z\",\"event_type\":\"autonomy_start\",\"session_id\":\"night-run\",\"authority_ref\":\"run:night-run\",\"authority_summary\":\"full local autonomy\",\"prompt_hash\":\"sha256:abc\",\"hard_stops\":[\"push\",\"archive\"]}\n",
-                "{\"schema_version\":\"maestro.event.v1\",\"ts\":\"2026-06-26T00:01:00Z\",\"event_type\":\"autonomy_action\",\"session_id\":\"night-run\",\"action\":\"feature_close\",\"target_kind\":\"feature\",\"target_id\":\"grep-source-shard\",\"authority_ref\":\"run:night-run\",\"before_state\":\"in_progress\",\"command\":\"maestro feature close grep-source-shard --outcome <redacted>\",\"result\":\"closed\",\"after_state\":\"closed\"}\n",
-                "{\"schema_version\":\"maestro.event.v1\",\"ts\":\"2026-06-26T00:02:00Z\",\"event_type\":\"autonomy_action\",\"session_id\":\"night-run\",\"action\":\"hard_stop\",\"target_kind\":\"task\",\"target_id\":\"task-secret\",\"authority_ref\":\"run:night-run\",\"before_state\":\"blocked\",\"command\":\"<not run>\",\"result\":\"hard_stop\",\"after_state\":\"blocked\"}\n",
-            ),
-        )
-        .expect("invariant: event log should be writable");
+                  "{\"schema_version\":\"maestro.event.v1\",\"ts\":\"2026-06-26T00:00:00Z\",\"event_type\":\"autonomy_start\",\"session_id\":\"night-run\",\"authority_ref\":\"run:night-run\",\"authority_summary\":\"full local autonomy\",\"prompt_hash\":\"sha256:abc\",\"hard_stops\":[\"push\",\"archive\"]}\n",
+                  "{\"schema_version\":\"maestro.event.v1\",\"ts\":\"2026-06-26T00:01:00Z\",\"event_type\":\"autonomy_action\",\"session_id\":\"night-run\",\"action\":\"feature_close\",\"target_kind\":\"feature\",\"target_id\":\"grep-source-shard\",\"authority_ref\":\"run:night-run\",\"before_state\":\"in_progress\",\"command\":\"maestro feature close grep-source-shard --outcome <redacted>\",\"result\":\"closed\",\"after_state\":\"closed\"}\n",
+                  "{\"schema_version\":\"maestro.event.v1\",\"ts\":\"2026-06-26T00:02:00Z\",\"event_type\":\"autonomy_action\",\"session_id\":\"night-run\",\"action\":\"hard_stop\",\"target_kind\":\"task\",\"target_id\":\"task-secret\",\"authority_ref\":\"run:night-run\",\"before_state\":\"blocked\",\"command\":\"<not run>\",\"result\":\"hard_stop\",\"after_state\":\"blocked\"}\n",
+                  "{\"schema_version\":\"maestro.event.v1\",\"ts\":\"2026-06-26T00:03:00Z\",\"event_type\":\"auto_archive\",\"session_id\":\"night-run\",\"target_kind\":\"feature\",\"target_id\":\"grep-source-shard\",\"authority_ref\":\"run:night-run\",\"before_state\":\"closed\",\"command\":\"maestro feature auto-archive grep-source-shard\",\"result\":\"archived\",\"after_state\":\"archived\"}\n",
+              ),
+          )
+          .expect("invariant: event log should be writable");
 
         let report = assemble_autonomy_report(&paths, 0).expect("autonomy report assembles");
 
@@ -188,7 +196,7 @@ mod tests {
             report.ledger_paths,
             [".maestro/runs/night-run/events.jsonl"]
         );
-        assert_eq!(report.actions.len(), 2);
+        assert_eq!(report.actions.len(), 3);
         assert_eq!(report.local_close_count, 1);
         assert_eq!(report.hard_stop_count, 1);
         assert_eq!(report.actions[0].target_id, "grep-source-shard");
@@ -196,6 +204,8 @@ mod tests {
             report.actions[0].command,
             "maestro feature close grep-source-shard --outcome <redacted>"
         );
+        assert_eq!(report.actions[2].action, "auto_archive");
+        assert_eq!(report.actions[2].result, "archived");
     }
 
     #[test]

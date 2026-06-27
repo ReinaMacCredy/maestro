@@ -1248,6 +1248,37 @@ pub enum FeatureCommand {
         )]
         dry_run: bool,
     },
+    #[command(about = "Archive a terminal feature after commit-bound QA evidence passes")]
+    AutoArchive {
+        #[arg(help = "Terminal feature id to archive")]
+        id: String,
+        #[arg(
+            long = "authority-ref",
+            help = "Durable user/SPEC/run authority reference"
+        )]
+        authority_ref: String,
+        #[arg(long = "tested-head", help = "Full Git HEAD SHA that passed QA")]
+        tested_head: String,
+        #[arg(long = "qa-result", help = "QA verdict; must be pass/passed")]
+        qa_result: String,
+        #[arg(
+            long = "qa-evidence",
+            help = "QA evidence item naming command, exit status, timestamp, and tested head (repeatable)"
+        )]
+        qa_evidence: Vec<String>,
+        #[arg(long, help = "Run id that receives the auto_archive event")]
+        run: String,
+        #[arg(
+            long = "multi-agent",
+            help = "Disposition of multi-agent/worktree work, e.g. none or merged back into target HEAD"
+        )]
+        multi_agent: String,
+        #[arg(
+            long,
+            help = "Preview the auto-archive without moving cards or writing receipts"
+        )]
+        dry_run: bool,
+    },
     #[command(about = "Restore an archived feature and its archived child tasks")]
     Unarchive { id: String },
 }

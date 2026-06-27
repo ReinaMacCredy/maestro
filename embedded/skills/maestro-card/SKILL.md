@@ -1,6 +1,6 @@
 ---
 name: maestro-card
-version: 1.33.0
+version: 1.34.0
 description: "Use when the user wants to implement, fix, verify, QA, close, release, or continue work tracked by Maestro cards/features/tasks in a project using Maestro after design is approved."
 ---
 
@@ -97,6 +97,13 @@ Read the reference for the job at hand; they share the ground rules below.
   `.maestro/archive/`; the user's word "close" on a terminal card is the
   explicit intent to archive, but archive is never an automatic side effect of
   close/cancel, and a non-terminal feature is never archived.
+- When the user or SPEC preauthorizes auto-archive at the archive phase, do not
+  ask again only after the delivered commit hash is known and required QA passed
+  against the exact current `HEAD`. Use
+  `maestro feature auto-archive <id> --authority-ref <ref> --tested-head <sha> --qa-result pass --qa-evidence "<bounded proof>" --run <run> --multi-agent "<disposition>"`.
+  Stop instead of archiving if the helper refuses, if the worktree is dirty, if
+  worker worktrees have not merged back, if relevant Maestro conflicts are still
+  asserted, or if terminal archive preflight fails.
 - When the user corrects or steers active work, do not pause just because they
   corrected you. If the correction is clear, record it with `maestro event
   intervention --note "<what changed>" [--topic <slug>]` and apply it. If it is
