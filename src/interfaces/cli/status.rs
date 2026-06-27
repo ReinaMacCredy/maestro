@@ -17,6 +17,9 @@ use crate::interfaces::cli::{
     stale_merge_advisory,
 };
 use crate::operations::harness;
+use crate::operations::memory::{
+    self, ApprovedMemory, MemoryReadScope, MemoryReadSurface, MemorySuggestionHint,
+};
 
 pub fn run(args: StatusArgs) -> Result<()> {
     let repo_root = match discover_repo_root() {
@@ -280,6 +283,10 @@ fn build_task_next_report(paths: &MaestroPaths) -> Result<StatusReport> {
         .map(HarnessFrictionJson::from)
         .collect::<Vec<_>>();
     let audit_hint = harness::audit_overdue_hint(paths)?.map(AuditHintJson::from);
+    let approved_memory =
+        memory::approved_memory(paths, MemoryReadSurface::Status, MemoryReadScope::default())?;
+    let memory_suggestions =
+        memory::suggestion_hints(paths, MemoryReadSurface::Status, MemoryReadScope::default())?;
     let sections = StatusSectionsJson {
         ready_to_close: ready_to_close_features.clone(),
     };
@@ -306,6 +313,10 @@ fn build_task_next_report(paths: &MaestroPaths) -> Result<StatusReport> {
         active_features: Vec::new(),
         harness_friction,
         audit_hint,
+        approved_memory: approved_memory.memories,
+        approved_memory_omitted: approved_memory.omitted,
+        memory_suggestions: memory_suggestions.suggestions,
+        memory_suggestions_omitted: memory_suggestions.omitted,
         sections,
         ready_to_close_features,
     })
@@ -358,6 +369,11 @@ fn print_status(report: StatusReport, json: bool) -> Result<()> {
     }
     print_harness_friction(&report.harness_friction);
     print_audit_hint(report.audit_hint.as_ref());
+    print_approved_memory(&report.approved_memory, report.approved_memory_omitted);
+    print_memory_suggestions(
+        &report.memory_suggestions,
+        report.memory_suggestions_omitted,
+    );
     if let Some(action) = &report.next_action {
         if action.requires_input {
             println!("template: {}", action.command.display);
@@ -466,6 +482,45 @@ fn print_audit_hint(hint: Option<&AuditHintJson>) {
     );
 }
 
+fn print_approved_memory(memories: &[ApprovedMemory], omitted: usize) {
+    if memories.is_empty() {
+        return;
+    }
+    println!("APPROVED MEMORY");
+    for memory in memories {
+        println!(
+            "{}. {} scope={} risk={} {}",
+            memory.rank,
+            memory.id,
+            memory.scope_kind.as_str(),
+            memory.risk.as_str(),
+            memory.summary
+        );
+        println!("   show: {}", memory.show_command);
+    }
+    if omitted > 0 {
+        println!("... {omitted} omitted; search with `maestro memory search <query>`");
+    }
+}
+
+fn print_memory_suggestions(suggestions: &[MemorySuggestionHint], omitted: usize) {
+    if suggestions.is_empty() {
+        return;
+    }
+    println!("MEMORY SUGGESTIONS");
+    for suggestion in suggestions {
+        println!(
+            "{}. {} sources={} {}",
+            suggestion.rank, suggestion.id, suggestion.source_count, suggestion.summary
+        );
+        println!("   create: {}", suggestion.create_command);
+        println!("   dismiss: {}", suggestion.dismiss_command);
+    }
+    if omitted > 0 {
+        println!("... {omitted} omitted; inspect with `maestro memory suggest list --all`");
+    }
+}
+
 fn print_next_action(action: &NextAction) {
     if action.requires_input {
         println!("template: {}", action.command.display);
@@ -491,6 +546,10 @@ fn print_next_action(action: &NextAction) {
     if let Some(inspect) = action.inspect.as_deref() {
         println!("inspect: {inspect}");
     }
+}
+
+fn is_zero(value: &usize) -> bool {
+    *value == 0
 }
 
 /// The concern-only proof line for the focal (next-action) task, shared by both
@@ -620,6 +679,10 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
         .map(HarnessFrictionJson::from)
         .collect::<Vec<_>>();
     let audit_hint = harness::audit_overdue_hint(paths)?.map(AuditHintJson::from);
+    let approved_memory =
+        memory::approved_memory(paths, MemoryReadSurface::Status, MemoryReadScope::default())?;
+    let memory_suggestions =
+        memory::suggestion_hints(paths, MemoryReadSurface::Status, MemoryReadScope::default())?;
     let sections = StatusSectionsJson {
         ready_to_close: ready_to_close_features.clone(),
     };
@@ -655,6 +718,10 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
         active_features,
         harness_friction,
         audit_hint,
+        approved_memory: approved_memory.memories,
+        approved_memory_omitted: approved_memory.omitted,
+        memory_suggestions: memory_suggestions.suggestions,
+        memory_suggestions_omitted: memory_suggestions.omitted,
         sections,
         ready_to_close_features,
     })
@@ -875,6 +942,14 @@ struct StatusReport {
     active_features: Vec<FeatureRowJson>,
     harness_friction: Vec<HarnessFrictionJson>,
     audit_hint: Option<AuditHintJson>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    approved_memory: Vec<ApprovedMemory>,
+    #[serde(skip_serializing_if = "is_zero")]
+    approved_memory_omitted: usize,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    memory_suggestions: Vec<MemorySuggestionHint>,
+    #[serde(skip_serializing_if = "is_zero")]
+    memory_suggestions_omitted: usize,
     sections: StatusSectionsJson,
     ready_to_close_features: Vec<ReadyFeatureJson>,
 }
@@ -911,6 +986,10 @@ impl StatusReport {
             active_features: Vec::new(),
             harness_friction: Vec::new(),
             audit_hint: None,
+            approved_memory: Vec::new(),
+            approved_memory_omitted: 0,
+            memory_suggestions: Vec::new(),
+            memory_suggestions_omitted: 0,
             sections: StatusSectionsJson::default(),
             ready_to_close_features: Vec::new(),
         }

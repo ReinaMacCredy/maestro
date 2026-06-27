@@ -332,6 +332,7 @@ fn prepare_from_file_with_blocker(
         .with_context(|| format!("failed to read {}", plan_path.display()))?;
     let plan = parse_plan(&contents)?;
     validate_plan(&plan)?;
+    guard_plan_covers_acceptance(&view, &plan)?;
 
     let mut created = Vec::with_capacity(plan.len());
     let result = (|| -> Result<PrepareReport> {
@@ -551,7 +552,11 @@ fn guard_card_can_prepare(card: &Card) -> Result<()> {
         CardType::Feature => {
             return Ok(());
         }
-        CardType::Task | CardType::Progress | CardType::Decision | CardType::Idea => {
+        CardType::Task
+        | CardType::Progress
+        | CardType::Memory
+        | CardType::Decision
+        | CardType::Idea => {
             bail!(
                 "cannot prepare {} — a {} card does not own executable tasks",
                 card.id,
@@ -902,6 +907,37 @@ fn validate_plan(plan: &[PlanTask]) -> Result<()> {
     Ok(())
 }
 
+fn guard_plan_covers_acceptance(view: &feature::FeatureView, plan: &[PlanTask]) -> Result<()> {
+    let required = view
+        .acceptance
+        .iter()
+        .enumerate()
+        .map(|(index, _)| feature::acceptance_id(index))
+        .collect::<BTreeSet<_>>();
+    if required.is_empty() {
+        return Ok(());
+    }
+
+    let covered = plan
+        .iter()
+        .flat_map(|item| item.covers.iter())
+        .filter_map(|cover| feature::normalize_acceptance_id(cover))
+        .filter(|ac_id| required.contains(ac_id))
+        .collect::<BTreeSet<_>>();
+    let missing = required.difference(&covered).cloned().collect::<Vec<_>>();
+    if missing.is_empty() {
+        return Ok(());
+    }
+
+    bail!(
+        "cannot prepare {} - {} acceptance item(s) have no covering task: {}\nfix: add `covers: <ac-id>` lines to the plan before rerunning `maestro feature prepare {} --from <plan-file>`",
+        view.id,
+        missing.len(),
+        missing.join(", "),
+        view.id
+    );
+}
+
 fn task_id_for_item(
     index: usize,
     item: &PlanTask,
@@ -984,6 +1020,7 @@ mod tests {
             &plan,
             concat!(
                 "## Task T1: First generated task\n",
+                "covers: ac-1\n",
                 "check: first task works\n",
                 "blocker: injected failure\n",
             ),
@@ -998,6 +1035,73 @@ mod tests {
         assert!(
             task_dirs(&paths).is_empty(),
             "created tasks should be rolled back after prepare failure"
+        );
+        fs::remove_dir_all(root).expect("invariant: temp root should be removable");
+    }
+
+    #[test]
+    fn prepare_rejects_missing_acceptance_coverage_before_mutation() {
+        let root = temp_root("maestro-feature-prepare-coverage");
+        let paths = MaestroPaths::new(&root);
+        let feature_id = feature::create(&paths, "Coverage Guard", None)
+            .expect("invariant: feature should be created");
+        feature::set(
+            &paths,
+            &feature_id,
+            ContractEdits {
+                acceptance: Some(vec![
+                    "first acceptance is covered".to_string(),
+                    "second acceptance is covered".to_string(),
+                ]),
+                affected_areas: Some(vec!["feature prepare".to_string()]),
+                ..ContractEdits::default()
+            },
+        )
+        .expect("invariant: feature contract should be set");
+        fs::write(
+            paths.cards_dir().join(&feature_id).join("qa.md"),
+            "---\namend_log_position: 0\n---\n\nbaseline\n",
+        )
+        .expect("invariant: baseline should be writable");
+        feature::finalize(&paths, &feature_id).expect("invariant: handoff should be fresh");
+        feature::accept(&paths, &feature_id, false).expect("invariant: feature should be ready");
+        let plan = root.join("prepare.md");
+        fs::write(
+            &plan,
+            concat!(
+                "## Task T1: First generated task\n",
+                "covers: ac-1\n",
+                "check: first task works\n",
+            ),
+        )
+        .expect("invariant: plan should be writable");
+
+        let error = prepare_from_file_with_blocker(
+            &paths,
+            &feature_id,
+            &plan,
+            "tester",
+            block_prepared_task,
+        )
+        .expect_err("invariant: missing coverage should fail prepare");
+
+        let message = error.to_string();
+        assert!(
+            message.contains("cannot prepare coverage-guard - 1 acceptance item(s)"),
+            "{message}"
+        );
+        assert!(message.contains("ac-2"), "{message}");
+        assert!(message.contains("add `covers: <ac-id>` lines"), "{message}");
+        assert!(
+            task_dirs(&paths).is_empty(),
+            "prepare must fail before creating child tasks"
+        );
+        assert_eq!(
+            feature::show(&paths, &feature_id)
+                .expect("invariant: feature should load")
+                .status,
+            FeatureStatus::Ready,
+            "feature should remain ready when prepare is rejected"
         );
         fs::remove_dir_all(root).expect("invariant: temp root should be removable");
     }

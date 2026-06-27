@@ -87,13 +87,21 @@ the same records and stop conditions.
    a stale/abandoned run. It is not a repo mode, card mode, config flag, daemon,
    or scheduler.
 2. `maestro loop work-lease --json` -> read the returned `selected_card` and
-   `worker_prompt` -> work the card per [work.md](work.md). The returned JSON
-   includes the card id, claim identity, stale-claim policy, allowed follow-up
-   verbs, hard stops, recurrence-guard requirement, inspect/reconcile handles,
-   run-event path, and ship authority status. The test-first rule applies
-   unchanged: an observable `--check` is worked test-first; a skip is valid
-   only for a non-behavioral check or an explore/spike lane, and the skip note
-   names which. Skips are surfaced in the report.
+     `worker_prompt` -> work the card per [work.md](work.md). The returned JSON
+     includes the card id, claim identity, stale-claim policy, allowed follow-up
+     verbs, hard stops, recurrence-guard requirement, inspect/reconcile handles,
+     run-event path, ship authority status, compact `approved_lessons` refs, and
+     review-only `memory_suggestions` with create/dismiss commands.
+     Approved Memory is context, not authority: use it as scoped guidance, but
+     current user instructions, locked acceptance, Proof/QA, and run-scoped ship
+     authority outrank it. Follow a lesson's `maestro memory show <id>` pointer
+     only when it is relevant to the selected card. A Memory suggestion is a
+     proposal, not authority: create it only with the printed `maestro memory
+     create --from <id>` command when it is relevant, or dismiss it with the
+     printed dismiss command. The test-first rule applies unchanged: an observable
+     `--check` is worked test-first; a skip is valid only for a non-behavioral
+     check or an explore/spike lane, and the skip note names which. Skips are
+     surfaced in the report.
 3. Finish with `task complete --summary --claim --proof`, then
    `maestro task verify <id>`.
 4. Commit each verified slice locally on the feature branch. Never push.
@@ -152,7 +160,8 @@ evidence names the exact current `HEAD`, and the helper writes both the
 If the autonomous worker fixes an issue discovered during the loop, it must
 record a durable recurrence guard before completion or ship: a regression
 test, proof gate, QA checklist entry, harness friction rule, skill guidance
-update, or locked decision. The final report names the guard evidence.
+update, locked decision, or Memory recurrence-guard candidate. The final report
+names the guard evidence.
 
 Autonomy evidence is an audit layer only. The normal card, feature, task, QA,
 proof, decision, and run stores remain authoritative. If ledger text and card

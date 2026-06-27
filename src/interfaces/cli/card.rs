@@ -14,6 +14,7 @@ use crate::interfaces::cli::{
     DepCommand, LinkArgs, LinkCommand, ListArgs, NoteArgs, ReadyArgs, ShowArgs, UpdateArgs,
 };
 use crate::operations::feature_prepare;
+use crate::operations::memory::{self as memory_ops, MemoryReadScope, MemoryReadSurface};
 
 const READY_JSON_SCHEMA: &str = "maestro.ready.v1";
 const LIST_JSON_SCHEMA: &str = "maestro.list.v1";
@@ -402,6 +403,11 @@ pub fn create(args: CreateArgs) -> Result<()> {
                     "a custom card cannot take --parent; custom cards are top-level containers"
                 ));
             }
+            if card_type == card::schema::CardType::Memory {
+                return Err(anyhow!(
+                    "a memory card cannot take --parent; memory cards are top-level containers"
+                ));
+            }
             card::store::validate_card_id(&parent)?;
             let parent_card = card::store::resolve(&paths, &parent)?
                 .map(|resolved| resolved.card)
@@ -429,7 +435,9 @@ pub fn create(args: CreateArgs) -> Result<()> {
             _ => card::store::mint_card_id(&paths, card_type, title),
         };
         let initial_status = match card_type {
-            card::schema::CardType::Bug | card::schema::CardType::Custom => "proposed",
+            card::schema::CardType::Bug
+            | card::schema::CardType::Custom
+            | card::schema::CardType::Memory => "proposed",
             _ => "open",
         };
         let mut new_card = card::schema::Card::new(&id, card_type, title, initial_status, &now);
@@ -639,6 +647,19 @@ pub fn show(args: ShowArgs) -> Result<()> {
             .map(|cards| incoming_related(cards, &c.id))
             .unwrap_or_default();
         render_show(&c, alias.as_deref(), &related_by);
+        if !from_archive {
+            let approved = memory_ops::approved_memory(
+                &paths,
+                MemoryReadSurface::CardShow,
+                MemoryReadScope {
+                    card_id: Some(c.id.clone()),
+                    ..MemoryReadScope::default()
+                },
+            )?;
+            if !approved.memories.is_empty() {
+                super::memory::render_approved_memory(&approved.memories, approved.omitted);
+            }
+        }
         if from_archive {
             println!("archived: read-only (lives in .maestro/archive/cards/)");
         }
@@ -913,6 +934,9 @@ fn per_type_verbs_hint(card_type: card::schema::CardType) -> &'static str {
         card::schema::CardType::Progress => {
             "finish its progress tasks before closing the progress card"
         }
+        card::schema::CardType::Memory => {
+            "use `maestro memory promote`, `maestro memory reject`, or `maestro memory stale`"
+        }
         card::schema::CardType::Decision => "use `maestro decision lock`",
         card::schema::CardType::Idea => "use `maestro harness apply/dismiss/measure`",
         card::schema::CardType::Task
@@ -926,7 +950,7 @@ fn per_type_verbs_hint(card_type: card::schema::CardType) -> &'static str {
 fn parse_card_type(word: &str) -> Result<card::schema::CardType> {
     card::schema::CardType::parse(word).ok_or_else(|| {
         anyhow!(
-            "unknown --type {word:?}; expected feature, custom, progress, task, bug, chore, idea, or decision"
+              "unknown --type {word:?}; expected feature, custom, progress, memory, task, bug, chore, idea, or decision"
         )
     })
 }

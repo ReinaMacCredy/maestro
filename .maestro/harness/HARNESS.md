@@ -1,5 +1,5 @@
 ---
-version: 1.23.0
+version: 1.26.0
 ---
 
 # Maestro Harness Protocol
@@ -27,7 +27,11 @@ unbacked claim lands); decisions + friction + skills are the compounding memory;
 7. Hooks auto-record your tool calls as proof. Verification matches each `--claim` against recorded or inline proof - an empty or unbacked claim fails.
 8. When the user corrects your behavior, record it with
    `maestro event intervention --note "<what was wrong>"`.
-9. Before proposing an idea or re-opening a settled question, run `maestro card list --grep <topic> --archived` and cite any precedent card in the proposal.
+9. Before proposing an idea or re-opening a settled question, search precedent
+   with `maestro grep "<topic> corpus:memory"` and cite the best matching card,
+   decision, task, proof, or note. Use `maestro card list --grep <topic>
+   --archived` only when the user asks for exact card rows, you are verifying
+   legacy card-list behavior, or unified grep is too broad or surprising.
 
 ## Code style
 

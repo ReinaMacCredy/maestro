@@ -213,6 +213,7 @@ state, or durable migration output:
 | `verification` | Keep Proof-owned reports separate from Task-owned lifecycle effects and preserve stale-snapshot handling for Proof-to-Task outcome application. |
 | `hooks` and `evidence` | Preserve event normalization, session encoding, append concurrency, symlink rejection, partial-line tolerance, and run evidence derivation. |
 | `harness backlog` | Preserve backlog schema, duplicate handling, deterministic ordering, refresh-without-apply, and read-model behavior. |
+| `memory` | Preserve native Memory card sidecars, visible suggestion queues, typed scorer receipts, target-registry fail-closed promotion, backup/CAS apply, health-ledger suppression, bounded read injection, and L0/L1/L2/L3 maintenance contracts. |
 | `core` | Keep helpers domain-neutral. Do not move Task, Proof, Install, or Migration policy into Core. |
 
 When changing any safety-sensitive surface, run the module tests plus at least

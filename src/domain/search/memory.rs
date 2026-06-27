@@ -464,6 +464,7 @@ fn memory_kind_for_card(card: &Card) -> &'static str {
     match card.card_type {
         CardType::Feature => "feature",
         CardType::Custom | CardType::Progress => "card",
+        CardType::Memory => "memory",
         CardType::Task | CardType::Bug | CardType::Chore => "task",
         CardType::Decision => "decision",
         CardType::Idea => "card",

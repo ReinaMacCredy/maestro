@@ -594,7 +594,7 @@ fn feature_task_with_no_falsifier_verifies_on_claims_without_running_the_stack_s
     let plan = repo.join("PLAN-csv-export.md");
     fs::write(
         &plan,
-        "## Task T1: Add CSV export\ncheck: csv export works\n",
+        "## Task T1: Add CSV export\ncheck: csv export works\ncovers: ac-1\n",
     )
     .expect("invariant: prepare plan should be writable");
     let plan_arg = plan
@@ -708,6 +708,7 @@ fn task_verify_warns_when_after_dependency_cleanup_fails_after_apply() {
         concat!(
             "## Task T1: First dependency\n",
             "check: first task done\n",
+            "covers: ac-1\n",
             "\n",
             "## Task T2: Dependent task\n",
             "after: T1\n",

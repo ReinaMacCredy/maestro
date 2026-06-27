@@ -2,6 +2,7 @@
 # Maestro local agent settings
 .claude/settings.local.json
 .codex/hooks.json
+.factory/hooks.json
 # <<< maestro <<<
 
 # --- user-managed (outside the maestro block) ---

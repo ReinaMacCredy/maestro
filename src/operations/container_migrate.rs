@@ -186,7 +186,7 @@ fn tally(report: &mut ContainerMigrateReport, card_type: CardType) {
         CardType::Decision => report.decisions += 1,
         CardType::Idea => report.ideas += 1,
         CardType::Task | CardType::Bug | CardType::Chore => report.tasks += 1,
-        CardType::Feature | CardType::Custom | CardType::Progress => {}
+        CardType::Feature | CardType::Custom | CardType::Progress | CardType::Memory => {}
     }
 }
 

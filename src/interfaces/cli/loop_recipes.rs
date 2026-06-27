@@ -7,6 +7,10 @@ use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::time::{timestamp_nanos, utc_now_timestamp};
 use crate::interfaces::cli::{LoopArgs, LoopCommand, WorkLeaseArgs};
 use crate::interfaces::hooks::record;
+use crate::operations::memory::{
+    self, ApprovedMemory, MemoryReadScope, MemoryReadSurface, MemorySuggestionHint,
+    MemorySuggestionSet,
+};
 
 const WORK_LEASE_JSON_SCHEMA: &str = "maestro.work_lease.v1";
 const WORK_LEASE_JSON_VERSION: u8 = 1;
@@ -59,14 +63,22 @@ fn run_work_lease(args: WorkLeaseArgs) -> Result<()> {
     let run_id = super::cli_run_id();
     let run_event_path = format!(".maestro/runs/{}/events.jsonl", run::run_dir_name(&run_id));
     let ship_authority = ShipAuthorityJson::from_args(&args, &now);
+    let lease_memory_scope = MemoryReadScope {
+        feature_id: args.feature.clone(),
+        project: args.project.clone(),
+        ..MemoryReadScope::default()
+    };
 
     if !paths.cards_dir().is_dir() {
+        let memory_suggestions =
+            memory::suggestion_hints(&paths, MemoryReadSurface::WorkLease, lease_memory_scope)?;
         print_work_lease(WorkLeaseJson::dry(
             "no_card_store",
             "this repo has no card store yet (.maestro/cards/)",
             scope,
             ship_authority,
             run_event_path,
+            memory_suggestions,
         ))?;
         return Ok(());
     }
@@ -81,12 +93,18 @@ fn run_work_lease(args: WorkLeaseArgs) -> Result<()> {
     }
 
     if ready.is_empty() {
+        let memory_suggestions = memory::suggestion_hints(
+            &paths,
+            MemoryReadSurface::WorkLease,
+            lease_memory_scope.clone(),
+        )?;
         print_work_lease(WorkLeaseJson::dry(
             "no_ready_work",
             "no ready cards matched this lease scope",
             scope,
             ship_authority,
             run_event_path,
+            memory_suggestions,
         ))?;
         return Ok(());
     }
@@ -99,6 +117,26 @@ fn run_work_lease(args: WorkLeaseArgs) -> Result<()> {
         match card::edit::claim(&paths, &before.id, &identity, &now) {
             Ok(outcome) => {
                 super::emit_work_touch(&paths, &before.id);
+                let approved_lessons = memory::approved_memory(
+                    &paths,
+                    MemoryReadSurface::WorkLease,
+                    MemoryReadScope {
+                        card_id: Some(before.id.clone()),
+                        feature_id: before.parent.clone(),
+                        project: before.project.clone(),
+                        ..MemoryReadScope::default()
+                    },
+                )?;
+                let memory_suggestions = memory::suggestion_hints(
+                    &paths,
+                    MemoryReadSurface::WorkLease,
+                    MemoryReadScope {
+                        card_id: Some(before.id.clone()),
+                        feature_id: before.parent.clone(),
+                        project: before.project.clone(),
+                        ..MemoryReadScope::default()
+                    },
+                )?;
                 emit_work_lease_action(
                     &paths,
                     &run_id,
@@ -122,6 +160,8 @@ fn run_work_lease(args: WorkLeaseArgs) -> Result<()> {
                     scope,
                     ship_authority,
                     run_event_path,
+                    approved_lessons.memories,
+                    memory_suggestions,
                 ))?;
                 return Ok(());
             }
@@ -133,12 +173,15 @@ fn run_work_lease(args: WorkLeaseArgs) -> Result<()> {
     }
 
     emit_blocked_work_lease_action(&paths, &run_id, &ship_authority);
+    let memory_suggestions =
+        memory::suggestion_hints(&paths, MemoryReadSurface::WorkLease, lease_memory_scope)?;
     print_work_lease(WorkLeaseJson::blocked(
         "all ready cards are held by live claims",
         blocked,
         scope,
         ship_authority,
         run_event_path,
+        memory_suggestions,
     ))?;
     Ok(())
 }
@@ -238,6 +281,12 @@ struct WorkLeaseJson {
     recurrence_guard: RecurrenceGuardJson,
     inspect: InspectJson,
     run_events: RunEventsJson,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    approved_lessons: Vec<ApprovedMemory>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    memory_suggestions: Vec<MemorySuggestionHint>,
+    #[serde(skip_serializing_if = "is_zero")]
+    memory_suggestions_omitted: usize,
     worker_prompt: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     reason: Option<String>,
@@ -249,11 +298,19 @@ impl WorkLeaseJson {
         scope: LeaseScopeJson,
         ship_authority: ShipAuthorityJson,
         run_event_path: String,
+        approved_lessons: Vec<ApprovedMemory>,
+        memory_suggestions: MemorySuggestionSet,
     ) -> Self {
         let card = selection.card;
         let now = selection.now;
         let lease_id = lease_id(card, now);
-        let worker_prompt = worker_prompt(card.id.as_str(), &ship_authority);
+        let worker_prompt = worker_prompt(
+            card.id.as_str(),
+            &ship_authority,
+            &approved_lessons,
+            &memory_suggestions.suggestions,
+        );
+        let memory_suggestions_omitted = memory_suggestions.omitted;
         Self {
             version: WORK_LEASE_JSON_VERSION,
             schema: WORK_LEASE_JSON_SCHEMA,
@@ -286,6 +343,9 @@ impl WorkLeaseJson {
             recurrence_guard: RecurrenceGuardJson::default(),
             inspect: InspectJson::new(Some(card.id.as_str())),
             run_events: RunEventsJson::new(run_event_path),
+            approved_lessons,
+            memory_suggestions: memory_suggestions.suggestions,
+            memory_suggestions_omitted,
             worker_prompt,
             reason: None,
         }
@@ -297,7 +357,9 @@ impl WorkLeaseJson {
         scope: LeaseScopeJson,
         ship_authority: ShipAuthorityJson,
         run_event_path: String,
+        memory_suggestions: MemorySuggestionSet,
     ) -> Self {
+        let memory_suggestions_omitted = memory_suggestions.omitted;
         Self {
             version: WORK_LEASE_JSON_VERSION,
             schema: WORK_LEASE_JSON_SCHEMA,
@@ -314,6 +376,9 @@ impl WorkLeaseJson {
             recurrence_guard: RecurrenceGuardJson::default(),
             inspect: InspectJson::new(None),
             run_events: RunEventsJson::new(run_event_path),
+            approved_lessons: Vec::new(),
+            memory_suggestions: memory_suggestions.suggestions,
+            memory_suggestions_omitted,
             worker_prompt: format!(
                 "No work lease was acquired ({reason_kind}). Reconcile with `maestro card ready`, `maestro feature list`, and `maestro query run --json`; do not launch a worker."
             ),
@@ -327,7 +392,9 @@ impl WorkLeaseJson {
         scope: LeaseScopeJson,
         ship_authority: ShipAuthorityJson,
         run_event_path: String,
+        memory_suggestions: MemorySuggestionSet,
     ) -> Self {
+        let memory_suggestions_omitted = memory_suggestions.omitted;
         Self {
             version: WORK_LEASE_JSON_VERSION,
             schema: WORK_LEASE_JSON_SCHEMA,
@@ -341,10 +408,13 @@ impl WorkLeaseJson {
             hard_stops: hard_stops(),
             allowed_follow_up_verbs: follow_up_verbs(),
             ship_authority,
-            recurrence_guard: RecurrenceGuardJson::default(),
-            inspect: InspectJson::new(None),
-            run_events: RunEventsJson::new(run_event_path),
-            worker_prompt: "No work lease was acquired because ready cards are actively claimed. Reconcile with `maestro active`, linked-card messages, and `maestro query run --json`; do not steal live work.".to_string(),
+              recurrence_guard: RecurrenceGuardJson::default(),
+              inspect: InspectJson::new(None),
+                run_events: RunEventsJson::new(run_event_path),
+                approved_lessons: Vec::new(),
+                memory_suggestions: memory_suggestions.suggestions,
+                memory_suggestions_omitted,
+                worker_prompt: "No work lease was acquired because ready cards are actively claimed. Reconcile with `maestro active`, linked-card messages, and `maestro query run --json`; do not steal live work.".to_string(),
             reason: Some(reason.to_string()),
         }
     }
@@ -660,13 +730,58 @@ fn overbroad_action(action: &str) -> bool {
     )
 }
 
-fn worker_prompt(card_id: &str, authority: &ShipAuthorityJson) -> String {
+fn worker_prompt(
+    card_id: &str,
+    authority: &ShipAuthorityJson,
+    lessons: &[ApprovedMemory],
+    suggestions: &[MemorySuggestionHint],
+) -> String {
     let ship_line = if authority.external_ship_allowed {
         "External ship actions are allowed only for ship_authority.allowed_external_actions after required_evidence is satisfied."
     } else {
         "Do not push, release, publish, tag, archive, or perform any external ship action."
     };
+    let memory_line = if lessons.is_empty() {
+        String::new()
+    } else {
+        let summaries = lessons
+            .iter()
+            .take(MemoryReadSurface::WorkerPrompt.cap())
+            .map(|memory| {
+                format!(
+                    "{}: {} ({})",
+                    memory.id, memory.summary, memory.show_command
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("; ");
+        format!(" Approved Memory: {summaries}.")
+    };
+    let suggestion_line = if suggestions.is_empty() {
+        String::new()
+    } else {
+        let summaries = suggestions
+            .iter()
+            .take(MemoryReadSurface::WorkerPrompt.cap())
+            .map(|suggestion| {
+                format!(
+                    "{}: {} (sources={}; create: {}; dismiss: {})",
+                    suggestion.id,
+                    suggestion.summary,
+                    suggestion.source_count,
+                    suggestion.create_command,
+                    suggestion.dismiss_command
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("; ");
+        format!(" Memory suggestions are review-only: {summaries}.")
+    };
     format!(
-        "Work exactly one leased card: {card_id}. Read `maestro card show {card_id} --json`, make the smallest correct change, record proof, and verify through the normal Maestro verbs. {ship_line} If you fix a loop-discovered issue, record durable recurrence-guard evidence before completion or ship. Stop on any hard stop and report with `maestro query run --json`."
+        "Work exactly one leased card: {card_id}. Read `maestro card show {card_id} --json`, make the smallest correct change, record proof, and verify through the normal Maestro verbs.{memory_line}{suggestion_line} {ship_line} If you fix a loop-discovered issue, record durable recurrence-guard evidence before completion or ship. Stop on any hard stop and report with `maestro query run --json`."
     )
+}
+
+fn is_zero(value: &usize) -> bool {
+    *value == 0
 }

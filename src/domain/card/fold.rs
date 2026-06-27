@@ -249,6 +249,7 @@ pub(crate) fn payload_pack_fields(
         CardType::Feature => "feature",
         CardType::Custom => return None,
         CardType::Progress => return None,
+        CardType::Memory => return None,
         CardType::Task | CardType::Bug | CardType::Chore => "task",
         CardType::Idea => "backlog",
         CardType::Decision => "decision",

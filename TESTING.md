@@ -97,6 +97,7 @@ has callers or user data safety impact.
 | Decision | `tests/feature_decision_artifacts.rs`, `tests/feature_decision_commands_integration.rs` | Query, docs, schema-constant, and migration tests when decision layout or metadata changes. |
 | Run | `tests/hook_record_integration.rs`, `tests/run_evidence_integration.rs` | `tests/task_verify_integration.rs` and `tests/harness_integration.rs` when event proof, concurrency, evidence regeneration, or harness intervention detection change. |
 | Proof | `tests/task_verify_integration.rs` | Task, Query, TUI, MCP, and Run tests when verification status, freshness, report writing, unapplied reports, or binding behavior changes. Include Proof-to-Task transaction tests for stale snapshots and partial failure. |
+| Memory | `tests/memory_commands_integration.rs` plus module-local tests in `src/domain/memory` and `src/operations/memory` | Card, Status/Resume, Work Lease, Scorer, Proof/QA, resource guard, and architecture-import tests when Memory card shape, suggestion queue, scorer receipts, promotion gates, approved-Memory injection, or maintenance contracts change. |
 | Install | `tests/install_mirrors.rs`, `tests/install_uninstall_integration.rs`, `tests/skills_symlink_integration.rs` | Harness, Skills, and safety tests when managed blocks, hooks, locks, symlinks, transaction state, or recovery behavior change. |
 | Local release install | `tests/local_install_script.rs` | Run when the local binary install recipe, `scripts/install-local.sh`, or release-adjacent handoff instructions change. |
 | Skills | `tests/skills_extract.rs`, `tests/skills_symlink_integration.rs` | Install and Update tests when extraction rollback, recursive skill resources, executable metadata, or installed skill wiring changes. |
@@ -213,6 +214,11 @@ the command-specific integration test when command output changes.
 
 If changing a read model, run the read-model test plus at least one flow that
 produces the source artifact it reads.
+
+If changing Memory, run `cargo test --test memory_commands_integration` for the
+end-to-end CLI workflow and `cargo check --all-targets`. Broaden to
+Status/Resume, Work Lease, Scorer, Proof/QA, or resource tests when the change
+touches their Memory read or gate surfaces.
 
 If changing generated or installed agent-facing files, run Install or Init tests
 and read the generated artifact text in the failing or touched test fixture.

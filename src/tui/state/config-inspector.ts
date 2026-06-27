@@ -501,19 +501,19 @@ function getEditMeta(
     };
   }
 
-  if (keyPath === "memory.learnings.compile_threshold") {
+  if (keyPath === "memory.lessons.compile_threshold") {
     return {
       editKind: "number-preset",
       options: ["1", "3", "5", "8", "10"],
-      description: "How many raw learning entries should accumulate before prompting compilation.",
+      description: "How many raw lesson entries should accumulate before prompting compilation.",
     };
   }
 
-  if (keyPath === "memory.learnings.max_age_days") {
+  if (keyPath === "memory.lessons.max_age_days") {
     return {
       editKind: "number-preset",
       options: ["3", "7", "14", "30"],
-      description: "How long compiled learnings remain fresh before Maestro warns that they are stale.",
+      description: "How long compiled lessons remain fresh before Maestro warns that they are stale.",
     };
   }
 
@@ -548,7 +548,7 @@ function getRowCopy(keyPath: string, tab: MissionControlConfigTab | "project" | 
       return {
         label: "Memory enabled",
         summary: "Master toggle for the memory system.",
-        impactText: "Disabling this turns off correction recall, learnings, ratchet checks, and graph context.",
+        impactText: "Disabling this turns off correction recall, lessons, ratchet checks, and graph context.",
         section: "Memory",
       };
     case "memory.corrections.enabled":
@@ -579,26 +579,26 @@ function getRowCopy(keyPath: string, tab: MissionControlConfigTab | "project" | 
         impactText: "Hard corrections are always recalled even when the task match is weak.",
         section: "Corrections",
       };
-    case "memory.learnings.enabled":
+    case "memory.lessons.enabled":
       return {
-        label: "Learnings enabled",
-        summary: "Store raw session learnings for later compilation.",
-        impactText: "Turning this off stops the learning log from growing.",
-        section: "Learnings",
+        label: "Lessons enabled",
+        summary: "Store raw session lessons for later compilation.",
+        impactText: "Turning this off stops the lesson log from growing.",
+        section: "Lessons",
       };
-    case "memory.learnings.compile_threshold":
+    case "memory.lessons.compile_threshold":
       return {
         label: "Compile threshold",
-        summary: "How many raw learning entries should accumulate before compilation is suggested.",
+        summary: "How many raw lesson entries should accumulate before compilation is suggested.",
         impactText: "Lower values compile sooner; higher values keep more raw history around.",
-        section: "Learnings",
+        section: "Lessons",
       };
-    case "memory.learnings.max_age_days":
+    case "memory.lessons.max_age_days":
       return {
         label: "Max age",
-        summary: "How long compiled learnings remain fresh.",
-        impactText: "Older compiled learnings trigger stale warnings in linting and the TUI.",
-        section: "Learnings",
+        summary: "How long compiled lessons remain fresh.",
+        impactText: "Older compiled lessons trigger stale warnings in linting and the TUI.",
+        section: "Lessons",
       };
     case "memory.ratchet.enabled":
       return {
@@ -670,8 +670,8 @@ function displayValueForKey(
   if (keyPath === "ui.missionControl.backgroundMode") {
     return formatMissionControlBackgroundMode(raw);
   }
-  if (keyPath === "memory.learnings.compile_threshold" && raw !== "unset") return `${raw} entries`;
-  if (keyPath === "memory.learnings.max_age_days" && raw !== "unset") return `${raw} days`;
+  if (keyPath === "memory.lessons.compile_threshold" && raw !== "unset") return `${raw} entries`;
+  if (keyPath === "memory.lessons.max_age_days" && raw !== "unset") return `${raw} days`;
   return raw;
 }
 
@@ -757,9 +757,9 @@ function buildMemoryConfigRows(
     "memory.corrections.matching",
     "memory.corrections.auto_capture",
     "memory.corrections.severity_default",
-    "memory.learnings.enabled",
-    "memory.learnings.compile_threshold",
-    "memory.learnings.max_age_days",
+    "memory.lessons.enabled",
+    "memory.lessons.compile_threshold",
+    "memory.lessons.max_age_days",
     "memory.ratchet.enabled",
     "memory.ratchet.enforcement",
     "memory.graph.enabled",

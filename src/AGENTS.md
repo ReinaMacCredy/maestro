@@ -50,6 +50,7 @@ Parent:
 Children:
 - [domain/AGENTS.md](domain/AGENTS.md)
 - [foundation/core/AGENTS.md](foundation/core/AGENTS.md)
+- [tui/AGENTS.md](tui/AGENTS.md)
 - [interfaces/cli/AGENTS.md](interfaces/cli/AGENTS.md)
 - [operations/AGENTS.md](operations/AGENTS.md)
 

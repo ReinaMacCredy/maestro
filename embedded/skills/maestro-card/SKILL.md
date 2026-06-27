@@ -1,6 +1,6 @@
 ---
 name: maestro-card
-version: 1.34.0
+version: 1.35.0
 description: "Use when the user wants to implement, fix, verify, QA, close, release, continue, use loop, keep looping, work while away, or work while asleep on Maestro cards/features/tasks in a project using Maestro after design is approved."
 ---
 

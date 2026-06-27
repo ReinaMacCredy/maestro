@@ -112,7 +112,11 @@ impl BlockerTarget {
             Some(CardType::Task | CardType::Bug | CardType::Chore) => Ok(Self::Task(by)),
             Some(CardType::Decision) => Ok(Self::Decision(by)),
             Some(
-                kind @ (CardType::Feature | CardType::Custom | CardType::Progress | CardType::Idea),
+                kind @ (CardType::Feature
+                | CardType::Custom
+                | CardType::Progress
+                | CardType::Memory
+                | CardType::Idea),
             ) => bail!(
                 "cannot block on {by}: it is a {} card, not a task or decision\n  record the dependency as a card edge instead: maestro card dep add <task> {by}",
                 kind.as_str()

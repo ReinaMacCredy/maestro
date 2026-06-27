@@ -164,6 +164,7 @@ pub(crate) const GENERATED_ID_PREFIXES: &[&str] = &[
     "chore-",
     "custom-",
     "progress-",
+    "mem-",
     "dec-",
     "idea-",
 ];
@@ -176,6 +177,7 @@ fn type_prefix(card_type: CardType) -> Option<&'static str> {
         CardType::Feature => None,
         CardType::Custom => Some("custom"),
         CardType::Progress => Some("progress"),
+        CardType::Memory => Some("mem"),
         CardType::Task => Some("task"),
         CardType::Bug => Some("bug"),
         CardType::Chore => Some("chore"),
@@ -402,7 +404,7 @@ impl CardHome {
 pub fn home_for_new(paths: &MaestroPaths, card: &Card) -> Result<CardHome> {
     validate_card_id(&card.id)?;
     Ok(match card.card_type {
-        CardType::Feature | CardType::Custom | CardType::Progress => {
+        CardType::Feature | CardType::Custom | CardType::Progress | CardType::Memory => {
             if RESERVED_CONTAINER_NAMES.contains(&card.id.as_str()) {
                 bail!(
                     "{} id {} is reserved by the card store layout",
@@ -1091,6 +1093,15 @@ mod tests {
         assert_eq!(
             home(&typed_card("new-feat", CardType::Feature, None)),
             CardHome::Dir(root.join("new-feat").join("card.yaml"))
+        );
+        assert_eq!(
+            home(&typed_card(
+                "mem-refund-policy-1234",
+                CardType::Memory,
+                None
+            )),
+            CardHome::Dir(root.join("mem-refund-policy-1234").join("card.yaml")),
+            "memory cards own top-level sidecar dirs"
         );
         assert_eq!(
             home(&typed_card(

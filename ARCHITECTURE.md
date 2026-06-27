@@ -1,8 +1,8 @@
 # ARCHITECTURE
 
-**Status:** as-built, 2026-06-26. §2 describes the shipped card/task model (the
+**Status:** as-built, 2026-06-28. §2 describes the shipped card/task model (the
 unified card store from `SPEC-beads-model.md`, updated with the D17 Progress card
-model and the Card/CardKind/Task taxonomy). §3 records what the rewrite
+model, the Card/CardKind/Task taxonomy, and native Memory cards). §3 records what the rewrite
 collapsed and the deviations kept.
 
 Related: `./AGENTS.md` (working rules). The full design history (SPEC-beads-model and
@@ -17,8 +17,8 @@ Four layers; dependencies point one way: **interfaces -> operations -> domain ->
 | Layer | Path | Owns |
 |---|---|---|
 | foundation/core | `src/foundation/core/` | paths, schema-version consts, atomic + content-hash-CAS writes, id-reservation markers, hashing, slugs, time, managed blocks, `MaestroError` + `.hint()` |
-| domain | `src/domain/` | durable concepts: Card (core + `CardType` enum dispatch), Feature, Task, Harness, Decision, Proof, Run, Install, Skills, Extraction |
-| operations | `src/operations/` | cross-domain workflows: init, sync, update, task_verify, harness apply/measure, feature_prepare, migrate |
+| domain | `src/domain/` | durable concepts: Card (core + `CardType` enum dispatch), Feature, Task, Harness, Decision, Proof, Run, Memory, Install, Skills, Extraction |
+| operations | `src/operations/` | cross-domain workflows: init, sync, update, task_verify, harness apply/measure, feature_prepare, migrate, Memory suggestion/scorer/promotion/maintenance |
 | interfaces | `src/interfaces/` | adapters: cli, mcp, tui, hooks, shell — parse + render; domain rules stay behind owning facades |
 
 ### Deep primitives (small interface, much hidden behavior) — `foundation/core`
@@ -47,7 +47,7 @@ Low  = Task
 
 The shipped store still uses a generic **deep card core** + a closed
 `pub enum CardType` (`feature | custom | progress | task | bug | chore | idea |
-decision`). `type: task` is retained for legacy readable/workable task cards;
+decision | memory`). `type: task` is retained for legacy readable/workable task cards;
 the target low-level Task abstraction is the `TaskRecord` payload used by
 card-backed task records and by Progress `progress.yml`. There is no `CardType`
 trait in the shipped model. The type seam is explicit exhaustive `match`
@@ -59,7 +59,7 @@ generic CARD CORE  -- never changes when a type is added/altered
   schema · store(save-if-unchanged) · id-reservation · scan · archive ·
   query(ready/list) · CLI(create/show/update/dep/close)
         |  dispatch by exhaustive match on CardType
-   enum CardType: feature · custom · progress · task(legacy) · bug · chore · idea · decision
+   enum CardType: feature · custom · progress · task(legacy) · bug · chore · idea · decision · memory
         ├ card store: placement · id prefix · save basis · reconcile
         ├ card query/edit/CLI: ready/list filters · type hints · close guards
         └ domain lifecycles:
@@ -69,11 +69,12 @@ generic CARD CORE  -- never changes when a type is added/altered
              bug/chore/custom (workflow CardKinds that own TaskRecord work)
              idea     (proposed->accepted->measured, +dismissed)
              decision (open->locked, +superseded)
+             memory   (card.status outer workflow + memory.lifecycle semantics)
 ```
 
-Trait revisit trigger: introduce a per-type behavior trait only if a seventh card
-type lands, or if WS5 schema-compatibility work makes match-based per-type behavior
-multiply enough that a trait removes real duplication. Until then, exhaustive matches
+Trait revisit trigger: introduce a per-type behavior trait only if future card
+type work makes match-based per-type behavior multiply enough that a trait removes
+real duplication. Until then, exhaustive matches
 are the intended safety mechanism: adding a `CardType` variant forces every dispatch
 site to be reviewed by the compiler.
 
@@ -81,14 +82,14 @@ site to be reviewed by the compiler.
   `claimed_by = <agent>#<session>` (agent in claude | codex | future-cli), title,
   description, acceptance, timestamps; prose (`spec.md`/`notes.md`/`qa.md`) as
   optional **facet sidecars** for any card that needs contract, evidence, or history.
-- **types:** `feature | custom | progress | task | bug | chore | idea | decision`.
+- **types:** `feature | custom | progress | task | bug | chore | idea | decision | memory`.
   `task` remains a compatibility card type; new low-ceremony Tasks are stored
   under Progress cards.
 - **status:** each type stores its REAL state; a coarse `open | in_progress | closed`
   is DERIVED for the board (single source of truth, can't desync).
 - **ids:** stable and opaque after creation. Features use their creation slug; other
   cards mint readable typed slug ids (`progress-<slug>-<hex4>`, `task-<slug>-<hex4>`,
-  `bug-...`, `chore-...`, `custom-...`, `dec-...`, `idea-...`). Legacy `card-<hex>` ids stay valid but are not minted for
+  `bug-...`, `chore-...`, `custom-...`, `dec-...`, `idea-...`, `mem-...`). Legacy `card-<hex>` ids stay valid but are not minted for
   new non-feature cards. The dotted `<feature>.<N>` form is a **display alias**
   rendered only by `show` (marked "display only"), never a ref and never parsed —
   addressing by position broke under reparenting, so it was demoted from the original
@@ -101,9 +102,14 @@ site to be reviewed by the compiler.
   .maestro/cards/<progress>/progress.yml                # low-level TaskRecord rows
   .maestro/cards/<feature>/tasks/<task>/task.yaml       # task/bug/chore cards
   .maestro/cards/<feature>/decisions.yaml               # decision entries
+  .maestro/cards/<memory>/card.yaml                     # native Memory card
+  .maestro/cards/<memory>/memory/{candidate.yml,lesson.md,signals.jsonl,receipts/}
   .maestro/cards/tasks/<task>/task.yaml                 # parentless task/bug/chore cards
   .maestro/cards/decisions.yaml                         # parentless decision entries
   .maestro/cards/ideas.yaml                             # harness idea entries
+  .maestro/memory/{suggestions.jsonl,target-registry.yml,health-ledger.jsonl}
+  .maestro/memory/promotions/<promotion>/plan.yml
+  .maestro/memory/maintenance/<maintenance>/contract.yml
   .maestro/harness/harness.yml                          # config only
   .maestro/archive/cards/
   ```
@@ -128,7 +134,16 @@ site to be reviewed by the compiler.
 
 Type mapping: feature -> `type:feature` CardKind · custom/bug/chore -> workflow
 CardKinds · progress -> lightweight CardKind with `progress.yml` · legacy task
-card -> `type:task` · harness item -> `type:idea` · decision -> `type:decision`.
+card -> `type:task` · harness item -> `type:idea` · decision -> `type:decision` ·
+Memory lesson/proposal -> `type:memory` with card-owned `memory/` sidecars.
+
+Memory is a promotion and reuse layer over existing evidence, not a hidden
+planner. `src/domain/memory` validates candidate sidecars, source refs, risk,
+gates, and card-status-to-`memory.lifecycle` mapping. `src/operations/memory`
+owns visible suggestions, typed scorer receipts, two-stage promotion
+plan/apply, approved-Memory read selection, and bounded maintenance contracts.
+Normal work and Work Lease can read compact approved Memory refs; current user
+instructions, locked acceptance, proof/QA, and run authority outrank Memory.
 
 ---
 

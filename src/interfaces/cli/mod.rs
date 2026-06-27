@@ -31,6 +31,7 @@ pub mod install;
 pub mod lean;
 pub mod loop_recipes;
 pub mod mcp;
+pub mod memory;
 pub mod migrate;
 pub mod mission_control;
 pub mod msg;
@@ -39,6 +40,7 @@ pub mod qa;
 pub mod query;
 pub mod reference;
 pub mod resume;
+pub mod scorer;
 pub mod shell_init;
 pub mod status;
 pub mod sync;
@@ -291,6 +293,16 @@ pub enum RootCommand {
         after_help = "Examples:\n  maestro grep runtime\n  maestro grep --json 'runtime corpus:memory type:decision'\n  maestro grep 'why agent runtime'"
     )]
     Grep(GrepArgs),
+    #[command(
+        about = "Manage inspectable Memory candidates and suggestions",
+        after_help = "Examples:\n  maestro memory suggest list\n  maestro memory suggest create --source-ref run_event:run-1 --signal-type failure --summary \"remember the fix\"\n  maestro memory create --from msug-abc123"
+    )]
+    Memory(MemoryArgs),
+    #[command(
+        about = "Run typed scorer contracts and inspect Memory receipts",
+        after_help = "Examples:\n  maestro scorer run mem-abc#gate.scorer_contract\n  maestro scorer list --memory mem-abc\n  maestro scorer show mem-abc#rcpt-123"
+    )]
+    Scorer(ScorerArgs),
     #[command(about = "Create, show, and list decision cards in the card store")]
     Decision(DecisionArgs),
     #[command(
@@ -696,7 +708,7 @@ pub struct ListArgs {
     /// Only cards whose parent is this card id.
     #[arg(long, value_name = "PARENT")]
     pub parent: Option<String>,
-    /// Only cards of this type (feature, custom, progress, task, bug, chore, idea, decision).
+    /// Only cards of this type (feature, custom, progress, memory, task, bug, chore, idea, decision).
     #[arg(long = "type", value_name = "TYPE")]
     pub card_type: Option<String>,
     /// Only cards whose advisory assignee hint OR actual claim is this agent or
@@ -1003,21 +1015,226 @@ pub struct QaArgs {
     pub command: QaCommand,
 }
 
+#[derive(Debug, Args)]
+pub struct MemoryArgs {
+    #[command(subcommand)]
+    pub command: MemoryCommand,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum MemoryCommand {
+    #[command(about = "Create a Memory card from an explicit source or suggestion id")]
+    Create {
+        #[arg(long = "from", value_name = "SOURCE_OR_SUGGESTION")]
+        from: String,
+        #[arg(
+            long,
+            help = "Lesson summary; required when --from is not a suggestion id"
+        )]
+        summary: Option<String>,
+        #[arg(long, help = "Full lesson text; defaults to the summary")]
+        lesson: Option<String>,
+        #[arg(long = "signal-type", help = "Signal type for explicit source refs")]
+        signal_type: Option<String>,
+        #[arg(long = "scope-kind", default_value = "repo")]
+        scope_kind: String,
+        #[arg(long = "scope-ref")]
+        scope_ref: Vec<String>,
+        #[arg(long = "target-surface", default_value = "memory_note")]
+        target_surface: String,
+        #[arg(long, help = "Print only the new Memory card id")]
+        id_only: bool,
+    },
+    #[command(about = "List Memory cards")]
+    List {
+        #[arg(long, help = "Include non-promoted Memory cards")]
+        all: bool,
+    },
+    #[command(about = "Show a Memory card, candidate metadata, and lesson")]
+    Show { id: String },
+    #[command(about = "Search approved Memory")]
+    Search {
+        #[arg(value_name = "QUERY")]
+        query: Vec<String>,
+    },
+    #[command(about = "Plan or apply a gated Memory promotion")]
+    Promote {
+        #[arg(value_name = "MEMORY_OR_PROMOTION_ID")]
+        id: String,
+        #[arg(long, conflicts_with = "apply", help = "Create a promotion plan")]
+        plan: bool,
+        #[arg(
+            long,
+            conflicts_with = "plan",
+            help = "Apply an existing promotion plan"
+        )]
+        apply: bool,
+        #[arg(long = "scorer-receipt", value_name = "REF")]
+        scorer_receipt: Option<String>,
+        #[arg(long = "review-evidence", value_name = "EVIDENCE")]
+        review_evidence: Option<String>,
+    },
+    #[command(about = "Create a bounded Memory maintenance contract")]
+    Maintain(MemoryMaintainArgs),
+    #[command(about = "Create a bounded Memory-dream maintenance contract")]
+    Dream(MemoryMaintainArgs),
+    #[command(about = "Attach scorer contracts to Memory candidates")]
+    Scorer(MemoryScorerArgs),
+    #[command(about = "List, create, and dismiss visible Memory suggestions")]
+    Suggest(MemorySuggestArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct MemoryMaintainArgs {
+    #[arg(long, value_name = "L0|L1|L2|L3")]
+    pub level: Option<String>,
+    #[arg(long = "scope-kind", default_value = "repo")]
+    pub scope_kind: String,
+    #[arg(long = "scope-ref")]
+    pub scope_ref: Vec<String>,
+    #[arg(long = "source-ref")]
+    pub source_ref: Vec<String>,
+    #[arg(long)]
+    pub reason: String,
+    #[arg(long = "proof-link")]
+    pub proof_link: Vec<String>,
+    #[arg(long = "run-link")]
+    pub run_link: Vec<String>,
+    #[arg(long = "human-approved")]
+    pub human_approved: bool,
+    #[arg(long)]
+    pub tokens: Option<u64>,
+    #[arg(long = "wall-minutes")]
+    pub wall_minutes: Option<u64>,
+    #[arg(long = "max-source-refs")]
+    pub max_source_refs: Option<u64>,
+    #[arg(long = "max-files")]
+    pub max_files: Option<u64>,
+    #[arg(long)]
+    pub subagents: Option<u64>,
+    #[arg(long, help = "Print only the maintenance id")]
+    pub id_only: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct MemoryScorerArgs {
+    #[command(subcommand)]
+    pub command: MemoryScorerCommand,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum MemoryScorerCommand {
+    #[command(about = "Attach an inline scorer contract file to memory/candidate.yml")]
+    Attach {
+        id: String,
+        #[arg(long = "contract-file", value_name = "PATH")]
+        contract_file: PathBuf,
+    },
+}
+
+#[derive(Debug, Args)]
+pub struct MemorySuggestArgs {
+    #[command(subcommand)]
+    pub command: MemorySuggestCommand,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum MemorySuggestCommand {
+    #[command(about = "List Memory suggestions")]
+    List {
+        #[arg(long, help = "Include dismissed, created, and expired suggestions")]
+        all: bool,
+    },
+    #[command(about = "Create or upsert a visible Memory suggestion")]
+    Create {
+        #[arg(
+            long = "source-ref",
+            help = "Source ref as kind:id or kind:path=<path>"
+        )]
+        source_ref: Vec<String>,
+        #[arg(long = "signal-type")]
+        signal_type: String,
+        #[arg(long)]
+        summary: String,
+        #[arg(long = "scope-kind", default_value = "repo")]
+        scope_kind: String,
+        #[arg(long = "scope-ref")]
+        scope_ref: Vec<String>,
+        #[arg(long = "target-surface", default_value = "memory_note")]
+        target_surface: String,
+        #[arg(long = "dedupe-key")]
+        dedupe_key: Option<String>,
+        #[arg(long = "expires-at")]
+        expires_at: Option<String>,
+    },
+    #[command(about = "Dismiss an open Memory suggestion")]
+    Dismiss {
+        id: String,
+        #[arg(long)]
+        reason: String,
+    },
+}
+
 #[derive(Debug, Subcommand)]
 pub enum QaCommand {
     #[command(about = "Write a feature QA baseline from explicit observed behavior")]
     Baseline {
         id: String,
-        #[arg(long, help = "Observed current behavior for the baseline scenario")]
-        observed: String,
+        #[arg(
+            long,
+            allow_hyphen_values = true,
+            help = "Observed current behavior for the baseline scenario"
+        )]
+        observed: Option<String>,
+        #[arg(
+            long = "observed-file",
+            value_name = "PATH",
+            help = "Read observed baseline evidence from a file"
+        )]
+        observed_file: Option<PathBuf>,
+        #[arg(
+            long = "observed-stdin",
+            help = "Read observed baseline evidence from stdin"
+        )]
+        observed_stdin: bool,
     },
     #[command(about = "Append counting QA slice evidence for baseline scenarios")]
     Slice {
         id: String,
         #[arg(long = "scenario", help = "Baseline scenario id, e.g. bl-001")]
         scenario: Vec<String>,
-        #[arg(long, help = "Observed slice evidence")]
-        observed: String,
+        #[arg(long, allow_hyphen_values = true, help = "Observed slice evidence")]
+        observed: Option<String>,
+        #[arg(
+            long = "observed-file",
+            value_name = "PATH",
+            help = "Read observed slice evidence from a file"
+        )]
+        observed_file: Option<PathBuf>,
+        #[arg(
+            long = "observed-stdin",
+            help = "Read observed slice evidence from stdin"
+        )]
+        observed_stdin: bool,
+    },
+}
+
+#[derive(Debug, Args)]
+pub struct ScorerArgs {
+    #[command(subcommand)]
+    pub command: ScorerCommand,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ScorerCommand {
+    #[command(about = "Run a typed scorer contract reference")]
+    Run { contract_ref: String },
+    #[command(about = "Show one scorer receipt by path or memory-id#receipt-id")]
+    Show { receipt_ref: String },
+    #[command(about = "List scorer receipts for a Memory card")]
+    List {
+        #[arg(long = "memory", value_name = "MEMORY_ID")]
+        memory: String,
     },
 }
 
@@ -1471,7 +1688,7 @@ pub struct NoteArgs {
 
 #[derive(Debug, Args)]
 pub struct CreateArgs {
-    /// Card type: feature, custom, progress, task, bug, chore, idea, or decision.
+    /// Card type: feature, custom, progress, memory, task, bug, chore, idea, or decision.
     #[arg(short = 't', long = "type", value_name = "TYPE")]
     pub card_type: String,
     /// One or more card titles; each title mints a card. A single title is the
@@ -1999,6 +2216,8 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Feature(args) => feature::run(args),
         RootCommand::Qa(args) => qa::run(args),
         RootCommand::Grep(args) => grep::run(args),
+        RootCommand::Memory(args) => memory::run(args),
+        RootCommand::Scorer(args) => scorer::run(args),
         RootCommand::Decision(args) => decision::run(args),
         RootCommand::Card(args) => match args.command {
             CardCommand::Ready(args) => card::ready(args),

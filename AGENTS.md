@@ -172,6 +172,7 @@ Children:
 - [src/foundation/core/AGENTS.md](src/foundation/core/AGENTS.md)
 - [src/interfaces/cli/AGENTS.md](src/interfaces/cli/AGENTS.md)
 - [src/operations/AGENTS.md](src/operations/AGENTS.md)
+- [src/tui/AGENTS.md](src/tui/AGENTS.md)
 - [tests/AGENTS.md](tests/AGENTS.md)
 
 Managed by `init-deep`. Edit outside this block.

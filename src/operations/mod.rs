@@ -9,6 +9,7 @@ pub mod feature_close;
 pub mod feature_prepare;
 pub mod harness;
 pub mod init;
+pub mod memory;
 pub mod migrate;
 pub mod sync;
 pub mod update;

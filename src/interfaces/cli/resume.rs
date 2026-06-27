@@ -12,6 +12,9 @@ use crate::foundation::core::time::utc_now_timestamp;
 use crate::interfaces::cli::{
     GitReadout, ResumeArgs, clean_worktree_note, git_readout, proof_concern_line, render_git_line,
 };
+use crate::operations::memory::{
+    self, ApprovedMemory, MemoryReadScope, MemoryReadSurface, MemorySuggestionHint,
+};
 
 const RESUME_SCHEMA: &str = "maestro.resume.v1";
 
@@ -80,6 +83,24 @@ fn build_resume_report(
         }),
     );
     let required_reads = required_reads(paths, selected_task.as_ref(), selected_feature.as_ref());
+    let approved_memory = memory::approved_memory(
+        paths,
+        MemoryReadSurface::Resume,
+        MemoryReadScope {
+            task_id: selected_task.as_ref().map(|task| task.id.clone()),
+            feature_id: selected_feature.as_ref().map(|feature| feature.id.clone()),
+            ..MemoryReadScope::default()
+        },
+    )?;
+    let memory_suggestions = memory::suggestion_hints(
+        paths,
+        MemoryReadSurface::Resume,
+        MemoryReadScope {
+            task_id: selected_task.as_ref().map(|task| task.id.clone()),
+            feature_id: selected_feature.as_ref().map(|feature| feature.id.clone()),
+            ..MemoryReadScope::default()
+        },
+    )?;
     let guardrails = vec![
         "preserve unrelated dirty files".to_string(),
         "do not commit planning or notes artifacts unless asked".to_string(),
@@ -121,6 +142,10 @@ fn build_resume_report(
         proof_concern,
         required_reads,
         guardrails,
+        approved_memory: approved_memory.memories,
+        approved_memory_omitted: approved_memory.omitted,
+        memory_suggestions: memory_suggestions.suggestions,
+        memory_suggestions_omitted: memory_suggestions.omitted,
         memory: memory_lines(paths),
         source_refs,
         write_path,
@@ -451,6 +476,20 @@ fn render_resume_report(report: &ResumeReport) -> String {
         write_list(&mut out, "memory", &report.memory);
         push_line(&mut out, "  full lid: .maestro/archive/cards/INDEX.md");
     }
+    if !report.approved_memory.is_empty() {
+        write_approved_memory(
+            &mut out,
+            &report.approved_memory,
+            report.approved_memory_omitted,
+        );
+    }
+    if !report.memory_suggestions.is_empty() {
+        write_memory_suggestions(
+            &mut out,
+            &report.memory_suggestions,
+            report.memory_suggestions_omitted,
+        );
+    }
     if let Some(full) = &report.full {
         write_list(&mut out, "prior decisions", &full.prior_decisions);
         write_list(&mut out, "last verified tasks", &full.last_verified_tasks);
@@ -474,6 +513,54 @@ fn write_list(out: &mut String, label: &str, values: &[String]) {
     push_line(out, format!("{label}:"));
     for value in values {
         push_line(out, format!("  - {value}"));
+    }
+}
+
+fn write_approved_memory(out: &mut String, memories: &[ApprovedMemory], omitted: usize) {
+    push_line(out, "approved memory:");
+    for memory in memories {
+        push_line(
+            out,
+            format!(
+                "  - {} scope={} risk={} {}",
+                memory.id,
+                memory.scope_kind.as_str(),
+                memory.risk.as_str(),
+                memory.summary
+            ),
+        );
+        push_line(out, format!("    show: {}", memory.show_command));
+    }
+    if omitted > 0 {
+        push_line(
+            out,
+            format!("  - {omitted} omitted; search with `maestro memory search <query>`"),
+        );
+    }
+}
+
+fn write_memory_suggestions(
+    out: &mut String,
+    suggestions: &[MemorySuggestionHint],
+    omitted: usize,
+) {
+    push_line(out, "memory suggestions:");
+    for suggestion in suggestions {
+        push_line(
+            out,
+            format!(
+                "  - {} sources={} {}",
+                suggestion.id, suggestion.source_count, suggestion.summary
+            ),
+        );
+        push_line(out, format!("    create: {}", suggestion.create_command));
+        push_line(out, format!("    dismiss: {}", suggestion.dismiss_command));
+    }
+    if omitted > 0 {
+        push_line(
+            out,
+            format!("  - {omitted} omitted; inspect with `maestro memory suggest list --all`"),
+        );
     }
 }
 
@@ -526,6 +613,10 @@ fn display_repo_relative(paths: &MaestroPaths, path: &Path) -> String {
         .unwrap_or(path)
         .display()
         .to_string()
+}
+
+fn is_zero(value: &usize) -> bool {
+    *value == 0
 }
 
 /// Whether the next verb resume would recommend is close/verify-shaped (the
@@ -602,6 +693,14 @@ struct ResumeReport {
     proof_concern: Option<String>,
     required_reads: Vec<String>,
     guardrails: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    approved_memory: Vec<ApprovedMemory>,
+    #[serde(skip_serializing_if = "is_zero")]
+    approved_memory_omitted: usize,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    memory_suggestions: Vec<MemorySuggestionHint>,
+    #[serde(skip_serializing_if = "is_zero")]
+    memory_suggestions_omitted: usize,
     /// Recent archive lid lines (SPEC-archive-memory-2 R3); empty when
     /// nothing has been archived.
     memory: Vec<String>,

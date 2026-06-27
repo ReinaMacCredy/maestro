@@ -6,7 +6,7 @@ Use this file with the parent [AGENTS.md](../AGENTS.md) and read `README.md` her
 - `state/` for snapshot types, snapshot building, and reducer logic
 - `app/` for preview-state and application wiring
 - `opentui/` for interactive loop, preview rendering, and components
-- `shared/` and `lib/` for TUI-only helpers
+- `shared/` for TUI-only helpers
 
 ## WHERE TO LOOK
 | Task | Location | Notes |

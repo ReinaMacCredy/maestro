@@ -6,8 +6,9 @@
 mod support;
 
 use std::fs;
+use std::io::Write;
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 use support::TestTempDir;
 
@@ -17,6 +18,26 @@ fn maestro(args: &[&str], cwd: &Path) -> std::process::Output {
         .current_dir(cwd)
         .output()
         .expect("invariant: compiled maestro binary should be runnable in integration tests")
+}
+
+fn maestro_with_stdin(args: &[&str], cwd: &Path, stdin: &str) -> std::process::Output {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_maestro"))
+        .args(args)
+        .current_dir(cwd)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("invariant: compiled maestro binary should be runnable in integration tests");
+    child
+        .stdin
+        .take()
+        .expect("invariant: stdin should be piped")
+        .write_all(stdin.as_bytes())
+        .expect("invariant: stdin should be writable");
+    child
+        .wait_with_output()
+        .expect("invariant: maestro process should exit")
 }
 
 fn stdout(output: std::process::Output, args: &[&str]) -> String {
@@ -62,6 +83,18 @@ fn init_and_author(repo: &Path, id: &str, title: &str) {
 
 fn feature_dir(repo: &Path, id: &str) -> std::path::PathBuf {
     repo.join(".maestro/cards").join(id)
+}
+
+fn raw_observed<'a>(contents: &'a str, label: &str) -> &'a str {
+    let start = format!("<!-- maestro:qa-observed:{label}:start -->\n");
+    let end = format!("<!-- maestro:qa-observed:{label}:end -->");
+    contents
+        .split_once(&start)
+        .expect("invariant: raw observed start marker should exist")
+        .1
+        .split_once(&end)
+        .expect("invariant: raw observed end marker should exist")
+        .0
 }
 
 fn write_baseline(repo: &Path, id: &str, position: usize, scenario_ids: &[&str]) {
@@ -199,6 +232,85 @@ fn qa_slice_helper_appends_counting_slice() {
     assert!(qa.contains("slices:"), "{qa}");
     assert!(qa.contains("bl-001"), "{qa}");
     assert!(qa.contains("slice evidence"), "{qa}");
+}
+
+#[test]
+fn qa_baseline_observed_file_preserves_frontmatter_verbatim() {
+    let temp = TestTempDir::new("maestro-qa-baseline-observed-file");
+    let repo = temp.path();
+    init_and_author(repo, "report-builder", "Report builder");
+    let observed = "---\nsource: pasted-agent-output\n---\n\nRan command\n$ maestro qa baseline\n";
+    let observed_path = repo.join("observed.txt");
+    fs::write(&observed_path, observed).expect("invariant: observed file should be writable");
+
+    let args = [
+        "qa",
+        "baseline",
+        "report-builder",
+        "--observed-file",
+        observed_path
+            .to_str()
+            .expect("invariant: observed path should be UTF-8"),
+    ];
+    let out = stdout(maestro(&args, repo), &args);
+
+    assert!(out.contains("recorded baseline"), "{out}");
+    let qa = fs::read_to_string(feature_dir(repo, "report-builder").join("qa.md"))
+        .expect("invariant: qa.md should be written");
+    assert_eq!(raw_observed(&qa, "baseline"), observed);
+}
+
+#[test]
+fn qa_slice_observed_stdin_preserves_frontmatter_verbatim() {
+    let temp = TestTempDir::new("maestro-qa-slice-observed-stdin");
+    let repo = temp.path();
+    init_and_author(repo, "report-builder", "Report builder");
+    write_baseline(repo, "report-builder", 0, &["bl-001"]);
+    let observed = "---\nsource: stdin\n---\n\nslice evidence with \"quotes\"\n";
+    let args = [
+        "qa",
+        "slice",
+        "report-builder",
+        "--scenario",
+        "bl-001",
+        "--observed-stdin",
+    ];
+    let out = stdout(maestro_with_stdin(&args, repo, observed), &args);
+
+    assert!(out.contains("recorded qa slice"), "{out}");
+    let qa = fs::read_to_string(feature_dir(repo, "report-builder").join("qa.md"))
+        .expect("invariant: qa.md should be readable");
+    assert_eq!(raw_observed(&qa, "slice"), observed);
+    assert!(qa.contains("evidence: ["), "{qa}");
+}
+
+#[test]
+fn qa_inline_option_like_observed_points_to_safe_forms() {
+    let temp = TestTempDir::new("maestro-qa-inline-option-like-observed");
+    let repo = temp.path();
+    init_and_author(repo, "report-builder", "Report builder");
+    let args = [
+        "qa",
+        "baseline",
+        "report-builder",
+        "--observed",
+        "---\nsource: pasted-frontmatter\n---",
+    ];
+    let stderr = assert_failure(maestro(&args, repo), &args);
+
+    assert!(stderr.contains("canonical inline:"), "{stderr}");
+    assert!(
+        stderr.contains("maestro qa baseline <ID> --observed \"<OBSERVED>\""),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains("maestro qa baseline <ID> --observed-file <PATH>"),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains("maestro qa baseline <ID> --observed-stdin"),
+        "{stderr}"
+    );
 }
 
 #[test]

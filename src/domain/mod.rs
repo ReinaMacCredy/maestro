@@ -11,6 +11,7 @@ pub mod harness;
 pub mod install;
 pub mod lean;
 pub mod loop_recipes;
+pub mod memory;
 pub mod playbook;
 pub mod proof;
 pub mod run;

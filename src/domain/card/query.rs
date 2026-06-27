@@ -691,6 +691,7 @@ mod tests {
         assert!(!CardType::Feature.workable());
         assert!(!CardType::Custom.workable());
         assert!(!CardType::Progress.workable());
+        assert!(!CardType::Memory.workable());
         assert!(!CardType::Idea.workable());
         assert!(!CardType::Decision.workable());
     }

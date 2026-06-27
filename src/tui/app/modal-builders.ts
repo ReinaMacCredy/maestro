@@ -250,10 +250,10 @@ function buildMemoryModal(
     title: "Memory",
     eyebrow: "Retired · see `maestro principle` for the durable-rule surface.",
     items: [
-      {
-        text: "The earlier memory subsystem (corrections, learnings, ratchet) was retired.",
-        tone: "muted" as const,
-      },
+        {
+          text: "The earlier memory subsystem (corrections, lessons, ratchet) was retired.",
+          tone: "muted" as const,
+        },
       { text: "Promoted principles live under `maestro principle list`." },
     ],
     footer: buildTabbedOverlayFooter(returnTarget),

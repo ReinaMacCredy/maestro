@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: 16b6ae1d88ee62d140407dcb7eedb8de47cadd434703f4ccc2318e5ddd77083a -->
+<!-- maestro:cli-reference-sha256: 228bd7e283794a7ce57c193b08299a11a629c6f56c93f05a1c8bac5a4b777920 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -60,8 +60,8 @@ a spelling not found here is outside this skill's CLI surface.
 
 ## maestro qa
 
-- `maestro qa baseline <ID> --observed <OBSERVED>` -- Write a feature QA baseline from explicit observed behavior
-- `maestro qa slice <ID> [--scenario <SCENARIO>]... --observed <OBSERVED>` -- Append counting QA slice evidence for baseline scenarios
+- `maestro qa baseline <ID> [--observed <OBSERVED>] [--observed-file <PATH>] [--observed-stdin]` -- Write a feature QA baseline from explicit observed behavior
+- `maestro qa slice <ID> [--scenario <SCENARIO>]... [--observed <OBSERVED>] [--observed-file <PATH>] [--observed-stdin]` -- Append counting QA slice evidence for baseline scenarios
 
 ## maestro card
 

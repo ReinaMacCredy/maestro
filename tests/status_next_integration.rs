@@ -1450,6 +1450,7 @@ fn feature_prepare_builds_sequenced_queue_and_claim_next_shows_chain() {
             "## Task Plan\n",
             "\n",
             "- Task T1: Implement protected read handlers\n",
+            "  - covers: ac-1\n",
             "  - check: GET /articles returns compact paginated records\n",
             "  - check: missing or invalid demo API key is rejected\n",
             "\n",
@@ -1501,23 +1502,6 @@ fn feature_prepare_builds_sequenced_queue_and_claim_next_shows_chain() {
         prepare.contains("next: maestro task claim --next"),
         "{prepare}"
     );
-
-    // The plan declared no covers, and prepare accepts every task on creation,
-    // so the uncovered warning must never point at `task set --covers`; that
-    // verb is refused for every task prepare just made.
-    assert!(prepare.contains("have no covering task: ac-1"), "{prepare}");
-    assert!(
-        prepare.contains(
-            "maestro task create \"<title>\" --feature serverless-news-backend --covers <ac-id>"
-        ),
-        "{prepare}"
-    );
-    assert!(
-        prepare
-            .contains("maestro feature verify serverless-news-backend --prove <ac-id> --evidence"),
-        "{prepare}"
-    );
-    assert!(!prepare.contains("task set"), "{prepare}");
 
     let covers_args = ["task", "set", t1.as_str(), "--covers", "ac-1"];
     let locked = maestro(repo, &covers_args);
@@ -1635,6 +1619,7 @@ fn feature_prepare_does_not_infer_blockers_and_keeps_all_blocked_feature_ready()
         &vague_plan,
         concat!(
             "## Task T1: Scaffold dependencies\n",
+            "covers: ac-1\n",
             "check: package manifest mentions dependency approval required\n",
         ),
     )
@@ -1677,6 +1662,7 @@ fn feature_prepare_does_not_infer_blockers_and_keeps_all_blocked_feature_ready()
         &blocked_plan,
         concat!(
             "## Task T1: Scaffold approved dependencies\n",
+            "covers: ac-1\n",
             "check: package manifest exists\n",
             "blocker: dependency approval required\n",
         ),
