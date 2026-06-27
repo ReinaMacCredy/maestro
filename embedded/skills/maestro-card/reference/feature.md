@@ -10,7 +10,8 @@ the QA baseline and slice evidence in `qa.md` prove the feature gates.
 - Freeze a proposed contract: `accept`.
 - Turn an accepted contract into work cards: `prepare`.
 - Grow a frozen contract: `amend`.
-- Finish or retire the feature: `close`, `cancel`, `archive`, `unarchive`.
+- Finish or retire the feature: `close`, `cancel`, `archive`,
+  `auto-archive`, `unarchive`.
 
 ## Do
 
@@ -34,7 +35,8 @@ maestro feature accept            # -> ready, requires qa-baseline
 maestro feature prepare --draft   # reviewable child-task plan
 maestro feature prepare --from    # create/explore/accept tasks from a plan file
 maestro feature close              # -> closed, requires qa-slice; --outcome required
-maestro card archive <id>         # terminal features only; archives children too
+maestro card archive <id>         # explicit terminal archive; archives children too
+maestro feature auto-archive <id> --authority-ref <ref> --tested-head <sha> --qa-result pass --qa-evidence "<proof>" --run <run> --multi-agent "<disposition>"
 ```
 
 Design owns proposed-contract authoring. After accept, use `feature amend` to
@@ -111,6 +113,17 @@ Close passes only when:
 Use `accept --dry-run` or `close --dry-run` to preview a gate without changing
 state.
 
+Auto-archive is a separate evidence-gated archive action, not a side effect of
+`close` or `cancel`. Use it only when a durable user/SPEC/run authority says
+archive is preauthorized and the delivered commit hash is known. The helper
+must see the exact current `HEAD` in `--tested-head`, a passing QA verdict,
+bounded QA evidence, a clean worktree, and a multi-agent/worktree disposition
+(`none`, or workers merged back and conflicts clear). It then runs the normal
+terminal feature archive preflight, writes an `auto_archive` run event, and
+adds an archive-index receipt that records authority, tested head, QA result,
+run id, event hash/path, archive path, and restore command. If any check fails,
+stop and report the blocker instead of falling back to manual archive.
+
 ## Fan-out
 
 Use feature fan-out only when 2+ ready work cards are independent. Full
@@ -139,4 +152,6 @@ show feature-fan-out`.
 
 Next: accepted feature -> [work.md](work.md); all children verified ->
 [qa-slice.md](qa-slice.md), then `feature close --outcome "<one line>"`;
-closed -> `maestro card archive <id>` if you mean to retire it.
+closed -> `maestro card archive <id>` for explicit retirement, or
+`maestro feature auto-archive <id> ...` when the commit/QA authority gate is
+already satisfied.

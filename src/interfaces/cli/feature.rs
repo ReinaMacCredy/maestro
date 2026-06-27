@@ -1,13 +1,21 @@
+use std::path::Path;
+
 use anyhow::{Result, bail};
+use serde_json::{Value, json};
 
 use crate::domain::card;
 use crate::domain::decisions;
 use crate::domain::feature::{
     self, ContractAdditions, ContractChangeCounts, ContractEdits, FeatureStatus,
 };
+use crate::domain::run;
 use crate::domain::task;
+use crate::foundation::core::git;
+use crate::foundation::core::hash::sha256_prefixed;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::safe_write::write_string_atomic;
+use crate::foundation::core::schema::EVENT_SCHEMA_VERSION;
+use crate::foundation::core::session::agent_runtime_from_env;
 use crate::foundation::core::table;
 use crate::foundation::core::time::{render_timestamp, timestamp_nanos, utc_now_timestamp};
 use crate::interfaces::cli::{
@@ -211,6 +219,28 @@ pub fn run(args: FeatureArgs) -> Result<()> {
             closed,
             dry_run,
         } => archive_features(&paths, id, closed, dry_run),
+        FeatureCommand::AutoArchive {
+            id,
+            authority_ref,
+            tested_head,
+            qa_result,
+            qa_evidence,
+            run,
+            multi_agent,
+            dry_run,
+        } => auto_archive_feature(
+            &paths,
+            AutoArchiveArgs {
+                id,
+                authority_ref,
+                tested_head,
+                qa_result,
+                qa_evidence,
+                run_id: run,
+                multi_agent,
+                dry_run,
+            },
+        ),
         FeatureCommand::Unarchive { id } => match feature::unarchive_feature(&paths, &id) {
             Ok(note) => {
                 print_feature_unarchive_note(&id, &note);
@@ -637,6 +667,260 @@ fn archive_features(
             "provide a feature id or --closed\n  maestro feature archive <id>\n  maestro feature archive --closed"
         ),
     }
+}
+
+#[derive(Debug)]
+struct AutoArchiveArgs {
+    id: String,
+    authority_ref: String,
+    tested_head: String,
+    qa_result: String,
+    qa_evidence: Vec<String>,
+    run_id: String,
+    multi_agent: String,
+    dry_run: bool,
+}
+
+fn auto_archive_feature(paths: &MaestroPaths, args: AutoArchiveArgs) -> Result<()> {
+    let id = required_cli_value("feature id", &args.id)?;
+    let authority_ref = required_cli_value("--authority-ref", &args.authority_ref)?;
+    let tested_head = required_cli_value("--tested-head", &args.tested_head)?;
+    let qa_result = required_cli_value("--qa-result", &args.qa_result)?;
+    let run_id = required_cli_value("--run", &args.run_id)?;
+    let multi_agent = required_cli_value("--multi-agent", &args.multi_agent)?;
+    let qa_evidence = required_cli_values("--qa-evidence", args.qa_evidence)?;
+
+    if !qa_passed(&qa_result) {
+        bail!("cannot auto-archive {id} — --qa-result must be pass/passed, got `{qa_result}`");
+    }
+    if qa_evidence.is_empty() {
+        bail!("cannot auto-archive {id} — at least one --qa-evidence item is required");
+    }
+
+    let snapshot = git::snapshot(paths.repo_root())?;
+    let Some(current_head) = snapshot.head.as_deref() else {
+        bail!("cannot auto-archive {id} — git HEAD is unborn; commit the delivered work first");
+    };
+    if current_head != tested_head {
+        bail!(
+            "cannot auto-archive {id} — tested head {tested_head} does not match current HEAD {current_head}"
+        );
+    }
+    if snapshot.dirty {
+        bail!(
+            "cannot auto-archive {id} — worktree is dirty at {current_head} ({} .maestro path(s), {} other path(s)); commit or clean before archive",
+            snapshot.maestro_dirty,
+            snapshot.code_other_dirty
+        );
+    }
+
+    let before_state = feature::status(paths, &id)
+        .map(|status| status.as_str().to_string())
+        .unwrap_or_else(|_| "<unknown>".to_string());
+
+    if args.dry_run {
+        let report = match feature::archive_feature(paths, &id, true) {
+            Ok(report) => report,
+            Err(error) => bail!("{}", feature_archive_error_message(&id, &error.to_string())),
+        };
+        println!("dry-run: auto-archive preflight passed for {id}");
+        println!("  authority: {authority_ref}");
+        println!("  tested head: {current_head}");
+        println!("  qa: {qa_result} ({} evidence item(s))", qa_evidence.len());
+        println!("  multi-agent/worktree: {multi_agent}");
+        print_feature_archive_note(&id, &report, true);
+        println!("writes: none");
+        return Ok(());
+    }
+
+    let report = match feature::archive_feature(paths, &id, false) {
+        Ok(report) => report,
+        Err(error) => bail!("{}", feature_archive_error_message(&id, &error.to_string())),
+    };
+    let post_archive_check = post_archive_check(paths, &id)?;
+    let archive_path = repo_relative_path(paths, &paths.archive_cards_dir().join(&id));
+    let restore_command = format!("maestro feature unarchive {id}");
+    let event_path = format!(".maestro/runs/{}/events.jsonl", run::run_dir_name(&run_id));
+    let event_id = format!(
+        "auto_archive:{id}:{}:{}",
+        short_commit(current_head),
+        utc_now_timestamp()
+    );
+    let command = auto_archive_command(&id, &authority_ref, current_head, &qa_result, &run_id);
+    let mut event = auto_archive_event(AutoArchiveEventParts {
+        event_id: &event_id,
+        id: &id,
+        authority_ref: &authority_ref,
+        current_head,
+        qa_result: &qa_result,
+        qa_evidence: &qa_evidence,
+        run_id: &run_id,
+        multi_agent: &multi_agent,
+        before_state: &before_state,
+        command: &command,
+        report: &report,
+        archive_path: &archive_path,
+        restore_command: &restore_command,
+        post_archive_check: &post_archive_check,
+        snapshot_maestro_dirty: snapshot.maestro_dirty,
+        snapshot_code_other_dirty: snapshot.code_other_dirty,
+    });
+    run::insert_agent_runtime(&mut event, agent_runtime_from_env());
+    let event_hash = sha256_prefixed(&serde_json::to_vec(&event)?);
+    event
+        .as_object_mut()
+        .expect("invariant: auto_archive event is an object")
+        .insert("event_hash".to_string(), json!(event_hash.clone()));
+
+    if let Err(error) = run::append_manual_event(paths, &run_id, &event) {
+        bail!(
+            "partial auto-archive for {id}: feature archived, but auto_archive run event failed: {error:#}\n  recovery: record the archive event manually in {event_path}, then append the archive index receipt"
+        );
+    }
+
+    let receipt = feature::AutoArchiveReceipt {
+        feature_id: id.clone(),
+        tested_head: current_head.to_string(),
+        authority_ref: authority_ref.clone(),
+        qa_result: qa_result.clone(),
+        run_id: run_id.clone(),
+        event_id: event_id.clone(),
+        event_hash: event_hash.clone(),
+        event_path: event_path.clone(),
+        archive_path: archive_path.clone(),
+        restore_command: restore_command.clone(),
+    };
+    let index_line = match feature::append_auto_archive_receipt(paths, &receipt) {
+        Ok(line) => line,
+        Err(error) => bail!(
+            "partial auto-archive for {id}: feature archived and run event was written, but archive index receipt failed: {error:#}\n  recovery: append a receipt to .maestro/archive/cards/INDEX.md for event {event_id} ({event_hash})"
+        ),
+    };
+
+    println!("auto-archived {id}");
+    println!("  authority: {authority_ref}");
+    println!("  tested head: {current_head}");
+    println!("  qa: {qa_result} ({} evidence item(s))", qa_evidence.len());
+    println!("  multi-agent/worktree: {multi_agent}");
+    println!("  run event: {event_path} ({event_hash})");
+    println!("  archive: {archive_path}");
+    println!("  restore: {restore_command}");
+    println!("  index: {}", index_line.trim());
+    Ok(())
+}
+
+struct AutoArchiveEventParts<'a> {
+    event_id: &'a str,
+    id: &'a str,
+    authority_ref: &'a str,
+    current_head: &'a str,
+    qa_result: &'a str,
+    qa_evidence: &'a [String],
+    run_id: &'a str,
+    multi_agent: &'a str,
+    before_state: &'a str,
+    command: &'a str,
+    report: &'a feature::FeatureArchiveReport,
+    archive_path: &'a str,
+    restore_command: &'a str,
+    post_archive_check: &'a str,
+    snapshot_maestro_dirty: usize,
+    snapshot_code_other_dirty: usize,
+}
+
+fn auto_archive_event(parts: AutoArchiveEventParts<'_>) -> Value {
+    json!({
+        "schema_version": EVENT_SCHEMA_VERSION,
+        "ts": utc_now_timestamp(),
+        "event_type": "auto_archive",
+        "event_id": parts.event_id,
+        "session_id": parts.run_id,
+        "feature_id": parts.id,
+        "action": "auto_archive",
+        "target_kind": "feature",
+        "target_id": parts.id,
+        "authority_ref": parts.authority_ref,
+        "tested_head": parts.current_head,
+        "commit": parts.current_head,
+        "qa_result": parts.qa_result,
+        "qa_evidence": parts.qa_evidence,
+        "multi_agent_disposition": parts.multi_agent,
+        "preflight_result": {
+            "git_head": parts.current_head,
+            "git_dirty": false,
+            "maestro_dirty": parts.snapshot_maestro_dirty,
+            "code_other_dirty": parts.snapshot_code_other_dirty,
+            "archive_preflight": "passed"
+        },
+        "archive_receipt": {
+            "note": parts.report.note,
+            "child_tasks": parts.report.child_tasks,
+            "archive_path": parts.archive_path,
+            "restore_command": parts.restore_command,
+            "archive_index": ".maestro/archive/cards/INDEX.md"
+        },
+        "post_archive_check": parts.post_archive_check,
+        "archive_path": parts.archive_path,
+        "restore_command": parts.restore_command,
+        "before_state": parts.before_state,
+        "command": parts.command,
+        "result": "archived",
+        "after_state": "archived"
+    })
+}
+
+fn post_archive_check(paths: &MaestroPaths, id: &str) -> Result<String> {
+    feature::show_archived(paths, id)?;
+    if feature::ensure_exists(paths, id).is_ok() {
+        bail!("post-archive check failed for {id}: live feature still exists");
+    }
+    Ok("archived-visible; live feature absent".to_string())
+}
+
+fn required_cli_value(name: &str, value: &str) -> Result<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        bail!("{name} must not be empty");
+    }
+    Ok(trimmed.to_string())
+}
+
+fn required_cli_values(name: &str, values: Vec<String>) -> Result<Vec<String>> {
+    values
+        .into_iter()
+        .map(|value| required_cli_value(name, &value))
+        .collect()
+}
+
+fn qa_passed(value: &str) -> bool {
+    matches!(
+        value.trim().to_ascii_lowercase().as_str(),
+        "pass" | "passed"
+    )
+}
+
+fn auto_archive_command(
+    id: &str,
+    authority_ref: &str,
+    tested_head: &str,
+    qa_result: &str,
+    run_id: &str,
+) -> String {
+    format!(
+        "maestro feature auto-archive {id} --authority-ref {authority_ref} --tested-head {tested_head} --qa-result {qa_result} --run {run_id}"
+    )
+}
+
+fn repo_relative_path(paths: &MaestroPaths, path: &Path) -> String {
+    path.strip_prefix(paths.repo_root())
+        .ok()
+        .unwrap_or(path)
+        .display()
+        .to_string()
+}
+
+fn short_commit(commit: &str) -> String {
+    commit.chars().take(12).collect()
 }
 
 /// Bulk-archive every closed (terminal) feature (§5 L3). Collect-and-continue:

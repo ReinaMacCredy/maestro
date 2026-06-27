@@ -42,3 +42,14 @@ contracts:
       - tool_input_hash
       - file_path             # edited path kept from Edit/Write tool_input for warm-file overlap
       - commit
+      - event_id
+      - event_hash
+      - tested_head
+      - qa_result
+      - qa_evidence
+      - multi_agent_disposition
+      - preflight_result
+      - archive_receipt
+      - post_archive_check
+      - archive_path
+      - restore_command

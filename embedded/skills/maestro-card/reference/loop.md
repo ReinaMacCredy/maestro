@@ -8,8 +8,10 @@
 >> memory: the feature and cards you're on now, then `maestro card ready`, then
 >> proposed/ready features you can accept or prepare.
 >> HARD STOP: any push/tag/publish/release/archive action not granted by an
->> explicit bounded run-scoped ship authority, destructive git, secret rotation,
->> or a platform/tool approval failure. End with the autonomy report.
+>> explicit bounded run-scoped ship authority; archive also requires explicit
+>> auto-archive authority and a passing helper preflight. HARD STOP:
+>> destructive git, secret rotation, or a platform/tool approval failure. End
+>> with the autonomy report.
 
 The away mode of the work loop: one long-lived session carries the current
 work forward and works the card store until done while the human is away. Per
@@ -111,7 +113,11 @@ the same records and stop conditions.
    publish, archive, or external announcement unless the original prompt or
    accepted card contract granted explicit run-scoped ship authority naming
    scope, target, allowed external actions, hard stops, and required evidence.
-   Absent, partial, stale, or overbroad authority fails closed.
+   Archive additionally requires the kickoff, SPEC, or run policy to explicitly
+   preauthorize auto-archive and
+   `maestro feature auto-archive <id> --authority-ref <ref> --tested-head <sha> --qa-result pass --qa-evidence "<proof>" --run <run> --multi-agent "<disposition>"`
+   to pass against the post-merge target `HEAD`. Absent, partial, stale, or
+   overbroad authority fails closed.
 8. When nothing is workable, acceptable, preparable, unblockable, or closable
    inside the hard-stop boundary, stop and write the report.
 
@@ -133,11 +139,15 @@ accepted contract or blocker authority, `claim`, work, `complete`, `verify`,
 `feature close` for locally verified features.
 
 Night NEVER without explicit bounded run-scoped ship authority: push, tag,
-release, publish, archive, or any external ship action. Night NEVER even with
-ship authority: destructive git operations, secret rotation, bypassing a
-platform/tool approval failure, or hand-editing `card.yaml` or guarded
-sidecars. Platform/tool approval failures are hard stops even under full local
-autonomy.
+release, publish, archive, or any external ship action. Archive authority must
+also be explicit auto-archive authority. Night NEVER even with ship authority:
+destructive git operations, secret rotation, bypassing a platform/tool approval
+failure, or hand-editing `card.yaml` or guarded sidecars. Platform/tool
+approval failures are hard stops even under full local autonomy.
+When auto-archive is preauthorized, the owning/orchestrator session may archive
+only after worker worktrees are merged back, relevant conflicts are clear, QA
+evidence names the exact current `HEAD`, and the helper writes both the
+`auto_archive` run event and archive-index receipt.
 
 If the autonomous worker fixes an issue discovered during the loop, it must
 record a durable recurrence guard before completion or ship: a regression
@@ -168,7 +178,8 @@ The session's final message is the report the human reads when they return:
 The report is a summary, not the record: notes, proof, card state, QA state,
 and run events carry the durable evidence. `maestro query run` and
 `maestro query run --json` rebuild the compact autonomy report from
-`autonomy_start` and `autonomy_action` events plus normal card state.
+`autonomy_start`, `autonomy_action`, and `auto_archive` events plus normal card
+state.
 
 ## Scheduler Variant
 
@@ -197,7 +208,8 @@ report from a dead firing's memory. Maestro itself never schedules anything.
 
 ## Hand-off
 
-On return, human: review the report and ledger, inspect local closes, unblock
-or reassign any hard-stop cards, and decide whether to push, tag, release,
-publish, or archive. Per-unit method -> [work.md](work.md); proof ->
-[verify.md](verify.md).
+On return, human: review the report and ledger, inspect local closes and any
+auto-archive receipts, unblock or reassign any hard-stop cards, and decide
+whether to push, tag, release, publish, or archive anything outside the
+preauthorized auto-archive gate. Per-unit method -> [work.md](work.md); proof
+-> [verify.md](verify.md).
