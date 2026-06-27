@@ -162,6 +162,20 @@ const MAESTRO_CARD_COMMANDS: &[&str] = &[
     "maestro feature unarchive",
     "maestro qa baseline",
     "maestro qa slice",
+    "maestro memory create",
+    "maestro memory list",
+    "maestro memory show",
+    "maestro memory search",
+    "maestro memory promote",
+    "maestro memory maintain",
+    "maestro memory dream",
+    "maestro memory scorer attach",
+    "maestro memory suggest list",
+    "maestro memory suggest create",
+    "maestro memory suggest dismiss",
+    "maestro scorer run",
+    "maestro scorer show",
+    "maestro scorer list",
     "maestro card ready",
     "maestro card list",
     "maestro card dep add",
@@ -501,6 +515,8 @@ mod tests {
         assert!(card.contains("maestro feature finalize <ID>"), "{card}");
         assert!(card.contains("maestro feature prepare <ID>"), "{card}");
         assert!(card.contains("maestro qa slice <ID>"), "{card}");
+        assert!(card.contains("maestro memory"), "{card}");
+        assert!(card.contains("maestro scorer"), "{card}");
         assert!(card.contains("maestro card graph"), "{card}");
         assert!(!card.contains("maestro init"), "{card}");
         assert!(!card.contains("maestro mcp serve"), "{card}");

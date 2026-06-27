@@ -43,6 +43,16 @@ fn memory_suggest_and_create_flow_writes_visible_artifacts() {
     let temp = cards_repo("memory-suggest-create");
     let repo = temp.path();
 
+    let generic_memory = maestro(repo, &["card", "create", "-t", "memory", "Invalid Memory"]);
+    assert!(
+        !generic_memory.status.success()
+            && String::from_utf8_lossy(&generic_memory.stderr)
+                .contains("memory cards require Memory sidecars"),
+        "generic card create must not create invalid Memory cards\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&generic_memory.stdout),
+        String::from_utf8_lossy(&generic_memory.stderr)
+    );
+
     let created = run(
         repo,
         &[
@@ -309,6 +319,13 @@ surfaces:
     assert_eq!(
         lease_json["memory_suggestions"][0]["create_command"].as_str(),
         Some(expected_create_command.as_str())
+    );
+    assert!(
+        lease_json["worker_prompt"]
+            .as_str()
+            .unwrap_or("")
+            .contains("Approved Memory is advisory only"),
+        "worker prompt marks Memory as advisory:\n{lease}"
     );
     assert!(
         lease_json["worker_prompt"]

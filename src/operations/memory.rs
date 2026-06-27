@@ -1,8 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
+use std::io::Read;
 use std::path::{Component, Path, PathBuf};
-use std::process::Command;
-use std::time::Instant;
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
@@ -21,6 +22,7 @@ use crate::foundation::core::fs::{
     append_text_file, ensure_dir, read_to_string_if_exists, write_string_if_unchanged,
 };
 use crate::foundation::core::hash::sha256_hex;
+use crate::foundation::core::managed_path::{SymlinkPolicy, managed_path};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::safe_write::write_string_atomic;
 use crate::foundation::core::time::utc_now_timestamp;
@@ -29,6 +31,7 @@ pub const SUGGESTION_SCHEMA_VERSION: &str = "maestro.memory.suggestion.v1";
 pub const SCORER_RECEIPT_SCHEMA_VERSION: &str = "maestro.memory.scorer_receipt.v1";
 pub const TARGET_REGISTRY_SCHEMA_VERSION: &str = "maestro.memory.target_registry.v1";
 pub const PROMOTION_PLAN_SCHEMA_VERSION: &str = "maestro.memory.promotion_plan.v1";
+const COMMAND_SCORER_TIMEOUT: Duration = Duration::from_secs(60);
 pub const MAINTENANCE_CONTRACT_SCHEMA_VERSION: &str = "maestro.memory.maintenance_contract.v1";
 
 #[derive(Clone, Debug, PartialEq)]
@@ -734,6 +737,7 @@ pub fn create_memory(
     now: &str,
 ) -> Result<CreateMemoryOutcome> {
     let (seed, mut snapshot) = resolve_create_seed(paths, &request, now)?;
+    validate_source_refs("memory create", &seed.source_refs)?;
     let summary = request
         .summary
         .as_deref()
@@ -818,6 +822,7 @@ pub fn run_scorer(paths: &MaestroPaths, contract_ref: &str, now: &str) -> Result
     let (memory_id, selector) = contract_ref.split_once('#').ok_or_else(|| {
         anyhow::anyhow!("scorer ref must look like <memory-id>#gate.scorer_contract")
     })?;
+    validate_memory_id(memory_id)?;
     if selector != "gate.scorer_contract" {
         bail!("unsupported scorer selector {selector:?}; expected gate.scorer_contract");
     }
@@ -829,6 +834,29 @@ pub fn run_scorer(paths: &MaestroPaths, contract_ref: &str, now: &str) -> Result
         bail!("memory candidate {memory_id} has no gate.scorer_contract");
     };
     let contract = parse_scorer_contract(contract_value)?;
+    if contract.scorer_type != ScorerType::Schema {
+        let (_registry_raw, _registry_hash, registry) = load_target_registry(paths)?;
+        let target_contract = target_contract(&registry, candidate.memory.target_surface)
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "target registry {} has no contract for {}",
+                    target_registry_path(paths).display(),
+                    candidate.memory.target_surface.as_str()
+                )
+            })?;
+        validate_target_contract(candidate.memory.target_surface, target_contract)?;
+        validate_candidate_target_allowed(&candidate)?;
+        if !target_contract
+            .allowed_scorer_types
+            .contains(&contract.scorer_type)
+        {
+            bail!(
+                "{} scorer is not allowed by target registry for {}",
+                contract.scorer_type.as_str(),
+                candidate.memory.target_surface.as_str()
+            );
+        }
+    }
     let contract_yaml =
         serde_yaml::to_string(contract_value).context("failed to serialize scorer contract")?;
     let contract_hash = format!("sha256:{}", sha256_hex(contract_yaml.as_bytes()));
@@ -869,6 +897,7 @@ pub fn list_scorer_receipts(
     paths: &MaestroPaths,
     memory_id: &str,
 ) -> Result<Vec<(ScorerReceipt, PathBuf)>> {
+    validate_memory_id(memory_id)?;
     let dir = crate::domain::memory::memory_dir(paths, memory_id).join(RECEIPTS_DIR);
     let mut receipts = Vec::new();
     let Ok(entries) = fs::read_dir(&dir) else {
@@ -891,11 +920,12 @@ pub fn list_scorer_receipts(
 }
 
 pub fn show_scorer_receipt(paths: &MaestroPaths, receipt_ref: &str) -> Result<ScorerReceipt> {
-    let path = if let Some((memory_id, receipt_id)) = receipt_ref.split_once('#') {
-        receipt_path(paths, memory_id, receipt_id)
-    } else {
-        PathBuf::from(receipt_ref)
+    let Some((memory_id, receipt_id)) = receipt_ref.split_once('#') else {
+        bail!("scorer receipt ref must look like <memory-id>#<receipt-id>");
     };
+    validate_memory_id(memory_id)?;
+    validate_artifact_id("receipt id", receipt_id)?;
+    let path = receipt_path(paths, memory_id, receipt_id);
     let raw = fs::read_to_string(&path)
         .with_context(|| format!("failed to read scorer receipt {}", path.display()))?;
     serde_json::from_str(&raw)
@@ -926,6 +956,7 @@ pub fn plan_promotion(
         contract.required_gate,
         candidate.memory.gate.review_required || contract.review_required,
     );
+    ensure_gate_not_forbidden(required_gate, &request.memory_id)?;
     let receipt_ref = resolve_required_receipt(
         paths,
         &candidate,
@@ -1063,7 +1094,9 @@ pub fn approved_memory(
             continue;
         }
         let lesson_path = crate::domain::memory::memory_dir(paths, &card.id).join(LESSON_FILE);
-        let lesson = fs::read_to_string(&lesson_path).unwrap_or_default();
+        let Ok(lesson) = fs::read_to_string(&lesson_path) else {
+            continue;
+        };
         if let Some(query) = scope.query.as_deref()
             && !memory_matches_query(&card, &candidate, &lesson, query)
         {
@@ -1108,6 +1141,7 @@ fn apply_promotion_inner(
     promotion_id: &str,
     now: &str,
 ) -> Result<ApplyPromotionOutcome> {
+    validate_artifact_id("promotion id", promotion_id)?;
     let plan_path = promotion_plan_path(paths, promotion_id);
     let plan_raw = fs::read_to_string(&plan_path)
         .with_context(|| format!("failed to read promotion plan {}", plan_path.display()))?;
@@ -1211,45 +1245,70 @@ fn apply_promotion_inner(
     ensure_dir(target_abs.parent().expect("target path has a parent"))?;
     write_string_if_unchanged(&target_abs, target_raw.as_deref(), &target_contents)?;
 
-    let mut card = resolved.card.clone();
-    card.status = "verified".to_string();
-    card.updated_at = now.to_string();
-    card.claimed_by = None;
-    card.claimed_at = None;
-    store::save_resolved(&card, &resolved)?;
+    let after_target_result = (|| -> Result<()> {
+        let mut card = resolved.card.clone();
+        card.status = "verified".to_string();
+        card.updated_at = now.to_string();
+        card.claimed_by = None;
+        card.claimed_at = None;
+        store::save_resolved(&card, &resolved)?;
 
-    candidate.memory.lifecycle = MemoryLifecycle::Promoted;
-    candidate.memory.risk.registry_hash = Some(plan.gates.registry_hash.clone());
-    candidate.memory.gate.rollback_path = Some(plan.rollback.backup_path.clone());
-    candidate
-        .memory
-        .rollback
-        .backup_refs
-        .push(plan.rollback.backup_path.clone());
-    validate_candidate_for_card(&card, &candidate)?;
-    let updated_candidate =
-        serde_yaml::to_string(&candidate).context("failed to serialize promoted Memory")?;
-    write_string_if_unchanged(
-        candidate_path(paths, &candidate.id),
-        Some(&candidate_raw),
-        &updated_candidate,
-    )?;
+        candidate.memory.lifecycle = MemoryLifecycle::Promoted;
+        candidate.memory.risk.registry_hash = Some(plan.gates.registry_hash.clone());
+        candidate.memory.gate.rollback_path = Some(plan.rollback.backup_path.clone());
+        candidate
+            .memory
+            .rollback
+            .backup_refs
+            .push(plan.rollback.backup_path.clone());
+        validate_candidate_for_card(&card, &candidate)?;
+        let updated_candidate =
+            serde_yaml::to_string(&candidate).context("failed to serialize promoted Memory")?;
+        write_string_if_unchanged(
+            candidate_path(paths, &candidate.id),
+            Some(&candidate_raw),
+            &updated_candidate,
+        )?;
 
-    append_health_ledger(
-        paths,
-        &candidate.id,
-        &plan.id,
-        "healthy",
-        "promotion_applied",
-        now,
-    )?;
+        append_health_ledger(
+            paths,
+            &candidate.id,
+            &plan.id,
+            "healthy",
+            "promotion_applied",
+            now,
+        )?;
 
-    plan.status = PromotionStatus::Applied;
-    plan.updated_at = now.to_string();
-    plan.applied_at = Some(now.to_string());
-    let applied_yaml =
-        serde_yaml::to_string(&plan).context("failed to serialize promotion plan")?;
-    write_string_if_unchanged(&plan_path, Some(&plan_raw), &applied_yaml)?;
+        plan.status = PromotionStatus::Applied;
+        plan.updated_at = now.to_string();
+        plan.applied_at = Some(now.to_string());
+        let applied_yaml =
+            serde_yaml::to_string(&plan).context("failed to serialize promotion plan")?;
+        write_string_if_unchanged(&plan_path, Some(&plan_raw), &applied_yaml)?;
+        Ok(())
+    })();
+
+    if let Err(error) = after_target_result {
+        restore_promotion_snapshots(ApplyRollbackSnapshots {
+            target_path: &target_abs,
+            target_raw: target_raw.as_deref(),
+            card_path: resolved.path(),
+            card_raw: Some(&current_card_raw),
+            candidate_path: &candidate_path(paths, &candidate.id),
+            candidate_raw: Some(&candidate_raw),
+            health_path: &health_ledger_path(paths),
+            health_raw: health_raw.as_deref(),
+            plan_path: &plan_path,
+            plan_raw: Some(&plan_raw),
+        })
+        .with_context(|| {
+            format!(
+                "failed to restore promotion {} after partial apply failure: {error}",
+                plan.id
+            )
+        })?;
+        return Err(error);
+    }
 
     Ok(ApplyPromotionOutcome {
         id: plan.id,
@@ -1268,6 +1327,7 @@ fn mark_plan_failed(
     now: &str,
     message: &str,
 ) -> Result<()> {
+    validate_artifact_id("promotion id", promotion_id)?;
     let path = promotion_plan_path(paths, promotion_id);
     let raw = read_to_string_if_exists(&path)?;
     let Some(raw) = raw else {
@@ -1286,10 +1346,52 @@ fn mark_plan_failed(
     Ok(())
 }
 
+struct ApplyRollbackSnapshots<'a> {
+    target_path: &'a Path,
+    target_raw: Option<&'a str>,
+    card_path: &'a Path,
+    card_raw: Option<&'a str>,
+    candidate_path: &'a Path,
+    candidate_raw: Option<&'a str>,
+    health_path: &'a Path,
+    health_raw: Option<&'a str>,
+    plan_path: &'a Path,
+    plan_raw: Option<&'a str>,
+}
+
+fn restore_promotion_snapshots(snapshots: ApplyRollbackSnapshots<'_>) -> Result<()> {
+    restore_file_snapshot(snapshots.target_path, snapshots.target_raw)?;
+    restore_file_snapshot(snapshots.card_path, snapshots.card_raw)?;
+    restore_file_snapshot(snapshots.candidate_path, snapshots.candidate_raw)?;
+    restore_file_snapshot(snapshots.health_path, snapshots.health_raw)?;
+    restore_file_snapshot(snapshots.plan_path, snapshots.plan_raw)?;
+    Ok(())
+}
+
+fn restore_file_snapshot(path: &Path, raw: Option<&str>) -> Result<()> {
+    match raw {
+        Some(raw) => {
+            if let Some(parent) = path.parent() {
+                ensure_dir(parent)?;
+            }
+            write_string_atomic(path, raw)?;
+        }
+        None => match fs::remove_file(path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(error).with_context(|| format!("failed to remove {}", path.display()));
+            }
+        },
+    }
+    Ok(())
+}
+
 fn load_memory_candidate_raw(
     paths: &MaestroPaths,
     memory_id: &str,
 ) -> Result<(store::ResolvedCard, String, MemoryCandidate)> {
+    validate_memory_id(memory_id)?;
     let resolved = store::resolve(paths, memory_id)?
         .ok_or_else(|| anyhow::anyhow!("memory card {memory_id} not found"))?;
     let path = candidate_path(paths, memory_id);
@@ -1505,6 +1607,7 @@ fn validate_plan_gate(
         contract.required_gate,
         candidate.memory.gate.review_required || contract.review_required,
     );
+    ensure_gate_not_forbidden(required_gate, &candidate.id)?;
     if required_gate != plan.gates.required_gate {
         bail!(
             "promotion plan {} gate changed from {} to {}; regenerate the plan",
@@ -1571,7 +1674,26 @@ fn validate_relative_path(path: &str) -> Result<()> {
 
 fn resolve_repo_relative(paths: &MaestroPaths, relative: &str) -> Result<PathBuf> {
     validate_relative_path(relative)?;
-    Ok(paths.repo_root().join(relative))
+    managed_path(paths, relative, SymlinkPolicy::RejectAllComponents)
+}
+
+fn validate_memory_id(id: &str) -> Result<()> {
+    store::validate_card_id(id)?;
+    if !id.starts_with("mem-") {
+        bail!("invalid memory id: {id}");
+    }
+    Ok(())
+}
+
+fn validate_artifact_id(label: &str, id: &str) -> Result<()> {
+    store::validate_card_id(id).with_context(|| format!("invalid {label}: {id}"))
+}
+
+fn ensure_gate_not_forbidden(gate: GateRequired, memory_id: &str) -> Result<()> {
+    if gate == GateRequired::Forbidden {
+        bail!("memory promotion for {memory_id} is forbidden by gate policy");
+    }
+    Ok(())
 }
 
 fn snapshot_hash(raw: Option<&str>) -> String {
@@ -1655,23 +1777,7 @@ fn validate_maintenance_request(request: &MaintenanceRequest) -> Result<()> {
     if request.reason.trim().is_empty() {
         bail!("memory maintenance reason cannot be empty");
     }
-    if request.source_refs.is_empty() {
-        bail!("memory maintenance requires at least one --source-ref");
-    }
-    for source in &request.source_refs {
-        if source.id.is_none() && source.path.is_none() {
-            bail!(
-                "memory maintenance source_ref {} needs id or path",
-                source.kind
-            );
-        }
-        if forbidden_source_kind(&source.kind) {
-            bail!(
-                "memory maintenance uses forbidden source kind {}",
-                source.kind
-            );
-        }
-    }
+    validate_source_refs("memory maintenance", &request.source_refs)?;
     match request.level {
         MaintenanceLevel::L0Detect => {
             if request.explicit_budget.is_some() {
@@ -1942,7 +2048,7 @@ fn memory_scope_matches(memory_scope: &MemoryScope, read_scope: &MemoryReadScope
         ScopeKind::Feature => read_scope.feature_id.as_ref().is_some_and(|id| {
             memory_scope.refs.is_empty() || memory_scope.refs.iter().any(|value| value == id)
         }),
-        ScopeKind::Project => read_scope.project.as_ref().is_none_or(|project| {
+        ScopeKind::Project => read_scope.project.as_ref().is_some_and(|project| {
             memory_scope.refs.is_empty() || memory_scope.refs.iter().any(|value| value == project)
         }),
         ScopeKind::Repo | ScopeKind::Global | ScopeKind::Team => true,
@@ -2082,11 +2188,24 @@ fn validate_suggestion_request(request: &CreateSuggestionRequest) -> Result<()> 
     if request.summary.trim().is_empty() {
         bail!("suggestion summary cannot be empty");
     }
-    if request.source_refs.is_empty() {
-        bail!("suggestion needs at least one source ref");
-    }
+    validate_source_refs("memory suggestion", &request.source_refs)?;
     if request.target_surface == TargetSurface::ExternalAction {
         bail!("memory suggestions cannot target external_action");
+    }
+    Ok(())
+}
+
+fn validate_source_refs(context: &str, source_refs: &[SourceRef]) -> Result<()> {
+    if source_refs.is_empty() {
+        bail!("{context} requires at least one source ref");
+    }
+    for source in source_refs {
+        if source.id.is_none() && source.path.is_none() {
+            bail!("{context} source_ref {} needs id or path", source.kind);
+        }
+        if forbidden_source_kind(&source.kind) {
+            bail!("{context} uses forbidden source kind {}", source.kind);
+        }
     }
     Ok(())
 }
@@ -2117,6 +2236,15 @@ fn execute_scorer(
     memory_id: &str,
     contract: &ScorerContract,
 ) -> ScorerExecution {
+    execute_scorer_with_timeout(paths, memory_id, contract, COMMAND_SCORER_TIMEOUT)
+}
+
+fn execute_scorer_with_timeout(
+    paths: &MaestroPaths,
+    memory_id: &str,
+    contract: &ScorerContract,
+    timeout: Duration,
+) -> ScorerExecution {
     if contract.scorer_type == ScorerType::Schema {
         return ScorerExecution {
             passed: true,
@@ -2126,25 +2254,76 @@ fn execute_scorer(
             error: None,
         };
     }
-    let output = Command::new(&contract.argv[0])
+    let mut child = match Command::new(&contract.argv[0])
         .args(&contract.argv[1..])
         .current_dir(paths.repo_root())
-        .output();
-    match output {
-        Ok(output) => ScorerExecution {
-            passed: output.status.success(),
-            exit_code: output.status.code(),
-            stdout: Some(String::from_utf8_lossy(&output.stdout).into_owned()),
-            stderr: Some(String::from_utf8_lossy(&output.stderr).into_owned()),
-            error: None,
-        },
-        Err(error) => ScorerExecution {
-            passed: false,
-            exit_code: None,
-            stdout: None,
-            stderr: None,
-            error: Some(error.to_string()),
-        },
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+    {
+        Ok(child) => child,
+        Err(error) => {
+            return ScorerExecution {
+                passed: false,
+                exit_code: None,
+                stdout: None,
+                stderr: None,
+                error: Some(error.to_string()),
+            };
+        }
+    };
+    let mut stdout = child.stdout.take();
+    let mut stderr = child.stderr.take();
+    let started = Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                return ScorerExecution {
+                    passed: status.success(),
+                    exit_code: status.code(),
+                    stdout: read_child_pipe(&mut stdout),
+                    stderr: read_child_pipe(&mut stderr),
+                    error: None,
+                };
+            }
+            Ok(None) if started.elapsed() >= timeout => {
+                let kill_error = child.kill().err();
+                let wait_error = child.wait().err();
+                let mut error = format!("scorer timed out after {}ms", timeout.as_millis());
+                if let Some(kill_error) = kill_error {
+                    error.push_str(&format!("; failed to kill process: {kill_error}"));
+                }
+                if let Some(wait_error) = wait_error {
+                    error.push_str(&format!("; failed to wait after kill: {wait_error}"));
+                }
+                return ScorerExecution {
+                    passed: false,
+                    exit_code: None,
+                    stdout: read_child_pipe(&mut stdout),
+                    stderr: read_child_pipe(&mut stderr),
+                    error: Some(error),
+                };
+            }
+            Ok(None) => std::thread::sleep(Duration::from_millis(20)),
+            Err(error) => {
+                return ScorerExecution {
+                    passed: false,
+                    exit_code: None,
+                    stdout: read_child_pipe(&mut stdout),
+                    stderr: read_child_pipe(&mut stderr),
+                    error: Some(error.to_string()),
+                };
+            }
+        }
+    }
+}
+
+fn read_child_pipe<R: Read>(pipe: &mut Option<R>) -> Option<String> {
+    let mut pipe = pipe.take()?;
+    let mut bytes = Vec::new();
+    match pipe.read_to_end(&mut bytes) {
+        Ok(_) => Some(String::from_utf8_lossy(&bytes).into_owned()),
+        Err(error) => Some(format!("[failed to read scorer output: {error}]")),
     }
 }
 
@@ -2454,6 +2633,60 @@ mod tests {
         }
     }
 
+    fn create_memory_note(paths: &MaestroPaths, summary: &str) -> String {
+        create_memory(
+            paths,
+            CreateMemoryRequest {
+                from: "run_event:run-1".to_string(),
+                summary: Some(summary.to_string()),
+                lesson: Some(summary.to_string()),
+                signal_type: None,
+                scope: None,
+                target_surface: None,
+            },
+            NOW,
+        )
+        .expect("create memory")
+        .id
+    }
+
+    fn write_memory_note_registry(paths: &MaestroPaths, target_path: &str) {
+        let path = target_registry_path(paths);
+        ensure_dir(path.parent().expect("registry path has a parent")).expect("registry dir");
+        std::fs::write(
+            path,
+            format!(
+                "schema_version: maestro.memory.target_registry.v1\nsurfaces:\n  memory_note:\n    target_path: {target_path}\n    required_gate: review\n    review_required: true\n    allowed_writes:\n      - replace\n"
+            ),
+        )
+        .expect("target registry");
+    }
+
+    fn promote_for_reads(paths: &MaestroPaths, memory_id: &str, scope: MemoryScope) {
+        let resolved = store::resolve(paths, memory_id)
+            .expect("resolve")
+            .expect("memory card exists");
+        let mut card = resolved.card.clone();
+        card.status = "verified".to_string();
+        store::save_resolved(&card, &resolved).expect("save verified card");
+
+        let path = candidate_path(paths, memory_id);
+        let raw = std::fs::read_to_string(&path).expect("candidate");
+        let mut candidate =
+            crate::domain::memory::parse_candidate(&raw, "candidate").expect("parse candidate");
+        candidate.memory.lifecycle = MemoryLifecycle::Promoted;
+        candidate.memory.scope = scope;
+        candidate.memory.risk.registry_hash = Some("sha256:test".to_string());
+        validate_candidate_for_card(&card, &candidate).expect("promoted candidate validates");
+        std::fs::write(
+            &path,
+            serde_yaml::to_string(&candidate).expect("candidate yaml"),
+        )
+        .expect("write candidate");
+        append_health_ledger(paths, memory_id, "prom-test", "healthy", "test", NOW)
+            .expect("health ledger");
+    }
+
     #[test]
     fn suggestion_create_upserts_open_dedupe_key() {
         let paths = paths("upsert");
@@ -2483,6 +2716,259 @@ mod tests {
         assert!(list_suggestions(&paths, false).expect("list").is_empty());
         assert_eq!(list_suggestions(&paths, true).expect("list all").len(), 1);
 
+        cleanup(&paths);
+    }
+
+    #[test]
+    fn suggestion_rejects_forbidden_source_kind_before_queue_write() {
+        let paths = paths("forbidden-suggestion");
+        let mut request = request("Do not record this");
+        request.source_refs = vec![SourceRef {
+            kind: "keystroke".to_string(),
+            id: Some("raw-1".to_string()),
+            path: None,
+        }];
+
+        let error = create_suggestion(&paths, request, NOW)
+            .expect_err("forbidden source kind should be rejected");
+
+        assert!(
+            error
+                .to_string()
+                .contains("forbidden source kind keystroke")
+        );
+        assert!(list_suggestions(&paths, true).expect("list all").is_empty());
+        cleanup(&paths);
+    }
+
+    #[test]
+    fn memory_create_rejects_forbidden_source_kind_before_card_write() {
+        let paths = paths("forbidden-create");
+        let error = create_memory(
+            &paths,
+            CreateMemoryRequest {
+                from: "keystroke:path=.maestro/private/raw.log".to_string(),
+                summary: Some("Do not record this".to_string()),
+                lesson: None,
+                signal_type: None,
+                scope: None,
+                target_surface: None,
+            },
+            NOW,
+        )
+        .expect_err("forbidden source kind should be rejected");
+
+        assert!(
+            error
+                .to_string()
+                .contains("forbidden source kind keystroke")
+        );
+        assert!(
+            crate::domain::card::query::scan(&paths)
+                .expect("scan")
+                .is_empty()
+        );
+        cleanup(&paths);
+    }
+
+    #[test]
+    fn promotion_planning_rejects_forbidden_gate() {
+        let paths = paths("forbidden-gate");
+        let memory_id = create_memory_note(&paths, "Forbidden gate");
+        write_memory_note_registry(&paths, ".maestro/memory/approved/{memory_id}.md");
+
+        let path = candidate_path(&paths, &memory_id);
+        let raw = std::fs::read_to_string(&path).expect("candidate");
+        let mut candidate =
+            crate::domain::memory::parse_candidate(&raw, "candidate").expect("parse candidate");
+        candidate.memory.gate.required = GateRequired::Forbidden;
+        candidate.memory.risk.overall = RiskLevel::Forbidden;
+        candidate.memory.risk.axes.external_authority = RiskLevel::Forbidden;
+        std::fs::write(
+            &path,
+            serde_yaml::to_string(&candidate).expect("candidate yaml"),
+        )
+        .expect("write candidate");
+
+        let error = plan_promotion(
+            &paths,
+            PlanPromotionRequest {
+                memory_id,
+                scorer_receipt: None,
+                review_evidence: Some("manual:approved".to_string()),
+            },
+            NOW,
+        )
+        .expect_err("forbidden gate should fail closed");
+
+        assert!(error.to_string().contains("forbidden by gate policy"));
+        cleanup(&paths);
+    }
+
+    #[test]
+    fn command_scorer_requires_target_registry_allowlist_before_execution() {
+        let paths = paths("scorer-allowlist");
+        let memory_id = create_memory_note(&paths, "Command scorer");
+        let marker = paths.repo_root().join("scorer-ran");
+        let contract: serde_yaml::Value = serde_yaml::from_str(&format!(
+            "type: test\nargv:\n  - /bin/sh\n  - -c\n  - touch {}\n",
+            marker.display()
+        ))
+        .expect("contract yaml");
+        let path = candidate_path(&paths, &memory_id);
+        let raw = std::fs::read_to_string(&path).expect("candidate");
+        let mut candidate =
+            crate::domain::memory::parse_candidate(&raw, "candidate").expect("parse candidate");
+        candidate.memory.gate.scorer_contract = Some(contract);
+        std::fs::write(
+            &path,
+            serde_yaml::to_string(&candidate).expect("candidate yaml"),
+        )
+        .expect("write candidate");
+
+        let error = run_scorer(&paths, &format!("{memory_id}#gate.scorer_contract"), NOW)
+            .expect_err("command scorer should require target registry");
+
+        assert!(error.to_string().contains("target-registry.yml"));
+        assert!(
+            !marker.exists(),
+            "scorer command must not run before allowlist"
+        );
+        cleanup(&paths);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn command_scorer_times_out_and_records_failure() {
+        let paths = paths("scorer-timeout");
+        ensure_dir(paths.repo_root()).expect("repo root");
+        let contract = ScorerContract {
+            scorer_type: ScorerType::Test,
+            name: None,
+            argv: vec![
+                "/bin/sh".to_string(),
+                "-c".to_string(),
+                "sleep 2".to_string(),
+            ],
+        };
+
+        let execution = execute_scorer_with_timeout(
+            &paths,
+            "mem-timeout",
+            &contract,
+            Duration::from_millis(10),
+        );
+
+        assert!(!execution.passed);
+        assert_eq!(execution.exit_code, None);
+        assert!(
+            execution
+                .error
+                .as_deref()
+                .unwrap_or_default()
+                .contains("scorer timed out"),
+            "{execution:?}"
+        );
+        cleanup(&paths);
+    }
+
+    #[test]
+    fn scorer_and_promotion_refs_reject_path_escapes() {
+        let paths = paths("path-escapes");
+
+        assert!(show_scorer_receipt(&paths, "../secret.json").is_err());
+        assert!(list_scorer_receipts(&paths, "../mem").is_err());
+        assert!(
+            apply_promotion(
+                &paths,
+                ApplyPromotionRequest {
+                    promotion_id: "../prom".to_string(),
+                },
+                NOW,
+            )
+            .is_err()
+        );
+        cleanup(&paths);
+    }
+
+    #[test]
+    fn approved_memory_skips_missing_lesson_and_requires_project_scope() {
+        let paths = paths("approved-scope");
+        let memory_id = create_memory_note(&paths, "Project-only lesson");
+        promote_for_reads(
+            &paths,
+            &memory_id,
+            MemoryScope {
+                kind: ScopeKind::Project,
+                refs: vec!["svc-pay".to_string()],
+            },
+        );
+
+        let unscoped = approved_memory(
+            &paths,
+            MemoryReadSurface::Status,
+            MemoryReadScope::default(),
+        )
+        .expect("approved memory");
+        assert!(unscoped.memories.is_empty());
+
+        let scoped = approved_memory(
+            &paths,
+            MemoryReadSurface::Status,
+            MemoryReadScope {
+                project: Some("svc-pay".to_string()),
+                ..MemoryReadScope::default()
+            },
+        )
+        .expect("approved memory");
+        assert_eq!(scoped.memories[0].id, memory_id);
+
+        std::fs::remove_file(
+            crate::domain::memory::memory_dir(&paths, &memory_id).join(LESSON_FILE),
+        )
+        .expect("remove lesson");
+        let missing_lesson = approved_memory(
+            &paths,
+            MemoryReadSurface::Status,
+            MemoryReadScope {
+                project: Some("svc-pay".to_string()),
+                ..MemoryReadScope::default()
+            },
+        )
+        .expect("approved memory");
+        assert!(missing_lesson.memories.is_empty());
+
+        cleanup(&paths);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn promotion_planning_rejects_symlinked_target_parent() {
+        let paths = paths("symlink-target");
+        let memory_id = create_memory_note(&paths, "Symlink target");
+        let outside = paths.repo_root().join("outside");
+        ensure_dir(&outside).expect("outside dir");
+        let memory_dir = paths.maestro_dir().join("memory");
+        ensure_dir(&memory_dir).expect("memory dir");
+        std::os::unix::fs::symlink(&outside, memory_dir.join("approved"))
+            .expect("symlink approved dir");
+        write_memory_note_registry(&paths, ".maestro/memory/approved/{memory_id}.md");
+
+        let error = plan_promotion(
+            &paths,
+            PlanPromotionRequest {
+                memory_id,
+                scorer_receipt: None,
+                review_evidence: Some("manual:approved".to_string()),
+            },
+            NOW,
+        )
+        .expect_err("symlinked target parent should be rejected");
+
+        assert!(
+            error.to_string().contains("symlink") || error.to_string().contains("outside"),
+            "{error}"
+        );
         cleanup(&paths);
     }
 

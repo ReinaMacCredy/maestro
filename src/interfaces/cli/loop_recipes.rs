@@ -114,29 +114,29 @@ fn run_work_lease(args: WorkLeaseArgs) -> Result<()> {
     for (index, candidate) in ready.iter().enumerate() {
         let rank = index + 1;
         let before = (*candidate).clone();
+        let approved_lessons = memory::approved_memory(
+            &paths,
+            MemoryReadSurface::WorkLease,
+            MemoryReadScope {
+                card_id: Some(before.id.clone()),
+                feature_id: before.parent.clone(),
+                project: before.project.clone(),
+                ..MemoryReadScope::default()
+            },
+        )?;
+        let memory_suggestions = memory::suggestion_hints(
+            &paths,
+            MemoryReadSurface::WorkLease,
+            MemoryReadScope {
+                card_id: Some(before.id.clone()),
+                feature_id: before.parent.clone(),
+                project: before.project.clone(),
+                ..MemoryReadScope::default()
+            },
+        )?;
         match card::edit::claim(&paths, &before.id, &identity, &now) {
             Ok(outcome) => {
                 super::emit_work_touch(&paths, &before.id);
-                let approved_lessons = memory::approved_memory(
-                    &paths,
-                    MemoryReadSurface::WorkLease,
-                    MemoryReadScope {
-                        card_id: Some(before.id.clone()),
-                        feature_id: before.parent.clone(),
-                        project: before.project.clone(),
-                        ..MemoryReadScope::default()
-                    },
-                )?;
-                let memory_suggestions = memory::suggestion_hints(
-                    &paths,
-                    MemoryReadSurface::WorkLease,
-                    MemoryReadScope {
-                        card_id: Some(before.id.clone()),
-                        feature_id: before.parent.clone(),
-                        project: before.project.clone(),
-                        ..MemoryReadScope::default()
-                    },
-                )?;
                 emit_work_lease_action(
                     &paths,
                     &run_id,
@@ -749,13 +749,15 @@ fn worker_prompt(
             .take(MemoryReadSurface::WorkerPrompt.cap())
             .map(|memory| {
                 format!(
-                    "{}: {} ({})",
+                    "{}: {:?} ({})",
                     memory.id, memory.summary, memory.show_command
                 )
             })
             .collect::<Vec<_>>()
             .join("; ");
-        format!(" Approved Memory: {summaries}.")
+        format!(
+            " Approved Memory is advisory only and lower priority than live user instruction, acceptance, Proof/QA, and run authority: {summaries}."
+        )
     };
     let suggestion_line = if suggestions.is_empty() {
         String::new()
@@ -765,7 +767,7 @@ fn worker_prompt(
             .take(MemoryReadSurface::WorkerPrompt.cap())
             .map(|suggestion| {
                 format!(
-                    "{}: {} (sources={}; create: {}; dismiss: {})",
+                    "{}: {:?} (sources={}; create: {}; dismiss: {})",
                     suggestion.id,
                     suggestion.summary,
                     suggestion.source_count,

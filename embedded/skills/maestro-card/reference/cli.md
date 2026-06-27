@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: 228bd7e283794a7ce57c193b08299a11a629c6f56c93f05a1c8bac5a4b777920 -->
+<!-- maestro:cli-reference-sha256: b3ae6239b5461588dc4700cea42f6170d7ffcaa73f3975cacfe2a51a819b425e -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -62,6 +62,26 @@ a spelling not found here is outside this skill's CLI surface.
 
 - `maestro qa baseline <ID> [--observed <OBSERVED>] [--observed-file <PATH>] [--observed-stdin]` -- Write a feature QA baseline from explicit observed behavior
 - `maestro qa slice <ID> [--scenario <SCENARIO>]... [--observed <OBSERVED>] [--observed-file <PATH>] [--observed-stdin]` -- Append counting QA slice evidence for baseline scenarios
+
+## maestro memory
+
+- `maestro memory create --from <SOURCE_OR_SUGGESTION> [--summary <SUMMARY>] [--lesson <LESSON>] [--signal-type <SIGNAL_TYPE>] [--scope-kind <SCOPE_KIND>] [--scope-ref <SCOPE_REF>]... [--target-surface <TARGET_SURFACE>] [--id-only]` -- Create a Memory card from an explicit source or suggestion id
+- `maestro memory list [--all]` -- List Memory cards
+- `maestro memory show <ID>` -- Show a Memory card, candidate metadata, and lesson
+- `maestro memory search [QUERY]...` -- Search approved Memory
+- `maestro memory promote <MEMORY_OR_PROMOTION_ID> [--plan] [--apply] [--scorer-receipt <REF>] [--review-evidence <EVIDENCE>]` -- Plan or apply a gated Memory promotion
+- `maestro memory maintain [--level <L0|L1|L2|L3>] [--scope-kind <SCOPE_KIND>] [--scope-ref <SCOPE_REF>]... [--source-ref <SOURCE_REF>]... --reason <REASON> [--proof-link <PROOF_LINK>]... [--run-link <RUN_LINK>]... [--human-approved] [--tokens <TOKENS>] [--wall-minutes <WALL_MINUTES>] [--max-source-refs <MAX_SOURCE_REFS>] [--max-files <MAX_FILES>] [--subagents <SUBAGENTS>] [--id-only]` -- Create a bounded Memory maintenance contract
+- `maestro memory dream [--level <L0|L1|L2|L3>] [--scope-kind <SCOPE_KIND>] [--scope-ref <SCOPE_REF>]... [--source-ref <SOURCE_REF>]... --reason <REASON> [--proof-link <PROOF_LINK>]... [--run-link <RUN_LINK>]... [--human-approved] [--tokens <TOKENS>] [--wall-minutes <WALL_MINUTES>] [--max-source-refs <MAX_SOURCE_REFS>] [--max-files <MAX_FILES>] [--subagents <SUBAGENTS>] [--id-only]` -- Create a bounded Memory-dream maintenance contract
+- `maestro memory scorer attach <ID> --contract-file <PATH>` -- Attach an inline scorer contract file to memory/candidate.yml
+- `maestro memory suggest list [--all]` -- List Memory suggestions
+- `maestro memory suggest create [--source-ref <SOURCE_REF>]... --signal-type <SIGNAL_TYPE> --summary <SUMMARY> [--scope-kind <SCOPE_KIND>] [--scope-ref <SCOPE_REF>]... [--target-surface <TARGET_SURFACE>] [--dedupe-key <DEDUPE_KEY>] [--expires-at <EXPIRES_AT>]` -- Create or upsert a visible Memory suggestion
+- `maestro memory suggest dismiss <ID> --reason <REASON>` -- Dismiss an open Memory suggestion
+
+## maestro scorer
+
+- `maestro scorer run <CONTRACT_REF>` -- Run a typed scorer contract reference
+- `maestro scorer show <RECEIPT_REF>` -- Show one scorer receipt by path or memory-id#receipt-id
+- `maestro scorer list --memory <MEMORY_ID>` -- List scorer receipts for a Memory card
 
 ## maestro card
 

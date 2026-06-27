@@ -352,6 +352,11 @@ pub fn create(args: CreateArgs) -> Result<()> {
         return Ok(());
     };
     let card_type = parse_card_type(&args.card_type)?;
+    if card_type == card::schema::CardType::Memory {
+        return Err(anyhow!(
+            "memory cards require Memory sidecars; use `maestro memory create --from <source-ref> --summary \"...\"`"
+        ));
+    }
     let custom_kind = match (card_type, args.kind.as_deref()) {
         (card::schema::CardType::Custom, Some(kind)) if !kind.trim().is_empty() => {
             Some(kind.trim().to_string())
