@@ -63,9 +63,8 @@ pub fn append_text_file(
         Ok(mut file) => {
             file.write_all(initial_contents.as_bytes())
                 .and_then(|()| file.write_all(appended_contents.as_bytes()))
-                .and_then(|()| file.sync_all())
+                .and_then(|()| file.flush())
                 .with_context(|| format!("failed to append {}", path.display()))?;
-            sync_parent_dir(path)?;
             Ok(true)
         }
         Err(error) if error.kind() == ErrorKind::AlreadyExists => {
@@ -84,7 +83,7 @@ pub fn append_text_file(
                 .with_context(|| format!("failed to open {} for append", path.display()))?;
             file.write_all(separator)
                 .and_then(|()| file.write_all(appended_contents.as_bytes()))
-                .and_then(|()| file.sync_all())
+                .and_then(|()| file.flush())
                 .with_context(|| format!("failed to append {}", path.display()))?;
             Ok(false)
         }
@@ -329,7 +328,6 @@ where
             )
         });
     }
-    sync_parent_dir(target_dir)?;
     let _ = fs::remove_dir(temp_root);
     Ok(())
 }

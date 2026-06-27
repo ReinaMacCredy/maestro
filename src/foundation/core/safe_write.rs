@@ -7,7 +7,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, bail};
 
-use crate::foundation::core::fs::{ensure_parent_dir, sync_parent_dir};
+use crate::foundation::core::fs::ensure_parent_dir;
 
 static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -17,6 +17,8 @@ pub fn write_string_atomic(path: impl AsRef<Path>, contents: &str) -> Result<()>
 }
 
 /// Atomically write bytes by replacing the target with a sibling temp file.
+/// This intentionally avoids synchronous disk flushes: on local/cloud-backed
+/// developer filesystems, fsync can block forever in uninterruptible I/O.
 pub fn write_atomic(path: impl AsRef<Path>, contents: &[u8]) -> Result<()> {
     let path = path.as_ref();
     ensure_parent_dir(path)?;
@@ -33,8 +35,6 @@ pub fn write_atomic(path: impl AsRef<Path>, contents: &[u8]) -> Result<()> {
             )
         });
     }
-    sync_parent_dir(path)?;
-
     Ok(())
 }
 
@@ -72,7 +72,7 @@ fn create_temp_sibling(path: &Path, contents: &[u8]) -> Result<PathBuf> {
             .open(&temp_path)
         {
             Ok(mut file) => {
-                if let Err(error) = file.write_all(contents).and_then(|()| file.sync_all()) {
+                if let Err(error) = file.write_all(contents).and_then(|()| file.flush()) {
                     let _ = fs::remove_file(&temp_path);
                     return Err(error).with_context(|| {
                         format!("failed to write temp file {}", temp_path.display())
