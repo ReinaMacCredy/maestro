@@ -6,11 +6,12 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use serde::Serialize;
 
-use crate::domain::feature::{FeatureStatus, FeatureView};
+use crate::domain::feature::{self as domain_feature, FeatureStatus, FeatureView};
 use crate::domain::proof;
 use crate::domain::run;
 use crate::domain::task::{TaskRecord, TaskState};
 use crate::foundation::core::error::MaestroError;
+use crate::foundation::core::fs::read_to_string_if_exists;
 use crate::foundation::core::git;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::interfaces::hooks::record;
@@ -61,23 +62,78 @@ pub(crate) fn recovery_label(hint: Option<&str>) -> String {
 
 /// Next-step label for a feature, shared by `status` and `feature list` so the
 /// hint never diverges between the two surfaces.
-pub(crate) fn feature_next_label(view: &FeatureView) -> &'static str {
+pub(crate) fn feature_next_label(paths: &MaestroPaths, view: &FeatureView) -> String {
+    feature_next_label_and_command(paths, view).0.to_string()
+}
+
+/// Concrete next command for detail surfaces where a compact table label is too
+/// easy to misread as a contradictory lifecycle state.
+pub(crate) fn feature_next_command(paths: &MaestroPaths, view: &FeatureView) -> String {
+    feature_next_label_and_command(paths, view).1
+}
+
+fn feature_next_label_and_command(
+    paths: &MaestroPaths,
+    view: &FeatureView,
+) -> (&'static str, String) {
     match view.status {
-        FeatureStatus::Proposed
-            if !view.acceptance.is_empty() && !view.affected_areas.is_empty() =>
-        {
-            "run: finalize_feature"
+        FeatureStatus::Proposed if view.acceptance.is_empty() || view.affected_areas.is_empty() => {
+            (
+                "template: set_contract",
+                format!(
+                    "maestro feature set {} --acceptance \"<criterion>\" --area \"<surface>\"",
+                    view.id
+                ),
+            )
         }
-        FeatureStatus::Proposed => "template: set_contract",
-        FeatureStatus::Ready => "run: prepare_feature",
+        FeatureStatus::Proposed if !handoff_is_fresh(paths, view) => (
+            "run: finalize_feature",
+            format!("maestro feature finalize {}", view.id),
+        ),
+        FeatureStatus::Proposed if !qa_baseline_present(paths, &view.id) => (
+            "template: qa_baseline",
+            format!(
+                "maestro qa baseline {} --observed \"<current behavior>\"",
+                view.id
+            ),
+        ),
+        FeatureStatus::Proposed => (
+            "run: accept_feature",
+            format!("maestro feature accept {}", view.id),
+        ),
+        FeatureStatus::Ready => (
+            "run: prepare_feature",
+            format!("maestro feature prepare {} --draft", view.id),
+        ),
         FeatureStatus::InProgress
             if view.counts.total > 0 && view.counts.total == view.counts.verified =>
         {
-            "template: close_feature"
+            (
+                "template: close_feature",
+                format!("maestro feature close {} --outcome \"<outcome>\"", view.id),
+            )
         }
-        FeatureStatus::InProgress => "run: resolve_tasks",
-        FeatureStatus::Closed | FeatureStatus::Cancelled => "run: archive_feature",
+        FeatureStatus::InProgress => (
+            "run: resolve_tasks",
+            format!("maestro feature show {}", view.id),
+        ),
+        FeatureStatus::Closed | FeatureStatus::Cancelled => (
+            "run: archive_feature",
+            format!("maestro feature archive {}", view.id),
+        ),
     }
+}
+
+fn handoff_is_fresh(paths: &MaestroPaths, view: &FeatureView) -> bool {
+    matches!(domain_feature::handoff_gap(paths, &view.id), Ok(None))
+}
+
+fn qa_baseline_present(paths: &MaestroPaths, id: &str) -> bool {
+    let path = domain_feature::feature_sidecar_dir(paths, id).join("qa.md");
+    read_to_string_if_exists(&path)
+        .ok()
+        .flatten()
+        .is_some_and(|contents| !contents.trim().is_empty())
 }
 
 /// Working-tree git readout shared by `resume` and `status` so the rendered git

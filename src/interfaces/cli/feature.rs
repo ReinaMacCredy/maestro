@@ -21,7 +21,8 @@ use crate::foundation::core::session::agent_runtime_from_env;
 use crate::foundation::core::table;
 use crate::foundation::core::time::{render_timestamp, timestamp_nanos, utc_now_timestamp};
 use crate::interfaces::cli::{
-    FeatureArgs, FeatureCommand, FeatureProofCommand, feature_next_label, recovery_label,
+    FeatureArgs, FeatureCommand, FeatureProofCommand, feature_next_command, feature_next_label,
+    recovery_label,
 };
 use crate::operations::{feature_close, feature_prepare};
 
@@ -1645,6 +1646,9 @@ fn show_feature(paths: &MaestroPaths, id: &str) -> Result<()> {
     println!("id: {}", view.id);
     println!("title: {}", view.title);
     println!("status: {}", feature::status_label(&view.status));
+    if !archived {
+        println!("next: {}", feature_next_command(paths, &view));
+    }
     if archived {
         println!("archived: true");
     }
@@ -2072,7 +2076,7 @@ fn list_features(paths: &MaestroPaths, all: bool) -> Result<()> {
                 vec![
                     view.id.clone(),
                     feature::status_label(&view.status).to_string(),
-                    feature_next_label(view).to_string(),
+                    feature_next_label(paths, view),
                     view.counts.total.to_string(),
                     view.counts.verified.to_string(),
                     title,

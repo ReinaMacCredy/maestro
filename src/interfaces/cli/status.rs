@@ -658,7 +658,7 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
     let proof_concern = focal_proof_concern(paths, next_action.as_ref(), &live_tasks);
     let ready_to_close_features = ready_to_close_features(&features);
     let now_nanos = timestamp_nanos(&utc_now_timestamp()).unwrap_or(0);
-    let mut active_features = active_feature_rows(&features, now_nanos);
+    let mut active_features = active_feature_rows(paths, &features, now_nanos);
     for (id, path, error, hint, _) in unreadable_features {
         warnings.push(WarningJson {
             code: "feature_unreadable".to_string(),
@@ -855,7 +855,11 @@ fn ready_to_close_features(features: &[feature::FeatureView]) -> Vec<ReadyFeatur
         .collect()
 }
 
-fn active_feature_rows(features: &[feature::FeatureView], now_nanos: i128) -> Vec<FeatureRowJson> {
+fn active_feature_rows(
+    paths: &MaestroPaths,
+    features: &[feature::FeatureView],
+    now_nanos: i128,
+) -> Vec<FeatureRowJson> {
     features
         .iter()
         .filter(|view| !view.status.is_terminal())
@@ -863,7 +867,7 @@ fn active_feature_rows(features: &[feature::FeatureView], now_nanos: i128) -> Ve
             id: view.id.clone(),
             state: feature::status_label(&view.status).to_string(),
             title: view.title.clone(),
-            next: feature_next_label(view).to_string(),
+            next: feature_next_label(paths, view),
             inspect: format!("maestro feature show {}", view.id),
             project: view.project.clone(),
             stale_proposed: feature::is_stale_proposed(&view.status, &view.updated_at, now_nanos),
@@ -1507,13 +1511,18 @@ mod tests {
         }
     }
 
+    fn test_paths() -> MaestroPaths {
+        MaestroPaths::new(PathBuf::from("."))
+    }
+
     #[test]
     fn injected_now_collapses_stale_proposed_keeps_fresh() {
         let views = vec![
             proposed_view("stale-old", "2026-06-01T00:00:00.000Z"), // 20d -> stale
             proposed_view("fresh-new", "2026-06-20T00:00:00.000Z"), // 1d  -> fresh
         ];
-        let rows = active_feature_rows(&views, now());
+        let paths = test_paths();
+        let rows = active_feature_rows(&paths, &views, now());
         assert_eq!(
             rows.len(),
             2,
@@ -1536,7 +1545,8 @@ mod tests {
     #[test]
     fn no_stale_block_carries_no_collapse_or_reminder() {
         let views = vec![proposed_view("fresh", "2026-06-20T00:00:00.000Z")];
-        let block = active_features_block(&active_feature_rows(&views, now()));
+        let paths = test_paths();
+        let block = active_features_block(&active_feature_rows(&paths, &views, now()));
         assert!(block.contains("fresh"));
         assert!(!block.contains("proposed stale hidden"));
         assert!(!block.contains(feature::RETIRE_REMINDER));
@@ -1548,7 +1558,8 @@ mod tests {
             proposed_view("alpha", "2026-06-01T00:00:00.000Z"),
             proposed_view("beta", "2026-05-20T00:00:00.000Z"),
         ];
-        let block = active_features_block(&active_feature_rows(&views, now()));
+        let paths = test_paths();
+        let block = active_features_block(&active_feature_rows(&paths, &views, now()));
         assert!(block.contains("(2 proposed stale hidden; feature list --all to review)"));
         assert!(block.contains(feature::RETIRE_REMINDER));
         assert!(
@@ -1566,8 +1577,9 @@ mod tests {
         let many: Vec<feature::FeatureView> = (0..5)
             .map(|i| proposed_view(&format!("f{i}"), "2026-06-01T00:00:00.000Z"))
             .collect();
-        let block_one = active_features_block(&active_feature_rows(&one, now()));
-        let block_many = active_features_block(&active_feature_rows(&many, now()));
+        let paths = test_paths();
+        let block_one = active_features_block(&active_feature_rows(&paths, &one, now()));
+        let block_many = active_features_block(&active_feature_rows(&paths, &many, now()));
         assert_eq!(block_one.matches(feature::RETIRE_REMINDER).count(), 1);
         assert_eq!(block_many.matches(feature::RETIRE_REMINDER).count(), 1);
     }

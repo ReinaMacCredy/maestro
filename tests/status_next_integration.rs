@@ -176,7 +176,7 @@ fn write_correction_session(repo: &Path, session: &str) {
 }
 
 #[test]
-fn proposed_feature_with_authored_contract_points_status_and_feature_list_to_qa_baseline() {
+fn proposed_feature_next_hint_tracks_handoff_and_qa_baseline_readiness() {
     let temp = setup_repo("maestro-status-authored-feature-next");
     let repo = temp.path();
 
@@ -208,6 +208,48 @@ fn proposed_feature_with_authored_contract_points_status_and_feature_list_to_qa_
     assert!(
         !feature_list.contains("template: set_contract"),
         "{feature_list}"
+    );
+
+    run(repo, &["feature", "finalize", "authored-contract"]);
+
+    let status = run(repo, &["status"]);
+    assert!(status.contains("authored-contract"), "{status}");
+    assert!(status.contains("template: qa_baseline"), "{status}");
+    assert!(!status.contains("run: finalize_feature"), "{status}");
+    assert!(!status.contains("run: accept_feature"), "{status}");
+
+    let feature_show = run(repo, &["feature", "show", "authored-contract"]);
+    assert!(
+        feature_show.contains("next: maestro qa baseline authored-contract"),
+        "{feature_show}"
+    );
+
+    run(
+        repo,
+        &[
+            "qa",
+            "baseline",
+            "authored-contract",
+            "--observed",
+            "current status output recorded before implementation",
+        ],
+    );
+
+    let status = run(repo, &["status"]);
+    assert!(status.contains("authored-contract"), "{status}");
+    assert!(status.contains("run: accept_feature"), "{status}");
+    assert!(!status.contains("template: qa_baseline"), "{status}");
+
+    let feature_list = run(repo, &["feature", "list"]);
+    assert!(
+        feature_list.contains("run: accept_feature"),
+        "{feature_list}"
+    );
+
+    let feature_show = run(repo, &["feature", "show", "authored-contract"]);
+    assert!(
+        feature_show.contains("next: maestro feature accept authored-contract"),
+        "{feature_show}"
     );
 }
 
