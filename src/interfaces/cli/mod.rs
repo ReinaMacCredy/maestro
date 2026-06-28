@@ -1229,7 +1229,7 @@ pub struct ScorerArgs {
 pub enum ScorerCommand {
     #[command(about = "Run a typed scorer contract reference")]
     Run { contract_ref: String },
-    #[command(about = "Show one scorer receipt by path or memory-id#receipt-id")]
+    #[command(about = "Show one scorer receipt by memory-id#receipt-id")]
     Show { receipt_ref: String },
     #[command(about = "List scorer receipts for a Memory card")]
     List {

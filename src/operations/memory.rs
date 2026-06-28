@@ -15,8 +15,8 @@ use crate::domain::memory::{
     CANDIDATE_FILE, Confidence, Freshness, Gate, GateRequired, LESSON_FILE, Links, MemoryCandidate,
     MemoryLifecycle, MemoryMetadata, MemoryScope, RECEIPTS_DIR, RiskAxes, RiskClassification,
     RiskLevel, Rollback, SIGNALS_FILE, ScopeKind, SignalSummary, SignalType, SourceRef,
-    TargetSurface, TargetTier, candidate_path, forbidden_source_kind, validate_candidate_for_card,
-    validate_card,
+    TargetSurface, TargetTier, candidate_path, validate_candidate_for_card, validate_card,
+    validate_source_refs,
 };
 use crate::foundation::core::fs::{
     append_text_file, ensure_dir, read_to_string_if_exists, write_string_if_unchanged,
@@ -24,7 +24,7 @@ use crate::foundation::core::fs::{
 use crate::foundation::core::hash::sha256_hex;
 use crate::foundation::core::managed_path::{SymlinkPolicy, managed_path};
 use crate::foundation::core::paths::MaestroPaths;
-use crate::foundation::core::safe_write::write_string_atomic;
+use crate::foundation::core::safe_write::{restore_or_remove, write_string_atomic};
 use crate::foundation::core::time::utc_now_timestamp;
 
 pub const SUGGESTION_SCHEMA_VERSION: &str = "maestro.memory.suggestion.v1";
@@ -1296,14 +1296,26 @@ fn apply_promotion_inner(
             card_raw: Some(&current_card_raw),
             candidate_path: &candidate_path(paths, &candidate.id),
             candidate_raw: Some(&candidate_raw),
-            health_path: &health_ledger_path(paths),
-            health_raw: health_raw.as_deref(),
             plan_path: &plan_path,
             plan_raw: Some(&plan_raw),
         })
         .with_context(|| {
             format!(
                 "failed to restore promotion {} after partial apply failure: {error}",
+                plan.id
+            )
+        })?;
+        append_health_ledger(
+            paths,
+            &candidate.id,
+            &plan.id,
+            "unhealthy",
+            "promotion_rollback_after_apply_failure",
+            now,
+        )
+        .with_context(|| {
+            format!(
+                "failed to append rollback health signal for promotion {} after partial apply failure: {error}",
                 plan.id
             )
         })?;
@@ -1353,38 +1365,25 @@ struct ApplyRollbackSnapshots<'a> {
     card_raw: Option<&'a str>,
     candidate_path: &'a Path,
     candidate_raw: Option<&'a str>,
-    health_path: &'a Path,
-    health_raw: Option<&'a str>,
     plan_path: &'a Path,
     plan_raw: Option<&'a str>,
 }
 
 fn restore_promotion_snapshots(snapshots: ApplyRollbackSnapshots<'_>) -> Result<()> {
-    restore_file_snapshot(snapshots.target_path, snapshots.target_raw)?;
-    restore_file_snapshot(snapshots.card_path, snapshots.card_raw)?;
-    restore_file_snapshot(snapshots.candidate_path, snapshots.candidate_raw)?;
-    restore_file_snapshot(snapshots.health_path, snapshots.health_raw)?;
-    restore_file_snapshot(snapshots.plan_path, snapshots.plan_raw)?;
+    restore_snapshot(snapshots.target_path, snapshots.target_raw)?;
+    restore_snapshot(snapshots.card_path, snapshots.card_raw)?;
+    restore_snapshot(snapshots.candidate_path, snapshots.candidate_raw)?;
+    restore_snapshot(snapshots.plan_path, snapshots.plan_raw)?;
     Ok(())
 }
 
-fn restore_file_snapshot(path: &Path, raw: Option<&str>) -> Result<()> {
-    match raw {
-        Some(raw) => {
-            if let Some(parent) = path.parent() {
-                ensure_dir(parent)?;
-            }
-            write_string_atomic(path, raw)?;
-        }
-        None => match fs::remove_file(path) {
-            Ok(()) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => {
-                return Err(error).with_context(|| format!("failed to remove {}", path.display()));
-            }
-        },
-    }
-    Ok(())
+fn restore_snapshot(path: &Path, raw: Option<&str>) -> Result<()> {
+    restore_or_remove(
+        path,
+        raw,
+        || format!("failed to restore {}", path.display()),
+        || format!("failed to remove {}", path.display()),
+    )
 }
 
 fn load_memory_candidate_raw(
@@ -2195,21 +2194,6 @@ fn validate_suggestion_request(request: &CreateSuggestionRequest) -> Result<()> 
     Ok(())
 }
 
-fn validate_source_refs(context: &str, source_refs: &[SourceRef]) -> Result<()> {
-    if source_refs.is_empty() {
-        bail!("{context} requires at least one source ref");
-    }
-    for source in source_refs {
-        if source.id.is_none() && source.path.is_none() {
-            bail!("{context} source_ref {} needs id or path", source.kind);
-        }
-        if forbidden_source_kind(&source.kind) {
-            bail!("{context} uses forbidden source kind {}", source.kind);
-        }
-    }
-    Ok(())
-}
-
 fn parse_scorer_contract(value: &serde_yaml::Value) -> Result<ScorerContract> {
     let contract: ScorerContract =
         serde_yaml::from_value(value.clone()).context("failed to parse gate.scorer_contract")?;
@@ -2272,23 +2256,25 @@ fn execute_scorer_with_timeout(
             };
         }
     };
-    let mut stdout = child.stdout.take();
-    let mut stderr = child.stderr.take();
+    let stdout_reader = spawn_child_pipe_reader(child.stdout.take());
+    let stderr_reader = spawn_child_pipe_reader(child.stderr.take());
     let started = Instant::now();
     loop {
         match child.try_wait() {
             Ok(Some(status)) => {
+                let (stdout, stderr) = collect_child_output(stdout_reader, stderr_reader);
                 return ScorerExecution {
                     passed: status.success(),
                     exit_code: status.code(),
-                    stdout: read_child_pipe(&mut stdout),
-                    stderr: read_child_pipe(&mut stderr),
+                    stdout,
+                    stderr,
                     error: None,
                 };
             }
             Ok(None) if started.elapsed() >= timeout => {
                 let kill_error = child.kill().err();
                 let wait_error = child.wait().err();
+                let (stdout, stderr) = collect_child_output(stdout_reader, stderr_reader);
                 let mut error = format!("scorer timed out after {}ms", timeout.as_millis());
                 if let Some(kill_error) = kill_error {
                     error.push_str(&format!("; failed to kill process: {kill_error}"));
@@ -2299,18 +2285,21 @@ fn execute_scorer_with_timeout(
                 return ScorerExecution {
                     passed: false,
                     exit_code: None,
-                    stdout: read_child_pipe(&mut stdout),
-                    stderr: read_child_pipe(&mut stderr),
+                    stdout,
+                    stderr,
                     error: Some(error),
                 };
             }
             Ok(None) => std::thread::sleep(Duration::from_millis(20)),
             Err(error) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                let (stdout, stderr) = collect_child_output(stdout_reader, stderr_reader);
                 return ScorerExecution {
                     passed: false,
                     exit_code: None,
-                    stdout: read_child_pipe(&mut stdout),
-                    stderr: read_child_pipe(&mut stderr),
+                    stdout,
+                    stderr,
                     error: Some(error.to_string()),
                 };
             }
@@ -2318,8 +2307,29 @@ fn execute_scorer_with_timeout(
     }
 }
 
-fn read_child_pipe<R: Read>(pipe: &mut Option<R>) -> Option<String> {
-    let mut pipe = pipe.take()?;
+fn spawn_child_pipe_reader<R>(pipe: Option<R>) -> std::thread::JoinHandle<Option<String>>
+where
+    R: Read + Send + 'static,
+{
+    std::thread::spawn(move || read_child_pipe(pipe))
+}
+
+fn collect_child_output(
+    stdout: std::thread::JoinHandle<Option<String>>,
+    stderr: std::thread::JoinHandle<Option<String>>,
+) -> (Option<String>, Option<String>) {
+    (join_child_pipe(stdout), join_child_pipe(stderr))
+}
+
+fn join_child_pipe(handle: std::thread::JoinHandle<Option<String>>) -> Option<String> {
+    match handle.join() {
+        Ok(output) => output,
+        Err(_) => Some("[failed to join scorer output reader]".to_string()),
+    }
+}
+
+fn read_child_pipe<R: Read>(pipe: Option<R>) -> Option<String> {
+    let mut pipe = pipe?;
     let mut bytes = Vec::new();
     match pipe.read_to_end(&mut bytes) {
         Ok(_) => Some(String::from_utf8_lossy(&bytes).into_owned()),
@@ -2869,6 +2879,35 @@ mod tests {
                 .contains("scorer timed out"),
             "{execution:?}"
         );
+        cleanup(&paths);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn command_scorer_drains_large_output_without_false_timeout() {
+        let paths = paths("scorer-large-output");
+        ensure_dir(paths.repo_root()).expect("repo root");
+        let contract = ScorerContract {
+            scorer_type: ScorerType::Test,
+            name: None,
+            argv: vec![
+                "/bin/sh".to_string(),
+                "-c".to_string(),
+                "head -c 200000 /dev/zero | tr '\\0' x; head -c 200000 /dev/zero | tr '\\0' y >&2"
+                    .to_string(),
+            ],
+        };
+
+        let execution = execute_scorer_with_timeout(
+            &paths,
+            "mem-large-output",
+            &contract,
+            Duration::from_secs(5),
+        );
+
+        assert!(execution.passed, "{execution:?}");
+        assert!(execution.stdout.as_deref().unwrap_or_default().len() >= 200_000);
+        assert!(execution.stderr.as_deref().unwrap_or_default().len() >= 200_000);
         cleanup(&paths);
     }
 

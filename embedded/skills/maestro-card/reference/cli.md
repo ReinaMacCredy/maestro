@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: b3ae6239b5461588dc4700cea42f6170d7ffcaa73f3975cacfe2a51a819b425e -->
+<!-- maestro:cli-reference-sha256: 04061c095cee8088d125ec478d22a4b86744e8a655af81e1735d7e7eca1d1b4d -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -80,7 +80,7 @@ a spelling not found here is outside this skill's CLI surface.
 ## maestro scorer
 
 - `maestro scorer run <CONTRACT_REF>` -- Run a typed scorer contract reference
-- `maestro scorer show <RECEIPT_REF>` -- Show one scorer receipt by path or memory-id#receipt-id
+- `maestro scorer show <RECEIPT_REF>` -- Show one scorer receipt by memory-id#receipt-id
 - `maestro scorer list --memory <MEMORY_ID>` -- List scorer receipts for a Memory card
 
 ## maestro card

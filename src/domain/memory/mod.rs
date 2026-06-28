@@ -95,20 +95,22 @@ fn validate_sources(candidate: &MemoryCandidate) -> Result<()> {
     if summary.source_refs.is_empty() {
         bail!("memory candidate {} has no source_refs", candidate.id);
     }
-    for source in &summary.source_refs {
+    validate_source_refs(
+        &format!("memory candidate {}", candidate.id),
+        &summary.source_refs,
+    )
+}
+
+pub fn validate_source_refs(context: &str, source_refs: &[SourceRef]) -> Result<()> {
+    if source_refs.is_empty() {
+        bail!("{context} requires at least one source ref");
+    }
+    for source in source_refs {
         if source.id.is_none() && source.path.is_none() {
-            bail!(
-                "memory candidate {} source_ref {} needs id or path",
-                candidate.id,
-                source.kind
-            );
+            bail!("{context} source_ref {} needs id or path", source.kind);
         }
         if forbidden_source_kind(&source.kind) {
-            bail!(
-                "memory candidate {} uses forbidden source kind {}",
-                candidate.id,
-                source.kind
-            );
+            bail!("{context} uses forbidden source kind {}", source.kind);
         }
     }
     Ok(())

@@ -408,11 +408,6 @@ pub fn create(args: CreateArgs) -> Result<()> {
                     "a custom card cannot take --parent; custom cards are top-level containers"
                 ));
             }
-            if card_type == card::schema::CardType::Memory {
-                return Err(anyhow!(
-                    "a memory card cannot take --parent; memory cards are top-level containers"
-                ));
-            }
             card::store::validate_card_id(&parent)?;
             let parent_card = card::store::resolve(&paths, &parent)?
                 .map(|resolved| resolved.card)
