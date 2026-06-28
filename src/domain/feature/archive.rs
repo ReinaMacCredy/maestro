@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 
 use crate::domain::card::query::{Coarse, coarse_of, scan_dir_with_paths, scan_with_paths};
-use crate::domain::card::schema::{Card, CardType};
+use crate::domain::card::schema::CardType;
 use crate::domain::card::store::{card_path, is_dir_backed, load_entries, save_entries};
 use crate::domain::feature::registry::{
     archived_card_path, load_archived_record, load_record, validate_feature_id,
@@ -109,15 +109,6 @@ pub fn archive_feature(
     archive_feature_checked(paths, id, dry_run, None)
 }
 
-pub fn archive_feature_with_expected_hash(
-    paths: &MaestroPaths,
-    id: &str,
-    dry_run: bool,
-    expected_live_card_hash: Option<&str>,
-) -> Result<FeatureArchiveReport> {
-    archive_feature_checked(paths, id, dry_run, expected_live_card_hash)
-}
-
 fn archive_feature_checked(
     paths: &MaestroPaths,
     id: &str,
@@ -128,16 +119,18 @@ fn archive_feature_checked(
     let live_card = card_path(paths, id);
     let archive_card = archived_card_path(paths, id);
     let live_card_snapshot = if live_card.is_file() {
-        Some(read_record_snapshot(id, &live_card)?)
+        let bytes = fs::read(&live_card)
+            .with_context(|| format!("failed to read {}", live_card.display()))?;
+        Some((sha256_prefixed(&bytes), bytes))
     } else {
         None
     };
-    if let (Some(expected), Some(snapshot)) = (expected_live_card_hash, live_card_snapshot.as_ref())
-        && expected != snapshot.hash
+    if let (Some(expected), Some((actual, _))) =
+        (expected_live_card_hash, live_card_snapshot.as_ref())
+        && expected != actual
     {
         bail!(
-            "cannot archive {id} — target card changed since preflight (expected {expected}, found {}); re-run the command",
-            snapshot.hash
+            "cannot archive {id} — target card changed since preflight (expected {expected}, found {actual}); re-run the command"
         );
     }
 
@@ -174,12 +167,7 @@ fn archive_feature_checked(
             continue;
         }
         if coarse_of(&card.status) == Some(Coarse::Closed) {
-            let snapshot = read_record_snapshot(&card.id, &path)?;
-            terminal_children.push(ArchiveRecord {
-                card,
-                path,
-                snapshot,
-            });
+            terminal_children.push((card.id, path));
         } else {
             live_children.push(card.id);
         }
@@ -192,14 +180,18 @@ fn archive_feature_checked(
             live_children.join(", ")
         );
     }
-    terminal_children.sort_by(|left, right| left.card.id.cmp(&right.card.id));
+    terminal_children.sort();
 
     if !dry_run {
-        if let Some(snapshot) = live_card_snapshot.as_ref() {
-            verify_record_snapshot(&format!("archive {id}"), snapshot)?;
-        }
-        for child in &terminal_children {
-            verify_record_snapshot(&format!("archive {id}"), &child.snapshot)?;
+        if let Some((snapshot_hash, snapshot_bytes)) = live_card_snapshot.as_ref() {
+            let current_bytes = fs::read(&live_card)
+                .with_context(|| format!("failed to re-read {}", live_card.display()))?;
+            if current_bytes != *snapshot_bytes {
+                let current_hash = sha256_prefixed(&current_bytes);
+                bail!(
+                    "cannot archive {id} — target card changed since preflight (expected {snapshot_hash}, found {current_hash}); re-run the command"
+                );
+            }
         }
         // Pre-flight no-clobber over the whole move set, so a collision aborts
         // the run before anything moves. A child inside the feature container
@@ -208,13 +200,13 @@ fn archive_feature_checked(
         if feature_live {
             moves.push((container.clone(), paths.archive_cards_dir().join(id)));
         }
-        for child in &terminal_children {
-            if child.path.starts_with(&container) {
+        for (child, path) in &terminal_children {
+            if path.starts_with(&container) {
                 continue;
             }
             moves.push(child_move(
-                &child.card.id,
-                &child.path,
+                child,
+                path,
                 &paths.cards_dir(),
                 &paths.archive_cards_dir(),
             )?);
@@ -254,10 +246,7 @@ fn archive_feature_checked(
         }
     }
 
-    let archived: Vec<String> = terminal_children
-        .into_iter()
-        .map(|child| child.card.id)
-        .collect();
+    let archived: Vec<String> = terminal_children.into_iter().map(|(id, _)| id).collect();
 
     Ok(FeatureArchiveReport {
         note: archive_note(id, dry_run, feature_live, &archived),
@@ -290,7 +279,6 @@ pub fn archive_loose(paths: &MaestroPaths) -> Result<LooseSweepReport> {
     let mut dir_moves: Vec<(PathBuf, PathBuf)> = Vec::new();
     // Entry sweeps grouped by live container file, ids in scan (id) order.
     let mut entry_sweeps: BTreeMap<PathBuf, Vec<String>> = BTreeMap::new();
-    let mut snapshots = Vec::new();
     let mut swept: Vec<String> = Vec::new();
     let mut lid_lines = String::new();
     let mut kept_rules: Vec<String> = Vec::new();
@@ -314,7 +302,6 @@ pub fn archive_loose(paths: &MaestroPaths) -> Result<LooseSweepReport> {
         if !sweeps {
             continue;
         }
-        snapshots.push(read_record_snapshot(&card.id, &path)?);
         if is_dir_backed(&path) {
             dir_moves.push(child_move(
                 &card.id,
@@ -334,10 +321,6 @@ pub fn archive_loose(paths: &MaestroPaths) -> Result<LooseSweepReport> {
 
     if swept.is_empty() {
         return Ok(LooseSweepReport { swept, kept_rules });
-    }
-
-    for snapshot in &snapshots {
-        verify_record_snapshot("sweep loose cards", snapshot)?;
     }
 
     // Pre-flight the whole sweep before anything moves: dir targets must be
@@ -488,45 +471,6 @@ fn child_move(
     Ok((dir.to_path_buf(), to_root.join(relative)))
 }
 
-#[derive(Clone, Debug)]
-struct ArchiveRecord {
-    card: Card,
-    path: PathBuf,
-    snapshot: RecordSnapshot,
-}
-
-#[derive(Clone, Debug)]
-struct RecordSnapshot {
-    id: String,
-    path: PathBuf,
-    hash: String,
-    bytes: Vec<u8>,
-}
-
-fn read_record_snapshot(id: &str, path: &Path) -> Result<RecordSnapshot> {
-    let bytes = fs::read(path).with_context(|| format!("failed to read {}", path.display()))?;
-    Ok(RecordSnapshot {
-        id: id.to_string(),
-        path: path.to_path_buf(),
-        hash: sha256_prefixed(&bytes),
-        bytes,
-    })
-}
-
-fn verify_record_snapshot(operation: &str, snapshot: &RecordSnapshot) -> Result<()> {
-    let current_bytes = fs::read(&snapshot.path)
-        .with_context(|| format!("failed to re-read {}", snapshot.path.display()))?;
-    if current_bytes != snapshot.bytes {
-        let current_hash = sha256_prefixed(&current_bytes);
-        bail!(
-            "cannot {operation} — card {} changed since preflight (expected {}, found {current_hash}); re-run the command",
-            snapshot.id,
-            snapshot.hash
-        );
-    }
-    Ok(())
-}
-
 /// Compose the `feature archive` summary across first-run, sweep-re-run,
 /// dry-run, and true no-op cases.
 fn archive_note(id: &str, dry_run: bool, feature_live: bool, archived: &[String]) -> String {
@@ -591,32 +535,4 @@ fn unarchive_note(id: &str, feature_changed: bool, restored: &[String]) -> Strin
         ));
     }
     parts.join("; ")
-}
-
-#[cfg(test)]
-mod tests {
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    use super::{read_record_snapshot, verify_record_snapshot};
-
-    #[test]
-    fn record_snapshot_rejects_changed_backing_file() {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("invariant: test clock should be after Unix epoch")
-            .as_nanos();
-        let path = std::env::temp_dir().join(format!(
-            "maestro-archive-snapshot-{nanos}-{}.yaml",
-            std::process::id()
-        ));
-        std::fs::write(&path, b"status: closed\n").expect("seed snapshot file");
-        let snapshot = read_record_snapshot("task-snapshot", &path).expect("snapshot file");
-
-        std::fs::write(&path, b"status: in_progress\n").expect("mutate snapshot file");
-        let error = verify_record_snapshot("archive feature", &snapshot)
-            .expect_err("changed backing file should fail snapshot verification");
-
-        assert!(error.to_string().contains("changed since preflight"));
-        std::fs::remove_file(path).expect("cleanup snapshot file");
-    }
 }

@@ -35,8 +35,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 18] = [
     (
         "skill",
         "maestro-card",
-        "1.36.1",
-        "0b9e2799617b2758f9b22acce66c4a2a42f523b2a15a31397f66f8810231d28b",
+        "1.36.0",
+        "58808d3e3bef7514ecde4cf9b36f20129484d0d3d5b1847514b50650f0412834",
     ),
     (
         "skill",
@@ -47,8 +47,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 18] = [
     (
         "skill",
         "maestro-design",
-        "1.30.1",
-        "6eec74b31d3db28ec342ec727b0d270cfe9a4336e419db788b71e932f9a1283a",
+        "1.30.0",
+        "34291149eca1133eb33850d464a12817ddb475dd39c48d8c09dc765d6b4d4aba",
     ),
     (
         "skill",
@@ -126,7 +126,7 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 18] = [
         "schema",
         "run-event",
         "maestro.event.v1",
-        "d07495c2b9539dbc264fe0361bdc5a3919c495cbaa90e059b30db83305ccb190",
+        "9747a8c28efe675a694e0fe315fa5b33c2aa6c5ee5352a1b272fa0a7cb9108a5",
     ),
     (
         "schema",
