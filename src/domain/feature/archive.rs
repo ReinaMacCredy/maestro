@@ -109,6 +109,15 @@ pub fn archive_feature(
     archive_feature_checked(paths, id, dry_run, None)
 }
 
+pub fn archive_feature_with_expected_hash(
+    paths: &MaestroPaths,
+    id: &str,
+    dry_run: bool,
+    expected_live_card_hash: Option<&str>,
+) -> Result<FeatureArchiveReport> {
+    archive_feature_checked(paths, id, dry_run, expected_live_card_hash)
+}
+
 fn archive_feature_checked(
     paths: &MaestroPaths,
     id: &str,

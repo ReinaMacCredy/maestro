@@ -47,8 +47,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 18] = [
     (
         "skill",
         "maestro-design",
-        "1.30.0",
-        "34291149eca1133eb33850d464a12817ddb475dd39c48d8c09dc765d6b4d4aba",
+        "1.30.1",
+        "6eec74b31d3db28ec342ec727b0d270cfe9a4336e419db788b71e932f9a1283a",
     ),
     (
         "skill",
@@ -126,7 +126,7 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 18] = [
         "schema",
         "run-event",
         "maestro.event.v1",
-        "9747a8c28efe675a694e0fe315fa5b33c2aa6c5ee5352a1b272fa0a7cb9108a5",
+        "d07495c2b9539dbc264fe0361bdc5a3919c495cbaa90e059b30db83305ccb190",
     ),
     (
         "schema",
