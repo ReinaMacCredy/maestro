@@ -140,6 +140,14 @@ fn feature_close_succeeds_when_the_full_suite_passes() {
     let closed = stdout(maestro(&close, repo), &close);
     assert!(closed.contains("closed report-builder"), "{closed}");
     assert!(closed.contains("full verify suite passed"), "{closed}");
+    assert!(
+        closed.contains("maestro feature auto-archive report-builder"),
+        "successful close should route preauthorized cleanup through auto-archive:\n{closed}"
+    );
+    assert!(
+        closed.contains("fallback: without auto-archive authority"),
+        "successful close still names the explicit archive path when authority is absent:\n{closed}"
+    );
 }
 
 #[test]

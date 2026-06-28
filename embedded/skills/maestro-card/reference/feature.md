@@ -35,8 +35,8 @@ maestro feature accept            # -> ready, requires qa-baseline
 maestro feature prepare --draft   # reviewable child-task plan
 maestro feature prepare --from    # create/explore/accept tasks from a plan file
 maestro feature close              # -> closed, requires qa-slice; --outcome required
-maestro card archive <id>         # explicit terminal archive; archives children too
-maestro feature auto-archive <id> --authority-ref <ref> --authority-target <id> --authority-head <sha> --authority-state current --tested-head <sha> --qa-result pass --qa-evidence "<proof>" --run <run> --multi-agent "<merge/evidence disposition>" --canonical-store <path-to/.maestro> --worker-source "<branch/worktree or none>"
+maestro feature auto-archive <id> --authority-ref <ref> --authority-target <id> --authority-head <sha> --authority-state current --tested-head <sha> --qa-result pass --qa-evidence "<proof>" --run <run> --multi-agent "<merge/evidence disposition>" --canonical-store <path-to/.maestro> --worker-source "<branch/worktree or none>"  # final cleanup when bounded ship/auto-archive authority exists
+maestro card archive <id>          # explicit terminal archive when no auto-archive authority exists
 ```
 
 Design owns proposed-contract authoring. After accept, use `feature amend` to
@@ -113,22 +113,27 @@ Close passes only when:
 Use `accept --dry-run` or `close --dry-run` to preview a gate without changing
 state.
 
-Auto-archive is a separate evidence-gated archive action, not a side effect of
-`close` or `cancel`. Use it only when a durable user/SPEC/run authority says
-archive is preauthorized for this target and the delivered commit hash is known.
-The helper must see the exact current `HEAD` in `--tested-head`, matching
-current target-scoped authority in `--authority-target`, `--authority-head`, and
-`--authority-state current`, a passing QA verdict, bounded QA evidence, a
-canonical owning store in `--canonical-store`, and a multi-agent/worktree
-disposition (`none`, or workers merged back and conflicts clear). Worker
-worktrees never auto-archive a shared target; they provide commits and evidence
-only. The owning/orchestrator checkout runs the helper against the canonical
-store. It then runs the normal terminal feature archive preflight, writes an
-`auto_archive` run event, and adds an archive-index receipt that records the
-canonical store path, invoking checkout path, worker branch/worktree source,
-final target head, tested head, authority, merge-back/evidence disposition, run
-id, event hash/path, archive path, and restore command. If any check fails, stop
-and report the blocker instead of falling back to manual archive.
+Auto-archive is a separate evidence-gated archive action, not a blind side
+effect of `close` or `cancel`. After a successful `feature close` or auto-close,
+do not finish at "closed" when a durable user/SPEC/run authority grants bounded
+ship or auto-archive authority for this target. Complete the separately
+authorized push, publish, release, local install, or handoff boundary first; then
+run `maestro feature auto-archive <id>` without asking again once the delivered
+commit hash is known. The helper must see the exact current `HEAD` in
+`--tested-head`, matching current target-scoped authority in `--authority-target`,
+`--authority-head`, and `--authority-state current`, a passing QA verdict,
+bounded QA evidence, a canonical owning store in `--canonical-store`, and a
+multi-agent/worktree disposition (`none`, or workers merged back and conflicts
+clear). Worker worktrees never auto-archive a shared target; they provide commits
+and evidence only. The owning/orchestrator checkout runs the helper against the
+canonical store. It then runs the normal terminal feature archive preflight,
+writes an `auto_archive` run event, and adds an archive-index receipt that
+records the canonical store path, invoking checkout path, worker branch/worktree
+source, final target head, tested head, authority, merge-back/evidence
+disposition, run id, event hash/path, archive path, and restore command. If any
+check fails, stop and report the blocker instead of falling back to manual
+archive. Use `maestro card archive <id>` only for explicit terminal archive when
+no auto-archive authority exists.
 
 ## Fan-out
 
@@ -157,7 +162,7 @@ show feature-fan-out`.
 ## Hand-off
 
 Next: accepted feature -> [work.md](work.md); all children verified ->
-[qa-slice.md](qa-slice.md), then `feature close --outcome "<one line>"`;
-closed -> `maestro card archive <id>` for explicit retirement, or
-`maestro feature auto-archive <id> ...` when the commit/QA authority gate is
-already satisfied.
+[qa-slice.md](qa-slice.md), then `feature close --outcome "<one line>"`. After
+close, run `maestro feature auto-archive <id> ...` when bounded ship or
+auto-archive authority plus exact-HEAD QA evidence are satisfied; otherwise use
+`maestro card archive <id>` only for explicit terminal retirement.

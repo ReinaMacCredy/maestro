@@ -632,7 +632,17 @@ fn print_close_receipt(paths: &MaestroPaths, report: &feature::TransitionReport)
         println!("  verification: {claims_only} claims-only task(s)");
     }
     println!("inspect: maestro feature show {}", report.id);
-    println!("next: maestro card archive {}", report.id);
+    println!(
+        "next: if bounded ship/auto-archive authority is current and exact-HEAD QA evidence is recorded, run:"
+    );
+    println!(
+        "  maestro feature auto-archive {} --authority-ref <ref> --authority-target {} --authority-head <sha> --authority-state current --tested-head <sha> --qa-result pass --qa-evidence \"<proof>\" --run <run> --multi-agent \"<disposition>\" --canonical-store <path-to/.maestro> --worker-source \"<branch/worktree or none>\"",
+        report.id, report.id
+    );
+    println!(
+        "fallback: without auto-archive authority, explicit terminal archive is: maestro card archive {}",
+        report.id
+    );
     println!("retro: anything to make a permanent rule?");
     println!("  record it: maestro harness propose --title \"<rule>\" --evidence \"<why>\"");
     Ok(())

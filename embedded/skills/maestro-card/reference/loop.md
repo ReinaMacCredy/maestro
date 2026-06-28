@@ -121,8 +121,10 @@ the same records and stop conditions.
    publish, archive, or external announcement unless the original prompt or
    accepted card contract granted explicit run-scoped ship authority naming
    scope, target, allowed external actions, hard stops, and required evidence.
-   Archive additionally requires the kickoff, SPEC, or run policy to explicitly
-   preauthorize auto-archive and
+   When that authority includes bounded ship or auto-archive authority for the
+   target, do not stop at `closed`: finish the authorized ship boundary, then run
+   the archive cleanup without asking again. Archive additionally requires the
+   kickoff, SPEC, or run policy to explicitly preauthorize auto-archive and
    `maestro feature auto-archive <id> --authority-ref <ref> --authority-target <id> --authority-head <sha> --authority-state current --tested-head <sha> --qa-result pass --qa-evidence "<proof>" --run <run> --multi-agent "<disposition>" --canonical-store <path-to/.maestro> --worker-source "<branch/worktree or none>"`
    to pass against the post-merge target `HEAD`. Absent, partial, stale, or
    overbroad authority fails closed.

@@ -129,6 +129,10 @@ fn last_prove_auto_closes_in_the_same_call() {
         out.contains("close receipt"),
         "close receipt printed: {out}"
     );
+    assert!(
+        out.contains("maestro feature auto-archive report-builder"),
+        "auto-close receipt should route preauthorized cleanup through auto-archive: {out}"
+    );
 
     let show = stdout(
         maestro(&["feature", "show", "report-builder"], repo),

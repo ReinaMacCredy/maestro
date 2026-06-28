@@ -1,6 +1,6 @@
 ---
 name: maestro-card
-version: 1.36.0
+version: 1.36.1
 description: "Use when the user wants to implement, fix, verify, QA, close, release, continue, use loop, keep looping, work while away, or work while asleep on Maestro cards/features/tasks in a project using Maestro after design is approved."
 ---
 
@@ -94,15 +94,17 @@ Read the reference for the job at hand; they share the ground rules below.
   Bug/Chore/Custom containers whose owned tasks are verified.
   When the user says "close" a feature, branch on its state: a live feature
   means `feature close` or `feature cancel`; a feature already terminal
-  (closed/cancelled) means archive it — run `maestro card archive <id>` directly,
-  do not re-ask. `maestro card archive` moves a terminal feature's records to
-  `.maestro/archive/`; the user's word "close" on a terminal card is the
-  explicit intent to archive, but archive is never an automatic side effect of
-  close/cancel, and a non-terminal feature is never archived.
-- When the user or SPEC preauthorizes auto-archive at the archive phase, do not
-  ask again only after the delivered commit hash is known and required QA passed
-  against the exact current `HEAD`. Use `maestro feature auto-archive <id>`
-  with a current target-scoped authority (`--authority-ref`, `--authority-target`,
+  (closed/cancelled) means archive it. If the current request, accepted
+  contract, SPEC, or run record grants bounded ship or auto-archive authority
+  for this target, do not finish at "closed" and do not ask again: after the
+  requested push/publish/release/local-install/handoff boundary completes and
+  the delivered commit hash is known, run `maestro feature auto-archive <id>`
+  as the next lifecycle step. If no such authority exists, run
+  `maestro card archive <id>` only when the user's terminal "close" wording is
+  explicit archive intent. Archive is never a blind close/cancel side effect,
+  and a non-terminal feature is never archived.
+- For preauthorized auto-archive, use `maestro feature auto-archive <id>` with
+  a current target-scoped authority (`--authority-ref`, `--authority-target`,
   `--authority-head`, `--authority-state current`), exact QA evidence
   (`--tested-head`, `--qa-result pass`, repeat `--qa-evidence`), the owning
   run/worktree disposition (`--run`, `--multi-agent`, `--worker-source`), and
