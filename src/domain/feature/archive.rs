@@ -22,6 +22,7 @@ use crate::domain::feature::registry::{
     archived_card_path, load_archived_record, load_record, validate_feature_id,
 };
 use crate::foundation::core::fs::{append_text_file, ensure_dir};
+use crate::foundation::core::hash::sha256_prefixed;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::time::utc_now_timestamp;
 
@@ -38,8 +39,13 @@ pub struct FeatureArchiveReport {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AutoArchiveReceipt {
     pub feature_id: String,
+    pub canonical_store_path: String,
+    pub invoking_checkout_path: String,
+    pub worker_source: String,
+    pub final_target_head: String,
     pub tested_head: String,
     pub authority_ref: String,
+    pub merge_back_disposition: String,
     pub qa_result: String,
     pub run_id: String,
     pub event_id: String,
@@ -61,10 +67,15 @@ pub fn append_auto_archive_receipt(
     validate_feature_id(&receipt.feature_id)?;
     let date = utc_now_timestamp()[..10].to_string();
     let line = format!(
-        "- {date} auto_archive {}: tested_head `{}`; authority `{}`; qa `{}`; run `{}`; event `{}` `{}` at `{}`; archive `{}`; restore `{}`\n",
+        "- {date} auto_archive {}: canonical_store `{}`; invoking_checkout `{}`; worker_source `{}`; final_head `{}`; tested_head `{}`; authority `{}`; merge_back `{}`; qa `{}`; run `{}`; event `{}` `{}` at `{}`; archive `{}`; restore `{}`\n",
         receipt.feature_id,
+        index_cell(&receipt.canonical_store_path),
+        index_cell(&receipt.invoking_checkout_path),
+        index_cell(&receipt.worker_source),
+        index_cell(&receipt.final_target_head),
         index_cell(&receipt.tested_head),
         index_cell(&receipt.authority_ref),
+        index_cell(&receipt.merge_back_disposition),
         index_cell(&receipt.qa_result),
         index_cell(&receipt.run_id),
         index_cell(&receipt.event_id),
@@ -95,9 +106,33 @@ pub fn archive_feature(
     id: &str,
     dry_run: bool,
 ) -> Result<FeatureArchiveReport> {
+    archive_feature_checked(paths, id, dry_run, None)
+}
+
+fn archive_feature_checked(
+    paths: &MaestroPaths,
+    id: &str,
+    dry_run: bool,
+    expected_live_card_hash: Option<&str>,
+) -> Result<FeatureArchiveReport> {
     validate_feature_id(id)?;
     let live_card = card_path(paths, id);
     let archive_card = archived_card_path(paths, id);
+    let live_card_snapshot = if live_card.is_file() {
+        let bytes = fs::read(&live_card)
+            .with_context(|| format!("failed to read {}", live_card.display()))?;
+        Some((sha256_prefixed(&bytes), bytes))
+    } else {
+        None
+    };
+    if let (Some(expected), Some((actual, _))) =
+        (expected_live_card_hash, live_card_snapshot.as_ref())
+        && expected != actual
+    {
+        bail!(
+            "cannot archive {id} — target card changed since preflight (expected {expected}, found {actual}); re-run the command"
+        );
+    }
 
     let (record, feature_live) = if live_card.is_file() {
         (load_record(paths, id)?, true)
@@ -148,6 +183,16 @@ pub fn archive_feature(
     terminal_children.sort();
 
     if !dry_run {
+        if let Some((snapshot_hash, snapshot_bytes)) = live_card_snapshot.as_ref() {
+            let current_bytes = fs::read(&live_card)
+                .with_context(|| format!("failed to re-read {}", live_card.display()))?;
+            if current_bytes != *snapshot_bytes {
+                let current_hash = sha256_prefixed(&current_bytes);
+                bail!(
+                    "cannot archive {id} — target card changed since preflight (expected {snapshot_hash}, found {current_hash}); re-run the command"
+                );
+            }
+        }
         // Pre-flight no-clobber over the whole move set, so a collision aborts
         // the run before anything moves. A child inside the feature container
         // rides the container move; only outside homes move individually.

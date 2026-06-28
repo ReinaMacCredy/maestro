@@ -1,4 +1,6 @@
-use std::path::Path;
+use std::collections::BTreeMap;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Result, bail};
 use serde_json::{Value, json};
@@ -222,22 +224,34 @@ pub fn run(args: FeatureArgs) -> Result<()> {
         FeatureCommand::AutoArchive {
             id,
             authority_ref,
+            authority_target,
+            authority_head,
+            authority_state,
             tested_head,
             qa_result,
             qa_evidence,
             run,
             multi_agent,
+            canonical_store,
+            worker_source,
+            target_card_hash,
             dry_run,
         } => auto_archive_feature(
             &paths,
             AutoArchiveArgs {
                 id,
                 authority_ref,
+                authority_target,
+                authority_head,
+                authority_state,
                 tested_head,
                 qa_result,
                 qa_evidence,
                 run_id: run,
                 multi_agent,
+                canonical_store,
+                worker_source,
+                target_card_hash,
                 dry_run,
             },
         ),
@@ -673,23 +687,79 @@ fn archive_features(
 struct AutoArchiveArgs {
     id: String,
     authority_ref: String,
+    authority_target: String,
+    authority_head: String,
+    authority_state: String,
     tested_head: String,
     qa_result: String,
     qa_evidence: Vec<String>,
     run_id: String,
     multi_agent: String,
+    canonical_store: String,
+    worker_source: String,
+    target_card_hash: Option<String>,
     dry_run: bool,
 }
 
 fn auto_archive_feature(paths: &MaestroPaths, args: AutoArchiveArgs) -> Result<()> {
     let id = required_cli_value("feature id", &args.id)?;
     let authority_ref = required_cli_value("--authority-ref", &args.authority_ref)?;
+    let authority_target = required_cli_value("--authority-target", &args.authority_target)?;
+    let authority_head = required_cli_value("--authority-head", &args.authority_head)?;
+    let authority_state = required_cli_value("--authority-state", &args.authority_state)?;
     let tested_head = required_cli_value("--tested-head", &args.tested_head)?;
     let qa_result = required_cli_value("--qa-result", &args.qa_result)?;
     let run_id = required_cli_value("--run", &args.run_id)?;
     let multi_agent = required_cli_value("--multi-agent", &args.multi_agent)?;
+    let canonical_store = required_cli_value("--canonical-store", &args.canonical_store)?;
+    let worker_source = required_cli_value("--worker-source", &args.worker_source)?;
+    let target_card_hash = args
+        .target_card_hash
+        .as_deref()
+        .map(|hash| required_cli_value("--target-card-hash", hash))
+        .transpose()?;
     let qa_evidence = required_cli_values("--qa-evidence", args.qa_evidence)?;
 
+    let current_store_path = canonical_path(&paths.maestro_dir());
+    let canonical_store_path = canonical_path(Path::new(&canonical_store));
+    let invoking_checkout_path = canonical_path(paths.repo_root());
+    let current_store = current_store_path.display().to_string();
+    let canonical_store = canonical_store_path.display().to_string();
+    let invoking_checkout = invoking_checkout_path.display().to_string();
+    if current_store_path != canonical_store_path {
+        bail!(
+            "cannot auto-archive {id} — current store `{}` is not canonical store `{}`; run from the owning/orchestrator checkout that owns the live target card",
+            current_store,
+            canonical_store
+        );
+    }
+    let target_card_path = paths.cards_dir().join(&id).join("card.yaml");
+    if !target_card_path.is_file() {
+        bail!(
+            "cannot auto-archive {id} — target feature is missing from current store `{}`; run from the owning/orchestrator checkout that owns the live target card",
+            current_store
+        );
+    }
+    if let Some(expected_hash) = target_card_hash.as_deref() {
+        let target_card_bytes = fs::read(&target_card_path)?;
+        let actual_hash = sha256_prefixed(&target_card_bytes);
+        if expected_hash != actual_hash {
+            bail!(
+                "cannot auto-archive {id} — target card changed since preflight (expected {expected_hash}, found {actual_hash}); re-run the command"
+            );
+        }
+    }
+
+    if authority_target != id {
+        bail!(
+            "cannot auto-archive {id} — authority target `{authority_target}` does not match feature id `{id}`; retry with a current target-scoped authority"
+        );
+    }
+    if authority_state != "current" {
+        bail!(
+            "cannot auto-archive {id} — authority `{authority_ref}` is `{authority_state}`, not current; retry with current target-scoped bounded ship authority"
+        );
+    }
     if !qa_passed(&qa_result) {
         bail!("cannot auto-archive {id} — --qa-result must be pass/passed, got `{qa_result}`");
     }
@@ -706,11 +776,30 @@ fn auto_archive_feature(paths: &MaestroPaths, args: AutoArchiveArgs) -> Result<(
             "cannot auto-archive {id} — tested head {tested_head} does not match current HEAD {current_head}"
         );
     }
-    if snapshot.dirty {
+    if authority_head != current_head {
         bail!(
-            "cannot auto-archive {id} — worktree is dirty at {current_head} ({} .maestro path(s), {} other path(s)); commit or clean before archive",
-            snapshot.maestro_dirty,
-            snapshot.code_other_dirty
+            "cannot auto-archive {id} — authority head {authority_head} does not match current HEAD {current_head}"
+        );
+    }
+    let relevant_dirty = relevant_dirty_paths(&snapshot.dirty_paths, &id, &run_id, &qa_evidence);
+    if !relevant_dirty.is_empty() {
+        bail!(
+            "cannot auto-archive {id} — relevant dirty path(s) at {current_head}: {}; commit or clean before archive",
+            relevant_dirty.join(", ")
+        );
+    }
+    let unresolved_conflicts = unresolved_conflicts_for_target(paths, &id)?;
+    if !unresolved_conflicts.is_empty() {
+        bail!(
+            "cannot auto-archive {id} — unresolved Maestro conflict(s): {}; clear conflicts before archive",
+            unresolved_conflicts.join(", ")
+        );
+    }
+    let open_work = blocking_work_items(paths, &id)?;
+    if !open_work.is_empty() {
+        bail!(
+            "cannot auto-archive {id} — live or claimed descendant/linked work item(s): {}; verify/archive or release them first",
+            open_work.join(", ")
         );
     }
 
@@ -725,6 +814,9 @@ fn auto_archive_feature(paths: &MaestroPaths, args: AutoArchiveArgs) -> Result<(
         };
         println!("dry-run: auto-archive preflight passed for {id}");
         println!("  authority: {authority_ref}");
+        println!("  canonical store: {current_store}");
+        println!("  invoking checkout: {invoking_checkout}");
+        println!("  worker source: {worker_source}");
         println!("  tested head: {current_head}");
         println!("  qa: {qa_result} ({} evidence item(s))", qa_evidence.len());
         println!("  multi-agent/worktree: {multi_agent}");
@@ -746,11 +838,25 @@ fn auto_archive_feature(paths: &MaestroPaths, args: AutoArchiveArgs) -> Result<(
         short_commit(current_head),
         utc_now_timestamp()
     );
-    let command = auto_archive_command(&id, &authority_ref, current_head, &qa_result, &run_id);
+    let command = auto_archive_command(AutoArchiveCommandParts {
+        id: &id,
+        authority_ref: &authority_ref,
+        authority_target: &authority_target,
+        authority_head: &authority_head,
+        tested_head: current_head,
+        qa_result: &qa_result,
+        run_id: &run_id,
+        multi_agent: &multi_agent,
+        canonical_store: &current_store,
+        worker_source: &worker_source,
+    });
     let mut event = auto_archive_event(AutoArchiveEventParts {
         event_id: &event_id,
         id: &id,
         authority_ref: &authority_ref,
+        canonical_store_path: &current_store,
+        invoking_checkout_path: &invoking_checkout,
+        worker_source: &worker_source,
         current_head,
         qa_result: &qa_result,
         qa_evidence: &qa_evidence,
@@ -764,6 +870,7 @@ fn auto_archive_feature(paths: &MaestroPaths, args: AutoArchiveArgs) -> Result<(
         post_archive_check: &post_archive_check,
         snapshot_maestro_dirty: snapshot.maestro_dirty,
         snapshot_code_other_dirty: snapshot.code_other_dirty,
+        merge_back_disposition: &multi_agent,
     });
     run::insert_agent_runtime(&mut event, agent_runtime_from_env());
     let event_hash = sha256_prefixed(&serde_json::to_vec(&event)?);
@@ -780,8 +887,13 @@ fn auto_archive_feature(paths: &MaestroPaths, args: AutoArchiveArgs) -> Result<(
 
     let receipt = feature::AutoArchiveReceipt {
         feature_id: id.clone(),
+        canonical_store_path: current_store.clone(),
+        invoking_checkout_path: invoking_checkout.clone(),
+        worker_source: worker_source.clone(),
+        final_target_head: current_head.to_string(),
         tested_head: current_head.to_string(),
         authority_ref: authority_ref.clone(),
+        merge_back_disposition: multi_agent.clone(),
         qa_result: qa_result.clone(),
         run_id: run_id.clone(),
         event_id: event_id.clone(),
@@ -799,6 +911,9 @@ fn auto_archive_feature(paths: &MaestroPaths, args: AutoArchiveArgs) -> Result<(
 
     println!("auto-archived {id}");
     println!("  authority: {authority_ref}");
+    println!("  canonical store: {current_store}");
+    println!("  invoking checkout: {invoking_checkout}");
+    println!("  worker source: {worker_source}");
     println!("  tested head: {current_head}");
     println!("  qa: {qa_result} ({} evidence item(s))", qa_evidence.len());
     println!("  multi-agent/worktree: {multi_agent}");
@@ -813,6 +928,9 @@ struct AutoArchiveEventParts<'a> {
     event_id: &'a str,
     id: &'a str,
     authority_ref: &'a str,
+    canonical_store_path: &'a str,
+    invoking_checkout_path: &'a str,
+    worker_source: &'a str,
     current_head: &'a str,
     qa_result: &'a str,
     qa_evidence: &'a [String],
@@ -826,6 +944,7 @@ struct AutoArchiveEventParts<'a> {
     post_archive_check: &'a str,
     snapshot_maestro_dirty: usize,
     snapshot_code_other_dirty: usize,
+    merge_back_disposition: &'a str,
 }
 
 fn auto_archive_event(parts: AutoArchiveEventParts<'_>) -> Value {
@@ -840,11 +959,16 @@ fn auto_archive_event(parts: AutoArchiveEventParts<'_>) -> Value {
         "target_kind": "feature",
         "target_id": parts.id,
         "authority_ref": parts.authority_ref,
+        "canonical_store_path": parts.canonical_store_path,
+        "invoking_checkout_path": parts.invoking_checkout_path,
+        "worker_source": parts.worker_source,
+        "final_target_head": parts.current_head,
         "tested_head": parts.current_head,
         "commit": parts.current_head,
         "qa_result": parts.qa_result,
         "qa_evidence": parts.qa_evidence,
         "multi_agent_disposition": parts.multi_agent,
+        "merge_back_disposition": parts.merge_back_disposition,
         "preflight_result": {
             "git_head": parts.current_head,
             "git_dirty": false,
@@ -877,6 +1001,137 @@ fn post_archive_check(paths: &MaestroPaths, id: &str) -> Result<String> {
     Ok("archived-visible; live feature absent".to_string())
 }
 
+fn canonical_path(path: &Path) -> PathBuf {
+    path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
+}
+
+fn relevant_dirty_paths(
+    dirty_paths: &[PathBuf],
+    id: &str,
+    run_id: &str,
+    qa_evidence: &[String],
+) -> Vec<String> {
+    let evidence_paths = qa_evidence_paths(qa_evidence);
+    dirty_paths
+        .iter()
+        .filter(|path| path_is_auto_archive_relevant(path, id, run_id, &evidence_paths))
+        .map(|path| path.display().to_string())
+        .collect()
+}
+
+fn qa_evidence_paths(qa_evidence: &[String]) -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    for item in qa_evidence {
+        for token in item.split_whitespace() {
+            let Some(value) = token
+                .strip_prefix("path=")
+                .or_else(|| token.strip_prefix("paths="))
+            else {
+                continue;
+            };
+            for path in value
+                .split(',')
+                .map(str::trim)
+                .filter(|path| !path.is_empty())
+            {
+                paths.push(PathBuf::from(path));
+            }
+        }
+    }
+    paths.sort();
+    paths.dedup();
+    paths
+}
+
+fn path_is_auto_archive_relevant(
+    path: &Path,
+    id: &str,
+    run_id: &str,
+    evidence_paths: &[PathBuf],
+) -> bool {
+    path.starts_with(Path::new(".maestro").join("cards").join(id))
+        || path == Path::new(".maestro/archive/cards/INDEX.md")
+        || path.starts_with(Path::new(".maestro").join("archive").join("cards").join(id))
+        || path.starts_with(
+            Path::new(".maestro")
+                .join("runs")
+                .join(run::run_dir_name(run_id)),
+        )
+        || evidence_paths
+            .iter()
+            .any(|evidence_path| path == evidence_path || path.starts_with(evidence_path))
+}
+
+fn blocking_work_items(paths: &MaestroPaths, id: &str) -> Result<Vec<String>> {
+    let mut blockers = Vec::new();
+    for card in card::query::scan(paths)? {
+        if !card.card_type.workable() {
+            continue;
+        }
+        let owned_by_target =
+            card.parent.as_deref() == Some(id) || card.deps.iter().any(|dep| dep.target == id);
+        if !owned_by_target {
+            continue;
+        }
+        let coarse = card::query::coarse_of(&card.status);
+        if coarse != Some(card::query::Coarse::Closed) || card.claimed_by.is_some() {
+            let claimed = card
+                .claimed_by
+                .as_deref()
+                .map(|owner| format!(", claimed_by={owner}"))
+                .unwrap_or_default();
+            blockers.push(format!("{} status={}{}", card.id, card.status, claimed));
+        }
+    }
+    blockers.sort();
+    Ok(blockers)
+}
+
+fn unresolved_conflicts_for_target(paths: &MaestroPaths, id: &str) -> Result<Vec<String>> {
+    let path = paths.maestro_dir().join("conflicts.jsonl");
+    let text = match fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => return Err(error.into()),
+    };
+    let mut latest: BTreeMap<(String, String), (String, String, String)> = BTreeMap::new();
+    for line in text.lines() {
+        let Ok(value) = serde_json::from_str::<Value>(line.trim()) else {
+            continue;
+        };
+        let action = value.get("action").and_then(Value::as_str).unwrap_or("");
+        let session = value
+            .get("asserter_session")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        let peer = value
+            .get("peer_card")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        let asserter = value
+            .get("asserter_card")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        let reason = value
+            .get("reason")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        latest.insert((session, peer), (action.to_string(), asserter, reason));
+    }
+    let mut conflicts = Vec::new();
+    for ((session, peer), (action, asserter, reason)) in latest {
+        if action == "assert" && (peer == id || asserter == id) {
+            conflicts.push(format!("{session}->{peer}: {reason}"));
+        }
+    }
+    conflicts.sort();
+    Ok(conflicts)
+}
+
 fn required_cli_value(name: &str, value: &str) -> Result<String> {
     let trimmed = value.trim();
     if trimmed.is_empty() {
@@ -899,15 +1154,32 @@ fn qa_passed(value: &str) -> bool {
     )
 }
 
-fn auto_archive_command(
-    id: &str,
-    authority_ref: &str,
-    tested_head: &str,
-    qa_result: &str,
-    run_id: &str,
-) -> String {
+struct AutoArchiveCommandParts<'a> {
+    id: &'a str,
+    authority_ref: &'a str,
+    authority_target: &'a str,
+    authority_head: &'a str,
+    tested_head: &'a str,
+    qa_result: &'a str,
+    run_id: &'a str,
+    multi_agent: &'a str,
+    canonical_store: &'a str,
+    worker_source: &'a str,
+}
+
+fn auto_archive_command(parts: AutoArchiveCommandParts<'_>) -> String {
     format!(
-        "maestro feature auto-archive {id} --authority-ref {authority_ref} --tested-head {tested_head} --qa-result {qa_result} --run {run_id}"
+        "maestro feature auto-archive {} --authority-ref {} --authority-target {} --authority-head {} --authority-state current --tested-head {} --qa-result {} --run {} --multi-agent {} --canonical-store {} --worker-source {}",
+        parts.id,
+        parts.authority_ref,
+        parts.authority_target,
+        parts.authority_head,
+        parts.tested_head,
+        parts.qa_result,
+        parts.run_id,
+        parts.multi_agent,
+        parts.canonical_store,
+        parts.worker_source,
     )
 }
 

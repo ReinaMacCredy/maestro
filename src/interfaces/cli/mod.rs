@@ -1513,6 +1513,18 @@ pub enum FeatureCommand {
             help = "Durable user/SPEC/run authority reference"
         )]
         authority_ref: String,
+        #[arg(long = "authority-target", help = "Feature id scoped by the authority")]
+        authority_target: String,
+        #[arg(
+            long = "authority-head",
+            help = "Full Git HEAD SHA scoped by the authority"
+        )]
+        authority_head: String,
+        #[arg(
+            long = "authority-state",
+            help = "Current authority state; must be current"
+        )]
+        authority_state: String,
         #[arg(long = "tested-head", help = "Full Git HEAD SHA that passed QA")]
         tested_head: String,
         #[arg(long = "qa-result", help = "QA verdict; must be pass/passed")]
@@ -1529,6 +1541,21 @@ pub enum FeatureCommand {
             help = "Disposition of multi-agent/worktree work, e.g. none or merged back into target HEAD"
         )]
         multi_agent: String,
+        #[arg(
+            long = "canonical-store",
+            help = "Canonical .maestro store path that owns the target card"
+        )]
+        canonical_store: String,
+        #[arg(
+            long = "worker-source",
+            help = "Worker branch/worktree that produced final HEAD, or none"
+        )]
+        worker_source: String,
+        #[arg(
+            long = "target-card-hash",
+            help = "Optional sha256:<hex> hash of the live target card from preflight"
+        )]
+        target_card_hash: Option<String>,
         #[arg(
             long,
             help = "Preview the auto-archive without moving cards or writing receipts"

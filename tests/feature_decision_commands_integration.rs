@@ -14,10 +14,19 @@ use card_support::{
 use git2::{IndexAddOption, Repository, Signature};
 use maestro::domain::decisions::template::decision_markdown;
 use maestro::foundation::core::fs::ensure_dir;
+use maestro::foundation::core::hash::sha256_prefixed;
 use serde_yaml::Value as YamlValue;
 use support::TestTempDir;
 
 fn maestro(args: &[&str], cwd: &Path) -> std::process::Output {
+    Command::new(env!("CARGO_BIN_EXE_maestro"))
+        .args(args)
+        .current_dir(cwd)
+        .output()
+        .expect("invariant: compiled maestro binary should be runnable in integration tests")
+}
+
+fn maestro_owned(args: &[String], cwd: &Path) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_maestro"))
         .args(args)
         .current_dir(cwd)
@@ -98,6 +107,79 @@ fn commit_all(repository: &Repository, message: &str) -> String {
         .to_string()
 }
 
+fn auto_archive_args(
+    id: &str,
+    head: &str,
+    evidence: &str,
+    canonical_store: &str,
+    worker_source: &str,
+) -> Vec<String> {
+    vec![
+        "feature".to_string(),
+        "auto-archive".to_string(),
+        id.to_string(),
+        "--authority-ref".to_string(),
+        "SPEC-auto-archive-policy:D1".to_string(),
+        "--authority-target".to_string(),
+        id.to_string(),
+        "--authority-head".to_string(),
+        head.to_string(),
+        "--authority-state".to_string(),
+        "current".to_string(),
+        "--tested-head".to_string(),
+        head.to_string(),
+        "--qa-result".to_string(),
+        "pass".to_string(),
+        "--qa-evidence".to_string(),
+        evidence.to_string(),
+        "--run".to_string(),
+        "run-auto".to_string(),
+        "--multi-agent".to_string(),
+        "workers merged back; evidence exact HEAD".to_string(),
+        "--canonical-store".to_string(),
+        canonical_store.to_string(),
+        "--worker-source".to_string(),
+        worker_source.to_string(),
+    ]
+}
+
+fn cancelled_feature_with_head(root: &Path) -> (Repository, String, String, String) {
+    let repository = init_git_repo(root);
+    stdout(maestro(&["init", "--yes"], root), &["init", "--yes"]);
+    stdout(
+        maestro(&["feature", "new", "Billing CSV export"], root),
+        &["feature", "new", "Billing CSV export"],
+    );
+    stdout(
+        maestro(
+            &[
+                "feature",
+                "cancel",
+                "billing-csv-export",
+                "--reason",
+                "scope cut",
+            ],
+            root,
+        ),
+        &[
+            "feature",
+            "cancel",
+            "billing-csv-export",
+            "--reason",
+            "scope cut",
+        ],
+    );
+    let head = commit_all(&repository, "terminal feature state");
+    let evidence = format!("cargo test exit=0 ts=2026-06-27T00:00:00Z head={head}");
+    let canonical_store = root
+        .join(".maestro")
+        .canonicalize()
+        .expect("invariant: canonical store should exist")
+        .display()
+        .to_string();
+    (repository, head, evidence, canonical_store)
+}
+
 fn stdout(output: std::process::Output, args: &[&str]) -> String {
     assert!(
         output.status.success(),
@@ -110,7 +192,31 @@ fn stdout(output: std::process::Output, args: &[&str]) -> String {
     String::from_utf8(output.stdout).expect("invariant: stdout should be UTF-8")
 }
 
+fn stdout_owned(output: std::process::Output, args: &[String]) -> String {
+    assert!(
+        output.status.success(),
+        "maestro {:?} failed\nstdout:\n{}\nstderr:\n{}",
+        args,
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    String::from_utf8(output.stdout).expect("invariant: stdout should be UTF-8")
+}
+
 fn assert_failure(output: std::process::Output, args: &[&str]) -> String {
+    assert!(
+        !output.status.success(),
+        "maestro {:?} unexpectedly succeeded\nstdout:\n{}\nstderr:\n{}",
+        args,
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    String::from_utf8(output.stderr).expect("invariant: stderr should be UTF-8")
+}
+
+fn assert_failure_owned(output: std::process::Output, args: &[String]) -> String {
     assert!(
         !output.status.success(),
         "maestro {:?} unexpectedly succeeded\nstdout:\n{}\nstderr:\n{}",
@@ -1871,64 +1977,36 @@ fn feature_archive_appends_one_digest_line_to_the_archive_index() {
 fn feature_auto_archive_requires_exact_head_and_writes_receipts() {
     let temp_dir = TestTempDir::new("maestro-auto-archive");
     let root = temp_dir.path();
-    let repository = init_git_repo(root);
-    stdout(maestro(&["init", "--yes"], root), &["init", "--yes"]);
-
-    let create_args = ["feature", "new", "Billing CSV export"];
-    stdout(maestro(&create_args, root), &create_args);
-    let cancel_args = [
-        "feature",
-        "cancel",
-        "billing-csv-export",
-        "--reason",
-        "scope cut",
-    ];
-    stdout(maestro(&cancel_args, root), &cancel_args);
-    let head = commit_all(&repository, "terminal feature state");
-    let evidence = format!("cargo test exit=0 ts=2026-06-27T00:00:00Z head={head}");
+    let (_repository, head, evidence, canonical_store) = cancelled_feature_with_head(root);
 
     let wrong_head = "0000000000000000000000000000000000000000";
-    let mismatch_args = [
-        "feature",
-        "auto-archive",
+    let mut mismatch_args = auto_archive_args(
         "billing-csv-export",
-        "--authority-ref",
-        "SPEC-auto-archive-policy:D1",
-        "--tested-head",
-        wrong_head,
-        "--qa-result",
-        "pass",
-        "--qa-evidence",
-        evidence.as_str(),
-        "--run",
-        "run-auto",
-        "--multi-agent",
-        "none",
-    ];
-    let mismatch = assert_failure(maestro(&mismatch_args, root), &mismatch_args);
+        &head,
+        &evidence,
+        &canonical_store,
+        "worktree api@feature/auto-archive",
+    );
+    let tested_head_index = mismatch_args
+        .iter()
+        .position(|arg| arg == "--tested-head")
+        .expect("invariant: tested-head flag exists")
+        + 1;
+    mismatch_args[tested_head_index] = wrong_head.to_string();
+    let mismatch = assert_failure_owned(maestro_owned(&mismatch_args, root), &mismatch_args);
     assert!(
         mismatch.contains("does not match current HEAD"),
         "mismatch failure explains the tested-head gate:\n{mismatch}"
     );
 
-    let auto_args = [
-        "feature",
-        "auto-archive",
+    let auto_args = auto_archive_args(
         "billing-csv-export",
-        "--authority-ref",
-        "SPEC-auto-archive-policy:D1",
-        "--tested-head",
-        head.as_str(),
-        "--qa-result",
-        "pass",
-        "--qa-evidence",
-        evidence.as_str(),
-        "--run",
-        "run-auto",
-        "--multi-agent",
-        "none",
-    ];
-    let output = stdout(maestro(&auto_args, root), &auto_args);
+        &head,
+        &evidence,
+        &canonical_store,
+        "worktree api@feature/auto-archive",
+    );
+    let output = stdout_owned(maestro_owned(&auto_args, root), &auto_args);
     assert!(
         output.contains("auto-archived billing-csv-export"),
         "{output}"
@@ -1964,6 +2042,18 @@ fn feature_auto_archive_requires_exact_head_and_writes_receipts() {
         index.contains("SPEC-auto-archive-policy:D1"),
         "index records authority ref:\n{index}"
     );
+    assert!(
+        index.contains("canonical_store"),
+        "index records canonical store:\n{index}"
+    );
+    assert!(
+        index.contains("invoking_checkout"),
+        "index records invoking checkout:\n{index}"
+    );
+    assert!(
+        index.contains("worktree api@feature/auto-archive"),
+        "index records worker source:\n{index}"
+    );
     assert!(index.contains("run-auto"), "index records run id:\n{index}");
     assert!(
         index.contains("sha256:"),
@@ -1985,8 +2075,21 @@ fn feature_auto_archive_requires_exact_head_and_writes_receipts() {
     assert_eq!(event["event_type"], "auto_archive");
     assert_eq!(event["feature_id"], "billing-csv-export");
     assert_eq!(event["tested_head"].as_str(), Some(head.as_str()));
+    assert_eq!(event["final_target_head"].as_str(), Some(head.as_str()));
+    assert_eq!(
+        event["canonical_store_path"].as_str(),
+        Some(canonical_store.as_str())
+    );
+    assert_eq!(event["worker_source"], "worktree api@feature/auto-archive");
     assert_eq!(event["qa_result"], "pass");
-    assert_eq!(event["multi_agent_disposition"], "none");
+    assert_eq!(
+        event["multi_agent_disposition"],
+        "workers merged back; evidence exact HEAD"
+    );
+    assert_eq!(
+        event["merge_back_disposition"],
+        "workers merged back; evidence exact HEAD"
+    );
     assert_eq!(event["result"], "archived");
     assert!(
         event["event_hash"]
@@ -2019,6 +2122,181 @@ fn feature_auto_archive_requires_exact_head_and_writes_receipts() {
     );
 
     stdout(maestro(&["doctor"], root), &["doctor"]);
+}
+
+#[test]
+fn feature_auto_archive_blocks_invalid_authority_relevant_dirt_and_conflicts() {
+    let temp_dir = TestTempDir::new("maestro-auto-archive-blockers");
+    let root = temp_dir.path();
+    let (_repository, head, evidence, canonical_store) = cancelled_feature_with_head(root);
+
+    let mut expired_authority = auto_archive_args(
+        "billing-csv-export",
+        &head,
+        &evidence,
+        &canonical_store,
+        "none",
+    );
+    let authority_state_index = expired_authority
+        .iter()
+        .position(|arg| arg == "--authority-state")
+        .expect("invariant: authority-state flag exists")
+        + 1;
+    expired_authority[authority_state_index] = "expired".to_string();
+    let expired = assert_failure_owned(maestro_owned(&expired_authority, root), &expired_authority);
+    assert!(
+        expired.contains("not current"),
+        "expired authority is blocked:\n{expired}"
+    );
+
+    fs::write(
+        root.join(".maestro/cards/billing-csv-export/notes.md"),
+        "dirty target note\n",
+    )
+    .expect("invariant: dirty target note should be writable");
+    let dirty_args = auto_archive_args(
+        "billing-csv-export",
+        &head,
+        &evidence,
+        &canonical_store,
+        "none",
+    );
+    let dirty = assert_failure_owned(maestro_owned(&dirty_args, root), &dirty_args);
+    assert!(
+        dirty.contains("relevant dirty path")
+            && dirty.contains(".maestro/cards/billing-csv-export/notes.md"),
+        "relevant dirty target artifacts block:\n{dirty}"
+    );
+    fs::remove_file(root.join(".maestro/cards/billing-csv-export/notes.md"))
+        .expect("invariant: dirty target note should be removable");
+
+    fs::write(
+        root.join(".maestro/conflicts.jsonl"),
+        r#"{"action":"assert","asserter_session":"s1","asserter_card":"card-peer","peer_card":"billing-csv-export","reason":"src/lib.rs: contested"}"#,
+    )
+    .expect("invariant: conflict fixture should be writable");
+    let conflict_args = auto_archive_args(
+        "billing-csv-export",
+        &head,
+        &evidence,
+        &canonical_store,
+        "none",
+    );
+    let conflict = assert_failure_owned(maestro_owned(&conflict_args, root), &conflict_args);
+    assert!(
+        conflict.contains("unresolved Maestro conflict")
+            && conflict.contains("src/lib.rs: contested"),
+        "unresolved conflict blocks:\n{conflict}"
+    );
+    fs::remove_file(root.join(".maestro/conflicts.jsonl"))
+        .expect("invariant: conflict fixture should be removable");
+
+    fs::create_dir_all(root.join(".maestro/cards/card-live-child"))
+        .expect("invariant: child card dir should be creatable");
+    fs::write(
+        root.join(".maestro/cards/card-live-child/card.yaml"),
+        r#"schema_version: maestro.card.v1
+id: card-live-child
+type: task
+title: live child
+status: in_progress
+parent: billing-csv-export
+created_at: "2026-06-27T00:00:00Z"
+updated_at: "2026-06-27T00:00:00Z"
+"#,
+    )
+    .expect("invariant: child card should be writable");
+    let child_args = auto_archive_args(
+        "billing-csv-export",
+        &head,
+        &evidence,
+        &canonical_store,
+        "none",
+    );
+    let child = assert_failure_owned(maestro_owned(&child_args, root), &child_args);
+    assert!(
+        child.contains("live or claimed descendant/linked work item")
+            && child.contains("card-live-child"),
+        "live descendant blocks:\n{child}"
+    );
+}
+
+#[test]
+fn feature_auto_archive_blocks_worker_missing_store_stale_store_and_stale_snapshot() {
+    let canonical_temp = TestTempDir::new("maestro-auto-archive-canonical");
+    let canonical_root = canonical_temp.path();
+    let (_repository, head, evidence, canonical_store) =
+        cancelled_feature_with_head(canonical_root);
+
+    let worker_temp = TestTempDir::new("maestro-auto-archive-worker");
+    let worker_root = worker_temp.path();
+    init_git_repo(worker_root);
+    stdout(maestro(&["init", "--yes"], worker_root), &["init", "--yes"]);
+    let worker_store = worker_root.join(".maestro").display().to_string();
+    let missing_args = auto_archive_args(
+        "billing-csv-export",
+        &head,
+        &evidence,
+        &worker_store,
+        "worker checkout",
+    );
+    let missing = assert_failure_owned(maestro_owned(&missing_args, worker_root), &missing_args);
+    assert!(
+        missing.contains("target feature is missing from current store")
+            && missing.contains(&worker_store),
+        "worker store without target blocks and names current store:\n{missing}"
+    );
+
+    fs::create_dir_all(worker_root.join(".maestro/cards/billing-csv-export"))
+        .expect("invariant: worker copied card dir should be creatable");
+    fs::copy(
+        canonical_root.join(".maestro/cards/billing-csv-export/card.yaml"),
+        worker_root.join(".maestro/cards/billing-csv-export/card.yaml"),
+    )
+    .expect("invariant: copied stale card should be writable");
+    let stale_store_args = auto_archive_args(
+        "billing-csv-export",
+        &head,
+        &evidence,
+        &canonical_store,
+        "worker checkout",
+    );
+    let stale_store = assert_failure_owned(
+        maestro_owned(&stale_store_args, worker_root),
+        &stale_store_args,
+    );
+    assert!(
+        stale_store.contains("is not canonical store") && stale_store.contains(&canonical_store),
+        "stale copied same-id store blocks by store identity:\n{stale_store}"
+    );
+
+    let card_bytes = fs::read(canonical_root.join(".maestro/cards/billing-csv-export/card.yaml"))
+        .expect("invariant: target card should be readable");
+    let actual_hash = sha256_prefixed(&card_bytes);
+    let mut stale_snapshot_args = auto_archive_args(
+        "billing-csv-export",
+        &head,
+        &evidence,
+        &canonical_store,
+        "none",
+    );
+    stale_snapshot_args.push("--target-card-hash".to_string());
+    stale_snapshot_args.push("sha256:0000".to_string());
+    let stale_snapshot = assert_failure_owned(
+        maestro_owned(&stale_snapshot_args, canonical_root),
+        &stale_snapshot_args,
+    );
+    assert!(
+        stale_snapshot.contains("target card changed since preflight")
+            && stale_snapshot.contains(&actual_hash),
+        "stale target-card snapshot blocks before mutation:\n{stale_snapshot}"
+    );
+    assert!(
+        canonical_root
+            .join(".maestro/cards/billing-csv-export/card.yaml")
+            .exists(),
+        "stale snapshot must leave live card in place"
+    );
 }
 
 /// S8: `feature spec --section --append/--replace` fills the spec during

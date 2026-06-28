@@ -36,7 +36,7 @@ maestro feature prepare --draft   # reviewable child-task plan
 maestro feature prepare --from    # create/explore/accept tasks from a plan file
 maestro feature close              # -> closed, requires qa-slice; --outcome required
 maestro card archive <id>         # explicit terminal archive; archives children too
-maestro feature auto-archive <id> --authority-ref <ref> --tested-head <sha> --qa-result pass --qa-evidence "<proof>" --run <run> --multi-agent "<disposition>"
+maestro feature auto-archive <id> --authority-ref <ref> --authority-target <id> --authority-head <sha> --authority-state current --tested-head <sha> --qa-result pass --qa-evidence "<proof>" --run <run> --multi-agent "<merge/evidence disposition>" --canonical-store <path-to/.maestro> --worker-source "<branch/worktree or none>"
 ```
 
 Design owns proposed-contract authoring. After accept, use `feature amend` to
@@ -115,14 +115,20 @@ state.
 
 Auto-archive is a separate evidence-gated archive action, not a side effect of
 `close` or `cancel`. Use it only when a durable user/SPEC/run authority says
-archive is preauthorized and the delivered commit hash is known. The helper
-must see the exact current `HEAD` in `--tested-head`, a passing QA verdict,
-bounded QA evidence, a clean worktree, and a multi-agent/worktree disposition
-(`none`, or workers merged back and conflicts clear). It then runs the normal
-terminal feature archive preflight, writes an `auto_archive` run event, and
-adds an archive-index receipt that records authority, tested head, QA result,
-run id, event hash/path, archive path, and restore command. If any check fails,
-stop and report the blocker instead of falling back to manual archive.
+archive is preauthorized for this target and the delivered commit hash is known.
+The helper must see the exact current `HEAD` in `--tested-head`, matching
+current target-scoped authority in `--authority-target`, `--authority-head`, and
+`--authority-state current`, a passing QA verdict, bounded QA evidence, a
+canonical owning store in `--canonical-store`, and a multi-agent/worktree
+disposition (`none`, or workers merged back and conflicts clear). Worker
+worktrees never auto-archive a shared target; they provide commits and evidence
+only. The owning/orchestrator checkout runs the helper against the canonical
+store. It then runs the normal terminal feature archive preflight, writes an
+`auto_archive` run event, and adds an archive-index receipt that records the
+canonical store path, invoking checkout path, worker branch/worktree source,
+final target head, tested head, authority, merge-back/evidence disposition, run
+id, event hash/path, archive path, and restore command. If any check fails, stop
+and report the blocker instead of falling back to manual archive.
 
 ## Fan-out
 

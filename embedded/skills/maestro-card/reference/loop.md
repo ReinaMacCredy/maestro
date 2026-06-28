@@ -123,7 +123,7 @@ the same records and stop conditions.
    scope, target, allowed external actions, hard stops, and required evidence.
    Archive additionally requires the kickoff, SPEC, or run policy to explicitly
    preauthorize auto-archive and
-   `maestro feature auto-archive <id> --authority-ref <ref> --tested-head <sha> --qa-result pass --qa-evidence "<proof>" --run <run> --multi-agent "<disposition>"`
+   `maestro feature auto-archive <id> --authority-ref <ref> --authority-target <id> --authority-head <sha> --authority-state current --tested-head <sha> --qa-result pass --qa-evidence "<proof>" --run <run> --multi-agent "<disposition>" --canonical-store <path-to/.maestro> --worker-source "<branch/worktree or none>"`
    to pass against the post-merge target `HEAD`. Absent, partial, stale, or
    overbroad authority fails closed.
 8. When nothing is workable, acceptable, preparable, unblockable, or closable
@@ -155,7 +155,9 @@ approval failures are hard stops even under full local autonomy.
 When auto-archive is preauthorized, the owning/orchestrator session may archive
 only after worker worktrees are merged back, relevant conflicts are clear, QA
 evidence names the exact current `HEAD`, and the helper writes both the
-`auto_archive` run event and archive-index receipt.
+`auto_archive` run event and archive-index receipt. Worker worktrees never run
+auto-archive for the shared target; they hand back commits, worker source, and
+evidence for the owning checkout to record.
 
 If the autonomous worker fixes an issue discovered during the loop, it must
 record a durable recurrence guard before completion or ship: a regression

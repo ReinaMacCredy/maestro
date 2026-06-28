@@ -17,6 +17,8 @@ pub struct GitSnapshot {
     pub maestro_dirty: usize,
     /// Uncommitted changes outside `.maestro/` (code and everything else).
     pub code_other_dirty: usize,
+    /// Tracked or untracked changed paths, repo-relative.
+    pub dirty_paths: Vec<PathBuf>,
 }
 
 /// Read-only divergence of the current branch from the repo's shared branch.
@@ -43,6 +45,7 @@ pub fn snapshot(path: impl AsRef<Path>) -> Result<GitSnapshot> {
         branch: branch_name(&repository)?,
         maestro_dirty: counts.maestro,
         code_other_dirty: counts.code_other,
+        dirty_paths: counts.paths,
     })
 }
 
@@ -252,6 +255,7 @@ fn shared_branch_oid(
 struct DirtyCounts {
     maestro: usize,
     code_other: usize,
+    paths: Vec<PathBuf>,
 }
 
 fn dirty_counts(repository: &Repository) -> Result<DirtyCounts> {
@@ -264,13 +268,24 @@ fn dirty_counts(repository: &Repository) -> Result<DirtyCounts> {
     let mut counts = DirtyCounts {
         maestro: 0,
         code_other: 0,
+        paths: Vec::new(),
     };
     for entry in statuses.iter() {
         match entry.path() {
-            Some(path) if path.starts_with(".maestro/") => counts.maestro += 1,
-            _ => counts.code_other += 1,
+            Some(path) => {
+                let path = PathBuf::from(path);
+                if path.starts_with(".maestro/") {
+                    counts.maestro += 1;
+                } else {
+                    counts.code_other += 1;
+                }
+                counts.paths.push(path);
+            }
+            None => counts.code_other += 1,
         }
     }
+    counts.paths.sort();
+    counts.paths.dedup();
     Ok(counts)
 }
 
