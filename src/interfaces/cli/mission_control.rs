@@ -1,5 +1,6 @@
-use std::fs;
-use std::path::Path;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -82,17 +83,7 @@ fn run_opentui(
         );
     }
 
-    let snapshot_file = temp_snapshot_path();
-    fs::write(
-        &snapshot_file,
-        serde_json::to_vec_pretty(&snapshot(paths)?)?,
-    )
-    .with_context(|| {
-        format!(
-            "write temporary Mission Control snapshot {}",
-            snapshot_file.display()
-        )
-    })?;
+    let snapshot_file = write_temp_snapshot(&serde_json::to_vec_pretty(&snapshot(paths)?)?)?;
 
     let result = run_opentui_child(paths, args, size, &snapshot_file);
     if let Err(error) = fs::remove_file(&snapshot_file)
@@ -160,14 +151,45 @@ fn run_opentui_child(
     Ok(())
 }
 
-fn temp_snapshot_path() -> std::path::PathBuf {
+fn write_temp_snapshot(contents: &[u8]) -> Result<PathBuf> {
+    for attempt in 0..16 {
+        let path = temp_snapshot_path(attempt);
+        match create_temp_snapshot(&path, contents) {
+            Ok(()) => return Ok(path),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => {
+                return Err(error).with_context(|| {
+                    format!(
+                        "write temporary Mission Control snapshot {}",
+                        path.display()
+                    )
+                });
+            }
+        }
+    }
+    bail!("could not create a unique temporary Mission Control snapshot file")
+}
+
+fn create_temp_snapshot(path: &Path, contents: &[u8]) -> std::io::Result<()> {
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(path)?;
+    file.write_all(contents)
+}
+
+fn temp_snapshot_path(attempt: u8) -> PathBuf {
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_nanos())
         .unwrap_or(0);
     std::env::temp_dir().join(format!(
-        "maestro-mission-control-{}-{nanos}.json",
-        std::process::id()
+        "maestro-mission-control-{}-{nanos}-{attempt}.json",
+        std::process::id(),
     ))
 }
 
@@ -227,7 +249,9 @@ fn parse_size(value: Option<&str>) -> Result<Option<(usize, usize)>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_size, resolve_screen};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    use super::{create_temp_snapshot, parse_size, resolve_screen};
     use crate::interfaces::tui::mission_control::PreviewScreen;
 
     #[test]
@@ -248,5 +272,28 @@ mod tests {
             Some(PreviewScreen::Tasks)
         );
         assert!(resolve_screen(Some(Some("unknown".to_string())), None).is_err());
+    }
+
+    #[test]
+    fn temp_snapshot_create_new_refuses_existing_file() {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("invariant: test clock should be after Unix epoch")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "maestro-temp-snapshot-create-new-{nanos}-{}.json",
+            std::process::id()
+        ));
+        std::fs::write(&path, b"owned").expect("seed existing temp file");
+
+        let error = create_temp_snapshot(&path, b"replacement")
+            .expect_err("exclusive temp snapshot create should refuse existing files");
+
+        assert_eq!(error.kind(), std::io::ErrorKind::AlreadyExists);
+        assert_eq!(
+            std::fs::read(&path).expect("existing temp file remains readable"),
+            b"owned"
+        );
+        std::fs::remove_file(path).expect("cleanup temp file");
     }
 }

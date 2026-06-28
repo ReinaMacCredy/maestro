@@ -10,7 +10,7 @@ mod verification;
 
 pub use archive::{
     AutoArchiveReceipt, FeatureArchiveReport, LooseSweepReport, append_auto_archive_receipt,
-    archive_feature, archive_loose, unarchive_feature,
+    archive_feature, archive_feature_with_expected_hash, archive_loose, unarchive_feature,
 };
 pub use registry::{
     AcceptanceTextEdit, AmendReport, CancelReport, ContractAdditions, ContractChangeCounts,

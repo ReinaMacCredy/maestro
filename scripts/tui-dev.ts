@@ -9,8 +9,8 @@
  *   bun scripts/tui-dev.ts --screen all             # all screens
  *   bun scripts/tui-dev.ts --size 200x60            # custom size
  *   bun scripts/tui-dev.ts --check                  # render-check mode (JSON)
- *   bun scripts/tui-dev.ts --mission <id>           # specific mission
- *   bun scripts/tui-dev.ts --compiled               # use ./dist/maestro instead of source
+ *   bun scripts/tui-dev.ts --feature <id>           # specific feature
+ *   bun scripts/tui-dev.ts --compiled               # use target/debug/maestro instead of cargo run
  */
 import { watch } from "node:fs";
 import { join } from "node:path";
@@ -40,10 +40,10 @@ function parseArgs() {
 function buildCommand(flags: Record<string, string | boolean>): string[] {
   const compiled = flags.compiled === true;
   const base = compiled
-    ? [join(ROOT, "dist", "maestro")]
-    : ["bun", "run", join(ROOT, "src", "index.ts")];
+    ? [join(ROOT, "target", "debug", "maestro")]
+    : ["cargo", "run", "--quiet", "--"];
 
-  const cmd = [...base, "mission-control"];
+  const cmd = [...base, "mission-control", "--renderer", "opentui"];
 
   if (flags.check === true) {
     cmd.push("--render-check");
@@ -58,8 +58,13 @@ function buildCommand(flags: Record<string, string | boolean>): string[] {
 
   cmd.push("--format", "plain");
 
-  if (typeof flags.mission === "string") {
-    cmd.push("--mission", flags.mission);
+  const feature = typeof flags.feature === "string"
+    ? flags.feature
+    : typeof flags.mission === "string"
+      ? flags.mission
+      : undefined;
+  if (feature !== undefined) {
+    cmd.push("--feature", feature);
   }
 
   return cmd;

@@ -2,10 +2,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::Read;
 use std::path::{Component, Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
@@ -32,6 +32,7 @@ pub const SCORER_RECEIPT_SCHEMA_VERSION: &str = "maestro.memory.scorer_receipt.v
 pub const TARGET_REGISTRY_SCHEMA_VERSION: &str = "maestro.memory.target_registry.v1";
 pub const PROMOTION_PLAN_SCHEMA_VERSION: &str = "maestro.memory.promotion_plan.v1";
 const COMMAND_SCORER_TIMEOUT: Duration = Duration::from_secs(60);
+const SCORER_OUTPUT_CAPTURE_LIMIT: usize = 4_000;
 pub const MAINTENANCE_CONTRACT_SCHEMA_VERSION: &str = "maestro.memory.maintenance_contract.v1";
 
 #[derive(Clone, Debug, PartialEq)]
@@ -758,37 +759,44 @@ pub fn create_memory(
     card.description = Some(summary.clone());
     store::create_card(paths, &card)?;
 
-    write_memory_sidecars(paths, &card, &seed, &summary, &lesson, now)?;
-    let loaded = validate_card(paths, &card)?;
-    if loaded.id != id {
-        bail!(
-            "created memory sidecar loaded with mismatched id {}",
-            loaded.id
-        );
-    }
-
-    if let Some(suggestion_id) = seed.suggestion_id.as_deref() {
-        let Some(snapshot) = snapshot.as_mut() else {
-            bail!("invariant: suggestion create seed has no queue snapshot");
-        };
-        let Some(row) = snapshot.rows.iter_mut().find(|row| row.id == suggestion_id) else {
-            bail!("memory suggestion {suggestion_id} disappeared before create link");
-        };
-        if row.status != SuggestionStatus::Open {
+    let from_suggestion = seed.suggestion_id.clone();
+    let create_result = (|| -> Result<()> {
+        write_memory_sidecars(paths, &card, &seed, &summary, &lesson, now)?;
+        let loaded = validate_card(paths, &card)?;
+        if loaded.id != id {
             bail!(
-                "memory suggestion {suggestion_id} is {}, not open",
-                row.status.as_str()
+                "created memory sidecar loaded with mismatched id {}",
+                loaded.id
             );
         }
-        row.status = SuggestionStatus::Created;
-        row.updated_at = now.to_string();
-        row.created_memory_id = Some(id.clone());
-        save_queue(paths, snapshot)?;
+
+        if let Some(suggestion_id) = seed.suggestion_id.as_deref() {
+            let Some(snapshot) = snapshot.as_mut() else {
+                bail!("invariant: suggestion create seed has no queue snapshot");
+            };
+            let Some(row) = snapshot.rows.iter_mut().find(|row| row.id == suggestion_id) else {
+                bail!("memory suggestion {suggestion_id} disappeared before create link");
+            };
+            if row.status != SuggestionStatus::Open {
+                bail!(
+                    "memory suggestion {suggestion_id} is {}, not open",
+                    row.status.as_str()
+                );
+            }
+            row.status = SuggestionStatus::Created;
+            row.updated_at = now.to_string();
+            row.created_memory_id = Some(id.clone());
+            save_queue(paths, snapshot)?;
+        }
+        Ok(())
+    })();
+    if let Err(error) = create_result {
+        return Err(rollback_created_memory_error(paths, &id, error));
     }
 
     Ok(CreateMemoryOutcome {
         id,
-        from_suggestion: seed.suggestion_id,
+        from_suggestion,
     })
 }
 
@@ -2238,13 +2246,18 @@ fn execute_scorer_with_timeout(
             error: None,
         };
     }
-    let mut child = match Command::new(&contract.argv[0])
+    let mut command = Command::new(&contract.argv[0]);
+    command
         .args(&contract.argv[1..])
         .current_dir(paths.repo_root())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
+        .stderr(Stdio::piped());
+    #[cfg(unix)]
     {
+        use std::os::unix::process::CommandExt;
+        command.process_group(0);
+    }
+    let mut child = match command.spawn() {
         Ok(child) => child,
         Err(error) => {
             return ScorerExecution {
@@ -2272,7 +2285,7 @@ fn execute_scorer_with_timeout(
                 };
             }
             Ok(None) if started.elapsed() >= timeout => {
-                let kill_error = child.kill().err();
+                let kill_error = kill_scorer_process(&mut child);
                 let wait_error = child.wait().err();
                 let (stdout, stderr) = collect_child_output(stdout_reader, stderr_reader);
                 let mut error = format!("scorer timed out after {}ms", timeout.as_millis());
@@ -2292,7 +2305,7 @@ fn execute_scorer_with_timeout(
             }
             Ok(None) => std::thread::sleep(Duration::from_millis(20)),
             Err(error) => {
-                let _ = child.kill();
+                let _ = kill_scorer_process(&mut child);
                 let _ = child.wait();
                 let (stdout, stderr) = collect_child_output(stdout_reader, stderr_reader);
                 return ScorerExecution {
@@ -2304,6 +2317,26 @@ fn execute_scorer_with_timeout(
                 };
             }
         }
+    }
+}
+
+fn kill_scorer_process(child: &mut Child) -> Option<std::io::Error> {
+    #[cfg(unix)]
+    {
+        let group = format!("-{}", child.id());
+        match Command::new("/bin/kill").args(["-KILL", &group]).status() {
+            Ok(status) if status.success() => None,
+            Ok(status) => child.kill().err().or_else(|| {
+                Some(std::io::Error::other(format!(
+                    "process-group kill exited with {status}"
+                )))
+            }),
+            Err(error) => child.kill().err().or(Some(error)),
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        child.kill().err()
     }
 }
 
@@ -2330,11 +2363,30 @@ fn join_child_pipe(handle: std::thread::JoinHandle<Option<String>>) -> Option<St
 
 fn read_child_pipe<R: Read>(pipe: Option<R>) -> Option<String> {
     let mut pipe = pipe?;
-    let mut bytes = Vec::new();
-    match pipe.read_to_end(&mut bytes) {
-        Ok(_) => Some(String::from_utf8_lossy(&bytes).into_owned()),
-        Err(error) => Some(format!("[failed to read scorer output: {error}]")),
+    let mut bytes = Vec::with_capacity(SCORER_OUTPUT_CAPTURE_LIMIT);
+    let mut buffer = [0_u8; 8192];
+    let mut truncated = false;
+    loop {
+        match pipe.read(&mut buffer) {
+            Ok(0) => break,
+            Ok(read) => {
+                let remaining = SCORER_OUTPUT_CAPTURE_LIMIT.saturating_sub(bytes.len());
+                let keep = read.min(remaining);
+                if keep > 0 {
+                    bytes.extend_from_slice(&buffer[..keep]);
+                }
+                if read > keep {
+                    truncated = true;
+                }
+            }
+            Err(error) => return Some(format!("[failed to read scorer output: {error}]")),
+        }
     }
+    let mut output = String::from_utf8_lossy(&bytes).into_owned();
+    if truncated {
+        output.push_str("...[truncated]");
+    }
+    Some(output)
 }
 
 fn receipt_path(paths: &MaestroPaths, memory_id: &str, receipt_id: &str) -> PathBuf {
@@ -2345,12 +2397,36 @@ fn receipt_path(paths: &MaestroPaths, memory_id: &str, receipt_id: &str) -> Path
 
 fn bounded_output(value: Option<String>) -> Option<String> {
     let value = value?;
-    const LIMIT: usize = 4_000;
-    if value.len() <= LIMIT {
+    if value.len() <= SCORER_OUTPUT_CAPTURE_LIMIT || value.ends_with("...[truncated]") {
         Some(value)
     } else {
-        let truncated = value.chars().take(LIMIT).collect::<String>();
+        let truncated = value
+            .chars()
+            .take(SCORER_OUTPUT_CAPTURE_LIMIT)
+            .collect::<String>();
         Some(format!("{truncated}...[truncated]"))
+    }
+}
+
+fn rollback_created_memory_error(
+    paths: &MaestroPaths,
+    memory_id: &str,
+    failure: anyhow::Error,
+) -> anyhow::Error {
+    let rollback = store::resolve(paths, memory_id).and_then(|resolved| {
+        if let Some(resolved) = resolved {
+            store::remove_resolved(&resolved)
+        } else {
+            Ok(())
+        }
+    });
+    match rollback {
+        Ok(()) => anyhow!(
+            "memory create failed after card {memory_id} was created: {failure:#}; created card was rolled back"
+        ),
+        Err(error) => anyhow!(
+            "memory create failed after card {memory_id} was created: {failure:#}; rollback failed: {error:#}"
+        ),
     }
 }
 
@@ -2906,8 +2982,18 @@ mod tests {
         );
 
         assert!(execution.passed, "{execution:?}");
-        assert!(execution.stdout.as_deref().unwrap_or_default().len() >= 200_000);
-        assert!(execution.stderr.as_deref().unwrap_or_default().len() >= 200_000);
+        let stdout = execution.stdout.as_deref().unwrap_or_default();
+        let stderr = execution.stderr.as_deref().unwrap_or_default();
+        assert!(
+            stdout.len() <= SCORER_OUTPUT_CAPTURE_LIMIT + "...[truncated]".len(),
+            "{execution:?}"
+        );
+        assert!(
+            stderr.len() <= SCORER_OUTPUT_CAPTURE_LIMIT + "...[truncated]".len(),
+            "{execution:?}"
+        );
+        assert!(stdout.ends_with("...[truncated]"), "{execution:?}");
+        assert!(stderr.ends_with("...[truncated]"), "{execution:?}");
         cleanup(&paths);
     }
 

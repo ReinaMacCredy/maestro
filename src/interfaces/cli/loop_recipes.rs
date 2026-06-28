@@ -114,6 +114,15 @@ fn run_work_lease(args: WorkLeaseArgs) -> Result<()> {
     for (index, candidate) in ready.iter().enumerate() {
         let rank = index + 1;
         let before = (*candidate).clone();
+        let mut claim_probe = before.clone();
+        match card::edit::apply_claim(&mut claim_probe, &identity, &now) {
+            Ok(_) => {}
+            Err(error) if live_claim_error(&error) => {
+                blocked.push(BlockedCardJson::new(rank, &before, error.to_string()));
+                continue;
+            }
+            Err(error) => return Err(error.context(format!("failed to lease {}", before.id))),
+        }
         let approved_lessons = memory::approved_memory(
             &paths,
             MemoryReadSurface::WorkLease,

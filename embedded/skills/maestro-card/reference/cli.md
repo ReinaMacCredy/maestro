@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: 04061c095cee8088d125ec478d22a4b86744e8a655af81e1735d7e7eca1d1b4d -->
+<!-- maestro:cli-reference-sha256: 7e37acc135a6f7848d20da354f18728c8c860f6e00074ed68888238f08a620c0 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -56,6 +56,7 @@ a spelling not found here is outside this skill's CLI surface.
 - `maestro feature show <ID>` -- Show a feature's status, full contract, and task counts
 - `maestro feature list [--all]` -- List features with their statuses and task counts
 - `maestro feature archive [ID] [--closed] [--dry-run]` -- Archive a terminal feature and its terminal child tasks (-> .maestro/archive/features)
+- `maestro feature auto-archive <ID> --authority-ref <AUTHORITY_REF> --authority-target <AUTHORITY_TARGET> --authority-head <AUTHORITY_HEAD> --authority-state <AUTHORITY_STATE> --tested-head <TESTED_HEAD> --qa-result <QA_RESULT> [--qa-evidence <QA_EVIDENCE>]... --run <RUN> --multi-agent <MULTI_AGENT> --canonical-store <CANONICAL_STORE> --worker-source <WORKER_SOURCE> [--target-card-hash <TARGET_CARD_HASH>] [--dry-run]` -- Archive a terminal feature after commit-bound QA evidence passes
 - `maestro feature unarchive <ID>` -- Restore an archived feature and its archived child tasks
 
 ## maestro qa

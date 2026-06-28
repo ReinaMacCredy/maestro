@@ -334,6 +334,7 @@ fn feature_domain_facade_exposes_the_deliberate_surface() {
             "amend".to_string(),
             "append_auto_archive_receipt".to_string(),
             "archive_feature".to_string(),
+            "archive_feature_with_expected_hash".to_string(),
             "archive_loose".to_string(),
             "cancel".to_string(),
             "create".to_string(),

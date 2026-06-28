@@ -159,6 +159,7 @@ const MAESTRO_CARD_COMMANDS: &[&str] = &[
     "maestro feature show",
     "maestro feature list",
     "maestro feature archive",
+    "maestro feature auto-archive",
     "maestro feature unarchive",
     "maestro qa baseline",
     "maestro qa slice",

@@ -808,7 +808,12 @@ fn auto_archive_feature(paths: &MaestroPaths, args: AutoArchiveArgs) -> Result<(
         .unwrap_or_else(|_| "<unknown>".to_string());
 
     if args.dry_run {
-        let report = match feature::archive_feature(paths, &id, true) {
+        let report = match feature::archive_feature_with_expected_hash(
+            paths,
+            &id,
+            true,
+            target_card_hash.as_deref(),
+        ) {
             Ok(report) => report,
             Err(error) => bail!("{}", feature_archive_error_message(&id, &error.to_string())),
         };
@@ -825,7 +830,12 @@ fn auto_archive_feature(paths: &MaestroPaths, args: AutoArchiveArgs) -> Result<(
         return Ok(());
     }
 
-    let report = match feature::archive_feature(paths, &id, false) {
+    let report = match feature::archive_feature_with_expected_hash(
+        paths,
+        &id,
+        false,
+        target_card_hash.as_deref(),
+    ) {
         Ok(report) => report,
         Err(error) => bail!("{}", feature_archive_error_message(&id, &error.to_string())),
     };
@@ -971,7 +981,7 @@ fn auto_archive_event(parts: AutoArchiveEventParts<'_>) -> Value {
         "merge_back_disposition": parts.merge_back_disposition,
         "preflight_result": {
             "git_head": parts.current_head,
-            "git_dirty": false,
+            "git_dirty": parts.snapshot_maestro_dirty + parts.snapshot_code_other_dirty > 0,
             "maestro_dirty": parts.snapshot_maestro_dirty,
             "code_other_dirty": parts.snapshot_code_other_dirty,
             "archive_preflight": "passed"

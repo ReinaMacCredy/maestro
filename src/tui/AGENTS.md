@@ -11,7 +11,7 @@ Use this file with the parent [AGENTS.md](../AGENTS.md) and read `README.md` her
 ## WHERE TO LOOK
 | Task | Location | Notes |
 |------|----------|-------|
-| Displayed data | `state/snapshot.ts`, `state/types.ts` | Read-model first |
+| Displayed data | `current-snapshot.ts`, `state/types.ts` | Rust snapshot adapter first |
 | Keyboard/modal behavior | `state/reducer.ts` | Reducer owns UI state |
 | Preview routing | `app/preview-state.ts` | Deterministic preview state |
 | Interactive actions | `opentui/app/interactive.tsx` | Writes belong here, not in snapshot building |

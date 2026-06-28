@@ -1,5 +1,5 @@
 // Pure projection of raw store outputs into the MissionControlSnapshot read
-// model. No I/O. Takes already-loaded inputs (see snapshot-loader.ts) and
+// model. No I/O. Takes already-loaded inputs from the Rust snapshot adapter and
 // computes derived views.
 import type { ConfigLayers } from "@/infra/ports/config.port.js";
 import type { GitPort } from "@/infra/ports/git.port.js";

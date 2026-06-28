@@ -44,10 +44,15 @@ contracts:
       - commit
       - event_id
       - event_hash
+      - canonical_store_path
+      - invoking_checkout_path
+      - worker_source
+      - final_target_head
       - tested_head
       - qa_result
       - qa_evidence
       - multi_agent_disposition
+      - merge_back_disposition
       - preflight_result
       - archive_receipt
       - post_archive_check

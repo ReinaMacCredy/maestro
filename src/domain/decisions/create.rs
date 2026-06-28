@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, anyhow, bail};
 
 use crate::domain::card::schema::CardType;
 use crate::domain::card::store as card_store;
@@ -258,31 +258,79 @@ pub fn supersede(
     );
     cards::save(&new_record, &new_resolved)?;
 
-    let Some((mut current_old, _, current_old_resolved)) = cards::load_one(paths, &old_record.id)?
-    else {
-        bail!(
-            "decision {} was replaced by {} but disappeared before superseded metadata could be written",
-            old_record.id,
-            new_record.id
-        );
+    let (mut current_old, _, current_old_resolved) = match cards::load_one(paths, &old_record.id) {
+        Ok(Some(loaded)) => loaded,
+        Ok(None) => {
+            return Err(rollback_replacement_error(
+                paths,
+                &new_record.id,
+                format!(
+                    "decision {} was replaced by {} but disappeared before superseded metadata could be written",
+                    old_record.id, new_record.id
+                ),
+            ));
+        }
+        Err(error) => {
+            return Err(rollback_replacement_error(
+                paths,
+                &new_record.id,
+                format!(
+                    "decision {} was replaced by {} but could not be reloaded: {error:#}",
+                    old_record.id, new_record.id
+                ),
+            ));
+        }
     };
     if current_old.status != DecisionStatus::Locked {
-        bail!(
-            "decision {} changed to {} while creating replacement {}; re-run against the current decision state",
-            current_old.id,
-            current_old.status.as_str(),
-            new_record.id
-        );
+        return Err(rollback_replacement_error(
+            paths,
+            &new_record.id,
+            format!(
+                "decision {} changed to {} while creating replacement {}; re-run against the current decision state",
+                current_old.id,
+                current_old.status.as_str(),
+                new_record.id
+            ),
+        ));
     }
     current_old.status = DecisionStatus::Superseded;
     current_old.superseded_by = Some(new_record.id.clone());
-    cards::save(&current_old, &current_old_resolved)?;
+    if let Err(error) = cards::save(&current_old, &current_old_resolved) {
+        return Err(rollback_replacement_error(
+            paths,
+            &new_record.id,
+            format!(
+                "decision {} was replaced by {} but superseded metadata could not be written: {error:#}",
+                current_old.id, new_record.id
+            ),
+        ));
+    }
     let note_line = note_superseded_feature(paths, &current_old, &new_record)?;
     Ok(DecisionLockReport {
         record: new_record,
         source: old_source,
         note_line,
     })
+}
+
+fn rollback_replacement_error(
+    paths: &MaestroPaths,
+    replacement_id: &str,
+    failure: String,
+) -> anyhow::Error {
+    let rollback = card_store::resolve(paths, replacement_id).and_then(|resolved| {
+        if let Some(resolved) = resolved {
+            card_store::remove_resolved(&resolved)
+        } else {
+            Ok(())
+        }
+    });
+    match rollback {
+        Ok(()) => anyhow!("{failure}; replacement {replacement_id} was rolled back"),
+        Err(error) => {
+            anyhow!("{failure}; rollback of replacement {replacement_id} failed: {error:#}")
+        }
+    }
 }
 
 fn lock_card(
