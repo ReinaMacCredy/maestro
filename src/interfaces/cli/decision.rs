@@ -64,6 +64,26 @@ pub fn run(args: DecisionArgs) -> Result<()> {
             preview.as_deref(),
             &supersedes,
         ),
+        DecisionCommand::Supersede {
+            old_id,
+            decision,
+            reason,
+            title,
+            rejected,
+            preview,
+            id_only,
+        } => supersede_decision(
+            &paths,
+            SupersedeRequest {
+                old_id: &old_id,
+                decision: &decision,
+                reason: &reason,
+                title: title.as_deref(),
+                rejected: &rejected,
+                preview: preview.as_deref(),
+                id_only,
+            },
+        ),
         DecisionCommand::Show { id } => show_decision(&paths, &id),
         DecisionCommand::List { all, feature } => {
             render_decision_list(decisions::list_tolerant(&paths), all, feature.as_deref())
@@ -140,6 +160,40 @@ fn lock_decision(
     let report = decisions::lock(paths, id, decision, rejected, preview, supersedes)?;
     emit_feature_touch(paths, &report.record);
     print_lock_report(&report);
+    Ok(())
+}
+
+struct SupersedeRequest<'a> {
+    old_id: &'a str,
+    decision: &'a str,
+    reason: &'a str,
+    title: Option<&'a str>,
+    rejected: &'a [String],
+    preview: Option<&'a str>,
+    id_only: bool,
+}
+
+fn supersede_decision(paths: &MaestroPaths, request: SupersedeRequest<'_>) -> Result<()> {
+    let report = decisions::supersede(
+        paths,
+        request.old_id,
+        decisions::SupersedeInputs {
+            title: request.title,
+            decision: request.decision,
+            reason: request.reason,
+            rejected: request.rejected,
+            preview: request.preview,
+        },
+    )?;
+    emit_feature_touch(paths, &report.record);
+    if request.id_only {
+        println!("{}", report.record.id);
+        return Ok(());
+    }
+    print_lock_report(&report);
+    if let Some(feature_id) = &report.record.feature {
+        println!("next: maestro feature finalize {feature_id}");
+    }
     Ok(())
 }
 

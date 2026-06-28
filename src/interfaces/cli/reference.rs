@@ -215,6 +215,7 @@ const MAESTRO_DESIGN_COMMANDS: &[&str] = &[
     "maestro feature list",
     "maestro decision new",
     "maestro decision lock",
+    "maestro decision supersede",
     "maestro decision show",
     "maestro decision list",
     "maestro card list",

@@ -25,6 +25,15 @@ pub struct DecisionLockReport {
     pub note_line: Option<String>,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct SupersedeInputs<'a> {
+    pub title: Option<&'a str>,
+    pub decision: &'a str,
+    pub reason: &'a str,
+    pub rejected: &'a [String],
+    pub preview: Option<&'a str>,
+}
+
 pub fn empty_store_yaml() -> Result<String> {
     serde_yaml::to_string(&DecisionStore::empty()).context("failed to serialize decisions store")
 }
@@ -153,6 +162,129 @@ pub fn lock(
     lock_card(paths, &id, decision, rejected, preview, supersedes)
 }
 
+pub fn supersede(
+    paths: &MaestroPaths,
+    old_id: &str,
+    inputs: SupersedeInputs<'_>,
+) -> Result<DecisionLockReport> {
+    if inputs.decision.trim().is_empty() {
+        bail!("--decision must not be empty");
+    }
+    if inputs.reason.trim().is_empty() {
+        bail!("--reason must not be empty");
+    }
+    if inputs.rejected.iter().any(|value| value.trim().is_empty()) {
+        bail!("--rejected values must not be empty");
+    }
+    if let Some(title) = inputs.title
+        && title.trim().is_empty()
+    {
+        bail!("--title must not be empty");
+    }
+
+    let old_id = normalize_decision_id(old_id)?;
+    let Some((old_record, old_source, old_resolved)) = cards::load_one(paths, &old_id)? else {
+        if decision_exists(paths, &old_id)? {
+            bail!(
+                "{old_id} is a frozen legacy decision; create a new decision from the old ruling and reference it in the reason"
+            );
+        }
+        let Some(resolved) = card_store::resolve(paths, &old_id)? else {
+            return Err(not_found(paths, &old_id));
+        };
+        bail!(
+            "{} is a {} card, not a decision; run `maestro decision list` and supersede a locked decision id",
+            old_id,
+            resolved.card.card_type.as_str()
+        );
+    };
+    if old_record.status == DecisionStatus::Open {
+        bail!(
+            "{} is open; lock it with `maestro decision lock {}` instead of superseding it",
+            old_record.id,
+            old_record.id
+        );
+    }
+    if old_record.status == DecisionStatus::Superseded {
+        let replacement = old_record
+            .superseded_by
+            .as_deref()
+            .map(|id| format!("; active replacement: {id}"))
+            .unwrap_or_default();
+        bail!("{} is already superseded{replacement}", old_record.id);
+    }
+    if old_record
+        .supersedes
+        .iter()
+        .any(|target| target == &old_record.id)
+    {
+        bail!(
+            "{} contains a self-referential supersedes edge",
+            old_record.id
+        );
+    }
+
+    let title = inputs
+        .title
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(&old_record.title);
+    let opened = create_open(
+        paths,
+        title,
+        Some(inputs.reason),
+        old_record.feature.as_deref(),
+        old_resolved.card.project.clone(),
+    )
+    .with_context(|| {
+        format!(
+            "decision {} was validated but the replacement create failed; no old decision metadata was changed",
+            old_record.id
+        )
+    })?;
+    let Some((mut new_record, _, new_resolved)) = cards::load_one(paths, &opened.record.id)? else {
+        bail!(
+            "decision {} was opened but could not be reloaded for locking",
+            opened.record.id
+        );
+    };
+    apply_lock(
+        &mut new_record,
+        inputs.decision,
+        inputs.rejected,
+        inputs.preview,
+        std::slice::from_ref(&old_record.id),
+        utc_now_timestamp(),
+    );
+    cards::save(&new_record, &new_resolved)?;
+
+    let Some((mut current_old, _, current_old_resolved)) = cards::load_one(paths, &old_record.id)?
+    else {
+        bail!(
+            "decision {} was replaced by {} but disappeared before superseded metadata could be written",
+            old_record.id,
+            new_record.id
+        );
+    };
+    if current_old.status != DecisionStatus::Locked {
+        bail!(
+            "decision {} changed to {} while creating replacement {}; re-run against the current decision state",
+            current_old.id,
+            current_old.status.as_str(),
+            new_record.id
+        );
+    }
+    current_old.status = DecisionStatus::Superseded;
+    current_old.superseded_by = Some(new_record.id.clone());
+    cards::save(&current_old, &current_old_resolved)?;
+    let note_line = note_superseded_feature(paths, &current_old, &new_record)?;
+    Ok(DecisionLockReport {
+        record: new_record,
+        source: old_source,
+        note_line,
+    })
+}
+
 fn lock_card(
     paths: &MaestroPaths,
     id: &str,
@@ -220,6 +352,27 @@ fn validate_supersedes(
         ensure_decision_exists(paths, target)?;
     }
     Ok(supersedes)
+}
+
+fn note_superseded_feature(
+    paths: &MaestroPaths,
+    old_record: &DecisionRecord,
+    new_record: &DecisionRecord,
+) -> Result<Option<String>> {
+    let Some(feature_id) = old_record.feature.as_deref() else {
+        return Ok(None);
+    };
+    Ok(Some(
+        feature::note(
+            paths,
+            feature_id,
+            &format!(
+                "{} supersedes {} -- {}",
+                new_record.id, old_record.id, new_record.title
+            ),
+        )?
+        .line,
+    ))
 }
 
 /// Stamp a record locked: decision text, rejected alternatives, preview, the

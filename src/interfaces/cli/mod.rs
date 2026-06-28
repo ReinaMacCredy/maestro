@@ -1654,6 +1654,25 @@ pub enum DecisionCommand {
         )]
         supersedes: Vec<String>,
     },
+    #[command(
+        about = "Replace a locked decision by superseding it",
+        after_help = "Example:\n  maestro decision supersede dec-old --decision \"Use the new ruling\" --reason \"Why the old ruling is replaced\" --title \"New ruling\""
+    )]
+    Supersede {
+        old_id: String,
+        #[arg(long, help = "New ruling that replaces the old decision")]
+        decision: String,
+        #[arg(long, help = "Why the old ruling is replaced")]
+        reason: String,
+        #[arg(long, help = "Replacement decision title (defaults to the old title)")]
+        title: Option<String>,
+        #[arg(long = "rejected", help = "Rejected option and reason (repeatable)")]
+        rejected: Vec<String>,
+        #[arg(long, help = "Preview or concrete example")]
+        preview: Option<String>,
+        #[arg(long, help = "Print only the new card id on stdout")]
+        id_only: bool,
+    },
     #[command(about = "Show a decision card by id")]
     Show { id: String },
     #[command(about = "List decision cards (recent 20 by activity unless --all)")]

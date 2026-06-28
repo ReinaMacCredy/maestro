@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: eeb70e322a233f30b649dd787d372c007c24b9f8604e85f102c6cb57b4403561 -->
+<!-- maestro:cli-reference-sha256: f7118d4819bfb74a3c3a49b194721e8e75a17e7e408aa07d35420d35e343512f -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -25,6 +25,7 @@ a spelling not found here is outside this skill's CLI surface.
 
 - `maestro decision new <TITLE> [--context <CONTEXT>] [--feature <FEATURE>] [--lock] [--decision <DECISION>] [--rejected <REJECTED>]... [--preview <PREVIEW>] [--supersedes <SUPERSEDES>]... [--project <PROJECT>] [--id-only]` -- Open a structured decision fork (mints a decision card)
 - `maestro decision lock <ID> --decision <DECISION> [--rejected <REJECTED>]... [--preview <PREVIEW>] [--supersedes <SUPERSEDES>]...` -- Lock an open decision with the chosen answer
+- `maestro decision supersede <OLD_ID> --decision <DECISION> --reason <REASON> [--title <TITLE>] [--rejected <REJECTED>]... [--preview <PREVIEW>] [--id-only]` -- Replace a locked decision by superseding it
 - `maestro decision show <ID>` -- Show a decision card by id
 - `maestro decision list [--all] [--feature <FEATURE>]` -- List decision cards (recent 20 by activity unless --all)
 

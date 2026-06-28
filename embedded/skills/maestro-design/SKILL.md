@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-version: 1.30.0
+version: 1.30.1
 description: "Use when the user wants to brainstorm, design, plan, choose wording, or decide a workflow, skill, harness, card/task/feature, architecture, UX, or agent-process change in a project using Maestro before implementation."
 ---
 
@@ -128,8 +128,9 @@ harness. Preserve the answer, not the code.
 
 - Do not implement from this skill.
 - Do not batch unrelated decisions into one lock.
-- Do not keep a contradicted decision silently. Reopen or supersede it in the
-  Decision record.
+- Do not keep a contradicted locked decision silently. To reopen a locked
+  ruling, supersede it with `maestro decision supersede`; never edit or unlock
+  the locked Decision record.
 - Do not resume from chat memory. Resume from `maestro feature spec <id>`,
   `.maestro/cards/<id>/handoff.md` first when it exists, then raw
   `spec.md`, `notes.md`, and `maestro decision list --feature <id>` for audit

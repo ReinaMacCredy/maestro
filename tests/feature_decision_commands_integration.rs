@@ -1751,6 +1751,394 @@ fn decision_new_list_show_mint_card_ids_and_preserve_template() {
     );
 }
 
+#[test]
+fn decision_supersede_creates_locked_replacement_and_marks_old_metadata_only() {
+    let temp_dir = TestTempDir::new("maestro-decision-supersede-command");
+    init_git_marker(temp_dir.path());
+    stdout(
+        maestro(&["init", "--yes"], temp_dir.path()),
+        &["init", "--yes"],
+    );
+    stdout(
+        maestro(&["feature", "new", "Decision Revision"], temp_dir.path()),
+        &["feature", "new"],
+    );
+    stdout(
+        maestro(
+            &[
+                "feature",
+                "set",
+                "decision-revision",
+                "--acceptance",
+                "supersession is explicit",
+                "--area",
+                "decision cli",
+            ],
+            temp_dir.path(),
+        ),
+        &["feature", "set"],
+    );
+
+    let old_title = "Use mutable reopen";
+    stdout(
+        maestro(
+            &[
+                "decision",
+                "new",
+                old_title,
+                "--feature",
+                "decision-revision",
+                "--lock",
+                "--decision",
+                "Unlock the old ruling in place",
+                "--rejected",
+                "supersession: too verbose",
+                "--preview",
+                "old preview",
+            ],
+            temp_dir.path(),
+        ),
+        &["decision", "new", "--lock"],
+    );
+    let old_id = id_by_title(temp_dir.path(), old_title);
+    let old_before = card_doc(temp_dir.path(), &old_id);
+
+    let supersede_args = [
+        "decision",
+        "supersede",
+        &old_id,
+        "--decision",
+        "Create a new locked decision and mark the old one superseded",
+        "--reason",
+        "Locked content is immutable",
+        "--title",
+        "Use supersession",
+        "--rejected",
+        "mutable reopen: edits history",
+        "--preview",
+        "old -> new",
+    ];
+    let supersede = stdout(maestro(&supersede_args, temp_dir.path()), &supersede_args);
+    assert!(supersede.contains("locked "), "{supersede}");
+    assert!(
+        supersede.contains(&format!("  supersedes {old_id}")),
+        "{supersede}"
+    );
+    assert!(
+        supersede.contains("next: maestro feature finalize decision-revision"),
+        "{supersede}"
+    );
+
+    let new_id = id_by_title(temp_dir.path(), "Use supersession");
+    let old_after = card_doc(temp_dir.path(), &old_id);
+    assert_eq!(old_after["status"], YamlValue::String("superseded".into()));
+    assert_eq!(
+        old_after["extra"]["superseded_by"],
+        YamlValue::String(new_id.clone())
+    );
+    assert_eq!(
+        old_after["extra"]["decision"], old_before["extra"]["decision"],
+        "supersede must not rewrite old decision content"
+    );
+    assert_eq!(
+        old_after["extra"]["rejected"], old_before["extra"]["rejected"],
+        "supersede must not rewrite old rejected options"
+    );
+    assert_eq!(
+        old_after["extra"]["preview"], old_before["extra"]["preview"],
+        "supersede must not rewrite old preview"
+    );
+    assert_eq!(
+        old_after["extra"]["locked_at"], old_before["extra"]["locked_at"],
+        "supersede must not rewrite old lock timestamp"
+    );
+
+    let new_card = card_doc(temp_dir.path(), &new_id);
+    assert_eq!(new_card["status"], YamlValue::String("locked".into()));
+    assert_eq!(
+        new_card["parent"],
+        YamlValue::String("decision-revision".into())
+    );
+    assert_eq!(
+        new_card["description"],
+        YamlValue::String("Locked content is immutable".into())
+    );
+    assert_eq!(
+        new_card["extra"]["supersedes"][0],
+        YamlValue::String(old_id.clone())
+    );
+
+    let notes = fs::read_to_string(
+        temp_dir
+            .path()
+            .join(".maestro/cards/decision-revision/notes.md"),
+    )
+    .expect("feature note should be written");
+    assert_dated_note_line(
+        &notes,
+        &format!("{new_id} supersedes {old_id} -- Use supersession"),
+    );
+
+    let old_show = stdout(
+        maestro(&["decision", "show", &old_id], temp_dir.path()),
+        &["decision", "show"],
+    );
+    assert!(old_show.contains("status: superseded"), "{old_show}");
+    assert!(
+        old_show.contains(&format!("superseded_by: {new_id}")),
+        "{old_show}"
+    );
+
+    let new_show = stdout(
+        maestro(&["decision", "show", &new_id], temp_dir.path()),
+        &["decision", "show"],
+    );
+    assert!(new_show.contains("status: locked"), "{new_show}");
+    assert!(new_show.contains("supersedes:"), "{new_show}");
+    assert!(new_show.contains(&format!("- {old_id}")), "{new_show}");
+
+    let list = stdout(
+        maestro(
+            &["decision", "list", "--feature", "decision-revision"],
+            temp_dir.path(),
+        ),
+        &["decision", "list", "--feature"],
+    );
+    assert!(
+        untabify(&list).contains(&format!("{new_id}\tlocked\t")),
+        "{list}"
+    );
+    assert!(
+        untabify(&list).contains(&format!("{old_id}\tsuperseded\t")),
+        "{list}"
+    );
+
+    let spec = stdout(
+        maestro(&["feature", "spec", "decision-revision"], temp_dir.path()),
+        &["feature", "spec"],
+    );
+    assert!(
+        spec.contains(&format!("- {new_id} [locked]: Use supersession")),
+        "{spec}"
+    );
+    assert!(
+        spec.contains(&format!("- {old_id} [superseded]: Use mutable reopen")),
+        "{spec}"
+    );
+
+    let finalize = stdout(
+        maestro(
+            &["feature", "finalize", "decision-revision"],
+            temp_dir.path(),
+        ),
+        &["feature", "finalize"],
+    );
+    assert!(
+        finalize.contains("finalized decision-revision"),
+        "{finalize}"
+    );
+    let handoff = fs::read_to_string(
+        temp_dir
+            .path()
+            .join(".maestro/cards/decision-revision/handoff.md"),
+    )
+    .expect("handoff should be readable");
+    assert!(
+        handoff.contains(&format!("- `{new_id}`: Use supersession")),
+        "{handoff}"
+    );
+    assert!(
+        handoff.contains(&format!(
+            "  - `{old_id}`: `.maestro/cards/{old_id}/card.yaml`"
+        )),
+        "{handoff}"
+    );
+
+    let bad_args = [
+        "decision",
+        "supersede",
+        &old_id,
+        "--decision",
+        "Try again",
+        "--reason",
+        "already replaced",
+        "--title",
+        "Use another replacement",
+    ];
+    let bad = assert_failure(maestro(&bad_args, temp_dir.path()), &bad_args);
+    assert!(bad.contains("already superseded"), "{bad}");
+}
+
+#[test]
+fn decision_supersede_rejects_invalid_targets_without_creating_replacements() {
+    let temp_dir = TestTempDir::new("maestro-decision-supersede-invalid-targets");
+    init_git_marker(temp_dir.path());
+    stdout(
+        maestro(&["init", "--yes"], temp_dir.path()),
+        &["init", "--yes"],
+    );
+    stdout(
+        maestro(&["feature", "new", "Revision Safety"], temp_dir.path()),
+        &["feature", "new"],
+    );
+
+    let open_title = "Open target";
+    stdout(
+        maestro(
+            &[
+                "decision",
+                "new",
+                open_title,
+                "--feature",
+                "revision-safety",
+            ],
+            temp_dir.path(),
+        ),
+        &["decision", "new"],
+    );
+    let open_id = id_by_title(temp_dir.path(), open_title);
+
+    let locked_title = "Locked target";
+    stdout(
+        maestro(
+            &[
+                "decision",
+                "new",
+                locked_title,
+                "--feature",
+                "revision-safety",
+                "--lock",
+                "--decision",
+                "Original ruling",
+                "--rejected",
+                "other: weaker",
+            ],
+            temp_dir.path(),
+        ),
+        &["decision", "new", "--lock"],
+    );
+    let locked_id = id_by_title(temp_dir.path(), locked_title);
+    stdout(
+        maestro(
+            &[
+                "decision",
+                "supersede",
+                &locked_id,
+                "--decision",
+                "Replacement ruling",
+                "--reason",
+                "Better evidence",
+                "--title",
+                "Replacement target",
+            ],
+            temp_dir.path(),
+        ),
+        &["decision", "supersede"],
+    );
+
+    let decisions_dir = temp_dir.path().join(".maestro/decisions");
+    ensure_dir(&decisions_dir).expect("invariant: decisions directory should be creatable");
+    fs::write(
+        decisions_dir.join("decision-009-legacy.md"),
+        decision_markdown(9, "Legacy"),
+    )
+    .expect("invariant: seed legacy decision should be writable");
+
+    let cases = [
+        (
+            [
+                "decision",
+                "supersede",
+                "dec-missing",
+                "--decision",
+                "Nope",
+                "--reason",
+                "missing target",
+                "--title",
+                "Missing Replacement",
+            ],
+            "not found",
+            "Missing Replacement",
+        ),
+        (
+            [
+                "decision",
+                "supersede",
+                &open_id,
+                "--decision",
+                "Nope",
+                "--reason",
+                "open target",
+                "--title",
+                "Open Replacement",
+            ],
+            "is open; lock it",
+            "Open Replacement",
+        ),
+        (
+            [
+                "decision",
+                "supersede",
+                &locked_id,
+                "--decision",
+                "Nope",
+                "--reason",
+                "already superseded",
+                "--title",
+                "Already Superseded Replacement",
+            ],
+            "already superseded",
+            "Already Superseded Replacement",
+        ),
+        (
+            [
+                "decision",
+                "supersede",
+                "decision-009",
+                "--decision",
+                "Nope",
+                "--reason",
+                "legacy target",
+                "--title",
+                "Legacy Replacement",
+            ],
+            "frozen legacy decision",
+            "Legacy Replacement",
+        ),
+        (
+            [
+                "decision",
+                "supersede",
+                "revision-safety",
+                "--decision",
+                "Nope",
+                "--reason",
+                "feature id",
+                "--title",
+                "Wrong Scope Replacement",
+            ],
+            "not a decision",
+            "Wrong Scope Replacement",
+        ),
+    ];
+
+    for (args, expected_error, title) in cases {
+        let stderr = assert_failure(maestro(&args, temp_dir.path()), &args);
+        assert!(
+            stderr.contains(expected_error),
+            "expected {expected_error:?} in stderr:\n{stderr}"
+        );
+        let list = stdout(
+            maestro(&["decision", "list", "--all"], temp_dir.path()),
+            &["decision", "list", "--all"],
+        );
+        assert!(
+            !list.contains(title),
+            "invalid supersede created replacement {title:?}:\n{list}"
+        );
+    }
+}
+
 /// ac-4: bare `decision list` / `query decisions` window to the 20 most-recent
 /// decisions with a count header; `--all` restores the full set; `--feature`
 /// scopes to one feature (and a small scope keeps the unwindowed table).

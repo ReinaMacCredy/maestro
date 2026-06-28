@@ -7,8 +7,8 @@ pub mod schema;
 pub mod template;
 
 pub use create::{
-    DecisionLockReport, DecisionWriteReport, LockInputs, create_locked, create_open,
-    empty_store_yaml, lock,
+    DecisionLockReport, DecisionWriteReport, LockInputs, SupersedeInputs, create_locked,
+    create_open, empty_store_yaml, lock, supersede,
 };
 pub use query::{
     DecisionContent, DecisionListEntry, DecisionSource, dangling_reference_warnings,

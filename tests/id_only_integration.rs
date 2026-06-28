@@ -141,6 +141,47 @@ fn decision_new_id_only_prints_only_the_id_for_open_and_locked() {
 }
 
 #[test]
+fn decision_supersede_id_only_prints_only_the_replacement_id() {
+    let repo = init_repo("maestro-id-only-decision-supersede");
+
+    let old_id = create_id_only(
+        repo.path(),
+        &[
+            "decision",
+            "new",
+            "Original ruling",
+            "--lock",
+            "--decision",
+            "keep the original",
+            "--id-only",
+        ],
+        "dec-",
+    );
+    let new_id = create_id_only(
+        repo.path(),
+        &[
+            "decision",
+            "supersede",
+            &old_id,
+            "--decision",
+            "replace the original",
+            "--reason",
+            "new evidence",
+            "--title",
+            "Replacement ruling",
+            "--id-only",
+        ],
+        "dec-",
+    );
+    let show = stdout(
+        maestro(&["decision", "show", &new_id], repo.path()),
+        &["decision", "show", &new_id],
+    );
+    assert!(show.contains("status: locked"), "{show}");
+    assert!(show.contains(&format!("- {old_id}")), "{show}");
+}
+
+#[test]
 fn flat_create_id_only_prints_only_a_resolvable_id() {
     let repo = init_repo("maestro-id-only-create");
     let id = create_id_only(
