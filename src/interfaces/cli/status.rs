@@ -14,7 +14,7 @@ use crate::foundation::core::time::{timestamp_nanos, utc_now_timestamp};
 use crate::interfaces::cli::{
     ClaimArgs, GitReadout, NextArgs, StatusArgs, clean_worktree_note, feature_next_label,
     git_readout, merge_busy_advisory, proof_concern_line, recovery_label, render_git_line,
-    stale_merge_advisory,
+    shell_word, stale_merge_advisory,
 };
 use crate::operations::harness;
 use crate::operations::memory::{
@@ -1057,18 +1057,6 @@ fn print_worktree_actions(actions: &[WorktreeActionJson]) {
             &rows,
         )
     );
-}
-
-fn shell_word(value: &str) -> String {
-    if !value.is_empty()
-        && value.bytes().all(|byte| {
-            byte.is_ascii_alphanumeric()
-                || matches!(byte, b'/' | b'.' | b'_' | b'-' | b'=' | b':' | b'@')
-        })
-    {
-        return value.to_string();
-    }
-    format!("'{}'", value.replace('\'', "'\\''"))
 }
 
 #[derive(Clone, Debug, Serialize)]

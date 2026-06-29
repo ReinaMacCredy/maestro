@@ -65,6 +65,18 @@ pub(crate) fn recovery_label(hint: Option<&str>) -> String {
     }
 }
 
+pub(crate) fn shell_word(value: &str) -> String {
+    if !value.is_empty()
+        && value.bytes().all(|byte| {
+            byte.is_ascii_alphanumeric()
+                || matches!(byte, b'/' | b'.' | b'_' | b'-' | b'=' | b':' | b'@')
+        })
+    {
+        return value.to_string();
+    }
+    format!("'{}'", value.replace('\'', "'\\''"))
+}
+
 /// Next-step label for a feature, shared by `status` and `feature list` so the
 /// hint never diverges between the two surfaces.
 pub(crate) fn feature_next_label(paths: &MaestroPaths, view: &FeatureView) -> String {

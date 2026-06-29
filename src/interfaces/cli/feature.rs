@@ -21,7 +21,7 @@ use crate::foundation::core::table;
 use crate::foundation::core::time::{render_timestamp, timestamp_nanos, utc_now_timestamp};
 use crate::interfaces::cli::{
     FeatureArgs, FeatureCommand, FeatureProofCommand, feature_next_command, feature_next_label,
-    recovery_label,
+    recovery_label, shell_word,
 };
 use crate::operations::{feature_close, feature_prepare, harness};
 
@@ -253,6 +253,7 @@ pub fn run(args: FeatureArgs) -> Result<()> {
                 worker_source,
                 target_card_hash,
                 allow_dirty_target_card: false,
+                preflight: None,
                 dry_run,
             },
         ),
@@ -704,45 +705,44 @@ fn close_auto_archive_plan(
         ));
     };
     if snapshot.code_other_dirty > 0 {
-        let mut dirty = snapshot
+        let dirty = snapshot
             .dirty_paths
             .iter()
             .filter(|path| !path.starts_with(".maestro"))
             .map(|path| path.display().to_string())
             .collect::<Vec<_>>();
-        dirty.sort();
         return Ok(CloseAutoArchivePlan::Skip(format!(
             "code/other dirty path(s) at {head}: {}; commit or clean before archive",
             dirty.join(", ")
         )));
     }
-    match unresolved_conflicts_for_target(paths, &report.id) {
-        Ok(conflicts) if !conflicts.is_empty() => {
-            return Ok(CloseAutoArchivePlan::Skip(format!(
-                "unresolved Maestro conflict(s): {}; clear conflicts before archive",
-                conflicts.join(", ")
-            )));
-        }
-        Ok(_) => {}
+    let unresolved_conflicts = match unresolved_conflicts_for_target(paths, &report.id) {
+        Ok(conflicts) => conflicts,
         Err(error) => {
             return Ok(CloseAutoArchivePlan::Skip(format!(
                 "conflict state is unavailable: {error:#}"
             )));
         }
+    };
+    if !unresolved_conflicts.is_empty() {
+        return Ok(CloseAutoArchivePlan::Skip(format!(
+            "unresolved Maestro conflict(s): {}; clear conflicts before archive",
+            unresolved_conflicts.join(", ")
+        )));
     }
-    match blocking_work_items(paths, &report.id) {
-        Ok(open_work) if !open_work.is_empty() => {
-            return Ok(CloseAutoArchivePlan::Skip(format!(
-                "live or claimed descendant/linked work item(s): {}; verify/archive or release them first",
-                open_work.join(", ")
-            )));
-        }
-        Ok(_) => {}
+    let open_work = match blocking_work_items(paths, &report.id) {
+        Ok(open_work) => open_work,
         Err(error) => {
             return Ok(CloseAutoArchivePlan::Skip(format!(
                 "work-item state is unavailable: {error:#}"
             )));
         }
+    };
+    if !open_work.is_empty() {
+        return Ok(CloseAutoArchivePlan::Skip(format!(
+            "live or claimed descendant/linked work item(s): {}; verify/archive or release them first",
+            open_work.join(", ")
+        )));
     }
     let target_card_path = paths.cards_dir().join(&report.id).join("card.yaml");
     let target_card_hash = if target_card_path.is_file() {
@@ -769,6 +769,10 @@ fn close_auto_archive_plan(
         worker_source: close_worker_source(paths, snapshot.branch.as_deref()),
         target_card_hash,
         allow_dirty_target_card: true,
+        preflight: Some(AutoArchivePreflight {
+            unresolved_conflicts,
+            open_work,
+        }),
         dry_run: false,
     })))
 }
@@ -856,7 +860,14 @@ struct AutoArchiveArgs {
     worker_source: String,
     target_card_hash: Option<String>,
     allow_dirty_target_card: bool,
+    preflight: Option<AutoArchivePreflight>,
     dry_run: bool,
+}
+
+#[derive(Debug)]
+struct AutoArchivePreflight {
+    unresolved_conflicts: Vec<String>,
+    open_work: Vec<String>,
 }
 
 fn auto_archive_feature(paths: &MaestroPaths, args: AutoArchiveArgs) -> Result<()> {
@@ -953,18 +964,23 @@ fn auto_archive_feature(paths: &MaestroPaths, args: AutoArchiveArgs) -> Result<(
             relevant_dirty.join(", ")
         );
     }
-    let unresolved_conflicts = unresolved_conflicts_for_target(paths, &id)?;
-    if !unresolved_conflicts.is_empty() {
+    let preflight = match args.preflight {
+        Some(preflight) => preflight,
+        None => AutoArchivePreflight {
+            unresolved_conflicts: unresolved_conflicts_for_target(paths, &id)?,
+            open_work: blocking_work_items(paths, &id)?,
+        },
+    };
+    if !preflight.unresolved_conflicts.is_empty() {
         bail!(
             "cannot auto-archive {id} — unresolved Maestro conflict(s): {}; clear conflicts before archive",
-            unresolved_conflicts.join(", ")
+            preflight.unresolved_conflicts.join(", ")
         );
     }
-    let open_work = blocking_work_items(paths, &id)?;
-    if !open_work.is_empty() {
+    if !preflight.open_work.is_empty() {
         bail!(
             "cannot auto-archive {id} — live or claimed descendant/linked work item(s): {}; verify/archive or release them first",
-            open_work.join(", ")
+            preflight.open_work.join(", ")
         );
     }
 
@@ -1401,18 +1417,6 @@ fn repo_relative_path(paths: &MaestroPaths, path: &Path) -> String {
 
 fn short_commit(commit: &str) -> String {
     commit.chars().take(12).collect()
-}
-
-fn shell_word(value: &str) -> String {
-    if !value.is_empty()
-        && value.bytes().all(|byte| {
-            byte.is_ascii_alphanumeric()
-                || matches!(byte, b'/' | b'.' | b'_' | b'-' | b'=' | b':' | b'@')
-        })
-    {
-        return value.to_string();
-    }
-    format!("'{}'", value.replace('\'', "'\\''"))
 }
 
 /// Bulk-archive every closed (terminal) feature (§5 L3). Collect-and-continue:

@@ -370,8 +370,8 @@ struct RunEventSummary {
     skill_activation_events: usize,
     latest_event: Option<(String, String)>,
     intervention_events: usize,
-    heartbeat_events: usize,
-    latest_heartbeat_at: Option<String>,
+    timestamped_events: usize,
+    latest_timestamped_event_at: Option<String>,
 }
 
 pub fn complete_readout(paths: &MaestroPaths) -> Result<CompleteHarnessReadout> {
@@ -768,13 +768,13 @@ fn run_event_summary(paths: &MaestroPaths) -> Result<RunEventSummary> {
             {
                 summary.latest_event = Some((ts.to_string(), kind.to_string()));
             }
-            summary.heartbeat_events += 1;
+            summary.timestamped_events += 1;
             if summary
-                .latest_heartbeat_at
+                .latest_timestamped_event_at
                 .as_deref()
                 .is_none_or(|latest| ts > latest)
             {
-                summary.latest_heartbeat_at = Some(ts.to_string());
+                summary.latest_timestamped_event_at = Some(ts.to_string());
             }
         }
         Ok(())
@@ -1039,7 +1039,7 @@ fn scheduler_readout_from_sessions(
 
     let status = if dead_runs > 0 {
         "degraded"
-    } else if event_summary.heartbeat_events > 0 || active_sessions > 0 {
+    } else if event_summary.timestamped_events > 0 || active_sessions > 0 {
         "observed"
     } else {
         "idle"
@@ -1050,8 +1050,8 @@ fn scheduler_readout_from_sessions(
         stance: "passive_local_first".to_string(),
         owner: "none".to_string(),
         heartbeat_source: "managed run event timestamps and active-session presence".to_string(),
-        heartbeat_events: event_summary.heartbeat_events,
-        latest_heartbeat_at: event_summary.latest_heartbeat_at.clone(),
+        heartbeat_events: event_summary.timestamped_events,
+        latest_heartbeat_at: event_summary.latest_timestamped_event_at.clone(),
         active_sessions,
         stale_sessions,
         missed_runs,

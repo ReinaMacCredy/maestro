@@ -174,7 +174,7 @@ pub fn show_with_custom_dir(name: &str, custom_dir: Option<&Path>) -> Result<Str
             .iter()
             .any(|custom| custom == name)
     {
-        return Ok(render_contract(&custom_contract(custom_dir, name)?));
+        return Ok(render_contract(&custom_contract_known(custom_dir, name)?));
     }
     bail!(
         "unknown loop recipe \"{name}\"; run `maestro loop` for the index (available: {})",
@@ -192,7 +192,7 @@ pub fn validate_with_custom_dir(name: &str, custom_dir: Option<&Path>) -> Result
             .iter()
             .any(|custom| custom == name)
     {
-        custom_contract(custom_dir, name)?;
+        custom_contract_known(custom_dir, name)?;
         return Ok(format!("valid project custom loop recipe: {name}\n"));
     }
     bail!(
@@ -269,7 +269,7 @@ pub fn contract(name: &str) -> Result<RecipeContract> {
 pub fn custom_contracts(custom_dir: &Path) -> Result<Vec<RecipeContract>> {
     custom_contract_names(custom_dir)?
         .into_iter()
-        .map(|name| custom_contract(custom_dir, &name))
+        .map(|name| custom_contract_known(custom_dir, &name))
         .collect()
 }
 
@@ -319,7 +319,16 @@ pub fn custom_contract_names(custom_dir: &Path) -> Result<Vec<String>> {
 
 pub fn custom_contract(custom_dir: &Path, name: &str) -> Result<RecipeContract> {
     let path = custom_contract_path(custom_dir, name)?;
-    let metadata = fs::symlink_metadata(&path)
+    read_custom_contract(&path, name)
+}
+
+fn custom_contract_known(custom_dir: &Path, name: &str) -> Result<RecipeContract> {
+    let path = custom_contract_file_path(custom_dir, name)?;
+    read_custom_contract(&path, name)
+}
+
+fn read_custom_contract(path: &Path, name: &str) -> Result<RecipeContract> {
+    let metadata = fs::symlink_metadata(path)
         .with_context(|| format!("failed to inspect custom loop recipe {}", path.display()))?;
     ensure!(
         !metadata.file_type().is_symlink(),
@@ -331,7 +340,7 @@ pub fn custom_contract(custom_dir: &Path, name: &str) -> Result<RecipeContract> 
         "custom loop recipe {} is not a regular file",
         path.display()
     );
-    let body = fs::read_to_string(&path)
+    let body = fs::read_to_string(path)
         .with_context(|| format!("failed to read custom loop recipe {}", path.display()))?;
     let contract = parse_contract_body(name, &body)
         .with_context(|| format!("invalid custom loop recipe {name}.yml"))?;
@@ -547,15 +556,20 @@ fn available_names_with_custom(custom_dir: Option<&Path>) -> Result<Vec<String>>
 }
 
 fn custom_contract_path(custom_dir: &Path, name: &str) -> Result<PathBuf> {
-    ensure!(
-        !name.contains('/') && !name.contains('\\') && name != "." && name != "..",
-        "custom loop recipe name must be a file stem, got {name:?}"
-    );
+    let path = custom_contract_file_path(custom_dir, name)?;
     let names = custom_contract_names(custom_dir)?;
     ensure!(
         names.iter().any(|custom| custom == name),
         "unknown custom loop recipe \"{name}\" in {}",
         custom_dir.display()
+    );
+    Ok(path)
+}
+
+fn custom_contract_file_path(custom_dir: &Path, name: &str) -> Result<PathBuf> {
+    ensure!(
+        !name.contains('/') && !name.contains('\\') && name != "." && name != "..",
+        "custom loop recipe name must be a file stem, got {name:?}"
     );
     Ok(custom_dir.join(format!("{name}.yml")))
 }
