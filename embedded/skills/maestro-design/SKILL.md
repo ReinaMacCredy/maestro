@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-version: 1.31.0
+version: 1.31.1
 description: "Use when the user wants to brainstorm, design, plan, choose wording, or decide a workflow, skill, harness, card/task/feature, architecture, UX, or agent-process change in a project using Maestro before implementation."
 ---
 
@@ -44,6 +44,33 @@ tools yet. After the design hand-off, `maestro-card` prefers MCP for supported
 work-card and feature-lifecycle steps.
 
 Routing: external PRD with open forks -> decide forks in design, then intake per maestro-card.
+
+## Conversation Driver
+
+Keep a working thesis from the user's latest correction, selected text,
+sidechat paste, example, and preference. Before opening or revising a fork,
+fold that thesis into the option framing instead of treating the new detail as
+a loose comment.
+
+Keep a short fork queue. After each locked decision or clarified user answer,
+derive the next unresolved fork from the feature spec, open questions, locked
+decisions, and working thesis. If a concrete next fork exists, present it in
+the same turn; do not make the user send "next fork" just to continue. If no
+fork remains, say that directly and name the next lifecycle gate, usually
+`maestro feature finalize <id>`.
+
+Every material fork needs a detail floor:
+
+- the concrete problem being decided
+- A/B/C options with artifact-level previews
+- one real Maestro example
+- the tradeoff and why rejected options lose
+- a clear recommendation
+- the exact answer format expected from the user
+
+If the user asks for more detail, examples, or clarification, answer by
+improving the current fork or thesis first. Only open a new fork after the
+clarified point is settled or explicitly becomes the next decision.
 
 Recipe checkpoint: design work uses the shipped `design` lifecycle recipe.
 Before deciding or changing the proposed contract, read or cite
