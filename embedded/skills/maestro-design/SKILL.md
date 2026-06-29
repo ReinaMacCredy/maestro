@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-version: 1.30.1
+version: 1.31.0
 description: "Use when the user wants to brainstorm, design, plan, choose wording, or decide a workflow, skill, harness, card/task/feature, architecture, UX, or agent-process change in a project using Maestro before implementation."
 ---
 
@@ -44,6 +44,13 @@ tools yet. After the design hand-off, `maestro-card` prefers MCP for supported
 work-card and feature-lifecycle steps.
 
 Routing: external PRD with open forks -> decide forks in design, then intake per maestro-card.
+
+Recipe checkpoint: design work uses the shipped `design` lifecycle recipe.
+Before deciding or changing the proposed contract, read or cite
+`maestro loop show design` and keep the work inside perceive -> choose -> act
+-> observe -> learn -> continue. Custom recipes are allowed only for the current
+card/run, and only when no shipped recipe fits; they must use the same six
+phases, current Maestro verbs, hard stops, and continue output.
 
 First step in a session: run `maestro active` (pull-only) to see what other
 live sessions are working on -- their card, mode, and progress -- before you

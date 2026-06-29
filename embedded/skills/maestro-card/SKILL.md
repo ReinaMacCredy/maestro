@@ -1,6 +1,6 @@
 ---
 name: maestro-card
-version: 1.36.1
+version: 1.37.1
 description: "Use when the user wants to implement, fix, verify, QA, close, release, continue, use loop, keep looping, work while away, or work while asleep on Maestro cards/features/tasks in a project using Maestro after design is approved."
 ---
 
@@ -33,6 +33,16 @@ When any other session is live as you start implementing, follow the
 conflict-handoff protocol in HARNESS.md: worktree-isolate, link + `maestro
 conflict` on a file you will share, merge back then `--clear`. The full dance
 (including a conflicted merge-back) is `maestro loop show conflict-handoff`.
+
+Recipe checkpoint: choose the shipped lifecycle recipe before acting. Use
+`maestro loop show work` for task/card implementation, `maestro loop show ship`
+before close/release/archive gates, `maestro loop show unattended` for away-mode
+autonomy, and `maestro loop show learning` when recording reusable lessons.
+Custom card/run recipes are allowed only when no shipped recipe fits, and must
+keep the same six phases, current Maestro verbs, hard stops, and continue
+output. Work Lease is only a choose-phase helper; it may select or reserve one
+safe unit, but it is not a scheduler, daemon, queue, worker launcher, executor,
+hidden store, or second lifecycle.
 
 ## Route
 

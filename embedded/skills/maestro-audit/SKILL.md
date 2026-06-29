@@ -1,6 +1,6 @@
 ---
 name: maestro-audit
-version: 1.9.0
+version: 1.10.0
 description: "Use when the user wants a read-only audit, code review, backlog proposal, or harness improvement finding for a project using Maestro, without applying fixes."
 ---
 
@@ -12,6 +12,13 @@ stores, merges, and surfaces proposals.
 Activate with a known session id:
 `maestro hook record --event skill_activation --skill maestro-audit --session <session_id>`
 
+Recipe checkpoint: audit work uses `maestro loop show audit`. Use that recipe
+as the shape for perceive -> choose -> act -> observe -> learn -> continue:
+read the bounded surface, choose a falsifiable probe, run read-only checks,
+observe findings, record durable proposals, then return the next audit or hard
+stop. Custom card/run recipes are allowed only when no shipped recipe fits, and
+must use the same six phases, current Maestro verbs, hard stops, and continue
+output.
 
 ## Stop
 

@@ -37,8 +37,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 19] = [
     (
         "skill",
         "maestro-card",
-        "1.36.1",
-        "1ce4db23f4d436244bdecc2536bb66c80760b875a8a0d0358dcc3d6837300bf0",
+        "1.37.1",
+        "44d3e64029ea1148c7e1808e3b38a43f732bdfe9fd93bc22dc19b8d12029ce0a",
     ),
     (
         "skill",
@@ -49,14 +49,14 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 19] = [
     (
         "skill",
         "maestro-design",
-        "1.30.1",
-        "6eec74b31d3db28ec342ec727b0d270cfe9a4336e419db788b71e932f9a1283a",
+        "1.31.0",
+        "c908591acccb7796d50cfbffc7c7e0aaced6290853a3979b22fce0fa44fc3f11",
     ),
     (
         "skill",
         "maestro-audit",
-        "1.9.0",
-        "98a2c9915628fdfa6b51b77c7a0b270cf49675f481cea4efd6c9fbd089a195d9",
+        "1.10.0",
+        "ad80835236ac55c61f4355d3ca458cfa5ab0bd2ac569efd1bf8ad6b50a61fb00",
     ),
     (
         "hook",
@@ -67,8 +67,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 19] = [
     (
         "harness",
         "HARNESS.md",
-        "1.27.0",
-        "13ae4d26ce78cc8aeb0ba53f6d31e70c340b099fa5d98196a092619db2a75d06",
+        "1.28.0",
+        "9ed3f07cbfd09746004673f6180b2c3b7f4e9b9495eb052c64f048e363394321",
     ),
     (
         "playbook",
@@ -315,6 +315,65 @@ fn maestro_card_skill_keeps_explicit_unattended_loop_triggers() {
             "maestro-card guidance must retain trigger phrase {phrase:?}"
         );
     }
+}
+
+#[test]
+fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
+    let harness = HARNESS_MD.replace("\n   ", " ");
+    assert!(
+        harness.contains("maestro loop show design")
+            && harness.contains("maestro loop show work")
+            && harness.contains("maestro loop show audit")
+            && harness.contains("maestro loop show ship")
+            && harness.contains("maestro loop show unattended")
+            && harness.contains("maestro loop show learning"),
+        "harness must route agents to shipped lifecycle recipe checkpoints"
+    );
+
+    let design = shipped_skill_body("maestro-design");
+    assert!(
+        design.contains("Recipe checkpoint")
+            && design.contains("maestro loop show design")
+            && design.contains("perceive -> choose -> act"),
+        "maestro-design must adopt the design lifecycle recipe"
+    );
+
+    let audit = shipped_skill_body("maestro-audit");
+    assert!(
+        audit.contains("Recipe checkpoint")
+            && audit.contains("maestro loop show audit")
+            && audit.contains("perceive -> choose -> act"),
+        "maestro-audit must adopt the audit lifecycle recipe"
+    );
+
+    let card = shipped_skill_body("maestro-card");
+    for phrase in [
+        "Recipe checkpoint",
+        "maestro loop show work",
+        "maestro loop show ship",
+        "maestro loop show unattended",
+        "maestro loop show learning",
+        "choose-phase helper",
+        "not a scheduler, daemon, queue, worker launcher, executor",
+    ] {
+        assert!(
+            card.contains(phrase),
+            "maestro-card must keep lifecycle recipe checkpoint phrase {phrase:?}"
+        );
+    }
+}
+
+fn shipped_skill_body(name: &str) -> String {
+    let skill = skills()
+        .iter()
+        .find(|skill| skill.name == name)
+        .unwrap_or_else(|| panic!("{name} skill should ship"));
+    let mut body = String::new();
+    for file in &skill.files {
+        body.push_str(&String::from_utf8_lossy(file.contents));
+        body.push('\n');
+    }
+    body
 }
 
 #[test]

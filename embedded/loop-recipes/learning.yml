@@ -1,0 +1,66 @@
+schema_version: maestro.loop_recipe.v1
+id: learning
+title: Learning loop
+summary: Convert verified corrections, repeated failures, and durable decisions into reusable Maestro memory without adding hidden state.
+applies_when:
+  - a user correction, repeated blocker, verified fix, or decision should guide future agents
+  - an implementation produced a reusable pattern rather than a one-off note
+hard_stops:
+  - lesson is speculative or not tied to evidence
+  - lesson would live only in chat
+  - lesson requires changing shipped skill text without accepted scope
+phases:
+  perceive:
+    goal: Read the source event, proof, decision, note, or repeated failure pattern.
+    bricks: ["event", "proof", "decision", "memory"]
+    reads: ["maestro query run --json", "maestro decision show <id>", "maestro task show <id>"]
+    allowed_verbs: ["maestro query run --json", "maestro task show <id>", "maestro decision show <id>"]
+    forbidden_verbs: ["memory create without source", "skill edit without accepted task"]
+    checks: ["source evidence is durable and current"]
+    durable_learning: []
+    outputs: ["candidate lesson", "hard stop"]
+  choose:
+    goal: Decide whether the lesson belongs in a card note, memory, decision, QA item, or skill proposal.
+    bricks: ["memory suggestion", "note", "decision", "skill proposal"]
+    reads: ["existing memory", "feature scope", "skill trigger text"]
+    allowed_verbs: ["maestro memory suggest create", "maestro card note <id> <text>", "maestro decision new"]
+    forbidden_verbs: ["duplicate memory", "unreviewed global policy change"]
+    checks: ["lesson type matches reuse value and authority"]
+    durable_learning: []
+    outputs: ["selected durable target", "no learning needed"]
+  act:
+    goal: Write the lesson through the proper Maestro artifact.
+    bricks: ["memory", "note", "decision", "QA"]
+    reads: ["source ref", "target artifact"]
+    allowed_verbs: ["maestro memory suggest create", "maestro memory create", "maestro card note <id> <text>", "maestro event intervention --note <text>"]
+    forbidden_verbs: ["manual hidden store edit", "unscoped skill rewrite"]
+    checks: ["artifact includes source reference and concise lesson"]
+    durable_learning: []
+    outputs: ["memory suggestion", "card note", "decision", "QA update"]
+  observe:
+    goal: Verify the learning artifact is inspectable and not duplicated.
+    bricks: ["memory list", "card show", "decision list"]
+    reads: ["maestro memory suggest list", "maestro card show <id>", "maestro grep <topic> corpus:memory"]
+    allowed_verbs: ["maestro grep <topic> corpus:memory", "maestro memory suggest list"]
+    forbidden_verbs: ["claim durable learning without readback"]
+    checks: ["readback shows the saved artifact"]
+    durable_learning: []
+    outputs: ["readback proof", "duplicate detected", "hard stop"]
+  learn:
+    goal: Treat the saved artifact as the durable learning output.
+    bricks: ["memory", "decision", "skill proposal"]
+    reads: ["saved artifact", "source evidence"]
+    allowed_verbs: ["maestro memory create", "maestro decision lock <id>"]
+    forbidden_verbs: ["private agent-only preference"]
+    checks: ["learning is scoped, sourced, and reusable"]
+    durable_learning: ["approved memory", "locked decision", "card note", "skill update proposal"]
+    outputs: ["durable learning", "no durable learning needed"]
+  continue:
+    goal: Return to the active work loop, design loop, or hard stop.
+    bricks: ["task", "feature", "status"]
+    reads: ["maestro status", "maestro task next", "maestro feature show <id>"]
+    allowed_verbs: ["maestro status", "maestro task next"]
+    forbidden_verbs: ["external ship action", "unbounded follow-on work"]
+    checks: ["next step remains inside current Maestro records"]
+    durable_learning: []
+    outputs: ["next task", "next feature gate", "hard stop"]

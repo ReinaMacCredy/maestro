@@ -19,6 +19,12 @@ Progress is the lightweight Task container for small same-session work.
 - Act on harness improvement proposals surfaced by `status`, `task next`, or
   `harness list`.
 
+Recipe checkpoint: executable work uses `maestro loop show work`. Use that
+recipe as the shape for perceive -> choose -> act -> observe -> learn ->
+continue while the concrete lifecycle writes still go through task/card/proof
+verbs. If a custom card/run recipe is needed, keep the same six phases, current
+Maestro verbs, hard stops, and continue output.
+
 ## Do
 
 When native Maestro MCP tools are available, use them for the normal Task loop:

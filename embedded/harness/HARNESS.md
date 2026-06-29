@@ -1,5 +1,5 @@
 ---
-version: 1.27.0
+version: 1.28.0
 ---
 
 # Maestro Harness Protocol
@@ -7,9 +7,11 @@ version: 1.27.0
 You are an agent working in a repo that
 uses Maestro. Follow these rules.
 
-Maestro is a loop harness: low-level Tasks are the executable loop; verify + qa
-are the stop hook (no unbacked claim lands); decisions + friction + skills are
-the compounding memory; `maestro loop` lists the orchestration recipes.
+Maestro is a loop harness: Tasks are executable loop units; verify + qa are
+the stop hook (no unbacked claim lands); decisions + friction + skills are the
+compounding memory. The main lifecycle grammar is perceive -> choose -> act ->
+observe -> learn -> continue. `maestro loop` lists shipped lifecycle recipe
+contracts plus orchestration recipes.
 
 Work has three levels: High = Card, Mid = CardKind / workflow kind, and Low =
 Task. Feature, Bug, Chore, Custom, Decision, Idea, and Progress are CardKinds,
@@ -22,24 +24,31 @@ CardTypes; legacy `type: task` cards remain readable for compatibility.
 1. Start with `maestro status`; honor MAESTRO_CURRENT_TASK env or `maestro task show <id>` when a current task is set.
 2. Acceptance criteria live in the card (`maestro card show <id>`) - they are locked.
 3. Use the skills active for this task.
-4. Exact command signatures live in `reference/cli.md` inside every installed
+4. Before acting, choose the closest shipped lifecycle recipe and stay inside
+   its grammar: design -> `maestro loop show design`; executable work ->
+   `maestro loop show work`; audit/review -> `maestro loop show audit`;
+   close/ship/archive -> `maestro loop show ship`; unattended autonomy ->
+   `maestro loop show unattended`; reusable learning -> `maestro loop show
+   learning`. If none fits, a custom card/run recipe must still use the same
+   six phases, current Maestro verbs, hard stops, and continue output.
+5. Exact command signatures live in `reference/cli.md` inside every installed
    maestro skill (e.g. `.maestro/skills/maestro-card/reference/cli.md`),
    generated from this binary. A verb or flag not listed there does not
    exist; read it instead of probing `--help`.
-5. Never chain a guessed id: use only ids read from verb output. When a
+6. Never chain a guessed id: use only ids read from verb output. When a
    lookup misses, re-list and read the real id; do not retry spelling
    variations.
-6. Complete tasks with `maestro task complete` (summary, claim, and proof);
+7. Complete tasks with `maestro task complete` (summary, claim, and proof);
    Maestro records the proof and auto-runs verification.
-7. Hooks auto-record your tool calls as proof. Verification matches each `--claim` against recorded or inline proof - an empty or unbacked claim fails.
-8. When the user corrects your behavior, record it with
+8. Hooks auto-record your tool calls as proof. Verification matches each `--claim` against recorded or inline proof - an empty or unbacked claim fails.
+9. When the user corrects your behavior, record it with
    `maestro event intervention --note "<what was wrong>"`.
-9. Before proposing an idea or re-opening a settled question, search precedent
+10. Before proposing an idea or re-opening a settled question, search precedent
    with `maestro grep "<topic> corpus:memory"` and cite the best matching card,
    decision, task, proof, or note. Use `maestro card list --grep <topic>
    --archived` only when the user asks for exact card rows, you are verifying
    legacy card-list behavior, or unified grep is too broad or surprising.
-10. Linked-card inbox messages are advisory coordination signals only. They may
+11. Linked-card inbox messages are advisory coordination signals only. They may
     suggest a cross-card task order, but they do not block execution. When order
     matters, record an explicit Task blocker/dependency; readiness, next, claim,
     and verification gates consult Task blockers, not messages or unread state.
@@ -91,7 +100,7 @@ or name the intentional deviation.
     brainstorm / design    -> maestro-design skill
     proof failed / verify  -> maestro-card skill (verify)
     before accept / close  -> maestro-card skill (qa-baseline / qa-slice)
-    backlog / unattended   -> maestro loop show unattended-loop (keep going in place; follow imperatively)
+    backlog / unattended   -> maestro loop show unattended (main recipe), then maestro-card loop reference
 
 ## Task commands (the loop)
 
@@ -153,7 +162,9 @@ Binary only counts and shows; the agent acts. Full method -> the maestro-card sk
 ## Orchestration (when work can fan out)
 
 Parallel sub-agents pay off when contexts must stay clean or work is
-independent. Each recipe's full HOW: `maestro loop show <name>`. The menu:
+independent. Lifecycle recipes name the main loop shape; orchestration recipes
+name fan-out or automation mechanics. Each recipe's full HOW:
+`maestro loop show <name>`. The orchestration menu:
 
     2+ independent ready tasks on a feature  -> feature-fan-out
     contested / high-stakes verification     -> adversarial-fan-out

@@ -1,0 +1,66 @@
+schema_version: maestro.loop_recipe.v1
+id: ship
+title: Ship loop
+summary: Cross close, commit, install, push, release, or archive gates only when explicit authority and evidence allow it.
+applies_when:
+  - user asks to close, ship, release, push, install, publish, archive, or finish a feature
+  - a feature has all child tasks verified and needs QA slice or closeout
+hard_stops:
+  - ship authority is absent, stale, ambiguous, or wider than the accepted scope
+  - QA slice does not cover the baseline
+  - target tree has unrelated dirty changes that make scoped delivery unclear
+phases:
+  perceive:
+    goal: Read feature status, QA baseline, slice evidence, git state, and authority.
+    bricks: ["feature", "qa", "git", "run authority"]
+    reads: ["maestro feature show <id>", ".maestro/cards/<id>/qa.md", "git status --short --branch", "git log -1 --oneline"]
+    allowed_verbs: ["maestro feature show <id>", "git status --short --branch", "maestro task list --feature <id>"]
+    forbidden_verbs: ["git push", "git tag", "maestro card archive <id>"]
+    checks: ["current HEAD, tree state, and authority are known"]
+    durable_learning: []
+    outputs: ["ship readiness", "hard stop"]
+  choose:
+    goal: "Select the next legal gate: qa-slice, close, local install, push, release, archive, or stop."
+    bricks: ["authority", "qa gate", "feature gate"]
+    reads: ["feature next", "authority record", "QA coverage"]
+    allowed_verbs: ["maestro qa slice <id>", "maestro feature close <id> --outcome <outcome>"]
+    forbidden_verbs: ["push without bounded authority", "release without bounded authority"]
+    checks: ["chosen gate is named in authority and supported by evidence"]
+    durable_learning: []
+    outputs: ["next ship gate", "hard stop"]
+  act:
+    goal: Execute exactly the authorized local or external ship action.
+    bricks: ["qa slice", "feature close", "commit", "install", "push"]
+    reads: ["QA baseline", "task verification", "git diff"]
+    allowed_verbs: ["maestro qa slice <id>", "maestro feature close <id> --outcome <outcome>", "git commit", "cargo build --release"]
+    forbidden_verbs: ["force push", "secret rotation", "platform approval bypass"]
+    checks: ["action matches authority scope and target"]
+    durable_learning: []
+    outputs: ["closed feature", "commit", "installed binary", "hard stop"]
+  observe:
+    goal: Verify the delivered artifact, final state, and exact HEAD.
+    bricks: ["test", "version", "release proof", "archive preflight"]
+    reads: ["test output", "maestro version", "git rev-parse HEAD", "feature status"]
+    allowed_verbs: ["cargo test", "maestro version", "maestro feature show <id>"]
+    forbidden_verbs: ["claim shipped without proof"]
+    checks: ["evidence names command, target, result, and HEAD"]
+    durable_learning: []
+    outputs: ["ship proof", "failed gate", "hard stop"]
+  learn:
+    goal: Record recurrence guards and closeout lessons when the ship loop fixed a discovered issue.
+    bricks: ["test", "proof", "skill proposal", "decision"]
+    reads: ["failure cause", "final proof", "recurrence guard"]
+    allowed_verbs: ["maestro card note <id> <text>", "maestro event intervention --note <text>"]
+    forbidden_verbs: ["unscoped skill edit", "chat-only closeout lesson"]
+    checks: ["recurrence guard exists when required"]
+    durable_learning: ["regression test", "proof gate", "QA checklist entry", "skill update proposal", "locked decision"]
+    outputs: ["recorded guard", "no reusable lesson"]
+  continue:
+    goal: Return final status, archive gate, or hard stop.
+    bricks: ["feature close", "auto-archive", "handoff"]
+    reads: ["feature status", "current HEAD", "authority target"]
+    allowed_verbs: ["maestro feature auto-archive <id>", "maestro card archive <id>"]
+    forbidden_verbs: ["archive before close", "external ship action outside authority"]
+    checks: ["archive helper has exact tested HEAD when used"]
+    durable_learning: []
+    outputs: ["closed", "archived", "handoff", "hard stop"]

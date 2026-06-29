@@ -2609,6 +2609,29 @@ fn loop_work_lease_claims_one_ready_card_and_returns_worker_contract() {
     assert_eq!(lease["claim"]["claimed_by"], "codex#lease-happy");
     assert_eq!(lease["lease"]["stale_after_seconds"], 900);
     assert_eq!(lease["selected_action"]["kind"], "work_card");
+    assert_eq!(
+        lease["handles"]["inspect"]["selected_card"],
+        format!("maestro card show {leased_id} --json")
+    );
+    assert_eq!(
+        lease["handles"]["status"]["claim"],
+        format!("maestro card show {leased_id} --json")
+    );
+    assert_eq!(
+        lease["handles"]["reconcile"]["run_events_jsonl"],
+        ".maestro/runs/lease-happy/events.jsonl"
+    );
+    assert_eq!(
+        lease["handles"]["reconcile"]["run_report"],
+        "maestro query run --json"
+    );
+    assert!(
+        lease["handles"]["restart_policy"]
+            .as_str()
+            .unwrap()
+            .contains("no daemon, queue, scheduler, executor, or hidden store"),
+        "lease should describe restart-stable handles without side state: {lease:#}"
+    );
     assert_eq!(lease["ship_authority"]["status"], "absent");
     assert_eq!(lease["ship_authority"]["external_ship_allowed"], false);
     assert!(lease["recurrence_guard"]["required"].as_bool().unwrap());
@@ -2634,6 +2657,30 @@ fn loop_work_lease_claims_one_ready_card_and_returns_worker_contract() {
         run_log.contains("\"event_type\":\"ownership_acquire\"")
             && run_log.contains("\"action\":\"work_lease_acquire\""),
         "lease acquisition should be inspectable in run events:\n{run_log}"
+    );
+
+    let restarted_card = run(repo, &["card", "show", leased_id, "--json"]);
+    let restarted_card: Value =
+        serde_json::from_str(&restarted_card).expect("restart card status json should parse");
+    assert_eq!(restarted_card["status"], "in_progress");
+    assert_eq!(restarted_card["claimed_by"], "codex#lease-happy");
+
+    let restarted_report = run(repo, &["query", "run", "--json"]);
+    let restarted_report: Value =
+        serde_json::from_str(&restarted_report).expect("restart run report json should parse");
+    assert_eq!(
+        restarted_report["autonomy"]["ledger_paths"][0],
+        ".maestro/runs/lease-happy/events.jsonl"
+    );
+    assert!(
+        restarted_report["autonomy"]["actions"]
+            .as_array()
+            .expect("restart run report should include actions")
+            .iter()
+            .any(|action| {
+                action["action"] == "work_lease_acquire" && action["target_id"] == leased_id
+            }),
+        "restart run report should reconcile the lease action: {restarted_report:#}"
     );
 }
 
@@ -2708,6 +2755,11 @@ fn loop_work_lease_reclaims_stale_claims_with_existing_claim_policy() {
 fn loop_work_lease_partial_ship_authority_fails_closed() {
     let temp = cards_repo("loop-work-lease-authority");
     let repo = temp.path();
+    let card = run(
+        repo,
+        &["create", "-t", "task", "Partial authority", "--id-only"],
+    );
+    let card = card.trim().to_string();
 
     let lease = run_lease_as_json(
         repo,
@@ -2724,12 +2776,70 @@ fn loop_work_lease_partial_ship_authority_fails_closed() {
         ],
     );
 
-    assert_eq!(lease["status"], "dry");
+    assert_eq!(lease["status"], "leased");
+    assert_eq!(lease["selected_card"]["id"], card);
     assert_eq!(lease["ship_authority"]["status"], "ambiguous");
     assert_eq!(lease["ship_authority"]["external_ship_allowed"], false);
     assert_eq!(
         lease["ship_authority"]["reason"],
         "partial ship authority is not enough; provide ref, summary, scope, target, allowed external actions, and required evidence"
+    );
+    assert!(
+        lease["worker_prompt"]
+            .as_str()
+            .unwrap()
+            .contains("Do not push"),
+        "partial authority must fail closed in the leased worker contract"
+    );
+}
+
+#[test]
+fn loop_work_lease_overbroad_ship_authority_fails_closed() {
+    let temp = cards_repo("loop-work-lease-overbroad-authority");
+    let repo = temp.path();
+    let card = run(
+        repo,
+        &["create", "-t", "task", "Overbroad authority", "--id-only"],
+    );
+    let card = card.trim().to_string();
+
+    let lease = run_lease_as_json(
+        repo,
+        "codex",
+        "lease-overbroad-authority",
+        &[
+            "loop",
+            "work-lease",
+            "--json",
+            "--authority-ref",
+            "prompt:night",
+            "--authority-summary",
+            "ship everything",
+            "--authority-scope",
+            "repo",
+            "--authority-target",
+            "main",
+            "--allow-external-action",
+            "everything",
+            "--required-evidence",
+            "green tests",
+        ],
+    );
+
+    assert_eq!(lease["status"], "leased");
+    assert_eq!(lease["selected_card"]["id"], card);
+    assert_eq!(lease["ship_authority"]["status"], "overbroad");
+    assert_eq!(lease["ship_authority"]["external_ship_allowed"], false);
+    assert_eq!(
+        lease["ship_authority"]["reason"],
+        "ship authority must name concrete external actions, not all/everything/*"
+    );
+    assert!(
+        lease["worker_prompt"]
+            .as_str()
+            .unwrap()
+            .contains("Do not push"),
+        "overbroad authority must fail closed in the leased worker contract"
     );
 }
 
