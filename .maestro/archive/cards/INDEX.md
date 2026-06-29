@@ -18,3 +18,4 @@
 - 2026-06-25 grep-output-freshness: closed -- grep output and freshness contracts implemented and verified in commit ba5a698f; 1 child task(s)
 - 2026-06-25 grep-card-list-compat: closed -- card-list grep compatibility implemented and verified in commit 5fa73c73; 1 child task(s)
 - 2026-06-25 active-ownership-liveness: closed -- Active ownership liveness shipped; quiet sessions stay owned until explicit release/done/unconfirmed timeout.; 1 child task(s)
+- 2026-06-29 worktree-interruption-recovery: closed -- Implemented passive worktree ledger recovery and cleanup: record verbs stay non-mutating for git, status/show/handoff surface computed recovery and cleanup states, and integration coverage proves branch-reserved recovery, cleanup gates, and cleanup receipts without claiming a max-worktree root cause.; 4 child task(s)
