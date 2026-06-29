@@ -4,6 +4,7 @@ pub mod card;
 pub mod channel;
 pub mod conflict;
 pub mod decisions;
+pub mod design;
 pub mod extraction;
 pub mod feature;
 pub mod gate_lock;

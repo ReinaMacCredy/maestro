@@ -6,7 +6,10 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use serde::Serialize;
 
-use crate::domain::feature::{self as domain_feature, FeatureStatus, FeatureView};
+use crate::domain::feature::FeatureStatus;
+use crate::domain::feature::FeatureView;
+use crate::domain::feature::feature_sidecar_dir;
+use crate::domain::feature::handoff_gap;
 use crate::domain::proof;
 use crate::domain::run;
 use crate::domain::task::{TaskRecord, TaskState};
@@ -20,6 +23,7 @@ pub mod active;
 pub mod card;
 pub mod conflict;
 pub mod decision;
+pub mod design;
 pub mod doctor;
 pub mod event;
 pub mod feature;
@@ -125,11 +129,11 @@ fn feature_next_label_and_command(
 }
 
 fn handoff_is_fresh(paths: &MaestroPaths, view: &FeatureView) -> bool {
-    matches!(domain_feature::handoff_gap(paths, &view.id), Ok(None))
+    matches!(handoff_gap(paths, &view.id), Ok(None))
 }
 
 fn qa_baseline_present(paths: &MaestroPaths, id: &str) -> bool {
-    let path = domain_feature::feature_sidecar_dir(paths, id).join("qa.md");
+    let path = feature_sidecar_dir(paths, id).join("qa.md");
     read_to_string_if_exists(&path)
         .ok()
         .flatten()
@@ -304,6 +308,11 @@ pub enum RootCommand {
         after_help = "Examples:\n  maestro sync                 # resync repo bundled resources to this binary, preserving edits\n  maestro sync --global-skills # resync user-level Maestro skill cache and links\n  maestro sync --dry-run       # preview the resync, write nothing"
     )]
     Sync(SyncArgs),
+    #[command(
+        about = "List or initialize a repo-root DESIGN.md from shipped design guides",
+        after_help = "Examples:\n  maestro design list\n  maestro design init --dry-run\n  maestro design init --style awesome:voltagent\n  maestro design init --force"
+    )]
+    Design(DesignArgs),
     #[command(
         hide = true,
         about = "Migrate v1 Maestro artifacts to the reduced v2 layout"
@@ -561,6 +570,33 @@ pub struct SyncArgs {
     /// Resync the user-level Maestro global skill cache and supported agent skill links.
     #[arg(long = "global-skills")]
     pub global_skills: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct DesignArgs {
+    #[command(subcommand)]
+    pub command: DesignCommand,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum DesignCommand {
+    #[command(about = "List shipped DESIGN.md style tokens")]
+    List,
+    #[command(
+        about = "Write repo-root DESIGN.md from a shipped style",
+        after_help = "Examples:\n  maestro design init --dry-run\n  maestro design init --style awesome:linear.app\n  maestro design init --force"
+    )]
+    Init {
+        /// Shipped style token. Omit for the neutral non-brand default.
+        #[arg(long, value_name = "STYLE")]
+        style: Option<String>,
+        /// Preview the target, selected style, pin metadata, and overwrite state.
+        #[arg(long)]
+        dry_run: bool,
+        /// Overwrite an existing DESIGN.md after backing it up.
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 #[derive(Clone, Debug, ValueEnum)]
@@ -2305,6 +2341,7 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Install(args) => install::run(args),
         RootCommand::Upgrade(args) => update::run(args),
         RootCommand::Sync(args) => sync::run(args),
+        RootCommand::Design(args) => design::run(args),
         RootCommand::MigrateV2 => migrate::run(),
         RootCommand::Migrate => migrate::run_card_fold(),
         RootCommand::Uninstall(args) => uninstall::run(args),

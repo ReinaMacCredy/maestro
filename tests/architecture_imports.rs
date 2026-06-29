@@ -17,6 +17,7 @@ const CLI_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] = &[
     ("src/interfaces/cli/doctor.rs", &[]),
     ("src/interfaces/cli/harness.rs", &[]),
     ("src/interfaces/cli/init.rs", &[]),
+    ("src/interfaces/cli/mod.rs", &["domain::feature"]),
     ("src/interfaces/cli/query.rs", &[]),
     ("src/interfaces/cli/task.rs", &[]),
     ("src/interfaces/cli/update.rs", &[]),
@@ -26,6 +27,7 @@ const CLI_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] = &[
 const DOMAIN_FACADES: &[&str] = &[
     "card",
     "decisions",
+    "design",
     "extraction",
     "feature",
     "harness",
@@ -54,6 +56,7 @@ const RESOURCE_EMBED_ALLOWLIST: &[(&str, &[&str])] = &[
         &["embedded/hooks/record.sh"],
     ),
     ("src/domain/playbook.rs", &["embedded/playbook"]),
+    ("src/domain/design.rs", &["embedded/design"]),
     ("src/domain/loop_recipes.rs", &["embedded/loop"]),
     ("src/domain/skills/catalog.rs", &["embedded/skills"]),
     (
@@ -1256,6 +1259,7 @@ fn transitional_public_surfaces_match_phase_policy() {
             "channel",
             "conflict",
             "decisions",
+            "design",
             "extraction",
             "feature",
             "gate_lock",

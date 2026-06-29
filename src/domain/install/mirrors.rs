@@ -1047,11 +1047,11 @@ fn hook_config_plan(agent: InstallAgent) -> Result<MirrorPlan> {
 }
 
 fn claude_md_block() -> &'static str {
-    "# Maestro Harness Protocol\n@.maestro/harness/HARNESS.md"
+    "# Maestro Harness Protocol\n@.maestro/harness/HARNESS.md\nFor frontend/UI work, also read DESIGN.md when present."
 }
 
 fn agents_md_block() -> &'static str {
-    "# Maestro Harness Protocol\nRead .maestro/harness/HARNESS.md first before working in this repo."
+    "# Maestro Harness Protocol\nRead .maestro/harness/HARNESS.md first before working in this repo.\nFor frontend/UI work, also read DESIGN.md when present."
 }
 
 /// Body of the maestro-owned `.maestro/.gitignore`. Patterns are relative to

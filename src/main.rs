@@ -47,6 +47,7 @@ fn should_auto_check_after(command: &maestro::interfaces::cli::RootCommand) -> b
         maestro::interfaces::cli::RootCommand::Init(_)
             | maestro::interfaces::cli::RootCommand::Upgrade(_)
             | maestro::interfaces::cli::RootCommand::Sync(_)
+            | maestro::interfaces::cli::RootCommand::Design(_)
             | maestro::interfaces::cli::RootCommand::MigrateV2
             | maestro::interfaces::cli::RootCommand::Resume(_)
             | maestro::interfaces::cli::RootCommand::Mcp(_)

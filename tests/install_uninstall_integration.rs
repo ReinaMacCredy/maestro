@@ -948,7 +948,7 @@ fn uninstall_refuses_text_mirror_when_current_hash_differs_from_lock() {
     let agents = fs::read_to_string(&agents_path)
         .expect("invariant: AGENTS.md should be readable after install");
     let agents = agents.replace(
-        "Read .maestro/harness/HARNESS.md first before working in this repo.",
+        "For frontend/UI work, also read DESIGN.md when present.",
         "tampered managed block",
     );
     fs::write(&agents_path, agents).expect("invariant: AGENTS.md edit should be writable");
@@ -1086,7 +1086,7 @@ fn uninstall_refuses_legacy_full_file_hash_when_managed_block_changed() {
     lock.save(&lock_path)
         .expect("invariant: legacy lock should be writable");
     let tampered_agents = original_agents.replace(
-        "Read .maestro/harness/HARNESS.md first before working in this repo.",
+        "For frontend/UI work, also read DESIGN.md when present.",
         "tampered managed block",
     );
     fs::write(&agents_path, tampered_agents)
@@ -1115,7 +1115,7 @@ fn uninstall_refuses_forged_strong_full_file_hash_when_managed_block_changed() {
     let original_agents = fs::read_to_string(&agents_path)
         .expect("invariant: AGENTS.md should be readable after install");
     let tampered_agents = original_agents.replace(
-        "Read .maestro/harness/HARNESS.md first before working in this repo.",
+        "For frontend/UI work, also read DESIGN.md when present.",
         "tampered managed block",
     );
     fs::write(&agents_path, &tampered_agents)

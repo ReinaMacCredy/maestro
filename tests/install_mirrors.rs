@@ -26,6 +26,12 @@ fn mirror_plan_writes_managed_content_for_claude() {
     assert!(plans.iter().any(|plan| {
         plan.relative_path == "CLAUDE.md" && plan.contents.contains("@.maestro/harness/HARNESS.md")
     }));
+    assert!(plans.iter().any(|plan| {
+        plan.relative_path == "CLAUDE.md"
+            && plan
+                .contents
+                .contains("For frontend/UI work, also read DESIGN.md when present.")
+    }));
     // The nested gitignore covers maestro-internal paths only; a small root
     // gitignore block protects the agent-local settings files that live outside
     // `.maestro/`.
@@ -111,9 +117,19 @@ fn mirror_plan_wraps_both_markdown_mirrors_in_maestro_markers() {
         }
         assert!(claude.contents.contains("@.maestro/harness/HARNESS.md"));
         assert!(
+            claude
+                .contents
+                .contains("For frontend/UI work, also read DESIGN.md when present.")
+        );
+        assert!(
             agents
                 .contents
                 .contains("Read .maestro/harness/HARNESS.md first")
+        );
+        assert!(
+            agents
+                .contents
+                .contains("For frontend/UI work, also read DESIGN.md when present.")
         );
     }
 }
@@ -127,6 +143,9 @@ fn mirror_plan_writes_codex_hook_timeout_and_trust_related_files() {
             && plan
                 .contents
                 .contains("Read .maestro/harness/HARNESS.md first")
+            && plan
+                .contents
+                .contains("For frontend/UI work, also read DESIGN.md when present.")
     }));
     assert!(plans.iter().any(|plan| {
         plan.relative_path == ".codex/hooks.json"

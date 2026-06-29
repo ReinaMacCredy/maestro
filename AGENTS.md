@@ -199,4 +199,5 @@ Managed by `init-deep`. Edit outside this block.
 <!-- maestro:start -->
 # Maestro Harness Protocol
 Read .maestro/harness/HARNESS.md first before working in this repo.
+For frontend/UI work, also read DESIGN.md when present.
 <!-- maestro:end -->

@@ -1,5 +1,5 @@
 ---
-version: 1.26.0
+version: 1.27.0
 ---
 
 # Maestro Harness Protocol
@@ -77,6 +77,12 @@ Go, TypeScript, JavaScript, C++, C#, Dart, HTML/CSS, plus `general`). Before
 writing or changing code, run it for the language you are editing; run
 `maestro playbook` with no language to list the guides. Read the one you need,
 not the rest.
+
+For frontend or UI work, read the repository-root `DESIGN.md` when it exists
+before changing the interface. If it is missing and visual direction materially
+matters, run `maestro design init --dry-run` and ask or record the chosen style
+before creating it. In proof or handoff, state that the UI matches `DESIGN.md`
+or name the intentional deviation.
 
 ## Where to look
 
