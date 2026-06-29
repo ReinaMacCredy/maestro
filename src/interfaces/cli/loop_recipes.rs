@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use anyhow::Result;
 use serde::Serialize;
 use serde_json::json;
@@ -44,12 +46,33 @@ const WORK_LEASE_RESTART_POLICY: &str = "Cold-start from the card store plus the
 /// default and `list`), or one recipe verbatim. Served from the binary, so it
 /// needs no `.maestro` repo.
 pub fn run(args: LoopArgs) -> Result<()> {
+    let custom_dir = custom_recipe_dir();
     match args.command {
-        None | Some(LoopCommand::List) => print!("{}", loop_recipes::index()),
-        Some(LoopCommand::Show { name }) => print!("{}", loop_recipes::show(&name)?),
+        None | Some(LoopCommand::List) => {
+            print!(
+                "{}",
+                loop_recipes::index_with_custom_dir(custom_dir.as_deref())?
+            )
+        }
+        Some(LoopCommand::Show { name }) => {
+            print!(
+                "{}",
+                loop_recipes::show_with_custom_dir(&name, custom_dir.as_deref())?
+            )
+        }
+        Some(LoopCommand::Validate { name }) => print!(
+            "{}",
+            loop_recipes::validate_with_custom_dir(&name, custom_dir.as_deref())?
+        ),
         Some(LoopCommand::WorkLease(args)) => run_work_lease(*args)?,
     }
     Ok(())
+}
+
+fn custom_recipe_dir() -> Option<PathBuf> {
+    let repo_root = discover_repo_root().ok()?;
+    let paths = MaestroPaths::new(repo_root);
+    Some(paths.loop_recipes_dir())
 }
 
 fn run_work_lease(args: WorkLeaseArgs) -> Result<()> {

@@ -490,7 +490,7 @@ pub enum RootCommand {
     Playbook(PlaybookArgs),
     #[command(
         about = "Print loop recipe contracts or mint one Work Lease",
-        after_help = "Examples:\n  maestro loop                      # list lifecycle and orchestration recipes\n  maestro loop list                 # same as above\n  maestro loop show design          # print one lifecycle recipe contract\n  maestro loop show feature-fan-out # print one orchestration recipe\n  maestro loop work-lease --json    # claim one ready card and print the worker contract"
+        after_help = "Examples:\n  maestro loop                      # list lifecycle, custom, and orchestration recipes\n  maestro loop list                 # same as above\n  maestro loop show design          # print one lifecycle recipe contract\n  maestro loop show feature-fan-out # print one orchestration recipe\n  maestro loop validate design      # validate one structured loop recipe\n  maestro loop work-lease --json    # claim one ready card and print the worker contract"
     )]
     Loop(LoopArgs),
     #[command(
@@ -624,11 +624,17 @@ pub struct LoopArgs {
 
 #[derive(Debug, Subcommand)]
 pub enum LoopCommand {
-    #[command(about = "List lifecycle recipe contracts and orchestration recipes")]
+    #[command(about = "List lifecycle, project custom, and orchestration recipes")]
     List,
-    #[command(about = "Print one lifecycle recipe contract or orchestration recipe")]
+    #[command(about = "Print one lifecycle, project custom, or orchestration recipe")]
     Show {
         /// Recipe name (e.g. feature-fan-out); run `maestro loop` for the list.
+        #[arg(value_name = "NAME")]
+        name: String,
+    },
+    #[command(about = "Validate one structured shipped or project custom loop recipe")]
+    Validate {
+        /// Recipe name; project custom recipes live under .maestro/loop-recipes/<name>.yml.
         #[arg(value_name = "NAME")]
         name: String,
     },

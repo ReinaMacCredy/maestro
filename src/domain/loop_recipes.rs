@@ -16,6 +16,8 @@
 //! reserved Rust keyword; the CLI subcommand is still `maestro loop`.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::fs;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail, ensure};
 use include_dir::{Dir, include_dir};
@@ -134,6 +136,20 @@ pub fn index() -> String {
     out
 }
 
+pub fn index_with_custom_dir(custom_dir: Option<&Path>) -> Result<String> {
+    let mut out = index();
+    if let Some(custom_dir) = custom_dir {
+        let contracts = custom_contracts(custom_dir)?;
+        if !contracts.is_empty() {
+            out.push_str("\n\n## Project Custom Recipes\n\n");
+            for contract in contracts {
+                out.push_str(&format!("    {}  --  {}\n", contract.id, contract.summary));
+            }
+        }
+    }
+    Ok(out)
+}
+
 /// Render either a structured lifecycle recipe contract or a legacy
 /// orchestration recipe.
 pub fn show(name: &str) -> Result<String> {
@@ -146,6 +162,42 @@ pub fn show(name: &str) -> Result<String> {
     bail!(
         "unknown loop recipe \"{name}\"; run `maestro loop` for the index (available: {})",
         available_names().join(", ")
+    );
+}
+
+pub fn show_with_custom_dir(name: &str, custom_dir: Option<&Path>) -> Result<String> {
+    if contract_names().contains(&name) || recipes().contains(&name) {
+        return show(name);
+    }
+    if let Some(custom_dir) = custom_dir
+        && custom_contract_names(custom_dir)?
+            .iter()
+            .any(|custom| custom == name)
+    {
+        return Ok(render_contract(&custom_contract(custom_dir, name)?));
+    }
+    bail!(
+        "unknown loop recipe \"{name}\"; run `maestro loop` for the index (available: {})",
+        available_names_with_custom(custom_dir)?.join(", ")
+    );
+}
+
+pub fn validate_with_custom_dir(name: &str, custom_dir: Option<&Path>) -> Result<String> {
+    if contract_names().contains(&name) {
+        contract(name)?;
+        return Ok(format!("valid shipped loop recipe: {name}\n"));
+    }
+    if let Some(custom_dir) = custom_dir
+        && custom_contract_names(custom_dir)?
+            .iter()
+            .any(|custom| custom == name)
+    {
+        custom_contract(custom_dir, name)?;
+        return Ok(format!("valid project custom loop recipe: {name}\n"));
+    }
+    bail!(
+        "unknown structured loop recipe \"{name}\"; run `maestro loop` for the index (available: {})",
+        available_names_with_custom(custom_dir)?.join(", ")
     );
 }
 
@@ -209,6 +261,57 @@ pub fn contract(name: &str) -> Result<RecipeContract> {
     ensure!(
         contract.id == name,
         "recipe contract {name} id mismatch: {}",
+        contract.id
+    );
+    Ok(contract)
+}
+
+pub fn custom_contracts(custom_dir: &Path) -> Result<Vec<RecipeContract>> {
+    custom_contract_names(custom_dir)?
+        .into_iter()
+        .map(|name| custom_contract(custom_dir, &name))
+        .collect()
+}
+
+pub fn custom_contract_names(custom_dir: &Path) -> Result<Vec<String>> {
+    if !custom_dir.is_dir() {
+        return Ok(Vec::new());
+    }
+    let mut names = Vec::new();
+    for entry in fs::read_dir(custom_dir).with_context(|| {
+        format!(
+            "failed to read custom loop recipe dir {}",
+            custom_dir.display()
+        )
+    })? {
+        let entry = entry.with_context(|| {
+            format!(
+                "failed to read custom loop recipe entry in {}",
+                custom_dir.display()
+            )
+        })?;
+        let path = entry.path();
+        if path.extension().and_then(|extension| extension.to_str()) != Some("yml") {
+            continue;
+        }
+        let Some(name) = path.file_stem().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        names.push(name.to_string());
+    }
+    names.sort();
+    Ok(names)
+}
+
+pub fn custom_contract(custom_dir: &Path, name: &str) -> Result<RecipeContract> {
+    let path = custom_contract_path(custom_dir, name)?;
+    let body = fs::read_to_string(&path)
+        .with_context(|| format!("failed to read custom loop recipe {}", path.display()))?;
+    let contract = parse_contract_body(name, &body)
+        .with_context(|| format!("invalid custom loop recipe {name}.yml"))?;
+    ensure!(
+        contract.id == name,
+        "custom loop recipe {name} id mismatch: {}",
         contract.id
     );
     Ok(contract)
@@ -384,6 +487,34 @@ fn available_names() -> Vec<&'static str> {
     names.extend(recipes());
     names.sort_unstable();
     names
+}
+
+fn available_names_with_custom(custom_dir: Option<&Path>) -> Result<Vec<String>> {
+    let mut names: Vec<String> = contract_names()
+        .into_iter()
+        .map(str::to_string)
+        .chain(recipes().into_iter().map(str::to_string))
+        .collect();
+    if let Some(custom_dir) = custom_dir {
+        names.extend(custom_contract_names(custom_dir)?);
+    }
+    names.sort();
+    names.dedup();
+    Ok(names)
+}
+
+fn custom_contract_path(custom_dir: &Path, name: &str) -> Result<PathBuf> {
+    ensure!(
+        !name.contains('/') && !name.contains('\\') && name != "." && name != "..",
+        "custom loop recipe name must be a file stem, got {name:?}"
+    );
+    let names = custom_contract_names(custom_dir)?;
+    ensure!(
+        names.iter().any(|custom| custom == name),
+        "unknown custom loop recipe \"{name}\" in {}",
+        custom_dir.display()
+    );
+    Ok(custom_dir.join(format!("{name}.yml")))
 }
 
 fn contract_supports_work_lease(contract: &RecipeContract) -> bool {

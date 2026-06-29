@@ -159,6 +159,11 @@ impl MaestroPaths {
     pub fn channels_dir(&self) -> PathBuf {
         self.maestro_dir().join("channels")
     }
+
+    /// Return the repo-local custom loop recipe directory.
+    pub fn loop_recipes_dir(&self) -> PathBuf {
+        self.maestro_dir().join("loop-recipes")
+    }
 }
 
 /// Infer a card's project from where it is being created, gated by the repo's
