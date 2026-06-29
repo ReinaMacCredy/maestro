@@ -966,14 +966,12 @@ fn feature_guarded_lifecycle_via_cli() {
     let close_output = stdout(maestro(&close_args, temp_dir.path()), &close_args);
     assert!(close_output.contains("closed billing-csv-export"));
     assert!(close_output.contains("close receipt:"));
-    // The closing moment points at the auto-archive path when authority exists,
-    // not the status dead end (R4).
+    // This marker-only fixture has no real git HEAD, so close succeeds but
+    // archive stays explicit until exact-HEAD authority exists.
+    assert!(close_output.contains("auto-archive skipped:"));
+    assert!(close_output.contains("git state is unavailable"));
     assert!(close_output.contains(
-        "next: if bounded ship/auto-archive authority is current and exact-HEAD QA evidence is recorded, run:"
-    ));
-    assert!(close_output.contains("maestro feature auto-archive billing-csv-export"));
-    assert!(close_output.contains(
-        "fallback: without auto-archive authority, explicit terminal archive is: maestro card archive billing-csv-export"
+        "fallback: explicit terminal archive is: maestro card archive billing-csv-export"
     ));
     assert!(!close_output.contains("optional: maestro feature archive"));
 

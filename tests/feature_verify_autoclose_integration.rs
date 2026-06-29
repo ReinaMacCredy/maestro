@@ -130,8 +130,12 @@ fn last_prove_auto_closes_in_the_same_call() {
         "close receipt printed: {out}"
     );
     assert!(
-        out.contains("maestro feature auto-archive report-builder"),
-        "auto-close receipt should route preauthorized cleanup through auto-archive: {out}"
+        out.contains("auto-archive skipped:"),
+        "marker-only autoclose should keep close successful and explain skipped archive: {out}"
+    );
+    assert!(
+        out.contains("git state is unavailable"),
+        "skipped archive names the missing git authority: {out}"
     );
 
     let show = stdout(

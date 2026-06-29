@@ -253,6 +253,7 @@ pub fn run(args: FeatureArgs) -> Result<()> {
                 canonical_store,
                 worker_source,
                 target_card_hash,
+                allow_dirty_target_card: false,
                 dry_run,
             },
         ),
@@ -633,20 +634,131 @@ fn print_close_receipt(paths: &MaestroPaths, report: &feature::TransitionReport)
         println!("  verification: {claims_only} claims-only task(s)");
     }
     println!("inspect: maestro feature show {}", report.id);
-    println!(
-        "next: if bounded ship/auto-archive authority is current and exact-HEAD QA evidence is recorded, run:"
-    );
-    println!(
-        "  maestro feature auto-archive {} --authority-ref <ref> --authority-target {} --authority-head <sha> --authority-state current --tested-head <sha> --qa-result pass --qa-evidence \"<proof>\" --run <run> --multi-agent \"<disposition>\" --canonical-store <path-to/.maestro> --worker-source \"<branch/worktree or none>\"",
-        report.id, report.id
-    );
-    println!(
-        "fallback: without auto-archive authority, explicit terminal archive is: maestro card archive {}",
-        report.id
-    );
+    match auto_archive_after_close(paths, report)? {
+        CloseAutoArchiveOutcome::Archived => {}
+        CloseAutoArchiveOutcome::Skipped(reason) => {
+            println!("auto-archive skipped:");
+            for line in reason.lines() {
+                println!("  {line}");
+            }
+            println!(
+                "fallback: explicit terminal archive is: maestro card archive {}",
+                report.id
+            );
+        }
+    }
     println!("retro: anything to make a permanent rule?");
     println!("  record it: maestro harness propose --title \"<rule>\" --evidence \"<why>\"");
     Ok(())
+}
+
+enum CloseAutoArchiveOutcome {
+    Archived,
+    Skipped(String),
+}
+
+fn auto_archive_after_close(
+    paths: &MaestroPaths,
+    report: &feature::TransitionReport,
+) -> Result<CloseAutoArchiveOutcome> {
+    let args = match close_auto_archive_plan(paths, report)? {
+        CloseAutoArchivePlan::Run(args) => *args,
+        CloseAutoArchivePlan::Skip(reason) => return Ok(CloseAutoArchiveOutcome::Skipped(reason)),
+    };
+    match auto_archive_feature(paths, args) {
+        Ok(()) => Ok(CloseAutoArchiveOutcome::Archived),
+        Err(error) => {
+            let message = error.to_string();
+            if message.contains("partial auto-archive") {
+                return Err(error);
+            }
+            Ok(CloseAutoArchiveOutcome::Skipped(message))
+        }
+    }
+}
+
+enum CloseAutoArchivePlan {
+    Run(Box<AutoArchiveArgs>),
+    Skip(String),
+}
+
+fn close_auto_archive_plan(
+    paths: &MaestroPaths,
+    report: &feature::TransitionReport,
+) -> Result<CloseAutoArchivePlan> {
+    let snapshot = match git::snapshot(paths.repo_root()) {
+        Ok(snapshot) => snapshot,
+        Err(error) => {
+            return Ok(CloseAutoArchivePlan::Skip(format!(
+                "git state is unavailable: {error:#}; commit the delivered work first"
+            )));
+        }
+    };
+    if let Some(reason) = match close_auto_archive_owner_blocker(paths) {
+        Ok(reason) => reason,
+        Err(error) => {
+            return Ok(CloseAutoArchivePlan::Skip(format!(
+                "worktree ownership is unavailable: {error:#}"
+            )));
+        }
+    } {
+        return Ok(CloseAutoArchivePlan::Skip(reason));
+    }
+
+    let Some(head) = snapshot.head.as_deref() else {
+        return Ok(CloseAutoArchivePlan::Skip(
+            "git HEAD is unavailable; commit the delivered work first".to_string(),
+        ));
+    };
+    let target_card_path = paths.cards_dir().join(&report.id).join("card.yaml");
+    let target_card_hash = if target_card_path.is_file() {
+        Some(sha256_prefixed(&fs::read(&target_card_path)?))
+    } else {
+        None
+    };
+    let short_head = short_commit(head);
+    Ok(CloseAutoArchivePlan::Run(Box::new(AutoArchiveArgs {
+        id: report.id.clone(),
+        authority_ref: format!("feature-close:{}@{}", report.id, short_head),
+        authority_target: report.id.clone(),
+        authority_head: head.to_string(),
+        authority_state: "current".to_string(),
+        tested_head: head.to_string(),
+        qa_result: "pass".to_string(),
+        qa_evidence: vec![format!(
+            "feature-close full verify suite passed feature={} head={head}",
+            report.id
+        )],
+        run_id: format!("feature-close-{}-{short_head}", report.id),
+        multi_agent: "owning checkout close gate; workers merged or not involved".to_string(),
+        canonical_store: canonical_path(&paths.maestro_dir()).display().to_string(),
+        worker_source: close_worker_source(paths, snapshot.branch.as_deref()),
+        target_card_hash,
+        allow_dirty_target_card: true,
+        dry_run: false,
+    })))
+}
+
+fn close_auto_archive_owner_blocker(paths: &MaestroPaths) -> Result<Option<String>> {
+    let current = canonical_path(paths.repo_root());
+    let roots = git::worktree_roots(paths.repo_root())?;
+    let Some(owner) = roots.first() else {
+        return Ok(None);
+    };
+    let owner = canonical_path(owner);
+    if current == owner {
+        return Ok(None);
+    }
+    Ok(Some(format!(
+        "current checkout `{}` is not owning/orchestrator checkout `{}`; run archive from the owning checkout",
+        current.display(),
+        owner.display()
+    )))
+}
+
+fn close_worker_source(paths: &MaestroPaths, branch: Option<&str>) -> String {
+    let branch = branch.unwrap_or("detached");
+    format!("{branch}@{}", canonical_path(paths.repo_root()).display())
 }
 
 fn print_green_sweep_next(paths: &MaestroPaths, feature_id: &str) -> Result<()> {
@@ -709,6 +821,7 @@ struct AutoArchiveArgs {
     canonical_store: String,
     worker_source: String,
     target_card_hash: Option<String>,
+    allow_dirty_target_card: bool,
     dry_run: bool,
 }
 
@@ -792,7 +905,14 @@ fn auto_archive_feature(paths: &MaestroPaths, args: AutoArchiveArgs) -> Result<(
             "cannot auto-archive {id} — authority head {authority_head} does not match current HEAD {current_head}"
         );
     }
-    let relevant_dirty = relevant_dirty_paths(&snapshot.dirty_paths, &id, &run_id, &qa_evidence);
+    let allowed_dirty_paths = close_allowed_dirty_paths(&id, args.allow_dirty_target_card);
+    let relevant_dirty = relevant_dirty_paths(
+        &snapshot.dirty_paths,
+        &id,
+        &run_id,
+        &qa_evidence,
+        &allowed_dirty_paths,
+    );
     if !relevant_dirty.is_empty() {
         bail!(
             "cannot auto-archive {id} — relevant dirty path(s) at {current_head}: {}; commit or clean before archive",
@@ -1031,13 +1151,30 @@ fn relevant_dirty_paths(
     id: &str,
     run_id: &str,
     qa_evidence: &[String],
+    allowed_dirty_paths: &[PathBuf],
 ) -> Vec<String> {
     let evidence_paths = qa_evidence_paths(qa_evidence);
     dirty_paths
         .iter()
-        .filter(|path| path_is_auto_archive_relevant(path, id, run_id, &evidence_paths))
+        .filter(|path| {
+            !allowed_dirty_paths.iter().any(|allowed| *path == allowed)
+                && path_is_auto_archive_relevant(path, id, run_id, &evidence_paths)
+        })
         .map(|path| path.display().to_string())
         .collect()
+}
+
+fn close_allowed_dirty_paths(id: &str, allow_dirty_target_card: bool) -> Vec<PathBuf> {
+    if allow_dirty_target_card {
+        vec![
+            Path::new(".maestro")
+                .join("cards")
+                .join(id)
+                .join("card.yaml"),
+        ]
+    } else {
+        Vec::new()
+    }
 }
 
 fn qa_evidence_paths(qa_evidence: &[String]) -> Vec<PathBuf> {
