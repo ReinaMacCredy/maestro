@@ -42,6 +42,7 @@ pub struct AutoArchiveReceipt {
     pub canonical_store_path: String,
     pub invoking_checkout_path: String,
     pub worker_source: String,
+    pub target_card_hash: Option<String>,
     pub final_target_head: String,
     pub tested_head: String,
     pub authority_ref: String,
@@ -67,11 +68,12 @@ pub fn append_auto_archive_receipt(
     validate_feature_id(&receipt.feature_id)?;
     let date = utc_now_timestamp()[..10].to_string();
     let line = format!(
-        "- {date} auto_archive {}: canonical_store `{}`; invoking_checkout `{}`; worker_source `{}`; final_head `{}`; tested_head `{}`; authority `{}`; merge_back `{}`; qa `{}`; run `{}`; event `{}` `{}` at `{}`; archive `{}`; restore `{}`\n",
+        "- {date} auto_archive {}: canonical_store `{}`; invoking_checkout `{}`; worker_source `{}`; target_card_hash `{}`; final_head `{}`; tested_head `{}`; authority `{}`; merge_back `{}`; qa `{}`; run `{}`; event `{}` `{}` at `{}`; archive `{}`; restore `{}`\n",
         receipt.feature_id,
-        index_cell(&receipt.canonical_store_path),
-        index_cell(&receipt.invoking_checkout_path),
-        index_cell(&receipt.worker_source),
+        index_location_cell(paths, &receipt.canonical_store_path),
+        index_location_cell(paths, &receipt.invoking_checkout_path),
+        index_location_cell(paths, &receipt.worker_source),
+        index_cell(receipt.target_card_hash.as_deref().unwrap_or("none")),
         index_cell(&receipt.final_target_head),
         index_cell(&receipt.tested_head),
         index_cell(&receipt.authority_ref),
@@ -523,6 +525,17 @@ fn index_cell(value: &str) -> String {
         .collect::<Vec<_>>()
         .join(" ")
         .replace('`', "'")
+}
+
+fn index_location_cell(paths: &MaestroPaths, value: &str) -> String {
+    let repo = paths
+        .repo_root()
+        .canonicalize()
+        .unwrap_or_else(|_| paths.repo_root().to_path_buf());
+    let repo = repo.display().to_string();
+    let raw_repo = paths.repo_root().display().to_string();
+    let value = value.replace(&repo, ".").replace(&raw_repo, ".");
+    index_cell(&value)
 }
 
 /// Compose the `feature unarchive` summary.

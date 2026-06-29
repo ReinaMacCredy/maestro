@@ -245,6 +245,52 @@ fn feature_close_auto_archives_when_git_head_exists() {
         index.contains("feature-close:report-builder"),
         "receipt records close-derived authority:\n{index}"
     );
+    assert!(
+        index.contains("target_card_hash `sha256:"),
+        "receipt records the close-owned target card snapshot:\n{index}"
+    );
+    let canonical_root = repo
+        .canonicalize()
+        .expect("invariant: repo root should canonicalize")
+        .display()
+        .to_string();
+    assert!(
+        !index.contains(&canonical_root),
+        "archive index must not persist absolute checkout paths:\n{index}"
+    );
+}
+
+#[test]
+fn feature_close_skips_auto_archive_when_source_tree_is_dirty() {
+    let temp = TestTempDir::new("maestro-close-auto-archive-dirty-source");
+    let repo = temp.path();
+    let repository = init_git_repo(repo);
+    seed_closable_feature(repo, "report-builder");
+    write_stack_verify(repo, "true");
+    commit_all(&repository, "verified feature ready to close");
+    fs::create_dir_all(repo.join("src")).expect("invariant: src dir should be writable");
+    fs::write(repo.join("src/lib.rs"), "pub fn dirty() {}\n")
+        .expect("invariant: dirty source should be writable");
+
+    let close = ["feature", "close", "report-builder", "--outcome", "done"];
+    let closed = stdout(maestro(&close, repo), &close);
+
+    assert!(closed.contains("closed report-builder"), "{closed}");
+    assert!(
+        closed.contains("auto-archive skipped:") && closed.contains("code/other dirty path"),
+        "dirty source should keep close successful but block auto-archive:\n{closed}"
+    );
+    assert!(
+        repo.join(".maestro/cards/report-builder/card.yaml")
+            .exists(),
+        "dirty-source close leaves the terminal feature live for explicit archive"
+    );
+    assert!(
+        !repo
+            .join(".maestro/archive/cards/report-builder/card.yaml")
+            .exists(),
+        "dirty-source close must not move the feature into archive"
+    );
 }
 
 #[test]

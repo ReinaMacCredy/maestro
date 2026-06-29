@@ -6,10 +6,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::domain::run::Presence;
 use crate::domain::{card, conflict, run};
-use crate::foundation::core::fs::read_to_string_if_exists;
+use crate::foundation::core::fs::{read_to_string_if_exists, write_string_if_unchanged};
 use crate::foundation::core::git;
 use crate::foundation::core::paths::MaestroPaths;
-use crate::foundation::core::safe_write::write_string_atomic;
 use crate::foundation::core::time::utc_now_timestamp;
 
 use super::registry;
@@ -44,7 +43,9 @@ impl WorktreeLedger {
 
     pub fn upsert_lane(&mut self, lane: WorktreeLane) {
         if let Some(existing) = self.lane_mut(&lane.intent.slug) {
-            *existing = lane;
+            existing.intent = lane.intent;
+            merge_missing_milestones(&mut existing.milestones, lane.milestones);
+            existing.cleanup_receipts.extend(lane.cleanup_receipts);
         } else {
             self.lanes.push(lane);
         }
@@ -185,6 +186,12 @@ pub struct WorktreeRecordReport {
     pub state: WorktreeComputedState,
 }
 
+#[derive(Debug)]
+struct LoadedWorktreeLedger {
+    ledger: WorktreeLedger,
+    raw: Option<String>,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct WorktreeLaneStatus {
     pub feature_id: String,
@@ -207,11 +214,11 @@ pub fn plan_lane(
     ensure_non_empty("path", &intent.path)?;
     ensure_non_empty("base", &intent.base)?;
     let slug = intent.slug.clone();
-    let mut ledger = load_or_default(paths, feature_id)?;
+    let mut snapshot = load_with_snapshot(paths, feature_id)?;
     let mut lane = WorktreeLane::new(intent);
     lane.milestones.branch_reserved_at = Some(recorded_at.to_string());
-    ledger.upsert_lane(lane);
-    save(paths, feature_id, &ledger)?;
+    snapshot.ledger.upsert_lane(lane);
+    save_with_snapshot(paths, feature_id, snapshot.raw.as_deref(), &snapshot.ledger)?;
     report_for(paths, feature_id, &slug)
 }
 
@@ -223,9 +230,9 @@ pub fn mark_lane(
     recorded_at: &str,
 ) -> Result<WorktreeRecordReport> {
     ensure_non_empty("slug", slug)?;
-    let mut ledger = load_or_default(paths, feature_id)?;
+    let mut snapshot = load_with_snapshot(paths, feature_id)?;
     {
-        let lane = ledger_lane_mut(&mut ledger, feature_id, slug)?;
+        let lane = ledger_lane_mut(&mut snapshot.ledger, feature_id, slug)?;
         match milestone {
             WorktreeMilestoneKind::LaneCreated => {
                 lane.milestones.lane_created_at = Some(recorded_at.to_string());
@@ -242,7 +249,7 @@ pub fn mark_lane(
             }
         }
     }
-    save(paths, feature_id, &ledger)?;
+    save_with_snapshot(paths, feature_id, snapshot.raw.as_deref(), &snapshot.ledger)?;
     report_for(paths, feature_id, slug)
 }
 
@@ -257,13 +264,13 @@ pub fn record_cleanup(
     ensure_non_empty("deleted-branch", &receipt.deleted_branch)?;
     ensure_non_empty("recorded-by", &receipt.recorded_by)?;
     ensure_non_empty("recorded-at", &receipt.recorded_at)?;
-    let mut ledger = load_or_default(paths, feature_id)?;
+    let mut snapshot = load_with_snapshot(paths, feature_id)?;
     {
-        let lane = ledger_lane_mut(&mut ledger, feature_id, slug)?;
+        let lane = ledger_lane_mut(&mut snapshot.ledger, feature_id, slug)?;
         lane.milestones.cleanup_completed_at = Some(receipt.recorded_at.clone());
         lane.cleanup_receipts.push(receipt);
     }
-    save(paths, feature_id, &ledger)?;
+    save_with_snapshot(paths, feature_id, snapshot.raw.as_deref(), &snapshot.ledger)?;
     report_for(paths, feature_id, slug)
 }
 
@@ -320,7 +327,36 @@ pub fn lane_statuses(paths: &MaestroPaths, feature_id: &str) -> Result<Vec<Workt
         .collect()
 }
 
-pub fn save(paths: &MaestroPaths, feature_id: &str, ledger: &WorktreeLedger) -> Result<()> {
+#[cfg(test)]
+fn save(paths: &MaestroPaths, feature_id: &str, ledger: &WorktreeLedger) -> Result<()> {
+    let path = ledger_path(paths, feature_id)?;
+    let raw = read_to_string_if_exists(&path)?;
+    save_with_snapshot(paths, feature_id, raw.as_deref(), ledger)
+}
+
+fn load_with_snapshot(paths: &MaestroPaths, feature_id: &str) -> Result<LoadedWorktreeLedger> {
+    let path = ledger_path(paths, feature_id)?;
+    let Some(raw) = read_to_string_if_exists(&path)? else {
+        return Ok(LoadedWorktreeLedger {
+            ledger: WorktreeLedger::default(),
+            raw: None,
+        });
+    };
+    let ledger: WorktreeLedger = serde_yaml::from_str(&raw)
+        .with_context(|| format!("failed to parse {}", path.display()))?;
+    ensure_supported_schema(&ledger, &path)?;
+    Ok(LoadedWorktreeLedger {
+        ledger,
+        raw: Some(raw),
+    })
+}
+
+fn save_with_snapshot(
+    paths: &MaestroPaths,
+    feature_id: &str,
+    expected_raw: Option<&str>,
+    ledger: &WorktreeLedger,
+) -> Result<()> {
     if ledger.schema_version != WORKTREE_LEDGER_SCHEMA_VERSION {
         bail!(
             "unsupported worktree ledger schema {} for feature {feature_id}; expected {}",
@@ -330,8 +366,35 @@ pub fn save(paths: &MaestroPaths, feature_id: &str, ledger: &WorktreeLedger) -> 
     }
     let path = ledger_path(paths, feature_id)?;
     let contents = serde_yaml::to_string(ledger)?;
-    write_string_atomic(&path, &contents)
+    write_string_if_unchanged(&path, expected_raw, &contents)
         .with_context(|| format!("failed to write {}", path.display()))
+}
+
+fn merge_missing_milestones(existing: &mut WorktreeMilestones, incoming: WorktreeMilestones) {
+    if existing.branch_reserved_at.is_none() {
+        existing.branch_reserved_at = incoming.branch_reserved_at;
+    }
+    if existing.lane_created_at.is_none() {
+        existing.lane_created_at = incoming.lane_created_at;
+    }
+    if existing.merged_back_at.is_none() {
+        existing.merged_back_at = incoming.merged_back_at;
+    }
+    if existing.merged_back_commit.is_none() {
+        existing.merged_back_commit = incoming.merged_back_commit;
+    }
+    if existing.verified_at.is_none() {
+        existing.verified_at = incoming.verified_at;
+    }
+    if existing.verified_commit.is_none() {
+        existing.verified_commit = incoming.verified_commit;
+    }
+    if existing.cleanup_due_at.is_none() {
+        existing.cleanup_due_at = incoming.cleanup_due_at;
+    }
+    if existing.cleanup_completed_at.is_none() {
+        existing.cleanup_completed_at = incoming.cleanup_completed_at;
+    }
 }
 
 fn ensure_supported_schema(ledger: &WorktreeLedger, path: &std::path::Path) -> Result<()> {
@@ -514,6 +577,57 @@ mod tests {
         );
 
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn stale_ledger_snapshot_rejects_a_second_writer() {
+        let (root, paths, id) = test_repo("stale-writer");
+        let mut first = load_with_snapshot(&paths, &id).expect("first snapshot");
+        let mut second = load_with_snapshot(&paths, &id).expect("second snapshot");
+
+        let mut first_lane = WorktreeLane::new(intent());
+        first_lane.milestones.branch_reserved_at = Some("2026-06-29T00:00:00Z".to_string());
+        first.ledger.upsert_lane(first_lane);
+        save_with_snapshot(&paths, &id, first.raw.as_deref(), &first.ledger).expect("first save");
+
+        let mut second_intent = intent();
+        second_intent.branch = "codex/second-writer".to_string();
+        second.ledger.upsert_lane(WorktreeLane::new(second_intent));
+        let error = save_with_snapshot(&paths, &id, second.raw.as_deref(), &second.ledger)
+            .expect_err("stale second writer should fail");
+        let error = format!("{error:#}");
+        assert!(
+            error.contains("changed since it was read; re-run the command"),
+            "{error}"
+        );
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn replanning_a_lane_preserves_recorded_milestones() {
+        let mut ledger = WorktreeLedger::default();
+        let mut lane = WorktreeLane::new(intent());
+        lane.milestones.branch_reserved_at = Some("2026-06-29T00:00:00Z".to_string());
+        lane.milestones.lane_created_at = Some("2026-06-29T01:00:00Z".to_string());
+        ledger.upsert_lane(lane);
+
+        let mut new_intent = intent();
+        new_intent.branch = "codex/replanned".to_string();
+        ledger.upsert_lane(WorktreeLane::new(new_intent));
+
+        let lane = ledger
+            .lane("design-md-guidance")
+            .expect("lane should still exist");
+        assert_eq!(lane.intent.branch, "codex/replanned");
+        assert_eq!(
+            lane.milestones.branch_reserved_at.as_deref(),
+            Some("2026-06-29T00:00:00Z")
+        );
+        assert_eq!(
+            lane.milestones.lane_created_at.as_deref(),
+            Some("2026-06-29T01:00:00Z")
+        );
     }
 
     #[test]

@@ -1,6 +1,7 @@
 mod support;
 
 use std::fs;
+use std::os::unix::fs as unix_fs;
 use std::path::Path;
 use std::process::{Command, Output};
 
@@ -140,6 +141,34 @@ fn loop_rejects_invalid_project_custom_recipes() {
         error.contains("invalid custom loop recipe brief.yml"),
         "{error}"
     );
+}
+
+#[test]
+fn loop_rejects_symlinked_project_custom_recipe_file() {
+    let temp = TestTempDir::new("maestro-loop-custom-file-symlink");
+    let external = temp.path().join("external-brief.yml");
+    fs::write(&external, CUSTOM_RECIPE).expect("external recipe should be writable");
+    let dir = temp.path().join(".maestro/loop-recipes");
+    fs::create_dir_all(&dir).expect("custom recipe dir should be creatable");
+    unix_fs::symlink(&external, dir.join("brief.yml")).expect("recipe symlink should be creatable");
+
+    let error = stderr(temp.path(), &["loop", "show", "brief"]);
+    assert!(error.contains("symlink"), "{error}");
+}
+
+#[test]
+fn loop_rejects_symlinked_project_custom_recipe_dir() {
+    let temp = TestTempDir::new("maestro-loop-custom-dir-symlink");
+    let external = temp.path().join("external-loop-recipes");
+    fs::create_dir_all(&external).expect("external recipe dir should be creatable");
+    fs::write(external.join("brief.yml"), CUSTOM_RECIPE)
+        .expect("external recipe should be writable");
+    fs::create_dir_all(temp.path().join(".maestro")).expect("maestro dir should be creatable");
+    unix_fs::symlink(&external, temp.path().join(".maestro/loop-recipes"))
+        .expect("recipe dir symlink should be creatable");
+
+    let error = stderr(temp.path(), &["loop"]);
+    assert!(error.contains("symlink"), "{error}");
 }
 
 const CUSTOM_RECIPE: &str = r#"schema_version: maestro.loop_recipe.v1

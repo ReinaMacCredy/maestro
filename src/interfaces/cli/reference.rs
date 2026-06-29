@@ -229,6 +229,8 @@ const MAESTRO_DESIGN_COMMANDS: &[&str] = &[
     "maestro msg send",
     "maestro msg read",
     "maestro msg list",
+    "maestro design list",
+    "maestro design init",
 ];
 
 const MAESTRO_AUDIT_COMMANDS: &[&str] = &[

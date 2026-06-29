@@ -50,7 +50,7 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 19] = [
         "skill",
         "maestro-design",
         "1.31.0",
-        "c908591acccb7796d50cfbffc7c7e0aaced6290853a3979b22fce0fa44fc3f11",
+        "abaa300e45990926411d87a2f230be9cdb95ff8a1cafc87317260284008e5543",
     ),
     (
         "skill",

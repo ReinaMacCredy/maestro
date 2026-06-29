@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: f7118d4819bfb74a3c3a49b194721e8e75a17e7e408aa07d35420d35e343512f -->
+<!-- maestro:cli-reference-sha256: f5be78f383ea2d8712aaa8a3583c50f85fd940139389be857fdaa954ded6fb7b -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -7,6 +7,11 @@ Authoritative signatures generated from the binary's clap model,
 filtered for the `maestro-design` skill. Every listed verb and flag is exact;
 a spelling not found here is outside this skill's CLI surface.
 `<X>` required, `[X]` optional, `...` repeatable.
+
+## maestro design
+
+- `maestro design list` -- List shipped DESIGN.md style tokens
+- `maestro design init [--style <STYLE>] [--dry-run] [--force]` -- Write repo-root DESIGN.md from a shipped style
 
 ## maestro status
 

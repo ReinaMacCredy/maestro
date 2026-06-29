@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -10,8 +9,8 @@ use crate::domain::decisions;
 use crate::domain::feature::{
     self, ContractAdditions, ContractChangeCounts, ContractEdits, FeatureStatus,
 };
-use crate::domain::run;
 use crate::domain::task;
+use crate::domain::{conflict, run};
 use crate::foundation::core::git;
 use crate::foundation::core::hash::sha256_prefixed;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
@@ -667,16 +666,8 @@ fn auto_archive_after_close(
         CloseAutoArchivePlan::Run(args) => *args,
         CloseAutoArchivePlan::Skip(reason) => return Ok(CloseAutoArchiveOutcome::Skipped(reason)),
     };
-    match auto_archive_feature(paths, args) {
-        Ok(()) => Ok(CloseAutoArchiveOutcome::Archived),
-        Err(error) => {
-            let message = error.to_string();
-            if message.contains("partial auto-archive") {
-                return Err(error);
-            }
-            Ok(CloseAutoArchiveOutcome::Skipped(message))
-        }
-    }
+    auto_archive_feature(paths, args)?;
+    Ok(CloseAutoArchiveOutcome::Archived)
 }
 
 enum CloseAutoArchivePlan {
@@ -712,6 +703,47 @@ fn close_auto_archive_plan(
             "git HEAD is unavailable; commit the delivered work first".to_string(),
         ));
     };
+    if snapshot.code_other_dirty > 0 {
+        let mut dirty = snapshot
+            .dirty_paths
+            .iter()
+            .filter(|path| !path.starts_with(".maestro"))
+            .map(|path| path.display().to_string())
+            .collect::<Vec<_>>();
+        dirty.sort();
+        return Ok(CloseAutoArchivePlan::Skip(format!(
+            "code/other dirty path(s) at {head}: {}; commit or clean before archive",
+            dirty.join(", ")
+        )));
+    }
+    match unresolved_conflicts_for_target(paths, &report.id) {
+        Ok(conflicts) if !conflicts.is_empty() => {
+            return Ok(CloseAutoArchivePlan::Skip(format!(
+                "unresolved Maestro conflict(s): {}; clear conflicts before archive",
+                conflicts.join(", ")
+            )));
+        }
+        Ok(_) => {}
+        Err(error) => {
+            return Ok(CloseAutoArchivePlan::Skip(format!(
+                "conflict state is unavailable: {error:#}"
+            )));
+        }
+    }
+    match blocking_work_items(paths, &report.id) {
+        Ok(open_work) if !open_work.is_empty() => {
+            return Ok(CloseAutoArchivePlan::Skip(format!(
+                "live or claimed descendant/linked work item(s): {}; verify/archive or release them first",
+                open_work.join(", ")
+            )));
+        }
+        Ok(_) => {}
+        Err(error) => {
+            return Ok(CloseAutoArchivePlan::Skip(format!(
+                "work-item state is unavailable: {error:#}"
+            )));
+        }
+    }
     let target_card_path = paths.cards_dir().join(&report.id).join("card.yaml");
     let target_card_hash = if target_card_path.is_file() {
         Some(sha256_prefixed(&fs::read(&target_card_path)?))
@@ -988,10 +1020,12 @@ fn auto_archive_feature(paths: &MaestroPaths, args: AutoArchiveArgs) -> Result<(
         authority_head: &authority_head,
         tested_head: current_head,
         qa_result: &qa_result,
+        qa_evidence: &qa_evidence,
         run_id: &run_id,
         multi_agent: &multi_agent,
         canonical_store: &current_store,
         worker_source: &worker_source,
+        target_card_hash: target_card_hash.as_deref(),
     });
     let mut event = auto_archive_event(AutoArchiveEventParts {
         event_id: &event_id,
@@ -1003,6 +1037,8 @@ fn auto_archive_feature(paths: &MaestroPaths, args: AutoArchiveArgs) -> Result<(
         current_head,
         qa_result: &qa_result,
         qa_evidence: &qa_evidence,
+        target_card_hash: target_card_hash.as_deref(),
+        allow_dirty_target_card: args.allow_dirty_target_card,
         run_id: &run_id,
         multi_agent: &multi_agent,
         before_state: &before_state,
@@ -1033,6 +1069,7 @@ fn auto_archive_feature(paths: &MaestroPaths, args: AutoArchiveArgs) -> Result<(
         canonical_store_path: current_store.clone(),
         invoking_checkout_path: invoking_checkout.clone(),
         worker_source: worker_source.clone(),
+        target_card_hash: target_card_hash.clone(),
         final_target_head: current_head.to_string(),
         tested_head: current_head.to_string(),
         authority_ref: authority_ref.clone(),
@@ -1077,6 +1114,8 @@ struct AutoArchiveEventParts<'a> {
     current_head: &'a str,
     qa_result: &'a str,
     qa_evidence: &'a [String],
+    target_card_hash: Option<&'a str>,
+    allow_dirty_target_card: bool,
     run_id: &'a str,
     multi_agent: &'a str,
     before_state: &'a str,
@@ -1110,6 +1149,7 @@ fn auto_archive_event(parts: AutoArchiveEventParts<'_>) -> Value {
         "commit": parts.current_head,
         "qa_result": parts.qa_result,
         "qa_evidence": parts.qa_evidence,
+        "target_card_hash": parts.target_card_hash,
         "multi_agent_disposition": parts.multi_agent,
         "merge_back_disposition": parts.merge_back_disposition,
         "preflight_result": {
@@ -1117,6 +1157,8 @@ fn auto_archive_event(parts: AutoArchiveEventParts<'_>) -> Value {
             "git_dirty": parts.snapshot_maestro_dirty + parts.snapshot_code_other_dirty > 0,
             "maestro_dirty": parts.snapshot_maestro_dirty,
             "code_other_dirty": parts.snapshot_code_other_dirty,
+            "allow_dirty_target_card": parts.allow_dirty_target_card,
+            "target_card_hash": parts.target_card_hash,
             "archive_preflight": "passed"
         },
         "archive_receipt": {
@@ -1248,46 +1290,23 @@ fn blocking_work_items(paths: &MaestroPaths, id: &str) -> Result<Vec<String>> {
 }
 
 fn unresolved_conflicts_for_target(paths: &MaestroPaths, id: &str) -> Result<Vec<String>> {
-    let path = paths.maestro_dir().join("conflicts.jsonl");
-    let text = match fs::read_to_string(&path) {
-        Ok(text) => text,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(error) => return Err(error.into()),
-    };
-    let mut latest: BTreeMap<(String, String), (String, String, String)> = BTreeMap::new();
-    for line in text.lines() {
-        let Ok(value) = serde_json::from_str::<Value>(line.trim()) else {
-            continue;
-        };
-        let action = value.get("action").and_then(Value::as_str).unwrap_or("");
-        let session = value
-            .get("asserter_session")
-            .and_then(Value::as_str)
-            .unwrap_or("")
-            .to_string();
-        let peer = value
-            .get("peer_card")
-            .and_then(Value::as_str)
-            .unwrap_or("")
-            .to_string();
-        let asserter = value
-            .get("asserter_card")
-            .and_then(Value::as_str)
-            .unwrap_or("")
-            .to_string();
-        let reason = value
-            .get("reason")
-            .and_then(Value::as_str)
-            .unwrap_or("")
-            .to_string();
-        latest.insert((session, peer), (action.to_string(), asserter, reason));
-    }
-    let mut conflicts = Vec::new();
-    for ((session, peer), (action, asserter, reason)) in latest {
-        if action == "assert" && (peer == id || asserter == id) {
-            conflicts.push(format!("{session}->{peer}: {reason}"));
-        }
-    }
+    let now = utc_now_timestamp();
+    let roots = git::worktree_roots(paths.repo_root())
+        .unwrap_or_else(|_| vec![paths.repo_root().to_path_buf()]);
+    let root_paths = roots
+        .iter()
+        .map(MaestroPaths::new)
+        .collect::<Vec<MaestroPaths>>();
+    let mut conflicts = conflict::active_notices(&root_paths, &now)?
+        .into_iter()
+        .filter(|notice| notice.peer_card == id || notice.asserter_card == id)
+        .map(|notice| {
+            format!(
+                "{}->{}: {}",
+                notice.asserter_session, notice.peer_card, notice.reason
+            )
+        })
+        .collect::<Vec<_>>();
     conflicts.sort();
     Ok(conflicts)
 }
@@ -1321,26 +1340,55 @@ struct AutoArchiveCommandParts<'a> {
     authority_head: &'a str,
     tested_head: &'a str,
     qa_result: &'a str,
+    qa_evidence: &'a [String],
     run_id: &'a str,
     multi_agent: &'a str,
     canonical_store: &'a str,
     worker_source: &'a str,
+    target_card_hash: Option<&'a str>,
 }
 
 fn auto_archive_command(parts: AutoArchiveCommandParts<'_>) -> String {
-    format!(
-        "maestro feature auto-archive {} --authority-ref {} --authority-target {} --authority-head {} --authority-state current --tested-head {} --qa-result {} --run {} --multi-agent {} --canonical-store {} --worker-source {}",
+    let mut args = vec![
+        "maestro",
+        "feature",
+        "auto-archive",
         parts.id,
+        "--authority-ref",
         parts.authority_ref,
+        "--authority-target",
         parts.authority_target,
+        "--authority-head",
         parts.authority_head,
+        "--authority-state",
+        "current",
+        "--tested-head",
         parts.tested_head,
+        "--qa-result",
         parts.qa_result,
+    ];
+    for evidence in parts.qa_evidence {
+        args.push("--qa-evidence");
+        args.push(evidence);
+    }
+    args.extend([
+        "--run",
         parts.run_id,
+        "--multi-agent",
         parts.multi_agent,
+        "--canonical-store",
         parts.canonical_store,
+        "--worker-source",
         parts.worker_source,
-    )
+    ]);
+    if let Some(hash) = parts.target_card_hash {
+        args.push("--target-card-hash");
+        args.push(hash);
+    }
+    args.into_iter()
+        .map(shell_word)
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn repo_relative_path(paths: &MaestroPaths, path: &Path) -> String {
@@ -1353,6 +1401,18 @@ fn repo_relative_path(paths: &MaestroPaths, path: &Path) -> String {
 
 fn short_commit(commit: &str) -> String {
     commit.chars().take(12).collect()
+}
+
+fn shell_word(value: &str) -> String {
+    if !value.is_empty()
+        && value.bytes().all(|byte| {
+            byte.is_ascii_alphanumeric()
+                || matches!(byte, b'/' | b'.' | b'_' | b'-' | b'=' | b':' | b'@')
+        })
+    {
+        return value.to_string();
+    }
+    format!("'{}'", value.replace('\'', "'\\''"))
 }
 
 /// Bulk-archive every closed (terminal) feature (§5 L3). Collect-and-continue:

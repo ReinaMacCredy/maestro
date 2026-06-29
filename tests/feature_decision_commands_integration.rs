@@ -15,6 +15,8 @@ use git2::{IndexAddOption, Repository, Signature};
 use maestro::domain::decisions::template::decision_markdown;
 use maestro::foundation::core::fs::ensure_dir;
 use maestro::foundation::core::hash::sha256_prefixed;
+use maestro::foundation::core::time::utc_now_timestamp;
+use serde_json::json;
 use serde_yaml::Value as YamlValue;
 use support::TestTempDir;
 
@@ -2456,6 +2458,15 @@ fn feature_auto_archive_requires_exact_head_and_writes_receipts() {
         index.contains("maestro feature unarchive billing-csv-export"),
         "index records restore command:\n{index}"
     );
+    let canonical_root = root
+        .canonicalize()
+        .expect("invariant: repo root should canonicalize")
+        .display()
+        .to_string();
+    assert!(
+        !index.contains(&canonical_root),
+        "index must not persist absolute checkout paths:\n{index}"
+    );
 
     let event_path = root.join(".maestro/runs/run-auto/events.jsonl");
     let events = fs::read_to_string(&event_path).expect("invariant: run event should exist");
@@ -2496,6 +2507,15 @@ fn feature_auto_archive_requires_exact_head_and_writes_receipts() {
             .expect("invariant: qa_evidence is an array")
             .len(),
         1
+    );
+    let command = event["command"]
+        .as_str()
+        .expect("invariant: command is a string");
+    assert!(
+        command.contains("--qa-evidence")
+            && command.contains("--worker-source 'worktree api@feature/auto-archive'")
+            && command.contains("--multi-agent 'workers merged back; evidence exact HEAD'"),
+        "event command should be replayable and shell-quoted: {command}"
     );
 
     let query_args = ["query", "run", "--since", "1970-01-01T00:00:00Z", "--json"];
@@ -2568,6 +2588,21 @@ fn feature_auto_archive_blocks_invalid_authority_relevant_dirt_and_conflicts() {
         r#"{"action":"assert","asserter_session":"s1","asserter_card":"card-peer","peer_card":"billing-csv-export","reason":"src/lib.rs: contested"}"#,
     )
     .expect("invariant: conflict fixture should be writable");
+    fs::create_dir_all(root.join(".maestro/runs/s1"))
+        .expect("invariant: live conflict session dir should be writable");
+    fs::write(
+        root.join(".maestro/runs/s1/events.jsonl"),
+        format!(
+            "{}\n",
+            json!({
+                "event_type": "card_touch",
+                "session_id": "s1",
+                "card_id": "card-peer",
+                "ts": utc_now_timestamp()
+            })
+        ),
+    )
+    .expect("invariant: live conflict session should be writable");
     let conflict_args = auto_archive_args(
         "billing-csv-export",
         &head,

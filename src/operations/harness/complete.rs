@@ -362,6 +362,18 @@ pub struct HarnessSignal {
     pub inspect: Vec<String>,
 }
 
+#[derive(Clone, Debug, Default)]
+struct RunEventSummary {
+    recorded_events: usize,
+    card_touch_events: usize,
+    task_proof_events: usize,
+    skill_activation_events: usize,
+    latest_event: Option<(String, String)>,
+    intervention_events: usize,
+    heartbeat_events: usize,
+    latest_heartbeat_at: Option<String>,
+}
+
 pub fn complete_readout(paths: &MaestroPaths) -> Result<CompleteHarnessReadout> {
     complete_readout_for_roots(paths, std::slice::from_ref(paths))
 }
@@ -394,11 +406,12 @@ pub fn complete_readout_for_roots(
         .count();
 
     let recurring_friction_items = over_threshold_items(paths)?.len();
-    let hook_trace = hook_trace_readout(paths)?;
+    let event_summary = run_event_summary(paths)?;
+    let hook_trace = hook_trace_readout(paths, &event_summary)?;
     let runtime_boundary = runtime_boundary_readout(paths, hook_trace.installed_agents)?;
     let security_gates = security_gate_readout(paths, &task_entries);
-    let guardrails = guardrail_readout(paths, &task_entries)?;
-    let scheduler = scheduler_readout_from_sessions(paths, &sessions)?;
+    let guardrails = guardrail_readout(paths, &task_entries, &event_summary)?;
+    let scheduler = scheduler_readout_from_sessions(&sessions, &event_summary);
     let observability_status = if harness_protocol == "present"
         && stale_sessions == 0
         && proof_gap_tasks == 0
@@ -624,7 +637,8 @@ pub fn scheduler_readout_for_roots(
 ) -> Result<SchedulerReadout> {
     let now = utc_now_timestamp();
     let sessions = run::active_sessions_union(roots, &now)?;
-    scheduler_readout_from_sessions(paths, &sessions)
+    let event_summary = run_event_summary(paths)?;
+    Ok(scheduler_readout_from_sessions(&sessions, &event_summary))
 }
 
 pub fn scheduler_surface_line(paths: &MaestroPaths) -> Result<String> {
@@ -728,7 +742,50 @@ fn runtime_boundary_readout(
     })
 }
 
-fn hook_trace_readout(paths: &MaestroPaths) -> Result<HookTraceReadout> {
+fn run_event_summary(paths: &MaestroPaths) -> Result<RunEventSummary> {
+    let mut summary = RunEventSummary::default();
+    run::visit_managed_events(paths, |record| {
+        let event = record.event();
+        let kind = event
+            .event_type()
+            .or_else(|| event.alias_kind())
+            .unwrap_or("<unknown>");
+        summary.recorded_events += 1;
+        match kind {
+            "card_touch" => summary.card_touch_events += 1,
+            "task_proof" => summary.task_proof_events += 1,
+            "skill_activation" | "SkillActivation" => summary.skill_activation_events += 1,
+            _ => {}
+        }
+        if event.is_event_type("intervention") {
+            summary.intervention_events += 1;
+        }
+        if let Some(ts) = event.timestamp() {
+            if summary
+                .latest_event
+                .as_ref()
+                .is_none_or(|(latest_ts, _)| ts > latest_ts.as_str())
+            {
+                summary.latest_event = Some((ts.to_string(), kind.to_string()));
+            }
+            summary.heartbeat_events += 1;
+            if summary
+                .latest_heartbeat_at
+                .as_deref()
+                .is_none_or(|latest| ts > latest)
+            {
+                summary.latest_heartbeat_at = Some(ts.to_string());
+            }
+        }
+        Ok(())
+    })?;
+    Ok(summary)
+}
+
+fn hook_trace_readout(
+    paths: &MaestroPaths,
+    event_summary: &RunEventSummary,
+) -> Result<HookTraceReadout> {
     let lock = InstallLock::load(&paths.install_lock_file())?;
     let installed_agents = lock
         .agents
@@ -749,45 +806,19 @@ fn hook_trace_readout(paths: &MaestroPaths) -> Result<HookTraceReadout> {
     };
 
     let supported_events = run::hook_event_contract().shared_events().len();
-    let mut recorded_events = 0;
-    let mut card_touch_events = 0;
-    let mut task_proof_events = 0;
-    let mut skill_activation_events = 0;
-    let mut latest_event: Option<(String, String)> = None;
-
-    run::visit_managed_events(paths, |record| {
-        let event = record.event();
-        let kind = event
-            .event_type()
-            .or_else(|| event.alias_kind())
-            .unwrap_or("<unknown>");
-        recorded_events += 1;
-        match kind {
-            "card_touch" => card_touch_events += 1,
-            "task_proof" => task_proof_events += 1,
-            "skill_activation" | "SkillActivation" => skill_activation_events += 1,
-            _ => {}
-        }
-        if let Some(ts) = event.timestamp()
-            && latest_event
-                .as_ref()
-                .is_none_or(|(latest_ts, _)| ts > latest_ts.as_str())
-        {
-            latest_event = Some((ts.to_string(), kind.to_string()));
-        }
-        Ok(())
-    })?;
 
     let status = if hook_wiring != "installed" {
         "missing"
-    } else if recorded_events == 0 {
+    } else if event_summary.recorded_events == 0 {
         "missing_evidence"
-    } else if card_touch_events > 0 && task_proof_events > 0 {
+    } else if event_summary.card_touch_events > 0 && event_summary.task_proof_events > 0 {
         "complete"
     } else {
         "partial"
     };
-    let (latest_event_at, latest_event) = latest_event
+    let (latest_event_at, latest_event) = event_summary
+        .latest_event
+        .clone()
         .map(|(ts, kind)| (Some(ts), Some(kind)))
         .unwrap_or((None, None));
 
@@ -797,10 +828,10 @@ fn hook_trace_readout(paths: &MaestroPaths) -> Result<HookTraceReadout> {
         installed_agents,
         pending_agents,
         supported_events,
-        recorded_events,
-        card_touch_events,
-        task_proof_events,
-        skill_activation_events,
+        recorded_events: event_summary.recorded_events,
+        card_touch_events: event_summary.card_touch_events,
+        task_proof_events: event_summary.task_proof_events,
+        skill_activation_events: event_summary.skill_activation_events,
         latest_event,
         latest_event_at,
     })
@@ -857,15 +888,8 @@ fn security_gate_readout(
 fn guardrail_readout(
     paths: &MaestroPaths,
     task_entries: &[task::TaskEntry],
+    event_summary: &RunEventSummary,
 ) -> Result<GuardrailReadout> {
-    let mut intervention_events = 0;
-    run::visit_managed_events(paths, |record| {
-        if record.event().is_event_type("intervention") {
-            intervention_events += 1;
-        }
-        Ok(())
-    })?;
-
     let mut candidate_rules = 0;
     let mut gated_rules = 0;
     let mut promoted_rules = 0;
@@ -966,7 +990,10 @@ fn guardrail_readout(
             rule: "intervention_to_rule_lifecycle".to_string(),
             severity: "medium".to_string(),
             source: "Run intervention events and Memory promotion".to_string(),
-            evidence: vec![format!("intervention_events={intervention_events}")],
+            evidence: vec![format!(
+                "intervention_events={}",
+                event_summary.intervention_events
+            )],
             bypass_policy:
                 "interventions are evidence only until promoted through Memory or rejected with review evidence"
                     .to_string(),
@@ -982,7 +1009,7 @@ fn guardrail_readout(
     Ok(GuardrailReadout {
         status: status.to_string(),
         rules,
-        intervention_events,
+        intervention_events: event_summary.intervention_events,
         candidate_rules,
         gated_rules,
         promoted_rules,
@@ -995,9 +1022,9 @@ fn guardrail_readout(
 }
 
 fn scheduler_readout_from_sessions(
-    paths: &MaestroPaths,
     sessions: &[run::SessionActivity],
-) -> Result<SchedulerReadout> {
+    event_summary: &RunEventSummary,
+) -> SchedulerReadout {
     let active_sessions = sessions.len();
     let stale_sessions = sessions
         .iter()
@@ -1009,38 +1036,22 @@ fn scheduler_readout_from_sessions(
         .count();
     let missed_runs = stale_sessions + unconfirmed_sessions;
     let dead_runs = stale_sessions;
-    let mut heartbeat_events = 0;
-    let mut latest_heartbeat_at: Option<String> = None;
-
-    run::visit_managed_events(paths, |record| {
-        let event = record.event();
-        if let Some(ts) = event.timestamp() {
-            heartbeat_events += 1;
-            if latest_heartbeat_at
-                .as_deref()
-                .is_none_or(|latest| ts > latest)
-            {
-                latest_heartbeat_at = Some(ts.to_string());
-            }
-        }
-        Ok(())
-    })?;
 
     let status = if dead_runs > 0 {
         "degraded"
-    } else if heartbeat_events > 0 || active_sessions > 0 {
+    } else if event_summary.heartbeat_events > 0 || active_sessions > 0 {
         "observed"
     } else {
         "idle"
     };
 
-    Ok(SchedulerReadout {
+    SchedulerReadout {
         status: status.to_string(),
         stance: "passive_local_first".to_string(),
         owner: "none".to_string(),
         heartbeat_source: "managed run event timestamps and active-session presence".to_string(),
-        heartbeat_events,
-        latest_heartbeat_at,
+        heartbeat_events: event_summary.heartbeat_events,
+        latest_heartbeat_at: event_summary.latest_heartbeat_at.clone(),
         active_sessions,
         stale_sessions,
         missed_runs,
@@ -1054,7 +1065,7 @@ fn scheduler_readout_from_sessions(
         ],
         next_probe: "rerun maestro status, active --all, watch snapshot, or query run --json"
             .to_string(),
-    })
+    }
 }
 
 fn proof_matrix_rows(

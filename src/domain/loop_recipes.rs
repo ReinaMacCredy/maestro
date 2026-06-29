@@ -274,7 +274,10 @@ pub fn custom_contracts(custom_dir: &Path) -> Result<Vec<RecipeContract>> {
 }
 
 pub fn custom_contract_names(custom_dir: &Path) -> Result<Vec<String>> {
-    if !custom_dir.is_dir() {
+    let Some(metadata) = custom_recipe_dir_metadata(custom_dir)? else {
+        return Ok(Vec::new());
+    };
+    if !metadata.is_dir() {
         return Ok(Vec::new());
     }
     let mut names = Vec::new();
@@ -291,6 +294,17 @@ pub fn custom_contract_names(custom_dir: &Path) -> Result<Vec<String>> {
             )
         })?;
         let path = entry.path();
+        let file_type = entry
+            .file_type()
+            .with_context(|| format!("failed to inspect custom loop recipe {}", path.display()))?;
+        ensure!(
+            !file_type.is_symlink(),
+            "custom loop recipe {} is a symlink; refusing to read it",
+            path.display()
+        );
+        if !file_type.is_file() {
+            continue;
+        }
         if path.extension().and_then(|extension| extension.to_str()) != Some("yml") {
             continue;
         }
@@ -305,6 +319,18 @@ pub fn custom_contract_names(custom_dir: &Path) -> Result<Vec<String>> {
 
 pub fn custom_contract(custom_dir: &Path, name: &str) -> Result<RecipeContract> {
     let path = custom_contract_path(custom_dir, name)?;
+    let metadata = fs::symlink_metadata(&path)
+        .with_context(|| format!("failed to inspect custom loop recipe {}", path.display()))?;
+    ensure!(
+        !metadata.file_type().is_symlink(),
+        "custom loop recipe {} is a symlink; refusing to read it",
+        path.display()
+    );
+    ensure!(
+        metadata.is_file(),
+        "custom loop recipe {} is not a regular file",
+        path.display()
+    );
     let body = fs::read_to_string(&path)
         .with_context(|| format!("failed to read custom loop recipe {}", path.display()))?;
     let contract = parse_contract_body(name, &body)
@@ -315,6 +341,23 @@ pub fn custom_contract(custom_dir: &Path, name: &str) -> Result<RecipeContract> 
         contract.id
     );
     Ok(contract)
+}
+
+fn custom_recipe_dir_metadata(custom_dir: &Path) -> Result<Option<fs::Metadata>> {
+    let metadata = match fs::symlink_metadata(custom_dir) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => {
+            return Err(error)
+                .with_context(|| format!("failed to inspect {}", custom_dir.display()));
+        }
+    };
+    ensure!(
+        !metadata.file_type().is_symlink(),
+        "custom loop recipe dir {} is a symlink; refusing to read it",
+        custom_dir.display()
+    );
+    Ok(Some(metadata))
 }
 
 pub fn validate_contract(contract: &RecipeContract) -> Result<()> {
