@@ -19,6 +19,9 @@ unit of work this file adds nothing - every card is claimed, worked, and
 verified exactly per [work.md](work.md), including its test-first default. This
 file is the full unattended-loop policy authority: authorization, local
 autonomy, replenishment, stops, audit ledger, boundaries, and the report.
+Read or cite `maestro loop show unattended` first; it is the shipped lifecycle
+recipe that maps this policy into perceive -> choose -> act -> observe -> learn
+-> continue.
 
 ## Kickoff
 
@@ -36,12 +39,12 @@ never ask for one.
 
 Start from the store, never from memory (the session can die; the store is the
 only durable state): `maestro status`, then `maestro loop work-lease --json`.
-`work-lease` is one sidecar tick: it selects one ready card in the requested
-scope, claims it through the normal card claim policy, emits the existing
-work-touch run evidence, and prints the bounded worker contract. It never
-launches a worker, sleeps, polls, owns a queue, or schedules the next tick.
-Long-lived agents may call it before each unit; an external sidecar may call it
-once per cron/launchd/cloud firing.
+Work Lease is the unattended recipe's choose-phase helper: it selects one ready
+card in the requested scope, claims it through the normal card claim policy,
+emits the existing work-touch run evidence, and prints the bounded worker
+contract. It never launches a worker, sleeps, polls, owns a queue, schedules the
+next tick, or becomes a second lifecycle. Long-lived agents may call it before
+each unit; an external scheduler may call it once per cron/launchd/cloud firing.
 
 If the kickoff is a broad goal instead of a named card or accepted feature,
 infer a minimal GoalBrief before work starts:
@@ -87,17 +90,18 @@ the same records and stop conditions.
    a stale/abandoned run. It is not a repo mode, card mode, config flag, daemon,
    or scheduler.
 2. `maestro loop work-lease --json` -> read the returned `selected_card` and
-     `worker_prompt` -> work the card per [work.md](work.md). The returned JSON
-     includes the card id, claim identity, stale-claim policy, allowed follow-up
-     verbs, hard stops, recurrence-guard requirement, inspect/reconcile handles,
-     run-event path, ship authority status, compact `approved_lessons` refs, and
-     review-only `memory_suggestions` with create/dismiss commands.
-     Approved Memory is context, not authority: use it as scoped guidance, but
-     current user instructions, locked acceptance, Proof/QA, and run-scoped ship
-     authority outrank it. Follow a lesson's `maestro memory show <id>` pointer
-     only when it is relevant to the selected card. A Memory suggestion is a
-     proposal, not authority: create it only with the printed `maestro memory
-     create --from <id>` command when it is relevant, or dismiss it with the
+   `worker_prompt` -> work the card per [work.md](work.md). The returned JSON
+   includes the card id, claim identity, stale-claim policy, allowed follow-up
+   verbs, hard stops, recurrence-guard requirement, `handles.inspect`,
+   `handles.status`, `handles.reconcile`, run-event path, ship authority status,
+   compact `approved_lessons` refs, and review-only `memory_suggestions` with
+   create/dismiss commands.
+   Approved Memory is context, not authority: use it as scoped guidance, but
+   current user instructions, locked acceptance, Proof/QA, and run-scoped ship
+   authority outrank it. Follow a lesson's `maestro memory show <id>` pointer
+   only when it is relevant to the selected card. A Memory suggestion is a
+   proposal, not authority: create it only with the printed `maestro memory
+   create --from <id>` command when it is relevant, or dismiss it with the
      printed dismiss command. The test-first rule applies unchanged: an observable
      `--check` is worked test-first; a skip is valid only for a non-behavioral
      check or an explore/spike lane, and the skip note names which. Skips are
@@ -198,17 +202,18 @@ state.
 
 An external scheduler (cron, launchd, a cloud schedule) can replace the
 long-lived session: each firing runs ONE iteration of the loop above, then
-exits. The sidecar tick is `maestro loop work-lease --json`; parse the JSON,
-launch at most one worker from the returned contract, then stop until the next
-external tick. The card store and run ledger are the only state between
-firings - cold-start with `maestro resume` - and `claim` already guards
-overlapping firings against double work. A firing that dies mid-card leaves
-its claim behind; the next firing reclaims it once the claim crosses the
-existing 15-min stale TTL - the same timeout that frees any abandoned claim,
-not a new mechanism. Rebuild the night's account from durable state with
-`maestro query run` (its `--json` carries the per-card trace, autonomy summary,
-ledger paths, and an honest interruption verdict); never reconstruct the
-report from a dead firing's memory. Maestro itself never schedules anything.
+exits. The scheduler calls the same choose-phase helper:
+`maestro loop work-lease --json`; parse the JSON, launch at most one worker from
+the returned contract, then stop until the next external tick. The card store
+and run ledger are the only state between firings - cold-start with `maestro
+resume` - and `claim` already guards overlapping firings against double work. A
+firing that dies mid-card leaves its claim behind; the next firing reclaims it
+once the claim crosses the existing 15-min stale TTL - the same timeout that
+frees any abandoned claim, not a new mechanism. Rebuild the night's account
+from durable state with `maestro query run` (its `--json` carries the per-card
+trace, autonomy summary, ledger paths, and an honest interruption verdict);
+never reconstruct the report from a dead firing's memory. Maestro itself never
+schedules anything.
 
 ## Stop
 

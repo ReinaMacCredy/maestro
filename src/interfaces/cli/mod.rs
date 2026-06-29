@@ -489,8 +489,8 @@ pub enum RootCommand {
     )]
     Playbook(PlaybookArgs),
     #[command(
-        about = "Print a loop recipe or mint one sidecar work lease",
-        after_help = "Examples:\n  maestro loop                      # list the recipes\n  maestro loop list                 # same as above\n  maestro loop show feature-fan-out # print one recipe\n  maestro loop work-lease --json    # claim one ready card and print the worker contract"
+        about = "Print loop recipe contracts or mint one Work Lease",
+        after_help = "Examples:\n  maestro loop                      # list lifecycle and orchestration recipes\n  maestro loop list                 # same as above\n  maestro loop show design          # print one lifecycle recipe contract\n  maestro loop show feature-fan-out # print one orchestration recipe\n  maestro loop work-lease --json    # claim one ready card and print the worker contract"
     )]
     Loop(LoopArgs),
     #[command(
@@ -624,15 +624,15 @@ pub struct LoopArgs {
 
 #[derive(Debug, Subcommand)]
 pub enum LoopCommand {
-    #[command(about = "List the loop-orchestration recipes with a one-line when-to-use")]
+    #[command(about = "List lifecycle recipe contracts and orchestration recipes")]
     List,
-    #[command(about = "Print one recipe verbatim")]
+    #[command(about = "Print one lifecycle recipe contract or orchestration recipe")]
     Show {
         /// Recipe name (e.g. feature-fan-out); run `maestro loop` for the list.
         #[arg(value_name = "NAME")]
         name: String,
     },
-    #[command(about = "Claim one ready card and print a sidecar worker contract as JSON")]
+    #[command(about = "Claim one ready card and print a Work Lease worker contract as JSON")]
     WorkLease(Box<WorkLeaseArgs>),
 }
 

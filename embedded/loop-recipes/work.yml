@@ -1,0 +1,66 @@
+schema_version: maestro.loop_recipe.v1
+id: work
+title: Work loop
+summary: Move one accepted task from claim through implementation, proof, verification, and the next lifecycle gate.
+applies_when:
+  - an accepted task is ready or in progress
+  - a feature has prepared child tasks that need implementation
+hard_stops:
+  - acceptance is missing or unlocked
+  - proof would be claimed without evidence
+  - unrelated dirty files make a scoped commit unclear
+phases:
+  perceive:
+    goal: Read the current task, feature contract, blockers, and relevant code.
+    bricks: ["status", "task", "feature", "code"]
+    reads: ["maestro status", "maestro task show <id>", "maestro feature show <id>", "srcwalk overview --scope <dir>"]
+    allowed_verbs: ["maestro task show <id>", "maestro feature show <id>", "srcwalk discover <query> --scope <dir>"]
+    forbidden_verbs: ["maestro task complete <id>", "git commit"]
+    checks: ["task checks are known", "affected files are scoped"]
+    durable_learning: []
+    outputs: ["implementation target", "blocker", "hard stop"]
+  choose:
+    goal: Select the smallest next implementation move that can satisfy the task check.
+    bricks: ["task check", "code path", "test target"]
+    reads: ["task checks", "existing tests", "callers and dependencies"]
+    allowed_verbs: ["maestro task claim <id>", "maestro task update <id>", "srcwalk trace callers <symbol> --scope <dir>"]
+    forbidden_verbs: ["unrelated refactor", "new dependency without approval"]
+    checks: ["next move traces to task acceptance"]
+    durable_learning: []
+    outputs: ["claimed task", "focused edit plan", "hard stop"]
+  act:
+    goal: Implement the smallest correct code or resource change.
+    bricks: ["edit", "test", "resource"]
+    reads: ["target source", "owning AGENTS.md", "playbook"]
+    allowed_verbs: ["apply_patch", "cargo test <target>", "cargo fmt"]
+    forbidden_verbs: ["destructive git", "force push", "manual guarded sidecar edit"]
+    checks: ["changed lines trace to acceptance", "formatting holds"]
+    durable_learning: []
+    outputs: ["code diff", "resource diff", "test diff"]
+  observe:
+    goal: Verify the changed surface can falsify the task check.
+    bricks: ["test", "lint", "diff review", "proof"]
+    reads: ["test output", "git diff", "srcwalk review"]
+    allowed_verbs: ["cargo test <target>", "cargo fmt --check", "srcwalk review"]
+    forbidden_verbs: ["claim success without verification"]
+    checks: ["focused check passes or blocker is recorded"]
+    durable_learning: []
+    outputs: ["verification evidence", "failed proof", "hard stop"]
+  learn:
+    goal: Record reusable knowledge from failures, user corrections, or verified patterns.
+    bricks: ["task note", "event", "memory suggestion"]
+    reads: ["failed test", "user correction", "proof output"]
+    allowed_verbs: ["maestro task update <id>", "maestro event intervention --note <text>"]
+    forbidden_verbs: ["chat-only lessons", "skill edit without accepted scope"]
+    checks: ["learning is durable only when reusable"]
+    durable_learning: ["task note", "run event", "memory candidate"]
+    outputs: ["recorded note", "no durable learning needed"]
+  continue:
+    goal: Complete, verify, or block the task and return the next task gate.
+    bricks: ["task complete", "task verify", "feature gate"]
+    reads: ["task state", "proof report", "feature next"]
+    allowed_verbs: ["maestro task complete <id>", "maestro task verify <id>", "maestro task block <id>"]
+    forbidden_verbs: ["feature close before child tasks verify", "external ship action"]
+    checks: ["proof backs each claim", "next task or blocker is visible"]
+    durable_learning: []
+    outputs: ["verified task", "needs_verification task", "blocked task", "next task"]

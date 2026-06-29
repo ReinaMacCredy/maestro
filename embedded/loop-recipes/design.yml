@@ -1,0 +1,66 @@
+schema_version: maestro.loop_recipe.v1
+id: design
+title: Design loop
+summary: Turn an unsettled request into a locked Maestro feature contract through real context, one fork at a time.
+applies_when:
+  - user asks to brainstorm, design, refine, lock, or decide a Maestro feature
+  - a proposed feature has open questions, unsettled acceptance, or contradictory decisions
+hard_stops:
+  - implementation starts before the user approves build
+  - a locked decision would be edited instead of superseded
+  - the feature contract would omit acceptance, affected areas, or non-goals
+phases:
+  perceive:
+    goal: Read current feature state, existing decisions, relevant code or artifacts, and precedent.
+    bricks: ["feature", "decision", "spec", "grep memory", "code read"]
+    reads: ["maestro feature show <id>", "maestro decision list --feature <id>", "maestro grep <topic> corpus:memory"]
+    allowed_verbs: ["maestro feature show <id>", "maestro decision show <id>", "maestro grep <topic> corpus:memory"]
+    forbidden_verbs: ["maestro feature accept <id>", "maestro task claim <id>", "git push"]
+    checks: ["current state and remaining forks are known"]
+    durable_learning: []
+    outputs: ["one current fork", "hard stop"]
+  choose:
+    goal: Select the next smallest unresolved fork or scope contradiction.
+    bricks: ["question", "decision", "acceptance"]
+    reads: ["feature handoff", "notes", "decision previews"]
+    allowed_verbs: ["maestro decision new", "maestro decision supersede", "maestro feature spec"]
+    forbidden_verbs: ["maestro feature accept <id>", "maestro task complete <id>"]
+    checks: ["exactly one fork is presented", "locked choices are not reopened in place"]
+    durable_learning: []
+    outputs: ["A/B/C fork", "clear recommendation", "hard stop"]
+  act:
+    goal: Record the chosen design move in Maestro artifacts.
+    bricks: ["decision lock", "spec update", "notes"]
+    reads: ["selected user answer", "active decision record"]
+    allowed_verbs: ["maestro decision lock <id>", "maestro decision supersede <id>", "maestro feature set <id>"]
+    forbidden_verbs: ["code edit", "maestro task claim <id>", "maestro feature prepare <id>"]
+    checks: ["decision status matches the user choice", "spec reflects current active direction"]
+    durable_learning: []
+    outputs: ["locked decision", "updated proposed contract"]
+  observe:
+    goal: Check the design surface for contradictions, stale wording, and uncovered acceptance.
+    bricks: ["feature show", "decision list", "advisor review"]
+    reads: ["maestro feature show <id>", "maestro feature spec <id>", "decision status"]
+    allowed_verbs: ["maestro feature show <id>", "maestro feature spec <id>"]
+    forbidden_verbs: ["maestro feature accept <id>", "maestro task complete <id>"]
+    checks: ["open decisions are zero before finalization", "superseded wording is labeled historical"]
+    durable_learning: []
+    outputs: ["build-ready verdict", "next fork", "hard stop"]
+  learn:
+    goal: Preserve durable design learning only when it will guide future work.
+    bricks: ["decision", "note", "memory candidate"]
+    reads: ["locked decisions", "user correction", "precedent"]
+    allowed_verbs: ["maestro card note <id> <text>", "maestro event intervention --note <text>"]
+    forbidden_verbs: ["hidden chat-only memory", "unscoped skill edit"]
+    checks: ["lesson is tied to a card, decision, note, or event"]
+    durable_learning: ["locked decision", "card note", "intervention event", "memory candidate"]
+    outputs: ["durable note", "no learning needed"]
+  continue:
+    goal: Return the next design fork, finalization gate, or hard stop.
+    bricks: ["feature finalize", "handoff", "next question"]
+    reads: ["feature next", "handoff freshness", "open questions"]
+    allowed_verbs: ["maestro feature finalize <id>", "maestro feature show <id>"]
+    forbidden_verbs: ["maestro feature accept <id> without QA baseline", "external ship action"]
+    checks: ["user has approved build before crossing to implementation"]
+    durable_learning: []
+    outputs: ["next fork", "maestro feature finalize <id>", "hard stop"]

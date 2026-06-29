@@ -1,0 +1,66 @@
+schema_version: maestro.loop_recipe.v1
+id: audit
+title: Audit loop
+summary: Scan a bounded surface, convert real findings into Maestro work, and avoid chat-only audit output.
+applies_when:
+  - user asks for review, audit, scan, risks, or findings
+  - a feature needs independent bug, security, or regression scrutiny
+hard_stops:
+  - requested scan scope is destructive or permission-sensitive
+  - findings cannot be tied to concrete files, commands, or artifacts
+  - audit output would create work outside Maestro records
+phases:
+  perceive:
+    goal: Read the requested scope, current diff, tests, and relevant contracts.
+    bricks: ["git diff", "srcwalk", "tests", "feature"]
+    reads: ["git status --short", "git diff", "maestro feature show <id>", "srcwalk review"]
+    allowed_verbs: ["git diff", "srcwalk overview --scope <dir>", "maestro feature show <id>"]
+    forbidden_verbs: ["code edit", "maestro task complete <id>"]
+    checks: ["audit boundary and affected surfaces are explicit"]
+    durable_learning: []
+    outputs: ["audit scope", "hard stop"]
+  choose:
+    goal: Pick the highest-risk probe that can expose a real defect.
+    bricks: ["risk matrix", "test probe", "source trace"]
+    reads: ["callers", "dependencies", "acceptance criteria"]
+    allowed_verbs: ["srcwalk trace callers <symbol> --scope <dir>", "cargo test <target>"]
+    forbidden_verbs: ["broad unrelated suite without reason", "unapproved dependency"]
+    checks: ["probe has a concrete failure mode"]
+    durable_learning: []
+    outputs: ["probe", "finding candidate", "hard stop"]
+  act:
+    goal: Run the bounded audit probe and capture evidence.
+    bricks: ["test", "static read", "manual reproduction"]
+    reads: ["source slice", "test output", "command output"]
+    allowed_verbs: ["cargo test <target>", "srcwalk show <path>:<line>", "rg <regex> <path>"]
+    forbidden_verbs: ["silent fix during read-only review", "destructive command"]
+    checks: ["finding has evidence or is discarded"]
+    durable_learning: []
+    outputs: ["finding", "no finding", "blocked probe"]
+  observe:
+    goal: Classify severity, reproducibility, and missing tests.
+    bricks: ["finding", "severity", "coverage"]
+    reads: ["evidence", "affected contract", "existing tests"]
+    allowed_verbs: ["maestro task create", "maestro card note <id> <text>"]
+    forbidden_verbs: ["unverified bug claim", "scope creep"]
+    checks: ["each finding names impact and reproduction path"]
+    durable_learning: []
+    outputs: ["finding list", "task creation", "no issues"]
+  learn:
+    goal: Turn repeated audit lessons into durable Maestro memory only when broadly useful.
+    bricks: ["task", "note", "memory"]
+    reads: ["finding pattern", "accepted remediation"]
+    allowed_verbs: ["maestro task create", "maestro event intervention --note <text>"]
+    forbidden_verbs: ["private chat-only follow-up"]
+    checks: ["new work has owner, scope, and check"]
+    durable_learning: ["finding task", "card note", "memory candidate"]
+    outputs: ["durable finding", "no durable learning needed"]
+  continue:
+    goal: Return findings first, then the next audit or implementation gate.
+    bricks: ["review output", "task list", "feature next"]
+    reads: ["created tasks", "remaining scope"]
+    allowed_verbs: ["maestro task list --feature <id>", "maestro feature show <id>"]
+    forbidden_verbs: ["feature close with unresolved blocker", "external ship action"]
+    checks: ["all findings are either recorded or explicitly non-actionable"]
+    durable_learning: []
+    outputs: ["findings report", "created tasks", "hard stop"]

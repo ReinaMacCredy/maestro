@@ -5,22 +5,99 @@
 //! WHEN -- the judgment to reach for a pattern -- lives in the skills; this
 //! catalog carries the mechanics. `maestro loop show <name>` prints one recipe
 //! verbatim; `maestro loop` (or `loop list`) prints the index with a one-line
-//! when-to-use per recipe. The recipes live in `embedded/loop/`: `LOOP.md` is
-//! the index prose, each `<name>.md` is one recipe. Serving from the binary
-//! means the command needs no `.maestro` repo and the recipes never drift from
-//! what this binary ships.
+//! when-to-use per recipe. The human recipes live in `embedded/loop/`: `LOOP.md`
+//! is the index prose, each `<name>.md` is one recipe. Structured lifecycle
+//! recipe contracts live in `embedded/loop-recipes/` and declare how current
+//! Maestro bricks map into the six loop phases. Serving from the binary means
+//! the command needs no `.maestro` repo and the recipes never drift from what
+//! this binary ships.
 //!
 //! The module is named `loop_recipes` rather than `loop` because `loop` is a
 //! reserved Rust keyword; the CLI subcommand is still `maestro loop`.
 
-use anyhow::{Result, bail};
+use std::collections::{BTreeMap, BTreeSet};
+
+use anyhow::{Context, Result, bail, ensure};
 use include_dir::{Dir, include_dir};
+use serde::Deserialize;
 
 /// The bundled loop-recipe tree, embedded at build time.
 static LOOP_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/embedded/loop");
 
+/// The structured lifecycle recipe contract tree, embedded at build time.
+static LOOP_RECIPE_CONTRACTS_DIR: Dir<'_> =
+    include_dir!("$CARGO_MANIFEST_DIR/embedded/loop-recipes");
+
 /// The index prose file; everything else is a recipe.
 const INDEX_NAME: &str = "LOOP.md";
+const CONTRACT_SCHEMA_VERSION: &str = "maestro.loop_recipe.v1";
+const REQUIRED_PHASES: [&str; 6] = ["perceive", "choose", "act", "observe", "learn", "continue"];
+const CUSTOM_RECIPE_POLICY: [&str; 4] = [
+    "Evaluate shipped applies_when rules first.",
+    "Use a run-scoped or card-scoped custom recipe only when no shipped recipe fits.",
+    "Custom recipes must use the same schema, six phases, allowed or forbidden verbs, hard stops, and continue output.",
+    "Custom recipes cannot add non-Maestro write surfaces or skip proof, QA, authority, or human approval gates.",
+];
+const FORBIDDEN_BYPASS_PHRASES: [&str; 10] = [
+    "bypass acceptance",
+    "bypass proof",
+    "bypass qa",
+    "ignore hard stops",
+    "launch workers",
+    "start a daemon",
+    "run scheduler",
+    "create hidden store",
+    "separate lifecycle",
+    "second lifecycle",
+];
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RecipeContract {
+    pub schema_version: String,
+    pub id: String,
+    pub title: String,
+    pub summary: String,
+    pub applies_when: Vec<String>,
+    pub hard_stops: Vec<String>,
+    pub phases: BTreeMap<String, PhaseContract>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PhaseContract {
+    pub goal: String,
+    pub bricks: Vec<String>,
+    pub reads: Vec<String>,
+    pub allowed_verbs: Vec<String>,
+    pub forbidden_verbs: Vec<String>,
+    pub checks: Vec<String>,
+    pub durable_learning: Vec<String>,
+    pub outputs: Vec<String>,
+    #[serde(default)]
+    pub optional_helpers: Vec<String>,
+    #[serde(default)]
+    pub helper_contract: Option<HelperContract>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HelperContract {
+    pub work_lease: Option<WorkLeaseHelperContract>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkLeaseHelperContract {
+    pub selected_unit: Vec<String>,
+    pub authority_scope: Vec<String>,
+    pub claim_or_reservation: Vec<String>,
+    pub expires_or_stale_policy: Vec<String>,
+    pub allowed_follow_up_verbs: Vec<String>,
+    pub hard_stops: Vec<String>,
+    pub observe_requirement: Vec<String>,
+    pub reconcile_handles: Vec<String>,
+}
 
 /// Serve one recipe verbatim by its name (`feature-fan-out`, ...). An unknown
 /// name fails loud with the available list, never a dead end.
@@ -44,11 +121,32 @@ pub fn serve(name: &str) -> Result<&'static str> {
 /// drifts from what ships.
 pub fn index() -> String {
     let mut out = shipped_index_prose().trim_end().to_string();
-    out.push_str("\n\n## Recipes\n\n");
+    out.push_str("\n\n## Lifecycle Recipes\n\n");
+    for contract in contracts().expect("invariant: shipped loop recipe contracts validate") {
+        out.push_str(&format!("    {}  --  {}\n", contract.id, contract.summary));
+    }
+    out.push_str("\n\n## Custom Recipe Policy\n\n");
+    push_bullets(&mut out, "", &CUSTOM_RECIPE_POLICY);
+    out.push_str("\n## Orchestration Recipes\n\n");
     for name in recipes() {
         out.push_str(&format!("    {name}  --  {}\n", when(name)));
     }
     out
+}
+
+/// Render either a structured lifecycle recipe contract or a legacy
+/// orchestration recipe.
+pub fn show(name: &str) -> Result<String> {
+    if contract_names().contains(&name) {
+        return Ok(render_contract(&contract(name)?));
+    }
+    if recipes().contains(&name) {
+        return Ok(serve(name)?.to_string());
+    }
+    bail!(
+        "unknown loop recipe \"{name}\"; run `maestro loop` for the index (available: {})",
+        available_names().join(", ")
+    );
 }
 
 /// Every recipe name the catalog serves, sorted; the index anchor excluded.
@@ -68,6 +166,174 @@ pub fn recipes() -> Vec<&'static str> {
     names
 }
 
+/// Every structured lifecycle recipe contract name, sorted.
+pub fn contract_names() -> Vec<&'static str> {
+    let mut names: Vec<&'static str> = LOOP_RECIPE_CONTRACTS_DIR
+        .files()
+        .filter_map(|file| {
+            let name = file
+                .path()
+                .strip_prefix(LOOP_RECIPE_CONTRACTS_DIR.path())
+                .ok()
+                .and_then(|path| path.to_str())?;
+            name.strip_suffix(".yml")
+        })
+        .collect();
+    names.sort_unstable();
+    names
+}
+
+/// Parse and validate every shipped structured lifecycle recipe contract.
+pub fn contracts() -> Result<Vec<RecipeContract>> {
+    let contracts = contract_names()
+        .into_iter()
+        .map(contract)
+        .collect::<Result<Vec<_>>>()?;
+    ensure_contract_set(&contracts)?;
+    Ok(contracts)
+}
+
+/// Parse and validate one shipped structured lifecycle recipe contract.
+pub fn contract(name: &str) -> Result<RecipeContract> {
+    let file_name = format!("{name}.yml");
+    let body = LOOP_RECIPE_CONTRACTS_DIR
+        .get_file(LOOP_RECIPE_CONTRACTS_DIR.path().join(&file_name))
+        .and_then(|file| file.contents_utf8())
+        .with_context(|| {
+            format!(
+                "unknown loop recipe contract \"{name}\"; available: {}",
+                contract_names().join(", ")
+            )
+        })?;
+    let contract = parse_contract_body(name, body)?;
+    ensure!(
+        contract.id == name,
+        "recipe contract {name} id mismatch: {}",
+        contract.id
+    );
+    Ok(contract)
+}
+
+pub fn validate_contract(contract: &RecipeContract) -> Result<()> {
+    ensure!(
+        contract.schema_version == CONTRACT_SCHEMA_VERSION,
+        "recipe {} uses schema_version {}, expected {CONTRACT_SCHEMA_VERSION}",
+        contract.id,
+        contract.schema_version
+    );
+    require_non_empty("id", &contract.id)?;
+    require_non_empty("title", &contract.title)?;
+    require_non_empty("summary", &contract.summary)?;
+    require_non_empty_list("applies_when", &contract.applies_when)?;
+    require_non_empty_list("hard_stops", &contract.hard_stops)?;
+    reject_forbidden_text(contract)?;
+
+    let actual: BTreeSet<&str> = contract.phases.keys().map(String::as_str).collect();
+    let expected: BTreeSet<&str> = REQUIRED_PHASES.into_iter().collect();
+    ensure!(
+        actual == expected,
+        "recipe {} phases must be exactly {:?}; found {:?}",
+        contract.id,
+        expected,
+        actual
+    );
+
+    for phase_name in REQUIRED_PHASES {
+        let phase = contract
+            .phases
+            .get(phase_name)
+            .expect("invariant: required phase set was checked");
+        validate_phase(&contract.id, phase_name, phase)?;
+    }
+    Ok(())
+}
+
+fn render_contract(contract: &RecipeContract) -> String {
+    let mut out = format!(
+        "# {}\n\nschema_version: {}\nid: {}\n\n{}\n\n",
+        contract.title, contract.schema_version, contract.id, contract.summary
+    );
+    out.push_str("## Applies When\n\n");
+    push_bullets(&mut out, "", &contract.applies_when);
+    out.push_str("\n## Hard Stops\n\n");
+    push_bullets(&mut out, "", &contract.hard_stops);
+    out.push_str("\n## Custom Recipe Policy\n\n");
+    push_bullets(&mut out, "", &CUSTOM_RECIPE_POLICY);
+    out.push_str(
+        "\n## Loop Grammar\n\nperceive -> choose -> act -> observe -> learn -> continue\n\n",
+    );
+    out.push_str("## Phases\n\n");
+    for name in REQUIRED_PHASES {
+        let phase = contract
+            .phases
+            .get(name)
+            .expect("invariant: contract validates before rendering");
+        render_phase(&mut out, name, phase);
+    }
+    out
+}
+
+fn render_phase(out: &mut String, name: &str, phase: &PhaseContract) {
+    out.push_str(&format!("### {name}\n\n"));
+    out.push_str(&format!("- Goal: {}\n", phase.goal));
+    push_named_list(out, "Bricks", &phase.bricks);
+    push_named_list(out, "Reads", &phase.reads);
+    push_named_list(out, "Allowed verbs", &phase.allowed_verbs);
+    push_named_list(out, "Forbidden verbs", &phase.forbidden_verbs);
+    push_named_list(out, "Checks", &phase.checks);
+    push_named_list(out, "Durable learning", &phase.durable_learning);
+    push_named_list(out, "Outputs", &phase.outputs);
+    if !phase.optional_helpers.is_empty() {
+        push_named_list(out, "Optional helpers", &phase.optional_helpers);
+    }
+    if let Some(helper) = phase
+        .helper_contract
+        .as_ref()
+        .and_then(|contract| contract.work_lease.as_ref())
+    {
+        out.push_str("- Work Lease helper contract:\n");
+        push_nested_named_list(out, "selected_unit", &helper.selected_unit);
+        push_nested_named_list(out, "authority_scope", &helper.authority_scope);
+        push_nested_named_list(out, "claim_or_reservation", &helper.claim_or_reservation);
+        push_nested_named_list(
+            out,
+            "expires_or_stale_policy",
+            &helper.expires_or_stale_policy,
+        );
+        push_nested_named_list(
+            out,
+            "allowed_follow_up_verbs",
+            &helper.allowed_follow_up_verbs,
+        );
+        push_nested_named_list(out, "hard_stops", &helper.hard_stops);
+        push_nested_named_list(out, "observe_requirement", &helper.observe_requirement);
+        push_nested_named_list(out, "reconcile_handles", &helper.reconcile_handles);
+    }
+    out.push('\n');
+}
+
+fn push_named_list(out: &mut String, name: &str, values: &[String]) {
+    if values.is_empty() {
+        return;
+    }
+    out.push_str(&format!("- {name}:\n"));
+    push_bullets(out, "  ", values);
+}
+
+fn push_nested_named_list(out: &mut String, name: &str, values: &[String]) {
+    if values.is_empty() {
+        return;
+    }
+    out.push_str(&format!("  - {name}:\n"));
+    push_bullets(out, "    ", values);
+}
+
+fn push_bullets<S: AsRef<str>>(out: &mut String, indent: &str, values: &[S]) {
+    for value in values {
+        out.push_str(&format!("{indent}- {}\n", value.as_ref()));
+    }
+}
+
 /// The one-line when-to-use for a recipe: the text after `WHEN:` on its first
 /// matching line, for the index listing.
 fn when(name: &str) -> &'static str {
@@ -85,6 +351,181 @@ fn shipped_index_prose() -> &'static str {
         .get_file(LOOP_DIR.path().join(INDEX_NAME))
         .and_then(|file| file.contents_utf8())
         .expect("invariant: LOOP.md is embedded and UTF-8")
+}
+
+fn parse_contract_body(name: &str, body: &str) -> Result<RecipeContract> {
+    let contract: RecipeContract = serde_yaml::from_str(body)
+        .with_context(|| format!("failed to parse loop recipe contract {name}.yml"))?;
+    validate_contract(&contract)
+        .with_context(|| format!("invalid loop recipe contract {name}.yml"))?;
+    Ok(contract)
+}
+
+fn ensure_contract_set(contracts: &[RecipeContract]) -> Result<()> {
+    let names: BTreeSet<&str> = contracts
+        .iter()
+        .map(|contract| contract.id.as_str())
+        .collect();
+    for expected in ["audit", "design", "learning", "ship", "unattended", "work"] {
+        ensure!(
+            names.contains(expected),
+            "loop recipe contracts are missing {expected}.yml"
+        );
+    }
+    ensure!(
+        contracts.iter().any(contract_supports_work_lease),
+        "at least one loop recipe contract must declare the work lease choose helper"
+    );
+    Ok(())
+}
+
+fn available_names() -> Vec<&'static str> {
+    let mut names = contract_names();
+    names.extend(recipes());
+    names.sort_unstable();
+    names
+}
+
+fn contract_supports_work_lease(contract: &RecipeContract) -> bool {
+    contract
+        .phases
+        .get("choose")
+        .is_some_and(has_work_lease_helper)
+}
+
+fn validate_phase(recipe_id: &str, name: &str, phase: &PhaseContract) -> Result<()> {
+    let prefix = format!("recipe {recipe_id} phase {name}");
+    require_non_empty(&format!("{prefix}.goal"), &phase.goal)?;
+    require_non_empty_list(&format!("{prefix}.bricks"), &phase.bricks)?;
+    require_non_empty_list(&format!("{prefix}.reads"), &phase.reads)?;
+    require_non_empty_list(&format!("{prefix}.checks"), &phase.checks)?;
+    ensure!(
+        !phase.allowed_verbs.is_empty() || !phase.forbidden_verbs.is_empty(),
+        "{prefix} must declare allowed_verbs or forbidden_verbs"
+    );
+    if name == "learn" {
+        require_non_empty_list(
+            &format!("{prefix}.durable_learning"),
+            &phase.durable_learning,
+        )?;
+    }
+    if name == "continue" {
+        require_non_empty_list(&format!("{prefix}.outputs"), &phase.outputs)?;
+    }
+    if has_work_lease_helper(phase) {
+        let helper = phase
+            .helper_contract
+            .as_ref()
+            .and_then(|contract| contract.work_lease.as_ref())
+            .with_context(|| {
+                format!("{prefix} declares optional helper work lease but omits helper_contract.work_lease")
+            })?;
+        validate_work_lease_helper(&prefix, helper)?;
+    }
+    Ok(())
+}
+
+fn has_work_lease_helper(phase: &PhaseContract) -> bool {
+    phase
+        .optional_helpers
+        .iter()
+        .any(|helper| helper == "work lease")
+}
+
+fn validate_work_lease_helper(prefix: &str, helper: &WorkLeaseHelperContract) -> Result<()> {
+    require_non_empty_list(
+        &format!("{prefix}.work_lease.selected_unit"),
+        &helper.selected_unit,
+    )?;
+    require_non_empty_list(
+        &format!("{prefix}.work_lease.authority_scope"),
+        &helper.authority_scope,
+    )?;
+    require_non_empty_list(
+        &format!("{prefix}.work_lease.claim_or_reservation"),
+        &helper.claim_or_reservation,
+    )?;
+    require_non_empty_list(
+        &format!("{prefix}.work_lease.expires_or_stale_policy"),
+        &helper.expires_or_stale_policy,
+    )?;
+    require_non_empty_list(
+        &format!("{prefix}.work_lease.allowed_follow_up_verbs"),
+        &helper.allowed_follow_up_verbs,
+    )?;
+    require_non_empty_list(
+        &format!("{prefix}.work_lease.hard_stops"),
+        &helper.hard_stops,
+    )?;
+    require_non_empty_list(
+        &format!("{prefix}.work_lease.observe_requirement"),
+        &helper.observe_requirement,
+    )?;
+    require_non_empty_list(
+        &format!("{prefix}.work_lease.reconcile_handles"),
+        &helper.reconcile_handles,
+    )?;
+    Ok(())
+}
+
+fn require_non_empty(field: &str, value: &str) -> Result<()> {
+    ensure!(!value.trim().is_empty(), "{field} must not be empty");
+    Ok(())
+}
+
+fn require_non_empty_list(field: &str, values: &[String]) -> Result<()> {
+    ensure!(!values.is_empty(), "{field} must not be empty");
+    for value in values {
+        require_non_empty(field, value)?;
+    }
+    Ok(())
+}
+
+fn reject_forbidden_text(contract: &RecipeContract) -> Result<()> {
+    let mut values = Vec::new();
+    values.extend([
+        contract.id.as_str(),
+        contract.title.as_str(),
+        contract.summary.as_str(),
+    ]);
+    values.extend(contract.applies_when.iter().map(String::as_str));
+    values.extend(contract.hard_stops.iter().map(String::as_str));
+    for phase in contract.phases.values() {
+        values.extend([phase.goal.as_str()]);
+        values.extend(phase.bricks.iter().map(String::as_str));
+        values.extend(phase.reads.iter().map(String::as_str));
+        values.extend(phase.allowed_verbs.iter().map(String::as_str));
+        values.extend(phase.forbidden_verbs.iter().map(String::as_str));
+        values.extend(phase.checks.iter().map(String::as_str));
+        values.extend(phase.durable_learning.iter().map(String::as_str));
+        values.extend(phase.outputs.iter().map(String::as_str));
+        values.extend(phase.optional_helpers.iter().map(String::as_str));
+        if let Some(helper) = phase
+            .helper_contract
+            .as_ref()
+            .and_then(|contract| contract.work_lease.as_ref())
+        {
+            values.extend(helper.selected_unit.iter().map(String::as_str));
+            values.extend(helper.authority_scope.iter().map(String::as_str));
+            values.extend(helper.claim_or_reservation.iter().map(String::as_str));
+            values.extend(helper.expires_or_stale_policy.iter().map(String::as_str));
+            values.extend(helper.allowed_follow_up_verbs.iter().map(String::as_str));
+            values.extend(helper.hard_stops.iter().map(String::as_str));
+            values.extend(helper.observe_requirement.iter().map(String::as_str));
+            values.extend(helper.reconcile_handles.iter().map(String::as_str));
+        }
+    }
+    for value in values {
+        let lower = value.to_ascii_lowercase();
+        for phrase in FORBIDDEN_BYPASS_PHRASES {
+            ensure!(
+                !lower.contains(phrase),
+                "recipe {} contains forbidden lifecycle-bypass wording: {phrase}",
+                contract.id
+            );
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -123,6 +564,84 @@ mod tests {
     }
 
     #[test]
+    fn ships_expected_structured_recipe_contracts() {
+        let names = contract_names();
+        assert_eq!(
+            names,
+            ["audit", "design", "learning", "ship", "unattended", "work"],
+            "structured recipe contract set drifted"
+        );
+    }
+
+    #[test]
+    fn validates_every_shipped_structured_recipe_contract() {
+        let contracts = contracts().expect("shipped contracts should validate");
+        assert_eq!(contracts.len(), 6);
+        assert!(contracts.iter().any(contract_supports_work_lease));
+    }
+
+    #[test]
+    fn rejects_contract_with_missing_required_field() {
+        let body = "schema_version: maestro.loop_recipe.v1\nid: broken\n";
+        let error = parse_contract_body("broken", body).unwrap_err().to_string();
+        assert!(error.contains("failed to parse"), "{error}");
+    }
+
+    #[test]
+    fn rejects_contract_with_missing_phase() {
+        let mut contract = contract("work").expect("work contract should validate");
+        contract.phases.remove("learn");
+        let error = validate_contract(&contract).unwrap_err().to_string();
+        assert!(error.contains("phases must be exactly"), "{error}");
+    }
+
+    #[test]
+    fn rejects_work_lease_helper_missing_required_fields() {
+        let mut contract = contract("unattended").expect("unattended contract should validate");
+        let helper = contract
+            .phases
+            .get_mut("choose")
+            .and_then(|phase| phase.helper_contract.as_mut())
+            .and_then(|helper| helper.work_lease.as_mut())
+            .expect("unattended choose phase should declare work lease helper");
+        helper.reconcile_handles.clear();
+
+        let error = validate_contract(&contract).unwrap_err().to_string();
+        assert!(error.contains("reconcile_handles"), "{error}");
+    }
+
+    #[test]
+    fn rejects_forbidden_lifecycle_bypass_wording() {
+        let mut contract = contract("design").expect("design contract should validate");
+        contract.summary = "agent may bypass acceptance when convenient".to_string();
+        let error = validate_contract(&contract).unwrap_err().to_string();
+        assert!(
+            error.contains("forbidden lifecycle-bypass wording"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn rejects_forbidden_work_lease_helper_wording() {
+        let mut contract = contract("unattended").expect("unattended contract should validate");
+        let helper = contract
+            .phases
+            .get_mut("choose")
+            .and_then(|phase| phase.helper_contract.as_mut())
+            .and_then(|helper| helper.work_lease.as_mut())
+            .expect("unattended choose phase should declare work lease helper");
+        helper
+            .allowed_follow_up_verbs
+            .push("launch workers from this contract".to_string());
+
+        let error = validate_contract(&contract).unwrap_err().to_string();
+        assert!(
+            error.contains("forbidden lifecycle-bypass wording"),
+            "{error}"
+        );
+    }
+
+    #[test]
     fn recipes_excludes_the_index_anchor() {
         assert!(!recipes().contains(&"LOOP"));
     }
@@ -130,6 +649,10 @@ mod tests {
     #[test]
     fn index_lists_every_recipe_with_a_when_line() {
         let idx = index();
+        for name in contract_names() {
+            assert!(idx.contains(name), "index lists lifecycle contract {name}");
+        }
+        assert!(idx.contains("## Custom Recipe Policy"), "{idx}");
         for name in recipes() {
             assert!(idx.contains(name), "index lists {name}");
             assert!(!when(name).is_empty(), "{name} has a WHEN line");
@@ -137,9 +660,45 @@ mod tests {
     }
 
     #[test]
+    fn show_renders_structured_contract_from_yaml() {
+        let body = show("design").expect("design contract should render");
+        assert!(body.contains("# Design loop"), "{body}");
+        assert!(
+            body.contains("schema_version: maestro.loop_recipe.v1"),
+            "{body}"
+        );
+        assert!(body.contains("## Applies When"), "{body}");
+        assert!(body.contains("## Custom Recipe Policy"), "{body}");
+        assert!(
+            body.contains("perceive -> choose -> act -> observe -> learn -> continue"),
+            "{body}"
+        );
+        assert!(body.contains("### perceive"), "{body}");
+        assert!(body.contains("### continue"), "{body}");
+    }
+
+    #[test]
+    fn show_renders_work_lease_helper_details() {
+        let body = show("unattended").expect("unattended contract should render");
+        assert!(body.contains("Optional helpers"), "{body}");
+        assert!(body.contains("work lease"), "{body}");
+        assert!(body.contains("Work Lease helper contract"), "{body}");
+        assert!(body.contains("selected_unit"), "{body}");
+        assert!(body.contains("reconcile_handles"), "{body}");
+    }
+
+    #[test]
+    fn show_keeps_legacy_orchestration_recipes_available() {
+        let body = show("conflict-handoff").expect("legacy recipe should render");
+        assert!(body.contains("# Conflict handoff"), "{body}");
+        assert!(body.contains("git worktree add"), "{body}");
+    }
+
+    #[test]
     fn unknown_recipe_is_a_loud_error_listing_the_available_recipes() {
-        let error = serve("no-such-recipe").unwrap_err().to_string();
+        let error = show("no-such-recipe").unwrap_err().to_string();
         assert!(error.contains("no-such-recipe"), "{error}");
+        assert!(error.contains("design"), "{error}");
         assert!(error.contains("feature-fan-out"), "{error}");
     }
 }

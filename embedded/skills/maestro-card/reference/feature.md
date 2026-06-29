@@ -29,6 +29,12 @@ authoring (`feature new`, `feature set`, and `feature spec`) belongs in
 `maestro-design`. MCP tool schemas come from the host; CLI signatures live in
 [cli.md](cli.md).
 
+Recipe checkpoint: feature implementation uses `maestro loop show work` until
+all child tasks verify. Before close, local install, push, release, publish,
+archive, or any other ship-style gate, switch to `maestro loop show ship` and
+fail closed unless authority, target, allowed actions, hard stops, and evidence
+are explicit.
+
 ```sh
 maestro feature finalize <id>    # writes/refreshes .maestro/cards/<id>/handoff.md
 maestro feature accept            # -> ready, requires qa-baseline

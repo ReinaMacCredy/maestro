@@ -1,0 +1,97 @@
+schema_version: maestro.loop_recipe.v1
+id: unattended
+title: Unattended loop
+summary: Keep working through accepted local Maestro records while the user is away, with one safe unit chosen per tick and hard stops for external ship actions.
+applies_when:
+  - user says use loop, keep looping, work while away, work while asleep, or similar autonomy wording
+  - the current run has accepted local work that can continue without further human steering
+hard_stops:
+  - external ship action lacks explicit bounded run or card authority
+  - failure budget reaches the accepted stop condition
+  - platform approval, secret rotation, or destructive git is required
+phases:
+  perceive:
+    goal: Reconstruct current state from the Maestro store and run log, not chat memory.
+    bricks: ["status", "card ready", "task next", "run events", "memory"]
+    reads: ["maestro status", "maestro card ready", "maestro task next", "maestro query run --json"]
+    allowed_verbs: ["maestro status", "maestro card ready", "maestro task next", "maestro query run --json"]
+    forbidden_verbs: ["start from chat memory", "external ship action"]
+    checks: ["current work, ready work, and hard stops are visible"]
+    durable_learning: []
+    outputs: ["ready unit candidates", "dry state", "hard stop"]
+  choose:
+    goal: Select or reserve exactly one safe unit for the current loop tick.
+    bricks: ["card ready", "task next", "claim", "Work Lease"]
+    reads: ["maestro loop work-lease --json", "maestro card ready", "maestro task next"]
+    allowed_verbs: ["maestro loop work-lease --json", "maestro task claim <id>", "maestro card ready"]
+    forbidden_verbs: ["worker launcher", "queue ownership", "process scheduler", "external ship action"]
+    checks: ["one selected unit or dry/blocked status is returned"]
+    durable_learning: []
+    outputs: ["bounded worker contract", "dry", "blocked", "hard stop"]
+    optional_helpers: ["work lease"]
+    helper_contract:
+      work_lease:
+        selected_unit:
+          - exactly one ready card or task selected from current Maestro store state
+        authority_scope:
+          - repo, feature, project, card, and explicit ship authority when present
+        claim_or_reservation:
+          - use existing ready, next, claim, and stale-claim semantics
+        expires_or_stale_policy:
+          - stale takeover follows the current card claim stale policy
+        allowed_follow_up_verbs:
+          - maestro card show <id> --json
+          - maestro status --json
+          - maestro task complete <id> --summary <summary> --claim <claim> --proof <proof>
+          - maestro task verify <id>
+          - maestro task block <id> --reason <reason>
+          - maestro query run --json
+        hard_stops:
+          - selected unit is not accepted or safe
+          - authority scope is absent for an external ship action
+          - returned inspect or status handle cannot be read
+        observe_requirement:
+          - acquisition and outcome evidence must land in run events or task proof
+        reconcile_handles:
+          - selected card id
+          - lease id
+          - run event path
+          - inspect command
+          - status command
+          - run report command
+  act:
+    goal: Work the selected unit through current Maestro verbs only.
+    bricks: ["task", "card", "proof", "test"]
+    reads: ["selected worker contract", "card show", "task show"]
+    allowed_verbs: ["maestro card show <id> --json", "maestro task complete <id>", "maestro task verify <id>", "git commit"]
+    forbidden_verbs: ["worker process manager", "guarded sidecar edit", "unapproved dependency"]
+    checks: ["only the selected unit is worked"]
+    durable_learning: []
+    outputs: ["verified unit", "blocked unit", "failed proof"]
+  observe:
+    goal: Check proof, QA, run events, and lease outcome evidence after the tick.
+    bricks: ["proof", "verify", "QA", "run event"]
+    reads: ["maestro task show <id>", "maestro query run --json", "test output"]
+    allowed_verbs: ["maestro task verify <id>", "maestro qa slice <id>", "maestro query run --json"]
+    forbidden_verbs: ["claim success without proof", "close around failed QA"]
+    checks: ["proof backs claims and outcome is inspectable"]
+    durable_learning: []
+    outputs: ["verified", "needs repair", "blocked", "hard stop"]
+  learn:
+    goal: Record corrections, recurrence guards, and reusable lessons discovered during autonomy.
+    bricks: ["event", "memory", "decision", "skill proposal"]
+    reads: ["failed proof", "user correction", "run event"]
+    allowed_verbs: ["maestro event intervention --note <text>", "maestro memory suggest create", "maestro card note <id> <text>"]
+    forbidden_verbs: ["global skill edit without accepted scope", "chat-only morning note"]
+    checks: ["autonomy learning has a source and accepted target"]
+    durable_learning: ["run event", "memory candidate", "card note", "recurrence guard"]
+    outputs: ["recorded lesson", "no lesson needed"]
+  continue:
+    goal: Continue to the next safe unit, replenish local work, or stop with a report.
+    bricks: ["card ready", "feature accept", "feature prepare", "report"]
+    reads: ["maestro card ready", "maestro feature list", "run ledger"]
+    allowed_verbs: ["maestro feature accept <id>", "maestro feature prepare <id>", "maestro card ready", "maestro status"]
+    forbidden_verbs: ["push", "tag", "release", "publish", "archive without authority"]
+    checks: ["next step is one unit, dry, blocked, or hard stop"]
+    durable_learning: []
+    outputs: ["next lease tick", "dry report", "hard stop report"]

@@ -57,7 +57,10 @@ const RESOURCE_EMBED_ALLOWLIST: &[(&str, &[&str])] = &[
     ),
     ("src/domain/playbook.rs", &["embedded/playbook"]),
     ("src/domain/design.rs", &["embedded/design"]),
-    ("src/domain/loop_recipes.rs", &["embedded/loop"]),
+    (
+        "src/domain/loop_recipes.rs",
+        &["embedded/loop", "embedded/loop-recipes"],
+    ),
     ("src/domain/skills/catalog.rs", &["embedded/skills"]),
     (
         "src/domain/schema_contracts/catalog.rs",

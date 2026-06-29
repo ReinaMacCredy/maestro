@@ -23,6 +23,7 @@ const DEFAULT_HARD_STOPS: &[&str] = &[
 ];
 const FOLLOW_UP_VERBS: &[&str] = &[
     "maestro card show <id> --json",
+    "maestro status --json",
     "maestro card note <id> <text>",
     "maestro task complete <id> --summary <summary> --claim <claim> --proof <proof>",
     "maestro task verify <id>",
@@ -37,6 +38,7 @@ const RECURRENCE_EVIDENCE: &[&str] = &[
     "skill guidance update",
     "locked decision",
 ];
+const WORK_LEASE_RESTART_POLICY: &str = "Cold-start from the card store plus the run ledger: rerun the inspect/status/reconcile handles; no daemon, queue, scheduler, executor, or hidden store exists.";
 
 /// Execute `maestro loop [list | show <name>]`: print the recipe index (the
 /// default and `list`), or one recipe verbatim. Served from the binary, so it
@@ -44,7 +46,7 @@ const RECURRENCE_EVIDENCE: &[&str] = &[
 pub fn run(args: LoopArgs) -> Result<()> {
     match args.command {
         None | Some(LoopCommand::List) => print!("{}", loop_recipes::index()),
-        Some(LoopCommand::Show { name }) => print!("{}", loop_recipes::serve(&name)?),
+        Some(LoopCommand::Show { name }) => print!("{}", loop_recipes::show(&name)?),
         Some(LoopCommand::WorkLease(args)) => run_work_lease(*args)?,
     }
     Ok(())
@@ -288,6 +290,7 @@ struct WorkLeaseJson {
     allowed_follow_up_verbs: Vec<String>,
     ship_authority: ShipAuthorityJson,
     recurrence_guard: RecurrenceGuardJson,
+    handles: LeaseHandlesJson,
     inspect: InspectJson,
     run_events: RunEventsJson,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -350,6 +353,7 @@ impl WorkLeaseJson {
             allowed_follow_up_verbs: follow_up_verbs(),
             ship_authority,
             recurrence_guard: RecurrenceGuardJson::default(),
+            handles: LeaseHandlesJson::new(Some(card.id.as_str()), run_event_path.clone()),
             inspect: InspectJson::new(Some(card.id.as_str())),
             run_events: RunEventsJson::new(run_event_path),
             approved_lessons,
@@ -383,6 +387,7 @@ impl WorkLeaseJson {
             allowed_follow_up_verbs: follow_up_verbs(),
             ship_authority,
             recurrence_guard: RecurrenceGuardJson::default(),
+            handles: LeaseHandlesJson::new(None, run_event_path.clone()),
             inspect: InspectJson::new(None),
             run_events: RunEventsJson::new(run_event_path),
             approved_lessons: Vec::new(),
@@ -417,13 +422,14 @@ impl WorkLeaseJson {
             hard_stops: hard_stops(),
             allowed_follow_up_verbs: follow_up_verbs(),
             ship_authority,
-              recurrence_guard: RecurrenceGuardJson::default(),
-              inspect: InspectJson::new(None),
-                run_events: RunEventsJson::new(run_event_path),
-                approved_lessons: Vec::new(),
-                memory_suggestions: memory_suggestions.suggestions,
-                memory_suggestions_omitted,
-                worker_prompt: "No work lease was acquired because ready cards are actively claimed. Reconcile with `maestro active`, linked-card messages, and `maestro query run --json`; do not steal live work.".to_string(),
+            recurrence_guard: RecurrenceGuardJson::default(),
+            handles: LeaseHandlesJson::new(None, run_event_path.clone()),
+            inspect: InspectJson::new(None),
+            run_events: RunEventsJson::new(run_event_path),
+            approved_lessons: Vec::new(),
+            memory_suggestions: memory_suggestions.suggestions,
+            memory_suggestions_omitted,
+            worker_prompt: "No work lease was acquired because ready cards are actively claimed. Reconcile with `maestro active`, linked-card messages, and `maestro query run --json`; do not steal live work.".to_string(),
             reason: Some(reason.to_string()),
         }
     }
@@ -634,6 +640,84 @@ impl Default for RecurrenceGuardJson {
                 .iter()
                 .map(|item| item.to_string())
                 .collect(),
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct LeaseHandlesJson {
+    inspect: InspectHandlesJson,
+    status: StatusHandlesJson,
+    reconcile: ReconcileHandlesJson,
+    restart_policy: &'static str,
+}
+
+impl LeaseHandlesJson {
+    fn new(card_id: Option<&str>, run_event_path: String) -> Self {
+        Self {
+            inspect: InspectHandlesJson::new(card_id),
+            status: StatusHandlesJson::new(card_id),
+            reconcile: ReconcileHandlesJson::new(run_event_path),
+            restart_policy: WORK_LEASE_RESTART_POLICY,
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct InspectHandlesJson {
+    repo: &'static str,
+    ready_queue: &'static str,
+    active_sessions: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    selected_card: Option<String>,
+}
+
+impl InspectHandlesJson {
+    fn new(card_id: Option<&str>) -> Self {
+        Self {
+            repo: "maestro status --json",
+            ready_queue: "maestro card ready --json",
+            active_sessions: "maestro active",
+            selected_card: card_id.map(|id| format!("maestro card show {id} --json")),
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct StatusHandlesJson {
+    repo: &'static str,
+    ready_queue: &'static str,
+    active_sessions: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    claim: Option<String>,
+}
+
+impl StatusHandlesJson {
+    fn new(card_id: Option<&str>) -> Self {
+        Self {
+            repo: "maestro status --json",
+            ready_queue: "maestro card ready --json",
+            active_sessions: "maestro active",
+            claim: card_id.map(|id| format!("maestro card show {id} --json")),
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct ReconcileHandlesJson {
+    run_report: &'static str,
+    run_events_jsonl: String,
+    active_sessions: &'static str,
+    ready_queue: &'static str,
+}
+
+impl ReconcileHandlesJson {
+    fn new(run_events_jsonl: String) -> Self {
+        Self {
+            run_report: "maestro query run --json",
+            run_events_jsonl,
+            active_sessions: "maestro active",
+            ready_queue: "maestro card ready --json",
         }
     }
 }
