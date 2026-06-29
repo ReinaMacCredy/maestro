@@ -11,8 +11,8 @@ use support::TestTempDir;
 fn harness_markdown_matches_spec_section_14_protocol() {
     assert_eq!(HARNESS_MD, include_str!("../embedded/harness/HARNESS.md"));
     assert!(HARNESS_MD.contains("# Maestro Harness Protocol"));
-    assert!(HARNESS_MD.contains("Start with `maestro status`"));
-    assert!(HARNESS_MD.contains("maestro task next"));
+    assert!(HARNESS_MD.contains("Run `maestro status` before acting"));
+    assert!(HARNESS_MD.contains("maestro loop show work"));
     assert!(HARNESS_MD.contains("maestro task complete"));
     assert!(HARNESS_MD.contains("maestro task proof"));
     assert!(!HARNESS_MD.contains("## If you are Claude Code"));
