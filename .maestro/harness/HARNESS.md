@@ -1,5 +1,5 @@
 ---
-version: 1.29.0
+version: 1.29.1
 ---
 
 # Maestro Harness Protocol
@@ -12,13 +12,12 @@ Use Maestro artifacts and shipped recipes as the source of truth.
 
 ## Start
 
-1. Run `maestro status` before acting.
-2. If `MAESTRO_CURRENT_TASK` is set, or status names a current task, read it with
-   `maestro task show <id>`.
-3. Read locked acceptance from `maestro card show <id>`.
-4. Use the skills active for the task.
-5. Do not guess ids. Use only ids printed by Maestro output; when lookup misses,
-   re-list and read the real id.
+Run `maestro status` before acting. If `MAESTRO_CURRENT_TASK` is set, or status
+names a current task, read it with `maestro task show <id>`. Read locked
+acceptance from `maestro card show <id>` and use the active task skills.
+
+Do not guess ids. Use only ids printed by Maestro output; when lookup misses,
+re-list and read the real id.
 
 ## Route
 
@@ -34,73 +33,53 @@ grammar:
 
 If no shipped recipe fits, a custom card or run recipe must still use
 perceive -> choose -> act -> observe -> learn -> continue, current Maestro
-verbs, hard stops, proof, QA, authority checks, and continue output.
+verbs, hard stops, continue output, and no skipped proof, QA, authority,
+approval, or hard-stop gates.
 
 ## Command Truth
 
-Exact command signatures live in `reference/cli.md` inside every installed
-Maestro skill, for example:
-
-`.maestro/skills/maestro-card/reference/cli.md`
-
-A verb or flag not listed there does not exist. Read the generated reference
-instead of probing or guessing.
+The generated `reference/cli.md` for installed or shipped Maestro skills
+matching this binary is authoritative. A verb or flag not listed there does not
+exist. Read the generated reference instead of probing or guessing.
 
 ## Work Model
 
-Work has three levels:
-
-- High: Card
-- Mid: CardKind / workflow kind
-- Low: Task
-
-Feature, Bug, Chore, Custom, Decision, Idea, and Progress are CardKinds.
+Work has three levels: High = Card, Mid = CardKind / workflow kind, and Low =
+Task. Feature, Bug, Chore, Custom, Decision, Idea, and Progress are CardKinds.
 Progress stores small Low Tasks in `progress.yml`; use it through
-`maestro task add/start/done/list`. Legacy `type: task` cards remain readable
-for compatibility.
+`maestro task add/start/done/list`.
 
 Linked-card inbox messages are advisory coordination signals only. They do not
 block execution. When order matters, record an explicit Task blocker or
 dependency; readiness, next, claim, and verification gates consult Task
 blockers, not messages or unread state.
 
-## Proof
+## Proof And Corrections
 
 Complete executable work with `maestro task complete` using summary, claim, and
 proof. Maestro records the proof and runs verification.
 
 Hooks auto-record tool calls as proof. Verification matches each `--claim`
-against recorded or inline proof. Empty or unbacked claims fail.
-
-When proof or verification fails, use the recovery path from the active recipe
-or `maestro task proof`.
-
-## Design
-
-For brainstorm or unsettled behavior, use the design loop.
-
-Map the problem from real code and artifacts, then walk open questions one at a
-time. Lock each decision and record the corresponding note. Do not batch-decide
-independent forks, edit locked decisions in place, or cross into implementation
-before the user approves build.
-
-Before proposing an idea or reopening a settled question, search precedent:
-
-`maestro grep "<topic> corpus:memory"`
-
-Cite the best matching card, decision, task, proof, or note. Use
-`maestro card list --grep <topic> --archived` only for exact legacy rows,
-compatibility checks, or when unified grep is too broad or surprising.
-
-## Corrections And Learning
+against recorded or inline proof. Empty or unbacked claims fail. When proof or
+verification fails, use the active recipe or `maestro task proof`.
 
 When the user corrects your behavior, record it:
 
 `maestro event intervention --note "<what was wrong>"`
 
-Durable learning belongs in Maestro artifacts: decisions, notes, events,
-friction, tasks, proof, skills, or recipes. Do not leave important workflow
-changes only in chat.
+## Design
+
+For brainstorm or unsettled behavior, use the design loop. Map the problem from
+real code and artifacts, then walk open questions one at a time. Lock each
+decision and record the corresponding note. Do not batch-decide independent
+forks, edit locked decisions in place, or cross into implementation before the
+user approves build.
+
+Before proposing an idea or reopening a settled question, search precedent with
+`maestro grep "<topic> corpus:memory"` and cite the best matching card, decision,
+task, proof, or note. Use `maestro card list --grep <topic> --archived` only for
+exact legacy rows, compatibility checks, or when unified grep is too broad or
+surprising.
 
 ## Concurrency
 
@@ -108,11 +87,10 @@ The card store is shared state. In fan-out work, the orchestrator performs
 store-mutating verbs such as decision lock, task complete, verification, status,
 and notes. Sub-agents return results as data unless they have isolated stores.
 
-Use a separate git worktree when sessions may edit overlapping code or the
-shared card store. Use `maestro active`, `[overlap]`, `[CONFLICT]`, and `[busy]`
-notices to coordinate. For full conflict handling, run:
-
-`maestro loop show conflict-handoff`
+Serialize overlapping writers through the orchestrator, or use a separate git
+worktree when sessions may edit overlapping code or the shared card store. Use
+`maestro active`, `[overlap]`, `[CONFLICT]`, and `[busy]` notices to coordinate.
+For full conflict handling, run `maestro loop show conflict-handoff`.
 
 A failed multi-file store command can be partial. Re-run it so Maestro reads the
 latest store and reapplies the intended change.
