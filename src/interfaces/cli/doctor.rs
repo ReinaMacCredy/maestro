@@ -136,6 +136,57 @@ fn doctor_report(paths: &MaestroPaths) -> Result<DoctorReport> {
         warnings.extend(card::query::unknown_field_warnings(paths, &scan.cards));
     }
     check_install(paths, &mut checks, &mut errors);
+    let scan_failures = scan.as_ref().map_or(0, |scan| scan.failures.len());
+    if scan_failures > 0 || scan.is_none() {
+        let detail = if scan_failures > 0 {
+            format!("skipped (card store has {scan_failures} load error(s); see error above)")
+        } else {
+            "skipped (card store scan failed; see error above)".to_string()
+        };
+        for name in [
+            "hook-trace",
+            "runtime-boundary",
+            "security-gates",
+            "guardrails",
+            "scheduler",
+            "proof-matrix",
+        ] {
+            checks.push(DoctorCheck {
+                name,
+                detail: detail.clone(),
+            });
+        }
+    } else {
+        match harness::complete_readout(paths) {
+            Ok(readout) => {
+                checks.push(DoctorCheck {
+                    name: "hook-trace",
+                    detail: readout.hook_trace_check_detail(),
+                });
+                checks.push(DoctorCheck {
+                    name: "runtime-boundary",
+                    detail: readout.runtime_check_detail(),
+                });
+                checks.push(DoctorCheck {
+                    name: "security-gates",
+                    detail: readout.security_check_detail(),
+                });
+                checks.push(DoctorCheck {
+                    name: "guardrails",
+                    detail: readout.guardrail_check_detail(),
+                });
+                checks.push(DoctorCheck {
+                    name: "scheduler",
+                    detail: readout.scheduler.summary_line(),
+                });
+                checks.push(DoctorCheck {
+                    name: "proof-matrix",
+                    detail: readout.proof_matrix_summary_line(),
+                });
+            }
+            Err(error) => errors.push(format!("hook-trace coverage: {error:#}")),
+        }
+    }
     check_search(paths, &mut checks, &mut warnings);
     check_global_skills(&mut checks, &mut warnings, &mut errors);
 

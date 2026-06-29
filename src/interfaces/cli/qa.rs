@@ -9,6 +9,7 @@ use crate::foundation::core::fs::ensure_dir;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::safe_write::write_string_atomic;
 use crate::interfaces::cli::{QaArgs, QaCommand};
+use crate::operations::harness;
 
 pub fn run(args: QaArgs) -> Result<()> {
     let repo_root = discover_repo_root()?;
@@ -53,13 +54,14 @@ fn baseline(paths: &MaestroPaths, id: &str, observed: &str) -> Result<()> {
     ensure_dir(&dir)?;
     let path = dir.join("qa.md");
     let mut contents = format!(
-        "---\namend_log_position: 0\n---\n\n### QA Baseline Contract\n\n- Scope: {id}\n- Critical workflow chains:\n  - CLI helper baseline\n    - Steps: setup -> action -> inspect output\n    - Touched link: feature QA gate\n    - Minimal proof: {observed}\n- Scenario Matrix:\n  - [bl-001] observed baseline behavior\n    - Dimensions: agent/CLI/local artifact\n    - Setup: repo initialized with feature {id}\n    - Action: {observed}\n    - Oracle: behavior remains observable\n    - Evidence to capture: command output or artifact diff\n    - Reproduction: rerun the observed command or workflow\n- Preserved behaviors:\n  - {observed} -> Proof: manual/CLI observation\n- Changed behaviors:\n  - None captured at baseline\n- Critical probes before commit:\n  - focused CLI/helper test\n- Required artifacts:\n  - .maestro/cards/{id}/qa.md\n- Baseline gaps:\n  - None\n"
+        "---\namend_log_position: 0\n---\n\n### QA Baseline Contract\n\n- Scope: {id}\n- Critical workflow chains:\n  - CLI helper baseline\n    - Steps: setup -> action -> inspect output\n    - Touched link: feature QA gate\n    - Minimal proof: {observed}\n- Scenario Matrix:\n  - [bl-001] observed baseline behavior\n    - Dimensions: agent/CLI/local artifact\n    - Setup: repo initialized with feature {id}\n    - Action: {observed}\n    - Oracle: behavior remains observable\n    - Evidence to capture: command output or artifact diff\n    - Reproduction: rerun the observed command or workflow\n- Preserved behaviors:\n  - {observed} -> Proof: manual/CLI observation\n- Changed behaviors:\n  - None captured at baseline\n- Critical probes before commit:\n  - focused CLI/helper test\n- Security gates:\n  - Risk classes: destructive_fs_git; dependency_version; schema_migration; secrets; external_side_effects; release_publish_push\n  - Enforcement: task verify/complete plus feature verify/close\n  - Required proof: task proof, QA evidence, or feature acceptance evidence\n  - Waiver/block: feature verify --waive or task block --reason\n- Required artifacts:\n  - .maestro/cards/{id}/qa.md\n- Baseline gaps:\n  - None\n"
     );
     append_raw_observed_block(&mut contents, "baseline", observed);
     write_string_atomic(&path, &contents)?;
     println!("recorded baseline bl-001");
     println!("feature: {id}");
     println!("file: {}", path.display());
+    println!("{}", harness::security_qa_gate_line());
     println!("next: maestro feature accept {id}");
     Ok(())
 }
@@ -93,6 +95,7 @@ fn slice(paths: &MaestroPaths, id: &str, scenarios: &[String], observed: &str) -
     println!("recorded qa slice");
     println!("feature: {id}");
     println!("file: {}", path.display());
+    println!("{}", harness::security_qa_gate_line());
     Ok(())
 }
 

@@ -4,6 +4,7 @@ use crate::domain::decisions;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::table;
 use crate::interfaces::cli::{DecisionArgs, DecisionCommand};
+use crate::operations::harness;
 
 /// Execute `maestro decision`.
 pub fn run(args: DecisionArgs) -> Result<()> {
@@ -113,6 +114,8 @@ fn new_decision(
     if let Some(feature_id) = &report.record.feature {
         println!("feature: {feature_id}");
     }
+    println!("{}", harness::security_decision_gate_line());
+    println!("{}", harness::guardrail_decision_line());
     println!(
         "next: maestro decision lock {} --decision \"<chosen>\"",
         report.record.id
@@ -215,6 +218,8 @@ fn print_lock_report(report: &decisions::DecisionLockReport) {
         println!("note:");
         println!("  {line}");
     }
+    println!("{}", harness::security_decision_gate_line());
+    println!("{}", harness::guardrail_decision_line());
 }
 
 fn show_decision(paths: &MaestroPaths, id: &str) -> Result<()> {
@@ -222,10 +227,14 @@ fn show_decision(paths: &MaestroPaths, id: &str) -> Result<()> {
         decisions::DecisionContent::Structured { record, path, .. } => {
             println!("store: {}", path.display());
             print!("{}", decisions::query::render_record(&record));
+            println!("{}", harness::security_decision_gate_line());
+            println!("{}", harness::guardrail_decision_line());
         }
         decisions::DecisionContent::Legacy { contents, path, .. } => {
             println!("legacy: {}", path.display());
             print!("{contents}");
+            println!("{}", harness::security_decision_gate_line());
+            println!("{}", harness::guardrail_decision_line());
         }
     }
     Ok(())

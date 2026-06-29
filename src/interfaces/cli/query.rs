@@ -64,6 +64,10 @@ pub fn run_proof(task_id: Option<String>, task_id_flag: Option<String>) -> Resul
     };
     let status = proof::proof_status(&paths, &task_id)?;
     print!("{}", proof::render_proof_status(&status));
+    println!(
+        "{}",
+        harness::complete_readout(&paths)?.hook_trace_summary_line()
+    );
     Ok(())
 }
 
@@ -534,6 +538,7 @@ fn query_run(paths: &MaestroPaths, since: Option<&str>, json: bool) -> Result<()
     let trace = run::assemble_trace(paths, cutoff_nanos)?;
     let autonomy = run::assemble_autonomy_report(paths, cutoff_nanos)?;
     let status = compute_run_status(paths, trace.last_activity.as_deref(), now_nanos)?;
+    let complete_harness = harness::complete_readout(paths)?;
 
     if json {
         let verdict = status.verdict();
@@ -543,6 +548,7 @@ fn query_run(paths: &MaestroPaths, since: Option<&str>, json: bool) -> Result<()
             "trace": trace,
             "status": status,
             "autonomy": autonomy,
+            "complete_harness": complete_harness,
             // The interruption inference is a method on RunStatus, not a serialized
             // field; surface it so the JSON consumer gets the same honest verdict
             // the text render prints.
@@ -551,7 +557,7 @@ fn query_run(paths: &MaestroPaths, since: Option<&str>, json: bool) -> Result<()
         println!("{}", serde_json::to_string(&report)?);
         return Ok(());
     }
-    render_run_text(&window, &trace, &status, &autonomy);
+    render_run_text(&window, &trace, &status, &autonomy, &complete_harness);
     Ok(())
 }
 
@@ -596,6 +602,7 @@ fn render_run_text(
     trace: &run::RunTrace,
     status: &run::RunStatus,
     autonomy: &run::AutonomyReport,
+    complete_harness: &harness::CompleteHarnessReadout,
 ) {
     let verdict = status.verdict();
     println!("RUN TRACE ({window})");
@@ -632,6 +639,11 @@ fn render_run_text(
         "current state at trace time: ready={} accepted-without-tasks={} proposed={}",
         status.ready, status.accepted_without_tasks, status.proposed
     );
+    println!("{}", complete_harness.summary_line());
+    println!("{}", complete_harness.security_summary_line());
+    println!("{}", complete_harness.guardrail_summary_line());
+    println!("{}", complete_harness.scheduler_summary_line());
+    println!("{}", complete_harness.proof_matrix_summary_line());
     if !autonomy.is_empty() {
         println!();
         println!("AUTONOMY");

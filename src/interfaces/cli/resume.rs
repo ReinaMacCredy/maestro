@@ -12,6 +12,7 @@ use crate::foundation::core::time::utc_now_timestamp;
 use crate::interfaces::cli::{
     GitReadout, ResumeArgs, clean_worktree_note, git_readout, proof_concern_line, render_git_line,
 };
+use crate::operations::harness::{self, CompleteHarnessReadout};
 use crate::operations::memory::{
     self, ApprovedMemory, MemoryReadScope, MemoryReadSurface, MemorySuggestionHint,
 };
@@ -101,6 +102,7 @@ fn build_resume_report(
             ..MemoryReadScope::default()
         },
     )?;
+    let complete_harness = harness::complete_readout(paths)?;
     let guardrails = vec![
         "preserve unrelated dirty files".to_string(),
         "do not commit planning or notes artifacts unless asked".to_string(),
@@ -142,6 +144,7 @@ fn build_resume_report(
         proof_concern,
         required_reads,
         guardrails,
+        complete_harness,
         approved_memory: approved_memory.memories,
         approved_memory_omitted: approved_memory.omitted,
         memory_suggestions: memory_suggestions.suggestions,
@@ -472,6 +475,15 @@ fn render_resume_report(report: &ResumeReport) -> String {
     }
     write_list(&mut out, "required reads", &report.required_reads);
     write_list(&mut out, "guardrails", &report.guardrails);
+    push_line(&mut out, report.complete_harness.summary_line());
+    push_line(&mut out, report.complete_harness.runtime_summary_line());
+    push_line(&mut out, report.complete_harness.security_summary_line());
+    push_line(&mut out, report.complete_harness.guardrail_summary_line());
+    push_line(&mut out, report.complete_harness.scheduler_summary_line());
+    push_line(
+        &mut out,
+        report.complete_harness.proof_matrix_summary_line(),
+    );
     if !report.memory.is_empty() {
         write_list(&mut out, "memory", &report.memory);
         push_line(&mut out, "  full lid: .maestro/archive/cards/INDEX.md");
@@ -693,6 +705,7 @@ struct ResumeReport {
     proof_concern: Option<String>,
     required_reads: Vec<String>,
     guardrails: Vec<String>,
+    complete_harness: CompleteHarnessReadout,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     approved_memory: Vec<ApprovedMemory>,
     #[serde(skip_serializing_if = "is_zero")]

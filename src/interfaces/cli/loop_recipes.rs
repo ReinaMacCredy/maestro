@@ -9,6 +9,7 @@ use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::time::{timestamp_nanos, utc_now_timestamp};
 use crate::interfaces::cli::{LoopArgs, LoopCommand, WorkLeaseArgs};
 use crate::interfaces::hooks::record;
+use crate::operations::harness;
 use crate::operations::memory::{
     self, ApprovedMemory, MemoryReadScope, MemoryReadSurface, MemorySuggestionHint,
     MemorySuggestionSet,
@@ -97,14 +98,17 @@ fn run_work_lease(args: WorkLeaseArgs) -> Result<()> {
     if !paths.cards_dir().is_dir() {
         let memory_suggestions =
             memory::suggestion_hints(&paths, MemoryReadSurface::WorkLease, lease_memory_scope)?;
-        print_work_lease(WorkLeaseJson::dry(
-            "no_card_store",
-            "this repo has no card store yet (.maestro/cards/)",
-            scope,
-            ship_authority,
-            run_event_path,
-            memory_suggestions,
-        ))?;
+        print_work_lease(
+            &paths,
+            WorkLeaseJson::dry(
+                "no_card_store",
+                "this repo has no card store yet (.maestro/cards/)",
+                scope,
+                ship_authority,
+                run_event_path,
+                memory_suggestions,
+            ),
+        )?;
         return Ok(());
     }
 
@@ -123,14 +127,17 @@ fn run_work_lease(args: WorkLeaseArgs) -> Result<()> {
             MemoryReadSurface::WorkLease,
             lease_memory_scope.clone(),
         )?;
-        print_work_lease(WorkLeaseJson::dry(
-            "no_ready_work",
-            "no ready cards matched this lease scope",
-            scope,
-            ship_authority,
-            run_event_path,
-            memory_suggestions,
-        ))?;
+        print_work_lease(
+            &paths,
+            WorkLeaseJson::dry(
+                "no_ready_work",
+                "no ready cards matched this lease scope",
+                scope,
+                ship_authority,
+                run_event_path,
+                memory_suggestions,
+            ),
+        )?;
         return Ok(());
     }
 
@@ -183,20 +190,23 @@ fn run_work_lease(args: WorkLeaseArgs) -> Result<()> {
                         after_state: "in_progress",
                     },
                 );
-                print_work_lease(WorkLeaseJson::leased(
-                    LeasedSelection {
-                        rank,
-                        card: &before,
-                        claimed_by: &identity,
-                        now: &now,
-                        outcome: &outcome,
-                    },
-                    scope,
-                    ship_authority,
-                    run_event_path,
-                    approved_lessons.memories,
-                    memory_suggestions,
-                ))?;
+                print_work_lease(
+                    &paths,
+                    WorkLeaseJson::leased(
+                        LeasedSelection {
+                            rank,
+                            card: &before,
+                            claimed_by: &identity,
+                            now: &now,
+                            outcome: &outcome,
+                        },
+                        scope,
+                        ship_authority,
+                        run_event_path,
+                        approved_lessons.memories,
+                        memory_suggestions,
+                    ),
+                )?;
                 return Ok(());
             }
             Err(error) if live_claim_error(&error) => {
@@ -209,14 +219,17 @@ fn run_work_lease(args: WorkLeaseArgs) -> Result<()> {
     emit_blocked_work_lease_action(&paths, &run_id, &ship_authority);
     let memory_suggestions =
         memory::suggestion_hints(&paths, MemoryReadSurface::WorkLease, lease_memory_scope)?;
-    print_work_lease(WorkLeaseJson::blocked(
-        "all ready cards are held by live claims",
-        blocked,
-        scope,
-        ship_authority,
-        run_event_path,
-        memory_suggestions,
-    ))?;
+    print_work_lease(
+        &paths,
+        WorkLeaseJson::blocked(
+            "all ready cards are held by live claims",
+            blocked,
+            scope,
+            ship_authority,
+            run_event_path,
+            memory_suggestions,
+        ),
+    )?;
     Ok(())
 }
 
@@ -233,8 +246,15 @@ fn live_claim_error(error: &anyhow::Error) -> bool {
     error.to_string().contains("not stale yet")
 }
 
-fn print_work_lease(report: WorkLeaseJson) -> Result<()> {
-    println!("{}", serde_json::to_string_pretty(&report)?);
+fn print_work_lease(paths: &MaestroPaths, report: WorkLeaseJson) -> Result<()> {
+    let mut value = serde_json::to_value(&report)?;
+    if let Some(object) = value.as_object_mut() {
+        object.insert(
+            "scheduler".to_string(),
+            serde_json::to_value(harness::scheduler_readout(paths)?)?,
+        );
+    }
+    println!("{}", serde_json::to_string_pretty(&value)?);
     Ok(())
 }
 

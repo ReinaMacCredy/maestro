@@ -24,7 +24,7 @@ use crate::interfaces::cli::{
     FeatureArgs, FeatureCommand, FeatureProofCommand, feature_next_command, feature_next_label,
     recovery_label,
 };
-use crate::operations::{feature_close, feature_prepare};
+use crate::operations::{feature_close, feature_prepare, harness};
 
 /// Execute `maestro feature`.
 pub fn run(args: FeatureArgs) -> Result<()> {
@@ -484,11 +484,13 @@ fn verify_feature(
     if let Some(recorded) = report.recorded {
         super::emit_work_touch(paths, &report.feature_id);
         println!("recorded {recorded}");
+        println!("{}", harness::security_feature_gate_line());
         return after_prove_autoclose(paths, &report.feature_id, no_close, outcome);
     }
     let Some(sweep) = report.sweep else {
         return Ok(());
     };
+    println!("{}", harness::security_feature_gate_line());
     println!(
         "checking contract ({} acceptance items):",
         sweep.items.len()

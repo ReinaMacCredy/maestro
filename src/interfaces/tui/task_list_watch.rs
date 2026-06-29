@@ -13,6 +13,7 @@ use crate::domain::task;
 use crate::foundation::core::git;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::time::utc_now_timestamp;
+use crate::operations::harness;
 
 // The board classifier moved to `card::query` so `maestro status` shares it
 // (interface code reaches domain submodules inline, not via a deep `use`).
@@ -600,7 +601,11 @@ fn load_live_sessions(paths: &MaestroPaths) -> Vec<SessionActivity> {
 pub fn render_board(paths: &MaestroPaths, focus: Option<&str>) -> Result<String> {
     let (cards, blocked_ids) = load_board(paths, focus)?;
     let sessions = load_live_sessions(paths);
-    Ok(build_board_layout(&cards, &blocked_ids, focus, &BTreeSet::new(), &sessions).render(None))
+    let mut frame =
+        build_board_layout(&cards, &blocked_ids, focus, &BTreeSet::new(), &sessions).render(None);
+    frame.push_str(&harness::scheduler_surface_line(paths)?);
+    frame.push('\n');
+    Ok(frame)
 }
 
 /// Run the live board loop. Extends the poll loop (dec-surface-under-watch):
@@ -637,7 +642,9 @@ pub fn run_board(paths: &MaestroPaths, focus: Option<&str>, interval_seconds: u6
         let sessions = load_live_sessions(paths);
         let layout = build_board_layout(&cards, &blocked_ids, focus, &just_completed, &sessions);
         for _ in 0..render_ticks {
-            let board = layout.render(Some(tick));
+            let mut board = layout.render(Some(tick));
+            board.push_str(&harness::scheduler_surface_line(paths)?);
+            board.push('\n');
             let frame = format!("{board}\n{}\n", live_footer(interval));
             print!("{}", paint(&frame));
             io::stdout()

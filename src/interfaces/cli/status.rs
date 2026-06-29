@@ -319,6 +319,8 @@ fn build_task_next_report(paths: &MaestroPaths) -> Result<StatusReport> {
         worktree_actions,
         harness_friction,
         audit_hint,
+        scheduler: Some(harness::scheduler_readout(paths)?),
+        complete_harness: None,
         approved_memory: approved_memory.memories,
         approved_memory_omitted: approved_memory.omitted,
         memory_suggestions: memory_suggestions.suggestions,
@@ -374,6 +376,14 @@ fn print_status(report: StatusReport, json: bool) -> Result<()> {
         println!("{}", merge_busy_advisory(holder));
     }
     print_harness_friction(&report.harness_friction);
+    if let Some(complete_harness) = &report.complete_harness {
+        println!("{}", complete_harness.summary_line());
+        println!("{}", complete_harness.runtime_summary_line());
+        println!("{}", complete_harness.security_summary_line());
+        println!("{}", complete_harness.guardrail_summary_line());
+        println!("{}", complete_harness.scheduler_summary_line());
+        println!("{}", complete_harness.proof_matrix_summary_line());
+    }
     print_audit_hint(report.audit_hint.as_ref());
     print_approved_memory(&report.approved_memory, report.approved_memory_omitted);
     print_memory_suggestions(
@@ -434,6 +444,9 @@ fn print_task_next(report: &StatusReport) {
     }
     print_harness_friction(&report.harness_friction);
     print_audit_hint(report.audit_hint.as_ref());
+    if let Some(scheduler) = &report.scheduler {
+        println!("{}", scheduler.summary_line());
+    }
     if let Some(action) = &report.next_action {
         print_next_action(action);
         if let Some(concern) = &report.proof_concern {
@@ -687,6 +700,7 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
         .map(HarnessFrictionJson::from)
         .collect::<Vec<_>>();
     let audit_hint = harness::audit_overdue_hint(paths)?.map(AuditHintJson::from);
+    let complete_harness = harness::complete_readout(paths)?;
     let approved_memory =
         memory::approved_memory(paths, MemoryReadSurface::Status, MemoryReadScope::default())?;
     let memory_suggestions =
@@ -731,6 +745,8 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
         worktree_actions,
         harness_friction,
         audit_hint,
+        scheduler: Some(complete_harness.scheduler.clone()),
+        complete_harness: Some(complete_harness),
         approved_memory: approved_memory.memories,
         approved_memory_omitted: approved_memory.omitted,
         memory_suggestions: memory_suggestions.suggestions,
@@ -1087,6 +1103,10 @@ struct StatusReport {
     worktree_actions: Vec<WorktreeActionJson>,
     harness_friction: Vec<HarnessFrictionJson>,
     audit_hint: Option<AuditHintJson>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    scheduler: Option<harness::SchedulerReadout>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    complete_harness: Option<harness::CompleteHarnessReadout>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     approved_memory: Vec<ApprovedMemory>,
     #[serde(skip_serializing_if = "is_zero")]
@@ -1132,6 +1152,8 @@ impl StatusReport {
             worktree_actions: Vec::new(),
             harness_friction: Vec::new(),
             audit_hint: None,
+            scheduler: None,
+            complete_harness: None,
             approved_memory: Vec::new(),
             approved_memory_omitted: 0,
             memory_suggestions: Vec::new(),
@@ -1152,6 +1174,7 @@ struct NextJson {
     next_action: Option<NextAction>,
     harness_friction: Vec<HarnessFrictionJson>,
     audit_hint: Option<AuditHintJson>,
+    scheduler: Option<harness::SchedulerReadout>,
     ready_to_close_features: Vec<ReadyFeatureJson>,
 }
 
@@ -1166,6 +1189,7 @@ impl NextJson {
             next_action: report.next_action.clone(),
             harness_friction: report.harness_friction.clone(),
             audit_hint: report.audit_hint.clone(),
+            scheduler: report.scheduler.clone(),
             ready_to_close_features: report.ready_to_close_features.clone(),
         }
     }
@@ -1212,6 +1236,7 @@ struct TaskNextJson {
     next_action: Option<NextAction>,
     harness_friction: Vec<HarnessFrictionJson>,
     audit_hint: Option<AuditHintJson>,
+    scheduler: Option<harness::SchedulerReadout>,
     broader_actions: Vec<BroaderActionJson>,
     warnings: Vec<WarningJson>,
     summary: String,
@@ -1264,6 +1289,7 @@ impl From<&StatusReport> for TaskNextJson {
             next_action: report.next_action.clone(),
             harness_friction: report.harness_friction.clone(),
             audit_hint: report.audit_hint.clone(),
+            scheduler: report.scheduler.clone(),
             broader_actions,
             warnings,
             summary: if report.next_action.is_some()

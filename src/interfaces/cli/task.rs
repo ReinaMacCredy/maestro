@@ -14,6 +14,7 @@ use crate::interfaces::cli::task_id::resolve_optional_task_id;
 use crate::interfaces::cli::verify;
 use crate::interfaces::cli::{TaskArgs, TaskCommand};
 use crate::interfaces::tui::task_list_watch;
+use crate::operations::harness;
 
 /// Execute `maestro task`.
 pub fn run(args: TaskArgs) -> Result<()> {
@@ -722,6 +723,12 @@ fn print_task_create_handoff(task: &TaskRecord, checks: &[String]) {
 }
 
 fn print_verify_block(task: &TaskRecord, checks: &[String]) {
+    if let Some(line) = harness::security_task_gate_line(task) {
+        println!("{line}");
+    }
+    if let Some(line) = harness::guardrail_task_check_line(task) {
+        println!("{line}");
+    }
     if !checks.is_empty() {
         println!("verify+ locked:");
         println!("  checks: {}", checks.len());
@@ -947,6 +954,12 @@ fn show_task(paths: &MaestroPaths, id: Option<String>) -> Result<()> {
     };
     let checks = task::load_task_checks(&paths.tasks_dir(), &task)?;
     print!("{}", task::render_task(&task, &checks));
+    if let Some(line) = harness::security_task_gate_line(&task) {
+        println!("{line}");
+    }
+    if let Some(line) = harness::guardrail_task_check_line(&task) {
+        println!("{line}");
+    }
     // Disclose an archive-resolved view so a user cannot mistake an archived task
     // for a live one (mirrors `feature show`'s `archived: true` marker).
     if archived {

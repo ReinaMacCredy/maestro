@@ -39,6 +39,12 @@ pub fn run(args: AgentArgs) -> Result<()> {
             println!("Droid hooks were written to .factory/hooks.json.");
         }
     }
+    let readout = {
+        use crate::operations::harness;
+        harness::complete_readout(&paths)?
+    };
+    println!("{}", readout.hook_trace_summary_line());
+    println!("{}", readout.runtime_summary_line());
 
     Ok(())
 }

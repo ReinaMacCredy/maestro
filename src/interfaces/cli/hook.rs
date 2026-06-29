@@ -6,6 +6,7 @@ use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::time::utc_now_timestamp;
 use crate::interfaces::cli::{HookArgs, HookCommand};
 use crate::interfaces::hooks::record;
+use crate::operations::harness;
 
 /// Event kinds that fire ~once per meaningful action, so the echo can afford a
 /// verbose multi-line block (D8). Everything else -- the per-tool firehose --
@@ -99,6 +100,9 @@ fn print_verbose_block(
     }
     println!("  -> runs/{run_dir}");
     println!("  tip:     maestro active  (see other live sessions)");
+    if let Ok(readout) = harness::complete_readout(paths) {
+        println!("  {}", readout.hook_trace_summary_line());
+    }
 }
 
 /// The session's currently bound card -- its latest `card_touch` -- read through

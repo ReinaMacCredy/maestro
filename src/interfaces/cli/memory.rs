@@ -4,6 +4,7 @@ use crate::domain::card;
 use crate::domain::memory::{MemoryLifecycle, MemoryScope, ScopeKind, SignalType, TargetSurface};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::time::utc_now_timestamp;
+use crate::operations::harness;
 use crate::operations::memory::{
     ApplyPromotionRequest, ApprovedMemory, CreateMemoryRequest, CreateSuggestionRequest,
     MaintenanceBudget, MaintenanceLevel, MaintenanceRequest, MemoryReadScope, MemoryReadSurface,
@@ -54,6 +55,9 @@ pub fn run(args: MemoryArgs) -> Result<()> {
             } else {
                 println!("created {} (memory)", outcome.id);
             }
+            if !id_only {
+                println!("{}", harness::guardrail_memory_line());
+            }
             Ok(())
         }
         MemoryCommand::List { all } => {
@@ -80,6 +84,7 @@ pub fn run(args: MemoryArgs) -> Result<()> {
             if shown == 0 {
                 println!("no memory cards");
             }
+            println!("{}", harness::guardrail_memory_line());
             Ok(())
         }
         MemoryCommand::Show { id } => {
@@ -106,6 +111,7 @@ pub fn run(args: MemoryArgs) -> Result<()> {
             if !lesson.ends_with('\n') {
                 println!();
             }
+            println!("{}", harness::guardrail_memory_line());
             Ok(())
         }
         MemoryCommand::Search { query } => {
@@ -152,6 +158,7 @@ pub fn run(args: MemoryArgs) -> Result<()> {
                     outcome.id,
                     outcome.path.display()
                 );
+                println!("{}", harness::guardrail_memory_line());
             } else {
                 if scorer_receipt.is_some() || review_evidence.is_some() {
                     return Err(anyhow!(
@@ -177,6 +184,7 @@ pub fn run(args: MemoryArgs) -> Result<()> {
                         outcome.target_path.display()
                     );
                 }
+                println!("{}", harness::guardrail_memory_line());
             }
             Ok(())
         }
@@ -195,6 +203,8 @@ pub fn run(args: MemoryArgs) -> Result<()> {
                     outcome.scorer_type.as_str(),
                     outcome.id
                 );
+                println!("{}", harness::guardrail_memory_line());
+                println!("{}", harness::guardrail_scorer_line());
                 Ok(())
             }
         },

@@ -28,6 +28,9 @@ pub fn render_task(task: &TaskRecord, checks: &[String]) -> String {
     if !task.covers.is_empty() {
         out.push_str(&format!("covers: {}\n", task.covers.join(", ")));
     }
+    if let Some(risk) = task.risk.as_deref() {
+        out.push_str(&format!("risk: {risk}\n"));
+    }
     if let Some(claimed_by) = task.claimed_by.as_deref() {
         out.push_str(&format!("claimed_by: {claimed_by}\n"));
     }

@@ -22,6 +22,7 @@ use crate::interfaces::cli::{
     ActiveArgs, ActiveCommand, ActiveReleaseArgs, OwnershipReleaseStatus, merge_busy_advisory,
     stale_merge_advisory,
 };
+use crate::operations::harness;
 
 /// Max width for the bound-card title column; longer titles truncate to keep one
 /// scannable line per session (row width is a tunable detail, not locked by D5).
@@ -43,6 +44,7 @@ pub fn run(args: ActiveArgs) -> Result<()> {
     let now = utc_now_timestamp();
     let roots = worktree_roots(&paths);
     let rows = run::active_sessions_union(&roots, &now)?;
+    let complete_harness = harness::complete_readout_for_roots(&paths, &roots)?;
 
     let cards = if paths.cards_dir().is_dir() {
         card::query::scan(&paths)?
@@ -87,6 +89,7 @@ pub fn run(args: ActiveArgs) -> Result<()> {
         if hidden_stale > 0 {
             println!("({hidden_stale} stale; --all to show)");
         }
+        println!("{}", complete_harness.scheduler_summary_line());
         return Ok(());
     }
 
@@ -102,6 +105,9 @@ pub fn run(args: ActiveArgs) -> Result<()> {
         println!();
         println!("({hidden_stale} stale hidden; --all to show)");
     }
+    println!();
+    println!("{}", complete_harness.summary_line());
+    println!("{}", complete_harness.scheduler_summary_line());
 
     render_link_hint(&shown, &by_id, &me, your_card, connect);
     Ok(())
