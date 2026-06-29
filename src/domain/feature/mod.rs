@@ -7,6 +7,7 @@ pub(crate) mod registry;
 pub mod schema;
 mod staleness;
 mod verification;
+pub(crate) mod worktree;
 
 pub use archive::{
     AutoArchiveReceipt, FeatureArchiveReport, LooseSweepReport, append_auto_archive_receipt,
@@ -27,4 +28,9 @@ pub use verification::{
     AcceptanceCoverage, AcceptanceProof, AcceptanceSweepItem, AcceptanceSweepReport,
     FeatureProofUpdate, FeatureVerifyReport, acceptance_coverage, acceptance_coverage_archived,
     acceptance_id, uncovered_acceptance, verify_feature,
+};
+pub(crate) use worktree::{
+    WorktreeCleanupReceipt, WorktreeComputedState, WorktreeIntent, WorktreeLaneStatus,
+    WorktreeMilestoneKind, WorktreeRecordReport, lane_statuses, mark_lane, plan_lane,
+    record_cleanup,
 };

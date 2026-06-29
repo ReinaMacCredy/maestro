@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: 7e37acc135a6f7848d20da354f18728c8c860f6e00074ed68888238f08a620c0 -->
+<!-- maestro:cli-reference-sha256: f576a485a6e0c7e5c38a3944c6f8dcf7607190adce5b0758de7b0af9c0eb6b6f -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -63,6 +63,12 @@ a spelling not found here is outside this skill's CLI surface.
 
 - `maestro qa baseline <ID> [--observed <OBSERVED>] [--observed-file <PATH>] [--observed-stdin]` -- Write a feature QA baseline from explicit observed behavior
 - `maestro qa slice <ID> [--scenario <SCENARIO>]... [--observed <OBSERVED>] [--observed-file <PATH>] [--observed-stdin]` -- Append counting QA slice evidence for baseline scenarios
+
+## maestro worktree
+
+- `maestro worktree plan <CARD> --slug <SLUG> --branch <BRANCH> --path <PATH> --base <BASE> [--owner-checkout <OWNER_CHECKOUT>] [--worker-checkout <WORKER_CHECKOUT>]` -- Plan a worker lane in the owning card ledger; does not run git
+- `maestro worktree mark <CARD> --slug <SLUG> [--lane-created] [--merged-back] [--verified] [--commit <COMMIT>]` -- Mark a worktree ledger milestone; does not run git
+- `maestro worktree cleanup-record <CARD> --slug <SLUG> --removed-path <REMOVED_PATH> --deleted-branch <DELETED_BRANCH> [--pruned] [--recorded-by <RECORDED_BY>]` -- Record that the agent already cleaned a worker lane; does not run git
 
 ## maestro memory
 

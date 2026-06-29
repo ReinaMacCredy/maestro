@@ -29,7 +29,6 @@ use crate::domain::card::schema::{Card, CardType};
 use crate::domain::card::store::{self as card_store, CardSnapshot};
 use crate::domain::decisions;
 use crate::domain::decisions::schema::{DecisionRecord, DecisionStatus};
-use crate::domain::feature::qa;
 use crate::domain::feature::query::{
     FeatureTaskCounts, count_tasks_by_feature, count_tasks_by_feature_in_entries,
     count_tasks_for_feature, count_tasks_for_feature_in_entries, live_child_task_ids,
@@ -40,6 +39,7 @@ use crate::domain::feature::schema::{
     normalize_acceptance_id,
 };
 use crate::domain::feature::verification;
+use crate::domain::feature::{qa, worktree};
 use crate::domain::task::{self, TaskEntry, TaskState, TransitionDetails};
 use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::fs::{append_text_file, read_to_string_if_exists};
@@ -455,7 +455,14 @@ pub fn finalize(paths: &MaestroPaths, id: &str) -> Result<FinalizeReport> {
     let sources = handoff_sources(paths, &record)?;
     let generated_at = utc_now_timestamp();
     let next_commands = handoff_next_commands(paths, &record)?;
-    let contents = render_handoff(&record, &sources, &generated_at, &next_commands);
+    let worktree_statuses = worktree::lane_statuses(paths, &record.id)?;
+    let contents = render_handoff(
+        &record,
+        &sources,
+        &generated_at,
+        &next_commands,
+        &worktree_statuses,
+    );
     let path = feature_sidecar_dir(paths, &record.id).join(HANDOFF_FILE);
     write_string_atomic(&path, &contents)
         .with_context(|| format!("failed to write {}", path.display()))?;
@@ -509,6 +516,7 @@ fn handoff_gate_gap(id: &str, state: &str, detail: &str) -> String {
 struct HandoffSources {
     spec: Option<String>,
     notes: Option<String>,
+    worktree_ledger: Option<String>,
     decisions: Vec<DecisionRecord>,
     fingerprint: String,
 }
@@ -517,12 +525,19 @@ fn handoff_sources(paths: &MaestroPaths, record: &FeatureRecord) -> Result<Hando
     let sidecar_dir = feature_sidecar_dir(paths, &record.id);
     let spec = read_to_string_if_exists(sidecar_dir.join("spec.md"))?;
     let notes = read_to_string_if_exists(sidecar_dir.join("notes.md"))?;
+    let worktree_ledger = read_to_string_if_exists(worktree::ledger_path(paths, &record.id)?)?;
     let decisions = decisions::decisions_for_feature(paths, &record.id)?;
-    let fingerprint =
-        handoff_source_fingerprint(record, spec.as_deref(), notes.as_deref(), &decisions);
+    let fingerprint = handoff_source_fingerprint(
+        record,
+        spec.as_deref(),
+        notes.as_deref(),
+        worktree_ledger.as_deref(),
+        &decisions,
+    );
     Ok(HandoffSources {
         spec,
         notes,
+        worktree_ledger,
         decisions,
         fingerprint,
     })
@@ -532,6 +547,7 @@ fn handoff_source_fingerprint(
     record: &FeatureRecord,
     spec: Option<&str>,
     notes: Option<&str>,
+    worktree_ledger: Option<&str>,
     decisions: &[DecisionRecord],
 ) -> String {
     let mut source = String::new();
@@ -547,6 +563,7 @@ fn handoff_source_fingerprint(
     push_source_list(&mut source, "open_questions", &record.open_questions);
     push_source_optional_field(&mut source, "spec.md", spec);
     push_source_optional_field(&mut source, "notes.md", notes);
+    push_source_optional_field(&mut source, "worktree.yml", worktree_ledger);
     source.push_str("decisions\n");
     for decision in decisions {
         push_source_field(&mut source, "decision.id", &decision.id);
@@ -634,6 +651,7 @@ fn render_handoff(
     sources: &HandoffSources,
     generated_at: &str,
     next_commands: &[String],
+    worktree_statuses: &[worktree::WorktreeLaneStatus],
 ) -> String {
     let mut out = String::new();
     out.push_str(&format!("{HANDOFF_VERSION_MARKER}{HANDOFF_VERSION} -->\n"));
@@ -712,6 +730,8 @@ fn render_handoff(
     out.push_str("\n## Non-Goals\n\n");
     push_handoff_list(&mut out, &record.non_goals);
 
+    push_handoff_worktrees(&mut out, worktree_statuses);
+
     out.push_str("\n## Audit Trail\n\n");
     out.push_str(&format!("- Spec: `.maestro/cards/{}/spec.md`", record.id));
     if sources.spec.is_none() {
@@ -720,6 +740,14 @@ fn render_handoff(
     out.push('\n');
     out.push_str(&format!("- Notes: `.maestro/cards/{}/notes.md`", record.id));
     if sources.notes.is_none() {
+        out.push_str(" (missing)");
+    }
+    out.push('\n');
+    out.push_str(&format!(
+        "- Worktree ledger: `.maestro/cards/{}/worktree.yml`",
+        record.id
+    ));
+    if sources.worktree_ledger.is_none() {
         out.push_str(" (missing)");
     }
     out.push('\n');
@@ -734,6 +762,92 @@ fn render_handoff(
         ));
     }
     out
+}
+
+fn push_handoff_worktrees(out: &mut String, lanes: &[worktree::WorktreeLaneStatus]) {
+    if lanes.is_empty() {
+        return;
+    }
+    out.push_str("\n## Worktree Ledger\n\n");
+    for lane in lanes {
+        out.push_str(&format!(
+            "- Lane `{}`: `{}`\n",
+            lane.slug,
+            lane.state.as_str()
+        ));
+        out.push_str(&format!("  - Branch: `{}`\n", lane.intent.branch));
+        out.push_str(&format!("  - Path: `{}`\n", lane.intent.path));
+        out.push_str(&format!("  - Base: `{}`\n", lane.intent.base));
+        if let Some(owner) = lane.intent.owner_checkout.as_deref() {
+            out.push_str(&format!("  - Owner checkout: `{owner}`\n"));
+        }
+        if let Some(worker) = lane.intent.expected_worker_checkout.as_deref() {
+            out.push_str(&format!("  - Expected worker checkout: `{worker}`\n"));
+        }
+        push_handoff_optional(
+            out,
+            "Branch reserved",
+            lane.milestones.branch_reserved_at.as_deref(),
+        );
+        push_handoff_optional(
+            out,
+            "Lane created",
+            lane.milestones.lane_created_at.as_deref(),
+        );
+        push_handoff_optional(
+            out,
+            "Merged back",
+            lane.milestones.merged_back_at.as_deref(),
+        );
+        push_handoff_optional(
+            out,
+            "Merged back commit",
+            lane.milestones.merged_back_commit.as_deref(),
+        );
+        push_handoff_optional(out, "Verified", lane.milestones.verified_at.as_deref());
+        push_handoff_optional(
+            out,
+            "Verified commit",
+            lane.milestones.verified_commit.as_deref(),
+        );
+        push_handoff_optional(
+            out,
+            "Cleanup due",
+            lane.milestones.cleanup_due_at.as_deref(),
+        );
+        push_handoff_optional(
+            out,
+            "Cleanup completed",
+            lane.milestones.cleanup_completed_at.as_deref(),
+        );
+        out.push_str(&format!(
+            "  - Evidence: branch_exists={} path_exists={} worker_clean_or_absent={} active_owner={} open_conflict={}\n",
+            lane.evidence.branch_exists,
+            lane.evidence.path_exists,
+            lane.evidence.worker_clean_or_absent,
+            lane.evidence.active_owner,
+            lane.evidence.open_conflict
+        ));
+        if !lane.cleanup_receipts.is_empty() {
+            out.push_str("  - Cleanup receipts:\n");
+            for receipt in &lane.cleanup_receipts {
+                out.push_str(&format!(
+                    "    - `{}` removed `{}` deleted `{}` pruned={} by `{}`\n",
+                    receipt.recorded_at,
+                    receipt.removed_path,
+                    receipt.deleted_branch,
+                    receipt.pruned_stale_metadata,
+                    receipt.recorded_by
+                ));
+            }
+        }
+    }
+}
+
+fn push_handoff_optional(out: &mut String, label: &str, value: Option<&str>) {
+    if let Some(value) = value {
+        out.push_str(&format!("  - {label}: `{value}`\n"));
+    }
 }
 
 fn push_handoff_list(out: &mut String, values: &[String]) {

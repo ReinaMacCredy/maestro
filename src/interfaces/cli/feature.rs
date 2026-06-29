@@ -1836,6 +1836,9 @@ fn show_feature(paths: &MaestroPaths, id: &str) -> Result<()> {
     print_list("affected_areas", &view.affected_areas);
     print_list("non_goals", &view.non_goals);
     print_list("open_questions", &view.open_questions);
+    if !archived {
+        print_worktree_ledger(&feature::lane_statuses(paths, &view.id)?);
+    }
     if let Some(notes) = view.notes.as_deref() {
         println!("notes:");
         for line in notes.lines() {
@@ -1844,6 +1847,78 @@ fn show_feature(paths: &MaestroPaths, id: &str) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn print_worktree_ledger(lanes: &[feature::WorktreeLaneStatus]) {
+    if lanes.is_empty() {
+        return;
+    }
+    println!("worktrees:");
+    for lane in lanes {
+        println!("  - slug: {}", lane.slug);
+        println!("    state: {}", lane.state.as_str());
+        println!("    branch: {}", lane.intent.branch);
+        println!("    path: {}", lane.intent.path);
+        println!("    base: {}", lane.intent.base);
+        if let Some(owner) = lane.intent.owner_checkout.as_deref() {
+            println!("    owner_checkout: {owner}");
+        }
+        if let Some(worker) = lane.intent.expected_worker_checkout.as_deref() {
+            println!("    expected_worker_checkout: {worker}");
+        }
+        println!("    milestones:");
+        print_optional_worktree_field(
+            "branch_reserved_at",
+            lane.milestones.branch_reserved_at.as_deref(),
+        );
+        print_optional_worktree_field(
+            "lane_created_at",
+            lane.milestones.lane_created_at.as_deref(),
+        );
+        print_optional_worktree_field("merged_back_at", lane.milestones.merged_back_at.as_deref());
+        print_optional_worktree_field(
+            "merged_back_commit",
+            lane.milestones.merged_back_commit.as_deref(),
+        );
+        print_optional_worktree_field("verified_at", lane.milestones.verified_at.as_deref());
+        print_optional_worktree_field(
+            "verified_commit",
+            lane.milestones.verified_commit.as_deref(),
+        );
+        print_optional_worktree_field("cleanup_due_at", lane.milestones.cleanup_due_at.as_deref());
+        print_optional_worktree_field(
+            "cleanup_completed_at",
+            lane.milestones.cleanup_completed_at.as_deref(),
+        );
+        println!("    evidence:");
+        println!("      branch_exists: {}", lane.evidence.branch_exists);
+        println!("      path_exists: {}", lane.evidence.path_exists);
+        println!(
+            "      worker_clean_or_absent: {}",
+            lane.evidence.worker_clean_or_absent
+        );
+        println!("      active_owner: {}", lane.evidence.active_owner);
+        println!("      open_conflict: {}", lane.evidence.open_conflict);
+        if !lane.cleanup_receipts.is_empty() {
+            println!("    cleanup_receipts:");
+            for receipt in &lane.cleanup_receipts {
+                println!("      - recorded_at: {}", receipt.recorded_at);
+                println!("        removed_path: {}", receipt.removed_path);
+                println!("        deleted_branch: {}", receipt.deleted_branch);
+                println!(
+                    "        pruned_stale_metadata: {}",
+                    receipt.pruned_stale_metadata
+                );
+                println!("        recorded_by: {}", receipt.recorded_by);
+            }
+        }
+    }
+}
+
+fn print_optional_worktree_field(name: &str, value: Option<&str>) {
+    if let Some(value) = value {
+        println!("      {name}: {value}");
+    }
 }
 
 fn print_decision_summary(paths: &MaestroPaths, id: &str) -> Result<()> {

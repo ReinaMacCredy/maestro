@@ -89,6 +89,16 @@ pub fn dirty(path: impl AsRef<Path>) -> Result<bool> {
     is_dirty(&repository)
 }
 
+/// Return whether a local branch exists in the repository containing `path`.
+pub fn local_branch_exists(path: impl AsRef<Path>, branch: &str) -> Result<bool> {
+    let repository = discover_repository(path.as_ref())?;
+    match repository.find_branch(branch, git2::BranchType::Local) {
+        Ok(_) => Ok(true),
+        Err(error) if error.code() == git2::ErrorCode::NotFound => Ok(false),
+        Err(error) => Err(error).with_context(|| format!("failed to read branch {branch}")),
+    }
+}
+
 /// Every worktree's working directory for the repository containing `path`:
 /// the main worktree first, then each linked worktree that `git worktree add`
 /// created, canonicalized and de-duplicated. The set is identical regardless of

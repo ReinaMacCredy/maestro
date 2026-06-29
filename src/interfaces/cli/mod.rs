@@ -56,6 +56,7 @@ pub mod update;
 pub mod verify;
 pub mod version;
 pub mod watch;
+pub mod worktree;
 
 pub(crate) fn recovery_label(hint: Option<&str>) -> String {
     match hint {
@@ -353,6 +354,8 @@ pub enum RootCommand {
     Feature(FeatureArgs),
     #[command(about = "Record feature QA baseline and slice evidence")]
     Qa(QaArgs),
+    #[command(about = "Record passive worktree handoff and cleanup ledger facts")]
+    Worktree(WorktreeArgs),
     #[command(
         about = "Search Maestro memory and source with the indexed grep engine",
         after_help = "Examples:\n  maestro grep runtime\n  maestro grep --json 'runtime corpus:memory type:decision'\n  maestro grep 'why agent runtime'"
@@ -733,6 +736,68 @@ pub struct ActiveReleaseArgs {
     pub card_id: String,
     #[arg(long, help = "Why this session is yielding the card")]
     pub reason: String,
+}
+
+#[derive(Debug, Args)]
+pub struct WorktreeArgs {
+    #[command(subcommand)]
+    pub command: WorktreeCommand,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum WorktreeCommand {
+    #[command(about = "Plan a worker lane in the owning card ledger; does not run git")]
+    Plan {
+        card: String,
+        #[arg(long)]
+        slug: String,
+        #[arg(long)]
+        branch: String,
+        #[arg(long)]
+        path: String,
+        #[arg(long)]
+        base: String,
+        #[arg(long = "owner-checkout")]
+        owner_checkout: Option<String>,
+        #[arg(long = "worker-checkout")]
+        worker_checkout: Option<String>,
+    },
+    #[command(
+        about = "Mark a worktree ledger milestone; does not run git",
+        group(
+            clap::ArgGroup::new("milestone")
+                .args(["lane_created", "merged_back", "verified"])
+                .required(true)
+                .multiple(false)
+        )
+    )]
+    Mark {
+        card: String,
+        #[arg(long)]
+        slug: String,
+        #[arg(long = "lane-created")]
+        lane_created: bool,
+        #[arg(long = "merged-back")]
+        merged_back: bool,
+        #[arg(long)]
+        verified: bool,
+        #[arg(long)]
+        commit: Option<String>,
+    },
+    #[command(about = "Record that the agent already cleaned a worker lane; does not run git")]
+    CleanupRecord {
+        card: String,
+        #[arg(long)]
+        slug: String,
+        #[arg(long = "removed-path")]
+        removed_path: String,
+        #[arg(long = "deleted-branch")]
+        deleted_branch: String,
+        #[arg(long)]
+        pruned: bool,
+        #[arg(long = "recorded-by")]
+        recorded_by: Option<String>,
+    },
 }
 
 #[derive(Debug, Args)]
@@ -2354,6 +2419,7 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Event(args) => event::run(args),
         RootCommand::Feature(args) => feature::run(args),
         RootCommand::Qa(args) => qa::run(args),
+        RootCommand::Worktree(args) => worktree::run(args),
         RootCommand::Grep(args) => grep::run(args),
         RootCommand::Memory(args) => memory::run(args),
         RootCommand::Scorer(args) => scorer::run(args),

@@ -290,10 +290,15 @@ fn build_task_next_report(paths: &MaestroPaths) -> Result<StatusReport> {
     let sections = StatusSectionsJson {
         ready_to_close: ready_to_close_features.clone(),
     };
+    let worktree_actions = Vec::new();
 
     Ok(StatusReport {
         schema: "maestro.status.v1".to_string(),
-        status: if next_action.is_some() || !harness_friction.is_empty() || audit_hint.is_some() {
+        status: if next_action.is_some()
+            || !harness_friction.is_empty()
+            || audit_hint.is_some()
+            || !worktree_actions.is_empty()
+        {
             "actionable".to_string()
         } else {
             "no_action".to_string()
@@ -311,6 +316,7 @@ fn build_task_next_report(paths: &MaestroPaths) -> Result<StatusReport> {
         features: FeatureSummaryJson::default(),
         task_rows: Vec::new(),
         active_features: Vec::new(),
+        worktree_actions,
         harness_friction,
         audit_hint,
         approved_memory: approved_memory.memories,
@@ -374,6 +380,7 @@ fn print_status(report: StatusReport, json: bool) -> Result<()> {
         &report.memory_suggestions,
         report.memory_suggestions_omitted,
     );
+    print_worktree_actions(&report.worktree_actions);
     if let Some(action) = &report.next_action {
         if action.requires_input {
             println!("template: {}", action.command.display);
@@ -659,6 +666,7 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
     let ready_to_close_features = ready_to_close_features(&features);
     let now_nanos = timestamp_nanos(&utc_now_timestamp()).unwrap_or(0);
     let mut active_features = active_feature_rows(paths, &features, now_nanos);
+    let worktree_actions = worktree_actions(paths, &features)?;
     for (id, path, error, hint, _) in unreadable_features {
         warnings.push(WarningJson {
             code: "feature_unreadable".to_string(),
@@ -698,7 +706,11 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
 
     Ok(StatusReport {
         schema: "maestro.status.v1".to_string(),
-        status: if next_action.is_some() || !harness_friction.is_empty() || audit_hint.is_some() {
+        status: if next_action.is_some()
+            || !harness_friction.is_empty()
+            || audit_hint.is_some()
+            || !worktree_actions.is_empty()
+        {
             "actionable".to_string()
         } else {
             "no_action".to_string()
@@ -716,6 +728,7 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
         features: FeatureSummaryJson::from_features(&features),
         task_rows: rows,
         active_features,
+        worktree_actions,
         harness_friction,
         audit_hint,
         approved_memory: approved_memory.memories,
@@ -916,6 +929,132 @@ fn active_features_block(rows: &[FeatureRowJson]) -> String {
     out
 }
 
+fn worktree_actions(
+    paths: &MaestroPaths,
+    features: &[feature::FeatureView],
+) -> Result<Vec<WorktreeActionJson>> {
+    let mut actions = Vec::new();
+    for view in features.iter().filter(|view| !view.status.is_terminal()) {
+        for lane in feature::lane_statuses(paths, &view.id)? {
+            if let Some(action) = worktree_action_for_lane(&lane) {
+                actions.push(action);
+            }
+        }
+    }
+    actions.sort_by(|left, right| {
+        left.feature_id
+            .cmp(&right.feature_id)
+            .then(left.slug.cmp(&right.slug))
+    });
+    Ok(actions)
+}
+
+fn worktree_action_for_lane(lane: &feature::WorktreeLaneStatus) -> Option<WorktreeActionJson> {
+    let (summary, run, record) = match lane.state {
+        feature::WorktreeComputedState::BranchReservedPathMissing => {
+            let run = if lane.evidence.branch_exists {
+                format!(
+                    "git worktree add {} {}",
+                    shell_word(&lane.intent.path),
+                    shell_word(&lane.intent.branch)
+                )
+            } else {
+                format!(
+                    "git worktree add -b {} {} {}",
+                    shell_word(&lane.intent.branch),
+                    shell_word(&lane.intent.path),
+                    shell_word(&lane.intent.base)
+                )
+            };
+            (
+                "worker path missing after branch reservation".to_string(),
+                run,
+                format!(
+                    "maestro worktree mark {} --slug {} --lane-created",
+                    shell_word(&lane.feature_id),
+                    shell_word(&lane.slug)
+                ),
+            )
+        }
+        feature::WorktreeComputedState::MergedNeedsVerification => (
+            "merged back; verify before cleanup".to_string(),
+            "run the feature/task QA on the merged checkout".to_string(),
+            format!(
+                "maestro worktree mark {} --slug {} --verified --commit <tested-head>",
+                shell_word(&lane.feature_id),
+                shell_word(&lane.slug)
+            ),
+        ),
+        feature::WorktreeComputedState::CleanupDue => (
+            "merged and verified; cleanup is safe to perform".to_string(),
+            format!(
+                "git worktree remove {} && git branch -d {} && git worktree prune",
+                shell_word(&lane.intent.path),
+                shell_word(&lane.intent.branch)
+            ),
+            format!(
+                "maestro worktree cleanup-record {} --slug {} --removed-path {} --deleted-branch {} --pruned --recorded-by <agent>",
+                shell_word(&lane.feature_id),
+                shell_word(&lane.slug),
+                shell_word(&lane.intent.path),
+                shell_word(&lane.intent.branch)
+            ),
+        ),
+        feature::WorktreeComputedState::Unplanned
+        | feature::WorktreeComputedState::LanePresent
+        | feature::WorktreeComputedState::CleanupComplete => return None,
+    };
+
+    Some(WorktreeActionJson {
+        feature_id: lane.feature_id.clone(),
+        slug: lane.slug.clone(),
+        state: lane.state.as_str().to_string(),
+        summary,
+        run,
+        record,
+        inspect: format!("maestro feature show {}", lane.feature_id),
+    })
+}
+
+fn print_worktree_actions(actions: &[WorktreeActionJson]) {
+    if actions.is_empty() {
+        return;
+    }
+    println!("WORKTREE RECOVERY");
+    let rows = actions
+        .iter()
+        .map(|action| {
+            vec![
+                action.feature_id.clone(),
+                action.slug.clone(),
+                action.state.clone(),
+                action.summary.clone(),
+                action.run.clone(),
+                action.record.clone(),
+            ]
+        })
+        .collect::<Vec<_>>();
+    print!(
+        "{}",
+        table::render_table(
+            &["FEATURE", "LANE", "STATE", "SUMMARY", "RUN", "RECORD"],
+            &rows,
+        )
+    );
+}
+
+fn shell_word(value: &str) -> String {
+    if !value.is_empty()
+        && value.bytes().all(|byte| {
+            byte.is_ascii_alphanumeric()
+                || matches!(byte, b'/' | b'.' | b'_' | b'-' | b'=' | b':' | b'@')
+        })
+    {
+        return value.to_string();
+    }
+    format!("'{}'", value.replace('\'', "'\\''"))
+}
+
 #[derive(Clone, Debug, Serialize)]
 struct StatusReport {
     schema: String,
@@ -944,6 +1083,8 @@ struct StatusReport {
     features: FeatureSummaryJson,
     task_rows: Vec<TaskRowJson>,
     active_features: Vec<FeatureRowJson>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    worktree_actions: Vec<WorktreeActionJson>,
     harness_friction: Vec<HarnessFrictionJson>,
     audit_hint: Option<AuditHintJson>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -988,6 +1129,7 @@ impl StatusReport {
             features: FeatureSummaryJson::default(),
             task_rows: Vec::new(),
             active_features: Vec::new(),
+            worktree_actions: Vec::new(),
             harness_friction: Vec::new(),
             audit_hint: None,
             approved_memory: Vec::new(),
@@ -1465,6 +1607,17 @@ struct FeatureRowJson {
     /// table. Skipped from JSON so `status --json` still carries every row.
     #[serde(skip)]
     stale_proposed: bool,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct WorktreeActionJson {
+    feature_id: String,
+    slug: String,
+    state: String,
+    summary: String,
+    run: String,
+    record: String,
+    inspect: String,
 }
 
 #[derive(Clone, Debug, Serialize)]
