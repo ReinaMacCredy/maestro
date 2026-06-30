@@ -671,7 +671,7 @@ fn the_per_task_falsifier_wins_over_claims_only_and_can_fail_the_slice() {
 }
 
 #[test]
-fn task_verify_warns_when_after_dependency_cleanup_fails_after_apply() {
+fn task_verify_resolves_after_dependency_cleanup_for_db_backed_tasks() {
     let temp = setup_repo();
     let repo = temp.path();
     assert_success(
@@ -740,13 +740,6 @@ fn task_verify_warns_when_after_dependency_cleanup_fails_after_apply() {
         &maestro(repo, &["task", "claim", &t1]),
         &["task", "claim", &t1],
     );
-    // The dependent task is held open against the cleanup write: the card
-    // store's write guard is an in-flight `.{record}.write-lock` reservation
-    // directory, so the after-dependency cleanup that resolves T2's blocker
-    // cannot land.
-    fs::create_dir(write_lock_dir(repo, &t2))
-        .expect("invariant: dependent task write-lock should be plantable");
-
     let complete = maestro(
         repo,
         &[
@@ -766,23 +759,14 @@ fn task_verify_warns_when_after_dependency_cleanup_fails_after_apply() {
     assert!(stdout(&complete).contains(&format!("verification passed for {t1}")));
     let err = stderr(&complete);
     assert!(
-        err.contains(&format!(
-            "warning: after-dependency cleanup incomplete for {t1}"
-        )),
-        "{err}"
-    );
-    assert!(
-        err.contains("follow-up: run maestro task list --blocked"),
+        !err.contains("warning: after-dependency cleanup incomplete"),
         "{err}"
     );
     assert_eq!(
         task_yaml(repo, &t1)["state"],
         YamlValue::String("verified".to_string())
     );
-    assert_eq!(
-        task_yaml(repo, &t2)["blockers"][0]["resolved_at"],
-        YamlValue::Null
-    );
+    assert!(task_yaml(repo, &t2)["blockers"][0]["resolved_at"].is_string());
 }
 
 #[test]

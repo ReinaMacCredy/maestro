@@ -7,6 +7,8 @@ use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use card_support::{cards_repo, id_by_title};
+use maestro::domain::feature;
+use maestro::foundation::core::paths::MaestroPaths;
 use maestro::foundation::core::time::format_utc_seconds_rfc3339_millis;
 use serde_json::Value;
 
@@ -363,9 +365,9 @@ fn security_gates_reuse_task_feature_qa_decision_and_waiver_surfaces() {
         qa.contains("harness: security gate QA path captures required proof"),
         "{qa}"
     );
-    let qa_artifact =
-        fs::read_to_string(repo.join(".maestro/cards").join(&feature_id).join("qa.md"))
-            .expect("qa artifact should exist");
+    let qa_artifact = feature::read_sidecar_text(&MaestroPaths::new(repo), &feature_id, "qa.md")
+        .expect("qa artifact should be readable")
+        .expect("qa artifact should exist");
     assert!(qa_artifact.contains("- Security gates:"), "{qa_artifact}");
     assert!(
         qa_artifact.contains("release_publish_push"),

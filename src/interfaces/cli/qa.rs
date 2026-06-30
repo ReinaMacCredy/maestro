@@ -5,9 +5,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result, bail};
 
 use crate::domain::feature;
-use crate::foundation::core::fs::ensure_dir;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
-use crate::foundation::core::safe_write::write_string_atomic;
 use crate::interfaces::cli::{QaArgs, QaCommand};
 use crate::operations::harness;
 
@@ -50,14 +48,11 @@ pub fn run(args: QaArgs) -> Result<()> {
 fn baseline(paths: &MaestroPaths, id: &str, observed: &str) -> Result<()> {
     non_empty(observed, "--observed")?;
     let amend_log_position = feature::amend_log_position(paths, id)?;
-    let dir = feature::feature_sidecar_dir(paths, id);
-    ensure_dir(&dir)?;
-    let path = dir.join("qa.md");
     let mut contents = format!(
         "---\namend_log_position: {amend_log_position}\n---\n\n### QA Baseline Contract\n\n- Scope: {id}\n- Critical workflow chains:\n  - CLI helper baseline\n    - Steps: setup -> action -> inspect output\n    - Touched link: feature QA gate\n    - Minimal proof: {observed}\n- Scenario Matrix:\n  - [bl-001] observed baseline behavior\n    - Dimensions: agent/CLI/local artifact\n    - Setup: repo initialized with feature {id}\n    - Action: {observed}\n    - Oracle: behavior remains observable\n    - Evidence to capture: command output or artifact diff\n    - Reproduction: rerun the observed command or workflow\n- Preserved behaviors:\n  - {observed} -> Proof: manual/CLI observation\n- Changed behaviors:\n  - None captured at baseline\n- Critical probes before commit:\n  - focused CLI/helper test\n- Security gates:\n  - Risk classes: destructive_fs_git; dependency_version; schema_migration; secrets; external_side_effects; release_publish_push\n  - Enforcement: task verify/complete plus feature verify/close\n  - Required proof: task proof, QA evidence, or feature acceptance evidence\n  - Waiver/block: feature verify --waive or task block --reason\n- Required artifacts:\n  - .maestro/cards/{id}/qa.md\n- Baseline gaps:\n  - None\n"
     );
     append_raw_observed_block(&mut contents, "baseline", observed);
-    write_string_atomic(&path, &contents)?;
+    let path = feature::write_sidecar_text(paths, id, "qa.md", &contents)?;
     println!("recorded baseline bl-001");
     println!("feature: {id}");
     println!("file: {}", path.display());
@@ -75,8 +70,7 @@ fn slice(paths: &MaestroPaths, id: &str, scenarios: &[String], observed: &str) -
         non_empty(scenario, "--scenario")?;
     }
     feature::ensure_exists(paths, id)?;
-    let path = feature::feature_sidecar_dir(paths, id).join("qa.md");
-    let mut contents = fs::read_to_string(&path).unwrap_or_default();
+    let mut contents = feature::read_sidecar_text(paths, id, "qa.md")?.unwrap_or_default();
     if !contents.contains("```yaml\nslices:") {
         contents.push_str("\n```yaml\nslices:\n```\n");
     }
@@ -91,7 +85,7 @@ fn slice(paths: &MaestroPaths, id: &str, scenarios: &[String], observed: &str) -
     );
     contents = contents.replacen("slices:\n", &format!("slices:\n{insertion}"), 1);
     append_raw_observed_block(&mut contents, "slice", observed);
-    write_string_atomic(&path, &contents)?;
+    let path = feature::write_sidecar_text(paths, id, "qa.md", &contents)?;
     println!("recorded qa slice");
     println!("feature: {id}");
     println!("file: {}", path.display());

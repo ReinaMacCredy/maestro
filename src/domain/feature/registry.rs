@@ -23,11 +23,11 @@ use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Context, Result, anyhow, bail};
 
-use crate::domain::card::archive_db;
 use crate::domain::card::fold;
 use crate::domain::card::query as card_query;
 use crate::domain::card::schema::{Card, CardType};
-use crate::domain::card::store::{self as card_store, CardSnapshot};
+use crate::domain::card::store::{self as card_store, ResolvedCard};
+use crate::domain::card::{archive_db, live_db};
 use crate::domain::decisions;
 use crate::domain::decisions::schema::{DecisionRecord, DecisionStatus};
 use crate::domain::feature::query::{
@@ -43,7 +43,7 @@ use crate::domain::feature::verification;
 use crate::domain::feature::{qa, worktree};
 use crate::domain::task::{self, TaskEntry, TaskState, TransitionDetails};
 use crate::foundation::core::error::MaestroError;
-use crate::foundation::core::fs::{append_text_file, read_to_string_if_exists};
+use crate::foundation::core::fs::{append_text_file, ensure_dir, read_to_string_if_exists};
 use crate::foundation::core::git;
 use crate::foundation::core::hash::sha256_hex;
 use crate::foundation::core::paths::MaestroPaths;
@@ -224,6 +224,13 @@ pub struct FinalizeReport {
     pub fingerprint: String,
     pub generated_at: String,
     pub next_commands: Vec<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ReopenReport {
+    pub id: String,
+    pub path: PathBuf,
+    pub files: usize,
 }
 
 /// Append-only additions applied by `feature amend` (Ready / InProgress).
@@ -430,7 +437,7 @@ pub fn set_with_report(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> 
     record.open_questions.extend(open_questions);
     apply_acceptance_text_edits(id, &mut record.acceptance, &edits.edit_acceptance)?;
     record.updated_at = utc_now_timestamp();
-    save_record(paths, &record, &write)?;
+    save_record(&record, &write)?;
     let counts = count_tasks_for_feature(&paths.tasks_dir(), &record.id)?;
     Ok(SetReport {
         view: view_from_record(record, counts, None),
@@ -441,7 +448,11 @@ pub fn set_with_report(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> 
 }
 
 pub fn finalize(paths: &MaestroPaths, id: &str) -> Result<FinalizeReport> {
-    let record = load_record(paths, id)?;
+    let source_dir = finalization_source_dir(paths, id);
+    let record = match source_dir.as_deref() {
+        Some(dir) => load_record_from_dir(dir, id)?,
+        None => load_record(paths, id)?,
+    };
     match record.status {
         FeatureStatus::Proposed | FeatureStatus::Ready | FeatureStatus::InProgress => {}
         FeatureStatus::Closed | FeatureStatus::Cancelled => bail!(
@@ -461,15 +472,41 @@ pub fn finalize(paths: &MaestroPaths, id: &str) -> Result<FinalizeReport> {
         &next_commands,
         &worktree_statuses,
     );
-    let path = feature_sidecar_dir(paths, &record.id).join(HANDOFF_FILE);
-    write_string_atomic(&path, &contents)
-        .with_context(|| format!("failed to write {}", path.display()))?;
+    let path = if let Some(dir) = source_dir.as_deref() {
+        let path = dir.join(HANDOFF_FILE);
+        write_string_atomic(&path, &contents)
+            .with_context(|| format!("failed to write {}", path.display()))?;
+        live_db::import_card_dir(paths, &record.id, dir, true)?;
+        db_sidecar_path(paths, &record.id, HANDOFF_FILE)
+    } else {
+        write_sidecar_text(paths, &record.id, HANDOFF_FILE, &contents)?
+    };
     Ok(FinalizeReport {
         id: record.id,
         path,
         fingerprint: sources.fingerprint,
         generated_at,
         next_commands,
+    })
+}
+
+pub fn reopen(paths: &MaestroPaths, id: &str) -> Result<ReopenReport> {
+    validate_feature_id(id)?;
+    let Some(db_card) = live_db::resolve(paths, id)? else {
+        bail!("cannot reopen {id} — feature is not DB-backed; edit .maestro/cards/{id} directly");
+    };
+    if db_card.card.card_type != CardType::Feature {
+        bail!(
+            "{id} is a {}, not a feature",
+            db_card.card.card_type.as_str()
+        );
+    }
+    let path = paths.workbench_dir().join(id);
+    let files = live_db::export_card_to_dir(paths, id, &path)?;
+    Ok(ReopenReport {
+        id: id.to_string(),
+        path,
+        files,
     })
 }
 
@@ -480,8 +517,7 @@ pub fn handoff_gap(paths: &MaestroPaths, id: &str) -> Result<Option<String>> {
 
 fn handoff_gap_for_record(paths: &MaestroPaths, record: &FeatureRecord) -> Result<Option<String>> {
     let sources = handoff_sources(paths, record)?;
-    let path = feature_sidecar_dir(paths, &record.id).join(HANDOFF_FILE);
-    let Some(contents) = read_to_string_if_exists(&path)? else {
+    let Some(contents) = read_sidecar_text(paths, &record.id, HANDOFF_FILE)? else {
         return Ok(Some(handoff_gate_gap(
             &record.id,
             "missing",
@@ -520,10 +556,9 @@ struct HandoffSources {
 }
 
 fn handoff_sources(paths: &MaestroPaths, record: &FeatureRecord) -> Result<HandoffSources> {
-    let sidecar_dir = feature_sidecar_dir(paths, &record.id);
-    let spec = read_to_string_if_exists(sidecar_dir.join("spec.md"))?;
-    let notes = read_to_string_if_exists(sidecar_dir.join("notes.md"))?;
-    let worktree_ledger = read_to_string_if_exists(worktree::ledger_path(paths, &record.id)?)?;
+    let spec = read_sidecar_text(paths, &record.id, "spec.md")?;
+    let notes = read_sidecar_text(paths, &record.id, "notes.md")?;
+    let worktree_ledger = read_sidecar_text(paths, &record.id, "worktree.yml")?;
     let decisions = decisions::decisions_for_feature(paths, &record.id)?;
     let fingerprint = handoff_source_fingerprint(
         record,
@@ -624,7 +659,10 @@ fn handoff_source_fingerprint_from_contents(contents: &str) -> Option<String> {
 fn handoff_next_commands(paths: &MaestroPaths, record: &FeatureRecord) -> Result<Vec<String>> {
     let commands = match record.status {
         FeatureStatus::Proposed
-            if qa::baseline_present(&feature_sidecar_dir(paths, &record.id))? =>
+            if read_sidecar_text(paths, &record.id, "qa.md")?
+                .as_deref()
+                .and_then(qa::baseline_from_contents)
+                .is_some() =>
         {
             vec![format!("maestro feature accept {}", record.id)]
         }
@@ -912,7 +950,7 @@ fn accept_inner(
         });
         record.updated_at = utc_now_timestamp();
         let status = record.status.clone();
-        save_record(paths, &record, &write)?;
+        save_record(&record, &write)?;
         return Ok(TransitionReport {
             id: id.to_string(),
             status,
@@ -947,12 +985,27 @@ fn accept_inner(
         gaps.push(gap);
     }
     // F — a captured behavior baseline is a precondition of accept (before edits).
-    let feat_dir = feature_sidecar_dir(paths, id);
-    if qa_none_reason.is_none() && !qa::baseline_present(&feat_dir)? {
+    let qa_contents = read_sidecar_text(paths, id, "qa.md")?;
+    if qa_none_reason.is_none()
+        && qa_contents
+            .as_deref()
+            .and_then(qa::baseline_from_contents)
+            .is_none()
+    {
+        let absence = qa_contents
+            .as_deref()
+            .map(|text| {
+                if text.trim().is_empty() {
+                    "empty"
+                } else {
+                    "missing"
+                }
+            })
+            .unwrap_or("missing");
         gaps.push(format!(
-                  "qa-baseline (.maestro/cards/{id}/qa.md {})\n    skill: maestro-card (qa-baseline)\n    target: .maestro/cards/{id}/qa.md\n    retry: maestro feature accept {id}\n    skip (no behavioral surface): maestro feature accept {id} --qa none --reason \"<why>\"",
-                qa::baseline_absence(&feat_dir)
-            ));
+                    "qa-baseline (.maestro/cards/{id}/qa.md {})\n    skill: maestro-card (qa-baseline)\n    target: .maestro/cards/{id}/qa.md\n    retry: maestro feature accept {id}\n    skip (no behavioral surface): maestro feature accept {id} --qa none --reason \"<why>\"",
+                  absence
+              ));
     }
 
     if dry_run {
@@ -1008,7 +1061,7 @@ fn accept_inner(
             amend_log_position: record.amends.len(),
         });
     }
-    save_record(paths, &record, &write)?;
+    save_record(&record, &write)?;
     Ok(TransitionReport {
         id: id.to_string(),
         status: target,
@@ -1091,7 +1144,7 @@ pub fn amend(
         record.qa = None;
     }
 
-    save_record(paths, &record, &write)?;
+    save_record(&record, &write)?;
 
     let note = format!(
         "amended {id} (acceptance +{}, areas +{}, non_goals +{}, questions +{}); reason recorded",
@@ -1115,7 +1168,13 @@ pub fn note(paths: &MaestroPaths, id: &str, text: &str) -> Result<NoteReport> {
         bail!("feature note text cannot be empty");
     }
     let path = feature_sidecar_dir(paths, &record.id).join("notes.md");
-    let append = append_note_file(&path, &record.title, text)?;
+    let append = if path.parent().is_some_and(Path::exists)
+        && !live_db::contains_card_id(paths, &record.id)?
+    {
+        append_note_file(&path, &record.title, text)?
+    } else {
+        append_note_sidecar(paths, &record.id, &record.title, text)?
+    };
     Ok(NoteReport {
         id: record.id,
         created: append.created,
@@ -1143,7 +1202,7 @@ pub fn start(paths: &MaestroPaths, id: &str) -> Result<TransitionReport> {
     };
     record.status = target.clone();
     record.updated_at = utc_now_timestamp();
-    save_record(paths, &record, &write)?;
+    save_record(&record, &write)?;
     Ok(TransitionReport {
         id: id.to_string(),
         status: target,
@@ -1219,7 +1278,7 @@ pub fn close(
     if let Some(line) = outcome {
         record.outcome = Some(line);
     }
-    save_record(paths, &record, &write)?;
+    save_record(&record, &write)?;
     Ok(TransitionReport {
         id: id.to_string(),
         status: target,
@@ -1280,19 +1339,31 @@ fn close_gaps_for_record(
         ));
     }
     // D5 cond 2/3 -- QA baseline present + fresh, every behavioral scenario proven.
-    let feat_dir = feature_sidecar_dir(paths, id);
     let qa_declared_none = qa::qa_declared_none_fresh(record.qa.as_ref(), &record.amends);
     let mut baseline = None;
     if !qa_declared_none {
-        baseline = qa::read_baseline(&feat_dir)?;
-        let slices = qa::read_qa_slices(&feat_dir)?;
+        let qa_contents = read_sidecar_text(paths, id, "qa.md")?;
+        baseline = qa_contents.as_deref().and_then(qa::baseline_from_contents);
+        let slices = match qa_contents.as_deref() {
+            Some(contents) => qa::qa_slices_from_contents(contents, ".maestro/cards/<id>/qa.md")?,
+            None => qa::QaSliceLog::default(),
+        };
         let amend_log = AmendLog {
             entries: record.amends.clone(),
         };
         // Classify absent-vs-empty only when there is no usable baseline (the only path
         // that consumes the word); a present baseline skips the extra read.
         let absence = if baseline.is_none() {
-            qa::baseline_absence(&feat_dir)
+            qa_contents
+                .as_deref()
+                .map(|text| {
+                    if text.trim().is_empty() {
+                        "empty"
+                    } else {
+                        "missing"
+                    }
+                })
+                .unwrap_or("missing")
         } else {
             "missing"
         };
@@ -1384,7 +1455,7 @@ pub fn cancel(paths: &MaestroPaths, id: &str, reason: &str, dry_run: bool) -> Re
     record.status = target;
     record.cancel_reason = Some(reason.to_string());
     record.updated_at = utc_now_timestamp();
-    save_record(paths, &record, &write)?;
+    save_record(&record, &write)?;
 
     let note = if live.is_empty() {
         format!("cancelled {id}; no child tasks affected")
@@ -1460,36 +1531,44 @@ pub fn list_tolerant_with_entries(
 ) -> Vec<FeatureRosterEntry> {
     let counts_by_feature = count_tasks_by_feature_in_entries(task_entries);
     let mut entries = Vec::new();
-    for id in feature_card_ids(paths).unwrap_or_default() {
-        let path = card_store::card_path(paths, &id);
-        match card_store::load(&path) {
-            Ok(Some(card)) if card.card_type == CardType::Feature => {
-                // The card base carries the project scope (T4); capture it before
-                // `record_from_card` folds the card into the project-less record.
-                let project = card.project.clone();
-                match record_from_card(card, path.display().to_string()) {
-                    Ok(record) => {
-                        let counts = counts_by_feature
-                            .get(&record.id)
-                            .cloned()
-                            .unwrap_or_default();
-                        entries.push(FeatureRosterEntry::Loaded(Box::new(view_from_record(
-                            record, counts, project,
-                        ))));
-                    }
-                    Err(error) => entries.push(unreadable_entry(id, path, &error)),
-                }
+    let scan = match card_query::scan_with_failures(paths) {
+        Ok(scan) => scan,
+        Err(_) => return entries,
+    };
+    for (card, path) in scan.cards {
+        if card.card_type != CardType::Feature {
+            continue;
+        }
+        // The card base carries the project scope (T4); capture it before
+        // `record_from_card` folds the card into the project-less record.
+        let id = card.id.clone();
+        let project = card.project.clone();
+        match record_from_card(card, path.display().to_string()) {
+            Ok(record) => {
+                let counts = counts_by_feature
+                    .get(&record.id)
+                    .cloned()
+                    .unwrap_or_default();
+                entries.push(FeatureRosterEntry::Loaded(Box::new(view_from_record(
+                    record, counts, project,
+                ))));
             }
-            Ok(_) => {}
-            Err(error) => {
-                // The card failed to parse, so its declared type is unknowable
-                // from the typed load. Skip only when the raw text clearly
-                // declares a non-feature type (that card's own surfaces report
-                // it); anything else stays on the board as unreadable.
-                if !raw_card_declares_non_feature(&path) {
-                    entries.push(unreadable_entry(id, path, &error));
-                }
-            }
+            Err(error) => entries.push(unreadable_entry(id, path, &error)),
+        }
+    }
+    for failure in scan.failures {
+        // The card failed to parse, so its declared type is unknowable from the
+        // typed load. Skip only when the raw text clearly declares a non-feature
+        // type (that card's own surfaces report it); anything else stays on the
+        // board as unreadable.
+        if !raw_card_declares_non_feature(&failure.path) {
+            entries.push(FeatureRosterEntry::Unreadable {
+                id: failure.id,
+                path: failure.path,
+                error: failure.error,
+                hint: None,
+                typed_error: None,
+            });
         }
     }
     entries
@@ -1545,7 +1624,9 @@ pub fn show(paths: &MaestroPaths, id: &str) -> Result<FeatureView> {
     let counts = count_tasks_for_feature_in_entries(&task_entries, &record.id);
     let acceptance_coverage =
         verification::acceptance_coverage_for_record_in_entries(&record, &task_entries);
-    let notes = read_notes_at(&feature_sidecar_dir(paths, id))?;
+    let notes = read_sidecar_text(paths, id, "notes.md")?
+        .map(|s| s.trim_end().to_string())
+        .filter(|s| !s.is_empty());
     let mut view = view_from_record(record, counts, None);
     view.acceptance_coverage = Some(acceptance_coverage);
     view.notes = notes;
@@ -1807,16 +1888,96 @@ fn view_from_record(
 /// The directory holding a feature's prose sidecars (`spec.md`, `notes.md`,
 /// `qa.md`) beside its `card.yaml` at `cards/<id>/`, where migration copied them.
 pub fn feature_sidecar_dir(paths: &MaestroPaths, id: &str) -> PathBuf {
+    let workbench = paths.workbench_dir().join(id);
+    if workbench.exists() {
+        return workbench;
+    }
     paths.cards_dir().join(id)
 }
 
-/// Read a feature's design notes (`notes.md`) from its directory, if present
-/// and non-empty. `show`/`show_archived` overlay this onto the view; the list
-/// path leaves `notes` as None to avoid per-row I/O.
-fn read_notes_at(dir: &Path) -> Result<Option<String>> {
-    Ok(read_to_string_if_exists(dir.join("notes.md"))?
-        .map(|s| s.trim_end().to_string())
-        .filter(|s| !s.is_empty()))
+fn finalization_source_dir(paths: &MaestroPaths, id: &str) -> Option<PathBuf> {
+    let workbench = paths.workbench_dir().join(id);
+    if workbench.join("card.yaml").is_file() {
+        return Some(workbench);
+    }
+    let card_dir = paths.cards_dir().join(id);
+    if card_dir.join("card.yaml").is_file() {
+        return Some(card_dir);
+    }
+    None
+}
+
+fn db_sidecar_path(paths: &MaestroPaths, id: &str, name: &str) -> PathBuf {
+    paths.store_db_file().join("cards").join(id).join(name)
+}
+
+fn validate_sidecar_name(name: &str) -> Result<()> {
+    let mut components = Path::new(name).components();
+    if name.is_empty()
+        || !matches!(components.next(), Some(Component::Normal(_)))
+        || components.next().is_some()
+    {
+        bail!("invalid feature sidecar name: {name}");
+    }
+    Ok(())
+}
+
+pub fn read_sidecar_text(paths: &MaestroPaths, id: &str, name: &str) -> Result<Option<String>> {
+    validate_feature_id(id)?;
+    validate_sidecar_name(name)?;
+    let workbench = paths.workbench_dir().join(id).join(name);
+    if let Some(contents) = read_to_string_if_exists(&workbench)? {
+        return Ok(Some(contents));
+    }
+    if live_db::contains_card_id(paths, id)?
+        && let Some(contents) = live_db::read_text_file(paths, id, name)?
+    {
+        return Ok(Some(contents));
+    }
+    let card_file = paths.cards_dir().join(id).join(name);
+    if let Some(contents) = read_to_string_if_exists(&card_file)? {
+        return Ok(Some(contents));
+    }
+    Ok(None)
+}
+
+pub fn write_sidecar_text(
+    paths: &MaestroPaths,
+    id: &str,
+    name: &str,
+    contents: &str,
+) -> Result<PathBuf> {
+    validate_feature_id(id)?;
+    validate_sidecar_name(name)?;
+    let workbench_dir = paths.workbench_dir().join(id);
+    if workbench_dir.exists() {
+        let path = workbench_dir.join(name);
+        write_string_atomic(&path, contents)
+            .with_context(|| format!("failed to write {}", path.display()))?;
+        return Ok(path);
+    }
+    if live_db::contains_card_id(paths, id)? {
+        live_db::write_text_file(paths, id, name, contents)?;
+        return Ok(db_sidecar_path(paths, id, name));
+    }
+    let card_dir = paths.cards_dir().join(id);
+    ensure_dir(&card_dir)?;
+    let path = card_dir.join(name);
+    write_string_atomic(&path, contents)
+        .with_context(|| format!("failed to write {}", path.display()))?;
+    Ok(path)
+}
+
+fn load_record_from_dir(dir: &Path, id: &str) -> Result<FeatureRecord> {
+    validate_feature_id(id)?;
+    let path = dir.join("card.yaml");
+    let Some(card) = card_store::load(&path)? else {
+        bail!("feature not found: {id}");
+    };
+    if card.card_type != CardType::Feature {
+        bail!("{id} is a {}, not a feature", card.card_type.as_str());
+    }
+    record_from_card(card, path.display().to_string())
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1833,6 +1994,29 @@ fn append_note_file(path: &Path, title: &str, text: &str) -> Result<NoteAppend> 
     let line = format!("{date}  {}", text.trim());
     let created = append_text_file(path, &format!("# {title}\n\n"), &format!("{line}\n"))
         .with_context(|| format!("failed to append feature note {}", path.display()))?;
+    Ok(NoteAppend { created, line })
+}
+
+fn append_note_sidecar(
+    paths: &MaestroPaths,
+    id: &str,
+    title: &str,
+    text: &str,
+) -> Result<NoteAppend> {
+    let date = utc_now_timestamp()
+        .split_once('T')
+        .map(|(date, _)| date.to_string())
+        .unwrap_or_else(|| "1970-01-01".to_string());
+    let line = format!("{date}  {}", text.trim());
+    let existing = read_sidecar_text(paths, id, "notes.md")?;
+    let created = existing.as_deref().is_none_or(str::is_empty);
+    let mut contents = existing.unwrap_or_else(|| format!("# {title}\n\n"));
+    if !contents.ends_with('\n') {
+        contents.push('\n');
+    }
+    contents.push_str(&line);
+    contents.push('\n');
+    write_sidecar_text(paths, id, "notes.md", &contents)?;
     Ok(NoteAppend { created, line })
 }
 
@@ -1875,13 +2059,10 @@ pub fn write_spec_section(
     if text.is_empty() {
         bail!("section text must not be empty");
     }
-    scaffold_spec_file(paths, id, &record.title)?;
-    let path = feature_sidecar_dir(paths, id).join("spec.md");
-    let original = std::fs::read_to_string(&path)
-        .with_context(|| format!("failed to read {}", path.display()))?;
+    let original = read_sidecar_text(paths, id, "spec.md")?
+        .unwrap_or_else(|| format!("# {}\n\n## Current state\n\n## Problem\n\n", record.title));
     let (contents, created_section) = patch_spec_section(&original, section, text, replace);
-    write_string_atomic(&path, &contents)
-        .with_context(|| format!("failed to write {}", path.display()))?;
+    write_sidecar_text(paths, id, "spec.md", &contents)?;
     Ok(SpecSectionReport { created_section })
 }
 
@@ -1957,35 +2138,38 @@ pub(crate) fn validate_feature_id(id: &str) -> Result<()> {
 /// incompatibility.
 pub(crate) fn load_record(paths: &MaestroPaths, id: &str) -> Result<FeatureRecord> {
     validate_feature_id(id)?;
-    let path = card_store::card_path(paths, id);
-    let Some(card) = card_store::load(&path)? else {
+    let Some(resolved) = card_store::resolve(paths, id)? else {
         return Err(feature_not_found(paths, id));
     };
-    if card.card_type != CardType::Feature {
-        bail!("{id} is a {}, not a feature", card.card_type.as_str());
+    if resolved.card.card_type != CardType::Feature {
+        bail!(
+            "{id} is a {}, not a feature",
+            resolved.card.card_type.as_str()
+        );
     }
-    record_from_card(card, path.display().to_string())
+    let artifact = resolved.path().display().to_string();
+    record_from_card(resolved.card, artifact)
 }
 
-/// Load a feature record for a read-modify-write, returning the load-time card
-/// snapshot that makes the matching [`save_record`] a compare-and-set (SPEC D1):
-/// the snapshot checked at write time is the one read at load time, which is what
-/// closes the feature write race. Same errors as [`load_record`].
+/// Load a feature record for a read-modify-write, returning the resolved card
+/// basis that makes the matching [`save_record`] a compare-and-set (SPEC D1).
+/// Same errors as [`load_record`].
 pub(crate) fn load_record_for_update(
     paths: &MaestroPaths,
     id: &str,
-) -> Result<(FeatureRecord, CardSnapshot)> {
+) -> Result<(FeatureRecord, ResolvedCard)> {
     validate_feature_id(id)?;
-    let path = card_store::card_path(paths, id);
-    let snapshot = card_store::load_with_snapshot(&path)?;
-    let Some(card) = snapshot.card.clone() else {
+    let Some(resolved) = card_store::resolve(paths, id)? else {
         return Err(feature_not_found(paths, id));
     };
-    if card.card_type != CardType::Feature {
-        bail!("{id} is a {}, not a feature", card.card_type.as_str());
+    if resolved.card.card_type != CardType::Feature {
+        bail!(
+            "{id} is a {}, not a feature",
+            resolved.card.card_type.as_str()
+        );
     }
-    let record = record_from_card(card, path.display().to_string())?;
-    Ok((record, snapshot))
+    let record = record_from_card(resolved.card.clone(), resolved.path().display().to_string())?;
+    Ok((record, resolved))
 }
 
 /// The not-found error for a live feature read. When the id resolves in the
@@ -2082,17 +2266,13 @@ fn record_from_native_card(card: Card) -> FeatureRecord {
 
 /// Persist a feature record against its load-time card snapshot, so the write is
 /// a CAS that rejects a racing writer (SPEC D1).
-pub(crate) fn save_record(
-    paths: &MaestroPaths,
-    record: &FeatureRecord,
-    snapshot: &CardSnapshot,
-) -> Result<()> {
+pub(crate) fn save_record(record: &FeatureRecord, resolved: &ResolvedCard) -> Result<()> {
     let card = fold::feature_card(
         record.id.clone(),
         fold::record_to_mapping(record, "feature record")?,
         &utc_now_timestamp(),
     );
-    card_store::save_folded_with_snapshot(&card_store::card_path(paths, &record.id), card, snapshot)
+    card_store::save_folded_resolved(card, resolved)
 }
 
 /// Create a new feature card through the store seam, which rejects a reserved
@@ -2114,14 +2294,9 @@ fn save_new_record(
 
 /// Whether a live feature card exists for `id`.
 fn live_record_exists(paths: &MaestroPaths, id: &str) -> bool {
-    card_store::card_path(paths, id).exists()
-}
-
-/// Ids of card directories in the flat store, sorted (the shared store walk).
-/// Shared by the record scan and the roster reader so both walk the store
-/// identically.
-fn feature_card_ids(paths: &MaestroPaths) -> Result<Vec<String>> {
-    card_store::card_dir_ids(&paths.cards_dir())
+    card_store::locate(paths, id)
+        .map(|home| home.is_some())
+        .unwrap_or(false)
 }
 
 /// Reconstruct every live feature record from `feature`-typed cards in the flat
@@ -2129,19 +2304,12 @@ fn feature_card_ids(paths: &MaestroPaths) -> Result<Vec<String>> {
 /// surface the first such error). Sorted by id.
 fn scan_feature_cards(paths: &MaestroPaths, tolerant: bool) -> Result<Vec<FeatureRecord>> {
     let mut records = Vec::new();
-    for id in feature_card_ids(paths)? {
-        let path = card_store::card_path(paths, &id);
-        match card_store::load(&path) {
-            Ok(Some(card)) if card.card_type == CardType::Feature => {
-                match record_from_card(card, path.display().to_string()) {
-                    Ok(record) => records.push(record),
-                    Err(error) if tolerant => {
-                        let _ = error;
-                    }
-                    Err(error) => return Err(error),
-                }
-            }
-            Ok(_) => {}
+    for (card, path) in card_query::scan_with_paths(paths)? {
+        if card.card_type != CardType::Feature {
+            continue;
+        }
+        match record_from_card(card, path.display().to_string()) {
+            Ok(record) => records.push(record),
             Err(error) if tolerant => {
                 let _ = error;
             }
@@ -2232,10 +2400,10 @@ mod cutover_tests {
             load_record_for_update(&paths, &id).expect("second read for update");
 
         winner.description = Some("winner".to_string());
-        save_record(&paths, &winner, &winner_write).expect("first writer commits");
+        save_record(&winner, &winner_write).expect("first writer commits");
 
         loser.description = Some("stale".to_string());
-        let error = save_record(&paths, &loser, &loser_write)
+        let error = save_record(&loser, &loser_write)
             .expect_err("the stale writer must be rejected, not silently win");
         assert!(
             format!("{error:#}").contains("changed since it was read"),
@@ -2360,6 +2528,74 @@ mod cutover_tests {
             std::fs::write(&file, raw).expect("write sniff fixture");
             assert_eq!(raw_card_declares_non_feature(&file), non_feature, "{raw:?}");
         }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn finalize_imports_feature_folder_into_db_authority() {
+        let (root, paths) = card_mode_repo("finalize-db");
+        let id = create(&paths, "DB Feature", None).expect("create feature");
+        set(
+            &paths,
+            &id,
+            ContractEdits {
+                acceptance: Some(vec!["DB-backed show works".to_string()]),
+                affected_areas: Some(vec!["card store".to_string()]),
+                ..Default::default()
+            },
+        )
+        .expect("set contract");
+        let card_dir = paths.cards_dir().join(&id);
+        assert!(card_dir.exists(), "feature starts file-backed");
+
+        let report = finalize(&paths, &id).expect("finalize imports into DB");
+
+        assert!(
+            !card_dir.exists(),
+            "finalized feature no longer depends on .maestro/cards/<id>"
+        );
+        assert!(
+            report.path.starts_with(paths.store_db_file()),
+            "handoff is DB-backed: {}",
+            report.path.display()
+        );
+        assert!(live_db::contains_card_id(&paths, &id).expect("DB lookup"));
+        assert_eq!(show(&paths, &id).expect("show DB feature").id, id);
+        assert!(
+            read_sidecar_text(&paths, &id, HANDOFF_FILE)
+                .expect("read DB handoff")
+                .is_some()
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn reopen_exports_workbench_and_finalize_imports_it_back() {
+        let (root, paths) = card_mode_repo("reopen-db");
+        let id = create(&paths, "Workbench Feature", None).expect("create feature");
+        finalize(&paths, &id).expect("initial DB finalize");
+
+        let report = reopen(&paths, &id).expect("reopen DB feature");
+        assert!(report.path.join("card.yaml").is_file());
+        assert!(report.path.join("spec.md").is_file());
+        std::fs::write(
+            report.path.join("spec.md"),
+            "# Workbench Feature\n\n## Current state\n\nedited in workbench\n",
+        )
+        .expect("edit workbench spec");
+
+        finalize(&paths, &id).expect("refinalize workbench");
+
+        assert!(
+            !report.path.exists(),
+            "finalize removes imported workbench surface"
+        );
+        let spec = read_sidecar_text(&paths, &id, "spec.md")
+            .expect("read DB spec")
+            .expect("DB spec exists");
+        assert!(spec.contains("edited in workbench"), "{spec}");
+
         let _ = std::fs::remove_dir_all(&root);
     }
 }

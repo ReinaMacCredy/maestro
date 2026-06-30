@@ -8,13 +8,13 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
-use crate::domain::card::archive_db;
 use crate::domain::card::fold;
 use crate::domain::card::schema::{Card, CardType, Dep, DepKind};
 use crate::domain::card::store::{
     CARD_FILE, DECISIONS_FILE, IDEAS_FILE, TASK_FILE, TASKS_DIR, is_dir_backed, is_symlink, load,
     load_entries, resolve,
 };
+use crate::domain::card::{archive_db, live_db};
 use crate::foundation::core::fs::sorted_child_dirs;
 use crate::foundation::core::paths::MaestroPaths;
 
@@ -113,7 +113,10 @@ pub fn body_of(card: &Card) -> Option<String> {
 /// schema-mismatched card; tolerant scans that need to survive one bad
 /// artifact filter at their own layer.
 pub fn scan(paths: &MaestroPaths) -> Result<Vec<Card>> {
-    scan_dir(&paths.cards_dir())
+    Ok(scan_with_paths(paths)?
+        .into_iter()
+        .map(|(card, _)| card)
+        .collect())
 }
 
 /// [`scan`] over an explicit card tree root, so the archive reads
@@ -149,14 +152,25 @@ pub struct StoreScanFailure {
 /// file (one failure per broken `decisions.yaml`/`ideas.yaml`). `Err` only
 /// when the store root itself cannot be walked.
 pub fn scan_with_failures(paths: &MaestroPaths) -> Result<StoreScan> {
-    walk(&paths.cards_dir(), false)
+    let mut scan = walk(&paths.cards_dir(), false)?;
+    match live_db::scan(paths) {
+        Ok(db_cards) => merge_db_cards(&mut scan, db_cards),
+        Err(error) => scan.failures.push(StoreScanFailure {
+            id: "store.sqlite".to_string(),
+            path: live_db::db_file(paths),
+            error: format!("{error:#}"),
+        }),
+    }
+    Ok(scan)
 }
 
 /// Strict [`scan`] that keeps each card's backing path (its own yaml for a
 /// dir-backed card, the container list file for an entry), for the per-type
 /// scans that report artifact locations.
 pub(crate) fn scan_with_paths(paths: &MaestroPaths) -> Result<Vec<(Card, PathBuf)>> {
-    scan_dir_with_paths(&paths.cards_dir())
+    let mut scan = walk(&paths.cards_dir(), true)?;
+    merge_db_cards(&mut scan, live_db::scan(paths)?);
+    Ok(scan.cards)
 }
 
 /// [`scan_with_paths`] over an explicit card tree root (the archive tree).
@@ -205,6 +219,16 @@ fn walk(root: &Path, strict: bool) -> Result<StoreScan> {
     scan.cards.sort_by(|a, b| a.0.id.cmp(&b.0.id));
     scan.failures.sort_by(|a, b| a.id.cmp(&b.id));
     Ok(scan)
+}
+
+fn merge_db_cards(scan: &mut StoreScan, db_cards: Vec<(Card, PathBuf)>) {
+    if db_cards.is_empty() {
+        return;
+    }
+    let db_ids: BTreeSet<String> = db_cards.iter().map(|(card, _)| card.id.clone()).collect();
+    scan.cards.retain(|(card, _)| !db_ids.contains(&card.id));
+    scan.cards.extend(db_cards);
+    scan.cards.sort_by(|a, b| a.0.id.cmp(&b.0.id));
 }
 
 /// Read one dir-backed record into the scan. An absent record (a marker dir,

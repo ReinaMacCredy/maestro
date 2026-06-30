@@ -219,7 +219,7 @@ fn amend_rejects_a_blank_addition_value() {
 }
 
 #[test]
-fn verify_rejects_unknown_acceptance_evidence_kind() {
+fn finalize_rejects_unknown_acceptance_evidence_kind() {
     let temp = TestTempDir::new("maestro-feature-evidence-kind");
     let paths = MaestroPaths::new(temp.path());
     feature::create(&paths, "Billing CSV", None).expect("invariant: create should succeed");
@@ -238,7 +238,8 @@ fn verify_rejects_unknown_acceptance_evidence_kind() {
         .expect("invariant: feature may be accepted");
     feature::start(&paths, "billing-csv").expect("invariant: started features may be verified");
 
-    let path = paths.cards_dir().join("billing-csv").join("card.yaml");
+    let reopened = feature::reopen(&paths, "billing-csv").expect("invariant: reopen should work");
+    let path = reopened.path.join("card.yaml");
     let mut raw: serde_yaml::Value = serde_yaml::from_str(
         &fs::read_to_string(&path).expect("invariant: feature should be readable"),
     )
@@ -273,10 +274,12 @@ fn verify_rejects_unknown_acceptance_evidence_kind() {
         serde_yaml::to_string(&raw).expect("invariant: feature should serialize"),
     )
     .expect("invariant: feature should be writable");
-
-    let error = feature::verify_feature(&paths, "billing-csv", Vec::new())
-        .expect_err("unknown evidence kind must not become explicit proof");
-    assert!(format!("{error:#}").contains("kind"), "{error:#}");
+    let error = feature::finalize(&paths, "billing-csv")
+        .expect_err("unknown evidence kind must not become DB authority");
+    assert!(
+        format!("{error:#}").contains("unknown variant `typo`"),
+        "{error:#}"
+    );
 }
 
 #[test]
@@ -511,8 +514,13 @@ fn amend_is_append_only_with_value_dedup() {
     assert!(!report.changed);
 
     // the feature record (folded under the card's `extra`) embeds the one genuine amend
-    let feature_raw = fs::read_to_string(paths.cards_dir().join("billing-csv").join("card.yaml"))
-        .expect("invariant: card.yaml should be readable");
+    let feature_raw = serde_yaml::to_string(
+        &card::store::resolve(&paths, "billing-csv")
+            .expect("invariant: feature should resolve")
+            .expect("invariant: feature should exist")
+            .card,
+    )
+    .expect("invariant: feature should serialize");
     assert!(feature_raw.contains("widen scope"));
     assert!(!feature_raw.contains("retry"));
 }

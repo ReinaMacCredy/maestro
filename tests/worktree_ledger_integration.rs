@@ -5,6 +5,8 @@ use std::path::Path;
 use std::process::Command;
 
 use git2::{BranchType, IndexAddOption, Repository, Signature};
+use maestro::domain::feature;
+use maestro::foundation::core::paths::MaestroPaths;
 use serde_yaml::Value as YamlValue;
 use support::TestTempDir;
 
@@ -272,13 +274,10 @@ fn worktree_record_verbs_update_ledger_without_running_git() {
 
     let finalize = maestro(temp.path(), &["feature", "finalize", &feature_id]);
     assert_success(&finalize, &["feature", "finalize"]);
-    let handoff = fs::read_to_string(
-        temp.path()
-            .join(".maestro/cards")
-            .join(&feature_id)
-            .join("handoff.md"),
-    )
-    .expect("handoff should exist");
+    let handoff =
+        feature::read_sidecar_text(&MaestroPaths::new(temp.path()), &feature_id, "handoff.md")
+            .expect("handoff should be readable")
+            .expect("handoff should exist");
     assert!(handoff.contains("## Worktree Ledger"), "{handoff}");
     assert!(
         handoff.contains("- Lane `passive-ledger`: `cleanup_due`"),
@@ -338,14 +337,11 @@ fn worktree_record_verbs_update_ledger_without_running_git() {
         "cleanup_complete must not keep prompting cleanup:\n{status_after_cleanup}"
     );
 
-    let ledger_path = temp
-        .path()
-        .join(".maestro/cards")
-        .join(&feature_id)
-        .join("worktree.yml");
-    let ledger: YamlValue =
-        serde_yaml::from_str(&fs::read_to_string(ledger_path).expect("ledger should exist"))
-            .expect("ledger should parse");
+    let ledger_raw =
+        feature::read_sidecar_text(&MaestroPaths::new(temp.path()), &feature_id, "worktree.yml")
+            .expect("ledger should be readable")
+            .expect("ledger should exist");
+    let ledger: YamlValue = serde_yaml::from_str(&ledger_raw).expect("ledger should parse");
     assert_eq!(ledger["lanes"][0]["intent"]["slug"], "passive-ledger");
     assert_eq!(ledger["lanes"][0]["milestones"]["merged_back_commit"], head);
     assert_eq!(ledger["lanes"][0]["milestones"]["verified_commit"], head);

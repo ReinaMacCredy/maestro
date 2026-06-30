@@ -143,7 +143,7 @@ pub fn verify_feature(
             });
         }
         record.acceptance_evidence.extend(entries);
-        registry::save_record(paths, &record, &write)?;
+        registry::save_record(&record, &write)?;
         return Ok(FeatureVerifyReport {
             feature_id: record.id,
             recorded: Some(recorded.join("; ")),
@@ -172,7 +172,7 @@ pub fn verify_feature(
         unresolved,
         invalidated_by: report.invalidated_by.clone(),
     });
-    registry::save_record(paths, &record, &write)?;
+    registry::save_record(&record, &write)?;
     Ok(FeatureVerifyReport {
         feature_id: record.id,
         recorded: None,
@@ -225,9 +225,13 @@ fn sweep_acceptance(
 ) -> Result<AcceptanceSweepReport> {
     let explicit = latest_explicit_evidence(record);
     let task_proofs = task_proofs_by_acceptance_in_entries(task_entries, &record.id);
-    let qa_proofs = qa::acceptance_ids_covered_by_counting_slices(&registry::feature_sidecar_dir(
-        paths, &record.id,
-    ))?;
+    let qa_proofs = match registry::read_sidecar_text(paths, &record.id, "qa.md")? {
+        Some(contents) => {
+            let slices = qa::qa_slices_from_contents(&contents, ".maestro/cards/<id>/qa.md")?;
+            qa::acceptance_ids_covered_by_contents(&contents, &slices)?
+        }
+        None => std::collections::BTreeSet::new(),
+    };
     let mut items = Vec::new();
     for (index, text) in record.acceptance.iter().enumerate() {
         let ac_id = acceptance_id(index);

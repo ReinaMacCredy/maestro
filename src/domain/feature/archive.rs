@@ -15,13 +15,13 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
-use crate::domain::card::archive_db;
 use crate::domain::card::query::{Coarse, coarse_of, scan_dir_with_paths, scan_with_paths};
 use crate::domain::card::schema::CardType;
 use crate::domain::card::store::{
     CardSnapshot, card_path, is_dir_backed, load_entries, load_with_snapshot,
     remove_dir_with_snapshot, save_entries,
 };
+use crate::domain::card::{archive_db, live_db};
 use crate::domain::feature::registry::{
     archived_card_path, load_archived_record, load_record, validate_feature_id,
 };
@@ -66,6 +66,17 @@ struct DirArchiveMove {
     source_dir: PathBuf,
     target_dir: PathBuf,
     snapshot: CardSnapshot,
+}
+
+struct DbArchiveMove {
+    card_id: String,
+    source_relpath: PathBuf,
+    expected_raw: String,
+}
+
+enum ArchiveMove {
+    Dir(Box<DirArchiveMove>),
+    Db(DbArchiveMove),
 }
 
 /// Append the durable minimum receipt for an evidence-gated auto-archive.
@@ -141,12 +152,22 @@ fn archive_feature_checked(
     validate_feature_id(id)?;
     let live_card = card_path(paths, id);
     let archive_card = archived_card_path(paths, id);
+    let live_db_card = if live_card.is_file() {
+        None
+    } else {
+        live_db::resolve(paths, id)?
+    };
     let live_card_snapshot = if live_card.is_file() {
         let bytes = fs::read(&live_card)
             .with_context(|| format!("failed to read {}", live_card.display()))?;
         Some((sha256_prefixed(&bytes), bytes))
     } else {
-        None
+        live_db_card.as_ref().map(|db_card| {
+            (
+                sha256_prefixed(db_card.raw.as_bytes()),
+                db_card.raw.as_bytes().to_vec(),
+            )
+        })
     };
     if let (Some(expected), Some((actual, _))) =
         (expected_live_card_hash, live_card_snapshot.as_ref())
@@ -157,7 +178,7 @@ fn archive_feature_checked(
         );
     }
 
-    let (record, feature_live) = if live_card.is_file() {
+    let (record, feature_live) = if live_card.is_file() || live_db_card.is_some() {
         (load_record(paths, id)?, true)
     } else if archive_card.is_file() || archive_db::contains_card_id(paths, id)? {
         // Sweep re-run: the feature already moved; only stragglers remain.
@@ -206,7 +227,9 @@ fn archive_feature_checked(
     terminal_children.sort();
 
     if !dry_run {
-        if let Some((snapshot_hash, snapshot_bytes)) = live_card_snapshot.as_ref() {
+        if live_card.is_file()
+            && let Some((snapshot_hash, snapshot_bytes)) = live_card_snapshot.as_ref()
+        {
             let current_bytes = fs::read(&live_card)
                 .with_context(|| format!("failed to re-read {}", live_card.display()))?;
             if current_bytes != *snapshot_bytes {
@@ -215,50 +238,86 @@ fn archive_feature_checked(
                     "cannot archive {id} — target card changed since preflight (expected {snapshot_hash}, found {current_hash}); re-run the command"
                 );
             }
+        } else if let Some(db_card) = live_db_card.as_ref() {
+            let Some(current) = live_db::resolve(paths, id)? else {
+                bail!(
+                    "cannot archive {id} — target card changed since preflight; re-run the command"
+                );
+            };
+            if current.raw != db_card.raw {
+                let expected_hash = sha256_prefixed(db_card.raw.as_bytes());
+                let current_hash = sha256_prefixed(current.raw.as_bytes());
+                bail!(
+                    "cannot archive {id} — target card changed since preflight (expected {expected_hash}, found {current_hash}); re-run the command"
+                );
+            }
         }
         // Pre-flight no-clobber over the whole move set, so a collision aborts
         // the run before anything moves. A child inside the feature container
         // rides the container move; only outside homes move individually.
         let mut moves = Vec::new();
         if feature_live {
-            moves.push(DirArchiveMove {
-                card_id: id.to_string(),
-                record_path: live_card.clone(),
-                source_dir: container.clone(),
-                target_dir: paths.archive_cards_dir().join(id),
-                snapshot: load_with_snapshot(&live_card)?,
-            });
+            if let Some(db_card) = live_db_card.as_ref() {
+                moves.push(ArchiveMove::Db(DbArchiveMove {
+                    card_id: id.to_string(),
+                    source_relpath: PathBuf::from(id),
+                    expected_raw: db_card.raw.clone(),
+                }));
+            } else {
+                moves.push(ArchiveMove::Dir(Box::new(DirArchiveMove {
+                    card_id: id.to_string(),
+                    record_path: live_card.clone(),
+                    source_dir: container.clone(),
+                    target_dir: paths.archive_cards_dir().join(id),
+                    snapshot: load_with_snapshot(&live_card)?,
+                })));
+            }
         }
         for (child, path) in &terminal_children {
             if path.starts_with(&container) {
                 continue;
             }
-            let (src, dst) =
-                child_move(child, path, &paths.cards_dir(), &paths.archive_cards_dir())?;
-            moves.push(DirArchiveMove {
-                card_id: child.clone(),
-                record_path: path.clone(),
-                source_dir: src,
-                target_dir: dst,
-                snapshot: load_with_snapshot(path)?,
-            });
+            if path.starts_with(live_db::db_file(paths)) {
+                let Some(db_child) = live_db::resolve(paths, child)? else {
+                    bail!(
+                        "cannot archive {id} — child {child} changed since preflight; re-run the command"
+                    );
+                };
+                moves.push(ArchiveMove::Db(DbArchiveMove {
+                    card_id: child.clone(),
+                    source_relpath: PathBuf::from(child),
+                    expected_raw: db_child.raw,
+                }));
+            } else {
+                let (src, dst) =
+                    child_move(child, path, &paths.cards_dir(), &paths.archive_cards_dir())?;
+                moves.push(ArchiveMove::Dir(Box::new(DirArchiveMove {
+                    card_id: child.clone(),
+                    record_path: path.clone(),
+                    source_dir: src,
+                    target_dir: dst,
+                    snapshot: load_with_snapshot(path)?,
+                })));
+            }
         }
         for item in &moves {
-            if item.target_dir.exists() {
+            if let Some(target_dir) = item.archive_target_dir(paths)
+                && target_dir.exists()
+            {
                 bail!(
                     "cannot archive {id} — an archived copy already exists at {}",
-                    item.target_dir.display()
+                    target_dir.display()
                 );
             }
-            if archive_db::contains_card_id(paths, &item.card_id)? {
+            if archive_db::contains_card_id(paths, item.card_id())? {
                 bail!(
                     "cannot archive {id} — archived card {} already exists in the archive DB",
-                    item.card_id
+                    item.card_id()
                 );
             }
         }
         for item in &moves {
-            archive_and_remove_dir(paths, item)?;
+            archive_and_remove(paths, item)?;
         }
         // SPEC-archive-memory A2: one digest line per archived feature, after
         // the moves succeed and only on the feature-moving run -- a sweep
@@ -284,6 +343,29 @@ fn archive_feature_checked(
     })
 }
 
+impl ArchiveMove {
+    fn card_id(&self) -> &str {
+        match self {
+            ArchiveMove::Dir(item) => &item.card_id,
+            ArchiveMove::Db(item) => &item.card_id,
+        }
+    }
+
+    fn archive_target_dir(&self, paths: &MaestroPaths) -> Option<PathBuf> {
+        match self {
+            ArchiveMove::Dir(item) => Some(item.target_dir.clone()),
+            ArchiveMove::Db(item) => Some(paths.archive_cards_dir().join(&item.source_relpath)),
+        }
+    }
+}
+
+fn archive_and_remove(paths: &MaestroPaths, item: &ArchiveMove) -> Result<()> {
+    match item {
+        ArchiveMove::Dir(item) => archive_and_remove_dir(paths, item),
+        ArchiveMove::Db(item) => archive_and_remove_db(paths, item),
+    }
+}
+
 fn archive_and_remove_dir(paths: &MaestroPaths, item: &DirArchiveMove) -> Result<()> {
     let relative = item
         .source_dir
@@ -305,6 +387,28 @@ fn archive_and_remove_dir(paths: &MaestroPaths, item: &DirArchiveMove) -> Result
         bail!(
             "failed to remove archived live card {}: {detail}",
             item.source_dir.display()
+        );
+    }
+    Ok(())
+}
+
+fn archive_and_remove_db(paths: &MaestroPaths, item: &DbArchiveMove) -> Result<()> {
+    let archived = live_db::archive_card_snapshot(paths, &item.card_id, &item.source_relpath)?;
+    if archived.raw != item.expected_raw {
+        rollback_archive_snapshot(paths, &item.card_id)?;
+        let expected_hash = sha256_prefixed(item.expected_raw.as_bytes());
+        let current_hash = sha256_prefixed(archived.raw.as_bytes());
+        bail!(
+            "cannot archive {} — target card changed since preflight (expected {expected_hash}, found {current_hash}); re-run the command",
+            item.card_id
+        );
+    }
+    if let Err(error) = live_db::remove_card_if_unchanged(paths, &archived.card, &archived.raw) {
+        let detail = error.to_string();
+        rollback_archive_snapshot(paths, &item.card_id)?;
+        bail!(
+            "failed to remove archived DB card {}: {detail}",
+            item.card_id
         );
     }
     Ok(())

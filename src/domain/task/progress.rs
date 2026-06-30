@@ -327,7 +327,7 @@ fn load_or_create_actor_progress(
             .parent()
             .context("progress card path is missing parent directory")?
             .join(PROGRESS_FILE),
-        CardHome::Entry(_) => bail!("progress cards must be dir-backed"),
+        CardHome::Entry(_) | CardHome::Db(_) => bail!("progress cards must be dir-backed"),
     };
     let snapshot = load_with_snapshot(&path)?;
     let progress = ProgressFile::new(agent, session_id);

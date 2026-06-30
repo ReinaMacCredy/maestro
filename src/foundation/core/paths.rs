@@ -74,6 +74,16 @@ impl MaestroPaths {
         self.maestro_dir().join("cards")
     }
 
+    /// Return the live DB-backed Maestro store.
+    pub fn store_db_file(&self) -> PathBuf {
+        self.maestro_dir().join("store.sqlite")
+    }
+
+    /// Return the editable workbench root for reopening finalized DB-backed cards.
+    pub fn workbench_dir(&self) -> PathBuf {
+        self.maestro_dir().join("workbench")
+    }
+
     /// Return the run artifact directory.
     pub fn runs_dir(&self) -> PathBuf {
         self.maestro_dir().join("runs")

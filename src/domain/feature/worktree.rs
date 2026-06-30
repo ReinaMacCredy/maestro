@@ -6,7 +6,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::domain::run::Presence;
 use crate::domain::{card, conflict, run};
-use crate::foundation::core::fs::{read_to_string_if_exists, write_string_if_unchanged};
 use crate::foundation::core::git;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::time::utc_now_timestamp;
@@ -281,7 +280,7 @@ pub fn ledger_path(paths: &MaestroPaths, feature_id: &str) -> Result<PathBuf> {
 
 pub fn load(paths: &MaestroPaths, feature_id: &str) -> Result<Option<WorktreeLedger>> {
     let path = ledger_path(paths, feature_id)?;
-    let Some(raw) = read_to_string_if_exists(&path)? else {
+    let Some(raw) = registry::read_sidecar_text(paths, feature_id, WORKTREE_LEDGER_FILE)? else {
         return Ok(None);
     };
     let ledger: WorktreeLedger = serde_yaml::from_str(&raw)
@@ -329,14 +328,13 @@ pub fn lane_statuses(paths: &MaestroPaths, feature_id: &str) -> Result<Vec<Workt
 
 #[cfg(test)]
 fn save(paths: &MaestroPaths, feature_id: &str, ledger: &WorktreeLedger) -> Result<()> {
-    let path = ledger_path(paths, feature_id)?;
-    let raw = read_to_string_if_exists(&path)?;
+    let raw = registry::read_sidecar_text(paths, feature_id, WORKTREE_LEDGER_FILE)?;
     save_with_snapshot(paths, feature_id, raw.as_deref(), ledger)
 }
 
 fn load_with_snapshot(paths: &MaestroPaths, feature_id: &str) -> Result<LoadedWorktreeLedger> {
     let path = ledger_path(paths, feature_id)?;
-    let Some(raw) = read_to_string_if_exists(&path)? else {
+    let Some(raw) = registry::read_sidecar_text(paths, feature_id, WORKTREE_LEDGER_FILE)? else {
         return Ok(LoadedWorktreeLedger {
             ledger: WorktreeLedger::default(),
             raw: None,
@@ -366,8 +364,16 @@ fn save_with_snapshot(
     }
     let path = ledger_path(paths, feature_id)?;
     let contents = serde_yaml::to_string(ledger)?;
-    write_string_if_unchanged(&path, expected_raw, &contents)
-        .with_context(|| format!("failed to write {}", path.display()))
+    let current = registry::read_sidecar_text(paths, feature_id, WORKTREE_LEDGER_FILE)?;
+    if current.as_deref() != expected_raw {
+        bail!(
+            "worktree ledger {} changed since it was read; re-run the command",
+            path.display()
+        );
+    }
+    registry::write_sidecar_text(paths, feature_id, WORKTREE_LEDGER_FILE, &contents)
+        .with_context(|| format!("failed to write {}", path.display()))?;
+    Ok(())
 }
 
 fn merge_missing_milestones(existing: &mut WorktreeMilestones, incoming: WorktreeMilestones) {

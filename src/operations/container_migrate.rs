@@ -149,6 +149,13 @@ pub fn run(paths: &MaestroPaths) -> Result<ContainerMigrateReport> {
                     });
                 }
             },
+            CardHome::Db(path) => {
+                bail!(
+                    "container migration cannot fold {} into DB-backed home {}",
+                    card.id,
+                    path.display()
+                )
+            }
         }
     }
 

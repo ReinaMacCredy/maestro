@@ -10,6 +10,8 @@ use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
+use maestro::domain::feature;
+use maestro::foundation::core::paths::MaestroPaths;
 use support::TestTempDir;
 
 fn maestro(args: &[&str], cwd: &Path) -> std::process::Output {
@@ -81,8 +83,17 @@ fn init_and_author(repo: &Path, id: &str, title: &str) {
     stdout(maestro(&set, repo), &set);
 }
 
-fn feature_dir(repo: &Path, id: &str) -> std::path::PathBuf {
-    repo.join(".maestro/cards").join(id)
+fn read_qa(repo: &Path, id: &str) -> String {
+    let paths = MaestroPaths::new(repo);
+    feature::read_sidecar_text(&paths, id, "qa.md")
+        .expect("invariant: qa.md should be readable")
+        .expect("invariant: qa.md should exist")
+}
+
+fn write_qa(repo: &Path, id: &str, contents: &str) {
+    let paths = MaestroPaths::new(repo);
+    feature::write_sidecar_text(&paths, id, "qa.md", contents)
+        .expect("invariant: qa.md should be writable");
 }
 
 fn raw_observed<'a>(contents: &'a str, label: &str) -> &'a str {
@@ -102,11 +113,13 @@ fn write_baseline(repo: &Path, id: &str, position: usize, scenario_ids: &[&str])
         .iter()
         .map(|id| format!("  - [{id}] scenario {id} (covers: ac-1)\n"))
         .collect::<String>();
-    fs::write(
-        feature_dir(repo, id).join("qa.md"),
-        format!("---\namend_log_position: {position}\n---\n\n### QA Baseline Contract\n\n- Scenario Matrix:\n{scenarios}"),
-    )
-    .expect("invariant: qa.md should be writable");
+    write_qa(
+        repo,
+        id,
+        &format!(
+            "---\namend_log_position: {position}\n---\n\n### QA Baseline Contract\n\n- Scenario Matrix:\n{scenarios}"
+        ),
+    );
 }
 
 fn finalize(repo: &Path, id: &str) {
@@ -125,8 +138,10 @@ fn write_qa_slices(repo: &Path, id: &str, covered: &[&str]) {
 }
 
 fn write_qa_slices_yaml(repo: &Path, id: &str, yaml: &str) {
-    let path = feature_dir(repo, id).join("qa.md");
-    let mut contents = fs::read_to_string(&path).unwrap_or_default();
+    let paths = MaestroPaths::new(repo);
+    let mut contents = feature::read_sidecar_text(&paths, id, "qa.md")
+        .expect("invariant: qa.md should be readable")
+        .unwrap_or_default();
     if let Some(start) = contents.find("\n```yaml\nslices:") {
         contents.truncate(start);
     }
@@ -136,7 +151,8 @@ fn write_qa_slices_yaml(repo: &Path, id: &str, yaml: &str) {
         contents.push('\n');
     }
     contents.push_str("```\n");
-    fs::write(path, contents).expect("invariant: qa.md should be writable");
+    feature::write_sidecar_text(&paths, id, "qa.md", &contents)
+        .expect("invariant: qa.md should be writable");
 }
 
 fn verify_contract_from_qa(repo: &Path, id: &str) {
@@ -191,8 +207,7 @@ fn qa_baseline_helper_writes_acceptance_baseline() {
     let out = stdout(maestro(&args, repo), &args);
 
     assert!(out.contains("recorded baseline"), "{out}");
-    let qa = fs::read_to_string(feature_dir(repo, "report-builder").join("qa.md"))
-        .expect("invariant: qa.md should be written");
+    let qa = read_qa(repo, "report-builder");
     assert!(qa.contains("[bl-001]"), "{qa}");
     assert!(
         qa.contains("current report command prints a summary"),
@@ -243,8 +258,7 @@ fn qa_baseline_helper_records_current_amend_position_after_refresh() {
     ];
     stdout(maestro(&baseline, repo), &baseline);
 
-    let qa = fs::read_to_string(feature_dir(repo, "report-builder").join("qa.md"))
-        .expect("invariant: qa.md should be readable");
+    let qa = read_qa(repo, "report-builder");
     assert!(qa.starts_with("---\namend_log_position: 1\n---"), "{qa}");
     assert_eq!(
         raw_observed(&qa, "baseline"),
@@ -282,8 +296,7 @@ fn qa_slice_helper_appends_counting_slice() {
     let out = stdout(maestro(&args, repo), &args);
 
     assert!(out.contains("recorded qa slice"), "{out}");
-    let qa = fs::read_to_string(feature_dir(repo, "report-builder").join("qa.md"))
-        .expect("invariant: qa.md should be readable");
+    let qa = read_qa(repo, "report-builder");
     assert!(qa.contains("slices:"), "{qa}");
     assert!(qa.contains("bl-001"), "{qa}");
     assert!(qa.contains("slice evidence"), "{qa}");
@@ -310,8 +323,7 @@ fn qa_baseline_observed_file_preserves_frontmatter_verbatim() {
     let out = stdout(maestro(&args, repo), &args);
 
     assert!(out.contains("recorded baseline"), "{out}");
-    let qa = fs::read_to_string(feature_dir(repo, "report-builder").join("qa.md"))
-        .expect("invariant: qa.md should be written");
+    let qa = read_qa(repo, "report-builder");
     assert_eq!(raw_observed(&qa, "baseline"), observed);
 }
 
@@ -333,8 +345,7 @@ fn qa_slice_observed_stdin_preserves_frontmatter_verbatim() {
     let out = stdout(maestro_with_stdin(&args, repo, observed), &args);
 
     assert!(out.contains("recorded qa slice"), "{out}");
-    let qa = fs::read_to_string(feature_dir(repo, "report-builder").join("qa.md"))
-        .expect("invariant: qa.md should be readable");
+    let qa = read_qa(repo, "report-builder");
     assert_eq!(raw_observed(&qa, "slice"), observed);
     assert!(qa.contains("evidence: ["), "{qa}");
 }
@@ -583,8 +594,7 @@ fn accept_words_a_blank_baseline_as_empty_not_missing() {
 
     // A present-but-whitespace qa.md: read_baseline collapses it to None like
     // an absent file, but the gate must distinguish the two in its remedy wording.
-    fs::write(feature_dir(repo, "report-builder").join("qa.md"), "   \n\n")
-        .expect("invariant: qa.md should be writable");
+    write_qa(repo, "report-builder", "   \n\n");
 
     finalize(repo, "report-builder");
     let accept = ["feature", "accept", "report-builder"];

@@ -15,7 +15,6 @@
 //! registry loads the inputs and renders the gaps.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::Path;
 
 use anyhow::{Result, anyhow};
 use serde::Deserialize;
@@ -23,7 +22,6 @@ use serde::Deserialize;
 use crate::domain::feature::schema::{
     AmendEntry, AmendLog, QaDeclaration, normalize_acceptance_id,
 };
-use crate::foundation::core::fs::read_to_string_if_exists;
 
 /// The parsed `qa.md` baseline: the amend-log position it was captured against and
 /// the set of `[bl-NNN]` scenario ids it declares (the close-gate coverage units).
@@ -54,25 +52,14 @@ pub(crate) struct QaSlice {
     pub evidence: Vec<String>,
 }
 
-/// Read `qa.md`, returning `None` when absent or whitespace-only (the
-/// fail-closed "no baseline" state the accept gate blocks on).
-pub(crate) fn read_baseline(feature_dir: &Path) -> Result<Option<Baseline>> {
-    let path = feature_dir.join("qa.md");
-    let Some(contents) = read_to_string_if_exists(&path)? else {
-        return Ok(None);
-    };
+pub(crate) fn baseline_from_contents(contents: &str) -> Option<Baseline> {
     if contents.trim().is_empty() {
-        return Ok(None);
+        return None;
     }
-    Ok(Some(Baseline {
-        amend_log_position: parse_amend_log_position(&contents),
-        scenario_ids: bracketed_bl_ids(&contents),
-    }))
-}
-
-/// True when a non-empty `qa.md` exists (the accept-gate precondition F).
-pub(crate) fn baseline_present(feature_dir: &Path) -> Result<bool> {
-    Ok(read_baseline(feature_dir)?.is_some())
+    Some(Baseline {
+        amend_log_position: parse_amend_log_position(contents),
+        scenario_ids: bracketed_bl_ids(contents),
+    })
 }
 
 /// Whether a feature's `qa: none` declaration still waives the close QA gate.
@@ -96,49 +83,23 @@ pub(crate) fn qa_declared_none_fresh(qa: Option<&QaDeclaration>, amends: &[Amend
     !amends[position..].iter().any(AmendEntry::is_behavioral)
 }
 
-/// Why a baseline is unusable, so the accept/close gates word the remedy precisely:
-/// a present-but-blank file reads `"empty"`, anything else (absent, or an IO error)
-/// `"missing"` (fail-closed, matching `read_baseline`). Called only on the gate-fail
-/// path, where a usable baseline never reaches it.
-pub(crate) fn baseline_absence(feature_dir: &Path) -> &'static str {
-    match read_to_string_if_exists(feature_dir.join("qa.md")) {
-        Ok(Some(text)) if text.trim().is_empty() => "empty",
-        _ => "missing",
-    }
-}
-
-/// Read structured slices from `qa.md`, returning an empty log when absent. A parse failure is
-/// an actionable error naming the path and the expected shape (not an opaque bail).
-pub(crate) fn read_qa_slices(feature_dir: &Path) -> Result<QaSliceLog> {
-    let path = feature_dir.join("qa.md");
-    match read_to_string_if_exists(&path)? {
-        None => Ok(QaSliceLog::default()),
-        Some(contents) => {
-            let Some(yaml) = fenced_slices_yaml(&contents) else {
-                return Ok(QaSliceLog::default());
-            };
-            serde_yaml::from_str(yaml).map_err(|err| {
-            anyhow!(
-                  "failed to parse {}: {err}\n  expected shape:\n    slices:\n      - scenarios: [\"bl-001\"]\n        evidence: [\"<proof of the replayed scenario>\"]",
-                  path.display()
-              )
-          })
-        }
-    }
-}
-
-/// Acceptance ids resolved by counting QA slices whose baseline scenario lines
-/// declare `(covers: ac-N)`.
-pub(crate) fn acceptance_ids_covered_by_counting_slices(
-    feature_dir: &Path,
-) -> Result<BTreeSet<String>> {
-    let path = feature_dir.join("qa.md");
-    let Some(contents) = read_to_string_if_exists(&path)? else {
-        return Ok(BTreeSet::new());
+pub(crate) fn qa_slices_from_contents(contents: &str, artifact: &str) -> Result<QaSliceLog> {
+    let Some(yaml) = fenced_slices_yaml(contents) else {
+        return Ok(QaSliceLog::default());
     };
-    let slices = read_qa_slices(feature_dir)?;
-    let covered_scenarios = covered_ids(&slices);
-    let covers_by_scenario = acceptance_covers_by_scenario(&contents);
+    serde_yaml::from_str(yaml).map_err(|err| {
+        anyhow!(
+            "failed to parse {artifact}: {err}\n  expected shape:\n    slices:\n      - scenarios: [\"bl-001\"]\n        evidence: [\"<proof of the replayed scenario>\"]"
+        )
+    })
+}
+
+pub(crate) fn acceptance_ids_covered_by_contents(
+    contents: &str,
+    slices: &QaSliceLog,
+) -> Result<BTreeSet<String>> {
+    let covered_scenarios = covered_ids(slices);
+    let covers_by_scenario = acceptance_covers_by_scenario(contents);
     Ok(covered_scenarios
         .into_iter()
         .filter_map(|scenario| covers_by_scenario.get(&scenario).cloned())
@@ -555,11 +516,9 @@ mod tests {
     #[test]
     fn counting_slice_resolves_acceptance_covers_from_baseline_line() {
         let body = "Scenario Matrix:\n- [bl-001] first (covers: ac-1, ac-02)\n```yaml\nslices:\n  - scenarios: [\"bl-001\"]\n    evidence: [\"passed\"]\n```\n";
-        let dir = temp_root("qa-covers");
-        std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join("qa.md"), body).unwrap();
+        let slices = qa_slices_from_contents(body, "qa.md").unwrap();
 
-        let ids = acceptance_ids_covered_by_counting_slices(&dir).unwrap();
+        let ids = acceptance_ids_covered_by_contents(body, &slices).unwrap();
 
         assert_eq!(
             ids,
@@ -567,12 +526,6 @@ mod tests {
                 .into_iter()
                 .collect()
         );
-    }
-
-    fn temp_root(prefix: &str) -> std::path::PathBuf {
-        let path = std::env::temp_dir().join(format!("maestro-{prefix}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&path);
-        path
     }
 
     #[test]

@@ -10,6 +10,8 @@ use std::path::Path;
 use std::process::Command;
 
 use git2::{IndexAddOption, Repository, Signature};
+use maestro::domain::feature;
+use maestro::foundation::core::paths::MaestroPaths;
 use support::TestTempDir;
 
 fn maestro(args: &[&str], cwd: &Path) -> std::process::Output {
@@ -76,9 +78,11 @@ fn seed_closable_feature(repo: &Path, id: &str) {
         "reports",
     ];
     stdout(maestro(&set, repo), &set);
-    let feature_dir = repo.join(".maestro/cards").join(id);
-    fs::write(
-        feature_dir.join("qa.md"),
+    let paths = MaestroPaths::new(repo);
+    feature::write_sidecar_text(
+        &paths,
+        id,
+        "qa.md",
         "---\namend_log_position: 0\n---\n\n### QA Baseline Contract\n\n- Scenario Matrix:\n  - [bl-001] scenario bl-001 (covers: ac-1)\n",
     )
     .expect("invariant: qa.md should be writable");
@@ -95,9 +99,12 @@ fn seed_closable_feature(repo: &Path, id: &str) {
         &["feature", "start"],
     );
     // Cover the baseline scenario with a counting slice.
-    let mut qa = fs::read_to_string(feature_dir.join("qa.md")).expect("invariant: qa.md readable");
+    let mut qa = feature::read_sidecar_text(&paths, id, "qa.md")
+        .expect("invariant: qa.md readable")
+        .expect("invariant: qa.md should exist");
     qa.push_str("\n```yaml\nslices:\n  - scenarios: [\"bl-001\"]\n    evidence: [\"proof for bl-001\"]\n```\n");
-    fs::write(feature_dir.join("qa.md"), qa).expect("invariant: qa.md should be writable");
+    feature::write_sidecar_text(&paths, id, "qa.md", &qa)
+        .expect("invariant: qa.md should be writable");
     // Resolve the acceptance contract sweep.
     stdout(
         maestro(&["feature", "verify", id], repo),
@@ -354,8 +361,7 @@ fn feature_close_auto_archives_from_linked_worktree() {
             .exists()
     );
     assert!(
-        main.join(".maestro/cards/report-builder/card.yaml")
-            .exists(),
+        feature::show(&MaestroPaths::new(&main), "report-builder").is_ok(),
         "linked worktree auto-archive must not mutate the primary checkout store directly"
     );
 }

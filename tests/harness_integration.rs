@@ -452,9 +452,7 @@ fn task_dir(repo: &Path, id: &str) -> PathBuf {
 /// live verbatim under the card's `extra` mapping; the top-level card header
 /// (`status`/timestamps) sits above it.
 fn read_card(repo: &Path, id: &str) -> YamlValue {
-    let path = card_record_path(repo, id);
-    let raw = fs::read_to_string(&path).expect("invariant: card record should be readable");
-    serde_yaml::from_str(&raw).expect("invariant: card record should parse")
+    card_doc(repo, id)
 }
 
 fn write_card(repo: &Path, id: &str, card: &YamlValue) {

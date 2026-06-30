@@ -89,23 +89,36 @@ pub fn card_doc(repo: &Path, id: &str) -> Value {
     let home = locate(&paths, id)
         .expect("invariant: card lookup should succeed")
         .unwrap_or_else(|| panic!("no card home found for {id}"));
-    let raw = fs::read_to_string(home.path()).unwrap_or_else(|e| {
-        panic!(
-            "card record for {id} should be readable at {}: {e}",
-            home.path().display()
-        )
-    });
     match home {
         CardHome::Dir(_) => {
+            let raw = fs::read_to_string(home.path()).unwrap_or_else(|e| {
+                panic!(
+                    "card record for {id} should be readable at {}: {e}",
+                    home.path().display()
+                )
+            });
             serde_yaml::from_str(&raw).expect("invariant: card.yaml should parse as YAML")
         }
         CardHome::Entry(_) => {
+            let raw = fs::read_to_string(home.path()).unwrap_or_else(|e| {
+                panic!(
+                    "card record for {id} should be readable at {}: {e}",
+                    home.path().display()
+                )
+            });
             let entries: Vec<Value> = serde_yaml::from_str(&raw)
                 .expect("invariant: container file should parse as a YAML sequence");
             entries
                 .into_iter()
                 .find(|entry| entry["id"] == id)
                 .unwrap_or_else(|| panic!("no entry for {id} in its container file"))
+        }
+        CardHome::Db(_) => {
+            let resolved = maestro::domain::card::store::resolve(&paths, id)
+                .expect("invariant: DB card should resolve")
+                .unwrap_or_else(|| panic!("no DB card found for {id}"));
+            serde_yaml::to_value(resolved.card)
+                .expect("invariant: DB card should serialize as YAML")
         }
     }
 }

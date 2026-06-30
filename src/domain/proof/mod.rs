@@ -4,6 +4,7 @@ mod claims;
 mod commands;
 mod events;
 mod proof_status;
+pub mod receipts;
 mod stale;
 mod verify_task;
 

@@ -79,6 +79,7 @@ pub fn run(args: FeatureArgs) -> Result<()> {
             },
         ),
         FeatureCommand::Finalize { id } => finalize_feature(&paths, &id),
+        FeatureCommand::Reopen { id } => reopen_feature(&paths, &id),
         FeatureCommand::Accept {
             id,
             qa,
@@ -301,6 +302,16 @@ fn finalize_feature(paths: &MaestroPaths, id: &str) -> Result<()> {
             println!("  {command}");
         }
     }
+    Ok(())
+}
+
+fn reopen_feature(paths: &MaestroPaths, id: &str) -> Result<()> {
+    let report = feature::reopen(paths, id)?;
+    super::emit_card_touch(paths, id);
+    println!("reopened {}", report.id);
+    println!("workbench: {}", report.path.display());
+    println!("files: {}", report.files);
+    println!("next: maestro feature finalize {}", report.id);
     Ok(())
 }
 
@@ -724,6 +735,11 @@ fn close_auto_archive_plan(
     let target_card_path = paths.cards_dir().join(&report.id).join("card.yaml");
     let target_card_hash = if target_card_path.is_file() {
         Some(sha256_prefixed(&fs::read(&target_card_path)?))
+    } else if let Some(resolved) = card::store::resolve(paths, &report.id)? {
+        let bytes = serde_yaml::to_string(&resolved.card)
+            .map(String::into_bytes)
+            .map_err(anyhow::Error::from)?;
+        Some(sha256_prefixed(&bytes))
     } else {
         None
     };
@@ -862,15 +878,26 @@ fn auto_archive_feature(paths: &MaestroPaths, args: AutoArchiveArgs) -> Result<(
             canonical_store
         );
     }
-    let target_card_path = paths.cards_dir().join(&id).join("card.yaml");
-    if !target_card_path.is_file() {
+    if feature::ensure_exists(paths, &id).is_err() {
         bail!(
             "cannot auto-archive {id} — target feature is missing from current store `{}`; run from the owning/orchestrator checkout that owns the live target card",
             current_store
         );
     }
     if let Some(expected_hash) = target_card_hash.as_deref() {
-        let target_card_bytes = fs::read(&target_card_path)?;
+        let target_card_path = paths.cards_dir().join(&id).join("card.yaml");
+        let target_card_bytes = if target_card_path.is_file() {
+            fs::read(&target_card_path)?
+        } else {
+            let Some(resolved) = card::store::resolve(paths, &id)? else {
+                bail!(
+                    "cannot auto-archive {id} — target feature is missing from current store `{current_store}`; run from the owning/orchestrator checkout that owns the live target card"
+                );
+            };
+            serde_yaml::to_string(&resolved.card)
+                .map(String::into_bytes)
+                .map_err(anyhow::Error::from)?
+        };
         let actual_hash = sha256_prefixed(&target_card_bytes);
         if expected_hash != actual_hash {
             bail!(
@@ -2045,16 +2072,13 @@ fn show_feature_spec(paths: &MaestroPaths, id: &str) -> Result<()> {
             }
         }
     } else {
-        let sidecar_dir = feature::feature_sidecar_dir(paths, &view.id);
-        let spec_path = sidecar_dir.join("spec.md");
-        match std::fs::read_to_string(&spec_path) {
-            Ok(spec) => print!("{}", spec.trim_end()),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+        match feature::read_sidecar_text(paths, &view.id, "spec.md")? {
+            Some(spec) => print!("{}", spec.trim_end()),
+            None => {
                 println!("# {}", view.title);
                 println!();
                 println!("(no spec.md found)");
             }
-            Err(error) => bail!("failed to read {}: {error}", spec_path.display()),
         }
     }
     println!();

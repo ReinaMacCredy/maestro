@@ -71,10 +71,10 @@ struct ManifestFile {
 }
 
 #[derive(Clone, Debug)]
-struct SnapshotFile {
-    path: String,
-    mode: u32,
-    bytes: Vec<u8>,
+pub(crate) struct SnapshotFile {
+    pub(crate) path: String,
+    pub(crate) mode: u32,
+    pub(crate) bytes: Vec<u8>,
 }
 
 struct SnapshotRow {
@@ -209,6 +209,20 @@ pub fn archive_virtual_card(
         mode: default_file_mode(),
         bytes: contents.into_bytes(),
     }];
+    archive_snapshot(paths, snapshot_id, &source_relpath, files)
+}
+
+pub(crate) fn archive_files(
+    paths: &MaestroPaths,
+    snapshot_id: &str,
+    source_relpath: &Path,
+    files: Vec<SnapshotFile>,
+) -> Result<()> {
+    validate_card_id(snapshot_id)?;
+    let source_relpath = normalize_relative(source_relpath)?;
+    if files.is_empty() {
+        bail!("cannot archive empty card snapshot {snapshot_id}");
+    }
     archive_snapshot(paths, snapshot_id, &source_relpath, files)
 }
 

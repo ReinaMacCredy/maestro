@@ -10,6 +10,8 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
+use maestro::domain::feature;
+use maestro::foundation::core::paths::MaestroPaths;
 use support::TestTempDir;
 
 fn maestro(args: &[&str], cwd: &Path) -> std::process::Output {
@@ -64,9 +66,11 @@ fn started_feature_two_acceptances(repo: &Path, id: &str) {
         "reports",
     ];
     stdout(maestro(&set, repo), &set);
-    let feature_dir = repo.join(".maestro/cards").join(id);
-    fs::write(
-        feature_dir.join("qa.md"),
+    let paths = MaestroPaths::new(repo);
+    feature::write_sidecar_text(
+        &paths,
+        id,
+        "qa.md",
         "---\namend_log_position: 0\n---\n\n### QA Baseline Contract\n\n- Scenario Matrix:\n  - [bl-001] baseline scenario\n",
     )
     .expect("invariant: qa.md should be writable");
@@ -82,9 +86,12 @@ fn started_feature_two_acceptances(repo: &Path, id: &str) {
         maestro(&["feature", "start", id], repo),
         &["feature", "start"],
     );
-    let mut qa = fs::read_to_string(feature_dir.join("qa.md")).expect("invariant: qa.md readable");
+    let mut qa = feature::read_sidecar_text(&paths, id, "qa.md")
+        .expect("invariant: qa.md readable")
+        .expect("invariant: qa.md should exist");
     qa.push_str("\n```yaml\nslices:\n  - scenarios: [\"bl-001\"]\n    evidence: [\"proof for bl-001\"]\n```\n");
-    fs::write(feature_dir.join("qa.md"), qa).expect("invariant: qa.md should be writable");
+    feature::write_sidecar_text(&paths, id, "qa.md", &qa)
+        .expect("invariant: qa.md should be writable");
 }
 
 fn prove(repo: &Path, id: &str, ac: &str, extra: &[&str]) -> std::process::Output {

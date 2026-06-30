@@ -13,8 +13,10 @@ use card_support::{
 };
 use git2::{IndexAddOption, Repository, Signature};
 use maestro::domain::decisions::template::decision_markdown;
+use maestro::domain::feature;
 use maestro::foundation::core::fs::ensure_dir;
 use maestro::foundation::core::hash::sha256_prefixed;
+use maestro::foundation::core::paths::MaestroPaths;
 use maestro::foundation::core::time::utc_now_timestamp;
 use serde_json::json;
 use serde_yaml::Value as YamlValue;
@@ -936,7 +938,9 @@ fn feature_guarded_lifecycle_via_cli() {
         finalize_output.contains("finalized billing-csv-export"),
         "{finalize_output}"
     );
-    let handoff = fs::read_to_string(cards_dir.join("billing-csv-export/handoff.md"))
+    let paths = MaestroPaths::new(temp_dir.path());
+    let handoff = feature::read_sidecar_text(&paths, "billing-csv-export", "handoff.md")
+        .expect("handoff sidecar should be readable")
         .expect("handoff should be written");
     assert!(
         handoff.contains("# Billing CSV export Handoff"),
@@ -1059,8 +1063,10 @@ fn feature_finalize_writes_handoff_and_gates_accept_prepare() {
     let finalized = stdout(maestro(&finalize_args, temp_dir.path()), &finalize_args);
     assert!(finalized.contains("finalized clean-handoff"), "{finalized}");
     assert!(finalized.contains("source_sha256:"), "{finalized}");
-    let handoff_path = cards_dir.join("clean-handoff/handoff.md");
-    let handoff = fs::read_to_string(&handoff_path).expect("handoff should be readable");
+    let paths = MaestroPaths::new(temp_dir.path());
+    let handoff = feature::read_sidecar_text(&paths, "clean-handoff", "handoff.md")
+        .expect("handoff sidecar should be readable")
+        .expect("handoff should exist");
     assert!(
         handoff.contains("<!-- maestro:feature-handoff-source-sha256:"),
         "{handoff}"
@@ -1091,11 +1097,16 @@ fn feature_finalize_writes_handoff_and_gates_accept_prepare() {
     stdout(maestro(&finalize_args, temp_dir.path()), &finalize_args);
     stdout(maestro(&accept_args, temp_dir.path()), &accept_args);
 
-    fs::remove_file(&handoff_path).expect("handoff should be removable for gate test");
+    feature::write_sidecar_text(&paths, "clean-handoff", "handoff.md", "")
+        .expect("handoff sidecar should be writable");
     let prepare_args = ["feature", "prepare", "clean-handoff", "--draft"];
     let prepare_missing = assert_failure(maestro(&prepare_args, temp_dir.path()), &prepare_args);
     assert!(
         prepare_missing.contains("cannot prepare clean-handoff"),
+        "{prepare_missing}"
+    );
+    assert!(
+        prepare_missing.contains("handoff.md stale"),
         "{prepare_missing}"
     );
     assert!(
@@ -1106,6 +1117,152 @@ fn feature_finalize_writes_handoff_and_gates_accept_prepare() {
     stdout(maestro(&finalize_args, temp_dir.path()), &finalize_args);
     let draft = stdout(maestro(&prepare_args, temp_dir.path()), &prepare_args);
     assert!(draft.contains("prepare-draft.md"), "{draft}");
+}
+
+#[test]
+fn feature_finalize_moves_authority_to_db_and_reopen_uses_workbench() {
+    let temp_dir = TestTempDir::new("maestro-feature-db-finalize-reopen");
+    let root = temp_dir.path();
+    init_git_marker(root);
+    stdout(maestro(&["init", "--yes"], root), &["init", "--yes"]);
+    stdout(
+        maestro(&["feature", "new", "DB Backed Contract"], root),
+        &["feature", "new", "DB Backed Contract"],
+    );
+    stdout(
+        maestro(
+            &[
+                "feature",
+                "set",
+                "db-backed-contract",
+                "--acceptance",
+                "commands read after finalize",
+                "--area",
+                "card store",
+            ],
+            root,
+        ),
+        &["feature", "set", "db-backed-contract"],
+    );
+    stdout(
+        maestro(
+            &[
+                "feature",
+                "spec",
+                "db-backed-contract",
+                "--section",
+                "Current state",
+                "--append",
+                "file-backed before finalize",
+            ],
+            root,
+        ),
+        &["feature", "spec", "db-backed-contract"],
+    );
+
+    let finalize = stdout(
+        maestro(&["feature", "finalize", "db-backed-contract"], root),
+        &["feature", "finalize", "db-backed-contract"],
+    );
+    assert!(
+        finalize.contains("finalized db-backed-contract"),
+        "{finalize}"
+    );
+    assert!(
+        root.join(".maestro/store.sqlite").is_file(),
+        "finalize should create the live DB authority"
+    );
+    assert!(
+        !root.join(".maestro/cards/db-backed-contract").exists(),
+        "finalized features stop depending on .maestro/cards/<id>"
+    );
+
+    let spec = stdout(
+        maestro(&["feature", "spec", "db-backed-contract"], root),
+        &["feature", "spec", "db-backed-contract"],
+    );
+    assert!(spec.contains("file-backed before finalize"), "{spec}");
+    let show = stdout(
+        maestro(&["feature", "show", "db-backed-contract"], root),
+        &["feature", "show", "db-backed-contract"],
+    );
+    assert!(show.contains("status: proposed"), "{show}");
+
+    let baseline = stdout(
+        maestro(
+            &[
+                "qa",
+                "baseline",
+                "db-backed-contract",
+                "--observed",
+                "DB-backed finalized card still accepts QA writes",
+            ],
+            root,
+        ),
+        &["qa", "baseline", "db-backed-contract"],
+    );
+    assert!(baseline.contains("recorded baseline bl-001"), "{baseline}");
+    let accept = stdout(
+        maestro(&["feature", "accept", "db-backed-contract"], root),
+        &["feature", "accept", "db-backed-contract"],
+    );
+    assert!(accept.contains("accepted db-backed-contract"), "{accept}");
+    assert!(
+        !root.join(".maestro/cards/db-backed-contract").exists(),
+        "DB-backed writes must not recreate the live card folder"
+    );
+
+    let reopen = stdout(
+        maestro(&["feature", "reopen", "db-backed-contract"], root),
+        &["feature", "reopen", "db-backed-contract"],
+    );
+    assert!(reopen.contains("reopened db-backed-contract"), "{reopen}");
+    let workbench = root.join(".maestro/workbench/db-backed-contract");
+    assert!(workbench.join("card.yaml").is_file());
+    assert!(workbench.join("spec.md").is_file());
+
+    stdout(
+        maestro(
+            &[
+                "feature",
+                "spec",
+                "db-backed-contract",
+                "--section",
+                "Problem",
+                "--append",
+                "workbench redesign detail",
+            ],
+            root,
+        ),
+        &["feature", "spec", "db-backed-contract"],
+    );
+    let workbench_spec =
+        fs::read_to_string(workbench.join("spec.md")).expect("workbench spec should be readable");
+    assert!(
+        workbench_spec.contains("workbench redesign detail"),
+        "{workbench_spec}"
+    );
+
+    let refinalize = stdout(
+        maestro(&["feature", "finalize", "db-backed-contract"], root),
+        &["feature", "finalize", "db-backed-contract"],
+    );
+    assert!(
+        refinalize.contains("finalized db-backed-contract"),
+        "{refinalize}"
+    );
+    assert!(
+        !workbench.exists(),
+        "refinalize should import and remove the editable workbench"
+    );
+    let refinalized_spec = stdout(
+        maestro(&["feature", "spec", "db-backed-contract"], root),
+        &["feature", "spec", "db-backed-contract"],
+    );
+    assert!(
+        refinalized_spec.contains("workbench redesign detail"),
+        "{refinalized_spec}"
+    );
 }
 
 #[test]
@@ -1191,7 +1348,9 @@ fn feature_finalize_refreshes_handoff_after_in_progress_amend() {
     let unsafe_set = assert_failure(maestro(&unsafe_set_args, root), &unsafe_set_args);
     assert!(unsafe_set.contains("contract frozen"), "{unsafe_set}");
 
-    let handoff = fs::read_to_string(cards_dir.join("amended-handoff/handoff.md"))
+    let paths = MaestroPaths::new(root);
+    let handoff = feature::read_sidecar_text(&paths, "amended-handoff", "handoff.md")
+        .expect("handoff sidecar should be readable")
         .expect("handoff should be readable");
     assert!(handoff.contains("- Status: `in_progress`"), "{handoff}");
     assert!(handoff.contains("`ac-2`: new behavior works"), "{handoff}");
@@ -2047,12 +2206,10 @@ fn decision_supersede_creates_locked_replacement_and_marks_old_metadata_only() {
         finalize.contains("finalized decision-revision"),
         "{finalize}"
     );
-    let handoff = fs::read_to_string(
-        temp_dir
-            .path()
-            .join(".maestro/cards/decision-revision/handoff.md"),
-    )
-    .expect("handoff should be readable");
+    let paths = MaestroPaths::new(temp_dir.path());
+    let handoff = feature::read_sidecar_text(&paths, "decision-revision", "handoff.md")
+        .expect("handoff sidecar should be readable")
+        .expect("handoff should be readable");
     assert!(
         handoff.contains(&format!("- `{new_id}`: Use supersession")),
         "{handoff}"
@@ -4307,7 +4464,6 @@ fn feature_archive_closed_sweeps_terminal_features() {
     assert!(out.contains("child tasks: 2 archived"));
     assert!(out.contains("next: maestro status"));
 
-    let cards_dir = root.join(".maestro/cards");
     let archive_cards = root.join(".maestro/archive/cards");
     assert!(root.join(".maestro/archive/cards.sqlite").is_file());
     assert!(!archive_cards.join("alpha-export").exists());
@@ -4316,7 +4472,10 @@ fn feature_archive_closed_sweeps_terminal_features() {
     assert!(!archive_cards.join("task-001").exists());
     assert!(!archive_cards.join("task-002").exists());
     // The in-progress feature is untouched and stays in the live store.
-    assert!(cards_dir.join("gamma-export").join("card.yaml").is_file());
+    assert_eq!(
+        card_doc(root, "gamma-export")["status"],
+        YamlValue::String("in_progress".into())
+    );
     assert!(!archive_cards.join("gamma-export").exists());
 
     // With the backlog swept, the doctor advisory becomes a green check.

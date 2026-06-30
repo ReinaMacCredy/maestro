@@ -309,6 +309,7 @@ mod tests {
         {
             card_store::CardHome::Dir(yaml) => yaml,
             card_store::CardHome::Entry(file) => file,
+            card_store::CardHome::Db(path) => path,
         };
         let card_dir = yaml.parent().expect("the card dir");
         let rel = card_dir

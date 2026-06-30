@@ -190,21 +190,15 @@ pub(crate) fn save(record: &TaskRecord, resolved: &ResolvedCard) -> Result<()> {
 /// dir), sorted by id. `feature_id` is recovered from `card.parent`, so the
 /// scan consumers (counts, projections) group correctly.
 pub(crate) fn scan(paths: &MaestroPaths) -> Result<Vec<(TaskRecord, PathBuf)>> {
-    scan_dir(&paths.cards_dir())
-}
-
-/// [`scan`] over an explicit card tree root, so archived task reads
-/// (`archive/cards/`) ride the same seam as the live store.
-pub(crate) fn scan_dir(cards_dir: &Path) -> Result<Vec<(TaskRecord, PathBuf)>> {
     let mut records = Vec::new();
-    for (card, path) in crate::domain::card::query::scan_dir_with_paths(cards_dir)? {
+    for (card, path) in crate::domain::card::query::scan_with_paths(paths)? {
         if card.card_type != CardType::Task {
             continue;
         }
         let task_dir = path
             .parent()
             .map(Path::to_path_buf)
-            .unwrap_or_else(|| cards_dir.to_path_buf());
+            .unwrap_or_else(|| paths.cards_dir());
         records.push((
             record_from_card(card, path.display().to_string())?,
             task_dir,

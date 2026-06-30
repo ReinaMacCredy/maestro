@@ -9,6 +9,8 @@ pub mod archive_db;
 pub mod edit;
 pub mod fold;
 pub mod index;
+pub mod live_db;
+pub mod locator;
 pub mod query;
 pub mod schema;
 pub mod store;

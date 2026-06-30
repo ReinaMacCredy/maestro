@@ -1,5 +1,3 @@
-use std::fs;
-
 use anyhow::Result;
 use serde::Serialize;
 
@@ -8,7 +6,7 @@ use crate::domain::card::schema::CardType;
 use crate::domain::install::{InstallLock, InstallState};
 use crate::domain::run::{self, Presence};
 use crate::domain::task::{self, TaskState};
-use crate::domain::{decisions, memory};
+use crate::domain::{decisions, feature, memory};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::session::agent_runtime_from_env;
 use crate::foundation::core::time::utc_now_timestamp;
@@ -1288,13 +1286,18 @@ fn normalize_risk(risk: &str) -> String {
 }
 
 fn qa_artifact_count(paths: &MaestroPaths) -> usize {
-    let cards_dir = paths.cards_dir();
-    let Ok(entries) = fs::read_dir(cards_dir) else {
-        return 0;
-    };
-    entries
-        .filter_map(Result::ok)
-        .filter(|entry| entry.path().join("qa.md").is_file())
+    feature::list_tolerant(paths)
+        .into_iter()
+        .filter_map(|entry| match entry {
+            feature::FeatureRosterEntry::Loaded(view) => Some(view.id.clone()),
+            feature::FeatureRosterEntry::Unreadable { .. } => None,
+        })
+        .filter(|id| {
+            feature::read_sidecar_text(paths, id, "qa.md")
+                .ok()
+                .flatten()
+                .is_some_and(|contents| !contents.trim().is_empty())
+        })
         .count()
 }
 

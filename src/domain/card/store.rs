@@ -6,9 +6,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use anyhow::{Context, Result, bail};
 
-use crate::domain::card::archive_db;
 use crate::domain::card::fold;
 use crate::domain::card::schema::{Card, CardType};
+use crate::domain::card::{archive_db, live_db};
 use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::fs::{
     child_dirs, ensure_dir, read_to_string_if_exists, remove_dir_if_file_unchanged,
@@ -385,6 +385,8 @@ pub enum CardHome {
     /// (`[<feature>/]decisions.yaml` or `ideas.yaml`), written back under
     /// whole-file CAS (the S2/S4 single-file contention rider).
     Entry(PathBuf),
+    /// DB-backed: the record row in `.maestro/store.sqlite`.
+    Db(PathBuf),
 }
 
 impl CardHome {
@@ -394,6 +396,7 @@ impl CardHome {
         match self {
             Self::Dir(yaml) => yaml,
             Self::Entry(file) => file,
+            Self::Db(path) => path,
         }
     }
 }
@@ -427,6 +430,11 @@ pub fn home_for_new(paths: &MaestroPaths, card: &Card) -> Result<CardHome> {
             }
             CardHome::Dir(paths.cards_dir().join(&card.id).join(CARD_FILE))
         }
+        CardType::Task | CardType::Bug | CardType::Chore
+            if live_db::parent_is_db_container(paths, card.parent.as_deref())? =>
+        {
+            CardHome::Db(live_db::synthetic_card_path(paths, &card.id, TASK_FILE))
+        }
         CardType::Task | CardType::Bug | CardType::Chore => {
             let pool = container_dir(paths, card.parent.as_deref())?.join(TASKS_DIR);
             // A symlinked pool would land the CAS write outside the store;
@@ -440,6 +448,11 @@ pub fn home_for_new(paths: &MaestroPaths, card: &Card) -> Result<CardHome> {
             CardHome::Dir(pool.join(&card.id).join(TASK_FILE))
         }
         CardType::Decision => {
+            if live_db::parent_is_db_container(paths, card.parent.as_deref())? {
+                return Ok(CardHome::Db(live_db::synthetic_card_path(
+                    paths, &card.id, CARD_FILE,
+                )));
+            }
             CardHome::Entry(container_dir(paths, card.parent.as_deref())?.join(DECISIONS_FILE))
         }
         CardType::Idea => CardHome::Entry(paths.cards_dir().join(IDEAS_FILE)),
@@ -472,6 +485,22 @@ fn container_dir(paths: &MaestroPaths, parent: Option<&str>) -> Result<PathBuf> 
 /// `ideas.yaml`, then each container's `decisions.yaml`). `None` when no
 /// home holds the id.
 pub fn locate(paths: &MaestroPaths, id: &str) -> Result<Option<CardHome>> {
+    if live_db::contains_card_id(paths, id)? {
+        let record_file = match live_db::resolve(paths, id)? {
+            Some(db_card) => db_card
+                .path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or(CARD_FILE)
+                .to_string(),
+            None => CARD_FILE.to_string(),
+        };
+        return Ok(Some(CardHome::Db(live_db::synthetic_card_path(
+            paths,
+            id,
+            &record_file,
+        ))));
+    }
     locate_in(&paths.cards_dir(), id)
 }
 
@@ -631,6 +660,11 @@ enum ResolvedBasis {
         file: PathBuf,
         snapshot: EntriesSnapshot,
     },
+    Db {
+        paths: MaestroPaths,
+        path: PathBuf,
+        raw: String,
+    },
 }
 
 impl ResolvedCard {
@@ -640,6 +674,7 @@ impl ResolvedCard {
         match &self.basis {
             ResolvedBasis::Dir { yaml, .. } => yaml,
             ResolvedBasis::Entry { file, .. } => file,
+            ResolvedBasis::Db { path, .. } => path,
         }
     }
 
@@ -664,6 +699,16 @@ pub(crate) fn is_dir_backed(record: &Path) -> bool {
 /// `None` when no home holds the id. The returned basis backs the matching
 /// [`save_resolved`]/[`remove_resolved`] CAS.
 pub fn resolve(paths: &MaestroPaths, id: &str) -> Result<Option<ResolvedCard>> {
+    if let Some(db_card) = live_db::resolve(paths, id)? {
+        return Ok(Some(ResolvedCard {
+            card: db_card.card,
+            basis: ResolvedBasis::Db {
+                paths: paths.clone(),
+                path: db_card.path,
+                raw: db_card.raw,
+            },
+        }));
+    }
     resolve_in(&paths.cards_dir(), id)
 }
 
@@ -723,6 +768,7 @@ pub fn save_resolved(card: &Card, basis: &ResolvedCard) -> Result<()> {
             *slot = card.clone();
             save_entries(file, &cards, snapshot)
         }
+        ResolvedBasis::Db { paths, raw, .. } => live_db::save_card_if_unchanged(paths, card, raw),
     }
 }
 
@@ -762,6 +808,13 @@ pub fn create_card(paths: &MaestroPaths, card: &Card) -> Result<CardHome> {
             let mut cards = snapshot.cards.clone();
             cards.push(card.clone());
             save_entries(file, &cards, &snapshot)?;
+        }
+        CardHome::Db(path) => {
+            let record_file = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or(TASK_FILE);
+            live_db::insert_card(paths, card, record_file)?;
         }
     }
     Ok(home)
@@ -803,6 +856,9 @@ pub fn remove_resolved(basis: &ResolvedCard) -> Result<()> {
                 .cloned()
                 .collect();
             save_entries(file, &cards, snapshot)
+        }
+        ResolvedBasis::Db { paths, raw, .. } => {
+            live_db::remove_card_if_unchanged(paths, &basis.card, raw)
         }
     }
 }
@@ -1073,6 +1129,91 @@ mod tests {
         let mut card = Card::new(id, card_type, id, "open", "2026-06-10T00:00:00Z");
         card.parent = parent.map(str::to_string);
         card
+    }
+
+    #[test]
+    fn db_backed_card_resolves_saves_and_scans_without_live_dir() {
+        let paths = temp_cards_repo("db-backed-card");
+        let mut feature = typed_card("db-feature", CardType::Feature, None);
+        feature.status = "proposed".to_string();
+        create_card(&paths, &feature).expect("create file-backed feature");
+        let feature_dir = paths.cards_dir().join("db-feature");
+        std::fs::write(feature_dir.join("notes.md"), "design note\n").expect("write sidecar");
+
+        live_db::import_card_dir(&paths, "db-feature", &feature_dir, true)
+            .expect("import feature into DB store");
+
+        assert!(
+            !feature_dir.exists(),
+            "finalized DB authority no longer needs the live card folder"
+        );
+        let resolved = resolve(&paths, "db-feature")
+            .expect("resolve DB-backed card")
+            .expect("DB-backed card exists");
+        assert_eq!(resolved.card.id, "db-feature");
+        assert!(
+            resolved.path().starts_with(paths.store_db_file()),
+            "synthetic DB path: {}",
+            resolved.path().display()
+        );
+        assert_eq!(
+            live_db::read_text_file(&paths, "db-feature", "notes.md")
+                .expect("read DB sidecar")
+                .as_deref(),
+            Some("design note\n")
+        );
+
+        let mut updated = resolved.card.clone();
+        updated.status = "ready".to_string();
+        save_resolved(&updated, &resolved).expect("save DB-backed card");
+
+        let reloaded = resolve(&paths, "db-feature")
+            .expect("resolve updated DB-backed card")
+            .expect("DB-backed card remains");
+        assert_eq!(reloaded.card.status, "ready");
+        let scanned = crate::domain::card::query::scan(&paths).expect("scan DB-backed cards");
+        assert!(
+            scanned
+                .iter()
+                .any(|card| card.id == "db-feature" && card.status == "ready"),
+            "DB-backed card appears in shared scans"
+        );
+
+        let _ = std::fs::remove_dir_all(paths.maestro_dir());
+    }
+
+    #[test]
+    fn child_card_of_db_backed_container_is_created_in_db_store() {
+        let paths = temp_cards_repo("db-backed-child");
+        let mut feature = typed_card("db-feature", CardType::Feature, None);
+        feature.status = "ready".to_string();
+        create_card(&paths, &feature).expect("create file-backed feature");
+        let feature_dir = paths.cards_dir().join("db-feature");
+        live_db::import_card_dir(&paths, "db-feature", &feature_dir, true)
+            .expect("import feature into DB store");
+
+        let task = typed_card("task-child-0001", CardType::Task, Some("db-feature"));
+        let home = create_card(&paths, &task).expect("create child task under DB parent");
+        assert!(
+            matches!(home, CardHome::Db(_)),
+            "child of DB-backed feature should be DB-backed"
+        );
+        assert!(
+            !paths
+                .cards_dir()
+                .join("db-feature")
+                .join("tasks")
+                .join("task-child-0001")
+                .exists(),
+            "creating a child must not recreate the finalized feature folder"
+        );
+        let resolved = resolve(&paths, "task-child-0001")
+            .expect("resolve DB child")
+            .expect("DB child exists");
+        assert_eq!(resolved.card.parent.as_deref(), Some("db-feature"));
+        assert!(resolved.path().starts_with(paths.store_db_file()));
+
+        let _ = std::fs::remove_dir_all(paths.maestro_dir());
     }
 
     /// Seed a card the pre-migration way: a flat `cards/<id>/card.yaml` dir.

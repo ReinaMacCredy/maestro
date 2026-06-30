@@ -8,13 +8,12 @@ use serde::Serialize;
 
 use crate::domain::feature::FeatureStatus;
 use crate::domain::feature::FeatureView;
-use crate::domain::feature::feature_sidecar_dir;
 use crate::domain::feature::handoff_gap;
+use crate::domain::feature::read_sidecar_text;
 use crate::domain::proof;
 use crate::domain::run;
 use crate::domain::task::{TaskRecord, TaskState};
 use crate::foundation::core::error::MaestroError;
-use crate::foundation::core::fs::read_to_string_if_exists;
 use crate::foundation::core::git;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::interfaces::hooks::record;
@@ -147,8 +146,7 @@ fn handoff_is_fresh(paths: &MaestroPaths, view: &FeatureView) -> bool {
 }
 
 fn qa_baseline_present(paths: &MaestroPaths, id: &str) -> bool {
-    let path = feature_sidecar_dir(paths, id).join("qa.md");
-    read_to_string_if_exists(&path)
+    read_sidecar_text(paths, id, "qa.md")
         .ok()
         .flatten()
         .is_some_and(|contents| !contents.trim().is_empty())
@@ -1531,6 +1529,8 @@ pub enum FeatureCommand {
     },
     #[command(about = "Write or refresh the clean design handoff before accept/prepare")]
     Finalize { id: String },
+    #[command(about = "Reopen a DB-backed finalized feature into .maestro/workbench/<id>")]
+    Reopen { id: String },
     #[command(about = "Accept a feature into ready, freezing its contract (-> ready; gated)")]
     Accept {
         id: String,

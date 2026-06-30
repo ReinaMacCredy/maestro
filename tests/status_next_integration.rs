@@ -7,7 +7,8 @@ use std::process::Command;
 
 use card_support::{card_dir, card_record_path, id_by_title, sole_idea_id, task_record};
 use git2::{Repository, Signature};
-use maestro::foundation::core::fs::ensure_dir;
+use maestro::domain::feature;
+use maestro::foundation::core::paths::MaestroPaths;
 use serde_json::Value as JsonValue;
 use serde_yaml::Value as YamlValue;
 use support::TestTempDir;
@@ -138,10 +139,10 @@ fn task_yaml(repo: &Path, id: &str) -> YamlValue {
 }
 
 fn write_baseline(repo: &Path, feature_id: &str) {
-    let dir = repo.join(".maestro/cards").join(feature_id);
-    ensure_dir(&dir).expect("invariant: card directory should be creatable");
-    fs::write(
-        dir.join("qa.md"),
+    feature::write_sidecar_text(
+        &MaestroPaths::new(repo),
+        feature_id,
+        "qa.md",
         "---\namend_log_position: 0\n---\n\n### QA Baseline Contract\n\n- Scenario Matrix:\n  - [bl-001] csv export round-trips\n",
     )
     .expect("invariant: qa.md should be writable");
@@ -1969,9 +1970,10 @@ fn feature_close_dry_run_flags_verified_children_at_older_commits_without_blocki
             "close",
         ],
     );
-    let feature_dir = repo.join(".maestro/cards/close-advisory");
-    fs::write(
-        feature_dir.join("qa.md"),
+    feature::write_sidecar_text(
+        &MaestroPaths::new(repo),
+        "close-advisory",
+        "qa.md",
         "---\namend_log_position: 0\n---\n\n### QA Baseline Contract\n\n- Scenario Matrix:\n  - [bl-001] advisory behaves (covers: ac-1)\n",
     )
     .expect("invariant: qa.md should be writable");
@@ -2016,9 +2018,12 @@ fn feature_close_dry_run_flags_verified_children_at_older_commits_without_blocki
 
     // Cover the baseline scenario (clears the QA gate and resolves ac-1 via the
     // counting slice), then run the acceptance sweep last so it stays fresh.
-    let mut qa = fs::read_to_string(feature_dir.join("qa.md")).expect("invariant: qa.md readable");
+    let mut qa = feature::read_sidecar_text(&MaestroPaths::new(repo), "close-advisory", "qa.md")
+        .expect("invariant: qa.md readable")
+        .expect("invariant: qa.md should exist");
     qa.push_str("\n```yaml\nslices:\n  - scenarios: [\"bl-001\"]\n    evidence: [\"proof for bl-001\"]\n```\n");
-    fs::write(feature_dir.join("qa.md"), qa).expect("invariant: qa.md should be writable");
+    feature::write_sidecar_text(&MaestroPaths::new(repo), "close-advisory", "qa.md", &qa)
+        .expect("invariant: qa.md should be writable");
     run(repo, &["feature", "verify", "close-advisory"]);
 
     // Before HEAD moves: the verified child matches HEAD -> would close, no advisory.
