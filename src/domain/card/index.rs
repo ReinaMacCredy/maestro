@@ -27,7 +27,7 @@ use crate::foundation::core::fs::ensure_dir;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::safe_write::write_string_atomic;
 
-const TEXT_INDEX_SCHEMA_VERSION: &str = "maestro.text-index.v1";
+const TEXT_INDEX_SCHEMA_VERSION: &str = "maestro.text-index.v2";
 
 #[derive(Debug, Deserialize, Serialize)]
 struct TextIndex {
@@ -68,10 +68,10 @@ pub fn rebuild(paths: &MaestroPaths) -> Result<RebuildReport> {
 
     let mut docs = Vec::with_capacity(live.len() + archived.len());
     for (card, path) in &live {
-        docs.push(doc_entry(card, path, false));
+        docs.push(doc_entry(paths, card, path, false));
     }
     for (card, path) in &archived {
-        docs.push(doc_entry(card, path, true));
+        docs.push(doc_entry(paths, card, path, true));
     }
 
     let index = TextIndex {
@@ -137,17 +137,17 @@ fn load_fresh(paths: &MaestroPaths) -> Option<TextIndex> {
     Some(index)
 }
 
-fn doc_entry(card: &Card, path: &Path, archived: bool) -> DocEntry {
+fn doc_entry(paths: &MaestroPaths, card: &Card, path: &Path, archived: bool) -> DocEntry {
     let mut text = card.title.clone();
     if let Some(body) = body_of(card) {
         text.push('\n');
         text.push_str(&body);
     }
-    if is_dir_backed(path)
-        && let Some(dir) = path.parent()
-    {
+    if is_dir_backed(path) {
         for sidecar in GREP_SIDECARS {
-            if let Ok(prose) = std::fs::read_to_string(dir.join(sidecar)) {
+            if let Some(prose) =
+                crate::domain::card::query::sidecar_text(Some(paths), path, sidecar)
+            {
                 text.push('\n');
                 text.push_str(&prose);
             }

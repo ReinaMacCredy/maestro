@@ -49,6 +49,20 @@ fn run_err(cwd: &Path, args: &[&str]) -> String {
     String::from_utf8_lossy(&output.stderr).into_owned()
 }
 
+fn git(cwd: &Path, args: &[&str]) {
+    let output = Command::new("git")
+        .args(args)
+        .current_dir(cwd)
+        .output()
+        .expect("invariant: git should be runnable in integration tests");
+    assert!(
+        output.status.success(),
+        "git {args:?} failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 fn write_claims_only_harness(repo: &Path) {
     let harness = repo.join(".maestro/harness");
     fs::create_dir_all(&harness).expect("invariant: harness dir should be creatable");
@@ -64,6 +78,53 @@ fn write_claims_only_harness(repo: &Path) {
         ),
     )
     .expect("invariant: harness should be writable");
+}
+
+fn seed_legacy_sidecar_archive(repo: &Path) {
+    let legacy = repo.join(".maestro/archive/cards/legacy-sidecar-feature");
+    fs::create_dir_all(&legacy).expect("invariant: legacy archive dir should be creatable");
+    fs::write(
+        legacy.join("card.yaml"),
+        r#"schema_version: maestro.card.v1
+id: legacy-sidecar-feature
+type: feature
+title: Legacy Sidecar Feature
+status: shipped
+created_at: "1"
+updated_at: "1"
+description: cardtokenx lives in the archived card record
+"#,
+    )
+    .expect("invariant: legacy archived card should be writable");
+    fs::write(
+        legacy.join("notes.md"),
+        "# Legacy Sidecar Feature\n\nnotestokenx from archived notes\n",
+    )
+    .expect("invariant: legacy archived notes should be writable");
+    fs::write(
+        legacy.join("spec.md"),
+        "# Legacy Sidecar Feature\n\n## Problem\n\nspectokenx from archived spec\n",
+    )
+    .expect("invariant: legacy archived spec should be writable");
+    fs::write(
+        legacy.join("qa.md"),
+        "### QA Baseline Contract\n\nqatokenx from archived qa\n",
+    )
+    .expect("invariant: legacy archived qa should be writable");
+    fs::write(
+        legacy.join("decisions.yaml"),
+        r#"- schema_version: maestro.card.v1
+  id: dec-sidecar-token
+  type: decision
+  title: Archived sidecar decision
+  status: locked
+  parent: legacy-sidecar-feature
+  created_at: "1"
+  updated_at: "1"
+  description: decisiontokenx from archived decisions
+"#,
+    )
+    .expect("invariant: legacy archived decisions should be writable");
 }
 
 #[test]
@@ -1232,6 +1293,183 @@ updated_at: "1"
     assert!(
         doctor_after_cleanup.contains("legacy quarantines: 0"),
         "doctor reflects cleanup:\n{doctor_after_cleanup}"
+    );
+}
+
+#[test]
+fn archive_migrate_db_refuses_tracked_archive_when_db_ignored() {
+    let temp = cards_repo("s2-archive-db-tracked-source");
+    let repo = temp.path();
+    git(repo, &["init", "-q"]);
+    fs::write(repo.join(".gitignore"), ".maestro/\n")
+        .expect("invariant: root gitignore should be writable");
+
+    let legacy = repo.join(".maestro/archive/cards/legacy-feature");
+    fs::create_dir_all(&legacy).expect("invariant: legacy archive dir should be creatable");
+    fs::write(
+        legacy.join("card.yaml"),
+        r#"schema_version: maestro.card.v1
+id: legacy-feature
+type: feature
+title: Legacy Feature
+status: shipped
+created_at: "1"
+updated_at: "1"
+"#,
+    )
+    .expect("invariant: legacy archived card should be writable");
+    git(repo, &["add", ".gitignore"]);
+    git(
+        repo,
+        &[
+            "add",
+            "-f",
+            ".maestro/archive/cards/legacy-feature/card.yaml",
+        ],
+    );
+    git(
+        repo,
+        &[
+            "-c",
+            "user.name=Maestro Test",
+            "-c",
+            "user.email=maestro@example.invalid",
+            "commit",
+            "-q",
+            "-m",
+            "track legacy archive",
+        ],
+    );
+
+    let err = run_err(repo, &["archive", "migrate-db", "--apply"]);
+
+    assert!(
+        err.contains("archive DB durability guard refused archive migrate-db")
+            && err.contains(".maestro/archive/cards.sqlite")
+            && err.contains(".maestro/archive/cards/legacy-feature/card.yaml"),
+        "migrate-db should name the unsafe tracked-to-untracked replacement:\n{err}"
+    );
+    assert!(
+        legacy.exists(),
+        "the legacy archive folder must remain when migration is refused"
+    );
+    assert!(
+        !repo.join(".maestro/archive/cards.sqlite").exists(),
+        "the guard must fail before creating an ignored DB"
+    );
+}
+
+#[test]
+fn archive_cleanup_refuses_when_quarantine_only_durable_copy() {
+    let temp = cards_repo("s2-archive-db-cleanup-durable-copy");
+    let repo = temp.path();
+    git(repo, &["init", "-q"]);
+    fs::write(repo.join(".gitignore"), ".maestro/\n")
+        .expect("invariant: root gitignore should be writable");
+
+    let legacy = repo.join(".maestro/archive/cards/legacy-feature");
+    fs::create_dir_all(&legacy).expect("invariant: legacy archive dir should be creatable");
+    fs::write(
+        legacy.join("card.yaml"),
+        r#"schema_version: maestro.card.v1
+id: legacy-feature
+type: feature
+title: Legacy Feature
+status: shipped
+created_at: "1"
+updated_at: "1"
+"#,
+    )
+    .expect("invariant: legacy archived card should be writable");
+    git(repo, &["add", ".gitignore"]);
+    git(
+        repo,
+        &[
+            "add",
+            "-f",
+            ".maestro/archive/cards/legacy-feature/card.yaml",
+        ],
+    );
+    git(
+        repo,
+        &[
+            "-c",
+            "user.name=Maestro Test",
+            "-c",
+            "user.email=maestro@example.invalid",
+            "commit",
+            "-q",
+            "-m",
+            "track legacy archive",
+        ],
+    );
+
+    let quarantine = repo.join(".maestro/archive/legacy-cards-2026-06-30");
+    fs::create_dir_all(&quarantine).expect("invariant: quarantine dir should be creatable");
+    fs::rename(&legacy, quarantine.join("legacy-feature"))
+        .expect("invariant: legacy archive should move to quarantine");
+
+    let err = run_err(repo, &["archive", "cleanup", "--apply"]);
+
+    assert!(
+        err.contains("archive DB durability guard refused archive cleanup")
+            && err.contains(".maestro/archive/cards.sqlite")
+            && err.contains(".maestro/archive/cards/legacy-feature/card.yaml"),
+        "cleanup should name the tracked source whose only local copy is quarantined:\n{err}"
+    );
+    assert!(
+        quarantine.join("legacy-feature/card.yaml").exists(),
+        "cleanup must leave the quarantine intact when the DB is not durable"
+    );
+}
+
+#[test]
+fn archive_db_sidecars_are_searchable_after_migration() {
+    let temp = cards_repo("s2-archive-db-sidecar-memory");
+    let repo = temp.path();
+    seed_legacy_sidecar_archive(repo);
+
+    run(repo, &["archive", "migrate-db", "--apply"]);
+    assert!(
+        !repo
+            .join(".maestro/archive/cards/legacy-sidecar-feature")
+            .exists(),
+        "migration should remove the filesystem sidecar source"
+    );
+
+    for term in [
+        "notestokenx",
+        "spectokenx",
+        "qatokenx",
+        "decisiontokenx",
+        "cardtokenx",
+    ] {
+        let out = run(repo, &["grep", "--json", &format!("{term} corpus:memory")]);
+        let json: Value = serde_json::from_str(&out).expect("grep output should be JSON");
+        assert_eq!(json["ok"], true, "{json:#}");
+        assert!(
+            json["hits"]
+                .as_array()
+                .expect("hits should be an array")
+                .iter()
+                .any(|hit| hit["id"] == "legacy-sidecar-feature" && hit["archived"] == true),
+            "memory grep should find archived DB sidecar term {term}:\n{json:#}"
+        );
+    }
+}
+
+#[test]
+fn card_list_grep_finds_db_archived_sidecar_text() {
+    let temp = cards_repo("s2-archive-db-sidecar-list");
+    let repo = temp.path();
+    seed_legacy_sidecar_archive(repo);
+
+    run(repo, &["archive", "migrate-db", "--apply"]);
+    let list = run(repo, &["list", "--grep", "spectokenx", "--archived"]);
+
+    assert!(
+        list.contains("legacy-sidecar-feature") && list.contains("Legacy Sidecar Feature"),
+        "card list grep should recall archived DB sidecar text:\n{list}"
     );
 }
 

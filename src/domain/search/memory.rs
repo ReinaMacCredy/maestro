@@ -21,10 +21,9 @@ use crate::foundation::core::fs::ensure_dir;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::safe_write::{write_atomic, write_string_atomic};
 
-const MEMORY_SHARD_SCHEMA_VERSION: &str = "maestro.memory-shard.v1";
+const MEMORY_SHARD_SCHEMA_VERSION: &str = "maestro.memory-shard.v2";
 const SEARCH_MANIFEST_SCHEMA_VERSION: &str = "maestro.search-manifest.v1";
 const MEMORY_SHARD_MAGIC: &[u8] = b"MAESTRO_MEMORY_SHARD_V1\n";
-const MEMORY_SIDECARS: &[&str] = &["notes.md", "spec.md", "qa.md", "decisions.yaml"];
 
 #[derive(Debug)]
 pub struct MemoryRebuildReport {
@@ -73,10 +72,10 @@ pub(crate) fn rebuild_memory_unlocked(paths: &MaestroPaths) -> Result<MemoryRebu
 
     let mut docs = Vec::new();
     for (card, path) in &live {
-        docs.push(document_for_card(card, path, false)?);
+        docs.push(document_for_card(Some(paths), card, path, false)?);
     }
     for (card, path) in &archived {
-        docs.push(document_for_card(card, path, true)?);
+        docs.push(document_for_card(Some(paths), card, path, true)?);
     }
     for entry in task::load_progress_task_entries(paths)? {
         docs.push(document_for_progress_task(&entry.task, &entry.task_dir)?);
@@ -289,7 +288,12 @@ fn decode_shard(bytes: &[u8]) -> Result<MemoryShard> {
     serde_json::from_slice(payload).context("failed to parse memory shard")
 }
 
-fn document_for_card(card: &Card, path: &Path, archived: bool) -> Result<SearchDocument> {
+fn document_for_card(
+    paths: Option<&MaestroPaths>,
+    card: &Card,
+    path: &Path,
+    archived: bool,
+) -> Result<SearchDocument> {
     let mut fields = BTreeMap::new();
     fields.insert("status".to_string(), card.status.clone());
     if let Some(parent) = &card.parent {
@@ -319,12 +323,9 @@ fn document_for_card(card: &Card, path: &Path, archived: bool) -> Result<SearchD
             text: serde_yaml::to_string(&card.extra).context("failed to serialize card payload")?,
         });
     }
-    if is_dir_backed(path)
-        && let Some(dir) = path.parent()
-    {
-        for sidecar in MEMORY_SIDECARS {
-            let sidecar_path = dir.join(sidecar);
-            if let Ok(Some(text)) = read_regular_sidecar(&sidecar_path) {
+    if is_dir_backed(path) {
+        for sidecar in card_query::GREP_SIDECARS {
+            if let Some(text) = card_query::sidecar_text(paths, path, sidecar) {
                 segments.push(SearchSegment {
                     id: sidecar.trim_end_matches(".md").replace('.', "_"),
                     field: sidecar.to_string(),
@@ -446,18 +447,6 @@ fn document_for_run_evidence(record: &run::RunEvidenceRecord) -> SearchDocument 
             text: body,
         }],
     }
-}
-
-fn read_regular_sidecar(path: &Path) -> Result<Option<String>> {
-    let Ok(metadata) = std::fs::symlink_metadata(path) else {
-        return Ok(None);
-    };
-    if !metadata.is_file() {
-        return Ok(None);
-    }
-    std::fs::read_to_string(path)
-        .map(Some)
-        .with_context(|| format!("failed to read {}", path.display()))
 }
 
 fn memory_kind_for_card(card: &Card) -> &'static str {
@@ -1024,6 +1013,7 @@ mod tests {
         );
         card.description = Some("Decision proof history".to_string());
         let doc = document_for_card(
+            None,
             &card,
             Path::new(".maestro/cards/demo-feature/card.yaml"),
             false,

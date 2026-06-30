@@ -18,7 +18,10 @@ use anyhow::{Context, Result, bail};
 use crate::domain::card::archive_db;
 use crate::domain::card::query::{Coarse, coarse_of, scan_dir_with_paths, scan_with_paths};
 use crate::domain::card::schema::CardType;
-use crate::domain::card::store::{card_path, is_dir_backed, load_entries, save_entries};
+use crate::domain::card::store::{
+    CardSnapshot, card_path, is_dir_backed, load_entries, load_with_snapshot,
+    remove_dir_with_snapshot, save_entries,
+};
 use crate::domain::feature::registry::{
     archived_card_path, load_archived_record, load_record, validate_feature_id,
 };
@@ -55,6 +58,14 @@ pub struct AutoArchiveReceipt {
     pub event_path: String,
     pub archive_path: String,
     pub restore_command: String,
+}
+
+struct DirArchiveMove {
+    card_id: String,
+    record_path: PathBuf,
+    source_dir: PathBuf,
+    target_dir: PathBuf,
+    snapshot: CardSnapshot,
 }
 
 /// Append the durable minimum receipt for an evidence-gated auto-archive.
@@ -208,13 +219,15 @@ fn archive_feature_checked(
         // Pre-flight no-clobber over the whole move set, so a collision aborts
         // the run before anything moves. A child inside the feature container
         // rides the container move; only outside homes move individually.
-        let mut moves: Vec<(String, PathBuf, PathBuf)> = Vec::new();
+        let mut moves = Vec::new();
         if feature_live {
-            moves.push((
-                id.to_string(),
-                container.clone(),
-                paths.archive_cards_dir().join(id),
-            ));
+            moves.push(DirArchiveMove {
+                card_id: id.to_string(),
+                record_path: live_card.clone(),
+                source_dir: container.clone(),
+                target_dir: paths.archive_cards_dir().join(id),
+                snapshot: load_with_snapshot(&live_card)?,
+            });
         }
         for (child, path) in &terminal_children {
             if path.starts_with(&container) {
@@ -222,31 +235,30 @@ fn archive_feature_checked(
             }
             let (src, dst) =
                 child_move(child, path, &paths.cards_dir(), &paths.archive_cards_dir())?;
-            moves.push((child.clone(), src, dst));
+            moves.push(DirArchiveMove {
+                card_id: child.clone(),
+                record_path: path.clone(),
+                source_dir: src,
+                target_dir: dst,
+                snapshot: load_with_snapshot(path)?,
+            });
         }
-        for (card_id, _, target) in &moves {
-            if target.exists() {
+        for item in &moves {
+            if item.target_dir.exists() {
                 bail!(
                     "cannot archive {id} — an archived copy already exists at {}",
-                    target.display()
+                    item.target_dir.display()
                 );
             }
-            if archive_db::contains_card_id(paths, card_id)? {
+            if archive_db::contains_card_id(paths, &item.card_id)? {
                 bail!(
-                    "cannot archive {id} — archived card {card_id} already exists in the archive DB"
+                    "cannot archive {id} — archived card {} already exists in the archive DB",
+                    item.card_id
                 );
             }
         }
-        for (card_id, src, _) in &moves {
-            let relative = src.strip_prefix(paths.cards_dir()).with_context(|| {
-                format!("failed to make {} relative to card store", src.display())
-            })?;
-            archive_db::archive_directory(paths, card_id, src, relative)?;
-        }
-        for (_, src, _) in &moves {
-            fs::remove_dir_all(src).with_context(|| {
-                format!("failed to remove archived live card {}", src.display())
-            })?;
+        for item in &moves {
+            archive_and_remove_dir(paths, item)?;
         }
         // SPEC-archive-memory A2: one digest line per archived feature, after
         // the moves succeed and only on the feature-moving run -- a sweep
@@ -272,6 +284,68 @@ fn archive_feature_checked(
     })
 }
 
+fn archive_and_remove_dir(paths: &MaestroPaths, item: &DirArchiveMove) -> Result<()> {
+    let relative = item
+        .source_dir
+        .strip_prefix(paths.cards_dir())
+        .with_context(|| {
+            format!(
+                "failed to make {} relative to card store",
+                item.source_dir.display()
+            )
+        })?;
+    archive_db::archive_directory(paths, &item.card_id, &item.source_dir, relative)?;
+    if let Err(error) = maybe_trigger_archive_race(item) {
+        rollback_archive_snapshot(paths, &item.card_id)?;
+        return Err(error);
+    }
+    if let Err(error) = remove_dir_with_snapshot(&item.record_path, &item.snapshot) {
+        let detail = error.to_string();
+        rollback_archive_snapshot(paths, &item.card_id)?;
+        bail!(
+            "failed to remove archived live card {}: {detail}",
+            item.source_dir.display()
+        );
+    }
+    Ok(())
+}
+
+fn rollback_archive_snapshot(paths: &MaestroPaths, card_id: &str) -> Result<()> {
+    archive_db::delete_snapshots(paths, &[card_id.to_string()])
+        .with_context(|| format!("failed to roll back archive DB snapshot {card_id}"))?;
+    Ok(())
+}
+
+#[cfg(debug_assertions)]
+fn maybe_trigger_archive_race(item: &DirArchiveMove) -> Result<()> {
+    if std::env::var("MAESTRO_TEST_ARCHIVE_RACE").ok().as_deref()
+        != Some("feature-archive-stale-before-remove")
+    {
+        return Ok(());
+    }
+    if item.record_path.file_name().and_then(|name| name.to_str()) != Some("card.yaml") {
+        return Ok(());
+    }
+    fs::write(
+        &item.record_path,
+        format!(
+            "schema_version: maestro.card.v1\nid: {}\ntype: feature\ntitle: Race changed before archive remove\nstatus: cancelled\ncreated_at: \"1\"\nupdated_at: \"1\"\n",
+            item.card_id
+        ),
+    )
+    .with_context(|| {
+        format!(
+            "failed to plant racing archive change at {}",
+            item.record_path.display()
+        )
+    })
+}
+
+#[cfg(not(debug_assertions))]
+fn maybe_trigger_archive_race(_item: &DirArchiveMove) -> Result<()> {
+    Ok(())
+}
+
 /// What `maestro archive --loose` did: swept ids (boxed) and the locked loose
 /// decisions deliberately left live (kept rules).
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -294,7 +368,7 @@ pub struct LooseSweepReport {
 ///
 /// Idempotent: a store with nothing loose to sweep is a no-op at exit 0.
 pub fn archive_loose(paths: &MaestroPaths) -> Result<LooseSweepReport> {
-    let mut dir_moves: Vec<(String, PathBuf, PathBuf)> = Vec::new();
+    let mut dir_moves = Vec::new();
     // Entry sweeps grouped by live container file, ids in scan (id) order.
     let mut entry_sweeps: BTreeMap<PathBuf, Vec<String>> = BTreeMap::new();
     let mut swept: Vec<String> = Vec::new();
@@ -327,7 +401,13 @@ pub fn archive_loose(paths: &MaestroPaths) -> Result<LooseSweepReport> {
                 &paths.cards_dir(),
                 &paths.archive_cards_dir(),
             )?;
-            dir_moves.push((card.id.clone(), src, dst));
+            dir_moves.push(DirArchiveMove {
+                card_id: card.id.clone(),
+                record_path: path.clone(),
+                source_dir: src,
+                target_dir: dst,
+                snapshot: load_with_snapshot(&path)?,
+            });
         } else {
             entry_sweeps.entry(path).or_default().push(card.id.clone());
         }
@@ -344,16 +424,19 @@ pub fn archive_loose(paths: &MaestroPaths) -> Result<LooseSweepReport> {
 
     // Pre-flight the whole sweep before anything moves: dir targets must be
     // free and no archive container may already hold a swept id.
-    for (id, _src, target) in &dir_moves {
-        if target.exists() {
+    for item in &dir_moves {
+        if item.target_dir.exists() {
             bail!(
                 "cannot sweep {} — an archived copy already exists at {}",
-                id,
-                target.display()
+                item.card_id,
+                item.target_dir.display()
             );
         }
-        if archive_db::contains_card_id(paths, id)? {
-            bail!("cannot sweep {id} — an archived copy already exists in the archive DB");
+        if archive_db::contains_card_id(paths, &item.card_id)? {
+            bail!(
+                "cannot sweep {} — an archived copy already exists in the archive DB",
+                item.card_id
+            );
         }
     }
     let mut entry_stages = Vec::new();
@@ -375,15 +458,8 @@ pub fn archive_loose(paths: &MaestroPaths) -> Result<LooseSweepReport> {
         entry_stages.push((live_file.clone(), live, keep, relative.to_path_buf(), sweep));
     }
 
-    for (id, src, _dst) in &dir_moves {
-        let relative = src
-            .strip_prefix(paths.cards_dir())
-            .with_context(|| format!("failed to make {} relative to card store", src.display()))?;
-        archive_db::archive_directory(paths, id, src, relative)?;
-    }
-    for (_id, src, _dst) in &dir_moves {
-        fs::remove_dir_all(src)
-            .with_context(|| format!("failed to remove archived live card {}", src.display()))?;
+    for item in &dir_moves {
+        archive_and_remove_dir(paths, item)?;
     }
     for (live_file, live_snapshot, keep, relative, sweep) in &entry_stages {
         for card in sweep {

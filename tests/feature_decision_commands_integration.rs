@@ -36,6 +36,17 @@ fn maestro_owned(args: &[String], cwd: &Path) -> std::process::Output {
         .expect("invariant: compiled maestro binary should be runnable in integration tests")
 }
 
+fn maestro_with_env(args: &[&str], cwd: &Path, envs: &[(&str, &str)]) -> std::process::Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_maestro"));
+    command.args(args).current_dir(cwd);
+    for (key, value) in envs {
+        command.env(key, value);
+    }
+    command
+        .output()
+        .expect("invariant: compiled maestro binary should be runnable in integration tests")
+}
+
 fn maestro_with_timeout(args: &[String], cwd: &Path, timeout: Duration) -> Output {
     let mut child = Command::new(env!("CARGO_BIN_EXE_maestro"))
         .args(args)
@@ -2921,6 +2932,106 @@ fn feature_unarchive_decorates_a_live_child_collision() {
             "resolve the live copy conflict, then retry: maestro feature unarchive billing-csv-export"
         ),
         "{err}"
+    );
+}
+
+#[test]
+fn archive_feature_rejects_stale_live_card_before_removing_dir() {
+    let temp_dir = TestTempDir::new("maestro-feature-archive-cas-remove");
+    let root = temp_dir.path();
+    init_git_marker(root);
+    stdout(maestro(&["init", "--yes"], root), &["init", "--yes"]);
+    stdout(
+        maestro(&["feature", "new", "Billing CSV export"], root),
+        &["feature", "new", "Billing CSV export"],
+    );
+    let cancel_args = [
+        "feature",
+        "cancel",
+        "billing-csv-export",
+        "--reason",
+        "scope dropped",
+    ];
+    stdout(maestro(&cancel_args, root), &cancel_args);
+
+    let archive_args = ["feature", "archive", "billing-csv-export"];
+    let err = assert_failure(
+        maestro_with_env(
+            &archive_args,
+            root,
+            &[(
+                "MAESTRO_TEST_ARCHIVE_RACE",
+                "feature-archive-stale-before-remove",
+            )],
+        ),
+        &archive_args,
+    );
+
+    assert!(
+        err.contains("changed since it was read") && err.contains("re-run the command"),
+        "archive must refuse the stale delete through the CAS seam:\n{err}"
+    );
+    let live_card = root.join(".maestro/cards/billing-csv-export/card.yaml");
+    let live = fs::read_to_string(&live_card).expect("stale archive failure should keep live card");
+    assert!(
+        live.contains("Race changed before archive remove"),
+        "the racing update must survive the refused archive:\n{live}"
+    );
+    let retry = stdout(maestro(&archive_args, root), &archive_args);
+    assert!(
+        retry.contains("archived feature billing-csv-export"),
+        "a stale-delete failure must leave the archive retryable:\n{retry}"
+    );
+}
+
+#[test]
+fn unarchive_feature_refuses_racing_target_creation() {
+    let temp_dir = TestTempDir::new("maestro-feature-unarchive-no-clobber");
+    let root = temp_dir.path();
+    init_git_marker(root);
+    stdout(maestro(&["init", "--yes"], root), &["init", "--yes"]);
+    stdout(
+        maestro(&["feature", "new", "Billing CSV export"], root),
+        &["feature", "new", "Billing CSV export"],
+    );
+    let cancel_args = [
+        "feature",
+        "cancel",
+        "billing-csv-export",
+        "--reason",
+        "scope dropped",
+    ];
+    stdout(maestro(&cancel_args, root), &cancel_args);
+    let archive_args = ["feature", "archive", "billing-csv-export"];
+    stdout(maestro(&archive_args, root), &archive_args);
+
+    let unarchive_args = ["feature", "unarchive", "billing-csv-export"];
+    let err = assert_failure(
+        maestro_with_env(
+            &unarchive_args,
+            root,
+            &[("MAESTRO_TEST_ARCHIVE_RACE", "unarchive-target-create")],
+        ),
+        &unarchive_args,
+    );
+
+    assert!(
+        err.contains("live artifact already exists")
+            || err.contains("live feature already occupies"),
+        "unarchive must refuse the racing live target:\n{err}"
+    );
+    let race_card = fs::read_to_string(root.join(".maestro/cards/billing-csv-export/card.yaml"))
+        .expect("racing live target should remain");
+    assert!(
+        race_card.contains("Racing live feature"),
+        "unarchive must not overwrite the racing live target:\n{race_card}"
+    );
+    fs::remove_dir_all(root.join(".maestro/cards/billing-csv-export"))
+        .expect("invariant: racing live target should be removable");
+    let retry = stdout(maestro(&unarchive_args, root), &unarchive_args);
+    assert!(
+        retry.contains("unarchived feature billing-csv-export"),
+        "unarchive failure must leave the DB snapshot retryable:\n{retry}"
     );
 }
 

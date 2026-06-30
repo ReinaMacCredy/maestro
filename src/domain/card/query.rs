@@ -581,6 +581,7 @@ pub fn query<'a>(cards: &'a [Card], filter: &ListFilter) -> Vec<&'a Card> {
 /// a card outside it skips the grep -- and its sidecar reads -- entirely;
 /// `None` greps every card.
 pub fn query_scanned<'a>(
+    paths: Option<&MaestroPaths>,
     cards: &'a [(Card, PathBuf)],
     filter: &ListFilter,
     grep: Option<&str>,
@@ -592,7 +593,7 @@ pub fn query_scanned<'a>(
             filter.matches(card)
                 && grep.is_none_or(|term| {
                     candidates.is_none_or(|set| set.contains(&card.id))
-                        && grep_matches(card, path, term)
+                        && grep_matches(paths, card, path, term)
                 })
         })
         .map(|(card, _)| card)
@@ -601,13 +602,20 @@ pub fn query_scanned<'a>(
 
 /// The dir-backed sidecar files grep (and the text index) read; one list so
 /// the index can never go blind to a surface the grep searches.
-pub(crate) const GREP_SIDECARS: &[&str] = &["notes.md", "spec.md"];
+pub(crate) const GREP_SIDECARS: &[&str] = &[
+    CARD_FILE,
+    TASK_FILE,
+    "notes.md",
+    "spec.md",
+    "qa.md",
+    DECISIONS_FILE,
+];
 
 /// Case-insensitive substring match for `list --grep`: the title, the prose
-/// body, and -- for a dir-backed card -- its `notes.md` and `spec.md`
-/// sidecars. An entry-backed card's container file carries other cards' text
-/// too, so only its own record fields are searched.
-fn grep_matches(card: &Card, path: &Path, term: &str) -> bool {
+/// body, and -- for a dir-backed card -- its own record and sibling sidecars.
+/// An entry-backed card's container file carries other cards' text too, so only
+/// its own record fields are searched.
+fn grep_matches(paths: Option<&MaestroPaths>, card: &Card, path: &Path, term: &str) -> bool {
     let needle = term.to_lowercase();
     if card.title.to_lowercase().contains(&needle) {
         return true;
@@ -616,12 +624,28 @@ fn grep_matches(card: &Card, path: &Path, term: &str) -> bool {
         return true;
     }
     is_dir_backed(path)
-        && path.parent().is_some_and(|dir| {
-            GREP_SIDECARS.iter().any(|sidecar| {
-                std::fs::read_to_string(dir.join(sidecar))
-                    .is_ok_and(|text| text.to_lowercase().contains(&needle))
-            })
+        && GREP_SIDECARS.iter().any(|sidecar| {
+            sidecar_text(paths, path, sidecar)
+                .is_some_and(|text| text.to_lowercase().contains(&needle))
         })
+}
+
+pub(crate) fn sidecar_text(
+    paths: Option<&MaestroPaths>,
+    record_path: &Path,
+    sidecar: &str,
+) -> Option<String> {
+    if let Some(paths) = paths
+        && let Ok(Some(text)) = archive_db::read_sibling_text(paths, record_path, sidecar)
+    {
+        return Some(text);
+    }
+    let sidecar_path = record_path.parent()?.join(sidecar);
+    let metadata = std::fs::symlink_metadata(&sidecar_path).ok()?;
+    if !metadata.is_file() {
+        return None;
+    }
+    std::fs::read_to_string(sidecar_path).ok()
 }
 
 /// The CLI-only dotted display alias (SPEC E2): `<parent>.<N>`, where N is the
@@ -1076,7 +1100,7 @@ mod tests {
         ];
 
         let hits = |term: &str| -> Vec<&str> {
-            query_scanned(&pairs, &ListFilter::default(), Some(term), None)
+            query_scanned(None, &pairs, &ListFilter::default(), Some(term), None)
                 .iter()
                 .map(|c| c.id.as_str())
                 .collect()
@@ -1092,7 +1116,7 @@ mod tests {
         );
         assert_eq!(hits("nothing-here"), Vec::<&str>::new());
         assert_eq!(
-            query_scanned(&pairs, &ListFilter::default(), None, None).len(),
+            query_scanned(None, &pairs, &ListFilter::default(), None, None).len(),
             3,
             "no term keeps every card"
         );

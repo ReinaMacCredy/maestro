@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs;
-use std::io::{Cursor, Read};
+use std::fs::{self, OpenOptions};
+use std::io::{Cursor, ErrorKind, Read, Write};
 #[cfg(unix)]
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Component, Path, PathBuf};
@@ -14,6 +14,7 @@ use crate::domain::card::store::{
     CARD_FILE, DECISIONS_FILE, IDEAS_FILE, TASK_FILE, validate_card_id,
 };
 use crate::foundation::core::fs::ensure_dir;
+use crate::foundation::core::git;
 use crate::foundation::core::hash::sha256_hex;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::schema::CARD_SCHEMA_VERSION;
@@ -83,6 +84,12 @@ struct SnapshotRow {
     blob: Vec<u8>,
 }
 
+struct RestoreRoot {
+    snapshot_id: String,
+    root: PathBuf,
+    files: Vec<SnapshotFile>,
+}
+
 pub fn archive_db_file(paths: &MaestroPaths) -> PathBuf {
     paths.archive_dir().join("cards.sqlite")
 }
@@ -122,6 +129,39 @@ pub fn read_file(
         }
     }
     Ok(None)
+}
+
+pub(crate) fn read_sibling_text(
+    paths: &MaestroPaths,
+    synthetic_record_path: &Path,
+    sibling: &str,
+) -> Result<Option<String>> {
+    let db_file = archive_db_file(paths);
+    let Ok(db_relative) = synthetic_record_path.strip_prefix(&db_file) else {
+        return Ok(None);
+    };
+    let mut components = db_relative.components();
+    let Some(Component::Normal(snapshot_id)) = components.next() else {
+        return Ok(None);
+    };
+    let Some(snapshot_id) = snapshot_id.to_str() else {
+        bail!(
+            "archive snapshot id is not utf8 in {}",
+            synthetic_record_path.display()
+        );
+    };
+    validate_card_id(snapshot_id)?;
+
+    let record_relative = normalize_relative(&components.collect::<PathBuf>())?;
+    let sibling_relative = Path::new(&record_relative)
+        .parent()
+        .unwrap_or_else(|| Path::new(""))
+        .join(sibling);
+    let sibling_relative = normalize_relative(&sibling_relative)?;
+    let Some(bytes) = read_file(paths, snapshot_id, &sibling_relative)? else {
+        return Ok(None);
+    };
+    Ok(String::from_utf8(bytes).ok())
 }
 
 pub fn scan(paths: &MaestroPaths) -> Result<Vec<ArchivedCard>> {
@@ -193,7 +233,7 @@ pub fn restore_snapshots(paths: &MaestroPaths, snapshot_ids: &[String]) -> Resul
         bail!("archived card not found: {missing}");
     }
 
-    let mut restore_files = Vec::new();
+    let mut restore_roots = Vec::new();
     for row in &rows {
         for archived in cards_from_row(paths, row)? {
             if crate::domain::card::store::resolve(paths, &archived.card.id)?.is_some() {
@@ -213,7 +253,7 @@ pub fn restore_snapshots(paths: &MaestroPaths, snapshot_ids: &[String]) -> Resul
                 root.display()
             );
         }
-        for file in files {
+        for file in &files {
             let target = root.join(&file.path);
             if target.exists() {
                 bail!(
@@ -222,22 +262,56 @@ pub fn restore_snapshots(paths: &MaestroPaths, snapshot_ids: &[String]) -> Resul
                     target.display()
                 );
             }
-            restore_files.push((target, file));
         }
+        restore_roots.push(RestoreRoot {
+            snapshot_id: row.id.clone(),
+            root,
+            files,
+        });
     }
 
-    for (target, file) in restore_files {
-        if let Some(parent) = target.parent() {
-            ensure_dir(parent)?;
+    maybe_trigger_unarchive_race(&restore_roots)?;
+
+    for restore in &restore_roots {
+        create_restore_root(restore)?;
+        for file in &restore.files {
+            let target = restore.root.join(&file.path);
+            write_new_restore_file(&target, file)?;
         }
-        fs::write(&target, &file.bytes)
-            .with_context(|| format!("failed to write {}", target.display()))?;
-        set_file_mode(&target, file.mode)?;
+    }
+    for restore in &restore_roots {
+        for file in &restore.files {
+            let target = restore.root.join(&file.path);
+            let actual = fs::read(&target)
+                .with_context(|| format!("failed to verify {}", target.display()))?;
+            if actual != file.bytes {
+                bail!(
+                    "cannot unarchive {} — restored file changed before archive DB delete: {}",
+                    restore.snapshot_id,
+                    target.display()
+                );
+            }
+        }
     }
     for id in unique {
         conn.execute("DELETE FROM archived_snapshots WHERE id = ?1", params![id])?;
     }
     Ok(rows.len())
+}
+
+pub(crate) fn delete_snapshots(paths: &MaestroPaths, snapshot_ids: &[String]) -> Result<usize> {
+    if snapshot_ids.is_empty() {
+        return Ok(0);
+    }
+    let Some(conn) = open_existing(paths)? else {
+        return Ok(0);
+    };
+    let mut deleted = 0;
+    for id in snapshot_ids {
+        validate_card_id(id)?;
+        deleted += conn.execute("DELETE FROM archived_snapshots WHERE id = ?1", params![id])?;
+    }
+    Ok(deleted)
 }
 
 pub fn migration_plan(paths: &MaestroPaths) -> Result<MigrationPlan> {
@@ -260,6 +334,7 @@ pub fn migrate_legacy_folders(paths: &MaestroPaths) -> Result<MigrationReport> {
             quarantine_dir: legacy_quarantine_dir(paths, &utc_now_timestamp()[..10]),
         });
     }
+    ensure_git_durable_archive_replacement(paths, "archive migrate-db")?;
 
     let quarantine = unique_quarantine_dir(paths)?;
     let mut imported = 0;
@@ -334,10 +409,119 @@ pub fn doctor(paths: &MaestroPaths) -> Result<ArchiveDoctorReport> {
 pub fn cleanup_legacy_quarantine(paths: &MaestroPaths) -> Result<usize> {
     let dirs = legacy_quarantine_paths(paths)?;
     let _ = doctor(paths)?;
+    if dirs.is_empty() {
+        return Ok(0);
+    }
+    ensure_git_durable_archive_replacement(paths, "archive cleanup")?;
     for dir in &dirs {
         fs::remove_dir_all(dir).with_context(|| format!("failed to remove {}", dir.display()))?;
     }
     Ok(dirs.len())
+}
+
+fn ensure_git_durable_archive_replacement(paths: &MaestroPaths, operation: &str) -> Result<()> {
+    let archive_cards = repo_relative_path(paths, &paths.archive_cards_dir())?;
+    let archive_db = repo_relative_path(paths, &archive_db_file(paths))?;
+    let Some(durability) =
+        git::replacement_durability(paths.repo_root(), &archive_cards, &archive_db)?
+    else {
+        return Ok(());
+    };
+    if durability.tracked_source_paths.is_empty() || durability.replacement_tracked {
+        return Ok(());
+    }
+    let first = durability
+        .tracked_source_paths
+        .first()
+        .expect("invariant: tracked source paths is non-empty");
+    let replacement_state = if durability.replacement_ignored {
+        "ignored and untracked"
+    } else {
+        "untracked"
+    };
+    bail!(
+        "archive DB durability guard refused {operation}: tracked legacy archive path {} would be replaced by {replacement_state} {}; track {} before applying this operation or keep the legacy archive quarantine",
+        first.display(),
+        archive_db.display(),
+        archive_db.display()
+    );
+}
+
+fn repo_relative_path(paths: &MaestroPaths, path: &Path) -> Result<PathBuf> {
+    path.strip_prefix(paths.repo_root())
+        .with_context(|| {
+            format!(
+                "failed to make {} relative to {}",
+                path.display(),
+                paths.repo_root().display()
+            )
+        })
+        .map(Path::to_path_buf)
+}
+
+fn create_restore_root(restore: &RestoreRoot) -> Result<()> {
+    if let Some(parent) = restore.root.parent() {
+        ensure_dir(parent)?;
+    }
+    match fs::create_dir(&restore.root) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == ErrorKind::AlreadyExists => bail!(
+            "cannot unarchive {} — live artifact already exists at {}",
+            restore.snapshot_id,
+            restore.root.display()
+        ),
+        Err(error) => {
+            Err(error).with_context(|| format!("failed to create {}", restore.root.display()))
+        }
+    }
+}
+
+fn write_new_restore_file(target: &Path, file: &SnapshotFile) -> Result<()> {
+    if let Some(parent) = target.parent() {
+        ensure_dir(parent)?;
+    }
+    match OpenOptions::new().write(true).create_new(true).open(target) {
+        Ok(mut handle) => {
+            handle
+                .write_all(&file.bytes)
+                .and_then(|()| handle.flush())
+                .with_context(|| format!("failed to write {}", target.display()))?;
+            set_file_mode(target, file.mode)
+        }
+        Err(error) if error.kind() == ErrorKind::AlreadyExists => {
+            bail!("live artifact already exists at {}", target.display())
+        }
+        Err(error) => Err(error).with_context(|| format!("failed to create {}", target.display())),
+    }
+}
+
+#[cfg(debug_assertions)]
+fn maybe_trigger_unarchive_race(restore_roots: &[RestoreRoot]) -> Result<()> {
+    if std::env::var("MAESTRO_TEST_ARCHIVE_RACE").ok().as_deref() != Some("unarchive-target-create")
+    {
+        return Ok(());
+    }
+    let Some(restore) = restore_roots.first() else {
+        return Ok(());
+    };
+    ensure_dir(&restore.root)?;
+    let id = restore
+        .root
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(&restore.snapshot_id);
+    fs::write(
+        restore.root.join(CARD_FILE),
+        format!(
+            "schema_version: {CARD_SCHEMA_VERSION}\nid: {id}\ntype: feature\ntitle: Racing live feature\nstatus: proposed\ncreated_at: \"1\"\nupdated_at: \"1\"\n"
+        ),
+    )
+    .with_context(|| format!("failed to plant racing live target at {}", restore.root.display()))
+}
+
+#[cfg(not(debug_assertions))]
+fn maybe_trigger_unarchive_race(_restore_roots: &[RestoreRoot]) -> Result<()> {
+    Ok(())
 }
 
 fn archive_snapshot(

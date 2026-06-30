@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use git2::{Oid, Repository, StatusOptions};
 
 /// Current Git state needed by proof freshness and migration checks.
@@ -32,6 +32,18 @@ pub struct BranchDivergence {
     pub ahead: usize,
     /// Commits reachable from the shared branch but not from the current branch.
     pub behind: usize,
+}
+
+/// Git-index durability for replacing one tracked path family with another file.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ReplacementDurability {
+    /// Index-tracked paths under the source prefix that would disappear from the
+    /// working tree after the replacement operation.
+    pub tracked_source_paths: Vec<PathBuf>,
+    /// Whether the replacement file itself is already tracked in the index.
+    pub replacement_tracked: bool,
+    /// Whether standard Git ignore rules hide the replacement path.
+    pub replacement_ignored: bool,
 }
 
 /// Read the current Git HEAD and dirty state for the repository containing `path`.
@@ -196,9 +208,88 @@ pub fn repo_files(path: impl AsRef<Path>) -> Result<Vec<PathBuf>> {
     Ok(files.into_iter().collect())
 }
 
+/// Inspect whether replacing tracked source paths with `replacement_path` would
+/// leave Git with an untracked replacement authority. Paths are repo-relative.
+///
+/// Returns `None` outside Git so local-only Maestro repositories keep working.
+pub fn replacement_durability(
+    path: impl AsRef<Path>,
+    source_prefix: impl AsRef<Path>,
+    replacement_path: impl AsRef<Path>,
+) -> Result<Option<ReplacementDurability>> {
+    let Some(repository) = discover_optional_repository(path.as_ref())? else {
+        return Ok(None);
+    };
+    let source_prefix = normalize_repo_relative(source_prefix.as_ref())?;
+    let replacement_path = normalize_repo_relative(replacement_path.as_ref())?;
+    let index = repository.index().context("failed to read git index")?;
+
+    let mut tracked_source_paths = Vec::new();
+    let mut replacement_tracked = false;
+    for entry in index.iter() {
+        let Ok(path) = std::str::from_utf8(&entry.path) else {
+            continue;
+        };
+        let path = PathBuf::from(path);
+        if path.starts_with(&source_prefix) {
+            tracked_source_paths.push(path.clone());
+        }
+        if path == replacement_path {
+            replacement_tracked = true;
+        }
+    }
+    tracked_source_paths.sort();
+
+    let replacement_ignored = repository
+        .status_should_ignore(&replacement_path)
+        .with_context(|| {
+            format!(
+                "failed to check ignore status for {}",
+                replacement_path.display()
+            )
+        })?;
+
+    Ok(Some(ReplacementDurability {
+        tracked_source_paths,
+        replacement_tracked,
+        replacement_ignored,
+    }))
+}
+
 fn discover_repository(path: &Path) -> Result<Repository> {
     Repository::discover(path)
         .with_context(|| format!("failed to discover git repository from {}", path.display()))
+}
+
+fn discover_optional_repository(path: &Path) -> Result<Option<Repository>> {
+    match Repository::discover(path) {
+        Ok(repository) => Ok(Some(repository)),
+        Err(error) if error.code() == git2::ErrorCode::NotFound => Ok(None),
+        Err(error) => Err(error)
+            .with_context(|| format!("failed to discover git repository from {}", path.display())),
+    }
+}
+
+fn normalize_repo_relative(path: &Path) -> Result<PathBuf> {
+    if path.is_absolute() {
+        bail!("git helper path must be repo-relative: {}", path.display());
+    }
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::Normal(part) => normalized.push(part),
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir
+            | std::path::Component::RootDir
+            | std::path::Component::Prefix(_) => {
+                bail!("unsafe git helper path: {}", path.display());
+            }
+        }
+    }
+    if normalized.as_os_str().is_empty() {
+        bail!("git helper path cannot be empty");
+    }
+    Ok(normalized)
 }
 
 fn head_oid(repository: &Repository) -> Result<Option<String>> {

@@ -94,11 +94,11 @@ pub fn list(args: ListArgs) -> Result<()> {
         Vec::new()
     };
     let mut rows: Vec<(&card::schema::Card, bool)> =
-        card::query::query_scanned(&live, &filter, grep, candidates)
+        card::query::query_scanned(Some(&paths), &live, &filter, grep, candidates)
             .into_iter()
             .map(|c| (c, false))
             .chain(
-                card::query::query_scanned(&archived, &filter, grep, candidates)
+                card::query::query_scanned(Some(&paths), &archived, &filter, grep, candidates)
                     .into_iter()
                     .map(|c| (c, true)),
             )
