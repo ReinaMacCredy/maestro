@@ -141,6 +141,40 @@ fn task_show_renders_implement_method_routing() {
     assert!(behavior_out.contains("method_reason: locked check names observable behavior"));
     assert!(behavior_out.contains("proof_required: RED claim + GREEN claim"));
 
+    let mixed = maestro(
+        repo,
+        &[
+            "task",
+            "create",
+            "Mixed routing",
+            "--check",
+            "behavior-changing work renders METHOD TDD required",
+            "--check",
+            "docs/config/mechanical/light/spike work renders METHOD TDD skipped with a reason",
+            "--id-only",
+        ],
+    );
+    assert_success(
+        &mixed,
+        &[
+            "task",
+            "create",
+            "Mixed routing",
+            "--check",
+            "behavior-changing work renders METHOD TDD required",
+            "--check",
+            "docs/config/mechanical/light/spike work renders METHOD TDD skipped with a reason",
+            "--id-only",
+        ],
+    );
+    let mixed_id = stdout(&mixed).trim().to_string();
+
+    let mixed_show = maestro(repo, &["task", "show", &mixed_id]);
+    assert_success(&mixed_show, &["task", "show", &mixed_id]);
+    let mixed_out = stdout(&mixed_show);
+    assert!(mixed_out.contains("implement_method: TDD required"));
+    assert!(mixed_out.contains("method_reason: locked check names observable behavior"));
+
     let docs = maestro(
         repo,
         &[

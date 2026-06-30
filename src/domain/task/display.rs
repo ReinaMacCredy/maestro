@@ -251,7 +251,15 @@ fn skip_reason_for_lane(lane: &str) -> Option<&'static str> {
 }
 
 fn skip_reason_for_checks(checks: &[String]) -> Option<&'static str> {
-    let text = checks.join("\n").to_ascii_lowercase();
+    let mut reason = None;
+    for check in checks {
+        reason = Some(skip_reason_for_check(check)?);
+    }
+    reason
+}
+
+fn skip_reason_for_check(check: &str) -> Option<&'static str> {
+    let text = check.to_ascii_lowercase();
     if text.contains("docs-only")
         || text.contains("documentation-only")
         || text.contains("markdown-only")
