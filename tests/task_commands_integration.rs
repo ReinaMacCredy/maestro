@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use card_support::{card_dir, card_doc, card_record_path, id_by_title, task_record};
+use serde_json::Value as JsonValue;
 use serde_yaml::{Mapping, Value};
 use support::TestTempDir;
 
@@ -109,7 +110,11 @@ fn task_progress_cli_flow_add_start_done_is_low_ceremony_and_verifies_simple_com
     let temp = setup_repo();
     let repo = temp.path();
 
-    let add = maestro(repo, &["task", "add", "fix typo", "--id-only"]);
+    let add = maestro_with_env(
+        repo,
+        &["task", "add", "fix typo", "--id-only"],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    );
     assert_success(&add, &["task", "add", "fix typo", "--id-only"]);
     let id = stdout(&add).trim().to_string();
     assert!(
@@ -136,32 +141,96 @@ fn task_progress_cli_flow_add_start_done_is_low_ceremony_and_verifies_simple_com
         "bare task add should write progress.yml, not a legacy task-card home"
     );
 
+    let other = maestro_with_env(
+        repo,
+        &["task", "add", "other session task", "--id-only"],
+        &[("MAESTRO_ACTOR", "codex#s2")],
+    );
+    assert_success(&other, &["task", "add", "other session task", "--id-only"]);
+
+    let current = stdout(&maestro_with_env(
+        repo,
+        &["task", "list"],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    ));
+    assert!(
+        untabify(&current).contains("REF\tSTATE\tNEXT\tTITLE"),
+        "{current}"
+    );
+    assert!(current.contains("fix typo"), "{current}");
+    assert!(!current.contains(&id), "{current}");
+    assert!(!current.contains("other session task"), "{current}");
+
     let start = maestro_with_env(
         repo,
-        &["task", "start", &id],
+        &["task", "start", "1"],
         &[("MAESTRO_ACTOR", "codex#s1")],
     );
-    assert_success(&start, &["task", "start", &id]);
+    assert_success(&start, &["task", "start", "1"]);
     let mine = stdout(&maestro_with_env(
         repo,
         &["task", "list", "--mine"],
         &[("MAESTRO_ACTOR", "codex#s1")],
     ));
-    assert!(mine.contains(&id), "{mine}");
+    assert!(mine.contains("fix typo"), "{mine}");
+
+    let shown_ref = stdout(&maestro_with_env(
+        repo,
+        &["task", "show", "1"],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    ));
+    assert!(shown_ref.contains(&id), "{shown_ref}");
+
+    let missing_proof = maestro_with_env(
+        repo,
+        &["task", "done", "1", "--summary", "fixed typo"],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    );
+    assert_failure(
+        &missing_proof,
+        &["task", "done", "1", "--summary", "fixed typo"],
+    );
+    assert!(stderr(&missing_proof).contains("--proof"));
 
     let done = maestro_with_env(
         repo,
-        &["task", "done", &id, "--summary", "fixed typo"],
+        &[
+            "task",
+            "done",
+            "1",
+            "--summary",
+            "fixed typo",
+            "--proof",
+            "fixed typo",
+        ],
         &[("MAESTRO_ACTOR", "codex#s1")],
     );
-    assert_success(&done, &["task", "done", &id]);
+    assert_success(&done, &["task", "done", "1", "--proof", "fixed typo"]);
+
+    let json: JsonValue = serde_json::from_str(&stdout(&maestro_with_env(
+        repo,
+        &["task", "list", "--all", "--json"],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    )))
+    .expect("task list JSON parses");
+    assert_eq!(
+        json["schema"],
+        JsonValue::String("maestro.task.list.v1".to_string())
+    );
+    assert_eq!(json["tasks"][0]["ref"], JsonValue::from(1));
+    assert_eq!(json["tasks"][0]["id"], JsonValue::String(id.clone()));
+    assert_eq!(
+        json["tasks"][0]["proof"]["status"],
+        JsonValue::String("passed".to_string())
+    );
+    assert!(json["tasks"][0]["progress_card"].as_str().is_some());
 
     let (_, record) = progress_task_record(repo, &id);
     assert_eq!(record["state"], Value::String("verified".to_string()));
     assert_eq!(record["verification"]["claims_only"], Value::Bool(true));
     assert_eq!(
         record["verification"]["claim_checks"][0]["source"],
-        Value::String("task done".to_string())
+        Value::String("task done --proof".to_string())
     );
 }
 
@@ -198,8 +267,14 @@ fn task_done_refuses_tasks_with_explicit_verification_gates() {
         assert_success(&maestro(repo, &args), &args);
     }
 
-    let done = maestro(repo, &["task", "done", &id]);
-    assert_failure(&done, &["task", "done", &id]);
+    let done = maestro(
+        repo,
+        &["task", "done", &id, "--proof", "observable proof exists"],
+    );
+    assert_failure(
+        &done,
+        &["task", "done", &id, "--proof", "observable proof exists"],
+    );
     let message = stderr(&done);
     assert!(
         message.contains("explicit verification gate") && message.contains("maestro task complete"),
@@ -723,39 +798,52 @@ fn list_supports_basic_output_and_requested_filters() {
     let all = maestro(repo, &["task", "list"]);
     assert_success(&all, &["task", "list"]);
     let all_out = stdout(&all);
-    assert!(untabify(&all_out).contains("ID\tSTATE\tNEXT\tTITLE"));
-    assert!(all_out.contains("inspect any: maestro task show <id>"));
-    assert!(all_out.contains(&a));
-    assert!(all_out.contains(&b));
-    assert!(all_out.contains(&c));
+    assert!(untabify(&all_out).contains("REF\tSTATE\tNEXT\tTITLE"));
+    assert!(all_out.contains("inspect any: maestro task show <ref>"));
+    assert!(all_out.contains("Task A"));
+    assert!(all_out.contains("Task B"));
+    assert!(all_out.contains("Task C"));
+
+    let all_json: JsonValue =
+        serde_json::from_str(&stdout(&maestro(repo, &["task", "list", "--json"])))
+            .expect("task list JSON parses");
+    let listed_ids: Vec<&str> = all_json["tasks"]
+        .as_array()
+        .expect("tasks array")
+        .iter()
+        .filter_map(|task| task["id"].as_str())
+        .collect();
+    assert!(listed_ids.contains(&a.as_str()));
+    assert!(listed_ids.contains(&b.as_str()));
+    assert!(listed_ids.contains(&c.as_str()));
 
     let ready = maestro(repo, &["task", "list", "--ready"]);
     assert_success(&ready, &["task", "list", "--ready"]);
     let ready_out = stdout(&ready);
-    assert!(ready_out.contains(&a));
-    assert!(!ready_out.contains(&b));
-    assert!(!ready_out.contains(&c));
+    assert!(ready_out.contains("Task A"));
+    assert!(!ready_out.contains("Task B"));
+    assert!(!ready_out.contains("Task C"));
 
     let blocked = maestro(repo, &["task", "list", "--blocked"]);
     assert_success(&blocked, &["task", "list", "--blocked"]);
     let blocked_out = stdout(&blocked);
-    assert!(blocked_out.contains(&b));
-    assert!(!blocked_out.contains(&a));
+    assert!(blocked_out.contains("Task B"));
+    assert!(!blocked_out.contains("Task A"));
 
     let blocked_by = maestro(repo, &["task", "list", "--blocked-by", &a]);
     assert_success(&blocked_by, &["task", "list", "--blocked-by", &a]);
-    assert!(stdout(&blocked_by).contains(&b));
+    assert!(stdout(&blocked_by).contains("Task B"));
 
     let blocks = maestro(repo, &["task", "list", "--blocks", &b]);
     assert_success(&blocks, &["task", "list", "--blocks", &b]);
-    assert!(stdout(&blocks).contains(&a));
+    assert!(stdout(&blocks).contains("Task A"));
 
     let feature = maestro(repo, &["task", "list", "--feature", "billing-csv"]);
     assert_success(&feature, &["task", "list", "--feature", "billing-csv"]);
     let feature_out = stdout(&feature);
-    assert!(feature_out.contains(&a));
-    assert!(feature_out.contains(&b));
-    assert!(!feature_out.contains(&c));
+    assert!(feature_out.contains("Task A"));
+    assert!(feature_out.contains("Task B"));
+    assert!(!feature_out.contains("Task C"));
 
     assert_success(
         &maestro(repo, &["task", "claim", &a]),
@@ -932,17 +1020,31 @@ fn list_hides_terminal_tasks_until_all_is_passed() {
     let default = maestro(repo, &["task", "list"]);
     assert_success(&default, &["task", "list"]);
     let default_out = stdout(&default);
-    assert!(default_out.contains(&live));
-    assert!(!default_out.contains(&done));
+    assert!(default_out.contains("Live task"));
+    assert!(!default_out.contains("Done task"));
     assert!(default_out.contains("# 1 terminal task(s) hidden; use --all to include"));
 
     // `--all` includes the terminal task and drops the hint.
     let all = maestro(repo, &["task", "list", "--all"]);
     assert_success(&all, &["task", "list", "--all"]);
     let all_out = stdout(&all);
-    assert!(all_out.contains(&live));
-    assert!(all_out.contains(&done));
+    assert!(all_out.contains("Live task"));
+    assert!(all_out.contains("Done task"));
     assert!(!all_out.contains("terminal task(s) hidden"));
+
+    let all_json: JsonValue = serde_json::from_str(&stdout(&maestro(
+        repo,
+        &["task", "list", "--all", "--json"],
+    )))
+    .expect("task list JSON parses");
+    let listed_ids: Vec<&str> = all_json["tasks"]
+        .as_array()
+        .expect("tasks array")
+        .iter()
+        .filter_map(|task| task["id"].as_str())
+        .collect();
+    assert!(listed_ids.contains(&live.as_str()));
+    assert!(listed_ids.contains(&done.as_str()));
 }
 
 #[test]

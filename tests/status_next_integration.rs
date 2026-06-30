@@ -1283,7 +1283,7 @@ fn task_create_check_handoff_and_list_columns_are_actionable() {
     assert!(list.contains("NEXT"));
     assert!(!list.contains("INSPECT"));
     assert!(list.contains("run: explore"));
-    assert!(list.contains("inspect any: maestro task show <id>"));
+    assert!(list.contains("inspect any: maestro task show <ref>"));
 }
 
 #[test]
@@ -1333,7 +1333,7 @@ fn task_list_next_column_uses_verify_contract_state_not_only_lifecycle_state() {
     let list = run(repo, &["task", "list"]);
     assert!(list.contains("template: add_check"), "{list}");
     assert!(
-        list.contains("inspect any: maestro task show <id>"),
+        list.contains("inspect any: maestro task show <ref>"),
         "{list}"
     );
     assert!(

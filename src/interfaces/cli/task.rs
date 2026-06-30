@@ -75,8 +75,14 @@ pub fn run(args: TaskArgs) -> Result<()> {
             }
             (None, false) => bail!("task claim requires <id> or --next"),
         },
-        TaskCommand::Start { id } => claim_task(&paths, &id, &actor),
-        TaskCommand::Done { id, summary } => done_task(&paths, &id, summary, &actor),
+        TaskCommand::Start { id } => {
+            let id = resolve_task_ref(&paths, &id, &actor)?;
+            claim_task(&paths, &id, &actor)
+        }
+        TaskCommand::Done { id, summary, proof } => {
+            let id = resolve_task_ref(&paths, &id, &actor)?;
+            done_task(&paths, &id, summary, proof, &actor)
+        }
         TaskCommand::Complete {
             id,
             summary,
@@ -142,7 +148,7 @@ pub fn run(args: TaskArgs) -> Result<()> {
             }
             supersede_task(&paths, &id, &by, &reason, &actor)
         }
-        TaskCommand::Show { id } => show_task(&paths, id),
+        TaskCommand::Show { id } => show_task(&paths, id, &actor),
         TaskCommand::List {
             blocked,
             blocked_by,
@@ -151,6 +157,7 @@ pub fn run(args: TaskArgs) -> Result<()> {
             ready,
             mine,
             all,
+            json,
             watch,
             interval,
         } => list_tasks(
@@ -163,6 +170,7 @@ pub fn run(args: TaskArgs) -> Result<()> {
                 ready,
                 mine,
                 all,
+                json,
                 watch,
                 interval,
             },
@@ -252,9 +260,21 @@ fn add_task(
     Ok(())
 }
 
-fn done_task(paths: &MaestroPaths, id: &str, summary: Option<String>, actor: &str) -> Result<()> {
-    let task =
-        task::complete_simple_task(&paths.tasks_dir(), id, actor, &utc_now_timestamp(), summary)?;
+fn done_task(
+    paths: &MaestroPaths,
+    id: &str,
+    summary: Option<String>,
+    proof: Vec<String>,
+    actor: &str,
+) -> Result<()> {
+    let task = task::complete_simple_task(
+        &paths.tasks_dir(),
+        id,
+        actor,
+        &utc_now_timestamp(),
+        summary,
+        proof,
+    )?;
     super::emit_ownership_release(
         paths,
         &task.id,
@@ -263,6 +283,24 @@ fn done_task(paths: &MaestroPaths, id: &str, summary: Option<String>, actor: &st
     );
     println!("done {} -> {}", task.id, task.state.as_str());
     Ok(())
+}
+
+fn resolve_task_ref(paths: &MaestroPaths, task_ref: &str, actor: &str) -> Result<String> {
+    let trimmed = task_ref.trim();
+    if let Ok(ordinal) = trimmed.parse::<usize>() {
+        if ordinal == 0 {
+            bail!("task ref must be 1 or greater");
+        }
+        let tasks = current_task_list(paths, actor, false)?;
+        let Some(task) = tasks.get(ordinal - 1) else {
+            bail!(
+                "no task at ref {}; run `maestro task list` to see current refs",
+                ordinal
+            );
+        };
+        return Ok(task.id.clone());
+    }
+    Ok(task_ref.to_string())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -933,11 +971,11 @@ fn update_task(
     Ok(())
 }
 
-fn show_task(paths: &MaestroPaths, id: Option<String>) -> Result<()> {
+fn show_task(paths: &MaestroPaths, id: Option<String>, actor: &str) -> Result<()> {
     // Mirror the env handling in resolve_optional_task_id (treat empty as unset,
     // no leaked VarError chain) but keep `show` strict: no single-task auto-detect.
     let task_id = match id {
-        Some(id) => id,
+        Some(id) => resolve_task_ref(paths, &id, actor)?,
         None => match std::env::var("MAESTRO_CURRENT_TASK") {
             Ok(id) if !id.trim().is_empty() => id,
             _ => bail!("task id is required or set MAESTRO_CURRENT_TASK for `maestro task show`"),
@@ -976,6 +1014,7 @@ struct TaskListFilters {
     ready: bool,
     mine: bool,
     all: bool,
+    json: bool,
     watch: bool,
     interval: Option<u64>,
 }
@@ -988,22 +1027,12 @@ fn list_tasks(paths: &MaestroPaths, filters: TaskListFilters, actor: &str) -> Re
         });
     }
 
-    // Bare list scans the live tree only (P2 hot path); `--all` also reads the
-    // archive (§5.4 / §5.7b), so the hidden-count hint stays live-tree only.
-    let mut all_tasks = task::load_task_records(&paths.tasks_dir())?;
-    let mut archived_ids = std::collections::BTreeSet::new();
-    if filters.all {
-        let archived: Vec<TaskRecord> = task::load_archived_task_entries(paths)?
-            .into_iter()
-            .map(|entry| entry.task)
-            .collect();
-        archived_ids.extend(archived.iter().map(|t| t.id.clone()));
-        all_tasks.extend(archived);
+    let (shown, all_tasks, archived_ids) = task_list_rows(paths, &filters, actor)?;
+    if filters.json {
+        render_task_list_json(paths, &shown)?;
+        return Ok(());
     }
-    let shown = task::filter_tasks(
-        all_tasks.clone(),
-        &task_filter(&filters, filters.all, actor),
-    );
+
     if shown.is_empty() {
         // Match `harness list` / `decision list`: an empty result says so
         // instead of leaving a bare header (T8).
@@ -1018,7 +1047,7 @@ fn list_tasks(paths: &MaestroPaths, filters: TaskListFilters, actor: &str) -> Re
                 &missing_verify_contract_ids,
             )
         );
-        println!("inspect any: maestro task show <id>");
+        println!("inspect any: maestro task show <ref>");
     }
     if !filters.all {
         let with_terminal = task::filter_tasks(all_tasks, &task_filter(&filters, true, actor));
@@ -1027,6 +1056,97 @@ fn list_tasks(paths: &MaestroPaths, filters: TaskListFilters, actor: &str) -> Re
             println!("# {hidden} terminal task(s) hidden; use --all to include");
         }
     }
+    Ok(())
+}
+
+fn current_task_list(
+    paths: &MaestroPaths,
+    actor: &str,
+    include_terminal: bool,
+) -> Result<Vec<TaskRecord>> {
+    let filters = TaskListFilters {
+        blocked: false,
+        blocked_by: None,
+        blocks: None,
+        feature: None,
+        ready: false,
+        mine: false,
+        all: include_terminal,
+        json: false,
+        watch: false,
+        interval: None,
+    };
+    let (shown, _, _) = task_list_rows(paths, &filters, actor)?;
+    Ok(shown)
+}
+
+fn task_list_rows(
+    paths: &MaestroPaths,
+    filters: &TaskListFilters,
+    actor: &str,
+) -> Result<(
+    Vec<TaskRecord>,
+    Vec<TaskRecord>,
+    std::collections::BTreeSet<String>,
+)> {
+    // Bare list scans the live tree only (P2 hot path); `--all` also reads the
+    // archive (§5.4 / §5.7b), so the hidden-count hint stays live-tree only.
+    let mut all_tasks = task::load_task_records(&paths.tasks_dir())?;
+    let mut archived_ids = std::collections::BTreeSet::new();
+    if filters.all {
+        let archived: Vec<TaskRecord> = task::load_archived_task_entries(paths)?
+            .into_iter()
+            .map(|entry| entry.task)
+            .collect();
+        archived_ids.extend(archived.iter().map(|t| t.id.clone()));
+        all_tasks.extend(archived);
+    }
+    let progress_task_infos = task::progress_task_infos(&paths.tasks_dir())?;
+    all_tasks.retain(|task| match progress_task_infos.get(&task.id) {
+        Some(info) => info.claimed_by.as_deref() == Some(actor),
+        None => true,
+    });
+    let shown = task::filter_tasks(all_tasks.clone(), &task_filter(filters, filters.all, actor));
+    Ok((shown, all_tasks, archived_ids))
+}
+
+fn render_task_list_json(paths: &MaestroPaths, tasks: &[TaskRecord]) -> Result<()> {
+    let progress_card_ids = task::progress_task_card_ids(&paths.tasks_dir())?;
+    let rows: Vec<_> = tasks
+        .iter()
+        .enumerate()
+        .map(|(index, task)| {
+            let proof_status = task
+                .verification
+                .status
+                .as_ref()
+                .map(|status| match status {
+                    task::VerificationStatus::Passed => "passed",
+                    task::VerificationStatus::Failed => "failed",
+                });
+            serde_json::json!({
+                "ref": index + 1,
+                "id": &task.id,
+                "state": task.state.as_str(),
+                "title": &task.title,
+                "claimed_by": &task.claimed_by,
+                "proof": {
+                    "status": proof_status,
+                    "claims_only": task.verification.claims_only,
+                    "claim_checks": &task.verification.claim_checks,
+                },
+                "progress_card": progress_card_ids.get(&task.id),
+            })
+        })
+        .collect();
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "version": 1,
+            "schema": "maestro.task.list.v1",
+            "tasks": rows,
+        }))?
+    );
     Ok(())
 }
 

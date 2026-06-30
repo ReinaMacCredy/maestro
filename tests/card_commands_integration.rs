@@ -186,8 +186,16 @@ fn progress_card_queries_show_progress_card_and_task_list_shows_low_tasks() {
 
     let tasks = run(repo, &["task", "list"]);
     assert!(
-        tasks.contains(&task_id) && tasks.contains("Fix typo"),
+        tasks.contains("REF")
+            && tasks.contains("STATE")
+            && tasks.contains("NEXT")
+            && tasks.contains("TITLE")
+            && tasks.contains("Fix typo"),
         "task list renders low-level progress tasks:\n{tasks}"
+    );
+    assert!(
+        !tasks.contains(&task_id),
+        "routine task list hides low-level task ids; use --json for stable ids:\n{tasks}"
     );
 
     let ready = run(repo, &["ready"]);
@@ -363,7 +371,10 @@ fn chore_card_with_owned_simple_tasks_closes_after_tasks_are_done() {
     );
 
     run(repo, &["task", "start", &task_id]);
-    run(repo, &["task", "done", &task_id]);
+    run(
+        repo,
+        &["task", "done", &task_id, "--proof", "Fix README heading"],
+    );
 
     let closed = run(repo, &["card", "close", &chore_id]);
     assert!(closed.contains("closed"), "{closed}");
@@ -1872,7 +1883,15 @@ fn linked_inbox_is_advisory_and_explicit_task_blocker_is_the_execution_gate() {
     let done = maestro_in_session(
         repo,
         "ui",
-        &["task", "done", &wire_ui, "--summary", "wired UI"],
+        &[
+            "task",
+            "done",
+            &wire_ui,
+            "--summary",
+            "wired UI",
+            "--proof",
+            "wired UI",
+        ],
     );
     assert!(
         done.status.success(),

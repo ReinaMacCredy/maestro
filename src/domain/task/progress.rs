@@ -165,6 +165,28 @@ pub fn scan(paths: &MaestroPaths) -> Result<Vec<(TaskRecord, PathBuf)>> {
     Ok(records)
 }
 
+pub fn scan_with_cards(paths: &MaestroPaths) -> Result<Vec<(TaskRecord, Card, PathBuf)>> {
+    let mut records = Vec::new();
+    for (card, card_path) in query::scan_dir_with_paths(&paths.cards_dir())? {
+        if card.card_type != CardType::Progress {
+            continue;
+        }
+        let Some(progress_dir) = card_path.parent() else {
+            continue;
+        };
+        let path = progress_dir.join(PROGRESS_FILE);
+        if let Some(progress) = load_with_snapshot(&path)?.progress {
+            records.extend(
+                progress
+                    .tasks
+                    .into_iter()
+                    .map(|task| (task, card.clone(), progress_dir.to_path_buf())),
+            );
+        }
+    }
+    Ok(records)
+}
+
 pub(crate) fn scan_in_cards(cards: &[(Card, PathBuf)]) -> Result<Vec<(TaskRecord, PathBuf)>> {
     let mut records = Vec::new();
     for (card, card_path) in cards {

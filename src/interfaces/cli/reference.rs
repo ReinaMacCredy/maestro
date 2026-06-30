@@ -123,11 +123,14 @@ impl CommandScope {
 const MAESTRO_CARD_COMMANDS: &[&str] = &[
     "maestro status",
     "maestro active",
+    "maestro task add",
     "maestro task create",
     "maestro task set",
     "maestro task explore",
     "maestro task accept",
     "maestro task claim",
+    "maestro task start",
+    "maestro task done",
     "maestro task complete",
     "maestro task verify",
     "maestro task next",
@@ -518,6 +521,9 @@ mod tests {
     #[test]
     fn skill_scopes_render_filtered_exact_signatures() {
         let card = render_cli_reference_for_skill("maestro-card");
+        assert!(card.contains("maestro task add <TITLE>"), "{card}");
+        assert!(card.contains("maestro task start <REF_OR_ID>"), "{card}");
+        assert!(card.contains("maestro task done <REF_OR_ID>"), "{card}");
         assert!(card.contains("maestro task complete <ID>"), "{card}");
         assert!(card.contains("maestro feature finalize <ID>"), "{card}");
         assert!(card.contains("maestro feature prepare <ID>"), "{card}");

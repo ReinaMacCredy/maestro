@@ -1018,12 +1018,22 @@ pub enum TaskCommand {
         next: bool,
     },
     #[command(alias = "begin", about = "Start a ready task (alias for claim)")]
-    Start { id: String },
+    Start {
+        #[arg(value_name = "REF_OR_ID")]
+        id: String,
+    },
     #[command(about = "Mark a low-ceremony task done when it has no explicit gate")]
     Done {
+        #[arg(value_name = "REF_OR_ID")]
         id: String,
         #[arg(long, help = "Completion summary stored in task history")]
         summary: Option<String>,
+        #[arg(
+            long,
+            required = true,
+            help = "Observed proof text for the simple completion"
+        )]
+        proof: Vec<String>,
     },
     #[command(about = "Submit work for verification (-> needs_verification)")]
     Complete {
@@ -1094,7 +1104,10 @@ pub enum TaskCommand {
         reason: String,
     },
     #[command(about = "Show a task's detail: state, claim, blockers")]
-    Show { id: Option<String> },
+    Show {
+        #[arg(value_name = "REF_OR_ID")]
+        id: Option<String>,
+    },
     #[command(about = "List tasks, with optional filters")]
     List {
         #[arg(long)]
@@ -1114,6 +1127,8 @@ pub enum TaskCommand {
             help = "Include terminal/done tasks (verified, rejected, abandoned, superseded) and archived ones"
         )]
         all: bool,
+        #[arg(long, help = "Print machine-readable task list JSON")]
+        json: bool,
         #[arg(long, hide = true)]
         watch: bool,
         #[arg(long)]

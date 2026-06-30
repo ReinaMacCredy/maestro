@@ -144,20 +144,21 @@ pub fn render_task_list_with_missing_checks(
 ) -> String {
     let rows: Vec<Vec<String>> = tasks
         .iter()
-        .map(|task| {
+        .enumerate()
+        .map(|(index, task)| {
             let mut state = state_label(task);
             if archived_ids.contains(&task.id) {
                 state.push_str(" (archived)");
             }
             vec![
-                task.id.clone(),
+                (index + 1).to_string(),
                 state,
                 compact_next(task, missing_verify_contract_ids.contains(&task.id)).to_string(),
                 task.title.clone(),
             ]
         })
         .collect();
-    table::render_table(&["ID", "STATE", "NEXT", "TITLE"], &rows)
+    table::render_table(&["REF", "STATE", "NEXT", "TITLE"], &rows)
 }
 
 fn state_label(task: &TaskRecord) -> String {
@@ -198,15 +199,15 @@ mod tests {
         let archived_ids = BTreeSet::from(["task-002".to_string()]);
 
         let out = render_task_list(&[live, archived], &archived_ids);
-        let row = |id: &str| {
+        let row = |title: &str| {
             out.lines()
-                .find(|l| l.starts_with(id))
-                .unwrap_or_else(|| panic!("{id} row present"))
+                .find(|line| line.contains(title))
+                .unwrap_or_else(|| panic!("{title} row present"))
                 .to_string()
         };
 
-        assert!(!row("task-001").contains("(archived)"));
-        assert!(row("task-002").contains("(archived)"));
+        assert!(!row("Live").contains("(archived)"));
+        assert!(row("Archived").contains("(archived)"));
     }
 
     #[test]

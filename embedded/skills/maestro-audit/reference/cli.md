@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: 4efa6130d8107f1dcafd8c1b093029b78ed957bf94ce88dcb18b03b0e394adab -->
+<!-- maestro:cli-reference-sha256: 9dc39b56f50e562fa673b72065d14f4c1089beb8ebd713d720cd18554fbe5a26 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -14,8 +14,8 @@ a spelling not found here is outside this skill's CLI surface.
 
 ## maestro task
 
-- `maestro task show [ID]` -- Show a task's detail: state, claim, blockers
-- `maestro task list [--blocked] [--blocked-by <BLOCKED_BY>] [--blocks <BLOCKS>] [--feature <FEATURE>] [--ready] [--mine] [--all] [--interval <INTERVAL>]` -- List tasks, with optional filters
+- `maestro task show [REF_OR_ID]` -- Show a task's detail: state, claim, blockers
+- `maestro task list [--blocked] [--blocked-by <BLOCKED_BY>] [--blocks <BLOCKS>] [--feature <FEATURE>] [--ready] [--mine] [--all] [--json] [--interval <INTERVAL>]` -- List tasks, with optional filters
 
 ## maestro feature
 

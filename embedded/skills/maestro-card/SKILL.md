@@ -1,6 +1,6 @@
 ---
 name: maestro-card
-version: 1.37.1
+version: 1.37.2
 description: "Use when the user wants to implement, fix, verify, QA, close, release, continue, use loop, keep looping, work while away, or work while asleep on Maestro cards/features/tasks in a project using Maestro after design is approved."
 ---
 
@@ -85,15 +85,17 @@ Read the reference for the job at hand; they share the ground rules below.
   human-facing contract; MCP is the agent ergonomic contract.
 - Discover executable work with `maestro task list`, `maestro task next`, and
   `maestro card list` for card-container context. Progress-backed low Tasks
-  appear in task views; the Progress card itself appears in card views. Take and annotate tasks with
+  appear in task views as routine `REF` rows; use `task list --json` when you
+  need stable ids. The Progress card itself appears in card views. Take and annotate tasks with
   `maestro task start`/`maestro task claim`, `maestro task update`, and
   `maestro task note`.
 - Ids are stable and opaque (`card-<hash>`; features keep their creation
   slug). The dotted alias `show` prints is display-only; never address a card
   with it.
-- Never chain a guessed id: use only ids read from verb output (`task add
-  --id-only`, `task list`, `card list`, `card show`). When a lookup misses,
-  re-list and read the real id; do not retry spelling variations.
+- Never chain a guessed id: use only refs read from `task list` for immediate
+  Task subcommands, or ids read from verb output (`task add --id-only`, `task
+  list --json`, `card list`, `card show`). When a lookup misses, re-list and
+  read the real id; do not retry spelling variations.
 - Do not hand-edit `card.yaml` or the verb-guarded sidecars (`qa.md`,
   state history). Use verbs so gates and audit trails stay intact.
 - Terminal words are per type — feature `closed`/`cancelled`, task

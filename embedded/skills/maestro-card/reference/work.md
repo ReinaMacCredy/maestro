@@ -10,7 +10,8 @@ Progress is the lightweight Task container for small same-session work.
 - Find work: `maestro card ready`, `maestro card list --parent <feature>`.
 - Create or prepare work: `task create`, `task explore`, `task accept`.
 - Pick up work: `task claim --next` (sequenced queue with dependency context)
-  or `maestro task start <id>` / `maestro task claim <id>` for one ready task.
+  or `maestro task start <ref-or-id>` / `maestro task claim <id>` for one ready
+  task.
 - Record progress: `task update --summary` and/or `--claim`;
   `maestro card note <id> "<text>"` for running notes.
 - Finish work: `task complete --summary --claim --proof`, then verify.
@@ -134,8 +135,9 @@ MCP: `maestro_task_add` -> `maestro_task_start` -> `maestro_task_done`.
 
 ```sh
 maestro task add "fix typo"      # creates a ready Task inside progress.yml
-maestro task start <id>          # marks it in_progress and takes ownership
-maestro task done <id>           # verifies it with simple-completion evidence
+maestro task list                # shows live rows with REF numbers
+maestro task start <ref>         # marks it in_progress and takes ownership
+maestro task done <ref> --proof "fixed typo"  # records proof and verifies it
 ```
 
 `task add` is for small work. It creates or reuses the current actor's Progress
@@ -155,13 +157,14 @@ tasks, product/defect/custom identity, or governance beyond execution.
 Focus discipline (the task tool's one-active-item rule):
 
 - `task start` is the "start before working" step. It records ownership and
-  moves the Task to `in_progress` in one move.
+  moves the Task to `in_progress` in one move. Use the `REF` from
+  `task list`, or a stable id from `task list --json` / `task add --id-only`.
 - Keep one Task `in_progress` per session at a time. If another task is active,
   the active board surfaces it; finish or pause the first when you switch.
-- `task done` only works for low-ceremony standalone or Chore-owned Tasks with
-  no explicit verification gate. If a Task has checks, a verify command, or
-  belongs to Feature/Bug/Custom work, use `task complete --summary --claim
-  --proof`, then `task verify`.
+- `task done <ref-or-id> --proof "<evidence>"` only works for low-ceremony
+  standalone or Chore-owned Tasks with no explicit verification gate. If a Task
+  has checks, a verify command, or belongs to Feature/Bug/Custom work, use
+  `task complete --summary --claim --proof`, then `task verify`.
 
 Board view:
 
@@ -169,11 +172,14 @@ Board view:
 maestro task list             # live Tasks; done hidden
 maestro task list --mine      # only Tasks claimed by this actor
 maestro task list --all       # include done/terminal history
+maestro task list --json      # machine-readable refs plus stable ids
 ```
 
-`maestro task list` includes Progress-backed Tasks and legacy card-backed Tasks.
-`maestro card list --type progress` shows the Progress card itself; low Tasks do
-not appear as card rows.
+`maestro task list` includes current actor/session Progress-backed Tasks and
+legacy card-backed Tasks. Human output uses ordinal `REF` values for
+`task show/start/done`; stable ids stay in `progress.yml` and `--json`.
+`maestro card list --type progress` shows the Progress card itself; low Tasks
+do not appear as card rows.
 
 The board reads:
 

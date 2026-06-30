@@ -14,14 +14,14 @@ tasks:
       locked_by: codex#019f0169-example
       locked_at: 2026-06-26T00:00:00.000Z
     claims:
-      - "simple completion: fixed typo"
+      - "fixed typo"
     verification:
       status: passed
       verified_at: 2026-06-26T00:05:00.000Z
       claim_checks:
-        - claim: "simple completion: fixed typo"
+        - claim: "fixed typo"
           matched: true
-          source: task done
+          source: task done --proof
       claims_only: true
     created_at: 2026-06-26T00:00:00.000Z
     updated_at: 2026-06-26T00:05:00.000Z

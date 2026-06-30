@@ -35,6 +35,12 @@ pub use template::{
     VerificationStatus, task_markdown,
 };
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProgressTaskInfo {
+    pub card_id: String,
+    pub claimed_by: Option<String>,
+}
+
 /// Result of appending a task note.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NoteReport {
@@ -208,6 +214,36 @@ pub fn add_simple_task(
 pub fn load_task_record(tasks_dir: &Path, id: &str) -> Result<TaskRecord> {
     let (task, _, _) = lookup::load_task_with_snapshot(tasks_dir, id)?;
     Ok(task)
+}
+
+/// Map Progress-backed low task ids to their backing Progress card ids.
+pub fn progress_task_card_ids(tasks_dir: &Path) -> Result<BTreeMap<String, String>> {
+    Ok(progress_task_infos(tasks_dir)?
+        .into_iter()
+        .map(|(id, info)| (id, info.card_id))
+        .collect())
+}
+
+/// Map Progress-backed low task ids to their backing Progress card metadata.
+pub fn progress_task_infos(tasks_dir: &Path) -> Result<BTreeMap<String, ProgressTaskInfo>> {
+    let paths = lookup::paths_for_tasks_dir(tasks_dir)
+        .context("cannot resolve maestro paths from tasks dir")?;
+    let mut ids = BTreeMap::new();
+    for (task, card, progress_dir) in progress::scan_with_cards(&paths)? {
+        let progress_id = progress_dir
+            .file_name()
+            .and_then(|name| name.to_str())
+            .context("progress card directory name is not valid UTF-8")?
+            .to_string();
+        ids.insert(
+            task.id,
+            ProgressTaskInfo {
+                card_id: progress_id,
+                claimed_by: card.claimed_by,
+            },
+        );
+    }
+    Ok(ids)
 }
 
 /// [`load_task_record`] with true absence as `Ok(None)` instead of an error,
@@ -504,13 +540,20 @@ pub fn complete_simple_task(
     actor: &str,
     completed_at: &str,
     summary: Option<String>,
+    proof: Vec<String>,
 ) -> Result<TaskRecord> {
     let (mut task, snapshot, _) = lookup::load_task_with_snapshot(tasks_dir, id)?;
     let paths = lookup::paths_for_tasks_dir(tasks_dir)
         .context("cannot resolve maestro paths from tasks dir")?;
     guard_simple_done_allowed(&paths, &task)?;
+    if proof.is_empty() || proof.iter().any(|proof| proof.trim().is_empty()) {
+        bail!(
+            "task done requires proof; run `maestro task done {} --proof \"<evidence>\"`",
+            task.id
+        );
+    }
     let summary = summary.unwrap_or_else(|| "marked done".to_string());
-    let claim = format!("simple completion: {summary}");
+    let claims: Vec<String> = proof.iter().map(|proof| proof.trim().to_string()).collect();
     lifecycle::transition(
         &mut task,
         TaskState::NeedsVerification,
@@ -518,7 +561,7 @@ pub fn complete_simple_task(
         completed_at,
         TransitionDetails {
             summary: Some(summary.clone()),
-            claims: vec![claim.clone()],
+            claims: claims.clone(),
             ..TransitionDetails::default()
         },
     )?;
@@ -528,15 +571,18 @@ pub fn complete_simple_task(
             binding: VerificationBinding {
                 status: Some(VerificationStatus::Passed),
                 verified_at: Some(completed_at.to_string()),
-                claim_checks: vec![ClaimCheckReceipt {
-                    claim,
-                    matched: true,
-                    source: Some("task done".to_string()),
-                }],
+                claim_checks: claims
+                    .into_iter()
+                    .map(|claim| ClaimCheckReceipt {
+                        claim,
+                        matched: true,
+                        source: Some("task done --proof".to_string()),
+                    })
+                    .collect(),
                 claims_only: true,
                 ..VerificationBinding::default()
             },
-            summary: "simple task done: no explicit verification gate".to_string(),
+            summary: "simple task done: proof recorded".to_string(),
         }),
         actor,
         completed_at,

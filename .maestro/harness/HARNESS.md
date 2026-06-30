@@ -1,5 +1,5 @@
 ---
-version: 1.29.1
+version: 1.29.2
 ---
 
 # Maestro Harness Protocol
@@ -18,6 +18,9 @@ acceptance from `maestro card show <id>` and use the active task skills.
 
 Do not guess ids. Use only ids printed by Maestro output; when lookup misses,
 re-list and read the real id.
+For routine `task list` output, use the displayed `REF` for the next
+`task show/start/done` command, or use `task list --json` when you need stable
+Task ids.
 
 ## Route
 
@@ -47,7 +50,9 @@ exist. Read the generated reference instead of probing or guessing.
 Work has three levels: High = Card, Mid = CardKind / workflow kind, and Low =
 Task. Feature, Bug, Chore, Custom, Decision, Idea, and Progress are CardKinds.
 Progress stores small Low Tasks in `progress.yml`; use it through
-`maestro task add/start/done/list`.
+`maestro task add/start/done/list`. The default board hides the backing
+Progress card, shows current actor/session low Tasks by ordinal `REF`, and
+keeps stable ids in `progress.yml` and `task list --json`.
 
 Linked-card inbox messages are advisory coordination signals only. They do not
 block execution. When order matters, record an explicit Task blocker or
@@ -58,6 +63,8 @@ blockers, not messages or unread state.
 
 Complete executable work with `maestro task complete` using summary, claim, and
 proof. Maestro records the proof and runs verification.
+For low-ceremony Progress Tasks, close the row with
+`maestro task done <ref> --proof "<evidence>"`; proof is required there too.
 
 Hooks auto-record tool calls as proof. Verification matches each `--claim`
 against recorded or inline proof. Empty or unbacked claims fail. When proof or

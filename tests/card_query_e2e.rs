@@ -23,6 +23,7 @@ use maestro::domain::card::store::{card_path, load_with_snapshot, save_with_snap
 use maestro::domain::task::{self, CreateTaskOptions};
 use maestro::foundation::core::paths::MaestroPaths;
 use maestro::operations::card_migrate;
+use serde_json::Value as JsonValue;
 use support::TestTempDir;
 
 const NOW: &str = "2026-06-08T12:00:00Z";
@@ -466,8 +467,15 @@ fn archived_task_still_renders_in_show_and_list_all() {
     );
     let all = run(repo, &["task", "list", "--all"]);
     assert!(
-        all.contains("task-001"),
+        all.contains("One") && all.contains("REF") && !all.contains("task-001"),
         "`--all` includes the archived task:\n{all}"
+    );
+    let all_json: JsonValue =
+        serde_json::from_str(&run(repo, &["task", "list", "--all", "--json"]))
+            .expect("task list JSON parses");
+    assert_eq!(
+        all_json["tasks"][0]["id"],
+        JsonValue::String("task-001".to_string())
     );
 }
 

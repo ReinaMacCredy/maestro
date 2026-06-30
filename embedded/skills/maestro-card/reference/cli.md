@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: f576a485a6e0c7e5c38a3944c6f8dcf7607190adce5b0758de7b0af9c0eb6b6f -->
+<!-- maestro:cli-reference-sha256: 226172b6825eff21496822b8de23c1799d9dbaec5c69c0f87d1a3cf39498433a -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -14,11 +14,14 @@ a spelling not found here is outside this skill's CLI surface.
 
 ## maestro task
 
+- `maestro task add <TITLE> [--card <CARD>] [--project <PROJECT>] [--id-only]` -- Add a low-ceremony task ready to start
 - `maestro task create <TITLE> [--feature <FEATURE>] [--card <CARD>] [--lane <LANE>] [--risk <RISK>] [--check <CHECK>]... [--covers <COVERS>]... [--project <PROJECT>] [--id-only]` -- Create a task (-> draft)
 - `maestro task set <ID> [--check <CHECK>]... [--feature <FEATURE>] [--no-feature] [--covers <COVERS>]... [--verify-command <VERIFY_COMMAND>] [--clear-verify-command]` -- Author task checks or change its feature link
 - `maestro task explore <ID>` -- Move a draft into exploring (-> exploring)
 - `maestro task accept <ID>` -- Lock acceptance and mark the task ready (-> ready)
 - `maestro task claim [ID] [--next]` -- Claim a ready, unblocked task to work on it (-> in_progress)
+- `maestro task start <REF_OR_ID>` -- Start a ready task (alias for claim)
+- `maestro task done <REF_OR_ID> [--summary <SUMMARY>] --proof <PROOF>...` -- Mark a low-ceremony task done when it has no explicit gate
 - `maestro task complete <ID> --summary <SUMMARY> --claim <CLAIM>... [--proof <PROOF>]...` -- Submit work for verification (-> needs_verification)
 - `maestro task verify [ID]` -- Run the evidence gate; on pass marks the task verified
 - `maestro task next [--json]` -- Print the next task action for the current repo
@@ -29,8 +32,8 @@ a spelling not found here is outside this skill's CLI surface.
 - `maestro task reject <ID> --reason <REASON>` -- Terminally reject a task (-> rejected)
 - `maestro task abandon <ID> --reason <REASON>` -- Terminally abandon a task (-> abandoned)
 - `maestro task supersede <ID> --by <BY> --reason <REASON>` -- Replace a task with another (-> superseded)
-- `maestro task show [ID]` -- Show a task's detail: state, claim, blockers
-- `maestro task list [--blocked] [--blocked-by <BLOCKED_BY>] [--blocks <BLOCKS>] [--feature <FEATURE>] [--ready] [--mine] [--all] [--interval <INTERVAL>]` -- List tasks, with optional filters
+- `maestro task show [REF_OR_ID]` -- Show a task's detail: state, claim, blockers
+- `maestro task list [--blocked] [--blocked-by <BLOCKED_BY>] [--blocks <BLOCKS>] [--feature <FEATURE>] [--ready] [--mine] [--all] [--json] [--interval <INTERVAL>]` -- List tasks, with optional filters
 - `maestro task watch [ID] [--interval <INTERVAL>]` -- Watch tasks live, refreshing on an interval
 - `maestro task proof [TASK_ID] [--task-id <TASK_ID>]` -- Show a task's proof status
 - `maestro task doctor` -- Check the task blocker graph for cycles and dangling refs
