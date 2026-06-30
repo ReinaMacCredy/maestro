@@ -37,8 +37,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 19] = [
     (
         "skill",
         "maestro-card",
-        "1.37.4",
-        "e89abd7830f5eee7e91fa01e03adb3e3184ffa6198aa3c450297b8d13117b12d",
+        "1.37.5",
+        "a6f3cb524848e0c2938e13ea854b3f204081f8f12f9c083df0cf5f18911f1271",
     ),
     (
         "skill",
@@ -67,8 +67,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 19] = [
     (
         "harness",
         "HARNESS.md",
-        "1.29.2",
-        "76543dbe250ecc5a91877775ab8fb4fa87e2840988bd254c63097be8a1d5308c",
+        "1.29.3",
+        "fd7021a9db8bd8878fb6e1a9e8c3c9cced7d404fa55c7f4994ca87a9ad6604da",
     ),
     (
         "playbook",

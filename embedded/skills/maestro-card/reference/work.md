@@ -131,6 +131,12 @@ For simple work that does not need the full feature/card pipeline, use the
 low-ceremony Task surface. There is no `todo` namespace and no task-specific
 second lifecycle.
 
+With Maestro hooks installed, the first write-like `PreToolUse` in an
+implementation session auto-creates or reuses that session's Progress card,
+adds one low Task if needed, starts it, and binds the session to the Progress
+card. This does not fire for read-only hooks or when `MAESTRO_CURRENT_TASK` is
+already set. Without hooks, do the same explicitly:
+
 MCP: `maestro_task_add` -> `maestro_task_start` -> `maestro_task_done`.
 
 ```sh

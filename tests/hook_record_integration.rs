@@ -239,6 +239,40 @@ fn read_events(repo: &Path, session: &str) -> Vec<Value> {
         .collect()
 }
 
+fn progress_files(repo: &Path) -> Vec<(String, serde_yaml::Value)> {
+    let cards = repo.join(".maestro/cards");
+    if !cards.exists() {
+        return Vec::new();
+    }
+    fs::read_dir(cards)
+        .expect("invariant: cards dir should be readable")
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            let path = entry.path().join("progress.yml");
+            path.exists().then(|| {
+                let card_id = entry.file_name().to_string_lossy().to_string();
+                let value = serde_yaml::from_str(
+                    &fs::read_to_string(path).expect("invariant: progress.yml should read"),
+                )
+                .expect("invariant: progress.yml should parse");
+                (card_id, value)
+            })
+        })
+        .collect()
+}
+
+fn progress_task_count(repo: &Path) -> usize {
+    progress_files(repo)
+        .iter()
+        .map(|(_, progress)| {
+            progress["tasks"]
+                .as_sequence()
+                .expect("invariant: progress tasks should be a sequence")
+                .len()
+        })
+        .sum()
+}
+
 #[test]
 fn start_and_stop_events_capture_current_commit() {
     let (repo, start_commit) = init_repo_with_head();
@@ -670,6 +704,107 @@ fn pre_tool_use_hashes_tool_input_without_persisting_raw_content() {
             .as_str()
             .expect("invariant: tool_input_hash should be a string")
             .starts_with("sha256:")
+    );
+}
+
+#[test]
+fn write_like_pre_tool_use_auto_starts_one_progress_task_and_binds_the_session() {
+    let repo = init_repo();
+    let first = maestro_record(
+        repo.path(),
+        r#"{
+            "session_id":"session-auto-progress",
+            "event_type":"PreToolUse",
+            "agent":"codex",
+            "tool_name":"Edit",
+            "tool_input":{"file_path":"src/lib.rs","old_string":"a","new_string":"b"}
+        }"#,
+    );
+    assert!(
+        first.status.success(),
+        "first write-like hook failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&first.stdout),
+        String::from_utf8_lossy(&first.stderr)
+    );
+
+    let files = progress_files(repo.path());
+    assert_eq!(files.len(), 1, "one Progress card should be created");
+    let (progress_card, progress) = &files[0];
+    assert_eq!(progress["agent"], "codex");
+    assert_eq!(progress["session_id"], "session-auto-progress");
+    let tasks = progress["tasks"]
+        .as_sequence()
+        .expect("invariant: progress tasks should be a sequence");
+    assert_eq!(tasks.len(), 1);
+    assert_eq!(tasks[0]["state"], "in_progress");
+    assert_eq!(tasks[0]["claimed_by"], "codex#session-auto-progress");
+    assert_eq!(tasks[0]["title"], "Work on src/lib.rs");
+
+    let events = read_events(repo.path(), "session-auto-progress");
+    assert!(
+        events
+            .iter()
+            .any(|event| event["event_type"] == "card_touch"
+                && event["card_id"] == progress_card.as_str()),
+        "auto-start should bind the session to the backing Progress card: {events:#?}"
+    );
+    assert!(
+        events
+            .iter()
+            .any(|event| event["event_type"] == "PreToolUse"),
+        "the original hook event must still be recorded: {events:#?}"
+    );
+
+    let second = maestro_record(
+        repo.path(),
+        r#"{
+            "session_id":"session-auto-progress",
+            "event_type":"PreToolUse",
+            "agent":"codex",
+            "tool_name":"MultiEdit",
+            "tool_input":{"file_path":"src/main.rs","edits":[]}
+        }"#,
+    );
+    assert!(second.status.success());
+    assert_eq!(
+        progress_task_count(repo.path()),
+        1,
+        "repeated write-like hooks in the same session should reuse the active Progress task"
+    );
+}
+
+#[test]
+fn read_only_and_current_task_hooks_do_not_auto_start_progress() {
+    let repo = init_repo();
+    let read_only = maestro_record(
+        repo.path(),
+        r#"{
+            "session_id":"session-read-only",
+            "event_type":"PreToolUse",
+            "agent":"codex",
+            "tool_name":"Read",
+            "tool_input":{"file_path":"src/lib.rs"}
+        }"#,
+    );
+    assert!(read_only.status.success());
+    assert_eq!(progress_task_count(repo.path()), 0);
+
+    let current_task = maestro_record_clean_env_with(
+        repo.path(),
+        r#"{
+            "session_id":"session-current-task",
+            "event_type":"PreToolUse",
+            "agent":"codex",
+            "tool_name":"Write",
+            "tool_input":{"file_path":"src/lib.rs","content":"changed"}
+        }"#,
+        &[("MAESTRO_CURRENT_TASK", "task-existing")],
+    );
+    assert!(current_task.status.success());
+    assert_eq!(
+        progress_task_count(repo.path()),
+        0,
+        "an already-bound task should suppress automatic Progress entry"
     );
 }
 

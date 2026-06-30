@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::domain::card::query::{self, Coarse};
 use crate::domain::card::schema::{Card, CardType};
 use crate::domain::card::store::{self, CardHome};
+use crate::domain::task::lifecycle::{self, TransitionDetails};
 use crate::domain::task::template::{TaskRecord, TaskState};
 use crate::foundation::core::fs::{
     ensure_dir, read_to_string_if_exists, write_string_if_unchanged,
@@ -120,6 +121,48 @@ pub fn add_simple_task(
 
     let (path, mut progress, snapshot) =
         load_or_create_actor_progress(paths, project, actor, &created_at)?;
+    progress.tasks.push(task.clone());
+    save_with_snapshot(&path, &progress, &snapshot)?;
+    Ok(task)
+}
+
+pub fn ensure_started_simple_task(
+    paths: &MaestroPaths,
+    title: &str,
+    project: Option<String>,
+    created_at: String,
+    actor: &str,
+) -> Result<TaskRecord> {
+    if title.trim().is_empty() {
+        bail!("task title must not be empty");
+    }
+    let (path, mut progress, snapshot) =
+        load_or_create_actor_progress(paths, project, actor, &created_at)?;
+    if let Some(task) = progress
+        .tasks
+        .iter()
+        .find(|task| task.state == TaskState::InProgress)
+    {
+        return Ok(task.clone());
+    }
+
+    let id = store::mint_card_id(paths, CardType::Task, title);
+    let mut task = TaskRecord::draft(&id, title, &created_at);
+    task.state = TaskState::Ready;
+    task.acceptance_locked = true;
+    task.acceptance.locked_by = Some(actor.to_string());
+    task.acceptance.locked_at = Some(created_at.clone());
+    lifecycle::transition(
+        &mut task,
+        TaskState::InProgress,
+        actor,
+        &created_at,
+        TransitionDetails {
+            summary: Some("auto-started from write-like hook".to_string()),
+            ..TransitionDetails::default()
+        },
+    )?;
+    progress.current_task = Some(task.id.clone());
     progress.tasks.push(task.clone());
     save_with_snapshot(&path, &progress, &snapshot)?;
     Ok(task)

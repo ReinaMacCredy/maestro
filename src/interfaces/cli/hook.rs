@@ -1,8 +1,10 @@
 use anyhow::Result;
-use serde_json::json;
+use serde_json::{Value, json};
 
 use crate::domain::run::{self, RecordOutcome};
+use crate::domain::task;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
+use crate::foundation::core::session::agent_runtime_from_env;
 use crate::foundation::core::time::utc_now_timestamp;
 use crate::interfaces::cli::{HookArgs, HookCommand};
 use crate::interfaces::hooks::record;
@@ -38,9 +40,9 @@ fn record_hook(
     session: Option<String>,
 ) -> Result<()> {
     let skill_for_ack = skill.clone();
+    let stdin_payload = record::optional_stdin_payload()?;
     let outcome = match event {
         Some(event) => {
-            let stdin_payload = record::optional_stdin_payload()?;
             let session_id = session
                 .or_else(|| stdin_payload.as_ref().and_then(record::payload_session_id))
                 .unwrap_or_else(super::cli_run_id);
@@ -54,7 +56,17 @@ fn record_hook(
             }
             record::record_value(paths, &payload)?
         }
-        None => record::record_stdin(paths)?,
+        None => {
+            let Some(payload) = stdin_payload else {
+                return Ok(());
+            };
+            if let Err(error) = ensure_auto_progress_for_hook(paths, &payload) {
+                eprintln!(
+                    "maestro hook record warning: automatic progress start failed: {error:#}"
+                );
+            }
+            record::record_value(paths, &payload)?
+        }
     };
     if let RecordOutcome::Recorded {
         event_type,
@@ -75,6 +87,99 @@ fn record_hook(
         }
     }
     Ok(())
+}
+
+fn ensure_auto_progress_for_hook(paths: &MaestroPaths, payload: &Value) -> Result<()> {
+    if current_task_is_set() || !is_write_like_pre_tool_use(payload) {
+        return Ok(());
+    }
+    let Some(session_id) = record::payload_session_id(payload) else {
+        return Ok(());
+    };
+    let (agent, actor) = auto_progress_actor(payload, &session_id);
+    let title = auto_progress_title(payload, &session_id);
+    let project = super::resolve_project(None, paths)?;
+    let task = task::ensure_started_simple_task(
+        &paths.tasks_dir(),
+        &title,
+        project,
+        utc_now_timestamp(),
+        &actor,
+    )?;
+    if let Some(progress_card) = task::progress_task_card_ids(&paths.tasks_dir())?.get(&task.id) {
+        emit_card_touch_for_session(paths, progress_card, &session_id, &agent);
+    }
+    Ok(())
+}
+
+fn current_task_is_set() -> bool {
+    std::env::var("MAESTRO_CURRENT_TASK")
+        .ok()
+        .is_some_and(|value| !value.trim().is_empty())
+}
+
+fn is_write_like_pre_tool_use(payload: &Value) -> bool {
+    if payload_event_type(payload) != Some("PreToolUse") {
+        return false;
+    }
+    let Some(tool_name) = string_field(payload, "tool_name") else {
+        return false;
+    };
+    let tool_name = tool_name.to_ascii_lowercase();
+    matches!(
+        tool_name.as_str(),
+        "edit" | "multiedit" | "write" | "notebookedit" | "apply_patch" | "functions.apply_patch"
+    ) || tool_name.ends_with("::apply_patch")
+        || tool_name.ends_with(".apply_patch")
+}
+
+fn payload_event_type(payload: &Value) -> Option<&str> {
+    ["event_type", "hook_event_name", "kind", "event", "type"]
+        .into_iter()
+        .find_map(|field| payload.get(field).and_then(Value::as_str))
+}
+
+fn auto_progress_actor(payload: &Value, session_id: &str) -> (String, String) {
+    let agent = string_field(payload, "agent")
+        .or_else(|| agent_runtime_from_env().map(str::to_string))
+        .unwrap_or_else(|| "maestro".to_string());
+    let actor = format!("{agent}#{session_id}");
+    (agent, actor)
+}
+
+fn auto_progress_title(payload: &Value, session_id: &str) -> String {
+    if let Some(file_path) = payload
+        .get("tool_input")
+        .and_then(|input| input.get("file_path"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        return format!("Work on {file_path}");
+    }
+    let short_session: String = session_id.chars().take(8).collect();
+    format!("Implementation work for session {short_session}")
+}
+
+fn string_field(payload: &Value, field: &str) -> Option<String> {
+    payload
+        .get(field)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+}
+
+fn emit_card_touch_for_session(paths: &MaestroPaths, card_id: &str, session_id: &str, agent: &str) {
+    let payload = json!({
+        "event": "card_touch",
+        "session_id": session_id,
+        "card_id": card_id,
+        "agent": agent,
+    });
+    if let Err(error) = record::record_value(paths, &payload) {
+        eprintln!("maestro hook record warning: auto-progress card_touch failed: {error:#}");
+    }
 }
 
 /// The D8 verbose block for a low-frequency event: kind, skill (when a

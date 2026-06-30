@@ -7,14 +7,6 @@ use crate::domain::run;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::session::agent_runtime_from_env;
 
-pub(crate) fn record_stdin(paths: &MaestroPaths) -> Result<run::RecordOutcome> {
-    let mut raw = String::new();
-    io::stdin()
-        .read_to_string(&mut raw)
-        .context("failed to read hook payload from stdin")?;
-    record_payload(paths, &raw)
-}
-
 pub(crate) fn optional_stdin_payload() -> Result<Option<Value>> {
     let mut stdin = io::stdin();
     if stdin.is_terminal() {
@@ -55,9 +47,4 @@ pub(crate) fn record_value(paths: &MaestroPaths, payload: &Value) -> Result<run:
         }
     }
     Ok(outcome)
-}
-
-fn record_payload(paths: &MaestroPaths, raw: &str) -> Result<run::RecordOutcome> {
-    let payload: Value = serde_json::from_str(raw).context("failed to parse hook payload JSON")?;
-    record_value(paths, &payload)
 }
