@@ -158,12 +158,15 @@ also be explicit auto-archive authority. Night NEVER even with ship authority:
 destructive git operations, secret rotation, bypassing a platform/tool approval
 failure, or hand-editing `card.yaml` or guarded sidecars. Platform/tool
 approval failures are hard stops even under full local autonomy.
-When auto-archive is preauthorized, the owning/orchestrator session may archive
-only after worker worktrees are merged back, relevant conflicts are clear, QA
+When auto-archive is preauthorized, the checkout whose current `.maestro` store
+owns the live target card may archive after relevant worker changes are
+represented in that checkout's current `HEAD`, relevant conflicts are clear, QA
 evidence names the exact current `HEAD`, and the helper writes both the
-`auto_archive` run event and archive-index receipt. Worker worktrees never run
-auto-archive for the shared target; they hand back commits, worker source, and
-evidence for the owning checkout to record.
+`auto_archive` run event and archive-index receipt. A linked implementation
+worktree may run auto-archive for its own target store when those gates pass.
+A worktree whose store is missing the target card, stale, or merely copied from
+another checkout stops and hands back commits, worker source, and evidence for
+the checkout that owns the target store to record.
 
 If the autonomous worker fixes an issue discovered during the loop, it must
 record a durable recurrence guard before completion or ship: a regression

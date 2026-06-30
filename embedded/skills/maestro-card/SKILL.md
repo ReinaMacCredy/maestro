@@ -1,6 +1,6 @@
 ---
 name: maestro-card
-version: 1.37.2
+version: 1.37.3
 description: "Use when the user wants to implement, fix, verify, QA, close, release, continue, use loop, keep looping, work while away, or work while asleep on Maestro cards/features/tasks in a project using Maestro after design is approved."
 ---
 
@@ -120,11 +120,14 @@ Read the reference for the job at hand; they share the ground rules below.
   `--authority-head`, `--authority-state current`), exact QA evidence
   (`--tested-head`, `--qa-result pass`, repeat `--qa-evidence`), the owning
   run/worktree disposition (`--run`, `--multi-agent`, `--worker-source`), and
-  the canonical owning store (`--canonical-store <path-to/.maestro>`). Stop
-  instead of archiving if the helper refuses, if relevant worktree state is dirty,
-  if worker worktrees have not merged back, if the current store is not the
-  canonical owner, if relevant Maestro conflicts are still asserted, or if
-  terminal archive preflight fails.
+  the current store that owns the target card
+  (`--canonical-store <path-to-current/.maestro>`). A linked implementation
+  worktree may auto-archive when its current `.maestro` store owns the target,
+  the work is done, and evidence names the exact current `HEAD`. Stop instead of
+  archiving if the helper refuses, if relevant worktree state is dirty, if
+  worker changes are not represented in the current target `HEAD`, if the
+  current store does not own the target card, if relevant Maestro conflicts are
+  still asserted, or if terminal archive preflight fails.
 - When the user corrects or steers active work, do not pause just because they
   corrected you. If the correction is clear, record it with `maestro event
   intervention --note "<what changed>" [--topic <slug>]` and apply it. If it is

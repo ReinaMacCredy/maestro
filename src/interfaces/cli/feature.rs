@@ -688,17 +688,6 @@ fn close_auto_archive_plan(
             )));
         }
     };
-    if let Some(reason) = match close_auto_archive_owner_blocker(paths) {
-        Ok(reason) => reason,
-        Err(error) => {
-            return Ok(CloseAutoArchivePlan::Skip(format!(
-                "worktree ownership is unavailable: {error:#}"
-            )));
-        }
-    } {
-        return Ok(CloseAutoArchivePlan::Skip(reason));
-    }
-
     let Some(head) = snapshot.head.as_deref() else {
         return Ok(CloseAutoArchivePlan::Skip(
             "git HEAD is unavailable; commit the delivered work first".to_string(),
@@ -752,7 +741,7 @@ fn close_auto_archive_plan(
             report.id
         )],
         run_id: format!("feature-close-{}-{short_head}", report.id),
-        multi_agent: "owning checkout close gate; workers merged or not involved".to_string(),
+        multi_agent: "current checkout close gate; workers merged or not involved".to_string(),
         canonical_store: canonical_path(&paths.maestro_dir()).display().to_string(),
         worker_source: close_worker_source(paths, snapshot.branch.as_deref()),
         target_card_hash,
@@ -763,23 +752,6 @@ fn close_auto_archive_plan(
         }),
         dry_run: false,
     })))
-}
-
-fn close_auto_archive_owner_blocker(paths: &MaestroPaths) -> Result<Option<String>> {
-    let current = canonical_path(paths.repo_root());
-    let roots = git::worktree_roots(paths.repo_root())?;
-    let Some(owner) = roots.first() else {
-        return Ok(None);
-    };
-    let owner = canonical_path(owner);
-    if current == owner {
-        return Ok(None);
-    }
-    Ok(Some(format!(
-        "current checkout `{}` is not owning/orchestrator checkout `{}`; run archive from the owning checkout",
-        current.display(),
-        owner.display()
-    )))
 }
 
 fn close_worker_source(paths: &MaestroPaths, branch: Option<&str>) -> String {

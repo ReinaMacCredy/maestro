@@ -130,10 +130,13 @@ commit hash is known. The helper must see the exact current `HEAD` in
 `--authority-head`, and `--authority-state current`, a passing QA verdict,
 bounded QA evidence, a canonical owning store in `--canonical-store`, and a
 multi-agent/worktree disposition (`none`, or workers merged back and conflicts
-clear). Worker worktrees never auto-archive a shared target; they provide commits
-and evidence only. The owning/orchestrator checkout runs the helper against the
-canonical store. It then runs the normal terminal feature archive preflight,
-writes an `auto_archive` run event, and adds an archive-index receipt that
+clear). A linked implementation worktree may auto-archive when its current
+`.maestro` store owns the live target card and the work is done and verified on
+the exact current `HEAD`. A worktree whose store is missing the target card,
+stale, or merely copied from another checkout provides commits and evidence
+only; the checkout that owns the target store runs the helper. The helper then
+runs the normal terminal feature archive preflight, writes an `auto_archive` run
+event, and adds an archive-index receipt that
 records the canonical store path, invoking checkout path, worker branch/worktree
 source, final target head, tested head, authority, merge-back/evidence
 disposition, run id, event hash/path, archive path, and restore command. If any

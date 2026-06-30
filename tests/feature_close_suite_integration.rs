@@ -312,6 +312,52 @@ fn feature_close_auto_archives_with_unrelated_dirty_paths() {
 }
 
 #[test]
+fn feature_close_auto_archives_from_linked_worktree() {
+    let temp = TestTempDir::new("maestro-close-auto-archive-linked-worktree");
+    let main = temp.path().join("main");
+    fs::create_dir(&main).expect("invariant: main worktree dir should be creatable");
+    let repository = init_git_repo(&main);
+    seed_closable_feature(&main, "report-builder");
+    write_stack_verify(&main, "true");
+    let head = commit_all(&repository, "verified feature ready to close");
+    let linked = temp.path().join("linked-close");
+    repository
+        .worktree("linked-close", &linked, None)
+        .expect("invariant: linked worktree should be creatable");
+
+    let close = ["feature", "close", "report-builder", "--outcome", "done"];
+    let closed = stdout(maestro(&close, &linked), &close);
+
+    assert!(closed.contains("closed report-builder"), "{closed}");
+    assert!(
+        closed.contains("auto-archived report-builder"),
+        "linked worktree with exact committed HEAD should auto-archive:\n{closed}"
+    );
+    assert!(closed.contains(&head), "{closed}");
+    assert!(
+        closed.contains("current checkout close gate"),
+        "receipt records that the current worktree owned the close gate:\n{closed}"
+    );
+    assert!(
+        !linked
+            .join(".maestro/cards/report-builder/card.yaml")
+            .exists(),
+        "auto-archive removes the linked worktree's live feature card"
+    );
+    assert!(
+        linked
+            .join(".maestro/archive/cards/report-builder/card.yaml")
+            .exists(),
+        "auto-archive writes the archive in the linked worktree's store"
+    );
+    assert!(
+        main.join(".maestro/cards/report-builder/card.yaml")
+            .exists(),
+        "linked worktree auto-archive must not mutate the primary checkout store directly"
+    );
+}
+
+#[test]
 fn feature_close_dry_run_does_not_execute_the_suite() {
     let temp = TestTempDir::new("maestro-close-suite-dryrun");
     let repo = temp.path();
