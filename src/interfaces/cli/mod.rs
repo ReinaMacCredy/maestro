@@ -2878,7 +2878,7 @@ mod tests {
         assert!(recipe.contains("[stale]"));
         assert!(recipe.contains("[merge-busy]"));
         assert!(recipe.contains("git merge --ff-only <branch>"));
-        assert!(recipe.contains("maestro never does"));
+        assert!(recipe.contains("Maestro never does"));
     }
 
     #[test]
