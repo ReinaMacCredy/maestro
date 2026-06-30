@@ -1,7 +1,7 @@
 ---
 name: maestro-design
-version: 1.32.0
-description: "Design Maestro changes before implementation: use for brainstorm, plan, domain model, wording, workflow, skill, harness, card/task/feature, architecture, UX, or agent-process decisions."
+version: 1.33.0
+description: "Design Maestro changes before implementation: use for brainstorm, plan, grill me, grilling, stress-test, domain model, wording, workflow, skill, harness, card/task/feature, architecture, UX, or agent-process decisions."
 ---
 
 # Maestro Design
@@ -44,7 +44,9 @@ tools yet. After the design hand-off, `maestro-card` prefers MCP for supported
 work-card and feature-lifecycle steps.
 
 Routing: external PRD with open forks -> decide forks in design, then intake per maestro-card.
+Grill/stress-test session -> use [reference/grilling.md](reference/grilling.md).
 Domain-modeling session -> use [reference/domain-model.md](reference/domain-model.md).
+Grill-with-docs session -> use [reference/grilling.md](reference/grilling.md), plus [reference/domain-model.md](reference/domain-model.md) for CONTEXT.md/ADR updates.
 
 ## Conversation Driver
 
@@ -118,6 +120,9 @@ maestro never auto-reads or auto-replies; you do.
 4. Decide one fork at a time. For each fork, give the concrete example, the
    options, the tradeoff, and the chosen answer. Sketch every option inline as
    ASCII before asking, so the preview is readable in the terminal.
+   When the user asks to grill, stress-test, or challenge a plan before build,
+   use [reference/grilling.md](reference/grilling.md): walk branches one by one,
+   give a recommended answer, and ask exactly one question at a time.
 5. Lock each decision durably: `maestro decision new` (with `--feature` and
    `--context`) opens the fork; `maestro decision lock` records the chosen
    answer, the rejected options, and optionally a preview and superseded
@@ -162,6 +167,15 @@ angles, judge, pairwise): `maestro loop show generate-and-filter`.
    Only the conductor locks, one decision at a time: parallel `decision lock`
    calls on one feature collide on the shared `decisions.yaml` (HARNESS
    Orchestration). Generators return their option as data; they never lock.
+
+## Grilling Forks
+
+When the user says "grill me", "grilling", "stress-test this plan", or asks for
+relentless challenge before building, run a grilling session inside the design
+loop. Ask one question at a time, provide your recommended answer, and answer
+explorable questions from code/docs/artifacts instead of asking. If the user asks
+for docs while grilling, combine this with the domain-model branch. Full branch:
+[reference/grilling.md](reference/grilling.md).
 
 ## Probe Forks
 
