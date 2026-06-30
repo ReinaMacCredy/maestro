@@ -1173,6 +1173,57 @@ fn ready_to_close_status_json_and_task_next_broader_actions_are_structured() {
 }
 
 #[test]
+fn status_shows_uncertain_loop_pointer_without_router_reason() {
+    let temp = setup_repo("maestro-status-loop-hint-uncertain");
+    let repo = temp.path();
+
+    let human = run(repo, &["status"]);
+    assert!(human.contains("loop: uncertain"), "{human}");
+    assert!(human.contains("  next: maestro loop next"), "{human}");
+    assert!(
+        !human.contains("no confident recipe matched"),
+        "uncertain status should not duplicate full router reasoning: {human}"
+    );
+
+    let json = run(repo, &["status", "--json"]);
+    let parsed: JsonValue =
+        serde_json::from_str(&json).expect("invariant: status JSON should parse");
+    assert_eq!(parsed["loop_hint"]["status"], "uncertain");
+    assert!(parsed["loop_hint"]["recommended_recipe"].is_null());
+    assert!(parsed["loop_hint"]["reason"].is_null());
+    assert_eq!(parsed["loop_hint"]["next"], "maestro loop next");
+}
+
+#[test]
+fn status_shows_compact_loop_hint_from_router_for_ready_task() {
+    let temp = setup_repo("maestro-status-loop-hint-ready");
+    let repo = temp.path();
+    let task_id = run(repo, &["task", "add", "--id-only", "Implement loop hint"]);
+    let task_id = task_id.trim();
+
+    let human = run(repo, &["status"]);
+    assert!(human.contains("loop: work (high) - "), "{human}");
+    assert!(human.contains(task_id), "{human}");
+    assert!(human.contains("  next: maestro loop next"), "{human}");
+    assert!(!human.contains("edges:"), "{human}");
+
+    let json = run(repo, &["status", "--json"]);
+    let parsed: JsonValue =
+        serde_json::from_str(&json).expect("invariant: status JSON should parse");
+    assert_eq!(parsed["loop_hint"]["status"], "recommended");
+    assert_eq!(parsed["loop_hint"]["recommended_recipe"], "work");
+    assert_eq!(parsed["loop_hint"]["recommended_status"], "work");
+    assert_eq!(parsed["loop_hint"]["confidence"], "high");
+    assert!(
+        parsed["loop_hint"]["reason"]
+            .as_str()
+            .is_some_and(|reason| reason.contains(task_id)),
+        "{parsed}"
+    );
+    assert_eq!(parsed["loop_hint"]["next"], "maestro loop next");
+}
+
+#[test]
 fn manual_and_root_verify_pass_use_context_aware_handoff() {
     let temp = setup_repo("maestro-manual-verify-handoff");
     let repo = temp.path();

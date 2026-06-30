@@ -91,6 +91,12 @@ fn run_next(args: LoopNextArgs) -> Result<()> {
 fn build_loop_next_report() -> Result<loop_recipes::LoopNextReport> {
     let repo_root = discover_repo_root().or_else(|_| env::current_dir())?;
     let paths = MaestroPaths::new(repo_root);
+    build_loop_next_report_for_paths(&paths)
+}
+
+pub(crate) fn build_loop_next_report_for_paths(
+    paths: &MaestroPaths,
+) -> Result<loop_recipes::LoopNextReport> {
     if !paths.maestro_dir().is_dir() {
         return loop_recipes::route_next(loop_recipes::LoopRouterInput {
             repo: paths.repo_root().display().to_string(),
@@ -120,7 +126,7 @@ fn build_loop_next_report() -> Result<loop_recipes::LoopNextReport> {
     let current_task = current_loop_task(&task_entries);
 
     let mut features = Vec::new();
-    for entry in feature::list_tolerant_with_entries(&paths, &task_entries) {
+    for entry in feature::list_tolerant_with_entries(paths, &task_entries) {
         match entry {
             feature::FeatureRosterEntry::Loaded(view) => {
                 features.push(loop_recipes::LoopFeatureInput {
@@ -144,7 +150,7 @@ fn build_loop_next_report() -> Result<loop_recipes::LoopNextReport> {
     }
 
     let now = utc_now_timestamp();
-    let active_sessions = match run::active_sessions(&paths, &now) {
+    let active_sessions = match run::active_sessions(paths, &now) {
         Ok(sessions) => sessions.len(),
         Err(error) => {
             warnings.push(format!("active session scan failed: {error:#}"));
@@ -159,7 +165,7 @@ fn build_loop_next_report() -> Result<loop_recipes::LoopNextReport> {
         tasks,
         features,
         active_sessions,
-        git: super::git_readout(&paths).map(|git| loop_recipes::LoopGitInput {
+        git: super::git_readout(paths).map(|git| loop_recipes::LoopGitInput {
             branch: git.branch,
             code_other_dirty: git.code_other_dirty,
             maestro_dirty: git.maestro_dirty,

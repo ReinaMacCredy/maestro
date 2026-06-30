@@ -7,7 +7,7 @@ use serde::Serialize;
 
 use crate::domain::feature::{self, FeatureRosterEntry, FeatureStatus};
 use crate::domain::task::{self, TaskRecord, TaskState};
-use crate::domain::{card, gate_lock};
+use crate::domain::{card, gate_lock, loop_recipes as loop_recipe_domain};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::table;
 use crate::foundation::core::time::{timestamp_nanos, utc_now_timestamp};
@@ -311,6 +311,7 @@ fn build_task_next_report(paths: &MaestroPaths) -> Result<StatusReport> {
         close_or_verify_pending: false,
         proof_concern,
         warnings,
+        loop_hint: None,
         next_action,
         tasks: TaskSummaryJson::default(),
         features: FeatureSummaryJson::default(),
@@ -375,6 +376,7 @@ fn print_status(report: StatusReport, json: bool) -> Result<()> {
     if let Some(holder) = report.merge_lock_holder.as_deref() {
         println!("{}", merge_busy_advisory(holder));
     }
+    print_loop_hint(report.loop_hint.as_ref());
     print_harness_friction(&report.harness_friction);
     if let Some(complete_harness) = &report.complete_harness {
         println!("{}", complete_harness.summary_line());
@@ -500,6 +502,22 @@ fn print_audit_hint(hint: Option<&AuditHintJson>) {
     println!(
         "  propose: maestro harness propose --title \"<finding>\" --evidence \"<evidence>\" --topic <slug>"
     );
+}
+
+fn print_loop_hint(hint: Option<&LoopStatusHintJson>) {
+    let Some(hint) = hint else {
+        return;
+    };
+    if let Some(recipe) = hint.recommended_recipe.as_deref() {
+        if let Some(reason) = hint.reason.as_deref() {
+            println!("loop: {recipe} ({}) - {reason}", hint.confidence);
+        } else {
+            println!("loop: {recipe} ({})", hint.confidence);
+        }
+    } else {
+        println!("loop: uncertain");
+    }
+    println!("  next: {}", hint.next);
 }
 
 fn print_approved_memory(memories: &[ApprovedMemory], omitted: usize) {
@@ -717,6 +735,16 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
         .as_ref()
         .is_some_and(|action| matches!(action.kind.as_str(), "complete_task" | "proof_recovery"))
         || !ready_to_close_features.is_empty();
+    let loop_hint = match super::loop_recipes::build_loop_next_report_for_paths(paths) {
+        Ok(report) => Some(LoopStatusHintJson::from_loop_next(&report)),
+        Err(error) => {
+            warnings.push(WarningJson {
+                code: "loop_hint_unavailable".to_string(),
+                message: format!("loop hint unavailable: {error:#}"),
+            });
+            None
+        }
+    };
 
     Ok(StatusReport {
         schema: "maestro.status.v1".to_string(),
@@ -737,6 +765,7 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
         close_or_verify_pending,
         proof_concern,
         warnings,
+        loop_hint,
         next_action,
         tasks: TaskSummaryJson::from_cards(&summary_cards, &blocked_ids),
         features: FeatureSummaryJson::from_features(&features),
@@ -1081,6 +1110,8 @@ struct StatusReport {
     /// needs no action.
     #[serde(skip)]
     proof_concern: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    loop_hint: Option<LoopStatusHintJson>,
     warnings: Vec<WarningJson>,
     next_action: Option<NextAction>,
     tasks: TaskSummaryJson,
@@ -1112,6 +1143,32 @@ struct StatusSectionsJson {
     ready_to_close: Vec<ReadyFeatureJson>,
 }
 
+#[derive(Clone, Debug, Serialize)]
+struct LoopStatusHintJson {
+    status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    recommended_recipe: Option<String>,
+    recommended_status: String,
+    confidence: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reason: Option<String>,
+    next: String,
+}
+
+impl LoopStatusHintJson {
+    fn from_loop_next(report: &loop_recipe_domain::LoopNextReport) -> Self {
+        let confident = report.status == "recommended" && report.recommended_recipe.is_some();
+        Self {
+            status: report.status.clone(),
+            recommended_recipe: report.recommended_recipe.clone(),
+            recommended_status: report.recommended_status.clone(),
+            confidence: report.confidence.clone(),
+            reason: confident.then(|| report.reason.clone()),
+            next: "maestro loop next".to_string(),
+        }
+    }
+}
+
 impl StatusReport {
     fn not_initialized(repo: PathBuf, reason: String) -> Self {
         Self {
@@ -1124,6 +1181,7 @@ impl StatusReport {
             merge_lock_holder: None,
             close_or_verify_pending: false,
             proof_concern: None,
+            loop_hint: None,
             warnings: vec![WarningJson {
                 code: "not_initialized".to_string(),
                 message: reason,
