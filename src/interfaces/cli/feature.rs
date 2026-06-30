@@ -704,18 +704,6 @@ fn close_auto_archive_plan(
             "git HEAD is unavailable; commit the delivered work first".to_string(),
         ));
     };
-    if snapshot.code_other_dirty > 0 {
-        let dirty = snapshot
-            .dirty_paths
-            .iter()
-            .filter(|path| !path.starts_with(".maestro"))
-            .map(|path| path.display().to_string())
-            .collect::<Vec<_>>();
-        return Ok(CloseAutoArchivePlan::Skip(format!(
-            "code/other dirty path(s) at {head}: {}; commit or clean before archive",
-            dirty.join(", ")
-        )));
-    }
     let unresolved_conflicts = match unresolved_conflicts_for_target(paths, &report.id) {
         Ok(conflicts) => conflicts,
         Err(error) => {
