@@ -1,7 +1,7 @@
 ---
 name: maestro-design
-version: 1.31.2
-description: "Design Maestro changes before implementation: use for brainstorm, plan, wording, workflow, skill, harness, card/task/feature, architecture, UX, or agent-process decisions."
+version: 1.32.0
+description: "Design Maestro changes before implementation: use for brainstorm, plan, domain model, wording, workflow, skill, harness, card/task/feature, architecture, UX, or agent-process decisions."
 ---
 
 # Maestro Design
@@ -44,6 +44,7 @@ tools yet. After the design hand-off, `maestro-card` prefers MCP for supported
 work-card and feature-lifecycle steps.
 
 Routing: external PRD with open forks -> decide forks in design, then intake per maestro-card.
+Domain-modeling session -> use [reference/domain-model.md](reference/domain-model.md).
 
 ## Conversation Driver
 
@@ -109,6 +110,9 @@ maestro never auto-reads or auto-replies; you do.
    rewrites a section wholesale. For a complex core domain, model it here: run
    the DDD fitness gate in [reference/ddd.md](reference/ddd.md) before reaching
    for domain-driven design (most cards do not need it; stop at the first NO).
+   When the design turns on domain language, bounded contexts, or business
+   concepts, run the domain-model branch in
+   [reference/domain-model.md](reference/domain-model.md).
 3. Put the problem and open questions on the feature:
    `maestro feature set <id> --description "<problem>" --question "<loose question>"`.
 4. Decide one fork at a time. For each fork, give the concrete example, the
@@ -165,6 +169,15 @@ When a fork hinges on runtime or state-machine behavior you cannot settle by
 reading, build a throwaway runnable harness, drive it through the edge cases,
 record the answer in the decision context or `notes.md`, then delete the
 harness. Preserve the answer, not the code.
+
+## Domain Model Forks
+
+When a fork hinges on project language or boundaries, challenge the terms before
+locking the design. Read existing `CONTEXT.md`, `CONTEXT-MAP.md`, and ADRs when
+present; if code can answer a question, inspect code instead of asking the user.
+Resolved domain terms are captured inline in the right `CONTEXT.md`; ADRs are
+offered only for hard-to-reverse, surprising trade-offs. Full branch:
+[reference/domain-model.md](reference/domain-model.md).
 
 ## Stop
 

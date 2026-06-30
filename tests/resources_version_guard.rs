@@ -49,8 +49,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 19] = [
     (
         "skill",
         "maestro-design",
-        "1.31.2",
-        "182676a4d42d708332828b572ff8d60200a79f30b24ac1d63194a3a5031c3fb9",
+        "1.32.0",
+        "1e9bfa21b590a518d17d36c07fae3e61931b86d90a365122d0178b11d0b9ee5a",
     ),
     (
         "skill",
@@ -336,6 +336,13 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
             && design.contains("maestro loop show design")
             && design.contains("perceive -> choose -> act"),
         "maestro-design must adopt the design lifecycle recipe"
+    );
+    assert!(
+        design.contains("domain model")
+            && design.contains("reference/domain-model.md")
+            && design.contains("CONTEXT.md")
+            && design.contains("ADRs"),
+        "maestro-design must retain the domain-modeling branch"
     );
 
     let audit = shipped_skill_body("maestro-audit");
