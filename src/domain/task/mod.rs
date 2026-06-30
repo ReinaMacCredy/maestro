@@ -210,6 +210,22 @@ pub fn add_simple_task(
     Ok(task)
 }
 
+/// Ensure a standalone low-ceremony task exists and is already in progress.
+///
+/// This is the automatic first-write hook path: it reuses the current actor's
+/// active Progress-backed Task, or creates and starts one when none exists.
+pub fn ensure_started_simple_task(
+    tasks_dir: &Path,
+    title: &str,
+    project: Option<String>,
+    created_at: String,
+    actor: &str,
+) -> Result<TaskRecord> {
+    let paths = lookup::paths_for_tasks_dir(tasks_dir)
+        .context("cannot resolve maestro paths from tasks dir")?;
+    progress::ensure_started_simple_task(&paths, title, project, created_at, actor)
+}
+
 /// Load one Task record by id or id prefix.
 pub fn load_task_record(tasks_dir: &Path, id: &str) -> Result<TaskRecord> {
     let (task, _, _) = lookup::load_task_with_snapshot(tasks_dir, id)?;

@@ -1,6 +1,6 @@
 ---
 name: maestro-card
-version: 1.37.4
+version: 1.37.5
 description: "Active Maestro card work after design approval: use for implement, fix, verify, QA, close, release, continue, or unattended prompts like use loop, keep looping, work while away/asleep."
 ---
 
@@ -54,8 +54,10 @@ Read the reference for the job at hand; they share the ground rules below.
   behavior: [reference/tdd.md](reference/tdd.md).
 - Track simple work with the low-ceremony Task surface (`task add` -> `task
   start` -> `task done`, no separate todo namespace): this creates or reuses a
-  Progress card and stores low Tasks in `progress.yml`; see the "Simple Task
-  Board" section of [reference/work.md](reference/work.md).
+  Progress card and stores low Tasks in `progress.yml`. Installed hooks
+  auto-start this Progress path on first write-like tool use when no current
+  Task is set; see the "Simple Task Board" section of
+  [reference/work.md](reference/work.md).
 - Tidy a card's diff before proving it (quality cleanup, applied in place):
   [reference/simplify.md](reference/simplify.md). On a test-first card this is
   the red-green-refactor step, not a second pass.
