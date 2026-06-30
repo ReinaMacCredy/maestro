@@ -23,6 +23,7 @@ use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Context, Result, anyhow, bail};
 
+use crate::domain::card::archive_db;
 use crate::domain::card::fold;
 use crate::domain::card::query as card_query;
 use crate::domain::card::schema::{Card, CardType};
@@ -319,7 +320,7 @@ pub fn create(paths: &MaestroPaths, title: &str, project: Option<String>) -> Res
         bail!("feature {id} already exists");
     }
     // L6a: an archived feature still owns its slug — refuse to reissue it.
-    if archived_card_path(paths, &id).is_file() {
+    if archived_card_path(paths, &id).is_file() || archive_db::contains_card_id(paths, &id)? {
         bail!(
             "feature {id} already exists in the archive; `maestro feature unarchive {id}` or choose a different title"
         );
@@ -1568,7 +1569,10 @@ pub fn show_archived(paths: &MaestroPaths, id: &str) -> Result<FeatureView> {
     let counts = count_tasks_for_feature_in_entries(&task_entries, &record.id);
     let acceptance_coverage =
         verification::acceptance_coverage_for_record_in_entries(&record, &task_entries);
-    let notes = read_notes_at(&paths.archive_cards_dir().join(id))?;
+    let notes = archive_db::read_file(paths, id, "notes.md")?
+        .map(String::from_utf8)
+        .transpose()
+        .context("archived notes.md is not UTF-8")?;
     let mut view = view_from_record(record, counts, None);
     view.acceptance_coverage = Some(acceptance_coverage);
     view.notes = notes;
@@ -1587,13 +1591,14 @@ pub fn ensure_exists(paths: &MaestroPaths, id: &str) -> Result<()> {
 ///
 /// Errors when an archived feature record is unparseable or schema-incompatible.
 pub fn list_archived(paths: &MaestroPaths) -> Result<Vec<FeatureView>> {
-    let archive_cards_dir = paths.archive_cards_dir();
     let task_entries = task::load_archived_task_entries(paths)?;
-    card_query::scan_dir(&archive_cards_dir)?
+    card_query::scan_archived(paths)?
         .into_iter()
         .filter(|card| card.card_type == CardType::Feature)
         .map(|card| {
-            let artifact = archive_cards_dir.join(&card.id).join("card.yaml");
+            let artifact = archive_db::archive_db_file(paths)
+                .join(&card.id)
+                .join("card.yaml");
             let project = card.project.clone();
             let record = record_from_card(card, artifact.display().to_string())?;
             let counts = count_tasks_for_feature_in_entries(&task_entries, &record.id);
@@ -1999,6 +2004,12 @@ fn feature_not_found(paths: &MaestroPaths, id: &str) -> anyhow::Error {
 /// as the live tree.
 pub(crate) fn load_archived_record(paths: &MaestroPaths, id: &str) -> Result<FeatureRecord> {
     validate_feature_id(id)?;
+    if let Some(archived) = archive_db::resolve(paths, id)? {
+        if archived.card.card_type != CardType::Feature {
+            bail!("feature not found: {id}");
+        }
+        return record_from_card(archived.card, archived.path.display().to_string());
+    }
     let path = archived_card_path(paths, id);
     let Some(card) = card_store::load(&path)? else {
         bail!("feature not found: {id}");

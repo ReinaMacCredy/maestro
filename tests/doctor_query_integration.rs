@@ -1030,11 +1030,10 @@ fn query_proof_reads_an_archived_task_through_the_archive_fallback() {
     // must fall through to the archive tree instead of erroring "not found".
     //
     // Card mode: per-task archive was retired (SPEC E4); archiving is now a
-    // feature-level cascade that moves the feature container -- its pooled child
-    // tasks ride inside -- to `.maestro/archive/cards/<feature>/`. Drive a
-    // verified child task, close it, terminal-ize the feature through its gated
-    // verb (a generic `update --status` on a feature is refused, SPEC E3), then
-    // `archive <feature>` so the task record lands in the archive tree -- and
+    // feature-level cascade into the DB-backed archive. Drive a verified child
+    // task, close it, terminal-ize the feature through its gated verb (a generic
+    // `update --status` on a feature is refused, SPEC E3), then
+    // `archive <feature>` so the task record lands in the archive DB -- and
     // `query proof` must read it through the archive fallback.
     let task_id = create_verified_task_with_proof(repo);
     for args in [
@@ -1051,11 +1050,14 @@ fn query_proof_reads_an_archived_task_through_the_archive_fallback() {
         assert_success(&maestro(repo, &args), &args);
     }
     assert!(
-        repo.join(".maestro/archive/cards/billing-csv-export/tasks")
-            .join(&task_id)
-            .join("task.yaml")
-            .is_file(),
-        "the pooled task record moved to the archive tree inside its feature container"
+        repo.join(".maestro/archive/cards.sqlite").is_file(),
+        "the pooled task record moved into the DB-backed archive"
+    );
+    assert!(
+        !repo
+            .join(".maestro/archive/cards/billing-csv-export")
+            .exists(),
+        "the DB-backed archive keeps per-card folders out of the visible tree"
     );
     assert!(!repo.join(".maestro/cards/billing-csv-export").exists());
 

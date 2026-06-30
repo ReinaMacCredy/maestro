@@ -2415,9 +2415,8 @@ fn feature_auto_archive_requires_exact_head_and_writes_receipts() {
         "auto-archive removes the live feature card"
     );
     assert!(
-        root.join(".maestro/archive/cards/billing-csv-export/card.yaml")
-            .exists(),
-        "auto-archive moves the feature card into the archive"
+        root.join(".maestro/archive/cards.sqlite").is_file(),
+        "auto-archive writes the feature into the archive DB"
     );
     assert!(
         !root
@@ -2892,20 +2891,20 @@ fn feature_unarchive_decorates_a_live_child_collision() {
         "scope dropped",
     ];
     stdout(maestro(&cancel_args, root), &cancel_args);
+    let task_yaml = "schema_version: maestro.card.v1\nid: card-conflict1\ntype: task\ntitle: Conflicting child\nstatus: verified\nparent: billing-csv-export\ncreated_at: \"1\"\nupdated_at: \"1\"\n";
+    let archived_child_home = root.join(".maestro/cards/tasks/card-conflict1");
+    fs::create_dir_all(&archived_child_home).expect("invariant: task dir should be creatable");
+    fs::write(archived_child_home.join("task.yaml"), task_yaml)
+        .expect("invariant: task record should be writable");
     let archive_args = ["feature", "archive", "billing-csv-export"];
     stdout(maestro(&archive_args, root), &archive_args);
 
-    // An archived child outside the container (the root pool of the archive
-    // tree) restores by an individual move; plant a live copy at its target.
-    let task_yaml = "schema_version: maestro.card.v1\nid: card-conflict1\ntype: task\ntitle: Conflicting child\nstatus: verified\nparent: billing-csv-export\ncreated_at: \"1\"\nupdated_at: \"1\"\n";
-    for home in [
-        root.join(".maestro/archive/cards/tasks/card-conflict1"),
-        root.join(".maestro/cards/tasks/card-conflict1"),
-    ] {
-        fs::create_dir_all(&home).expect("invariant: task dir should be creatable");
-        fs::write(home.join("task.yaml"), task_yaml)
-            .expect("invariant: task record should be writable");
-    }
+    // The archived child restores by an individual DB snapshot; plant a live copy
+    // at its target so unarchive must refuse before writing anything.
+    let live_child_home = root.join(".maestro/cards/tasks/card-conflict1");
+    fs::create_dir_all(&live_child_home).expect("invariant: task dir should be creatable");
+    fs::write(live_child_home.join("task.yaml"), task_yaml)
+        .expect("invariant: task record should be writable");
 
     let unarchive_args = ["feature", "unarchive", "billing-csv-export"];
     let err = assert_failure(maestro(&unarchive_args, root), &unarchive_args);
@@ -2914,7 +2913,7 @@ fn feature_unarchive_decorates_a_live_child_collision() {
         "{err}"
     );
     assert!(
-        err.contains("a live copy of card-conflict1 already occupies"),
+        err.contains("a live copy of card-conflict1 already exists"),
         "{err}"
     );
     assert!(
@@ -3814,14 +3813,14 @@ fn feature_archive_cascades_children_with_qa_and_round_trips() {
     assert!(archived.contains("restore: maestro feature unarchive billing-csv-export"));
 
     // The feature card dir (QA sidecar inside) + each child card dir moved into
-    // the flat archive sibling tree.
-    let archive_cards = root.join(".maestro/archive/cards");
-    let archived_feature = archive_cards.join("billing-csv-export");
-    assert!(archived_feature.join("card.yaml").is_file());
-    assert!(archived_feature.join("qa.md").is_file());
+    // the DB archive store.
+    let archive_db = root.join(".maestro/archive/cards.sqlite");
+    assert!(archive_db.is_file());
+    let archived_feature = root.join(".maestro/archive/cards/billing-csv-export");
+    assert!(!archived_feature.exists());
     assert!(!cards_dir.join("billing-csv-export").exists());
-    assert!(archive_cards.join("task-001").join("card.yaml").is_file());
-    assert!(archive_cards.join("task-002").join("card.yaml").is_file());
+    assert!(!root.join(".maestro/archive/cards/task-001").exists());
+    assert!(!root.join(".maestro/archive/cards/task-002").exists());
     assert!(!cards_dir.join("task-001").exists());
     assert!(!cards_dir.join("task-002").exists());
 
@@ -3955,11 +3954,15 @@ fn feature_archive_moves_terminal_child_cards_with_feature() {
     assert!(first.contains("task-001"));
     assert!(first.contains("task-002"));
     assert!(first.contains("task-003"));
-    let archive_cards = root.join(".maestro/archive/cards");
-    assert!(archive_cards.join("billing-csv-export/card.yaml").is_file());
-    assert!(archive_cards.join("task-001/card.yaml").is_file());
-    assert!(archive_cards.join("task-002/card.yaml").is_file());
-    assert!(archive_cards.join("task-003/card.yaml").is_file());
+    assert!(root.join(".maestro/archive/cards.sqlite").is_file());
+    assert!(
+        !root
+            .join(".maestro/archive/cards/billing-csv-export")
+            .exists()
+    );
+    assert!(!root.join(".maestro/archive/cards/task-001").exists());
+    assert!(!root.join(".maestro/archive/cards/task-002").exists());
+    assert!(!root.join(".maestro/archive/cards/task-003").exists());
     // The entangled live blocker-holder stays in the live store.
     assert!(card_support::card_record_path(root, &holder_id).is_file());
 
@@ -4013,12 +4016,10 @@ fn feature_archive_ignores_open_decisions_and_moves_them_with_the_container() {
     assert!(archived.contains("archived feature billing-csv-export"));
     assert!(archived.contains("child tasks: 0 archived"));
 
-    // The whole container moved, the open fork still inside it.
+    // The whole container moved into the DB archive, the open fork still inside it.
     let archived_feature = root.join(".maestro/archive/cards/billing-csv-export");
-    assert!(archived_feature.join("card.yaml").is_file());
-    let decisions = fs::read_to_string(archived_feature.join("decisions.yaml"))
-        .expect("invariant: archived container should keep its decisions.yaml");
-    assert!(decisions.contains("Pick the writer"));
+    assert!(root.join(".maestro/archive/cards.sqlite").is_file());
+    assert!(!archived_feature.exists());
     assert!(!root.join(".maestro/cards/billing-csv-export").exists());
 
     // Round-trip: the decision rides back without counting as a child task.
@@ -4105,11 +4106,12 @@ fn feature_archive_closed_sweeps_terminal_features() {
 
     let cards_dir = root.join(".maestro/cards");
     let archive_cards = root.join(".maestro/archive/cards");
-    assert!(archive_cards.join("alpha-export/card.yaml").is_file());
-    assert!(archive_cards.join("beta-export/card.yaml").is_file());
-    assert!(archive_cards.join("delta-export/card.yaml").is_file());
-    assert!(archive_cards.join("task-001/card.yaml").is_file());
-    assert!(archive_cards.join("task-002/card.yaml").is_file());
+    assert!(root.join(".maestro/archive/cards.sqlite").is_file());
+    assert!(!archive_cards.join("alpha-export").exists());
+    assert!(!archive_cards.join("beta-export").exists());
+    assert!(!archive_cards.join("delta-export").exists());
+    assert!(!archive_cards.join("task-001").exists());
+    assert!(!archive_cards.join("task-002").exists());
     // The in-progress feature is untouched and stays in the live store.
     assert!(cards_dir.join("gamma-export").join("card.yaml").is_file());
     assert!(!archive_cards.join("gamma-export").exists());

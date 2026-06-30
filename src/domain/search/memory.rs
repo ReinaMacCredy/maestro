@@ -68,7 +68,7 @@ pub fn rebuild_memory(paths: &MaestroPaths) -> Result<MemoryRebuildReport> {
 
 pub(crate) fn rebuild_memory_unlocked(paths: &MaestroPaths) -> Result<MemoryRebuildReport> {
     let live = card_query::scan_with_paths(paths)?;
-    let archived = card_query::scan_dir_with_paths(&paths.archive_cards_dir())?;
+    let archived = card_query::scan_archived_with_paths(paths)?;
     let run_evidence = run::load_run_evidence(paths)?;
 
     let mut docs = Vec::new();
@@ -922,9 +922,17 @@ fn is_memory_kind(kind: &str) -> bool {
 
 fn manifest(paths: &MaestroPaths) -> Result<Vec<ManifestEntry>> {
     let mut entries = Vec::new();
-    for root in [paths.cards_dir(), paths.archive_cards_dir()] {
-        collect_files(&root, &paths.maestro_dir(), &mut entries, |_| true)?;
-    }
+    collect_files(
+        &paths.cards_dir(),
+        &paths.maestro_dir(),
+        &mut entries,
+        |_| true,
+    )?;
+    collect_file(
+        &crate::domain::card::archive_db::archive_db_file(paths),
+        &paths.maestro_dir(),
+        &mut entries,
+    )?;
     collect_files(
         &paths.runs_dir(),
         &paths.maestro_dir(),
@@ -959,6 +967,27 @@ fn collect_files(
             });
         }
     }
+    Ok(())
+}
+
+fn collect_file(path: &Path, base: &Path, entries: &mut Vec<ManifestEntry>) -> Result<()> {
+    let Ok(metadata) = std::fs::symlink_metadata(path) else {
+        return Ok(());
+    };
+    if !metadata.is_file() {
+        return Ok(());
+    }
+    let mtime_ns = metadata
+        .modified()
+        .ok()
+        .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|duration| duration.as_nanos() as u64)
+        .unwrap_or_default();
+    entries.push(ManifestEntry {
+        path: relative_label(path, base),
+        mtime_ns,
+        len: metadata.len(),
+    });
     Ok(())
 }
 

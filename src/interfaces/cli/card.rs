@@ -10,7 +10,7 @@ use crate::foundation::core::safe_write::write_string_atomic;
 use crate::foundation::core::slug::slugify_ascii;
 use crate::foundation::core::time::utc_now_timestamp;
 use crate::interfaces::cli::{
-    ArchiveArgs, AssignArgs, CardPrepareArgs, ClaimArgs, CloseArgs, CreateArgs, DepArgs,
+    AssignArgs, CardArchiveArgs, CardPrepareArgs, ClaimArgs, CloseArgs, CreateArgs, DepArgs,
     DepCommand, LinkArgs, LinkCommand, ListArgs, NoteArgs, ReadyArgs, ShowArgs, UpdateArgs,
 };
 use crate::operations::feature_prepare;
@@ -89,7 +89,7 @@ pub fn list(args: ListArgs) -> Result<()> {
     let candidates = candidates.as_ref();
     let live = card::query::scan_with_paths(&paths)?;
     let archived = if args.archived {
-        card::query::scan_dir_with_paths(&paths.archive_cards_dir())?
+        card::query::scan_archived_with_paths(&paths)?
     } else {
         Vec::new()
     };
@@ -210,7 +210,7 @@ pub fn link(args: LinkArgs) -> Result<()> {
 /// archive`, so the typed terminal gate, sweep re-run, and no-clobber pre-flight
 /// hold on both spellings. `--loose` sweeps terminal parentless cards instead
 /// (SPEC-archive-memory-2 R2).
-pub fn archive(args: ArchiveArgs) -> Result<()> {
+pub fn archive(args: CardArchiveArgs) -> Result<()> {
     let Some(paths) = card_paths()? else {
         return Ok(());
     };
@@ -611,7 +611,7 @@ pub fn show(args: ShowArgs) -> Result<()> {
     // task verbs use).
     let live = card::store::resolve(&paths, &args.id)?.map(|resolved| resolved.card);
     let archived = if live.is_none() {
-        card::store::resolve_in(&paths.archive_cards_dir(), &args.id)?.map(|resolved| resolved.card)
+        card::resolve_archived(&paths, &args.id)?.map(|archived| archived.card)
     } else {
         None
     };
@@ -661,7 +661,7 @@ pub fn show(args: ShowArgs) -> Result<()> {
             }
         }
         if from_archive {
-            println!("archived: read-only (lives in .maestro/archive/cards/)");
+            println!("archived: read-only (lives in .maestro/archive/cards.sqlite)");
         }
     }
     Ok(())

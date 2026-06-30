@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use anyhow::{Context, Result, bail};
 
+use crate::domain::card::archive_db;
 use crate::domain::card::fold;
 use crate::domain::card::schema::{Card, CardType};
 use crate::foundation::core::error::MaestroError;
@@ -736,7 +737,9 @@ pub fn create_card(paths: &MaestroPaths, card: &Card) -> Result<CardHome> {
     // Archived ids stay reserved: archive fallbacks (`show`, `update`'s
     // not-found hint) resolve by id, so a live re-mint would shadow the
     // archived card and make those reads ambiguous.
-    if locate_in(&paths.archive_cards_dir(), &card.id)?.is_some() {
+    if locate_in(&paths.archive_cards_dir(), &card.id)?.is_some()
+        || archive_db::contains_card_id(paths, &card.id)?
+    {
         bail!(
             "card {} already exists in the archive; pick a new id",
             card.id

@@ -20,6 +20,7 @@ use crate::foundation::core::paths::MaestroPaths;
 use crate::interfaces::hooks::record;
 
 pub mod active;
+pub mod archive;
 pub mod card;
 pub mod conflict;
 pub mod decision;
@@ -835,7 +836,7 @@ pub enum CardCommand {
     #[command(about = "Author dependency edges between cards")]
     Dep(DepArgs),
     #[command(about = "Archive a feature card and its child cards")]
-    Archive(ArchiveArgs),
+    Archive(CardArchiveArgs),
     #[command(about = "Claim a workable card for this session")]
     Claim(ClaimArgs),
     #[command(about = "Suggest an owner for a workable card (advisory; never blocks a claim)")]
@@ -1878,6 +1879,49 @@ pub enum DecisionCommand {
 
 #[derive(Debug, Args)]
 pub struct ArchiveArgs {
+    #[command(subcommand)]
+    pub command: Option<ArchiveCommand>,
+    /// Compatibility path: the feature card to archive.
+    #[arg(value_name = "FEATURE", conflicts_with = "loose")]
+    pub feature: Option<String>,
+    /// Compatibility path: sweep terminal parentless cards instead.
+    #[arg(long)]
+    pub loose: bool,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ArchiveCommand {
+    #[command(about = "Migrate folder-backed archived cards into cards.sqlite")]
+    MigrateDb(ArchiveMigrateDbArgs),
+    #[command(about = "Verify the DB-backed archive store")]
+    Doctor,
+    #[command(about = "Delete legacy archive quarantine folders after doctor passes")]
+    Cleanup(ArchiveCleanupArgs),
+    #[command(about = "Show DB-backed archive store counts")]
+    Stats,
+}
+
+#[derive(Debug, Args)]
+pub struct ArchiveMigrateDbArgs {
+    #[arg(long, help = "Preview migration without importing or moving folders")]
+    pub dry_run: bool,
+    #[arg(
+        long,
+        help = "Import folder-backed archives and move them to quarantine"
+    )]
+    pub apply: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct ArchiveCleanupArgs {
+    #[arg(long, help = "Preview cleanup without deleting quarantine folders")]
+    pub dry_run: bool,
+    #[arg(long, help = "Delete quarantine folders after archive doctor passes")]
+    pub apply: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct CardArchiveArgs {
     /// The feature card to archive (its `parent=<feature>` children ride along).
     #[arg(
         value_name = "FEATURE",
@@ -2479,7 +2523,7 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Link(args) => card::link(args),
         RootCommand::Msg(args) => msg::run(args),
         RootCommand::Conflict(args) => conflict::run(args),
-        RootCommand::Archive(args) => card::archive(args),
+        RootCommand::Archive(args) => archive::run(args),
         RootCommand::Claim(args) => card::claim(args),
         RootCommand::Assign(args) => card::assign(args),
         RootCommand::Note(args) => card::note(args),

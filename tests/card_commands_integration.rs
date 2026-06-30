@@ -1029,11 +1029,14 @@ fn archive_loose_sweeps_terminal_parentless_cards_but_keeps_rules() {
     );
 
     assert!(
-        repo.join(".maestro/archive/cards/tasks")
+        repo.join(".maestro/archive/cards.sqlite").is_file(),
+        "loose archive writes DB-backed snapshots"
+    );
+    assert!(
+        !repo
+            .join(".maestro/archive/cards/tasks")
             .join(&swept_task)
-            .join("task.yaml")
-            .is_file(),
-        "a dir-backed loose task moves to the mirrored archive path"
+            .exists()
     );
     let live_decisions = fs::read_to_string(repo.join(".maestro/cards/decisions.yaml"))
         .expect("invariant: live decisions.yaml should exist");
@@ -1043,11 +1046,10 @@ fn archive_loose_sweeps_terminal_parentless_cards_but_keeps_rules() {
         live_decisions.contains(&new_rule) && !live_decisions.contains("Tabs or spaces"),
         "only the superseded entry leaves the live file:\n{live_decisions}"
     );
-    let archived_decisions = fs::read_to_string(repo.join(".maestro/archive/cards/decisions.yaml"))
-        .expect("invariant: archived decisions.yaml should exist");
+    let archived_decisions = run(repo, &["show", &old_rule]);
     assert!(
         archived_decisions.contains(&old_rule),
-        "the superseded entry lands in the archive container:\n{archived_decisions}"
+        "the superseded entry reads back from the archive DB:\n{archived_decisions}"
     );
 
     let index = fs::read_to_string(repo.join(".maestro/archive/cards/INDEX.md"))
@@ -1088,6 +1090,149 @@ fn archive_loose_sweeps_terminal_parentless_cards_but_keeps_rules() {
     let index_again = fs::read_to_string(repo.join(".maestro/archive/cards/INDEX.md"))
         .expect("invariant: INDEX.md should exist");
     assert_eq!(index, index_again, "a re-run appends no duplicate lid line");
+}
+
+#[test]
+fn archive_migrate_db_imports_legacy_folders_and_cleanup_removes_quarantine() {
+    let temp = cards_repo("s2-archive-db-migration");
+    let repo = temp.path();
+
+    let legacy = repo.join(".maestro/archive/cards/legacy-feature");
+    fs::create_dir_all(&legacy).expect("invariant: legacy archive dir should be creatable");
+    fs::write(
+        legacy.join("card.yaml"),
+        r#"schema_version: maestro.card.v1
+id: legacy-feature
+type: feature
+title: Legacy Feature
+status: shipped
+created_at: "1"
+updated_at: "1"
+"#,
+    )
+    .expect("invariant: legacy archived card should be writable");
+    fs::write(legacy.join("notes.md"), "legacy note\n")
+        .expect("invariant: legacy archived sidecar should be writable");
+    let legacy_task = repo.join(".maestro/archive/cards/tasks/task-legacy-0001");
+    fs::create_dir_all(&legacy_task).expect("invariant: legacy task archive dir should exist");
+    fs::write(
+        legacy_task.join("task.yaml"),
+        r#"schema_version: maestro.card.v1
+id: task-legacy-0001
+type: task
+title: Legacy Task
+status: verified
+created_at: "1"
+updated_at: "1"
+"#,
+    )
+    .expect("invariant: legacy archived task should be writable");
+
+    let dry_run = run(repo, &["archive", "migrate-db", "--dry-run"]);
+    assert!(
+        dry_run.contains("folder-backed archived cards: 2")
+            && dry_run.contains("would import snapshots: 2"),
+        "dry-run reports the importable legacy folders:\n{dry_run}"
+    );
+    assert!(legacy.exists(), "dry-run leaves the legacy folder in place");
+    assert!(
+        legacy_task.exists(),
+        "dry-run leaves the nested legacy task folder in place"
+    );
+    assert!(
+        !repo.join(".maestro/archive/cards.sqlite").exists(),
+        "dry-run does not create the archive DB"
+    );
+
+    let applied = run(repo, &["archive", "migrate-db", "--apply"]);
+    assert!(
+        applied.contains("imported snapshots: 2") && applied.contains("quarantined folders: 2"),
+        "apply imports and quarantines the legacy folders:\n{applied}"
+    );
+    assert!(
+        repo.join(".maestro/archive/cards.sqlite").is_file(),
+        "apply writes the DB-backed archive"
+    );
+    assert!(
+        !legacy.exists(),
+        "apply removes the visible per-card archive dir"
+    );
+    assert!(
+        !legacy_task.exists(),
+        "apply removes the nested visible task archive dir"
+    );
+
+    let quarantine_root = repo.join(".maestro/archive");
+    let quarantines: Vec<_> = fs::read_dir(&quarantine_root)
+        .expect("invariant: archive dir should be readable")
+        .map(|entry| {
+            entry
+                .expect("invariant: archive entry should be readable")
+                .path()
+        })
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("legacy-cards-"))
+        })
+        .collect();
+    assert_eq!(quarantines.len(), 1, "one quarantine is created");
+    assert!(
+        quarantines[0].join("legacy-feature/card.yaml").is_file(),
+        "quarantine keeps the old feature folder until explicit cleanup"
+    );
+    assert!(
+        quarantines[0]
+            .join("tasks/task-legacy-0001/task.yaml")
+            .is_file(),
+        "quarantine preserves the old nested task pool path"
+    );
+
+    let shown = run(repo, &["show", "legacy-feature"]);
+    assert!(
+        shown.contains("Legacy Feature") && shown.contains("archived: read-only"),
+        "show falls through to the DB-backed archive:\n{shown}"
+    );
+    let shown_task = run(repo, &["show", "task-legacy-0001"]);
+    assert!(
+        shown_task.contains("Legacy Task") && shown_task.contains("archived: read-only"),
+        "show falls through to the nested task imported into the DB-backed archive:\n{shown_task}"
+    );
+
+    let doctor = run(repo, &["archive", "doctor"]);
+    assert!(
+        doctor.contains("archive: ok")
+            && doctor.contains("snapshots: 2")
+            && doctor.contains("archived cards: 2")
+            && doctor.contains("legacy quarantines: 1"),
+        "doctor verifies the imported DB snapshot and quarantine count:\n{doctor}"
+    );
+
+    let cleanup_dry_run = run(repo, &["archive", "cleanup", "--dry-run"]);
+    assert!(
+        cleanup_dry_run.contains("legacy quarantines: 1") && cleanup_dry_run.contains("doctor: ok"),
+        "cleanup dry-run reports the quarantine without deleting it:\n{cleanup_dry_run}"
+    );
+    assert!(
+        quarantines[0].exists(),
+        "cleanup dry-run keeps the quarantine folder"
+    );
+
+    let cleanup = run(repo, &["archive", "cleanup", "--apply"]);
+    assert!(
+        cleanup.contains("removed legacy quarantines: 1"),
+        "cleanup apply removes the quarantine:\n{cleanup}"
+    );
+    assert!(
+        !quarantines[0].exists(),
+        "cleanup apply deletes the quarantine folder"
+    );
+
+    let doctor_after_cleanup = run(repo, &["archive", "doctor"]);
+    assert!(
+        doctor_after_cleanup.contains("legacy quarantines: 0"),
+        "doctor reflects cleanup:\n{doctor_after_cleanup}"
+    );
 }
 
 #[test]

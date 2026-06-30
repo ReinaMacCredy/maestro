@@ -374,14 +374,12 @@ fn archive_moves_a_shipped_feature_and_its_children_through_the_binary() {
         "the verb reports the feature and its archived children:\n{out}"
     );
 
-    // E4: the whole set moved to archive/cards/ and left the live store.
+    // E4: the whole set moved to cards.sqlite and left the live store.
+    assert!(repo.join(".maestro/archive/cards.sqlite").is_file());
     for id in ["csv-export", "task-001", "task-002"] {
         assert!(
-            repo.join(".maestro/archive/cards")
-                .join(id)
-                .join("card.yaml")
-                .is_file(),
-            "{id} moved to the archive"
+            !repo.join(".maestro/archive/cards").join(id).exists(),
+            "{id} should not leave a visible archive folder"
         );
         assert!(
             !repo.join(".maestro/cards").join(id).exists(),

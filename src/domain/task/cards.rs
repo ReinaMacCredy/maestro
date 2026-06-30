@@ -153,18 +153,18 @@ pub(crate) fn load_one_archived(
     id: &str,
 ) -> Result<Option<(TaskRecord, PathBuf)>> {
     lookup::validate_task_lookup_id(id)?;
-    let Some(resolved) = card_store::resolve_in(&paths.archive_cards_dir(), id)? else {
+    let Some(resolved) = crate::domain::card::archive_db::resolve(paths, id)? else {
         return Ok(None);
     };
     if resolved.card.card_type != CardType::Task {
         return Ok(None);
     }
     let task_dir = resolved
-        .path()
+        .path
         .parent()
         .map(Path::to_path_buf)
         .context("card path is missing parent directory")?;
-    let record = record_from_card(resolved.card.clone(), resolved.path().display().to_string())?;
+    let record = record_from_card(resolved.card.clone(), resolved.path.display().to_string())?;
     Ok(Some((record, task_dir)))
 }
 

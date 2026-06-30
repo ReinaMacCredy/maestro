@@ -222,12 +222,12 @@ pub fn assemble_trace(paths: &MaestroPaths, cutoff_nanos: i128) -> Result<RunTra
         }
         // A card archived mid-window still rendered: resolve it by id from the
         // archive tree (no blocker computation -- a terminal card blocks nothing).
-        card::store::resolve_in(&paths.archive_cards_dir(), id)
+        card::archive_db::resolve(paths, id)
             .ok()
             .flatten()
-            .map(|resolved| CardFacts {
-                title: resolved.card.title.clone(),
-                status: resolved.card.status.clone(),
+            .map(|archived| CardFacts {
+                title: archived.card.title.clone(),
+                status: archived.card.status.clone(),
                 blocked_by: Vec::new(),
             })
     };

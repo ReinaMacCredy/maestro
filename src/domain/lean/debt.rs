@@ -134,7 +134,7 @@ pub fn mint_cards(paths: &MaestroPaths, markers: &[Marker]) -> Result<MintOutcom
         // archived ids reserved, so a marker whose card was minted then archived must
         // skip here -- falling through to create_card would bail and `?` the whole run.
         let already_minted = card_store::resolve(paths, &id)?.is_some()
-            || card_store::locate_in(&paths.archive_cards_dir(), &id)?.is_some();
+            || crate::domain::card::archive_db::contains_card_id(paths, &id)?;
         if already_minted {
             outcome.deduped += 1;
             continue;
@@ -314,9 +314,8 @@ mod tests {
         let rel = card_dir
             .strip_prefix(paths.cards_dir())
             .expect("a minted card lives under the live store");
-        let dest = paths.archive_cards_dir().join(rel);
-        fs::create_dir_all(dest.parent().expect("archive parent")).unwrap();
-        fs::rename(card_dir, &dest).unwrap();
+        crate::domain::card::archive_db::archive_directory(&paths, &id, card_dir, rel).unwrap();
+        fs::remove_dir_all(card_dir).unwrap();
         assert!(
             card_store::resolve(&paths, &id).unwrap().is_none(),
             "the archived card no longer lives in the live store"

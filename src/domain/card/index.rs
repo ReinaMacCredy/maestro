@@ -20,7 +20,7 @@ use std::time::UNIX_EPOCH;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-use crate::domain::card::query::{GREP_SIDECARS, body_of, scan_dir_with_paths, scan_with_paths};
+use crate::domain::card::query::{GREP_SIDECARS, body_of, scan_with_paths};
 use crate::domain::card::schema::Card;
 use crate::domain::card::store::is_dir_backed;
 use crate::foundation::core::fs::ensure_dir;
@@ -64,7 +64,7 @@ pub struct RebuildReport {
 /// Rebuild the index from scratch over the live and archive card trees.
 pub fn rebuild(paths: &MaestroPaths) -> Result<RebuildReport> {
     let live = scan_with_paths(paths)?;
-    let archived = scan_dir_with_paths(&paths.archive_cards_dir())?;
+    let archived = crate::domain::card::query::scan_archived_with_paths(paths)?;
 
     let mut docs = Vec::with_capacity(live.len() + archived.len());
     for (card, path) in &live {
@@ -174,9 +174,12 @@ fn trigrams(text: &str) -> BTreeSet<String> {
 /// Every file under both card trees as sorted (relative path, mtime, len).
 fn manifest(paths: &MaestroPaths) -> Result<Vec<ManifestEntry>> {
     let mut entries = Vec::new();
-    for root in [paths.cards_dir(), paths.archive_cards_dir()] {
-        collect_files(&root, &paths.maestro_dir(), &mut entries)?;
-    }
+    collect_files(&paths.cards_dir(), &paths.maestro_dir(), &mut entries)?;
+    collect_one_file(
+        &crate::domain::card::archive_db::archive_db_file(paths),
+        &paths.maestro_dir(),
+        &mut entries,
+    )?;
     entries.sort();
     Ok(entries)
 }
@@ -208,6 +211,27 @@ fn collect_files(dir: &Path, base: &Path, entries: &mut Vec<ManifestEntry>) -> R
         }
         // Symlinks are neither walked nor listed: the card store refuses them.
     }
+    Ok(())
+}
+
+fn collect_one_file(path: &Path, base: &Path, entries: &mut Vec<ManifestEntry>) -> Result<()> {
+    let Ok(metadata) = std::fs::symlink_metadata(path) else {
+        return Ok(());
+    };
+    if !metadata.is_file() {
+        return Ok(());
+    }
+    let mtime_ns = metadata
+        .modified()
+        .ok()
+        .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+        .map(|duration| duration.as_nanos() as u64)
+        .unwrap_or_default();
+    entries.push(ManifestEntry {
+        path: relative_label(path, base),
+        mtime_ns,
+        len: metadata.len(),
+    });
     Ok(())
 }
 

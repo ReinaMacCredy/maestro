@@ -488,7 +488,7 @@ fn legacy_task_channels_union(
     let mut task_ids = BTreeSet::new();
     for card in card::query::scan(paths)?
         .into_iter()
-        .chain(card::query::scan_dir(&paths.archive_cards_dir())?)
+        .chain(card::query::scan_archived(paths)?)
     {
         if card.card_type == card::schema::CardType::Task
             && card.parent.as_deref() == Some(me.id.as_str())
@@ -580,8 +580,7 @@ fn resolve_live_or_archived_card(paths: &MaestroPaths, id: &str) -> Result<Optio
     if let Some(resolved) = card::store::resolve(paths, id)? {
         return Ok(Some(CardPresence::Live(resolved.card)));
     }
-    Ok(card::store::resolve_in(&paths.archive_cards_dir(), id)?
-        .map(|resolved| CardPresence::Archived(resolved.card)))
+    Ok(card::resolve_archived(paths, id)?.map(|archived| CardPresence::Archived(archived.card)))
 }
 
 fn reject_task_inbox_endpoint(

@@ -231,10 +231,10 @@ fn feature_close_auto_archives_when_git_head_exists() {
         "auto-archive removes the live feature card"
     );
     assert!(
-        repo.join(".maestro/archive/cards/report-builder/card.yaml")
-            .exists(),
-        "auto-archive moves the feature card into the archive"
+        repo.join(".maestro/archive/cards.sqlite").is_file(),
+        "auto-archive writes the feature card into the archive DB"
     );
+    assert!(!repo.join(".maestro/archive/cards/report-builder").exists());
     let index = fs::read_to_string(repo.join(".maestro/archive/cards/INDEX.md"))
         .expect("invariant: archive index should be written");
     assert!(
@@ -299,10 +299,10 @@ fn feature_close_auto_archives_with_unrelated_dirty_paths() {
         "auto-archive removes the live feature card"
     );
     assert!(
-        repo.join(".maestro/archive/cards/report-builder/card.yaml")
-            .exists(),
-        "auto-archive moves the feature into the archive"
+        repo.join(".maestro/archive/cards.sqlite").is_file(),
+        "auto-archive writes the feature into the archive DB"
     );
+    assert!(!repo.join(".maestro/archive/cards/report-builder").exists());
     let index = fs::read_to_string(repo.join(".maestro/archive/cards/INDEX.md"))
         .expect("invariant: archive index should be written");
     assert!(
@@ -345,10 +345,13 @@ fn feature_close_auto_archives_from_linked_worktree() {
         "auto-archive removes the linked worktree's live feature card"
     );
     assert!(
-        linked
-            .join(".maestro/archive/cards/report-builder/card.yaml")
-            .exists(),
-        "auto-archive writes the archive in the linked worktree's store"
+        linked.join(".maestro/archive/cards.sqlite").is_file(),
+        "auto-archive writes the archive DB in the linked worktree's store"
+    );
+    assert!(
+        !linked
+            .join(".maestro/archive/cards/report-builder")
+            .exists()
     );
     assert!(
         main.join(".maestro/cards/report-builder/card.yaml")

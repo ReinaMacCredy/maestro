@@ -243,11 +243,10 @@ fn print_graph_tree(
         .collect();
     let mut dangling: BTreeMap<&str, &'static str> = BTreeMap::new();
     if !unknown.is_empty() {
-        let archived: BTreeSet<String> =
-            card::query::scan_dir_with_paths(&paths.archive_cards_dir())?
-                .into_iter()
-                .map(|(card, _)| card.id)
-                .collect();
+        let archived: BTreeSet<String> = card::query::scan_archived_with_paths(paths)?
+            .into_iter()
+            .map(|(card, _)| card.id)
+            .collect();
         for target in unknown {
             let mark = if archived.contains(target) {
                 "[archived]"

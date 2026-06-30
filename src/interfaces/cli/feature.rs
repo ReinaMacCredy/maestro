@@ -981,7 +981,7 @@ fn auto_archive_feature(paths: &MaestroPaths, args: AutoArchiveArgs) -> Result<(
         Err(error) => bail!("{}", feature_archive_error_message(&id, &error.to_string())),
     };
     let post_archive_check = post_archive_check(paths, &id)?;
-    let archive_path = repo_relative_path(paths, &paths.archive_cards_dir().join(&id));
+    let archive_path = format!(".maestro/archive/cards.sqlite#{id}");
     let restore_command = format!("maestro feature unarchive {id}");
     let event_path = format!(".maestro/runs/{}/events.jsonl", run::run_dir_name(&run_id));
     let event_id = format!(
@@ -1365,14 +1365,6 @@ fn auto_archive_command(parts: AutoArchiveCommandParts<'_>) -> String {
         .map(shell_word)
         .collect::<Vec<_>>()
         .join(" ")
-}
-
-fn repo_relative_path(paths: &MaestroPaths, path: &Path) -> String {
-    path.strip_prefix(paths.repo_root())
-        .ok()
-        .unwrap_or(path)
-        .display()
-        .to_string()
 }
 
 fn short_commit(commit: &str) -> String {
@@ -2039,20 +2031,31 @@ fn show_feature_spec(paths: &MaestroPaths, id: &str) -> Result<()> {
         println!("archived: true");
     }
     println!();
-    let sidecar_dir = if archived {
-        paths.archive_cards_dir().join(&view.id)
-    } else {
-        feature::feature_sidecar_dir(paths, &view.id)
-    };
-    let spec_path = sidecar_dir.join("spec.md");
-    match std::fs::read_to_string(&spec_path) {
-        Ok(spec) => print!("{}", spec.trim_end()),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            println!("# {}", view.title);
-            println!();
-            println!("(no spec.md found)");
+    if archived {
+        match card::read_archived_file(paths, &view.id, "spec.md")? {
+            Some(bytes) => {
+                let spec = String::from_utf8(bytes)
+                    .map_err(|error| anyhow::anyhow!("archived spec.md is not UTF-8: {error}"))?;
+                print!("{}", spec.trim_end());
+            }
+            None => {
+                println!("# {}", view.title);
+                println!();
+                println!("(no spec.md found)");
+            }
         }
-        Err(error) => bail!("failed to read {}: {error}", spec_path.display()),
+    } else {
+        let sidecar_dir = feature::feature_sidecar_dir(paths, &view.id);
+        let spec_path = sidecar_dir.join("spec.md");
+        match std::fs::read_to_string(&spec_path) {
+            Ok(spec) => print!("{}", spec.trim_end()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                println!("# {}", view.title);
+                println!();
+                println!("(no spec.md found)");
+            }
+            Err(error) => bail!("failed to read {}: {error}", spec_path.display()),
+        }
     }
     println!();
     println!();

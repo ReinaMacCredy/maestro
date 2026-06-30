@@ -3,6 +3,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 
+use crate::domain::card::query as card_query;
 use crate::domain::card::schema::Card;
 use crate::domain::decisions;
 use crate::domain::task::lookup::paths_for_tasks_dir;
@@ -70,10 +71,18 @@ pub fn load_progress_task_entries(paths: &MaestroPaths) -> Result<Vec<TaskEntry>
 /// the archived feature reads -- the live loader above never sees an archived
 /// card, so archived task counts must scan the archive tree explicitly.
 pub fn load_archived_task_entries(paths: &MaestroPaths) -> Result<Vec<TaskEntry>> {
-    Ok(cards::scan_dir(&paths.archive_cards_dir())?
+    card_query::scan_archived_with_paths(paths)?
         .into_iter()
-        .map(|(task, task_dir)| TaskEntry { task, task_dir })
-        .collect())
+        .filter(|(card, _)| card.card_type == crate::domain::card::schema::CardType::Task)
+        .map(|(card, path)| {
+            let task_dir = path
+                .parent()
+                .map(Path::to_path_buf)
+                .unwrap_or_else(|| crate::domain::card::archive_db::archive_db_file(paths));
+            cards::record_from_card(card, path.display().to_string())
+                .map(|task| TaskEntry { task, task_dir })
+        })
+        .collect::<Result<Vec<_>>>()
 }
 
 /// Check unresolved task blocker references for missing nodes, self-blocks, and cycles.

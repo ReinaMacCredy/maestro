@@ -8,11 +8,12 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
+use crate::domain::card::archive_db;
 use crate::domain::card::fold;
 use crate::domain::card::schema::{Card, CardType, Dep, DepKind};
 use crate::domain::card::store::{
     CARD_FILE, DECISIONS_FILE, IDEAS_FILE, TASK_FILE, TASKS_DIR, is_dir_backed, is_symlink, load,
-    load_entries, resolve, resolve_in,
+    load_entries, resolve,
 };
 use crate::foundation::core::fs::sorted_child_dirs;
 use crate::foundation::core::paths::MaestroPaths;
@@ -161,6 +162,22 @@ pub(crate) fn scan_with_paths(paths: &MaestroPaths) -> Result<Vec<(Card, PathBuf
 /// [`scan_with_paths`] over an explicit card tree root (the archive tree).
 pub(crate) fn scan_dir_with_paths(root: &Path) -> Result<Vec<(Card, PathBuf)>> {
     Ok(walk(root, true)?.cards)
+}
+
+/// Strict scan over DB-backed archived cards.
+pub fn scan_archived(paths: &MaestroPaths) -> Result<Vec<Card>> {
+    Ok(scan_archived_with_paths(paths)?
+        .into_iter()
+        .map(|(card, _)| card)
+        .collect())
+}
+
+/// Strict scan over DB-backed archived cards with synthetic artifact paths.
+pub fn scan_archived_with_paths(paths: &MaestroPaths) -> Result<Vec<(Card, PathBuf)>> {
+    Ok(archive_db::scan(paths)?
+        .into_iter()
+        .map(|archived| (archived.card, archived.path))
+        .collect())
 }
 
 /// One walk over a card tree root in the container layout, shared by the
@@ -664,10 +681,10 @@ pub fn pair_linked(paths: &MaestroPaths, me: &Card, partner_id: &str) -> Result<
         return Ok(true);
     }
     let partner = match resolve(paths, partner_id)? {
-        Some(found) => Some(found),
-        None => resolve_in(&paths.archive_cards_dir(), partner_id)?,
+        Some(found) => Some(found.card),
+        None => archive_db::resolve(paths, partner_id)?.map(|archived| archived.card),
     };
-    Ok(partner.is_some_and(|resolved| has_related_to(&resolved.card, &me.id)))
+    Ok(partner.is_some_and(|card| has_related_to(&card, &me.id)))
 }
 
 #[cfg(test)]
@@ -1538,9 +1555,8 @@ mod tests {
             kind: DepKind::Related,
             target: "task-001".to_string(),
         });
-        let archived_yaml = paths.archive_cards_dir().join("task-002").join(CARD_FILE);
-        let snap = load_with_snapshot(&archived_yaml).expect("absent loads None");
-        save_with_snapshot(&archived_yaml, &partner, &snap).expect("seed archived partner");
+        archive_db::archive_virtual_card(&paths, "task-002", &partner, Path::new("task-002"))
+            .expect("seed archived partner");
 
         assert!(
             pair_linked(&paths, &me, "task-002").expect("pair_linked"),
