@@ -106,6 +106,122 @@ fn setup_repo() -> TestTempDir {
 }
 
 #[test]
+fn task_show_renders_implement_method_routing() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    let behavior = maestro(
+        repo,
+        &[
+            "task",
+            "create",
+            "Behavior change",
+            "--check",
+            "retry happens after a transient network failure",
+            "--id-only",
+        ],
+    );
+    assert_success(
+        &behavior,
+        &[
+            "task",
+            "create",
+            "Behavior change",
+            "--check",
+            "retry happens after a transient network failure",
+            "--id-only",
+        ],
+    );
+    let behavior_id = stdout(&behavior).trim().to_string();
+
+    let behavior_show = maestro(repo, &["task", "show", &behavior_id]);
+    assert_success(&behavior_show, &["task", "show", &behavior_id]);
+    let behavior_out = stdout(&behavior_show);
+    assert!(behavior_out.contains("implement_method: TDD required"));
+    assert!(behavior_out.contains("method_reason: locked check names observable behavior"));
+    assert!(behavior_out.contains("proof_required: RED claim + GREEN claim"));
+
+    let docs = maestro(
+        repo,
+        &[
+            "task",
+            "create",
+            "Docs update",
+            "--lane",
+            "light",
+            "--check",
+            "docs-only update README install command",
+            "--id-only",
+        ],
+    );
+    assert_success(
+        &docs,
+        &[
+            "task",
+            "create",
+            "Docs update",
+            "--lane",
+            "light",
+            "--check",
+            "docs-only update README install command",
+            "--id-only",
+        ],
+    );
+    let docs_id = stdout(&docs).trim().to_string();
+
+    let docs_show = maestro(repo, &["task", "show", &docs_id]);
+    assert_success(&docs_show, &["task", "show", &docs_id]);
+    let docs_out = stdout(&docs_show);
+    assert!(docs_out.contains("implement_method: TDD skipped"));
+    assert!(docs_out.contains("method_reason: lane light"));
+    assert!(docs_out.contains("proof_required: skip-reason claim + relevant verification"));
+
+    let chore = maestro(
+        repo,
+        &["card", "create", "Retry chore", "-t", "chore", "--id-only"],
+    );
+    assert_success(
+        &chore,
+        &["card", "create", "Retry chore", "-t", "chore", "--id-only"],
+    );
+    let chore_id = stdout(&chore).trim().to_string();
+    let chore_task = maestro(
+        repo,
+        &[
+            "task",
+            "create",
+            "Chore behavior change",
+            "--card",
+            &chore_id,
+            "--check",
+            "retry happens after a transient network failure",
+            "--id-only",
+        ],
+    );
+    assert_success(
+        &chore_task,
+        &[
+            "task",
+            "create",
+            "Chore behavior change",
+            "--card",
+            &chore_id,
+            "--check",
+            "retry happens after a transient network failure",
+            "--id-only",
+        ],
+    );
+    let chore_task_id = stdout(&chore_task).trim().to_string();
+
+    let chore_show = maestro(repo, &["task", "show", &chore_task_id]);
+    assert_success(&chore_show, &["task", "show", &chore_task_id]);
+    let chore_out = stdout(&chore_show);
+    assert!(chore_out.contains("feature: "));
+    assert!(chore_out.contains("implement_method: TDD required"));
+    assert!(!chore_out.contains("implement_method: TDD skipped"));
+}
+
+#[test]
 fn task_progress_cli_flow_add_start_done_is_low_ceremony_and_verifies_simple_completion() {
     let temp = setup_repo();
     let repo = temp.path();

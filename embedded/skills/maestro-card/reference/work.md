@@ -71,6 +71,11 @@ code. The skip is valid only when the `--check` is non-behavioral
 `--lane light` (no real logic to test); the skip note must name which case
 applies. "Non-testable" is not a free judgment call: a locked observable
 `--check` is, by definition, testable.
+Task handoff surfaces (`task create`, `task show`, `task accept`, and `task
+claim`) render `implement_method`, `method_reason`, and `proof_required` before
+work starts. `TDD required` means finish with matching RED and GREEN proof
+claims. `TDD skipped` means finish with one claim naming the printed skip
+reason plus the relevant verification evidence.
 
 Before you write implementation code, climb the reach-ladder (HARNESS Code
 style: skip/YAGNI -> stdlib -> native platform -> installed dependency ->

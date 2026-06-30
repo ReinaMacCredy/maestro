@@ -5,6 +5,49 @@ use crate::domain::task::template::{StateHistoryEntry, TaskRecord, TaskState};
 use crate::foundation::core::table;
 use crate::foundation::core::time::{render_timestamp, timestamp_nanos};
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ImplementMethod {
+    method: &'static str,
+    reason: &'static str,
+    proof_required: &'static str,
+}
+
+fn implement_method(task: &TaskRecord, checks: &[String]) -> ImplementMethod {
+    if let Some(reason) = task.lane.as_deref().and_then(skip_reason_for_lane) {
+        return tdd_skipped(reason);
+    }
+    if let Some(reason) = skip_reason_for_checks(checks) {
+        return tdd_skipped(reason);
+    }
+    if checks.is_empty() {
+        if task.feature_id.is_some() {
+            return ImplementMethod {
+                method: "TDD required",
+                reason: "feature acceptance is inherited",
+                proof_required: "RED claim + GREEN claim",
+            };
+        }
+        return ImplementMethod {
+            method: "TDD pending",
+            reason: "no locked check yet",
+            proof_required: "add an observable check before implementation",
+        };
+    }
+    ImplementMethod {
+        method: "TDD required",
+        reason: "locked check names observable behavior",
+        proof_required: "RED claim + GREEN claim",
+    }
+}
+
+pub fn render_implement_method_block(task: &TaskRecord, checks: &[String]) -> String {
+    let method = implement_method(task, checks);
+    format!(
+        "implement_method: {}\nmethod_reason: {}\nproof_required: {}\n",
+        method.method, method.reason, method.proof_required
+    )
+}
+
 /// Render one task for `maestro task show`. `checks` is the task's acceptance
 /// contract, read by the caller from the task record.
 pub fn render_task(task: &TaskRecord, checks: &[String]) -> String {
@@ -42,6 +85,8 @@ pub fn render_task(task: &TaskRecord, checks: &[String]) -> String {
         "updated_at: {}\n",
         render_timestamp(&task.updated_at)
     ));
+
+    out.push_str(&render_implement_method_block(task, checks));
 
     out.push_str("checks:\n");
     if checks.is_empty() {
@@ -186,6 +231,48 @@ fn compact_next(task: &TaskRecord, missing_verify_contract: bool) -> &'static st
         | TaskState::Abandoned
         | TaskState::Superseded => "run: status",
     }
+}
+
+fn tdd_skipped(reason: &'static str) -> ImplementMethod {
+    ImplementMethod {
+        method: "TDD skipped",
+        reason,
+        proof_required: "skip-reason claim + relevant verification",
+    }
+}
+
+fn skip_reason_for_lane(lane: &str) -> Option<&'static str> {
+    match lane.trim().to_ascii_lowercase().as_str() {
+        "light" => Some("lane light"),
+        "explore" => Some("lane explore"),
+        "spike" => Some("lane spike"),
+        _ => None,
+    }
+}
+
+fn skip_reason_for_checks(checks: &[String]) -> Option<&'static str> {
+    let text = checks.join("\n").to_ascii_lowercase();
+    if text.contains("docs-only")
+        || text.contains("documentation-only")
+        || text.contains("markdown-only")
+        || text.contains("readme-only")
+    {
+        return Some("docs-only check");
+    }
+    if text.contains("config-only") || text.contains("configuration-only") {
+        return Some("config-only check");
+    }
+    if text.contains("behavior held constant")
+        || text.contains("no behavior change")
+        || text.contains("non-behavioral")
+        || text.contains("mechanical")
+    {
+        return Some("mechanical/no-behavior-change check");
+    }
+    if text.contains("spike") || text.contains("throwaway") {
+        return Some("spike check");
+    }
+    None
 }
 
 #[cfg(test)]

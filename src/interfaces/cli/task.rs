@@ -767,6 +767,7 @@ fn print_verify_block(task: &TaskRecord, checks: &[String]) {
     if let Some(line) = harness::guardrail_task_check_line(task) {
         println!("{line}");
     }
+    print!("{}", task::render_implement_method_block(task, checks));
     if !checks.is_empty() {
         println!("verify+ locked:");
         println!("  checks: {}", checks.len());

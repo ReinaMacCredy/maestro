@@ -119,8 +119,10 @@ The red→green record is the card's proof, recorded as two claims in
   (`GREEN: cargo test 41 passed, 0 failed`)
 
 Both carry matching proof text per the evidence gate, so the proof shows
-test-first on its face. A card that took the skip records one claim naming the
-locked skip reason instead.
+test-first on its face. The task handoff prints `implement_method: TDD
+required` with `proof_required: RED claim + GREEN claim` when this applies. A
+card that took the skip records one claim naming the locked or printed skip
+reason instead.
 
 ## Hand-off
 
