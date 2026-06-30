@@ -24,9 +24,9 @@ unanswered questions remains.
 ## Grill With Docs
 
 When the user asks for grilling with docs, or the grilling turns on project
-language, bounded contexts, business concepts, glossary, or ADRs, also use
-[domain-model.md](domain-model.md).
+language, bounded contexts, business concepts, glossary, or durable trade-offs,
+also use [domain-model.md](domain-model.md).
 
 The docs-backed variant keeps the same one-question-at-a-time grilling rhythm,
-but resolved domain terms are captured immediately in `CONTEXT.md`, and ADRs are
-offered only for hard-to-reverse, surprising trade-offs.
+but resolved domain terms are captured immediately in feature spec sections, and
+Maestro decisions are locked only for hard-to-reverse, surprising trade-offs.

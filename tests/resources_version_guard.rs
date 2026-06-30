@@ -49,14 +49,14 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 19] = [
     (
         "skill",
         "maestro-design",
-        "1.34.0",
-        "88488b8a66b6c26895c512d30633071dfca6089c05ad4eb82b533b57785d002b",
+        "1.36.0",
+        "c537f85bb8fe98db7f5e1c12658cefcff3df5b36d4959236e2a3b37d82afd6c0",
     ),
     (
         "skill",
         "maestro-audit",
-        "1.11.0",
-        "4e08fc3787b1483130ae5cc22a8bce82348f099d9c09b20d3d3dd3c6ad1b32c4",
+        "1.13.0",
+        "cdc97974f4246f2c7a68226c82eefe774ff626d72106869e1dff75d374bc945d",
     ),
     (
         "hook",
@@ -340,8 +340,9 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
     assert!(
         design.contains("domain model")
             && design.contains("reference/domain-model.md")
-            && design.contains("CONTEXT.md")
-            && design.contains("ADRs"),
+            && design.contains("feature spec")
+            && design.contains("maestro decision")
+            && design.contains("maestro grep"),
         "maestro-design must retain the domain-modeling branch"
     );
     assert!(
@@ -373,7 +374,9 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
             && audit.contains("deepening opportunities")
             && audit.contains("reference/architecture-review.md")
             && audit.contains("architecture-review-<timestamp>.html")
-            && audit.contains("Top recommendation"),
+            && audit.contains("Top recommendation")
+            && audit.contains("locked-decision conflicts")
+            && audit.contains("maestro grep"),
         "maestro-audit must retain the architecture review branch"
     );
 

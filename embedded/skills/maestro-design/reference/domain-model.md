@@ -4,19 +4,32 @@ Use this branch when a design fork depends on project language, bounded
 contexts, business concepts, or a plan that should be challenged against the
 existing domain model.
 
-## Find The Domain Record
+## Find The Maestro Domain Record
 
-During current-state mapping, also look for existing domain documentation:
+During current-state mapping, use Maestro's native search engine before generic
+repository search:
 
-- Root `CONTEXT-MAP.md` means the repo has multiple contexts; read it and use
-  the context path that matches the topic.
-- Root `CONTEXT.md` means the repo has one context.
-- `docs/adr/` at the root holds system-wide decisions.
-- Context-local `docs/adr/` holds context-specific decisions.
+```sh
+maestro grep "<topic>"
+maestro grep "<topic> corpus:memory"
+maestro grep "<topic> corpus:source"
+```
 
-Create files lazily. If no `CONTEXT.md` exists, create it only when the first
-domain term is resolved. If no `docs/adr/` exists, create it only when the first
-ADR qualifies.
+Then read the Maestro artifacts it points at:
+
+- `.maestro/cards/<feature>/spec.md` is the editable design record. Use
+  sections such as `Language`, `Relationships`, and `Flagged ambiguities` for
+  domain terms.
+- `.maestro/cards/<feature>/handoff.md` is the clean continuation index after
+  `maestro feature finalize`.
+- `.maestro/cards/<feature>/notes.md` carries dated context and corrections.
+- `maestro decision list --feature <id>` and `maestro decision show <id>` hold
+  locked rulings and rejected alternatives.
+- `maestro grep "<topic> corpus:memory"` finds reusable language and precedent
+  across prior work.
+
+Do not create `CONTEXT.md`, `CONTEXT-MAP.md`, or `docs/adr/` from this Maestro
+skill. Code and ordinary docs are evidence, not the domain record of authority.
 
 ## Run The Fork
 
@@ -26,7 +39,7 @@ ADR qualifies.
    inspect them instead of asking the user.
 3. Give each question a recommended answer.
 4. Challenge terminology immediately when the user uses a term that conflicts
-   with existing `CONTEXT.md` language.
+   with feature spec language, locked decisions, memory, or code evidence.
 5. Sharpen vague or overloaded language into one canonical term.
 6. Stress-test relationships with concrete scenarios that probe boundaries,
    edge cases, and cardinality.
@@ -35,23 +48,26 @@ ADR qualifies.
 8. Lock decisions through the normal `maestro decision new` /
    `maestro decision lock` path once the fork is settled.
 
-Completion criterion: every material domain term used by the design has either
-an existing definition, a new resolved definition, or an explicit unresolved
-feature question; every settled domain fork is reflected in the feature
-decision record.
+Completion criterion: every material domain term used by the design has an
+existing Maestro-backed definition, a new feature-spec entry, or an explicit
+unresolved feature question; every settled domain fork is reflected in the
+feature decision record.
 
-## Update CONTEXT.md
+## Update Maestro Artifacts
 
-When a term is resolved, update the matching `CONTEXT.md` immediately. Do not
-batch glossary updates. Keep it domain-facing, not implementation-facing.
+When a term is resolved, update the feature spec immediately. Do not batch
+glossary updates. Keep the language domain-facing, not implementation-facing.
+Use:
+
+```sh
+maestro feature spec <id> --section "Language" --append "<entry>"
+maestro feature spec <id> --section "Relationships" --append "<entry>"
+maestro feature spec <id> --section "Flagged ambiguities" --append "<entry>"
+```
 
 Use this shape:
 
 ```md
-# {Context Name}
-
-{One or two sentence description of what this context is and why it exists.}
-
 ## Language
 
 **Canonical Term**:
@@ -81,17 +97,16 @@ Rules:
 - Express relationships and cardinality where obvious.
 - Add flagged ambiguities when a term was overloaded or corrected.
 
-## Offer ADRs Sparingly
+## Lock Durable Rulings Sparingly
 
-Offer an ADR only when all three are true:
+Use `maestro decision new` and `maestro decision lock` only when all three are
+true:
 
 - hard to reverse
 - surprising without context
 - the result of a real trade-off
 
-ADRs live in `docs/adr/` or the matching context's `docs/adr/`. Number them by
-scanning for the highest existing `NNNN-*.md` and incrementing it. Keep the file
-small:
+Keep the decision context small:
 
 ```md
 # {Short title of the decision}
@@ -99,5 +114,6 @@ small:
 {1-3 sentences: context, what was decided, and why.}
 ```
 
-Optional sections such as `Status`, `Considered Options`, or `Consequences`
-belong only when they carry useful future context.
+Record rejected alternatives in the lock context when they prevent future
+re-litigation. If a locked decision is contradicted later, supersede it; never
+edit or unlock the old Decision record.

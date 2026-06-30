@@ -24,8 +24,8 @@ wrapper when one of the terms above is meant.
 
 ## Design Loop
 
-1. Start from the chosen candidate, its files/modules, the audit report, domain
-   vocabulary, and relevant ADRs.
+1. Start from the chosen candidate, its files/modules, the audit report, feature
+   spec language, locked decisions, notes, memory, and relevant source evidence.
 2. Classify dependencies:
    - in-process: test directly through the new interface
    - local-substitutable: test with the local stand-in
@@ -43,5 +43,5 @@ wrapper when one of the terms above is meant.
 
 Completion criterion: the selected design names the module, interface, seam,
 dependency strategy, adapters if any, tests that move to the interface, tests to
-delete, rejected alternatives, and any ADR/domain-model updates needed to keep
-future reviews from re-suggesting rejected work.
+delete, rejected alternatives, and any feature-spec, decision, or memory updates
+needed to keep future reviews from re-suggesting rejected work.

@@ -12,7 +12,11 @@ architecture claim.
 
 ## Explore
 
-1. Read `CONTEXT.md`, `CONTEXT-MAP.md`, and relevant ADRs when present.
+1. Use the Maestro-native search engine first: `maestro grep "<topic>"`. Narrow
+   with `maestro grep "<topic> corpus:memory"` for artifact precedent or
+   `maestro grep "<topic> corpus:source"` for source evidence. Read the
+   matching feature spec, handoff, notes, locked decisions, memory hits, and
+   source evidence when present.
 2. Explore organically and note where understanding a concept requires bouncing
    through many small modules, where interfaces are as complex as
    implementations, where testability extractions hurt locality, where modules
@@ -44,8 +48,8 @@ Each candidate card includes:
 - Before / after diagram
 - Recommendation strength: `Strong`, `Worth exploring`, or `Speculative`
 
-Mark real ADR conflicts only when the friction is strong enough to justify
-reopening the ADR. End with one **Top recommendation**.
+Mark real locked-decision conflicts only when the friction is strong enough to
+justify superseding the decision. End with one **Top recommendation**.
 
 Completion criterion: the report exists in the temp directory, has at least one
 candidate with before/after visuals and recommendation strength, names the top
@@ -55,5 +59,6 @@ recommendation, and asks the user which candidate to explore.
 
 When the user picks a candidate, route to `maestro-design` using its
 `deepening-candidate`, `grilling`, and `domain-model` branches. If a candidate
-is rejected for a durable reason future reviews need to remember, offer an ADR;
-skip ephemeral reasons like "not worth it right now".
+is rejected for a durable reason future reviews need to remember, offer to lock
+a Maestro decision or record a reusable memory; skip ephemeral reasons like "not
+worth it right now".

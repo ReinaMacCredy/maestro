@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-version: 1.34.0
+version: 1.36.0
 description: "Design Maestro changes before implementation: use for brainstorm, plan, PRD synthesis, grill me, grilling, stress-test, domain model, deepening candidate, wording, workflow, skill, harness, card/task/feature, architecture, UX, or agent-process decisions."
 ---
 
@@ -47,7 +47,7 @@ Routing: external PRD with open forks -> decide forks in design, then intake per
 PRD synthesis from settled context -> use [reference/prd.md](reference/prd.md).
 Grill/stress-test session -> use [reference/grilling.md](reference/grilling.md).
 Domain-modeling session -> use [reference/domain-model.md](reference/domain-model.md).
-Grill-with-docs session -> use [reference/grilling.md](reference/grilling.md), plus [reference/domain-model.md](reference/domain-model.md) for CONTEXT.md/ADR updates.
+Grill-with-docs session -> use [reference/grilling.md](reference/grilling.md), plus [reference/domain-model.md](reference/domain-model.md) for Maestro spec/decision updates.
 Chosen architecture deepening candidate -> use [reference/deepening-candidate.md](reference/deepening-candidate.md).
 
 ## Conversation Driver
@@ -204,10 +204,11 @@ harness. Preserve the answer, not the code.
 ## Domain Model Forks
 
 When a fork hinges on project language or boundaries, challenge the terms before
-locking the design. Read existing `CONTEXT.md`, `CONTEXT-MAP.md`, and ADRs when
-present; if code can answer a question, inspect code instead of asking the user.
-Resolved domain terms are captured inline in the right `CONTEXT.md`; ADRs are
-offered only for hard-to-reverse, surprising trade-offs. Full branch:
+locking the design. Use `maestro grep "<topic>"` as the native search path,
+then read the feature spec, handoff, notes, decisions, memory, and relevant code
+before asking; if evidence can answer a question, inspect it instead. Resolved
+domain terms are captured in the feature spec and material trade-offs are
+locked as Maestro decisions. Full branch:
 [reference/domain-model.md](reference/domain-model.md).
 
 ## Stop

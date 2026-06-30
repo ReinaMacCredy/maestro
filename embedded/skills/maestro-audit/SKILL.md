@@ -1,6 +1,6 @@
 ---
 name: maestro-audit
-version: 1.11.0
+version: 1.13.0
 description: "Audit Maestro projects read-only: use for code review, architecture review, deepening opportunities, backlog proposals, harness-improvement findings, or repo-wide improvement audits without fixes."
 ---
 
