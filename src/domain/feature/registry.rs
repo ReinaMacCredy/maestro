@@ -443,10 +443,7 @@ pub fn set_with_report(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> 
 pub fn finalize(paths: &MaestroPaths, id: &str) -> Result<FinalizeReport> {
     let record = load_record(paths, id)?;
     match record.status {
-        FeatureStatus::Proposed | FeatureStatus::Ready => {}
-        FeatureStatus::InProgress => bail!(
-            "cannot finalize {id} — implementation is already in progress; inspect `.maestro/cards/{id}/handoff.md` and `maestro feature show {id}`"
-        ),
+        FeatureStatus::Proposed | FeatureStatus::Ready | FeatureStatus::InProgress => {}
         FeatureStatus::Closed | FeatureStatus::Cancelled => bail!(
             "cannot finalize {id} — terminal (status: {})",
             record.status.as_str()

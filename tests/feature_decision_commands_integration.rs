@@ -1109,6 +1109,98 @@ fn feature_finalize_writes_handoff_and_gates_accept_prepare() {
 }
 
 #[test]
+fn feature_finalize_refreshes_handoff_after_in_progress_amend() {
+    let temp_dir = TestTempDir::new("maestro-feature-finalize-in-progress-amend");
+    let root = temp_dir.path();
+    init_git_marker(root);
+    stdout(maestro(&["init", "--yes"], root), &["init", "--yes"]);
+    stdout(
+        maestro(&["feature", "new", "Amended Handoff"], root),
+        &["feature", "new", "Amended Handoff"],
+    );
+
+    let set_args = [
+        "feature",
+        "set",
+        "amended-handoff",
+        "--acceptance",
+        "original behavior works",
+        "--area",
+        "feature lifecycle",
+    ];
+    stdout(maestro(&set_args, root), &set_args);
+    let cards_dir = root.join(".maestro/cards");
+    write_baseline(&cards_dir, "amended-handoff");
+    stdout(
+        maestro(&["feature", "finalize", "amended-handoff"], root),
+        &["feature", "finalize", "amended-handoff"],
+    );
+    stdout(
+        maestro(&["feature", "accept", "amended-handoff"], root),
+        &["feature", "accept", "amended-handoff"],
+    );
+    stdout(
+        maestro(&["feature", "start", "amended-handoff"], root),
+        &["feature", "start", "amended-handoff"],
+    );
+
+    let amend_args = [
+        "feature",
+        "amend",
+        "amended-handoff",
+        "--reason",
+        "new audited acceptance",
+        "--add-acceptance",
+        "new behavior works",
+    ];
+    let amended = stdout(maestro(&amend_args, root), &amend_args);
+    assert!(amended.contains("acceptance +1"), "{amended}");
+
+    let prepare_args = ["feature", "prepare", "amended-handoff", "--draft"];
+    let stale = assert_failure(maestro(&prepare_args, root), &prepare_args);
+    assert!(stale.contains("cannot prepare amended-handoff"), "{stale}");
+    assert!(stale.contains("handoff.md stale"), "{stale}");
+    assert!(
+        stale.contains("fix: maestro feature finalize amended-handoff"),
+        "{stale}"
+    );
+
+    let refresh = stdout(
+        maestro(&["feature", "finalize", "amended-handoff"], root),
+        &["feature", "finalize", "amended-handoff"],
+    );
+    assert!(refresh.contains("finalized amended-handoff"), "{refresh}");
+    assert!(
+        refresh.contains("maestro feature verify amended-handoff"),
+        "{refresh}"
+    );
+
+    let show = stdout(
+        maestro(&["feature", "show", "amended-handoff"], root),
+        &["feature", "show", "amended-handoff"],
+    );
+    assert!(show.contains("status: in_progress"), "{show}");
+
+    let unsafe_set_args = [
+        "feature",
+        "set",
+        "amended-handoff",
+        "--acceptance",
+        "replacement contract",
+    ];
+    let unsafe_set = assert_failure(maestro(&unsafe_set_args, root), &unsafe_set_args);
+    assert!(unsafe_set.contains("contract frozen"), "{unsafe_set}");
+
+    let handoff = fs::read_to_string(cards_dir.join("amended-handoff/handoff.md"))
+        .expect("handoff should be readable");
+    assert!(handoff.contains("- Status: `in_progress`"), "{handoff}");
+    assert!(handoff.contains("`ac-2`: new behavior works"), "{handoff}");
+
+    let draft = stdout(maestro(&prepare_args, root), &prepare_args);
+    assert!(draft.contains("prepare-draft.md"), "{draft}");
+}
+
+#[test]
 fn feature_authoring_append_flags_are_proposed_only() {
     let temp_dir = TestTempDir::new("maestro-feature-authoring-ergonomics");
     init_git_marker(temp_dir.path());
