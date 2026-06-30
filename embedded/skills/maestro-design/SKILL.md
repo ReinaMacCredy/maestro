@@ -1,7 +1,7 @@
 ---
 name: maestro-design
-version: 1.31.1
-description: "Use when the user wants to brainstorm, design, plan, choose wording, or decide a workflow, skill, harness, card/task/feature, architecture, UX, or agent-process change in a project using Maestro before implementation."
+version: 1.31.2
+description: "Design Maestro changes before implementation: use for brainstorm, plan, wording, workflow, skill, harness, card/task/feature, architecture, UX, or agent-process decisions."
 ---
 
 # Maestro Design
@@ -68,6 +68,10 @@ Every material fork needs a detail floor:
 - a clear recommendation
 - the exact answer format expected from the user
 
+Completion criterion: a fork is ready to ask only when the user can answer in
+the requested format and the eventual lock context can cite a real artifact,
+command output, or explicit user statement.
+
 If the user asks for more detail, examples, or clarification, answer by
 improving the current fork or thesis first. Only open a new fork after the
 clarified point is settled or explicitly becomes the next decision.
@@ -133,6 +137,10 @@ maestro never auto-reads or auto-replies; you do.
    `maestro feature finalize <id>`. The next agent starts at
    `.maestro/cards/<id>/handoff.md`; raw `spec.md`, `notes.md`, and decision
    cards stay preserved for audit.
+
+Completion criterion: design is done only when every material fork is locked or
+left as an explicit feature question, acceptance criteria and affected areas
+exist, and `feature finalize` has refreshed `handoff.md`.
 
 ## Taste Forks
 

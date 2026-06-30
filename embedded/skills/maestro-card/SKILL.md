@@ -1,7 +1,7 @@
 ---
 name: maestro-card
-version: 1.37.3
-description: "Use when the user wants to implement, fix, verify, QA, close, release, continue, use loop, keep looping, work while away, or work while asleep on Maestro cards/features/tasks in a project using Maestro after design is approved."
+version: 1.37.4
+description: "Active Maestro card work after design approval: use for implement, fix, verify, QA, close, release, continue, or unattended prompts like use loop, keep looping, work while away/asleep."
 ---
 
 # Maestro Card
@@ -72,6 +72,8 @@ Read the reference for the job at hand; they share the ground rules below.
   [reference/qa-baseline.md](reference/qa-baseline.md)
 - Replay scenarios and record slice evidence before `feature close`:
   [reference/qa-slice.md](reference/qa-slice.md)
+- Intake an external spec, plan, or PRD after design approval:
+  [reference/intake.md](reference/intake.md)
 
 ## Shared Ground
 
@@ -135,22 +137,6 @@ Read the reference for the job at hand; they share the ground rules below.
   when the ambiguity can change scope, contract, schema, lifecycle, release
   behavior, or other hard-to-reverse work. Full routing lives in
   [reference/work.md](reference/work.md).
-
-## External intake
-
-When the user brings a spec, plan, or PRD authored elsewhere, route open forks
-through `maestro-design` first. This skill consumes the approved contract and
-drives the active lifecycle; there is no CLI parser for external documents.
-
-1. Use `maestro-design` to create the feature, preserve the source text, decide
-   open forks, and author observable acceptance criteria.
-2. Return here after the contract is stable.
-3. Read `.maestro/cards/<id>/handoff.md` first. If it is missing or stale, run
-   `maestro feature finalize <id>`.
-4. Run `qa-baseline`, `feature accept`, `feature prepare`, work, verify,
-   `qa-slice`, and `feature close`.
-
-`request.md` travels with the card through archive and unarchive.
 
 ## Pipeline
 

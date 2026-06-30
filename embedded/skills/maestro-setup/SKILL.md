@@ -1,7 +1,7 @@
 ---
 name: maestro-setup
-version: 1.11.0
-description: "Use when a project using or adopting Maestro needs init/install/sync/doctor, global skills, hooks, harness setup, or agent integration diagnosis or repair."
+version: 1.11.1
+description: "Setup Maestro in a project: use for init/install/sync/doctor, global skills, hooks, harness setup, or agent integration diagnosis/repair."
 ---
 
 # Maestro Setup

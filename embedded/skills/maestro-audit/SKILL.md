@@ -1,7 +1,7 @@
 ---
 name: maestro-audit
-version: 1.10.0
-description: "Use when the user wants a read-only audit, code review, backlog proposal, or harness improvement finding for a project using Maestro, without applying fixes."
+version: 1.10.1
+description: "Audit Maestro projects read-only: use for code review, backlog proposals, harness-improvement findings, or repo-wide improvement audits without fixes."
 ---
 
 # Maestro Audit
@@ -29,8 +29,8 @@ Produce proposals only.
 
 1. Read known state: `maestro status`, `maestro harness list --all`, active
    features, active tasks, decisions, and repo instructions.
-2. Re-read the repo from scratch, including docs, code ownership boundaries,
-   tests, scripts, and shipped embedded resources relevant to the finding.
+2. Map the bounded audit surface from repo evidence: docs, code ownership
+   boundaries, tests, scripts, and shipped embedded resources relevant to the finding.
    Sweep every lens so coverage is checkable, not just whatever surfaced
    first: correctness, security, performance, test coverage, tech debt,
    dependencies, developer experience, docs. The tech-debt lens includes the
@@ -50,6 +50,10 @@ Produce proposals only.
    `--topic` per finding so the verb merges repeats, and end the `--evidence`
    text with a leverage estimate:
    `impact/effort/confidence: <H|M|L>/<H|M|L>/<H|M|L>`.
+
+Completion criterion: every surviving finding has a `maestro harness propose`
+record with stable topic, concrete evidence, and leverage estimate; every
+finding that failed refutation or Maestro-state cross-check is dropped.
 
 ## Evidence
 
