@@ -477,6 +477,7 @@ struct LeaseActionEvent<'a> {
 struct WorkLeaseJson {
     version: u8,
     schema: &'static str,
+    helper: WorkLeaseHelperJson,
     status: &'static str,
     scope: LeaseScopeJson,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -529,6 +530,7 @@ impl WorkLeaseJson {
         Self {
             version: WORK_LEASE_JSON_VERSION,
             schema: WORK_LEASE_JSON_SCHEMA,
+            helper: WorkLeaseHelperJson::default(),
             status: "leased",
             scope,
             lease: Some(LeaseJson {
@@ -579,6 +581,7 @@ impl WorkLeaseJson {
         Self {
             version: WORK_LEASE_JSON_VERSION,
             schema: WORK_LEASE_JSON_SCHEMA,
+            helper: WorkLeaseHelperJson::default(),
             status: "dry",
             scope,
             lease: None,
@@ -615,6 +618,7 @@ impl WorkLeaseJson {
         Self {
             version: WORK_LEASE_JSON_VERSION,
             schema: WORK_LEASE_JSON_SCHEMA,
+            helper: WorkLeaseHelperJson::default(),
             status: "blocked",
             scope,
             lease: None,
@@ -634,6 +638,29 @@ impl WorkLeaseJson {
             memory_suggestions_omitted,
             worker_prompt: "No work lease was acquired because ready cards are actively claimed. Reconcile with `maestro active`, linked-card messages, and `maestro query run --json`; do not steal live work.".to_string(),
             reason: Some(reason.to_string()),
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct WorkLeaseHelperJson {
+    role: &'static str,
+    phase: &'static str,
+    parent_recipe: &'static str,
+    selection_limit: &'static str,
+    persistence: &'static str,
+    hard_boundary: &'static str,
+}
+
+impl Default for WorkLeaseHelperJson {
+    fn default() -> Self {
+        Self {
+            role: "internal_choose_phase_helper",
+            phase: "choose",
+            parent_recipe: "unattended",
+            selection_limit: "exactly_one_ready_unit",
+            persistence: "current Maestro card store plus run ledger evidence",
+            hard_boundary: "not a top-level lifecycle, daemon, scheduler, executor, queue, worker launcher, or hidden store",
         }
     }
 }

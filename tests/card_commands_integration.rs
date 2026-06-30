@@ -2998,6 +2998,17 @@ fn loop_work_lease_claims_one_ready_card_and_returns_worker_contract() {
 
     assert_eq!(lease["schema"], "maestro.work_lease.v1");
     assert_eq!(lease["version"], 1);
+    assert_eq!(lease["helper"]["role"], "internal_choose_phase_helper");
+    assert_eq!(lease["helper"]["phase"], "choose");
+    assert_eq!(lease["helper"]["parent_recipe"], "unattended");
+    assert_eq!(lease["helper"]["selection_limit"], "exactly_one_ready_unit");
+    assert!(
+        lease["helper"]["hard_boundary"]
+            .as_str()
+            .unwrap()
+            .contains("not a top-level lifecycle"),
+        "lease should demote Work Lease to an internal helper: {lease:#}"
+    );
     assert_eq!(lease["status"], "leased");
     let leased_id = lease["selected_card"]["id"]
         .as_str()
@@ -3102,6 +3113,8 @@ fn loop_work_lease_no_ready_work_returns_dry_json_without_card_mutation() {
     );
 
     assert_eq!(lease["status"], "dry");
+    assert_eq!(lease["helper"]["role"], "internal_choose_phase_helper");
+    assert_eq!(lease["helper"]["phase"], "choose");
     assert_eq!(lease["reason"], "no ready cards matched this lease scope");
     assert!(lease.get("selected_card").is_none());
     let after = fs::read_dir(repo.join(".maestro/cards"))
