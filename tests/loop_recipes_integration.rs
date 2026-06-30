@@ -5,6 +5,8 @@ use std::os::unix::fs as unix_fs;
 use std::path::Path;
 use std::process::{Command, Output};
 
+use serde_json::Value;
+
 use support::TestTempDir;
 
 fn maestro(cwd: &Path, args: &[&str]) -> Output {
@@ -44,6 +46,36 @@ fn write_custom_recipe(repo: &Path, name: &str, body: &str) {
     fs::write(dir.join(format!("{name}.yml")), body).expect("custom recipe should be writable");
 }
 
+fn init_git_marker(repo: &Path) {
+    fs::create_dir(repo.join(".git")).expect("invariant: .git marker should be creatable");
+}
+
+fn snapshot_dir(dir: &Path) -> Vec<(String, Vec<u8>)> {
+    let mut files = Vec::new();
+    collect_snapshot(dir, dir, &mut files);
+    files.sort_by(|left, right| left.0.cmp(&right.0));
+    files
+}
+
+fn collect_snapshot(root: &Path, dir: &Path, files: &mut Vec<(String, Vec<u8>)>) {
+    for entry in fs::read_dir(dir).expect("snapshot dir should be readable") {
+        let entry = entry.expect("snapshot entry should be readable");
+        let path = entry.path();
+        let metadata = fs::symlink_metadata(&path).expect("snapshot metadata should be readable");
+        if metadata.is_dir() {
+            collect_snapshot(root, &path, files);
+        } else if metadata.is_file() {
+            let relative = path
+                .strip_prefix(root)
+                .expect("snapshot path should stay under root")
+                .display()
+                .to_string();
+            let contents = fs::read(&path).expect("snapshot file should be readable");
+            files.push((relative, contents));
+        }
+    }
+}
+
 #[test]
 fn loop_index_lists_unified_structured_recipe_catalog() {
     let temp = TestTempDir::new("maestro-loop-index");
@@ -62,6 +94,76 @@ fn loop_index_lists_unified_structured_recipe_catalog() {
     assert!(!out.contains("feature-fan-out"), "{out}");
     assert!(!out.contains("adversarial-fan-out"), "{out}");
     assert!(!out.contains("generate-and-filter"), "{out}");
+}
+
+#[test]
+fn loop_next_json_routes_missing_maestro_without_writes() {
+    let temp = TestTempDir::new("maestro-loop-next-missing");
+    let out = stdout(temp.path(), &["loop", "next", "--json"]);
+    let value: Value = serde_json::from_str(&out).expect("loop next JSON should parse");
+
+    assert_eq!(value["schema"], "maestro.loop_next.v1");
+    assert_eq!(value["status"], "uncertain");
+    assert_eq!(value["recommended_recipe"], "intake-triage");
+    assert_eq!(value["recommended_status"], "intake_triage");
+    assert!(value["authority_scope"].is_array(), "{value}");
+    assert!(value["autonomy"].is_array(), "{value}");
+    assert!(value["edges"].is_array(), "{value}");
+    assert!(value["hard_stops"].is_array(), "{value}");
+    assert!(value["inspect"].is_array(), "{value}");
+    assert!(value["next_verbs"].is_array(), "{value}");
+    assert!(
+        !temp.path().join(".maestro").exists(),
+        "loop next must not initialize or write Maestro artifacts"
+    );
+}
+
+#[test]
+fn loop_next_routes_ready_task_and_does_not_mutate_maestro_store() {
+    let temp = TestTempDir::new("maestro-loop-next-ready-task");
+    init_git_marker(temp.path());
+    stdout(temp.path(), &["init", "--yes"]);
+    let task_id = stdout(
+        temp.path(),
+        &["task", "add", "--id-only", "Implement router"],
+    );
+    let task_id = task_id.trim();
+    let before = snapshot_dir(&temp.path().join(".maestro"));
+
+    let out = stdout(temp.path(), &["loop", "next", "--json"]);
+    let after = snapshot_dir(&temp.path().join(".maestro"));
+    let value: Value = serde_json::from_str(&out).expect("loop next JSON should parse");
+
+    assert_eq!(before, after, "loop next must not mutate .maestro");
+    assert_eq!(value["schema"], "maestro.loop_next.v1");
+    assert_eq!(value["status"], "recommended");
+    assert_eq!(value["recommended_recipe"], "work");
+    assert_eq!(value["recommended_status"], "work");
+    let expected_inspect = format!("maestro task show {task_id}");
+    assert!(
+        value["inspect"]
+            .as_array()
+            .expect("inspect should be an array")
+            .iter()
+            .any(|entry| entry.as_str() == Some(expected_inspect.as_str())),
+        "{value}"
+    );
+    assert!(
+        value["edges"]
+            .as_array()
+            .expect("edges should be an array")
+            .iter()
+            .any(|edge| edge["kind"] == "transition" && edge["to"] == "design"),
+        "{value}"
+    );
+    assert!(
+        value["edges"]
+            .as_array()
+            .expect("edges should be an array")
+            .iter()
+            .any(|edge| edge["kind"] == "invocation" && edge["to"] == "audit"),
+        "{value}"
+    );
 }
 
 #[test]

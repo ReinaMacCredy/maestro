@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail, ensure};
 use include_dir::{Dir, include_dir};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// The structured recipe contract tree, embedded at build time.
 static LOOP_RECIPE_CONTRACTS_DIR: Dir<'_> =
@@ -143,6 +143,458 @@ pub struct WorkLeaseHelperContract {
     pub hard_stops: Vec<String>,
     pub observe_requirement: Vec<String>,
     pub reconcile_handles: Vec<String>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct LoopRouterInput {
+    pub repo: String,
+    pub initialized: bool,
+    pub current_task: Option<LoopTaskInput>,
+    pub tasks: Vec<LoopTaskInput>,
+    pub features: Vec<LoopFeatureInput>,
+    pub active_sessions: usize,
+    pub git: Option<LoopGitInput>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LoopTaskInput {
+    pub id: String,
+    pub title: String,
+    pub state: String,
+    pub feature_id: Option<String>,
+    pub blocked: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LoopFeatureInput {
+    pub id: String,
+    pub title: String,
+    pub status: String,
+    pub total_tasks: usize,
+    pub verified_tasks: usize,
+    pub open_questions: usize,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LoopGitInput {
+    pub branch: Option<String>,
+    pub code_other_dirty: usize,
+    pub maestro_dirty: usize,
+    pub ahead: usize,
+    pub behind: usize,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct LoopNextReport {
+    pub schema: &'static str,
+    pub status: String,
+    pub repo: String,
+    pub recommended_recipe: Option<String>,
+    pub recommended_status: String,
+    pub reason: String,
+    pub confidence: String,
+    pub priority: u16,
+    pub authority_scope: Vec<String>,
+    pub autonomy: Vec<String>,
+    pub edges: Vec<LoopNextEdge>,
+    pub hard_stops: Vec<String>,
+    pub inspect: Vec<String>,
+    pub next_verbs: Vec<String>,
+    pub candidates: Vec<LoopNextCandidate>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub git: Option<LoopNextGit>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct LoopNextEdge {
+    pub kind: &'static str,
+    pub trigger: String,
+    pub to: String,
+    pub authority_scope: Vec<String>,
+    pub allowed_verbs: Vec<String>,
+    pub forbidden_verbs: Vec<String>,
+    pub hard_stops: Vec<String>,
+    pub return_condition: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct LoopNextCandidate {
+    pub recipe: String,
+    pub status: String,
+    pub priority: u16,
+    pub confidence: String,
+    pub reason: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct LoopNextGit {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub branch: Option<String>,
+    pub code_other_dirty: usize,
+    pub maestro_dirty: usize,
+    pub ahead: usize,
+    pub behind: usize,
+}
+
+#[derive(Clone, Debug)]
+struct RouterCandidate {
+    recipe: &'static str,
+    reason: String,
+    inspect: Vec<String>,
+    next_verbs: Vec<String>,
+}
+
+/// Recommend the next loop recipe from already-read local state.
+///
+/// This is intentionally a read-only scorer over caller-supplied facts. It does
+/// not inspect the filesystem, run git, execute tests, mutate Maestro artifacts,
+/// dispatch workers, or call back into the CLI.
+pub fn route_next(input: LoopRouterInput) -> Result<LoopNextReport> {
+    let mut candidates = Vec::new();
+    if !input.initialized {
+        return report_for_candidate(
+            &input,
+            RouterCandidate {
+                recipe: "intake-triage",
+                reason: ".maestro is missing; route through setup/intake before choosing an executable recipe".to_string(),
+                inspect: vec![
+                    "maestro status --json".to_string(),
+                    "maestro init --dry-run".to_string(),
+                ],
+                next_verbs: vec![
+                    "maestro init --dry-run".to_string(),
+                    "maestro init --yes".to_string(),
+                ],
+            },
+            "uncertain",
+            Vec::new(),
+        );
+    }
+
+    if !input.warnings.is_empty() {
+        return uncertain_report(
+            &input,
+            "local state had unreadable or incomplete evidence; inspect before choosing a recipe",
+        );
+    }
+
+    if input.active_sessions > 1 {
+        candidates.push(RouterCandidate {
+            recipe: "conflict-handoff",
+            reason: format!(
+                "{} active sessions are visible; check overlap before implementation or merge-back",
+                input.active_sessions
+            ),
+            inspect: vec![
+                "maestro active".to_string(),
+                "maestro status --json".to_string(),
+                "git status --short --branch".to_string(),
+            ],
+            next_verbs: vec![
+                "maestro loop show conflict-handoff".to_string(),
+                "maestro active".to_string(),
+            ],
+        });
+    }
+
+    if input.git.as_ref().is_some_and(|git| git.behind > 0) {
+        candidates.push(RouterCandidate {
+            recipe: "conflict-handoff",
+            reason: "shared branch moved since this worktree forked; rebase or merge-back safety must be resolved".to_string(),
+            inspect: vec![
+                "maestro status --json".to_string(),
+                "git status --short --branch".to_string(),
+            ],
+            next_verbs: vec![
+                "maestro loop show conflict-handoff".to_string(),
+                "git rebase <shared-branch>".to_string(),
+            ],
+        });
+    }
+
+    if let Some(task) = input.current_task.as_ref() {
+        candidates.push(work_candidate(task, "current task is live"));
+    }
+
+    let live_tasks: Vec<&LoopTaskInput> = input
+        .tasks
+        .iter()
+        .filter(|task| is_live_task_state(&task.state) && !task.blocked)
+        .collect();
+    if let Some(task) = live_tasks
+        .iter()
+        .find(|task| task.state == "needs_verification")
+    {
+        candidates.push(work_candidate(
+            task,
+            "task needs proof recovery or verification",
+        ));
+    }
+    if let Some(task) = live_tasks.iter().find(|task| task.state == "ready") {
+        candidates.push(work_candidate(task, "ready task can enter implementation"));
+    }
+    if let Some(task) = live_tasks.iter().find(|task| task.state == "in_progress") {
+        candidates.push(work_candidate(
+            task,
+            "in-progress task should continue through work",
+        ));
+    }
+
+    if let Some((feature_id, ready_count)) = fanout_feature(&live_tasks) {
+        candidates.push(RouterCandidate {
+            recipe: "feature-fanout",
+            reason: format!(
+                "{ready_count} ready tasks share feature {feature_id}; fanout may be legal after independence checks"
+            ),
+            inspect: vec![
+                format!("maestro task list --feature {feature_id}"),
+                format!("maestro feature show {feature_id}"),
+            ],
+            next_verbs: vec![
+                "maestro loop show feature-fanout".to_string(),
+                format!("maestro task list --feature {feature_id}"),
+            ],
+        });
+    }
+
+    if let Some(feature) = input.features.iter().find(|feature| {
+        feature.status == "in_progress"
+            && feature.total_tasks > 0
+            && feature.total_tasks == feature.verified_tasks
+    }) {
+        candidates.push(RouterCandidate {
+            recipe: "ship",
+            reason: format!(
+                "feature {} has all child tasks verified ({}/{})",
+                feature.id, feature.verified_tasks, feature.total_tasks
+            ),
+            inspect: vec![
+                format!("maestro feature show {}", feature.id),
+                "git status --short --branch".to_string(),
+            ],
+            next_verbs: vec![
+                "maestro loop show ship".to_string(),
+                format!(
+                    "maestro feature close {} --outcome \"<outcome>\"",
+                    feature.id
+                ),
+            ],
+        });
+    }
+
+    if let Some(feature) = input.features.iter().find(|feature| {
+        feature.status == "proposed" || feature.open_questions > 0 || feature.total_tasks == 0
+    }) {
+        candidates.push(RouterCandidate {
+            recipe: "design",
+            reason: format!(
+                "feature {} still needs design or contract clarification",
+                feature.id
+            ),
+            inspect: vec![
+                format!("maestro feature show {}", feature.id),
+                format!("maestro decision list --feature {}", feature.id),
+            ],
+            next_verbs: vec![
+                "maestro loop show design".to_string(),
+                format!("maestro feature show {}", feature.id),
+            ],
+        });
+    }
+
+    let Some(candidate) = best_candidate(&candidates)? else {
+        return uncertain_report(
+            &input,
+            "no confident recipe matched the current local Maestro state",
+        );
+    };
+    report_for_candidate(&input, candidate, "recommended", candidates)
+}
+
+fn report_for_candidate(
+    input: &LoopRouterInput,
+    candidate: RouterCandidate,
+    status: &str,
+    candidates: Vec<RouterCandidate>,
+) -> Result<LoopNextReport> {
+    let contract = contract(candidate.recipe)?;
+    let candidates = if candidates.is_empty() {
+        vec![candidate_report(&contract, &candidate)]
+    } else {
+        candidate_reports(candidates)?
+    };
+    Ok(LoopNextReport {
+        schema: "maestro.loop_next.v1",
+        status: status.to_string(),
+        repo: input.repo.clone(),
+        recommended_recipe: Some(contract.id.clone()),
+        recommended_status: contract.router.status.clone(),
+        reason: candidate.reason,
+        confidence: contract.router.confidence.clone(),
+        priority: contract.router.priority,
+        authority_scope: contract.authority_scope.clone(),
+        autonomy: contract.autonomy.clone(),
+        edges: edge_reports(&contract),
+        hard_stops: contract.hard_stops.clone(),
+        inspect: candidate.inspect,
+        next_verbs: candidate.next_verbs,
+        candidates,
+        warnings: input.warnings.clone(),
+        git: input.git.clone().map(LoopNextGit::from),
+    })
+}
+
+fn uncertain_report(input: &LoopRouterInput, reason: &str) -> Result<LoopNextReport> {
+    Ok(LoopNextReport {
+        schema: "maestro.loop_next.v1",
+        status: "uncertain".to_string(),
+        repo: input.repo.clone(),
+        recommended_recipe: None,
+        recommended_status: "uncertain".to_string(),
+        reason: reason.to_string(),
+        confidence: "low".to_string(),
+        priority: 0,
+        authority_scope: Vec::new(),
+        autonomy: Vec::new(),
+        edges: Vec::new(),
+        hard_stops: vec![
+            "do not mutate cards, tasks, features, git, releases, archives, or files from loop next"
+                .to_string(),
+            "inspect the current state before choosing a write verb".to_string(),
+        ],
+        inspect: vec![
+            "maestro status --json".to_string(),
+            "maestro task list --json".to_string(),
+            "maestro feature list --all".to_string(),
+            "maestro active".to_string(),
+        ],
+        next_verbs: vec!["maestro status".to_string(), "maestro loop".to_string()],
+        candidates: Vec::new(),
+        warnings: input.warnings.clone(),
+        git: input.git.clone().map(LoopNextGit::from),
+    })
+}
+
+fn best_candidate(candidates: &[RouterCandidate]) -> Result<Option<RouterCandidate>> {
+    let mut ranked = candidates
+        .iter()
+        .map(|candidate| Ok((contract(candidate.recipe)?, candidate)))
+        .collect::<Result<Vec<_>>>()?;
+    ranked.sort_by(
+        |(left_contract, left_candidate), (right_contract, right_candidate)| {
+            right_contract
+                .router
+                .priority
+                .cmp(&left_contract.router.priority)
+                .then_with(|| left_candidate.recipe.cmp(right_candidate.recipe))
+                .then_with(|| left_candidate.reason.cmp(&right_candidate.reason))
+        },
+    );
+    Ok(ranked.first().map(|(_, candidate)| (*candidate).clone()))
+}
+
+fn candidate_reports(candidates: Vec<RouterCandidate>) -> Result<Vec<LoopNextCandidate>> {
+    let mut reports = candidates
+        .into_iter()
+        .map(|candidate| {
+            let contract = contract(candidate.recipe)?;
+            Ok(candidate_report(&contract, &candidate))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    reports.sort_by(|left, right| {
+        right
+            .priority
+            .cmp(&left.priority)
+            .then_with(|| left.recipe.cmp(&right.recipe))
+            .then_with(|| left.reason.cmp(&right.reason))
+    });
+    reports.dedup_by(|left, right| left.recipe == right.recipe && left.reason == right.reason);
+    Ok(reports)
+}
+
+fn candidate_report(contract: &RecipeContract, candidate: &RouterCandidate) -> LoopNextCandidate {
+    LoopNextCandidate {
+        recipe: contract.id.clone(),
+        status: contract.router.status.clone(),
+        priority: contract.router.priority,
+        confidence: contract.router.confidence.clone(),
+        reason: candidate.reason.clone(),
+    }
+}
+
+fn edge_reports(contract: &RecipeContract) -> Vec<LoopNextEdge> {
+    contract
+        .transitions
+        .iter()
+        .map(|edge| edge_report("transition", edge))
+        .chain(
+            contract
+                .invocations
+                .iter()
+                .map(|edge| edge_report("invocation", edge)),
+        )
+        .collect()
+}
+
+fn edge_report(kind: &'static str, edge: &RecipeEdge) -> LoopNextEdge {
+    LoopNextEdge {
+        kind,
+        trigger: edge.trigger.clone(),
+        to: edge.to.clone(),
+        authority_scope: edge.authority_scope.clone(),
+        allowed_verbs: edge.allowed_verbs.clone(),
+        forbidden_verbs: edge.forbidden_verbs.clone(),
+        hard_stops: edge.hard_stops.clone(),
+        return_condition: edge.return_condition.clone(),
+    }
+}
+
+fn work_candidate(task: &LoopTaskInput, reason: &str) -> RouterCandidate {
+    RouterCandidate {
+        recipe: "work",
+        reason: format!("{reason}: {} ({})", task.id, task.state),
+        inspect: vec![
+            format!("maestro task show {}", task.id),
+            "maestro status --json".to_string(),
+        ],
+        next_verbs: vec![
+            "maestro loop show work".to_string(),
+            format!("maestro task show {}", task.id),
+        ],
+    }
+}
+
+fn fanout_feature(tasks: &[&LoopTaskInput]) -> Option<(String, usize)> {
+    let mut counts: BTreeMap<String, usize> = BTreeMap::new();
+    for task in tasks.iter().filter(|task| task.state == "ready") {
+        let Some(feature_id) = task.feature_id.as_deref() else {
+            continue;
+        };
+        *counts.entry(feature_id.to_string()).or_default() += 1;
+    }
+    counts.into_iter().find(|(_, count)| *count >= 2)
+}
+
+fn is_live_task_state(state: &str) -> bool {
+    matches!(
+        state,
+        "draft" | "exploring" | "ready" | "in_progress" | "needs_verification"
+    )
+}
+
+impl From<LoopGitInput> for LoopNextGit {
+    fn from(git: LoopGitInput) -> Self {
+        Self {
+            branch: git.branch,
+            code_other_dirty: git.code_other_dirty,
+            maestro_dirty: git.maestro_dirty,
+            ahead: git.ahead,
+            behind: git.behind,
+        }
+    }
 }
 
 /// Render one shipped recipe by its canonical id. An unknown name fails loud
@@ -968,11 +1420,112 @@ mod tests {
     }
 
     #[test]
+    fn route_next_recommends_work_for_current_task_with_edges() {
+        let task = task_input("task-router", "in_progress", Some("feature-router"));
+        let report = route_next(LoopRouterInput {
+            repo: "/repo".to_string(),
+            initialized: true,
+            current_task: Some(task.clone()),
+            tasks: vec![task],
+            ..LoopRouterInput::default()
+        })
+        .expect("router should recommend work");
+
+        assert_eq!(report.status, "recommended");
+        assert_eq!(report.recommended_recipe.as_deref(), Some("work"));
+        assert_eq!(report.recommended_status, "work");
+        assert!(report.reason.contains("task-router"), "{report:?}");
+        assert!(
+            report
+                .inspect
+                .contains(&"maestro task show task-router".to_string())
+        );
+        assert!(report.edges.iter().any(|edge| {
+            edge.kind == "transition" && edge.to == "design" && edge.trigger.contains("too unclear")
+        }));
+        assert!(
+            report
+                .edges
+                .iter()
+                .any(|edge| { edge.kind == "invocation" && edge.to == "audit" })
+        );
+    }
+
+    #[test]
+    fn route_next_uses_recipe_priority_before_task_state() {
+        let task = task_input("task-router", "in_progress", Some("feature-router"));
+        let report = route_next(LoopRouterInput {
+            repo: "/repo".to_string(),
+            initialized: true,
+            current_task: Some(task.clone()),
+            tasks: vec![task],
+            active_sessions: 2,
+            ..LoopRouterInput::default()
+        })
+        .expect("router should recommend conflict handling");
+
+        assert_eq!(
+            report.recommended_recipe.as_deref(),
+            Some("conflict-handoff")
+        );
+        assert_eq!(report.priority, 40);
+        assert!(
+            report
+                .candidates
+                .iter()
+                .any(|candidate| candidate.recipe == "work")
+        );
+        assert!(
+            report
+                .candidates
+                .windows(2)
+                .all(|pair| pair[0].priority >= pair[1].priority),
+            "{:?}",
+            report.candidates
+        );
+    }
+
+    #[test]
+    fn route_next_returns_uncertain_when_evidence_is_incomplete() {
+        let report = route_next(LoopRouterInput {
+            repo: "/repo".to_string(),
+            initialized: true,
+            ..LoopRouterInput::default()
+        })
+        .expect("router should return uncertain");
+
+        assert_eq!(report.status, "uncertain");
+        assert_eq!(report.recommended_recipe.as_deref(), None);
+        assert_eq!(report.recommended_status, "uncertain");
+        assert!(
+            report
+                .inspect
+                .contains(&"maestro status --json".to_string())
+        );
+        assert!(
+            report
+                .hard_stops
+                .iter()
+                .any(|stop| stop.contains("do not mutate"))
+        );
+    }
+
+    #[test]
     fn unknown_recipe_is_a_loud_error_listing_the_available_recipes() {
         let error = show("no-such-recipe").unwrap_err().to_string();
         assert!(error.contains("no-such-recipe"), "{error}");
         assert!(error.contains("design"), "{error}");
         assert!(error.contains("feature-fanout"), "{error}");
         assert!(!error.contains("feature-fan-out"), "{error}");
+    }
+
+    fn task_input(id: &str, state: &str, feature_id: Option<&str>) -> LoopTaskInput {
+        LoopTaskInput {
+            id: id.to_string(),
+            title: format!("{id} title"),
+            state: state.to_string(),
+            feature_id: feature_id.map(str::to_string),
+            blocked: false,
+        }
     }
 }

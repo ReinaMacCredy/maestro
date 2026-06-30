@@ -50,6 +50,7 @@ fn should_auto_check_after(command: &maestro::interfaces::cli::RootCommand) -> b
             | maestro::interfaces::cli::RootCommand::Design(_)
             | maestro::interfaces::cli::RootCommand::MigrateV2
             | maestro::interfaces::cli::RootCommand::Resume(_)
+            | maestro::interfaces::cli::RootCommand::Loop(_)
             | maestro::interfaces::cli::RootCommand::Mcp(_)
             | maestro::interfaces::cli::RootCommand::Hook(_)
             | maestro::interfaces::cli::RootCommand::ShellInit

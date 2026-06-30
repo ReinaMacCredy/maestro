@@ -1,13 +1,14 @@
+use std::env;
 use std::path::PathBuf;
 
 use anyhow::Result;
 use serde::Serialize;
 use serde_json::json;
 
-use crate::domain::{card, loop_recipes, run};
+use crate::domain::{card, feature, loop_recipes, run, task};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::time::{timestamp_nanos, utc_now_timestamp};
-use crate::interfaces::cli::{LoopArgs, LoopCommand, WorkLeaseArgs};
+use crate::interfaces::cli::{LoopArgs, LoopCommand, LoopNextArgs, WorkLeaseArgs};
 use crate::interfaces::hooks::record;
 use crate::operations::harness;
 use crate::operations::memory::{
@@ -65,6 +66,7 @@ pub fn run(args: LoopArgs) -> Result<()> {
             "{}",
             loop_recipes::validate_with_custom_dir(&name, custom_dir.as_deref())?
         ),
+        Some(LoopCommand::Next(args)) => run_next(args)?,
         Some(LoopCommand::WorkLease(args)) => run_work_lease(*args)?,
     }
     Ok(())
@@ -74,6 +76,158 @@ fn custom_recipe_dir() -> Option<PathBuf> {
     let repo_root = discover_repo_root().ok()?;
     let paths = MaestroPaths::new(repo_root);
     Some(paths.loop_recipes_dir())
+}
+
+fn run_next(args: LoopNextArgs) -> Result<()> {
+    let report = build_loop_next_report()?;
+    if args.json {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+    } else {
+        print_loop_next(&report);
+    }
+    Ok(())
+}
+
+fn build_loop_next_report() -> Result<loop_recipes::LoopNextReport> {
+    let repo_root = discover_repo_root().or_else(|_| env::current_dir())?;
+    let paths = MaestroPaths::new(repo_root);
+    if !paths.maestro_dir().is_dir() {
+        return loop_recipes::route_next(loop_recipes::LoopRouterInput {
+            repo: paths.repo_root().display().to_string(),
+            initialized: false,
+            ..loop_recipes::LoopRouterInput::default()
+        });
+    }
+
+    let mut warnings = Vec::new();
+    let task_entries = match task::load_task_entries(&paths.tasks_dir()) {
+        Ok(entries) => entries,
+        Err(error) => {
+            warnings.push(format!("task scan failed: {error:#}"));
+            Vec::new()
+        }
+    };
+    let tasks = task_entries
+        .iter()
+        .map(|entry| loop_recipes::LoopTaskInput {
+            id: entry.task.id.clone(),
+            title: entry.task.title.clone(),
+            state: entry.task.state.as_str().to_string(),
+            feature_id: entry.task.feature_id.clone(),
+            blocked: task::has_unresolved_blockers(&entry.task),
+        })
+        .collect::<Vec<_>>();
+    let current_task = current_loop_task(&task_entries);
+
+    let mut features = Vec::new();
+    for entry in feature::list_tolerant_with_entries(&paths, &task_entries) {
+        match entry {
+            feature::FeatureRosterEntry::Loaded(view) => {
+                features.push(loop_recipes::LoopFeatureInput {
+                    id: view.id.clone(),
+                    title: view.title.clone(),
+                    status: view.status.as_str().to_string(),
+                    total_tasks: view.counts.total,
+                    verified_tasks: view.counts.verified,
+                    open_questions: view.open_questions.len(),
+                });
+            }
+            feature::FeatureRosterEntry::Unreadable {
+                id, path, error, ..
+            } => {
+                warnings.push(format!(
+                    "feature {id} at {} is unreadable: {error}",
+                    path.display()
+                ));
+            }
+        }
+    }
+
+    let now = utc_now_timestamp();
+    let active_sessions = match run::active_sessions(&paths, &now) {
+        Ok(sessions) => sessions.len(),
+        Err(error) => {
+            warnings.push(format!("active session scan failed: {error:#}"));
+            0
+        }
+    };
+
+    loop_recipes::route_next(loop_recipes::LoopRouterInput {
+        repo: paths.repo_root().display().to_string(),
+        initialized: true,
+        current_task,
+        tasks,
+        features,
+        active_sessions,
+        git: super::git_readout(&paths).map(|git| loop_recipes::LoopGitInput {
+            branch: git.branch,
+            code_other_dirty: git.code_other_dirty,
+            maestro_dirty: git.maestro_dirty,
+            ahead: git
+                .divergence
+                .as_ref()
+                .map(|divergence| divergence.ahead)
+                .unwrap_or(0),
+            behind: git
+                .divergence
+                .as_ref()
+                .map(|divergence| divergence.behind)
+                .unwrap_or(0),
+        }),
+        warnings,
+    })
+}
+
+fn current_loop_task(entries: &[task::TaskEntry]) -> Option<loop_recipes::LoopTaskInput> {
+    let id = env::var("MAESTRO_CURRENT_TASK").ok()?;
+    let id = id.trim();
+    if id.is_empty() {
+        return None;
+    }
+    let task = entries
+        .iter()
+        .find(|entry| entry.task.id == id && entry.task.state.is_live())?;
+    Some(loop_recipes::LoopTaskInput {
+        id: task.task.id.clone(),
+        title: task.task.title.clone(),
+        state: task.task.state.as_str().to_string(),
+        feature_id: task.task.feature_id.clone(),
+        blocked: task::has_unresolved_blockers(&task.task),
+    })
+}
+
+fn print_loop_next(report: &loop_recipes::LoopNextReport) {
+    if let Some(recipe) = report.recommended_recipe.as_deref() {
+        println!("recipe: {recipe}");
+        println!("status: {}", report.recommended_status);
+    } else {
+        println!("recipe: <uncertain>");
+        println!("status: uncertain");
+    }
+    println!("confidence: {}", report.confidence);
+    println!("priority: {}", report.priority);
+    println!("reason: {}", report.reason);
+    print_loop_next_list("authority_scope", &report.authority_scope);
+    print_loop_next_list("autonomy", &report.autonomy);
+    if !report.edges.is_empty() {
+        println!("edges:");
+        for edge in &report.edges {
+            println!("- {}: {} -> {}", edge.kind, edge.trigger, edge.to);
+        }
+    }
+    print_loop_next_list("hard_stops", &report.hard_stops);
+    print_loop_next_list("inspect", &report.inspect);
+    print_loop_next_list("next_verbs", &report.next_verbs);
+}
+
+fn print_loop_next_list(label: &str, values: &[String]) {
+    if values.is_empty() {
+        return;
+    }
+    println!("{label}:");
+    for value in values {
+        println!("- {value}");
+    }
 }
 
 fn run_work_lease(args: WorkLeaseArgs) -> Result<()> {
