@@ -632,7 +632,10 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
     let mut current_task = None;
     let mut current_feature = None;
 
-    let tasks: Vec<TaskRecord> = task_entries.into_iter().map(|entry| entry.task).collect();
+    let tasks: Vec<TaskRecord> = task_entries
+        .iter()
+        .map(|entry| entry.task.clone())
+        .collect();
     let live_tasks: Vec<TaskRecord> = tasks
         .iter()
         .filter(|task| task.state.is_live())
@@ -735,7 +738,13 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
         .as_ref()
         .is_some_and(|action| matches!(action.kind.as_str(), "complete_task" | "proof_recovery"))
         || !ready_to_close_features.is_empty();
-    let loop_hint = match super::loop_recipes::build_loop_next_report_for_paths(paths) {
+    let loop_hint = match super::loop_recipes::build_loop_next_report_from_snapshot(
+        paths,
+        &task_entries,
+        &features,
+        git.as_ref(),
+        Vec::new(),
+    ) {
         Ok(report) => Some(LoopStatusHintJson::from_loop_next(&report)),
         Err(error) => {
             warnings.push(WarningJson {

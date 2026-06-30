@@ -1581,6 +1581,12 @@ pub fn ensure_exists(paths: &MaestroPaths, id: &str) -> Result<()> {
     load_record(paths, id).map(|_| ())
 }
 
+/// Current append-only amend-log length, for artifacts that record the behavior
+/// position they cover.
+pub fn amend_log_position(paths: &MaestroPaths, id: &str) -> Result<usize> {
+    Ok(load_record(paths, id)?.amends.len())
+}
+
 /// List every archived feature joined with its archived task counts (L6b,
 /// `feature list --all`).
 ///

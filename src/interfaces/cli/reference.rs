@@ -126,6 +126,7 @@ const MAESTRO_CARD_COMMANDS: &[&str] = &[
     "maestro loop list",
     "maestro loop show",
     "maestro loop next",
+    "maestro loop validate",
     "maestro loop work-lease",
     "maestro task add",
     "maestro task create",
@@ -221,6 +222,7 @@ const MAESTRO_DESIGN_COMMANDS: &[&str] = &[
     "maestro loop list",
     "maestro loop show",
     "maestro loop next",
+    "maestro loop validate",
     "maestro feature new",
     "maestro feature set",
     "maestro feature finalize",
@@ -249,6 +251,7 @@ const MAESTRO_AUDIT_COMMANDS: &[&str] = &[
     "maestro loop list",
     "maestro loop show",
     "maestro loop next",
+    "maestro loop validate",
     "maestro task show",
     "maestro task list",
     "maestro feature show",
@@ -280,6 +283,7 @@ const MAESTRO_SETUP_COMMANDS: &[&str] = &[
     "maestro loop list",
     "maestro loop show",
     "maestro loop next",
+    "maestro loop validate",
 ];
 
 /// Check the header's sha256 stamp against the body it covers, so a hand edit
@@ -538,6 +542,7 @@ mod tests {
         assert!(card.contains("maestro task start <REF_OR_ID>"), "{card}");
         assert!(card.contains("maestro task done <REF_OR_ID>"), "{card}");
         assert!(card.contains("maestro task complete <ID>"), "{card}");
+        assert!(card.contains("maestro loop validate <NAME>"), "{card}");
         assert!(card.contains("maestro feature finalize <ID>"), "{card}");
         assert!(card.contains("maestro feature prepare <ID>"), "{card}");
         assert!(card.contains("maestro qa slice <ID>"), "{card}");
@@ -568,6 +573,7 @@ mod tests {
         assert!(setup.contains("maestro init [--dry-run]"), "{setup}");
         assert!(setup.contains("maestro install"), "{setup}");
         assert!(setup.contains("maestro doctor"), "{setup}");
+        assert!(setup.contains("maestro loop validate <NAME>"), "{setup}");
         assert!(!setup.contains("maestro task claim"), "{setup}");
         assert!(!setup.contains("maestro decision new"), "{setup}");
     }

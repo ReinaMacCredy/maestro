@@ -1,6 +1,6 @@
 ---
 name: maestro-card
-version: 1.37.8
+version: 1.37.9
 description: "Active Maestro card work after design approval: use for implement, fix, verify, QA, close, release, continue, or unattended prompts like use loop, keep looping, work while away/asleep."
 ---
 

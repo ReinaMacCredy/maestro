@@ -16,11 +16,11 @@ pub use archive::{
 pub use registry::{
     AcceptanceTextEdit, AmendReport, CancelReport, ContractAdditions, ContractChangeCounts,
     ContractEdits, FeatureDiagnostic, FeatureRosterEntry, FeatureView, FinalizeReport, NoteReport,
-    SetReport, SpecSectionReport, TransitionReport, accept, accept_with_qa_none, amend, cancel,
-    close, close_gaps, create, diagnose, ensure_exists, feature_sidecar_dir, finalize, handoff_gap,
-    list, list_archived, list_tolerant, list_tolerant_with_entries, list_with_entries, note, set,
-    set_with_report, show, show_archived, start, status, status_label, titles,
-    verified_child_commit_drift, write_spec_section,
+    SetReport, SpecSectionReport, TransitionReport, accept, accept_with_qa_none, amend,
+    amend_log_position, cancel, close, close_gaps, create, diagnose, ensure_exists,
+    feature_sidecar_dir, finalize, handoff_gap, list, list_archived, list_tolerant,
+    list_tolerant_with_entries, list_with_entries, note, set, set_with_report, show, show_archived,
+    start, status, status_label, titles, verified_child_commit_drift, write_spec_section,
 };
 pub use schema::{FeatureStatus, normalize_acceptance_id};
 pub use staleness::{RETIRE_REMINDER, STALE_PROPOSED_THRESHOLD_DAYS, age_days, is_stale_proposed};

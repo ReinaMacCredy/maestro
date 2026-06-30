@@ -206,19 +206,20 @@ state.
 ## Scheduler Variant
 
 An external scheduler (cron, launchd, a cloud schedule) can replace the
-long-lived session: each firing runs ONE iteration of the loop above, then
-exits. The scheduler calls the same choose-phase helper:
-`maestro loop work-lease --json`; parse the JSON, launch at most one worker from
-the returned contract, then stop until the next external tick. The card store
-and run ledger are the only state between firings - cold-start with `maestro
-resume` - and `claim` already guards overlapping firings against double work. A
-firing that dies mid-card leaves its claim behind; the next firing reclaims it
-once the claim crosses the existing 15-min stale TTL - the same timeout that
-frees any abandoned claim, not a new mechanism. Rebuild the night's account
-from durable state with `maestro query run` (its `--json` carries the per-card
-trace, autonomy summary, ledger paths, and an honest interruption verdict);
-never reconstruct the report from a dead firing's memory. Maestro itself never
-schedules anything.
+long-lived session: each firing starts one ordinary agent session, runs one
+bounded loop iteration under the same prompt authority, then exits. The scheduled
+session may call the choose-phase helper `maestro loop work-lease --json` to
+select and claim one card, but the returned JSON is not launch authority and does
+not create a worker, queue, daemon, executor, or scheduler inside Maestro. The
+card store and run ledger are the only state between firings - cold-start with
+`maestro resume` - and `claim` already guards overlapping firings against double
+work. A firing that dies mid-card leaves its claim behind; the next firing
+reclaims it once the claim crosses the existing 15-min stale TTL - the same
+timeout that frees any abandoned claim, not a new mechanism. Rebuild the night's
+account from durable state with `maestro query run` (its `--json` carries the
+per-card trace, autonomy summary, ledger paths, and an honest interruption
+verdict); never reconstruct the report from a dead firing's memory. Maestro
+itself never schedules anything.
 
 ## Stop
 

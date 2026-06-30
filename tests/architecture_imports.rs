@@ -335,6 +335,7 @@ fn feature_domain_facade_exposes_the_deliberate_surface() {
             "acceptance_id".to_string(),
             "age_days".to_string(),
             "amend".to_string(),
+            "amend_log_position".to_string(),
             "append_auto_archive_receipt".to_string(),
             "archive_feature".to_string(),
             "archive_feature_with_expected_hash".to_string(),

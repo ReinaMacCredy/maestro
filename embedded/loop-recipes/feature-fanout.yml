@@ -13,7 +13,7 @@ autonomy:
   - conductor keeps store-mutating verification and close gates
 router:
   status: feature_fanout
-  priority: 18
+  priority: 25
   confidence: medium
 transitions:
   - trigger: each worker receives a selected unit

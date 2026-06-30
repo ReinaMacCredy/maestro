@@ -269,6 +269,18 @@ fn loop_rejects_invalid_project_custom_recipes() {
 }
 
 #[test]
+fn loop_rejects_project_custom_recipes_that_collide_with_shipped_ids() {
+    let temp = TestTempDir::new("maestro-loop-custom-id-collision");
+    write_custom_recipe(temp.path(), "work", CUSTOM_RECIPE);
+
+    let error = stderr(temp.path(), &["loop"]);
+    assert!(
+        error.contains("collides with a shipped or legacy recipe id"),
+        "{error}"
+    );
+}
+
+#[test]
 fn loop_rejects_symlinked_project_custom_recipe_file() {
     let temp = TestTempDir::new("maestro-loop-custom-file-symlink");
     let external = temp.path().join("external-brief.yml");

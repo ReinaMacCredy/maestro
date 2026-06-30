@@ -316,7 +316,27 @@ pub fn route_next(input: LoopRouterInput) -> Result<LoopNextReport> {
     }
 
     if let Some(task) = input.current_task.as_ref() {
-        candidates.push(work_candidate(task, "current task is live"));
+        if task.blocked {
+            if candidates.is_empty() {
+                return uncertain_report_with_actions(
+                    &input,
+                    &format!(
+                        "current task {} is blocked; inspect blockers before choosing a recipe",
+                        task.id
+                    ),
+                    vec![
+                        format!("maestro task show {}", task.id),
+                        "maestro status --json".to_string(),
+                    ],
+                    vec![
+                        format!("maestro task show {}", task.id),
+                        "maestro task unblock <blocker-id> --reason \"<why>\"".to_string(),
+                    ],
+                );
+            }
+        } else {
+            candidates.push(work_candidate(task, "current task is live"));
+        }
     }
 
     let live_tasks: Vec<&LoopTaskInput> = input
@@ -343,7 +363,9 @@ pub fn route_next(input: LoopRouterInput) -> Result<LoopNextReport> {
         ));
     }
 
-    if let Some((feature_id, ready_count)) = fanout_feature(&live_tasks) {
+    if input.current_task.is_none()
+        && let Some((feature_id, ready_count)) = fanout_feature(&live_tasks)
+    {
         candidates.push(RouterCandidate {
             recipe: "feature-fanout",
             reason: format!(
@@ -385,9 +407,11 @@ pub fn route_next(input: LoopRouterInput) -> Result<LoopNextReport> {
         });
     }
 
-    if let Some(feature) = input.features.iter().find(|feature| {
-        feature.status == "proposed" || feature.open_questions > 0 || feature.total_tasks == 0
-    }) {
+    if candidates.is_empty()
+        && let Some(feature) = input.features.iter().find(|feature| {
+            feature.status == "proposed" || feature.open_questions > 0 || feature.total_tasks == 0
+        })
+    {
         candidates.push(RouterCandidate {
             recipe: "design",
             reason: format!(
@@ -448,6 +472,25 @@ fn report_for_candidate(
 }
 
 fn uncertain_report(input: &LoopRouterInput, reason: &str) -> Result<LoopNextReport> {
+    uncertain_report_with_actions(
+        input,
+        reason,
+        vec![
+            "maestro status --json".to_string(),
+            "maestro task list --json".to_string(),
+            "maestro feature list --all".to_string(),
+            "maestro active".to_string(),
+        ],
+        vec!["maestro status".to_string(), "maestro loop".to_string()],
+    )
+}
+
+fn uncertain_report_with_actions(
+    input: &LoopRouterInput,
+    reason: &str,
+    inspect: Vec<String>,
+    next_verbs: Vec<String>,
+) -> Result<LoopNextReport> {
     Ok(LoopNextReport {
         schema: "maestro.loop_next.v1",
         status: "uncertain".to_string(),
@@ -465,13 +508,8 @@ fn uncertain_report(input: &LoopRouterInput, reason: &str) -> Result<LoopNextRep
                 .to_string(),
             "inspect the current state before choosing a write verb".to_string(),
         ],
-        inspect: vec![
-            "maestro status --json".to_string(),
-            "maestro task list --json".to_string(),
-            "maestro feature list --all".to_string(),
-            "maestro active".to_string(),
-        ],
-        next_verbs: vec!["maestro status".to_string(), "maestro loop".to_string()],
+        inspect,
+        next_verbs,
         candidates: Vec::new(),
         warnings: input.warnings.clone(),
         git: input.git.clone().map(LoopNextGit::from),
@@ -608,7 +646,7 @@ pub fn serve(name: &str) -> Result<String> {
 pub fn index() -> String {
     let mut out = "# Loop Recipes\n\n".to_string();
     out.push_str(
-        "Maestro is the loop: recipes are structured control grammar over current cards, tasks, features, decisions, proof, QA, run events, notes, memory, and skills. `maestro loop` is read-only; existing Maestro verbs perform writes.\n\n",
+        "Maestro is the loop: recipes are structured control grammar over current cards, tasks, features, decisions, proof, QA, run events, notes, memory, and skills. `maestro loop list/show/next/validate` are read-only; `maestro loop work-lease` is a mutating helper that emits run evidence and may claim a card. Existing Maestro verbs perform writes.\n\n",
     );
     out.push_str("## Shipped Recipe Catalog\n\n");
     for contract in contracts().expect("invariant: shipped loop recipe contracts validate") {
@@ -648,13 +686,15 @@ pub fn show(name: &str) -> Result<String> {
 }
 
 pub fn show_with_custom_dir(name: &str, custom_dir: Option<&Path>) -> Result<String> {
+    let custom_names = match custom_dir {
+        Some(custom_dir) => custom_contract_names(custom_dir)?,
+        None => Vec::new(),
+    };
     if contract_names().contains(&name) {
         return show(name);
     }
     if let Some(custom_dir) = custom_dir
-        && custom_contract_names(custom_dir)?
-            .iter()
-            .any(|custom| custom == name)
+        && custom_names.iter().any(|custom| custom == name)
     {
         return Ok(render_contract(&custom_contract_known(custom_dir, name)?));
     }
@@ -665,14 +705,16 @@ pub fn show_with_custom_dir(name: &str, custom_dir: Option<&Path>) -> Result<Str
 }
 
 pub fn validate_with_custom_dir(name: &str, custom_dir: Option<&Path>) -> Result<String> {
+    let custom_names = match custom_dir {
+        Some(custom_dir) => custom_contract_names(custom_dir)?,
+        None => Vec::new(),
+    };
     if contract_names().contains(&name) {
         contract(name)?;
         return Ok(format!("valid shipped loop recipe: {name}\n"));
     }
     if let Some(custom_dir) = custom_dir
-        && custom_contract_names(custom_dir)?
-            .iter()
-            .any(|custom| custom == name)
+        && custom_names.iter().any(|custom| custom == name)
     {
         custom_contract_known(custom_dir, name)?;
         return Ok(format!("valid project custom loop recipe: {name}\n"));
@@ -723,6 +765,7 @@ pub fn contract(name: &str) -> Result<RecipeContract> {
             )
         })?;
     let contract = parse_contract_body(name, body)?;
+    validate_edge_targets(&contract, &allowed_edge_targets(&[]))?;
     ensure!(
         contract.id == name,
         "recipe contract {name} id mismatch: {}",
@@ -732,9 +775,10 @@ pub fn contract(name: &str) -> Result<RecipeContract> {
 }
 
 pub fn custom_contracts(custom_dir: &Path) -> Result<Vec<RecipeContract>> {
-    custom_contract_names(custom_dir)?
-        .into_iter()
-        .map(|name| custom_contract_known(custom_dir, &name))
+    let names = custom_contract_names(custom_dir)?;
+    names
+        .iter()
+        .map(|name| custom_contract_known_with_names(custom_dir, name, &names))
         .collect()
 }
 
@@ -776,6 +820,10 @@ pub fn custom_contract_names(custom_dir: &Path) -> Result<Vec<String>> {
         let Some(name) = path.file_stem().and_then(|name| name.to_str()) else {
             continue;
         };
+        ensure!(
+            !CANONICAL_RECIPE_IDS.contains(&name) && !LEGACY_RECIPE_IDS.contains(&name),
+            "custom loop recipe {name}.yml collides with a shipped or legacy recipe id"
+        );
         names.push(name.to_string());
     }
     names.sort();
@@ -784,15 +832,29 @@ pub fn custom_contract_names(custom_dir: &Path) -> Result<Vec<String>> {
 
 pub fn custom_contract(custom_dir: &Path, name: &str) -> Result<RecipeContract> {
     let path = custom_contract_path(custom_dir, name)?;
-    read_custom_contract(&path, name)
+    let names = custom_contract_names(custom_dir)?;
+    read_custom_contract(&path, name, &names)
 }
 
 fn custom_contract_known(custom_dir: &Path, name: &str) -> Result<RecipeContract> {
-    let path = custom_contract_file_path(custom_dir, name)?;
-    read_custom_contract(&path, name)
+    let names = custom_contract_names(custom_dir)?;
+    custom_contract_known_with_names(custom_dir, name, &names)
 }
 
-fn read_custom_contract(path: &Path, name: &str) -> Result<RecipeContract> {
+fn custom_contract_known_with_names(
+    custom_dir: &Path,
+    name: &str,
+    custom_names: &[String],
+) -> Result<RecipeContract> {
+    let path = custom_contract_file_path(custom_dir, name)?;
+    read_custom_contract(&path, name, custom_names)
+}
+
+fn read_custom_contract(
+    path: &Path,
+    name: &str,
+    custom_names: &[String],
+) -> Result<RecipeContract> {
     let metadata = fs::symlink_metadata(path)
         .with_context(|| format!("failed to inspect custom loop recipe {}", path.display()))?;
     ensure!(
@@ -808,6 +870,8 @@ fn read_custom_contract(path: &Path, name: &str) -> Result<RecipeContract> {
     let body = fs::read_to_string(path)
         .with_context(|| format!("failed to read custom loop recipe {}", path.display()))?;
     let contract = parse_contract_body(name, &body)
+        .with_context(|| format!("invalid custom loop recipe {name}.yml"))?;
+    validate_edge_targets(&contract, &allowed_edge_targets(custom_names))
         .with_context(|| format!("invalid custom loop recipe {name}.yml"))?;
     ensure!(
         contract.id == name,
@@ -1180,6 +1244,34 @@ fn validate_edges(recipe_id: &str, field: &str, edges: &[RecipeEdge]) -> Result<
     Ok(())
 }
 
+fn allowed_edge_targets(custom_names: &[String]) -> BTreeSet<String> {
+    let mut names = CANONICAL_RECIPE_IDS
+        .iter()
+        .map(|name| (*name).to_string())
+        .collect::<BTreeSet<_>>();
+    names.extend(custom_names.iter().cloned());
+    names
+}
+
+fn validate_edge_targets(contract: &RecipeContract, allowed: &BTreeSet<String>) -> Result<()> {
+    for (field, edges) in [
+        ("transitions", contract.transitions.as_slice()),
+        ("invocations", contract.invocations.as_slice()),
+    ] {
+        for (index, edge) in edges.iter().enumerate() {
+            ensure!(
+                allowed.contains(&edge.to),
+                "recipe {}.{}[{}].to references unknown recipe {}",
+                contract.id,
+                field,
+                index,
+                edge.to
+            );
+        }
+    }
+    Ok(())
+}
+
 fn require_non_empty(field: &str, value: &str) -> Result<()> {
     ensure!(!value.trim().is_empty(), "{field} must not be empty");
     Ok(())
@@ -1452,6 +1544,79 @@ mod tests {
     }
 
     #[test]
+    fn route_next_fails_closed_for_blocked_current_task() {
+        let mut task = task_input("task-blocked", "in_progress", Some("feature-router"));
+        task.blocked = true;
+        let report = route_next(LoopRouterInput {
+            repo: "/repo".to_string(),
+            initialized: true,
+            current_task: Some(task.clone()),
+            tasks: vec![task],
+            ..LoopRouterInput::default()
+        })
+        .expect("router should fail closed for blocked current task");
+
+        assert_eq!(report.status, "uncertain");
+        assert_eq!(report.recommended_recipe.as_deref(), None);
+        assert!(
+            report
+                .reason
+                .contains("current task task-blocked is blocked"),
+            "{report:?}"
+        );
+        assert!(
+            report
+                .inspect
+                .contains(&"maestro task show task-blocked".to_string()),
+            "{report:?}"
+        );
+    }
+
+    #[test]
+    fn route_next_recommends_feature_fanout_before_single_ready_work() {
+        let first = task_input("task-one", "ready", Some("feature-router"));
+        let second = task_input("task-two", "ready", Some("feature-router"));
+        let report = route_next(LoopRouterInput {
+            repo: "/repo".to_string(),
+            initialized: true,
+            tasks: vec![first, second],
+            ..LoopRouterInput::default()
+        })
+        .expect("router should recommend fanout");
+
+        assert_eq!(report.recommended_recipe.as_deref(), Some("feature-fanout"));
+        assert!(
+            report
+                .candidates
+                .iter()
+                .any(|candidate| candidate.recipe == "work"),
+            "{report:?}"
+        );
+    }
+
+    #[test]
+    fn route_next_prioritizes_ready_work_over_unrelated_design_backlog() {
+        let task = task_input("task-ready", "ready", Some("feature-work"));
+        let report = route_next(LoopRouterInput {
+            repo: "/repo".to_string(),
+            initialized: true,
+            tasks: vec![task],
+            features: vec![feature_input("feature-design", "proposed", 0, 0, 0)],
+            ..LoopRouterInput::default()
+        })
+        .expect("router should prefer immediate work");
+
+        assert_eq!(report.recommended_recipe.as_deref(), Some("work"));
+        assert!(
+            !report
+                .candidates
+                .iter()
+                .any(|candidate| candidate.recipe == "design"),
+            "{report:?}"
+        );
+    }
+
+    #[test]
     fn route_next_uses_recipe_priority_before_task_state() {
         let task = task_input("task-router", "in_progress", Some("feature-router"));
         let report = route_next(LoopRouterInput {
@@ -1519,6 +1684,17 @@ mod tests {
         assert!(!error.contains("feature-fan-out"), "{error}");
     }
 
+    #[test]
+    fn rejects_edge_targets_that_do_not_name_known_recipes() {
+        let mut contract = contract("work").expect("work contract should validate");
+        contract.transitions[0].to = "typo-recipe".to_string();
+        let error = validate_edge_targets(&contract, &allowed_edge_targets(&[]))
+            .unwrap_err()
+            .to_string();
+
+        assert!(error.contains("unknown recipe typo-recipe"), "{error}");
+    }
+
     fn task_input(id: &str, state: &str, feature_id: Option<&str>) -> LoopTaskInput {
         LoopTaskInput {
             id: id.to_string(),
@@ -1526,6 +1702,23 @@ mod tests {
             state: state.to_string(),
             feature_id: feature_id.map(str::to_string),
             blocked: false,
+        }
+    }
+
+    fn feature_input(
+        id: &str,
+        status: &str,
+        total_tasks: usize,
+        verified_tasks: usize,
+        open_questions: usize,
+    ) -> LoopFeatureInput {
+        LoopFeatureInput {
+            id: id.to_string(),
+            title: format!("{id} title"),
+            status: status.to_string(),
+            total_tasks,
+            verified_tasks,
+            open_questions,
         }
     }
 }

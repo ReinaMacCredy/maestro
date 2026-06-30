@@ -8,7 +8,7 @@ use serde_json::json;
 use crate::domain::{card, feature, loop_recipes, run, task};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::time::{timestamp_nanos, utc_now_timestamp};
-use crate::interfaces::cli::{LoopArgs, LoopCommand, LoopNextArgs, WorkLeaseArgs};
+use crate::interfaces::cli::{GitReadout, LoopArgs, LoopCommand, LoopNextArgs, WorkLeaseArgs};
 use crate::interfaces::hooks::record;
 use crate::operations::harness;
 use crate::operations::memory::{
@@ -113,31 +113,10 @@ pub(crate) fn build_loop_next_report_for_paths(
             Vec::new()
         }
     };
-    let tasks = task_entries
-        .iter()
-        .map(|entry| loop_recipes::LoopTaskInput {
-            id: entry.task.id.clone(),
-            title: entry.task.title.clone(),
-            state: entry.task.state.as_str().to_string(),
-            feature_id: entry.task.feature_id.clone(),
-            blocked: task::has_unresolved_blockers(&entry.task),
-        })
-        .collect::<Vec<_>>();
-    let current_task = current_loop_task(&task_entries);
-
     let mut features = Vec::new();
     for entry in feature::list_tolerant_with_entries(paths, &task_entries) {
         match entry {
-            feature::FeatureRosterEntry::Loaded(view) => {
-                features.push(loop_recipes::LoopFeatureInput {
-                    id: view.id.clone(),
-                    title: view.title.clone(),
-                    status: view.status.as_str().to_string(),
-                    total_tasks: view.counts.total,
-                    verified_tasks: view.counts.verified,
-                    open_questions: view.open_questions.len(),
-                });
-            }
+            feature::FeatureRosterEntry::Loaded(view) => features.push(*view),
             feature::FeatureRosterEntry::Unreadable {
                 id, path, error, ..
             } => {
@@ -149,9 +128,46 @@ pub(crate) fn build_loop_next_report_for_paths(
         }
     }
 
+    let git = super::git_readout(paths);
+    build_loop_next_report_from_snapshot(paths, &task_entries, &features, git.as_ref(), warnings)
+}
+
+pub(crate) fn build_loop_next_report_from_snapshot(
+    paths: &MaestroPaths,
+    task_entries: &[task::TaskEntry],
+    features: &[feature::FeatureView],
+    git: Option<&GitReadout>,
+    mut warnings: Vec<String>,
+) -> Result<loop_recipes::LoopNextReport> {
+    let tasks = task_entries
+        .iter()
+        .map(|entry| loop_recipes::LoopTaskInput {
+            id: entry.task.id.clone(),
+            title: entry.task.title.clone(),
+            state: entry.task.state.as_str().to_string(),
+            feature_id: entry.task.feature_id.clone(),
+            blocked: task::has_unresolved_blockers(&entry.task),
+        })
+        .collect::<Vec<_>>();
+    let current_task = current_loop_task(task_entries);
+    let features = features
+        .iter()
+        .map(|view| loop_recipes::LoopFeatureInput {
+            id: view.id.clone(),
+            title: view.title.clone(),
+            status: view.status.as_str().to_string(),
+            total_tasks: view.counts.total,
+            verified_tasks: view.counts.verified,
+            open_questions: view.open_questions.len(),
+        })
+        .collect::<Vec<_>>();
     let now = utc_now_timestamp();
-    let active_sessions = match run::active_sessions(paths, &now) {
-        Ok(sessions) => sessions.len(),
+    let roots = super::worktree_roots(paths);
+    let active_sessions = match run::active_sessions_union(&roots, &now) {
+        Ok(sessions) => sessions
+            .iter()
+            .filter(|session| session.presence != run::Presence::Stale)
+            .count(),
         Err(error) => {
             warnings.push(format!("active session scan failed: {error:#}"));
             0
@@ -165,8 +181,8 @@ pub(crate) fn build_loop_next_report_for_paths(
         tasks,
         features,
         active_sessions,
-        git: super::git_readout(paths).map(|git| loop_recipes::LoopGitInput {
-            branch: git.branch,
+        git: git.map(|git| loop_recipes::LoopGitInput {
+            branch: git.branch.clone(),
             code_other_dirty: git.code_other_dirty,
             maestro_dirty: git.maestro_dirty,
             ahead: git

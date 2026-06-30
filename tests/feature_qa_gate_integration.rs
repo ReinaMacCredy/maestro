@@ -209,6 +209,61 @@ fn qa_baseline_helper_writes_acceptance_baseline() {
 }
 
 #[test]
+fn qa_baseline_helper_records_current_amend_position_after_refresh() {
+    let temp = TestTempDir::new("maestro-qa-baseline-amend-position");
+    let repo = temp.path();
+    init_and_author(repo, "report-builder", "Report builder");
+    write_baseline(repo, "report-builder", 0, &["bl-001"]);
+    finalize(repo, "report-builder");
+    stdout(
+        maestro(&["feature", "accept", "report-builder"], repo),
+        &["feature", "accept"],
+    );
+    stdout(
+        maestro(&["feature", "start", "report-builder"], repo),
+        &["feature", "start"],
+    );
+    let amend = [
+        "feature",
+        "amend",
+        "report-builder",
+        "--add-area",
+        "exports",
+        "--reason",
+        "scope grew",
+    ];
+    stdout(maestro(&amend, repo), &amend);
+
+    let baseline = [
+        "qa",
+        "baseline",
+        "report-builder",
+        "--observed",
+        "refreshed baseline after scope grew",
+    ];
+    stdout(maestro(&baseline, repo), &baseline);
+
+    let qa = fs::read_to_string(feature_dir(repo, "report-builder").join("qa.md"))
+        .expect("invariant: qa.md should be readable");
+    assert!(qa.starts_with("---\namend_log_position: 1\n---"), "{qa}");
+    assert_eq!(
+        raw_observed(&qa, "baseline"),
+        "refreshed baseline after scope grew"
+    );
+
+    let close = ["feature", "close", "report-builder"];
+    let stderr = assert_failure(maestro(&close, repo), &close);
+    assert!(
+        !stderr.contains("stale"),
+        "refreshed CLI baseline should clear freshness: {stderr}"
+    );
+    assert!(
+        stderr.contains("coverage incomplete") && stderr.contains("bl-001"),
+        "close should now block on coverage, not freshness: {stderr}"
+    );
+}
+
+#[test]
 fn qa_slice_helper_appends_counting_slice() {
     let temp = TestTempDir::new("maestro-qa-slice-helper");
     let repo = temp.path();
