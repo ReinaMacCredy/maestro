@@ -1,6 +1,6 @@
 ---
 name: maestro-card
-version: 1.37.7
+version: 1.37.8
 description: "Active Maestro card work after design approval: use for implement, fix, verify, QA, close, release, continue, or unattended prompts like use loop, keep looping, work while away/asleep."
 ---
 
@@ -34,15 +34,19 @@ conflict-handoff protocol in HARNESS.md: worktree-isolate, link + `maestro
 conflict` on a file you will share, merge back then `--clear`. The full dance
 (including a conflicted merge-back) is `maestro loop show conflict-handoff`.
 
-Recipe checkpoint: choose the shipped lifecycle recipe before acting. Use
-`maestro loop show work` for task/card implementation, `maestro loop show ship`
-before close/release/archive gates, `maestro loop show unattended` for away-mode
-autonomy, and `maestro loop show learning` when recording reusable lessons.
-Custom card/run recipes are allowed only when no shipped recipe fits, and must
-keep the same six phases, current Maestro verbs, hard stops, and continue
-output. Work Lease is only a choose-phase helper; it may select or reserve one
-safe unit, but it is not a scheduler, daemon, queue, worker launcher, executor,
-hidden store, or second lifecycle.
+Recipe checkpoint: Maestro's main workflow is the loop. Use `maestro status`
+for current state, `maestro loop next` as the read-only router when the next
+recipe is not obvious, and `maestro loop show <recipe>` for the selected
+lifecycle grammar. Use `maestro loop show work` for task/card implementation,
+`maestro loop show ship` before close/release/archive gates,
+`maestro loop show unattended` for away-mode autonomy, and
+`maestro loop show learning` when recording reusable lessons. Writes still use
+the existing Maestro verbs named by the recipe. Custom card/run recipes are
+allowed only when no shipped recipe fits, and must keep the same six phases,
+current Maestro verbs, hard stops, and continue output. Work Lease is only a
+choose-phase helper; it may select or reserve one safe unit, but it is not a
+scheduler, daemon, queue, worker launcher, executor, hidden store, or second
+lifecycle.
 
 ## Route
 

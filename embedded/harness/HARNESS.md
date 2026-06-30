@@ -1,5 +1,5 @@
 ---
-version: 1.29.3
+version: 1.29.4
 ---
 
 # Maestro Harness Protocol
@@ -24,8 +24,15 @@ Task ids.
 
 ## Route
 
-Before acting, choose the closest shipped lifecycle recipe and stay inside its
-grammar:
+Maestro's main workflow is the loop. Use `maestro status` for current state and
+its compact loop hint, then use `maestro loop next` when routing is not obvious.
+`loop next` is read-only: it recommends a recipe or uncertainty from local
+artifacts and never writes cards, tasks, features, decisions, proof, QA, git,
+releases, archives, or files. After choosing, read the recipe with
+`maestro loop show <recipe>` and perform writes only through the existing
+Maestro verbs named by the recipe.
+
+Choose the closest shipped lifecycle recipe and stay inside its grammar:
 
 - design / brainstorm: `maestro loop show design`
 - executable work: `maestro loop show work`

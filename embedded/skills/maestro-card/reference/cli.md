@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: 226172b6825eff21496822b8de23c1799d9dbaec5c69c0f87d1a3cf39498433a -->
+<!-- maestro:cli-reference-sha256: 3fe7b91dfec559675e8a5407117075df41efa1bb5d1f76bc30985e25b08813fd -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -140,3 +140,10 @@ a spelling not found here is outside this skill's CLI surface.
 
 - `maestro watch [ID] [--interval <INTERVAL>]` -- Live dependency-tree board (bare) or a one-shot snapshot; optional feature-id focuses one feature
 - `maestro watch snapshot [ID]` -- Render the live board once and exit
+
+## maestro loop
+
+- `maestro loop list` -- List shipped and project custom recipes
+- `maestro loop next [--json]` -- Recommend the next loop recipe without mutating state
+- `maestro loop show <NAME>` -- Print one shipped or project custom recipe
+- `maestro loop work-lease [--json] [--project <PROJECT>] [--feature <FEATURE>] [--authority-ref <REF>] [--authority-summary <SUMMARY>] [--authority-scope <SCOPE>] [--authority-target <TARGET>] [--allow-external-action <ACTION>]... [--required-evidence <EVIDENCE>]... [--authority-expires-at <TIMESTAMP>] [--authority-hard-stop <STOP>]...` -- Run the internal Work Lease choose-phase helper and print JSON

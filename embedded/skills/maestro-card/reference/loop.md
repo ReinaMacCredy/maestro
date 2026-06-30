@@ -38,13 +38,15 @@ ever; if the prompt states one ("until 07:00", "max 5 cards"), honor it,
 never ask for one.
 
 Start from the store, never from memory (the session can die; the store is the
-only durable state): `maestro status`, then `maestro loop work-lease --json`.
-Work Lease is the unattended recipe's choose-phase helper: it selects one ready
-card in the requested scope, claims it through the normal card claim policy,
-emits the existing work-touch run evidence, and prints the bounded worker
-contract. It never launches a worker, sleeps, polls, owns a queue, schedules the
-next tick, or becomes a second lifecycle. Long-lived agents may call it before
-each unit; an external scheduler may call it once per cron/launchd/cloud firing.
+only durable state): `maestro status` for state, `maestro loop next` for
+read-only routing when the next lifecycle is not obvious, then
+`maestro loop work-lease --json` when the unattended recipe needs its
+choose-phase helper. Work Lease selects one ready card in the requested scope,
+claims it through the normal card claim policy, emits the existing work-touch
+run evidence, and prints the bounded worker contract. It never launches a
+worker, sleeps, polls, owns a queue, schedules the next tick, or becomes a
+second lifecycle. Long-lived agents may call it before each unit; an external
+scheduler may call it once per cron/launchd/cloud firing.
 
 If the kickoff is a broad goal instead of a named card or accepted feature,
 infer a minimal GoalBrief before work starts:

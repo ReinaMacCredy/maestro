@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: 9dc39b56f50e562fa673b72065d14f4c1089beb8ebd713d720cd18554fbe5a26 -->
+<!-- maestro:cli-reference-sha256: 0fe7dfd97670bfa5938b6ecda07753b328d88f6bd06020952a3653b81f4cf79e -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -48,6 +48,12 @@ a spelling not found here is outside this skill's CLI surface.
 - `maestro query matrix` -- Show the feature x task matrix (FEATURE/TASK/STATE/PROOF/TITLE)
 - `maestro query friction` -- Summarize recorded run friction (events, prompts, corrections)
 - `maestro query backlog` -- List improvement backlog items (ID/TITLE)
+
+## maestro loop
+
+- `maestro loop list` -- List shipped and project custom recipes
+- `maestro loop next [--json]` -- Recommend the next loop recipe without mutating state
+- `maestro loop show <NAME>` -- Print one shipped or project custom recipe
 
 ## maestro lean
 

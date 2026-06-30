@@ -123,6 +123,10 @@ impl CommandScope {
 const MAESTRO_CARD_COMMANDS: &[&str] = &[
     "maestro status",
     "maestro active",
+    "maestro loop list",
+    "maestro loop show",
+    "maestro loop next",
+    "maestro loop work-lease",
     "maestro task add",
     "maestro task create",
     "maestro task set",
@@ -214,6 +218,9 @@ const MAESTRO_CARD_COMMANDS: &[&str] = &[
 const MAESTRO_DESIGN_COMMANDS: &[&str] = &[
     "maestro status",
     "maestro active",
+    "maestro loop list",
+    "maestro loop show",
+    "maestro loop next",
     "maestro feature new",
     "maestro feature set",
     "maestro feature finalize",
@@ -239,6 +246,9 @@ const MAESTRO_DESIGN_COMMANDS: &[&str] = &[
 const MAESTRO_AUDIT_COMMANDS: &[&str] = &[
     "maestro status",
     "maestro active",
+    "maestro loop list",
+    "maestro loop show",
+    "maestro loop next",
     "maestro task show",
     "maestro task list",
     "maestro feature show",
@@ -267,6 +277,9 @@ const MAESTRO_SETUP_COMMANDS: &[&str] = &[
     "maestro shell-init",
     "maestro status",
     "maestro active",
+    "maestro loop list",
+    "maestro loop show",
+    "maestro loop next",
 ];
 
 /// Check the header's sha256 stamp against the body it covers, so a hand edit

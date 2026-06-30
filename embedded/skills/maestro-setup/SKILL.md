@@ -1,6 +1,6 @@
 ---
 name: maestro-setup
-version: 1.11.1
+version: 1.11.2
 description: "Setup Maestro in a project: use for init/install/sync/doctor, global skills, hooks, harness setup, or agent integration diagnosis/repair."
 ---
 
@@ -11,6 +11,11 @@ Tune a Maestro-enabled repository harness from current repository evidence.
 Activate with a known session id:
 `maestro hook record --event skill_activation --skill maestro-setup --session <session_id>`
 
+Recipe checkpoint: Maestro's main workflow is the loop. Use `maestro status`
+for current state and `maestro loop next` as the read-only router when the next
+lifecycle is not obvious. Setup writes still use the existing Maestro verbs
+named by this skill (`init`, `install`, `sync`, `doctor`, `upgrade`,
+`uninstall`, and `shell-init`), not hidden setup state.
 
 ## Use
 

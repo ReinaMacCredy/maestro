@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: f5be78f383ea2d8712aaa8a3583c50f85fd940139389be857fdaa954ded6fb7b -->
+<!-- maestro:cli-reference-sha256: 4a438554218652f30be745871c1a931431f9bba34f9447a25f67d023f058636b -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -53,3 +53,9 @@ a spelling not found here is outside this skill's CLI surface.
 - `maestro msg send <TO> <TEXT> [--from <CARD>]` -- Send a message to a linked card (sender is your current card)
 - `maestro msg read [CARD]` -- Read unread messages; with no card, aggregate every linked partner
 - `maestro msg list [CARD]` -- Channel overview, or one partner's full timeline
+
+## maestro loop
+
+- `maestro loop list` -- List shipped and project custom recipes
+- `maestro loop next [--json]` -- Recommend the next loop recipe without mutating state
+- `maestro loop show <NAME>` -- Print one shipped or project custom recipe

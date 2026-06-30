@@ -37,26 +37,26 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 19] = [
     (
         "skill",
         "maestro-card",
-        "1.37.7",
-        "3a93dab88c6802bb312e3a24b72a030ac55c52b458538c474617398b0d31acb5",
+        "1.37.8",
+        "30a2c6216de44b7536da9c66ddf465b0d9d09deeb2061311e6a254394551f5b1",
     ),
     (
         "skill",
         "maestro-setup",
-        "1.11.1",
-        "fd60301882ea2963f43e97150bb682d8e607f4089efd9731fea6ad2377b27708",
+        "1.11.2",
+        "28f04d2ce8f1d7138cf6fb67a842a829889e0e8b8e7614f7183baef0287e7b53",
     ),
     (
         "skill",
         "maestro-design",
-        "1.36.1",
-        "6200514db4bd73bdde999bfad37bf98e0d9b094475aeeb6f4d62924717b47dc0",
+        "1.36.2",
+        "3f1ec060b8abe1e336d7f7dc883fc4f8b6960ecb05907bc0c30a6180df8f01ec",
     ),
     (
         "skill",
         "maestro-audit",
-        "1.13.0",
-        "cdc97974f4246f2c7a68226c82eefe774ff626d72106869e1dff75d374bc945d",
+        "1.13.1",
+        "5c9dfe0049622eff0c4004e250182d8b9176b6af6dbe40546ccf9cbb5dc31ee4",
     ),
     (
         "hook",
@@ -67,8 +67,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 19] = [
     (
         "harness",
         "HARNESS.md",
-        "1.29.3",
-        "fd7021a9db8bd8878fb6e1a9e8c3c9cced7d404fa55c7f4994ca87a9ad6604da",
+        "1.29.4",
+        "e7f8ec040e3bbe4640892456581cc50ac486f41e036af0eb26eb2ab9bcabcd22",
     ),
     (
         "playbook",
@@ -319,7 +319,15 @@ fn maestro_card_skill_keeps_explicit_unattended_loop_triggers() {
 
 #[test]
 fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
-    let harness = HARNESS_MD.replace("\n   ", " ");
+    let harness = HARNESS_MD.replace('\n', " ");
+    assert!(
+        harness.contains("Maestro's main workflow is the loop")
+            && harness.contains("maestro status")
+            && harness.contains("maestro loop next")
+            && harness.contains("read-only")
+            && harness.contains("existing Maestro verbs"),
+        "harness must teach the loop-first state/router/write split"
+    );
     assert!(
         harness.contains("maestro loop show design")
             && harness.contains("maestro loop show work")
@@ -330,12 +338,16 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
         "harness must route agents to shipped lifecycle recipe checkpoints"
     );
 
-    let design = shipped_skill_body("maestro-design");
+    let design = shipped_skill_body("maestro-design").replace('\n', " ");
     assert!(
         design.contains("Recipe checkpoint")
             && design.contains("maestro loop show design")
+            && design.contains("maestro status")
+            && design.contains("maestro loop next")
+            && design.contains("read-only")
+            && design.contains("existing Maestro verbs")
             && design.contains("perceive -> choose -> act"),
-        "maestro-design must adopt the design lifecycle recipe"
+        "maestro-design must adopt the loop-first design lifecycle recipe"
     );
     assert!(
         design.contains("domain model")
@@ -362,12 +374,16 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
         "maestro-design must retain PRD synthesis and deepening-candidate branches"
     );
 
-    let audit = shipped_skill_body("maestro-audit");
+    let audit = shipped_skill_body("maestro-audit").replace('\n', " ");
     assert!(
         audit.contains("Recipe checkpoint")
             && audit.contains("maestro loop show audit")
+            && audit.contains("maestro status")
+            && audit.contains("maestro loop next")
+            && audit.contains("read-only")
+            && audit.contains("existing Maestro verbs")
             && audit.contains("perceive -> choose -> act"),
-        "maestro-audit must adopt the audit lifecycle recipe"
+        "maestro-audit must adopt the loop-first audit lifecycle recipe"
     );
     assert!(
         audit.contains("architecture review")
@@ -380,19 +396,36 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
         "maestro-audit must retain the architecture review branch"
     );
 
-    let card = shipped_skill_body("maestro-card");
+    let card = shipped_skill_body("maestro-card").replace('\n', " ");
     for phrase in [
         "Recipe checkpoint",
         "maestro loop show work",
         "maestro loop show ship",
         "maestro loop show unattended",
         "maestro loop show learning",
+        "maestro status",
+        "maestro loop next",
+        "existing Maestro verbs",
         "choose-phase helper",
         "not a scheduler, daemon, queue, worker launcher, executor",
     ] {
         assert!(
             card.contains(phrase),
             "maestro-card must keep lifecycle recipe checkpoint phrase {phrase:?}"
+        );
+    }
+
+    let setup = shipped_skill_body("maestro-setup").replace('\n', " ");
+    for phrase in [
+        "Recipe checkpoint",
+        "maestro status",
+        "maestro loop next",
+        "read-only router",
+        "existing Maestro verbs",
+    ] {
+        assert!(
+            setup.contains(phrase),
+            "maestro-setup must keep loop-first routing phrase {phrase:?}"
         );
     }
 }

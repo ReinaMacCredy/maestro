@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: e1b3eddc8254bc0fd097ac5875deb9e707e81059c6308322d8528a56051dafa1 -->
+<!-- maestro:cli-reference-sha256: 11115eb909da70322d8f274e4f500d1ab17ab15f96b73c1fa0187f11389cf15f -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -43,3 +43,9 @@ a spelling not found here is outside this skill's CLI surface.
 ## maestro active
 
 - `maestro active [--all] [--connect]` -- Show what other live sessions are doing (cross-session awareness)
+
+## maestro loop
+
+- `maestro loop list` -- List shipped and project custom recipes
+- `maestro loop next [--json]` -- Recommend the next loop recipe without mutating state
+- `maestro loop show <NAME>` -- Print one shipped or project custom recipe

@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-version: 1.36.1
+version: 1.36.2
 description: "Design Maestro changes before implementation: use for brainstorm, plan, PRD synthesis, grill me, grilling, stress-test, domain model, deepening candidate, wording, workflow, skill, harness, card/task/feature, architecture, UX, or agent-process decisions."
 ---
 
@@ -81,12 +81,15 @@ If the user asks for more detail, examples, or clarification, answer by
 improving the current fork or thesis first. Only open a new fork after the
 clarified point is settled or explicitly becomes the next decision.
 
-Recipe checkpoint: design work uses the shipped `design` lifecycle recipe.
-Before deciding or changing the proposed contract, read or cite
+Recipe checkpoint: Maestro's main workflow is the loop. Use `maestro status`
+for current state and `maestro loop next` as the read-only router when the next
+recipe is not obvious. Design work normally uses the shipped `design` lifecycle
+recipe. Before deciding or changing the proposed contract, read or cite
 `maestro loop show design` and keep the work inside perceive -> choose -> act
--> observe -> learn -> continue. Custom recipes are allowed only for the current
-card/run, and only when no shipped recipe fits; they must use the same six
-phases, current Maestro verbs, hard stops, and continue output.
+-> observe -> learn -> continue. Writes still use the existing Maestro verbs
+named by the recipe. Custom recipes are allowed only for the current card/run,
+and only when no shipped recipe fits; they must use the same six phases, current
+Maestro verbs, hard stops, and continue output.
 
 First step in a session: run `maestro active` (pull-only) to see what other
 live sessions are working on -- their card, mode, and progress -- before you
