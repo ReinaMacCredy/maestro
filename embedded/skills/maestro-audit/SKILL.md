@@ -1,13 +1,15 @@
 ---
 name: maestro-audit
-version: 1.10.1
-description: "Audit Maestro projects read-only: use for code review, backlog proposals, harness-improvement findings, or repo-wide improvement audits without fixes."
+version: 1.11.0
+description: "Audit Maestro projects read-only: use for code review, architecture review, deepening opportunities, backlog proposals, harness-improvement findings, or repo-wide improvement audits without fixes."
 ---
 
 # Maestro Audit
 
 Use this for repo-wide improvement audits. The audit is agent work; Maestro only
 stores, merges, and surfaces proposals.
+Architecture reviews that write an HTML report use the OS temp directory only,
+not the repo.
 
 Activate with a known session id:
 `maestro hook record --event skill_activation --skill maestro-audit --session <session_id>`
@@ -23,7 +25,8 @@ output.
 ## Stop
 
 Do not implement, edit code, or change repo artifacts during this skill run.
-Produce proposals only.
+Produce proposals only. Temp HTML architecture reports are allowed when the
+architecture-review branch asks for them.
 
 ## Do
 
@@ -41,6 +44,8 @@ Produce proposals only.
    form, `off` skips the reach-ladder lens. `maestro lean audit` runs the
    focused, mode-adjusted reach-ladder pass; this skill still only proposes
    (no edits, no markers).
+   For architecture deepening opportunities, use
+   [reference/architecture-review.md](reference/architecture-review.md).
 3. Vet each finding before filing: try to refute it against the live repo
    (re-read the code, re-run the command). Drop findings that do not survive.
 4. Cross-check findings against Maestro state so you do not propose work already
@@ -66,6 +71,8 @@ improvement.
 ## Hand-off
 
 Pipeline: `[maestro-audit] -> maestro harness apply -> maestro-card`
+Architecture pipeline: `[maestro-audit: architecture report] -> maestro-design
+(deepening-candidate + grilling + domain-model) -> maestro-card`
 
 Next: proposals filed -> inspect with `maestro harness list`; accepted proposals
 spawn normal tasks through `maestro harness apply <id>`.

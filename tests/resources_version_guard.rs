@@ -49,14 +49,14 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 19] = [
     (
         "skill",
         "maestro-design",
-        "1.33.0",
-        "50101aced14bb4b97e919b012012d481e2b31d039d95daf9d81981e2a6fb7256",
+        "1.34.0",
+        "88488b8a66b6c26895c512d30633071dfca6089c05ad4eb82b533b57785d002b",
     ),
     (
         "skill",
         "maestro-audit",
-        "1.10.1",
-        "009f3e64f54ebced5322546f41b8777b8c37cb6f14fd146bf602e3a32de7749f",
+        "1.11.0",
+        "4e08fc3787b1483130ae5cc22a8bce82348f099d9c09b20d3d3dd3c6ad1b32c4",
     ),
     (
         "hook",
@@ -351,6 +351,15 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
             && design.contains("Grill With Docs"),
         "maestro-design must retain the grilling branch"
     );
+    assert!(
+        design.contains("PRD synthesis")
+            && design.contains("reference/prd.md")
+            && design.contains("ready-for-agent")
+            && design.contains("reference/deepening-candidate.md")
+            && design.contains("Module")
+            && design.contains("seam"),
+        "maestro-design must retain PRD synthesis and deepening-candidate branches"
+    );
 
     let audit = shipped_skill_body("maestro-audit");
     assert!(
@@ -358,6 +367,14 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
             && audit.contains("maestro loop show audit")
             && audit.contains("perceive -> choose -> act"),
         "maestro-audit must adopt the audit lifecycle recipe"
+    );
+    assert!(
+        audit.contains("architecture review")
+            && audit.contains("deepening opportunities")
+            && audit.contains("reference/architecture-review.md")
+            && audit.contains("architecture-review-<timestamp>.html")
+            && audit.contains("Top recommendation"),
+        "maestro-audit must retain the architecture review branch"
     );
 
     let card = shipped_skill_body("maestro-card");

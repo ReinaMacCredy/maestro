@@ -1,7 +1,7 @@
 ---
 name: maestro-design
-version: 1.33.0
-description: "Design Maestro changes before implementation: use for brainstorm, plan, grill me, grilling, stress-test, domain model, wording, workflow, skill, harness, card/task/feature, architecture, UX, or agent-process decisions."
+version: 1.34.0
+description: "Design Maestro changes before implementation: use for brainstorm, plan, PRD synthesis, grill me, grilling, stress-test, domain model, deepening candidate, wording, workflow, skill, harness, card/task/feature, architecture, UX, or agent-process decisions."
 ---
 
 # Maestro Design
@@ -44,9 +44,11 @@ tools yet. After the design hand-off, `maestro-card` prefers MCP for supported
 work-card and feature-lifecycle steps.
 
 Routing: external PRD with open forks -> decide forks in design, then intake per maestro-card.
+PRD synthesis from settled context -> use [reference/prd.md](reference/prd.md).
 Grill/stress-test session -> use [reference/grilling.md](reference/grilling.md).
 Domain-modeling session -> use [reference/domain-model.md](reference/domain-model.md).
 Grill-with-docs session -> use [reference/grilling.md](reference/grilling.md), plus [reference/domain-model.md](reference/domain-model.md) for CONTEXT.md/ADR updates.
+Chosen architecture deepening candidate -> use [reference/deepening-candidate.md](reference/deepening-candidate.md).
 
 ## Conversation Driver
 
@@ -117,6 +119,8 @@ maestro never auto-reads or auto-replies; you do.
    [reference/domain-model.md](reference/domain-model.md).
 3. Put the problem and open questions on the feature:
    `maestro feature set <id> --description "<problem>" --question "<loose question>"`.
+   When the request is to turn settled context into a PRD, use
+   [reference/prd.md](reference/prd.md) and do not open a new discovery interview.
 4. Decide one fork at a time. For each fork, give the concrete example, the
    options, the tradeoff, and the chosen answer. Sketch every option inline as
    ASCII before asking, so the preview is readable in the terminal.
@@ -176,6 +180,19 @@ loop. Ask one question at a time, provide your recommended answer, and answer
 explorable questions from code/docs/artifacts instead of asking. If the user asks
 for docs while grilling, combine this with the domain-model branch. Full branch:
 [reference/grilling.md](reference/grilling.md).
+
+## PRD Synthesis
+
+When the user asks to turn the current conversation into a PRD, synthesize only
+from existing conversation, codebase evidence, domain language, and decisions.
+Do not interview for new scope. Full branch: [reference/prd.md](reference/prd.md).
+
+## Architecture Deepening
+
+When the user picks a deepening opportunity from `maestro-audit`, design the
+chosen module, interface, seam, dependency strategy, and surviving tests in
+`maestro-design`. Full branch:
+[reference/deepening-candidate.md](reference/deepening-candidate.md).
 
 ## Probe Forks
 
