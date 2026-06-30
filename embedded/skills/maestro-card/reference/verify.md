@@ -37,7 +37,7 @@ asks for QA evidence.
 
 Use when a card failed verify twice, risk is high, or many cards support a
 feature close. Full orchestration HOW (refuter dispatch, majority, verdict
-collection): `maestro loop show adversarial-fan-out`.
+collection): `maestro loop show adversarial-review`.
 
 1. Rubric is the locked acceptance checks plus completion claims. Do not
    invent softer checks.

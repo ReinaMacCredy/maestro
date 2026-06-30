@@ -1,0 +1,101 @@
+schema_version: maestro.recipe.v2
+id: conflict-handoff
+kind:
+  category: orchestration
+  tags: ["concurrency", "worktree", "merge-back"]
+title: Conflict handoff
+summary: Coordinate overlapping sessions through visible Maestro notices and manual git worktree merge-back.
+authority_scope:
+  - current repo, linked cards, conflict notices, and bounded worktree branch
+  - manual git commands owned by the agent, never by Maestro
+autonomy:
+  - autonomous for local worktree isolation and merge-back after verification
+  - stops when peer intent is needed for overlapping lines
+router:
+  status: conflict_handoff
+  priority: 40
+  confidence: high
+transitions:
+  - trigger: isolated slice is verified and ready to land
+    to: work
+    authority_scope:
+      - verified branch and shared branch
+    allowed_verbs:
+      - git rebase <shared-branch>
+      - git merge --ff-only <branch>
+      - maestro conflict --clear <card>
+    forbidden_verbs:
+      - force push
+      - clearing a conflict before merge lands
+    hard_stops:
+      - "[stale] or [merge-busy] remains unresolved"
+      - git conflict requires peer intent
+    return_condition: slice is merged and notices are clear
+invocations: []
+outputs:
+  - isolated worktree path
+  - visible conflict notice
+  - verified merge-back
+  - cleared notice or hard stop
+applies_when:
+  - another session is live and implementation may touch the same repo or files
+  - a worktree branch must be merged back safely
+hard_stops:
+  - peer conflict is visible for a file you need
+  - "[merge-busy] says another session is landing"
+  - git conflict needs peer intent
+phases:
+  perceive:
+    goal: Read active sessions, conflict banners, and branch divergence before editing.
+    bricks: ["active", "git", "conflict notice"]
+    reads: ["maestro active", "maestro status", "git status --short --branch"]
+    allowed_verbs: ["maestro active", "maestro status", "git status --short --branch"]
+    forbidden_verbs: ["git merge before verification"]
+    checks: ["overlap and merge state are known"]
+    durable_learning: []
+    outputs: ["overlap state", "hard stop"]
+  choose:
+    goal: Select isolation, wait, or merge-back based on the visible state.
+    bricks: ["worktree", "link", "conflict"]
+    reads: ["active table", "branch divergence"]
+    allowed_verbs: ["maestro link add <your-card> <their-card>", "maestro conflict <card> <file>"]
+    forbidden_verbs: ["unannounced overlapping edit"]
+    checks: ["the contested files are named when overlap exists"]
+    durable_learning: []
+    outputs: ["isolation decision", "wait decision", "merge-back decision"]
+  act:
+    goal: Isolate or merge using normal git commands and Maestro notices.
+    bricks: ["git worktree", "git rebase", "git merge", "conflict clear"]
+    reads: ["verified branch", "shared branch"]
+    allowed_verbs: ["git worktree add .maestro/worktree/<slug> -b <branch>", "git rebase <shared-branch>", "git merge --ff-only <branch>", "maestro conflict --clear <card>"]
+    forbidden_verbs: ["maestro merge", "force push"]
+    checks: ["Maestro never does git merge; the agent runs git explicitly"]
+    durable_learning: []
+    outputs: ["worktree", "merged branch", "hard stop"]
+  observe:
+    goal: Verify the merge and notices after the operation.
+    bricks: ["tests", "status", "conflict"]
+    reads: ["maestro status", "git status --short --branch", "test output"]
+    allowed_verbs: ["cargo test <target>", "maestro status", "git diff"]
+    forbidden_verbs: ["clear notice over failed verification"]
+    checks: ["[stale] and [merge-busy] are handled", "git merge --ff-only <branch> landed when used"]
+    durable_learning: []
+    outputs: ["verified merge", "remaining conflict"]
+  learn:
+    goal: Record any coordination lesson only when it prevents repeated conflict.
+    bricks: ["note", "event"]
+    reads: ["conflict cause", "resolution evidence"]
+    allowed_verbs: ["maestro card note <id> <text>", "maestro event intervention --note <text>"]
+    forbidden_verbs: ["chat-only coordination memory"]
+    checks: ["lesson has a concrete conflict source"]
+    durable_learning: ["card note", "intervention event"]
+    outputs: ["recorded lesson", "no learning needed"]
+  continue:
+    goal: Return to work once the slice is merged or stop with the active conflict.
+    bricks: ["work", "status"]
+    reads: ["maestro status", "maestro task next"]
+    allowed_verbs: ["maestro loop show work", "maestro status"]
+    forbidden_verbs: ["external ship action"]
+    checks: ["next action is clear"]
+    durable_learning: []
+    outputs: ["return to work", "hard stop"]

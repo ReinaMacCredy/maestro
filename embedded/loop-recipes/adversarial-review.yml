@@ -1,0 +1,98 @@
+schema_version: maestro.recipe.v2
+id: adversarial-review
+kind:
+  category: orchestration
+  tags: ["verification", "skeptic", "claims"]
+title: Adversarial review
+summary: Refute high-stakes claims with independent skeptics before verification lands.
+authority_scope:
+  - locked checks, task claims, proof, and bounded source evidence
+  - block or verify only through current Maestro proof verbs
+autonomy:
+  - autonomous for read-only refutation and verdict collection
+  - stops on reproducible refutation until the task is fixed or blocked
+router:
+  status: adversarial_review
+  priority: 16
+  confidence: high
+transitions:
+  - trigger: a reproducible refutation identifies fix work
+    to: work
+    authority_scope:
+      - refuted task or claim
+    allowed_verbs:
+      - maestro task block <id> --reason <reason>
+      - maestro loop show work
+    forbidden_verbs:
+      - verify over a reproducible refutation
+    hard_stops:
+      - verifier cannot tie verdict to evidence
+    return_condition: claim is fixed, blocked, or upheld
+invocations: []
+outputs:
+  - upheld claim
+  - refuted claim
+  - blocked task
+  - verification gate
+applies_when:
+  - a claim is contested or high-stakes and must not land wrong
+  - proof needs independent refutation rather than self-verification
+hard_stops:
+  - rubric is softer than the locked checks
+  - verifier receives new context mid-run
+  - reproducible refutation is present
+phases:
+  perceive:
+    goal: Read the claim, locked check, proof, and bounded source or command evidence.
+    bricks: ["claim", "check", "proof", "source"]
+    reads: ["maestro task show <id>", "maestro task proof <id>", "srcwalk show <path>:<line>"]
+    allowed_verbs: ["maestro task show <id>", "srcwalk show <path>:<line>", "cargo test <target>"]
+    forbidden_verbs: ["change implementation during refutation"]
+    checks: ["rubric is exactly the locked checks and claims"]
+    durable_learning: []
+    outputs: ["claim packet", "hard stop"]
+  choose:
+    goal: Assign one fresh refuter per claim or check.
+    bricks: ["refuter", "claim packet"]
+    reads: ["claim packet", "test target"]
+    allowed_verbs: ["maestro loop show adversarial-review"]
+    forbidden_verbs: ["shared context between independent refuters"]
+    checks: ["each refuter has one bounded claim"]
+    durable_learning: []
+    outputs: ["refuter prompt", "hard stop"]
+  act:
+    goal: Run the refutation and return one verdict line.
+    bricks: ["test", "source read", "verdict"]
+    reads: ["test output", "source evidence"]
+    allowed_verbs: ["cargo test <target>", "srcwalk review", "rg <regex> <path>"]
+    forbidden_verbs: ["implementation edit"]
+    checks: ["verdict is upheld or refuted with evidence"]
+    durable_learning: []
+    outputs: ["upheld verdict", "refuted verdict"]
+  observe:
+    goal: Convert verdicts into verification or a block.
+    bricks: ["proof", "block", "verify"]
+    reads: ["verdict lines", "task proof"]
+    allowed_verbs: ["maestro task verify <id>", "maestro task block <id> --reason <reason>"]
+    forbidden_verbs: ["task verify over refuted claim"]
+    checks: ["all claims upheld before verify"]
+    durable_learning: []
+    outputs: ["verified task", "blocked task"]
+  learn:
+    goal: Record recurring refutation patterns only when broadly useful.
+    bricks: ["note", "event"]
+    reads: ["failed proof", "fix result"]
+    allowed_verbs: ["maestro card note <id> <text>", "maestro event intervention --note <text>"]
+    forbidden_verbs: ["private verifier note"]
+    checks: ["lesson has recurrence value"]
+    durable_learning: ["card note", "intervention event"]
+    outputs: ["recorded lesson", "no learning needed"]
+  continue:
+    goal: Return to work for a fix or continue verification after all claims uphold.
+    bricks: ["work", "verify"]
+    reads: ["task state", "proof state"]
+    allowed_verbs: ["maestro loop show work", "maestro task verify <id>"]
+    forbidden_verbs: ["external ship action"]
+    checks: ["next gate follows verdict"]
+    durable_learning: []
+    outputs: ["return to work", "verification complete", "hard stop"]

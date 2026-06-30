@@ -1,7 +1,57 @@
-schema_version: maestro.loop_recipe.v1
+schema_version: maestro.recipe.v2
 id: work
+kind:
+  category: lifecycle
+  tags: ["implementation", "task", "proof"]
 title: Work loop
 summary: Move one accepted task from claim through implementation, proof, verification, and the next lifecycle gate.
+authority_scope:
+  - accepted task or feature contract
+  - local code, tests, resources, and proof for the selected unit
+autonomy:
+  - autonomous inside accepted implementation authority
+  - may transition to design only to rescope unclear or oversized work without changing accepted authority
+router:
+  status: work
+  priority: 20
+  confidence: high
+transitions:
+  - trigger: implementation discovers accepted task scope is too unclear or too large
+    to: design
+    authority_scope:
+      - clarify or split within the accepted feature contract
+    allowed_verbs:
+      - maestro decision new
+      - maestro decision lock <id>
+      - maestro feature amend <id>
+      - maestro feature finalize <id>
+    forbidden_verbs:
+      - acceptance change without human decision
+      - external ship action
+    hard_stops:
+      - authority, non-goal, or user intent would change
+      - feature contract would broaden
+    return_condition: clarified contract or sliced work returns to work
+invocations:
+  - trigger: implementation result is risky or contested
+    to: audit
+    authority_scope:
+      - bounded changed surface
+    allowed_verbs:
+      - maestro loop show audit
+      - cargo test <target>
+      - srcwalk review
+    forbidden_verbs:
+      - broad unrelated rewrite
+      - external ship action
+    hard_stops:
+      - audit cannot tie findings to evidence
+    return_condition: findings are recorded or no issue remains
+outputs:
+  - code or resource diff
+  - verification evidence
+  - task proof
+  - next task, verified task, blocker, or feature gate
 applies_when:
   - an accepted task is ready or in progress
   - a feature has prepared child tasks that need implementation

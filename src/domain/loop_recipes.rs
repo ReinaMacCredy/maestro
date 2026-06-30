@@ -1,16 +1,11 @@
-//! The bundled loop-orchestration recipes, served on demand from the binary.
+//! The bundled loop recipes, served on demand from the binary.
 //!
-//! Each recipe is the HOW of running one fan-out or loop pattern: how to
-//! dispatch the agents, collect their results through the verbs, and stop. The
-//! WHEN -- the judgment to reach for a pattern -- lives in the skills; this
-//! catalog carries the mechanics. `maestro loop show <name>` prints one recipe
-//! verbatim; `maestro loop` (or `loop list`) prints the index with a one-line
-//! when-to-use per recipe. The human recipes live in `embedded/loop/`: `LOOP.md`
-//! is the index prose, each `<name>.md` is one recipe. Structured lifecycle
-//! recipe contracts live in `embedded/loop-recipes/` and declare how current
-//! Maestro bricks map into the six loop phases. Serving from the binary means
-//! the command needs no `.maestro` repo and the recipes never drift from what
-//! this binary ships.
+//! Each recipe is structured control grammar for current Maestro artifacts:
+//! when it applies, what authority it has, how it maps current bricks into the
+//! six loop phases, and where it may transition or invoke helpers. The
+//! authoritative shipped catalog lives in `embedded/loop-recipes/` as
+//! `maestro.recipe.v2` YAML. `maestro loop show <name>` renders readable docs
+//! from that structure, so human output cannot drift from the contract.
 //!
 //! The module is named `loop_recipes` rather than `loop` because `loop` is a
 //! reserved Rust keyword; the CLI subcommand is still `maestro loop`.
@@ -23,21 +18,36 @@ use anyhow::{Context, Result, bail, ensure};
 use include_dir::{Dir, include_dir};
 use serde::Deserialize;
 
-/// The bundled loop-recipe tree, embedded at build time.
-static LOOP_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/embedded/loop");
-
-/// The structured lifecycle recipe contract tree, embedded at build time.
+/// The structured recipe contract tree, embedded at build time.
 static LOOP_RECIPE_CONTRACTS_DIR: Dir<'_> =
     include_dir!("$CARGO_MANIFEST_DIR/embedded/loop-recipes");
 
-/// The index prose file; everything else is a recipe.
-const INDEX_NAME: &str = "LOOP.md";
-const CONTRACT_SCHEMA_VERSION: &str = "maestro.loop_recipe.v1";
+const CONTRACT_SCHEMA_VERSION: &str = "maestro.recipe.v2";
 const REQUIRED_PHASES: [&str; 6] = ["perceive", "choose", "act", "observe", "learn", "continue"];
+const CANONICAL_RECIPE_IDS: [&str; 12] = [
+    "adversarial-review",
+    "audit",
+    "conflict-handoff",
+    "design",
+    "feature-fanout",
+    "generate-filter",
+    "intake-triage",
+    "learning",
+    "loop-until-done",
+    "ship",
+    "unattended",
+    "work",
+];
+const LEGACY_RECIPE_IDS: [&str; 4] = [
+    "adversarial-fan-out",
+    "feature-fan-out",
+    "generate-and-filter",
+    "unattended-loop",
+];
 const CUSTOM_RECIPE_POLICY: [&str; 4] = [
     "Evaluate shipped applies_when rules first.",
     "Use a run-scoped or card-scoped custom recipe only when no shipped recipe fits.",
-    "Custom recipes must use the same schema, six phases, allowed or forbidden verbs, hard stops, and continue output.",
+    "Custom recipes must use maestro.recipe.v2, six phases, current Maestro verbs, hard stops, and continue output.",
     "Custom recipes cannot add non-Maestro write surfaces or skip proof, QA, authority, or human approval gates.",
 ];
 const FORBIDDEN_BYPASS_PHRASES: [&str; 10] = [
@@ -58,11 +68,45 @@ const FORBIDDEN_BYPASS_PHRASES: [&str; 10] = [
 pub struct RecipeContract {
     pub schema_version: String,
     pub id: String,
+    pub kind: RecipeKind,
     pub title: String,
     pub summary: String,
     pub applies_when: Vec<String>,
+    pub authority_scope: Vec<String>,
+    pub autonomy: Vec<String>,
     pub hard_stops: Vec<String>,
+    pub transitions: Vec<RecipeEdge>,
+    pub invocations: Vec<RecipeEdge>,
+    pub outputs: Vec<String>,
+    pub router: RouterMetadata,
     pub phases: BTreeMap<String, PhaseContract>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RecipeKind {
+    pub category: String,
+    pub tags: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RouterMetadata {
+    pub status: String,
+    pub priority: u16,
+    pub confidence: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RecipeEdge {
+    pub trigger: String,
+    pub to: String,
+    pub authority_scope: Vec<String>,
+    pub allowed_verbs: Vec<String>,
+    pub forbidden_verbs: Vec<String>,
+    pub hard_stops: Vec<String>,
+    pub return_condition: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -101,38 +145,28 @@ pub struct WorkLeaseHelperContract {
     pub reconcile_handles: Vec<String>,
 }
 
-/// Serve one recipe verbatim by its name (`feature-fan-out`, ...). An unknown
-/// name fails loud with the available list, never a dead end.
-pub fn serve(name: &str) -> Result<&'static str> {
-    let file_name = format!("{name}.md");
-    if file_name != INDEX_NAME
-        && let Some(body) = LOOP_DIR
-            .get_file(LOOP_DIR.path().join(&file_name))
-            .and_then(|file| file.contents_utf8())
-    {
-        return Ok(body);
-    }
-    bail!(
-        "unknown loop recipe \"{name}\"; run `maestro loop` for the index (available: {})",
-        recipes().join(", ")
-    );
+/// Render one shipped recipe by its canonical id. An unknown name fails loud
+/// with the available list, never a dead end.
+pub fn serve(name: &str) -> Result<String> {
+    show(name)
 }
 
-/// The index: the `LOOP.md` prose followed by the recipes with a one-line
-/// when-to-use each, enumerated from the embedded tree so the list never
+/// The index enumerates the embedded structured catalog so the list never
 /// drifts from what ships.
 pub fn index() -> String {
-    let mut out = shipped_index_prose().trim_end().to_string();
-    out.push_str("\n\n## Lifecycle Recipes\n\n");
+    let mut out = "# Loop Recipes\n\n".to_string();
+    out.push_str(
+        "Maestro is the loop: recipes are structured control grammar over current cards, tasks, features, decisions, proof, QA, run events, notes, memory, and skills. `maestro loop` is read-only; existing Maestro verbs perform writes.\n\n",
+    );
+    out.push_str("## Shipped Recipe Catalog\n\n");
     for contract in contracts().expect("invariant: shipped loop recipe contracts validate") {
-        out.push_str(&format!("    {}  --  {}\n", contract.id, contract.summary));
+        out.push_str(&format!(
+            "    {}  [{}]  --  {}\n",
+            contract.id, contract.kind.category, contract.summary
+        ));
     }
     out.push_str("\n\n## Custom Recipe Policy\n\n");
     push_bullets(&mut out, "", &CUSTOM_RECIPE_POLICY);
-    out.push_str("\n## Orchestration Recipes\n\n");
-    for name in recipes() {
-        out.push_str(&format!("    {name}  --  {}\n", when(name)));
-    }
     out
 }
 
@@ -150,14 +184,10 @@ pub fn index_with_custom_dir(custom_dir: Option<&Path>) -> Result<String> {
     Ok(out)
 }
 
-/// Render either a structured lifecycle recipe contract or a legacy
-/// orchestration recipe.
+/// Render one structured shipped recipe contract.
 pub fn show(name: &str) -> Result<String> {
     if contract_names().contains(&name) {
         return Ok(render_contract(&contract(name)?));
-    }
-    if recipes().contains(&name) {
-        return Ok(serve(name)?.to_string());
     }
     bail!(
         "unknown loop recipe \"{name}\"; run `maestro loop` for the index (available: {})",
@@ -166,7 +196,7 @@ pub fn show(name: &str) -> Result<String> {
 }
 
 pub fn show_with_custom_dir(name: &str, custom_dir: Option<&Path>) -> Result<String> {
-    if contract_names().contains(&name) || recipes().contains(&name) {
+    if contract_names().contains(&name) {
         return show(name);
     }
     if let Some(custom_dir) = custom_dir
@@ -201,24 +231,7 @@ pub fn validate_with_custom_dir(name: &str, custom_dir: Option<&Path>) -> Result
     );
 }
 
-/// Every recipe name the catalog serves, sorted; the index anchor excluded.
-pub fn recipes() -> Vec<&'static str> {
-    let mut names: Vec<&'static str> = LOOP_DIR
-        .files()
-        .filter_map(|file| {
-            let name = file
-                .path()
-                .strip_prefix(LOOP_DIR.path())
-                .ok()
-                .and_then(|path| path.to_str())?;
-            (name != INDEX_NAME).then(|| name.strip_suffix(".md").unwrap_or(name))
-        })
-        .collect();
-    names.sort_unstable();
-    names
-}
-
-/// Every structured lifecycle recipe contract name, sorted.
+/// Every shipped structured recipe contract name, sorted.
 pub fn contract_names() -> Vec<&'static str> {
     let mut names: Vec<&'static str> = LOOP_RECIPE_CONTRACTS_DIR
         .files()
@@ -376,11 +389,29 @@ pub fn validate_contract(contract: &RecipeContract) -> Result<()> {
         contract.id,
         contract.schema_version
     );
+    ensure!(
+        !LEGACY_RECIPE_IDS.contains(&contract.id.as_str()),
+        "recipe {} uses legacy id; use a canonical recipe id",
+        contract.id
+    );
     require_non_empty("id", &contract.id)?;
+    require_non_empty("kind.category", &contract.kind.category)?;
+    require_non_empty_list("kind.tags", &contract.kind.tags)?;
     require_non_empty("title", &contract.title)?;
     require_non_empty("summary", &contract.summary)?;
     require_non_empty_list("applies_when", &contract.applies_when)?;
+    require_non_empty_list("authority_scope", &contract.authority_scope)?;
+    require_non_empty_list("autonomy", &contract.autonomy)?;
     require_non_empty_list("hard_stops", &contract.hard_stops)?;
+    require_non_empty_list("outputs", &contract.outputs)?;
+    require_non_empty("router.status", &contract.router.status)?;
+    require_non_empty("router.confidence", &contract.router.confidence)?;
+    ensure!(
+        contract.router.priority > 0,
+        "router.priority must be non-zero"
+    );
+    validate_edges(&contract.id, "transitions", &contract.transitions)?;
+    validate_edges(&contract.id, "invocations", &contract.invocations)?;
     reject_forbidden_text(contract)?;
 
     let actual: BTreeSet<&str> = contract.phases.keys().map(String::as_str).collect();
@@ -405,13 +436,31 @@ pub fn validate_contract(contract: &RecipeContract) -> Result<()> {
 
 fn render_contract(contract: &RecipeContract) -> String {
     let mut out = format!(
-        "# {}\n\nschema_version: {}\nid: {}\n\n{}\n\n",
-        contract.title, contract.schema_version, contract.id, contract.summary
+        "# {}\n\nschema_version: {}\nid: {}\nkind: {}\ntags: {}\n\n{}\n\n",
+        contract.title,
+        contract.schema_version,
+        contract.id,
+        contract.kind.category,
+        contract.kind.tags.join(", "),
+        contract.summary
     );
+    out.push_str("## Router Metadata\n\n");
+    out.push_str(&format!(
+        "- status: {}\n- priority: {}\n- confidence: {}\n",
+        contract.router.status, contract.router.priority, contract.router.confidence
+    ));
+    out.push_str("\n## Authority Scope\n\n");
+    push_bullets(&mut out, "", &contract.authority_scope);
+    out.push_str("\n## Autonomy\n\n");
+    push_bullets(&mut out, "", &contract.autonomy);
     out.push_str("## Applies When\n\n");
     push_bullets(&mut out, "", &contract.applies_when);
     out.push_str("\n## Hard Stops\n\n");
     push_bullets(&mut out, "", &contract.hard_stops);
+    out.push_str("\n## Outputs\n\n");
+    push_bullets(&mut out, "", &contract.outputs);
+    render_edges(&mut out, "Transitions", &contract.transitions);
+    render_edges(&mut out, "Invocations", &contract.invocations);
     out.push_str("\n## Custom Recipe Policy\n\n");
     push_bullets(&mut out, "", &CUSTOM_RECIPE_POLICY);
     out.push_str(
@@ -426,6 +475,24 @@ fn render_contract(contract: &RecipeContract) -> String {
         render_phase(&mut out, name, phase);
     }
     out
+}
+
+fn render_edges(out: &mut String, title: &str, edges: &[RecipeEdge]) {
+    if edges.is_empty() {
+        return;
+    }
+    out.push_str(&format!("\n## {title}\n\n"));
+    for edge in edges {
+        out.push_str(&format!("- {} -> {}\n", edge.trigger, edge.to));
+        push_nested_named_list(out, "authority_scope", &edge.authority_scope);
+        push_nested_named_list(out, "allowed_verbs", &edge.allowed_verbs);
+        push_nested_named_list(out, "forbidden_verbs", &edge.forbidden_verbs);
+        push_nested_named_list(out, "hard_stops", &edge.hard_stops);
+        out.push_str(&format!(
+            "  - return_condition: {}\n",
+            edge.return_condition
+        ));
+    }
 }
 
 fn render_phase(out: &mut String, name: &str, phase: &PhaseContract) {
@@ -489,25 +556,6 @@ fn push_bullets<S: AsRef<str>>(out: &mut String, indent: &str, values: &[S]) {
     }
 }
 
-/// The one-line when-to-use for a recipe: the text after `WHEN:` on its first
-/// matching line, for the index listing.
-fn when(name: &str) -> &'static str {
-    LOOP_DIR
-        .get_file(LOOP_DIR.path().join(format!("{name}.md")))
-        .and_then(|file| file.contents_utf8())
-        .and_then(|body| body.lines().find_map(|line| line.strip_prefix("WHEN:")))
-        .map(str::trim)
-        .unwrap_or_default()
-}
-
-/// The shipped contents of the `LOOP.md` index prose.
-fn shipped_index_prose() -> &'static str {
-    LOOP_DIR
-        .get_file(LOOP_DIR.path().join(INDEX_NAME))
-        .and_then(|file| file.contents_utf8())
-        .expect("invariant: LOOP.md is embedded and UTF-8")
-}
-
 fn parse_contract_body(name: &str, body: &str) -> Result<RecipeContract> {
     let contract: RecipeContract = serde_yaml::from_str(body)
         .with_context(|| format!("failed to parse loop recipe contract {name}.yml"))?;
@@ -521,10 +569,22 @@ fn ensure_contract_set(contracts: &[RecipeContract]) -> Result<()> {
         .iter()
         .map(|contract| contract.id.as_str())
         .collect();
-    for expected in ["audit", "design", "learning", "ship", "unattended", "work"] {
+    for expected in CANONICAL_RECIPE_IDS {
         ensure!(
             names.contains(expected),
             "loop recipe contracts are missing {expected}.yml"
+        );
+    }
+    ensure!(
+        names.len() == CANONICAL_RECIPE_IDS.len(),
+        "loop recipe contract set drifted: expected {:?}, found {:?}",
+        CANONICAL_RECIPE_IDS,
+        names
+    );
+    for legacy in LEGACY_RECIPE_IDS {
+        ensure!(
+            !names.contains(legacy),
+            "legacy recipe id {legacy} must not be shipped as an alias"
         );
     }
     ensure!(
@@ -536,17 +596,12 @@ fn ensure_contract_set(contracts: &[RecipeContract]) -> Result<()> {
 
 fn available_names() -> Vec<&'static str> {
     let mut names = contract_names();
-    names.extend(recipes());
     names.sort_unstable();
     names
 }
 
 fn available_names_with_custom(custom_dir: Option<&Path>) -> Result<Vec<String>> {
-    let mut names: Vec<String> = contract_names()
-        .into_iter()
-        .map(str::to_string)
-        .chain(recipes().into_iter().map(str::to_string))
-        .collect();
+    let mut names: Vec<String> = contract_names().into_iter().map(str::to_string).collect();
     if let Some(custom_dir) = custom_dir {
         names.extend(custom_contract_names(custom_dir)?);
     }
@@ -656,6 +711,23 @@ fn validate_work_lease_helper(prefix: &str, helper: &WorkLeaseHelperContract) ->
     Ok(())
 }
 
+fn validate_edges(recipe_id: &str, field: &str, edges: &[RecipeEdge]) -> Result<()> {
+    for (index, edge) in edges.iter().enumerate() {
+        let prefix = format!("recipe {recipe_id}.{field}[{index}]");
+        require_non_empty(&format!("{prefix}.trigger"), &edge.trigger)?;
+        require_non_empty(&format!("{prefix}.to"), &edge.to)?;
+        require_non_empty_list(&format!("{prefix}.authority_scope"), &edge.authority_scope)?;
+        require_non_empty_list(&format!("{prefix}.allowed_verbs"), &edge.allowed_verbs)?;
+        require_non_empty_list(&format!("{prefix}.forbidden_verbs"), &edge.forbidden_verbs)?;
+        require_non_empty_list(&format!("{prefix}.hard_stops"), &edge.hard_stops)?;
+        require_non_empty(
+            &format!("{prefix}.return_condition"),
+            &edge.return_condition,
+        )?;
+    }
+    Ok(())
+}
+
 fn require_non_empty(field: &str, value: &str) -> Result<()> {
     ensure!(!value.trim().is_empty(), "{field} must not be empty");
     Ok(())
@@ -673,11 +745,33 @@ fn reject_forbidden_text(contract: &RecipeContract) -> Result<()> {
     let mut values = Vec::new();
     values.extend([
         contract.id.as_str(),
+        contract.kind.category.as_str(),
         contract.title.as_str(),
         contract.summary.as_str(),
+        contract.router.status.as_str(),
+        contract.router.confidence.as_str(),
     ]);
+    values.extend(contract.kind.tags.iter().map(String::as_str));
     values.extend(contract.applies_when.iter().map(String::as_str));
+    values.extend(contract.authority_scope.iter().map(String::as_str));
+    values.extend(contract.autonomy.iter().map(String::as_str));
     values.extend(contract.hard_stops.iter().map(String::as_str));
+    values.extend(contract.outputs.iter().map(String::as_str));
+    for edge in contract
+        .transitions
+        .iter()
+        .chain(contract.invocations.iter())
+    {
+        values.extend([
+            edge.trigger.as_str(),
+            edge.to.as_str(),
+            edge.return_condition.as_str(),
+        ]);
+        values.extend(edge.authority_scope.iter().map(String::as_str));
+        values.extend(edge.allowed_verbs.iter().map(String::as_str));
+        values.extend(edge.forbidden_verbs.iter().map(String::as_str));
+        values.extend(edge.hard_stops.iter().map(String::as_str));
+    }
     for phase in contract.phases.values() {
         values.extend([phase.goal.as_str()]);
         values.extend(phase.bricks.iter().map(String::as_str));
@@ -721,58 +815,56 @@ mod tests {
     use super::*;
 
     #[test]
-    fn serves_every_recipe_byte_identical_to_the_embedded_file() {
-        for name in recipes() {
-            let embedded = LOOP_DIR
-                .get_file(LOOP_DIR.path().join(format!("{name}.md")))
-                .and_then(|file| file.contents_utf8())
-                .unwrap_or_else(|| panic!("embedded recipe {name}.md is missing"));
-            assert_eq!(serve(name).unwrap(), embedded, "{name} served body drifted");
-        }
-    }
-
-    #[test]
-    fn ships_every_expected_recipe() {
-        let names = recipes();
-        for expected in [
-            "adversarial-fan-out",
-            "conflict-handoff",
-            "feature-fan-out",
-            "generate-and-filter",
-            "intake-triage",
-            "loop-until-done",
-            "unattended-loop",
-        ] {
+    fn serves_every_recipe_from_the_structured_catalog() {
+        for name in contract_names() {
+            let rendered = serve(name).expect("recipe should render");
             assert!(
-                names.contains(&expected),
-                "loop catalog is missing {expected}"
+                rendered.contains(CONTRACT_SCHEMA_VERSION),
+                "{name}: {rendered}"
+            );
+            assert!(
+                rendered.contains(&format!("id: {name}")),
+                "{name}: {rendered}"
             );
         }
-        assert_eq!(names.len(), 7, "ships exactly 7 recipes");
     }
 
     #[test]
-    fn ships_expected_structured_recipe_contracts() {
+    fn ships_expected_canonical_structured_recipe_contracts() {
         let names = contract_names();
         assert_eq!(
-            names,
-            ["audit", "design", "learning", "ship", "unattended", "work"],
+            names, CANONICAL_RECIPE_IDS,
             "structured recipe contract set drifted"
         );
+        for legacy in LEGACY_RECIPE_IDS {
+            assert!(
+                !names.contains(&legacy),
+                "legacy recipe id {legacy} must not be accepted as a shipped alias"
+            );
+        }
     }
 
     #[test]
     fn validates_every_shipped_structured_recipe_contract() {
         let contracts = contracts().expect("shipped contracts should validate");
-        assert_eq!(contracts.len(), 6);
+        assert_eq!(contracts.len(), CANONICAL_RECIPE_IDS.len());
         assert!(contracts.iter().any(contract_supports_work_lease));
     }
 
     #[test]
     fn rejects_contract_with_missing_required_field() {
-        let body = "schema_version: maestro.loop_recipe.v1\nid: broken\n";
+        let body = "schema_version: maestro.recipe.v2\nid: broken\n";
         let error = parse_contract_body("broken", body).unwrap_err().to_string();
         assert!(error.contains("failed to parse"), "{error}");
+    }
+
+    #[test]
+    fn rejects_legacy_recipe_id_as_alias() {
+        let mut contract =
+            contract("feature-fanout").expect("feature-fanout contract should validate");
+        contract.id = "feature-fan-out".to_string();
+        let error = validate_contract(&contract).unwrap_err().to_string();
+        assert!(error.contains("legacy id"), "{error}");
     }
 
     #[test]
@@ -830,31 +922,23 @@ mod tests {
     }
 
     #[test]
-    fn recipes_excludes_the_index_anchor() {
-        assert!(!recipes().contains(&"LOOP"));
-    }
-
-    #[test]
-    fn index_lists_every_recipe_with_a_when_line() {
+    fn index_lists_every_canonical_recipe() {
         let idx = index();
         for name in contract_names() {
-            assert!(idx.contains(name), "index lists lifecycle contract {name}");
+            assert!(idx.contains(name), "index lists recipe {name}");
         }
         assert!(idx.contains("## Custom Recipe Policy"), "{idx}");
-        for name in recipes() {
-            assert!(idx.contains(name), "index lists {name}");
-            assert!(!when(name).is_empty(), "{name} has a WHEN line");
-        }
+        assert!(idx.contains("Maestro is the loop"), "{idx}");
     }
 
     #[test]
     fn show_renders_structured_contract_from_yaml() {
         let body = show("design").expect("design contract should render");
         assert!(body.contains("# Design loop"), "{body}");
-        assert!(
-            body.contains("schema_version: maestro.loop_recipe.v1"),
-            "{body}"
-        );
+        assert!(body.contains("schema_version: maestro.recipe.v2"), "{body}");
+        assert!(body.contains("## Router Metadata"), "{body}");
+        assert!(body.contains("## Authority Scope"), "{body}");
+        assert!(body.contains("## Autonomy"), "{body}");
         assert!(body.contains("## Applies When"), "{body}");
         assert!(body.contains("## Custom Recipe Policy"), "{body}");
         assert!(
@@ -876,10 +960,11 @@ mod tests {
     }
 
     #[test]
-    fn show_keeps_legacy_orchestration_recipes_available() {
-        let body = show("conflict-handoff").expect("legacy recipe should render");
+    fn show_renders_migrated_orchestration_recipes_from_yaml() {
+        let body = show("conflict-handoff").expect("migrated recipe should render");
         assert!(body.contains("# Conflict handoff"), "{body}");
         assert!(body.contains("git worktree add"), "{body}");
+        assert!(body.contains("schema_version: maestro.recipe.v2"), "{body}");
     }
 
     #[test]
@@ -887,6 +972,7 @@ mod tests {
         let error = show("no-such-recipe").unwrap_err().to_string();
         assert!(error.contains("no-such-recipe"), "{error}");
         assert!(error.contains("design"), "{error}");
-        assert!(error.contains("feature-fan-out"), "{error}");
+        assert!(error.contains("feature-fanout"), "{error}");
+        assert!(!error.contains("feature-fan-out"), "{error}");
     }
 }

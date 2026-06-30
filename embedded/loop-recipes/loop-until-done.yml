@@ -1,0 +1,110 @@
+schema_version: maestro.recipe.v2
+id: loop-until-done
+kind:
+  category: orchestration
+  tags: ["sweep", "bounded-loop", "discovery"]
+title: Loop until done
+summary: Continue an open-ended sweep until an explicit query says no ready or newly discovered work remains.
+authority_scope:
+  - accepted local discovery or audit scope
+  - newly minted Maestro tasks from each finding
+autonomy:
+  - autonomous while the stop query remains false
+  - stops at the chosen dry-count, cap, blocker, or hard stop
+router:
+  status: loop_until_done
+  priority: 9
+  confidence: medium
+transitions:
+  - trigger: a finding is minted as work
+    to: work
+    authority_scope:
+      - minted finding task
+    allowed_verbs:
+      - maestro task add <finding>
+      - maestro task start <id>
+      - maestro loop show work
+    forbidden_verbs:
+      - working a finding before recording it
+    hard_stops:
+      - stop query or cap is reached
+    return_condition: finding is verified, blocked, or superseded
+invocations:
+  - trigger: sweep produces high-risk claims
+    to: adversarial-review
+    authority_scope:
+      - generated finding claim
+    allowed_verbs:
+      - maestro loop show adversarial-review
+    forbidden_verbs:
+      - verify contested claim without refutation pass
+    hard_stops:
+      - claim lacks reproduction evidence
+    return_condition: claim is upheld or blocked
+outputs:
+  - discovery sweep result
+  - minted findings
+  - dry-count report
+  - stop condition proof
+applies_when:
+  - work amount is unknown up front
+  - an audit or sweep needs a query-based stop condition
+hard_stops:
+  - no explicit stop query or cap exists
+  - new findings remain only in notes or chat
+  - failure budget is hit
+phases:
+  perceive:
+    goal: Read the accepted sweep scope and define the stop query.
+    bricks: ["scope", "ready query", "dry count"]
+    reads: ["maestro card ready", "maestro task list", "feature contract"]
+    allowed_verbs: ["maestro card ready", "maestro task list", "maestro feature show <id>"]
+    forbidden_verbs: ["start sweep without stop query"]
+    checks: ["stop query and cap are explicit"]
+    durable_learning: []
+    outputs: ["stop query", "scope", "hard stop"]
+  choose:
+    goal: Pick the next discovery pass or stop when the query is satisfied.
+    bricks: ["sweep", "ready", "dry count"]
+    reads: ["previous sweep results", "ready query"]
+    allowed_verbs: ["rg <regex> <path>", "srcwalk discover <query> --scope <dir>"]
+    forbidden_verbs: ["unbounded search"]
+    checks: ["round has a bounded method"]
+    durable_learning: []
+    outputs: ["next sweep", "stop decision"]
+  act:
+    goal: Discover findings and capture each as Maestro work before fixing.
+    bricks: ["discovery", "task add", "work"]
+    reads: ["source hits", "existing cards"]
+    allowed_verbs: ["maestro task add <finding>", "maestro loop show work"]
+    forbidden_verbs: ["fix before recording finding"]
+    checks: ["new finding is durable before work starts"]
+    durable_learning: []
+    outputs: ["minted finding", "dry sweep"]
+  observe:
+    goal: Re-run the stop query and update the consecutive dry count.
+    bricks: ["ready query", "dry count", "proof"]
+    reads: ["maestro card ready", "maestro task list", "sweep output"]
+    allowed_verbs: ["maestro card ready", "maestro task list"]
+    forbidden_verbs: ["stop by feeling finished"]
+    checks: ["stop condition is query-backed"]
+    durable_learning: []
+    outputs: ["continue", "done", "hard stop"]
+  learn:
+    goal: Record reusable sweep patterns or failure guards when they matter.
+    bricks: ["note", "event"]
+    reads: ["repeated misses", "new guard"]
+    allowed_verbs: ["maestro card note <id> <text>", "maestro event intervention --note <text>"]
+    forbidden_verbs: ["chat-only sweep lesson"]
+    checks: ["lesson has recurrence value"]
+    durable_learning: ["card note", "intervention event"]
+    outputs: ["recorded lesson", "no learning needed"]
+  continue:
+    goal: Continue the next round or stop with the query evidence.
+    bricks: ["loop", "report"]
+    reads: ["dry count", "ready query"]
+    allowed_verbs: ["maestro status", "maestro task list"]
+    forbidden_verbs: ["external ship action"]
+    checks: ["dry count, cap, or blocker is reported"]
+    durable_learning: []
+    outputs: ["next round", "done report", "hard stop"]

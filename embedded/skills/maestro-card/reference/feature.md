@@ -148,7 +148,7 @@ no auto-archive authority exists.
 
 Use feature fan-out only when 2+ ready work cards are independent. Full
 orchestration HOW (dispatch, worktree isolation, collection): `maestro loop
-show feature-fan-out`.
+show feature-fanout`.
 
 1. Confirm with `maestro card ready <feature>` and each card's locked acceptance
    checks. Same files, dependency edges, or contended card-store writes (every

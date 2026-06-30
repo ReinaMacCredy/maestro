@@ -1,7 +1,41 @@
-schema_version: maestro.loop_recipe.v1
+schema_version: maestro.recipe.v2
 id: audit
+kind:
+  category: lifecycle
+  tags: ["review", "audit", "findings"]
 title: Audit loop
 summary: Scan a bounded surface, convert real findings into Maestro work, and avoid chat-only audit output.
+authority_scope:
+  - read requested source, diff, tests, and artifacts
+  - write only findings, notes, or tasks unless implementation is separately authorized
+autonomy:
+  - autonomous for bounded read-only probes and recorded findings
+  - implementation requires a work recipe or explicit user direction
+router:
+  status: audit
+  priority: 15
+  confidence: high
+transitions:
+  - trigger: audit produces accepted local fix work
+    to: work
+    authority_scope:
+      - recorded finding task or accepted feature contract
+    allowed_verbs:
+      - maestro task add <title>
+      - maestro task start <id>
+      - maestro loop show work
+    forbidden_verbs:
+      - silent fix during read-only review
+      - external ship action
+    hard_stops:
+      - finding lacks evidence
+    return_condition: finding has a task or is explicitly non-actionable
+invocations: []
+outputs:
+  - findings report
+  - created task
+  - no issues verdict
+  - hard stop
 applies_when:
   - user asks for review, audit, scan, risks, or findings
   - a feature needs independent bug, security, or regression scrutiny

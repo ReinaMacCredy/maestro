@@ -17,7 +17,7 @@ The away mode of the work loop: one long-lived session carries the current
 work forward and works the card store until done while the human is away. Per
 unit of work this file adds nothing - every card is claimed, worked, and
 verified exactly per [work.md](work.md), including its test-first default. This
-file is the full unattended-loop policy authority: authorization, local
+file is the full unattended policy authority: authorization, local
 autonomy, replenishment, stops, audit ledger, boundaries, and the report.
 Read or cite `maestro loop show unattended` first; it is the shipped lifecycle
 recipe that maps this policy into perceive -> choose -> act -> observe -> learn

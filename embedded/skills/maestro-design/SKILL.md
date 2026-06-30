@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-version: 1.36.0
+version: 1.36.1
 description: "Design Maestro changes before implementation: use for brainstorm, plan, PRD synthesis, grill me, grilling, stress-test, domain model, deepening candidate, wording, workflow, skill, harness, card/task/feature, architecture, UX, or agent-process decisions."
 ---
 
@@ -157,9 +157,9 @@ exist, and `feature finalize` has refreshed `handoff.md`.
 
 ## Taste Forks
 
-Use a generate-and-filter pass for naming, UX wording, API shape, report
+Use a generate-filter pass for naming, UX wording, API shape, report
 structure, or other judgment-heavy forks. Full orchestration HOW (generator
-angles, judge, pairwise): `maestro loop show generate-and-filter`.
+angles, judge, pairwise): `maestro loop show generate-filter`.
 
 1. Write a 3-5 point rubric into `notes.md` before generating options.
 2. Ask 3-5 fresh-context generators for one concrete option each from different

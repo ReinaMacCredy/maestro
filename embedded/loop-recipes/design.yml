@@ -1,7 +1,42 @@
-schema_version: maestro.loop_recipe.v1
+schema_version: maestro.recipe.v2
 id: design
+kind:
+  category: lifecycle
+  tags: ["design", "decision", "feature-contract"]
 title: Design loop
 summary: Turn an unsettled request into a locked Maestro feature contract through real context, one fork at a time.
+authority_scope:
+  - read current feature, decisions, artifacts, and precedent
+  - write only design decisions, notes, and feature contract fields before build approval
+autonomy:
+  - human-guided while decisions or acceptance change
+  - may continue without human only for readback, contradiction checks, and handoff refresh
+router:
+  status: design
+  priority: 30
+  confidence: high
+transitions:
+  - trigger: user approves build and feature has zero open decisions
+    to: work
+    authority_scope:
+      - accepted feature contract
+    allowed_verbs:
+      - maestro feature finalize <id>
+      - maestro qa baseline <id>
+      - maestro feature accept <id>
+    forbidden_verbs:
+      - code edit before build approval
+      - external ship action
+    hard_stops:
+      - open design decision remains
+      - acceptance or non-goal would change without human choice
+    return_condition: accepted feature is ready for prepared work
+invocations: []
+outputs:
+  - locked decision
+  - updated feature contract
+  - fresh handoff
+  - next fork or build gate
 applies_when:
   - user asks to brainstorm, design, refine, lock, or decide a Maestro feature
   - a proposed feature has open questions, unsettled acceptance, or contradictory decisions

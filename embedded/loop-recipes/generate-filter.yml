@@ -1,0 +1,100 @@
+schema_version: maestro.recipe.v2
+id: generate-filter
+kind:
+  category: orchestration
+  tags: ["taste", "options", "decision"]
+title: Generate and filter
+summary: Generate divergent options, judge them against a fixed rubric, and lock only the survivor.
+authority_scope:
+  - design forks, naming, UX wording, API shape, or report structure
+  - decision records and notes for the selected option
+autonomy:
+  - autonomous for generating and judging options inside the current design fork
+  - human decision remains required when the fork changes acceptance or authority
+router:
+  status: generate_filter
+  priority: 8
+  confidence: medium
+transitions:
+  - trigger: survivor needs a durable design decision
+    to: design
+    authority_scope:
+      - active design card and current fork
+    allowed_verbs:
+      - maestro decision new
+      - maestro decision lock <id>
+      - maestro feature set <id>
+    forbidden_verbs:
+      - code edit
+      - feature accept
+    hard_stops:
+      - rubric was not fixed before generation
+    return_condition: survivor and rejected alternatives are recorded
+invocations: []
+outputs:
+  - fixed rubric
+  - generated options
+  - judged survivor
+  - locked decision
+applies_when:
+  - a taste-heavy fork needs divergent options before choosing
+  - naming, UX wording, API shape, or report structure has multiple plausible answers
+hard_stops:
+  - rubric is written after seeing options
+  - multiple maybe-options would remain after lock
+  - generators write decisions directly
+phases:
+  perceive:
+    goal: Read the active fork, constraints, precedent, and user taste signals.
+    bricks: ["decision", "notes", "precedent"]
+    reads: ["maestro feature show <id>", "maestro decision list --feature <id>", "maestro grep <topic> corpus:memory"]
+    allowed_verbs: ["maestro feature show <id>", "maestro grep <topic> corpus:memory"]
+    forbidden_verbs: ["decision lock before rubric"]
+    checks: ["fork and constraints are known"]
+    durable_learning: []
+    outputs: ["fork brief", "hard stop"]
+  choose:
+    goal: Write a 3-5 point rubric and choose divergent generation angles.
+    bricks: ["rubric", "angles"]
+    reads: ["feature notes", "design constraints"]
+    allowed_verbs: ["maestro card note <id> <text>"]
+    forbidden_verbs: ["generate without rubric"]
+    checks: ["rubric is fixed before options"]
+    durable_learning: []
+    outputs: ["rubric", "generator angles"]
+  act:
+    goal: Generate options and judge them with a fresh pass.
+    bricks: ["generator", "judge", "pairwise"]
+    reads: ["rubric", "options"]
+    allowed_verbs: ["maestro loop show generate-filter"]
+    forbidden_verbs: ["parallel decision lock"]
+    checks: ["survivor is selected against rubric"]
+    durable_learning: []
+    outputs: ["options", "judge result"]
+  observe:
+    goal: Confirm the survivor satisfies the original fork and losers are rejected for concrete reasons.
+    bricks: ["decision", "rubric", "rejected alternatives"]
+    reads: ["judge result", "feature contract"]
+    allowed_verbs: ["maestro decision new", "maestro decision lock <id>"]
+    forbidden_verbs: ["leaving alternatives as active design"]
+    checks: ["decision records survivor and rejected alternatives"]
+    durable_learning: []
+    outputs: ["locked decision"]
+  learn:
+    goal: Preserve taste guidance only when it will shape future forks.
+    bricks: ["note", "memory"]
+    reads: ["rubric", "user correction"]
+    allowed_verbs: ["maestro card note <id> <text>", "maestro event intervention --note <text>"]
+    forbidden_verbs: ["chat-only taste rule"]
+    checks: ["guidance is sourced"]
+    durable_learning: ["card note", "intervention event"]
+    outputs: ["recorded lesson", "no learning needed"]
+  continue:
+    goal: Return to the design loop with one selected option.
+    bricks: ["design", "decision"]
+    reads: ["maestro decision show <id>", "maestro feature show <id>"]
+    allowed_verbs: ["maestro loop show design", "maestro feature show <id>"]
+    forbidden_verbs: ["feature accept without build approval"]
+    checks: ["next design fork or finalization gate is visible"]
+    durable_learning: []
+    outputs: ["next fork", "finalization gate", "hard stop"]

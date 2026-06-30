@@ -1,7 +1,41 @@
-schema_version: maestro.loop_recipe.v1
+schema_version: maestro.recipe.v2
 id: ship
+kind:
+  category: lifecycle
+  tags: ["close", "ship", "authority"]
 title: Ship loop
 summary: Cross close, commit, install, push, release, or archive gates only when explicit authority and evidence allow it.
+authority_scope:
+  - verified feature or task evidence
+  - explicit bounded local or external ship authority
+autonomy:
+  - autonomous for local close and commit only when accepted scope grants it
+  - external actions require explicit bounded authority naming target and evidence
+router:
+  status: ship
+  priority: 10
+  confidence: high
+transitions: []
+invocations:
+  - trigger: ship gate exposes risky or missing evidence
+    to: audit
+    authority_scope:
+      - bounded closeout surface
+    allowed_verbs:
+      - maestro loop show audit
+      - maestro feature show <id>
+      - git diff
+    forbidden_verbs:
+      - push without bounded authority
+      - release without bounded authority
+    hard_stops:
+      - evidence cannot be tied to current HEAD
+    return_condition: blocker is recorded or evidence is restored
+outputs:
+  - QA slice
+  - closed feature
+  - commit or installed binary when authorized
+  - archive gate or hard stop
 applies_when:
   - user asks to close, ship, release, push, install, publish, archive, or finish a feature
   - a feature has all child tasks verified and needs QA slice or closeout

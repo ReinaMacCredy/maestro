@@ -45,17 +45,23 @@ fn write_custom_recipe(repo: &Path, name: &str, body: &str) {
 }
 
 #[test]
-fn loop_index_lists_structured_lifecycle_contracts_and_legacy_recipes() {
+fn loop_index_lists_unified_structured_recipe_catalog() {
     let temp = TestTempDir::new("maestro-loop-index");
     let out = stdout(temp.path(), &["loop"]);
 
-    assert!(out.contains("## Lifecycle Recipes"), "{out}");
-    assert!(out.contains("design  --"), "{out}");
-    assert!(out.contains("work  --"), "{out}");
-    assert!(out.contains("unattended  --"), "{out}");
+    assert!(out.contains("## Shipped Recipe Catalog"), "{out}");
+    assert!(out.contains("design  [lifecycle]"), "{out}");
+    assert!(out.contains("work  [lifecycle]"), "{out}");
+    assert!(out.contains("unattended  [lifecycle]"), "{out}");
+    assert!(out.contains("conflict-handoff  [orchestration]"), "{out}");
+    assert!(out.contains("feature-fanout"), "{out}");
+    assert!(out.contains("adversarial-review"), "{out}");
+    assert!(out.contains("generate-filter"), "{out}");
     assert!(out.contains("## Custom Recipe Policy"), "{out}");
-    assert!(out.contains("## Orchestration Recipes"), "{out}");
     assert!(out.contains("conflict-handoff"), "{out}");
+    assert!(!out.contains("feature-fan-out"), "{out}");
+    assert!(!out.contains("adversarial-fan-out"), "{out}");
+    assert!(!out.contains("generate-and-filter"), "{out}");
 }
 
 #[test]
@@ -64,10 +70,10 @@ fn loop_show_renders_structured_contracts_from_yaml() {
     let out = stdout(temp.path(), &["loop", "show", "unattended"]);
 
     assert!(out.contains("# Unattended loop"), "{out}");
-    assert!(
-        out.contains("schema_version: maestro.loop_recipe.v1"),
-        "{out}"
-    );
+    assert!(out.contains("schema_version: maestro.recipe.v2"), "{out}");
+    assert!(out.contains("## Router Metadata"), "{out}");
+    assert!(out.contains("## Authority Scope"), "{out}");
+    assert!(out.contains("## Autonomy"), "{out}");
     assert!(
         out.contains("perceive -> choose -> act -> observe -> learn -> continue"),
         "{out}"
@@ -87,12 +93,29 @@ fn loop_show_renders_structured_contracts_from_yaml() {
 }
 
 #[test]
-fn loop_show_keeps_legacy_orchestration_recipe_names_available() {
-    let temp = TestTempDir::new("maestro-loop-show-legacy");
+fn loop_show_renders_migrated_orchestration_recipe_from_yaml() {
+    let temp = TestTempDir::new("maestro-loop-show-migrated");
     let out = stdout(temp.path(), &["loop", "show", "conflict-handoff"]);
 
     assert!(out.contains("# Conflict handoff"), "{out}");
     assert!(out.contains("git worktree add"), "{out}");
+    assert!(out.contains("schema_version: maestro.recipe.v2"), "{out}");
+}
+
+#[test]
+fn loop_rejects_old_renamed_recipe_ids() {
+    let temp = TestTempDir::new("maestro-loop-old-aliases");
+    for legacy in [
+        "feature-fan-out",
+        "adversarial-fan-out",
+        "generate-and-filter",
+        "unattended-loop",
+    ] {
+        let error = stderr(temp.path(), &["loop", "show", legacy]);
+        assert!(error.contains("unknown loop recipe"), "{legacy}: {error}");
+        assert!(error.contains("feature-fanout"), "{legacy}: {error}");
+        assert!(!error.contains("feature-fan-out,"), "{legacy}: {error}");
+    }
 }
 
 #[test]
@@ -111,7 +134,7 @@ fn loop_lists_shows_and_validates_project_custom_recipes() {
     let shown = stdout(temp.path(), &["loop", "show", "brief"]);
     assert!(shown.contains("# Support brief loop"), "{shown}");
     assert!(
-        shown.contains("schema_version: maestro.loop_recipe.v1"),
+        shown.contains("schema_version: maestro.recipe.v2"),
         "{shown}"
     );
     assert!(
@@ -133,7 +156,7 @@ fn loop_rejects_invalid_project_custom_recipes() {
     write_custom_recipe(
         temp.path(),
         "brief",
-        "schema_version: maestro.loop_recipe.v1\nid: brief\n",
+        "schema_version: maestro.recipe.v2\nid: brief\n",
     );
 
     let error = stderr(temp.path(), &["loop", "show", "brief"]);
@@ -171,10 +194,39 @@ fn loop_rejects_symlinked_project_custom_recipe_dir() {
     assert!(error.contains("symlink"), "{error}");
 }
 
-const CUSTOM_RECIPE: &str = r#"schema_version: maestro.loop_recipe.v1
+const CUSTOM_RECIPE: &str = r#"schema_version: maestro.recipe.v2
 id: brief
+kind:
+  category: custom
+  tags: ["support", "brief"]
 title: Support brief loop
 summary: Handle one bounded support brief through current Maestro cards.
+authority_scope:
+  - current support brief and selected Maestro card
+autonomy:
+  - local autonomous work only inside the selected brief
+router:
+  status: custom_brief
+  priority: 3
+  confidence: medium
+transitions:
+  - trigger: brief needs ordinary implementation
+    to: work
+    authority_scope:
+      - selected card
+    allowed_verbs:
+      - maestro card show <id>
+      - maestro task complete <id>
+    forbidden_verbs:
+      - external ship action
+    hard_stops:
+      - brief requires external approval
+    return_condition: selected card is verified or blocked
+invocations: []
+outputs:
+  - selected card
+  - verified card
+  - hard stop
 applies_when:
   - a user request is already scoped to one support brief
 hard_stops:

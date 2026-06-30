@@ -1,7 +1,69 @@
-schema_version: maestro.loop_recipe.v1
+schema_version: maestro.recipe.v2
 id: unattended
+kind:
+  category: lifecycle
+  tags: ["autonomy", "work-lease", "away-mode"]
 title: Unattended loop
 summary: Keep working through accepted local Maestro records while the user is away, with one safe unit chosen per tick and hard stops for external ship actions.
+authority_scope:
+  - accepted local Maestro records
+  - exactly one selected unit per tick
+  - explicit bounded ship authority when any external action is requested
+autonomy:
+  - autonomous for local accepted work, proof, verification, and local close when authorized
+  - stops on external ship action without bounded authority
+router:
+  status: unattended
+  priority: 12
+  confidence: high
+transitions:
+  - trigger: selected unit needs ordinary implementation
+    to: work
+    authority_scope:
+      - selected card or task from Work Lease
+    allowed_verbs:
+      - maestro card show <id> --json
+      - maestro task complete <id>
+      - maestro task verify <id>
+    forbidden_verbs:
+      - unselected unit mutation
+      - external ship action without authority
+    hard_stops:
+      - selected unit is not accepted or safe
+    return_condition: selected unit is verified, blocked, or dry
+  - trigger: backlog is dry but acceptable local features exist
+    to: design
+    authority_scope:
+      - proposed local feature contract
+    allowed_verbs:
+      - maestro feature finalize <id>
+      - maestro feature accept <id>
+      - maestro feature prepare <id>
+    forbidden_verbs:
+      - acceptance broadening without human decision
+      - external ship action
+    hard_stops:
+      - proposed feature has open decisions or missing QA baseline
+    return_condition: local work is replenished or dry report is produced
+invocations:
+  - trigger: selected unit is risky or contested
+    to: audit
+    authority_scope:
+      - selected unit and touched files
+    allowed_verbs:
+      - maestro loop show audit
+      - cargo test <target>
+      - srcwalk review
+    forbidden_verbs:
+      - unrelated refactor
+      - external ship action
+    hard_stops:
+      - audit cannot produce evidence
+    return_condition: finding is recorded or unit returns to work
+outputs:
+  - one selected unit, dry report, blocked report, or hard stop
+  - run event acquisition and outcome evidence
+  - verified local work or replenished local backlog
 applies_when:
   - user says use loop, keep looping, work while away, work while asleep, or similar autonomy wording
   - the current run has accepted local work that can continue without further human steering

@@ -1,7 +1,40 @@
-schema_version: maestro.loop_recipe.v1
+schema_version: maestro.recipe.v2
 id: learning
+kind:
+  category: lifecycle
+  tags: ["memory", "correction", "reuse"]
 title: Learning loop
 summary: Convert verified corrections, repeated failures, and durable decisions into reusable Maestro memory without adding hidden state.
+authority_scope:
+  - durable source evidence from events, proof, decisions, notes, or repeated failures
+  - memory suggestions, card notes, or scoped skill proposals
+autonomy:
+  - autonomous for sourced readback and memory suggestions
+  - shipped skill changes require accepted implementation scope
+router:
+  status: learning
+  priority: 5
+  confidence: medium
+transitions:
+  - trigger: learning reveals current work still needs a fix
+    to: work
+    authority_scope:
+      - current accepted task or feature
+    allowed_verbs:
+      - maestro task show <id>
+      - maestro loop show work
+    forbidden_verbs:
+      - unscoped skill rewrite
+      - external ship action
+    hard_stops:
+      - lesson has no durable source
+    return_condition: reusable lesson is recorded or no learning is needed
+invocations: []
+outputs:
+  - memory suggestion
+  - card note
+  - decision
+  - no durable learning needed
 applies_when:
   - a user correction, repeated blocker, verified fix, or decision should guide future agents
   - an implementation produced a reusable pattern rather than a one-off note

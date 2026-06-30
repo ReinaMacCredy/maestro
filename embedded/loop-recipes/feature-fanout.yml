@@ -1,0 +1,112 @@
+schema_version: maestro.recipe.v2
+id: feature-fanout
+kind:
+  category: orchestration
+  tags: ["parallel", "feature", "independent-slices"]
+title: Feature fanout
+summary: Run independent ready slices for one feature in parallel while the conductor owns verification and closeout.
+authority_scope:
+  - accepted feature with multiple independent ready units
+  - one isolated unit per worker, with conductor-owned verification
+autonomy:
+  - autonomous for worker dispatch when independence is proven
+  - conductor keeps store-mutating verification and close gates
+router:
+  status: feature_fanout
+  priority: 18
+  confidence: medium
+transitions:
+  - trigger: each worker receives a selected unit
+    to: work
+    authority_scope:
+      - one selected task or card
+    allowed_verbs:
+      - maestro task show <id>
+      - maestro task complete <id>
+      - maestro task verify <id>
+    forbidden_verbs:
+      - feature close from worker
+      - changing another worker unit
+    hard_stops:
+      - selected units share files or dependency edge without isolation
+    return_condition: worker returns proof data or verified unit
+invocations:
+  - trigger: worker proof is contested
+    to: adversarial-review
+    authority_scope:
+      - returned claim and locked check
+    allowed_verbs:
+      - maestro loop show adversarial-review
+      - maestro task block <id> --reason <reason>
+    forbidden_verbs:
+      - verify over reproducible refutation
+    hard_stops:
+      - refuter returns reproducible failure
+    return_condition: claim is upheld or task is blocked
+outputs:
+  - independent worker contracts
+  - verified slices
+  - blocked refutation
+  - conductor close gate
+applies_when:
+  - two or more ready units on one feature are independent
+  - parallel work pays off and file or store conflicts are controlled
+hard_stops:
+  - units share files or dependency edges without isolation
+  - worker would mutate feature close or accept gates
+  - conductor cannot collect proof
+phases:
+  perceive:
+    goal: Read ready units, locked checks, dependencies, and likely file overlap.
+    bricks: ["feature", "task", "card ready", "code"]
+    reads: ["maestro card ready <feature>", "maestro task list --feature <id>", "srcwalk deps <file>"]
+    allowed_verbs: ["maestro card ready <feature>", "maestro task list --feature <id>", "srcwalk overview --scope <dir>"]
+    forbidden_verbs: ["dispatch before independence check"]
+    checks: ["candidate units and overlaps are known"]
+    durable_learning: []
+    outputs: ["candidate unit set", "hard stop"]
+  choose:
+    goal: Assign each independent unit to one worker or serialize contested units.
+    bricks: ["independence", "worktree", "worker contract"]
+    reads: ["acceptance checks", "dependency edges", "dirty paths"]
+    allowed_verbs: ["git worktree add .maestro/worktree/<slug> -b <branch>", "maestro loop show conflict-handoff"]
+    forbidden_verbs: ["shared store writes from parallel workers"]
+    checks: ["each worker owns exactly one unit"]
+    durable_learning: []
+    outputs: ["worker prompts", "serialized unit", "hard stop"]
+  act:
+    goal: Dispatch independent workers and keep conductor-owned lifecycle gates.
+    bricks: ["subagent", "worktree", "proof collection"]
+    reads: ["worker return data", "test output"]
+    allowed_verbs: ["maestro task verify <id>", "git commit"]
+    forbidden_verbs: ["maestro feature close <id> from worker"]
+    checks: ["worker returns proof tied to the unit"]
+    durable_learning: []
+    outputs: ["worker results", "verified slice", "blocked slice"]
+  observe:
+    goal: Verify returned claims and resolve any refutation before closeout.
+    bricks: ["proof", "verify", "audit"]
+    reads: ["task proof", "adversarial verdict"]
+    allowed_verbs: ["maestro task verify <id>", "maestro task block <id> --reason <reason>"]
+    forbidden_verbs: ["claim success without conductor verification"]
+    checks: ["all parallel units are verified or blocked"]
+    durable_learning: []
+    outputs: ["verified units", "blocked units"]
+  learn:
+    goal: Record reusable independence or conflict lessons only when future fanout needs them.
+    bricks: ["note", "event"]
+    reads: ["conflict outcome", "worker failure"]
+    allowed_verbs: ["maestro card note <id> <text>", "maestro event intervention --note <text>"]
+    forbidden_verbs: ["chat-only worker lesson"]
+    checks: ["lesson is tied to evidence"]
+    durable_learning: ["card note", "intervention event"]
+    outputs: ["recorded lesson", "no learning needed"]
+  continue:
+    goal: Return to ship when every selected unit is resolved.
+    bricks: ["ship", "feature"]
+    reads: ["maestro feature show <id>", "maestro task list --feature <id>"]
+    allowed_verbs: ["maestro loop show ship", "maestro feature show <id>"]
+    forbidden_verbs: ["feature close with unresolved worker"]
+    checks: ["feature gate is visible"]
+    durable_learning: []
+    outputs: ["ship gate", "remaining work", "hard stop"]
