@@ -126,6 +126,56 @@ pub fn add_simple_task(
     Ok(task)
 }
 
+pub fn setup_simple_tasks(
+    paths: &MaestroPaths,
+    titles: &[String],
+    project: Option<String>,
+    start: bool,
+    created_at: String,
+    actor: &str,
+) -> Result<Vec<TaskRecord>> {
+    if titles.is_empty() {
+        bail!("task setup requires at least one --task");
+    }
+    if titles.iter().any(|title| title.trim().is_empty()) {
+        bail!("task title must not be empty");
+    }
+
+    let (path, mut progress, snapshot) =
+        load_or_create_actor_progress(paths, project, actor, &created_at)?;
+    let mut tasks = Vec::with_capacity(titles.len());
+    for title in titles {
+        let id = store::mint_card_id(paths, CardType::Task, title);
+        let mut task = TaskRecord::draft(&id, title, &created_at);
+        task.state = TaskState::Ready;
+        task.acceptance_locked = true;
+        task.acceptance.locked_by = Some(actor.to_string());
+        task.acceptance.locked_at = Some(created_at.clone());
+        tasks.push(task);
+    }
+
+    if start {
+        let first = tasks
+            .first_mut()
+            .context("task setup requires at least one --task")?;
+        lifecycle::transition(
+            first,
+            TaskState::InProgress,
+            actor,
+            &created_at,
+            TransitionDetails {
+                summary: Some("started from task setup".to_string()),
+                ..TransitionDetails::default()
+            },
+        )?;
+        progress.current_task = Some(first.id.clone());
+    }
+
+    progress.tasks.extend(tasks.iter().cloned());
+    save_with_snapshot(&path, &progress, &snapshot)?;
+    Ok(tasks)
+}
+
 pub fn ensure_started_simple_task(
     paths: &MaestroPaths,
     title: &str,

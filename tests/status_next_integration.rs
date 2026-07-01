@@ -275,6 +275,41 @@ fn status_before_init_is_friendly_and_read_only() {
 }
 
 #[test]
+fn status_surfaces_active_progress_checklist() {
+    let temp = setup_repo("maestro-status-progress");
+    let repo = temp.path();
+    let setup = maestro_with_env(
+        repo,
+        &[
+            "task",
+            "setup",
+            "--task",
+            "Reproduce current behavior",
+            "--task",
+            "Implement setup command",
+            "--start",
+        ],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    );
+    assert_success(&setup, &["task", "setup", "--task", "...", "--start"]);
+
+    let status_output = maestro_with_env(repo, &["status"], &[("MAESTRO_ACTOR", "codex#s1")]);
+    assert_success(&status_output, &["status"]);
+    let status = stdout(&status_output);
+
+    assert!(status.contains("PROGRESS"), "{status}");
+    assert!(status.contains("progress: active 1/2"), "{status}");
+    assert!(
+        status.contains("current: 1 Reproduce current behavior"),
+        "{status}"
+    );
+    assert!(
+        status.contains("next: maestro task done 1 --proof"),
+        "{status}"
+    );
+}
+
+#[test]
 fn task_next_no_action_prints_summary_and_exits_nonzero() {
     let temp = setup_repo("maestro-task-next-empty");
     let repo = temp.path();

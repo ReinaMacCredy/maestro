@@ -82,6 +82,28 @@ fn progress_task_record(repo: &Path, id: &str) -> (PathBuf, Value) {
     panic!("no progress task {id} under {}", cards.display());
 }
 
+fn progress_tasks(repo: &Path) -> Vec<Value> {
+    let cards = repo.join(".maestro/cards");
+    for entry in fs::read_dir(&cards).expect("invariant: cards dir should be readable") {
+        let dir = entry
+            .expect("invariant: cards dir entry should read")
+            .path();
+        let progress_path = dir.join("progress.yml");
+        if !progress_path.exists() {
+            continue;
+        }
+        let progress: Value = serde_yaml::from_str(
+            &fs::read_to_string(&progress_path).expect("invariant: progress.yml should read"),
+        )
+        .expect("invariant: progress.yml should parse");
+        return progress["tasks"]
+            .as_sequence()
+            .expect("invariant: progress tasks should be a sequence")
+            .clone();
+    }
+    panic!("no progress.yml under {}", cards.display());
+}
+
 /// A card-mode repo: `.maestro/cards/` exists so `store_mode` resolves to Cards,
 /// plus the generic claims-only harness the task verbs read for verification gating.
 fn setup_repo() -> TestTempDir {
@@ -382,6 +404,56 @@ fn task_progress_cli_flow_add_start_done_is_low_ceremony_and_verifies_simple_com
         record["verification"]["claim_checks"][0]["source"],
         Value::String("task done --proof".to_string())
     );
+}
+
+#[test]
+fn task_progress_setup_creates_checklist_and_starts_first_task() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    let setup = maestro_with_env(
+        repo,
+        &[
+            "task",
+            "setup",
+            "--task",
+            "Reproduce current behavior",
+            "--task",
+            "Implement setup command",
+            "--start",
+        ],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    );
+    assert_success(&setup, &["task", "setup", "--task", "...", "--start"]);
+    let out = stdout(&setup);
+    assert!(out.contains("setup 2 task(s)"), "{out}");
+    assert!(out.contains("started task 1"), "{out}");
+
+    let tasks = progress_tasks(repo);
+    assert_eq!(tasks.len(), 2);
+    assert_eq!(
+        tasks[0]["title"],
+        Value::String("Reproduce current behavior".to_string())
+    );
+    assert_eq!(tasks[0]["state"], Value::String("in_progress".to_string()));
+    assert_eq!(
+        tasks[0]["claimed_by"],
+        Value::String("codex#s1".to_string())
+    );
+    assert_eq!(
+        tasks[1]["title"],
+        Value::String("Implement setup command".to_string())
+    );
+    assert_eq!(tasks[1]["state"], Value::String("ready".to_string()));
+
+    let list = stdout(&maestro_with_env(
+        repo,
+        &["task", "list"],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    ));
+    assert!(list.contains("in_progress"), "{list}");
+    assert!(list.contains("Reproduce current behavior"), "{list}");
+    assert!(list.contains("Implement setup command"), "{list}");
 }
 
 #[test]

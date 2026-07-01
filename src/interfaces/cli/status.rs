@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::path::PathBuf;
 
@@ -317,6 +317,7 @@ fn build_task_next_report(paths: &MaestroPaths) -> Result<StatusReport> {
         features: FeatureSummaryJson::default(),
         task_rows: Vec::new(),
         active_features: Vec::new(),
+        progress: Vec::new(),
         worktree_actions,
         harness_friction,
         audit_hint,
@@ -393,6 +394,7 @@ fn print_status(report: StatusReport, json: bool) -> Result<()> {
         report.memory_suggestions_omitted,
     );
     print_worktree_actions(&report.worktree_actions);
+    print_progress_block(&report.progress);
     if let Some(action) = &report.next_action {
         if action.requires_input {
             println!("template: {}", action.command.display);
@@ -559,6 +561,22 @@ fn print_memory_suggestions(suggestions: &[MemorySuggestionHint], omitted: usize
     }
 }
 
+fn print_progress_block(progress: &[ProgressStatusJson]) {
+    if progress.is_empty() {
+        return;
+    }
+    println!("PROGRESS");
+    for row in progress {
+        if let Some(current) = &row.current {
+            println!("progress: {} {}/{}", row.state, current.task_ref, row.total);
+            println!("  current: {} {}", current.task_ref, current.title);
+            println!("  next: {}", current.next);
+        } else {
+            println!("progress: {} 0/{}", row.state, row.total);
+        }
+    }
+}
+
 fn print_next_action(action: &NextAction) {
     if action.requires_input {
         println!("template: {}", action.command.display);
@@ -701,6 +719,7 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
     let now_nanos = timestamp_nanos(&utc_now_timestamp()).unwrap_or(0);
     let mut active_features = active_feature_rows(paths, &features, now_nanos);
     let worktree_actions = worktree_actions(paths, &features)?;
+    let progress = progress_status_rows(&task_entries);
     for (id, path, error, hint, _) in unreadable_features {
         warnings.push(WarningJson {
             code: "feature_unreadable".to_string(),
@@ -780,6 +799,7 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
         features: FeatureSummaryJson::from_features(&features),
         task_rows: rows,
         active_features,
+        progress,
         worktree_actions,
         harness_friction,
         audit_hint,
@@ -938,6 +958,61 @@ fn active_feature_rows(
             inspect: format!("maestro feature show {}", view.id),
             project: view.project.clone(),
             stale_proposed: feature::is_stale_proposed(&view.status, &view.updated_at, now_nanos),
+        })
+        .collect()
+}
+
+fn progress_status_rows(task_entries: &[task::TaskEntry]) -> Vec<ProgressStatusJson> {
+    let mut grouped: BTreeMap<PathBuf, Vec<&TaskRecord>> = BTreeMap::new();
+    for entry in task_entries {
+        if !entry.task_dir.join(task::PROGRESS_FILE).is_file() {
+            continue;
+        }
+        grouped
+            .entry(entry.task_dir.clone())
+            .or_default()
+            .push(&entry.task);
+    }
+
+    grouped
+        .into_iter()
+        .filter_map(|(task_dir, tasks)| {
+            if !tasks.iter().any(|task| task.state.is_live()) {
+                return None;
+            }
+            let current = tasks
+                .iter()
+                .enumerate()
+                .find(|(_, task)| task.state == TaskState::InProgress)
+                .or_else(|| {
+                    tasks
+                        .iter()
+                        .enumerate()
+                        .find(|(_, task)| task.state == TaskState::Ready)
+                })
+                .map(|(index, task)| ProgressCurrentJson {
+                    task_ref: index + 1,
+                    id: task.id.clone(),
+                    title: task.title.clone(),
+                    state: task.state.as_str().to_string(),
+                    next: if task.state == TaskState::InProgress {
+                        format!("maestro task done {} --proof \"<evidence>\"", index + 1)
+                    } else {
+                        format!("maestro task start {}", index + 1)
+                    },
+                });
+            let card_id = task_dir
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("progress")
+                .to_string();
+            Some(ProgressStatusJson {
+                card_id,
+                state: "active".to_string(),
+                total: tasks.len(),
+                done: tasks.iter().filter(|task| !task.state.is_live()).count(),
+                current,
+            })
         })
         .collect()
 }
@@ -1128,6 +1203,8 @@ struct StatusReport {
     task_rows: Vec<TaskRowJson>,
     active_features: Vec<FeatureRowJson>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
+    progress: Vec<ProgressStatusJson>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     worktree_actions: Vec<WorktreeActionJson>,
     harness_friction: Vec<HarnessFrictionJson>,
     audit_hint: Option<AuditHintJson>,
@@ -1204,6 +1281,7 @@ impl StatusReport {
             features: FeatureSummaryJson::default(),
             task_rows: Vec::new(),
             active_features: Vec::new(),
+            progress: Vec::new(),
             worktree_actions: Vec::new(),
             harness_friction: Vec::new(),
             audit_hint: None,
@@ -1674,6 +1752,25 @@ struct TaskRowJson {
     next: String,
     inspect: String,
     project: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct ProgressStatusJson {
+    card_id: String,
+    state: String,
+    total: usize,
+    done: usize,
+    current: Option<ProgressCurrentJson>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct ProgressCurrentJson {
+    #[serde(rename = "ref")]
+    task_ref: usize,
+    id: String,
+    title: String,
+    state: String,
+    next: String,
 }
 
 #[derive(Clone, Debug, Serialize)]

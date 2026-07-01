@@ -195,6 +195,21 @@ fn loop_show_renders_structured_contracts_from_yaml() {
 }
 
 #[test]
+fn loop_show_renders_progress_recipe() {
+    let temp = TestTempDir::new("maestro-loop-show-progress");
+    let out = stdout(temp.path(), &["loop", "show", "progress"]);
+
+    assert!(out.contains("# Progress loop"), "{out}");
+    assert!(out.contains("maestro task setup --task"), "{out}");
+    assert!(out.contains("maestro task done <ref> --proof"), "{out}");
+    assert!(out.contains("escalate to full card"), "{out}");
+    assert!(
+        out.contains("perceive -> choose -> act -> observe -> learn -> continue"),
+        "{out}"
+    );
+}
+
+#[test]
 fn loop_show_renders_migrated_orchestration_recipe_from_yaml() {
     let temp = TestTempDir::new("maestro-loop-show-migrated");
     let out = stdout(temp.path(), &["loop", "show", "conflict-handoff"]);
