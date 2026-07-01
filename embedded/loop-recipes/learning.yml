@@ -5,6 +5,37 @@ kind:
   tags: ["memory", "correction", "reuse"]
 title: Learning loop
 summary: Convert verified corrections, repeated failures, and durable decisions into reusable Maestro memory without adding hidden state.
+progress_tasks:
+  - id: anchor-scope
+    title: Anchor learning scope and authority
+    phase: perceive
+    required: true
+    done_check: scope, authority, and hard stops are known
+  - id: choose-next
+    title: Choose next learning move
+    phase: choose
+    required: true
+    done_check: next move is selected from recipe rules
+  - id: execute-move
+    title: Execute bounded learning move
+    phase: act
+    required: true
+    done_check: bounded recipe action is complete or blocked
+  - id: observe-evidence
+    title: Observe learning evidence
+    phase: observe
+    required: true
+    done_check: evidence, result, or blocker is recorded
+  - id: record-learning
+    title: Record reusable learning learning when needed
+    phase: learn
+    required: true
+    done_check: durable learning is recorded or explicitly unnecessary
+  - id: return-next-gate
+    title: Return next learning gate
+    phase: continue
+    required: true
+    done_check: next gate, next task, or hard stop is visible
 authority_scope:
   - durable source evidence from events, proof, decisions, notes, or repeated failures
   - memory suggestions, card notes, or scoped skill proposals

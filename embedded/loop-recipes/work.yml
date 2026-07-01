@@ -5,6 +5,37 @@ kind:
   tags: ["implementation", "task", "proof"]
 title: Work loop
 summary: Move one accepted task from claim through implementation, proof, verification, and the next lifecycle gate.
+progress_tasks:
+  - id: anchor-scope
+    title: Anchor work scope and authority
+    phase: perceive
+    required: true
+    done_check: scope, authority, and hard stops are known
+  - id: choose-next
+    title: Choose next work move
+    phase: choose
+    required: true
+    done_check: next move is selected from recipe rules
+  - id: execute-move
+    title: Execute bounded work move
+    phase: act
+    required: true
+    done_check: bounded recipe action is complete or blocked
+  - id: observe-evidence
+    title: Observe work evidence
+    phase: observe
+    required: true
+    done_check: evidence, result, or blocker is recorded
+  - id: record-learning
+    title: Record reusable work learning when needed
+    phase: learn
+    required: true
+    done_check: durable learning is recorded or explicitly unnecessary
+  - id: return-next-gate
+    title: Return next work gate
+    phase: continue
+    required: true
+    done_check: next gate, next task, or hard stop is visible
 authority_scope:
   - accepted task or feature contract
   - local code, tests, resources, and proof for the selected unit

@@ -5,6 +5,37 @@ kind:
   tags: ["intake", "triage", "untrusted-input"]
 title: Intake triage
 summary: Classify raw backlog items safely, dedupe centrally, and mint Maestro work through trusted verbs.
+progress_tasks:
+  - id: anchor-scope
+    title: Anchor intake-triage scope and authority
+    phase: perceive
+    required: true
+    done_check: scope, authority, and hard stops are known
+  - id: choose-next
+    title: Choose next intake-triage move
+    phase: choose
+    required: true
+    done_check: next move is selected from recipe rules
+  - id: execute-move
+    title: Execute bounded intake-triage move
+    phase: act
+    required: true
+    done_check: bounded recipe action is complete or blocked
+  - id: observe-evidence
+    title: Observe intake-triage evidence
+    phase: observe
+    required: true
+    done_check: evidence, result, or blocker is recorded
+  - id: record-learning
+    title: Record reusable intake-triage learning when needed
+    phase: learn
+    required: true
+    done_check: durable learning is recorded or explicitly unnecessary
+  - id: return-next-gate
+    title: Return next intake-triage gate
+    phase: continue
+    required: true
+    done_check: next gate, next task, or hard stop is visible
 authority_scope:
   - raw untrusted backlog as read-only input
   - trusted conductor creates cards, tasks, blockers, or notes

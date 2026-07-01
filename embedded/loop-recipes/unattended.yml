@@ -5,6 +5,37 @@ kind:
   tags: ["autonomy", "work-lease", "away-mode"]
 title: Unattended loop
 summary: Keep working through accepted local Maestro records while the user is away, with one safe unit chosen per tick and hard stops for external ship actions.
+progress_tasks:
+  - id: anchor-scope
+    title: Anchor unattended scope and authority
+    phase: perceive
+    required: true
+    done_check: scope, authority, and hard stops are known
+  - id: choose-next
+    title: Choose next unattended move
+    phase: choose
+    required: true
+    done_check: next move is selected from recipe rules
+  - id: execute-move
+    title: Execute bounded unattended move
+    phase: act
+    required: true
+    done_check: bounded recipe action is complete or blocked
+  - id: observe-evidence
+    title: Observe unattended evidence
+    phase: observe
+    required: true
+    done_check: evidence, result, or blocker is recorded
+  - id: record-learning
+    title: Record reusable unattended learning when needed
+    phase: learn
+    required: true
+    done_check: durable learning is recorded or explicitly unnecessary
+  - id: return-next-gate
+    title: Return next unattended gate
+    phase: continue
+    required: true
+    done_check: next gate, next task, or hard stop is visible
 authority_scope:
   - accepted local Maestro records
   - exactly one selected unit per tick

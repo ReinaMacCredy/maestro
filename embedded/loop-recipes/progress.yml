@@ -5,6 +5,37 @@ kind:
   tags: ["progress", "task", "lightweight"]
 title: Progress loop
 summary: Set up and advance low-ceremony Progress work through a full checklist before execution starts.
+progress_tasks:
+  - id: anchor-scope
+    title: Anchor progress scope and authority
+    phase: perceive
+    required: true
+    done_check: scope, authority, and hard stops are known
+  - id: choose-next
+    title: Choose next progress move
+    phase: choose
+    required: true
+    done_check: next move is selected from recipe rules
+  - id: execute-move
+    title: Execute bounded progress move
+    phase: act
+    required: true
+    done_check: bounded recipe action is complete or blocked
+  - id: observe-evidence
+    title: Observe progress evidence
+    phase: observe
+    required: true
+    done_check: evidence, result, or blocker is recorded
+  - id: record-learning
+    title: Record reusable progress learning when needed
+    phase: learn
+    required: true
+    done_check: durable learning is recorded or explicitly unnecessary
+  - id: return-next-gate
+    title: Return next progress gate
+    phase: continue
+    required: true
+    done_check: next gate, next task, or hard stop is visible
 authority_scope:
   - current session Progress card and its progress.yml tasks
   - lightweight task setup, start, proof, and advancement

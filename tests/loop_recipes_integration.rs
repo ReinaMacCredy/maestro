@@ -258,6 +258,9 @@ fn loop_lists_shows_and_validates_project_custom_recipes() {
         shown.contains("perceive -> choose -> act -> observe -> learn -> continue"),
         "{shown}"
     );
+    assert!(shown.contains("## Progress Tasks"), "{shown}");
+    assert!(shown.contains("brief-anchor"), "{shown}");
+    assert!(shown.contains("done_check"), "{shown}");
     assert!(shown.contains("## Custom Recipe Policy"), "{shown}");
 
     let validated = stdout(temp.path(), &["loop", "validate", "brief"]);
@@ -281,6 +284,20 @@ fn loop_rejects_invalid_project_custom_recipes() {
         error.contains("invalid custom loop recipe brief.yml"),
         "{error}"
     );
+}
+
+#[test]
+fn loop_rejects_project_custom_recipe_with_invalid_progress_task_phase() {
+    let temp = TestTempDir::new("maestro-loop-custom-progress-task-phase");
+    write_custom_recipe(
+        temp.path(),
+        "brief",
+        &CUSTOM_RECIPE.replace("phase: perceive", "phase: invalid-phase"),
+    );
+
+    let error = stderr(temp.path(), &["loop", "validate", "brief"]);
+    assert!(error.contains("progress_tasks"), "{error}");
+    assert!(error.contains("invalid-phase"), "{error}");
 }
 
 #[test]
@@ -330,6 +347,17 @@ kind:
   tags: ["support", "brief"]
 title: Support brief loop
 summary: Handle one bounded support brief through current Maestro cards.
+progress_tasks:
+  - id: brief-anchor
+    title: Anchor support brief scope
+    phase: perceive
+    required: true
+    done_check: support brief and selected card are visible
+  - id: brief-finish
+    title: Finish selected brief card
+    phase: continue
+    required: true
+    done_check: next step or hard stop is returned
 authority_scope:
   - current support brief and selected Maestro card
 autonomy:

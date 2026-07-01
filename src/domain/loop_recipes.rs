@@ -72,6 +72,7 @@ pub struct RecipeContract {
     pub kind: RecipeKind,
     pub title: String,
     pub summary: String,
+    pub progress_tasks: Vec<ProgressTaskContract>,
     pub applies_when: Vec<String>,
     pub authority_scope: Vec<String>,
     pub autonomy: Vec<String>,
@@ -88,6 +89,16 @@ pub struct RecipeContract {
 pub struct RecipeKind {
     pub category: String,
     pub tags: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProgressTaskContract {
+    pub id: String,
+    pub title: String,
+    pub phase: String,
+    pub required: bool,
+    pub done_check: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -921,6 +932,7 @@ pub fn validate_contract(contract: &RecipeContract) -> Result<()> {
     require_non_empty_list("autonomy", &contract.autonomy)?;
     require_non_empty_list("hard_stops", &contract.hard_stops)?;
     require_non_empty_list("outputs", &contract.outputs)?;
+    validate_progress_tasks(&contract.id, &contract.progress_tasks)?;
     require_non_empty("router.status", &contract.router.status)?;
     require_non_empty("router.confidence", &contract.router.confidence)?;
     ensure!(
@@ -976,6 +988,7 @@ fn render_contract(contract: &RecipeContract) -> String {
     push_bullets(&mut out, "", &contract.hard_stops);
     out.push_str("\n## Outputs\n\n");
     push_bullets(&mut out, "", &contract.outputs);
+    render_progress_tasks(&mut out, &contract.progress_tasks);
     render_edges(&mut out, "Transitions", &contract.transitions);
     render_edges(&mut out, "Invocations", &contract.invocations);
     out.push_str("\n## Custom Recipe Policy\n\n");
@@ -1009,6 +1022,17 @@ fn render_edges(out: &mut String, title: &str, edges: &[RecipeEdge]) {
             "  - return_condition: {}\n",
             edge.return_condition
         ));
+    }
+}
+
+fn render_progress_tasks(out: &mut String, tasks: &[ProgressTaskContract]) {
+    out.push_str("\n## Progress Tasks\n\n");
+    for task in tasks {
+        out.push_str(&format!(
+            "- {} [{} required={}]: {}\n",
+            task.id, task.phase, task.required, task.title
+        ));
+        out.push_str(&format!("  - done_check: {}\n", task.done_check));
     }
 }
 
@@ -1228,6 +1252,33 @@ fn validate_work_lease_helper(prefix: &str, helper: &WorkLeaseHelperContract) ->
     Ok(())
 }
 
+fn validate_progress_tasks(recipe_id: &str, tasks: &[ProgressTaskContract]) -> Result<()> {
+    ensure!(
+        !tasks.is_empty(),
+        "recipe {recipe_id}.progress_tasks must not be empty"
+    );
+    let valid_phases: BTreeSet<&str> = REQUIRED_PHASES.into_iter().collect();
+    let mut ids = BTreeSet::new();
+    for (index, task) in tasks.iter().enumerate() {
+        let prefix = format!("recipe {recipe_id}.progress_tasks[{index}]");
+        require_non_empty(&format!("{prefix}.id"), &task.id)?;
+        ensure!(
+            ids.insert(task.id.as_str()),
+            "{prefix}.id duplicates progress task id {}",
+            task.id
+        );
+        require_non_empty(&format!("{prefix}.title"), &task.title)?;
+        require_non_empty(&format!("{prefix}.phase"), &task.phase)?;
+        ensure!(
+            valid_phases.contains(task.phase.as_str()),
+            "{prefix}.phase references unknown phase {}",
+            task.phase
+        );
+        require_non_empty(&format!("{prefix}.done_check"), &task.done_check)?;
+    }
+    Ok(())
+}
+
 fn validate_edges(recipe_id: &str, field: &str, edges: &[RecipeEdge]) -> Result<()> {
     for (index, edge) in edges.iter().enumerate() {
         let prefix = format!("recipe {recipe_id}.{field}[{index}]");
@@ -1302,6 +1353,14 @@ fn reject_forbidden_text(contract: &RecipeContract) -> Result<()> {
     values.extend(contract.autonomy.iter().map(String::as_str));
     values.extend(contract.hard_stops.iter().map(String::as_str));
     values.extend(contract.outputs.iter().map(String::as_str));
+    for task in &contract.progress_tasks {
+        values.extend([
+            task.id.as_str(),
+            task.title.as_str(),
+            task.phase.as_str(),
+            task.done_check.as_str(),
+        ]);
+    }
     for edge in contract
         .transitions
         .iter()
@@ -1418,6 +1477,34 @@ mod tests {
         contract.phases.remove("learn");
         let error = validate_contract(&contract).unwrap_err().to_string();
         assert!(error.contains("phases must be exactly"), "{error}");
+    }
+
+    #[test]
+    fn rejects_progress_task_duplicate_ids() {
+        let mut contract = contract("work").expect("work contract should validate");
+        contract.progress_tasks[1].id = contract.progress_tasks[0].id.clone();
+
+        let error = validate_contract(&contract).unwrap_err().to_string();
+        assert!(error.contains("duplicates progress task id"), "{error}");
+    }
+
+    #[test]
+    fn rejects_progress_task_unknown_phase() {
+        let mut contract = contract("work").expect("work contract should validate");
+        contract.progress_tasks[0].phase = "invalid-phase".to_string();
+
+        let error = validate_contract(&contract).unwrap_err().to_string();
+        assert!(error.contains("invalid-phase"), "{error}");
+        assert!(error.contains("progress_tasks"), "{error}");
+    }
+
+    #[test]
+    fn rejects_progress_task_blank_done_check() {
+        let mut contract = contract("work").expect("work contract should validate");
+        contract.progress_tasks[0].done_check.clear();
+
+        let error = validate_contract(&contract).unwrap_err().to_string();
+        assert!(error.contains("done_check must not be empty"), "{error}");
     }
 
     #[test]

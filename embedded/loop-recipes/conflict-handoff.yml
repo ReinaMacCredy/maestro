@@ -5,6 +5,37 @@ kind:
   tags: ["concurrency", "worktree", "merge-back"]
 title: Conflict handoff
 summary: Coordinate overlapping sessions through visible Maestro notices and manual git worktree merge-back.
+progress_tasks:
+  - id: anchor-scope
+    title: Anchor conflict-handoff scope and authority
+    phase: perceive
+    required: true
+    done_check: scope, authority, and hard stops are known
+  - id: choose-next
+    title: Choose next conflict-handoff move
+    phase: choose
+    required: true
+    done_check: next move is selected from recipe rules
+  - id: execute-move
+    title: Execute bounded conflict-handoff move
+    phase: act
+    required: true
+    done_check: bounded recipe action is complete or blocked
+  - id: observe-evidence
+    title: Observe conflict-handoff evidence
+    phase: observe
+    required: true
+    done_check: evidence, result, or blocker is recorded
+  - id: record-learning
+    title: Record reusable conflict-handoff learning when needed
+    phase: learn
+    required: true
+    done_check: durable learning is recorded or explicitly unnecessary
+  - id: return-next-gate
+    title: Return next conflict-handoff gate
+    phase: continue
+    required: true
+    done_check: next gate, next task, or hard stop is visible
 authority_scope:
   - current repo, linked cards, conflict notices, and bounded worktree branch
   - manual git commands owned by the agent, never by Maestro

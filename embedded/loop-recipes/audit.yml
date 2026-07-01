@@ -5,6 +5,37 @@ kind:
   tags: ["review", "audit", "findings"]
 title: Audit loop
 summary: Scan a bounded surface, convert real findings into Maestro work, and avoid chat-only audit output.
+progress_tasks:
+  - id: anchor-scope
+    title: Anchor audit scope and authority
+    phase: perceive
+    required: true
+    done_check: scope, authority, and hard stops are known
+  - id: choose-next
+    title: Choose next audit move
+    phase: choose
+    required: true
+    done_check: next move is selected from recipe rules
+  - id: execute-move
+    title: Execute bounded audit move
+    phase: act
+    required: true
+    done_check: bounded recipe action is complete or blocked
+  - id: observe-evidence
+    title: Observe audit evidence
+    phase: observe
+    required: true
+    done_check: evidence, result, or blocker is recorded
+  - id: record-learning
+    title: Record reusable audit learning when needed
+    phase: learn
+    required: true
+    done_check: durable learning is recorded or explicitly unnecessary
+  - id: return-next-gate
+    title: Return next audit gate
+    phase: continue
+    required: true
+    done_check: next gate, next task, or hard stop is visible
 authority_scope:
   - read requested source, diff, tests, and artifacts
   - write only findings, notes, or tasks unless implementation is separately authorized
