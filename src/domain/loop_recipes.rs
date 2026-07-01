@@ -23,6 +23,7 @@ static LOOP_RECIPE_CONTRACTS_DIR: Dir<'_> =
     include_dir!("$CARGO_MANIFEST_DIR/embedded/loop-recipes");
 
 const CONTRACT_SCHEMA_VERSION: &str = "maestro.recipe.v2";
+const LOOP_COMPACT_PACKET_SCHEMA: &str = "maestro.loop_compact_packet.v1";
 const REQUIRED_PHASES: [&str; 6] = ["perceive", "choose", "act", "observe", "learn", "continue"];
 const CANONICAL_RECIPE_IDS: [&str; 13] = [
     "adversarial-review",
@@ -249,6 +250,20 @@ pub struct LoopNextGit {
     pub maestro_dirty: usize,
     pub ahead: usize,
     pub behind: usize,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct LoopCompactPacket {
+    pub schema: &'static str,
+    pub recipe: String,
+    pub phase: String,
+    pub progress_task: String,
+    pub reads: Vec<String>,
+    pub allowed_verbs: Vec<String>,
+    pub forbidden_verbs: Vec<String>,
+    pub checks: Vec<String>,
+    pub hard_stops: Vec<String>,
+    pub next: Vec<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -716,6 +731,56 @@ pub fn show_with_custom_dir(name: &str, custom_dir: Option<&Path>) -> Result<Str
     );
 }
 
+pub fn compact_packet_with_custom_dir(
+    name: &str,
+    custom_dir: Option<&Path>,
+    phase: Option<&str>,
+) -> Result<LoopCompactPacket> {
+    let custom_names = match custom_dir {
+        Some(custom_dir) => custom_contract_names(custom_dir)?,
+        None => Vec::new(),
+    };
+    if contract_names().contains(&name) {
+        return compact_packet_for_contract(&contract(name)?, phase);
+    }
+    if let Some(custom_dir) = custom_dir
+        && custom_names.iter().any(|custom| custom == name)
+    {
+        return compact_packet_for_contract(&custom_contract_known(custom_dir, name)?, phase);
+    }
+    bail!(
+        "unknown loop recipe \"{name}\"; run `maestro loop` for the index (available: {})",
+        available_names_with_custom(custom_dir)?.join(", ")
+    );
+}
+
+pub fn compact_packet_for_next_report(
+    report: &LoopNextReport,
+    custom_dir: Option<&Path>,
+    phase: Option<&str>,
+) -> Result<LoopCompactPacket> {
+    let recipe = report
+        .recommended_recipe
+        .as_deref()
+        .with_context(|| format!("loop next has no recommended recipe: {}", report.reason))?;
+    let selected_phase = phase.unwrap_or_else(|| default_phase_for_next(recipe, &report.reason));
+    compact_packet_with_custom_dir(recipe, custom_dir, Some(selected_phase))
+}
+
+pub fn render_compact_packet(packet: &LoopCompactPacket) -> String {
+    let mut out = format!(
+        "schema: {}\nrecipe: {}\nphase: {}\nprogress_task: {}\n",
+        packet.schema, packet.recipe, packet.phase, packet.progress_task
+    );
+    push_compact_list(&mut out, "reads", &packet.reads);
+    push_compact_list(&mut out, "allowed_verbs", &packet.allowed_verbs);
+    push_compact_list(&mut out, "forbidden_verbs", &packet.forbidden_verbs);
+    push_compact_list(&mut out, "checks", &packet.checks);
+    push_compact_list(&mut out, "hard_stops", &packet.hard_stops);
+    push_compact_list(&mut out, "next", &packet.next);
+    out
+}
+
 pub fn validate_with_custom_dir(name: &str, custom_dir: Option<&Path>) -> Result<String> {
     let custom_names = match custom_dir {
         Some(custom_dir) => custom_contract_names(custom_dir)?,
@@ -735,6 +800,121 @@ pub fn validate_with_custom_dir(name: &str, custom_dir: Option<&Path>) -> Result
         "unknown structured loop recipe \"{name}\"; run `maestro loop` for the index (available: {})",
         available_names_with_custom(custom_dir)?.join(", ")
     );
+}
+
+pub fn custom_recipe_template() -> &'static str {
+    r#"schema_version: maestro.recipe.v2
+id: custom
+kind:
+  category: custom
+  tags: ["custom", "template"]
+title: Custom loop
+summary: Handle one bounded custom workflow through current Maestro artifacts.
+progress_tasks:
+  - id: anchor-scope
+    title: Anchor custom scope
+    phase: perceive
+    required: true
+    done_check: scope, authority, and hard stops are known
+  - id: choose-next
+    title: Choose next custom move
+    phase: choose
+    required: true
+    done_check: next move is selected from recipe rules
+  - id: execute-move
+    title: Execute bounded custom move
+    phase: act
+    required: true
+    done_check: bounded recipe action is complete or blocked
+  - id: observe-evidence
+    title: Observe custom evidence
+    phase: observe
+    required: true
+    done_check: evidence, result, or blocker is recorded
+  - id: record-learning
+    title: Record reusable custom learning when needed
+    phase: learn
+    required: true
+    done_check: durable learning is recorded or explicitly unnecessary
+  - id: return-next-gate
+    title: Return next custom gate
+    phase: continue
+    required: true
+    done_check: next gate, next task, or hard stop is visible
+authority_scope:
+  - current custom request and selected Maestro artifacts
+autonomy:
+  - local autonomous work only inside the selected custom scope
+router:
+  status: custom
+  priority: 3
+  confidence: medium
+transitions: []
+invocations: []
+outputs:
+  - selected work
+  - recorded evidence
+  - next gate or hard stop
+applies_when:
+  - no shipped recipe fits the current card or run
+hard_stops:
+  - authority, proof, QA, or approval gate would be skipped
+phases:
+  perceive:
+    goal: Read current Maestro state and the selected custom scope.
+    bricks: ["status", "card", "task"]
+    reads: ["maestro status", "maestro card show <id>", "maestro task list"]
+    allowed_verbs: ["maestro status", "maestro card show <id>", "maestro task list"]
+    forbidden_verbs: ["external ship action"]
+    checks: ["scope, authority, and hard stops are visible"]
+    durable_learning: []
+    outputs: ["current scope", "hard stop"]
+  choose:
+    goal: Choose the smallest legal next move.
+    bricks: ["task", "decision", "recipe"]
+    reads: ["maestro loop next", "maestro task next"]
+    allowed_verbs: ["maestro loop next", "maestro task next"]
+    forbidden_verbs: ["unbounded worker launch"]
+    checks: ["one move is selected"]
+    durable_learning: []
+    outputs: ["selected move"]
+  act:
+    goal: Execute the bounded move through existing Maestro verbs.
+    bricks: ["task", "proof", "note"]
+    reads: ["maestro task show <id>"]
+    allowed_verbs: ["maestro task complete <id>", "maestro task verify <id>", "maestro card note <id> <text>"]
+    forbidden_verbs: ["unapproved dependency", "force push"]
+    checks: ["action stays inside selected scope"]
+    durable_learning: []
+    outputs: ["completed move", "blocker"]
+  observe:
+    goal: Verify the result and capture inspectable evidence.
+    bricks: ["proof", "test", "status"]
+    reads: ["maestro status", "test output"]
+    allowed_verbs: ["maestro task verify <id>", "cargo test <target>", "maestro status"]
+    forbidden_verbs: ["claim success without proof"]
+    checks: ["evidence backs every claim"]
+    durable_learning: []
+    outputs: ["verified result", "failed proof", "hard stop"]
+  learn:
+    goal: Preserve reusable corrections only when they will guide future work.
+    bricks: ["event", "memory", "note"]
+    reads: ["failed proof", "user correction"]
+    allowed_verbs: ["maestro event intervention --note <text>", "maestro card note <id> <text>"]
+    forbidden_verbs: ["chat-only learning"]
+    checks: ["lesson has a durable source when needed"]
+    durable_learning: ["card note", "intervention event", "memory candidate"]
+    outputs: ["recorded lesson", "no learning needed"]
+  continue:
+    goal: Return the next gate, next task, or hard stop.
+    bricks: ["status", "task next", "report"]
+    reads: ["maestro status", "maestro task next"]
+    allowed_verbs: ["maestro status", "maestro task next"]
+    forbidden_verbs: ["external ship action"]
+    checks: ["next step is explicit"]
+    durable_learning: []
+    outputs: ["next gate", "next task", "hard stop"]
+"#
 }
 
 /// Every shipped structured recipe contract name, sorted.
@@ -1007,6 +1187,59 @@ fn render_contract(contract: &RecipeContract) -> String {
     out
 }
 
+fn compact_packet_for_contract(
+    contract: &RecipeContract,
+    phase: Option<&str>,
+) -> Result<LoopCompactPacket> {
+    let phase_name = phase.unwrap_or("perceive");
+    ensure!(
+        REQUIRED_PHASES.contains(&phase_name),
+        "unknown loop recipe phase {phase_name:?}; expected one of {}",
+        REQUIRED_PHASES.join(", ")
+    );
+    let phase = contract
+        .phases
+        .get(phase_name)
+        .with_context(|| format!("recipe {} does not define phase {phase_name}", contract.id))?;
+    let progress_task = contract
+        .progress_tasks
+        .iter()
+        .find(|task| task.phase == phase_name)
+        .with_context(|| {
+            format!(
+                "recipe {} has no progress task for phase {phase_name}",
+                contract.id
+            )
+        })?;
+    Ok(LoopCompactPacket {
+        schema: LOOP_COMPACT_PACKET_SCHEMA,
+        recipe: contract.id.clone(),
+        phase: phase_name.to_string(),
+        progress_task: progress_task.id.clone(),
+        reads: phase.reads.clone(),
+        allowed_verbs: phase.allowed_verbs.clone(),
+        forbidden_verbs: phase.forbidden_verbs.clone(),
+        checks: phase.checks.clone(),
+        hard_stops: contract.hard_stops.clone(),
+        next: phase.outputs.clone(),
+    })
+}
+
+fn default_phase_for_next(recipe: &str, reason: &str) -> &'static str {
+    if recipe == "work" {
+        if reason.contains("needs_verification") {
+            return "observe";
+        }
+        if reason.contains("in-progress")
+            || reason.contains("in_progress")
+            || reason.contains("current task is live")
+        {
+            return "act";
+        }
+    }
+    "perceive"
+}
+
 fn render_edges(out: &mut String, title: &str, edges: &[RecipeEdge]) {
     if edges.is_empty() {
         return;
@@ -1095,6 +1328,11 @@ fn push_bullets<S: AsRef<str>>(out: &mut String, indent: &str, values: &[S]) {
     for value in values {
         out.push_str(&format!("{indent}- {}\n", value.as_ref()));
     }
+}
+
+fn push_compact_list(out: &mut String, name: &str, values: &[String]) {
+    out.push_str(&format!("{name}:\n"));
+    push_bullets(out, "  ", values);
 }
 
 fn parse_contract_body(name: &str, body: &str) -> Result<RecipeContract> {

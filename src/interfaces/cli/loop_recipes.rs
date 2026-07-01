@@ -1,7 +1,7 @@
 use std::env;
 use std::path::PathBuf;
 
-use anyhow::Result;
+use anyhow::{Result, bail};
 use serde::Serialize;
 use serde_json::json;
 
@@ -56,17 +56,47 @@ pub fn run(args: LoopArgs) -> Result<()> {
                 loop_recipes::index_with_custom_dir(custom_dir.as_deref())?
             )
         }
-        Some(LoopCommand::Show { name }) => {
-            print!(
-                "{}",
-                loop_recipes::show_with_custom_dir(&name, custom_dir.as_deref())?
-            )
+        Some(LoopCommand::Show {
+            name,
+            compact,
+            phase,
+            json,
+        }) => {
+            if compact {
+                let packet = loop_recipes::compact_packet_with_custom_dir(
+                    &name,
+                    custom_dir.as_deref(),
+                    phase.as_deref(),
+                )?;
+                if json {
+                    println!("{}", serde_json::to_string_pretty(&packet)?);
+                } else {
+                    print!("{}", loop_recipes::render_compact_packet(&packet));
+                }
+            } else {
+                if phase.is_some() {
+                    bail!("--phase requires --compact");
+                }
+                if json {
+                    bail!("--json requires --compact for `maestro loop show`");
+                }
+                print!(
+                    "{}",
+                    loop_recipes::show_with_custom_dir(&name, custom_dir.as_deref())?
+                );
+            }
         }
         Some(LoopCommand::Validate { name }) => print!(
             "{}",
             loop_recipes::validate_with_custom_dir(&name, custom_dir.as_deref())?
         ),
-        Some(LoopCommand::Next(args)) => run_next(args)?,
+        Some(LoopCommand::Template { kind }) => {
+            if kind != "custom" {
+                bail!("unknown loop template {kind:?}; available: custom");
+            }
+            print!("{}", loop_recipes::custom_recipe_template());
+        }
+        Some(LoopCommand::Next(args)) => run_next(args, custom_dir.as_deref())?,
         Some(LoopCommand::WorkLease(args)) => run_work_lease(*args)?,
     }
     Ok(())
@@ -78,9 +108,22 @@ fn custom_recipe_dir() -> Option<PathBuf> {
     Some(paths.loop_recipes_dir())
 }
 
-fn run_next(args: LoopNextArgs) -> Result<()> {
+fn run_next(args: LoopNextArgs, custom_dir: Option<&std::path::Path>) -> Result<()> {
     let report = build_loop_next_report()?;
-    if args.json {
+    if args.compact {
+        let packet = loop_recipes::compact_packet_for_next_report(
+            &report,
+            custom_dir,
+            args.phase.as_deref(),
+        )?;
+        if args.json {
+            println!("{}", serde_json::to_string_pretty(&packet)?);
+        } else {
+            print!("{}", loop_recipes::render_compact_packet(&packet));
+        }
+    } else if args.phase.is_some() {
+        bail!("--phase requires --compact");
+    } else if args.json {
         println!("{}", serde_json::to_string_pretty(&report)?);
     } else {
         print_loop_next(&report);

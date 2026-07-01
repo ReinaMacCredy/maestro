@@ -650,6 +650,15 @@ pub enum LoopCommand {
         /// Recipe name (e.g. feature-fanout); run `maestro loop` for the list.
         #[arg(value_name = "NAME")]
         name: String,
+        /// Print one compact execution packet instead of the full recipe.
+        #[arg(long)]
+        compact: bool,
+        /// Select the compact packet phase; defaults to perceive for show.
+        #[arg(long, value_name = "PHASE")]
+        phase: Option<String>,
+        /// Print compact packet JSON.
+        #[arg(long)]
+        json: bool,
     },
     #[command(about = "Validate one structured shipped or project custom loop recipe")]
     Validate {
@@ -657,15 +666,27 @@ pub enum LoopCommand {
         #[arg(value_name = "NAME")]
         name: String,
     },
+    #[command(about = "Print a non-mutating custom recipe template")]
+    Template {
+        /// Template kind. Currently supported: custom.
+        #[arg(value_name = "KIND")]
+        kind: String,
+    },
     #[command(about = "Run the internal Work Lease choose-phase helper and print JSON")]
     WorkLease(Box<WorkLeaseArgs>),
 }
 
 #[derive(Debug, Args)]
 pub struct LoopNextArgs {
-    /// Print machine-readable router JSON.
+    /// Print machine-readable router or compact packet JSON.
     #[arg(long)]
     pub json: bool,
+    /// Print a compact execution packet for the recommended recipe.
+    #[arg(long)]
+    pub compact: bool,
+    /// Override the compact packet phase selected from current status.
+    #[arg(long, value_name = "PHASE")]
+    pub phase: Option<String>,
 }
 
 #[derive(Debug, Args)]

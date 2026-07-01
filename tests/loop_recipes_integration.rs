@@ -210,6 +210,83 @@ fn loop_show_renders_progress_recipe() {
 }
 
 #[test]
+fn loop_show_compact_renders_one_phase_execution_packet() {
+    let temp = TestTempDir::new("maestro-loop-show-compact");
+    let out = stdout(temp.path(), &["loop", "show", "work", "--compact"]);
+
+    assert!(
+        out.contains("schema: maestro.loop_compact_packet.v1"),
+        "{out}"
+    );
+    assert!(out.contains("recipe: work"), "{out}");
+    assert!(out.contains("phase: perceive"), "{out}");
+    assert!(out.contains("progress_task: anchor-scope"), "{out}");
+    assert!(out.contains("reads:"), "{out}");
+    assert!(out.contains("allowed_verbs:"), "{out}");
+    assert!(out.contains("forbidden_verbs:"), "{out}");
+    assert!(out.contains("checks:"), "{out}");
+    assert!(out.contains("hard_stops:"), "{out}");
+    assert!(out.contains("next:"), "{out}");
+    assert!(
+        !out.contains("progress_task: record-learning"),
+        "compact output should not render every phase: {out}"
+    );
+}
+
+#[test]
+fn loop_show_compact_json_uses_shared_packet_schema() {
+    let temp = TestTempDir::new("maestro-loop-show-compact-json");
+    let out = stdout(
+        temp.path(),
+        &[
+            "loop",
+            "show",
+            "work",
+            "--compact",
+            "--phase",
+            "observe",
+            "--json",
+        ],
+    );
+    let value: Value = serde_json::from_str(&out).expect("compact packet JSON should parse");
+
+    assert_eq!(value["schema"], "maestro.loop_compact_packet.v1");
+    assert_eq!(value["recipe"], "work");
+    assert_eq!(value["phase"], "observe");
+    assert_eq!(value["progress_task"], "observe-evidence");
+    assert!(value["reads"].is_array(), "{value}");
+    assert!(value["allowed_verbs"].is_array(), "{value}");
+    assert!(value["forbidden_verbs"].is_array(), "{value}");
+    assert!(value["checks"].is_array(), "{value}");
+    assert!(value["hard_stops"].is_array(), "{value}");
+    assert!(value["next"].is_array(), "{value}");
+}
+
+#[test]
+fn loop_next_compact_json_routes_ready_task_without_mutating_store() {
+    let temp = TestTempDir::new("maestro-loop-next-compact-json");
+    init_git_marker(temp.path());
+    stdout(temp.path(), &["init", "--yes"]);
+    stdout(
+        temp.path(),
+        &["task", "add", "--id-only", "Implement compact packet"],
+    );
+    let before = snapshot_dir(&temp.path().join(".maestro"));
+
+    let out = stdout(temp.path(), &["loop", "next", "--compact", "--json"]);
+    let after = snapshot_dir(&temp.path().join(".maestro"));
+    let value: Value = serde_json::from_str(&out).expect("compact next JSON should parse");
+
+    assert_eq!(before, after, "loop next --compact must stay read-only");
+    assert_eq!(value["schema"], "maestro.loop_compact_packet.v1");
+    assert_eq!(value["recipe"], "work");
+    assert_eq!(value["phase"], "perceive");
+    assert_eq!(value["progress_task"], "anchor-scope");
+    assert!(value["reads"].is_array(), "{value}");
+    assert!(value["next"].is_array(), "{value}");
+}
+
+#[test]
 fn loop_show_renders_migrated_orchestration_recipe_from_yaml() {
     let temp = TestTempDir::new("maestro-loop-show-migrated");
     let out = stdout(temp.path(), &["loop", "show", "conflict-handoff"]);
@@ -266,6 +343,29 @@ fn loop_lists_shows_and_validates_project_custom_recipes() {
     let validated = stdout(temp.path(), &["loop", "validate", "brief"]);
     assert!(
         validated.contains("valid project custom loop recipe: brief"),
+        "{validated}"
+    );
+}
+
+#[test]
+fn loop_template_custom_prints_valid_non_mutating_recipe() {
+    let temp = TestTempDir::new("maestro-loop-template-custom");
+
+    let out = stdout(temp.path(), &["loop", "template", "custom"]);
+    assert!(out.contains("schema_version: maestro.recipe.v2"), "{out}");
+    assert!(out.contains("id: custom"), "{out}");
+    assert!(out.contains("progress_tasks:"), "{out}");
+    assert!(out.contains("perceive:"), "{out}");
+    assert!(out.contains("continue:"), "{out}");
+    assert!(
+        !temp.path().join(".maestro/loop-recipes").exists(),
+        "template command must not create custom recipe files"
+    );
+
+    write_custom_recipe(temp.path(), "custom", &out);
+    let validated = stdout(temp.path(), &["loop", "validate", "custom"]);
+    assert!(
+        validated.contains("valid project custom loop recipe: custom"),
         "{validated}"
     );
 }
