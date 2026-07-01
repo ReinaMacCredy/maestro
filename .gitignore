@@ -15,7 +15,9 @@
 /node_modules/
 
 # Maestro local cache (not covered by the managed block above)
-.maestro/
+.maestro/*
+!.maestro/
+!.maestro/store.sqlite
 # macOS / local noise
 .DS_Store
 .claude/scheduled_tasks.lock
