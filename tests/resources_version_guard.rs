@@ -33,7 +33,13 @@ static PLAYBOOK_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/embedded/playbo
 /// The shipped DESIGN.md catalog, served from the binary instead of extracted.
 static DESIGN_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/embedded/design");
 /// `(group, name, shipped version, sha256 tree-hash of the resource files)`.
-const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 19] = [
+const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 20] = [
+    (
+        "skill",
+        "ask-maestro",
+        "1.0.0",
+        "b7343f3a05806418812d8a6a590bb31bb62b819940728ff03a1869840732a612",
+    ),
     (
         "skill",
         "maestro-card",
@@ -489,6 +495,26 @@ fn every_shipped_skill_is_recorded_in_the_guard() {
                 .any(|(group, name, _, _)| *group == "skill" && *name == skill.name),
             "shipped skill {} is missing from RESOURCE_VERSION_GUARD",
             skill.name
+        );
+    }
+}
+
+#[test]
+fn ask_maestro_routes_to_the_shipped_skill_family() {
+    let ask = shipped_skill_body("ask-maestro").replace('\n', " ");
+    for phrase in [
+        "maestro-design",
+        "maestro-card",
+        "maestro-setup",
+        "maestro-audit",
+        "maestro status",
+        "maestro loop next",
+        "maestro task setup",
+        "conflict-handoff",
+    ] {
+        assert!(
+            ask.contains(phrase),
+            "ask-maestro must retain routing phrase {phrase:?}"
         );
     }
 }

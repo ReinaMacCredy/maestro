@@ -93,6 +93,7 @@ impl CommandScope {
 
     fn for_skill(skill: &str) -> Self {
         let paths = match skill {
+            "ask-maestro" => Some(ASK_MAESTRO_COMMANDS),
             "maestro-audit" => Some(MAESTRO_AUDIT_COMMANDS),
             "maestro-card" => Some(MAESTRO_CARD_COMMANDS),
             "maestro-design" => Some(MAESTRO_DESIGN_COMMANDS),
@@ -119,6 +120,42 @@ impl CommandScope {
             .unwrap_or(true)
     }
 }
+
+const ASK_MAESTRO_COMMANDS: &[&str] = &[
+    "maestro status",
+    "maestro active",
+    "maestro loop list",
+    "maestro loop show",
+    "maestro loop next",
+    "maestro task setup",
+    "maestro task add",
+    "maestro task start",
+    "maestro task done",
+    "maestro task show",
+    "maestro task list",
+    "maestro feature new",
+    "maestro feature set",
+    "maestro feature finalize",
+    "maestro feature show",
+    "maestro feature list",
+    "maestro decision new",
+    "maestro decision lock",
+    "maestro decision show",
+    "maestro card show",
+    "maestro card list",
+    "maestro qa baseline",
+    "maestro qa slice",
+    "maestro harness list",
+    "maestro harness show",
+    "maestro harness apply",
+    "maestro init",
+    "maestro install",
+    "maestro sync",
+    "maestro doctor",
+    "maestro link add",
+    "maestro msg send",
+    "maestro msg read",
+];
 
 const MAESTRO_CARD_COMMANDS: &[&str] = &[
     "maestro status",
@@ -538,6 +575,16 @@ mod tests {
 
     #[test]
     fn skill_scopes_render_filtered_exact_signatures() {
+        let ask = render_cli_reference_for_skill("ask-maestro");
+        assert!(ask.contains("maestro status"), "{ask}");
+        assert!(ask.contains("maestro loop next"), "{ask}");
+        assert!(ask.contains("maestro task setup"), "{ask}");
+        assert!(ask.contains("maestro feature finalize <ID>"), "{ask}");
+        assert!(ask.contains("maestro harness apply <ID>"), "{ask}");
+        assert!(ask.contains("maestro doctor"), "{ask}");
+        assert!(!ask.contains("maestro scorer"), "{ask}");
+        assert!(!ask.contains("maestro mcp serve"), "{ask}");
+
         let card = render_cli_reference_for_skill("maestro-card");
         assert!(card.contains("maestro task add <TITLE>"), "{card}");
         assert!(card.contains("maestro task start <REF_OR_ID>"), "{card}");
