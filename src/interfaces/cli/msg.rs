@@ -14,18 +14,27 @@
 //! there is no reparent verb, so it ends only when the feature goes terminal).
 
 use std::collections::BTreeSet;
+use std::env;
+use std::io::Write;
+use std::process::{Command, Stdio};
+use std::thread;
+use std::time::{Duration, Instant};
 
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Context, Result, anyhow, bail};
+use serde_json::{Value, json};
 
 use crate::domain::card;
-use crate::domain::channel::{self, Channel, ChannelKind, Message};
+use crate::domain::channel::{self, Channel, ChannelKind, DeliveryReceipt, Message};
+use crate::domain::run::{self, Presence};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
+use crate::foundation::core::time::utc_now_timestamp;
 use crate::interfaces::cli::{MsgArgs, MsgCommand, worktree_roots};
 
 /// How many already-seen partner messages a read prints as context above the
 /// unread block (`dec-msg-verbs-read-model-send-link-gated-52f6`).
 const CONTEXT_LIMIT: usize = 5;
 const TASK_ORDERING_HINT: &str = "hint: inbox is advisory; enforce ordering with explicit task blockers: maestro task block <id> --by <task-id>";
+const CODEX_DELIVERY_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub fn run(args: MsgArgs) -> Result<()> {
     match args.command {
@@ -77,7 +86,34 @@ fn send(from: Option<&str>, to: &str, text: &str) -> Result<()> {
         bail!("{me} and {to} are not linked; run `maestro link add {me} {to}` before messaging");
     }
 
-    channel::send(&paths, &me, to, &super::cli_run_id(), text)?;
+    let from_session = super::cli_run_id();
+    if let CardPresence::Live(target_card) = &target
+        && let Some(outcome) =
+            send_codex_thread_primary(&paths, &me, &target_card.id, &from_session, text)?
+    {
+        match outcome {
+            CodexThreadOutcome::Delivered {
+                target_thread,
+                receipt_id,
+            } => {
+                println!(
+                    "sent to {to} via codex thread {target_thread} (from {me}); receipt {receipt_id}"
+                );
+            }
+            CodexThreadOutcome::FallbackLocal {
+                target_thread,
+                receipt_id,
+                reason,
+            } => {
+                println!(
+                    "sent to {to} (from {me}); codex thread {target_thread} unavailable, saved local fallback; receipt {receipt_id}; reason: {reason}"
+                );
+            }
+        }
+        return Ok(());
+    }
+
+    channel::send(&paths, &me, to, &from_session, text)?;
     println!("sent to {to} (from {me})");
     Ok(())
 }
@@ -103,6 +139,222 @@ fn send_broadcast(
     channel::send_feature(paths, feature_id, me, &super::cli_run_id(), text)?;
     println!("broadcast to feature {feature_id} (from {me})");
     Ok(())
+}
+
+enum CodexThreadOutcome {
+    Delivered {
+        target_thread: String,
+        receipt_id: String,
+    },
+    FallbackLocal {
+        target_thread: String,
+        receipt_id: String,
+        reason: String,
+    },
+}
+
+/// Prefer direct Codex-thread delivery only when both sides are real Codex
+/// thread sessions and the target thread is fresh enough to trust. If the app
+/// socket is unavailable or rejects the turn, preserve delivery by writing the
+/// ordinary local channel and record the fallback in the receipt ledger.
+fn send_codex_thread_primary(
+    paths: &MaestroPaths,
+    from_card: &str,
+    to_card: &str,
+    from_session: &str,
+    text: &str,
+) -> Result<Option<CodexThreadOutcome>> {
+    let Some(source_thread) = current_codex_thread_id(from_session) else {
+        return Ok(None);
+    };
+    let Some(target_thread) = target_codex_thread(paths, to_card, &source_thread)? else {
+        return Ok(None);
+    };
+
+    let prompt = codex_thread_prompt(from_card, to_card, &source_thread, text);
+    match start_codex_thread_turn(paths, &target_thread, &prompt) {
+        Ok(()) => {
+            let receipt_id = channel::append_delivery_receipt(
+                paths,
+                channel::DeliveryReceiptAppend {
+                    from_card,
+                    from_session,
+                    to_card,
+                    to_session: Some(&target_thread),
+                    transport: "codex_thread",
+                    status: "delivered",
+                    text,
+                    detail: None,
+                },
+            )?;
+            Ok(Some(CodexThreadOutcome::Delivered {
+                target_thread,
+                receipt_id,
+            }))
+        }
+        Err(error) => {
+            let reason = compact_reason(&error.to_string());
+            channel::send(paths, from_card, to_card, from_session, text)?;
+            let receipt_id = channel::append_delivery_receipt(
+                paths,
+                channel::DeliveryReceiptAppend {
+                    from_card,
+                    from_session,
+                    to_card,
+                    to_session: Some(&target_thread),
+                    transport: "codex_thread",
+                    status: "fallback_local",
+                    text,
+                    detail: Some(&reason),
+                },
+            )?;
+            Ok(Some(CodexThreadOutcome::FallbackLocal {
+                target_thread,
+                receipt_id,
+                reason,
+            }))
+        }
+    }
+}
+
+fn current_codex_thread_id(from_session: &str) -> Option<String> {
+    env::var("CODEX_THREAD_ID")
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty() && value == from_session)
+}
+
+fn target_codex_thread(
+    paths: &MaestroPaths,
+    to_card: &str,
+    source_thread: &str,
+) -> Result<Option<String>> {
+    let roots = worktree_roots(paths);
+    let now = utc_now_timestamp();
+    let rows = run::active_sessions_union(&roots, &now)?;
+    Ok(rows.into_iter().find_map(|row| {
+        if row.agent_runtime.as_deref() != Some("codex") {
+            return None;
+        }
+        if !fresh_codex_target(row.presence) {
+            return None;
+        }
+        if !row
+            .bound_card
+            .as_deref()
+            .is_some_and(|card| card.eq_ignore_ascii_case(to_card))
+        {
+            return None;
+        }
+        let thread = raw_thread_id(&row.session_id);
+        if thread == source_thread || thread.starts_with("cli-") {
+            return None;
+        }
+        Some(thread.to_string())
+    }))
+}
+
+fn fresh_codex_target(presence: Presence) -> bool {
+    matches!(
+        presence,
+        Presence::Working | Presence::QuietWorking | Presence::Waiting | Presence::Idle
+    )
+}
+
+fn raw_thread_id(session_id: &str) -> &str {
+    session_id
+        .split_once('@')
+        .map_or(session_id, |(thread, _)| thread)
+}
+
+fn codex_thread_prompt(from_card: &str, to_card: &str, from_thread: &str, text: &str) -> String {
+    format!(
+        "Maestro linked message\n\nFrom card: {from_card}\nFrom Codex thread: {from_thread}\nTo card: {to_card}\n\n{text}\n\nMaestro recorded this as a direct Codex-thread delivery receipt. Continue from this thread if the message changes your work."
+    )
+}
+
+fn start_codex_thread_turn(paths: &MaestroPaths, target_thread: &str, prompt: &str) -> Result<()> {
+    let request = json!({
+        "id": "maestro-msg-send",
+        "method": "turn/start",
+        "params": {
+            "threadId": target_thread,
+            "input": [
+                {
+                    "type": "text",
+                    "text": prompt,
+                }
+            ],
+            "cwd": paths.repo_root().display().to_string(),
+        }
+    });
+    let payload = format!("{}\n", serde_json::to_string(&request)?);
+    let mut child = Command::new("codex")
+        .args(["app-server", "proxy"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .context("failed to start `codex app-server proxy`")?;
+    child
+        .stdin
+        .as_mut()
+        .context("failed to open codex app-server proxy stdin")?
+        .write_all(payload.as_bytes())
+        .context("failed to send turn/start request to codex app-server proxy")?;
+    drop(child.stdin.take());
+
+    let output = wait_with_timeout(child, CODEX_DELIVERY_TIMEOUT)?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    if !output.status.success() {
+        bail!("codex app-server proxy failed: {}", compact_reason(&stderr));
+    }
+    if let Some(error) = json_rpc_error(&stdout) {
+        bail!("codex app-server proxy returned error: {error}");
+    }
+    Ok(())
+}
+
+fn wait_with_timeout(
+    mut child: std::process::Child,
+    timeout: Duration,
+) -> Result<std::process::Output> {
+    let started = Instant::now();
+    loop {
+        if child.try_wait()?.is_some() {
+            return Ok(child.wait_with_output()?);
+        }
+        if started.elapsed() >= timeout {
+            let _ = child.kill();
+            let _ = child.wait_with_output();
+            bail!(
+                "codex app-server proxy timed out after {}s",
+                timeout.as_secs()
+            );
+        }
+        thread::sleep(Duration::from_millis(25));
+    }
+}
+
+fn json_rpc_error(stdout: &str) -> Option<String> {
+    stdout.lines().find_map(|line| {
+        let value: Value = serde_json::from_str(line).ok()?;
+        value
+            .get("error")
+            .map(|error| compact_reason(&error.to_string()))
+    })
+}
+
+fn compact_reason(raw: &str) -> String {
+    let reason = raw.split_whitespace().collect::<Vec<_>>().join(" ");
+    if reason.chars().count() > 180 {
+        format!("{}...", reason.chars().take(177).collect::<String>())
+    } else if reason.is_empty() {
+        "unknown error".to_string()
+    } else {
+        reason
+    }
 }
 
 /// `maestro msg read [card]`: print each visible channel's seen context plus all
@@ -215,7 +467,9 @@ fn list(scope: Option<&str>) -> Result<()> {
                 .iter()
                 .filter(|channel| channel.matches_scope(target))
                 .collect();
-            if selected.is_empty() && selected_legacy.is_empty() {
+            let delivery_receipts =
+                channel::delivery_receipts_union(&worktree_roots(&paths), &me, target)?;
+            if selected.is_empty() && selected_legacy.is_empty() && delivery_receipts.is_empty() {
                 println!("{}", empty_note(scope));
                 return Ok(());
             }
@@ -225,6 +479,7 @@ fn list(scope: Option<&str>) -> Result<()> {
             for channel in selected_legacy {
                 list_legacy_task_channel(&paths, &me, channel)?;
             }
+            list_delivery_receipts(&me, target, &delivery_receipts);
         }
     }
     Ok(())
@@ -353,6 +608,29 @@ fn list_legacy_task_channel(
     }
     channel::set_cursor_to_latest(paths, &channel.channel, me)?;
     Ok(())
+}
+
+fn list_delivery_receipts(me: &str, target: &str, receipts: &[DeliveryReceipt]) {
+    if receipts.is_empty() {
+        return;
+    }
+    println!("{target} delivery receipts:");
+    for receipt in receipts {
+        let who = if receipt.from_card == me {
+            "you"
+        } else {
+            target
+        };
+        let destination = receipt
+            .to_session
+            .as_deref()
+            .map(|session| format!(" -> {session}"))
+            .unwrap_or_default();
+        println!(
+            "  {who}  {}  {}{} {}  {}",
+            receipt.ts, receipt.transport, destination, receipt.status, receipt.preview
+        );
+    }
 }
 
 fn legacy_line_speaker<'a>(me: &str, message: &'a Message) -> &'a str {

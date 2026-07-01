@@ -24,7 +24,7 @@ pub const SESSION_ENV_KEYS: &[&str] = &[
 
 const AGENT_RUNTIME_ENV_KEY: &str = "MAESTRO_AGENT";
 const CLAUDE_RUNTIME_ENV_KEYS: &[&str] = &["CLAUDECODE", "CLAUDE_CODE"];
-const CODEX_RUNTIME_ENV_KEYS: &[&str] = &["CODEX_CLI", "CODEX_SANDBOX"];
+const CODEX_RUNTIME_ENV_KEYS: &[&str] = &["CODEX_CLI", "CODEX_SANDBOX", "CODEX_THREAD_ID"];
 
 /// First non-empty, trimmed value among `keys`, resolved through `lookup`. Pure:
 /// the caller supplies the environment, so the key list is testable without
@@ -164,6 +164,10 @@ mod tests {
         );
         assert_eq!(
             agent_runtime_from_pairs(&[("CODEX_SANDBOX", "1")]),
+            Some("codex")
+        );
+        assert_eq!(
+            agent_runtime_from_pairs(&[("CODEX_THREAD_ID", "codex-thread-xyz")]),
             Some("codex")
         );
     }

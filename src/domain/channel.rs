@@ -1,14 +1,18 @@
 //! The chat-channel store: pull-only, file-backed messaging. A channel is either
 //! a two-card pair that shares a `related` edge, or a feature-scoped broadcast
 //! every card under a feature shares (no `related` edge required). This module is
-//! pure persistence and queries -- the link/membership gate, visibility, and
-//! rendering live in the `msg` verbs and the inbox banner. maestro never pushes;
-//! a peer's message is seen only when the other agent reads it.
+//! pure persistence and queries -- the link/membership gate, visibility,
+//! transport selection, and rendering live in the `msg` verbs and the inbox
+//! banner. The ordinary channel is pull-only: a peer's local message is seen
+//! only when the other agent reads it. Transport-specific delivery receipts live
+//! beside the channel without becoming unread inbox items.
 //!
 //! On-disk shape under `.maestro/channels/` (gitignored, machine-local):
 //!   `<key>.jsonl`         line 1 = `{"pair":[a,b]}` (two-card) or `{"feature":id}`
 //!                         (feature broadcast) header (authoritative),
 //!                         lines 2.. = `{id,ts,from_card,from_session,text}`.
+//!   `delivery/<key>.jsonl` line 1 = `{"schema_version":"maestro.channel-delivery.v1",
+//!                         "pair":[a,b]}`, lines 2.. = delivery receipts.
 //!   `<key>.cur-<cardkey>` the viewer's read-through cursor: the newest seen ts
 //!                         plus exact message ids at that ts. Legacy bare-ts
 //!                         cursors still read as timestamp-only cursors.
@@ -44,6 +48,7 @@ use crate::foundation::core::time::{parse_utc_timestamp, utc_now_timestamp};
 /// is still caught by the authoritative header check, never silently merged.
 const KEY_LEN: usize = 16;
 const CURSOR_SCHEMA_VERSION: &str = "maestro.channel-cursor.v1";
+const DELIVERY_SCHEMA_VERSION: &str = "maestro.channel-delivery.v1";
 static MESSAGE_ID_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// One message line. Timestamps are fixed-width RFC3339 millis, so a string
@@ -55,6 +60,37 @@ pub struct Message {
     pub from_card: String,
     pub from_session: String,
     pub text: String,
+}
+
+/// One transport receipt line. Receipts are not messages: they are a durable
+/// ledger for delivery attempts that should not create unread inbox items.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DeliveryReceipt {
+    pub id: String,
+    pub ts: String,
+    pub from_card: String,
+    pub from_session: String,
+    pub to_card: String,
+    pub to_session: Option<String>,
+    pub transport: String,
+    pub status: String,
+    pub text_sha256: String,
+    pub preview: String,
+    pub detail: Option<String>,
+}
+
+/// Input for appending a delivery receipt. Keep the append API named and
+/// explicit because transport metadata is easy to swap accidentally.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DeliveryReceiptAppend<'a> {
+    pub from_card: &'a str,
+    pub from_session: &'a str,
+    pub to_card: &'a str,
+    pub to_session: Option<&'a str>,
+    pub transport: &'a str,
+    pub status: &'a str,
+    pub text: &'a str,
+    pub detail: Option<&'a str>,
 }
 
 /// The two channel shapes, mirroring the header line: a two-card `Pair`
@@ -204,6 +240,71 @@ pub fn send_feature(
     )
 }
 
+/// Append a delivery receipt for the pair. The receipt file has its own header
+/// and lives under `channels/delivery/`, so normal channel enumeration never
+/// treats transport receipts as inbox messages.
+pub fn append_delivery_receipt(
+    paths: &MaestroPaths,
+    receipt: DeliveryReceiptAppend<'_>,
+) -> Result<String> {
+    let (pair, key) = identity(receipt.from_card, receipt.to_card);
+    let relative_path = delivery_relative_path(&key);
+    let mut file = open_managed_appendable(paths, &relative_path)?;
+    if file
+        .metadata()
+        .context("failed to stat delivery receipt file")?
+        .len()
+        == 0
+    {
+        append_jsonl_line(
+            &mut file,
+            &json!({
+                "schema_version": DELIVERY_SCHEMA_VERSION,
+                "pair": pair,
+            }),
+        )
+        .with_context(|| format!("failed to write header to {relative_path}"))?;
+    } else {
+        verify_delivery_header(paths, &key, &pair)?;
+    }
+
+    let ts = utc_now_timestamp();
+    let id = new_delivery_receipt_id(&ts, &receipt);
+    let line = json!({
+        "id": id,
+        "ts": ts,
+        "from_card": receipt.from_card,
+        "from_session": receipt.from_session,
+        "to_card": receipt.to_card,
+        "to_session": receipt.to_session,
+        "transport": receipt.transport,
+        "status": receipt.status,
+        "text_sha256": sha256_hex(receipt.text.as_bytes()),
+        "preview": preview(receipt.text),
+        "detail": receipt.detail,
+    });
+    append_jsonl_line(&mut file, &line)
+        .with_context(|| format!("failed to append to {relative_path}"))?;
+    Ok(id)
+}
+
+/// Load pair delivery receipts from every worktree root, sorted by timestamp.
+pub fn delivery_receipts_union(
+    roots: &[MaestroPaths],
+    a: &str,
+    b: &str,
+) -> Result<Vec<DeliveryReceipt>> {
+    let (_, key) = identity(a, b);
+    let mut receipts = Vec::new();
+    for paths in roots {
+        if let Ok(mut loaded) = load_delivery_receipts(paths, &key) {
+            receipts.append(&mut loaded);
+        }
+    }
+    receipts.sort_by(|a, b| a.ts.cmp(&b.ts).then_with(|| a.id.cmp(&b.id)));
+    Ok(receipts)
+}
+
 /// Append one message under `header`, writing the authoritative header line on
 /// first send and verifying it on every later send (a key collision errors rather
 /// than cross-writing into the wrong conversation). Shared by [`send`] and
@@ -278,6 +379,19 @@ pub fn load_feature(paths: &MaestroPaths, feature_id: &str) -> Result<Option<Cha
 /// root, ts-sorted, or `None` if nothing was broadcast in any.
 pub fn load_feature_union(roots: &[MaestroPaths], feature_id: &str) -> Result<Option<Channel>> {
     load_union_by_key(roots, &feature_identity(feature_id))
+}
+
+fn load_delivery_receipts(paths: &MaestroPaths, key: &str) -> Result<Vec<DeliveryReceipt>> {
+    let relative_path = delivery_relative_path(key);
+    let path = managed_path(paths, &relative_path, SymlinkPolicy::RejectAllComponents)?;
+    let bytes = match fs::read(&path) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => {
+            return Err(error).with_context(|| format!("failed to read {relative_path}"));
+        }
+    };
+    parse_delivery_receipts(key, &bytes)
 }
 
 /// Merge one channel key across worktree roots into a single ts-sorted channel,
@@ -434,6 +548,10 @@ fn channel_relative_path(key: &str) -> String {
     format!(".maestro/channels/{key}.jsonl")
 }
 
+fn delivery_relative_path(key: &str) -> String {
+    format!(".maestro/channels/delivery/{key}.jsonl")
+}
+
 fn cursor_relative_path(key: &str, viewer: &str) -> String {
     let card_key = &sha256_hex(viewer.to_lowercase().as_bytes())[..KEY_LEN];
     format!(".maestro/channels/{key}.cur-{card_key}")
@@ -562,6 +680,38 @@ fn message_cursor_id(message: &Message) -> String {
     })
 }
 
+fn new_delivery_receipt_id(ts: &str, receipt: &DeliveryReceiptAppend<'_>) -> String {
+    let sequence = MESSAGE_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
+    sha256_hex(
+        format!(
+            "{}\x1f{}\x1f{}\x1f{}\x1f{}\x1f{}\x1f{}\x1f{}",
+            ts,
+            receipt.from_card,
+            receipt.from_session,
+            receipt.to_card,
+            receipt.to_session.unwrap_or(""),
+            receipt.transport,
+            receipt.status,
+            sequence
+        )
+        .as_bytes(),
+    )
+}
+
+fn preview(text: &str) -> String {
+    let mut out = String::new();
+    for ch in text.trim().chars().take(160) {
+        if ch.is_whitespace() {
+            if !out.ends_with(' ') {
+                out.push(' ');
+            }
+        } else {
+            out.push(ch);
+        }
+    }
+    out.trim().to_string()
+}
+
 /// Merge channels that share a key (the same pair, one file per worktree) into a
 /// single channel whose messages are ts-sorted. Assumes a non-empty input.
 fn merge_same_key(key: String, mut channels: Vec<Channel>) -> Channel {
@@ -621,6 +771,40 @@ fn load_kind_by_key(paths: &MaestroPaths, key: &str) -> Result<Option<ChannelKin
     }
 }
 
+fn verify_delivery_header(
+    paths: &MaestroPaths,
+    key: &str,
+    expected_pair: &[String; 2],
+) -> Result<()> {
+    let relative_path = delivery_relative_path(key);
+    let path = managed_path(paths, &relative_path, SymlinkPolicy::RejectAllComponents)?;
+    let file = fs::File::open(&path)
+        .with_context(|| format!("failed to read delivery header from {relative_path}"))?;
+    let mut reader = std::io::BufReader::new(file);
+    let mut line = String::new();
+    loop {
+        line.clear();
+        let read = reader
+            .read_line(&mut line)
+            .with_context(|| format!("failed to read delivery header from {relative_path}"))?;
+        if read == 0 {
+            bail!("delivery receipt {key} has no header line");
+        }
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let value: Value = serde_json::from_str(trimmed)
+            .with_context(|| format!("malformed delivery receipt header in {key}"))?;
+        let schema = value.get("schema_version").and_then(Value::as_str);
+        let pair = parse_pair_array(value.get("pair"));
+        if schema != Some(DELIVERY_SCHEMA_VERSION) || pair.as_ref() != Some(expected_pair) {
+            bail!("delivery receipt {key} header does not match the requested pair");
+        }
+        return Ok(());
+    }
+}
+
 /// Confirm the on-disk header matches the kind we are about to write to. A
 /// mismatch means two different ids hashed to the same key (a collision) --
 /// error rather than cross-write into the wrong conversation.
@@ -661,6 +845,34 @@ fn parse_channel(key: &str, bytes: &[u8]) -> Result<Channel> {
     })
 }
 
+fn parse_delivery_receipts(key: &str, bytes: &[u8]) -> Result<Vec<DeliveryReceipt>> {
+    let text = std::str::from_utf8(bytes).context("delivery receipt file is not UTF-8")?;
+    let mut saw_header = false;
+    let mut receipts = Vec::new();
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let value: Value = serde_json::from_str(trimmed)
+            .with_context(|| format!("malformed delivery receipt line in {key}"))?;
+        if !saw_header {
+            if value.get("schema_version").and_then(Value::as_str) != Some(DELIVERY_SCHEMA_VERSION)
+                || parse_pair_array(value.get("pair")).is_none()
+            {
+                bail!("delivery receipt {key} header missing schema/pair");
+            }
+            saw_header = true;
+        } else {
+            receipts.push(parse_delivery_receipt(&value));
+        }
+    }
+    if !saw_header {
+        bail!("delivery receipt {key} has no header line");
+    }
+    Ok(receipts)
+}
+
 /// Parse the authoritative header line into a [`ChannelKind`]: `{"pair":[a,b]}`
 /// for a two-card channel, `{"feature":id}` for a feature broadcast.
 fn parse_header(value: &Value, key: &str) -> Result<ChannelKind> {
@@ -682,6 +894,17 @@ fn parse_header(value: &Value, key: &str) -> Result<ChannelKind> {
     }
 }
 
+fn parse_pair_array(value: Option<&Value>) -> Option<[String; 2]> {
+    let pair = value?.as_array()?;
+    if pair.len() != 2 {
+        return None;
+    }
+    Some([
+        pair[0].as_str().unwrap_or_default().to_string(),
+        pair[1].as_str().unwrap_or_default().to_string(),
+    ])
+}
+
 fn parse_message(value: &Value) -> Message {
     let field = |name: &str| {
         value
@@ -696,6 +919,35 @@ fn parse_message(value: &Value) -> Message {
         from_card: field("from_card"),
         from_session: field("from_session"),
         text: field("text"),
+    }
+}
+
+fn parse_delivery_receipt(value: &Value) -> DeliveryReceipt {
+    let field = |name: &str| {
+        value
+            .get(name)
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string()
+    };
+    DeliveryReceipt {
+        id: field("id"),
+        ts: field("ts"),
+        from_card: field("from_card"),
+        from_session: field("from_session"),
+        to_card: field("to_card"),
+        to_session: value
+            .get("to_session")
+            .and_then(Value::as_str)
+            .map(str::to_string),
+        transport: field("transport"),
+        status: field("status"),
+        text_sha256: field("text_sha256"),
+        preview: field("preview"),
+        detail: value
+            .get("detail")
+            .and_then(Value::as_str)
+            .map(str::to_string),
     }
 }
 
