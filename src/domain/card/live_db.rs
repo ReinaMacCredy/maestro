@@ -235,6 +235,54 @@ pub fn write_text_file(
     upsert_file(&conn, card_id, &relative, 0o644, contents.as_bytes())
 }
 
+pub fn write_text_file_if_unchanged(
+    paths: &MaestroPaths,
+    card_id: &str,
+    relative: &str,
+    expected: Option<&str>,
+    contents: &str,
+) -> Result<()> {
+    validate_card_id(card_id)?;
+    let mut conn = open_for_write(paths)?;
+    let relative = normalize_relative(Path::new(relative))?;
+    let bytes = contents.as_bytes();
+    let now = utc_now_timestamp();
+    let sha = sha256_hex(bytes);
+    let tx = conn.transaction()?;
+    if !card_exists(&tx, card_id)? {
+        bail!("card {card_id} not found in the DB store");
+    }
+    let changed = match expected {
+        Some(expected) => tx.execute(
+            "UPDATE card_files
+                SET mode = ?3,
+                    contents = ?4,
+                    sha256 = ?5,
+                    updated_at = ?6
+              WHERE card_id = ?1 AND path = ?2 AND contents = ?7",
+            params![
+                card_id,
+                relative,
+                0o644,
+                bytes,
+                sha,
+                now,
+                expected.as_bytes()
+            ],
+        )?,
+        None => tx.execute(
+            "INSERT OR IGNORE INTO card_files (card_id, path, mode, contents, sha256, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![card_id, relative, 0o644, bytes, sha, now],
+        )?,
+    };
+    if changed == 0 {
+        bail!("DB sidecar {card_id}/{relative} changed since it was read; re-run the command");
+    }
+    tx.commit()?;
+    Ok(())
+}
+
 pub fn import_card_dir(
     paths: &MaestroPaths,
     card_id: &str,

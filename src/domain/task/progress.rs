@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 
+use crate::domain::card::live_db;
 use crate::domain::card::query::{self, Coarse};
 use crate::domain::card::schema::{Card, CardType};
 use crate::domain::card::store::{self, CardHome};
@@ -45,6 +46,7 @@ impl ProgressFile {
 pub struct ProgressSnapshot {
     pub progress: Option<ProgressFile>,
     raw: Option<String>,
+    db: Option<DbProgressSnapshot>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -52,6 +54,13 @@ pub struct ProgressTaskSnapshot {
     pub path: PathBuf,
     progress: ProgressFile,
     raw: Option<String>,
+    db: Option<DbProgressSnapshot>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct DbProgressSnapshot {
+    paths: MaestroPaths,
+    card_id: String,
 }
 
 pub fn progress_path(paths: &MaestroPaths, progress_id: &str) -> PathBuf {
@@ -69,22 +78,54 @@ pub fn load_with_snapshot(path: &Path) -> Result<ProgressSnapshot> {
         return Ok(ProgressSnapshot {
             progress: None,
             raw: None,
+            db: None,
         });
     };
-    let progress: ProgressFile = serde_yaml::from_str(&contents)
-        .with_context(|| format!("failed to parse {}", path.display()))?;
+    let progress = parse_progress(&contents, &path.display().to_string())?;
+    Ok(ProgressSnapshot {
+        progress: Some(progress),
+        raw: Some(contents),
+        db: None,
+    })
+}
+
+fn load_db_with_snapshot(paths: &MaestroPaths, card_id: &str) -> Result<ProgressSnapshot> {
+    let display = live_db::synthetic_card_path(paths, card_id, PROGRESS_FILE)
+        .display()
+        .to_string();
+    let Some(contents) = live_db::read_text_file(paths, card_id, PROGRESS_FILE)? else {
+        return Ok(ProgressSnapshot {
+            progress: None,
+            raw: None,
+            db: Some(DbProgressSnapshot {
+                paths: paths.clone(),
+                card_id: card_id.to_string(),
+            }),
+        });
+    };
+    let progress = parse_progress(&contents, &display)?;
+    Ok(ProgressSnapshot {
+        progress: Some(progress),
+        raw: Some(contents),
+        db: Some(DbProgressSnapshot {
+            paths: paths.clone(),
+            card_id: card_id.to_string(),
+        }),
+    })
+}
+
+fn parse_progress(contents: &str, display: &str) -> Result<ProgressFile> {
+    let progress: ProgressFile =
+        serde_yaml::from_str(contents).with_context(|| format!("failed to parse {display}"))?;
     if classify(&progress.schema_version, PROGRESS_SCHEMA_VERSION) != Compat::Exact {
         bail!(
             "unsupported progress schema {} in {}; expected {}",
             progress.schema_version,
-            path.display(),
+            display,
             PROGRESS_SCHEMA_VERSION
         );
     }
-    Ok(ProgressSnapshot {
-        progress: Some(progress),
-        raw: Some(contents),
-    })
+    Ok(progress)
 }
 
 pub fn save_with_snapshot(
@@ -92,6 +133,16 @@ pub fn save_with_snapshot(
     progress: &ProgressFile,
     snapshot: &ProgressSnapshot,
 ) -> Result<()> {
+    if let Some(db) = &snapshot.db {
+        let contents = serde_yaml::to_string(progress).context("failed to serialize progress")?;
+        return live_db::write_text_file_if_unchanged(
+            &db.paths,
+            &db.card_id,
+            PROGRESS_FILE,
+            snapshot.raw.as_deref(),
+            &contents,
+        );
+    }
     if snapshot.raw.is_none()
         && let Some(parent) = path.parent()
     {
@@ -223,27 +274,28 @@ pub fn load_task_with_snapshot(
     id: &str,
 ) -> Result<Option<(TaskRecord, ProgressTaskSnapshot, PathBuf)>> {
     store::validate_card_id(id)?;
-    for (card, card_path) in query::scan_dir_with_paths(&paths.cards_dir())? {
+    for (card, card_path) in query::scan_with_paths(paths)? {
         if card.card_type != CardType::Progress {
             continue;
         }
-        let Some(progress_dir) = card_path.parent() else {
-            continue;
-        };
-        let path = progress_dir.join(PROGRESS_FILE);
-        let snapshot = load_with_snapshot(&path)?;
+        let (path, snapshot) = load_card_snapshot(paths, &card, &card_path)?;
         let Some(progress) = snapshot.progress.clone() else {
             continue;
         };
         if let Some(task) = progress.tasks.iter().find(|task| task.id == id) {
+            let progress_dir = path
+                .parent()
+                .context("progress sidecar path is missing parent directory")?
+                .to_path_buf();
             return Ok(Some((
                 task.clone(),
                 ProgressTaskSnapshot {
                     path,
                     progress,
                     raw: snapshot.raw,
+                    db: snapshot.db,
                 },
-                progress_dir.to_path_buf(),
+                progress_dir,
             )));
         }
     }
@@ -252,60 +304,66 @@ pub fn load_task_with_snapshot(
 
 pub fn scan(paths: &MaestroPaths) -> Result<Vec<(TaskRecord, PathBuf)>> {
     let mut records = Vec::new();
-    for (card, card_path) in query::scan_dir_with_paths(&paths.cards_dir())? {
-        collect_tasks_from_progress_card(&mut records, &card, &card_path)?;
+    for (card, card_path) in query::scan_with_paths(paths)? {
+        collect_tasks_from_progress_card(&mut records, paths, &card, &card_path)?;
     }
     Ok(records)
 }
 
 pub fn scan_with_cards(paths: &MaestroPaths) -> Result<Vec<(TaskRecord, Card, PathBuf)>> {
     let mut records = Vec::new();
-    for (card, card_path) in query::scan_dir_with_paths(&paths.cards_dir())? {
+    for (card, card_path) in query::scan_with_paths(paths)? {
         if card.card_type != CardType::Progress {
             continue;
         }
-        let Some(progress_dir) = card_path.parent() else {
-            continue;
-        };
-        let path = progress_dir.join(PROGRESS_FILE);
-        if let Some(progress) = load_with_snapshot(&path)?.progress {
+        let (path, snapshot) = load_card_snapshot(paths, &card, &card_path)?;
+        if let Some(progress) = snapshot.progress {
+            let progress_dir = path
+                .parent()
+                .context("progress sidecar path is missing parent directory")?
+                .to_path_buf();
             records.extend(
                 progress
                     .tasks
                     .into_iter()
-                    .map(|task| (task, card.clone(), progress_dir.to_path_buf())),
+                    .map(|task| (task, card.clone(), progress_dir.clone())),
             );
         }
     }
     Ok(records)
 }
 
-pub(crate) fn scan_in_cards(cards: &[(Card, PathBuf)]) -> Result<Vec<(TaskRecord, PathBuf)>> {
+pub(crate) fn scan_in_cards(
+    paths: &MaestroPaths,
+    cards: &[(Card, PathBuf)],
+) -> Result<Vec<(TaskRecord, PathBuf)>> {
     let mut records = Vec::new();
     for (card, card_path) in cards {
-        collect_tasks_from_progress_card(&mut records, card, card_path)?;
+        collect_tasks_from_progress_card(&mut records, paths, card, card_path)?;
     }
     Ok(records)
 }
 
 fn collect_tasks_from_progress_card(
     records: &mut Vec<(TaskRecord, PathBuf)>,
+    paths: &MaestroPaths,
     card: &Card,
     card_path: &Path,
 ) -> Result<()> {
     if card.card_type != CardType::Progress {
         return Ok(());
     }
-    let Some(progress_dir) = card_path.parent() else {
-        return Ok(());
-    };
-    let path = progress_dir.join(PROGRESS_FILE);
-    if let Some(progress) = load_with_snapshot(&path)?.progress {
+    let (path, snapshot) = load_card_snapshot(paths, card, card_path)?;
+    if let Some(progress) = snapshot.progress {
+        let progress_dir = path
+            .parent()
+            .context("progress sidecar path is missing parent directory")?
+            .to_path_buf();
         records.extend(
             progress
                 .tasks
                 .into_iter()
-                .map(|task| (task, progress_dir.to_path_buf())),
+                .map(|task| (task, progress_dir.clone())),
         );
     }
     Ok(())
@@ -336,6 +394,7 @@ pub fn save_task_with_snapshot(task: &TaskRecord, snapshot: &ProgressTaskSnapsho
         &ProgressSnapshot {
             progress: Some(snapshot.progress.clone()),
             raw: snapshot.raw.clone(),
+            db: snapshot.db.clone(),
         },
     )
 }
@@ -347,11 +406,7 @@ fn load_or_create_actor_progress(
     now: &str,
 ) -> Result<(PathBuf, ProgressFile, ProgressSnapshot)> {
     if let Some((card, card_path)) = find_actor_progress(paths, actor, project.as_deref())? {
-        let path = card_path
-            .parent()
-            .context("progress card path is missing parent directory")?
-            .join(PROGRESS_FILE);
-        let snapshot = load_with_snapshot(&path)?;
+        let (path, snapshot) = load_card_snapshot(paths, &card, &card_path)?;
         let (agent, session_id) = card
             .claimed_by
             .as_deref()
@@ -384,12 +439,27 @@ fn load_or_create_actor_progress(
     Ok((path, progress, snapshot))
 }
 
+fn load_card_snapshot(
+    paths: &MaestroPaths,
+    card: &Card,
+    card_path: &Path,
+) -> Result<(PathBuf, ProgressSnapshot)> {
+    let path = card_path
+        .parent()
+        .context("progress card path is missing parent directory")?
+        .join(PROGRESS_FILE);
+    if live_db::contains_card_id(paths, &card.id)? {
+        return Ok((path, load_db_with_snapshot(paths, &card.id)?));
+    }
+    Ok((path.clone(), load_with_snapshot(&path)?))
+}
+
 fn find_actor_progress(
     paths: &MaestroPaths,
     actor: &str,
     project: Option<&str>,
 ) -> Result<Option<(Card, PathBuf)>> {
-    for (card, card_path) in query::scan_dir_with_paths(&paths.cards_dir())? {
+    for (card, card_path) in query::scan_with_paths(paths)? {
         if card.card_type != CardType::Progress {
             continue;
         }
@@ -500,6 +570,67 @@ mod tests {
         let loser = ProgressFile::new(Some("codex".to_string()), Some("s1".to_string()));
         let error = save_with_snapshot(&path, &loser, &first).expect_err("stale writer rejected");
         assert!(format!("{error:#}").contains("changed since it was read"));
+
+        let _ = std::fs::remove_dir_all(paths.maestro_dir());
+    }
+
+    #[test]
+    fn db_backed_progress_sidecar_scans_saves_and_rejects_stale_writers() {
+        let paths = temp_paths("task-progress-db");
+        let now = "2026-07-01T00:00:00Z";
+        let mut card = Card::new(
+            "progress-codex-db-019f",
+            CardType::Progress,
+            "Progress for codex#s1",
+            "in_progress",
+            now,
+        );
+        card.claimed_by = Some("codex#s1".to_string());
+        store::create_card(&paths, &card).expect("create progress card");
+        let card_dir = paths.cards_dir().join(&card.id);
+        let path = card_dir.join(PROGRESS_FILE);
+        let snapshot = load_with_snapshot(&path).expect("load empty progress sidecar");
+        let mut progress = ProgressFile::new(Some("codex".to_string()), Some("s1".to_string()));
+        let mut task = TaskRecord::draft("task-db-progress-019f", "db progress task", now);
+        task.state = TaskState::Ready;
+        progress.tasks.push(task);
+        save_with_snapshot(&path, &progress, &snapshot).expect("write progress sidecar");
+        live_db::import_card_dir(&paths, &card.id, &card_dir, true)
+            .expect("import progress card into DB");
+
+        assert!(
+            !card_dir.exists(),
+            "DB import removes the progress card dir"
+        );
+        let scanned = scan(&paths).expect("scan DB-backed progress tasks");
+        assert!(
+            scanned
+                .iter()
+                .any(|(task, _)| task.id == "task-db-progress-019f"),
+            "DB-backed progress sidecar contributes its tasks"
+        );
+
+        let (mut winner, winner_snapshot, _) =
+            load_task_with_snapshot(&paths, "task-db-progress-019f")
+                .expect("load DB-backed progress task")
+                .expect("DB-backed progress task exists");
+        let (mut loser, loser_snapshot, _) =
+            load_task_with_snapshot(&paths, "task-db-progress-019f")
+                .expect("load stale DB-backed progress task snapshot")
+                .expect("DB-backed progress task exists");
+        winner.state = TaskState::InProgress;
+        save_task_with_snapshot(&winner, &winner_snapshot)
+            .expect("save DB-backed progress task through sidecar");
+
+        loser.title = "stale writer loses".to_string();
+        let error = save_task_with_snapshot(&loser, &loser_snapshot)
+            .expect_err("stale DB sidecar writer rejected");
+        assert!(format!("{error:#}").contains("changed since it was read"));
+
+        let (reloaded, _, _) = load_task_with_snapshot(&paths, "task-db-progress-019f")
+            .expect("reload DB-backed progress task")
+            .expect("DB-backed progress task remains");
+        assert_eq!(reloaded.state, TaskState::InProgress);
 
         let _ = std::fs::remove_dir_all(paths.maestro_dir());
     }

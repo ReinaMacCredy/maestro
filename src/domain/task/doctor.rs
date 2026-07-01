@@ -107,7 +107,7 @@ pub fn check_blocker_graph_in_cards(
 ) -> Result<TaskDoctorReport> {
     let mut tasks = cards::records_in_cards(cards)?;
     tasks.extend(
-        progress::scan_in_cards(cards)?
+        progress::scan_in_cards(paths, cards)?
             .into_iter()
             .map(|(task, _task_dir)| task),
     );
