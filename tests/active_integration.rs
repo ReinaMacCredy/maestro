@@ -14,6 +14,7 @@ use std::process::{Command, Output};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use card_support::cards_repo;
+use maestro::foundation::core::schema::SESSION_ACTIVITY_SCHEMA_VERSION;
 use maestro::foundation::core::time::format_utc_seconds_rfc3339_millis;
 use serde_json::Value;
 
@@ -108,6 +109,16 @@ fn seed_run(repo: &Path, session: &str, lines: &[String]) {
         format!("{}\n", lines.join("\n")),
     )
     .expect("invariant: event log fixture should be writable");
+}
+
+fn seed_activity(repo: &Path, session: &str, lines: &[String]) {
+    let run_dir = repo.join(".maestro/runs").join(session);
+    fs::create_dir_all(&run_dir).expect("invariant: run dir should be creatable");
+    fs::write(
+        run_dir.join("activity.jsonl"),
+        format!("{}\n", lines.join("\n")),
+    )
+    .expect("invariant: activity log fixture should be writable");
 }
 
 /// Drop every run bucket so card-setup verbs (which auto-emit `card_touch`) do
@@ -242,6 +253,48 @@ fn active_lists_live_sessions_with_enriched_rows_and_you_marker() {
         "running mode (maestro-design)\n{out}"
     );
     assert!(you.contains("you"), "running session marked you\n{out}");
+}
+
+#[test]
+fn active_shows_compact_session_detail_hint_when_activity_is_hidden() {
+    let temp = cards_repo("active-session-activity-hint");
+    let repo = temp.path();
+
+    let card = create_id(repo, &["-t", "task", "Busy task"]);
+    clear_runs(repo);
+
+    let recent = ts_minutes_ago(1);
+    seed_run(
+        repo,
+        "busy-sess",
+        &[
+            skill_event("busy-sess", "maestro-card", &recent),
+            card_touch_event("busy-sess", &card, &recent),
+        ],
+    );
+    seed_activity(
+        repo,
+        "busy-sess",
+        &[format!(
+            r#"{{"schema_version":"{SESSION_ACTIVITY_SCHEMA_VERSION}","source":"run_event","source_event_type":"PostToolUse","kind":"command_finished","session_id":"busy-sess","ts":"{recent}","command":{{"program":"Shell","input_hash":"sha256:abc"}}}}"#
+        )],
+    );
+
+    let out = run(repo, &[], &["active"]);
+    let line = line_with(&out, "busy-sess");
+
+    assert!(
+        line.contains("activity: 1 cmd"),
+        "active row should show a compact activity count\n{out}"
+    );
+    assert!(
+        line.contains("maestro session show busy-sess"),
+        "active row should point at the detail readout\n{out}"
+    );
+    assert!(
+        !out.contains("Timeline:"),
+        "active must stay compact and not inline the session readout\n{out}"
+    );
 }
 
 #[test]

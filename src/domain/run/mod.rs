@@ -1,6 +1,7 @@
 //! Run aggregate facade.
 
 mod active;
+mod activity;
 mod append;
 mod autonomy;
 mod discovery;
@@ -8,6 +9,7 @@ mod event;
 mod evidence;
 mod reader;
 mod record;
+mod session;
 mod trace;
 
 pub(crate) use active::{DeclaredScopeOverlap, declared_scope_overlaps_for_active_union};
@@ -15,6 +17,7 @@ pub use active::{
     FileOverlap, Presence, SessionActivity, WarmEditor, active_sessions, active_sessions_union,
     current_bound_card, union_session_id, warm_file_overlaps,
 };
+pub use activity::{ActivityCounts, session_activity_counts};
 pub(crate) use append::{
     append_jsonl_line, append_manual_event, insert_agent_runtime, open_managed_appendable,
 };
@@ -29,4 +32,8 @@ pub use evidence::{
 };
 pub use reader::{RunEvent, RunEventRecord, visit_managed_event_logs, visit_managed_events};
 pub(crate) use record::{RecordOutcome, record_hook_event};
+pub use session::{
+    SessionActivitySummary, SessionLifecycleSummary, SessionProofSummary, SessionReadout,
+    SessionSources, SessionTaskSummary, session_readout,
+};
 pub use trace::{RunStatus, RunTrace, TraceEntry, assemble_trace};

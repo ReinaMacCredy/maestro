@@ -239,6 +239,20 @@ fn read_events(repo: &Path, session: &str) -> Vec<Value> {
         .collect()
 }
 
+fn read_activity(repo: &Path, session: &str) -> Vec<Value> {
+    let path = repo
+        .join(".maestro")
+        .join("runs")
+        .join(session)
+        .join("activity.jsonl");
+    let raw = fs::read_to_string(path).expect("invariant: activity.jsonl should be readable");
+    raw.lines()
+        .map(|line| {
+            serde_json::from_str(line).expect("invariant: activity line should be valid JSON")
+        })
+        .collect()
+}
+
 fn progress_files(repo: &Path) -> Vec<(String, serde_yaml::Value)> {
     let cards = repo.join(".maestro/cards");
     if !cards.exists() {
@@ -325,6 +339,54 @@ fn valid_event_writes_schema_and_event_type_for_session() {
         .expect("invariant: normalized hook event should include a timestamp");
     assert!(timestamp.contains('T'));
     assert!(timestamp.ends_with('Z'));
+}
+
+#[test]
+fn hook_record_writes_redacted_session_activity_metadata() {
+    let repo = init_repo();
+    let output = maestro_record(
+        repo.path(),
+        r#"{
+            "session_id":"session-activity",
+            "event_type":"PostToolUse",
+            "tool_name":"Bash",
+            "task_id":"task-abc123",
+            "status":"ok",
+            "duration_ms":1234,
+            "tool_input":{"command":"cargo test -- api_key=top-secret","file_path":"src/lib.rs"}
+        }"#,
+    );
+
+    assert!(
+        output.status.success(),
+        "hook record failed\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let activity = read_activity(repo.path(), "session-activity");
+    assert_eq!(activity.len(), 1);
+    let entry = &activity[0];
+    assert_eq!(entry["schema_version"], "maestro.session_activity.v1");
+    assert_eq!(entry["kind"], "command_finished");
+    assert_eq!(entry["source"], "run_event");
+    assert_eq!(entry["source_event_type"], "PostToolUse");
+    assert_eq!(entry["session_id"], "session-activity");
+    assert_eq!(entry["task_id"], "task-abc123");
+    assert_eq!(entry["status"], "ok");
+    assert_eq!(entry["duration_ms"], 1234);
+    assert_eq!(entry["command"]["program"], "Bash");
+    assert_eq!(entry["command"]["file_path"], "src/lib.rs");
+    assert!(
+        entry["command"]["input_hash"]
+            .as_str()
+            .is_some_and(|hash| hash.starts_with("sha256:")),
+        "activity should keep only a hash of tool_input: {entry:#?}"
+    );
+
+    let raw = serde_json::to_string(entry).expect("invariant: activity entry should serialize");
+    assert!(
+        !raw.contains("top-secret") && !raw.contains("api_key"),
+        "activity must not persist raw command input: {raw}"
+    );
 }
 
 #[test]

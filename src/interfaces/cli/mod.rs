@@ -46,6 +46,7 @@ pub mod query;
 pub mod reference;
 pub mod resume;
 pub mod scorer;
+pub mod session;
 pub mod shell_init;
 pub mod status;
 pub mod sync;
@@ -412,6 +413,11 @@ pub enum RootCommand {
     )]
     Active(ActiveArgs),
     #[command(
+        about = "Show the joined activity, lifecycle, and proof story for one session",
+        after_help = "Examples:\n  maestro session show 019f180a-fcf7-7891-ae54-59654b1a56ff\n  maestro session show 019f180a-fcf7-7891-ae54-59654b1a56ff --json"
+    )]
+    Session(SessionArgs),
+    #[command(
         about = "Author non-blocking related links between cards (card store)",
         after_help = "Examples:\n  maestro link add task-a task-b\n  maestro link remove task-b task-a"
     )]
@@ -755,6 +761,28 @@ pub struct ActiveArgs {
 pub enum ActiveCommand {
     #[command(about = "Release this session's ownership of a card without changing card status")]
     Release(ActiveReleaseArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct SessionArgs {
+    #[command(subcommand)]
+    pub command: SessionCommand,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum SessionCommand {
+    #[command(about = "Show a joined readout for one logical session id")]
+    Show(SessionShowArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct SessionShowArgs {
+    /// Logical session id / run bucket to inspect.
+    #[arg(value_name = "SESSION_ID")]
+    pub session_id: String,
+    /// Print machine-readable JSON.
+    #[arg(long)]
+    pub json: bool,
 }
 
 #[derive(Debug, Args)]
@@ -2543,6 +2571,7 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::List(args) => card::list(args),
         RootCommand::Dep(args) => card::dep(args),
         RootCommand::Active(args) => active::run(args),
+        RootCommand::Session(args) => session::run(args),
         RootCommand::Link(args) => card::link(args),
         RootCommand::Msg(args) => msg::run(args),
         RootCommand::Conflict(args) => conflict::run(args),

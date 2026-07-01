@@ -14,6 +14,8 @@ use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::retention::prune_child_dirs;
 use crate::foundation::core::session::known_agent_runtime;
 
+use super::activity::append_activity_for_run_event;
+
 const OPEN_EVENT_FILE_RETRIES: usize = 8;
 
 pub(crate) fn append_normalized_event(paths: &MaestroPaths, event: &Value) -> Result<()> {
@@ -58,7 +60,10 @@ fn append_event_to_session_dir(
 ) -> Result<()> {
     let relative_path = format!(".maestro/runs/{session_dir}/events.jsonl");
     let mut file = open_managed_appendable(paths, &relative_path)?;
-    append_jsonl_line(&mut file, event).with_context(|| format!("failed to append {relative_path}"))
+    append_jsonl_line(&mut file, event)
+        .with_context(|| format!("failed to append {relative_path}"))?;
+    append_activity_for_run_event(paths, session_dir, event)?;
+    Ok(())
 }
 
 /// Open a managed append-only file under the repo, creating parent dirs, applying

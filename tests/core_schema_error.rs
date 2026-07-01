@@ -6,8 +6,9 @@ use maestro::foundation::core::schema::{
     ACCEPTANCE_SCHEMA_VERSION, ALL_SCHEMA_VERSIONS, BACKLOG_SCHEMA_VERSION, CARD_SCHEMA_VERSION,
     Compat, DECISIONS_SCHEMA_VERSION, EVENT_SCHEMA_VERSION, FEATURE_SCHEMA_VERSION,
     GLOBAL_SKILLS_LOCK_SCHEMA_VERSION, HARNESS_SCHEMA_VERSION, INSTALL_LOCK_SCHEMA_VERSION,
-    PROGRESS_SCHEMA_VERSION, RUN_EVIDENCE_SCHEMA_VERSION, RUN_SCHEMA_VERSION, TASK_SCHEMA_VERSION,
-    VERIFICATION_RESTORE_SCHEMA_VERSION, VERIFICATION_SCHEMA_VERSION, classify,
+    PROGRESS_SCHEMA_VERSION, RUN_EVIDENCE_SCHEMA_VERSION, RUN_SCHEMA_VERSION,
+    SESSION_ACTIVITY_SCHEMA_VERSION, TASK_SCHEMA_VERSION, VERIFICATION_RESTORE_SCHEMA_VERSION,
+    VERIFICATION_SCHEMA_VERSION, classify,
 };
 
 #[test]
@@ -22,6 +23,7 @@ fn all_active_schema_versions_are_declared_once() {
             PROGRESS_SCHEMA_VERSION,
             RUN_SCHEMA_VERSION,
             EVENT_SCHEMA_VERSION,
+            SESSION_ACTIVITY_SCHEMA_VERSION,
             DECISIONS_SCHEMA_VERSION,
             RUN_EVIDENCE_SCHEMA_VERSION,
             INSTALL_LOCK_SCHEMA_VERSION,
@@ -29,7 +31,7 @@ fn all_active_schema_versions_are_declared_once() {
             BACKLOG_SCHEMA_VERSION,
         ]
     );
-    assert_eq!(ALL_SCHEMA_VERSIONS.len(), 12);
+    assert_eq!(ALL_SCHEMA_VERSIONS.len(), 13);
 }
 
 #[test]
@@ -41,6 +43,10 @@ fn schema_constants_match_current_artifact_contract() {
     assert_eq!(PROGRESS_SCHEMA_VERSION, "maestro.progress.v1");
     assert_eq!(RUN_SCHEMA_VERSION, "maestro.run.v1");
     assert_eq!(EVENT_SCHEMA_VERSION, "maestro.event.v1");
+    assert_eq!(
+        SESSION_ACTIVITY_SCHEMA_VERSION,
+        "maestro.session_activity.v1"
+    );
     assert_eq!(DECISIONS_SCHEMA_VERSION, "maestro.decisions.v1");
     assert_eq!(RUN_EVIDENCE_SCHEMA_VERSION, "maestro.run_evidence.v1");
     assert_eq!(VERIFICATION_SCHEMA_VERSION, "maestro.verification.v1");

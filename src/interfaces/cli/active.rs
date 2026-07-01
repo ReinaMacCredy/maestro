@@ -7,7 +7,7 @@
 //! `maestro link add` hint the agent decides whether to run
 //! (`dec-link-follow-up-copy-pasteable-hint-5b33`, `dec-awareness-view-is-an-explicit-verb-not-3092`).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use anyhow::{Result, bail};
 
@@ -99,7 +99,8 @@ pub fn run(args: ActiveArgs) -> Result<()> {
         if shown.len() == 1 { "" } else { "s" }
     );
     println!();
-    render_table(&shown, &by_id, &cards, &me, your_card);
+    let activity_hints = activity_hints_by_session(&paths, &roots, &shown);
+    render_table(&shown, &by_id, &cards, &me, your_card, &activity_hints);
 
     if hidden_stale > 0 {
         println!();
@@ -209,11 +210,21 @@ fn render_table(
     cards: &[card::schema::Card],
     me: &str,
     your_card: Option<&str>,
+    activity_hints: &HashMap<String, String>,
 ) {
     let progress_by_parent = progress_by_parent(cards);
     let rows: Vec<Cells> = shown
         .iter()
-        .map(|row| cells_for(row, by_id, &progress_by_parent, me, your_card))
+        .map(|row| {
+            cells_for(
+                row,
+                by_id,
+                &progress_by_parent,
+                me,
+                your_card,
+                activity_hints.get(&row.session_id).map(String::as_str),
+            )
+        })
         .collect();
 
     let headers = [
@@ -255,6 +266,7 @@ fn cells_for(
     progress_by_parent: &HashMap<&str, ProgressCounts>,
     me: &str,
     your_card: Option<&str>,
+    activity_hint: Option<&str>,
 ) -> Cells {
     let (card, status, progress) = match &row.bound_card {
         Some(id) => match by_id.get(id.as_str()) {
@@ -278,6 +290,11 @@ fn cells_for(
         }
     };
 
+    let last_action = match activity_hint {
+        Some(hint) => format!("{} | {hint}", row.last_action),
+        None => row.last_action.clone(),
+    };
+
     Cells {
         agent: row.agent_runtime.as_deref().unwrap_or("-").to_string(),
         session: row.session_id.clone(),
@@ -292,7 +309,7 @@ fn cells_for(
         },
         age: format!("{}m", row.age_minutes),
         state: presence_label(row.presence, row.age_minutes),
-        last_action: row.last_action.clone(),
+        last_action,
     }
 }
 
@@ -370,6 +387,65 @@ fn truncate(value: &str, max: usize) -> String {
 
 fn dash() -> String {
     "-".to_string()
+}
+
+fn activity_hints_by_session(
+    current_paths: &MaestroPaths,
+    roots: &[MaestroPaths],
+    shown: &[&SessionActivity],
+) -> HashMap<String, String> {
+    let wanted: HashSet<&str> = shown.iter().map(|row| row.session_id.as_str()).collect();
+    let mut hints = HashMap::new();
+    for paths in roots {
+        if paths.repo_root() != current_paths.repo_root() {
+            continue;
+        }
+        let Ok(logs) = run::managed_event_logs(paths) else {
+            continue;
+        };
+        for log in logs {
+            let display_session = run::union_session_id(paths, roots, log.session_id());
+            if !wanted.contains(display_session.as_str()) {
+                continue;
+            }
+            let Ok(counts) = run::session_activity_counts(paths, log.session_id()) else {
+                continue;
+            };
+            if let Some(hint) = format_activity_hint(&counts, log.session_id()) {
+                hints.insert(display_session, hint);
+            }
+        }
+    }
+    hints
+}
+
+fn format_activity_hint(counts: &run::ActivityCounts, session_id: &str) -> Option<String> {
+    if counts.events == 0 {
+        return None;
+    }
+    let mut parts = Vec::new();
+    if counts.commands > 0 {
+        parts.push(plural_count(counts.commands, "cmd", "cmds"));
+    }
+    if counts.compactions > 0 {
+        parts.push(plural_count(
+            counts.compactions,
+            "compaction",
+            "compactions",
+        ));
+    }
+    if parts.is_empty() {
+        parts.push(plural_count(counts.events, "event", "events"));
+    }
+    Some(format!(
+        "activity: {} | maestro session show {session_id}",
+        parts.join(", ")
+    ))
+}
+
+fn plural_count(count: usize, singular: &str, plural: &str) -> String {
+    let noun = if count == 1 { singular } else { plural };
+    format!("{count} {noun}")
 }
 
 /// Print the copy-pasteable addressing footer (D7), link-aware and now
@@ -591,6 +667,9 @@ fn live_peer_summary(rows: &[SessionActivity], me: &str) -> Option<(usize, Strin
 mod tests {
     use super::*;
     use card::schema::{Card, Dep, DepKind};
+    use std::fs;
+    use std::path::Path;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn card(id: &str, ty: card::schema::CardType, parent: Option<&str>) -> Card {
         let mut c = Card::new(id, ty, id, "in_progress", "t0");
@@ -626,8 +705,37 @@ mod tests {
             &progress_by_parent,
             me,
             your_card,
+            None,
         )
         .link
+    }
+
+    fn temp_root(label: &str) -> std::path::PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("invariant: clock is after Unix epoch")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "maestro-active-{label}-{}-{nanos}",
+            std::process::id()
+        ));
+        fs::create_dir_all(path.join(".maestro/runs"))
+            .expect("invariant: temp run root should be creatable");
+        path
+    }
+
+    fn seed_activity_log(root: &Path, session: &str) {
+        let run_dir = root.join(".maestro/runs").join(session);
+        fs::create_dir_all(&run_dir).expect("invariant: temp run dir should be creatable");
+        fs::write(run_dir.join("events.jsonl"), "\n")
+            .expect("invariant: temp event log should be writable");
+        fs::write(
+            run_dir.join("activity.jsonl"),
+            format!(
+                r#"{{"kind":"command_finished","source":"run_event","source_event_type":"PostToolUse","session_id":"{session}","command":{{"program":"Shell"}}}}"#
+            ) + "\n",
+        )
+        .expect("invariant: temp activity log should be writable");
     }
 
     #[test]
@@ -656,6 +764,36 @@ mod tests {
         assert_eq!(link_of("p1", Some("task-2"), &cards, me, mine_id), "team");
         assert_eq!(link_of("p3", Some("task-o"), &cards, me, mine_id), "-");
         assert_eq!(link_of("p4", Some("task-x"), &cards, me, mine_id), "-");
+    }
+
+    #[test]
+    fn activity_hint_uses_executable_raw_session_id_for_local_union_rows() {
+        let current_root = temp_root("current");
+        let sibling_root = temp_root("sibling");
+        seed_activity_log(&current_root, "sess-local");
+        seed_activity_log(&sibling_root, "sess-sibling");
+
+        let current = MaestroPaths::new(current_root.clone());
+        let sibling = MaestroPaths::new(sibling_root.clone());
+        let roots = vec![current.clone(), sibling.clone()];
+        let local_display = run::union_session_id(&current, &roots, "sess-local");
+        let sibling_display = run::union_session_id(&sibling, &roots, "sess-sibling");
+        let rows = [row(&local_display, None), row(&sibling_display, None)];
+        let shown = rows.iter().collect::<Vec<_>>();
+
+        let hints = activity_hints_by_session(&current, &roots, &shown);
+
+        assert_eq!(
+            hints.get(&local_display).map(String::as_str),
+            Some("activity: 1 cmd | maestro session show sess-local")
+        );
+        assert!(
+            !hints.contains_key(&sibling_display),
+            "do not print a local command for a sibling worktree session"
+        );
+
+        let _ = fs::remove_dir_all(current_root);
+        let _ = fs::remove_dir_all(sibling_root);
     }
 
     #[test]
