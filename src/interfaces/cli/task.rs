@@ -33,6 +33,11 @@ pub fn run(args: TaskArgs) -> Result<()> {
             project,
             id_only,
         } => add_task(&paths, &title, card, project, id_only, &actor),
+        TaskCommand::Setup {
+            task,
+            start,
+            project,
+        } => setup_tasks(&paths, &task, start, project, &actor),
         TaskCommand::Create {
             title,
             feature,
@@ -256,6 +261,35 @@ fn add_task(
     } else {
         println!("added {} ({})", task.id, task.state.as_str());
         println!("next: maestro task start {}", task.id);
+    }
+    Ok(())
+}
+
+fn setup_tasks(
+    paths: &MaestroPaths,
+    titles: &[String],
+    start: bool,
+    project: Option<String>,
+    actor: &str,
+) -> Result<()> {
+    let project = super::resolve_project(project, paths)?;
+    let tasks = task::setup_simple_tasks(
+        &paths.tasks_dir(),
+        titles,
+        project,
+        start,
+        utc_now_timestamp(),
+        actor,
+    )?;
+    println!("setup {} task(s)", tasks.len());
+    for (index, task) in tasks.iter().enumerate() {
+        println!("{}. {} ({})", index + 1, task.id, task.state.as_str());
+    }
+    if start {
+        println!("started task 1: {}", tasks[0].id);
+        println!("next: maestro task done 1 --proof \"<evidence>\"");
+    } else {
+        println!("next: maestro task start 1");
     }
     Ok(())
 }

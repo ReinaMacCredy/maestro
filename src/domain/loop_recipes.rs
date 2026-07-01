@@ -24,7 +24,7 @@ static LOOP_RECIPE_CONTRACTS_DIR: Dir<'_> =
 
 const CONTRACT_SCHEMA_VERSION: &str = "maestro.recipe.v2";
 const REQUIRED_PHASES: [&str; 6] = ["perceive", "choose", "act", "observe", "learn", "continue"];
-const CANONICAL_RECIPE_IDS: [&str; 12] = [
+const CANONICAL_RECIPE_IDS: [&str; 13] = [
     "adversarial-review",
     "audit",
     "conflict-handoff",
@@ -34,6 +34,7 @@ const CANONICAL_RECIPE_IDS: [&str; 12] = [
     "intake-triage",
     "learning",
     "loop-until-done",
+    "progress",
     "ship",
     "unattended",
     "work",

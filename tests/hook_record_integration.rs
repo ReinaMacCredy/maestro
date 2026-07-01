@@ -708,7 +708,7 @@ fn pre_tool_use_hashes_tool_input_without_persisting_raw_content() {
 }
 
 #[test]
-fn write_like_pre_tool_use_auto_starts_one_progress_task_and_binds_the_session() {
+fn write_like_pre_tool_use_requires_progress_setup_instead_of_generic_autostart() {
     let repo = init_repo();
     let first = maestro_record(
         repo.path(),
@@ -726,28 +726,18 @@ fn write_like_pre_tool_use_auto_starts_one_progress_task_and_binds_the_session()
         String::from_utf8_lossy(&first.stdout),
         String::from_utf8_lossy(&first.stderr)
     );
-
-    let files = progress_files(repo.path());
-    assert_eq!(files.len(), 1, "one Progress card should be created");
-    let (progress_card, progress) = &files[0];
-    assert_eq!(progress["agent"], "codex");
-    assert_eq!(progress["session_id"], "session-auto-progress");
-    let tasks = progress["tasks"]
-        .as_sequence()
-        .expect("invariant: progress tasks should be a sequence");
-    assert_eq!(tasks.len(), 1);
-    assert_eq!(tasks[0]["state"], "in_progress");
-    assert_eq!(tasks[0]["claimed_by"], "codex#session-auto-progress");
-    assert_eq!(tasks[0]["title"], "Work on src/lib.rs");
+    let stderr = String::from_utf8_lossy(&first.stderr);
+    assert!(
+        stderr.contains("maestro task setup --task"),
+        "write-like hook should point at setup before execution\nstderr:\n{stderr}"
+    );
+    assert_eq!(
+        progress_task_count(repo.path()),
+        0,
+        "write-like hook should not create one generic started Progress task"
+    );
 
     let events = read_events(repo.path(), "session-auto-progress");
-    assert!(
-        events
-            .iter()
-            .any(|event| event["event_type"] == "card_touch"
-                && event["card_id"] == progress_card.as_str()),
-        "auto-start should bind the session to the backing Progress card: {events:#?}"
-    );
     assert!(
         events
             .iter()
@@ -755,21 +745,11 @@ fn write_like_pre_tool_use_auto_starts_one_progress_task_and_binds_the_session()
         "the original hook event must still be recorded: {events:#?}"
     );
 
-    let second = maestro_record(
-        repo.path(),
-        r#"{
-            "session_id":"session-auto-progress",
-            "event_type":"PreToolUse",
-            "agent":"codex",
-            "tool_name":"MultiEdit",
-            "tool_input":{"file_path":"src/main.rs","edits":[]}
-        }"#,
-    );
-    assert!(second.status.success());
-    assert_eq!(
-        progress_task_count(repo.path()),
-        1,
-        "repeated write-like hooks in the same session should reuse the active Progress task"
+    assert!(
+        !events
+            .iter()
+            .any(|event| event["event_type"] == "card_touch"),
+        "setup stop should not bind the session to a generic Progress task: {events:#?}"
     );
 }
 

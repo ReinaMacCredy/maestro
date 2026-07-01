@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result, bail};
 use serde_json::{Value, json};
 
 use crate::domain::run::{self, RecordOutcome};
@@ -98,18 +98,33 @@ fn ensure_auto_progress_for_hook(paths: &MaestroPaths, payload: &Value) -> Resul
     };
     let (agent, actor) = auto_progress_actor(payload, &session_id);
     let title = auto_progress_title(payload, &session_id);
-    let project = super::resolve_project(None, paths)?;
-    let task = task::ensure_started_simple_task(
-        &paths.tasks_dir(),
-        &title,
-        project,
-        utc_now_timestamp(),
-        &actor,
-    )?;
-    if let Some(progress_card) = task::progress_task_card_ids(&paths.tasks_dir())?.get(&task.id) {
-        emit_card_touch_for_session(paths, progress_card, &session_id, &agent);
+    if let Some(progress_card) = active_progress_card_for_actor(paths, &actor)? {
+        emit_card_touch_for_session(paths, &progress_card, &session_id, &agent);
+        return Ok(());
     }
-    Ok(())
+    bail!(
+        "Progress setup required before write-like work; run: maestro task setup --task {:?} --start",
+        title
+    )
+}
+
+fn active_progress_card_for_actor(paths: &MaestroPaths, actor: &str) -> Result<Option<String>> {
+    for entry in task::load_progress_task_entries(paths)? {
+        if entry.task.state != task::TaskState::InProgress {
+            continue;
+        }
+        if entry.task.claimed_by.as_deref() != Some(actor) {
+            continue;
+        }
+        let progress_card = entry
+            .task_dir
+            .file_name()
+            .and_then(|name| name.to_str())
+            .context("progress task directory is missing card id")?
+            .to_string();
+        return Ok(Some(progress_card));
+    }
+    Ok(None)
 }
 
 fn current_task_is_set() -> bool {

@@ -1,0 +1,102 @@
+schema_version: maestro.recipe.v2
+id: progress
+kind:
+  category: lifecycle
+  tags: ["progress", "task", "lightweight"]
+title: Progress loop
+summary: Set up and advance low-ceremony Progress work through a full checklist before execution starts.
+authority_scope:
+  - current session Progress card and its progress.yml tasks
+  - lightweight task setup, start, proof, and advancement
+autonomy:
+  - autonomous inside a user-approved small-work request
+  - escalate to full card when work needs acceptance, facets, governance, or child tasks
+router:
+  status: progress
+  priority: 25
+  confidence: medium
+transitions:
+  - trigger: Progress work outgrows lightweight tracking
+    to: work
+    authority_scope:
+      - accepted or prepared card-backed work
+    allowed_verbs:
+      - maestro task create
+      - maestro feature prepare <id>
+      - maestro loop show work
+    forbidden_verbs:
+      - hide expanded scope inside progress.yml
+      - skip acceptance for card-scale work
+    hard_stops:
+      - task needs its own acceptance contract
+      - task needs child work, QA, or durable decisions
+    return_condition: work is represented by the correct card-backed artifact
+invocations: []
+outputs:
+  - Progress checklist
+  - active task
+  - proof-backed task completion
+  - next task or escalation path
+applies_when:
+  - small same-session work needs task-tool-like tracking
+  - a write-like hook reports that Progress setup is required
+  - progress.yml has ready or in-progress tasks for the current actor
+hard_stops:
+  - execution starts before the full checklist exists
+  - task proof would be recorded without evidence
+  - work needs feature, bug, chore, or custom card governance
+phases:
+  perceive:
+    goal: Read current status, active Progress, and any setup-stop instruction.
+    bricks: ["status", "progress", "task"]
+    reads: ["maestro status", "maestro task list", "maestro task show <ref>"]
+    allowed_verbs: ["maestro status", "maestro task list", "maestro task show <ref>"]
+    forbidden_verbs: ["maestro task done <ref>", "code edit"]
+    checks: ["current checklist state is known"]
+    durable_learning: []
+    outputs: ["checklist state", "active task", "hard stop"]
+  choose:
+    goal: Create the checklist or select the next task.
+    bricks: ["checklist", "task ref", "scope"]
+    reads: ["user request", "current Progress rows"]
+    allowed_verbs: ["maestro task setup --task \"...\" --start", "maestro task start <ref>"]
+    forbidden_verbs: ["start generic task without checklist", "full feature lifecycle shortcut"]
+    checks: ["task list matches requested work"]
+    durable_learning: []
+    outputs: ["setup command", "selected task", "escalate to full card"]
+  act:
+    goal: Work only on the active task and record proof when it is complete.
+    bricks: ["active task", "edit", "proof"]
+    reads: ["maestro task show <ref>", "relevant files"]
+    allowed_verbs: ["maestro task done <ref> --proof \"<evidence>\"", "apply_patch", "cargo test <target>"]
+    forbidden_verbs: ["untracked extra task", "proofless completion"]
+    checks: ["active task maps to the edit"]
+    durable_learning: []
+    outputs: ["diff", "proof", "completed task"]
+  observe:
+    goal: Check checklist progress and current task visibility.
+    bricks: ["status", "task list", "proof"]
+    reads: ["maestro status", "maestro task list --all"]
+    allowed_verbs: ["maestro status", "maestro task list --all"]
+    forbidden_verbs: ["claim done without reading Progress state"]
+    checks: ["status shows active Progress and checklist progress"]
+    durable_learning: []
+    outputs: ["progress state", "next task", "done"]
+  learn:
+    goal: Record recurring setup misses or user corrections only when reusable.
+    bricks: ["friction", "intervention", "note"]
+    reads: ["hook warning", "user correction", "task proof"]
+    allowed_verbs: ["maestro event intervention --note <text>", "maestro card note <id> <text>"]
+    forbidden_verbs: ["chat-only correction", "unscoped skill edit"]
+    checks: ["lesson is tied to a concrete event or correction"]
+    durable_learning: ["intervention event", "card note"]
+    outputs: ["recorded lesson", "no learning needed"]
+  continue:
+    goal: Advance to the next Progress task, finish, or escalate.
+    bricks: ["next task", "done", "escalation"]
+    reads: ["maestro task list", "maestro status"]
+    allowed_verbs: ["maestro task start <ref>", "maestro loop show work", "maestro task create"]
+    forbidden_verbs: ["leave hidden remaining work", "close larger work as Progress"]
+    checks: ["next action is visible to the user"]
+    durable_learning: []
+    outputs: ["next task", "all Progress done", "escalate to full card"]

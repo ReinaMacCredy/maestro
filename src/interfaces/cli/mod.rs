@@ -952,6 +952,19 @@ pub enum TaskCommand {
         #[arg(long, help = "Print only the new task id on stdout")]
         id_only: bool,
     },
+    #[command(about = "Set up a low-ceremony Progress checklist before work starts")]
+    Setup {
+        #[arg(
+            long = "task",
+            required = true,
+            help = "Task title to add to the Progress checklist (repeatable)"
+        )]
+        task: Vec<String>,
+        #[arg(long, help = "Start the first checklist task after setup")]
+        start: bool,
+        #[arg(long, help = "Project/service scope stored on the Progress card")]
+        project: Option<String>,
+    },
     #[command(about = "Create a task (-> draft)")]
     Create {
         title: String,
