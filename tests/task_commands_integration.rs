@@ -415,7 +415,16 @@ fn task_complete_refuses_low_ceremony_progress_task_without_mutating() {
 
     let setup = maestro_with_env(
         repo,
-        &["task", "setup", "--task", "map loop schema", "--start"],
+        &[
+            "task",
+            "setup",
+            "--task",
+            "map loop schema",
+            "--start",
+            "--atomic",
+            "--reason",
+            "one schema mapping fixture",
+        ],
         &[("MAESTRO_ACTOR", "codex#s1")],
     );
     assert_success(&setup, &["task", "setup", "--task", "...", "--start"]);
@@ -467,7 +476,16 @@ fn task_done_recovers_low_ceremony_progress_task_stuck_needs_verification() {
 
     let setup = maestro_with_env(
         repo,
-        &["task", "setup", "--task", "map loop schema", "--start"],
+        &[
+            "task",
+            "setup",
+            "--task",
+            "map loop schema",
+            "--start",
+            "--atomic",
+            "--reason",
+            "one schema mapping fixture",
+        ],
         &[("MAESTRO_ACTOR", "codex#s1")],
     );
     assert_success(&setup, &["task", "setup", "--task", "...", "--start"]);
@@ -516,7 +534,16 @@ fn task_note_appends_to_db_backed_progress_sidecar() {
 
     let setup = maestro_with_env(
         repo,
-        &["task", "setup", "--task", "map loop schema", "--start"],
+        &[
+            "task",
+            "setup",
+            "--task",
+            "map loop schema",
+            "--start",
+            "--atomic",
+            "--reason",
+            "one schema mapping fixture",
+        ],
         &[("MAESTRO_ACTOR", "codex#s1")],
     );
     assert_success(&setup, &["task", "setup", "--task", "...", "--start"]);
@@ -550,6 +577,89 @@ fn task_note_appends_to_db_backed_progress_sidecar() {
         .expect("DB notes sidecar exists");
     assert!(notes.contains("# map loop schema"), "{notes}");
     assert!(notes.contains("Correction recorded"), "{notes}");
+}
+
+#[test]
+fn task_progress_setup_single_task_requires_atomic_reason() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    let setup = maestro_with_env(
+        repo,
+        &["task", "setup", "--task", "wrapper task", "--start"],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    );
+    assert_failure(&setup, &["task", "setup", "--task", "...", "--start"]);
+    let message = stderr(&setup);
+    assert!(
+        message.contains("visible checklist")
+            && message.contains("--atomic --reason")
+            && message.contains("Map current behavior"),
+        "single setup should be blocked with a checklist remedy:\n{message}"
+    );
+    let has_progress = fs::read_dir(repo.join(".maestro/cards"))
+        .expect("cards dir should read")
+        .filter_map(Result::ok)
+        .any(|entry| entry.path().join("progress.yml").exists());
+    assert!(
+        !has_progress,
+        "failed single setup must not create a Progress row"
+    );
+
+    let missing_reason = maestro_with_env(
+        repo,
+        &[
+            "task",
+            "setup",
+            "--task",
+            "atomic wrapper",
+            "--start",
+            "--atomic",
+        ],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    );
+    assert_failure(&missing_reason, &["task", "setup", "--atomic"]);
+    assert!(stderr(&missing_reason).contains("--atomic requires --reason"));
+}
+
+#[test]
+fn task_progress_setup_single_atomic_records_reason() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    let setup = maestro_with_env(
+        repo,
+        &[
+            "task",
+            "setup",
+            "--task",
+            "fix typo",
+            "--start",
+            "--atomic",
+            "--reason",
+            "one file one edit one verification",
+        ],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    );
+    assert_success(&setup, &["task", "setup", "--task", "...", "--atomic"]);
+    let tasks = progress_tasks(repo);
+    let id = tasks[0]["id"].as_str().expect("progress task has id");
+    assert_eq!(tasks[0]["atomic"], Value::Bool(true));
+    assert_eq!(
+        tasks[0]["atomic_reason"],
+        Value::String("one file one edit one verification".to_string())
+    );
+
+    let shown = stdout(&maestro_with_env(
+        repo,
+        &["task", "show", id],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    ));
+    assert!(shown.contains("atomic: true"), "{shown}");
+    assert!(
+        shown.contains("atomic_reason: one file one edit one verification"),
+        "{shown}"
+    );
 }
 
 #[test]

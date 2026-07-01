@@ -78,6 +78,10 @@ pub struct TaskRecord {
     pub risk: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub raw_request: Option<String>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub atomic: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub atomic_reason: Option<String>,
     pub state: TaskState,
     pub acceptance_locked: bool,
     #[serde(default)]
@@ -255,6 +259,8 @@ impl TaskRecord {
             lane: Some("normal".to_string()),
             risk: Some("medium".to_string()),
             raw_request: None,
+            atomic: false,
+            atomic_reason: None,
             state: TaskState::Draft,
             acceptance_locked: false,
             acceptance: AcceptanceFile::new(id, Vec::new()),

@@ -136,16 +136,30 @@ For simple work that does not need the full feature/card pipeline, use the
 low-ceremony Task surface. There is no `todo` namespace and no task-specific
 second lifecycle.
 
-With Maestro hooks installed, the first write-like `PreToolUse` in an
-implementation session auto-creates or reuses that session's Progress card,
-adds one low Task if needed, starts it, and binds the session to the Progress
-card. This does not fire for read-only hooks or when `MAESTRO_CURRENT_TASK` is
-already set. Without hooks, do the same explicitly:
+With Maestro hooks installed, a write-like `PreToolUse` in an implementation
+session is blocked before recording unless the active Progress context already
+has a visible checklist: at least two rows, or one row created as explicitly
+atomic with a reason. `MAESTRO_CURRENT_TASK` does not bypass this rule when it
+points at a Progress row. Read-only hooks do not create Progress rows. Without
+hooks, do the same setup explicitly before editing.
 
-MCP: `maestro_task_add` -> `maestro_task_start` -> `maestro_task_done`.
+Default checklist setup:
 
 ```sh
-maestro task add "fix typo"      # creates a ready Task inside progress.yml
+maestro task setup --task "Map current behavior" --task "Implement scoped fix" --task "Verify" --start
+```
+
+Single-row override only when the work is genuinely atomic:
+
+```sh
+maestro task setup --task "fix typo" --start --atomic --reason "one file one edit one verification"
+```
+
+Manual row management remains available after setup, or for non-write
+bookkeeping:
+
+```sh
+maestro task add "follow-up check" # creates a ready Task inside progress.yml
 maestro task list                # shows live rows with REF numbers
 maestro task start <ref>         # marks it in_progress and takes ownership
 maestro task done <ref> --proof "fixed typo"  # records proof and verifies it

@@ -128,6 +128,7 @@ const MAESTRO_CARD_COMMANDS: &[&str] = &[
     "maestro loop next",
     "maestro loop validate",
     "maestro loop work-lease",
+    "maestro task setup",
     "maestro task add",
     "maestro task create",
     "maestro task set",

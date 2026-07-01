@@ -990,6 +990,13 @@ pub enum TaskCommand {
         task: Vec<String>,
         #[arg(long, help = "Start the first checklist task after setup")]
         start: bool,
+        #[arg(long, help = "Declare a single setup task atomic; requires --reason")]
+        atomic: bool,
+        #[arg(
+            long,
+            help = "Why a single atomic Progress task is enough for the work"
+        )]
+        reason: Option<String>,
         #[arg(long, help = "Project/service scope stored on the Progress card")]
         project: Option<String>,
     },

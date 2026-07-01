@@ -77,6 +77,12 @@ pub fn render_task(task: &TaskRecord, checks: &[String]) -> String {
     if let Some(claimed_by) = task.claimed_by.as_deref() {
         out.push_str(&format!("claimed_by: {claimed_by}\n"));
     }
+    if task.atomic {
+        out.push_str("atomic: true\n");
+        if let Some(reason) = task.atomic_reason.as_deref() {
+            out.push_str(&format!("atomic_reason: {reason}\n"));
+        }
+    }
     out.push_str(&format!(
         "created_at: {}\n",
         render_timestamp(&task.created_at)

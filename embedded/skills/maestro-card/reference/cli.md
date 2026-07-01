@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: 48688890a3cfa616772cca3df8c6a5d2c57936c85bee0e8943bd72c8d9424588 -->
+<!-- maestro:cli-reference-sha256: 031ff9ac41a77e48062cc440d22988c17516901a85c7c1f8f422264ee946b61c -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -15,6 +15,7 @@ a spelling not found here is outside this skill's CLI surface.
 ## maestro task
 
 - `maestro task add <TITLE> [--card <CARD>] [--project <PROJECT>] [--id-only]` -- Add a low-ceremony task ready to start
+- `maestro task setup --task <TASK>... [--start] [--atomic] [--reason <REASON>] [--project <PROJECT>]` -- Set up a low-ceremony Progress checklist before work starts
 - `maestro task create <TITLE> [--feature <FEATURE>] [--card <CARD>] [--lane <LANE>] [--risk <RISK>] [--check <CHECK>]... [--covers <COVERS>]... [--project <PROJECT>] [--id-only]` -- Create a task (-> draft)
 - `maestro task set <ID> [--check <CHECK>]... [--feature <FEATURE>] [--no-feature] [--covers <COVERS>]... [--verify-command <VERIFY_COMMAND>] [--clear-verify-command]` -- Author task checks or change its feature link
 - `maestro task explore <ID>` -- Move a draft into exploring (-> exploring)

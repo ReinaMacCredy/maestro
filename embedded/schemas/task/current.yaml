@@ -18,6 +18,8 @@ contracts:
       - lane
       - risk
       - raw_request
+      - atomic
+      - atomic_reason
       - state
       - acceptance_locked
       - acceptance

@@ -16,6 +16,8 @@ extra:
   lane: normal
   risk: medium
   raw_request: exercise every persisted task field
+  atomic: true
+  atomic_reason: fixture covers single-row Progress metadata
   state: verified
   acceptance_locked: true
   acceptance:

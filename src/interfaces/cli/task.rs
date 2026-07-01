@@ -36,8 +36,10 @@ pub fn run(args: TaskArgs) -> Result<()> {
         TaskCommand::Setup {
             task,
             start,
+            atomic,
+            reason,
             project,
-        } => setup_tasks(&paths, &task, start, project, &actor),
+        } => setup_tasks(&paths, &task, start, atomic, reason, project, &actor),
         TaskCommand::Create {
             title,
             feature,
@@ -269,9 +271,17 @@ fn setup_tasks(
     paths: &MaestroPaths,
     titles: &[String],
     start: bool,
+    atomic: bool,
+    reason: Option<String>,
     project: Option<String>,
     actor: &str,
 ) -> Result<()> {
+    let atomic_reason = match (atomic, reason) {
+        (true, Some(reason)) if !reason.trim().is_empty() => Some(reason),
+        (true, _) => bail!("--atomic requires --reason \"<why one row is enough>\""),
+        (false, Some(_)) => bail!("--reason requires --atomic"),
+        (false, None) => None,
+    };
     let project = super::resolve_project(project, paths)?;
     let tasks = task::setup_simple_tasks(
         &paths.tasks_dir(),
@@ -280,6 +290,7 @@ fn setup_tasks(
         start,
         utc_now_timestamp(),
         actor,
+        task::ProgressSetupOptions { atomic_reason },
     )?;
     println!("setup {} task(s)", tasks.len());
     for (index, task) in tasks.iter().enumerate() {

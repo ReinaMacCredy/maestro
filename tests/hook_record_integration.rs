@@ -770,7 +770,7 @@ fn pre_tool_use_hashes_tool_input_without_persisting_raw_content() {
 }
 
 #[test]
-fn write_like_pre_tool_use_requires_progress_setup_instead_of_generic_autostart() {
+fn write_like_pre_tool_use_blocks_without_progress_setup() {
     let repo = init_repo();
     let first = maestro_record(
         repo.path(),
@@ -779,39 +779,217 @@ fn write_like_pre_tool_use_requires_progress_setup_instead_of_generic_autostart(
             "event_type":"PreToolUse",
             "agent":"codex",
             "tool_name":"Edit",
-            "tool_input":{"file_path":"src/lib.rs","old_string":"a","new_string":"b"}
-        }"#,
+              "tool_input":{"file_path":"src/lib.rs","old_string":"a","new_string":"b"}
+          }"#,
     );
     assert!(
-        first.status.success(),
-        "first write-like hook failed\nstdout:\n{}\nstderr:\n{}",
+        !first.status.success(),
+        "first write-like hook unexpectedly succeeded\nstdout:\n{}\nstderr:\n{}",
         String::from_utf8_lossy(&first.stdout),
         String::from_utf8_lossy(&first.stderr)
     );
     let stderr = String::from_utf8_lossy(&first.stderr);
     assert!(
-        stderr.contains("maestro task setup --task"),
-        "write-like hook should point at setup before execution\nstderr:\n{stderr}"
+        stderr.contains("blocked: Progress setup required")
+            && stderr.contains("Map current behavior")
+            && stderr.contains("--atomic --reason"),
+        "write-like hook should block before execution with setup remedies\nstderr:\n{stderr}"
     );
     assert_eq!(
         progress_task_count(repo.path()),
         0,
         "write-like hook should not create one generic started Progress task"
     );
+    assert!(
+        !repo
+            .path()
+            .join(".maestro/runs/session-auto-progress/events.jsonl")
+            .exists(),
+        "blocked write-like hook must not record the PreToolUse event"
+    );
+}
 
-    let events = read_events(repo.path(), "session-auto-progress");
+#[test]
+fn write_like_pre_tool_use_blocks_single_non_atomic_progress_task() {
+    let repo = init_repo();
+    let add = maestro_with_env(
+        repo.path(),
+        &["task", "add", "wrapper task", "--id-only"],
+        &[("MAESTRO_ACTOR", "codex#session-single")],
+    );
+    assert!(add.status.success());
+    let task_id = String::from_utf8(add.stdout)
+        .expect("task id stdout is UTF-8")
+        .trim()
+        .to_string();
+    let start = maestro_with_env(
+        repo.path(),
+        &["task", "start", &task_id],
+        &[("MAESTRO_ACTOR", "codex#session-single")],
+    );
+    assert!(start.status.success());
+
+    let output = maestro_record(
+        repo.path(),
+        r#"{
+            "session_id":"session-single",
+            "event_type":"PreToolUse",
+            "agent":"codex",
+            "tool_name":"Edit",
+            "tool_input":{"file_path":"src/lib.rs","old_string":"a","new_string":"b"}
+        }"#,
+    );
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("visible checklist before write-like work")
+            && stderr.contains(&task_id)
+            && stderr.contains("not marked atomic"),
+        "single non-atomic Progress task should be blocked:\n{stderr}"
+    );
+    assert!(
+        !repo
+            .path()
+            .join(".maestro/runs/session-single/events.jsonl")
+            .exists(),
+        "blocked hook must not record the write-like event"
+    );
+}
+
+#[test]
+fn write_like_pre_tool_use_allows_single_atomic_progress_task() {
+    let repo = init_repo();
+    let setup = maestro_with_env(
+        repo.path(),
+        &[
+            "task",
+            "setup",
+            "--task",
+            "fix typo",
+            "--start",
+            "--atomic",
+            "--reason",
+            "one file one edit one verification",
+        ],
+        &[("MAESTRO_ACTOR", "codex#session-atomic")],
+    );
+    assert!(
+        setup.status.success(),
+        "atomic setup failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&setup.stdout),
+        String::from_utf8_lossy(&setup.stderr)
+    );
+
+    let output = maestro_record(
+        repo.path(),
+        r#"{
+            "session_id":"session-atomic",
+            "event_type":"PreToolUse",
+            "agent":"codex",
+            "tool_name":"Edit",
+            "tool_input":{"file_path":"src/lib.rs","old_string":"a","new_string":"b"}
+        }"#,
+    );
+
+    assert!(
+        output.status.success(),
+        "atomic Progress hook should pass\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let events = read_events(repo.path(), "session-atomic");
+    assert!(
+        events
+            .iter()
+            .any(|event| event["event_type"] == "card_touch")
+            && events
+                .iter()
+                .any(|event| event["event_type"] == "PreToolUse"),
+        "allowed hook should bind the card and record the tool event: {events:#?}"
+    );
+}
+
+#[test]
+fn write_like_pre_tool_use_allows_progress_checklist() {
+    let repo = init_repo();
+    let setup = maestro_with_env(
+        repo.path(),
+        &[
+            "task",
+            "setup",
+            "--task",
+            "Map behavior",
+            "--task",
+            "Implement fix",
+            "--start",
+        ],
+        &[("MAESTRO_ACTOR", "codex#session-checklist")],
+    );
+    assert!(
+        setup.status.success(),
+        "checklist setup failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&setup.stdout),
+        String::from_utf8_lossy(&setup.stderr)
+    );
+
+    let output = maestro_record(
+        repo.path(),
+        r#"{
+            "session_id":"session-checklist",
+            "event_type":"PreToolUse",
+            "agent":"codex",
+            "tool_name":"Edit",
+            "tool_input":{"file_path":"src/lib.rs","old_string":"a","new_string":"b"}
+        }"#,
+    );
+
+    assert!(
+        output.status.success(),
+        "multi-row Progress hook should pass\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let events = read_events(repo.path(), "session-checklist");
     assert!(
         events
             .iter()
             .any(|event| event["event_type"] == "PreToolUse"),
-        "the original hook event must still be recorded: {events:#?}"
+        "allowed checklist hook should record the tool event: {events:#?}"
+    );
+}
+
+#[test]
+fn current_task_env_does_not_bypass_single_progress_invariant() {
+    let repo = init_repo();
+    let add = maestro_with_env(
+        repo.path(),
+        &["task", "add", "wrapper task", "--id-only"],
+        &[("MAESTRO_ACTOR", "codex#session-current-progress")],
+    );
+    assert!(add.status.success());
+    let task_id = String::from_utf8(add.stdout)
+        .expect("task id stdout is UTF-8")
+        .trim()
+        .to_string();
+
+    let output = maestro_record_clean_env_with(
+        repo.path(),
+        r#"{
+            "session_id":"session-current-progress",
+            "event_type":"PreToolUse",
+            "agent":"codex",
+            "tool_name":"Write",
+            "tool_input":{"file_path":"src/lib.rs","content":"changed"}
+        }"#,
+        &[("MAESTRO_CURRENT_TASK", task_id.as_str())],
     );
 
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        !events
-            .iter()
-            .any(|event| event["event_type"] == "card_touch"),
-        "setup stop should not bind the session to a generic Progress task: {events:#?}"
+        stderr.contains("visible checklist before write-like work") && stderr.contains(&task_id),
+        "MAESTRO_CURRENT_TASK must not bypass Progress invariant:\n{stderr}"
     );
 }
 

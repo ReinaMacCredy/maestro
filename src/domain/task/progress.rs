@@ -57,6 +57,11 @@ pub struct ProgressTaskSnapshot {
     db: Option<DbProgressSnapshot>,
 }
 
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ProgressSetupOptions {
+    pub atomic_reason: Option<String>,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct DbProgressSnapshot {
     paths: MaestroPaths,
@@ -184,6 +189,7 @@ pub fn setup_simple_tasks(
     start: bool,
     created_at: String,
     actor: &str,
+    options: ProgressSetupOptions,
 ) -> Result<Vec<TaskRecord>> {
     if titles.is_empty() {
         bail!("task setup requires at least one --task");
@@ -191,17 +197,37 @@ pub fn setup_simple_tasks(
     if titles.iter().any(|title| title.trim().is_empty()) {
         bail!("task title must not be empty");
     }
+    let atomic_reason = options
+        .atomic_reason
+        .as_deref()
+        .map(str::trim)
+        .filter(|reason| !reason.is_empty());
+    if titles.len() == 1 && atomic_reason.is_none() {
+        bail!(
+            "blocked: Progress setup needs a visible checklist for write-capable work\nreason: one Progress task hides the actual work breakdown\nfix: maestro task setup --task \"Map current behavior\" --task \"Implement scoped fix\" --task \"Verify\" --start\noverride: maestro task setup --task {:?} --start --atomic --reason \"<why one row is enough>\"",
+            titles[0]
+        );
+    }
+    if titles.len() > 1 && atomic_reason.is_some() {
+        bail!("--atomic applies only to a single-task Progress setup");
+    }
 
     let (path, mut progress, snapshot) =
         load_or_create_actor_progress(paths, project, actor, &created_at)?;
     let mut tasks = Vec::with_capacity(titles.len());
-    for title in titles {
+    for (index, title) in titles.iter().enumerate() {
         let id = store::mint_card_id(paths, CardType::Task, title);
         let mut task = TaskRecord::draft(&id, title, &created_at);
         task.state = TaskState::Ready;
         task.acceptance_locked = true;
         task.acceptance.locked_by = Some(actor.to_string());
         task.acceptance.locked_at = Some(created_at.clone());
+        if index == 0
+            && let Some(reason) = atomic_reason
+        {
+            task.atomic = true;
+            task.atomic_reason = Some(reason.to_string());
+        }
         tasks.push(task);
     }
 

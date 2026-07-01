@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use serde_json::{Value, json};
 
 use crate::domain::run::{self, RecordOutcome};
@@ -26,11 +26,29 @@ pub fn run(args: HookArgs) -> Result<()> {
                 .map(MaestroPaths::new)
                 .and_then(|paths| record_hook(&paths, event, skill, session));
             if let Err(error) = result {
+                if error.is::<ProgressSetupBlock>() {
+                    return Err(error);
+                }
                 eprintln!("maestro hook record warning: {error:#}");
             }
             Ok(())
         }
     }
+}
+
+#[derive(Debug)]
+struct ProgressSetupBlock(String);
+
+impl std::fmt::Display for ProgressSetupBlock {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for ProgressSetupBlock {}
+
+fn progress_setup_block(message: String) -> anyhow::Error {
+    ProgressSetupBlock(message).into()
 }
 
 fn record_hook(
@@ -60,9 +78,7 @@ fn record_hook(
             let Some(payload) = stdin_payload else {
                 return Ok(());
             };
-            if let Err(error) = ensure_auto_progress_for_hook(paths, &payload) {
-                eprintln!("maestro hook record warning: progress setup check failed: {error:#}");
-            }
+            ensure_auto_progress_for_hook(paths, &payload)?;
             record::record_value(paths, &payload)?
         }
     };
@@ -88,47 +104,117 @@ fn record_hook(
 }
 
 fn ensure_auto_progress_for_hook(paths: &MaestroPaths, payload: &Value) -> Result<()> {
-    if current_task_is_set() || !is_write_like_pre_tool_use(payload) {
+    if !is_write_like_pre_tool_use(payload) {
         return Ok(());
+    }
+    if let Some(current_task_id) = current_task_id() {
+        return ensure_current_progress_allows_write(paths, &current_task_id);
     }
     let Some(session_id) = record::payload_session_id(payload) else {
         return Ok(());
     };
     let (agent, actor) = auto_progress_actor(payload, &session_id);
     let title = auto_progress_title(payload, &session_id);
-    if let Some(progress_card) = active_progress_card_for_actor(paths, &actor)? {
-        emit_card_touch_for_session(paths, &progress_card, &session_id, &agent);
+    if let Some(progress) = active_progress_for_actor(paths, &actor)? {
+        ensure_progress_allows_write(&progress)?;
+        emit_card_touch_for_session(paths, &progress.card_id, &session_id, &agent);
         return Ok(());
     }
-    bail!(
-        "Progress setup required before write-like work; run: maestro task setup --task {:?} --start",
+    Err(progress_setup_block(format!(
+        "blocked: Progress setup required before write-like work\nreason: no active Progress checklist is claimed by {actor}\nfix: maestro task setup --task \"Map current behavior\" --task \"Implement scoped fix\" --task \"Verify\" --start\noverride: maestro task setup --task {:?} --start --atomic --reason \"<why one row is enough>\"",
         title
-    )
+    )))
 }
 
-fn active_progress_card_for_actor(paths: &MaestroPaths, actor: &str) -> Result<Option<String>> {
+#[derive(Clone, Debug)]
+struct ActiveProgress {
+    card_id: String,
+    task: task::TaskRecord,
+    total_tasks: usize,
+}
+
+#[derive(Clone, Debug)]
+struct ProgressRow {
+    card_id: String,
+    task: task::TaskRecord,
+}
+
+fn ensure_current_progress_allows_write(paths: &MaestroPaths, current_task_id: &str) -> Result<()> {
+    if let Some(progress) = progress_for_task(paths, current_task_id)? {
+        ensure_progress_allows_write(&progress)?;
+    }
+    Ok(())
+}
+
+fn active_progress_for_actor(paths: &MaestroPaths, actor: &str) -> Result<Option<ActiveProgress>> {
+    let rows = progress_rows(paths)?;
+    Ok(active_progress_from_rows(&rows, |task| {
+        task.state == task::TaskState::InProgress && task.claimed_by.as_deref() == Some(actor)
+    }))
+}
+
+fn progress_for_task(paths: &MaestroPaths, task_id: &str) -> Result<Option<ActiveProgress>> {
+    let rows = progress_rows(paths)?;
+    Ok(active_progress_from_rows(&rows, |task| task.id == task_id))
+}
+
+fn progress_rows(paths: &MaestroPaths) -> Result<Vec<ProgressRow>> {
+    let mut rows = Vec::new();
     for entry in task::load_progress_task_entries(paths)? {
-        if entry.task.state != task::TaskState::InProgress {
-            continue;
-        }
-        if entry.task.claimed_by.as_deref() != Some(actor) {
-            continue;
-        }
-        let progress_card = entry
+        let card_id = entry
             .task_dir
             .file_name()
             .and_then(|name| name.to_str())
             .context("progress task directory is missing card id")?
             .to_string();
-        return Ok(Some(progress_card));
+        rows.push(ProgressRow {
+            card_id,
+            task: entry.task,
+        });
     }
-    Ok(None)
+    Ok(rows)
 }
 
-fn current_task_is_set() -> bool {
+fn active_progress_from_rows(
+    rows: &[ProgressRow],
+    predicate: impl Fn(&task::TaskRecord) -> bool,
+) -> Option<ActiveProgress> {
+    let row = rows.iter().find(|row| predicate(&row.task))?;
+    let total_tasks = rows
+        .iter()
+        .filter(|candidate| candidate.card_id == row.card_id)
+        .count();
+    Some(ActiveProgress {
+        card_id: row.card_id.clone(),
+        task: row.task.clone(),
+        total_tasks,
+    })
+}
+
+fn ensure_progress_allows_write(progress: &ActiveProgress) -> Result<()> {
+    if progress.total_tasks >= 2 {
+        return Ok(());
+    }
+    if progress.task.atomic
+        && progress
+            .task
+            .atomic_reason
+            .as_deref()
+            .is_some_and(|reason| !reason.trim().is_empty())
+    {
+        return Ok(());
+    }
+    Err(progress_setup_block(format!(
+        "blocked: Progress setup needs a visible checklist before write-like work\ntask: {}\nreason: one active Progress task is not marked atomic\nfix: maestro task setup --task \"Map current behavior\" --task \"Implement scoped fix\" --task \"Verify\"\noverride: create the task with --atomic --reason when one row is truly enough",
+        progress.task.id
+    )))
+}
+
+fn current_task_id() -> Option<String> {
     std::env::var("MAESTRO_CURRENT_TASK")
         .ok()
-        .is_some_and(|value| !value.trim().is_empty())
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
 }
 
 fn is_write_like_pre_tool_use(payload: &Value) -> bool {

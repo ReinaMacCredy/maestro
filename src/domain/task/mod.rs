@@ -31,7 +31,7 @@ pub use doctor::{
     render_report,
 };
 pub use lifecycle::TransitionDetails;
-pub use progress::PROGRESS_FILE;
+pub use progress::{PROGRESS_FILE, ProgressSetupOptions};
 pub use template::{
     AcceptanceFile, Blocker, BlockerKind, BlockerRef, BlockerSource, ClaimCheckReceipt,
     ProofSourceReceipt, TaskRecord, TaskState, VerificationBinding, VerificationCommandReceipt,
@@ -226,10 +226,11 @@ pub fn setup_simple_tasks(
     start: bool,
     created_at: String,
     actor: &str,
+    options: ProgressSetupOptions,
 ) -> Result<Vec<TaskRecord>> {
     let paths = lookup::paths_for_tasks_dir(tasks_dir)
         .context("cannot resolve maestro paths from tasks dir")?;
-    progress::setup_simple_tasks(&paths, titles, project, start, created_at, actor)
+    progress::setup_simple_tasks(&paths, titles, project, start, created_at, actor, options)
 }
 
 /// Ensure a standalone low-ceremony task exists and is already in progress.

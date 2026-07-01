@@ -28,6 +28,10 @@ fn maestro_with_clean_agent_env(
         "CLAUDE_CODE",
         "CODEX_CLI",
         "CODEX_SANDBOX",
+        "CODEX_THREAD_ID",
+        "CLAUDE_SESSION_ID",
+        "CLAUDECODE_SESSION_ID",
+        "CLAUDE_CODE_SESSION_ID",
     ] {
         command.env_remove(key);
     }

@@ -90,8 +90,11 @@ phases:
     goal: Create the checklist or select the next task.
     bricks: ["checklist", "task ref", "scope"]
     reads: ["user request", "current Progress rows"]
-    allowed_verbs: ["maestro task setup --task \"...\" --start", "maestro task start <ref>"]
-    forbidden_verbs: ["start generic task without checklist", "full feature lifecycle shortcut"]
+    allowed_verbs:
+      - maestro task setup --task "Map current behavior" --task "Implement scoped fix" --task "Verify" --start
+      - maestro task setup --task "..." --start --atomic --reason "<why one row is enough>"
+      - maestro task start <ref>
+    forbidden_verbs: ["start generic task without checklist", "single-row setup without --atomic --reason", "full feature lifecycle shortcut"]
     checks: ["task list matches requested work"]
     durable_learning: []
     outputs: ["setup command", "selected task", "escalate to full card"]
