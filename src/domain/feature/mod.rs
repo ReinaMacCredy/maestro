@@ -39,6 +39,6 @@ pub use verification::{
 };
 pub(crate) use worktree::{
     WorktreeCleanupReceipt, WorktreeComputedState, WorktreeIntent, WorktreeLaneStatus,
-    WorktreeMilestoneKind, WorktreeRecordReport, lane_statuses, mark_lane, plan_lane,
-    record_cleanup,
+    WorktreeMilestoneKind, WorktreeRecordReport, WorktreeSynthesisHandoff, WorktreeSynthesisState,
+    claim_synthesis, lane_statuses, mark_lane, plan_lane, record_cleanup, record_synthesis_handoff,
 };

@@ -18,10 +18,31 @@ fn maestro(cwd: &Path, args: &[&str]) -> std::process::Output {
         .expect("invariant: compiled maestro binary should run in integration tests")
 }
 
+fn maestro_with_env(cwd: &Path, args: &[&str], envs: &[(&str, &str)]) -> std::process::Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_maestro"));
+    command.args(args).current_dir(cwd);
+    for (key, value) in envs {
+        command.env(key, value);
+    }
+    command
+        .output()
+        .expect("invariant: compiled maestro binary should run in integration tests")
+}
+
 fn assert_success(output: &std::process::Output, args: &[&str]) {
     assert!(
         output.status.success(),
         "maestro {:?} failed\nstdout:\n{}\nstderr:\n{}",
+        args,
+        stdout(output),
+        stderr(output)
+    );
+}
+
+fn assert_failure(output: &std::process::Output, args: &[&str]) {
+    assert!(
+        !output.status.success(),
+        "maestro {:?} unexpectedly succeeded\nstdout:\n{}\nstderr:\n{}",
         args,
         stdout(output),
         stderr(output)
@@ -83,6 +104,20 @@ fn git_worktree_list(repo: &Path) -> String {
         stderr(&output)
     );
     stdout(&output)
+}
+
+fn git(repo: &Path, args: &[&str]) {
+    let output = Command::new("git")
+        .args(args)
+        .current_dir(repo)
+        .output()
+        .expect("invariant: git should be runnable");
+    assert!(
+        output.status.success(),
+        "git {args:?} failed\nstdout:\n{}\nstderr:\n{}",
+        stdout(&output),
+        stderr(&output)
+    );
 }
 
 fn setup_repo() -> (TestTempDir, Repository) {
@@ -350,5 +385,363 @@ fn worktree_record_verbs_update_ledger_without_running_git() {
     assert_eq!(
         ledger["lanes"][0]["cleanup_receipts"][0]["deleted_branch"],
         branch
+    );
+}
+
+#[test]
+fn worktree_synthesis_handoff_records_and_claims_one_merge_owner() {
+    let (temp, repository) = setup_repo();
+    let feature = maestro(
+        temp.path(),
+        &["feature", "new", "Worktree synthesis", "--id-only"],
+    );
+    assert_success(
+        &feature,
+        &["feature", "new", "Worktree synthesis", "--id-only"],
+    );
+    let feature_id = stdout(&feature).trim().to_string();
+    let head = repository
+        .head()
+        .expect("invariant: HEAD should exist")
+        .target()
+        .expect("invariant: HEAD should point at a commit")
+        .to_string();
+    let branch = "codex/synthesis-lane";
+    let lane_path = ".maestro/worktree/synthesis-lane";
+
+    let plan = maestro(
+        temp.path(),
+        &[
+            "worktree",
+            "plan",
+            &feature_id,
+            "--slug",
+            "synthesis-lane",
+            "--branch",
+            branch,
+            "--path",
+            lane_path,
+            "--base",
+            &head,
+        ],
+    );
+    assert_success(&plan, &["worktree", "plan"]);
+
+    let handoff = maestro(
+        temp.path(),
+        &[
+            "worktree",
+            "handoff",
+            &feature_id,
+            "--slug",
+            "synthesis-lane",
+            "--created-by-session",
+            "worker-1",
+            "--head",
+            &head,
+            "--target",
+            "main",
+            "--blocker",
+            "root/main busy with active session",
+            "--verified-check",
+            "cargo test --test worktree_ledger_integration passed",
+        ],
+    );
+    assert_success(&handoff, &["worktree", "handoff"]);
+    let handoff_out = stdout(&handoff);
+    assert!(
+        handoff_out.contains("state: needs_synthesis"),
+        "{handoff_out}"
+    );
+    assert!(
+        handoff_out.contains("next: maestro synthesize claim"),
+        "{handoff_out}"
+    );
+
+    let show = maestro(temp.path(), &["feature", "show", &feature_id]);
+    assert_success(&show, &["feature", "show"]);
+    let show = stdout(&show);
+    assert!(show.contains("synthesis:"), "{show}");
+    assert!(show.contains("state: needs_synthesis"), "{show}");
+    assert!(show.contains("created_by_session: worker-1"), "{show}");
+    assert!(show.contains("merge_owner: unassigned"), "{show}");
+    assert!(
+        show.contains("next_owner_rule: next root/main session may claim"),
+        "{show}"
+    );
+    assert!(show.contains("head: "), "{show}");
+    assert!(show.contains("target: main"), "{show}");
+    assert!(
+        show.contains("cargo test --test worktree_ledger_integration passed"),
+        "{show}"
+    );
+
+    let status = maestro(temp.path(), &["status"]);
+    assert_success(&status, &["status"]);
+    let status = stdout(&status);
+    assert!(status.contains("needs_synthesis"), "{status}");
+    assert!(
+        status.contains("maestro synthesize claim"),
+        "status should show the claim command\n{status}"
+    );
+
+    let claim = maestro_with_env(
+        temp.path(),
+        &[
+            "synthesize",
+            "claim",
+            &feature_id,
+            "--slug",
+            "synthesis-lane",
+        ],
+        &[("MAESTRO_SESSION_ID", "coordinator-1")],
+    );
+    assert_success(&claim, &["synthesize", "claim"]);
+    let claim_out = stdout(&claim);
+    assert!(
+        claim_out.contains("merge_owner: coordinator-1"),
+        "{claim_out}"
+    );
+
+    let contested = maestro_with_env(
+        temp.path(),
+        &[
+            "synthesize",
+            "claim",
+            &feature_id,
+            "--slug",
+            "synthesis-lane",
+        ],
+        &[("MAESTRO_SESSION_ID", "coordinator-2")],
+    );
+    assert_failure(&contested, &["synthesize", "claim"]);
+    assert!(
+        stderr(&contested).contains("already claimed by coordinator-1"),
+        "{}",
+        stderr(&contested)
+    );
+}
+
+#[test]
+fn worktree_cleanup_dry_run_is_non_mutating_and_apply_is_gated() {
+    let (temp, repository) = setup_repo();
+    let feature = maestro(
+        temp.path(),
+        &["feature", "new", "Worktree cleanup", "--id-only"],
+    );
+    assert_success(
+        &feature,
+        &["feature", "new", "Worktree cleanup", "--id-only"],
+    );
+    let feature_id = stdout(&feature).trim().to_string();
+    let head = repository
+        .head()
+        .expect("invariant: HEAD should exist")
+        .target()
+        .expect("invariant: HEAD should point at a commit")
+        .to_string();
+    let branch = "cleanup-lane";
+    let worker = temp.path().join("worker-cleanup-lane");
+    let worker_string = worker.display().to_string();
+
+    git(temp.path(), &["branch", branch]);
+    git(temp.path(), &["worktree", "add", &worker_string, branch]);
+
+    let plan = maestro(
+        temp.path(),
+        &[
+            "worktree",
+            "plan",
+            &feature_id,
+            "--slug",
+            "cleanup-lane",
+            "--branch",
+            branch,
+            "--path",
+            &worker_string,
+            "--base",
+            &head,
+        ],
+    );
+    assert_success(&plan, &["worktree", "plan"]);
+    for args in [
+        vec![
+            "worktree",
+            "mark",
+            &feature_id,
+            "--slug",
+            "cleanup-lane",
+            "--lane-created",
+        ],
+        vec![
+            "worktree",
+            "mark",
+            &feature_id,
+            "--slug",
+            "cleanup-lane",
+            "--merged-back",
+            "--commit",
+            &head,
+        ],
+        vec![
+            "worktree",
+            "mark",
+            &feature_id,
+            "--slug",
+            "cleanup-lane",
+            "--verified",
+            "--commit",
+            &head,
+        ],
+    ] {
+        let marked = maestro(temp.path(), &args);
+        assert_success(&marked, &args);
+    }
+
+    fs::write(worker.join("dirty.txt"), "dirty\n").expect("invariant: dirty file writable");
+    let dirty_apply = maestro(
+        temp.path(),
+        &[
+            "worktree",
+            "cleanup",
+            &feature_id,
+            "--slug",
+            "cleanup-lane",
+            "--apply",
+        ],
+    );
+    assert_failure(&dirty_apply, &["worktree", "cleanup", "--apply"]);
+    assert!(
+        stderr(&dirty_apply).contains("cleanup blocked"),
+        "{}",
+        stderr(&dirty_apply)
+    );
+
+    fs::remove_file(worker.join("dirty.txt")).expect("invariant: dirty file removable");
+    let release = maestro(
+        temp.path(),
+        &[
+            "active",
+            "release",
+            &feature_id,
+            "--reason",
+            "cleanup-ready",
+        ],
+    );
+    assert_success(&release, &["active", "release"]);
+    let before = git_worktree_list(temp.path());
+    let dry_run = maestro(
+        temp.path(),
+        &["worktree", "cleanup", &feature_id, "--slug", "cleanup-lane"],
+    );
+    assert_success(&dry_run, &["worktree", "cleanup"]);
+    let dry_run = stdout(&dry_run);
+    assert!(dry_run.contains("dry-run"), "{dry_run}");
+    assert!(dry_run.contains("state: cleanup_due"), "{dry_run}");
+    assert!(dry_run.contains("git worktree remove"), "{dry_run}");
+    assert!(
+        dry_run.contains("maestro worktree cleanup-record"),
+        "{dry_run}"
+    );
+    assert_eq!(
+        git_worktree_list(temp.path()),
+        before,
+        "dry-run must not mutate git worktrees"
+    );
+
+    let apply = maestro(
+        temp.path(),
+        &[
+            "worktree",
+            "cleanup",
+            &feature_id,
+            "--slug",
+            "cleanup-lane",
+            "--apply",
+        ],
+    );
+    assert_success(&apply, &["worktree", "cleanup", "--apply"]);
+    let apply = stdout(&apply);
+    assert!(apply.contains("applied cleanup"), "{apply}");
+    assert!(!worker.exists(), "apply should remove the worker worktree");
+    assert!(
+        repository.find_branch(branch, BranchType::Local).is_err(),
+        "apply should delete the merged worker branch"
+    );
+
+    let show = maestro(temp.path(), &["feature", "show", &feature_id]);
+    assert_success(&show, &["feature", "show"]);
+    let show = stdout(&show);
+    assert!(show.contains("state: cleanup_complete"), "{show}");
+    assert!(show.contains("cleanup_receipts:"), "{show}");
+}
+
+#[test]
+fn loop_next_routes_pending_synthesis_handoff() {
+    let (temp, repository) = setup_repo();
+    let feature = maestro(
+        temp.path(),
+        &["feature", "new", "Route synthesis", "--id-only"],
+    );
+    assert_success(
+        &feature,
+        &["feature", "new", "Route synthesis", "--id-only"],
+    );
+    let feature_id = stdout(&feature).trim().to_string();
+    let head = repository
+        .head()
+        .expect("invariant: HEAD should exist")
+        .target()
+        .expect("invariant: HEAD should point at a commit")
+        .to_string();
+    let plan = maestro(
+        temp.path(),
+        &[
+            "worktree",
+            "plan",
+            &feature_id,
+            "--slug",
+            "route-synthesis",
+            "--branch",
+            "codex/route-synthesis",
+            "--path",
+            ".maestro/worktree/route-synthesis",
+            "--base",
+            &head,
+        ],
+    );
+    assert_success(&plan, &["worktree", "plan"]);
+    let handoff = maestro(
+        temp.path(),
+        &[
+            "worktree",
+            "handoff",
+            &feature_id,
+            "--slug",
+            "route-synthesis",
+            "--created-by-session",
+            "worker-1",
+            "--head",
+            &head,
+            "--target",
+            "main",
+            "--blocker",
+            "root/main busy",
+            "--verified-check",
+            "cargo test passed",
+        ],
+    );
+    assert_success(&handoff, &["worktree", "handoff"]);
+
+    let next = maestro(temp.path(), &["loop", "next", "--json"]);
+    assert_success(&next, &["loop", "next", "--json"]);
+    let next: serde_json::Value =
+        serde_json::from_str(&stdout(&next)).expect("loop next JSON should parse");
+    assert_eq!(next["recommended_recipe"], "synthesize");
+    assert!(
+        next["reason"]
+            .as_str()
+            .is_some_and(|reason| reason.contains("pending worktree synthesis")),
+        "{next}"
     );
 }

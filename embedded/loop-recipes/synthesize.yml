@@ -1,0 +1,150 @@
+schema_version: maestro.recipe.v2
+id: synthesize
+kind:
+  category: orchestration
+  tags: ["worktree", "merge-back", "cleanup"]
+title: Synthesize loop
+summary: Claim one pending worktree synthesis handoff, verify it, merge it, run checks, close/archive when applicable, and clean it up one lane at a time.
+progress_tasks:
+  - id: anchor-scope
+    title: Anchor synthesis scope and authority
+    phase: perceive
+    required: true
+    done_check: pending handoff, target branch, and hard stops are known
+  - id: choose-next
+    title: Choose one synthesis handoff
+    phase: choose
+    required: true
+    done_check: exactly one pending lane is selected or a blocker is recorded
+  - id: execute-move
+    title: Execute bounded synthesis move
+    phase: act
+    required: true
+    done_check: claim, merge, check, close/archive, or cleanup action is complete or blocked
+  - id: observe-evidence
+    title: Observe synthesis evidence
+    phase: observe
+    required: true
+    done_check: merge/check/cleanup evidence or blocker is recorded
+  - id: record-learning
+    title: Record reusable synthesis learning when needed
+    phase: learn
+    required: true
+    done_check: durable learning is recorded or explicitly unnecessary
+  - id: return-next-gate
+    title: Return next synthesis gate
+    phase: continue
+    required: true
+    done_check: next pending handoff, work gate, ship gate, or hard stop is visible
+authority_scope:
+  - pending worktree synthesis handoff in the current repo
+  - root/main coordinator checkout and one worker lane at a time
+  - manual git merge/check commands run by the agent; Maestro records ledger facts and cleanup receipts
+autonomy:
+  - autonomous to claim one unowned handoff, verify freshness, merge, run checks, and clean up when gates pass
+  - stops when merge conflicts, stale heads, dirty lanes, missing ownership, or external ship authority blocks progress
+router:
+  status: synthesize
+  priority: 35
+  confidence: high
+transitions:
+  - trigger: synthesis lane is merged and verified but feature close or archive remains
+    to: ship
+    authority_scope:
+      - verified merged target and feature close/archive authority
+    allowed_verbs:
+      - maestro qa slice <feature>
+      - maestro feature close <feature> --outcome <outcome>
+      - maestro feature auto-archive <feature> ...
+    forbidden_verbs:
+      - push without bounded authority
+      - archive before exact-head QA evidence
+    hard_stops:
+      - QA slice is missing
+      - archive authority is absent or stale
+    return_condition: feature is closed/archived or blocker is recorded
+invocations:
+  - trigger: merge diff or cleanup gate is risky or surprising
+    to: audit
+    authority_scope:
+      - bounded worker lane and target merge surface
+    allowed_verbs:
+      - maestro loop show audit
+      - git diff
+      - cargo test <target>
+    forbidden_verbs:
+      - broad unrelated rewrite
+      - deleting unknown worktrees
+    hard_stops:
+      - audit cannot tie findings to this lane
+    return_condition: issue is fixed, waived, or blocked with evidence
+outputs:
+  - claimed synthesis handoff
+  - verified branch/head/target freshness
+  - one merged lane or explicit blocker
+  - final verification evidence
+  - cleanup receipt
+applies_when:
+  - status or loop next shows a pending worktree synthesis handoff
+  - a root/main coordinator session is at a clean synthesis point
+hard_stops:
+  - merge_owner is already another live session
+  - branch/head/base/target evidence is missing or stale
+  - worker lane is dirty, unmerged, missing, or differently headed
+  - git merge conflict requires peer intent
+  - cleanup would delete an unknown or unsafe lane
+phases:
+  perceive:
+    goal: Read pending worktree synthesis handoffs, git state, active sessions, and feature status.
+    bricks: ["status", "worktree ledger", "git", "active"]
+    reads: ["maestro status --json", "maestro feature show <feature>", "git status --short --branch", "maestro active"]
+    allowed_verbs: ["maestro status --json", "maestro feature show <feature>", "maestro active"]
+    forbidden_verbs: ["git merge before claim"]
+    checks: ["pending lane and current owner are known"]
+    durable_learning: []
+    outputs: ["pending lane", "hard stop"]
+  choose:
+    goal: Claim one pending handoff and verify no competing owner exists.
+    bricks: ["claim", "owner", "queue"]
+    reads: ["pending synthesis table"]
+    allowed_verbs: ["maestro synthesize claim <feature> --slug <slug>"]
+    forbidden_verbs: ["claiming multiple lanes at once"]
+    checks: ["one lane is claimed or blocked"]
+    durable_learning: []
+    outputs: ["merge_owner", "next git command"]
+  act:
+    goal: Merge the claimed lane, run final checks, and clean it up only after gates pass.
+    bricks: ["git merge", "test", "feature close", "cleanup"]
+    reads: ["claimed branch", "verification command", "feature gate"]
+    allowed_verbs: ["git merge --ff-only <branch>", "cargo test <target>", "maestro worktree mark <feature> --slug <slug> --merged-back --commit <head>", "maestro worktree mark <feature> --slug <slug> --verified --commit <head>", "maestro worktree cleanup <feature> --slug <slug> --apply"]
+    forbidden_verbs: ["force push", "background cleanup", "cleanup before verification"]
+    checks: ["merge and checks complete before cleanup"]
+    durable_learning: []
+    outputs: ["merged lane", "verification", "cleanup receipt"]
+  observe:
+    goal: Confirm final repository state and receipts.
+    bricks: ["git status", "feature show", "receipt"]
+    reads: ["git status --short --branch", "maestro feature show <feature>", "maestro status"]
+    allowed_verbs: ["git status --short --branch", "maestro feature show <feature>", "maestro status"]
+    forbidden_verbs: ["claim success without receipt"]
+    checks: ["cleanup receipt exists or blocker is explicit"]
+    durable_learning: []
+    outputs: ["receipt", "remaining blocker"]
+  learn:
+    goal: Record reusable synthesis lessons only when a lane revealed repeatable friction.
+    bricks: ["note", "intervention"]
+    reads: ["failure cause", "resolution evidence"]
+    allowed_verbs: ["maestro card note <feature> <text>", "maestro event intervention --note <text>"]
+    forbidden_verbs: ["chat-only learning"]
+    checks: ["lesson has a concrete recurrence source"]
+    durable_learning: ["card note", "intervention event"]
+    outputs: ["recorded lesson", "no learning needed"]
+  continue:
+    goal: Return the next pending synthesis lane, work gate, ship gate, or hard stop.
+    bricks: ["loop next", "status"]
+    reads: ["maestro loop next", "maestro status"]
+    allowed_verbs: ["maestro loop next", "maestro status"]
+    forbidden_verbs: ["external ship action outside authority"]
+    checks: ["next gate is visible"]
+    durable_learning: []
+    outputs: ["next synthesis lane", "work", "ship", "hard stop"]

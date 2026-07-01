@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: 2e1fba85e59cfe4d8edd9a014e787edafe56e22045df3c8ada2413146122a1b7 -->
+<!-- maestro:cli-reference-sha256: 6c7671296e8c409c31d9e62afabb15edfbe6634bcc3f11b84eb82d8844fe38a6 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -57,6 +57,6 @@ a spelling not found here is outside this skill's CLI surface.
 ## maestro loop
 
 - `maestro loop list` -- List shipped and project custom recipes
-- `maestro loop next [--json]` -- Recommend the next loop recipe without mutating state
-- `maestro loop show <NAME>` -- Print one shipped or project custom recipe
+- `maestro loop next [--json] [--compact] [--phase <PHASE>]` -- Recommend the next loop recipe without mutating state
+- `maestro loop show <NAME> [--compact] [--phase <PHASE>] [--json]` -- Print one shipped or project custom recipe
 - `maestro loop validate <NAME>` -- Validate one structured shipped or project custom loop recipe

@@ -2120,6 +2120,29 @@ fn print_worktree_ledger(lanes: &[feature::WorktreeLaneStatus]) {
             "cleanup_completed_at",
             lane.milestones.cleanup_completed_at.as_deref(),
         );
+        if let Some(handoff) = &lane.synthesis {
+            println!("    synthesis:");
+            println!("      state: {}", handoff.state.as_str());
+            println!("      created_by_session: {}", handoff.created_by_session);
+            println!(
+                "      merge_owner: {}",
+                handoff.merge_owner.as_deref().unwrap_or("unassigned")
+            );
+            println!("      next_owner_rule: {}", handoff.next_owner_rule);
+            println!("      blocker: {}", handoff.blocker);
+            println!("      head: {}", handoff.head);
+            println!("      target: {}", handoff.target);
+            println!("      recorded_at: {}", handoff.recorded_at);
+            if let Some(claimed_at) = handoff.claimed_at.as_deref() {
+                println!("      claimed_at: {claimed_at}");
+            }
+            if !handoff.verified.is_empty() {
+                println!("      verified:");
+                for check in &handoff.verified {
+                    println!("        - {check}");
+                }
+            }
+        }
         println!("    evidence:");
         println!("      branch_exists: {}", lane.evidence.branch_exists);
         println!("      path_exists: {}", lane.evidence.path_exists);

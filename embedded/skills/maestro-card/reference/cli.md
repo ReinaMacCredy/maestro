@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: 031ff9ac41a77e48062cc440d22988c17516901a85c7c1f8f422264ee946b61c -->
+<!-- maestro:cli-reference-sha256: d988357aa9b6aca0faf61f919655dd78e60ef502e84f3892b202a6c8cc2c5389 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -145,7 +145,7 @@ a spelling not found here is outside this skill's CLI surface.
 ## maestro loop
 
 - `maestro loop list` -- List shipped and project custom recipes
-- `maestro loop next [--json]` -- Recommend the next loop recipe without mutating state
-- `maestro loop show <NAME>` -- Print one shipped or project custom recipe
+- `maestro loop next [--json] [--compact] [--phase <PHASE>]` -- Recommend the next loop recipe without mutating state
+- `maestro loop show <NAME> [--compact] [--phase <PHASE>] [--json]` -- Print one shipped or project custom recipe
 - `maestro loop validate <NAME>` -- Validate one structured shipped or project custom loop recipe
 - `maestro loop work-lease [--json] [--project <PROJECT>] [--feature <FEATURE>] [--authority-ref <REF>] [--authority-summary <SUMMARY>] [--authority-scope <SCOPE>] [--authority-target <TARGET>] [--allow-external-action <ACTION>]... [--required-evidence <EVIDENCE>]... [--authority-expires-at <TIMESTAMP>] [--authority-hard-stop <STOP>]...` -- Run the internal Work Lease choose-phase helper and print JSON

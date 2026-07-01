@@ -1128,6 +1128,22 @@ fn worktree_action_for_lane(lane: &feature::WorktreeLaneStatus) -> Option<Worktr
                 shell_word(&lane.slug)
             ),
         ),
+        feature::WorktreeComputedState::NeedsSynthesis => {
+            let owner = lane
+                .synthesis
+                .as_ref()
+                .and_then(|handoff| handoff.merge_owner.as_deref())
+                .unwrap_or("unassigned");
+            (
+                format!("pending worktree merge synthesis; merge_owner={owner}"),
+                format!(
+                    "maestro synthesize claim {} --slug {}",
+                    shell_word(&lane.feature_id),
+                    shell_word(&lane.slug)
+                ),
+                format!("git merge --ff-only {}", shell_word(&lane.intent.branch)),
+            )
+        }
         feature::WorktreeComputedState::CleanupDue => (
             "merged and verified; cleanup is safe to perform".to_string(),
             format!(

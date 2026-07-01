@@ -86,11 +86,13 @@ fn loop_index_lists_unified_structured_recipe_catalog() {
     assert!(out.contains("work  [lifecycle]"), "{out}");
     assert!(out.contains("unattended  [lifecycle]"), "{out}");
     assert!(out.contains("conflict-handoff  [orchestration]"), "{out}");
+    assert!(out.contains("synthesize  [orchestration]"), "{out}");
     assert!(out.contains("feature-fanout"), "{out}");
     assert!(out.contains("adversarial-review"), "{out}");
     assert!(out.contains("generate-filter"), "{out}");
     assert!(out.contains("## Custom Recipe Policy"), "{out}");
     assert!(out.contains("conflict-handoff"), "{out}");
+    assert!(out.contains("synthesize"), "{out}");
     assert!(!out.contains("feature-fan-out"), "{out}");
     assert!(!out.contains("adversarial-fan-out"), "{out}");
     assert!(!out.contains("generate-and-filter"), "{out}");
@@ -294,6 +296,17 @@ fn loop_show_renders_migrated_orchestration_recipe_from_yaml() {
     assert!(out.contains("# Conflict handoff"), "{out}");
     assert!(out.contains("git worktree add"), "{out}");
     assert!(out.contains("schema_version: maestro.recipe.v2"), "{out}");
+}
+
+#[test]
+fn loop_show_renders_synthesize_recipe() {
+    let temp = TestTempDir::new("maestro-loop-show-synthesize");
+    let out = stdout(temp.path(), &["loop", "show", "synthesize"]);
+
+    assert!(out.contains("# Synthesize loop"), "{out}");
+    assert!(out.contains("maestro synthesize claim"), "{out}");
+    assert!(out.contains("maestro worktree cleanup"), "{out}");
+    assert!(out.contains("one lane at a time"), "{out}");
 }
 
 #[test]

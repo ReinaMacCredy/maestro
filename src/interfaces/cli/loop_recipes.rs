@@ -1,3 +1,4 @@
+use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::path::PathBuf;
 
@@ -204,16 +205,28 @@ pub(crate) fn build_loop_next_report_from_snapshot(
             open_questions: view.open_questions.len(),
         })
         .collect::<Vec<_>>();
+    let pending_synthesis = pending_synthesis_count(paths, features.as_slice(), &mut warnings);
     let now = utc_now_timestamp();
     let roots = super::worktree_roots(paths);
-    let active_sessions = match run::active_sessions_union(&roots, &now) {
-        Ok(sessions) => sessions
-            .iter()
-            .filter(|session| session.presence != run::Presence::Stale)
-            .count(),
+    let (active_sessions, active_conflicts) = match run::active_sessions_union(&roots, &now) {
+        Ok(sessions) => {
+            let active_sessions = sessions
+                .iter()
+                .filter(|session| session.presence != run::Presence::Stale)
+                .count();
+            let active_conflicts = match actionable_active_conflict_count(paths, &roots, &sessions)
+            {
+                Ok(count) => count,
+                Err(error) => {
+                    warnings.push(format!("active overlap scan failed: {error:#}"));
+                    0
+                }
+            };
+            (active_sessions, active_conflicts)
+        }
         Err(error) => {
             warnings.push(format!("active session scan failed: {error:#}"));
-            0
+            (0, 0)
         }
     };
 
@@ -223,7 +236,9 @@ pub(crate) fn build_loop_next_report_from_snapshot(
         current_task,
         tasks,
         features,
+        active_conflicts,
         active_sessions,
+        pending_synthesis,
         git: git.map(|git| loop_recipes::LoopGitInput {
             branch: git.branch.clone(),
             code_other_dirty: git.code_other_dirty,
@@ -241,6 +256,94 @@ pub(crate) fn build_loop_next_report_from_snapshot(
         }),
         warnings,
     })
+}
+
+fn pending_synthesis_count(
+    paths: &MaestroPaths,
+    features: &[loop_recipes::LoopFeatureInput],
+    warnings: &mut Vec<String>,
+) -> usize {
+    let mut pending = 0;
+    for feature in features {
+        if feature.status == "closed" || feature.status == "cancelled" {
+            continue;
+        }
+        match feature::lane_statuses(paths, &feature.id) {
+            Ok(lanes) => {
+                pending += lanes
+                    .iter()
+                    .filter(|lane| lane.state == feature::WorktreeComputedState::NeedsSynthesis)
+                    .count();
+            }
+            Err(error) => warnings.push(format!(
+                "worktree synthesis scan failed for {}: {error:#}",
+                feature.id
+            )),
+        }
+    }
+    pending
+}
+
+fn actionable_active_conflict_count(
+    paths: &MaestroPaths,
+    roots: &[MaestroPaths],
+    sessions: &[run::SessionActivity],
+) -> Result<usize> {
+    let me = run::union_session_id(paths, roots, &super::cli_run_id());
+    let mut current_cards = sessions
+        .iter()
+        .filter(|session| session.session_id == me)
+        .filter_map(|session| session.bound_card.clone())
+        .collect::<BTreeSet<_>>();
+    if let Some(card) = super::current_card(paths) {
+        current_cards.insert(card);
+    }
+
+    let presence_by_session = sessions
+        .iter()
+        .map(|session| (session.session_id.as_str(), session.presence))
+        .collect::<BTreeMap<_, _>>();
+    let mut conflicts = BTreeSet::new();
+
+    for session in sessions {
+        if !session_can_conflict(session, &me) {
+            continue;
+        }
+        if session
+            .bound_card
+            .as_ref()
+            .is_some_and(|card| current_cards.contains(card))
+        {
+            conflicts.insert(session.session_id.clone());
+        }
+    }
+
+    for overlap in run::declared_scope_overlaps_for_active_union(roots, sessions)? {
+        if !overlap.owners.iter().any(|owner| owner.session_id == me) {
+            continue;
+        }
+        for owner in overlap.owners {
+            if owner.session_id == me {
+                continue;
+            }
+            let Some(presence) = presence_by_session.get(owner.session_id.as_str()) else {
+                continue;
+            };
+            if presence_can_conflict(*presence) {
+                conflicts.insert(owner.session_id);
+            }
+        }
+    }
+
+    Ok(conflicts.len())
+}
+
+fn session_can_conflict(session: &run::SessionActivity, me: &str) -> bool {
+    session.session_id != me && presence_can_conflict(session.presence)
+}
+
+fn presence_can_conflict(presence: run::Presence) -> bool {
+    !matches!(presence, run::Presence::Released | run::Presence::Done)
 }
 
 fn current_loop_task(entries: &[task::TaskEntry]) -> Option<loop_recipes::LoopTaskInput> {

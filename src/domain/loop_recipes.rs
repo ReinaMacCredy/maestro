@@ -25,7 +25,7 @@ static LOOP_RECIPE_CONTRACTS_DIR: Dir<'_> =
 const CONTRACT_SCHEMA_VERSION: &str = "maestro.recipe.v2";
 const LOOP_COMPACT_PACKET_SCHEMA: &str = "maestro.loop_compact_packet.v1";
 const REQUIRED_PHASES: [&str; 6] = ["perceive", "choose", "act", "observe", "learn", "continue"];
-const CANONICAL_RECIPE_IDS: [&str; 13] = [
+const CANONICAL_RECIPE_IDS: [&str; 14] = [
     "adversarial-review",
     "audit",
     "conflict-handoff",
@@ -37,6 +37,7 @@ const CANONICAL_RECIPE_IDS: [&str; 13] = [
     "loop-until-done",
     "progress",
     "ship",
+    "synthesize",
     "unattended",
     "work",
 ];
@@ -165,7 +166,9 @@ pub struct LoopRouterInput {
     pub current_task: Option<LoopTaskInput>,
     pub tasks: Vec<LoopTaskInput>,
     pub features: Vec<LoopFeatureInput>,
+    pub active_conflicts: usize,
     pub active_sessions: usize,
+    pub pending_synthesis: usize,
     pub git: Option<LoopGitInput>,
     pub warnings: Vec<String>,
 }
@@ -308,12 +311,13 @@ pub fn route_next(input: LoopRouterInput) -> Result<LoopNextReport> {
         );
     }
 
-    if input.active_sessions > 1 {
+    if input.active_conflicts > 0 {
         candidates.push(RouterCandidate {
             recipe: "conflict-handoff",
             reason: format!(
-                "{} active sessions are visible; check overlap before implementation or merge-back",
-                input.active_sessions
+                "{} active session overlap{} visible; check overlap before implementation or merge-back",
+                input.active_conflicts,
+                if input.active_conflicts == 1 { " is" } else { "s are" }
             ),
             inspect: vec![
                 "maestro active".to_string(),
@@ -338,6 +342,29 @@ pub fn route_next(input: LoopRouterInput) -> Result<LoopNextReport> {
             next_verbs: vec![
                 "maestro loop show conflict-handoff".to_string(),
                 "git rebase <shared-branch>".to_string(),
+            ],
+        });
+    }
+
+    if input.pending_synthesis > 0 {
+        candidates.push(RouterCandidate {
+            recipe: "synthesize",
+            reason: format!(
+                "{} pending worktree synthesis handoff{} need root/main merge ownership",
+                input.pending_synthesis,
+                if input.pending_synthesis == 1 {
+                    ""
+                } else {
+                    "s"
+                }
+            ),
+            inspect: vec![
+                "maestro status --json".to_string(),
+                "maestro feature list --all".to_string(),
+            ],
+            next_verbs: vec![
+                "maestro loop show synthesize".to_string(),
+                "maestro status".to_string(),
             ],
         });
     }
@@ -1951,6 +1978,7 @@ mod tests {
             current_task: Some(task.clone()),
             tasks: vec![task],
             active_sessions: 2,
+            active_conflicts: 1,
             ..LoopRouterInput::default()
         })
         .expect("router should recommend conflict handling");

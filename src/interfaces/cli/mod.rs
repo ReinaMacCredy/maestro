@@ -50,6 +50,7 @@ pub mod session;
 pub mod shell_init;
 pub mod status;
 pub mod sync;
+pub mod synthesize;
 pub mod task;
 mod task_id;
 pub mod uninstall;
@@ -368,6 +369,8 @@ pub enum RootCommand {
     Qa(QaArgs),
     #[command(about = "Record passive worktree handoff and cleanup ledger facts")]
     Worktree(WorktreeArgs),
+    #[command(about = "Claim and coordinate pending worktree synthesis handoffs")]
+    Synthesize(SynthesizeArgs),
     #[command(
         about = "Search Maestro memory and source with the indexed grep engine",
         after_help = "Examples:\n  maestro grep runtime\n  maestro grep --json 'runtime corpus:memory type:decision'\n  maestro grep 'why agent runtime'"
@@ -819,6 +822,24 @@ pub struct WorktreeArgs {
     pub command: WorktreeCommand,
 }
 
+#[derive(Debug, Args)]
+pub struct SynthesizeArgs {
+    #[command(subcommand)]
+    pub command: SynthesizeCommand,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum SynthesizeCommand {
+    #[command(about = "Claim one pending needs_synthesis worktree handoff")]
+    Claim {
+        card: String,
+        #[arg(long)]
+        slug: String,
+        #[arg(long)]
+        session: Option<String>,
+    },
+}
+
 #[derive(Debug, Subcommand)]
 pub enum WorktreeCommand {
     #[command(about = "Plan a worker lane in the owning card ledger; does not run git")]
@@ -872,6 +893,30 @@ pub enum WorktreeCommand {
         pruned: bool,
         #[arg(long = "recorded-by")]
         recorded_by: Option<String>,
+    },
+    #[command(about = "Dry-run or apply gated cleanup for a worker lane")]
+    Cleanup {
+        card: String,
+        #[arg(long)]
+        slug: String,
+        #[arg(long)]
+        apply: bool,
+    },
+    #[command(about = "Record that a worker lane needs root/main synthesis")]
+    Handoff {
+        card: String,
+        #[arg(long)]
+        slug: String,
+        #[arg(long = "created-by-session")]
+        created_by_session: String,
+        #[arg(long)]
+        head: String,
+        #[arg(long)]
+        target: String,
+        #[arg(long)]
+        blocker: String,
+        #[arg(long = "verified-check")]
+        verified_check: Vec<String>,
     },
 }
 
@@ -2589,6 +2634,7 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Feature(args) => feature::run(args),
         RootCommand::Qa(args) => qa::run(args),
         RootCommand::Worktree(args) => worktree::run(args),
+        RootCommand::Synthesize(args) => synthesize::run(args),
         RootCommand::Grep(args) => grep::run(args),
         RootCommand::Memory(args) => memory::run(args),
         RootCommand::Scorer(args) => scorer::run(args),

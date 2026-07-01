@@ -44,6 +44,9 @@ impl WorktreeLedger {
         if let Some(existing) = self.lane_mut(&lane.intent.slug) {
             existing.intent = lane.intent;
             merge_missing_milestones(&mut existing.milestones, lane.milestones);
+            if lane.synthesis.is_some() {
+                existing.synthesis = lane.synthesis;
+            }
             existing.cleanup_receipts.extend(lane.cleanup_receipts);
         } else {
             self.lanes.push(lane);
@@ -56,6 +59,8 @@ pub struct WorktreeLane {
     pub intent: WorktreeIntent,
     #[serde(default)]
     pub milestones: WorktreeMilestones,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub synthesis: Option<WorktreeSynthesisHandoff>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub cleanup_receipts: Vec<WorktreeCleanupReceipt>,
 }
@@ -65,6 +70,7 @@ impl WorktreeLane {
         Self {
             intent,
             milestones: WorktreeMilestones::default(),
+            synthesis: None,
             cleanup_receipts: Vec::new(),
         }
     }
@@ -78,6 +84,13 @@ impl WorktreeLane {
         }
         if self.milestones.merged_back_at.is_some() && self.milestones.verified_at.is_none() {
             return WorktreeComputedState::MergedNeedsVerification;
+        }
+        if self
+            .synthesis
+            .as_ref()
+            .is_some_and(|handoff| handoff.state == WorktreeSynthesisState::NeedsSynthesis)
+        {
+            return WorktreeComputedState::NeedsSynthesis;
         }
         if self.milestones.lane_created_at.is_some() || evidence.path_exists {
             return WorktreeComputedState::LanePresent;
@@ -130,6 +143,37 @@ pub struct WorktreeMilestones {
     pub cleanup_completed_at: Option<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct WorktreeSynthesisHandoff {
+    pub state: WorktreeSynthesisState,
+    pub created_by_session: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub merge_owner: Option<String>,
+    pub next_owner_rule: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub verified: Vec<String>,
+    pub blocker: String,
+    pub head: String,
+    pub target: String,
+    pub recorded_at: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub claimed_at: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorktreeSynthesisState {
+    NeedsSynthesis,
+}
+
+impl WorktreeSynthesisState {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::NeedsSynthesis => "needs_synthesis",
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct WorktreeEvidence {
     pub branch_exists: bool,
@@ -144,6 +188,7 @@ pub enum WorktreeComputedState {
     Unplanned,
     BranchReservedPathMissing,
     LanePresent,
+    NeedsSynthesis,
     MergedNeedsVerification,
     CleanupDue,
     CleanupComplete,
@@ -155,6 +200,7 @@ impl WorktreeComputedState {
             Self::Unplanned => "unplanned",
             Self::BranchReservedPathMissing => "branch_reserved_path_missing",
             Self::LanePresent => "lane_present",
+            Self::NeedsSynthesis => "needs_synthesis",
             Self::MergedNeedsVerification => "merged_needs_verification",
             Self::CleanupDue => "cleanup_due",
             Self::CleanupComplete => "cleanup_complete",
@@ -185,6 +231,15 @@ pub struct WorktreeRecordReport {
     pub state: WorktreeComputedState,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct WorktreeSynthesisClaimReport {
+    pub feature_id: String,
+    pub slug: String,
+    pub merge_owner: String,
+    pub next: String,
+    pub after: String,
+}
+
 #[derive(Debug)]
 struct LoadedWorktreeLedger {
     ledger: WorktreeLedger,
@@ -198,6 +253,7 @@ pub struct WorktreeLaneStatus {
     pub state: WorktreeComputedState,
     pub intent: WorktreeIntent,
     pub milestones: WorktreeMilestones,
+    pub synthesis: Option<WorktreeSynthesisHandoff>,
     pub cleanup_receipts: Vec<WorktreeCleanupReceipt>,
     pub evidence: WorktreeEvidence,
 }
@@ -273,6 +329,75 @@ pub fn record_cleanup(
     report_for(paths, feature_id, slug)
 }
 
+pub fn record_synthesis_handoff(
+    paths: &MaestroPaths,
+    feature_id: &str,
+    slug: &str,
+    handoff: WorktreeSynthesisHandoff,
+) -> Result<WorktreeRecordReport> {
+    ensure_non_empty("slug", slug)?;
+    ensure_non_empty("created-by-session", &handoff.created_by_session)?;
+    ensure_non_empty("next-owner-rule", &handoff.next_owner_rule)?;
+    ensure_non_empty("blocker", &handoff.blocker)?;
+    ensure_non_empty("head", &handoff.head)?;
+    ensure_non_empty("target", &handoff.target)?;
+    ensure_non_empty("recorded-at", &handoff.recorded_at)?;
+    let mut snapshot = load_with_snapshot(paths, feature_id)?;
+    {
+        let lane = ledger_lane_mut(&mut snapshot.ledger, feature_id, slug)?;
+        lane.synthesis = Some(handoff);
+    }
+    save_with_snapshot(paths, feature_id, snapshot.raw.as_deref(), &snapshot.ledger)?;
+    report_for(paths, feature_id, slug)
+}
+
+pub fn claim_synthesis(
+    paths: &MaestroPaths,
+    feature_id: &str,
+    slug: &str,
+    merge_owner: &str,
+    claimed_at: &str,
+) -> Result<WorktreeSynthesisClaimReport> {
+    ensure_non_empty("slug", slug)?;
+    ensure_non_empty("merge-owner", merge_owner)?;
+    ensure_non_empty("claimed-at", claimed_at)?;
+    let mut snapshot = load_with_snapshot(paths, feature_id)?;
+    let (next, after) = {
+        let lane = ledger_lane_mut(&mut snapshot.ledger, feature_id, slug)?;
+        let handoff = lane.synthesis.as_mut().with_context(|| {
+            format!("feature {feature_id} worktree lane {slug} has no synthesis handoff")
+        })?;
+        if handoff.state != WorktreeSynthesisState::NeedsSynthesis {
+            bail!(
+                "feature {feature_id} worktree lane {slug} is {}; expected needs_synthesis",
+                handoff.state.as_str()
+            );
+        }
+        if let Some(owner) = handoff.merge_owner.as_deref()
+            && owner != merge_owner
+        {
+            bail!("worktree lane {slug} already claimed by {owner}");
+        }
+        handoff.merge_owner = Some(merge_owner.to_string());
+        handoff.claimed_at = Some(claimed_at.to_string());
+        (
+            format!("git merge --ff-only {}", lane.intent.branch),
+            format!(
+                "maestro worktree cleanup-record {feature_id} --slug {slug} --removed-path {} --deleted-branch {} --pruned --recorded-by <agent>",
+                lane.intent.path, lane.intent.branch
+            ),
+        )
+    };
+    save_with_snapshot(paths, feature_id, snapshot.raw.as_deref(), &snapshot.ledger)?;
+    Ok(WorktreeSynthesisClaimReport {
+        feature_id: feature_id.to_string(),
+        slug: slug.to_string(),
+        merge_owner: merge_owner.to_string(),
+        next,
+        after,
+    })
+}
+
 pub fn ledger_path(paths: &MaestroPaths, feature_id: &str) -> Result<PathBuf> {
     registry::load_record(paths, feature_id)?;
     Ok(registry::feature_sidecar_dir(paths, feature_id).join(WORKTREE_LEDGER_FILE))
@@ -319,6 +444,7 @@ pub fn lane_statuses(paths: &MaestroPaths, feature_id: &str) -> Result<Vec<Workt
                 state,
                 intent: lane.intent,
                 milestones: lane.milestones,
+                synthesis: lane.synthesis,
                 cleanup_receipts: lane.cleanup_receipts,
                 evidence,
             })

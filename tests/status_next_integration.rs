@@ -4,11 +4,13 @@ mod support;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use card_support::{card_dir, card_record_path, id_by_title, sole_idea_id, task_record};
 use git2::{Repository, Signature};
 use maestro::domain::feature;
 use maestro::foundation::core::paths::MaestroPaths;
+use maestro::foundation::core::time::format_utc_seconds_rfc3339_millis;
 use serde_json::Value as JsonValue;
 use serde_yaml::Value as YamlValue;
 use support::TestTempDir;
@@ -178,6 +180,52 @@ fn write_correction_session(repo: &Path, session: &str) {
         ),
     )
     .expect("invariant: events fixture should be writable");
+}
+
+fn clear_runs(repo: &Path) {
+    let runs = repo.join(".maestro/runs");
+    if runs.exists() {
+        fs::remove_dir_all(runs).expect("invariant: runs dir should be removable");
+    }
+}
+
+fn ts_minutes_ago(minutes: u64) -> String {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("invariant: clock is after the Unix epoch")
+        .as_secs();
+    format_utc_seconds_rfc3339_millis(now - minutes * 60)
+}
+
+fn seed_run(repo: &Path, session: &str, lines: &[String]) {
+    let run_dir = repo.join(".maestro/runs").join(session);
+    fs::create_dir_all(&run_dir).expect("invariant: run dir should be creatable");
+    fs::write(
+        run_dir.join("events.jsonl"),
+        format!("{}\n", lines.join("\n")),
+    )
+    .expect("invariant: events fixture should be writable");
+}
+
+fn ownership_event(session: &str, card: &str, minutes_ago: u64) -> String {
+    let ts = ts_minutes_ago(minutes_ago);
+    format!(
+        r#"{{"event_type":"ownership_acquire","session_id":"{session}","card_id":"{card}","ts":"{ts}"}}"#
+    )
+}
+
+fn ownership_release_event(session: &str, card: &str, status: &str, minutes_ago: u64) -> String {
+    let ts = ts_minutes_ago(minutes_ago);
+    format!(
+        r#"{{"event_type":"ownership_release","session_id":"{session}","card_id":"{card}","status":"{status}","ts":"{ts}"}}"#
+    )
+}
+
+fn scope_event(session: &str, path: &str, minutes_ago: u64) -> String {
+    let ts = ts_minutes_ago(minutes_ago);
+    format!(
+        r#"{{"event_type":"scope_declaration","session_id":"{session}","scope_paths":["{path}"],"ts":"{ts}"}}"#
+    )
 }
 
 #[test]
@@ -1269,6 +1317,98 @@ fn status_shows_compact_loop_hint_from_router_for_ready_task() {
         "{parsed}"
     );
     assert_eq!(parsed["loop_hint"]["next"], "maestro loop next");
+}
+
+#[test]
+fn loop_next_routes_conflict_only_for_actionable_active_overlap() {
+    let temp = setup_repo("maestro-loop-active-overlap-filter");
+    let repo = temp.path();
+    let task_id = run(repo, &["task", "add", "--id-only", "Implement router"]);
+    let task_id = task_id.trim();
+    clear_runs(repo);
+    seed_run(repo, "me", &[ownership_event("me", task_id, 1)]);
+    seed_run(
+        repo,
+        "fresh-other-card",
+        &[ownership_event("fresh-other-card", "task-other", 1)],
+    );
+    seed_run(
+        repo,
+        "released-same-card",
+        &[
+            ownership_event("released-same-card", task_id, 2),
+            ownership_release_event("released-same-card", task_id, "done", 1),
+        ],
+    );
+    seed_run(
+        repo,
+        "old-unconfirmed-other-card",
+        &[ownership_event(
+            "old-unconfirmed-other-card",
+            "task-old-other",
+            121,
+        )],
+    );
+
+    let no_overlap = maestro_with_env(
+        repo,
+        &["loop", "next", "--json"],
+        &[("MAESTRO_SESSION_ID", "me")],
+    );
+    assert_success(&no_overlap, &["loop", "next", "--json"]);
+    let no_overlap_json: JsonValue =
+        serde_json::from_str(&stdout(&no_overlap)).expect("loop next JSON should parse");
+    assert_eq!(no_overlap_json["recommended_recipe"], "work");
+    assert!(
+        !no_overlap_json["reason"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("active sessions are visible"),
+        "{no_overlap_json}"
+    );
+
+    seed_run(
+        repo,
+        "fresh-same-card",
+        &[ownership_event("fresh-same-card", task_id, 1)],
+    );
+    let same_card = maestro_with_env(
+        repo,
+        &["loop", "next", "--json"],
+        &[("MAESTRO_SESSION_ID", "me")],
+    );
+    assert_success(&same_card, &["loop", "next", "--json"]);
+    let same_card_json: JsonValue =
+        serde_json::from_str(&stdout(&same_card)).expect("loop next JSON should parse");
+    assert_eq!(same_card_json["recommended_recipe"], "conflict-handoff");
+
+    fs::remove_dir_all(repo.join(".maestro/runs/fresh-same-card"))
+        .expect("invariant: run fixture should be removable");
+    seed_run(
+        repo,
+        "me",
+        &[
+            ownership_event("me", task_id, 1),
+            scope_event("me", "src/interfaces/cli/status.rs", 1),
+        ],
+    );
+    seed_run(
+        repo,
+        "fresh-same-scope",
+        &[
+            ownership_event("fresh-same-scope", "task-scope-other", 1),
+            scope_event("fresh-same-scope", "./src/interfaces/cli/status.rs", 1),
+        ],
+    );
+    let same_scope = maestro_with_env(
+        repo,
+        &["loop", "next", "--json"],
+        &[("MAESTRO_SESSION_ID", "me")],
+    );
+    assert_success(&same_scope, &["loop", "next", "--json"]);
+    let same_scope_json: JsonValue =
+        serde_json::from_str(&stdout(&same_scope)).expect("loop next JSON should parse");
+    assert_eq!(same_scope_json["recommended_recipe"], "conflict-handoff");
 }
 
 #[test]
