@@ -132,6 +132,10 @@ fn run(repo: &Path, args: &[&str]) -> String {
     stdout(&output)
 }
 
+fn reconcile_feature(repo: &Path, id: &str) {
+    run(repo, &["feature", "reconcile", id]);
+}
+
 /// The folded task record reconstructed into the old `task.yaml` shape, so an
 /// assertion written against `doc["state"]`/`doc["blockers"]` reads unchanged.
 fn task_yaml(repo: &Path, id: &str) -> YamlValue {
@@ -211,6 +215,7 @@ fn proposed_feature_next_hint_tracks_handoff_and_qa_baseline_readiness() {
         "{feature_list}"
     );
 
+    reconcile_feature(repo, "authored-contract");
     run(repo, &["feature", "finalize", "authored-contract"]);
 
     let status = run(repo, &["status"]);
@@ -1096,6 +1101,7 @@ fn ready_to_close_status_json_and_task_next_broader_actions_are_structured() {
         ],
     );
     write_baseline(repo, "csv-export");
+    reconcile_feature(repo, "csv-export");
     run(repo, &["feature", "finalize", "csv-export"]);
     run(repo, &["feature", "accept", "csv-export"]);
     run(repo, &["feature", "start", "csv-export"]);
@@ -1507,6 +1513,7 @@ fn feature_prepare_builds_sequenced_queue_and_claim_next_shows_chain() {
         ],
     );
     write_baseline(repo, "serverless-news-backend");
+    reconcile_feature(repo, "serverless-news-backend");
     run(repo, &["feature", "finalize", "serverless-news-backend"]);
     let accept = run(repo, &["feature", "accept", "serverless-news-backend"]);
     assert!(
@@ -1706,6 +1713,7 @@ fn feature_prepare_does_not_infer_blockers_and_keeps_all_blocked_feature_ready()
         ],
     );
     write_baseline(repo, "no-inferred-blockers");
+    reconcile_feature(repo, "no-inferred-blockers");
     run(repo, &["feature", "finalize", "no-inferred-blockers"]);
     run(repo, &["feature", "accept", "no-inferred-blockers"]);
     let vague_plan = repo.join("PLAN-no-infer.md");
@@ -1749,6 +1757,7 @@ fn feature_prepare_does_not_infer_blockers_and_keeps_all_blocked_feature_ready()
         ],
     );
     write_baseline(repo, "all-blocked-setup");
+    reconcile_feature(repo, "all-blocked-setup");
     run(repo, &["feature", "finalize", "all-blocked-setup"]);
     run(repo, &["feature", "accept", "all-blocked-setup"]);
     let blocked_plan = repo.join("PLAN-all-blocked.md");
@@ -1977,6 +1986,7 @@ fn feature_close_dry_run_flags_verified_children_at_older_commits_without_blocki
         "---\namend_log_position: 0\n---\n\n### QA Baseline Contract\n\n- Scenario Matrix:\n  - [bl-001] advisory behaves (covers: ac-1)\n",
     )
     .expect("invariant: qa.md should be writable");
+    reconcile_feature(repo, "close-advisory");
     run(repo, &["feature", "finalize", "close-advisory"]);
     run(repo, &["feature", "accept", "close-advisory"]);
     run(repo, &["feature", "start", "close-advisory"]);

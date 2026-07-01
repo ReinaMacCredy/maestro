@@ -80,6 +80,12 @@ pub fn run(args: FeatureArgs) -> Result<()> {
         ),
         FeatureCommand::Finalize { id } => finalize_feature(&paths, &id),
         FeatureCommand::Reopen { id } => reopen_feature(&paths, &id),
+        FeatureCommand::Reconcile {
+            id,
+            full,
+            json,
+            apply_plan,
+        } => reconcile_feature(&paths, &id, full, json, apply_plan.as_deref()),
         FeatureCommand::Accept {
             id,
             qa,
@@ -313,6 +319,179 @@ fn reopen_feature(paths: &MaestroPaths, id: &str) -> Result<()> {
     println!("files: {}", report.files);
     println!("next: maestro feature finalize {}", report.id);
     Ok(())
+}
+
+fn reconcile_feature(
+    paths: &MaestroPaths,
+    id: &str,
+    full: bool,
+    json: bool,
+    apply_plan: Option<&Path>,
+) -> Result<()> {
+    if full && json {
+        bail!("use either --full or --json, not both");
+    }
+    if let Some(plan) = apply_plan {
+        let report = feature::apply_reconcile_plan(
+            paths,
+            id,
+            plan,
+            feature::ReconcileActor::agent(
+                &super::actor(),
+                agent_runtime_from_env().map(str::to_string),
+            ),
+        )?;
+        return print_reconcile_compact(&report);
+    }
+
+    let report = if full || json {
+        feature::reconcile_report(paths, id)?
+    } else {
+        feature::reconcile_clean_check(
+            paths,
+            id,
+            feature::ReconcileActor::agent(
+                &super::actor(),
+                agent_runtime_from_env().map(str::to_string),
+            ),
+        )?
+    };
+    if json {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+    } else if full {
+        print_reconcile_full(&report)?;
+    } else {
+        print_reconcile_compact(&report)?;
+    }
+    Ok(())
+}
+
+fn print_reconcile_compact(report: &feature::ReconcileReport) -> Result<()> {
+    println!("status: {}", report.status.as_str());
+    println!("feature: {}", report.feature.id);
+    println!(
+        "surface: {}/{}",
+        json_label(&report.surface.kind)?,
+        json_label(&report.surface.backend)?
+    );
+    println!("receipt: {}", report.receipt.state);
+    if let Some(plan_digest) = report.receipt.plan_digest.as_deref() {
+        println!("plan_digest: {plan_digest}");
+    }
+    if !report.issues.is_empty() {
+        println!("issues:");
+        for issue in &report.issues {
+            println!(
+                "  - {} [{}:{}] {}",
+                issue.kind,
+                issue.category.as_deref().unwrap_or("none"),
+                issue.severity,
+                issue.summary
+            );
+        }
+    }
+    if !report.next.is_empty() {
+        println!("next:");
+        for action in &report.next {
+            print_reconcile_action("  -", action);
+        }
+    }
+    Ok(())
+}
+
+fn print_reconcile_full(report: &feature::ReconcileReport) -> Result<()> {
+    println!("# Feature reconcile report: {}", report.feature.id);
+    println!();
+    println!("status: {}", report.status.as_str());
+    println!("title: {}", report.feature.title);
+    println!("feature_status: {}", report.feature.status);
+    println!(
+        "surface: {}/{}",
+        json_label(&report.surface.kind)?,
+        json_label(&report.surface.backend)?
+    );
+    println!("receipt: {}", report.receipt.state);
+    println!();
+    println!("## Issues");
+    if report.issues.is_empty() {
+        println!("none");
+    } else {
+        for issue in &report.issues {
+            println!(
+                "- {} [{}:{}] {}",
+                issue.kind,
+                issue.category.as_deref().unwrap_or("none"),
+                issue.severity,
+                issue.summary
+            );
+        }
+    }
+    println!();
+    println!("## Acceptance Criteria");
+    print_reconcile_text_items(&report.contract.acceptance);
+    println!();
+    println!("## Affected Areas");
+    print_reconcile_text_items(&report.contract.affected_areas);
+    println!();
+    println!("## Non-goals");
+    print_reconcile_text_items(&report.contract.non_goals);
+    println!();
+    println!("## Open Questions");
+    print_reconcile_text_items(&report.questions.open);
+    println!();
+    println!("## Tasks");
+    if report.tasks.items.is_empty() {
+        println!("none");
+    } else {
+        for task in &report.tasks.items {
+            println!("- {} [{}] {}", task.id, task.state, task.title);
+        }
+    }
+    println!();
+    println!("## QA");
+    println!("present: {}", report.qa.present);
+    if let Some(digest) = report.qa.digest.as_deref() {
+        println!("digest: {digest}");
+    }
+    println!();
+    println!("## Handoff");
+    println!("present: {}", report.handoff.present);
+    if let Some(digest) = report.handoff.digest.as_deref() {
+        println!("digest: {digest}");
+    }
+    println!();
+    println!("## Next");
+    for action in &report.next {
+        print_reconcile_action("-", action);
+    }
+    Ok(())
+}
+
+fn print_reconcile_action(prefix: &str, action: &feature::ReconcileAction) {
+    if let Some(command) = action.command.as_deref() {
+        println!("{prefix} {command}");
+    } else if let Some(plan_change) = action.plan_change.as_ref() {
+        println!("{prefix} {} {}", action.description, plan_change);
+    } else {
+        println!("{prefix} {}", action.description);
+    }
+}
+
+fn print_reconcile_text_items(items: &[feature::ReconcileTextItem]) {
+    if items.is_empty() {
+        println!("none");
+        return;
+    }
+    for item in items {
+        println!("- {}: {}", item.id, item.text);
+    }
+}
+
+fn json_label<T: serde::Serialize>(value: &T) -> Result<String> {
+    let Value::String(label) = serde_json::to_value(value)? else {
+        bail!("internal error: expected string label");
+    };
+    Ok(label)
 }
 
 fn prepare_feature(

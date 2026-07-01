@@ -124,6 +124,10 @@ fn write_baseline(repo: &Path, id: &str, position: usize, scenario_ids: &[&str])
 
 fn finalize(repo: &Path, id: &str) {
     stdout(
+        maestro(&["feature", "reconcile", id], repo),
+        &["feature", "reconcile", id],
+    );
+    stdout(
         maestro(&["feature", "finalize", id], repo),
         &["feature", "finalize", id],
     );
@@ -212,6 +216,10 @@ fn qa_baseline_helper_writes_acceptance_baseline() {
     assert!(
         qa.contains("current report command prints a summary"),
         "{qa}"
+    );
+    stdout(
+        maestro(&["feature", "reconcile", "report-builder"], repo),
+        &["feature", "reconcile"],
     );
     stdout(
         maestro(&["feature", "finalize", "report-builder"], repo),
@@ -492,6 +500,10 @@ fn feature_qa_gates_via_cli() {
     );
 
     write_baseline(repo, "report-builder", 0, &["bl-001"]);
+    stdout(
+        maestro(&["feature", "reopen", "report-builder"], repo),
+        &["feature", "reopen"],
+    );
     finalize(repo, "report-builder");
     let accepted = stdout(maestro(&accept, repo), &accept);
     assert!(accepted.contains("accepted report-builder"));

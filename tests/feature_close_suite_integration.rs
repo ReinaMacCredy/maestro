@@ -87,6 +87,10 @@ fn seed_closable_feature(repo: &Path, id: &str) {
     )
     .expect("invariant: qa.md should be writable");
     stdout(
+        maestro(&["feature", "reconcile", id], repo),
+        &["feature", "reconcile"],
+    );
+    stdout(
         maestro(&["feature", "finalize", id], repo),
         &["feature", "finalize"],
     );

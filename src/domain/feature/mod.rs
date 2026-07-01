@@ -3,6 +3,7 @@
 pub(crate) mod archive;
 mod qa;
 pub mod query;
+mod reconcile;
 pub(crate) mod registry;
 pub mod schema;
 mod staleness;
@@ -12,6 +13,12 @@ pub(crate) mod worktree;
 pub use archive::{
     AutoArchiveReceipt, FeatureArchiveReport, LooseSweepReport, append_auto_archive_receipt,
     archive_feature, archive_feature_with_expected_hash, archive_loose, unarchive_feature,
+};
+pub use reconcile::{
+    ReconcileAction, ReconcileActor, ReconcileContract, ReconcileIssue, ReconcileIssueRef,
+    ReconcileQuestions, ReconcileReceipt, ReconcileReport, ReconcileStatus, ReconcileSurfaceError,
+    ReconcileTasks, ReconcileTextItem, apply_reconcile_plan, reconcile_clean_check,
+    reconcile_report,
 };
 pub use registry::{
     AcceptanceTextEdit, AmendReport, CancelReport, ContractAdditions, ContractChangeCounts,

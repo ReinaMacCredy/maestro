@@ -449,6 +449,11 @@ pub fn set_with_report(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> 
 
 pub fn finalize(paths: &MaestroPaths, id: &str) -> Result<FinalizeReport> {
     let source_dir = finalization_source_dir(paths, id);
+    if source_dir.is_none() && live_db::contains_card_id(paths, id)? {
+        bail!(
+            "cannot finalize {id} directly from DB-backed store; run `maestro feature reopen {id}` first"
+        );
+    }
     let record = match source_dir.as_deref() {
         Some(dir) => load_record_from_dir(dir, id)?,
         None => load_record(paths, id)?,
@@ -460,6 +465,7 @@ pub fn finalize(paths: &MaestroPaths, id: &str) -> Result<FinalizeReport> {
             record.status.as_str()
         ),
     }
+    super::reconcile::ensure_current_receipt_for_finalize(paths, &record.id)?;
 
     let sources = handoff_sources(paths, &record)?;
     let generated_at = utc_now_timestamp();
@@ -2548,6 +2554,12 @@ mod cutover_tests {
         let card_dir = paths.cards_dir().join(&id);
         assert!(card_dir.exists(), "feature starts file-backed");
 
+        crate::domain::feature::reconcile_clean_check(
+            &paths,
+            &id,
+            crate::domain::feature::ReconcileActor::agent("test", None),
+        )
+        .expect("current reconcile receipt");
         let report = finalize(&paths, &id).expect("finalize imports into DB");
 
         assert!(
@@ -2574,6 +2586,12 @@ mod cutover_tests {
     fn reopen_exports_workbench_and_finalize_imports_it_back() {
         let (root, paths) = card_mode_repo("reopen-db");
         let id = create(&paths, "Workbench Feature", None).expect("create feature");
+        crate::domain::feature::reconcile_clean_check(
+            &paths,
+            &id,
+            crate::domain::feature::ReconcileActor::agent("test", None),
+        )
+        .expect("current reconcile receipt");
         finalize(&paths, &id).expect("initial DB finalize");
 
         let report = reopen(&paths, &id).expect("reopen DB feature");
@@ -2585,6 +2603,12 @@ mod cutover_tests {
         )
         .expect("edit workbench spec");
 
+        crate::domain::feature::reconcile_clean_check(
+            &paths,
+            &id,
+            crate::domain::feature::ReconcileActor::agent("test", None),
+        )
+        .expect("current workbench reconcile receipt");
         finalize(&paths, &id).expect("refinalize workbench");
 
         assert!(

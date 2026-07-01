@@ -1013,6 +1013,12 @@ mod tests {
             "---\namend_log_position: 0\n---\n\nbaseline\n",
         )
         .expect("invariant: baseline should be writable");
+        feature::reconcile_clean_check(
+            &paths,
+            &feature_id,
+            feature::ReconcileActor::agent("test", None),
+        )
+        .expect("invariant: reconcile receipt should be current");
         feature::finalize(&paths, &feature_id).expect("invariant: handoff should be fresh");
         feature::accept(&paths, &feature_id, false).expect("invariant: feature should be ready");
         let plan = root.join("prepare.md");
@@ -1063,6 +1069,12 @@ mod tests {
             "---\namend_log_position: 0\n---\n\nbaseline\n",
         )
         .expect("invariant: baseline should be writable");
+        feature::reconcile_clean_check(
+            &paths,
+            &feature_id,
+            feature::ReconcileActor::agent("test", None),
+        )
+        .expect("invariant: reconcile receipt should be current");
         feature::finalize(&paths, &feature_id).expect("invariant: handoff should be fresh");
         feature::accept(&paths, &feature_id, false).expect("invariant: feature should be ready");
         let plan = root.join("prepare.md");

@@ -1837,6 +1837,7 @@ fn mcp_intake_lifecycle_tools_accept_and_prepare_feature() {
             "src/interfaces/mcp/tools.rs",
         ],
     );
+    run_success(repo, &["feature", "reconcile", "mcp-intake-feature"]);
     run_success(repo, &["feature", "finalize", "mcp-intake-feature"]);
 
     let requests = [
@@ -1957,6 +1958,7 @@ fn mcp_feature_gate_tools_verify_slice_and_close_without_autoclose() {
             "src/interfaces/mcp/tools.rs",
         ],
     );
+    run_success(repo, &["feature", "reconcile", "mcp-feature-gate"]);
     run_success(repo, &["feature", "finalize", "mcp-feature-gate"]);
     let intake_requests = [
         r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"maestro_qa_baseline","arguments":{"feature_id":"mcp-feature-gate","observed":"[bl-001] feature gate currently closes only through CLI"}}}"#.to_string(),

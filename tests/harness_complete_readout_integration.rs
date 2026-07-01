@@ -350,6 +350,7 @@ fn security_gates_reuse_task_feature_qa_decision_and_waiver_surfaces() {
             "src",
         ],
     );
+    run_with_home(repo, &["feature", "reconcile", &feature_id]);
     run_with_home(repo, &["feature", "finalize", &feature_id]);
     let qa = run_with_home(
         repo,

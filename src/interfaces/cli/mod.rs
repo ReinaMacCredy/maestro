@@ -1531,6 +1531,20 @@ pub enum FeatureCommand {
     Finalize { id: String },
     #[command(about = "Reopen a DB-backed finalized feature into .maestro/workbench/<id>")]
     Reopen { id: String },
+    #[command(about = "Report or apply feature contract reconciliation before finalize")]
+    Reconcile {
+        id: String,
+        #[arg(long, help = "Print full human-readable reconciliation context")]
+        full: bool,
+        #[arg(long, help = "Emit the full agent-readable reconciliation JSON")]
+        json: bool,
+        #[arg(
+            long = "apply-plan",
+            value_name = "PLAN_FILE",
+            help = "Apply an explicit full-contract reconcile.yml plan"
+        )]
+        apply_plan: Option<PathBuf>,
+    },
     #[command(about = "Accept a feature into ready, freezing its contract (-> ready; gated)")]
     Accept {
         id: String,

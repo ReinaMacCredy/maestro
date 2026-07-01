@@ -272,6 +272,8 @@ fn worktree_record_verbs_update_ledger_without_running_git() {
     assert!(show.contains("branch_exists: true"), "{show}");
     assert!(show.contains("path_exists: false"), "{show}");
 
+    let reconcile = maestro(temp.path(), &["feature", "reconcile", &feature_id]);
+    assert_success(&reconcile, &["feature", "reconcile"]);
     let finalize = maestro(temp.path(), &["feature", "finalize", &feature_id]);
     assert_success(&finalize, &["feature", "finalize"]);
     let handoff =

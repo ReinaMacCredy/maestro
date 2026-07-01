@@ -64,7 +64,13 @@ fn author_contract(paths: &MaestroPaths, id: &str) {
     )
     .expect("invariant: qa.md should be writable");
 
+    reconcile_clean(paths, id);
     feature::finalize(paths, id).expect("invariant: finalize should write a fresh handoff");
+}
+
+fn reconcile_clean(paths: &MaestroPaths, id: &str) {
+    feature::reconcile_clean_check(paths, id, feature::ReconcileActor::agent("test", None))
+        .expect("invariant: reconcile receipt should be current");
 }
 
 fn verify_contract(paths: &MaestroPaths, id: &str) {
@@ -233,6 +239,7 @@ fn finalize_rejects_unknown_acceptance_evidence_kind() {
         },
     )
     .expect("invariant: set should succeed");
+    reconcile_clean(&paths, "billing-csv");
     feature::finalize(&paths, "billing-csv").expect("invariant: finalize should succeed");
     feature::accept_with_qa_none(&paths, "billing-csv", "domain test", false)
         .expect("invariant: feature may be accepted");

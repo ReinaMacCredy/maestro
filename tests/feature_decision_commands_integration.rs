@@ -18,7 +18,7 @@ use maestro::foundation::core::fs::ensure_dir;
 use maestro::foundation::core::hash::sha256_prefixed;
 use maestro::foundation::core::paths::MaestroPaths;
 use maestro::foundation::core::time::utc_now_timestamp;
-use serde_json::json;
+use serde_json::{Value as JsonValue, json};
 use serde_yaml::Value as YamlValue;
 use support::TestTempDir;
 
@@ -205,6 +205,13 @@ fn stdout(output: std::process::Output, args: &[&str]) -> String {
     );
 
     String::from_utf8(output.stdout).expect("invariant: stdout should be UTF-8")
+}
+
+fn reconcile_clean(root: &Path, id: &str) {
+    stdout(
+        maestro(&["feature", "reconcile", id], root),
+        &["feature", "reconcile", id],
+    );
 }
 
 fn stdout_owned(output: std::process::Output, args: &[String]) -> String {
@@ -410,6 +417,7 @@ fn feature_verify_sweeps_acceptance_contract() {
         "src",
     ];
     stdout(maestro(&set_args, temp_dir.path()), &set_args);
+    reconcile_clean(temp_dir.path(), "contract-sweep");
     stdout(
         maestro(&["feature", "finalize", "contract-sweep"], temp_dir.path()),
         &["feature", "finalize", "contract-sweep"],
@@ -593,6 +601,7 @@ fn feature_contract_display_warnings_waivers_and_stale_sweep() {
         "--reason",
         "contract display test",
     ];
+    reconcile_clean(temp_dir.path(), "coverage-display");
     stdout(
         maestro(
             &["feature", "finalize", "coverage-display"],
@@ -933,6 +942,7 @@ fn feature_guarded_lifecycle_via_cli() {
     write_baseline(&cards_dir, "billing-csv-export");
     write_qa_slice(&cards_dir, "billing-csv-export");
     let finalize_args = ["feature", "finalize", "billing-csv-export"];
+    reconcile_clean(temp_dir.path(), "billing-csv-export");
     let finalize_output = stdout(maestro(&finalize_args, temp_dir.path()), &finalize_args);
     assert!(
         finalize_output.contains("finalized billing-csv-export"),
@@ -1060,6 +1070,7 @@ fn feature_finalize_writes_handoff_and_gates_accept_prepare() {
     );
 
     let finalize_args = ["feature", "finalize", "clean-handoff"];
+    reconcile_clean(temp_dir.path(), "clean-handoff");
     let finalized = stdout(maestro(&finalize_args, temp_dir.path()), &finalize_args);
     assert!(finalized.contains("finalized clean-handoff"), "{finalized}");
     assert!(finalized.contains("source_sha256:"), "{finalized}");
@@ -1094,6 +1105,11 @@ fn feature_finalize_writes_handoff_and_gates_accept_prepare() {
         "{stale}"
     );
 
+    stdout(
+        maestro(&["feature", "reopen", "clean-handoff"], temp_dir.path()),
+        &["feature", "reopen", "clean-handoff"],
+    );
+    reconcile_clean(temp_dir.path(), "clean-handoff");
     stdout(maestro(&finalize_args, temp_dir.path()), &finalize_args);
     stdout(maestro(&accept_args, temp_dir.path()), &accept_args);
 
@@ -1114,6 +1130,11 @@ fn feature_finalize_writes_handoff_and_gates_accept_prepare() {
         "{prepare_missing}"
     );
 
+    stdout(
+        maestro(&["feature", "reopen", "clean-handoff"], temp_dir.path()),
+        &["feature", "reopen", "clean-handoff"],
+    );
+    reconcile_clean(temp_dir.path(), "clean-handoff");
     stdout(maestro(&finalize_args, temp_dir.path()), &finalize_args);
     let draft = stdout(maestro(&prepare_args, temp_dir.path()), &prepare_args);
     assert!(draft.contains("prepare-draft.md"), "{draft}");
@@ -1160,6 +1181,7 @@ fn feature_finalize_moves_authority_to_db_and_reopen_uses_workbench() {
         &["feature", "spec", "db-backed-contract"],
     );
 
+    reconcile_clean(root, "db-backed-contract");
     let finalize = stdout(
         maestro(&["feature", "finalize", "db-backed-contract"], root),
         &["feature", "finalize", "db-backed-contract"],
@@ -1243,6 +1265,7 @@ fn feature_finalize_moves_authority_to_db_and_reopen_uses_workbench() {
         "{workbench_spec}"
     );
 
+    reconcile_clean(root, "db-backed-contract");
     let refinalize = stdout(
         maestro(&["feature", "finalize", "db-backed-contract"], root),
         &["feature", "finalize", "db-backed-contract"],
@@ -1262,6 +1285,465 @@ fn feature_finalize_moves_authority_to_db_and_reopen_uses_workbench() {
     assert!(
         refinalized_spec.contains("workbench redesign detail"),
         "{refinalized_spec}"
+    );
+}
+
+#[test]
+fn feature_reconcile_reports_context_and_refuses_db_rewrite() {
+    let temp_dir = TestTempDir::new("maestro-feature-reconcile-report");
+    let root = temp_dir.path();
+    init_git_marker(root);
+    stdout(maestro(&["init", "--yes"], root), &["init", "--yes"]);
+    stdout(
+        maestro(
+            &[
+                "feature",
+                "new",
+                "Reconcile Contract",
+                "--question",
+                "Which scope should ship?",
+            ],
+            root,
+        ),
+        &["feature", "new", "Reconcile Contract"],
+    );
+    stdout(
+        maestro(
+            &[
+                "feature",
+                "set",
+                "reconcile-contract",
+                "--acceptance",
+                "final contract is explicit",
+                "--area",
+                "feature lifecycle",
+            ],
+            root,
+        ),
+        &["feature", "set", "reconcile-contract"],
+    );
+
+    let compact = stdout(
+        maestro(&["feature", "reconcile", "reconcile-contract"], root),
+        &["feature", "reconcile", "reconcile-contract"],
+    );
+    assert!(compact.contains("status: changes_required"), "{compact}");
+    assert!(compact.contains("receipt: not_created"), "{compact}");
+    assert!(compact.contains("open_questions"), "{compact}");
+    assert!(
+        compact.contains("maestro feature reconcile reconcile-contract --full"),
+        "{compact}"
+    );
+    assert!(
+        compact.contains("maestro feature reconcile reconcile-contract --json"),
+        "{compact}"
+    );
+    assert!(
+        !compact.contains("chosen vision"),
+        "compact output must not infer the final vision: {compact}"
+    );
+
+    let full = stdout(
+        maestro(
+            &["feature", "reconcile", "reconcile-contract", "--full"],
+            root,
+        ),
+        &["feature", "reconcile", "reconcile-contract", "--full"],
+    );
+    assert!(full.contains("Which scope should ship?"), "{full}");
+    assert!(full.contains("Acceptance Criteria"), "{full}");
+    assert!(full.contains("Open Questions"), "{full}");
+
+    let json_out = stdout(
+        maestro(
+            &["feature", "reconcile", "reconcile-contract", "--json"],
+            root,
+        ),
+        &["feature", "reconcile", "reconcile-contract", "--json"],
+    );
+    let report: JsonValue =
+        serde_json::from_str(&json_out).expect("reconcile report should be JSON");
+    for key in [
+        "status",
+        "feature",
+        "surface",
+        "receipt",
+        "issues",
+        "contract",
+        "questions",
+        "tasks",
+        "qa",
+        "handoff",
+        "next",
+    ] {
+        assert!(report.get(key).is_some(), "missing {key}: {report:#}");
+    }
+    assert_eq!(report["status"], "changes_required");
+    assert_eq!(report["surface"]["kind"], "card_folder");
+    assert_eq!(report["surface"]["backend"], "filesystem");
+    assert_eq!(
+        report["contract"]["acceptance"][0]["text"],
+        "final contract is explicit"
+    );
+    assert_eq!(
+        report["questions"]["open"][0]["text"],
+        "Which scope should ship?"
+    );
+    assert_eq!(report["receipt"]["state"], "not_created");
+    assert_eq!(report["receipt"]["mode"], JsonValue::Null);
+    assert_eq!(report["receipt"]["stale"], JsonValue::Array(vec![]));
+
+    let plan = root.join("reconcile.yml");
+    fs::write(
+        &plan,
+        r#"
+vision: Keep the explicit test contract.
+description: Reconcile the contract before DB finalize.
+acceptance:
+  - final contract is explicit
+non_goals: []
+affected_areas:
+  - feature lifecycle
+questions:
+  remove:
+    - ref: "Which scope should ship?"
+      reason: Answered by the explicit test plan.
+tasks:
+  add: []
+  remove: []
+  order: []
+rationale: The test must finalize only after an explicit reconcile receipt.
+"#,
+    )
+    .expect("write reconcile plan");
+    stdout(
+        maestro_owned(
+            &[
+                "feature".to_string(),
+                "reconcile".to_string(),
+                "reconcile-contract".to_string(),
+                "--apply-plan".to_string(),
+                plan.display().to_string(),
+            ],
+            root,
+        ),
+        &["feature", "reconcile", "reconcile-contract", "--apply-plan"],
+    );
+
+    stdout(
+        maestro(&["feature", "finalize", "reconcile-contract"], root),
+        &["feature", "finalize", "reconcile-contract"],
+    );
+    let db_error = assert_failure(
+        maestro(&["feature", "reconcile", "reconcile-contract"], root),
+        &["feature", "reconcile", "reconcile-contract"],
+    );
+    assert!(db_error.contains("db_backed"), "{db_error}");
+    assert!(
+        db_error.contains("maestro feature reopen reconcile-contract"),
+        "{db_error}"
+    );
+}
+
+#[test]
+fn feature_reconcile_apply_plan_updates_contract_tasks_and_receipt() {
+    let temp_dir = TestTempDir::new("maestro-feature-reconcile-apply");
+    let root = temp_dir.path();
+    init_git_marker(root);
+    stdout(maestro(&["init", "--yes"], root), &["init", "--yes"]);
+    stdout(
+        maestro(
+            &[
+                "feature",
+                "new",
+                "Reconcile Apply",
+                "--question",
+                "Which scope should ship?",
+            ],
+            root,
+        ),
+        &["feature", "new", "Reconcile Apply"],
+    );
+    stdout(
+        maestro(
+            &[
+                "feature",
+                "set",
+                "reconcile-apply",
+                "--acceptance",
+                "old contract",
+                "--area",
+                "old area",
+            ],
+            root,
+        ),
+        &["feature", "set", "reconcile-apply"],
+    );
+    let plan = root.join("reconcile.yml");
+    fs::write(
+        &plan,
+        r#"
+vision: Apply the reviewed reconcile plan.
+description: Updated description from explicit reconcile.yml.
+acceptance:
+  - applied contract is explicit
+non_goals:
+  - do not infer the vision
+affected_areas:
+  - src/domain/feature
+questions:
+  remove:
+    - ref: "Which scope should ship?"
+      reason: Answered by the reviewed plan.
+tasks:
+  add:
+    - key: parser
+      title: Parse reconcile plan
+      intent: Validate the locked schema before applying.
+      acceptance:
+        - valid full schema applies
+      depends_on: []
+    - key: receipt
+      title: Store reconcile receipt
+      intent: Record current freshness after apply.
+      acceptance:
+        - receipt is current after apply
+      depends_on:
+        - parser
+  remove: []
+  order:
+    - parser
+    - receipt
+rationale: Human or authorized agent reviewed the full context.
+"#,
+    )
+    .expect("write reconcile plan");
+
+    let apply_out = stdout(
+        maestro_owned(
+            &[
+                "feature".to_string(),
+                "reconcile".to_string(),
+                "reconcile-apply".to_string(),
+                "--apply-plan".to_string(),
+                plan.display().to_string(),
+            ],
+            root,
+        ),
+        &["feature", "reconcile", "reconcile-apply", "--apply-plan"],
+    );
+    assert!(apply_out.contains("status: applied"), "{apply_out}");
+    assert!(apply_out.contains("receipt: current"), "{apply_out}");
+    assert!(apply_out.contains("plan_digest: sha256:"), "{apply_out}");
+
+    let show = stdout(
+        maestro(&["feature", "show", "reconcile-apply"], root),
+        &["feature", "show", "reconcile-apply"],
+    );
+    assert!(
+        show.contains("Updated description from explicit reconcile.yml."),
+        "{show}"
+    );
+    assert!(show.contains("applied contract is explicit"), "{show}");
+    assert!(!show.contains("Which scope should ship?"), "{show}");
+
+    let json_out = stdout(
+        maestro(&["feature", "reconcile", "reconcile-apply", "--json"], root),
+        &["feature", "reconcile", "reconcile-apply", "--json"],
+    );
+    let report: JsonValue =
+        serde_json::from_str(&json_out).expect("reconcile report should be JSON");
+    assert_eq!(report["status"], "clean");
+    assert_eq!(report["receipt"]["state"], "current");
+    assert_eq!(report["receipt"]["mode"], "apply_plan");
+    assert_eq!(report["receipt"]["fresh"], true);
+    assert_eq!(report["receipt"]["artifact"]["type"], "reconcile_receipt");
+    assert!(
+        report["receipt"]["plan_digest"]
+            .as_str()
+            .is_some_and(|digest| digest.starts_with("sha256:"))
+    );
+    assert_eq!(report["receipt"]["actor"]["kind"], "agent");
+    assert_eq!(
+        report["tasks"]["order"]
+            .as_array()
+            .expect("task order")
+            .len(),
+        2
+    );
+}
+
+#[test]
+fn feature_reconcile_apply_plan_validation_is_atomic() {
+    let temp_dir = TestTempDir::new("maestro-feature-reconcile-apply-atomic");
+    let root = temp_dir.path();
+    init_git_marker(root);
+    stdout(maestro(&["init", "--yes"], root), &["init", "--yes"]);
+    stdout(
+        maestro(
+            &[
+                "feature",
+                "new",
+                "Reconcile Atomic",
+                "--question",
+                "Which scope should ship?",
+            ],
+            root,
+        ),
+        &["feature", "new", "Reconcile Atomic"],
+    );
+    stdout(
+        maestro(
+            &[
+                "feature",
+                "set",
+                "reconcile-atomic",
+                "--acceptance",
+                "old contract",
+                "--area",
+                "old area",
+            ],
+            root,
+        ),
+        &["feature", "set", "reconcile-atomic"],
+    );
+    let plan = root.join("bad-reconcile.yml");
+    fs::write(
+        &plan,
+        r#"
+vision: Bad plan.
+description: Should not apply.
+acceptance:
+  - should not replace
+non_goals: []
+affected_areas: []
+questions:
+  remove:
+    - ref: missing question
+      reason: invalid ref
+tasks:
+  add: []
+  remove: []
+  order: []
+"#,
+    )
+    .expect("write bad reconcile plan");
+
+    let error = assert_failure(
+        maestro_owned(
+            &[
+                "feature".to_string(),
+                "reconcile".to_string(),
+                "reconcile-atomic".to_string(),
+                "--apply-plan".to_string(),
+                plan.display().to_string(),
+            ],
+            root,
+        ),
+        &["feature", "reconcile", "reconcile-atomic", "--apply-plan"],
+    );
+    assert!(error.contains("rationale"), "{error}");
+
+    let show = stdout(
+        maestro(&["feature", "show", "reconcile-atomic"], root),
+        &["feature", "show", "reconcile-atomic"],
+    );
+    assert!(show.contains("old contract"), "{show}");
+    assert!(show.contains("Which scope should ship?"), "{show}");
+    assert!(!show.contains("should not replace"), "{show}");
+
+    let json_out = stdout(
+        maestro(
+            &["feature", "reconcile", "reconcile-atomic", "--json"],
+            root,
+        ),
+        &["feature", "reconcile", "reconcile-atomic", "--json"],
+    );
+    let report: JsonValue =
+        serde_json::from_str(&json_out).expect("reconcile report should be JSON");
+    assert_eq!(report["receipt"]["state"], "not_created");
+}
+
+#[test]
+fn feature_finalize_requires_current_reconcile_receipt_and_reports_stale() {
+    let temp_dir = TestTempDir::new("maestro-feature-reconcile-finalize-gate");
+    let root = temp_dir.path();
+    init_git_marker(root);
+    stdout(maestro(&["init", "--yes"], root), &["init", "--yes"]);
+    stdout(
+        maestro(&["feature", "new", "Finalize Gate"], root),
+        &["feature", "new", "Finalize Gate"],
+    );
+    stdout(
+        maestro(
+            &[
+                "feature",
+                "set",
+                "finalize-gate",
+                "--acceptance",
+                "receipt is required",
+                "--area",
+                "feature lifecycle",
+            ],
+            root,
+        ),
+        &["feature", "set", "finalize-gate"],
+    );
+
+    let missing = assert_failure(
+        maestro(&["feature", "finalize", "finalize-gate"], root),
+        &["feature", "finalize", "finalize-gate"],
+    );
+    assert!(
+        missing.contains("reconcile receipt is missing"),
+        "{missing}"
+    );
+    assert!(
+        missing.contains("maestro feature reconcile finalize-gate"),
+        "{missing}"
+    );
+
+    stdout(
+        maestro(&["feature", "reconcile", "finalize-gate"], root),
+        &["feature", "reconcile", "finalize-gate"],
+    );
+    stdout(
+        maestro(
+            &[
+                "feature",
+                "set",
+                "finalize-gate",
+                "--acceptance",
+                "receipt becomes stale",
+                "--area",
+                "feature lifecycle",
+            ],
+            root,
+        ),
+        &["feature", "set", "finalize-gate"],
+    );
+
+    let stale = assert_failure(
+        maestro(&["feature", "finalize", "finalize-gate"], root),
+        &["feature", "finalize", "finalize-gate"],
+    );
+    assert!(stale.contains("reconcile receipt is stale"), "{stale}");
+    assert!(stale.contains("contract"), "{stale}");
+    assert!(stale.contains("receipt=sha256:"), "{stale}");
+    assert!(stale.contains("current=sha256:"), "{stale}");
+    assert!(
+        stale.contains("maestro feature reconcile finalize-gate"),
+        "{stale}"
+    );
+
+    let refreshed = stdout(
+        maestro(&["feature", "reconcile", "finalize-gate"], root),
+        &["feature", "reconcile", "finalize-gate"],
+    );
+    assert!(refreshed.contains("receipt: current"), "{refreshed}");
+    stdout(
+        maestro(&["feature", "finalize", "finalize-gate"], root),
+        &["feature", "finalize", "finalize-gate"],
     );
 }
 
@@ -1288,6 +1770,7 @@ fn feature_finalize_refreshes_handoff_after_in_progress_amend() {
     stdout(maestro(&set_args, root), &set_args);
     let cards_dir = root.join(".maestro/cards");
     write_baseline(&cards_dir, "amended-handoff");
+    reconcile_clean(root, "amended-handoff");
     stdout(
         maestro(&["feature", "finalize", "amended-handoff"], root),
         &["feature", "finalize", "amended-handoff"],
@@ -1322,6 +1805,11 @@ fn feature_finalize_refreshes_handoff_after_in_progress_amend() {
         "{stale}"
     );
 
+    stdout(
+        maestro(&["feature", "reopen", "amended-handoff"], root),
+        &["feature", "reopen", "amended-handoff"],
+    );
+    reconcile_clean(root, "amended-handoff");
     let refresh = stdout(
         maestro(&["feature", "finalize", "amended-handoff"], root),
         &["feature", "finalize", "amended-handoff"],
@@ -1422,6 +1910,14 @@ fn feature_authoring_append_flags_are_proposed_only() {
         "--reason",
         "contract-only test",
     ];
+    stdout(
+        maestro(
+            &["feature", "set", "authoring-ux", "--clear-questions"],
+            temp_dir.path(),
+        ),
+        &["feature", "set", "authoring-ux", "--clear-questions"],
+    );
+    reconcile_clean(temp_dir.path(), "authoring-ux");
     stdout(
         maestro(&["feature", "finalize", "authoring-ux"], temp_dir.path()),
         &["feature", "finalize", "authoring-ux"],
@@ -1620,6 +2116,7 @@ fn feature_verify_rejects_unstarted_features_without_recording_proof() {
         "--reason",
         "no runtime surface",
     ];
+    reconcile_clean(root, "proposed-verify");
     stdout(
         maestro(&["feature", "finalize", "proposed-verify"], root),
         &["feature", "finalize", "proposed-verify"],
@@ -1667,6 +2164,7 @@ fn feature_verify_records_repeatable_paired_proofs_atomically() {
         "feature workflow",
     ];
     stdout(maestro(&set_args, root), &set_args);
+    reconcile_clean(root, "batch-proof");
     stdout(
         maestro(&["feature", "finalize", "batch-proof"], root),
         &["feature", "finalize", "batch-proof"],
@@ -1903,6 +2401,7 @@ fn feature_cancel_via_cli_cascades_to_live_tasks() {
     stdout(maestro(&set_args, temp_dir.path()), &set_args);
     let cards_dir = temp_dir.path().join(".maestro/cards");
     write_baseline(&cards_dir, "billing-csv-export");
+    reconcile_clean(temp_dir.path(), "billing-csv-export");
     stdout(
         maestro(
             &["feature", "finalize", "billing-csv-export"],
@@ -2195,6 +2694,7 @@ fn decision_supersede_creates_locked_replacement_and_marks_old_metadata_only() {
         "{spec}"
     );
 
+    reconcile_clean(temp_dir.path(), "decision-revision");
     let finalize = stdout(
         maestro(
             &["feature", "finalize", "decision-revision"],
@@ -3926,6 +4426,7 @@ fn create_qa_none_feature(root: &Path, title: &str, slug: &str) {
         "feature workflow",
     ];
     stdout(maestro(&set_args, root), &set_args);
+    reconcile_clean(root, slug);
     stdout(
         maestro(&["feature", "finalize", slug], root),
         &["feature", "finalize", slug],
@@ -4038,6 +4539,7 @@ fn close_feature(root: &Path, title: &str, slug: &str, child: &str) {
     let cards_dir = root.join(".maestro/cards");
     write_baseline(&cards_dir, slug);
     write_qa_slice(&cards_dir, slug);
+    reconcile_clean(root, slug);
     stdout(
         maestro(&["feature", "finalize", slug], root),
         &["feature", "finalize", slug],
@@ -4136,6 +4638,7 @@ fn feature_archive_cascades_children_with_qa_and_round_trips() {
     let cards_dir = root.join(".maestro/cards");
     write_baseline(&cards_dir, "billing-csv-export");
     write_qa_slice(&cards_dir, "billing-csv-export");
+    reconcile_clean(root, "billing-csv-export");
     stdout(
         maestro(&["feature", "finalize", "billing-csv-export"], root),
         &["feature", "finalize", "billing-csv-export"],
@@ -4266,6 +4769,7 @@ fn feature_archive_moves_terminal_child_cards_with_feature() {
     stdout(maestro(&set_args, root), &set_args);
     let cards_dir = root.join(".maestro/cards");
     write_baseline(&cards_dir, "billing-csv-export");
+    reconcile_clean(root, "billing-csv-export");
     stdout(
         maestro(&["feature", "finalize", "billing-csv-export"], root),
         &["feature", "finalize", "billing-csv-export"],
@@ -4435,6 +4939,7 @@ fn feature_archive_closed_sweeps_terminal_features() {
     ];
     stdout(maestro(&set_gamma, root), &set_gamma);
     write_baseline(&root.join(".maestro/cards"), "gamma-export");
+    reconcile_clean(root, "gamma-export");
     stdout(
         maestro(&["feature", "finalize", "gamma-export"], root),
         &["feature", "finalize", "gamma-export"],

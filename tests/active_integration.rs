@@ -793,6 +793,7 @@ fn create_ready_feature(repo: &Path, title: &str, slug: &str) {
             "active ownership",
         ],
     );
+    run(repo, &[], &["feature", "reconcile", slug]);
     run(repo, &[], &["feature", "finalize", slug]);
     run(
         repo,

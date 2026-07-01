@@ -4,7 +4,7 @@ mod claims;
 mod commands;
 mod events;
 mod proof_status;
-pub mod receipts;
+mod receipts;
 mod stale;
 mod verify_task;
 
@@ -16,6 +16,10 @@ pub use proof_status::{
     proof_status_kind_for_task, render_proof_status,
 };
 pub(crate) use proof_status::{VerificationCommandRead, verification_command_read_for_task};
+pub use receipts::{
+    RECONCILE_RECEIPT_TYPE, ReceiptExtension, load_receipt_extension, store_receipt_extension,
+    store_reconcile_receipt_extension,
+};
 pub use verify_task::{TaskVerification, TaskVerificationStatus};
 pub(crate) use verify_task::{
     VerificationReport, evaluate_task_report, verification_outcome_for_report,
