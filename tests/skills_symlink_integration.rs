@@ -18,6 +18,7 @@ mod unix {
             .args(args)
             .current_dir(cwd)
             .env("HOME", cwd.join("home"))
+            .env("MAESTRO_INSTALL_METHOD", "local")
             .output()
             .expect("invariant: compiled maestro binary should be runnable in symlink tests")
     }

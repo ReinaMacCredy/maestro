@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 
 use card_support::{
     card_dir, card_doc, card_record_path, id_by_title, seed_optional_string, seed_string,
+    task_record,
 };
 use git2::{IndexAddOption, Repository, Signature};
 use maestro::domain::decisions::template::decision_markdown;
@@ -1600,6 +1601,122 @@ rationale: Human or authorized agent reviewed the full context.
             .len(),
         2
     );
+}
+
+#[test]
+fn feature_reconcile_task_order_excludes_terminal_history() {
+    let temp_dir = TestTempDir::new("maestro-feature-reconcile-terminal-order");
+    let root = temp_dir.path();
+    init_git_marker(root);
+    stdout(maestro(&["init", "--yes"], root), &["init", "--yes"]);
+    stdout(
+        maestro(
+            &[
+                "feature",
+                "new",
+                "Reconcile Terminal Order",
+                "--question",
+                "Which live task remains?",
+            ],
+            root,
+        ),
+        &["feature", "new", "Reconcile Terminal Order"],
+    );
+    stdout(
+        maestro(
+            &[
+                "feature",
+                "set",
+                "reconcile-terminal-order",
+                "--acceptance",
+                "new contract",
+                "--area",
+                "feature lifecycle",
+            ],
+            root,
+        ),
+        &["feature", "set", "reconcile-terminal-order"],
+    );
+
+    let cards_dir = root.join(".maestro/cards");
+    write_task(
+        &cards_dir,
+        "task-done",
+        "reconcile-terminal-order",
+        "verified",
+    );
+    write_task(&cards_dir, "task-live", "reconcile-terminal-order", "ready");
+
+    let json_out = stdout(
+        maestro(
+            &["feature", "reconcile", "reconcile-terminal-order", "--json"],
+            root,
+        ),
+        &["feature", "reconcile", "reconcile-terminal-order", "--json"],
+    );
+    let report: JsonValue =
+        serde_json::from_str(&json_out).expect("reconcile report should be JSON");
+    assert_eq!(report["tasks"]["order"], json!(["task-live"]));
+    let items = report["tasks"]["items"]
+        .as_array()
+        .expect("reconcile items should be an array");
+    assert!(
+        items
+            .iter()
+            .any(|item| item["id"] == "task-done" && item["state"] == "verified"),
+        "terminal task remains visible as history: {report:#}"
+    );
+
+    let plan = root.join("reconcile.yml");
+    fs::write(
+        &plan,
+        r#"
+vision: Keep only live tasks in execution order.
+description: Reconcile terminal task history without turning it into a dependency.
+acceptance:
+  - new contract
+non_goals: []
+affected_areas:
+  - feature lifecycle
+questions:
+  remove:
+    - ref: "Which live task remains?"
+      reason: Answered by the reviewed plan.
+tasks:
+  add: []
+  remove: []
+  order:
+    - task-live
+rationale: Terminal tasks stay in history and should not be sequenced as work.
+"#,
+    )
+    .expect("write reconcile plan");
+    stdout(
+        maestro_owned(
+            &[
+                "feature".to_string(),
+                "reconcile".to_string(),
+                "reconcile-terminal-order".to_string(),
+                "--apply-plan".to_string(),
+                plan.display().to_string(),
+            ],
+            root,
+        ),
+        &[
+            "feature",
+            "reconcile",
+            "reconcile-terminal-order",
+            "--apply-plan",
+        ],
+    );
+
+    let task = task_record(root, "task-live");
+    if let Some(blockers) = task.get("blockers").and_then(YamlValue::as_sequence) {
+        assert!(
+            blockers.is_empty(),
+            "single live task should not receive dependency blockers: {task:#?}"
+        );
+    }
 }
 
 #[test]

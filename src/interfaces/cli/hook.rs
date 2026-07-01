@@ -61,9 +61,7 @@ fn record_hook(
                 return Ok(());
             };
             if let Err(error) = ensure_auto_progress_for_hook(paths, &payload) {
-                eprintln!(
-                    "maestro hook record warning: automatic progress start failed: {error:#}"
-                );
+                eprintln!("maestro hook record warning: progress setup check failed: {error:#}");
             }
             record::record_value(paths, &payload)?
         }

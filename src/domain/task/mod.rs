@@ -228,8 +228,8 @@ pub fn setup_simple_tasks(
 
 /// Ensure a standalone low-ceremony task exists and is already in progress.
 ///
-/// This is the automatic first-write hook path: it reuses the current actor's
-/// active Progress-backed Task, or creates and starts one when none exists.
+/// This is the low-ceremony setup path: it reuses the current actor's active
+/// Progress-backed Task, or creates and starts one when none exists.
 pub fn ensure_started_simple_task(
     tasks_dir: &Path,
     title: &str,

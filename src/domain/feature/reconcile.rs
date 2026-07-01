@@ -654,12 +654,17 @@ fn validate_task_plan(tasks: &[TaskRecord], plan: &PlanTasks) -> Result<BTreeMap
         }
     }
 
-    let remaining_existing = existing_ids
+    let orderable_existing_ids = tasks
+        .iter()
+        .filter(|task| task.state.is_live())
+        .map(|task| task.id.clone())
+        .collect::<BTreeSet<_>>();
+    let remaining_orderable = orderable_existing_ids
         .iter()
         .filter(|id| !removed.contains(*id))
         .cloned()
         .collect::<BTreeSet<_>>();
-    let mut known_refs = remaining_existing.clone();
+    let mut known_refs = remaining_orderable.clone();
     known_refs.extend(added_keys.iter().cloned());
 
     let order_set = plan.order.iter().cloned().collect::<BTreeSet<_>>();
@@ -703,7 +708,7 @@ fn validate_task_plan(tasks: &[TaskRecord], plan: &PlanTasks) -> Result<BTreeMap
             }
         }
     }
-    Ok(remaining_existing
+    Ok(remaining_orderable
         .iter()
         .map(|id| (id.clone(), id.clone()))
         .collect())
@@ -804,9 +809,12 @@ fn task_items(paths: &MaestroPaths, feature_id: &str) -> Result<ReconcileTasks> 
         include_terminal: true,
         ..Default::default()
     };
+    let mut order = Vec::new();
     let items = task::filter_tasks(task::load_task_records(&paths.tasks_dir())?, &filter)
         .into_iter()
         .map(|task| {
+            let is_live = task.state.is_live();
+            let state = task.state.as_str().to_string();
             let depends_on = task
                 .blockers
                 .iter()
@@ -815,10 +823,14 @@ fn task_items(paths: &MaestroPaths, feature_id: &str) -> Result<ReconcileTasks> 
                 .filter(|blocked_ref| blocked_ref.kind == task::BlockerKind::Task)
                 .map(|blocked_ref| blocked_ref.id.clone())
                 .collect();
+            let id = task.id;
+            if is_live {
+                order.push(id.clone());
+            }
             ReconcileTaskItem {
-                id: task.id,
+                id,
                 title: task.title,
-                state: task.state.as_str().to_string(),
+                state,
                 acceptance: task.acceptance.checks,
                 covers: task.covers,
                 depends_on,
@@ -831,11 +843,6 @@ fn task_items(paths: &MaestroPaths, feature_id: &str) -> Result<ReconcileTasks> 
             }
         })
         .collect::<Vec<_>>();
-    let order = items
-        .iter()
-        .filter(|task| task.state != "superseded")
-        .map(|task| task.id.clone())
-        .collect();
     let dependencies = items
         .iter()
         .flat_map(|task| {

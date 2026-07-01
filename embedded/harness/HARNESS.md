@@ -1,5 +1,5 @@
 ---
-version: 1.29.4
+version: 1.29.5
 ---
 
 # Maestro Harness Protocol
@@ -60,11 +60,12 @@ Progress stores small Low Tasks in `progress.yml`; use it through
 `maestro task add/start/done/list`. The default board hides the backing
 Progress card, shows current actor/session low Tasks by ordinal `REF`, and
 keeps stable ids in `progress.yml` and `task list --json`.
-When Maestro hooks are installed, the first write-like `PreToolUse` event in a
-session automatically creates or reuses that session's Progress Task and starts
-it unless `MAESTRO_CURRENT_TASK` is already set. Read-only hooks do not create
-Progress rows. If hooks are unavailable, run `maestro task add` and
-`maestro task start` yourself before editing.
+When Maestro hooks are installed, a write-like `PreToolUse` event with no
+`MAESTRO_CURRENT_TASK` requires an explicit `maestro task setup --task ... --start`
+first; the hook records the event and prints that setup command instead of
+creating a generic Progress task. Read-only hooks do not create Progress rows.
+If hooks are unavailable, run `maestro task add` and `maestro task start`
+yourself before editing.
 
 Linked-card inbox messages are advisory coordination signals only. They do not
 block execution. When order matters, record an explicit Task blocker or
