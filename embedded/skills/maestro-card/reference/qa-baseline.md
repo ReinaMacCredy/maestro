@@ -1,13 +1,16 @@
 # QA Baseline
 
-Create `.maestro/cards/<id>/qa.md` before feature edits start. This is the
-behavior oracle for `feature close`, not a list of tests.
+Record a QA baseline with `maestro qa baseline <id>` before feature edits start.
+This is the behavior oracle for `feature close`, not a list of tests. The
+stored baseline may live in editable files before finalize or in the DB-backed
+card store after finalize; use Maestro commands to read it.
 
 ## Use
 
-- `maestro feature accept` is blocked on missing or empty `qa.md`.
-- `maestro feature accept` also requires a fresh `handoff.md`; when the
-  blocker names handoff, run `maestro feature finalize <id>` first.
+- `maestro feature accept` is blocked on a missing or empty QA baseline.
+- `maestro feature accept` also requires a fresh finalized handoff; when the
+  blocker names handoff, run `maestro feature finalize <id>` first, then read
+  with `maestro feature spec <id>` or `maestro feature show <id>`.
 - A behavioral amend added acceptance or area and the baseline must be fresh.
 - The feature touches user-visible, data, security, persistence,
   compatibility, release, or workflow behavior.
@@ -50,7 +53,7 @@ behavior has a surface — write a real baseline below, however small.
    acceptance criterion.
 5. Capture the current-behavior oracle: setup, action, expected observable
    result, evidence to capture, and reproduction steps.
-6. Write the contract below to `.maestro/cards/<id>/qa.md`.
+6. Record the contract below with `maestro qa baseline <id>`.
 
 MCP: when available, `maestro_qa_baseline` records the observed baseline through
 the normal QA gate. If there is no behavioral surface, use

@@ -1,8 +1,9 @@
 # QA Slice
 
 Replay affected baseline scenarios after an implementation wave and record the
-evidence as counting slices in `.maestro/cards/<id>/qa.md`. The close gate
-counts only slices with scenario ids and non-empty evidence.
+evidence with `maestro qa slice <id>`. The close gate counts only slices with
+scenario ids and non-empty evidence. The stored QA artifact may be file-backed
+or DB-backed; use Maestro commands instead of editing storage paths directly.
 
 ## Use
 
@@ -12,8 +13,8 @@ counts only slices with scenario ids and non-empty evidence.
 
 ## Do
 
-1. Read changed files/commands, `maestro feature show <id>`, and the baseline
-   contract in `.maestro/cards/<id>/qa.md`.
+1. Read changed files/commands, `maestro feature show <id>`, and
+   `maestro feature spec <id>` for the baseline contract.
 2. Select the affected `[bl-NNN]` scenarios. If the wave adds behavior, extend
    the baseline with a new id instead of hiding it behind a unit test.
 3. Run the smallest useful probes:
@@ -21,8 +22,8 @@ counts only slices with scenario ids and non-empty evidence.
    when composition risk exists.
 4. Compare against the baseline. Unexplained output, schema, state, permission,
    performance, compatibility, or UI drift is a blocker.
-5. Append a counting slice to the fenced `slices:` block at the end of
-   `qa.md` (create the block on first slice).
+5. Record a counting slice with `maestro qa slice <id> --scenario <bl-NNN>
+   --observed "<evidence>"`.
 6. If blocked, return a tracker entry with expected vs actual, reproduction,
    evidence, and fix path. Do not fix code from this reference.
 
@@ -32,8 +33,10 @@ satisfied.
 
 ## The slices block
 
-One fenced yaml block inside `qa.md`, append-only. Scenario ids must match
-baseline digits exactly: `bl-001` and `bl-1` are different.
+The underlying QA artifact stores one fenced yaml block, append-only. Scenario
+ids must match baseline digits exactly: `bl-001` and `bl-1` are different.
+Prefer `maestro qa slice <id>` so file-backed and DB-backed cards use the same
+write path.
 
 ````markdown
 ```yaml

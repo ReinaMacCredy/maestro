@@ -1191,6 +1191,22 @@ fn feature_finalize_moves_authority_to_db_and_reopen_uses_workbench() {
         "{finalize}"
     );
     assert!(
+        finalize.contains("handoff: DB-backed in ") && finalize.contains(".maestro/store.sqlite"),
+        "{finalize}"
+    );
+    assert!(
+        finalize.contains("read: maestro feature spec db-backed-contract"),
+        "{finalize}"
+    );
+    assert!(
+        finalize.contains("show: maestro feature show db-backed-contract"),
+        "{finalize}"
+    );
+    assert!(
+        !finalize.contains(".maestro/store.sqlite/cards/db-backed-contract/handoff.md"),
+        "{finalize}"
+    );
+    assert!(
         root.join(".maestro/store.sqlite").is_file(),
         "finalize should create the live DB authority"
     );
@@ -1272,6 +1288,19 @@ fn feature_finalize_moves_authority_to_db_and_reopen_uses_workbench() {
     );
     assert!(
         refinalize.contains("finalized db-backed-contract"),
+        "{refinalize}"
+    );
+    assert!(
+        refinalize.contains("handoff: DB-backed in ")
+            && refinalize.contains(".maestro/store.sqlite"),
+        "{refinalize}"
+    );
+    assert!(
+        refinalize.contains("read: maestro feature spec db-backed-contract"),
+        "{refinalize}"
+    );
+    assert!(
+        !refinalize.contains(".maestro/store.sqlite/cards/db-backed-contract/handoff.md"),
         "{refinalize}"
     );
     assert!(

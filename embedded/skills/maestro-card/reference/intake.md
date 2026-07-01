@@ -7,8 +7,9 @@ drives the active lifecycle; there is no CLI parser for external documents.
 1. Use `maestro-design` to create the feature, preserve the source text, decide
    open forks, and author observable acceptance criteria.
 2. Return here after the contract is stable.
-3. Read `.maestro/cards/<id>/handoff.md` first. If it is missing or stale, run
-   `maestro feature finalize <id>`.
+3. Read `maestro feature show <id>` and `maestro feature spec <id>` first. If
+   the finalized handoff is missing or stale, run `maestro feature finalize
+   <id>`, then reread through those commands.
 4. Run `qa-baseline`, `feature accept`, `feature prepare`, work, verify,
    `qa-slice`, and `feature close`.
 

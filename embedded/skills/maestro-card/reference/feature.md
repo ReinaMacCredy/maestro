@@ -36,7 +36,7 @@ fail closed unless authority, target, allowed actions, hard stops, and evidence
 are explicit.
 
 ```sh
-maestro feature finalize <id>    # writes/refreshes .maestro/cards/<id>/handoff.md
+maestro feature finalize <id>    # writes/refreshes the finalized handoff authority
 maestro feature accept            # -> ready, requires qa-baseline
 maestro feature prepare --draft   # reviewable child-task plan
 maestro feature prepare --from    # create/explore/accept tasks from a plan file
@@ -53,10 +53,12 @@ Use `feature show <id>` for the everyday lifecycle summary. Use
 forks; `--question` is for loose questions not yet forks, both handled in
 `maestro-design`.
 
-At the approval moment, read `.maestro/cards/<id>/handoff.md` first. It is the
-clean continuation index; use raw `spec.md`, `notes.md`, and
-`maestro decision list --feature <id>` only for audit or deeper context. If
-the handoff is missing or stale, run `maestro feature finalize <id>`.
+At the approval moment, read `maestro feature show <id>` and
+`maestro feature spec <id>` first. They are the authority-aware continuation
+index after finalize, including DB-backed finalized cards that no longer have a
+live `.maestro/cards/<id>/` directory. Use raw editable files only while a card
+folder or workbench is the current authority surface. If the handoff is missing
+or stale, run `maestro feature finalize <id>`.
 
 Record directive or sequencing constraints, plus the
 dated authorization line, in one `maestro card note <id> "<date + authorization
@@ -96,9 +98,10 @@ Accept passes only when the feature has:
 
 - at least one acceptance criterion
 - at least one affected area
-- a fresh `.maestro/cards/<id>/handoff.md` from `maestro feature finalize <id>`
-- a non-empty `.maestro/cards/<id>/qa.md` from
-  [qa-baseline.md](qa-baseline.md)
+- a fresh finalized handoff from `maestro feature finalize <id>`, readable with
+  `maestro feature spec <id>` / `maestro feature show <id>`
+- a non-empty QA baseline from [qa-baseline.md](qa-baseline.md), readable through
+  `maestro feature spec <id>` and the QA verbs
 
 On pass, the contract and baseline freeze. Later growth uses:
 

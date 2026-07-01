@@ -300,7 +300,13 @@ fn finalize_feature(paths: &MaestroPaths, id: &str) -> Result<()> {
     let report = feature::finalize(paths, id)?;
     super::emit_card_touch(paths, id);
     println!("finalized {}", report.id);
-    println!("handoff: {}", report.path.display());
+    if report.path.starts_with(paths.store_db_file()) {
+        println!("handoff: DB-backed in {}", paths.store_db_file().display());
+        println!("read: maestro feature spec {}", report.id);
+        println!("show: maestro feature show {}", report.id);
+    } else {
+        println!("handoff: {}", report.path.display());
+    }
     println!("source_sha256: {}", report.fingerprint);
     if !report.next_commands.is_empty() {
         println!("next:");
