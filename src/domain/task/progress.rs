@@ -10,7 +10,7 @@ use crate::domain::card::store::{self, CardHome};
 use crate::domain::task::lifecycle::{self, TransitionDetails};
 use crate::domain::task::template::{TaskRecord, TaskState};
 use crate::foundation::core::fs::{
-    ensure_dir, read_to_string_if_exists, write_string_if_unchanged,
+    append_text_file, ensure_dir, read_to_string_if_exists, write_string_if_unchanged,
 };
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::schema::{Compat, PROGRESS_SCHEMA_VERSION, classify};
@@ -397,6 +397,47 @@ pub fn save_task_with_snapshot(task: &TaskRecord, snapshot: &ProgressTaskSnapsho
             db: snapshot.db.clone(),
         },
     )
+}
+
+pub fn append_note_sidecar(
+    snapshot: &ProgressTaskSnapshot,
+    initial_contents: &str,
+    appended_contents: &str,
+) -> Result<bool> {
+    const NOTES_FILE: &str = "notes.md";
+    if let Some(db) = &snapshot.db {
+        let existing = live_db::read_text_file(&db.paths, &db.card_id, NOTES_FILE)?;
+        let created = existing.is_none();
+        let mut contents = existing
+            .clone()
+            .unwrap_or_else(|| initial_contents.to_string());
+        if !contents.ends_with('\n') {
+            contents.push('\n');
+        }
+        contents.push_str(appended_contents);
+        live_db::write_text_file_if_unchanged(
+            &db.paths,
+            &db.card_id,
+            NOTES_FILE,
+            existing.as_deref(),
+            &contents,
+        )
+        .with_context(|| {
+            format!(
+                "failed to append task note {}",
+                live_db::synthetic_card_path(&db.paths, &db.card_id, NOTES_FILE).display()
+            )
+        })?;
+        return Ok(created);
+    }
+
+    let path = snapshot
+        .path
+        .parent()
+        .context("progress sidecar path is missing parent directory")?
+        .join(NOTES_FILE);
+    append_text_file(&path, initial_contents, appended_contents)
+        .with_context(|| format!("failed to append task note {}", path.display()))
 }
 
 fn load_or_create_actor_progress(

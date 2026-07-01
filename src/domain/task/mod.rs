@@ -53,6 +53,12 @@ pub struct NoteReport {
     pub created: bool,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SimpleDoneMode {
+    Submit,
+    RecoverNeedsVerification,
+}
+
 /// Inputs for creating a draft task.
 pub struct CreateTaskOptions {
     pub feature: Option<String>,
@@ -480,29 +486,40 @@ pub(crate) fn load_task_for_update(tasks_dir: &Path, id: &str) -> Result<TaskHan
 
 /// Append one dated line to a task's `notes.md`, creating it on first write.
 pub fn note(tasks_dir: &Path, id: &str, text: &str) -> Result<NoteReport> {
-    let (task, _, task_dir) = lookup::load_task_with_snapshot(tasks_dir, id)?;
+    let (task, snapshot, task_dir) = lookup::load_task_with_snapshot(tasks_dir, id)?;
     if text.trim().is_empty() {
         bail!("task note text cannot be empty");
     }
-    let path = task_dir.join("notes.md");
-    let created = append_note_file(&path, &task.title, text)?;
+    let (initial_contents, appended_contents) = note_contents(&task.title, text);
+    let created = match &snapshot {
+        template::TaskSnapshot::Progress(snapshot) => {
+            progress::append_note_sidecar(snapshot, &initial_contents, &appended_contents)?
+        }
+        template::TaskSnapshot::Card(_) => {
+            let path = task_dir.join("notes.md");
+            append_note_file(&path, &initial_contents, &appended_contents)?
+        }
+    };
     Ok(NoteReport {
         id: task.id,
         created,
     })
 }
 
-fn append_note_file(path: &Path, title: &str, text: &str) -> Result<bool> {
+fn note_contents(title: &str, text: &str) -> (String, String) {
     let date = utc_now_timestamp()
         .split_once('T')
         .map(|(date, _)| date.to_string())
         .unwrap_or_else(|| "1970-01-01".to_string());
-    append_text_file(
-        path,
-        &format!("# {title}\n\n"),
-        &format!("{date}  {}\n", text.trim()),
+    (
+        format!("# {title}\n\n"),
+        format!("{date}  {}\n", text.trim()),
     )
-    .with_context(|| format!("failed to append task note {}", path.display()))
+}
+
+fn append_note_file(path: &Path, initial_contents: &str, appended_contents: &str) -> Result<bool> {
+    append_text_file(path, initial_contents, appended_contents)
+        .with_context(|| format!("failed to append task note {}", path.display()))
 }
 
 /// Lock acceptance criteria and move a task to ready.
@@ -577,7 +594,7 @@ pub fn complete_simple_task(
     let (mut task, snapshot, _) = lookup::load_task_with_snapshot(tasks_dir, id)?;
     let paths = lookup::paths_for_tasks_dir(tasks_dir)
         .context("cannot resolve maestro paths from tasks dir")?;
-    guard_simple_done_allowed(&paths, &task)?;
+    let mode = guard_simple_done_allowed(&paths, &task)?;
     if proof.is_empty() || proof.iter().any(|proof| proof.trim().is_empty()) {
         bail!(
             "task done requires proof; run `maestro task done {} --proof \"<evidence>\"`",
@@ -586,17 +603,33 @@ pub fn complete_simple_task(
     }
     let summary = summary.unwrap_or_else(|| "marked done".to_string());
     let claims: Vec<String> = proof.iter().map(|proof| proof.trim().to_string()).collect();
-    lifecycle::transition(
-        &mut task,
-        TaskState::NeedsVerification,
-        actor,
-        completed_at,
-        TransitionDetails {
-            summary: Some(summary.clone()),
-            claims: claims.clone(),
-            ..TransitionDetails::default()
-        },
-    )?;
+    match mode {
+        SimpleDoneMode::Submit => {
+            lifecycle::transition(
+                &mut task,
+                TaskState::NeedsVerification,
+                actor,
+                completed_at,
+                TransitionDetails {
+                    summary: Some(summary.clone()),
+                    claims: claims.clone(),
+                    ..TransitionDetails::default()
+                },
+            )?;
+        }
+        SimpleDoneMode::RecoverNeedsVerification => {
+            lifecycle::append_history(
+                &mut task,
+                actor,
+                completed_at,
+                TransitionDetails {
+                    summary: Some(summary.clone()),
+                    claims: claims.clone(),
+                    ..TransitionDetails::default()
+                },
+            );
+        }
+    }
     apply_verification_outcome(
         &mut task,
         VerificationOutcome::Passed(VerificationPassed {
@@ -623,18 +656,40 @@ pub fn complete_simple_task(
     Ok(task)
 }
 
-fn guard_simple_done_allowed(paths: &MaestroPaths, task: &TaskRecord) -> Result<()> {
+pub fn uses_simple_done_contract(paths: &MaestroPaths, task: &TaskRecord) -> Result<bool> {
+    if !task.acceptance.checks.is_empty() || task.verify_command.is_some() {
+        return Ok(false);
+    }
+    let Some(card_id) = task.feature_id.as_deref() else {
+        return Ok(true);
+    };
+    let Some(card) = card_store::resolve(paths, card_id)?.map(|resolved| resolved.card) else {
+        return Ok(false);
+    };
+    Ok(card.card_type == CardType::Chore)
+}
+
+fn guard_simple_done_allowed(paths: &MaestroPaths, task: &TaskRecord) -> Result<SimpleDoneMode> {
     if task.state == TaskState::Verified {
         bail!("task {} is already done", task.id);
     }
-    if task.state != TaskState::InProgress {
-        bail!(
-            "task {} is {}; run `maestro task start {}` before `maestro task done`",
-            task.id,
-            task.state.as_str(),
-            task.id
-        );
-    }
+    let mode = match task.state {
+        TaskState::InProgress => SimpleDoneMode::Submit,
+        TaskState::NeedsVerification => SimpleDoneMode::RecoverNeedsVerification,
+        _ => {
+            bail!(
+                "task {} is {}; run `maestro task start {}` before `maestro task done`",
+                task.id,
+                task.state.as_str(),
+                task.id
+            );
+        }
+    };
+    guard_simple_done_contract(paths, task)?;
+    Ok(mode)
+}
+
+fn guard_simple_done_contract(paths: &MaestroPaths, task: &TaskRecord) -> Result<()> {
     if let Some(card_id) = task.feature_id.as_deref() {
         let Some(card) = card_store::resolve(paths, card_id)?.map(|resolved| resolved.card) else {
             bail!(

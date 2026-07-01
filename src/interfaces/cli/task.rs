@@ -286,10 +286,13 @@ fn setup_tasks(
         println!("{}. {} ({})", index + 1, task.id, task.state.as_str());
     }
     if start {
-        println!("started task 1: {}", tasks[0].id);
-        println!("next: maestro task done 1 --proof \"<evidence>\"");
+        println!("started task: {}", tasks[0].id);
+        println!(
+            "next: maestro task done {} --proof \"<evidence>\"",
+            tasks[0].id
+        );
     } else {
-        println!("next: maestro task start 1");
+        println!("next: maestro task start {}", tasks[0].id);
     }
     Ok(())
 }
@@ -667,6 +670,18 @@ fn complete_task(
     proof_texts: Vec<String>,
     actor: &str,
 ) -> Result<()> {
+    let task = task::load_task_record(&paths.tasks_dir(), id)?;
+    if matches!(
+        task.state,
+        TaskState::InProgress | TaskState::NeedsVerification
+    ) && task::uses_simple_done_contract(paths, &task)?
+    {
+        bail!(
+            "task {} has no explicit verification gate; use `maestro task done {} --proof \"<evidence>\"` instead of `maestro task complete`",
+            task.id,
+            task.id
+        );
+    }
     if proof_texts
         .iter()
         .any(|proof_text| proof_text.trim().is_empty())

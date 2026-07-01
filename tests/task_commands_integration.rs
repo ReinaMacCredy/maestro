@@ -7,6 +7,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use card_support::{card_dir, card_doc, card_record_path, id_by_title, task_record};
+use maestro::domain::card::live_db;
+use maestro::foundation::core::paths::MaestroPaths;
 use serde_json::Value as JsonValue;
 use serde_yaml::{Mapping, Value};
 use support::TestTempDir;
@@ -407,6 +409,150 @@ fn task_progress_cli_flow_add_start_done_is_low_ceremony_and_verifies_simple_com
 }
 
 #[test]
+fn task_complete_refuses_low_ceremony_progress_task_without_mutating() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    let setup = maestro_with_env(
+        repo,
+        &["task", "setup", "--task", "map loop schema", "--start"],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    );
+    assert_success(&setup, &["task", "setup", "--task", "...", "--start"]);
+    let id = progress_tasks(repo)[0]["id"]
+        .as_str()
+        .expect("progress task has id")
+        .to_string();
+
+    let complete = maestro_with_env(
+        repo,
+        &[
+            "task",
+            "complete",
+            &id,
+            "--summary",
+            "mapped schema",
+            "--claim",
+            "schema mapped",
+        ],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    );
+    assert_failure(
+        &complete,
+        &[
+            "task",
+            "complete",
+            &id,
+            "--summary",
+            "...",
+            "--claim",
+            "...",
+        ],
+    );
+    let message = stderr(&complete);
+    assert!(
+        message.contains("no explicit verification gate")
+            && message.contains(&format!("maestro task done {id} --proof")),
+        "simple task complete should redirect before mutating:\n{message}"
+    );
+
+    let (_, record) = progress_task_record(repo, &id);
+    assert_eq!(record["state"], Value::String("in_progress".to_string()));
+}
+
+#[test]
+fn task_done_recovers_low_ceremony_progress_task_stuck_needs_verification() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    let setup = maestro_with_env(
+        repo,
+        &["task", "setup", "--task", "map loop schema", "--start"],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    );
+    assert_success(&setup, &["task", "setup", "--task", "...", "--start"]);
+    let id = progress_tasks(repo)[0]["id"]
+        .as_str()
+        .expect("progress task has id")
+        .to_string();
+    let (progress_dir, _) = progress_task_record(repo, &id);
+    let progress_path = progress_dir.join("progress.yml");
+    let mut progress: Value = serde_yaml::from_str(
+        &fs::read_to_string(&progress_path).expect("invariant: progress.yml reads"),
+    )
+    .expect("invariant: progress.yml parses");
+    let task = progress["tasks"]
+        .as_sequence_mut()
+        .expect("progress tasks sequence")
+        .iter_mut()
+        .find(|task| task["id"] == id)
+        .expect("progress task exists");
+    task["state"] = Value::String("needs_verification".to_string());
+    fs::write(
+        &progress_path,
+        serde_yaml::to_string(&progress).expect("progress serializes"),
+    )
+    .expect("invariant: progress.yml writes");
+
+    let done = maestro_with_env(
+        repo,
+        &["task", "done", &id, "--proof", "schema mapped"],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    );
+    assert_success(&done, &["task", "done", &id, "--proof", "..."]);
+
+    let (_, record) = progress_task_record(repo, &id);
+    assert_eq!(record["state"], Value::String("verified".to_string()));
+    assert_eq!(
+        record["verification"]["claim_checks"][0]["source"],
+        Value::String("task done --proof".to_string())
+    );
+}
+
+#[test]
+fn task_note_appends_to_db_backed_progress_sidecar() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    let setup = maestro_with_env(
+        repo,
+        &["task", "setup", "--task", "map loop schema", "--start"],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    );
+    assert_success(&setup, &["task", "setup", "--task", "...", "--start"]);
+    let id = progress_tasks(repo)[0]["id"]
+        .as_str()
+        .expect("progress task has id")
+        .to_string();
+    let (progress_dir, _) = progress_task_record(repo, &id);
+    let progress_id = progress_dir
+        .file_name()
+        .and_then(|name| name.to_str())
+        .expect("progress card dir has UTF-8 name")
+        .to_string();
+    let paths = MaestroPaths::new(repo);
+    live_db::import_card_dir(&paths, &progress_id, &progress_dir, true)
+        .expect("progress card imports into live DB");
+    assert!(
+        !progress_dir.exists(),
+        "fixture should leave only the DB-backed progress card"
+    );
+
+    let note = maestro_with_env(
+        repo,
+        &["task", "note", &id, "Correction recorded"],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    );
+    assert_success(&note, &["task", "note", &id, "..."]);
+
+    let notes = live_db::read_text_file(&paths, &progress_id, "notes.md")
+        .expect("DB note read succeeds")
+        .expect("DB notes sidecar exists");
+    assert!(notes.contains("# map loop schema"), "{notes}");
+    assert!(notes.contains("Correction recorded"), "{notes}");
+}
+
+#[test]
 fn task_progress_setup_creates_checklist_and_starts_first_task() {
     let temp = setup_repo();
     let repo = temp.path();
@@ -426,10 +572,15 @@ fn task_progress_setup_creates_checklist_and_starts_first_task() {
     );
     assert_success(&setup, &["task", "setup", "--task", "...", "--start"]);
     let out = stdout(&setup);
-    assert!(out.contains("setup 2 task(s)"), "{out}");
-    assert!(out.contains("started task 1"), "{out}");
 
     let tasks = progress_tasks(repo);
+    let first_id = tasks[0]["id"].as_str().expect("progress task has id");
+    assert!(out.contains("setup 2 task(s)"), "{out}");
+    assert!(out.contains(&format!("started task: {first_id}")), "{out}");
+    assert!(
+        out.contains(&format!("next: maestro task done {first_id} --proof")),
+        "{out}"
+    );
     assert_eq!(tasks.len(), 2);
     assert_eq!(
         tasks[0]["title"],

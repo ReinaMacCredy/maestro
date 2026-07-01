@@ -292,6 +292,12 @@ fn status_surfaces_active_progress_checklist() {
         &[("MAESTRO_ACTOR", "codex#s1")],
     );
     assert_success(&setup, &["task", "setup", "--task", "...", "--start"]);
+    let setup_out = stdout(&setup);
+    let task_id = setup_out
+        .lines()
+        .find_map(|line| line.strip_prefix("1. "))
+        .and_then(|line| line.split_whitespace().next())
+        .expect("setup output includes first stable task id");
 
     let status_output = maestro_with_env(repo, &["status"], &[("MAESTRO_ACTOR", "codex#s1")]);
     assert_success(&status_output, &["status"]);
@@ -304,7 +310,7 @@ fn status_surfaces_active_progress_checklist() {
         "{status}"
     );
     assert!(
-        status.contains("next: maestro task done 1 --proof"),
+        status.contains(&format!("next: maestro task done {task_id} --proof")),
         "{status}"
     );
 }

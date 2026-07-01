@@ -719,7 +719,7 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
     let now_nanos = timestamp_nanos(&utc_now_timestamp()).unwrap_or(0);
     let mut active_features = active_feature_rows(paths, &features, now_nanos);
     let worktree_actions = worktree_actions(paths, &features)?;
-    let progress = progress_status_rows(&task_entries);
+    let progress = progress_status_rows(paths, &task_entries)?;
     for (id, path, error, hint, _) in unreadable_features {
         warnings.push(WarningJson {
             code: "feature_unreadable".to_string(),
@@ -753,10 +753,12 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
     // The next verb is close/verify-shaped when the chosen task action is a proof
     // or completion step, or a feature is ready to close (`feature_close` never
     // appears as a task `next_action.kind`; it lives in ready_to_close_features).
-    let close_or_verify_pending = next_action
-        .as_ref()
-        .is_some_and(|action| matches!(action.kind.as_str(), "complete_task" | "proof_recovery"))
-        || !ready_to_close_features.is_empty();
+    let close_or_verify_pending = next_action.as_ref().is_some_and(|action| {
+        matches!(
+            action.kind.as_str(),
+            "complete_task" | "done_task" | "proof_recovery"
+        )
+    }) || !ready_to_close_features.is_empty();
     let loop_hint = match super::loop_recipes::build_loop_next_report_from_snapshot(
         paths,
         &task_entries,
@@ -851,6 +853,14 @@ fn task_action(paths: &MaestroPaths, task: &TaskRecord) -> Result<Option<NextAct
     let checks = task::load_task_checks(&paths.tasks_dir(), task).unwrap_or_default();
     let has_verify_contract = task.feature_id.is_some() || !checks.is_empty();
     let action = match task.state {
+        TaskState::NeedsVerification if task::uses_simple_done_contract(paths, task)? => {
+            NextAction::task(
+                "done_task",
+                task,
+                task_done_template(&task.id),
+                "low-ceremony task needs done proof",
+            )
+        }
         TaskState::NeedsVerification => NextAction::task(
             "proof_recovery",
             task,
@@ -862,6 +872,12 @@ fn task_action(paths: &MaestroPaths, task: &TaskRecord) -> Result<Option<NextAct
             task,
             runnable_command(["maestro", "task", "claim", task.id.as_str()]),
             "ready task is unclaimed",
+        ),
+        TaskState::InProgress if task::uses_simple_done_contract(paths, task)? => NextAction::task(
+            "done_task",
+            task,
+            task_done_template(&task.id),
+            "low-ceremony task needs done proof",
         ),
         TaskState::InProgress => NextAction::task(
             "complete_task",
@@ -962,21 +978,24 @@ fn active_feature_rows(
         .collect()
 }
 
-fn progress_status_rows(task_entries: &[task::TaskEntry]) -> Vec<ProgressStatusJson> {
-    let mut grouped: BTreeMap<PathBuf, Vec<&TaskRecord>> = BTreeMap::new();
+fn progress_status_rows(
+    paths: &MaestroPaths,
+    task_entries: &[task::TaskEntry],
+) -> Result<Vec<ProgressStatusJson>> {
+    let progress_task_infos = task::progress_task_infos(&paths.tasks_dir())?;
+    let mut grouped: BTreeMap<String, Vec<&TaskRecord>> = BTreeMap::new();
     for entry in task_entries {
-        if !entry.task_dir.join(task::PROGRESS_FILE).is_file() {
-            continue;
+        if let Some(info) = progress_task_infos.get(&entry.task.id) {
+            grouped
+                .entry(info.card_id.clone())
+                .or_default()
+                .push(&entry.task);
         }
-        grouped
-            .entry(entry.task_dir.clone())
-            .or_default()
-            .push(&entry.task);
     }
 
-    grouped
+    Ok(grouped
         .into_iter()
-        .filter_map(|(task_dir, tasks)| {
+        .filter_map(|(card_id, tasks)| {
             if !tasks.iter().any(|task| task.state.is_live()) {
                 return None;
             }
@@ -996,16 +1015,11 @@ fn progress_status_rows(task_entries: &[task::TaskEntry]) -> Vec<ProgressStatusJ
                     title: task.title.clone(),
                     state: task.state.as_str().to_string(),
                     next: if task.state == TaskState::InProgress {
-                        format!("maestro task done {} --proof \"<evidence>\"", index + 1)
+                        format!("maestro task done {} --proof \"<evidence>\"", task.id)
                     } else {
-                        format!("maestro task start {}", index + 1)
+                        format!("maestro task start {}", task.id)
                     },
                 });
-            let card_id = task_dir
-                .file_name()
-                .and_then(|name| name.to_str())
-                .unwrap_or("progress")
-                .to_string();
             Some(ProgressStatusJson {
                 card_id,
                 state: "active".to_string(),
@@ -1014,7 +1028,7 @@ fn progress_status_rows(task_entries: &[task::TaskEntry]) -> Vec<ProgressStatusJ
                 current,
             })
         })
-        .collect()
+        .collect())
 }
 
 /// Render the ACTIVE FEATURES block: a table of the features still worth a row,
@@ -1622,6 +1636,19 @@ fn task_complete_template(task_id: &str) -> CommandJson {
                 "observed proof text",
             ),
         ],
+    )
+}
+
+fn task_done_template(task_id: &str) -> CommandJson {
+    template_command(
+        format!("maestro task done {task_id} --proof \"<evidence>\""),
+        vec!["maestro", "task", "done", task_id, "--proof", "<evidence>"],
+        vec![required_input(
+            "proof",
+            "--proof",
+            "<evidence>",
+            "observed proof text",
+        )],
     )
 }
 
