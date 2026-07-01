@@ -569,7 +569,6 @@ fn handoff_sources(paths: &MaestroPaths, record: &FeatureRecord) -> Result<Hando
     let fingerprint = handoff_source_fingerprint(
         record,
         spec.as_deref(),
-        notes.as_deref(),
         worktree_ledger.as_deref(),
         &decisions,
     );
@@ -585,7 +584,6 @@ fn handoff_sources(paths: &MaestroPaths, record: &FeatureRecord) -> Result<Hando
 fn handoff_source_fingerprint(
     record: &FeatureRecord,
     spec: Option<&str>,
-    notes: Option<&str>,
     worktree_ledger: Option<&str>,
     decisions: &[DecisionRecord],
 ) -> String {
@@ -601,7 +599,9 @@ fn handoff_source_fingerprint(
     push_source_list(&mut source, "non_goals", &record.non_goals);
     push_source_list(&mut source, "open_questions", &record.open_questions);
     push_source_optional_field(&mut source, "spec.md", spec);
-    push_source_optional_field(&mut source, "notes.md", notes);
+    // `notes.md` is commentary and coordination evidence. It stays visible in
+    // handoff audit trails and feature show output, but it must not stale the
+    // finalized contract when agents append post-finalize authorization notes.
     push_source_optional_field(&mut source, "worktree.yml", worktree_ledger);
     source.push_str("decisions\n");
     for decision in decisions {
