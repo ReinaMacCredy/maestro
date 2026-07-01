@@ -683,6 +683,11 @@ impl ResolvedCard {
     pub fn is_dir_backed(&self) -> bool {
         matches!(self.basis, ResolvedBasis::Dir { .. })
     }
+
+    /// Whether this card resolved to the live SQLite card store.
+    pub fn is_db_backed(&self) -> bool {
+        matches!(self.basis, ResolvedBasis::Db { .. })
+    }
 }
 
 /// Whether a record path is a dir-backed card file (`card.yaml`/`task.yaml`)

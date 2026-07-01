@@ -13,6 +13,7 @@ use card_support::{
     task_record,
 };
 use git2::{IndexAddOption, Repository, Signature};
+use maestro::domain::card::live_db;
 use maestro::domain::decisions::template::decision_markdown;
 use maestro::domain::feature;
 use maestro::foundation::core::fs::ensure_dir;
@@ -1214,6 +1215,35 @@ fn feature_finalize_moves_authority_to_db_and_reopen_uses_workbench() {
     assert!(
         !root.join(".maestro/cards/db-backed-contract").exists(),
         "finalized features stop depending on .maestro/cards/<id>"
+    );
+
+    let note = stdout(
+        maestro(
+            &[
+                "card",
+                "note",
+                "db-backed-contract",
+                "authorization captured in supported note path",
+            ],
+            root,
+        ),
+        &["card", "note", "db-backed-contract"],
+    );
+    assert!(
+        note.contains("noted db-backed-contract (notes.md created)"),
+        "{note}"
+    );
+    let notes = live_db::read_text_file(&MaestroPaths::new(root), "db-backed-contract", "notes.md")
+        .expect("DB-backed notes read should succeed")
+        .expect("DB-backed card note should create notes.md");
+    assert!(
+        notes.contains("# DB Backed Contract")
+            && notes.contains("authorization captured in supported note path"),
+        "{notes}"
+    );
+    assert!(
+        !root.join(".maestro/cards/db-backed-contract").exists(),
+        "DB-backed card note must not recreate the live card folder"
     );
 
     let spec = stdout(

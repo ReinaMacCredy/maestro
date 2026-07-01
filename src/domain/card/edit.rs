@@ -4,6 +4,7 @@
 
 use anyhow::{Context, Result, bail};
 
+use crate::domain::card::live_db;
 use crate::domain::card::query::{Coarse, coarse_of, has_related_to};
 use crate::domain::card::schema::{Card, Dep, DepKind};
 use crate::domain::card::store::{
@@ -321,19 +322,23 @@ pub fn append_note(paths: &MaestroPaths, id: &str, text: &str, now: &str) -> Res
     let Some(resolved) = resolve(paths, id)? else {
         bail!("no card {id} to note");
     };
+    let date = now.split_once('T').map_or(now, |(date, _)| date);
+    let text = text.trim();
+    if resolved.is_db_backed() {
+        return append_db_note(paths, &resolved.card, text, date);
+    }
     let record = resolved.path();
     let dir = record
         .parent()
         .with_context(|| format!("card path missing parent: {}", record.display()))?;
     let dir_backed = resolved.is_dir_backed();
-    let date = now.split_once('T').map_or(now, |(date, _)| date);
     let (header, line) = if dir_backed {
-        (resolved.card.title.clone(), text.trim().to_string())
+        (resolved.card.title.clone(), text.to_string())
     } else {
         let container_title = load(&dir.join(CARD_FILE))?
             .map(|container| container.title)
             .unwrap_or_else(|| "Notes".to_string());
-        (container_title, format!("[{id}] {}", text.trim()))
+        (container_title, format!("[{id}] {text}"))
     };
     let notes_path = dir.join("notes.md");
     append_text_file(
@@ -342,6 +347,29 @@ pub fn append_note(paths: &MaestroPaths, id: &str, text: &str, now: &str) -> Res
         &format!("{date}  {line}\n"),
     )
     .with_context(|| format!("failed to append card note {}", notes_path.display()))
+}
+
+fn append_db_note(paths: &MaestroPaths, card: &Card, line: &str, date: &str) -> Result<bool> {
+    let existing = live_db::read_text_file(paths, &card.id, "notes.md")?;
+    let created = existing.is_none();
+    let mut contents = existing
+        .clone()
+        .unwrap_or_else(|| format!("# {}\n\n", card.title));
+    contents.push_str(&format!("{date}  {line}\n"));
+    live_db::write_text_file_if_unchanged(
+        paths,
+        &card.id,
+        "notes.md",
+        existing.as_deref(),
+        &contents,
+    )
+    .with_context(|| {
+        format!(
+            "failed to append card note {}",
+            live_db::synthetic_card_path(paths, &card.id, "notes.md").display()
+        )
+    })?;
+    Ok(created)
 }
 
 #[cfg(test)]
