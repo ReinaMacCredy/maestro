@@ -12,6 +12,8 @@ use std::path::Path;
 use std::process::{Command, Output};
 
 use card_support::{card_doc, card_record_path, cards_repo, id_by_title};
+use maestro::domain::card::live_db;
+use maestro::domain::card::schema::{Card, CardType};
 use maestro::domain::channel;
 use maestro::foundation::core::paths::MaestroPaths;
 use serde_json::Value;
@@ -1151,6 +1153,43 @@ fn archive_loose_sweeps_terminal_parentless_cards_but_keeps_rules() {
     let index_again = fs::read_to_string(repo.join(".maestro/archive/cards/INDEX.md"))
         .expect("invariant: INDEX.md should exist");
     assert_eq!(index, index_again, "a re-run appends no duplicate lid line");
+}
+
+#[test]
+fn archive_loose_sweeps_terminal_db_backed_cards() {
+    let temp = cards_repo("s2-archive-loose-db-backed");
+    let repo = temp.path();
+    let paths = MaestroPaths::new(repo);
+    let card = Card::new(
+        "db-loose-memory",
+        CardType::Memory,
+        "DB Loose Memory",
+        "closed",
+        "2026-07-01T00:00:00Z",
+    );
+    live_db::insert_card(&paths, &card, "card.yaml")
+        .expect("invariant: DB-backed loose card should be insertable");
+
+    let receipt = run(repo, &["archive", "--loose"]);
+
+    assert!(
+        receipt.contains("boxed: db-loose-memory"),
+        "DB-backed terminal loose card should sweep:\n{receipt}"
+    );
+    assert!(
+        !live_db::contains_card_id(&paths, "db-loose-memory")
+            .expect("live DB lookup should succeed"),
+        "sweep should remove the live DB-backed card"
+    );
+    assert!(
+        !repo.join(".maestro/archive/cards/db-loose-memory").exists(),
+        "DB-backed loose sweep should write an archive DB snapshot, not a legacy folder"
+    );
+    let shown = run(repo, &["show", "db-loose-memory"]);
+    assert!(
+        shown.contains("DB Loose Memory") && shown.contains("archived: read-only"),
+        "show should fall through to the DB-backed archive:\n{shown}"
+    );
 }
 
 #[test]

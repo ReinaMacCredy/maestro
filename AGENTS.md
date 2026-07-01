@@ -25,6 +25,7 @@ maestro/
 | Task | Location | Notes |
 | --- | --- | --- |
 | Add or change CLI verbs | `src/interfaces/cli/` | Adapter only; domain rules stay behind owning facades. |
+| Change card storage, query, or archive behavior | `src/domain/card/`, `src/domain/feature/archive.rs` | Preserve DB/file parity, archive snapshot readability, index receipts, and CAS checks. |
 | Change task lifecycle or artifacts | `src/domain/task/` | Preserve optimistic concurrency, state history, blockers, acceptance lock. |
 | Change verification behavior | `src/domain/proof/`, `src/operations/task_verify/` | Proof writes reports; Task applies lifecycle outcomes. |
 | Change hook/event capture | `src/domain/run/`, `src/interfaces/hooks/` | Preserve normalized append, partial-line tolerance, symlink rejection. |
@@ -115,7 +116,7 @@ cargo check --all-targets
 cargo fmt --check
 cargo clippy --all-targets -- -D warnings
 cargo test
-git diff --check -- ARCHITECTURE.md TESTING.md MAINTENANCE.md AGENTS.md
+git diff --check -- README.md ARCHITECTURE.md TESTING.md MAINTENANCE.md AGENTS.md
 ```
 
 Release verification uses the stricter release contract:

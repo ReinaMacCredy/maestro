@@ -473,12 +473,14 @@ pub struct LooseSweepReport {
 /// Idempotent: a store with nothing loose to sweep is a no-op at exit 0.
 pub fn archive_loose(paths: &MaestroPaths) -> Result<LooseSweepReport> {
     let mut dir_moves = Vec::new();
+    let mut db_moves = Vec::new();
     // Entry sweeps grouped by live container file, ids in scan (id) order.
     let mut entry_sweeps: BTreeMap<PathBuf, Vec<String>> = BTreeMap::new();
     let mut swept: Vec<String> = Vec::new();
     let mut lid_lines = String::new();
     let mut kept_rules: Vec<String> = Vec::new();
     let date = utc_now_timestamp()[..10].to_string();
+    let live_db_file = live_db::db_file(paths);
 
     for (card, path) in scan_with_paths(paths)? {
         if card.parent.is_some() || card.card_type == CardType::Feature {
@@ -498,7 +500,19 @@ pub fn archive_loose(paths: &MaestroPaths) -> Result<LooseSweepReport> {
         if !sweeps {
             continue;
         }
-        if is_dir_backed(&path) {
+        if path.starts_with(&live_db_file) {
+            let Some(db_card) = live_db::resolve(paths, &card.id)? else {
+                bail!(
+                    "cannot sweep {} — DB-backed card changed since preflight; re-run the command",
+                    card.id
+                );
+            };
+            db_moves.push(DbArchiveMove {
+                card_id: card.id.clone(),
+                source_relpath: PathBuf::from(&card.id),
+                expected_raw: db_card.raw,
+            });
+        } else if is_dir_backed(&path) {
             let (src, dst) = child_move(
                 &card.id,
                 &path,
@@ -544,6 +558,22 @@ pub fn archive_loose(paths: &MaestroPaths) -> Result<LooseSweepReport> {
         }
     }
     let mut entry_stages = Vec::new();
+    for item in &db_moves {
+        let target_dir = paths.archive_cards_dir().join(&item.source_relpath);
+        if target_dir.exists() {
+            bail!(
+                "cannot sweep {} — an archived copy already exists at {}",
+                item.card_id,
+                target_dir.display()
+            );
+        }
+        if archive_db::contains_card_id(paths, &item.card_id)? {
+            bail!(
+                "cannot sweep {} — an archived copy already exists in the archive DB",
+                item.card_id
+            );
+        }
+    }
     for (live_file, ids) in &entry_sweeps {
         let live = load_entries(live_file)?;
         let relative = live_file.strip_prefix(paths.cards_dir()).with_context(|| {
@@ -564,6 +594,9 @@ pub fn archive_loose(paths: &MaestroPaths) -> Result<LooseSweepReport> {
 
     for item in &dir_moves {
         archive_and_remove_dir(paths, item)?;
+    }
+    for item in &db_moves {
+        archive_and_remove_db(paths, item)?;
     }
     for (live_file, live_snapshot, keep, relative, sweep) in &entry_stages {
         for card in sweep {

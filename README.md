@@ -40,13 +40,15 @@ A **card** owns identity, container/lifecycle state, and governance. A **task**
 is the atomic executable progress unit. A **facet** is an optional sidecar that
 describes or proves a card.
 
-Cards live under `.maestro/cards/<id>/`; `card.yaml` carries identity, type,
-state, parent, ownership, links, and timestamps. Feature, Bug, Chore, Custom,
-Decision, Idea, and Progress are CardKinds / workflow kinds on cards, not
-separate high-level objects. Progress is the lightweight CardKind for small
-work: its `progress.yml` stores many Low Tasks compactly without requiring the
-full feature pipeline. Facets such as `spec.md`, `qa.md`, and `notes.md` are
-optional sidecars for any card type that needs contract, evidence, or history.
+Cards live in the local card store. File-backed cards still appear under
+`.maestro/cards/<id>/`; DB-backed cards live in `.maestro/store.sqlite` and are
+projected through the same card APIs. `card.yaml` carries identity, type, state,
+parent, ownership, links, and timestamps. Feature, Bug, Chore, Custom, Decision,
+Idea, and Progress are CardKinds / workflow kinds on cards, not separate
+high-level objects. Progress is the lightweight CardKind for small work: its
+`progress.yml` stores many Low Tasks compactly without requiring the full feature
+pipeline. Facets such as `spec.md`, `qa.md`, and `notes.md` are optional
+sidecars for any card type that needs contract, evidence, or history.
 
 ![Maestro card model](docs/readme/maestro-card-model.png)
 
@@ -544,8 +546,10 @@ checked, not asserted, so a green close is a real signal.
 ### The archive is memory
 
 Closing work does not discard it. `maestro archive <feature>` moves a closed feature tree
-into `.maestro/archive/cards/`, and `maestro archive --loose` sweeps closed loose tasks,
-ideas, and superseded decisions after it. Every archived card appends a one-line digest to
+out of the live store, and `maestro archive --loose` sweeps closed loose tasks, ideas,
+superseded decisions, and DB-backed loose cards after it. Archived snapshots live in
+`.maestro/archive/cards.sqlite`; legacy folder archives under `.maestro/archive/cards/`
+remain readable. Every archived card appends a one-line digest to
 `.maestro/archive/cards/INDEX.md`; `maestro resume` opens with the most recent of those
 lines, `maestro list --grep <term> --archived` searches the full history (kept fast by the
 local text index, which falls back to a plain scan when missing or stale), and
@@ -683,14 +687,20 @@ edits. `maestro sync --global-skills` refreshes only the user-level global skill
 | `install` / `uninstall` | Wire or remove agent hooks and config (`--agent claude\|codex`) |
 | `sync` / `shell-init` | Resync repo-local resources (or global skills with `--global-skills`); print the shell init snippet |
 | `upgrade` | Upgrade the binary and refresh resources |
+| `design` | List or initialize a repo-root `DESIGN.md` from shipped design guides |
 | `doctor` | Diagnose the installation |
-| `status` / `resume` | Print the current handoff, next action, or clean-session resume packet |
+| `status` / `next` / `resume` | Print the current handoff, next safe action, or clean-session resume packet |
 | `active` | Show other live sessions, their bound cards, link state, progress, and copy-paste link/message hints |
+| `session` | Show one session's joined activity, lifecycle, and proof story |
 | `migrate` | Snapshot `.maestro/` and fold legacy feature/task/decision/harness trees into `.maestro/cards/` |
 | `feature` | Manage the product contract and its lifecycle |
+| `qa` | Record feature QA baselines and slice evidence |
 | `task` | Create, claim, complete, `verify`, and inspect `proof` for proof-gated work cards (`task watch` for a live list) |
 | `decision` | Create, lock, show, and list decision cards |
 | `card` | Work the flat store: `ready` / `list` / `show` / `create` / `update` / `close` / `claim` / `assign` / `note` / `dep` / `graph` / `archive` (`--parent`, `--type`, `--assignee`, `--status`, `--grep`) |
+| `worktree` | Record passive worktree handoff and cleanup ledger facts |
+| `grep` | Search Maestro memory and source through the indexed grep engine |
+| `memory` / `scorer` | Manage Memory candidates, suggestions, scorer contracts, and receipts |
 | `link` | Add or remove non-blocking `related` edges between live cards; linked cards can use `msg` |
 | `msg` | Send, read, and list pull-only messages on linked-card channels |
 | `conflict` | Flag a link-free, git-free "I'm taking this ground, hold off" notice on a peer card; `--clear` retracts it |

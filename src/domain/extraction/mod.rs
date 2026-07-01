@@ -4,7 +4,7 @@
 //! binary and extract on init/update through one version-gated core.
 //! [`extract_all`] composes every resource family into a single operation with
 //! unified rollback; each family's planner lives with its own module
-//! ([`hook_script`] here, [`crate::domain::harness::extract`] for the harness
+//! (`hook_script` here, [`crate::domain::harness::extract`] for the harness
 //! protocol). Skills are not extracted per repo; they are served from the
 //! global `~/.maestro/skills` cache (see [`crate::domain::skills`]). The code
 //! playbook is likewise served from the binary (`maestro playbook`, see

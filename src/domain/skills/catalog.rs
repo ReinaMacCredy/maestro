@@ -45,7 +45,7 @@ static CATALOG: OnceLock<Vec<Skill>> = OnceLock::new();
 /// Return the skills Maestro ships and refreshes, in extraction order. These are
 /// distinct from user-added skills under `.maestro/skills/`.
 ///
-/// Built once by walking the embedded [`SKILLS_DIR`] and memoized; the returned
+/// Built once by walking the embedded `SKILLS_DIR` and memoized; the returned
 /// slice borrows the `'static` embedded bytes and skill-name strings.
 pub fn skills() -> &'static [Skill] {
     CATALOG.get_or_init(build_catalog).as_slice()

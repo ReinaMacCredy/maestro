@@ -201,7 +201,7 @@ pub enum ClaimOutcome {
 ///
 /// Only task/bug/chore are claimable (SPEC E3); claiming a feature/idea/decision
 /// or a closed card is refused at this input boundary. A live claim held by
-/// someone else is refused, but a claim older than [`STALE_CLAIM_AGE_NANOS`] is
+/// someone else is refused, but a claim older than `STALE_CLAIM_AGE_NANOS` is
 /// taken over with a `Reclaimed` outcome so a dead session never pins a card
 /// forever (SPEC E6/O2). A successful claim stamps `claimed_at`/`updated_at` and
 /// moves the card to `in_progress`.

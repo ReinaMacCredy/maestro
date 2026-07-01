@@ -96,6 +96,7 @@ site to be reviewed by the compiler.
   dotted-id design.
 - **storage (one card store, feature is just a card):**
   ```text
+  .maestro/store.sqlite                                # DB-backed live cards + stored sidecars
   .maestro/cards/<feature>/card.yaml                    # feature container card
   .maestro/cards/<feature>/{spec.md,notes.md,qa.md}     # feature facets
   .maestro/cards/<progress>/card.yaml                   # lightweight progress card
@@ -111,14 +112,17 @@ site to be reviewed by the compiler.
   .maestro/memory/promotions/<promotion>/plan.yml
   .maestro/memory/maintenance/<maintenance>/contract.yml
   .maestro/harness/harness.yml                          # config only
-  .maestro/archive/cards/
+  .maestro/archive/cards.sqlite                         # DB-backed archived card snapshots
+  .maestro/archive/cards/                               # legacy folder archives + INDEX.md receipt
   ```
   Folds the old `features/` + `tasks/` + `harness/backlog.yaml` + `decisions/` trees
   into one store (`maestro migrate` remints v1 repos). Legacy task-family cards keep
   per-card dirs for compatibility and contention-free gated work; Progress cards keep
   small same-session TaskRecord rows in one `progress.yml`. Decisions and ideas are
-  entry-backed where their owning domain still treats them as rosters. (NOT Dolt;
-  file-native.)
+  entry-backed where their owning domain still treats them as rosters. DB-backed live
+  cards and archive snapshots use SQLite as a local artifact container, but callers
+  still go through card-domain loaders and CAS-style write helpers rather than hidden
+  service state.
 - **management:** global QUERY, not directory navigation — `maestro ready [<feature>]`,
   `maestro list --parent --type --assignee --status`, beads-style verbs
   (`claim`/`show`/`note`/`dep add`/`archive`), emoji-free, `--json` parity.

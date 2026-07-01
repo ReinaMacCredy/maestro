@@ -1395,7 +1395,7 @@ fn close_gaps_for_record(
 
 /// Cancel a feature: non-terminal → `Cancelled`, cascading to live children (D6).
 ///
-/// Every LIVE child task is abandoned (reason "feature cancelled: <reason>")
+/// Every LIVE child task is abandoned (reason `feature cancelled: <reason>`)
 /// before the feature is flipped; verified / already-terminal children are
 /// untouched and stay linked as history. The cascade is not transactional: if a
 /// child abandon fails, it bails before the feature is cancelled.

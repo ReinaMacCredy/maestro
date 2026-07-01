@@ -107,7 +107,7 @@ pub(crate) enum FolderGate<'a> {
 
 /// The whole-folder fate of a bundled resource, independent of write-path
 /// concerns (backup operation label, timestamp). Single source of truth shared
-/// by [`folder_gate`] (the write path) and [`preview_folder`] (the read-only
+/// by `folder_gate` (the write path) and `preview_folder` (the read-only
 /// `--dry-run` path), so the two can never drift.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum FolderDecision {
@@ -209,7 +209,7 @@ pub struct FolderPreview {
     pub shipped_version: Option<String>,
 }
 
-/// Compute one [`FolderPreview`] from the same inputs as [`folder_gate`],
+/// Compute one [`FolderPreview`] from the same inputs as `folder_gate`,
 /// without touching the filesystem beyond the `read_version` the caller already
 /// performed. Drives `sync --dry-run`, `init --dry-run`, and the merge drift hint.
 pub fn preview_folder(

@@ -107,7 +107,7 @@ pub struct GateGuard {
 /// Take the gate lock, waiting for any current holder to finish. Best-effort and
 /// infallible: on a non-Unix target or an IO failure it returns an unserialized
 /// guard so the suite still runs. The wait announces itself once, then prints a
-/// coarse elapsed line every [`REPORT_EVERY_SECS`]; a Ctrl-C during the wait
+/// coarse elapsed line every `REPORT_EVERY_SECS`; a Ctrl-C during the wait
 /// terminates the process through the default SIGINT handler (no custom handler).
 pub fn acquire(paths: &MaestroPaths, holder: &str) -> GateGuard {
     acquire_kind(paths, holder, LockKind::Gate)

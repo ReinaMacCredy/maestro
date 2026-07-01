@@ -1,7 +1,7 @@
 //! Lean: the always-on reach-ladder's session-scoped tooling.
 //!
-//! [`mode`] holds the per-session strictness dial (lite/full/ultra/off) that
-//! tunes how hard the reach-ladder is enforced. [`debt`] harvests inline
+//! `mode` holds the per-session strictness dial (lite/full/ultra/off) that
+//! tunes how hard the reach-ladder is enforced. `debt` harvests inline
 //! `// lean:` markers from the tree into a ledger and mints deduped task cards
 //! from them.
 

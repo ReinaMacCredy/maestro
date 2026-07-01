@@ -523,7 +523,7 @@ impl RowStateCounts {
 /// ready work. `blocked_ids` is the set of ids held back by an unsatisfied
 /// `blocks` dependency (from [`blocked`]), so a card reads blocked here exactly
 /// when an open dependency keeps it out of [`ready`]. A claimed card reads
-/// `Active` before `Ready` (the distinction [`is_ready`] does not draw), which
+/// `Active` before `Ready` (the distinction `is_ready` does not draw), which
 /// is why count consumers route through this rather than reassembling buckets
 /// from [`ready`]/[`blocked`].
 pub fn classify(card: &Card, blocked_ids: &BTreeSet<String>) -> Option<RowState> {
@@ -547,7 +547,7 @@ pub fn classify(card: &Card, blocked_ids: &BTreeSet<String>) -> Option<RowState>
 
 /// The `list` filter (SPEC G3): every supplied predicate must match (AND). An
 /// unset field does not constrain. `assignee` matches a claim by full token or
-/// agent portion (see [`claim_matches`]); `status` matches the COARSE word
+/// agent portion (see `claim_matches`); `status` matches the COARSE word
 /// (SPEC DN3, the `--status` filter's form).
 #[derive(Clone, Debug, Default)]
 pub struct ListFilter<'a> {

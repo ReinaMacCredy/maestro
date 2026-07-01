@@ -21,3 +21,4 @@
 # macOS / local noise
 .DS_Store
 .claude/scheduled_tasks.lock
+.worktrees/

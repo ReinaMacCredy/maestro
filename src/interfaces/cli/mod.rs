@@ -653,7 +653,7 @@ pub enum LoopCommand {
     },
     #[command(about = "Validate one structured shipped or project custom loop recipe")]
     Validate {
-        /// Recipe name; project custom recipes live under .maestro/loop-recipes/<name>.yml.
+        /// Recipe name; project custom recipes live under `.maestro/loop-recipes/<name>.yml`.
         #[arg(value_name = "NAME")]
         name: String,
     },
@@ -2481,7 +2481,7 @@ pub struct MissionControlArgs {
     /// Render a read-only preview frame. Omit value for the dashboard.
     #[arg(long, num_args = 0..=1, default_missing_value = "dashboard")]
     pub preview: Option<Option<String>>,
-    /// Alias for --preview <screen>, intended for programmatic callers.
+    /// Alias for `--preview <screen>`, intended for programmatic callers.
     #[arg(long, conflicts_with = "preview")]
     pub screen: Option<String>,
     /// Select a feature/card id for dashboard or cards previews.

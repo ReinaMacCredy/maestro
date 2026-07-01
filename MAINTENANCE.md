@@ -208,6 +208,7 @@ state, or durable migration output:
 | --- | --- |
 | `install` and `skills` | Preserve install-lock ownership, pending/committed/removing recovery state, rollback, managed-block boundaries, Harness prerequisite checks, JSON restore validation, and skill symlink safety. |
 | `migrate` | Keep dry-run/check behavior non-mutating, preserve backups, document direct-write exceptions, and verify migrated artifacts through target-domain loaders where possible. |
+| `card/archive store` | Preserve live DB/file parity, archive DB snapshot readability, sidecar projection, optimistic write checks, index receipts, and loose-sweep idempotency. |
 | `update` | Keep check/update behavior separate, preserve rollback for downloaded or extracted files, report schema drift clearly, and do not apply Harness changes silently. |
 | `task` | Preserve optimistic concurrency, acceptance locking, state history, blockers, and verification binding semantics. |
 | `verification` | Keep Proof-owned reports separate from Task-owned lifecycle effects and preserve stale-snapshot handling for Proof-to-Task outcome application. |
@@ -280,6 +281,9 @@ At minimum for release-adjacent changes:
 - Install the freshly built local binary with `scripts/install-local.sh`, not
   `cp`, so running `~/.local/bin/maestro` processes keep their old executable
   inode and new invocations see an atomic replacement.
+- GitHub publishing uses the manual `Release` workflow (`workflow_dispatch`) after
+  pushing the intended commit. Verify the live latest release with `gh release view`
+  or `gh release list` before and after dispatch.
 
 Do not document or run a legacy release command unless it exists in the current
 Rust repo and has been verified in the current session.

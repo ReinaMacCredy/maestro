@@ -92,6 +92,7 @@ has callers or user data safety impact.
 | --- | --- | --- |
 | Foundation/Core | `tests/core_paths_fs.rs`, `tests/core_schema_error.rs`, `tests/core_managed_blocks.rs`, `tests/core_backup_diff_git.rs` | Any module whose safety policy uses the changed Core helper. |
 | Harness | `tests/harness_templates.rs`, `tests/init_integration.rs`, `tests/harness_backlog.rs` | `tests/install_mirrors.rs`, `tests/update_integration.rs`, and Proof tests when Harness verification config changes, backlog proposal refresh changes, or explicit Harness apply behavior changes. |
+| Card store and archive | `tests/card_commands_integration.rs`, `tests/card_query_e2e.rs`, `tests/doctor_query_integration.rs` | Feature, Task, Memory, Migration, archive, search/index, and schema tests when live/archived storage, DB snapshots, sidecars, or query output change. |
 | Task | `tests/task_lifecycle.rs`, `tests/task_artifacts.rs`, `tests/task_commands_integration.rs` | `tests/task_verify_integration.rs`, Query, TUI, and MCP tests when task state, verification binding, or layout changes. |
 | Feature | `tests/feature_decision_artifacts.rs`, `tests/feature_decision_commands_integration.rs` | Query, Doctor, TUI, and MCP tests when feature read models or output change. |
 | Decision | `tests/feature_decision_artifacts.rs`, `tests/feature_decision_commands_integration.rs` | Query, docs, schema-constant, and migration tests when decision layout or metadata changes. |
@@ -144,6 +145,10 @@ adapter and runtime-flow tests for every caller.
 If changing schema versions, path layout, managed writes, backups, rollback,
 or symlink policy, run the owning module tests plus the relevant safety,
 migration, install, or update tests.
+
+If changing Card live/archive storage, DB-backed snapshots, archive sweep, or
+card sidecar projection, run Card store tests plus at least one runtime flow that
+writes, archives, reads, and queries the affected card shape.
 
 If changing an allowed contract edge between modules, run contract tests for
 both modules and at least one runtime-flow or operation test that exercises the
