@@ -20,3 +20,4 @@
 - 2026-06-25 active-ownership-liveness: closed -- Active ownership liveness shipped; quiet sessions stay owned until explicit release/done/unconfirmed timeout.; 1 child task(s)
 - 2026-06-29 worktree-interruption-recovery: closed -- Implemented passive worktree ledger recovery and cleanup: record verbs stay non-mutating for git, status/show/handoff surface computed recovery and cleanup states, and integration coverage proves branch-reserved recovery, cleanup gates, and cleanup receipts without claiming a max-worktree root cause.; 4 child task(s)
 - 2026-06-30 tdd-default-implement-routing: closed -- IMPLEMENT method routing now exposes TDD required/skipped with proof expectations before work starts.; 1 child task(s)
+- 2026-07-01 plan-before-go-progress-setup: closed -- Implemented Progress setup-before-go workflow on codex/plan-before-go-progress-setup at 4755de06 with full Rust verification green.; 4 child task(s)
