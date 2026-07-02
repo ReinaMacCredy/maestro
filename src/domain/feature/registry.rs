@@ -449,7 +449,7 @@ pub fn set_with_report(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> 
 
 pub fn finalize(paths: &MaestroPaths, id: &str) -> Result<FinalizeReport> {
     let source_dir = finalization_source_dir(paths, id);
-    if source_dir.is_none() && live_db::contains_card_id(paths, id)? {
+    if finalize_requires_reopen(paths, id)? {
         bail!(
             "cannot finalize {id} directly from DB-backed store; run `maestro feature reopen {id}` first"
         );
@@ -494,6 +494,10 @@ pub fn finalize(paths: &MaestroPaths, id: &str) -> Result<FinalizeReport> {
         generated_at,
         next_commands,
     })
+}
+
+pub fn finalize_requires_reopen(paths: &MaestroPaths, id: &str) -> Result<bool> {
+    Ok(finalization_source_dir(paths, id).is_none() && live_db::contains_card_id(paths, id)?)
 }
 
 pub fn reopen(paths: &MaestroPaths, id: &str) -> Result<ReopenReport> {
