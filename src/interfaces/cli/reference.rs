@@ -138,6 +138,7 @@ const ASK_MAESTRO_COMMANDS: &[&str] = &[
     "maestro feature new",
     "maestro feature set",
     "maestro feature finalize",
+    "maestro feature reopen",
     "maestro feature show",
     "maestro feature list",
     "maestro decision new",
@@ -196,6 +197,7 @@ const MAESTRO_CARD_COMMANDS: &[&str] = &[
     "maestro event create",
     "maestro event intervention",
     "maestro feature finalize",
+    "maestro feature reopen",
     "maestro feature accept",
     "maestro feature prepare",
     "maestro feature amend",
@@ -270,6 +272,7 @@ const MAESTRO_DESIGN_COMMANDS: &[&str] = &[
     "maestro feature new",
     "maestro feature set",
     "maestro feature finalize",
+    "maestro feature reopen",
     "maestro feature show",
     "maestro feature spec",
     "maestro feature list",
@@ -590,6 +593,7 @@ mod tests {
         assert!(ask.contains("maestro loop next"), "{ask}");
         assert!(ask.contains("maestro task setup"), "{ask}");
         assert!(ask.contains("maestro feature finalize <ID>"), "{ask}");
+        assert!(ask.contains("maestro feature reopen <ID>"), "{ask}");
         assert!(ask.contains("maestro harness apply <ID>"), "{ask}");
         assert!(ask.contains("maestro doctor"), "{ask}");
         assert!(!ask.contains("maestro scorer"), "{ask}");
@@ -602,6 +606,7 @@ mod tests {
         assert!(card.contains("maestro task complete <ID>"), "{card}");
         assert!(card.contains("maestro loop validate <NAME>"), "{card}");
         assert!(card.contains("maestro feature finalize <ID>"), "{card}");
+        assert!(card.contains("maestro feature reopen <ID>"), "{card}");
         assert!(card.contains("maestro feature prepare <ID>"), "{card}");
         assert!(card.contains("maestro qa slice <ID>"), "{card}");
         assert!(card.contains("maestro memory"), "{card}");
@@ -614,6 +619,7 @@ mod tests {
         let design = render_cli_reference_for_skill("maestro-design");
         assert!(design.contains("maestro feature spec <ID>"), "{design}");
         assert!(design.contains("maestro feature finalize <ID>"), "{design}");
+        assert!(design.contains("maestro feature reopen <ID>"), "{design}");
         assert!(design.contains("maestro decision lock <ID>"), "{design}");
         assert!(design.contains("maestro card show <ID>"), "{design}");
         assert!(!design.contains("maestro task complete"), "{design}");

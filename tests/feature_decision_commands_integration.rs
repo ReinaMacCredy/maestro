@@ -1217,6 +1217,51 @@ fn feature_finalize_moves_authority_to_db_and_reopen_uses_workbench() {
         "finalized features stop depending on .maestro/cards/<id>"
     );
 
+    stdout(
+        maestro(
+            &[
+                "feature",
+                "spec",
+                "db-backed-contract",
+                "--section",
+                "Problem",
+                "--append",
+                "DB-backed source changed after finalize",
+            ],
+            root,
+        ),
+        &["feature", "spec", "db-backed-contract"],
+    );
+    let stale_show = stdout(
+        maestro(&["feature", "show", "db-backed-contract"], root),
+        &["feature", "show", "db-backed-contract"],
+    );
+    assert!(
+        stale_show.contains("next: maestro feature reopen db-backed-contract"),
+        "{stale_show}"
+    );
+    assert!(
+        !stale_show.contains("next: maestro feature finalize db-backed-contract"),
+        "{stale_show}"
+    );
+    let stale_finalize = assert_failure(
+        maestro(&["feature", "finalize", "db-backed-contract"], root),
+        &["feature", "finalize", "db-backed-contract"],
+    );
+    assert!(
+        stale_finalize.contains("maestro feature reopen db-backed-contract"),
+        "{stale_finalize}"
+    );
+    stdout(
+        maestro(&["feature", "reopen", "db-backed-contract"], root),
+        &["feature", "reopen", "db-backed-contract"],
+    );
+    reconcile_clean(root, "db-backed-contract");
+    stdout(
+        maestro(&["feature", "finalize", "db-backed-contract"], root),
+        &["feature", "finalize", "db-backed-contract"],
+    );
+
     let note = stdout(
         maestro(
             &[

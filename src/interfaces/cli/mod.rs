@@ -8,6 +8,7 @@ use serde::Serialize;
 
 use crate::domain::feature::FeatureStatus;
 use crate::domain::feature::FeatureView;
+use crate::domain::feature::finalize_requires_reopen;
 use crate::domain::feature::handoff_gap;
 use crate::domain::feature::read_sidecar_text;
 use crate::domain::proof;
@@ -105,10 +106,9 @@ fn feature_next_label_and_command(
                 ),
             )
         }
-        FeatureStatus::Proposed if !handoff_is_fresh(paths, view) => (
-            "run: finalize_feature",
-            format!("maestro feature finalize {}", view.id),
-        ),
+        FeatureStatus::Proposed if !handoff_is_fresh(paths, view) => {
+            handoff_repair_next(paths, view)
+        }
         FeatureStatus::Proposed if !qa_baseline_present(paths, &view.id) => (
             "template: qa_baseline",
             format!(
@@ -140,6 +140,24 @@ fn feature_next_label_and_command(
             "run: archive_feature",
             format!("maestro feature archive {}", view.id),
         ),
+    }
+}
+
+pub(crate) fn handoff_repair_command(paths: &MaestroPaths, view: &FeatureView) -> String {
+    handoff_repair_next(paths, view).1
+}
+
+fn handoff_repair_next(paths: &MaestroPaths, view: &FeatureView) -> (&'static str, String) {
+    if matches!(finalize_requires_reopen(paths, &view.id), Ok(true)) {
+        (
+            "run: reopen_feature",
+            format!("maestro feature reopen {}", view.id),
+        )
+    } else {
+        (
+            "run: finalize_feature",
+            format!("maestro feature finalize {}", view.id),
+        )
     }
 }
 
