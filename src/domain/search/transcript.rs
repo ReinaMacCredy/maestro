@@ -83,6 +83,55 @@ pub struct TranscriptStoredSegment {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CodexTranscript {
+    pub provider: TranscriptProvider,
+    pub session_id: String,
+    pub cwd: Option<String>,
+    pub workspace_roots: Vec<String>,
+    pub segments: Vec<TranscriptSegmentInput>,
+}
+
+impl CodexTranscript {
+    pub fn project_match_reasons(
+        &self,
+        current_workspace: &str,
+        explicit_session: Option<&str>,
+        scope_global: bool,
+    ) -> Vec<String> {
+        if scope_global {
+            return vec!["scope_global".to_string()];
+        }
+        if explicit_session.is_some_and(|session| session == self.session_id) {
+            return vec!["explicit_session".to_string()];
+        }
+        let mut reasons = Vec::new();
+        if self
+            .workspace_roots
+            .iter()
+            .any(|root| paths_overlap(root, current_workspace))
+        {
+            reasons.push("workspace_root".to_string());
+        }
+        if self
+            .cwd
+            .as_deref()
+            .is_some_and(|cwd| paths_overlap(cwd, current_workspace))
+        {
+            reasons.push("cwd".to_string());
+        }
+        reasons.sort();
+        reasons.dedup();
+        reasons
+    }
+
+    pub fn visible_in_project_by_default(&self, current_workspace: &str) -> bool {
+        !self
+            .project_match_reasons(current_workspace, None, false)
+            .is_empty()
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FactorySessionDescriptor {
     pub provider: TranscriptProvider,
     pub session_id: String,
@@ -268,6 +317,37 @@ pub fn global_transcript_home() -> Option<PathBuf> {
     resolve_transcript_home(env_override.as_deref(), user_home.as_deref())
 }
 
+pub fn parse_codex_transcript_jsonl(
+    contents: &str,
+    fallback_session_id: &str,
+) -> Result<CodexTranscript> {
+    let mut transcript = CodexTranscript {
+        provider: TranscriptProvider::Codex,
+        session_id: fallback_session_id.to_string(),
+        cwd: None,
+        workspace_roots: Vec::new(),
+        segments: Vec::new(),
+    };
+    for (idx, line) in contents.lines().enumerate() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let value: Value = serde_json::from_str(line)
+            .with_context(|| format!("failed to parse Codex transcript line {}", idx + 1))?;
+        match value.get("type").and_then(Value::as_str) {
+            Some("session_meta") => apply_codex_session_meta(&mut transcript, &value),
+            Some("response_item") => {
+                if let Some(segment) = codex_response_segment(&transcript, &value, idx + 1) {
+                    transcript.segments.push(segment);
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(transcript)
+}
+
 pub fn parse_claude_transcript_jsonl(
     contents: &str,
     session_id: &str,
@@ -416,6 +496,112 @@ fn note_raw_exclusion(excluded_fields: &mut Vec<String>, field: &str, value: &Op
     }
 }
 
+fn apply_codex_session_meta(transcript: &mut CodexTranscript, value: &Value) {
+    let payload = value.get("payload").unwrap_or(value);
+    if let Some(id) = string_field(payload, "id").or_else(|| string_field(value, "id")) {
+        transcript.session_id = id;
+    }
+    if let Some(cwd) = string_field(payload, "cwd").or_else(|| string_field(value, "cwd")) {
+        transcript.cwd = Some(cwd);
+    }
+    let roots = payload
+        .get("workspace_roots")
+        .or_else(|| payload.get("workspaceRoots"))
+        .or_else(|| value.get("workspace_roots"))
+        .or_else(|| value.get("workspaceRoots"))
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .filter_map(non_empty);
+    for root in roots {
+        if !transcript.workspace_roots.contains(&root) {
+            transcript.workspace_roots.push(root);
+        }
+    }
+}
+
+fn codex_response_segment(
+    transcript: &CodexTranscript,
+    value: &Value,
+    ordinal: usize,
+) -> Option<TranscriptSegmentInput> {
+    let payload = value.get("payload")?;
+    let payload_type = payload.get("type").and_then(Value::as_str)?;
+    let workspace = transcript
+        .cwd
+        .clone()
+        .or_else(|| transcript.workspace_roots.first().cloned())
+        .unwrap_or_default();
+    let segment_id = payload
+        .get("id")
+        .or_else(|| value.get("id"))
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .unwrap_or_else(|| format!("{}:{ordinal}", transcript.session_id));
+    match payload_type {
+        "message" => {
+            let role = payload.get("role").and_then(Value::as_str)?;
+            if !matches!(role, "user" | "assistant") {
+                return None;
+            }
+            let text = json_text(payload.get("content"))?;
+            if is_bootstrap_context_text(&text) {
+                return None;
+            }
+            Some(TranscriptSegmentInput {
+                provider: TranscriptProvider::Codex,
+                session_id: transcript.session_id.clone(),
+                segment_id,
+                source_kind: format!("codex_{role}_message"),
+                workspace,
+                text,
+                raw_tool_arguments: None,
+                raw_tool_output: None,
+                raw_reasoning: None,
+                raw_environment: None,
+            })
+        }
+        "function_call" => {
+            let name = payload
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown");
+            Some(TranscriptSegmentInput {
+                provider: TranscriptProvider::Codex,
+                session_id: transcript.session_id.clone(),
+                segment_id,
+                source_kind: "codex_tool_call".to_string(),
+                workspace,
+                text: format!("tool call: {name}"),
+                raw_tool_arguments: payload.get("arguments").map(json_value_string),
+                raw_tool_output: None,
+                raw_reasoning: None,
+                raw_environment: None,
+            })
+        }
+        "function_call_output" => {
+            let name = payload
+                .get("call_id")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown");
+            Some(TranscriptSegmentInput {
+                provider: TranscriptProvider::Codex,
+                session_id: transcript.session_id.clone(),
+                segment_id,
+                source_kind: "codex_tool_output".to_string(),
+                workspace,
+                text: format!("tool output: {name}"),
+                raw_tool_arguments: None,
+                raw_tool_output: payload.get("output").map(json_value_string),
+                raw_reasoning: None,
+                raw_environment: None,
+            })
+        }
+        _ => None,
+    }
+}
+
 fn json_text(value: Option<&Value>) -> Option<String> {
     match value? {
         Value::String(text) => non_empty(text),
@@ -454,6 +640,18 @@ fn string_field(value: &Value, field: &str) -> Option<String> {
 fn non_empty(text: &str) -> Option<String> {
     let trimmed = text.trim();
     (!trimmed.is_empty()).then(|| trimmed.to_string())
+}
+
+fn is_bootstrap_context_text(text: &str) -> bool {
+    let trimmed = text.trim_start();
+    trimmed.starts_with("# AGENTS.md instructions")
+        || (trimmed.contains("<INSTRUCTIONS>") && trimmed.contains("<environment_context>"))
+}
+
+fn paths_overlap(left: &str, right: &str) -> bool {
+    let left = Path::new(left);
+    let right = Path::new(right);
+    left == right || left.starts_with(right) || right.starts_with(left)
 }
 
 fn redact_text(text: &str) -> (String, Vec<String>) {
