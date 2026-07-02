@@ -1,8 +1,10 @@
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::domain::search::query::ParsedQuery;
 use crate::domain::search::types::{
@@ -78,6 +80,29 @@ pub struct TranscriptStoredSegment {
     pub redacted_text_hash: String,
     pub redaction: TranscriptRedactionMetadata,
     pub excluded_fields: Vec<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FactorySessionDescriptor {
+    pub provider: TranscriptProvider,
+    pub session_id: String,
+    pub session_path: Option<String>,
+    pub directory_path: Option<String>,
+    pub workspace: Option<String>,
+    pub mission_id: Option<String>,
+    pub session_type: Option<String>,
+    pub title: Option<String>,
+    pub message_count: Option<u64>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FactoryMissionDescriptor {
+    pub provider: TranscriptProvider,
+    pub mission_id: String,
+    pub base_session_id: Option<String>,
+    pub workspace: Option<String>,
+    pub worker_session_ids: Vec<String>,
+    pub state: Option<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -243,6 +268,118 @@ pub fn global_transcript_home() -> Option<PathBuf> {
     resolve_transcript_home(env_override.as_deref(), user_home.as_deref())
 }
 
+pub fn parse_claude_transcript_jsonl(
+    contents: &str,
+    session_id: &str,
+    workspace: &str,
+) -> Result<Vec<TranscriptSegmentInput>> {
+    let mut segments = Vec::new();
+    for (idx, line) in contents.lines().enumerate() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let value: Value = serde_json::from_str(line)
+            .with_context(|| format!("failed to parse Claude transcript line {}", idx + 1))?;
+        let Some(record_type) = value.get("type").and_then(Value::as_str) else {
+            continue;
+        };
+        let segment_id = value
+            .get("uuid")
+            .or_else(|| value.get("id"))
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .unwrap_or_else(|| format!("{session_id}:{}", idx + 1));
+        match record_type {
+            "user" | "assistant" => {
+                let Some(text) = json_text(value.get("content")) else {
+                    continue;
+                };
+                segments.push(TranscriptSegmentInput {
+                    provider: TranscriptProvider::Claude,
+                    session_id: session_id.to_string(),
+                    segment_id,
+                    source_kind: format!("claude_{record_type}_message"),
+                    workspace: workspace.to_string(),
+                    text,
+                    raw_tool_arguments: None,
+                    raw_tool_output: None,
+                    raw_reasoning: None,
+                    raw_environment: None,
+                });
+            }
+            "tool_use" | "tool_result" => {
+                let tool_name = value
+                    .get("tool_name")
+                    .and_then(Value::as_str)
+                    .unwrap_or("unknown");
+                segments.push(TranscriptSegmentInput {
+                    provider: TranscriptProvider::Claude,
+                    session_id: session_id.to_string(),
+                    segment_id,
+                    source_kind: format!("claude_{record_type}"),
+                    workspace: workspace.to_string(),
+                    text: format!("{}: {tool_name}", record_type.replace('_', " ")),
+                    raw_tool_arguments: value.get("tool_input").map(Value::to_string),
+                    raw_tool_output: value.get("tool_output").map(json_value_string),
+                    raw_reasoning: None,
+                    raw_environment: None,
+                });
+            }
+            _ => {}
+        }
+    }
+    Ok(segments)
+}
+
+pub fn parse_factory_discovery_index(contents: &str) -> Result<Vec<FactorySessionDescriptor>> {
+    let value: Value =
+        serde_json::from_str(contents).context("failed to parse Factory discovery index")?;
+    let entries = value
+        .get("entries")
+        .and_then(Value::as_object)
+        .ok_or_else(|| anyhow::anyhow!("Factory discovery index missing entries object"))?;
+    let mut parsed = Vec::new();
+    let sorted: BTreeMap<_, _> = entries.iter().collect();
+    for (key, entry) in sorted {
+        parsed.push(FactorySessionDescriptor {
+            provider: TranscriptProvider::Factory,
+            session_id: string_field(entry, "id").unwrap_or_else(|| key.to_string()),
+            session_path: string_field(entry, "sessionPath"),
+            directory_path: string_field(entry, "directoryPath"),
+            workspace: string_field(entry, "cwd"),
+            mission_id: string_field(entry, "decompMissionId"),
+            session_type: string_field(entry, "decompSessionType"),
+            title: string_field(entry, "sessionTitle").or_else(|| string_field(entry, "title")),
+            message_count: entry.get("messageCount").and_then(Value::as_u64),
+        });
+    }
+    Ok(parsed)
+}
+
+pub fn parse_factory_mission_state(contents: &str) -> Result<FactoryMissionDescriptor> {
+    let value: Value =
+        serde_json::from_str(contents).context("failed to parse Factory mission state")?;
+    let mission_id = string_field(&value, "missionId")
+        .ok_or_else(|| anyhow::anyhow!("Factory mission state missing missionId"))?;
+    let worker_session_ids = value
+        .get("workerSessionIds")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .map(str::to_string)
+        .collect();
+    Ok(FactoryMissionDescriptor {
+        provider: TranscriptProvider::Factory,
+        mission_id,
+        base_session_id: string_field(&value, "baseSessionId"),
+        workspace: string_field(&value, "workingDirectory"),
+        worker_session_ids,
+        state: string_field(&value, "state"),
+    })
+}
+
 pub(crate) fn unavailable_diagnostic() -> SearchDiagnostic {
     SearchDiagnostic::error(
         "transcript_corpus_unavailable",
@@ -277,6 +414,46 @@ fn note_raw_exclusion(excluded_fields: &mut Vec<String>, field: &str, value: &Op
     if value.is_some() {
         excluded_fields.push(field.to_string());
     }
+}
+
+fn json_text(value: Option<&Value>) -> Option<String> {
+    match value? {
+        Value::String(text) => non_empty(text),
+        Value::Array(items) => {
+            let parts: Vec<String> = items
+                .iter()
+                .filter_map(|item| match item {
+                    Value::String(text) => non_empty(text),
+                    Value::Object(_) => {
+                        item.get("text").and_then(Value::as_str).and_then(non_empty)
+                    }
+                    _ => None,
+                })
+                .collect();
+            non_empty(&parts.join("\n"))
+        }
+        Value::Object(_) => value?
+            .get("text")
+            .and_then(Value::as_str)
+            .and_then(non_empty),
+        _ => None,
+    }
+}
+
+fn json_value_string(value: &Value) -> String {
+    value
+        .as_str()
+        .map(str::to_string)
+        .unwrap_or_else(|| value.to_string())
+}
+
+fn string_field(value: &Value, field: &str) -> Option<String> {
+    value.get(field).and_then(Value::as_str).and_then(non_empty)
+}
+
+fn non_empty(text: &str) -> Option<String> {
+    let trimmed = text.trim();
+    (!trimmed.is_empty()).then(|| trimmed.to_string())
 }
 
 fn redact_text(text: &str) -> (String, Vec<String>) {
