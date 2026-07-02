@@ -78,18 +78,15 @@ pub fn run(args: ActiveArgs) -> Result<()> {
         &roots, &rows,
     )?);
 
-    let shown: Vec<&SessionActivity> = rows
-        .iter()
-        .filter(|row| all || row.presence != Presence::Stale)
-        .collect();
-    let hidden_stale = rows.len() - shown.len();
+    let selection = select_rows(&rows, all);
+    let shown = selection.shown;
 
     if shown.is_empty() {
         println!("No active sessions.");
-        if hidden_stale > 0 {
-            println!("({hidden_stale} stale; --all to show)");
+        render_hidden_summary(&selection.hidden);
+        if all {
+            println!("{}", complete_harness.scheduler_summary_line());
         }
-        println!("{}", complete_harness.scheduler_summary_line());
         return Ok(());
     }
 
@@ -102,13 +99,15 @@ pub fn run(args: ActiveArgs) -> Result<()> {
     let activity_hints = activity_hints_by_session(&paths, &roots, &shown);
     render_table(&shown, &by_id, &cards, &me, your_card, &activity_hints);
 
-    if hidden_stale > 0 {
+    if !selection.hidden.is_empty() {
         println!();
-        println!("({hidden_stale} stale hidden; --all to show)");
+        render_hidden_summary(&selection.hidden);
     }
-    println!();
-    println!("{}", complete_harness.summary_line());
-    println!("{}", complete_harness.scheduler_summary_line());
+    if all {
+        println!();
+        println!("{}", complete_harness.summary_line());
+        println!("{}", complete_harness.scheduler_summary_line());
+    }
 
     render_link_hint(&shown, &by_id, &me, your_card, connect);
     Ok(())
@@ -147,6 +146,77 @@ fn render_scope_overlap_advisories(overlaps: &[run::DeclaredScopeOverlap]) {
         );
     }
     println!();
+}
+
+struct ActiveSelection<'a> {
+    shown: Vec<&'a SessionActivity>,
+    hidden: HiddenRows,
+}
+
+#[derive(Default)]
+struct HiddenRows {
+    inactive: usize,
+    duplicates: usize,
+}
+
+impl HiddenRows {
+    fn is_empty(&self) -> bool {
+        self.inactive == 0 && self.duplicates == 0
+    }
+}
+
+fn select_rows(rows: &[SessionActivity], all: bool) -> ActiveSelection<'_> {
+    if all {
+        return ActiveSelection {
+            shown: rows.iter().collect(),
+            hidden: HiddenRows::default(),
+        };
+    }
+
+    let mut hidden = HiddenRows::default();
+    let mut seen_work: HashSet<&str> = HashSet::new();
+    let mut shown = Vec::new();
+    for row in rows {
+        if !default_active_presence(row.presence) {
+            hidden.inactive += 1;
+            continue;
+        }
+
+        let key = row.bound_card.as_deref().unwrap_or(row.session_id.as_str());
+        if !seen_work.insert(key) {
+            hidden.duplicates += 1;
+            continue;
+        }
+        shown.push(row);
+    }
+
+    ActiveSelection { shown, hidden }
+}
+
+fn default_active_presence(presence: Presence) -> bool {
+    matches!(
+        presence,
+        Presence::Working | Presence::QuietWorking | Presence::Waiting
+    )
+}
+
+fn render_hidden_summary(hidden: &HiddenRows) {
+    if hidden.is_empty() {
+        return;
+    }
+
+    let mut parts = Vec::new();
+    if hidden.inactive > 0 {
+        parts.push(format!("{} inactive hidden", hidden.inactive));
+    }
+    if hidden.duplicates > 0 {
+        parts.push(format!(
+            "{} duplicate session{} hidden",
+            hidden.duplicates,
+            if hidden.duplicates == 1 { "" } else { "s" }
+        ));
+    }
+    println!("({}; --all to show)", parts.join(", "));
 }
 
 /// Whether the live cards `a` and `b` share a `related` edge in either
@@ -464,11 +534,13 @@ fn render_link_hint(
     your_card: Option<&str>,
     connect: bool,
 ) {
+    let mut seen_peers = HashSet::new();
     let peers: Vec<&str> = shown
         .iter()
         .filter(|row| row.session_id != me)
         .filter_map(|row| row.bound_card.as_deref())
         .filter(|peer| your_card != Some(*peer))
+        .filter(|peer| seen_peers.insert(*peer))
         .collect();
     if peers.is_empty() {
         return;
@@ -499,19 +571,20 @@ fn render_link_hint(
         println!();
         if connect {
             println!("suggested coordination:");
-        } else {
-            println!("linked -- message them:");
-        }
-        for their_card in &linked {
-            if connect {
+            for their_card in &linked {
                 let your = your_card.unwrap_or("<your-card>");
                 println!("  message:");
                 println!("    maestro msg send --from {your} {their_card} \"<text>\"");
                 println!("  conflict notice:");
                 println!("    maestro conflict {their_card} \"<why>\"");
-            } else {
-                println!("  maestro msg send {their_card} \"<text>\"");
             }
+        } else {
+            println!(
+                "linked: {} messageable card{}; run maestro active --connect for commands",
+                linked.len(),
+                if linked.len() == 1 { "" } else { "s" }
+            );
+            println!("  {}", linked.join(", "));
         }
     }
 
@@ -520,21 +593,21 @@ fn render_link_hint(
         println!();
         if connect {
             println!("suggested coordination:");
-        } else {
-            println!("related? link, then message:");
-        }
-        for their_card in &unlinked {
-            if connect {
+            for their_card in &unlinked {
                 println!("  link:");
                 println!("    maestro link add {your} {their_card}");
                 println!("  message:");
                 println!("    maestro msg send --from {your} {their_card} \"<text>\"");
                 println!("  conflict notice:");
                 println!("    maestro conflict {their_card} \"<why>\"");
-            } else {
-                println!("  maestro link add {your} {their_card}");
-                println!("  maestro msg send {their_card} \"<text>\"");
             }
+        } else {
+            println!(
+                "related: {} unlinked card{}; run maestro active --connect for link/message commands",
+                unlinked.len(),
+                if unlinked.len() == 1 { "" } else { "s" }
+            );
+            println!("  {}", unlinked.join(", "));
         }
     }
 }
@@ -857,6 +930,33 @@ mod tests {
         let mut r = row(session, bound);
         r.presence = presence;
         r
+    }
+
+    #[test]
+    fn default_selection_keeps_only_actionable_rows_and_collapses_duplicate_cards() {
+        let rows = vec![
+            row("meS", Some("task-1")),
+            row("peer-1", Some("task-2")),
+            row("peer-2", Some("task-2")),
+            presence_row("idle", Some("task-3"), Presence::Idle),
+            stale_row("stale", Some("task-4")),
+        ];
+
+        let default = select_rows(&rows, false);
+        assert_eq!(
+            default
+                .shown
+                .iter()
+                .map(|row| row.session_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["meS", "peer-1"]
+        );
+        assert_eq!(default.hidden.duplicates, 1);
+        assert_eq!(default.hidden.inactive, 2);
+
+        let all = select_rows(&rows, true);
+        assert_eq!(all.shown.len(), rows.len());
+        assert!(all.hidden.is_empty());
     }
 
     #[test]

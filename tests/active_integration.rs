@@ -108,6 +108,12 @@ fn ownership_acquire_event(session: &str, card: &str, ts: &str) -> String {
     )
 }
 
+fn ownership_release_event(session: &str, card: &str, status: &str, ts: &str) -> String {
+    format!(
+        r#"{{"event_type":"ownership_release","session_id":"{session}","card_id":"{card}","status":"{status}","ts":"{ts}"}}"#
+    )
+}
+
 fn stop_event(session: &str, ts: &str) -> String {
     format!(r#"{{"event_type":"Stop","session_id":"{session}","ts":"{ts}"}}"#)
 }
@@ -175,6 +181,10 @@ fn line_with<'a>(output: &'a str, needle: &str) -> &'a str {
         .lines()
         .find(|line| line.contains(needle))
         .unwrap_or_else(|| panic!("expected a line containing {needle:?}\n{output}"))
+}
+
+fn occurrence_count(output: &str, needle: &str) -> usize {
+    output.matches(needle).count()
 }
 
 #[test]
@@ -404,6 +414,189 @@ fn all_reveals_stale_sessions_hidden_by_default() {
 }
 
 #[test]
+fn default_active_hides_non_actionable_rows_and_diagnostics_with_all_escape_hatch() {
+    let temp = cards_repo("active-compact-default");
+    let repo = temp.path();
+    let working = create_id(repo, &["-t", "task", "Working card"]);
+    let quiet = create_id(repo, &["-t", "task", "Quiet card"]);
+    let idle = create_id(repo, &["-t", "task", "Idle card"]);
+    let released = create_id(repo, &["-t", "task", "Released card"]);
+    let done = create_id(repo, &["-t", "task", "Done card"]);
+    let unconfirmed = create_id(repo, &["-t", "task", "Unconfirmed card"]);
+    let stale = create_id(repo, &["-t", "task", "Stale card"]);
+    clear_runs(repo);
+
+    seed_run(
+        repo,
+        "working-sess",
+        &[
+            skill_event("working-sess", "maestro-card", &ts_minutes_ago(1)),
+            card_touch_event("working-sess", &working, &ts_minutes_ago(1)),
+        ],
+    );
+    seed_run(
+        repo,
+        "quiet-sess",
+        &[ownership_acquire_event(
+            "quiet-sess",
+            &quiet,
+            &ts_minutes_ago(10),
+        )],
+    );
+    seed_run(
+        repo,
+        "waiting-sess",
+        &[
+            skill_event("waiting-sess", "maestro-card", &ts_minutes_ago(2)),
+            stop_event("waiting-sess", &ts_minutes_ago(1)),
+        ],
+    );
+    seed_run(
+        repo,
+        "idle-sess",
+        &[card_touch_event("idle-sess", &idle, &ts_minutes_ago(10))],
+    );
+    seed_run(
+        repo,
+        "released-sess",
+        &[ownership_release_event(
+            "released-sess",
+            &released,
+            "released",
+            &ts_minutes_ago(10),
+        )],
+    );
+    seed_run(
+        repo,
+        "done-sess",
+        &[ownership_release_event(
+            "done-sess",
+            &done,
+            "done",
+            &ts_minutes_ago(10),
+        )],
+    );
+    seed_run(
+        repo,
+        "unconfirmed-sess",
+        &[ownership_acquire_event(
+            "unconfirmed-sess",
+            &unconfirmed,
+            &ts_minutes_ago(121),
+        )],
+    );
+    seed_run(
+        repo,
+        "stale-sess",
+        &[card_touch_event("stale-sess", &stale, &ts_minutes_ago(40))],
+    );
+
+    let default = run(repo, &[], &["active"]);
+    assert!(default.contains("working-sess"), "{default}");
+    assert!(default.contains("quiet-sess"), "{default}");
+    assert!(default.contains("waiting-sess"), "{default}");
+    assert!(!default.contains("idle-sess"), "{default}");
+    assert!(!default.contains("released-sess"), "{default}");
+    assert!(!default.contains("done-sess"), "{default}");
+    assert!(!default.contains("unconfirmed-sess"), "{default}");
+    assert!(!default.contains("stale-sess"), "{default}");
+    assert!(
+        !default.contains("harness:"),
+        "default active board should omit harness diagnostics\n{default}"
+    );
+    assert!(
+        default.contains("inactive hidden") && default.contains("--all to show"),
+        "default output should name hidden inactive rows compactly\n{default}"
+    );
+
+    let all = run(repo, &[], &["active", "--all"]);
+    for session in [
+        "working-sess",
+        "quiet-sess",
+        "waiting-sess",
+        "idle-sess",
+        "released-sess",
+        "done-sess",
+        "unconfirmed-sess",
+        "stale-sess",
+    ] {
+        assert!(
+            all.contains(session),
+            "--all should reveal {session}\n{all}"
+        );
+    }
+    assert!(
+        all.contains("harness:"),
+        "--all keeps the historical diagnostic footer\n{all}"
+    );
+}
+
+#[test]
+fn active_connect_dedupes_related_commands_by_target_card() {
+    let temp = cards_repo("active-connect-dedupes");
+    let repo = temp.path();
+
+    let mine = create_id(repo, &["-t", "task", "Mine"]);
+    let peer = create_id(repo, &["-t", "task", "Peer"]);
+    clear_runs(repo);
+
+    let recent = ts_minutes_ago(1);
+    seed_run(
+        repo,
+        "you-sess",
+        &[
+            skill_event("you-sess", "maestro-card", &recent),
+            card_touch_event("you-sess", &mine, &recent),
+        ],
+    );
+    seed_run(
+        repo,
+        "peer-one",
+        &[
+            skill_event("peer-one", "maestro-card", &recent),
+            card_touch_event("peer-one", &peer, &recent),
+        ],
+    );
+    seed_run(
+        repo,
+        "peer-two",
+        &[
+            skill_event("peer-two", "maestro-card", &recent),
+            card_touch_event("peer-two", &peer, &recent),
+        ],
+    );
+
+    let default = run(repo, &[("MAESTRO_SESSION_ID", "you-sess")], &["active"]);
+    assert!(
+        default.contains("related:") && default.contains("maestro active --connect"),
+        "default output should collapse related guidance behind --connect\n{default}"
+    );
+    assert!(
+        !default.contains(&format!("maestro link add {mine} {peer}")),
+        "default output should not print repeated link commands\n{default}"
+    );
+
+    let connect = run(
+        repo,
+        &[("MAESTRO_SESSION_ID", "you-sess")],
+        &["active", "--connect"],
+    );
+    assert_eq!(
+        occurrence_count(&connect, &format!("maestro link add {mine} {peer}")),
+        1,
+        "connect should print one link command per target card\n{connect}"
+    );
+    assert_eq!(
+        occurrence_count(
+            &connect,
+            &format!("maestro msg send --from {mine} {peer} \"<text>\"")
+        ),
+        1,
+        "connect should print one message command per target card\n{connect}"
+    );
+}
+
+#[test]
 fn recent_stop_reads_as_waiting_not_excluded() {
     // bl-003: a session whose latest event is a recent Stop is present and
     // labelled `[waiting]`, not filtered out.
@@ -432,7 +625,7 @@ fn recent_stop_reads_as_waiting_not_excluded() {
 }
 
 #[test]
-fn ownership_events_keep_quiet_and_unconfirmed_sessions_visible() {
+fn ownership_events_keep_quiet_sessions_visible_and_moves_old_context_to_all() {
     let temp = cards_repo("active-ownership-states");
     let repo = temp.path();
     let owned = create_id(repo, &["-t", "task", "Owned card"]);
@@ -475,12 +668,22 @@ fn ownership_events_keep_quiet_and_unconfirmed_sessions_visible() {
         "owned quiet session stays owned\n{out}"
     );
     assert!(
-        line_with(&out, "touch-sess").contains("[idle"),
-        "card_touch alone remains recency-idle context\n{out}"
+        !out.contains("touch-sess"),
+        "card_touch-only idle context is hidden from the compact default\n{out}"
     );
     assert!(
-        line_with(&out, "old-owned-sess").contains("[unconfirmed"),
-        "owned session past two hours is still visible by default\n{out}"
+        !out.contains("old-owned-sess"),
+        "owned session past two hours moves behind --all\n{out}"
+    );
+
+    let all = run(repo, &[], &["active", "--all"]);
+    assert!(
+        line_with(&all, "touch-sess").contains("[idle"),
+        "card_touch-only idle context remains available through --all\n{all}"
+    );
+    assert!(
+        line_with(&all, "old-owned-sess").contains("[unconfirmed"),
+        "owned session past two hours remains auditable through --all\n{all}"
     );
 }
 
@@ -626,7 +829,7 @@ fn generic_card_status_updates_release_instead_of_reacquire() {
         "terminal status updates should release after the acquire\n{events}"
     );
 
-    let active = run(repo, &[], &["active"]);
+    let active = run(repo, &[], &["active", "--all"]);
     let line = line_with(&active, "status-sess");
     assert!(
         line.contains("[done") && !line.contains("[quiet-working"),
@@ -651,7 +854,7 @@ fn active_release_records_release_without_changing_card_status() {
         "release command receipt\n{out}"
     );
 
-    let active = run(repo, &[], &["active"]);
+    let active = run(repo, &[], &["active", "--all"]);
     assert!(
         line_with(&active, "owner-sess").contains("[idle/released"),
         "release event is visible as idle/released\n{active}"
@@ -711,7 +914,7 @@ fn task_claim_and_complete_emit_ownership_lifecycle() {
             "GREEN: done",
         ],
     );
-    let completed = run(repo, &[], &["active"]);
+    let completed = run(repo, &[], &["active", "--all"]);
     assert!(
         line_with(&completed, "owner-sess").contains("[done"),
         "successful task complete releases ownership as done\n{completed}"
@@ -776,7 +979,7 @@ fn direct_task_verify_after_recovery_releases_ownership() {
         &["task", "verify", &task],
     );
 
-    let active = run(repo, &[], &["active"]);
+    let active = run(repo, &[], &["active", "--all"]);
     assert!(
         line_with(&active, "verify-sess").contains("[done"),
         "direct task verify should release ownership as done\n{active}"
@@ -831,7 +1034,7 @@ fn terminal_task_transitions_release_ownership() {
         ],
     );
 
-    let active = run(repo, &[], &["active"]);
+    let active = run(repo, &[], &["active", "--all"]);
     assert!(
         line_with(&active, "reject-sess").contains("[done"),
         "reject should release ownership as done\n{active}"
@@ -1007,7 +1210,7 @@ fn feature_prepare_start_and_close_emit_ownership_lifecycle() {
         &[("MAESTRO_SESSION_ID", "close-sess")],
         &["feature", "close", "closable-feature", "--outcome", "done"],
     );
-    let closed = run(repo, &[], &["active"]);
+    let closed = run(repo, &[], &["active", "--all"]);
     assert!(
         line_with(&closed, "close-sess").contains("[done"),
         "feature close releases ownership as done\n{closed}"
@@ -1015,10 +1218,10 @@ fn feature_prepare_start_and_close_emit_ownership_lifecycle() {
 }
 
 #[test]
-fn prints_copy_pasteable_link_hint_and_creates_no_edge() {
-    // bl-005: output carries a `maestro link add <your-card> <their-card>`
-    // template referencing the peer's card id; running `active` creates no
-    // related edge as a side effect.
+fn default_collapses_link_hint_and_creates_no_edge() {
+    // bl-005: default output points at the peer's card without auto-linking; the
+    // copy-pasteable command expansion lives behind `--connect` so the routine
+    // board stays compact.
     let temp = cards_repo("active-bl005");
     let repo = temp.path();
 
@@ -1038,14 +1241,17 @@ fn prints_copy_pasteable_link_hint_and_creates_no_edge() {
     // Running session has no bucket yet (active as a first step), so `<your-card>`
     // stays a literal placeholder.
     let out = run(repo, &[("MAESTRO_SESSION_ID", "you-sess")], &["active"]);
-    assert!(out.contains("maestro link add"), "link hint present\n{out}");
+    assert!(
+        out.contains("related:") && out.contains("maestro active --connect"),
+        "compact related hint present\n{out}"
+    );
     assert!(
         out.contains("peer-topic"),
         "hint names the peer card\n{out}"
     );
     assert!(
-        out.contains("<your-card>"),
-        "no bound card yet -> literal placeholder\n{out}"
+        !out.contains("maestro link add"),
+        "default output should not print full link commands\n{out}"
     );
 
     let show = run(repo, &[], &["show", "peer-topic"]);
@@ -1093,23 +1299,39 @@ fn link_column_and_footer_reflect_existing_related_edges() {
         "unlinked peer row does not read linked\n{out}"
     );
 
-    // Footer: link the unlinked peer (not the linked one), and offer a ready
-    // `msg send` template addressing each peer by full card id.
+    // Default footer: summarizes link/message opportunities without expanding
+    // full command pairs.
     assert!(
-        out.contains(format!("maestro link add {a} {c}").as_str()),
-        "footer suggests linking the unlinked peer\n{out}"
+        out.contains("related:") && out.contains("maestro active --connect"),
+        "default footer points at the explicit command expansion\n{out}"
     );
     assert!(
-        !out.contains(format!("maestro link add {a} {b}").as_str()),
-        "footer must not re-suggest an already-linked peer\n{out}"
+        !out.contains(format!("maestro link add {a} {c}").as_str()),
+        "default footer must not print full link commands\n{out}"
+    );
+
+    let connect = run(
+        repo,
+        &[("MAESTRO_SESSION_ID", "you-sess")],
+        &["active", "--connect"],
+    );
+    // Expanded footer: link the unlinked peer (not the linked one), and offer a
+    // ready `msg send` template addressing each peer by full card id.
+    assert!(
+        connect.contains(format!("maestro link add {a} {c}").as_str()),
+        "expanded footer suggests linking the unlinked peer\n{connect}"
     );
     assert!(
-        out.contains(format!("maestro msg send {b} \"<text>\"").as_str()),
-        "footer offers a msg-send template addressing the already-linked peer by id\n{out}"
+        !connect.contains(format!("maestro link add {a} {b}").as_str()),
+        "expanded footer must not re-suggest an already-linked peer\n{connect}"
     );
     assert!(
-        out.contains(format!("maestro msg send {c} \"<text>\"").as_str()),
-        "footer offers a msg-send template for the unlinked peer too (link, then message)\n{out}"
+        connect.contains(format!("maestro msg send --from {a} {b} \"<text>\"").as_str()),
+        "expanded footer offers a msg-send template addressing the already-linked peer by id\n{connect}"
+    );
+    assert!(
+        connect.contains(format!("maestro msg send --from {a} {c} \"<text>\"").as_str()),
+        "expanded footer offers a msg-send template for the unlinked peer too (link, then message)\n{connect}"
     );
 }
 
@@ -1163,18 +1385,24 @@ fn link_hint_drops_terminal_peers_but_keeps_already_linked() {
         "no link-add suggestion for a terminal peer\n{out}"
     );
 
+    let connect = run(
+        repo,
+        &[("MAESTRO_SESSION_ID", "you-sess")],
+        &["active", "--connect"],
+    );
+
     // The already-linked terminal peer still reads 'linked' and stays messageable.
     assert!(
         line_with(&out, "peer-ally").contains("linked"),
         "already-linked terminal peer still reads linked\n{out}"
     );
     assert!(
-        out.contains(format!("maestro msg send {ally} \"<text>\"").as_str()),
-        "already-linked terminal peer still offers a msg-send template\n{out}"
+        connect.contains(format!("maestro msg send --from {a} {ally} \"<text>\"").as_str()),
+        "already-linked terminal peer still offers a msg-send template\n{connect}"
     );
     // Every unlinked peer is terminal, so the link suggestion section is absent.
     assert!(
-        !out.contains("related? link"),
+        !connect.contains("maestro link add"),
         "no link suggestion section when every unlinked peer is terminal\n{out}"
     );
 }
