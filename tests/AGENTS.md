@@ -10,9 +10,9 @@ runtime flows, safety surfaces, resources, and architecture import boundaries.
 | Task | Location | Notes |
 | --- | --- | --- |
 | Import boundaries | `architecture_imports.rs` | Required for module moves and facade policy changes. |
-| Task behavior | `task_lifecycle.rs`, `task_artifacts.rs`, `task_commands_integration.rs` | Pair domain and CLI checks as needed. |
+| Task behavior | `task_artifacts.rs`, `task_commands_integration.rs`, `task_verify_integration.rs` | Pair artifact, CLI, and verification checks as needed. |
 | Verification | `task_verify_integration.rs` | Main Proof-to-Task workflow coverage. |
-| Install and skills | `install_mirrors.rs`, `install_uninstall_integration.rs`, `skills_*` | Mirrors, locks, symlinks, extraction, rollback. |
+| Install and skills | `install_mirrors.rs`, `install_uninstall_integration.rs`, `global_skills_integration.rs`, `skills_symlink_integration.rs`, `setup_skill_context_readin.rs` | Mirrors, locks, symlinks, extraction, rollback. |
 | Harness | `harness_templates.rs`, `harness_backlog.rs`, `init_integration.rs` | Template, config, backlog, init output. |
 | Run/hooks | `hook_record_integration.rs`, `run_evidence_integration.rs` | Event append and evidence derivation. |
 | Update/schema drift | `update_integration.rs` | User-owned artifact safety and compatibility reporting. |

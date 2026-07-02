@@ -2,13 +2,14 @@
 //! clap's error stays verbatim (exit 2 preserved) plus exactly one `fix:`
 //! recovery line, so a guessed verb never strands an agent without a next step.
 
-use std::process::Command;
+mod common;
+use std::path::Path;
+use std::process::Output;
 
-fn maestro(args: &[&str]) -> std::process::Output {
-    Command::new(env!("CARGO_BIN_EXE_maestro"))
-        .args(args)
-        .output()
-        .expect("invariant: compiled maestro binary should be runnable")
+use common::cli_harness::maestro as cli_maestro;
+
+fn maestro(args: &[&str]) -> Output {
+    cli_maestro(Path::new(".")).args(args).output().into_raw()
 }
 
 #[test]

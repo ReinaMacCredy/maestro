@@ -1,17 +1,17 @@
+mod common;
 mod support;
 
 use std::path::Path;
-use std::process::Command;
 
+use common::cli_harness::maestro as cli_maestro;
 use support::TestTempDir;
 
 fn maestro(cwd: &Path, home: &Path, args: &[&str]) -> std::process::Output {
-    Command::new(env!("CARGO_BIN_EXE_maestro"))
+    cli_maestro(cwd)
         .args(args)
-        .current_dir(cwd)
-        .env("HOME", home)
+        .env("HOME", home.as_os_str())
         .output()
-        .expect("invariant: compiled maestro binary should run in integration tests")
+        .into_raw()
 }
 
 fn assert_success(output: &std::process::Output, args: &[&str]) {

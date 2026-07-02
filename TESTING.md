@@ -93,7 +93,7 @@ has callers or user data safety impact.
 | Foundation/Core | `tests/core_paths_fs.rs`, `tests/core_schema_error.rs`, `tests/core_managed_blocks.rs`, `tests/core_backup_diff_git.rs` | Any module whose safety policy uses the changed Core helper. |
 | Harness | `tests/harness_templates.rs`, `tests/init_integration.rs`, `tests/harness_backlog.rs` | `tests/install_mirrors.rs`, `tests/update_integration.rs`, and Proof tests when Harness verification config changes, backlog proposal refresh changes, or explicit Harness apply behavior changes. |
 | Card store and archive | `tests/card_commands_integration.rs`, `tests/card_query_e2e.rs`, `tests/doctor_query_integration.rs` | Feature, Task, Memory, Migration, archive, search/index, and schema tests when live/archived storage, DB snapshots, sidecars, or query output change. |
-| Task | `tests/task_lifecycle.rs`, `tests/task_artifacts.rs`, `tests/task_commands_integration.rs` | `tests/task_verify_integration.rs`, Query, TUI, and MCP tests when task state, verification binding, or layout changes. |
+| Task | `tests/task_artifacts.rs`, `tests/task_commands_integration.rs`, `tests/task_verify_integration.rs` | Query, TUI, and MCP tests when task state, verification binding, or layout changes. |
 | Feature | `tests/feature_decision_artifacts.rs`, `tests/feature_decision_commands_integration.rs` | Query, Doctor, TUI, and MCP tests when feature read models or output change. |
 | Decision | `tests/feature_decision_artifacts.rs`, `tests/feature_decision_commands_integration.rs` | Query, docs, schema-constant, and migration tests when decision layout or metadata changes. |
 | Run | `tests/hook_record_integration.rs`, `tests/run_evidence_integration.rs` | `tests/task_verify_integration.rs` and `tests/harness_integration.rs` when event proof, concurrency, evidence regeneration, or harness intervention detection change. |
@@ -101,8 +101,8 @@ has callers or user data safety impact.
 | Memory | `tests/memory_commands_integration.rs` plus module-local tests in `src/domain/memory` and `src/operations/memory` | Card, Status/Resume, Work Lease, Scorer, Proof/QA, resource guard, and architecture-import tests when Memory card shape, suggestion queue, scorer receipts, promotion gates, approved-Memory injection, or maintenance contracts change. |
 | Install | `tests/install_mirrors.rs`, `tests/install_uninstall_integration.rs`, `tests/skills_symlink_integration.rs` | Harness, Skills, and safety tests when managed blocks, hooks, locks, symlinks, transaction state, or recovery behavior change. |
 | Local release install | `tests/local_install_script.rs` | Run when the local binary install recipe, `scripts/install-local.sh`, or release-adjacent handoff instructions change. |
-| Skills | `tests/skills_extract.rs`, `tests/skills_symlink_integration.rs` | Install and Update tests when extraction rollback, recursive skill resources, executable metadata, or installed skill wiring changes. |
-| Migration | `tests/migrate_integration.rs` | Target domain loader or contract tests for every artifact Migration writes; direct-write exceptions need explicit fixture coverage. |
+| Skills | `tests/global_skills_integration.rs`, `tests/skills_symlink_integration.rs`, `tests/setup_skill_context_readin.rs`, `tests/extraction_rollback.rs` | Install and Update tests when extraction rollback, recursive skill resources, executable metadata, or installed skill wiring changes. |
+| Migration | Module-local tests in `src/operations/migrate.rs`, `src/operations/card_migrate.rs`, and `src/operations/container_migrate.rs` | Target domain loader or contract tests for every artifact Migration writes; direct-write exceptions need explicit fixture coverage. |
 | Update | `tests/update_integration.rs`, module-local tests in `src/operations/update/mod.rs` and `src/interfaces/cli/update.rs` | Skills extraction tests, Harness non-mutation tests, and schema/migration tests when update touches bundled skills, compatibility checks, or schema drift reporting. |
 | Harness, MCP | `tests/harness_integration.rs` | Task, Run, Proof, Feature, and Harness Backlog contract tests when source read models or backlog proposal refresh changes. |
 | Shell | `tests/shell_init_integration.rs` | Install tests if shell output starts depending on install state. |
@@ -172,9 +172,9 @@ Install as the only domain-owned orchestration exception; and the
 `update_routes_schema_drift_through_migration_and_does_not_import_harness_writes`
 guard keeps Update off the Harness template write surface and requires any
 Migration use to go through the `operations/migrate` root facade. These are
-import-boundary checks; Migration and Update behavioral coverage still lives in
-`tests/migrate_integration.rs` and `tests/update_integration.rs` per the rows
-above.
+import-boundary checks; Migration behavioral coverage lives in the
+module-local migration tests named in the matrix, and Update behavioral coverage
+still lives in `tests/update_integration.rs` per the rows above.
 
 If changing current Task verification surfaces such as
 `src/domain/proof/verify_task.rs`, the task verify command path,
@@ -241,12 +241,14 @@ If changing bundled skill subfolders such as `references/`, `scripts/`, or
 `.maestro/skills/<skill-name>/` and that development-only `evals/` content is
 not installed unless explicitly intended.
 
-If changing Migration, run `tests/migrate_integration.rs` and the target domain
-tests for artifacts Migration creates. Migration's current direct-write
-exceptions are Task artifacts, Feature registry, Decision markdown, Harness
-config, Run logs under `runs/migrated/`, raw archives, backups, and rollback
-targets. Keep coverage that loads or validates each target family through the
-owning domain contract where practical; archive, backup, and rollback files are
+If changing Migration, run the module-local migration tests in
+`src/operations/migrate.rs`, `src/operations/card_migrate.rs`, and
+`src/operations/container_migrate.rs`, plus the target domain tests for
+artifacts Migration creates. Migration's current direct-write exceptions are
+Task artifacts, Feature registry, Decision markdown, Harness config, Run logs
+under `runs/migrated/`, raw archives, backups, and rollback targets. Keep
+coverage that loads or validates each target family through the owning domain
+contract where practical; archive, backup, and rollback files are
 Migration-owned and need explicit migration fixture assertions.
 
 ## Safety Invariants

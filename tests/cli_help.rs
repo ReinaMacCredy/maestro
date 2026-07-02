@@ -1,24 +1,15 @@
+mod common;
 mod support;
 
-use std::process::Command;
+use std::path::Path;
 
+use common::cli_harness::maestro as cli_maestro;
 use support::TestTempDir;
 
 fn maestro(args: &[&str]) -> String {
-    let output = Command::new(env!("CARGO_BIN_EXE_maestro"))
-        .args(args)
-        .output()
-        .expect("invariant: compiled maestro binary should be runnable in CLI tests");
-
-    assert!(
-        output.status.success(),
-        "maestro {:?} failed\nstdout:\n{}\nstderr:\n{}",
-        args,
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    String::from_utf8(output.stdout).expect("invariant: clap help should be valid UTF-8")
+    let output = cli_maestro(Path::new(".")).args(args).output();
+    output.assert_success(format_args!("maestro {args:?}"));
+    output.stdout()
 }
 
 fn assert_contains_all(output: &str, expected: &[&str]) {
@@ -181,20 +172,11 @@ fn version_flag_matches_the_version_subcommand() {
 #[test]
 fn version_subcommand_runs_without_repo_root() {
     let temp_dir = TestTempDir::new("maestro-version-rootless-test");
-    let output = Command::new(env!("CARGO_BIN_EXE_maestro"))
-        .arg("version")
-        .current_dir(temp_dir.path())
-        .output()
-        .expect("invariant: compiled maestro binary should be runnable in CLI tests");
+    let output = cli_maestro(temp_dir.path()).arg("version").output();
 
-    assert!(
-        output.status.success(),
-        "maestro version failed outside a repo\nstdout:\n{}\nstderr:\n{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
+    output.assert_success("maestro version outside a repo");
+    let stdout = output.stdout();
+    let stderr = output.stderr();
     assert!(
         stdout.starts_with("maestro "),
         "unexpected stdout: {stdout}"

@@ -2,6 +2,18 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 const PRODUCTION_UNWRAP_ALLOWLIST: &[(&str, usize)] = &[];
+const CLI_HARNESS_PUBLIC_METHODS: &[&str] = &[
+    "arg",
+    "args",
+    "assert_success",
+    "env",
+    "into_raw",
+    "maestro",
+    "output",
+    "stderr",
+    "stdin",
+    "stdout",
+];
 
 #[test]
 fn production_sources_do_not_call_unwrap() {
@@ -20,6 +32,46 @@ fn production_sources_do_not_call_unwrap() {
         "production sources must not call .unwrap(); use Result propagation, \
          an invariant expect, or an infallible rendering pattern instead:\n{}",
         violations.join("\n")
+    );
+}
+
+#[test]
+fn common_cli_harness_does_not_hide_unused_public_surface() {
+    let path = Path::new("tests/common/cli_harness.rs");
+    let source = read_source_file(path);
+    assert!(
+        !source.contains("#![allow(dead_code)]"),
+        "{} must not use a file-wide dead_code suppression; remove unused methods or add method-level allowances to the explicit ratchet",
+        path.display()
+    );
+
+    let mut exported = Vec::new();
+    let mut previous_nonempty = "";
+    for line in source.lines() {
+        let trimmed = line.trim_start();
+        if let Some(rest) = trimmed.strip_prefix("pub fn ") {
+            if let Some((name, _)) = rest.split_once('(') {
+                exported.push(name.to_string());
+                if name != "maestro" {
+                    assert!(
+                        previous_nonempty.starts_with("#[allow(dead_code, reason = "),
+                        "{} public method `{name}` must carry method-level dead_code allowance so the shared per-crate harness suppression stays explicit",
+                        path.display()
+                    );
+                }
+            }
+        }
+        if !trimmed.is_empty() {
+            previous_nonempty = trimmed;
+        }
+    }
+    exported.sort();
+
+    assert_eq!(
+        exported,
+        CLI_HARNESS_PUBLIC_METHODS,
+        "{} public methods changed; update this ratchet with evidence from migrated users",
+        path.display()
     );
 }
 

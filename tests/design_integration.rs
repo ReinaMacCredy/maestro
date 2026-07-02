@@ -1,18 +1,20 @@
+mod common;
 mod support;
 
 use std::fs;
-use std::process::Command;
+use std::path::Path;
+
+use common::cli_harness::maestro as cli_maestro;
 
 use maestro::domain::design;
 use support::TestTempDir;
 
-fn maestro(args: &[&str], cwd: &std::path::Path) -> std::process::Output {
-    Command::new(env!("CARGO_BIN_EXE_maestro"))
+fn maestro(args: &[&str], cwd: &Path) -> std::process::Output {
+    cli_maestro(cwd)
         .args(args)
-        .current_dir(cwd)
-        .env("HOME", cwd.join("home"))
+        .env("HOME", cwd.join("home").as_os_str())
         .output()
-        .expect("invariant: compiled maestro binary should be runnable")
+        .into_raw()
 }
 
 fn init_repo() -> TestTempDir {

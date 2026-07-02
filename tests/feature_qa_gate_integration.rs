@@ -3,43 +3,28 @@
 //! The pure gate predicates are unit-tested in `domain::feature::qa`; this file
 //! proves the CLI actually consults the on-disk artifacts.
 
+mod common;
 mod support;
 
 use std::fs;
-use std::io::Write;
 use std::path::Path;
-use std::process::{Command, Stdio};
+
+use common::cli_harness::maestro as cli_maestro;
 
 use maestro::domain::feature;
 use maestro::foundation::core::paths::MaestroPaths;
 use support::TestTempDir;
 
 fn maestro(args: &[&str], cwd: &Path) -> std::process::Output {
-    Command::new(env!("CARGO_BIN_EXE_maestro"))
-        .args(args)
-        .current_dir(cwd)
-        .output()
-        .expect("invariant: compiled maestro binary should be runnable in integration tests")
+    cli_maestro(cwd).args(args).output().into_raw()
 }
 
 fn maestro_with_stdin(args: &[&str], cwd: &Path, stdin: &str) -> std::process::Output {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_maestro"))
+    cli_maestro(cwd)
         .args(args)
-        .current_dir(cwd)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("invariant: compiled maestro binary should be runnable in integration tests");
-    child
-        .stdin
-        .take()
-        .expect("invariant: stdin should be piped")
-        .write_all(stdin.as_bytes())
-        .expect("invariant: stdin should be writable");
-    child
-        .wait_with_output()
-        .expect("invariant: maestro process should exit")
+        .stdin(stdin.as_bytes().to_vec())
+        .output()
+        .into_raw()
 }
 
 fn stdout(output: std::process::Output, args: &[&str]) -> String {

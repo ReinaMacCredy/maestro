@@ -2,20 +2,17 @@
 //! on stdout and nothing else, so scripts and agents can capture the id
 //! without scraping the human handoff text.
 
+mod common;
 mod support;
 
 use std::fs;
 use std::path::Path;
-use std::process::Command;
 
+use common::cli_harness::maestro as cli_maestro;
 use support::TestTempDir;
 
 fn maestro(args: &[&str], cwd: &Path) -> std::process::Output {
-    Command::new(env!("CARGO_BIN_EXE_maestro"))
-        .args(args)
-        .current_dir(cwd)
-        .output()
-        .expect("invariant: compiled maestro binary should be runnable in integration tests")
+    cli_maestro(cwd).args(args).output().into_raw()
 }
 
 fn stdout(output: std::process::Output, args: &[&str]) -> String {
