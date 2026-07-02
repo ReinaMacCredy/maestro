@@ -608,20 +608,28 @@ fn recency(age_minutes: u64) -> String {
     }
 }
 
-/// The design-to-implement worktree advisory (`dec-prepare-time-concurrency-rule`):
-/// fired at `feature accept` and `feature prepare`, it prints a one-line STDERR
-/// recommendation to isolate in a git worktree when ANY other session is live in
-/// the active union, naming how many peers are live and their cards and pointing
-/// at `maestro link add` + `maestro conflict` for the shared-file case. Silent
-/// when solo. It never guesses file overlap from declared areas (that signal is
-/// the warm-file `[overlap]` banner during work), never blocks, and creates no
-/// link -- maestro stays passive. Best-effort: the caller discards any error.
-pub(super) fn worktree_advisory(paths: &MaestroPaths) -> Result<()> {
+/// The design-to-implement worktree advisory
+/// (`dec-session-owned-main-fast-path-before-e133`): fired at `feature accept`
+/// and `feature prepare`, it prints a STDERR recommendation only when a fresh
+/// non-self peer is bound to the same feature family. Unrelated fresh peers,
+/// released/done rows, stale rows, and old unconfirmed rows stay silent so a
+/// same-session main checkout is not forced into worktree overhead merely
+/// because the repo is dirty or the activity union contains unrelated history.
+/// The warm-file `[overlap]` banner still owns precise file overlap once work is
+/// underway. Best-effort: the caller discards any error.
+pub(super) fn worktree_advisory(paths: &MaestroPaths, target_card: &str) -> Result<()> {
     let now = utc_now_timestamp();
     let roots = worktree_roots(paths);
     let me = run::union_session_id(paths, &roots, &super::cli_run_id());
     let rows = run::active_sessions_union(&roots, &now)?;
-    let Some((count, who)) = live_peer_summary(&rows, &me) else {
+    let cards = if paths.cards_dir().is_dir() {
+        card::query::scan(paths)?
+    } else {
+        Vec::new()
+    };
+    let by_id: HashMap<&str, &card::schema::Card> =
+        cards.iter().map(|card| (card.id.as_str(), card)).collect();
+    let Some((count, who)) = related_live_peer_summary(&rows, &me, target_card, &by_id) else {
         return Ok(());
     };
     eprintln!("{}", worktree_advisory_text(count, &who));
@@ -633,21 +641,43 @@ pub(super) fn worktree_advisory(paths: &MaestroPaths) -> Result<()> {
 /// isolation path so the recipe's location is discoverable at the nudge.
 fn worktree_advisory_text(count: usize, who: &str) -> String {
     format!(
-        "[worktree] {count} other live session{plural}: {who}\n           -> isolate in .maestro/worktree/<slug> (git worktree add) before implementing; maestro link add + maestro conflict if you'll share a file",
+        "[worktree] {count} fresh related session{plural}: {who}\n           -> isolate in .maestro/worktree/<slug> (git worktree add) before implementing; maestro link add + maestro conflict if you'll share a file",
         plural = if count == 1 { "" } else { "s" }
     )
 }
 
 /// The live-peer summary behind [`worktree_advisory`]: the count and a
-/// comma-joined list of every OTHER non-stale session's bound card (its session
-/// id when it has touched no card), or `None` when the running session is alone
-/// (the advisory stays silent). Pure over the union rows so the present-with-peer
-/// / silent-when-solo decision is testable without spawning sessions.
+/// comma-joined list of every OTHER fresh working session's bound card (its
+/// session id when it has touched no card), or `None` when the running session
+/// is alone (the advisory stays silent). Pure over the union rows so the
+/// present-with-peer / silent-when-solo decision is testable without spawning
+/// sessions.
+#[cfg(test)]
 fn live_peer_summary(rows: &[SessionActivity], me: &str) -> Option<(usize, String)> {
-    let peers: Vec<&SessionActivity> = rows
-        .iter()
-        .filter(|row| row.session_id != me && row.presence != Presence::Stale)
-        .collect();
+    peer_summary(
+        rows.iter()
+            .filter(|row| row.session_id != me && worktree_advisory_presence(row.presence)),
+    )
+}
+
+fn related_live_peer_summary(
+    rows: &[SessionActivity],
+    me: &str,
+    target_card: &str,
+    by_id: &HashMap<&str, &card::schema::Card>,
+) -> Option<(usize, String)> {
+    peer_summary(rows.iter().filter(|row| {
+        row.session_id != me
+            && worktree_advisory_presence(row.presence)
+            && row
+                .bound_card
+                .as_deref()
+                .is_some_and(|peer| peer == target_card || same_feature(by_id, target_card, peer))
+    }))
+}
+
+fn peer_summary<'a>(peers: impl Iterator<Item = &'a SessionActivity>) -> Option<(usize, String)> {
+    let peers: Vec<&SessionActivity> = peers.collect();
     if peers.is_empty() {
         return None;
     }
@@ -661,6 +691,13 @@ fn live_peer_summary(rows: &[SessionActivity], me: &str) -> Option<(usize, Strin
         .collect::<Vec<_>>()
         .join(", ");
     Some((peers.len(), who))
+}
+
+fn worktree_advisory_presence(presence: Presence) -> bool {
+    matches!(
+        presence,
+        Presence::Working | Presence::QuietWorking | Presence::Waiting
+    )
 }
 
 #[cfg(test)]
@@ -816,6 +853,12 @@ mod tests {
         r
     }
 
+    fn presence_row(session: &str, bound: Option<&str>, presence: Presence) -> SessionActivity {
+        let mut r = row(session, bound);
+        r.presence = presence;
+        r
+    }
+
     #[test]
     fn worktree_advisory_is_silent_when_the_running_session_is_alone() {
         // Only my own row in the union, plus a long-dead peer: no live peer.
@@ -840,15 +883,29 @@ mod tests {
     }
 
     #[test]
+    fn worktree_advisory_ignores_released_done_idle_and_unconfirmed_peers() {
+        let rows = vec![
+            row("meS", Some("task-1")),
+            presence_row("released", Some("task-2"), Presence::Released),
+            presence_row("done", Some("task-3"), Presence::Done),
+            presence_row("idle", Some("task-4"), Presence::Idle),
+            presence_row("unconfirmed", Some("task-5"), Presence::Unconfirmed),
+            stale_row("stale", Some("task-6")),
+        ];
+
+        assert_eq!(live_peer_summary(&rows, "meS"), None);
+    }
+
+    #[test]
     fn worktree_advisory_text_names_the_maestro_worktree_path() {
         let text = worktree_advisory_text(2, "task-2, p2");
-        assert!(text.contains("[worktree] 2 other live sessions: task-2, p2"));
+        assert!(text.contains("[worktree] 2 fresh related sessions: task-2, p2"));
         assert!(
             text.contains(".maestro/worktree/<slug>"),
             "nudge must name the canonical isolation path: {text}"
         );
         // singular peer -> "session", not "sessions"
-        assert!(worktree_advisory_text(1, "task-2").contains("1 other live session:"));
+        assert!(worktree_advisory_text(1, "task-2").contains("1 fresh related session:"));
     }
 
     #[test]

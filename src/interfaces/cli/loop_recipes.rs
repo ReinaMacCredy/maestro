@@ -343,7 +343,10 @@ fn session_can_conflict(session: &run::SessionActivity, me: &str) -> bool {
 }
 
 fn presence_can_conflict(presence: run::Presence) -> bool {
-    !matches!(presence, run::Presence::Released | run::Presence::Done)
+    matches!(
+        presence,
+        run::Presence::Working | run::Presence::QuietWorking | run::Presence::Waiting
+    )
 }
 
 fn current_loop_task(entries: &[task::TaskEntry]) -> Option<loop_recipes::LoopTaskInput> {

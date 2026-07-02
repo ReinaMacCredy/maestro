@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-version: 1.36.2
+version: 1.36.3
 description: "Design Maestro changes before implementation: use for brainstorm, plan, PRD synthesis, grill me, grilling, stress-test, domain model, deepening candidate, wording, workflow, skill, harness, card/task/feature, architecture, UX, or agent-process decisions."
 ---
 
@@ -238,7 +238,11 @@ Next: decisions locked and contract authored -> run `maestro feature finalize
 stale. When the user authorizes building, do not re-ask -- flow straight
 through finalize -> qa-baseline -> accept -> prepare -> work.
 
-If another session is live as you cross into implementation, follow the
-conflict-handoff protocol in HARNESS.md (worktree-isolate; link + `maestro
-conflict` on a shared file; merge back then `--clear`); `maestro loop show
+As you cross into implementation, apply the session-owned main fast path first:
+if only your session is fresh, and dirty paths are current-session Maestro state
+or unrelated files you will not touch, stay on main. Worktree-isolate only for
+a fresh non-self same-card/path overlap, unknown source/test dirt,
+release/install clean-tree proof, or explicit user isolation. If you split,
+follow the conflict-handoff protocol in HARNESS.md (link + `maestro conflict`
+on a shared file; merge back then `--clear`); `maestro loop show
 conflict-handoff` is the full dance.

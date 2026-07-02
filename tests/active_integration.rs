@@ -51,6 +51,17 @@ fn run(repo: &Path, env: &[(&str, &str)], args: &[&str]) -> String {
     String::from_utf8(output.stdout).expect("invariant: stdout should be UTF-8")
 }
 
+fn run_output(repo: &Path, env: &[(&str, &str)], args: &[&str]) -> Output {
+    let output = maestro(repo, env, args);
+    assert!(
+        output.status.success(),
+        "maestro {args:?} failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    output
+}
+
 fn run_failure(repo: &Path, env: &[(&str, &str)], args: &[&str]) -> String {
     let output = maestro(repo, env, args);
     assert!(
@@ -832,6 +843,23 @@ fn terminal_task_transitions_release_ownership() {
 }
 
 fn create_ready_feature(repo: &Path, title: &str, slug: &str) {
+    create_feature_contract(repo, title, slug);
+    run(
+        repo,
+        &[],
+        &[
+            "feature",
+            "accept",
+            slug,
+            "--qa",
+            "none",
+            "--reason",
+            "integration coverage",
+        ],
+    );
+}
+
+fn create_feature_contract(repo: &Path, title: &str, slug: &str) {
     run(repo, &[], &["feature", "new", title]);
     run(
         repo,
@@ -848,18 +876,75 @@ fn create_ready_feature(repo: &Path, title: &str, slug: &str) {
     );
     run(repo, &[], &["feature", "reconcile", slug]);
     run(repo, &[], &["feature", "finalize", slug]);
-    run(
+}
+
+#[test]
+fn feature_gate_worktree_advisory_is_target_aware() {
+    let temp = cards_repo("active-feature-worktree-advisory");
+    let repo = temp.path();
+
+    create_feature_contract(repo, "Primary Feature", "primary-feature");
+    create_feature_contract(repo, "Other Feature", "other-feature");
+    clear_runs(repo);
+    let recent = ts_minutes_ago(1);
+    seed_run(
         repo,
-        &[],
+        "peer-other",
+        &[ownership_acquire_event(
+            "peer-other",
+            "other-feature",
+            &recent,
+        )],
+    );
+    let accept_primary = run_output(
+        repo,
+        &[("MAESTRO_SESSION_ID", "you-sess")],
         &[
             "feature",
             "accept",
-            slug,
+            "primary-feature",
             "--qa",
             "none",
             "--reason",
             "integration coverage",
         ],
+    );
+    let unrelated_stderr =
+        String::from_utf8(accept_primary.stderr).expect("invariant: stderr should be UTF-8");
+    assert!(
+        !unrelated_stderr.contains("[worktree]"),
+        "unrelated fresh peer should not force a worktree nudge:\n{unrelated_stderr}"
+    );
+
+    create_feature_contract(repo, "Shared Feature", "shared-feature");
+    clear_runs(repo);
+    seed_run(
+        repo,
+        "peer-same",
+        &[ownership_acquire_event(
+            "peer-same",
+            "shared-feature",
+            &recent,
+        )],
+    );
+    let accept_shared = run_output(
+        repo,
+        &[("MAESTRO_SESSION_ID", "you-sess")],
+        &[
+            "feature",
+            "accept",
+            "shared-feature",
+            "--qa",
+            "none",
+            "--reason",
+            "integration coverage",
+        ],
+    );
+    let shared_stderr =
+        String::from_utf8(accept_shared.stderr).expect("invariant: stderr should be UTF-8");
+    assert!(
+        shared_stderr.contains("[worktree] 1 fresh related session: shared-feature"),
+        "same-feature fresh peer should still get a worktree nudge:\n{shared_stderr}"
     );
 }
 

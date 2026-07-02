@@ -1,6 +1,6 @@
 ---
 name: maestro-card
-version: 1.37.11
+version: 1.37.12
 description: "Active Maestro card work after design approval: use for implement, fix, verify, QA, close, release, continue, or unattended prompts like use loop, keep looping, work while away/asleep."
 ---
 
@@ -29,10 +29,14 @@ Inbox messages are advisory coordination only: they can suggest an ordering
 relationship, but they do not block work. Record an explicit Task blocker when
 execution order matters. Reply when the message poses a question or needs a
 decision; an FYI needs no reply.
-When any other session is live as you start implementing, follow the
-conflict-handoff protocol in HARNESS.md: worktree-isolate, link + `maestro
-conflict` on a file you will share, merge back then `--clear`. The full dance
-(including a conflicted merge-back) is `maestro loop show conflict-handoff`.
+When you start implementation, apply the session-owned main fast path first:
+if only your session is fresh, and dirty paths are current-session Maestro state
+or unrelated files you will not touch, stay on main. Worktree-isolate only for
+a fresh non-self same-card/path overlap, unknown source/test dirt,
+release/install clean-tree proof, or explicit user isolation. If you split,
+follow the conflict-handoff protocol in HARNESS.md: link + `maestro conflict`
+on a file you will share, merge back then `--clear`. The full dance (including
+a conflicted merge-back) is `maestro loop show conflict-handoff`.
 
 Recipe checkpoint: Maestro's main workflow is the loop. Use `maestro status`
 for current state, `maestro loop next` as the read-only router when the next

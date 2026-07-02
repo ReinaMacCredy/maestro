@@ -101,7 +101,7 @@ pub fn run(args: FeatureArgs) -> Result<()> {
                 println!("next: maestro feature prepare {} --draft", report.id);
             }
             if !dry_run {
-                let _ = super::active::worktree_advisory(&paths);
+                let _ = super::active::worktree_advisory(&paths, &id);
             }
             Ok(())
         }
@@ -128,7 +128,7 @@ pub fn run(args: FeatureArgs) -> Result<()> {
                     after,
                 },
             )?;
-            let _ = super::active::worktree_advisory(&paths);
+            let _ = super::active::worktree_advisory(&paths, &id);
             Ok(())
         }
         FeatureCommand::Amend {
