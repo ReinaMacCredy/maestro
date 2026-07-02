@@ -24,6 +24,7 @@ static LOOP_RECIPE_CONTRACTS_DIR: Dir<'_> =
 
 const CONTRACT_SCHEMA_VERSION: &str = "maestro.recipe.v2";
 const LOOP_COMPACT_PACKET_SCHEMA: &str = "maestro.loop_compact_packet.v1";
+const LOOP_IMPROVE_SCHEMA: &str = "maestro.loop_improve.v1";
 const REQUIRED_PHASES: [&str; 6] = ["perceive", "choose", "act", "observe", "learn", "continue"];
 const CANONICAL_RECIPE_IDS: [&str; 14] = [
     "adversarial-review",
@@ -166,6 +167,7 @@ pub struct LoopRouterInput {
     pub current_task: Option<LoopTaskInput>,
     pub tasks: Vec<LoopTaskInput>,
     pub features: Vec<LoopFeatureInput>,
+    pub memory_hits: Vec<LoopMemoryHit>,
     pub active_conflicts: usize,
     pub active_sessions: usize,
     pub pending_synthesis: usize,
@@ -202,15 +204,189 @@ pub struct LoopGitInput {
 }
 
 #[derive(Clone, Debug, Serialize)]
+pub struct LoopContext {
+    pub schema: &'static str,
+    pub repo: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_task: Option<LoopContextTask>,
+    pub candidate_tasks: Vec<LoopContextTask>,
+    pub features: Vec<LoopContextFeature>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub git: Option<LoopContextGit>,
+    pub proof: LoopContextPlaceholder,
+    pub qa: LoopContextPlaceholder,
+    pub active_sessions: usize,
+    pub active_conflicts: usize,
+    pub pending_synthesis: usize,
+    pub blockers: Vec<LoopContextBlocker>,
+    pub memory: Vec<LoopMemoryHit>,
+    pub recent_outcomes: Vec<LoopRecentOutcome>,
+    pub context_refs: Vec<LoopContextRef>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct LoopContextTask {
+    pub id: String,
+    pub title: String,
+    pub state: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub feature_id: Option<String>,
+    pub blocked: bool,
+    pub source_refs: Vec<LoopContextRef>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct LoopContextFeature {
+    pub id: String,
+    pub title: String,
+    pub status: String,
+    pub total_tasks: usize,
+    pub verified_tasks: usize,
+    pub open_questions: usize,
+    pub source_refs: Vec<LoopContextRef>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct LoopContextGit {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub branch: Option<String>,
+    pub code_other_dirty: usize,
+    pub maestro_dirty: usize,
+    pub ahead: usize,
+    pub behind: usize,
+    pub source_refs: Vec<LoopContextRef>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct LoopContextPlaceholder {
+    pub status: LoopConstraintStatus,
+    pub reason: String,
+    pub source_refs: Vec<LoopContextRef>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct LoopContextBlocker {
+    pub target_kind: String,
+    pub target_id: String,
+    pub reason: String,
+    pub source_refs: Vec<LoopContextRef>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct LoopMemoryHit {
+    pub id: String,
+    pub kind: String,
+    pub reason: String,
+    pub source_refs: Vec<LoopContextRef>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct LoopRecentOutcome {
+    pub id: String,
+    pub recipe: String,
+    pub phase: String,
+    pub result: String,
+    pub source_refs: Vec<LoopContextRef>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct LoopImproveInput {
+    pub outcomes: Vec<LoopOutcomeInput>,
+}
+
+#[derive(Clone, Debug)]
+pub struct LoopOutcomeInput {
+    pub session_id: String,
+    pub recipe: String,
+    pub phase: String,
+    pub selected_unit: String,
+    pub failure_class: String,
+    pub route_action: String,
+    pub route_recipe: String,
+    pub proof_result: String,
+    pub blocker_class: String,
+    pub retry_count: u32,
+    pub duration_ms: u64,
+    pub learning_candidate: Option<String>,
+    pub source_refs: Vec<LoopContextRef>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct LoopImproveReport {
+    pub schema: &'static str,
+    pub read_only: bool,
+    pub proposal_count: usize,
+    pub proposals: Vec<LoopImproveProposal>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct LoopImproveProposal {
+    pub id: String,
+    pub kind: String,
+    pub title: String,
+    pub severity: String,
+    pub reason: String,
+    pub failure_class: String,
+    pub outcome_count: usize,
+    pub source_refs: Vec<LoopContextRef>,
+    pub dry_plan: Vec<String>,
+    pub apply_command: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct LoopContextRef {
+    pub kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct LoopConstraint {
+    pub id: String,
+    pub status: LoopConstraintStatus,
+    pub severity: LoopConstraintSeverity,
+    pub recipe: String,
+    pub reason: String,
+    pub blocks: Vec<String>,
+    pub unblocks_with: Vec<String>,
+    pub source_refs: Vec<LoopContextRef>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LoopConstraintStatus {
+    Pass,
+    Warn,
+    Fail,
+    Unknown,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LoopConstraintSeverity {
+    Info,
+    Warning,
+    Blocker,
+}
+
+#[derive(Clone, Debug, Serialize)]
 pub struct LoopNextReport {
     pub schema: &'static str,
     pub status: String,
     pub repo: String,
     pub recommended_recipe: Option<String>,
     pub recommended_status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recommended_phase: Option<String>,
     pub reason: String,
     pub confidence: String,
     pub priority: u16,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub score: Option<u8>,
     pub authority_scope: Vec<String>,
     pub autonomy: Vec<String>,
     pub edges: Vec<LoopNextEdge>,
@@ -218,6 +394,14 @@ pub struct LoopNextReport {
     pub inspect: Vec<String>,
     pub next_verbs: Vec<String>,
     pub candidates: Vec<LoopNextCandidate>,
+    pub constraints: Vec<LoopConstraint>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub memory_hits: Vec<LoopMemoryHit>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub why_not: Vec<LoopWhyNot>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attempt_policy: Option<LoopAttemptPolicy>,
+    pub context_refs: Vec<LoopContextRef>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -243,6 +427,22 @@ pub struct LoopNextCandidate {
     pub priority: u16,
     pub confidence: String,
     pub reason: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct LoopWhyNot {
+    pub recipe: String,
+    pub blocked_by: Vec<String>,
+    pub reason: String,
+    pub source_refs: Vec<LoopContextRef>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct LoopAttemptPolicy {
+    pub policy: String,
+    pub max_attempts: u8,
+    pub retry_after: Vec<String>,
+    pub stop_on: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -499,6 +699,12 @@ fn report_for_candidate(
     candidates: Vec<RouterCandidate>,
 ) -> Result<LoopNextReport> {
     let contract = contract(candidate.recipe)?;
+    let context = LoopContext::from_input(input);
+    let constraints = evaluate_base_constraints(&context, Some(&contract), Some(&candidate));
+    let score = score_candidate(&contract, &constraints);
+    let recommended_phase = default_phase_for_next(&contract.id, &candidate.reason).to_string();
+    let why_not = why_not_candidates(&context, &candidate, &candidates)?;
+    let attempt_policy = attempt_policy_for(&contract.id, &constraints);
     let candidates = if candidates.is_empty() {
         vec![candidate_report(&contract, &candidate)]
     } else {
@@ -510,9 +716,11 @@ fn report_for_candidate(
         repo: input.repo.clone(),
         recommended_recipe: Some(contract.id.clone()),
         recommended_status: contract.router.status.clone(),
+        recommended_phase: Some(recommended_phase),
         reason: candidate.reason,
         confidence: contract.router.confidence.clone(),
         priority: contract.router.priority,
+        score: Some(score),
         authority_scope: contract.authority_scope.clone(),
         autonomy: contract.autonomy.clone(),
         edges: edge_reports(&contract),
@@ -520,6 +728,11 @@ fn report_for_candidate(
         inspect: candidate.inspect,
         next_verbs: candidate.next_verbs,
         candidates,
+        constraints,
+        memory_hits: context.memory.clone(),
+        why_not,
+        attempt_policy: Some(attempt_policy),
+        context_refs: context.context_refs,
         warnings: input.warnings.clone(),
         git: input.git.clone().map(LoopNextGit::from),
     })
@@ -545,15 +758,19 @@ fn uncertain_report_with_actions(
     inspect: Vec<String>,
     next_verbs: Vec<String>,
 ) -> Result<LoopNextReport> {
+    let context = LoopContext::from_input(input);
+    let constraints = evaluate_base_constraints(&context, None, None);
     Ok(LoopNextReport {
         schema: "maestro.loop_next.v1",
         status: "uncertain".to_string(),
         repo: input.repo.clone(),
         recommended_recipe: None,
         recommended_status: "uncertain".to_string(),
+        recommended_phase: None,
         reason: reason.to_string(),
         confidence: "low".to_string(),
         priority: 0,
+        score: None,
         authority_scope: Vec::new(),
         autonomy: Vec::new(),
         edges: Vec::new(),
@@ -565,9 +782,963 @@ fn uncertain_report_with_actions(
         inspect,
         next_verbs,
         candidates: Vec::new(),
+        constraints,
+        memory_hits: context.memory.clone(),
+        why_not: Vec::new(),
+        attempt_policy: None,
+        context_refs: context.context_refs,
         warnings: input.warnings.clone(),
         git: input.git.clone().map(LoopNextGit::from),
     })
+}
+
+impl LoopContext {
+    fn from_input(input: &LoopRouterInput) -> Self {
+        let mut refs = vec![LoopContextRef::command(
+            "status",
+            None,
+            "maestro status --json",
+        )];
+
+        let current_task = input.current_task.as_ref().map(context_task);
+        let mut candidate_tasks = Vec::new();
+        let mut blockers = Vec::new();
+        for task in &input.tasks {
+            let item = context_task(task);
+            refs.extend(item.source_refs.iter().cloned());
+            if task.blocked {
+                blockers.push(LoopContextBlocker {
+                    target_kind: "task".to_string(),
+                    target_id: task.id.clone(),
+                    reason: "task has unresolved blockers".to_string(),
+                    source_refs: item.source_refs.clone(),
+                });
+            }
+            candidate_tasks.push(item);
+        }
+        if let Some(task) = current_task.as_ref() {
+            refs.extend(task.source_refs.iter().cloned());
+        }
+
+        let features = input
+            .features
+            .iter()
+            .map(|feature| {
+                let source_refs = vec![LoopContextRef::command(
+                    "feature",
+                    Some(feature.id.clone()),
+                    format!("maestro feature show {}", feature.id),
+                )];
+                refs.extend(source_refs.iter().cloned());
+                LoopContextFeature {
+                    id: feature.id.clone(),
+                    title: feature.title.clone(),
+                    status: feature.status.clone(),
+                    total_tasks: feature.total_tasks,
+                    verified_tasks: feature.verified_tasks,
+                    open_questions: feature.open_questions,
+                    source_refs,
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let git = input.git.as_ref().map(|git| {
+            let source_refs = vec![LoopContextRef::command(
+                "git",
+                None,
+                "git status --short --branch",
+            )];
+            refs.extend(source_refs.iter().cloned());
+            LoopContextGit {
+                branch: git.branch.clone(),
+                code_other_dirty: git.code_other_dirty,
+                maestro_dirty: git.maestro_dirty,
+                ahead: git.ahead,
+                behind: git.behind,
+                source_refs,
+            }
+        });
+
+        let active_ref = LoopContextRef::command("active_sessions", None, "maestro active");
+        refs.push(active_ref.clone());
+        let memory = input.memory_hits.clone();
+        for hit in &memory {
+            refs.extend(hit.source_refs.iter().cloned());
+        }
+        refs.sort_by_key(context_ref_sort_key);
+        refs.dedup();
+
+        Self {
+            schema: "maestro.loop_context.v1",
+            repo: input.repo.clone(),
+            current_task,
+            candidate_tasks,
+            features,
+            git,
+            proof: LoopContextPlaceholder::unknown(
+                "proof state is not yet included in loop context",
+            ),
+            qa: LoopContextPlaceholder::unknown("QA state is not yet included in loop context"),
+            active_sessions: input.active_sessions,
+            active_conflicts: input.active_conflicts,
+            pending_synthesis: input.pending_synthesis,
+            blockers,
+            memory,
+            recent_outcomes: Vec::new(),
+            context_refs: refs,
+        }
+    }
+}
+
+impl LoopContextPlaceholder {
+    fn unknown(reason: &str) -> Self {
+        Self {
+            status: LoopConstraintStatus::Unknown,
+            reason: reason.to_string(),
+            source_refs: Vec::new(),
+        }
+    }
+}
+
+impl LoopContextRef {
+    fn command(kind: &str, id: Option<String>, command: impl Into<String>) -> Self {
+        Self {
+            kind: kind.to_string(),
+            id,
+            path: None,
+            command: Some(command.into()),
+        }
+    }
+}
+
+pub fn improve_from_outcomes(input: LoopImproveInput) -> LoopImproveReport {
+    let mut by_failure_class = BTreeMap::<String, Vec<LoopOutcomeInput>>::new();
+    for outcome in input.outcomes {
+        let failure_class = outcome.failure_class.trim().to_ascii_lowercase();
+        if failure_class.is_empty() {
+            continue;
+        }
+        by_failure_class
+            .entry(failure_class)
+            .or_default()
+            .push(outcome);
+    }
+
+    let mut proposals = Vec::new();
+    for (failure_class, mut outcomes) in by_failure_class {
+        outcomes.sort_by(|left, right| {
+            left.session_id
+                .cmp(&right.session_id)
+                .then_with(|| left.selected_unit.cmp(&right.selected_unit))
+                .then_with(|| left.recipe.cmp(&right.recipe))
+        });
+        let high_severity = high_severity_failure_class(&failure_class);
+        if outcomes.len() < 2 && !high_severity {
+            continue;
+        }
+        for kind in loop_improve_kinds(&failure_class) {
+            if matches!(kind, "recipe_edit_proposal" | "skill_update_proposal")
+                && outcomes.len() < 2
+                && !high_severity
+            {
+                continue;
+            }
+            proposals.push(loop_improve_proposal(
+                kind,
+                &failure_class,
+                &outcomes,
+                high_severity,
+            ));
+        }
+    }
+
+    proposals.sort_by(|left, right| left.id.cmp(&right.id));
+    proposals.dedup_by(|left, right| left.id == right.id);
+    LoopImproveReport {
+        schema: LOOP_IMPROVE_SCHEMA,
+        read_only: true,
+        proposal_count: proposals.len(),
+        proposals,
+    }
+}
+
+fn high_severity_failure_class(failure_class: &str) -> bool {
+    matches!(
+        failure_class,
+        "authority_gap" | "conflict" | "external_approval" | "repeated_failure"
+    )
+}
+
+fn loop_improve_kinds(failure_class: &str) -> Vec<&'static str> {
+    match failure_class {
+        "proof_gap" => vec!["memory_suggestion", "proof_guard", "recipe_edit_proposal"],
+        "test_failure" => vec!["memory_suggestion", "qa_guard"],
+        "scope_ambiguity" => vec!["harness_friction", "recipe_edit_proposal"],
+        "repeated_failure" => vec![
+            "memory_suggestion",
+            "harness_friction",
+            "skill_update_proposal",
+        ],
+        "memory_collision" => vec!["memory_suggestion"],
+        "dirty_scope" => vec!["harness_friction"],
+        "authority_gap" | "conflict" | "external_approval" => {
+            vec!["harness_friction", "skill_update_proposal"]
+        }
+        _ => vec!["harness_friction"],
+    }
+}
+
+fn loop_improve_proposal(
+    kind: &str,
+    failure_class: &str,
+    outcomes: &[LoopOutcomeInput],
+    high_severity: bool,
+) -> LoopImproveProposal {
+    let source_refs = loop_improve_source_refs(outcomes);
+    let outcome_count = outcomes.len();
+    let severity = if high_severity || outcome_count >= 4 {
+        "high"
+    } else {
+        "medium"
+    };
+    let id = format!("limp-{}-{failure_class}", slug(kind));
+    let title = loop_improve_title(kind, failure_class);
+    let reason = format!(
+        "{outcome_count} sourced loop_outcome event(s) reported {failure_class}; latest route {} -> {}",
+        outcomes
+            .last()
+            .map(|outcome| outcome.route_action.as_str())
+            .unwrap_or("unknown"),
+        outcomes
+            .last()
+            .map(|outcome| outcome.route_recipe.as_str())
+            .unwrap_or("unknown")
+    );
+    let dry_plan = loop_improve_dry_plan(kind);
+    let apply_command = loop_improve_apply_command(kind, failure_class, &title, outcomes);
+    LoopImproveProposal {
+        id,
+        kind: kind.to_string(),
+        title,
+        severity: severity.to_string(),
+        reason,
+        failure_class: failure_class.to_string(),
+        outcome_count,
+        source_refs,
+        dry_plan,
+        apply_command,
+    }
+}
+
+fn loop_improve_title(kind: &str, failure_class: &str) -> String {
+    match kind {
+        "memory_suggestion" => format!("Capture loop lesson for {failure_class} outcomes"),
+        "harness_friction" => format!("Reduce recurring {failure_class} loop friction"),
+        "recipe_edit_proposal" => {
+            format!("Review loop recipe routing for {failure_class} outcomes")
+        }
+        "skill_update_proposal" => {
+            format!("Update loop guidance for {failure_class} outcomes")
+        }
+        "qa_guard" => format!("Add QA guard for recurring {failure_class} outcomes"),
+        "proof_guard" => format!("Add proof guard for recurring {failure_class} outcomes"),
+        _ => format!("Review loop improvement for {failure_class} outcomes"),
+    }
+}
+
+fn loop_improve_dry_plan(kind: &str) -> Vec<String> {
+    let target = match kind {
+        "memory_suggestion" => "draft a visible memory suggestion",
+        "harness_friction" => "file a visible harness friction proposal",
+        "recipe_edit_proposal" => "file a recipe edit proposal for review",
+        "skill_update_proposal" => "file a skill guidance proposal for review",
+        "qa_guard" => "file a QA guard proposal for review",
+        "proof_guard" => "file a proof guard proposal for review",
+        _ => "file an explicit improvement proposal for review",
+    };
+    vec![
+        "Inspect the sourced loop_outcome events.".to_string(),
+        format!("Confirm the pattern is still valid, then {target}."),
+        "Run the apply command only after review; planning does not mutate recipes, skills, harness files, schemas, git, releases, or external systems.".to_string(),
+    ]
+}
+
+fn loop_improve_apply_command(
+    kind: &str,
+    failure_class: &str,
+    title: &str,
+    outcomes: &[LoopOutcomeInput],
+) -> String {
+    let first_session = outcomes
+        .first()
+        .map(|outcome| outcome.session_id.as_str())
+        .unwrap_or("unknown");
+    let evidence = format!(
+        "{} sourced loop_outcome event(s) for {}; inspect maestro session show {} --json",
+        outcomes.len(),
+        failure_class,
+        first_session
+    );
+    if kind == "memory_suggestion" {
+        return format!(
+            "maestro memory suggest create --source-ref run_event:{} --signal-type failure --summary {} --scope-kind repo --target-surface memory_note --dedupe-key loop-improve-{}",
+            shell_single_quote(first_session),
+            shell_single_quote(title),
+            slug(failure_class)
+        );
+    }
+    format!(
+        "maestro harness propose --topic loop-improve-{}-{} --title {} --evidence {}",
+        slug(kind),
+        slug(failure_class),
+        shell_single_quote(title),
+        shell_single_quote(&evidence)
+    )
+}
+
+fn loop_improve_source_refs(outcomes: &[LoopOutcomeInput]) -> Vec<LoopContextRef> {
+    let mut refs = Vec::new();
+    for outcome in outcomes {
+        if outcome.source_refs.is_empty() {
+            refs.push(LoopContextRef::command(
+                "run_event",
+                Some(outcome.session_id.clone()),
+                format!("maestro session show {} --json", outcome.session_id),
+            ));
+        } else {
+            refs.extend(outcome.source_refs.iter().cloned());
+        }
+    }
+    refs.sort_by_key(context_ref_sort_key);
+    refs.dedup_by(|left, right| {
+        left.kind == right.kind
+            && left.id == right.id
+            && left.path == right.path
+            && left.command == right.command
+    });
+    refs
+}
+
+fn slug(value: &str) -> String {
+    value
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() {
+                ch.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>()
+        .split('-')
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join("-")
+}
+
+fn shell_single_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\"'\"'"))
+}
+
+fn context_task(task: &LoopTaskInput) -> LoopContextTask {
+    let source_refs = vec![LoopContextRef::command(
+        "task",
+        Some(task.id.clone()),
+        format!("maestro task show {}", task.id),
+    )];
+    LoopContextTask {
+        id: task.id.clone(),
+        title: task.title.clone(),
+        state: task.state.clone(),
+        feature_id: task.feature_id.clone(),
+        blocked: task.blocked,
+        source_refs,
+    }
+}
+
+fn context_ref_sort_key(reference: &LoopContextRef) -> (String, String, String, String) {
+    (
+        reference.kind.clone(),
+        reference.id.clone().unwrap_or_default(),
+        reference.path.clone().unwrap_or_default(),
+        reference.command.clone().unwrap_or_default(),
+    )
+}
+
+fn evaluate_base_constraints(
+    context: &LoopContext,
+    contract: Option<&RecipeContract>,
+    candidate: Option<&RouterCandidate>,
+) -> Vec<LoopConstraint> {
+    let recipe = contract
+        .map(|contract| contract.id.clone())
+        .unwrap_or_else(|| "uncertain".to_string());
+    let selected_unit_refs = selected_unit_refs(context, candidate);
+    let git_refs = context
+        .git
+        .as_ref()
+        .map(|git| git.source_refs.clone())
+        .unwrap_or_default();
+    let active_refs = context
+        .context_refs
+        .iter()
+        .filter(|reference| reference.kind == "active_sessions")
+        .cloned()
+        .collect::<Vec<_>>();
+
+    vec![
+        constraint(
+            "authority_ok",
+            authority_status(contract),
+            authority_severity(contract),
+            &recipe,
+            authority_reason(contract),
+            ConstraintExtras::default(),
+        ),
+        constraint(
+            "scope_clear",
+            if context.blockers.is_empty() {
+                LoopConstraintStatus::Pass
+            } else {
+                LoopConstraintStatus::Warn
+            },
+            if context.blockers.is_empty() {
+                LoopConstraintSeverity::Info
+            } else {
+                LoopConstraintSeverity::Warning
+            },
+            &recipe,
+            if context.blockers.is_empty() {
+                "no unresolved task blockers are visible in the router snapshot"
+            } else {
+                "one or more visible tasks have unresolved blockers"
+            },
+            ConstraintExtras::with_source_refs(selected_unit_refs.clone()),
+        ),
+        constraint(
+            "selected_unit_ok",
+            if selected_unit_refs.is_empty() {
+                LoopConstraintStatus::Unknown
+            } else {
+                LoopConstraintStatus::Pass
+            },
+            if selected_unit_refs.is_empty() {
+                LoopConstraintSeverity::Warning
+            } else {
+                LoopConstraintSeverity::Info
+            },
+            &recipe,
+            if selected_unit_refs.is_empty() {
+                "no selected task or feature was identified"
+            } else {
+                "selected task or feature is backed by source refs"
+            },
+            ConstraintExtras::with_source_refs(selected_unit_refs.clone()),
+        ),
+        constraint(
+            "proof_ready",
+            proof_status(&recipe),
+            proof_severity(&recipe),
+            &recipe,
+            proof_reason(&recipe),
+            ConstraintExtras::with_source_refs(context.proof.source_refs.clone()),
+        ),
+        constraint(
+            "qa_ready",
+            qa_status(&recipe),
+            qa_severity(&recipe),
+            &recipe,
+            qa_reason(&recipe),
+            ConstraintExtras::with_source_refs(context.qa.source_refs.clone()),
+        ),
+        constraint(
+            "dirty_tree_risk",
+            dirty_tree_status(context),
+            dirty_tree_severity(context),
+            &recipe,
+            dirty_tree_reason(context),
+            ConstraintExtras {
+                blocks: dirty_tree_blocks(&recipe, context),
+                unblocks_with: vec!["git status --short --branch".to_string()],
+                source_refs: git_refs,
+            },
+        ),
+        constraint(
+            "conflict_risk",
+            if context.active_conflicts > 0 {
+                LoopConstraintStatus::Warn
+            } else {
+                LoopConstraintStatus::Pass
+            },
+            if context.active_conflicts > 0 {
+                LoopConstraintSeverity::Warning
+            } else {
+                LoopConstraintSeverity::Info
+            },
+            &recipe,
+            if context.active_conflicts > 0 {
+                "active overlapping sessions are visible"
+            } else {
+                "no active overlap count is visible in the router snapshot"
+            },
+            ConstraintExtras {
+                blocks: if context.active_conflicts > 0 {
+                    vec!["work".to_string(), "ship".to_string()]
+                } else {
+                    Vec::new()
+                },
+                unblocks_with: vec!["maestro active".to_string()],
+                source_refs: active_refs,
+            },
+        ),
+        constraint(
+            "memory_relevance",
+            memory_relevance_status(context),
+            memory_relevance_severity(context),
+            &recipe,
+            memory_relevance_reason(context),
+            ConstraintExtras::with_source_refs(memory_source_refs(context)),
+        ),
+        constraint(
+            "prior_failure_risk",
+            prior_failure_status(context),
+            prior_failure_severity(context),
+            &recipe,
+            prior_failure_reason(context),
+            ConstraintExtras::with_source_refs(prior_failure_source_refs(context)),
+        ),
+        constraint(
+            "route_confidence",
+            route_confidence_status(contract),
+            route_confidence_severity(contract),
+            &recipe,
+            route_confidence_reason(contract),
+            ConstraintExtras::default(),
+        ),
+        constraint(
+            "ship_gate_ok",
+            ship_gate_status(&recipe),
+            ship_gate_severity(&recipe),
+            &recipe,
+            ship_gate_reason(&recipe),
+            ConstraintExtras::with_source_refs(selected_unit_refs.clone()),
+        ),
+        constraint(
+            "human_approval_ok",
+            LoopConstraintStatus::Pass,
+            LoopConstraintSeverity::Info,
+            &recipe,
+            "router recommendation does not change acceptance, non-goals, ship authority, dependencies, schemas, git, secrets, or platform approval",
+            ConstraintExtras::default(),
+        ),
+    ]
+}
+
+#[derive(Default)]
+struct ConstraintExtras {
+    blocks: Vec<String>,
+    unblocks_with: Vec<String>,
+    source_refs: Vec<LoopContextRef>,
+}
+
+impl ConstraintExtras {
+    fn with_source_refs(source_refs: Vec<LoopContextRef>) -> Self {
+        Self {
+            source_refs,
+            ..Self::default()
+        }
+    }
+}
+
+fn constraint(
+    id: &str,
+    status: LoopConstraintStatus,
+    severity: LoopConstraintSeverity,
+    recipe: &str,
+    reason: impl Into<String>,
+    extras: ConstraintExtras,
+) -> LoopConstraint {
+    LoopConstraint {
+        id: id.to_string(),
+        status,
+        severity,
+        recipe: recipe.to_string(),
+        reason: reason.into(),
+        blocks: extras.blocks,
+        unblocks_with: extras.unblocks_with,
+        source_refs: extras.source_refs,
+    }
+}
+
+fn memory_source_refs(context: &LoopContext) -> Vec<LoopContextRef> {
+    let mut refs = context
+        .memory
+        .iter()
+        .flat_map(|hit| hit.source_refs.iter().cloned())
+        .collect::<Vec<_>>();
+    refs.sort_by_key(context_ref_sort_key);
+    refs.dedup();
+    refs
+}
+
+fn memory_relevance_status(context: &LoopContext) -> LoopConstraintStatus {
+    if context.memory.is_empty() {
+        LoopConstraintStatus::Unknown
+    } else {
+        LoopConstraintStatus::Pass
+    }
+}
+
+fn memory_relevance_severity(_context: &LoopContext) -> LoopConstraintSeverity {
+    LoopConstraintSeverity::Info
+}
+
+fn memory_relevance_reason(context: &LoopContext) -> String {
+    if context.memory.is_empty() {
+        "no scoped approved memories or memory suggestions matched the router snapshot".to_string()
+    } else {
+        format!(
+            "{} scoped memory hit{} matched the router snapshot",
+            context.memory.len(),
+            if context.memory.len() == 1 { "" } else { "s" }
+        )
+    }
+}
+
+fn prior_failure_status(context: &LoopContext) -> LoopConstraintStatus {
+    if context.memory.iter().any(memory_kind_is_failure_risk) {
+        LoopConstraintStatus::Warn
+    } else if context.memory.is_empty() {
+        LoopConstraintStatus::Unknown
+    } else {
+        LoopConstraintStatus::Pass
+    }
+}
+
+fn prior_failure_severity(context: &LoopContext) -> LoopConstraintSeverity {
+    if context.memory.iter().any(memory_kind_is_failure_risk) {
+        LoopConstraintSeverity::Warning
+    } else {
+        LoopConstraintSeverity::Info
+    }
+}
+
+fn prior_failure_reason(context: &LoopContext) -> String {
+    let count = context
+        .memory
+        .iter()
+        .filter(|hit| memory_kind_is_failure_risk(hit))
+        .count();
+    if count > 0 {
+        format!(
+            "{count} memory hit{} indicate prior failure, guardrail, or user correction risk",
+            if count == 1 { "" } else { "s" }
+        )
+    } else if context.memory.is_empty() {
+        "recent loop outcomes and failure memories are not yet populated".to_string()
+    } else {
+        "matched memory hits do not indicate prior failure risk".to_string()
+    }
+}
+
+fn prior_failure_source_refs(context: &LoopContext) -> Vec<LoopContextRef> {
+    let mut refs = context
+        .memory
+        .iter()
+        .filter(|hit| memory_kind_is_failure_risk(hit))
+        .flat_map(|hit| hit.source_refs.iter().cloned())
+        .collect::<Vec<_>>();
+    refs.sort_by_key(context_ref_sort_key);
+    refs.dedup();
+    refs
+}
+
+fn memory_kind_is_failure_risk(hit: &LoopMemoryHit) -> bool {
+    matches!(
+        hit.kind.as_str(),
+        "prior_failure" | "guardrail" | "user_correction"
+    )
+}
+
+fn selected_unit_refs(
+    context: &LoopContext,
+    candidate: Option<&RouterCandidate>,
+) -> Vec<LoopContextRef> {
+    let Some(candidate) = candidate else {
+        return Vec::new();
+    };
+    context
+        .context_refs
+        .iter()
+        .filter(|reference| {
+            reference
+                .id
+                .as_ref()
+                .is_some_and(|id| candidate.reason.contains(id))
+        })
+        .cloned()
+        .collect()
+}
+
+fn authority_status(contract: Option<&RecipeContract>) -> LoopConstraintStatus {
+    if contract.is_some() {
+        LoopConstraintStatus::Pass
+    } else {
+        LoopConstraintStatus::Unknown
+    }
+}
+
+fn authority_severity(contract: Option<&RecipeContract>) -> LoopConstraintSeverity {
+    if contract.is_some() {
+        LoopConstraintSeverity::Info
+    } else {
+        LoopConstraintSeverity::Warning
+    }
+}
+
+fn authority_reason(contract: Option<&RecipeContract>) -> &'static str {
+    if contract.is_some() {
+        "recommended recipe carries an explicit authority scope"
+    } else {
+        "no recipe authority scope was selected"
+    }
+}
+
+fn proof_status(recipe: &str) -> LoopConstraintStatus {
+    if recipe == "ship" {
+        LoopConstraintStatus::Unknown
+    } else {
+        LoopConstraintStatus::Pass
+    }
+}
+
+fn proof_severity(recipe: &str) -> LoopConstraintSeverity {
+    if recipe == "ship" {
+        LoopConstraintSeverity::Warning
+    } else {
+        LoopConstraintSeverity::Info
+    }
+}
+
+fn proof_reason(recipe: &str) -> &'static str {
+    if recipe == "ship" {
+        "ship proof requires feature-level verification evidence not yet modeled in LoopContext"
+    } else {
+        "route can proceed before final proof, which remains enforced by task and feature gates"
+    }
+}
+
+fn qa_status(recipe: &str) -> LoopConstraintStatus {
+    if recipe == "ship" {
+        LoopConstraintStatus::Unknown
+    } else {
+        LoopConstraintStatus::Pass
+    }
+}
+
+fn qa_severity(recipe: &str) -> LoopConstraintSeverity {
+    if recipe == "ship" {
+        LoopConstraintSeverity::Warning
+    } else {
+        LoopConstraintSeverity::Info
+    }
+}
+
+fn qa_reason(recipe: &str) -> &'static str {
+    if recipe == "ship" {
+        "ship QA requires feature QA evidence not yet modeled in LoopContext"
+    } else {
+        "QA is not a blocker for this route before final feature gates"
+    }
+}
+
+fn dirty_tree_status(context: &LoopContext) -> LoopConstraintStatus {
+    match context.git.as_ref() {
+        Some(git) if git.code_other_dirty > 0 || git.maestro_dirty > 0 => {
+            LoopConstraintStatus::Warn
+        }
+        Some(_) => LoopConstraintStatus::Pass,
+        None => LoopConstraintStatus::Unknown,
+    }
+}
+
+fn dirty_tree_severity(context: &LoopContext) -> LoopConstraintSeverity {
+    match dirty_tree_status(context) {
+        LoopConstraintStatus::Warn => LoopConstraintSeverity::Warning,
+        LoopConstraintStatus::Unknown => LoopConstraintSeverity::Warning,
+        _ => LoopConstraintSeverity::Info,
+    }
+}
+
+fn dirty_tree_reason(context: &LoopContext) -> &'static str {
+    match context.git.as_ref() {
+        Some(git) if git.code_other_dirty > 0 || git.maestro_dirty > 0 => {
+            "working tree has dirty code/other or Maestro files"
+        }
+        Some(_) => "working tree is clean in the router snapshot",
+        None => "git state is unavailable in the router snapshot",
+    }
+}
+
+fn dirty_tree_blocks(recipe: &str, context: &LoopContext) -> Vec<String> {
+    if recipe == "ship" && dirty_tree_status(context) == LoopConstraintStatus::Warn {
+        vec!["ship".to_string()]
+    } else {
+        Vec::new()
+    }
+}
+
+fn route_confidence_status(contract: Option<&RecipeContract>) -> LoopConstraintStatus {
+    match contract.map(|contract| contract.router.confidence.as_str()) {
+        Some("high") => LoopConstraintStatus::Pass,
+        Some("medium") => LoopConstraintStatus::Warn,
+        Some("low") => LoopConstraintStatus::Unknown,
+        Some(_) | None => LoopConstraintStatus::Unknown,
+    }
+}
+
+fn route_confidence_severity(contract: Option<&RecipeContract>) -> LoopConstraintSeverity {
+    match route_confidence_status(contract) {
+        LoopConstraintStatus::Pass => LoopConstraintSeverity::Info,
+        LoopConstraintStatus::Warn => LoopConstraintSeverity::Warning,
+        _ => LoopConstraintSeverity::Warning,
+    }
+}
+
+fn route_confidence_reason(contract: Option<&RecipeContract>) -> &'static str {
+    match contract.map(|contract| contract.router.confidence.as_str()) {
+        Some("high") => "recipe router metadata confidence is high",
+        Some("medium") => "recipe router metadata confidence is medium",
+        Some("low") => "recipe router metadata confidence is low",
+        Some(_) => "recipe router metadata confidence is unrecognized",
+        None => "no recipe was selected",
+    }
+}
+
+fn ship_gate_status(recipe: &str) -> LoopConstraintStatus {
+    if recipe == "ship" {
+        LoopConstraintStatus::Unknown
+    } else {
+        LoopConstraintStatus::Pass
+    }
+}
+
+fn ship_gate_severity(recipe: &str) -> LoopConstraintSeverity {
+    if recipe == "ship" {
+        LoopConstraintSeverity::Warning
+    } else {
+        LoopConstraintSeverity::Info
+    }
+}
+
+fn ship_gate_reason(recipe: &str) -> &'static str {
+    if recipe == "ship" {
+        "feature ship gate requires proof and QA evidence before close"
+    } else {
+        "route is not attempting to close or ship a feature"
+    }
+}
+
+fn score_candidate(contract: &RecipeContract, constraints: &[LoopConstraint]) -> u8 {
+    let confidence_bonus = match contract.router.confidence.as_str() {
+        "high" => 20,
+        "medium" => 10,
+        "low" => 0,
+        _ => 0,
+    };
+    let mut score = 50_i16 + contract.router.priority.min(30) as i16 + confidence_bonus;
+    for constraint in constraints {
+        score -= match constraint.status {
+            LoopConstraintStatus::Fail => 40,
+            LoopConstraintStatus::Warn => 10,
+            LoopConstraintStatus::Unknown
+                if constraint.severity == LoopConstraintSeverity::Warning =>
+            {
+                5
+            }
+            LoopConstraintStatus::Unknown | LoopConstraintStatus::Pass => 0,
+        };
+    }
+    score.clamp(0, 100) as u8
+}
+
+fn why_not_candidates(
+    context: &LoopContext,
+    selected: &RouterCandidate,
+    candidates: &[RouterCandidate],
+) -> Result<Vec<LoopWhyNot>> {
+    let selected_contract = contract(selected.recipe)?;
+    let mut reports = Vec::new();
+    for candidate in candidates
+        .iter()
+        .filter(|candidate| candidate.recipe != selected.recipe)
+    {
+        let candidate_contract = contract(candidate.recipe)?;
+        let candidate_constraints =
+            evaluate_base_constraints(context, Some(&candidate_contract), Some(candidate));
+        let mut blocked_by = blocked_by_for_candidate(candidate.recipe, &candidate_constraints);
+        let reason = if blocked_by.is_empty() {
+            blocked_by.push("lower_priority_than_selected_recipe".to_string());
+            format!(
+                "{} priority {} did not outrank selected {} priority {}",
+                candidate_contract.id,
+                candidate_contract.router.priority,
+                selected_contract.id,
+                selected_contract.router.priority
+            )
+        } else {
+            format!(
+                "{} was not selected because constraint(s) blocked or warned on that route",
+                candidate_contract.id
+            )
+        };
+        reports.push(LoopWhyNot {
+            recipe: candidate_contract.id,
+            blocked_by,
+            reason,
+            source_refs: selected_unit_refs(context, Some(candidate)),
+        });
+    }
+    reports.sort_by(|left, right| left.recipe.cmp(&right.recipe));
+    reports.dedup_by(|left, right| left.recipe == right.recipe);
+    Ok(reports)
+}
+
+fn blocked_by_for_candidate(recipe: &str, constraints: &[LoopConstraint]) -> Vec<String> {
+    let mut blocked_by = constraints
+        .iter()
+        .filter(|constraint| {
+            constraint.status == LoopConstraintStatus::Fail
+                || constraint.blocks.iter().any(|blocked| blocked == recipe)
+        })
+        .map(|constraint| constraint.id.clone())
+        .collect::<Vec<_>>();
+    blocked_by.sort();
+    blocked_by.dedup();
+    blocked_by
+}
+
+fn attempt_policy_for(recipe: &str, constraints: &[LoopConstraint]) -> LoopAttemptPolicy {
+    let mut stop_on = blocked_by_for_candidate(recipe, constraints);
+    for constraint in constraints.iter().filter(|constraint| {
+        constraint.id == "human_approval_ok" && constraint.status != LoopConstraintStatus::Pass
+    }) {
+        stop_on.push(constraint.id.clone());
+    }
+    stop_on.sort();
+    stop_on.dedup();
+    if stop_on.is_empty() {
+        stop_on.push("failed proof, QA, conflict, dirty-tree, or approval constraint".to_string());
+    }
+    LoopAttemptPolicy {
+        policy: "single_attempt_then_observe".to_string(),
+        max_attempts: 1,
+        retry_after: vec![
+            "record LoopOutcome before retrying the same recipe".to_string(),
+            "rerun loop next with refreshed local state".to_string(),
+        ],
+        stop_on,
+    }
 }
 
 fn best_candidate(candidates: &[RouterCandidate]) -> Result<Option<RouterCandidate>> {
@@ -1894,6 +3065,165 @@ mod tests {
                 .iter()
                 .any(|edge| { edge.kind == "invocation" && edge.to == "audit" })
         );
+    }
+
+    #[test]
+    fn route_next_includes_context_refs_and_base_constraints() {
+        let task = task_input("task-router", "in_progress", Some("feature-router"));
+        let report = route_next(LoopRouterInput {
+            repo: "/repo".to_string(),
+            initialized: true,
+            current_task: Some(task.clone()),
+            tasks: vec![task],
+            active_sessions: 3,
+            git: Some(LoopGitInput {
+                branch: Some("main".to_string()),
+                code_other_dirty: 1,
+                maestro_dirty: 2,
+                ahead: 0,
+                behind: 0,
+            }),
+            ..LoopRouterInput::default()
+        })
+        .expect("router should recommend work");
+
+        assert!(
+            report
+                .context_refs
+                .iter()
+                .any(|reference| reference.kind == "task"
+                    && reference.id.as_deref() == Some("task-router")),
+            "{report:#?}"
+        );
+        assert!(
+            report
+                .context_refs
+                .iter()
+                .any(|reference| reference.kind == "git"
+                    && reference.command.as_deref() == Some("git status --short --branch")),
+            "{report:#?}"
+        );
+
+        let constraint_ids = report
+            .constraints
+            .iter()
+            .map(|constraint| constraint.id.as_str())
+            .collect::<BTreeSet<_>>();
+        for expected in [
+            "authority_ok",
+            "scope_clear",
+            "selected_unit_ok",
+            "proof_ready",
+            "qa_ready",
+            "dirty_tree_risk",
+            "conflict_risk",
+            "memory_relevance",
+            "prior_failure_risk",
+            "route_confidence",
+            "ship_gate_ok",
+            "human_approval_ok",
+        ] {
+            assert!(constraint_ids.contains(expected), "{constraint_ids:?}");
+        }
+        assert!(report.constraints.iter().any(|constraint| {
+            constraint.id == "dirty_tree_risk" && constraint.status == LoopConstraintStatus::Warn
+        }));
+        assert!(report.constraints.iter().any(|constraint| {
+            constraint.id == "human_approval_ok" && constraint.status == LoopConstraintStatus::Pass
+        }));
+    }
+
+    #[test]
+    fn route_next_scores_phase_attempt_policy_and_why_not_alternatives() {
+        let task = task_input("task-router", "ready", Some("feature-router"));
+        let report = route_next(LoopRouterInput {
+            repo: "/repo".to_string(),
+            initialized: true,
+            tasks: vec![task],
+            features: vec![feature_input("feature-router", "in_progress", 1, 1, 0)],
+            active_conflicts: 1,
+            active_sessions: 2,
+            ..LoopRouterInput::default()
+        })
+        .expect("router should recommend conflict handoff before work or ship");
+
+        assert_eq!(
+            report.recommended_recipe.as_deref(),
+            Some("conflict-handoff")
+        );
+        assert_eq!(report.recommended_phase.as_deref(), Some("perceive"));
+        assert!(
+            report.score.is_some_and(|score| score > 0 && score <= 100),
+            "{report:#?}"
+        );
+        let attempt_policy = report
+            .attempt_policy
+            .as_ref()
+            .expect("recommended route should carry attempt policy");
+        assert_eq!(attempt_policy.max_attempts, 1);
+        assert!(
+            attempt_policy
+                .retry_after
+                .iter()
+                .any(|item| item.contains("LoopOutcome"))
+        );
+        assert!(report.why_not.iter().any(|why_not| {
+            why_not.recipe == "ship"
+                && why_not
+                    .blocked_by
+                    .iter()
+                    .any(|blocked_by| blocked_by == "conflict_risk")
+        }));
+        assert!(report.why_not.iter().any(|why_not| {
+            why_not.recipe == "work"
+                && why_not
+                    .blocked_by
+                    .iter()
+                    .any(|blocked_by| blocked_by == "conflict_risk")
+        }));
+    }
+
+    #[test]
+    fn route_next_memory_hits_shape_memory_constraints_without_overriding_live_truth() {
+        let task = task_input("task-router", "ready", Some("feature-router"));
+        let report = route_next(LoopRouterInput {
+            repo: "/repo".to_string(),
+            initialized: true,
+            tasks: vec![task],
+            memory_hits: vec![
+                LoopMemoryHit {
+                    id: "mem-failure".to_string(),
+                    kind: "prior_failure".to_string(),
+                    reason: "approved memory matched task-router".to_string(),
+                    source_refs: vec![LoopContextRef::command(
+                        "memory",
+                        Some("mem-failure".to_string()),
+                        "maestro memory show mem-failure",
+                    )],
+                },
+                LoopMemoryHit {
+                    id: "msug-success".to_string(),
+                    kind: "success_pattern".to_string(),
+                    reason: "open memory suggestion matched feature-router".to_string(),
+                    source_refs: vec![LoopContextRef::command(
+                        "memory_suggestion",
+                        Some("msug-success".to_string()),
+                        "maestro memory suggest list",
+                    )],
+                },
+            ],
+            ..LoopRouterInput::default()
+        })
+        .expect("router should keep live task route with advisory memory");
+
+        assert_eq!(report.recommended_recipe.as_deref(), Some("work"));
+        assert_eq!(report.memory_hits.len(), 2);
+        assert!(report.constraints.iter().any(|constraint| {
+            constraint.id == "memory_relevance" && constraint.status == LoopConstraintStatus::Pass
+        }));
+        assert!(report.constraints.iter().any(|constraint| {
+            constraint.id == "prior_failure_risk" && constraint.status == LoopConstraintStatus::Warn
+        }));
     }
 
     #[test]

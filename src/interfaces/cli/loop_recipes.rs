@@ -4,19 +4,24 @@ use std::path::PathBuf;
 
 use anyhow::{Result, bail};
 use serde::Serialize;
-use serde_json::json;
+use serde_json::{Value, json};
 
 use crate::domain::{card, feature, loop_recipes, run, task};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
+use crate::foundation::core::session::agent_runtime_from_env;
 use crate::foundation::core::time::{timestamp_nanos, utc_now_timestamp};
-use crate::interfaces::cli::{GitReadout, LoopArgs, LoopCommand, LoopNextArgs, WorkLeaseArgs};
+use crate::interfaces::cli::{
+    GitReadout, LoopArgs, LoopCommand, LoopImproveArgs, LoopNextArgs, LoopOutcomeArgs,
+    WorkLeaseArgs,
+};
 use crate::interfaces::hooks::record;
 use crate::operations::harness;
 use crate::operations::memory::{
     self, ApprovedMemory, MemoryReadScope, MemoryReadSurface, MemorySuggestionHint,
-    MemorySuggestionSet,
+    MemorySuggestionSet, parse_source_ref,
 };
 
+const LOOP_OUTCOME_SCHEMA: &str = "maestro.loop_outcome.v1";
 const WORK_LEASE_JSON_SCHEMA: &str = "maestro.work_lease.v1";
 const WORK_LEASE_JSON_VERSION: u8 = 1;
 const DEFAULT_HARD_STOPS: &[&str] = &[
@@ -98,6 +103,8 @@ pub fn run(args: LoopArgs) -> Result<()> {
             print!("{}", loop_recipes::custom_recipe_template());
         }
         Some(LoopCommand::Next(args)) => run_next(args, custom_dir.as_deref())?,
+        Some(LoopCommand::Improve(args)) => run_improve(args)?,
+        Some(LoopCommand::Outcome(args)) => run_outcome(*args)?,
         Some(LoopCommand::WorkLease(args)) => run_work_lease(*args)?,
     }
     Ok(())
@@ -130,6 +137,251 @@ fn run_next(args: LoopNextArgs, custom_dir: Option<&std::path::Path>) -> Result<
         print_loop_next(&report);
     }
     Ok(())
+}
+
+fn run_improve(args: LoopImproveArgs) -> Result<()> {
+    let repo_root = discover_repo_root()?;
+    let paths = MaestroPaths::new(repo_root);
+    let report = build_loop_improve_report(&paths)?;
+    if args.json {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+    } else {
+        print_loop_improve(&report);
+    }
+    Ok(())
+}
+
+fn build_loop_improve_report(paths: &MaestroPaths) -> Result<loop_recipes::LoopImproveReport> {
+    let mut outcomes = Vec::new();
+    run::visit_managed_events(paths, |record| {
+        let event = record.event();
+        if event.event_type() != Some("loop_outcome") {
+            return Ok(());
+        }
+        let value: Value = serde_json::from_str(record.raw_line())?;
+        let failure_class = json_string(&value, "failure_class");
+        if failure_class.is_empty() {
+            return Ok(());
+        }
+        outcomes.push(loop_recipes::LoopOutcomeInput {
+            session_id: record.session_id().to_string(),
+            recipe: json_string(&value, "recipe"),
+            phase: json_string(&value, "phase"),
+            selected_unit: json_string(&value, "selected_unit"),
+            failure_class,
+            route_action: json_string_at(&value, &["route", "action"]),
+            route_recipe: json_string_at(&value, &["route", "recipe"]),
+            proof_result: json_string(&value, "proof_result"),
+            blocker_class: json_string(&value, "blocker_class"),
+            retry_count: value
+                .get("retry_count")
+                .and_then(Value::as_u64)
+                .unwrap_or_default() as u32,
+            duration_ms: value
+                .get("duration_ms")
+                .and_then(Value::as_u64)
+                .unwrap_or_default(),
+            learning_candidate: optional_json_string(&value, "learning_candidate"),
+            source_refs: loop_outcome_source_refs(record.session_id(), &value),
+        });
+        Ok(())
+    })?;
+    Ok(loop_recipes::improve_from_outcomes(
+        loop_recipes::LoopImproveInput { outcomes },
+    ))
+}
+
+fn print_loop_improve(report: &loop_recipes::LoopImproveReport) {
+    if report.proposals.is_empty() {
+        println!("no loop improvement proposals");
+        return;
+    }
+    println!("LoopImprove proposals: {}", report.proposal_count);
+    for proposal in &report.proposals {
+        println!(
+            "{} [{}] {} ({})",
+            proposal.id, proposal.kind, proposal.title, proposal.severity
+        );
+        println!("  apply: {}", proposal.apply_command);
+    }
+}
+
+fn loop_outcome_source_refs(session_id: &str, value: &Value) -> Vec<loop_recipes::LoopContextRef> {
+    let mut refs = vec![loop_recipes::LoopContextRef {
+        kind: "run_event".to_string(),
+        id: Some(session_id.to_string()),
+        path: None,
+        command: Some(format!("maestro session show {session_id} --json")),
+    }];
+    if let Some(items) = value.get("source_refs").and_then(Value::as_array) {
+        for item in items {
+            let kind = json_string(item, "kind");
+            if kind.is_empty() {
+                continue;
+            }
+            refs.push(loop_recipes::LoopContextRef {
+                kind,
+                id: optional_json_string(item, "id"),
+                path: optional_json_string(item, "path"),
+                command: optional_json_string(item, "command"),
+            });
+        }
+    }
+    refs
+}
+
+fn json_string(value: &Value, field: &str) -> String {
+    optional_json_string(value, field).unwrap_or_default()
+}
+
+fn optional_json_string(value: &Value, field: &str) -> Option<String> {
+    value
+        .get(field)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+}
+
+fn json_string_at(value: &Value, path: &[&str]) -> String {
+    let mut current = value;
+    for field in path {
+        let Some(next) = current.get(*field) else {
+            return String::new();
+        };
+        current = next;
+    }
+    current
+        .as_str()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or_default()
+        .to_string()
+}
+
+#[derive(Clone, Copy, Debug, Serialize)]
+struct LoopOutcomeRoute {
+    action: &'static str,
+    recipe: &'static str,
+    reason: &'static str,
+}
+
+fn run_outcome(args: LoopOutcomeArgs) -> Result<()> {
+    let repo_root = discover_repo_root()?;
+    let paths = MaestroPaths::new(repo_root);
+    let recipe = required_arg(args.recipe, "--recipe")?;
+    let phase = required_arg(args.phase, "--phase")?;
+    let selected_unit = required_arg(args.selected_unit, "--selected-unit")?;
+    let failure_class = required_arg(args.failure_class, "--failure-class")?.to_ascii_lowercase();
+    let proof_result =
+        optional_arg(args.proof_result, "--proof-result")?.unwrap_or_else(|| "unknown".to_string());
+    let blocker_class =
+        optional_arg(args.blocker_class, "--blocker-class")?.unwrap_or_else(|| "none".to_string());
+    let constraints = args
+        .constraints
+        .into_iter()
+        .map(|constraint| required_arg(constraint, "--constraint"))
+        .collect::<Result<Vec<_>>>()?;
+    let source_refs = args
+        .source_ref
+        .iter()
+        .map(|raw| parse_source_ref(raw))
+        .collect::<Vec<_>>();
+    let learning_candidate = optional_arg(args.learning_candidate, "--learning-candidate")?;
+    let route = loop_outcome_route(&failure_class)?;
+    let run_id = args.run.unwrap_or_else(super::cli_run_id);
+    let mut event = json!({
+        "schema_version": LOOP_OUTCOME_SCHEMA,
+        "ts": utc_now_timestamp(),
+        "event_type": "loop_outcome",
+        "session_id": run_id,
+        "recipe": recipe,
+        "phase": phase,
+        "selected_unit": selected_unit,
+        "constraints": constraints,
+        "proof_result": proof_result,
+        "failure_class": failure_class,
+        "blocker_class": blocker_class,
+        "retry_count": args.retry_count,
+        "duration_ms": args.duration_ms,
+        "learning_candidate": learning_candidate,
+        "source_refs": source_refs,
+        "route": route,
+    });
+    run::insert_agent_runtime(&mut event, agent_runtime_from_env());
+    run::append_manual_event(&paths, &run_id, &event)?;
+    if args.json {
+        println!("{}", serde_json::to_string(&event)?);
+    } else {
+        println!("recorded loop_outcome event for run {run_id}");
+        println!("route: {} -> {}", route.action, route.recipe);
+    }
+    Ok(())
+}
+
+fn required_arg(value: String, flag: &str) -> Result<String> {
+    let value = value.trim();
+    if value.is_empty() {
+        bail!("{flag} must not be empty");
+    }
+    Ok(value.to_string())
+}
+
+fn optional_arg(value: Option<String>, flag: &str) -> Result<Option<String>> {
+    value.map(|value| required_arg(value, flag)).transpose()
+}
+
+fn loop_outcome_route(failure_class: &str) -> Result<LoopOutcomeRoute> {
+    match failure_class {
+        "proof_gap" => Ok(LoopOutcomeRoute {
+            action: "repair",
+            recipe: "work",
+            reason: "proof failed or evidence is missing; repair the current unit before retrying",
+        }),
+        "test_failure" => Ok(LoopOutcomeRoute {
+            action: "repair",
+            recipe: "work",
+            reason: "verification failed; repair implementation or tests before retrying",
+        }),
+        "scope_ambiguity" => Ok(LoopOutcomeRoute {
+            action: "design",
+            recipe: "design",
+            reason: "route is ambiguous; clarify contract, scope, or acceptance before coding",
+        }),
+        "authority_gap" => Ok(LoopOutcomeRoute {
+            action: "hard_stop",
+            recipe: "ship",
+            reason: "required external authority is absent; stop before irreversible action",
+        }),
+        "dirty_scope" => Ok(LoopOutcomeRoute {
+            action: "repair",
+            recipe: "work",
+            reason: "dirty tree or ownership risk must be isolated before continuing",
+        }),
+        "conflict" => Ok(LoopOutcomeRoute {
+            action: "hard_stop",
+            recipe: "conflict-handoff",
+            reason: "active ownership or scope conflict requires coordination before continuing",
+        }),
+        "memory_collision" => Ok(LoopOutcomeRoute {
+            action: "learning",
+            recipe: "learning",
+            reason: "memory evidence conflicts; reconcile or propose a memory update before reuse",
+        }),
+        "external_approval" => Ok(LoopOutcomeRoute {
+            action: "hard_stop",
+            recipe: "ship",
+            reason: "external approval gate is unmet; stop before shipping or publishing",
+        }),
+        "repeated_failure" => Ok(LoopOutcomeRoute {
+            action: "audit",
+            recipe: "audit",
+            reason: "same class failed repeatedly; audit before another implementation attempt",
+        }),
+        _ => bail!(
+            "unsupported --failure-class {failure_class:?}; supported: proof_gap, test_failure, scope_ambiguity, authority_gap, dirty_scope, conflict, memory_collision, external_approval, repeated_failure"
+        ),
+    }
 }
 
 fn build_loop_next_report() -> Result<loop_recipes::LoopNextReport> {
@@ -230,12 +482,13 @@ pub(crate) fn build_loop_next_report_from_snapshot(
         }
     };
 
-    loop_recipes::route_next(loop_recipes::LoopRouterInput {
+    let mut input = loop_recipes::LoopRouterInput {
         repo: paths.repo_root().display().to_string(),
         initialized: true,
         current_task,
         tasks,
         features,
+        memory_hits: Vec::new(),
         active_conflicts,
         active_sessions,
         pending_synthesis,
@@ -255,7 +508,165 @@ pub(crate) fn build_loop_next_report_from_snapshot(
                 .unwrap_or(0),
         }),
         warnings,
-    })
+    };
+    let report = loop_recipes::route_next(input.clone())?;
+    input.memory_hits = loop_memory_preflight_hits(paths, &input, &report);
+    loop_recipes::route_next(input)
+}
+
+fn loop_memory_preflight_hits(
+    paths: &MaestroPaths,
+    input: &loop_recipes::LoopRouterInput,
+    report: &loop_recipes::LoopNextReport,
+) -> Vec<loop_recipes::LoopMemoryHit> {
+    let base_scope = loop_memory_scope(input, None);
+    let mut hits = Vec::new();
+    if let Ok(set) = memory::approved_memory(paths, MemoryReadSurface::Status, base_scope.clone()) {
+        hits.extend(set.memories.into_iter().map(approved_memory_hit));
+    }
+    if let Some(recipe) = report.recommended_recipe.as_deref() {
+        let route_scope = loop_memory_scope(input, Some(recipe));
+        if let Ok(set) = memory::approved_memory(paths, MemoryReadSurface::Status, route_scope) {
+            hits.extend(set.memories.into_iter().map(approved_memory_hit));
+        }
+    }
+    if let Ok(set) = memory::suggestion_hints(paths, MemoryReadSurface::Status, base_scope) {
+        hits.extend(set.suggestions.into_iter().map(memory_suggestion_hit));
+    }
+    hits.sort_by(|left, right| {
+        left.id
+            .cmp(&right.id)
+            .then_with(|| left.kind.cmp(&right.kind))
+    });
+    hits.dedup_by(|left, right| left.id == right.id && left.kind == right.kind);
+    hits
+}
+
+fn loop_memory_scope(
+    input: &loop_recipes::LoopRouterInput,
+    query: Option<&str>,
+) -> MemoryReadScope {
+    let selected_task = input
+        .current_task
+        .as_ref()
+        .or_else(|| input.tasks.iter().find(|task| task.state == "in_progress"))
+        .or_else(|| input.tasks.iter().find(|task| task.state == "ready"))
+        .or_else(|| {
+            input
+                .tasks
+                .iter()
+                .find(|task| task.state == "needs_verification")
+        });
+    MemoryReadScope {
+        task_id: selected_task.map(|task| task.id.clone()),
+        feature_id: selected_task
+            .and_then(|task| task.feature_id.clone())
+            .or_else(|| {
+                input
+                    .features
+                    .iter()
+                    .find(|feature| feature.status == "in_progress" || feature.status == "proposed")
+                    .map(|feature| feature.id.clone())
+            }),
+        query: query.map(str::to_string),
+        ..MemoryReadScope::default()
+    }
+}
+
+fn approved_memory_hit(memory: ApprovedMemory) -> loop_recipes::LoopMemoryHit {
+    let kind = classify_memory_signals(memory.signal_types.iter().map(|signal| signal.as_str()));
+    loop_recipes::LoopMemoryHit {
+        id: memory.id.clone(),
+        kind,
+        reason: format!(
+            "approved memory matched {} scope; {}; {}",
+            memory.scope_kind.as_str(),
+            memory.reason,
+            memory.summary
+        ),
+        source_refs: vec![
+            loop_context_command_ref(
+                "memory",
+                Some(memory.id.clone()),
+                format!("maestro memory show {}", memory.id),
+            ),
+            loop_context_path_ref("memory_lesson", Some(memory.id), memory.lesson_path),
+        ],
+    }
+}
+
+fn memory_suggestion_hit(suggestion: MemorySuggestionHint) -> loop_recipes::LoopMemoryHit {
+    let kind = classify_memory_signals(std::iter::once(suggestion.signal_type.as_str()));
+    loop_recipes::LoopMemoryHit {
+        id: suggestion.id.clone(),
+        kind,
+        reason: format!(
+            "open memory suggestion matched {} scope; signal={}; target={}; {}",
+            suggestion.scope_kind,
+            suggestion.signal_type,
+            suggestion.target_surface,
+            suggestion.summary
+        ),
+        source_refs: vec![loop_context_command_ref(
+            "memory_suggestion",
+            Some(suggestion.id),
+            "maestro memory suggest list",
+        )],
+    }
+}
+
+fn classify_memory_signals<'a>(signals: impl Iterator<Item = &'a str>) -> String {
+    let mut user_correction = false;
+    let mut success_pattern = false;
+    let mut decision = false;
+    let mut guardrail = false;
+    for signal in signals {
+        match signal {
+            "failure" | "repeated_block" => return "prior_failure".to_string(),
+            "user_correction" => user_correction = true,
+            "verified_success" | "good_run" | "approval" => success_pattern = true,
+            "manual_final_decision" | "rejection" => decision = true,
+            "loop_hard_stop" | "health_signal" => guardrail = true,
+            _ => {}
+        }
+    }
+    if user_correction {
+        "user_correction".to_string()
+    } else if success_pattern {
+        "success_pattern".to_string()
+    } else if decision {
+        "decision".to_string()
+    } else if guardrail {
+        "guardrail".to_string()
+    } else {
+        "recipe_hint".to_string()
+    }
+}
+
+fn loop_context_command_ref(
+    kind: &str,
+    id: Option<String>,
+    command: impl Into<String>,
+) -> loop_recipes::LoopContextRef {
+    loop_recipes::LoopContextRef {
+        kind: kind.to_string(),
+        id,
+        path: None,
+        command: Some(command.into()),
+    }
+}
+
+fn loop_context_path_ref(
+    kind: &str,
+    id: Option<String>,
+    path: impl Into<String>,
+) -> loop_recipes::LoopContextRef {
+    loop_recipes::LoopContextRef {
+        kind: kind.to_string(),
+        id,
+        path: Some(path.into()),
+        command: None,
+    }
 }
 
 fn pending_synthesis_count(
@@ -377,6 +788,12 @@ fn print_loop_next(report: &loop_recipes::LoopNextReport) {
     }
     println!("confidence: {}", report.confidence);
     println!("priority: {}", report.priority);
+    if let Some(score) = report.score {
+        println!("score: {score}");
+    }
+    if let Some(phase) = report.recommended_phase.as_deref() {
+        println!("recommended_phase: {phase}");
+    }
     println!("reason: {}", report.reason);
     print_loop_next_list("authority_scope", &report.authority_scope);
     print_loop_next_list("autonomy", &report.autonomy);
@@ -389,6 +806,16 @@ fn print_loop_next(report: &loop_recipes::LoopNextReport) {
     print_loop_next_list("hard_stops", &report.hard_stops);
     print_loop_next_list("inspect", &report.inspect);
     print_loop_next_list("next_verbs", &report.next_verbs);
+    if !report.why_not.is_empty() {
+        println!("why_not:");
+        for alternative in &report.why_not {
+            println!(
+                "- {} blocked_by: {}",
+                alternative.recipe,
+                alternative.blocked_by.join(", ")
+            );
+        }
+    }
 }
 
 fn print_loop_next_list(label: &str, values: &[String]) {

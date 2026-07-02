@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: 64a4023fca32506fac57350b698feef9cd55abe1df75abf5890d52d825991bc8 -->
+<!-- maestro:cli-reference-sha256: c925c3f869a1ece9b58508f922a425d6947494d68fa1707ae61b81e622072a6e -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -48,5 +48,7 @@ a spelling not found here is outside this skill's CLI surface.
 
 - `maestro loop list` -- List shipped and project custom recipes
 - `maestro loop next [--json] [--compact] [--phase <PHASE>]` -- Recommend the next loop recipe without mutating state
+- `maestro loop improve [--json]` -- Plan loop improvement proposals without mutating state
 - `maestro loop show <NAME> [--compact] [--phase <PHASE>] [--json]` -- Print one shipped or project custom recipe
 - `maestro loop validate <NAME>` -- Validate one structured shipped or project custom loop recipe
+- `maestro loop outcome --recipe <RECIPE> --phase <PHASE> --selected-unit <SELECTED_UNIT> [--constraint <CONSTRAINTS>]... [--proof-result <PROOF_RESULT>] --failure-class <FAILURE_CLASS> [--blocker-class <BLOCKER_CLASS>] [--retry-count <RETRY_COUNT>] [--duration-ms <DURATION_MS>] [--learning-candidate <LEARNING_CANDIDATE>] [--source-ref <SOURCE_REF>]... [--run <RUN>] [--json]` -- Record a write-side loop outcome event

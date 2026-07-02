@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: d988357aa9b6aca0faf61f919655dd78e60ef502e84f3892b202a6c8cc2c5389 -->
+<!-- maestro:cli-reference-sha256: eebbac7207d972521904db579ed6449f6f5453a173cb7bc4821c2b832a1a5512 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -146,6 +146,8 @@ a spelling not found here is outside this skill's CLI surface.
 
 - `maestro loop list` -- List shipped and project custom recipes
 - `maestro loop next [--json] [--compact] [--phase <PHASE>]` -- Recommend the next loop recipe without mutating state
+- `maestro loop improve [--json]` -- Plan loop improvement proposals without mutating state
 - `maestro loop show <NAME> [--compact] [--phase <PHASE>] [--json]` -- Print one shipped or project custom recipe
 - `maestro loop validate <NAME>` -- Validate one structured shipped or project custom loop recipe
+- `maestro loop outcome --recipe <RECIPE> --phase <PHASE> --selected-unit <SELECTED_UNIT> [--constraint <CONSTRAINTS>]... [--proof-result <PROOF_RESULT>] --failure-class <FAILURE_CLASS> [--blocker-class <BLOCKER_CLASS>] [--retry-count <RETRY_COUNT>] [--duration-ms <DURATION_MS>] [--learning-candidate <LEARNING_CANDIDATE>] [--source-ref <SOURCE_REF>]... [--run <RUN>] [--json]` -- Record a write-side loop outcome event
 - `maestro loop work-lease [--json] [--project <PROJECT>] [--feature <FEATURE>] [--authority-ref <REF>] [--authority-summary <SUMMARY>] [--authority-scope <SCOPE>] [--authority-target <TARGET>] [--allow-external-action <ACTION>]... [--required-evidence <EVIDENCE>]... [--authority-expires-at <TIMESTAMP>] [--authority-hard-stop <STOP>]...` -- Run the internal Work Lease choose-phase helper and print JSON

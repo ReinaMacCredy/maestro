@@ -37,32 +37,32 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 20] = [
     (
         "skill",
         "ask-maestro",
-        "1.0.0",
-        "b7343f3a05806418812d8a6a590bb31bb62b819940728ff03a1869840732a612",
+        "1.0.1",
+        "8133e01490250799b98eaf6026021301d223344e3ae830fef262bb3af32fb228",
     ),
     (
         "skill",
         "maestro-card",
         "1.37.12",
-        "31450b855897579a30921c6daed3d2f16c0485adc35ca1c7a999d50538b6a320",
+        "e8539b94adbcf388da725a049e244ba0ffdf05f27f450c0fe0deab1cfcc06840",
     ),
     (
         "skill",
         "maestro-setup",
-        "1.11.2",
-        "28f04d2ce8f1d7138cf6fb67a842a829889e0e8b8e7614f7183baef0287e7b53",
+        "1.11.3",
+        "bd59bd51b707573a04cdfc9473aacf24e7d8e23788663ce2a6f7b4dd800321ff",
     ),
     (
         "skill",
         "maestro-design",
         "1.36.3",
-        "ff564c081697437e87979d2811f9e216d5a409820be5414e9eb40b8383523c65",
+        "4a084c36e607f7e10788d2906287b06ca3d96f6d251bfc0b726f634dedbd9e3e",
     ),
     (
         "skill",
         "maestro-audit",
-        "1.13.1",
-        "5c9dfe0049622eff0c4004e250182d8b9176b6af6dbe40546ccf9cbb5dc31ee4",
+        "1.13.2",
+        "cea3209daef0eac3ff34827a68f0df1bdf437296719cdd83dbff2dc6d277cf77",
     ),
     (
         "hook",
@@ -73,8 +73,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 20] = [
     (
         "harness",
         "HARNESS.md",
-        "1.29.6",
-        "92e161f22e6bb7a19ae59cf9579e2674085be950151aaeb81cfdebb2d7bda0f2",
+        "1.29.7",
+        "dfe9fd6c9e736f2fc47aa765b10f2282943cf331ad654add7916e1edbc993a1c",
     ),
     (
         "playbook",
@@ -334,6 +334,20 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
             && harness.contains("existing Maestro verbs"),
         "harness must teach the loop-first state/router/write split"
     );
+    for phrase in [
+        "maestro loop outcome",
+        "maestro loop improve",
+        "outcome/proof/memory verbs write",
+        "hidden stores",
+        "hidden schedulers",
+        "silent recipe mutation",
+        "proof/QA bypass",
+    ] {
+        assert!(
+            harness.contains(phrase),
+            "harness must explain loop intelligence boundary phrase {phrase:?}"
+        );
+    }
     assert!(
         harness.contains("maestro loop show design")
             && harness.contains("maestro loop show work")
@@ -355,6 +369,18 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
             && design.contains("perceive -> choose -> act"),
         "maestro-design must adopt the loop-first design lifecycle recipe"
     );
+    for phrase in [
+        "maestro loop outcome",
+        "maestro loop improve",
+        "loop next recommends",
+        "outcome/proof/memory verbs write",
+        "silent recipe mutation",
+    ] {
+        assert!(
+            design.contains(phrase),
+            "maestro-design must explain loop intelligence boundary phrase {phrase:?}"
+        );
+    }
     assert!(
         design.contains("domain model")
             && design.contains("reference/domain-model.md")
@@ -401,6 +427,18 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
             && audit.contains("maestro grep"),
         "maestro-audit must retain the architecture review branch"
     );
+    for phrase in [
+        "maestro loop outcome",
+        "maestro loop improve",
+        "loop next recommends",
+        "outcome/proof/memory verbs write",
+        "silent recipe mutation",
+    ] {
+        assert!(
+            audit.contains(phrase),
+            "maestro-audit must explain loop intelligence boundary phrase {phrase:?}"
+        );
+    }
 
     let card = shipped_skill_body("maestro-card").replace('\n', " ");
     for phrase in [
@@ -420,6 +458,19 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
             "maestro-card must keep lifecycle recipe checkpoint phrase {phrase:?}"
         );
     }
+    for phrase in [
+        "maestro loop outcome",
+        "maestro loop improve",
+        "loop next recommends",
+        "outcome/proof/memory verbs write",
+        "hidden stores",
+        "proof/QA bypass",
+    ] {
+        assert!(
+            card.contains(phrase),
+            "maestro-card must explain loop intelligence boundary phrase {phrase:?}"
+        );
+    }
 
     let setup = shipped_skill_body("maestro-setup").replace('\n', " ");
     for phrase in [
@@ -432,6 +483,32 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
         assert!(
             setup.contains(phrase),
             "maestro-setup must keep loop-first routing phrase {phrase:?}"
+        );
+    }
+    for phrase in [
+        "maestro loop outcome",
+        "maestro loop improve",
+        "loop next recommends",
+        "outcome/proof/memory verbs write",
+        "hidden schedulers",
+    ] {
+        assert!(
+            setup.contains(phrase),
+            "maestro-setup must explain loop intelligence boundary phrase {phrase:?}"
+        );
+    }
+
+    let ask = shipped_skill_body("ask-maestro").replace('\n', " ");
+    for phrase in [
+        "maestro loop outcome",
+        "maestro loop improve",
+        "loop next recommends",
+        "outcome/proof/memory verbs write",
+        "hidden stores",
+    ] {
+        assert!(
+            ask.contains(phrase),
+            "ask-maestro must explain loop intelligence boundary phrase {phrase:?}"
         );
     }
 }

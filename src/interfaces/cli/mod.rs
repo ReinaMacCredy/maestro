@@ -510,7 +510,7 @@ pub enum RootCommand {
     Playbook(PlaybookArgs),
     #[command(
         about = "Print loop recipe contracts, route next, or run choose-phase helpers",
-        after_help = "Examples:\n  maestro loop                    # list shipped and project custom recipes\n  maestro loop list               # same as above\n  maestro loop show design        # print one lifecycle recipe contract\n  maestro loop show feature-fanout # print one orchestration recipe\n  maestro loop next --json        # recommend the next recipe without writing\n  maestro loop validate design    # validate one structured loop recipe\n  maestro loop work-lease --json  # run the choose-phase helper for one ready card"
+        after_help = "Examples:\n  maestro loop                    # list shipped and project custom recipes\n  maestro loop list               # same as above\n  maestro loop show design        # print one lifecycle recipe contract\n  maestro loop show feature-fanout # print one orchestration recipe\n  maestro loop next --json        # recommend the next recipe without writing\n  maestro loop improve --json     # plan improvement proposals without writing\n  maestro loop validate design    # validate one structured loop recipe\n  maestro loop work-lease --json  # run the choose-phase helper for one ready card"
     )]
     Loop(LoopArgs),
     #[command(
@@ -648,6 +648,8 @@ pub enum LoopCommand {
     List,
     #[command(about = "Recommend the next loop recipe without mutating state")]
     Next(LoopNextArgs),
+    #[command(about = "Plan loop improvement proposals without mutating state")]
+    Improve(LoopImproveArgs),
     #[command(about = "Print one shipped or project custom recipe")]
     Show {
         /// Recipe name (e.g. feature-fanout); run `maestro loop` for the list.
@@ -675,6 +677,8 @@ pub enum LoopCommand {
         #[arg(value_name = "KIND")]
         kind: String,
     },
+    #[command(about = "Record a write-side loop outcome event")]
+    Outcome(Box<LoopOutcomeArgs>),
     #[command(about = "Run the internal Work Lease choose-phase helper and print JSON")]
     WorkLease(Box<WorkLeaseArgs>),
 }
@@ -690,6 +694,43 @@ pub struct LoopNextArgs {
     /// Override the compact packet phase selected from current status.
     #[arg(long, value_name = "PHASE")]
     pub phase: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct LoopImproveArgs {
+    /// Print machine-readable loop improvement proposal JSON.
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct LoopOutcomeArgs {
+    #[arg(long)]
+    pub recipe: String,
+    #[arg(long)]
+    pub phase: String,
+    #[arg(long = "selected-unit")]
+    pub selected_unit: String,
+    #[arg(long = "constraint")]
+    pub constraints: Vec<String>,
+    #[arg(long = "proof-result")]
+    pub proof_result: Option<String>,
+    #[arg(long = "failure-class")]
+    pub failure_class: String,
+    #[arg(long = "blocker-class")]
+    pub blocker_class: Option<String>,
+    #[arg(long = "retry-count", default_value_t = 0)]
+    pub retry_count: u32,
+    #[arg(long = "duration-ms", default_value_t = 0)]
+    pub duration_ms: u64,
+    #[arg(long = "learning-candidate")]
+    pub learning_candidate: Option<String>,
+    #[arg(long = "source-ref")]
+    pub source_ref: Vec<String>,
+    #[arg(long)]
+    pub run: Option<String>,
+    #[arg(long)]
+    pub json: bool,
 }
 
 #[derive(Debug, Args)]
