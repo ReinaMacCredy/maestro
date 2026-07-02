@@ -280,3 +280,43 @@ fn doctor_reports_transcript_health_without_payload() {
     assert!(!out.contains("hunter2"));
     assert!(!out.contains("tool-secret"));
 }
+
+#[test]
+fn session_grep_matches_explicit_transcript_session_filter() {
+    let fixture = transcript_repo("grep-transcript-session-grep");
+    let session_out = stdout(
+        maestro_with_env(
+            &["session", "grep", "--json", "019f-transcript", "rocket"],
+            fixture.repo(),
+            &fixture.envs(),
+        ),
+        &["session", "grep", "--json", "019f-transcript", "rocket"],
+    );
+    let explicit_out = stdout(
+        maestro_with_env(
+            &[
+                "grep",
+                "--json",
+                "rocket corpus:transcript session:019f-transcript",
+            ],
+            fixture.repo(),
+            &fixture.envs(),
+        ),
+        &[
+            "grep",
+            "--json",
+            "rocket corpus:transcript session:019f-transcript",
+        ],
+    );
+    let session_json: Value =
+        serde_json::from_str(&session_out).expect("session grep should emit JSON");
+    let explicit_json: Value = serde_json::from_str(&explicit_out).expect("grep should emit JSON");
+
+    assert_eq!(session_json["ok"], true);
+    assert_eq!(session_json["hits"], explicit_json["hits"]);
+    assert_eq!(session_json["hits"][0]["provider"], "codex");
+    assert_eq!(session_json["hits"][0]["session_id"], "019f-transcript");
+    assert_eq!(session_json["hits"][0]["authority"], "transcript_context");
+    assert_eq!(session_json["hits"][0]["proof_eligible"], false);
+    assert!(!session_out.contains("hunter2"));
+}

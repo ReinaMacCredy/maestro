@@ -1,12 +1,14 @@
 use anyhow::Result;
 
 use crate::domain::run;
+use crate::domain::search;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
-use crate::interfaces::cli::{SessionArgs, SessionCommand, SessionShowArgs};
+use crate::interfaces::cli::{SessionArgs, SessionCommand, SessionGrepArgs, SessionShowArgs};
 
 pub fn run(args: SessionArgs) -> Result<()> {
     match args.command {
         SessionCommand::Show(args) => show(args),
+        SessionCommand::Grep(args) => grep(args),
     }
 }
 
@@ -27,6 +29,31 @@ fn show(args: SessionShowArgs) -> Result<()> {
     }
     render_text(&readout);
     Ok(())
+}
+
+fn grep(args: SessionGrepArgs) -> Result<()> {
+    let paths = MaestroPaths::new(discover_repo_root()?);
+    let query = session_grep_query(&args.session_id, &args.query);
+    let envelope = search::grep(&paths, &query);
+
+    if args.json {
+        println!("{}", serde_json::to_string(&envelope)?);
+    } else if envelope.ok {
+        super::grep::render_human(&envelope.hits);
+    } else {
+        for diagnostic in &envelope.diagnostics {
+            eprintln!("{}: {}", diagnostic.code, diagnostic.message);
+        }
+        std::process::exit(2);
+    }
+    Ok(())
+}
+
+fn session_grep_query(session_id: &str, query: &[String]) -> String {
+    let mut atoms = query.to_vec();
+    atoms.push("corpus:transcript".to_string());
+    atoms.push(format!("session:{session_id}"));
+    atoms.join(" ")
 }
 
 fn render_text(readout: &run::SessionReadout) {

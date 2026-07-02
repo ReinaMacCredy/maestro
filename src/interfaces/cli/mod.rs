@@ -857,6 +857,11 @@ pub struct SessionArgs {
 pub enum SessionCommand {
     #[command(about = "Show a joined readout for one logical session id")]
     Show(SessionShowArgs),
+    #[command(
+        about = "Search exactly one visible transcript session",
+        after_help = "Equivalent to:\n  maestro grep <query> corpus:transcript session:<session-id>"
+    )]
+    Grep(SessionGrepArgs),
 }
 
 #[derive(Debug, Args)]
@@ -870,6 +875,19 @@ pub struct SessionShowArgs {
     /// Include local Codex transcript messages and tool-call summaries.
     #[arg(long)]
     pub transcript: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct SessionGrepArgs {
+    /// Logical transcript session id to search.
+    #[arg(value_name = "SESSION_ID")]
+    pub session_id: String,
+    /// Query terms to search within this one transcript session.
+    #[arg(value_name = "QUERY", required = true, trailing_var_arg = true)]
+    pub query: Vec<String>,
+    /// Print the additive-only maestro.grep.v1 JSON envelope.
+    #[arg(long)]
+    pub json: bool,
 }
 
 #[derive(Debug, Args)]

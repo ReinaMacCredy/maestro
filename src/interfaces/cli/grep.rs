@@ -23,7 +23,7 @@ pub fn run(args: GrepArgs) -> Result<()> {
     Ok(())
 }
 
-fn render_human(hits: &[search::SearchHit]) {
+pub(super) fn render_human(hits: &[search::SearchHit]) {
     if hits.is_empty() {
         println!("no hits");
         return;
