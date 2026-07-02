@@ -444,6 +444,21 @@ fn archive_candidates_classify_lifecycle_states_and_apply_targets() {
 
     let closed_id = close_ready_feature(&paths, "Closed Export");
     write_task(&paths, "task-archive-child", &closed_id, "verified");
+    let claimed_child = paths
+        .cards_dir()
+        .join("task-archive-child")
+        .join("card.yaml");
+    fs::write(
+        &claimed_child,
+        fs::read_to_string(&claimed_child)
+            .expect("invariant: child card should be readable")
+            .replacen(
+                "updated_at: \"2026-06-06T00:00:00.000Z\"\n",
+                "updated_at: \"2026-06-06T00:00:00.000Z\"\nclaimed_by: maestro\nclaimed_at: \"2026-07-02T00:00:00.000Z\"\n",
+                1,
+            ),
+    )
+    .expect("invariant: claimed child card should be writable");
 
     let proposed = feature::archive_candidate(&paths, "proposed-export", &evidence)
         .expect("invariant: proposed candidate should classify");

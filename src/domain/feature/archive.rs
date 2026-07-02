@@ -359,7 +359,7 @@ fn archive_target_blockers(paths: &MaestroPaths, id: &str) -> Result<(usize, Vec
         if card.parent.as_deref() == Some(id) && coarse == Some(Coarse::Closed) {
             terminal_children += 1;
         }
-        if coarse != Some(Coarse::Closed) || card.claimed_by.is_some() {
+        if coarse != Some(Coarse::Closed) {
             let claimed = card
                 .claimed_by
                 .as_deref()

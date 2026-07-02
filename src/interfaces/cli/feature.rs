@@ -1308,7 +1308,7 @@ fn blocking_work_items(paths: &MaestroPaths, id: &str) -> Result<Vec<String>> {
             continue;
         }
         let coarse = card::query::coarse_of(&card.status);
-        if coarse != Some(card::query::Coarse::Closed) || card.claimed_by.is_some() {
+        if coarse != Some(card::query::Coarse::Closed) {
             let claimed = card
                 .claimed_by
                 .as_deref()

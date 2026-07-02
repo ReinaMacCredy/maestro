@@ -219,6 +219,7 @@ fn feature_close_auto_archives_when_git_head_exists() {
     let repo = temp.path();
     let repository = init_git_repo(repo);
     seed_closable_feature(repo, "report-builder");
+    write_claimed_verified_task(repo, "task-report-builder-child", "report-builder");
     write_stack_verify(repo, "true");
     let head = commit_all(&repository, "verified feature ready to close");
 
@@ -240,6 +241,12 @@ fn feature_close_auto_archives_when_git_head_exists() {
             .join(".maestro/cards/report-builder/card.yaml")
             .exists(),
         "auto-archive removes the live feature card"
+    );
+    assert!(
+        !repo
+            .join(".maestro/cards/task-report-builder-child/card.yaml")
+            .exists(),
+        "auto-archive removes the claimed verified child card"
     );
     assert!(
         repo.join(".maestro/archive/cards.sqlite").is_file(),
@@ -269,6 +276,18 @@ fn feature_close_auto_archives_when_git_head_exists() {
         !index.contains(&canonical_root),
         "archive index must not persist absolute checkout paths:\n{index}"
     );
+}
+
+fn write_claimed_verified_task(repo: &Path, id: &str, feature_id: &str) {
+    let card_dir = repo.join(".maestro/cards").join(id);
+    fs::create_dir_all(&card_dir).expect("invariant: task card dir should be creatable");
+    fs::write(
+        card_dir.join("card.yaml"),
+        format!(
+            "schema_version: maestro.card.v1\nid: {id}\ntype: task\ntitle: {id}\nstatus: verified\nparent: {feature_id}\nclaimed_by: maestro\nclaimed_at: \"2026-07-02T00:00:00.000Z\"\ncreated_at: \"2026-07-02T00:00:00.000Z\"\nupdated_at: \"2026-07-02T00:00:00.000Z\"\nextra:\n  schema_version: maestro.task.v2\n  id: {id}\n  title: {id}\n  state: verified\n  claimed_by: maestro\n  acceptance_locked: false\n  verification: {{}}\n  created_at: \"2026-07-02T00:00:00.000Z\"\n  updated_at: \"2026-07-02T00:00:00.000Z\"\n"
+        ),
+    )
+    .expect("invariant: task card should be writable");
 }
 
 #[test]
