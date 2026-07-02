@@ -1,6 +1,7 @@
 pub mod card_support;
 mod support;
 
+use std::fs;
 use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Output, Stdio};
@@ -15,6 +16,7 @@ fn maestro(cwd: &Path, args: &[&str]) -> Output {
         .env("MAESTRO_AGENT", "codex")
         .env("MAESTRO_SESSION_ID", "test-driver")
         .env("MAESTRO_AUTO_UPDATE", "0")
+        .env("CODEX_HOME", cwd.join(".codex-test-home"))
         .output()
         .expect("invariant: compiled maestro binary should run in integration tests")
 }
@@ -35,6 +37,7 @@ fn record(cwd: &Path, payload: &str) {
         .args(["hook", "record"])
         .current_dir(cwd)
         .env("MAESTRO_AUTO_UPDATE", "0")
+        .env("CODEX_HOME", cwd.join(".codex-test-home"))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -124,4 +127,94 @@ fn session_show_renders_joined_text_and_json_readouts() {
     assert_eq!(parsed["sources"]["transcript"], "unavailable");
     let raw = serde_json::to_string(&parsed).expect("session JSON should serialize");
     assert!(!raw.contains("top-secret") && !raw.contains("api_key"));
+}
+
+fn seed_codex_transcript(repo: &Path, session_id: &str) {
+    let dir = repo.join(".codex-test-home/sessions/2026/07/01");
+    fs::create_dir_all(&dir).expect("invariant: transcript dir should be creatable");
+    fs::write(
+        dir.join(format!("rollout-2026-07-01T00-00-00-{session_id}.jsonl")),
+        concat!(
+            "{\"type\":\"response_item\",\"payload\":{\"type\":\"function_call\",\"name\":\"exec_command\",\"arguments\":\"secret=abc\"}}\n",
+            "{\"type\":\"response_item\",\"payload\":{\"type\":\"function_call\",\"name\":\"apply_patch\",\"arguments\":\"token=def\"}}\n",
+            "{\"type\":\"compacted\",\"payload\":{\"note\":\"private\"}}\n"
+        ),
+    )
+    .expect("invariant: transcript fixture should write");
+}
+
+#[test]
+fn session_show_uses_local_codex_transcript_as_labeled_backfill() {
+    let temp = cards_repo("session-show-transcript-backfill");
+    let repo = temp.path();
+    seed_codex_transcript(repo, "legacy-sess");
+
+    let text = run(repo, &["session", "show", "legacy-sess"]);
+    assert!(text.contains("commands: 2"), "{text}");
+    assert!(text.contains("compactions: 1"), "{text}");
+    assert!(
+        text.contains("activity: ledger + transcript backfill"),
+        "{text}"
+    );
+    assert!(text.contains("transcript: backfill"), "{text}");
+    assert!(!text.contains("transcript backfill unavailable"), "{text}");
+    assert!(
+        !text.contains("secret=abc") && !text.contains("token=def"),
+        "session show must not leak raw transcript input:\n{text}"
+    );
+
+    let json_out = run(repo, &["session", "show", "legacy-sess", "--json"]);
+    let parsed: Value = serde_json::from_str(&json_out).expect("session JSON should parse");
+    assert_eq!(parsed["activity"]["commands"], 2);
+    assert_eq!(parsed["activity"]["compactions"], 1);
+    assert_eq!(
+        parsed["activity"]["counts"]["transcript_command_observed"],
+        2
+    );
+    assert_eq!(
+        parsed["activity"]["counts"]["transcript_compaction_observed"],
+        1
+    );
+    assert_eq!(
+        parsed["sources"]["activity"],
+        "ledger + transcript backfill"
+    );
+    assert_eq!(parsed["sources"]["transcript"], "backfill");
+    assert!(
+        parsed["gaps"].as_array().is_some_and(Vec::is_empty),
+        "{parsed}"
+    );
+    let raw = serde_json::to_string(&parsed).expect("session JSON should serialize");
+    assert!(!raw.contains("secret=abc") && !raw.contains("token=def"));
+}
+
+#[test]
+fn session_show_resolves_progress_task_ids_through_task_store() {
+    let temp = cards_repo("session-show-progress-task");
+    let repo = temp.path();
+
+    let task_id = run(repo, &["task", "add", "Resolve progress task", "--id-only"])
+        .trim()
+        .to_string();
+    record(
+        repo,
+        &format!(
+            r#"{{"session_id":"progress-sess","event_type":"card_touch","card_id":"{task_id}"}}"#
+        ),
+    );
+
+    let text = run(repo, &["session", "show", "progress-sess"]);
+    assert!(text.contains(&task_id), "{text}");
+    assert!(text.contains("Resolve progress task"), "{text}");
+    assert!(text.contains("[ready]"), "{text}");
+    assert!(!text.contains("(not in store)"), "{text}");
+    assert!(!text.contains("[unknown]"), "{text}");
+
+    let json_out = run(repo, &["session", "show", "progress-sess", "--json"]);
+    let parsed: Value = serde_json::from_str(&json_out).expect("session JSON should parse");
+    let task = &parsed["tasks"][0];
+    assert_eq!(task["id"], task_id);
+    assert_eq!(task["title"], "Resolve progress task");
+    assert_eq!(task["status"], "ready");
+    assert_eq!(task["type"], "task");
 }
