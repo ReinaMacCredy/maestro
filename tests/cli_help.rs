@@ -55,6 +55,7 @@ fn root_help_lists_top_level_commands() {
             "card",
             "active",
             "link",
+            "archive",
             "harness",
             "query",
             "mcp",
@@ -64,8 +65,9 @@ fn root_help_lists_top_level_commands() {
         ],
     );
 
-    // The 11 flat card verbs, top-level verify, and both migrations are hidden:
+    // The flat card verbs, top-level verify, and both migrations are hidden:
     // the card namespace is canonical, but each flat spelling still dispatches.
+    // Archive is intentionally visible as the canonical top-level archive engine.
     let command_section = output
         .split("Options:")
         .next()
@@ -74,7 +76,6 @@ fn root_help_lists_top_level_commands() {
         "  ready ",
         "  list ",
         "  dep ",
-        "  archive ",
         "  claim ",
         "  assign ",
         "  note ",
