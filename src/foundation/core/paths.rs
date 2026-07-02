@@ -152,6 +152,16 @@ impl MaestroPaths {
         self.search_index_dir().join("source.shard")
     }
 
+    /// Return the project transcript view directory used by explicit transcript grep.
+    pub fn transcript_index_dir(&self) -> PathBuf {
+        self.index_dir().join("transcripts")
+    }
+
+    /// Return the redacted project transcript view manifest.
+    pub fn transcript_view_manifest_file(&self) -> PathBuf {
+        self.transcript_index_dir().join("manifest.json")
+    }
+
     /// Return the unified grep/search writer lock file.
     pub fn search_writer_lock_file(&self) -> PathBuf {
         self.search_index_dir().join("write.lock")

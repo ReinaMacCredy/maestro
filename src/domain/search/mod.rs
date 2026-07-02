@@ -16,4 +16,6 @@ pub(crate) use source::rebuild_source_unlocked;
 pub use source::{
     SourceIndexHealth, SourceRebuildReport, grep, grep_source, rebuild_source, source_index_health,
 };
+pub(crate) use transcript::rebuild_transcript_unlocked;
+pub use transcript::{TranscriptIndexHealth, TranscriptRebuildReport, transcript_index_health};
 pub use types::{GrepEnvelope, SearchDiagnostic, SearchHit};

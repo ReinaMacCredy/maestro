@@ -144,11 +144,14 @@ pub fn grep(paths: &MaestroPaths, raw_query: &str) -> GrepEnvelope {
         Some(SearchCorpus::Source) => {
             with_intent(grep_source_parsed(paths, raw_query, &parsed), &decision)
         }
-        Some(SearchCorpus::Transcript) => transcript::unavailable_envelope(raw_query, &parsed),
+        Some(SearchCorpus::Transcript) => with_intent(
+            transcript::grep_transcript_parsed(paths, raw_query, &parsed),
+            &decision,
+        ),
         None => grep_mixed(paths, raw_query, &parsed, &decision),
     };
-    if parsed.filters.include_transcript {
-        envelope = transcript::attach_unavailable(envelope);
+    if parsed.filters.include_transcript && parsed.filters.corpus.as_deref() != Some("transcript") {
+        envelope = transcript::attach_results(paths, raw_query, &parsed, envelope);
     }
     envelope
 }
@@ -346,7 +349,7 @@ pub(crate) fn grep_source_parsed(
     parsed: &ParsedQuery,
 ) -> GrepEnvelope {
     if parsed.filters.corpus.as_deref() == Some("transcript") {
-        return transcript::unavailable_envelope(raw_query, parsed);
+        return transcript::grep_transcript_parsed(paths, raw_query, parsed);
     }
     if let Some(invalid) = parsed.filters.kinds.iter().find(|kind| {
         let kind = kind.as_str();

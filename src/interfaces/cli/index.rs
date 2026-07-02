@@ -14,11 +14,13 @@ pub fn run(args: IndexArgs) -> Result<()> {
             memory,
             source,
             cards,
+            transcript,
         } => {
-            let rebuild_all = !memory && !source && !cards;
+            let rebuild_all = !memory && !source && !cards && !transcript;
             let rebuild_cards = cards || rebuild_all;
             let rebuild_memory = memory || cards || rebuild_all;
             let rebuild_source = source || rebuild_all;
+            let rebuild_transcript = transcript;
             let _guard = search::acquire_writer(&paths)?;
 
             if rebuild_cards {
@@ -66,6 +68,15 @@ pub fn run(args: IndexArgs) -> Result<()> {
                     println!("  skip example: {} ({})", skip.path, skip.reason);
                 }
                 println!("  file: .maestro/index/search/source.shard");
+            }
+            if rebuild_transcript {
+                let report = search::rebuild_transcript_unlocked(&paths)?;
+                println!("transcript project view rebuilt");
+                println!(
+                    "  sessions: {}, segments: {}, consent records: {}",
+                    report.sessions, report.segments, report.consent_records
+                );
+                println!("  file: .maestro/index/transcripts/manifest.json");
             }
             println!("next: maestro grep <query>");
             Ok(())

@@ -436,6 +436,27 @@ fn check_search(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, warnings: &
             detail: format!("optional missing: {}", health.ctags_status.message),
         });
     }
+
+    let transcript = search::transcript_index_health(paths);
+    if transcript.configured && transcript.manifest_present {
+        checks.push(DoctorCheck {
+            name: "search-transcripts",
+            detail: format!(
+                "{} session(s), {} segment(s), {} consent record(s)",
+                transcript.sessions, transcript.segments, transcript.consent_records
+            ),
+        });
+    } else if transcript.configured {
+        warnings.push(
+              "search transcript project view missing or stale; run `maestro index rebuild --transcript`"
+                  .to_string(),
+          );
+    } else {
+        warnings.push(
+              "search transcript corpus unconfigured; set MAESTRO_TRANSCRIPT_HOME and grant provider/project consent"
+                  .to_string(),
+          );
+    }
 }
 
 /// Verify that the files an installed agent owns still exist on disk. A bare

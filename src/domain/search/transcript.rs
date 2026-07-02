@@ -2,22 +2,26 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use regex::Regex;
+use regex::{Regex, RegexBuilder};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::domain::search::intent;
 use crate::domain::search::query::ParsedQuery;
 use crate::domain::search::types::{
-    GrepEnvelope, SearchCorpus, SearchDiagnostic, TranscriptRedactionMetadata,
+    GrepEnvelope, MatchSpan, ScoreReason, SearchCorpus, SearchDiagnostic, SearchFreshness,
+    SearchHit, TranscriptRedactionMetadata,
 };
 use crate::foundation::core::fs::{append_text_file, ensure_dir};
 use crate::foundation::core::hash::sha256_prefixed;
+use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::safe_write::write_string_atomic;
 
 pub const TRANSCRIPT_HOME_ENV: &str = "MAESTRO_TRANSCRIPT_HOME";
 const SEGMENT_SCHEMA_VERSION: &str = "maestro.transcript.segment.v1";
+const TRANSCRIPT_VIEW_SCHEMA_VERSION: &str = "maestro.transcript-view.v1";
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum TranscriptProvider {
     Codex,
@@ -157,6 +161,61 @@ pub struct FactoryMissionDescriptor {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TranscriptStore {
     root: PathBuf,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TranscriptRebuildReport {
+    pub consent_records: usize,
+    pub sessions: usize,
+    pub segments: usize,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TranscriptIndexHealth {
+    pub configured: bool,
+    pub consent_records: usize,
+    pub manifest_present: bool,
+    pub sessions: usize,
+    pub segments: usize,
+}
+
+#[derive(Clone, Debug)]
+struct TranscriptLoad {
+    consent_records: Vec<TranscriptConsentRecord>,
+    segments: Vec<TranscriptStoredSegment>,
+}
+
+#[derive(Clone, Debug)]
+struct TranscriptMatch {
+    byte_start: usize,
+    byte_end: usize,
+    snippet: String,
+    factor: &'static str,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct TranscriptViewManifest {
+    schema_version: String,
+    sessions: Vec<TranscriptViewSession>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct TranscriptViewSession {
+    provider: TranscriptProvider,
+    session_id: String,
+    workspace: String,
+    segments: Vec<TranscriptViewSegment>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct TranscriptViewSegment {
+    segment_id: String,
+    source_kind: String,
+    authority: String,
+    proof_eligible: bool,
+    redacted_text_hash: String,
+    redaction: TranscriptRedactionMetadata,
+    project_match_reasons: Vec<String>,
 }
 
 impl TranscriptStore {
@@ -317,6 +376,146 @@ pub fn global_transcript_home() -> Option<PathBuf> {
     resolve_transcript_home(env_override.as_deref(), user_home.as_deref())
 }
 
+pub(crate) fn rebuild_transcript_unlocked(paths: &MaestroPaths) -> Result<TranscriptRebuildReport> {
+    let load = load_configured_store()
+        .map_err(|diagnostic| anyhow::anyhow!("{}: {}", diagnostic.code, diagnostic.message))?;
+    let target_workspace = paths.repo_root().display().to_string();
+    let mut sessions: BTreeMap<(TranscriptProvider, String, String), Vec<TranscriptViewSegment>> =
+        BTreeMap::new();
+
+    for segment in consented_segments(&load) {
+        let reasons = project_match_reasons(&segment, &target_workspace, None, false);
+        if reasons.is_empty() {
+            continue;
+        }
+        sessions
+            .entry((
+                segment.provider,
+                segment.session_id.clone(),
+                segment.workspace.clone(),
+            ))
+            .or_default()
+            .push(TranscriptViewSegment {
+                segment_id: segment.segment_id.clone(),
+                source_kind: segment.source_kind.clone(),
+                authority: segment.authority.clone(),
+                proof_eligible: segment.proof_eligible,
+                redacted_text_hash: segment.redacted_text_hash.clone(),
+                redaction: segment.redaction.clone(),
+                project_match_reasons: reasons,
+            });
+    }
+
+    let sessions = sessions
+        .into_iter()
+        .map(
+            |((provider, session_id, workspace), mut segments)| TranscriptViewSession {
+                provider,
+                session_id,
+                workspace,
+                segments: {
+                    segments.sort_by(|left, right| left.segment_id.cmp(&right.segment_id));
+                    segments
+                },
+            },
+        )
+        .collect::<Vec<_>>();
+    let report = TranscriptRebuildReport {
+        consent_records: load.consent_records.len(),
+        sessions: sessions.len(),
+        segments: sessions.iter().map(|session| session.segments.len()).sum(),
+    };
+    let manifest = TranscriptViewManifest {
+        schema_version: TRANSCRIPT_VIEW_SCHEMA_VERSION.to_string(),
+        sessions,
+    };
+    ensure_dir(paths.transcript_index_dir())?;
+    write_string_atomic(
+        paths.transcript_view_manifest_file(),
+        &serde_json::to_string_pretty(&manifest)?,
+    )?;
+    Ok(report)
+}
+
+pub fn transcript_index_health(paths: &MaestroPaths) -> TranscriptIndexHealth {
+    let configured = load_configured_store().ok();
+    let consent_records = configured
+        .as_ref()
+        .map_or(0, |load| load.consent_records.len());
+    match std::fs::read_to_string(paths.transcript_view_manifest_file())
+        .ok()
+        .and_then(|contents| serde_json::from_str::<TranscriptViewManifest>(&contents).ok())
+    {
+        Some(manifest) if manifest.schema_version == TRANSCRIPT_VIEW_SCHEMA_VERSION => {
+            TranscriptIndexHealth {
+                configured: configured.is_some(),
+                consent_records,
+                manifest_present: true,
+                sessions: manifest.sessions.len(),
+                segments: manifest
+                    .sessions
+                    .iter()
+                    .map(|session| session.segments.len())
+                    .sum(),
+            }
+        }
+        _ => TranscriptIndexHealth {
+            configured: configured.is_some(),
+            consent_records,
+            manifest_present: false,
+            sessions: 0,
+            segments: 0,
+        },
+    }
+}
+
+pub(crate) fn grep_transcript_parsed(
+    paths: &MaestroPaths,
+    raw_query: &str,
+    parsed: &ParsedQuery,
+) -> GrepEnvelope {
+    let load = match load_configured_store() {
+        Ok(load) => load,
+        Err(diagnostic) => return unavailable_envelope_with(raw_query, parsed, diagnostic),
+    };
+    let hits = match search_segments(paths, &load, parsed) {
+        Ok(hits) => hits,
+        Err(diagnostic) => {
+            return GrepEnvelope::error_with_overrides(
+                raw_query,
+                diagnostic,
+                parsed.explicit_filter_overrides.clone(),
+            );
+        }
+    };
+    GrepEnvelope::success(raw_query, hits, parsed.explicit_filter_overrides.clone())
+        .with_freshness(vec![transcript_freshness(&load, false)])
+}
+
+pub(crate) fn attach_results(
+    paths: &MaestroPaths,
+    raw_query: &str,
+    parsed: &ParsedQuery,
+    mut envelope: GrepEnvelope,
+) -> GrepEnvelope {
+    if !envelope.ok {
+        return envelope;
+    }
+
+    let transcript = grep_transcript_parsed(paths, raw_query, parsed);
+    if transcript.ok {
+        envelope.hits.extend(transcript.hits);
+        envelope.freshness.extend(transcript.freshness);
+        envelope.diagnostics.extend(transcript.diagnostics);
+        sort_and_rank_hits(&mut envelope.hits);
+        return envelope;
+    }
+
+    envelope.partial = true;
+    envelope.diagnostics.extend(transcript.diagnostics);
+    envelope
+}
+
 pub fn parse_codex_transcript_jsonl(
     contents: &str,
     fallback_session_id: &str,
@@ -471,9 +670,17 @@ pub(crate) fn unavailable_diagnostic() -> SearchDiagnostic {
 }
 
 pub(crate) fn unavailable_envelope(raw_query: &str, parsed: &ParsedQuery) -> GrepEnvelope {
+    unavailable_envelope_with(raw_query, parsed, unavailable_diagnostic())
+}
+
+fn unavailable_envelope_with(
+    raw_query: &str,
+    parsed: &ParsedQuery,
+    diagnostic: SearchDiagnostic,
+) -> GrepEnvelope {
     let mut envelope = GrepEnvelope::error_with_overrides(
         raw_query,
-        unavailable_diagnostic(),
+        diagnostic,
         parsed.explicit_filter_overrides.clone(),
     );
     envelope.intent = Some("transcript".to_string());
@@ -482,12 +689,407 @@ pub(crate) fn unavailable_envelope(raw_query: &str, parsed: &ParsedQuery) -> Gre
     envelope
 }
 
-pub(crate) fn attach_unavailable(mut envelope: GrepEnvelope) -> GrepEnvelope {
-    if envelope.ok {
-        envelope.partial = true;
-        envelope.diagnostics.push(unavailable_diagnostic());
+fn load_configured_store() -> Result<TranscriptLoad, SearchDiagnostic> {
+    let Some(home) = global_transcript_home() else {
+        return Err(unavailable_diagnostic());
+    };
+    if !home.is_dir() {
+        return Err(unavailable_diagnostic());
     }
-    envelope
+    let store = TranscriptStore::new(&home);
+    let consent_records = store
+        .consent_records()
+        .map_err(|error| transcript_store_diagnostic(format!("{error:#}")))?;
+    let consent_records = consent_records
+        .into_iter()
+        .filter(|record| record.granted)
+        .collect::<Vec<_>>();
+    if consent_records.is_empty() {
+        return Err(unavailable_diagnostic());
+    }
+    let segments = load_stored_segments(&home)
+        .map_err(|error| transcript_store_diagnostic(format!("{error:#}")))?;
+    Ok(TranscriptLoad {
+        consent_records,
+        segments,
+    })
+}
+
+fn load_stored_segments(root: &Path) -> Result<Vec<TranscriptStoredSegment>> {
+    let segments_dir = root.join("segments");
+    if !segments_dir.is_dir() {
+        return Ok(Vec::new());
+    }
+
+    let mut segments = Vec::new();
+    for provider in [
+        TranscriptProvider::Codex,
+        TranscriptProvider::Claude,
+        TranscriptProvider::Factory,
+    ] {
+        let provider_dir = segments_dir.join(provider.as_str());
+        if !provider_dir.is_dir() {
+            continue;
+        }
+        let mut files = std::fs::read_dir(&provider_dir)
+            .with_context(|| format!("failed to read {}", provider_dir.display()))?
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .with_context(|| format!("failed to read {}", provider_dir.display()))?;
+        files.sort_by_key(|entry| entry.path());
+        for entry in files {
+            let path = entry.path();
+            if path.extension().and_then(|ext| ext.to_str()) != Some("jsonl") {
+                continue;
+            }
+            let contents = std::fs::read_to_string(&path)
+                .with_context(|| format!("failed to read {}", path.display()))?;
+            for (idx, line) in contents.lines().enumerate() {
+                let line = line.trim();
+                if line.is_empty() {
+                    continue;
+                }
+                let segment: TranscriptStoredSegment =
+                    serde_json::from_str(line).with_context(|| {
+                        format!("failed to parse {} line {}", path.display(), idx + 1)
+                    })?;
+                if segment.schema_version != SEGMENT_SCHEMA_VERSION {
+                    bail!(
+                        "{} line {} has stale transcript segment schema {}",
+                        path.display(),
+                        idx + 1,
+                        segment.schema_version
+                    );
+                }
+                segments.push(segment);
+            }
+        }
+    }
+    Ok(segments)
+}
+
+fn transcript_store_diagnostic(message: String) -> SearchDiagnostic {
+    SearchDiagnostic::error(
+        "transcript_store_unreadable",
+        format!("transcript store unreadable: {message}"),
+    )
+    .with_corpus(SearchCorpus::Transcript)
+    .with_path(".maestro/index/transcripts")
+    .with_retryable(false)
+}
+
+fn consented_segments(load: &TranscriptLoad) -> Vec<TranscriptStoredSegment> {
+    load.segments
+        .iter()
+        .filter(|segment| consent_allows_segment(&load.consent_records, segment))
+        .cloned()
+        .collect()
+}
+
+fn consent_allows_segment(
+    consent_records: &[TranscriptConsentRecord],
+    segment: &TranscriptStoredSegment,
+) -> bool {
+    consent_records.iter().any(|record| {
+        record.granted
+            && record.provider == segment.provider
+            && (record.scope == TranscriptConsentScope::Global
+                || paths_overlap(&record.workspace, &segment.workspace))
+    })
+}
+
+fn search_segments(
+    paths: &MaestroPaths,
+    load: &TranscriptLoad,
+    parsed: &ParsedQuery,
+) -> Result<Vec<SearchHit>, SearchDiagnostic> {
+    let case_sensitive = crate::domain::search::query::literal_case_sensitive(parsed);
+    let mut hits = Vec::new();
+    let target_workspace = parsed
+        .filters
+        .workspace
+        .clone()
+        .unwrap_or_else(|| paths.repo_root().display().to_string());
+    let scope_global = parsed.filters.scope.as_deref() == Some("global");
+    let explicit_session = parsed.filters.session.as_deref();
+    let provider_filter = parsed.filters.provider.as_deref();
+
+    for segment in consented_segments(load) {
+        if let Some(provider) = provider_filter
+            && provider != segment.provider.as_str()
+        {
+            continue;
+        }
+        if let Some(session) = explicit_session
+            && session != segment.session_id
+        {
+            continue;
+        }
+
+        let reasons =
+            project_match_reasons(&segment, &target_workspace, explicit_session, scope_global);
+        if reasons.is_empty() {
+            continue;
+        }
+        if !evaluate_expr(&parsed.expr, &segment.redacted_text, case_sensitive)? {
+            continue;
+        }
+        let Some(first_match) =
+            first_positive_match(&segment.redacted_text, parsed, case_sensitive)?
+        else {
+            continue;
+        };
+        hits.push(transcript_hit(segment, first_match, reasons, parsed));
+    }
+
+    sort_and_rank_hits(&mut hits);
+    Ok(hits)
+}
+
+fn transcript_hit(
+    segment: TranscriptStoredSegment,
+    first_match: TranscriptMatch,
+    project_match_reasons: Vec<String>,
+    parsed: &ParsedQuery,
+) -> SearchHit {
+    let mut score: f64 = 0.58;
+    if parsed
+        .filters
+        .provider
+        .as_deref()
+        .is_some_and(|provider| provider == segment.provider.as_str())
+    {
+        score += 0.12;
+    }
+    if parsed
+        .filters
+        .session
+        .as_deref()
+        .is_some_and(|session| session == segment.session_id)
+    {
+        score += 0.16;
+    }
+    if first_match.factor == "regex" {
+        score += 0.08;
+    }
+
+    SearchHit {
+        rank: 0,
+        corpus: SearchCorpus::Transcript,
+        kind: "message".to_string(),
+        id: format!(
+            "{}:{}:{}",
+            segment.provider.as_str(),
+            segment.session_id,
+            segment.segment_id
+        ),
+        path: None,
+        line: None,
+        title: format!("{} {}", segment.provider.as_str(), segment.source_kind),
+        snippet: first_match.snippet,
+        score: score.min(1.0),
+        score_reasons: vec![ScoreReason {
+            factor: format!("transcript_{}", first_match.factor),
+            value: 1.0,
+            detail: "confirmed against redacted transcript segment".to_string(),
+        }],
+        opener: Some(format!(
+            "maestro session show {} --transcript",
+            segment.session_id
+        )),
+        archived: false,
+        feature: None,
+        parent: None,
+        symbol_kind: None,
+        match_spans: vec![MatchSpan::Memory {
+            segment_id: segment.segment_id.clone(),
+            byte_start: first_match.byte_start,
+            byte_end: first_match.byte_end,
+        }],
+        provider: Some(segment.provider.as_str().to_string()),
+        session_id: Some(segment.session_id),
+        authority: Some(segment.authority),
+        proof_eligible: Some(segment.proof_eligible),
+        source_kind: Some(segment.source_kind),
+        project_match_reasons,
+        redaction: Some(segment.redaction),
+    }
+}
+
+fn project_match_reasons(
+    segment: &TranscriptStoredSegment,
+    target_workspace: &str,
+    explicit_session: Option<&str>,
+    scope_global: bool,
+) -> Vec<String> {
+    if scope_global {
+        return vec!["scope_global".to_string()];
+    }
+    let mut reasons = Vec::new();
+    if explicit_session.is_some_and(|session| session == segment.session_id) {
+        reasons.push("explicit_session".to_string());
+    }
+    if paths_overlap(&segment.workspace, target_workspace) {
+        reasons.push("workspace".to_string());
+    }
+    reasons.sort();
+    reasons.dedup();
+    reasons
+}
+
+fn evaluate_expr(
+    expr: &crate::domain::search::query::QueryExpr,
+    contents: &str,
+    case_sensitive: bool,
+) -> Result<bool, SearchDiagnostic> {
+    match expr {
+        crate::domain::search::query::QueryExpr::Atom(
+            crate::domain::search::query::QueryAtom::Literal(term),
+        ) => Ok(find_literal(contents, term, case_sensitive).is_some()),
+        crate::domain::search::query::QueryExpr::Atom(
+            crate::domain::search::query::QueryAtom::Regex(pattern),
+        ) => Ok(regex_for(pattern, case_sensitive)?.find(contents).is_some()),
+        crate::domain::search::query::QueryExpr::Not(inner) => {
+            Ok(!evaluate_expr(inner, contents, case_sensitive)?)
+        }
+        crate::domain::search::query::QueryExpr::And(items) => {
+            for item in items {
+                if !evaluate_expr(item, contents, case_sensitive)? {
+                    return Ok(false);
+                }
+            }
+            Ok(true)
+        }
+        crate::domain::search::query::QueryExpr::Or(items) => {
+            for item in items {
+                if evaluate_expr(item, contents, case_sensitive)? {
+                    return Ok(true);
+                }
+            }
+            Ok(false)
+        }
+    }
+}
+
+fn first_positive_match(
+    contents: &str,
+    parsed: &ParsedQuery,
+    case_sensitive: bool,
+) -> Result<Option<TranscriptMatch>, SearchDiagnostic> {
+    for pattern in &parsed.regexes {
+        let regex = regex_for(pattern, case_sensitive)?;
+        if let Some(mat) = regex.find(contents) {
+            return Ok(Some(transcript_match(
+                contents,
+                mat.start(),
+                mat.end(),
+                "regex",
+            )));
+        }
+    }
+    for term in &parsed.terms {
+        if let Some((start, end)) = find_literal(contents, term, case_sensitive) {
+            return Ok(Some(transcript_match(contents, start, end, "literal")));
+        }
+    }
+    Ok(None)
+}
+
+fn transcript_match(
+    contents: &str,
+    byte_start: usize,
+    byte_end: usize,
+    factor: &'static str,
+) -> TranscriptMatch {
+    TranscriptMatch {
+        byte_start,
+        byte_end,
+        snippet: line_snippet(contents, byte_start),
+        factor,
+    }
+}
+
+fn regex_for(pattern: &str, case_sensitive: bool) -> Result<Regex, SearchDiagnostic> {
+    RegexBuilder::new(pattern)
+        .case_insensitive(!case_sensitive)
+        .build()
+        .map_err(|error| SearchDiagnostic::error("parse_error", format!("invalid regex: {error}")))
+}
+
+fn find_literal(text: &str, needle: &str, case_sensitive: bool) -> Option<(usize, usize)> {
+    if case_sensitive {
+        return text.find(needle).map(|start| (start, start + needle.len()));
+    }
+    let needle_chars = lowercase_chars(needle);
+    if needle_chars.is_empty() {
+        return None;
+    }
+    let chars: Vec<(usize, String)> = text
+        .char_indices()
+        .map(|(idx, ch)| (idx, ch.to_lowercase().collect::<String>()))
+        .collect();
+    for start_idx in 0..chars.len() {
+        if chars.len().saturating_sub(start_idx) < needle_chars.len() {
+            continue;
+        }
+        if chars[start_idx..]
+            .iter()
+            .zip(needle_chars.iter())
+            .all(|((_, hay), needle)| hay == needle)
+        {
+            let byte_start = chars[start_idx].0;
+            let end_char_idx = start_idx + needle_chars.len();
+            let byte_end = chars.get(end_char_idx).map_or(text.len(), |(idx, _)| *idx);
+            return Some((byte_start, byte_end));
+        }
+    }
+    None
+}
+
+fn lowercase_chars(text: &str) -> Vec<String> {
+    text.chars()
+        .map(|ch| ch.to_lowercase().collect::<String>())
+        .collect()
+}
+
+fn line_snippet(contents: &str, byte_start: usize) -> String {
+    let line_start = contents[..byte_start].rfind('\n').map_or(0, |idx| idx + 1);
+    let line_end = contents[byte_start..]
+        .find('\n')
+        .map_or(contents.len(), |idx| byte_start + idx);
+    contents[line_start..line_end].trim().to_string()
+}
+
+fn sort_and_rank_hits(hits: &mut [SearchHit]) {
+    hits.sort_by(|left, right| {
+        right
+            .score
+            .total_cmp(&left.score)
+            .then_with(|| left.corpus.as_str().cmp(right.corpus.as_str()))
+            .then_with(|| left.id.cmp(&right.id))
+    });
+    for (idx, hit) in hits.iter_mut().enumerate() {
+        hit.rank = idx + 1;
+    }
+}
+
+fn transcript_freshness(load: &TranscriptLoad, repaired: bool) -> SearchFreshness {
+    SearchFreshness {
+        corpus: SearchCorpus::Transcript,
+        shard: ".maestro/index/transcripts/manifest.json".to_string(),
+        fresh: true,
+        repaired,
+        schema_version: TRANSCRIPT_VIEW_SCHEMA_VERSION.to_string(),
+        manifest_entries: consented_segments(load).len(),
+        vocabulary_version: intent::SYMBOLIC_VOCABULARY_VERSION.to_string(),
+        artifact_graph_version: intent::ARTIFACT_GRAPH_VERSION.to_string(),
+        outline_extractor_version: None,
+        documents: Some(consented_segments(load).len()),
+        indexed_files: None,
+        outline_entries: None,
+        ctags_symbols: None,
+        skipped_files: None,
+        skipped_by_reason: BTreeMap::new(),
+    }
 }
 
 fn note_raw_exclusion(excluded_fields: &mut Vec<String>, field: &str, value: &Option<String>) {
@@ -649,9 +1251,15 @@ fn is_bootstrap_context_text(text: &str) -> bool {
 }
 
 fn paths_overlap(left: &str, right: &str) -> bool {
-    let left = Path::new(left);
-    let right = Path::new(right);
-    left == right || left.starts_with(right) || right.starts_with(left)
+    let left = normalized_path(left);
+    let right = normalized_path(right);
+    left == right || left.starts_with(&right) || right.starts_with(&left)
+}
+
+fn normalized_path(path: &str) -> PathBuf {
+    Path::new(path)
+        .canonicalize()
+        .unwrap_or_else(|_| PathBuf::from(path))
 }
 
 fn redact_text(text: &str) -> (String, Vec<String>) {
