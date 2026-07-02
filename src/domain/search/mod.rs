@@ -6,7 +6,7 @@ pub mod memory;
 mod outline;
 pub mod query;
 pub mod source;
-mod transcript;
+pub mod transcript;
 pub mod types;
 
 pub use lock::{SearchWriterLock, acquire_writer};
