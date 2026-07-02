@@ -351,7 +351,7 @@ pub enum RootCommand {
     Status(StatusArgs),
     #[command(
         about = "Show or run the next safe agent action",
-        after_help = "Examples:\n  maestro next\n  maestro next --json\n  maestro next --run\n  maestro next --loop --max-steps 5"
+        after_help = "Examples:\n  maestro next\n  maestro next --brief\n  maestro next --brief --json\n  maestro next --json\n  maestro next --run\n  maestro next --loop --max-steps 5"
     )]
     Next(NextArgs),
     #[command(
@@ -755,6 +755,8 @@ pub struct StatusArgs {
 
 #[derive(Debug, Args)]
 pub struct NextArgs {
+    #[arg(long, help = "Print compact next-action output")]
+    pub brief: bool,
     #[arg(long, help = "Print machine-readable next-action JSON")]
     pub json: bool,
     #[arg(long, conflicts_with = "loop_mode", help = "Run one auto-safe action")]

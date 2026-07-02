@@ -65,7 +65,7 @@ pub fn run_next(args: NextArgs) -> Result<()> {
         Err(_) => {
             let cwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
             let report = StatusReport::not_initialized(cwd, "repo root not found".to_string());
-            return print_next_suggest(&report, "suggest", args.json);
+            return print_next_suggest(&report, "suggest", args.json, args.brief);
         }
     };
     let paths = MaestroPaths::new(repo_root);
@@ -74,21 +74,21 @@ pub fn run_next(args: NextArgs) -> Result<()> {
             paths.repo_root().to_path_buf(),
             ".maestro is missing".to_string(),
         );
-        return print_next_suggest(&report, "suggest", args.json);
+        return print_next_suggest(&report, "suggest", args.json, args.brief);
     }
 
     if args.loop_mode {
-        return run_next_loop(&paths, args.max_steps, args.json);
+        return run_next_loop(&paths, args.max_steps, args.json, args.brief);
     }
     let report = build_task_next_report(&paths)?;
     if args.run {
-        run_one_next_action(&paths, &report, args.json)
+        run_one_next_action(&paths, &report, args.json, args.brief)
     } else {
-        print_next_suggest(&report, "suggest", args.json)
+        print_next_suggest(&report, "suggest", args.json, args.brief)
     }
 }
 
-fn run_next_loop(paths: &MaestroPaths, max_steps: usize, json: bool) -> Result<()> {
+fn run_next_loop(paths: &MaestroPaths, max_steps: usize, json: bool, brief: bool) -> Result<()> {
     let max_steps = max_steps.max(1);
     let mut taken = Vec::new();
     for step in 1..=max_steps {
@@ -115,6 +115,8 @@ fn run_next_loop(paths: &MaestroPaths, max_steps: usize, json: bool) -> Result<(
                         "next action is not auto-safe",
                     ))?
                 );
+            } else if brief {
+                print_next_brief(report.next_action.as_ref());
             } else {
                 println!("blocked: next action requires input or review");
                 print_next_action(action);
@@ -134,6 +136,13 @@ fn run_next_loop(paths: &MaestroPaths, max_steps: usize, json: bool) -> Result<(
             "{}",
             serde_json::to_string_pretty(&NextRunJson::done("loop", taken))?
         );
+    } else if brief {
+        if report.next_action.is_none() {
+            println!("done: no actionable task");
+        } else {
+            println!("stop: max steps reached");
+            print_next_brief(report.next_action.as_ref());
+        }
     } else if let Some(action) = report.next_action.as_ref() {
         println!("blocked: max steps reached");
         print_next_action(action);
@@ -143,13 +152,20 @@ fn run_next_loop(paths: &MaestroPaths, max_steps: usize, json: bool) -> Result<(
     Ok(())
 }
 
-fn run_one_next_action(paths: &MaestroPaths, report: &StatusReport, json: bool) -> Result<()> {
+fn run_one_next_action(
+    paths: &MaestroPaths,
+    report: &StatusReport,
+    json: bool,
+    brief: bool,
+) -> Result<()> {
     let Some(action) = report.next_action.as_ref() else {
         if json {
             println!(
                 "{}",
                 serde_json::to_string_pretty(&NextRunJson::done("run", Vec::new()))?
             );
+        } else if brief {
+            println!("done: no actionable task");
         } else {
             println!("no actionable task");
         }
@@ -166,6 +182,8 @@ fn run_one_next_action(paths: &MaestroPaths, report: &StatusReport, json: bool) 
                     "next action is not auto-safe",
                 ))?
             );
+        } else if brief {
+            print_next_brief(Some(action));
         } else {
             println!("blocked: next action requires input");
             print_next_action(action);
@@ -190,15 +208,26 @@ fn execute_auto_safe_action(_paths: &MaestroPaths, action: &NextAction) -> Resul
     }
 }
 
-fn print_next_suggest(report: &StatusReport, mode: &str, json: bool) -> Result<()> {
+fn print_next_suggest(report: &StatusReport, mode: &str, json: bool, brief: bool) -> Result<()> {
     if json {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&NextJson::from_report(report, mode))?
-        );
+        if brief {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&NextBriefJson::from(report))?
+            );
+        } else {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&NextJson::from_report(report, mode))?
+            );
+        }
         return Ok(());
     }
-    print_task_next(report);
+    if brief {
+        print_next_brief(report.next_action.as_ref());
+    } else {
+        print_task_next(report);
+    }
     Ok(())
 }
 
@@ -598,9 +627,44 @@ fn print_next_action(action: &NextAction) {
     if let Some(title) = action.title.as_deref() {
         println!("title: {title}");
     }
-    println!("reason: {}", action.reason);
     if let Some(inspect) = action.inspect.as_deref() {
         println!("inspect: {inspect}");
+    }
+}
+
+fn print_next_brief(action: Option<&NextAction>) {
+    let Some(action) = action else {
+        println!("done: no actionable task");
+        return;
+    };
+    println!("next: {}", action.command.display);
+    if !action.command.requires_input.is_empty() {
+        let needs = action
+            .command
+            .requires_input
+            .iter()
+            .map(|input| input.name.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+        println!("needs: {needs}");
+    }
+    if let Some(stop) = brief_stop(action) {
+        println!("stop: {stop}");
+    } else {
+        println!("reason: {}", action.reason);
+    }
+    if let Some(inspect) = action.inspect.as_deref() {
+        println!("inspect: {inspect}");
+    }
+}
+
+fn brief_stop(action: &NextAction) -> Option<&'static str> {
+    if action.requires_input {
+        Some("requires input")
+    } else if !action.auto_safe {
+        Some("not auto-safe")
+    } else {
+        None
     }
 }
 
@@ -1354,6 +1418,85 @@ impl NextJson {
             audit_hint: report.audit_hint.clone(),
             scheduler: report.scheduler.clone(),
             ready_to_close_features: report.ready_to_close_features.clone(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct NextBriefJson {
+    schema: String,
+    status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    kind: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    scope: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    task_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    feature_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cmd: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    needs: Vec<BriefRequiredInputJson>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    stop: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    inspect: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct BriefRequiredInputJson {
+    name: String,
+    why: String,
+}
+
+impl NextBriefJson {
+    fn from(report: &StatusReport) -> Self {
+        let Some(action) = report.next_action.as_ref() else {
+            return Self {
+                schema: "maestro.next.brief.v1".to_string(),
+                status: "no_action".to_string(),
+                kind: None,
+                scope: None,
+                task_id: None,
+                feature_id: None,
+                cmd: None,
+                needs: Vec::new(),
+                stop: Some("no actionable task".to_string()),
+                inspect: None,
+            };
+        };
+        let stop = brief_stop(action).map(str::to_string);
+        let status = if stop.is_some() {
+            "blocked"
+        } else if action.runnable {
+            "runnable"
+        } else {
+            "actionable"
+        };
+        Self {
+            schema: "maestro.next.brief.v1".to_string(),
+            status: status.to_string(),
+            kind: Some(action.kind.clone()),
+            scope: Some(action.scope.clone()),
+            task_id: action.task_id.clone(),
+            feature_id: action.feature_id.clone(),
+            cmd: action
+                .command
+                .argv
+                .clone()
+                .or(action.command.argv_template.clone()),
+            needs: action
+                .command
+                .requires_input
+                .iter()
+                .map(|input| BriefRequiredInputJson {
+                    name: input.name.clone(),
+                    why: input.description.clone(),
+                })
+                .collect(),
+            stop,
+            inspect: action.inspect.clone(),
         }
     }
 }

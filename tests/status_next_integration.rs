@@ -11,7 +11,7 @@ use git2::{Repository, Signature};
 use maestro::domain::feature;
 use maestro::foundation::core::paths::MaestroPaths;
 use maestro::foundation::core::time::format_utc_seconds_rfc3339_millis;
-use serde_json::Value as JsonValue;
+use serde_json::{Value as JsonValue, json};
 use serde_yaml::Value as YamlValue;
 use support::TestTempDir;
 
@@ -418,6 +418,97 @@ fn next_json_uses_next_schema_and_marks_claim_task_auto_safe() {
 }
 
 #[test]
+fn next_brief_text_reports_one_action_without_side_payloads() {
+    let temp = setup_repo("maestro-next-brief-ready");
+    let repo = temp.path();
+    run(
+        repo,
+        &["task", "create", "Ready task", "--check", "ready check"],
+    );
+    let ready = id_by_title(repo, "Ready task");
+    run(repo, &["task", "explore", &ready]);
+    run(repo, &["task", "accept", &ready]);
+
+    let next = run(repo, &["next", "--brief"]);
+
+    assert!(
+        next.contains(&format!("next: maestro task claim {ready}")),
+        "{next}"
+    );
+    assert!(next.contains("reason: ready task is unclaimed"), "{next}");
+    assert!(
+        next.contains(&format!("inspect: maestro task show {ready}")),
+        "{next}"
+    );
+    assert!(!next.contains("stop:"), "{next}");
+    assert!(!next.contains("harness: scheduler"), "{next}");
+    assert!(!next.contains("ACTIVE FEATURES"), "{next}");
+    assert_eq!(task_yaml(repo, &ready)["state"].as_str(), Some("ready"));
+}
+
+#[test]
+fn next_brief_json_marks_auto_safe_claim_as_runnable() {
+    let temp = setup_repo("maestro-next-brief-json-ready");
+    let repo = temp.path();
+    run(
+        repo,
+        &["task", "create", "Ready task", "--check", "ready check"],
+    );
+    let ready = id_by_title(repo, "Ready task");
+    run(repo, &["task", "explore", &ready]);
+    run(repo, &["task", "accept", &ready]);
+
+    let json = run(repo, &["next", "--brief", "--json"]);
+    let parsed: JsonValue =
+        serde_json::from_str(&json).expect("invariant: brief next JSON should parse");
+
+    assert_eq!(parsed["schema"], "maestro.next.brief.v1");
+    assert_eq!(parsed["status"], "runnable");
+    assert_eq!(parsed["kind"], "claim_task");
+    assert_eq!(parsed["task_id"], ready);
+    assert_eq!(parsed["cmd"], json!(["maestro", "task", "claim", ready]));
+    assert!(parsed.get("needs").is_none());
+    assert!(parsed.get("stop").is_none());
+    assert_eq!(parsed["inspect"], format!("maestro task show {ready}"));
+}
+
+#[test]
+fn next_brief_json_emits_compact_agent_contract() {
+    let temp = setup_repo("maestro-next-brief-json-input");
+    let repo = temp.path();
+    run(
+        repo,
+        &["task", "create", "Ready task", "--check", "ready check"],
+    );
+    let ready = id_by_title(repo, "Ready task");
+    run(repo, &["task", "explore", &ready]);
+    run(repo, &["task", "accept", &ready]);
+    run(repo, &["task", "claim", &ready]);
+
+    let json = run(repo, &["next", "--brief", "--json"]);
+    let parsed: JsonValue =
+        serde_json::from_str(&json).expect("invariant: brief next JSON should parse");
+
+    assert_eq!(parsed["schema"], "maestro.next.brief.v1");
+    assert_eq!(parsed["status"], "blocked");
+    assert_eq!(parsed["kind"], "complete_task");
+    assert_eq!(parsed["task_id"], ready);
+    assert_eq!(parsed["cmd"][0], "maestro");
+    assert_eq!(parsed["cmd"][1], "task");
+    assert_eq!(parsed["cmd"][2], "complete");
+    assert_eq!(parsed["needs"][0]["name"], "summary");
+    assert_eq!(parsed["needs"][0]["why"], "what changed");
+    assert_eq!(parsed["stop"], "requires input");
+    assert_eq!(parsed["inspect"], format!("maestro task show {ready}"));
+    assert!(parsed.get("title").is_none());
+    assert!(parsed.get("auto_safe").is_none());
+    assert!(parsed.get("runnable").is_none());
+    assert!(parsed.get("reason").is_none());
+    assert!(parsed.get("scheduler").is_none());
+    assert!(parsed.get("ready_to_close_features").is_none());
+}
+
+#[test]
 fn next_run_claims_only_auto_safe_ready_task() {
     let temp = setup_repo("maestro-next-run-ready");
     let repo = temp.path();
@@ -465,6 +556,33 @@ fn next_run_refuses_input_requiring_completion_template() {
 }
 
 #[test]
+fn next_run_brief_stops_before_input_requiring_completion() {
+    let temp = setup_repo("maestro-next-run-brief-refuses-input");
+    let repo = temp.path();
+    run(
+        repo,
+        &["task", "create", "Ready task", "--check", "ready check"],
+    );
+    let ready = id_by_title(repo, "Ready task");
+    run(repo, &["task", "explore", &ready]);
+    run(repo, &["task", "accept", &ready]);
+    run(repo, &["task", "claim", &ready]);
+
+    let next = maestro(repo, &["next", "--run", "--brief"]);
+
+    assert_failure(&next, &["next", "--run", "--brief"]);
+    let out = stdout(&next);
+    assert!(out.contains("next: maestro task complete"), "{out}");
+    assert!(out.contains("needs: summary, claim, proof"), "{out}");
+    assert!(out.contains("stop: requires input"), "{out}");
+    assert!(!out.contains("template:"), "{out}");
+    assert_eq!(
+        task_yaml(repo, &ready)["state"].as_str(),
+        Some("in_progress")
+    );
+}
+
+#[test]
 fn next_loop_stops_after_first_blocker_and_reports_transcript() {
     let temp = setup_repo("maestro-next-loop-ready");
     let repo = temp.path();
@@ -484,6 +602,31 @@ fn next_loop_stops_after_first_blocker_and_reports_transcript() {
         next.contains("blocked: next action requires input"),
         "{next}"
     );
+    assert_eq!(
+        task_yaml(repo, &ready)["state"].as_str(),
+        Some("in_progress")
+    );
+}
+
+#[test]
+fn next_loop_brief_stops_after_auto_safe_claim_before_proof() {
+    let temp = setup_repo("maestro-next-loop-brief-ready");
+    let repo = temp.path();
+    run(
+        repo,
+        &["task", "create", "Ready task", "--check", "ready check"],
+    );
+    let ready = id_by_title(repo, "Ready task");
+    run(repo, &["task", "explore", &ready]);
+    run(repo, &["task", "accept", &ready]);
+
+    let next = run(repo, &["next", "--loop", "--brief", "--max-steps", "5"]);
+
+    assert!(next.contains("auto-safe: maestro task claim"), "{next}");
+    assert!(next.contains("next: maestro task complete"), "{next}");
+    assert!(next.contains("needs: summary, claim, proof"), "{next}");
+    assert!(next.contains("stop: requires input"), "{next}");
+    assert!(!next.contains("template:"), "{next}");
     assert_eq!(
         task_yaml(repo, &ready)["state"].as_str(),
         Some("in_progress")
