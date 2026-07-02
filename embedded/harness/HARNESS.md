@@ -1,81 +1,56 @@
 ---
-version: 1.29.9
+version: 1.29.11
 ---
 
 # Maestro Harness Protocol
 
-You are an agent working in a repo that uses Maestro.
-
-Maestro is a local loop harness. Tasks are executable loop units; verification
-and QA are the stop hook; decisions, friction, and skills are durable memory.
-Use Maestro artifacts and shipped recipes as the source of truth.
+Use local Maestro artifacts as source of truth. This is a router: status ->
+route -> act -> proof -> learn.
 
 ## Start
 
-Run `maestro status` before acting. If `MAESTRO_CURRENT_TASK` is set, or status
-names a current task, read it with `maestro task show <id>`. Read locked
-acceptance from `maestro card show <id>` and use the active task skills.
-
-Do not guess ids. Use only ids printed by Maestro output; when lookup misses,
-re-list and read the real id.
-For routine `task list` output, use the displayed `REF` for the next
-`task show/start/done` command, or use `task list --json` when you need stable
-Task ids.
+Run `maestro status` before acting. If status or `MAESTRO_CURRENT_TASK` names a
+current task, read `maestro task show <id>`. Read locked acceptance with
+`maestro card show <id>` and use active task skills. Do not guess ids: use
+printed ids, routine `task list` REF values, or `task list --json`.
 
 ## Route
 
 Maestro's main workflow is the loop. Use `maestro status` for current state and
-its compact loop hint, then use `maestro loop next` when routing is not obvious.
-`loop next` is read-only: it recommends a recipe or uncertainty from local
-artifacts and never writes cards, tasks, features, decisions, proof, QA, git,
-releases, archives, or files. After choosing, read the recipe with
-`maestro loop show <recipe>` and perform writes only through the existing
-Maestro verbs named by the recipe.
+`maestro loop next` when routing is unclear. `loop next` is read-only: it
+recommends from local artifacts and never writes cards, tasks, features,
+decisions, proof, QA, git, releases, archives, or files. Read
+`maestro loop show <recipe>` and write only through existing Maestro verbs.
 
 Rule: loop next recommends; outcome/proof/memory verbs write. Use
-`maestro loop outcome` to append structured attempt outcomes after action, proof
-or repair. Use `maestro loop improve` for read-only improvement proposals over
-sourced outcomes; apply only by running the explicit memory, harness, proof, or
-QA command it prints. No hidden stores, hidden schedulers, silent recipe mutation,
-and proof/QA bypass are forbidden.
+`maestro loop outcome` after action/proof/repair. Use `maestro loop improve` for
+read-only proposals; apply only the explicit memory, harness, proof, or QA
+command it prints. No hidden stores, hidden schedulers, silent recipe mutation,
+or proof/QA bypass.
 
-Choose the closest shipped lifecycle recipe and stay inside its grammar:
+Use the closest shipped lifecycle recipe: `maestro loop show design`,
+`maestro loop show work`, `maestro loop show audit`, `maestro loop show ship`,
+`maestro loop show unattended`, or `maestro loop show learning`.
 
-- design / brainstorm: `maestro loop show design`
-- executable work: `maestro loop show work`
-- audit / review: `maestro loop show audit`
-- close / ship / archive: `maestro loop show ship`
-- unattended autonomy: `maestro loop show unattended`
-- reusable learning: `maestro loop show learning`
-
-If no shipped recipe fits, a custom card or run recipe must still use
-perceive -> choose -> act -> observe -> learn -> continue, current Maestro
-verbs, hard stops, continue output, and no skipped proof, QA, authority,
-approval, or hard-stop gates.
+If no shipped recipe fits, custom card/run recipes still use perceive -> choose
+-> act -> observe -> learn -> continue, current Maestro verbs, hard stops,
+continue output, and no skipped proof, QA, authority, approval, or hard-stop
+gates.
 
 ## Command Truth
 
 The generated `reference/cli.md` for installed or shipped Maestro skills
-matching this binary is authoritative. A verb or flag not listed there does not
-exist. Read the generated reference instead of probing or guessing.
+matching this binary is authoritative. Unlisted verbs or flags do not exist.
 
 ## Work Model
 
-Work has three levels: High = Card, Mid = CardKind / workflow kind, and Low =
-Task. Feature, Bug, Chore, Custom, Decision, Idea, and Progress are CardKinds.
-Progress stores small Low Tasks in `progress.yml`; use it through
-`maestro task add/start/done/list`. The default board hides the backing
-Progress card, shows current actor/session low Tasks by ordinal `REF`, and
-keeps stable ids in `progress.yml` and `task list --json`.
-When Maestro hooks are installed, a write-like `PreToolUse` event must have a
-visible Progress breakdown before execution. The hook blocks before recording
-the tool event unless the active Progress context has at least two rows, or the
-single active row was created with `maestro task setup --task ... --start
---atomic --reason "<why one row is enough>"`. `MAESTRO_CURRENT_TASK` does not
-bypass this rule when it points at a Progress row. Read-only hooks do not create
-Progress rows. If hooks are unavailable, run multi-row `maestro task setup`
-yourself before editing, or use the explicit atomic override for genuinely
-single-step work.
+Work levels: High = Card, Mid = CardKind/workflow kind, Low = Task. Use
+Progress through `maestro task add/start/done/list` and displayed REF values.
+
+Before write-like work, create a visible Progress breakdown with
+`maestro task setup --task ... --start`: at least two rows, or one row only with
+`--atomic --reason "<why one row is enough>"`. `MAESTRO_CURRENT_TASK` does not
+bypass this.
 
 Design-to-card gate: before executable work after a design or brainstorm
 session, ask:
@@ -84,35 +59,26 @@ session, ask:
 - What card/feature owns this work?
 - Is that card/feature handoff finalized and fresh?
 
-If the answer starts in design and the owning card/feature or fresh handoff is
-missing, stop before creating Progress rows, running `feature prepare`, editing
-source, or running implementation tests. First bind standalone chat or Decision
-records to a Feature/card contract and refresh the handoff through the supported
-feature lifecycle path. Do not let Progress tasks or source edits implicitly end
-the design phase.
-
-Linked-card inbox messages are advisory coordination signals only. They do not
-block execution. When order matters, record an explicit Task blocker or
-dependency; readiness, next, claim, and verification gates consult Task
-blockers, not messages or unread state.
+If design started and the owning card/feature or fresh handoff is missing, stop
+before creating Progress rows, running `feature prepare`, editing source, or
+running tests. Bind standalone chat or Decision records to a Feature/card and
+refresh the handoff. Do not let Progress tasks or source edits implicitly end the
+design phase.
 
 Canonical work readiness is `maestro ready`: a task-wave projection from the
 Task DAG. It shows the parallel executable wave, ready serial gates, and the
-bounded blocked-next frontier. `maestro loop next` reads that same projection
-and routes to existing lifecycle recipes; it does not create a second scheduler
-or separate gate loop. Use `maestro card ready` only as the explicit legacy
+bounded blocked-next frontier. `maestro loop next` uses that projection and does
+not create a second scheduler. `maestro card ready` is the explicit legacy
 card-board readiness surface.
 
 ## Proof And Corrections
 
 Complete executable work with `maestro task complete` using summary, claim, and
-proof. Maestro records the proof and runs verification.
-For low-ceremony Progress Tasks, close the row with
-`maestro task done <ref> --proof "<evidence>"`; proof is required there too.
+proof. Close Progress rows with `maestro task done <ref> --proof "<evidence>"`.
 
-Hooks auto-record tool calls as proof. Verification matches each `--claim`
-against recorded or inline proof. Empty or unbacked claims fail. When proof or
-verification fails, use the active recipe or `maestro task proof`.
+Verification matches each `--claim` against recorded or inline proof. Empty
+claims fail. Repair proof/verification failures with the active recipe or
+`maestro task proof`.
 
 When the user corrects your behavior, record it:
 
@@ -120,36 +86,39 @@ When the user corrects your behavior, record it:
 
 ## Design
 
-For brainstorm or unsettled behavior, use the design loop. Map the problem from
-real code and artifacts, then walk open questions one at a time. Lock each
-decision and record the corresponding note. Do not batch-decide independent
-forks, edit locked decisions in place, or cross into implementation before the
-user approves build.
+For brainstorm or unsettled behavior, use the design loop. Map real code and
+artifacts, ask one open question at a time, lock each decision, and record the
+note. Do not batch-decide independent forks, edit locked decisions in place, or
+cross into implementation before the user approves build.
+
+When the user says "lock all", "all rec", "all-recommendations", or otherwise
+settles multiple forks at once, preserve each fork as its own DecisionSet child
+record. Use `maestro decision set draft` / `maestro decision set lock` for the
+batch, or lock separate child decisions. Never compress a batch into one summary
+`maestro decision lock`; if one exists, run `maestro decision audit --compressed`
+and repair it with `maestro decision set repair`.
 
 Before proposing an idea or reopening a settled question, search precedent with
 `maestro grep "<topic> corpus:memory"` and cite the best matching card, decision,
 task, proof, or note. Use `maestro card list --grep <topic> --archived` only for
-exact legacy rows, compatibility checks, or when unified grep is too broad or
-surprising.
+exact legacy rows or compatibility checks.
 
-## Concurrency
+## Coordination
 
-The card store is shared state. In fan-out work, the orchestrator performs
-store-mutating verbs such as decision lock, task complete, verification, status,
-and notes. Sub-agents return results as data unless they have isolated stores.
+Linked-card inbox messages are advisory only. When order matters, record an
+explicit Task blocker or dependency; readiness, next, claim, and verification
+gates consult Task blockers, not messages or unread state.
 
-Serialize overlapping writers through the orchestrator, or use a separate git
-worktree when sessions may edit overlapping code or the shared card store. Use
-`maestro active`, `[overlap]`, `[CONFLICT]`, and `[busy]` notices to coordinate.
-For full conflict handling, run `maestro loop show conflict-handoff`.
+The card store is shared state. In fan-out, the orchestrator performs
+store-mutating verbs; sub-agents return data unless isolated. Use worktrees for
+overlapping code or shared-store writes. Coordinate with `maestro active`,
+`[overlap]`, `[CONFLICT]`, `[busy]`, and `maestro loop show conflict-handoff`.
 
 A failed multi-file store command can be partial. Re-run it so Maestro reads the
 latest store and reapplies the intended change.
 
 ## Harness Improvement
 
-Passive friction backlog: `maestro harness list / apply / measure`.
-
-When status, next, or complete surfaces over-threshold friction, apply and claim
-it before new work, or dismiss it with a reason when it is noise. The binary
-counts and shows friction; the agent acts.
+Passive friction backlog: `maestro harness list / apply / measure`. When status,
+next, or complete surfaces over-threshold friction, apply and claim it before
+new work, or dismiss it with a reason when it is noise.

@@ -73,8 +73,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 20] = [
     (
         "harness",
         "HARNESS.md",
-        "1.29.9",
-        "11ecd604e91974443780f396fd4955ba10cfd5e9258f2d210af6e746fc4d6d7f",
+        "1.29.11",
+        "b2e10431e12de71dffac00cdfe779eda1eb943a19c150442f47e98496c3420fb",
     ),
     (
         "playbook",
