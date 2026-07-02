@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 pub enum SearchCorpus {
     Memory,
     Source,
+    Transcript,
 }
 
 impl SearchCorpus {
@@ -14,6 +15,7 @@ impl SearchCorpus {
         match self {
             Self::Memory => "memory",
             Self::Source => "source",
+            Self::Transcript => "transcript",
         }
     }
 }
@@ -58,6 +60,27 @@ pub struct SearchHit {
     pub parent: Option<String>,
     pub symbol_kind: Option<String>,
     pub match_spans: Vec<MatchSpan>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub authority: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub proof_eligible: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_kind: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub project_match_reasons: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub redaction: Option<TranscriptRedactionMetadata>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TranscriptRedactionMetadata {
+    pub state: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub excluded: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -196,6 +219,11 @@ impl GrepEnvelope {
             intent: Some(
                 if hits.iter().all(|hit| hit.corpus == SearchCorpus::Source) {
                     "source"
+                } else if hits
+                    .iter()
+                    .all(|hit| hit.corpus == SearchCorpus::Transcript)
+                {
+                    "transcript"
                 } else {
                     "memory"
                 }

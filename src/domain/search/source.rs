@@ -12,6 +12,7 @@ use crate::domain::search::lock;
 use crate::domain::search::memory;
 use crate::domain::search::outline::{self, OutlineEntry};
 use crate::domain::search::query::{self, ParsedQuery, QueryAtom, QueryExpr};
+use crate::domain::search::transcript;
 use crate::domain::search::types::{
     DiagnosticSeverity, GrepEnvelope, MatchSpan, ScoreReason, SearchCorpus, SearchDiagnostic,
     SearchFreshness, SearchHit,
@@ -135,7 +136,7 @@ pub fn grep(paths: &MaestroPaths, raw_query: &str) -> GrepEnvelope {
         );
     }
 
-    match decision.route {
+    let mut envelope = match decision.route {
         Some(SearchCorpus::Memory) => with_intent(
             memory::grep_memory_parsed(paths, raw_query, &parsed),
             &decision,
@@ -143,8 +144,13 @@ pub fn grep(paths: &MaestroPaths, raw_query: &str) -> GrepEnvelope {
         Some(SearchCorpus::Source) => {
             with_intent(grep_source_parsed(paths, raw_query, &parsed), &decision)
         }
+        Some(SearchCorpus::Transcript) => transcript::unavailable_envelope(raw_query, &parsed),
         None => grep_mixed(paths, raw_query, &parsed, &decision),
+    };
+    if parsed.filters.include_transcript {
+        envelope = transcript::attach_unavailable(envelope);
     }
+    envelope
 }
 
 fn has_source_filter(parsed: &ParsedQuery) -> bool {
@@ -339,6 +345,9 @@ pub(crate) fn grep_source_parsed(
     raw_query: &str,
     parsed: &ParsedQuery,
 ) -> GrepEnvelope {
+    if parsed.filters.corpus.as_deref() == Some("transcript") {
+        return transcript::unavailable_envelope(raw_query, parsed);
+    }
     if let Some(invalid) = parsed.filters.kinds.iter().find(|kind| {
         let kind = kind.as_str();
         kind != "file" && !OUTLINE_KINDS.contains(&kind)
@@ -515,6 +524,13 @@ fn search_shard(
                     byte_start: first_match.byte_start,
                     byte_end: first_match.byte_end,
                 }],
+                provider: None,
+                session_id: None,
+                authority: None,
+                proof_eligible: None,
+                source_kind: None,
+                project_match_reasons: Vec::new(),
+                redaction: None,
             });
         }
     }
@@ -612,6 +628,13 @@ fn search_symbols(
                 byte_start: 0,
                 byte_end: 0,
             }],
+            provider: None,
+            session_id: None,
+            authority: None,
+            proof_eligible: None,
+            source_kind: None,
+            project_match_reasons: Vec::new(),
+            redaction: None,
         });
     }
     hits.sort_by(|a, b| a.path.cmp(&b.path).then_with(|| a.line.cmp(&b.line)));
@@ -771,6 +794,13 @@ fn outline_hit(entry: &OutlineEntry, first_match: &SourceMatch, parsed: &ParsedQ
             byte_start: first_match.byte_start,
             byte_end: first_match.byte_end,
         }],
+        provider: None,
+        session_id: None,
+        authority: None,
+        proof_eligible: None,
+        source_kind: None,
+        project_match_reasons: Vec::new(),
+        redaction: None,
     }
 }
 

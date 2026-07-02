@@ -10,6 +10,7 @@ pub enum CaseMode {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct QueryFilters {
     pub corpus: Option<String>,
+    pub include_transcript: bool,
     pub kinds: Vec<String>,
     pub file_globs: Vec<String>,
     pub excluded_file_globs: Vec<String>,
@@ -19,6 +20,23 @@ pub struct QueryFilters {
     pub feature: Option<String>,
     pub runtime: Option<String>,
     pub event: Option<String>,
+    pub provider: Option<String>,
+    pub session: Option<String>,
+    pub scope: Option<String>,
+    pub workspace: Option<String>,
+}
+
+impl QueryFilters {
+    pub fn transcript_requested(&self) -> bool {
+        self.corpus.as_deref() == Some("transcript") || self.include_transcript
+    }
+
+    pub fn has_transcript_only_filter(&self) -> bool {
+        self.provider.is_some()
+            || self.session.is_some()
+            || self.scope.is_some()
+            || self.workspace.is_some()
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -94,14 +112,26 @@ pub fn parse(raw: &str) -> Result<ParsedQuery, SearchDiagnostic> {
                     ));
                 }
                 "corpus" => {
-                    if value != "memory" && value != "source" {
+                    if value != "memory" && value != "source" && value != "transcript" {
                         return Err(SearchDiagnostic::error(
                             "invalid_filter",
-                            format!("unsupported corpus {value:?}; expected memory or source"),
+                            format!(
+                                "unsupported corpus {value:?}; expected memory, source, or transcript"
+                            ),
                         ));
                     }
                     filters.corpus = Some(value.to_string());
                     push_once(&mut overrides, "corpus");
+                }
+                "include" => {
+                    if value != "transcript" {
+                        return Err(SearchDiagnostic::error(
+                            "invalid_filter",
+                            "include: only supports transcript",
+                        ));
+                    }
+                    filters.include_transcript = true;
+                    push_once(&mut overrides, "include");
                 }
                 "type" => {
                     filters.kinds.push(value.to_string());
@@ -136,6 +166,46 @@ pub fn parse(raw: &str) -> Result<ParsedQuery, SearchDiagnostic> {
                 "event" => {
                     filters.event = Some(value.to_string());
                     push_once(&mut overrides, "event");
+                }
+                "provider" => {
+                    if !matches!(value, "codex" | "claude" | "factory") {
+                        return Err(SearchDiagnostic::error(
+                            "invalid_filter",
+                            "provider: must be codex, claude, or factory",
+                        ));
+                    }
+                    filters.provider = Some(value.to_string());
+                    push_once(&mut overrides, "provider");
+                }
+                "session" => {
+                    if value.is_empty() {
+                        return Err(SearchDiagnostic::error(
+                            "invalid_filter",
+                            "session: requires a session id",
+                        ));
+                    }
+                    filters.session = Some(value.to_string());
+                    push_once(&mut overrides, "session");
+                }
+                "scope" => {
+                    if !matches!(value, "project" | "global") {
+                        return Err(SearchDiagnostic::error(
+                            "invalid_filter",
+                            "scope: must be project or global",
+                        ));
+                    }
+                    filters.scope = Some(value.to_string());
+                    push_once(&mut overrides, "scope");
+                }
+                "workspace" => {
+                    if value.is_empty() {
+                        return Err(SearchDiagnostic::error(
+                            "invalid_filter",
+                            "workspace: requires a path",
+                        ));
+                    }
+                    filters.workspace = Some(value.to_string());
+                    push_once(&mut overrides, "workspace");
                 }
                 "file" => {
                     if negate_next {
@@ -213,6 +283,12 @@ pub fn parse(raw: &str) -> Result<ParsedQuery, SearchDiagnostic> {
         return Err(SearchDiagnostic::error(
             "empty_query",
             "maestro grep needs at least one text term, /regex/ atom, or sym:<name>",
+        ));
+    }
+    if filters.has_transcript_only_filter() && !filters.transcript_requested() {
+        return Err(SearchDiagnostic::error(
+            "invalid_filter",
+            "provider:, session:, scope:, and workspace: require corpus:transcript or include:transcript",
         ));
     }
 

@@ -10,6 +10,7 @@ pub(crate) const ARTIFACT_GRAPH_VERSION: &str = "maestro.artifact-graph.v1";
 pub(crate) enum IntentKind {
     Memory,
     Source,
+    Transcript,
     Ambiguous,
 }
 
@@ -18,6 +19,7 @@ impl IntentKind {
         match self {
             Self::Memory => "memory",
             Self::Source => "source",
+            Self::Transcript => "transcript",
             Self::Ambiguous => "ambiguous",
         }
     }
@@ -33,20 +35,16 @@ pub(crate) struct IntentDecision {
 
 pub(crate) fn classify(parsed: &ParsedQuery) -> IntentDecision {
     if let Some(corpus) = parsed.filters.corpus.as_deref() {
-        let kind = if corpus == "source" {
-            IntentKind::Source
-        } else {
-            IntentKind::Memory
+        let (kind, route) = match corpus {
+            "source" => (IntentKind::Source, SearchCorpus::Source),
+            "transcript" => (IntentKind::Transcript, SearchCorpus::Transcript),
+            _ => (IntentKind::Memory, SearchCorpus::Memory),
         };
         return IntentDecision {
             kind,
             confidence: "high",
             reasons: vec!["explicit corpus filter".to_string()],
-            route: Some(if corpus == "source" {
-                SearchCorpus::Source
-            } else {
-                SearchCorpus::Memory
-            }),
+            route: Some(route),
         };
     }
 
@@ -260,6 +258,7 @@ fn apply_intent_boost(hit: &mut SearchHit, kind: IntentKind) {
     let boost = match (kind, hit.corpus) {
         (IntentKind::Memory, SearchCorpus::Memory) => 0.18,
         (IntentKind::Source, SearchCorpus::Source) => 0.18,
+        (IntentKind::Transcript, SearchCorpus::Transcript) => 0.18,
         (IntentKind::Ambiguous, SearchCorpus::Memory) => 0.04,
         _ => 0.0,
     };
@@ -290,8 +289,12 @@ fn compare_hits(a: &SearchHit, b: &SearchHit, kind: IntentKind) -> Ordering {
 fn corpus_priority(corpus: SearchCorpus, kind: IntentKind) -> u8 {
     match (kind, corpus) {
         (IntentKind::Source, SearchCorpus::Source) => 0,
+        (IntentKind::Transcript, SearchCorpus::Transcript) => 0,
         (IntentKind::Source, SearchCorpus::Memory) => 1,
+        (IntentKind::Source, SearchCorpus::Transcript) => 2,
+        (IntentKind::Transcript, SearchCorpus::Memory | SearchCorpus::Source) => 1,
         (_, SearchCorpus::Memory) => 0,
         (_, SearchCorpus::Source) => 1,
+        (_, SearchCorpus::Transcript) => 2,
     }
 }

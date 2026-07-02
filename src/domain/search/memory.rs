@@ -12,6 +12,7 @@ use crate::domain::run;
 use crate::domain::search::intent;
 use crate::domain::search::lock;
 use crate::domain::search::query::{self, ParsedQuery};
+use crate::domain::search::transcript;
 use crate::domain::search::types::{
     GrepEnvelope, MatchSpan, ScoreReason, SearchCorpus, SearchDiagnostic, SearchDocument,
     SearchFreshness, SearchHit, SearchSegment,
@@ -142,6 +143,9 @@ pub(crate) fn grep_memory_parsed(
             ),
             parsed.explicit_filter_overrides.clone(),
         );
+    }
+    if parsed.filters.corpus.as_deref() == Some("transcript") {
+        return transcript::unavailable_envelope(raw_query, parsed);
     }
     if !parsed.regexes.is_empty() {
         return GrepEnvelope::error_with_overrides(
@@ -687,6 +691,13 @@ fn score_document(
         parent: doc.parent.clone(),
         symbol_kind: None,
         match_spans: spans,
+        provider: None,
+        session_id: None,
+        authority: None,
+        proof_eligible: None,
+        source_kind: None,
+        project_match_reasons: Vec::new(),
+        redaction: None,
     })
 }
 
