@@ -149,14 +149,15 @@ no auto-archive authority exists.
 
 ## Fan-out
 
-Use feature fan-out only when 2+ ready work cards are independent. Full
-orchestration HOW (dispatch, worktree isolation, collection): `maestro loop
-show feature-fanout`.
+Use feature fan-out only when 2+ tasks in the executable `maestro ready <feature>`
+parallel wave are independent. Full orchestration HOW (dispatch, worktree
+isolation, collection): `maestro loop show feature-fanout`.
 
-1. Confirm with `maestro card ready <feature>` and each card's locked acceptance
-   checks. Same files, dependency edges, or contended card-store writes (every
-   worker's `claim`/`complete` writes the store) mean serialize, or isolate each
-   worker in its own worktree -- the funnel rule in HARNESS Orchestration.
+1. Confirm with `maestro ready <feature>` and each task's locked acceptance
+   checks. Same files, explicit `blocked_by` edges, or contended card-store
+   writes (every worker's `claim`/`complete` writes the store) mean serialize,
+   or isolate each worker in its own worktree -- the funnel rule in HARNESS
+   Orchestration.
 2. Spawn one fresh sub-agent per card. Each owns:
    `maestro card claim <id> -> work -> task complete --summary --claim --proof`.
 3. The conductor collects completions, runs `maestro task verify <id>`, commits

@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: 266618c6b2860deb305555149d7272d28fc31541efa341fbdf4ea95291018953 -->
+<!-- maestro:cli-reference-sha256: 068afadfcf6d9583564f5a321fe673e2130fc1eea665d9fdc845b095bbaed764 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -15,7 +15,7 @@ a spelling not found here is outside this skill's CLI surface.
 ## maestro task
 
 - `maestro task add <TITLE> [--card <CARD>] [--project <PROJECT>] [--id-only]` -- Add a low-ceremony task ready to start
-- `maestro task setup --task <TASK>... [--start] [--atomic] [--reason <REASON>] [--project <PROJECT>]` -- Set up a low-ceremony Progress checklist before work starts
+- `maestro task setup [--task <TASK>]... [--from <PLAN_FILE>] [--lane <LANE>]... [--after <AFTER>]... [--gate <GATE>]... [--start] [--atomic] [--reason <REASON>] [--project <PROJECT>]` -- Set up a low-ceremony Progress checklist before work starts
 - `maestro task create <TITLE> [--feature <FEATURE>] [--card <CARD>] [--lane <LANE>] [--risk <RISK>] [--check <CHECK>]... [--covers <COVERS>]... [--project <PROJECT>] [--id-only]` -- Create a task (-> draft)
 - `maestro task set <ID> [--check <CHECK>]... [--feature <FEATURE>] [--no-feature] [--covers <COVERS>]... [--verify-command <VERIFY_COMMAND>] [--clear-verify-command]` -- Author task checks or change its feature link
 - `maestro task explore <ID>` -- Move a draft into exploring (-> exploring)
@@ -110,6 +110,10 @@ a spelling not found here is outside this skill's CLI surface.
 - `maestro card update [ID] [--status <STATUS>] [--title <TITLE>] [--description <TEXT>] [--active-form <TEXT>] [--claim] [--json]` -- Update a card's status, title, description, or claim
 - `maestro card close <ID>` -- Close a card: status -> closed
 - `maestro card graph [ID] [--dot]` -- Walk a card's typed edges (parent/blocks/related/supersedes)
+
+## maestro ready
+
+- `maestro ready [FEATURE] [--json] [--plan] [--project <PROJECT>]` -- Show canonical task-wave readiness from the task DAG
 
 ## maestro active
 

@@ -5,8 +5,9 @@
 >> under full local autonomy: accept proposed contracts, prepare tasks, unblock
 >> local Maestro blockers, claim -> work -> verify -> commit locally, and close
 >> locally verified features. Stay grounded in the maestro card store, not chat
->> memory: the feature and cards you're on now, then `maestro card ready`, then
->> proposed/ready features you can accept or prepare.
+>> memory: the feature/tasks you're on now, then `maestro ready`, then explicit
+>> legacy `maestro card ready` only when you are intentionally working card-board
+>> items, then proposed/ready features you can accept or prepare.
 >> HARD STOP: any push/tag/publish/release/archive action not granted by an
 >> explicit bounded run-scoped ship authority; archive also requires explicit
 >> auto-archive authority and a passing helper preflight. HARD STOP:
@@ -38,15 +39,18 @@ ever; if the prompt states one ("until 07:00", "max 5 cards"), honor it,
 never ask for one.
 
 Start from the store, never from memory (the session can die; the store is the
-only durable state): `maestro status` for state, `maestro loop next` for
-read-only routing when the next lifecycle is not obvious, then
-`maestro loop work-lease --json` when the unattended recipe needs its
-choose-phase helper. Work Lease selects one ready card in the requested scope,
-claims it through the normal card claim policy, emits the existing work-touch
-run evidence, and prints the bounded worker contract. It never launches a
-worker, sleeps, polls, owns a queue, schedules the next tick, or becomes a
-second lifecycle. Long-lived agents may call it before each unit; an external
-scheduler may call it once per cron/launchd/cloud firing.
+only durable state): `maestro status` for state, `maestro ready` for the
+executable task-wave projection, and `maestro loop next` for read-only routing
+when the next lifecycle is not obvious. `loop next` consumes the readiness graph
+and chooses the lifecycle recipe: parallel work -> work, serial integration gate
+-> work, ship gate -> ship, design gap -> design, conflict -> conflict-handoff.
+It is not a queue, scheduler, executor, or hidden gate loop. Use
+`maestro loop work-lease --json` only when you are intentionally running the
+legacy card-board choose-phase helper. Work Lease selects one ready card in the
+requested scope, claims it through the normal card claim policy, emits the
+existing work-touch run evidence, and prints the bounded worker contract. It
+never launches a worker, sleeps, polls, owns a queue, schedules the next tick,
+or becomes a second lifecycle.
 
 If the kickoff is a broad goal instead of a named card or accepted feature,
 infer a minimal GoalBrief before work starts:
@@ -116,9 +120,10 @@ the same records and stop conditions.
    `action`, `target_kind`, `target_id`, `authority_ref`, compact
    `before_state`, normalized/redacted `command`, `result`, and compact
    `after_state`. Do not store full card snapshots.
-6. When `maestro card ready` is dry, replenish: find proposed or ready features
-   that can proceed locally. For proposed features, satisfy the normal
-   QA-baseline and accept gate; for ready features with no tasks, run
+6. When `maestro ready` has no executable wave, serial gate, or blocked-next
+   item you can resolve locally, replenish: find proposed or ready features that
+   can proceed locally. For proposed features, satisfy the normal QA-baseline
+   and accept gate; for ready features with no tasks, run
    `feature prepare <id> --draft`, review the draft, apply with
    `prepare --from`, and continue the loop.
 7. A feature whose children are all verified may be closed locally when the

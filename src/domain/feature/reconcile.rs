@@ -350,6 +350,7 @@ pub fn apply_reconcile_plan(
                 &paths.tasks_dir(),
                 &item.title,
                 task::CreateTaskOptions {
+                    id: None,
                     feature: Some(id.to_string()),
                     covers: Vec::new(),
                     lane: None,

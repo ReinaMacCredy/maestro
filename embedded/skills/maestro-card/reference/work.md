@@ -7,9 +7,11 @@ Progress is the lightweight Task container for small same-session work.
 
 ## Use
 
-- Find work: `maestro card ready`, `maestro card list --parent <feature>`.
+- Find work: `maestro ready`, or `maestro ready --plan` when you need the
+  projected wave sequence. Use `maestro card ready` only for explicit legacy
+  card-board work.
 - Create or prepare work: `task create`, `task explore`, `task accept`.
-- Pick up work: `task claim --next` (sequenced queue with dependency context)
+- Pick up work: `task claim --next` (bounded executable wave with dependency context)
   or `maestro task start <ref-or-id>` / `maestro task claim <id>` for one ready
   task.
 - Record progress: `task update --summary` and/or `--claim`;
@@ -36,10 +38,12 @@ maestro_task_claim -> maestro_task_update -> maestro_task_complete
 maestro_verify
 ```
 
-Use `maestro_card_ready`, `maestro_card_list`, and `maestro_card_show` for
-orientation. Use the CLI loop below when MCP is unavailable or a needed verb is
-not exposed as an MCP tool. MCP tool schemas come from the host; CLI
-signatures live in [cli.md](cli.md).
+Use `maestro_ready` for task-wave orientation, then `maestro_task_next` and
+`maestro_task_*` for the normal work loop. Use `maestro_card_ready`,
+`maestro_card_list`, and `maestro_card_show` only for explicit legacy/card-board
+work. Use the CLI loop below when MCP is unavailable or a needed verb is not
+exposed as an MCP tool. MCP tool schemas come from the host; CLI signatures
+live in [cli.md](cli.md).
 
 ```sh
 maestro task create        # mint the card; seed --check with the observable result
@@ -53,13 +57,12 @@ maestro task verify
 
 `verify` and `show` can omit `<id>` when `MAESTRO_CURRENT_TASK` is set.
 
-Use `--lane` as a routing convention, not a schema enum. Standard lanes are
-`implement`, `explore`, `review`, `audit`, `light`, and `normal` for unrouted
-default work; extend the vocabulary only by team convention. A `light` card is
-one whose change carries no real logic to test: mechanical or structural code
-with behavior held constant, config-only, docs-only, or a throwaway spike. A
-change that adds or alters observable behavior is not light, whatever its size.
-Existing states still own workflow meaning: exploring is a task state,
+Use `lane` as a routing convention, not a closed enum. Built-in ordering knows
+`frontend`, `backend`, `tests`, `docs`, `integration`, `ship`, and `general`;
+custom lanes are allowed when the feature contract explains them. `gate: true`
+means the task is serial even if it is otherwise ready. `gate_kind: ship` routes
+through the ship loop; other gates stay in the work loop as single-owner serial
+tasks. Existing states still own workflow meaning: exploring is a task state,
 brainstorm/design work belongs in a feature card or SPEC, and planning usually
 happens before `feature prepare`.
 
@@ -276,8 +279,8 @@ For unstructured audit/review/user-feedback backlogs:
 
 For unknown-size work:
 
-- Stop on a query, not a feeling: `maestro card ready` empty, or K discovery sweeps
-  with zero new findings.
+- Stop on a query, not a feeling: `maestro ready` has no executable wave or
+  serial gate, or K discovery sweeps have zero new findings.
 - Turn each new finding into a card immediately so it survives context loss.
 - Claim, work, complete, verify, then re-check the stop condition.
 

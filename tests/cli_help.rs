@@ -53,6 +53,7 @@ fn root_help_lists_top_level_commands() {
             "qa",
             "decision",
             "card",
+            "ready",
             "active",
             "link",
             "archive",
@@ -65,15 +66,15 @@ fn root_help_lists_top_level_commands() {
         ],
     );
 
-    // The flat card verbs, top-level verify, and both migrations are hidden:
-    // the card namespace is canonical, but each flat spelling still dispatches.
+    // The flat card verbs other than canonical `ready`, top-level verify, and
+    // both migrations are hidden: the card namespace is canonical, but each flat
+    // spelling still dispatches.
     // Archive is intentionally visible as the canonical top-level archive engine.
     let command_section = output
         .split("Options:")
         .next()
         .expect("root --help always has a Commands section before Options");
     for hidden in [
-        "  ready ",
         "  list ",
         "  dep ",
         "  claim ",

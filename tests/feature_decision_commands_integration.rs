@@ -1143,6 +1143,101 @@ fn feature_finalize_writes_handoff_and_gates_accept_prepare() {
 }
 
 #[test]
+fn feature_prepare_accepts_task_plan_v1_and_stores_blocked_by_edges() {
+    let temp_dir = TestTempDir::new("maestro-feature-task-plan-v1");
+    let root = temp_dir.path();
+    init_git_marker(root);
+    stdout(maestro(&["init", "--yes"], root), &["init", "--yes"]);
+    stdout(
+        maestro(&["feature", "new", "Wave Ready Feature"], root),
+        &["feature", "new", "Wave Ready Feature"],
+    );
+    let set_args = [
+        "feature",
+        "set",
+        "wave-ready-feature",
+        "--acceptance",
+        "settings behavior works",
+        "--area",
+        "task planner",
+    ];
+    stdout(maestro(&set_args, root), &set_args);
+    let cards_dir = root.join(".maestro/cards");
+    write_baseline(&cards_dir, "wave-ready-feature");
+    reconcile_clean(root, "wave-ready-feature");
+    stdout(
+        maestro(&["feature", "finalize", "wave-ready-feature"], root),
+        &["feature", "finalize", "wave-ready-feature"],
+    );
+    stdout(
+        maestro(&["feature", "accept", "wave-ready-feature"], root),
+        &["feature", "accept", "wave-ready-feature"],
+    );
+
+    let plan_path = root.join("task-plan.yml");
+    fs::write(
+        &plan_path,
+        r#"schema: maestro.task_plan.v1
+tasks:
+  - alias: api
+    title: Build settings API
+    lane: backend
+    checks:
+      - settings API works
+    covers:
+      - ac-1
+  - alias: ui
+    title: Wire settings UI
+    lane: frontend
+    blocked_by:
+      - api
+    checks:
+      - settings UI works
+    covers:
+      - ac-1
+  - alias: gate
+    title: Ship settings gate
+    lane: ship
+    blocked_by:
+      - ui
+    gate: true
+    gate_kind: ship
+"#,
+    )
+    .expect("task plan should write");
+    let plan_arg = plan_path.to_string_lossy().to_string();
+    let prepare_args = [
+        "feature",
+        "prepare",
+        "wave-ready-feature",
+        "--from",
+        plan_arg.as_str(),
+    ];
+    let prepared = stdout(maestro(&prepare_args, root), &prepare_args);
+    assert!(prepared.contains("prepared 3 task(s)"), "{prepared}");
+
+    let api_id = id_by_title(root, "Build settings API");
+    let ui_id = id_by_title(root, "Wire settings UI");
+    let gate_id = id_by_title(root, "Ship settings gate");
+    let ui = task_record(root, &ui_id);
+    assert_eq!(
+        ui["blocked_by"],
+        YamlValue::Sequence(vec![YamlValue::String(api_id.clone())])
+    );
+    assert!(
+        ui["blockers"].as_sequence().is_none_or(Vec::is_empty),
+        "DAG dependencies should not be stored as impediment blockers: {ui:?}"
+    );
+    let gate = task_record(root, &gate_id);
+    assert_eq!(gate["gate"], YamlValue::Bool(true));
+    assert_eq!(gate["gate_kind"], YamlValue::String("ship".to_string()));
+    assert_eq!(
+        gate["blocked_by"],
+        YamlValue::Sequence(vec![YamlValue::String(ui_id)])
+    );
+}
+
+#[test]
 fn feature_finalize_moves_authority_to_db_and_reopen_uses_workbench() {
     let temp_dir = TestTempDir::new("maestro-feature-db-finalize-reopen");
     let root = temp_dir.path();

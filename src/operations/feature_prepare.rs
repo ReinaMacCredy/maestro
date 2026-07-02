@@ -192,6 +192,7 @@ pub fn prepare_card_from_file(
                 &paths.tasks_dir(),
                 &item.title,
                 task::CreateTaskOptions {
+                    id: None,
                     feature: Some(card.id.clone()),
                     covers: item.covers.clone(),
                     lane: None,
@@ -316,6 +317,109 @@ pub fn prepare_card_from_file(
     }
 }
 
+fn prepare_structured_plan_for_feature(
+    paths: &MaestroPaths,
+    view: &feature::FeatureView,
+    input: task::TaskPlanInput,
+    actor: &str,
+) -> Result<PrepareReport> {
+    let existing_tasks = task::load_task_records(&paths.tasks_dir())?;
+    let normalized = task::plan::normalize_new_task_plan(paths, input, &existing_tasks)?;
+    let mut created = Vec::with_capacity(normalized.len());
+    let result = (|| -> Result<PrepareReport> {
+        let mut accepted = Vec::with_capacity(normalized.len());
+        for row in &normalized {
+            let now = utc_now_timestamp();
+            let task = task::create_task(
+                &paths.tasks_dir(),
+                &row.title,
+                task::CreateTaskOptions {
+                    id: Some(row.id.clone()),
+                    feature: Some(view.id.clone()),
+                    covers: row.covers.clone(),
+                    lane: row.lane.clone(),
+                    risk: None,
+                    checks: row.checks.clone(),
+                    project: None,
+                    created_at: now,
+                },
+            )?;
+            created.push(task.clone());
+            let now = utc_now_timestamp();
+            task::transition_task(
+                &paths.tasks_dir(),
+                &task.id,
+                TaskState::Exploring,
+                actor,
+                &now,
+                TransitionDetails::default(),
+            )?;
+            task::set_dag_metadata(
+                &paths.tasks_dir(),
+                &task.id,
+                task::TaskDagMetadata {
+                    lane: row.lane.clone(),
+                    blocked_by: row.blocked_by.clone(),
+                    gate: row.gate,
+                    gate_kind: row.gate_kind.clone(),
+                    order: Some(row.order),
+                },
+            )?;
+            let now = utc_now_timestamp();
+            accepted.push(task::accept_task(
+                &paths.tasks_dir(),
+                &task.id,
+                actor,
+                &now,
+            )?);
+        }
+        let prepared = reload_created_tasks(paths, &accepted)?;
+        let ready_count = prepared
+            .iter()
+            .filter(|task| task_is_startable(paths, task))
+            .count();
+        let blocked_count = prepared
+            .iter()
+            .filter(|task| task.state == TaskState::Ready && !task_is_startable(paths, task))
+            .count();
+        let started = ready_count > 0 && view.status == FeatureStatus::Ready;
+        if started {
+            feature::start(paths, &view.id)?;
+        }
+        Ok(PrepareReport {
+            feature_id: view.id.clone(),
+            task_count: prepared.len(),
+            ready_count,
+            blocked_count,
+            started,
+            remained_ready: ready_count == 0 && view.status == FeatureStatus::Ready,
+            prepared: prepared
+                .into_iter()
+                .map(|task| {
+                    let blocked =
+                        task.state == TaskState::Ready && !task_is_startable(paths, &task);
+                    PreparedTask {
+                        id: task.id,
+                        title: task.title,
+                        blocked,
+                    }
+                })
+                .collect(),
+            blockers: Vec::new(),
+        })
+    })();
+
+    match result {
+        Ok(report) => Ok(report),
+        Err(error) => {
+            rollback_created_tasks(paths, &created).with_context(|| {
+                format!("failed to roll back partial prepare after error: {error}")
+            })?;
+            Err(error)
+        }
+    }
+}
+
 fn prepare_from_file_with_blocker(
     paths: &MaestroPaths,
     feature_id: &str,
@@ -330,6 +434,19 @@ fn prepare_from_file_with_blocker(
 
     let contents = fs::read_to_string(plan_path)
         .with_context(|| format!("failed to read {}", plan_path.display()))?;
+    if looks_like_structured_task_plan(&contents) {
+        let input = task::parse_plan_file(&contents)?;
+        let report = prepare_structured_plan_for_feature(paths, &view, input, actor)?;
+        let prepare_dir = feature::feature_sidecar_dir(paths, &view.id);
+        remove_owned_prepare_file(
+            plan_path,
+            &[
+                prepare_dir.join("prepare-draft.md"),
+                prepare_dir.join("prepare-inline.md"),
+            ],
+        )?;
+        return Ok(report);
+    }
     let plan = parse_plan(&contents)?;
     validate_plan(&plan)?;
     guard_plan_covers_acceptance(&view, &plan)?;
@@ -343,6 +460,7 @@ fn prepare_from_file_with_blocker(
                 &paths.tasks_dir(),
                 &item.title,
                 task::CreateTaskOptions {
+                    id: None,
                     feature: Some(view.id.clone()),
                     covers: item.covers.clone(),
                     lane: None,
@@ -468,6 +586,18 @@ fn prepare_from_file_with_blocker(
 fn same_path(left: &Path, right: &Path) -> bool {
     left.canonicalize().unwrap_or_else(|_| left.to_path_buf())
         == right.canonicalize().unwrap_or_else(|_| right.to_path_buf())
+}
+
+fn looks_like_structured_task_plan(contents: &str) -> bool {
+    let trimmed = contents.trim_start();
+    trimmed.starts_with("schema:") || trimmed.starts_with("schema_version:")
+}
+
+fn task_is_startable(paths: &MaestroPaths, task: &TaskRecord) -> bool {
+    task.state == TaskState::Ready
+        && task::readiness::remaining_start_blockers(paths, task)
+            .map(|remaining| remaining.is_empty())
+            .unwrap_or(false)
 }
 
 fn remove_owned_prepare_file(plan_path: &Path, owned_paths: &[PathBuf]) -> Result<()> {

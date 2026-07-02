@@ -718,6 +718,170 @@ fn task_progress_setup_creates_checklist_and_starts_first_task() {
 }
 
 #[test]
+fn task_progress_setup_accepts_alias_keyed_dag_metadata() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    let setup = maestro_with_env(
+        repo,
+        &[
+            "task",
+            "setup",
+            "--task",
+            "api=Build settings API",
+            "--task",
+            "ui=Wire settings UI",
+            "--task",
+            "ship=Ship settings integration",
+            "--lane",
+            "api=backend",
+            "--lane",
+            "ui=frontend",
+            "--lane",
+            "ship=ship",
+            "--after",
+            "ui=api",
+            "--after",
+            "ship=ui",
+            "--gate",
+            "ship=ship",
+            "--start",
+        ],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    );
+    assert_success(
+        &setup,
+        &["task", "setup", "--task", "...", "--after", "..."],
+    );
+    let out = stdout(&setup);
+
+    let tasks = progress_tasks(repo);
+    assert_eq!(tasks.len(), 3);
+    let api_id = tasks[0]["id"].as_str().expect("api task has id");
+    let ui_id = tasks[1]["id"].as_str().expect("ui task has id");
+    assert!(
+        out.contains(&format!("started task: {api_id}")),
+        "setup starts the first deterministic unblocked row only:\n{out}"
+    );
+    assert_eq!(
+        tasks[0]["title"],
+        Value::String("Build settings API".to_string())
+    );
+    assert_eq!(tasks[0]["lane"], Value::String("backend".to_string()));
+    assert_eq!(tasks[0]["state"], Value::String("in_progress".to_string()));
+    assert_eq!(tasks[1]["lane"], Value::String("frontend".to_string()));
+    assert_eq!(
+        tasks[1]["blocked_by"],
+        Value::Sequence(vec![Value::String(api_id.to_string())])
+    );
+    assert_eq!(tasks[2]["lane"], Value::String("ship".to_string()));
+    assert_eq!(
+        tasks[2]["blocked_by"],
+        Value::Sequence(vec![Value::String(ui_id.to_string())])
+    );
+    assert_eq!(tasks[2]["gate"], Value::Bool(true));
+    assert_eq!(tasks[2]["gate_kind"], Value::String("ship".to_string()));
+    assert_eq!(
+        tasks[2]["order"],
+        Value::Number(serde_yaml::Number::from(2))
+    );
+}
+
+#[test]
+fn ready_v2_projects_parallel_wave_serial_gates_and_blocked_next() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    let setup = maestro_with_env(
+        repo,
+        &[
+            "task",
+            "setup",
+            "--task",
+            "api=Build settings API",
+            "--task",
+            "ui=Build settings UI",
+            "--task",
+            "docs=Document settings",
+            "--task",
+            "gate=Wire real integration",
+            "--task",
+            "ship=Ship settings",
+            "--lane",
+            "api=backend",
+            "--lane",
+            "ui=frontend",
+            "--lane",
+            "docs=docs",
+            "--lane",
+            "gate=integration",
+            "--lane",
+            "ship=ship",
+            "--after",
+            "gate=api,ui",
+            "--after",
+            "ship=gate,docs",
+            "--gate",
+            "gate=integration",
+            "--gate",
+            "ship=ship",
+        ],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    );
+    assert_success(&setup, &["task", "setup", "--task", "..."]);
+
+    let human = stdout(&maestro_with_env(
+        repo,
+        &["ready"],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    ));
+    assert!(human.contains("Parallel wave (3 ready"), "{human}");
+    assert!(human.contains("backend"), "{human}");
+    assert!(human.contains("frontend"), "{human}");
+    assert!(human.contains("docs"), "{human}");
+    assert!(human.contains("Serial gates: none ready"), "{human}");
+    assert!(human.contains("Blocked next (2"), "{human}");
+    assert!(human.contains("Wire real integration"), "{human}");
+
+    let json: JsonValue = serde_json::from_str(&stdout(&maestro_with_env(
+        repo,
+        &["ready", "--json"],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    )))
+    .expect("ready v2 JSON parses");
+    assert_eq!(
+        json["schema"],
+        JsonValue::String("maestro.ready.v2".to_string())
+    );
+    assert_eq!(
+        json["parallel_wave"]
+            .as_array()
+            .expect("parallel_wave")
+            .len(),
+        3
+    );
+    assert_eq!(
+        json["serial_gates"].as_array().expect("serial_gates").len(),
+        0
+    );
+    assert_eq!(
+        json["blocked_next"].as_array().expect("blocked_next").len(),
+        2
+    );
+    let argv = json["parallel_wave"][0]["command"]["argv"]
+        .as_array()
+        .expect("command argv is an array");
+    assert_eq!(
+        &argv[..3],
+        [
+            JsonValue::String("maestro".into()),
+            JsonValue::String("task".into()),
+            JsonValue::String("start".into())
+        ]
+    );
+}
+
+#[test]
 fn task_done_refuses_tasks_with_explicit_verification_gates() {
     let temp = setup_repo();
     let repo = temp.path();

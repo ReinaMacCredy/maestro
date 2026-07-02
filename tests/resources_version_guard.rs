@@ -43,8 +43,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 20] = [
     (
         "skill",
         "maestro-card",
-        "1.37.12",
-        "e8539b94adbcf388da725a049e244ba0ffdf05f27f450c0fe0deab1cfcc06840",
+        "1.37.14",
+        "6666de94f7df432f873ec059f3ca8ac85750597bd2d13761fd414de4e29ea31f",
     ),
     (
         "skill",
@@ -73,8 +73,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 20] = [
     (
         "harness",
         "HARNESS.md",
-        "1.29.7",
-        "dfe9fd6c9e736f2fc47aa765b10f2282943cf331ad654add7916e1edbc993a1c",
+        "1.29.9",
+        "11ecd604e91974443780f396fd4955ba10cfd5e9258f2d210af6e746fc4d6d7f",
     ),
     (
         "playbook",
@@ -348,6 +348,32 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
             "harness must explain loop intelligence boundary phrase {phrase:?}"
         );
     }
+    for phrase in [
+        "Design-to-card gate",
+        "Am I coming from design or brainstorm?",
+        "What card/feature owns this work?",
+        "Is that card/feature handoff finalized and fresh?",
+        "stop before creating Progress rows",
+        "implicitly end the design phase",
+    ] {
+        assert!(
+            harness.contains(phrase),
+            "harness must retain design-to-card gate phrase {phrase:?}"
+        );
+    }
+    for phrase in [
+        "Canonical work readiness is `maestro ready`",
+        "task-wave projection from the Task DAG",
+        "parallel executable wave",
+        "bounded blocked-next frontier",
+        "does not create a second scheduler",
+        "explicit legacy card-board readiness surface",
+    ] {
+        assert!(
+            harness.contains(phrase),
+            "harness must retain Ready V2 routing phrase {phrase:?}"
+        );
+    }
     assert!(
         harness.contains("maestro loop show design")
             && harness.contains("maestro loop show work")
@@ -478,6 +504,32 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
         assert!(
             card.contains(phrase),
             "maestro-card must explain loop intelligence boundary phrase {phrase:?}"
+        );
+    }
+    for phrase in [
+        "Phase 0: design-to-card gate",
+        "Before `task setup`",
+        "Am I coming from design or brainstorm?",
+        "What card/feature owns this work?",
+        "Is that card/feature handoff finalized and fresh?",
+        "Progress rows cannot be used",
+    ] {
+        assert!(
+            card.contains(phrase),
+            "maestro-card must retain design-to-card gate phrase {phrase:?}"
+        );
+    }
+    for phrase in [
+        "Use `maestro_ready` for task-wave orientation",
+        "Use `maestro_card_ready`",
+        "only for explicit legacy/card-board work",
+        "executable `maestro ready <feature>` parallel wave",
+        "ship gate -> ship",
+        "It is not a queue, scheduler, executor, or hidden gate loop",
+    ] {
+        assert!(
+            card.contains(phrase),
+            "maestro-card must retain Ready V2 routing phrase {phrase:?}"
         );
     }
 

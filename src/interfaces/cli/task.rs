@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use anyhow::{Context, Result, bail};
 
 use crate::domain::card;
@@ -35,11 +37,29 @@ pub fn run(args: TaskArgs) -> Result<()> {
         } => add_task(&paths, &title, card, project, id_only, &actor),
         TaskCommand::Setup {
             task,
+            from,
+            lane,
+            after,
+            gate,
             start,
             atomic,
             reason,
             project,
-        } => setup_tasks(&paths, &task, start, atomic, reason, project, &actor),
+        } => setup_tasks(
+            &paths,
+            TaskSetupRequest {
+                titles: &task,
+                from: from.as_deref(),
+                lanes: &lane,
+                after: &after,
+                gates: &gate,
+                start,
+                atomic,
+                reason,
+                project,
+                actor: &actor,
+            },
+        ),
         TaskCommand::Create {
             title,
             feature,
@@ -218,6 +238,7 @@ fn create_task(
         &paths.tasks_dir(),
         title,
         task::CreateTaskOptions {
+            id: None,
             feature: parent,
             covers,
             lane,
@@ -267,15 +288,32 @@ fn add_task(
     Ok(())
 }
 
-fn setup_tasks(
-    paths: &MaestroPaths,
-    titles: &[String],
+struct TaskSetupRequest<'a> {
+    titles: &'a [String],
+    from: Option<&'a Path>,
+    lanes: &'a [String],
+    after: &'a [String],
+    gates: &'a [String],
     start: bool,
     atomic: bool,
     reason: Option<String>,
     project: Option<String>,
-    actor: &str,
-) -> Result<()> {
+    actor: &'a str,
+}
+
+fn setup_tasks(paths: &MaestroPaths, request: TaskSetupRequest<'_>) -> Result<()> {
+    let TaskSetupRequest {
+        titles,
+        from,
+        lanes,
+        after,
+        gates,
+        start,
+        atomic,
+        reason,
+        project,
+        actor,
+    } = request;
     let atomic_reason = match (atomic, reason) {
         (true, Some(reason)) if !reason.trim().is_empty() => Some(reason),
         (true, _) => bail!("--atomic requires --reason \"<why one row is enough>\""),
@@ -283,9 +321,18 @@ fn setup_tasks(
         (false, None) => None,
     };
     let project = super::resolve_project(project, paths)?;
-    let tasks = task::setup_simple_tasks(
+    if from.is_some() && !titles.is_empty() {
+        bail!("use either --from <PLAN_FILE> or inline --task flags, not both");
+    }
+    let input = if let Some(from) = from {
+        let contents = task::read_plan_file(from)?;
+        task::parse_plan_file(&contents)?
+    } else {
+        task::plan_from_cli(titles, lanes, after, gates)?
+    };
+    let tasks = task::setup_planned_tasks(
         &paths.tasks_dir(),
-        titles,
+        input,
         project,
         start,
         utc_now_timestamp(),
@@ -297,11 +344,19 @@ fn setup_tasks(
         println!("{}. {} ({})", index + 1, task.id, task.state.as_str());
     }
     if start {
-        println!("started task: {}", tasks[0].id);
-        println!(
-            "next: maestro task done {} --proof \"<evidence>\"",
-            tasks[0].id
-        );
+        if let Some(started) = tasks
+            .iter()
+            .find(|task| task.state == TaskState::InProgress)
+        {
+            println!("started task: {}", started.id);
+            println!(
+                "next: maestro task done {} --proof \"<evidence>\"",
+                started.id
+            );
+        } else if let Some(first) = tasks.first() {
+            println!("started task: none (all setup tasks are blocked)");
+            println!("next: maestro task show {}", first.id);
+        }
     } else {
         println!("next: maestro task start {}", tasks[0].id);
     }
@@ -551,11 +606,21 @@ fn accept_task(paths: &MaestroPaths, id: &str, actor: &str) -> Result<()> {
 }
 
 fn claim_task(paths: &MaestroPaths, id: &str, actor: &str) -> Result<()> {
-    if let Ok(task) = task::load_task_record(&paths.tasks_dir(), id)
-        && matches!(task.state, TaskState::Draft | TaskState::Exploring)
-    {
-        let checks = task::load_task_checks(&paths.tasks_dir(), &task).unwrap_or_default();
-        bail!("{}", claim_not_ready_message(&task, &checks));
+    if let Ok(task) = task::load_task_record(&paths.tasks_dir(), id) {
+        if matches!(task.state, TaskState::Draft | TaskState::Exploring) {
+            let checks = task::load_task_checks(&paths.tasks_dir(), &task).unwrap_or_default();
+            bail!("{}", claim_not_ready_message(&task, &checks));
+        }
+        if task.state == TaskState::Ready && !task::has_unresolved_blockers(&task) {
+            let remaining = task::readiness::remaining_start_blockers(paths, &task)?;
+            if !remaining.is_empty() {
+                bail!(
+                    "task {} is blocked by {}; run `maestro ready` for the executable wave",
+                    task.id,
+                    remaining.join(", ")
+                );
+            }
+        }
     }
     let now = utc_now_timestamp();
     let task = task::claim_task(&paths.tasks_dir(), id, actor, &now)?;
@@ -575,7 +640,21 @@ fn claim_next_task(paths: &MaestroPaths, actor: &str) -> Result<()> {
     let tasks = task::load_task_records(&paths.tasks_dir())?;
     let Some(next) = tasks
         .iter()
-        .find(|task| task.state == TaskState::Ready && !task::has_unresolved_blockers(task))
+        .find(|task| {
+            task.state == TaskState::Ready
+                && task::readiness::remaining_start_blockers(paths, task)
+                    .map(|remaining| remaining.is_empty())
+                    .unwrap_or(false)
+                && !task.gate
+        })
+        .or_else(|| {
+            tasks.iter().find(|task| {
+                task.state == TaskState::Ready
+                    && task::readiness::remaining_start_blockers(paths, task)
+                        .map(|remaining| remaining.is_empty())
+                        .unwrap_or(false)
+            })
+        })
     else {
         bail!("no ready, unblocked task to claim; run `maestro task next`");
     };
@@ -1187,11 +1266,17 @@ fn render_task_list_json(paths: &MaestroPaths, tasks: &[TaskRecord]) -> Result<(
                 });
             serde_json::json!({
                 "ref": index + 1,
-                "id": &task.id,
-                "state": task.state.as_str(),
-                "title": &task.title,
-                "claimed_by": &task.claimed_by,
-                "proof": {
+                  "id": &task.id,
+                  "state": task.state.as_str(),
+                  "title": &task.title,
+                  "lane": &task.lane,
+                  "blocked_by": &task.blocked_by,
+                  "gate": task.gate,
+                  "gate_kind": &task.gate_kind,
+                  "execution_mode": if task.gate { "serial" } else { "parallel" },
+                  "order": task.order,
+                  "claimed_by": &task.claimed_by,
+                  "proof": {
                     "status": proof_status,
                     "claims_only": task.verification.claims_only,
                     "claim_checks": &task.verification.claim_checks,

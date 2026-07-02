@@ -71,6 +71,24 @@ pub fn render_task(task: &TaskRecord, checks: &[String]) -> String {
     if !task.covers.is_empty() {
         out.push_str(&format!("covers: {}\n", task.covers.join(", ")));
     }
+    if let Some(lane) = task.lane.as_deref() {
+        out.push_str(&format!("lane: {lane}\n"));
+    }
+    if !task.blocked_by.is_empty() {
+        out.push_str(&format!("blocked_by: {}\n", task.blocked_by.join(", ")));
+    }
+    if task.gate {
+        out.push_str("gate: true\n");
+        if let Some(kind) = task.gate_kind.as_deref() {
+            out.push_str(&format!("gate_kind: {kind}\n"));
+        }
+        out.push_str("execution_mode: serial\n");
+    } else {
+        out.push_str("execution_mode: parallel\n");
+    }
+    if let Some(order) = task.order {
+        out.push_str(&format!("order: {order}\n"));
+    }
     if let Some(risk) = task.risk.as_deref() {
         out.push_str(&format!("risk: {risk}\n"));
     }

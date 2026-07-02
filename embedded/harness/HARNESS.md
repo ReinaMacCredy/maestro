@@ -1,5 +1,5 @@
 ---
-version: 1.29.7
+version: 1.29.9
 ---
 
 # Maestro Harness Protocol
@@ -77,10 +77,31 @@ Progress rows. If hooks are unavailable, run multi-row `maestro task setup`
 yourself before editing, or use the explicit atomic override for genuinely
 single-step work.
 
+Design-to-card gate: before executable work after a design or brainstorm
+session, ask:
+
+- Am I coming from design or brainstorm?
+- What card/feature owns this work?
+- Is that card/feature handoff finalized and fresh?
+
+If the answer starts in design and the owning card/feature or fresh handoff is
+missing, stop before creating Progress rows, running `feature prepare`, editing
+source, or running implementation tests. First bind standalone chat or Decision
+records to a Feature/card contract and refresh the handoff through the supported
+feature lifecycle path. Do not let Progress tasks or source edits implicitly end
+the design phase.
+
 Linked-card inbox messages are advisory coordination signals only. They do not
 block execution. When order matters, record an explicit Task blocker or
 dependency; readiness, next, claim, and verification gates consult Task
 blockers, not messages or unread state.
+
+Canonical work readiness is `maestro ready`: a task-wave projection from the
+Task DAG. It shows the parallel executable wave, ready serial gates, and the
+bounded blocked-next frontier. `maestro loop next` reads that same projection
+and routes to existing lifecycle recipes; it does not create a second scheduler
+or separate gate loop. Use `maestro card ready` only as the explicit legacy
+card-board readiness surface.
 
 ## Proof And Corrections
 

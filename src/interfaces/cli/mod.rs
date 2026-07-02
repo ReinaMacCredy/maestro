@@ -412,9 +412,8 @@ pub enum RootCommand {
     )]
     Card(CardArgs),
     #[command(
-        hide = true,
-        about = "List workable cards with no open blockers (card store)",
-        after_help = "Examples:\n  maestro ready                # every unblocked task/bug/chore\n  maestro ready --json\n  maestro ready agent-cli-ux   # only those parented to a feature"
+        about = "Show canonical task-wave readiness from the task DAG",
+        after_help = "Examples:\n  maestro ready                # current executable task wave\n  maestro ready --plan         # include projected later waves\n  maestro ready --json         # maestro.ready.v2 JSON\n  maestro ready agent-cli-ux   # only tasks parented to a feature"
     )]
     Ready(ReadyArgs),
     #[command(
@@ -1012,7 +1011,7 @@ pub struct CardArgs {
 #[derive(Debug, Subcommand)]
 pub enum CardCommand {
     #[command(about = "List workable cards with no open blockers")]
-    Ready(ReadyArgs),
+    Ready(CardReadyArgs),
     #[command(about = "List cards filtered by parent, type, assignee, or coarse status")]
     List(ListArgs),
     #[command(about = "Author dependency edges between cards")]
@@ -1051,6 +1050,22 @@ pub enum CardCommand {
 #[derive(Debug, Args)]
 pub struct ReadyArgs {
     /// Print machine-readable ready JSON.
+    #[arg(long)]
+    pub json: bool,
+    /// Show the full projected task-wave plan.
+    #[arg(long)]
+    pub plan: bool,
+    /// Only tasks whose stored project scope equals this value.
+    #[arg(long, value_name = "PROJECT")]
+    pub project: Option<String>,
+    /// Restrict to tasks parented to this feature id (one level).
+    #[arg(value_name = "FEATURE")]
+    pub feature: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct CardReadyArgs {
+    /// Print machine-readable legacy card-ready JSON.
     #[arg(long)]
     pub json: bool,
     /// Only cards whose stored project scope equals this value.
@@ -1131,10 +1146,30 @@ pub enum TaskCommand {
     Setup {
         #[arg(
             long = "task",
-            required = true,
             help = "Task title to add to the Progress checklist (repeatable)"
         )]
         task: Vec<String>,
+        #[arg(
+            long = "from",
+            value_name = "PLAN_FILE",
+            help = "Read maestro.task_plan.v1 from a file, or '-' for stdin"
+        )]
+        from: Option<PathBuf>,
+        #[arg(
+            long = "lane",
+            help = "Assign a task alias to a lane, e.g. ui=frontend (repeatable)"
+        )]
+        lane: Vec<String>,
+        #[arg(
+            long = "after",
+            help = "Make a task alias wait on aliases or task ids, e.g. ui=api,fixtures (repeatable)"
+        )]
+        after: Vec<String>,
+        #[arg(
+            long = "gate",
+            help = "Mark a task alias as a serial gate, e.g. ship=ship (repeatable)"
+        )]
+        gate: Vec<String>,
         #[arg(long, help = "Start the first checklist task after setup")]
         start: bool,
         #[arg(long, help = "Declare a single setup task atomic; requires --reason")]
@@ -2748,7 +2783,7 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Scorer(args) => scorer::run(args),
         RootCommand::Decision(args) => decision::run(args),
         RootCommand::Card(args) => match args.command {
-            CardCommand::Ready(args) => card::ready(args),
+            CardCommand::Ready(args) => card::card_ready(args),
             CardCommand::List(args) => card::list(args),
             CardCommand::Dep(args) => card::dep(args),
             CardCommand::Archive(args) => card::archive(args),

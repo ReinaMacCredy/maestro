@@ -353,6 +353,7 @@ pub fn apply(paths: &MaestroPaths, id: &str, checks: Vec<String>) -> Result<Appl
         &paths.tasks_dir(),
         &title,
         task::CreateTaskOptions {
+            id: None,
             feature: None,
             covers: Vec::new(),
             lane: None,
@@ -800,6 +801,7 @@ mod tests {
             &paths.tasks_dir(),
             "Rollback stale task",
             task::CreateTaskOptions {
+                id: None,
                 feature: None,
                 covers: Vec::new(),
                 lane: None,

@@ -214,10 +214,16 @@ fn legacy_workable_cards_remain_readable_after_progress_card_addition() {
         );
     }
 
-    let ready = run(repo, &["ready"]);
+    let ready = run(repo, &["card", "ready"]);
     assert!(
         ready.contains(&task_id) && ready.contains(&bug_id) && ready.contains(&chore_id),
-        "legacy workable cards remain on the ready board:\n{ready}"
+        "legacy workable cards remain on the card-ready board:\n{ready}"
+    );
+
+    let root_ready = run(repo, &["ready"]);
+    assert!(
+        root_ready.contains("Parallel wave: none") && !root_ready.contains(&task_id),
+        "top-level ready is task-wave readiness, not legacy card readiness:\n{root_ready}"
     );
 }
 
@@ -261,7 +267,7 @@ fn progress_card_queries_show_progress_card_and_task_list_shows_low_tasks() {
         "routine task list hides low-level task ids; use --json for stable ids:\n{tasks}"
     );
 
-    let ready = run(repo, &["ready"]);
+    let ready = run(repo, &["card", "ready"]);
     assert!(
         !ready.contains(&progress_id) && !ready.contains(&task_id),
         "progress cards and their low tasks do not enter the legacy card ready board:\n{ready}"
@@ -481,7 +487,7 @@ fn show_renders_the_display_alias_for_parented_cards() {
         !feature_shown.contains("alias:"),
         "a parentless card carries no alias line:\n{feature_shown}"
     );
-    let ready = run(repo, &["ready"]);
+    let ready = run(repo, &["card", "ready"]);
     assert!(
         !ready.contains("csv-export."),
         "ready carries no alias column:\n{ready}"
@@ -1801,7 +1807,7 @@ fn ready_and_list_render_the_beads_structure() {
     run(repo, &["create", "-t", "task", "First task"]);
     run(repo, &["create", "-t", "bug", "Second bug"]);
 
-    let ready = run(repo, &["ready"]);
+    let ready = run(repo, &["card", "ready"]);
     assert!(
         ready.contains("Ready work (2 cards, no blockers):"),
         "beads ready header with a count:\n{ready}"
@@ -1894,7 +1900,7 @@ fn link_add_show_graph_and_reverse_remove_round_trip() {
     let first = id_by_title(repo, "Draft the loop");
     let second = id_by_title(repo, "Route the skill");
     let ready_before: serde_json::Value =
-        serde_json::from_str(&run(repo, &["ready", "--json"])).expect("ready json before");
+        serde_json::from_str(&run(repo, &["card", "ready", "--json"])).expect("ready json before");
     let list_before: serde_json::Value =
         serde_json::from_str(&run(repo, &["list", "--json"])).expect("list json before");
 
@@ -1930,7 +1936,7 @@ fn link_add_show_graph_and_reverse_remove_round_trip() {
     );
 
     let ready_after: serde_json::Value =
-        serde_json::from_str(&run(repo, &["ready", "--json"])).expect("ready json after");
+        serde_json::from_str(&run(repo, &["card", "ready", "--json"])).expect("ready json after");
     let list_after: serde_json::Value =
         serde_json::from_str(&run(repo, &["list", "--json"])).expect("list json after");
     assert_eq!(
@@ -1983,7 +1989,7 @@ fn dep_remove_unblocks_the_child_and_is_directional() {
     let parent = id_by_title(repo, "The blocker");
 
     run(repo, &["dep", "add", &child, &parent]);
-    let blocked_ready = run(repo, &["ready", "--json"]);
+    let blocked_ready = run(repo, &["card", "ready", "--json"]);
     assert!(
         !blocked_ready.contains(&child),
         "the dependent is not ready while blocked:\n{blocked_ready}"
@@ -2016,7 +2022,7 @@ fn dep_remove_unblocks_the_child_and_is_directional() {
         child_doc["deps"].as_sequence().is_none_or(Vec::is_empty),
         "the blocks edge is deleted: {child_doc:?}"
     );
-    let unblocked_ready = run(repo, &["ready", "--json"]);
+    let unblocked_ready = run(repo, &["card", "ready", "--json"]);
     assert!(
         unblocked_ready.contains(&child),
         "the dependent is ready once unblocked:\n{unblocked_ready}"

@@ -129,6 +129,7 @@ const ASK_MAESTRO_COMMANDS: &[&str] = &[
     "maestro loop next",
     "maestro loop improve",
     "maestro loop outcome",
+    "maestro ready",
     "maestro task setup",
     "maestro task add",
     "maestro task start",
@@ -172,6 +173,7 @@ const MAESTRO_CARD_COMMANDS: &[&str] = &[
     "maestro loop outcome",
     "maestro loop validate",
     "maestro loop work-lease",
+    "maestro ready",
     "maestro task setup",
     "maestro task add",
     "maestro task create",
@@ -539,11 +541,11 @@ mod tests {
     #[test]
     fn hidden_duplicates_and_relocations_shape_the_reference() {
         let reference = render_cli_reference();
-        // The flat card verbs + top-level verify + both migrations are hidden:
-        // no top-level section renders for them. Archive is now a canonical
-        // top-level engine, so it intentionally renders its own section.
+        // The flat card verbs other than canonical `ready`, top-level verify,
+        // and both migrations are hidden: no top-level section renders for
+        // them. Archive is now a canonical top-level engine, so it intentionally
+        // renders its own section.
         for hidden in [
-            "## maestro ready",
             "## maestro list",
             "## maestro dep",
             "## maestro claim",
@@ -563,6 +565,7 @@ mod tests {
             );
         }
         // The card namespace is the canonical home for those verbs.
+        assert!(reference.contains("## maestro ready"), "{reference}");
         assert!(reference.contains("## maestro card"), "{reference}");
         assert!(reference.contains("maestro card ready"), "{reference}");
         // Relocated read views are canonical under their resource.

@@ -1456,9 +1456,11 @@ fn status_shows_compact_loop_hint_from_router_for_ready_task() {
     assert!(
         parsed["loop_hint"]["reason"]
             .as_str()
-            .is_some_and(|reason| reason.contains(task_id)),
+            .is_some_and(|reason| reason.contains("1 executable task")
+                && reason.contains("1 lane")),
         "{parsed}"
     );
+    assert_eq!(parsed["next_action"]["task_id"], task_id);
     assert_eq!(parsed["loop_hint"]["next"], "maestro loop next");
 }
 

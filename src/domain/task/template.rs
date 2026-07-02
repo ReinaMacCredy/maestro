@@ -74,6 +74,14 @@ pub struct TaskRecord {
     pub title: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lane: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub blocked_by: Vec<String>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub gate: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gate_kind: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub order: Option<usize>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub risk: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -257,6 +265,10 @@ impl TaskRecord {
             covers: Vec::new(),
             title: title.to_string(),
             lane: Some("normal".to_string()),
+            blocked_by: Vec::new(),
+            gate: false,
+            gate_kind: None,
+            order: None,
             risk: Some("medium".to_string()),
             raw_request: None,
             atomic: false,

@@ -19,8 +19,8 @@ maestro fixes that by making the work itself durable, queryable, and gated:
 
 - One flat card store replaces scattered feature, task, decision, and harness trees.
 - A **feature card** owns the contract; work cards dock to it through `parent`.
-- `maestro ready` computes unblocked work from card dependencies instead of a global counter.
-- `maestro claim` stamps the current `agent#session`, so multi-session work stays visible.
+- `maestro ready` projects the executable task wave from the Task DAG; `maestro card ready` is the explicit legacy card-readiness board.
+- `maestro task start` / `maestro task claim` stamps the current `agent#session`, so multi-session work stays visible.
 - **Proof** and **QA** gates keep "done" and "closed" evidence-backed.
 - Harness suggestions and decisions are cards too, so tool-improvement and reasoning survive context loss.
 
@@ -147,8 +147,8 @@ your agent (Claude Code, Codex, or any CLI agent) at the repo and paste:
 Set up maestro in this repo: run `maestro init --yes`, then `maestro install --agent claude`
 (or `--agent codex`). Then follow the maestro-setup skill it installs to tune the harness to
 this repo. Start each session with `maestro status`, inspect available work with
-`maestro ready` and `maestro show <id>`, then claim and close cards through the `maestro`
-CLI from there.
+`maestro ready` and `maestro task show <id>`, then start and close tasks through the
+`maestro` CLI from there.
 ```
 
 ## Quickstart
@@ -187,10 +187,10 @@ cat > PLAN-csv-export.md <<'EOF'
 ## Task T1: Implement CSV writer
 check: cargo test export passes
 EOF
-maestro feature prepare csv-export --from PLAN-csv-export.md   # spawns ready child cards
-maestro ready csv-export                                      # show unblocked child work
-maestro claim <task-card-id>                                  # stamp agent#session
-maestro task complete <task-card-id> --summary "wrote csv writer" \
+maestro feature prepare csv-export --from PLAN-csv-export.md   # spawns ready child tasks
+maestro ready csv-export                                      # show executable task wave
+maestro task start <task-id>                                  # stamp agent#session
+maestro task complete <task-id> --summary "wrote csv writer" \
   --claim "cargo test export passes" --proof "observed: cargo test export passes"
 
 # close is gated on QA coverage: every [bl-NNN] baseline scenario needs a proven slice.
@@ -223,8 +223,8 @@ same task loop:
 ```
 maestro harness list                          # what friction the run log surfaced
 maestro harness apply <proposal-id>           # accept a proposal -> spawns a task with a check preset
-maestro claim <task-card-id>
-maestro task complete <task-card-id> --summary "stabilized the suite" \
+maestro task start <task-id>
+maestro task complete <task-id> --summary "stabilized the suite" \
   --claim "cargo test integration passes" --proof "observed: cargo test integration passes"
 maestro harness measure <proposal-id>         # close the loop once that task is verified
 ```
@@ -350,14 +350,16 @@ $ maestro feature prepare api-rate-limiting --from PLAN-api-rate-limiting.md
 prepared 1 task(s)
 started api-rate-limiting -> in_progress
 prepared:
-  card-764dd7 ready           Fixed-window counter middleware
+  task-764dd7 ready           Fixed-window counter middleware
 next: maestro ready api-rate-limiting
 $ maestro ready api-rate-limiting
-Ready work (1 card, no blockers):
-  1. [P1] card-764dd7  task  Fixed-window counter middleware  (unclaimed)
-$ maestro claim card-764dd7
-# prints: claimed card-764dd7 as <agent>#<session>
-$ maestro task complete card-764dd7 --summary "fixed-window counter in the request middleware" --claim "cargo test ratelimit passes" --proof "observed: cargo test ratelimit passes"
+Parallel wave (1 ready, 1 lane)
+  general
+    1. task-764dd7  Fixed-window counter middleware
+       start: maestro task start task-764dd7
+$ maestro task start task-764dd7
+# prints: claimed task-764dd7 as <agent>#<session>
+$ maestro task complete task-764dd7 --summary "fixed-window counter in the request middleware" --claim "cargo test ratelimit passes" --proof "observed: cargo test ratelimit passes"
 completed card-764dd7 -> needs_verification
 auto: recorded task_proof event
 auto: maestro task verify card-764dd7
@@ -400,13 +402,13 @@ Error: cannot accept api-rate-limiting - contract incomplete:
 
 `feature prepare --from <plan-file>` creates the feature's child task queue from explicit `## Task`,
 `check:`, `blocker:`, and `after:` lines. Then drive every task through the same gated loop:
-`maestro ready <feature>` -> `maestro claim <id>` -> work ->
+`maestro ready <feature>` -> `maestro task start <id>` -> work ->
 `task complete --summary "..." --claim "..." --proof "..."`.
 Completion records the inline proof and runs `task verify`; a `verified` task is always evidence
 you can open.
 
-*Prompt:* "Follow the maestro-card skill's work reference: inspect ready cards with
-`maestro ready`, claim one with `maestro claim <id>`, do the work, then `task complete`
+*Prompt:* "Follow the maestro-card skill's work reference: inspect the executable wave with
+`maestro ready`, start one task with `maestro task start <id>`, do the work, then `task complete`
 with a `--claim` stating what proves it and `--proof` containing the observed evidence.
 Use the maestro-card skill's verify reference and
 `maestro query proof` if verification fails."
@@ -463,7 +465,7 @@ across tasks with no decision on record (`rediscovered_decision`).
 
 *Prompt:* "Follow the maestro-card skill's work reference for the harness loop: run
 `maestro harness list`, and for each proposal worth doing, `harness apply <id>` to spawn the fix task
-(it arrives with a check preset), close that task through the proof loop (`maestro claim <id>`, complete `--claim`,
+(it arrives with a check preset), close that task through the proof loop (`maestro task start <id>`, complete `--claim`,
 record proof, `verify`), then `harness measure <id>` to record the outcome."
 
 A fresh repo has no history, so nothing is proposed. Here two tasks hit the same blocker, which is the
@@ -485,10 +487,10 @@ card-5eb94a		proposed	recurring_blocker	2x/2s	Reduce recurring blocker: staging 
 $ maestro harness apply card-5eb94a            # accept -> spawns the fix task with a check preset
 accepted card-5eb94a (spawned card-01d0fd)
   check preset: "Reduce recurring blocker: staging credentials missing is resolved and detector is silent"
-next: maestro claim card-01d0fd
+next: maestro task start card-01d0fd
 
 # close the spawned task through the proof loop (it already has its check)
-$ maestro claim card-01d0fd
+$ maestro task start card-01d0fd
 # prints: claimed card-01d0fd as <agent>#<session>
 $ maestro task complete card-01d0fd --summary "added staging creds to onboarding" --claim "onboarding doc lists staging creds" --proof "observed: onboarding doc lists staging creds"
 completed card-01d0fd -> needs_verification
@@ -511,7 +513,7 @@ vanished. Either way, the improvement is tracked and backed by a verified task, 
 
 A feature card is the product contract and the parent container for work. `proposed` is the
 editable design state; `accept` freezes the contract into `ready` and requires a behavior baseline;
-`prepare` turns a reviewed plan into child work cards; `verify` records feature-level evidence; and
+`prepare` turns a reviewed plan into child tasks; `verify` records feature-level evidence; and
 `close` requires no live child work plus QA coverage and a passing contract sweep. Each feature is a
 card under `.maestro/cards/<id>/`: `card.yaml` holds typed state, `qa.md` holds the behavior baseline
 and slices block, `spec.md` is the design write-up, and `notes.md` accumulates the running design log.
@@ -526,7 +528,7 @@ claim, and observed proof, then `task verify` checks that evidence before the
 Task counts as done.
 
 Legacy `task`, `bug`, and `chore` cards remain workable card types. They can be
-discovered with `maestro ready`, claimed with `maestro claim <id>`, blocked with
+discovered with `maestro card ready`, claimed with `maestro card claim <id>`, blocked with
 `maestro dep add <child> <blocker>`, and closed after their proof-gated work is
 done. The result is that "done" is always backed by evidence you can open.
 
@@ -619,7 +621,7 @@ card-5eb94a		proposed	recurring_blocker	2x/2s	Reduce recurring blocker: staging 
 $ maestro harness apply card-5eb94a
 accepted card-5eb94a (spawned card-01d0fd)
   check preset: "Reduce recurring blocker: staging credentials missing is resolved and detector is silent"
-next: maestro claim card-01d0fd
+next: maestro task start card-01d0fd
 
 # show reveals the evidence, the fingerprint's spawned task, and the append-only history:
 $ maestro harness show card-5eb94a
@@ -715,11 +717,11 @@ edits. `maestro sync --global-skills` refreshes only the user-level global skill
 | `version` | Print the version and binary path |
 
 The entity verbs (`feature`, `task`, `harness`, `decision`) own the proof- and QA-gated lifecycle;
-the `card` subcommands are for discovery and lightweight edits. `card ready` only shows workable
-cards (`task`, `bug`, `chore`) whose `blocks` dependencies are closed. `card list` accepts the
-coarse status filter `open`, `in_progress`, or `closed`. Several legacy root aliases (`ready`,
-`list`, `claim`, `verify`, ...) still dispatch but are hidden from `--help`; run
-`maestro <command> --help` for the full surface.
+the `card` subcommands are for discovery and lightweight edits. `maestro ready` is the canonical
+task-wave readiness surface; `card ready` only shows legacy workable cards (`task`, `bug`, `chore`)
+whose `blocks` dependencies are closed. `card list` accepts the coarse status filter `open`,
+`in_progress`, or `closed`. Several legacy root aliases (`list`, `claim`, `verify`, ...) still
+dispatch but are hidden from `--help`; run `maestro <command> --help` for the full surface.
 
 ## Migration
 

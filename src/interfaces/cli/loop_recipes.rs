@@ -435,17 +435,12 @@ pub(crate) fn build_loop_next_report_from_snapshot(
     git: Option<&GitReadout>,
     mut warnings: Vec<String>,
 ) -> Result<loop_recipes::LoopNextReport> {
+    let readiness = loop_readiness_index(paths, &mut warnings);
     let tasks = task_entries
         .iter()
-        .map(|entry| loop_recipes::LoopTaskInput {
-            id: entry.task.id.clone(),
-            title: entry.task.title.clone(),
-            state: entry.task.state.as_str().to_string(),
-            feature_id: entry.task.feature_id.clone(),
-            blocked: task::has_unresolved_blockers(&entry.task),
-        })
+        .map(|entry| loop_task_input(entry, &readiness))
         .collect::<Vec<_>>();
-    let current_task = current_loop_task(task_entries);
+    let current_task = current_loop_task(task_entries, &readiness);
     let features = features
         .iter()
         .map(|view| loop_recipes::LoopFeatureInput {
@@ -760,7 +755,69 @@ fn presence_can_conflict(presence: run::Presence) -> bool {
     )
 }
 
-fn current_loop_task(entries: &[task::TaskEntry]) -> Option<loop_recipes::LoopTaskInput> {
+#[derive(Default)]
+struct LoopReadinessIndex {
+    startable: BTreeSet<String>,
+    remaining_blockers: BTreeMap<String, Vec<String>>,
+}
+
+fn loop_readiness_index(paths: &MaestroPaths, warnings: &mut Vec<String>) -> LoopReadinessIndex {
+    let projection = match task::readiness::projection(
+        paths,
+        task::readiness::ReadinessFilter {
+            blocked_next_limit: usize::MAX,
+            ..Default::default()
+        },
+    ) {
+        Ok(projection) => projection,
+        Err(error) => {
+            warnings.push(format!("ready projection unavailable: {error:#}"));
+            return LoopReadinessIndex::default();
+        }
+    };
+    let mut index = LoopReadinessIndex::default();
+    for row in projection
+        .parallel_wave
+        .iter()
+        .chain(projection.serial_gates.iter())
+    {
+        index.startable.insert(row.id.clone());
+    }
+    for row in projection.blocked_next {
+        index
+            .remaining_blockers
+            .insert(row.id, row.remaining_blockers);
+    }
+    index
+}
+
+fn loop_task_input(
+    entry: &task::TaskEntry,
+    readiness: &LoopReadinessIndex,
+) -> loop_recipes::LoopTaskInput {
+    let remaining_blockers = readiness
+        .remaining_blockers
+        .get(&entry.task.id)
+        .cloned()
+        .unwrap_or_default();
+    loop_recipes::LoopTaskInput {
+        id: entry.task.id.clone(),
+        title: entry.task.title.clone(),
+        state: entry.task.state.as_str().to_string(),
+        feature_id: entry.task.feature_id.clone(),
+        blocked: task::has_unresolved_blockers(&entry.task) || !remaining_blockers.is_empty(),
+        ready_startable: readiness.startable.contains(&entry.task.id),
+        gate: entry.task.gate,
+        gate_kind: entry.task.gate_kind.clone(),
+        lane: entry.task.lane.clone(),
+        remaining_blockers,
+    }
+}
+
+fn current_loop_task(
+    entries: &[task::TaskEntry],
+    readiness: &LoopReadinessIndex,
+) -> Option<loop_recipes::LoopTaskInput> {
     let id = env::var("MAESTRO_CURRENT_TASK").ok()?;
     let id = id.trim();
     if id.is_empty() {
@@ -769,13 +826,7 @@ fn current_loop_task(entries: &[task::TaskEntry]) -> Option<loop_recipes::LoopTa
     let task = entries
         .iter()
         .find(|entry| entry.task.id == id && entry.task.state.is_live())?;
-    Some(loop_recipes::LoopTaskInput {
-        id: task.task.id.clone(),
-        title: task.task.title.clone(),
-        state: task.task.state.as_str().to_string(),
-        feature_id: task.task.feature_id.clone(),
-        blocked: task::has_unresolved_blockers(&task.task),
-    })
+    Some(loop_task_input(task, readiness))
 }
 
 fn print_loop_next(report: &loop_recipes::LoopNextReport) {

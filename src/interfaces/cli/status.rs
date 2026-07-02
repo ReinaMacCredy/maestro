@@ -770,7 +770,7 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
     for task in &live_tasks {
         rows.push(TaskRowJson {
             id: task.id.clone(),
-            state: task_state_label(task),
+            state: task_state_label(paths, task)?,
             title: task.title.clone(),
             next: compact_next(paths, task)?,
             inspect: format!("maestro task show {}", task.id),
@@ -899,6 +899,12 @@ fn choose_next_task_action(
         if let Some(action) = tasks
             .iter()
             .filter(|task| task.state == state)
+            .filter(|task| {
+                state != TaskState::Ready
+                    || task::readiness::remaining_start_blockers(paths, task)
+                        .map(|remaining| remaining.is_empty())
+                        .unwrap_or(false)
+            })
             .find_map(|task| task_action(paths, task).transpose())
             .transpose()?
         {
@@ -907,7 +913,12 @@ fn choose_next_task_action(
     }
     if let Some(action) = tasks
         .iter()
-        .find(|task| task::has_unresolved_blockers(task))
+        .find(|task| {
+            task::has_unresolved_blockers(task)
+                || task::readiness::remaining_start_blockers(paths, task)
+                    .map(|remaining| !remaining.is_empty())
+                    .unwrap_or(false)
+        })
         .map(blocked_action)
     {
         return Ok(Some(action));
@@ -918,6 +929,11 @@ fn choose_next_task_action(
 fn task_action(paths: &MaestroPaths, task: &TaskRecord) -> Result<Option<NextAction>> {
     if task::has_unresolved_blockers(task) {
         return Ok(Some(blocked_action(task)));
+    }
+    if task.state == TaskState::Ready
+        && !task::readiness::remaining_start_blockers(paths, task)?.is_empty()
+    {
+        return Ok(None);
     }
     let checks = task::load_task_checks(&paths.tasks_dir(), task).unwrap_or_default();
     let has_verify_contract = task.feature_id.is_some() || !checks.is_empty();
@@ -1003,11 +1019,15 @@ fn compact_next(paths: &MaestroPaths, task: &TaskRecord) -> Result<String> {
         .unwrap_or_else(|| "status".to_string()))
 }
 
-fn task_state_label(task: &TaskRecord) -> String {
-    if task::has_unresolved_blockers(task) {
-        format!("{} / blocked", task.state.as_str())
+fn task_state_label(paths: &MaestroPaths, task: &TaskRecord) -> Result<String> {
+    if task::has_unresolved_blockers(task)
+        || task::readiness::remaining_start_blockers(paths, task)
+            .map(|remaining| !remaining.is_empty())
+            .unwrap_or(false)
+    {
+        Ok(format!("{} / blocked", task.state.as_str()))
     } else {
-        task.state.as_str().to_string()
+        Ok(task.state.as_str().to_string())
     }
 }
 

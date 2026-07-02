@@ -182,6 +182,11 @@ pub struct LoopTaskInput {
     pub state: String,
     pub feature_id: Option<String>,
     pub blocked: bool,
+    pub ready_startable: bool,
+    pub gate: bool,
+    pub gate_kind: Option<String>,
+    pub lane: Option<String>,
+    pub remaining_blockers: Vec<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -232,6 +237,14 @@ pub struct LoopContextTask {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub feature_id: Option<String>,
     pub blocked: bool,
+    pub ready_startable: bool,
+    pub gate: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gate_kind: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lane: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub remaining_blockers: Vec<String>,
     pub source_refs: Vec<LoopContextRef>,
 }
 
@@ -588,6 +601,8 @@ pub fn route_next(input: LoopRouterInput) -> Result<LoopNextReport> {
                     ],
                 );
             }
+        } else if is_ship_gate(task) && matches!(task.state.as_str(), "ready" | "in_progress") {
+            candidates.push(ship_gate_candidate(task));
         } else {
             candidates.push(work_candidate(task, "current task is live"));
         }
@@ -607,8 +622,25 @@ pub fn route_next(input: LoopRouterInput) -> Result<LoopNextReport> {
             "task needs proof recovery or verification",
         ));
     }
-    if let Some(task) = live_tasks.iter().find(|task| task.state == "ready") {
-        candidates.push(work_candidate(task, "ready task can enter implementation"));
+    if let Some(task) = live_tasks
+        .iter()
+        .find(|task| task.state == "ready" && task.ready_startable && is_ship_gate(task))
+    {
+        candidates.push(ship_gate_candidate(task));
+    } else {
+        let parallel_wave = live_tasks
+            .iter()
+            .copied()
+            .filter(|task| task.state == "ready" && task.ready_startable && !task.gate)
+            .collect::<Vec<_>>();
+        if !parallel_wave.is_empty() {
+            candidates.push(parallel_wave_candidate(&parallel_wave));
+        } else if let Some(task) = live_tasks
+            .iter()
+            .find(|task| task.state == "ready" && task.ready_startable && task.gate)
+        {
+            candidates.push(serial_gate_candidate(task));
+        }
     }
     if let Some(task) = live_tasks.iter().find(|task| task.state == "in_progress") {
         candidates.push(work_candidate(
@@ -617,23 +649,13 @@ pub fn route_next(input: LoopRouterInput) -> Result<LoopNextReport> {
         ));
     }
 
-    if input.current_task.is_none()
-        && let Some((feature_id, ready_count)) = fanout_feature(&live_tasks)
+    if candidates.is_empty()
+        && let Some(task) = input
+            .tasks
+            .iter()
+            .find(|task| task.state == "ready" && task.blocked)
     {
-        candidates.push(RouterCandidate {
-            recipe: "feature-fanout",
-            reason: format!(
-                "{ready_count} ready tasks share feature {feature_id}; fanout may be legal after independence checks"
-            ),
-            inspect: vec![
-                format!("maestro task list --feature {feature_id}"),
-                format!("maestro feature show {feature_id}"),
-            ],
-            next_verbs: vec![
-                "maestro loop show feature-fanout".to_string(),
-                format!("maestro task list --feature {feature_id}"),
-            ],
-        });
+        candidates.push(blocked_ready_candidate(task));
     }
 
     if let Some(feature) = input.features.iter().find(|feature| {
@@ -1152,6 +1174,11 @@ fn context_task(task: &LoopTaskInput) -> LoopContextTask {
         state: task.state.clone(),
         feature_id: task.feature_id.clone(),
         blocked: task.blocked,
+        ready_startable: task.ready_startable,
+        gate: task.gate,
+        gate_kind: task.gate_kind.clone(),
+        lane: task.lane.clone(),
+        remaining_blockers: task.remaining_blockers.clone(),
         source_refs,
     }
 }
@@ -1830,15 +1857,92 @@ fn work_candidate(task: &LoopTaskInput, reason: &str) -> RouterCandidate {
     }
 }
 
-fn fanout_feature(tasks: &[&LoopTaskInput]) -> Option<(String, usize)> {
-    let mut counts: BTreeMap<String, usize> = BTreeMap::new();
-    for task in tasks.iter().filter(|task| task.state == "ready") {
-        let Some(feature_id) = task.feature_id.as_deref() else {
-            continue;
-        };
-        *counts.entry(feature_id.to_string()).or_default() += 1;
+fn parallel_wave_candidate(tasks: &[&LoopTaskInput]) -> RouterCandidate {
+    let first = tasks[0];
+    let lanes = ready_lane_count(tasks);
+    RouterCandidate {
+        recipe: "work",
+        reason: format!(
+            "{} executable task{} ready now across {} lane{}",
+            tasks.len(),
+            if tasks.len() == 1 { " is" } else { "s are" },
+            lanes,
+            if lanes == 1 { "" } else { "s" }
+        ),
+        inspect: vec![
+            "maestro ready".to_string(),
+            format!("maestro task show {}", first.id),
+        ],
+        next_verbs: vec![
+            "maestro loop show work".to_string(),
+            "maestro ready".to_string(),
+            format!("maestro task start {}", first.id),
+        ],
     }
-    counts.into_iter().find(|(_, count)| *count >= 2)
+}
+
+fn serial_gate_candidate(task: &LoopTaskInput) -> RouterCandidate {
+    let kind = task.gate_kind.as_deref().unwrap_or("integration");
+    RouterCandidate {
+        recipe: "work",
+        reason: format!("{kind} gate {} is ready and must run serially", task.id),
+        inspect: vec![
+            "maestro ready".to_string(),
+            format!("maestro task show {}", task.id),
+        ],
+        next_verbs: vec![
+            "maestro loop show work".to_string(),
+            format!("maestro task start {}", task.id),
+        ],
+    }
+}
+
+fn ship_gate_candidate(task: &LoopTaskInput) -> RouterCandidate {
+    RouterCandidate {
+        recipe: "ship",
+        reason: format!("ship gate {} is ready", task.id),
+        inspect: vec![
+            "maestro ready".to_string(),
+            format!("maestro task show {}", task.id),
+            "git status --short --branch".to_string(),
+        ],
+        next_verbs: vec![
+            "maestro loop show ship".to_string(),
+            format!("maestro task start {}", task.id),
+        ],
+    }
+}
+
+fn blocked_ready_candidate(task: &LoopTaskInput) -> RouterCandidate {
+    let blockers = if task.remaining_blockers.is_empty() {
+        "unresolved blockers".to_string()
+    } else {
+        task.remaining_blockers.join(", ")
+    };
+    RouterCandidate {
+        recipe: "work",
+        reason: format!("ready graph is blocked; {} waits on {blockers}", task.id),
+        inspect: vec![
+            "maestro ready".to_string(),
+            format!("maestro task show {}", task.id),
+        ],
+        next_verbs: vec![
+            "maestro loop show work".to_string(),
+            "maestro ready".to_string(),
+        ],
+    }
+}
+
+fn ready_lane_count(tasks: &[&LoopTaskInput]) -> usize {
+    let mut lanes = BTreeSet::new();
+    for task in tasks {
+        lanes.insert(task.lane.as_deref().unwrap_or("general"));
+    }
+    lanes.len()
+}
+
+fn is_ship_gate(task: &LoopTaskInput) -> bool {
+    task.gate && (task.gate_kind.as_deref() == Some("ship") || task.lane.as_deref() == Some("ship"))
 }
 
 fn is_live_task_state(state: &str) -> bool {
@@ -3256,7 +3360,7 @@ mod tests {
     }
 
     #[test]
-    fn route_next_recommends_feature_fanout_before_single_ready_work() {
+    fn route_next_recommends_parallel_wave_as_work() {
         let first = task_input("task-one", "ready", Some("feature-router"));
         let second = task_input("task-two", "ready", Some("feature-router"));
         let report = route_next(LoopRouterInput {
@@ -3265,14 +3369,14 @@ mod tests {
             tasks: vec![first, second],
             ..LoopRouterInput::default()
         })
-        .expect("router should recommend fanout");
+        .expect("router should recommend work for the executable wave");
 
-        assert_eq!(report.recommended_recipe.as_deref(), Some("feature-fanout"));
+        assert_eq!(report.recommended_recipe.as_deref(), Some("work"));
         assert!(
             report
                 .candidates
                 .iter()
-                .any(|candidate| candidate.recipe == "work"),
+                .any(|candidate| candidate.reason.contains("2 executable tasks")),
             "{report:?}"
         );
     }
@@ -3386,6 +3490,11 @@ mod tests {
             state: state.to_string(),
             feature_id: feature_id.map(str::to_string),
             blocked: false,
+            ready_startable: state == "ready",
+            gate: false,
+            gate_kind: None,
+            lane: Some("general".to_string()),
+            remaining_blockers: Vec::new(),
         }
     }
 

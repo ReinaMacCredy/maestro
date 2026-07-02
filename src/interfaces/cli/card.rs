@@ -10,18 +10,42 @@ use crate::foundation::core::safe_write::write_string_atomic;
 use crate::foundation::core::slug::slugify_ascii;
 use crate::foundation::core::time::utc_now_timestamp;
 use crate::interfaces::cli::{
-    AssignArgs, CardArchiveArgs, CardPrepareArgs, ClaimArgs, CloseArgs, CreateArgs, DepArgs,
-    DepCommand, LinkArgs, LinkCommand, ListArgs, NoteArgs, ReadyArgs, ShowArgs, UpdateArgs,
+    AssignArgs, CardArchiveArgs, CardPrepareArgs, CardReadyArgs, ClaimArgs, CloseArgs, CreateArgs,
+    DepArgs, DepCommand, LinkArgs, LinkCommand, ListArgs, NoteArgs, ReadyArgs, ShowArgs,
+    UpdateArgs,
 };
 use crate::operations::feature_prepare;
 use crate::operations::memory::{self as memory_ops, MemoryReadScope, MemoryReadSurface};
 
-const READY_JSON_SCHEMA: &str = "maestro.ready.v1";
+const CARD_READY_JSON_SCHEMA: &str = "maestro.ready.v1";
 const LIST_JSON_SCHEMA: &str = "maestro.list.v1";
 const CARD_QUERY_JSON_VERSION: u8 = 1;
 
-/// Execute `maestro ready`: workable cards with no open blockers.
+/// Execute `maestro ready`: task-wave readiness from the Task DAG.
 pub fn ready(args: ReadyArgs) -> Result<()> {
+    let paths = repo_paths()?;
+    if !paths.maestro_dir().is_dir() {
+        let projection = task::readiness::ReadyProjection {
+            version: 1,
+            schema: task::readiness::READY_SCHEMA_V2.to_string(),
+            ..task::readiness::ReadyProjection::default()
+        };
+        return render_ready_v2(&projection, args.json);
+    }
+    let projection = task::readiness::projection(
+        &paths,
+        task::readiness::ReadinessFilter {
+            project: args.project,
+            feature: args.feature,
+            blocked_next_limit: if args.plan { usize::MAX } else { 5 },
+            include_projected_waves: args.plan,
+        },
+    )?;
+    render_ready_v2(&projection, args.json)
+}
+
+/// Execute `maestro card ready`: legacy workable cards with no open blockers.
+pub fn card_ready(args: CardReadyArgs) -> Result<()> {
     let paths = if args.json {
         card_paths_json()?
     } else {
@@ -29,7 +53,7 @@ pub fn ready(args: ReadyArgs) -> Result<()> {
     };
     let Some(paths) = paths else {
         if args.json {
-            render_ready_json(&[])?;
+            render_card_ready_json(&[])?;
         }
         return Ok(());
     };
@@ -42,9 +66,9 @@ pub fn ready(args: ReadyArgs) -> Result<()> {
         ready.retain(|c| c.project.as_deref() == Some(project));
     }
     if args.json {
-        render_ready_json(&ready)?;
+        render_card_ready_json(&ready)?;
     } else {
-        render_ready(&ready);
+        render_card_ready(&ready);
     }
     Ok(())
 }
@@ -1001,7 +1025,103 @@ fn legacy_notice() {
 /// Render `ready` in the beads structure (SPEC DN9): a count header plus numbered
 /// `[P#] id type title @claim` rows, emoji-free. `[P#]` is the 1-based ready rank
 /// (the card schema carries no priority field, so position is the priority).
-fn render_ready(cards: &[&card::schema::Card]) {
+fn render_ready_v2(projection: &task::readiness::ReadyProjection, json: bool) -> Result<()> {
+    if json {
+        println!("{}", serde_json::to_string(projection)?);
+        return Ok(());
+    }
+    render_parallel_wave(&projection.parallel_wave);
+    render_serial_gates(&projection.serial_gates);
+    render_blocked_next(projection);
+    if !projection.projected_waves.is_empty() {
+        println!();
+        println!("Projected waves ({})", projection.projected_waves.len());
+        for wave in &projection.projected_waves {
+            println!(
+                "  wave {}: {} parallel, {} serial gate(s)",
+                wave.index,
+                wave.parallel_wave.len(),
+                wave.serial_gates.len()
+            );
+        }
+    }
+    for diagnostic in &projection.diagnostics {
+        println!("diagnostic: {diagnostic}");
+    }
+    println!("more: maestro ready --plan");
+    Ok(())
+}
+
+fn render_parallel_wave(rows: &[task::readiness::ReadyTaskRow]) {
+    if rows.is_empty() {
+        println!("Parallel wave: none");
+        return;
+    }
+    let lanes = rows
+        .iter()
+        .map(|row| row.lane.as_str())
+        .collect::<BTreeSet<_>>();
+    println!(
+        "Parallel wave ({} ready, {} lanes)",
+        rows.len(),
+        lanes.len()
+    );
+    render_rows_by_lane(rows);
+}
+
+fn render_serial_gates(rows: &[task::readiness::ReadyTaskRow]) {
+    println!();
+    if rows.is_empty() {
+        println!("Serial gates: none ready");
+        return;
+    }
+    println!("Serial gates ({} ready)", rows.len());
+    render_rows_by_lane(rows);
+}
+
+fn render_blocked_next(projection: &task::readiness::ReadyProjection) {
+    println!();
+    if projection.blocked_next.is_empty() {
+        println!("Blocked next: none");
+        return;
+    }
+    let hidden = if projection.blocked_next_hidden > 0 {
+        format!("; {} hidden", projection.blocked_next_hidden)
+    } else {
+        String::new()
+    };
+    println!(
+        "Blocked next ({} shown{hidden})",
+        projection.blocked_next.len()
+    );
+    for row in &projection.blocked_next {
+        println!(
+            "  {}  {}  waits on: {}",
+            row.id,
+            row.title,
+            row.remaining_blockers.join(", ")
+        );
+    }
+}
+
+fn render_rows_by_lane(rows: &[task::readiness::ReadyTaskRow]) {
+    let mut by_lane: BTreeMap<&str, Vec<&task::readiness::ReadyTaskRow>> = BTreeMap::new();
+    for row in rows {
+        by_lane.entry(row.lane.as_str()).or_default().push(row);
+    }
+    for (lane, rows) in by_lane {
+        println!("  {lane}");
+        for (index, row) in rows.iter().enumerate() {
+            let mode = if row.gate { " gate serial" } else { "" };
+            println!("    {}. {}  {}{}", index + 1, row.id, row.title, mode);
+            if let Some(command) = row.command.as_ref() {
+                println!("       start: {}", command.display);
+            }
+        }
+    }
+}
+
+fn render_card_ready(cards: &[&card::schema::Card]) {
     println!(
         "Ready work ({} {}, no blockers):",
         cards.len(),
@@ -1028,7 +1148,7 @@ fn render_ready(cards: &[&card::schema::Card]) {
     }
 }
 
-fn render_ready_json(cards: &[&card::schema::Card]) -> Result<()> {
+fn render_card_ready_json(cards: &[&card::schema::Card]) -> Result<()> {
     let cards = cards
         .iter()
         .enumerate()
@@ -1036,7 +1156,7 @@ fn render_ready_json(cards: &[&card::schema::Card]) -> Result<()> {
         .collect();
     let report = ReadyJson {
         version: CARD_QUERY_JSON_VERSION,
-        schema: READY_JSON_SCHEMA,
+        schema: CARD_READY_JSON_SCHEMA,
         cards,
     };
     println!("{}", serde_json::to_string(&report)?);

@@ -17,7 +17,9 @@ pub(crate) mod display;
 pub(crate) mod doctor;
 pub(crate) mod lifecycle;
 pub(crate) mod lookup;
+pub mod plan;
 pub mod progress;
+pub mod readiness;
 pub(crate) mod template;
 
 pub use blockers::has_unresolved_blockers;
@@ -31,6 +33,7 @@ pub use doctor::{
     render_report,
 };
 pub use lifecycle::TransitionDetails;
+pub use plan::{TaskPlanInput, TaskPlanItem, parse_plan_file, plan_from_cli, read_plan_file};
 pub use progress::{PROGRESS_FILE, ProgressSetupOptions};
 pub use template::{
     AcceptanceFile, Blocker, BlockerKind, BlockerRef, BlockerSource, ClaimCheckReceipt,
@@ -61,6 +64,7 @@ enum SimpleDoneMode {
 
 /// Inputs for creating a draft task.
 pub struct CreateTaskOptions {
+    pub id: Option<String>,
     pub feature: Option<String>,
     pub covers: Vec<String>,
     pub lane: Option<String>,
@@ -68,6 +72,15 @@ pub struct CreateTaskOptions {
     pub checks: Vec<String>,
     pub project: Option<String>,
     pub created_at: String,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct TaskDagMetadata {
+    pub lane: Option<String>,
+    pub blocked_by: Vec<String>,
+    pub gate: bool,
+    pub gate_kind: Option<String>,
+    pub order: Option<usize>,
 }
 
 /// Task aggregate loaded with its Task-owned optimistic save context.
@@ -172,7 +185,9 @@ pub fn create_task(
     // fails loud rather than silently bumping.
     let paths = lookup::paths_for_tasks_dir(tasks_dir)
         .context("cannot resolve maestro paths from tasks dir")?;
-    let id = card_store::mint_card_id(&paths, CardType::Task, title);
+    let id = options
+        .id
+        .unwrap_or_else(|| card_store::mint_card_id(&paths, CardType::Task, title));
     let mut task = TaskRecord::draft(&id, title, &options.created_at);
     task.feature_id = options.feature;
     task.covers = options.covers;
@@ -233,6 +248,33 @@ pub fn setup_simple_tasks(
     progress::setup_simple_tasks(&paths, titles, project, start, created_at, actor, options)
 }
 
+pub fn setup_planned_tasks(
+    tasks_dir: &Path,
+    input: TaskPlanInput,
+    project: Option<String>,
+    start: bool,
+    created_at: String,
+    actor: &str,
+    options: ProgressSetupOptions,
+) -> Result<Vec<TaskRecord>> {
+    let paths = lookup::paths_for_tasks_dir(tasks_dir)
+        .context("cannot resolve maestro paths from tasks dir")?;
+    let existing_tasks = doctor::load_task_records(tasks_dir)?;
+    let normalized = plan::normalize_new_task_plan(&paths, input, &existing_tasks)?;
+    progress::setup_planned_tasks(
+        &paths,
+        progress::PlannedProgressSetup {
+            rows: normalized,
+            existing_tasks: &existing_tasks,
+            project,
+            start,
+            created_at,
+            actor,
+            options,
+        },
+    )
+}
+
 /// Ensure a standalone low-ceremony task exists and is already in progress.
 ///
 /// This is the low-ceremony setup path: it reuses the current actor's active
@@ -252,6 +294,21 @@ pub fn ensure_started_simple_task(
 /// Load one Task record by id or id prefix.
 pub fn load_task_record(tasks_dir: &Path, id: &str) -> Result<TaskRecord> {
     let (task, _, _) = lookup::load_task_with_snapshot(tasks_dir, id)?;
+    Ok(task)
+}
+
+pub fn set_dag_metadata(
+    tasks_dir: &Path,
+    id: &str,
+    metadata: TaskDagMetadata,
+) -> Result<TaskRecord> {
+    let (mut task, snapshot, _) = lookup::load_task_with_snapshot(tasks_dir, id)?;
+    task.lane = metadata.lane;
+    task.blocked_by = metadata.blocked_by;
+    task.gate = metadata.gate;
+    task.gate_kind = metadata.gate_kind;
+    task.order = metadata.order;
+    template::save_task_with_snapshot(&task, &snapshot)?;
     Ok(task)
 }
 
@@ -1442,6 +1499,7 @@ mod tests {
             &tasks_dir,
             "Add CSV export",
             CreateTaskOptions {
+                id: None,
                 feature: Some(feature_id.clone()),
                 covers: Vec::new(),
                 lane: None,

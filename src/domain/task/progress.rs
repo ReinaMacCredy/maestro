@@ -8,6 +8,7 @@ use crate::domain::card::query::{self, Coarse};
 use crate::domain::card::schema::{Card, CardType};
 use crate::domain::card::store::{self, CardHome};
 use crate::domain::task::lifecycle::{self, TransitionDetails};
+use crate::domain::task::plan::NormalizedPlanTask;
 use crate::domain::task::template::{TaskRecord, TaskState};
 use crate::foundation::core::fs::{
     append_text_file, ensure_dir, read_to_string_if_exists, write_string_if_unchanged,
@@ -253,6 +254,122 @@ pub fn setup_simple_tasks(
     Ok(tasks)
 }
 
+pub struct PlannedProgressSetup<'a> {
+    pub rows: Vec<NormalizedPlanTask>,
+    pub existing_tasks: &'a [TaskRecord],
+    pub project: Option<String>,
+    pub start: bool,
+    pub created_at: String,
+    pub actor: &'a str,
+    pub options: ProgressSetupOptions,
+}
+
+pub fn setup_planned_tasks(
+    paths: &MaestroPaths,
+    request: PlannedProgressSetup<'_>,
+) -> Result<Vec<TaskRecord>> {
+    let PlannedProgressSetup {
+        rows,
+        existing_tasks,
+        project,
+        start,
+        created_at,
+        actor,
+        options,
+    } = request;
+    if rows.is_empty() {
+        bail!("task setup requires at least one task plan item");
+    }
+    let atomic_reason = options
+        .atomic_reason
+        .as_deref()
+        .map(str::trim)
+        .filter(|reason| !reason.is_empty());
+    if rows.len() == 1 && atomic_reason.is_none() {
+        bail!(
+            "blocked: Progress setup needs a visible checklist for write-capable work\nreason: one Progress task hides the actual work breakdown\nfix: maestro task setup --task \"Map current behavior\" --task \"Implement scoped fix\" --task \"Verify\" --start\noverride: maestro task setup --task {:?} --start --atomic --reason \"<why one row is enough>\"",
+            rows[0].title
+        );
+    }
+    if rows.len() > 1 && atomic_reason.is_some() {
+        bail!("--atomic applies only to a single-task Progress setup");
+    }
+
+    let (path, mut progress, snapshot) =
+        load_or_create_actor_progress(paths, project, actor, &created_at)?;
+    let mut tasks = Vec::with_capacity(rows.len());
+    for (index, row) in rows.into_iter().enumerate() {
+        let mut task = TaskRecord::draft(&row.id, &row.title, &created_at);
+        task.state = TaskState::Ready;
+        task.acceptance_locked = true;
+        task.acceptance.locked_by = Some(actor.to_string());
+        task.acceptance.locked_at = Some(created_at.clone());
+        task.lane = row.lane;
+        task.blocked_by = row.blocked_by;
+        task.gate = row.gate;
+        task.gate_kind = row.gate_kind;
+        task.order = Some(row.order);
+        if index == 0
+            && let Some(reason) = atomic_reason
+        {
+            task.atomic = true;
+            task.atomic_reason = Some(reason.to_string());
+        }
+        tasks.push(task);
+    }
+
+    if start && let Some(index) = startable_setup_index(&tasks, existing_tasks) {
+        let first = tasks
+            .get_mut(index)
+            .context("startable setup index should point at a task")?;
+        lifecycle::transition(
+            first,
+            TaskState::InProgress,
+            actor,
+            &created_at,
+            TransitionDetails {
+                summary: Some("started from task setup".to_string()),
+                ..TransitionDetails::default()
+            },
+        )?;
+        progress.current_task = Some(first.id.clone());
+    }
+
+    progress.tasks.extend(tasks.iter().cloned());
+    save_with_snapshot(&path, &progress, &snapshot)?;
+    Ok(tasks)
+}
+
+fn startable_setup_index(tasks: &[TaskRecord], existing_tasks: &[TaskRecord]) -> Option<usize> {
+    tasks
+        .iter()
+        .position(|task| !task.gate && setup_dependencies_satisfied(task, tasks, existing_tasks))
+        .or_else(|| {
+            tasks.iter().position(|task| {
+                task.gate && setup_dependencies_satisfied(task, tasks, existing_tasks)
+            })
+        })
+}
+
+fn setup_dependencies_satisfied(
+    task: &TaskRecord,
+    new_tasks: &[TaskRecord],
+    existing_tasks: &[TaskRecord],
+) -> bool {
+    task.blocked_by.iter().all(|dependency| {
+        if new_tasks
+            .iter()
+            .any(|candidate| candidate.id == *dependency)
+        {
+            return false;
+        }
+        existing_tasks
+            .iter()
+            .find(|candidate| candidate.id == *dependency)
+            .is_some_and(|candidate| candidate.state == TaskState::Verified)
+    })
+}
+
 pub fn ensure_started_simple_task(
     paths: &MaestroPaths,
     title: &str,
@@ -348,12 +465,10 @@ pub fn scan_with_cards(paths: &MaestroPaths) -> Result<Vec<(TaskRecord, Card, Pa
                 .parent()
                 .context("progress sidecar path is missing parent directory")?
                 .to_path_buf();
-            records.extend(
-                progress
-                    .tasks
-                    .into_iter()
-                    .map(|task| (task, card.clone(), progress_dir.clone())),
-            );
+            records.extend(progress.tasks.into_iter().map(|mut task| {
+                task.project = card.project.clone();
+                (task, card.clone(), progress_dir.clone())
+            }));
         }
     }
     Ok(records)
@@ -385,12 +500,10 @@ fn collect_tasks_from_progress_card(
             .parent()
             .context("progress sidecar path is missing parent directory")?
             .to_path_buf();
-        records.extend(
-            progress
-                .tasks
-                .into_iter()
-                .map(|task| (task, progress_dir.clone())),
-        );
+        records.extend(progress.tasks.into_iter().map(|mut task| {
+            task.project = card.project.clone();
+            (task, progress_dir.clone())
+        }));
     }
     Ok(())
 }

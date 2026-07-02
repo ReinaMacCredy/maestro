@@ -1609,7 +1609,8 @@ fn mcp_serve_lists_tools_and_calls_status_over_stdio() {
     let tools = lines[1]["result"]["tools"]
         .as_array()
         .expect("invariant: tools/list should return an array");
-    assert_eq!(tools.len(), 38);
+    assert_eq!(tools.len(), 39);
+    assert!(tools.iter().any(|tool| tool["name"] == "maestro_ready"));
     assert!(tools.iter().any(|tool| tool["name"] == "maestro_task_next"));
     assert!(
         tools
@@ -2067,6 +2068,7 @@ fn mcp_task_tools_drive_normal_lifecycle_over_stdio() {
         .expect("invariant: tools/list should return tools");
     for name in [
         "maestro_task_next",
+        "maestro_ready",
         "maestro_task_create",
         "maestro_task_explore",
         "maestro_task_accept",
@@ -2092,24 +2094,42 @@ fn mcp_task_tools_drive_normal_lifecycle_over_stdio() {
         format!(
             r#"{{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{{"name":"maestro_task_accept","arguments":{{"id":"{id}"}}}}}}"#
         ),
-        r#"{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"maestro_task_next","arguments":{}}}"#.to_string(),
+        r#"{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"maestro_ready","arguments":{}}}"#.to_string(),
+        r#"{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"maestro_task_next","arguments":{}}}"#.to_string(),
         format!(
-            r#"{{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{{"name":"maestro_task_claim","arguments":{{"id":"{id}"}}}}}}"#
+            r#"{{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{{"name":"maestro_task_claim","arguments":{{"id":"{id}"}}}}}}"#
         ),
         format!(
-            r#"{{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{{"name":"maestro_task_update","arguments":{{"id":"{id}","summary":"progress checkpoint","claims":["first claim passed","second claim passed"]}}}}}}"#
+            r#"{{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{{"name":"maestro_task_update","arguments":{{"id":"{id}","summary":"progress checkpoint","claims":["first claim passed","second claim passed"]}}}}}}"#
         ),
         format!(
-            r#"{{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{{"name":"maestro_task_complete","arguments":{{"id":"{id}","summary":"done through MCP","claims":["first claim passed","second claim passed"],"proof":["first claim passed","second claim passed"]}}}}}}"#
+            r#"{{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{{"name":"maestro_task_complete","arguments":{{"id":"{id}","summary":"done through MCP","claims":["first claim passed","second claim passed"],"proof":["first claim passed","second claim passed"]}}}}}}"#
         ),
         format!(
-            r#"{{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{{"name":"maestro_verify","arguments":{{"id":"{id}"}}}}}}"#
+            r#"{{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{{"name":"maestro_verify","arguments":{{"id":"{id}"}}}}}}"#
         ),
     ];
     let request_refs = requests.iter().map(String::as_str).collect::<Vec<_>>();
     let frames = run_mcp_requests(repo, &request_refs);
 
-    let next_text = frames[2]["result"]["content"][0]["text"]
+    let ready_text = frames[2]["result"]["content"][0]["text"]
+        .as_str()
+        .expect("invariant: ready returns text");
+    let ready_json: JsonValue = serde_json::from_str(ready_text).expect("ready returns JSON text");
+    assert_eq!(
+        ready_json["schema"],
+        JsonValue::String("maestro.ready.v2".to_string())
+    );
+    assert!(
+        ready_json["parallel_wave"]
+            .as_array()
+            .expect("parallel_wave should be an array")
+            .iter()
+            .any(|row| row["id"] == id),
+        "ready includes accepted task:\n{ready_text}"
+    );
+
+    let next_text = frames[3]["result"]["content"][0]["text"]
         .as_str()
         .expect("invariant: task_next returns text");
     let next_json: JsonValue =
@@ -2123,7 +2143,7 @@ fn mcp_task_tools_drive_normal_lifecycle_over_stdio() {
         "task_next includes raw output:\n{next_text}"
     );
     assert!(
-        frames[5]["result"]["content"][0]["text"]
+        frames[6]["result"]["content"][0]["text"]
             .as_str()
             .expect("invariant: complete returns text")
             .contains("verification passed")

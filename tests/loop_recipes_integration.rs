@@ -228,6 +228,117 @@ fn loop_next_routes_ready_task_and_does_not_mutate_maestro_store() {
 }
 
 #[test]
+fn loop_next_routes_ready_v2_parallel_wave_as_work() {
+    let temp = TestTempDir::new("maestro-loop-next-ready-v2-wave");
+    init_git_marker(temp.path());
+    stdout(temp.path(), &["init", "--yes"]);
+    stdout(
+        temp.path(),
+        &[
+            "task",
+            "setup",
+            "--task",
+            "api=Build API",
+            "--task",
+            "ui=Build UI",
+            "--lane",
+            "api=backend",
+            "--lane",
+            "ui=frontend",
+        ],
+    );
+    let before = snapshot_dir(&temp.path().join(".maestro"));
+
+    let out = stdout(temp.path(), &["loop", "next", "--json"]);
+    let after = snapshot_dir(&temp.path().join(".maestro"));
+    let value: Value = serde_json::from_str(&out).expect("loop next JSON should parse");
+
+    assert_eq!(before, after, "loop next must not mutate .maestro");
+    assert_eq!(value["recommended_recipe"], "work");
+    assert_eq!(value["recommended_status"], "work");
+    assert!(
+        value["reason"].as_str().is_some_and(
+            |reason| reason.contains("2 executable tasks") && reason.contains("2 lanes")
+        ),
+        "{value}"
+    );
+    assert!(
+        value["inspect"]
+            .as_array()
+            .expect("inspect should be an array")
+            .iter()
+            .any(|entry| entry.as_str() == Some("maestro ready")),
+        "{value}"
+    );
+}
+
+#[test]
+fn loop_next_routes_ready_v2_serial_and_ship_gates() {
+    let serial = TestTempDir::new("maestro-loop-next-ready-v2-serial-gate");
+    init_git_marker(serial.path());
+    stdout(serial.path(), &["init", "--yes"]);
+    stdout(
+        serial.path(),
+        &[
+            "task",
+            "setup",
+            "--task",
+            "gate=Wire integration",
+            "--lane",
+            "gate=integration",
+            "--gate",
+            "gate=integration",
+            "--atomic",
+            "--reason",
+            "single serial gate fixture",
+        ],
+    );
+
+    let serial_out = stdout(serial.path(), &["loop", "next", "--json"]);
+    let serial_value: Value =
+        serde_json::from_str(&serial_out).expect("serial gate loop JSON should parse");
+    assert_eq!(serial_value["recommended_recipe"], "work");
+    assert!(
+        serial_value["reason"].as_str().is_some_and(
+            |reason| reason.contains("integration gate") && reason.contains("serially")
+        ),
+        "{serial_value}"
+    );
+
+    let ship = TestTempDir::new("maestro-loop-next-ready-v2-ship-gate");
+    init_git_marker(ship.path());
+    stdout(ship.path(), &["init", "--yes"]);
+    stdout(
+        ship.path(),
+        &[
+            "task",
+            "setup",
+            "--task",
+            "ship=Ship release",
+            "--lane",
+            "ship=ship",
+            "--gate",
+            "ship=ship",
+            "--atomic",
+            "--reason",
+            "single ship gate fixture",
+        ],
+    );
+
+    let ship_out = stdout(ship.path(), &["loop", "next", "--json"]);
+    let ship_value: Value =
+        serde_json::from_str(&ship_out).expect("ship gate loop JSON should parse");
+    assert_eq!(ship_value["recommended_recipe"], "ship");
+    assert_eq!(ship_value["recommended_status"], "ship");
+    assert!(
+        ship_value["reason"]
+            .as_str()
+            .is_some_and(|reason| reason.contains("ship gate")),
+        "{ship_value}"
+    );
+}
+
+#[test]
 fn loop_next_json_includes_scoped_memory_preflight_without_mutating_store() {
     let temp = TestTempDir::new("maestro-loop-next-memory-preflight");
     init_git_marker(temp.path());

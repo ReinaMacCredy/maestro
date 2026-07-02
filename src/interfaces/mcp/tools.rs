@@ -30,6 +30,11 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
             json!({"type":"object","properties":{}}),
         ),
         tool(
+            "maestro_ready",
+            "Returns canonical task-wave readiness as maestro.ready.v2 JSON: parallel wave, serial gates, blocked next, and optional projected waves.",
+            json!({"type":"object","properties":{"feature":{"type":"string"},"project":{"type":"string"},"plan":{"type":"boolean"}}}),
+        ),
+        tool(
             "maestro_task_create",
             "Creates a task through the normal task lifecycle; returns a draft task.",
             json!({"type":"object","properties":{"title":{"type":"string"},"feature_id":{"type":"string"},"card_id":{"type":"string"},"lane":{"type":"string"},"risk":{"type":"string"},"checks":{"type":"array","items":{"type":"string"}},"covers":{"type":"array","items":{"type":"string"}},"project":{"type":"string"},"id_only":{"type":"boolean"}},"required":["title"]}),
@@ -217,6 +222,7 @@ pub fn call_tool(paths: &MaestroPaths, name: &str, arguments: &Value) -> Result<
     match name {
         "maestro_status" => status(paths),
         "maestro_task_next" => task_next(),
+        "maestro_ready" => ready(arguments),
         "maestro_task_create" => task_create(arguments),
         "maestro_task_add" => task_add(arguments),
         "maestro_task_explore" => cli(required_args(arguments, &["task", "explore"], &["id"])?),
@@ -310,8 +316,8 @@ fn status(paths: &MaestroPaths) -> Result<String> {
         }
     }
     out.push_str("MCP workflow guidance:\n");
-    out.push_str("  Use maestro_task_next and maestro_task_* for the normal task progress loop.\n");
-    out.push_str("  Use maestro_card_ready, maestro_card_graph, and maestro_card_* for backlog/card lifecycle work.\n");
+    out.push_str("  Use maestro_ready, maestro_task_next, and maestro_task_* for the normal task-wave progress loop.\n");
+    out.push_str("  Use maestro_card_ready, maestro_card_graph, and maestro_card_* for explicit legacy/card lifecycle work.\n");
     Ok(out)
 }
 
@@ -327,6 +333,17 @@ fn task_next() -> Result<String> {
         "raw": raw.trim_end()
     }))
     .context("failed to encode task_next MCP response")
+}
+
+fn ready(arguments: &Value) -> Result<String> {
+    let mut args = vec!["ready".to_string()];
+    if let Some(feature) = string_arg(arguments, "feature") {
+        args.push(feature);
+    }
+    push_optional_flag(arguments, &mut args, "project", "--project");
+    push_bool_flag(arguments, &mut args, "plan", "--plan");
+    args.push("--json".to_string());
+    cli(args)
 }
 
 fn task_create(arguments: &Value) -> Result<String> {

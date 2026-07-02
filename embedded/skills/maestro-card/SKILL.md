@@ -1,6 +1,6 @@
 ---
 name: maestro-card
-version: 1.37.12
+version: 1.37.14
 description: "Active Maestro card work after design approval: use for implement, fix, verify, QA, close, release, continue, or unattended prompts like use loop, keep looping, work while away/asleep."
 ---
 
@@ -29,6 +29,19 @@ Inbox messages are advisory coordination only: they can suggest an ordering
 relationship, but they do not block work. Record an explicit Task blocker when
 execution order matters. Reply when the message poses a question or needs a
 decision; an FYI needs no reply.
+
+Phase 0: design-to-card gate. Before `task setup`, `feature prepare`, source
+edits, implementation tests, or other work verbs, ask:
+
+- Am I coming from design or brainstorm?
+- What card/feature owns this work?
+- Is that card/feature handoff finalized and fresh?
+
+If the answer starts in design and the owning card/feature or fresh handoff is
+missing, stop. Bind chat-only or standalone Decision records to a Feature/card
+contract and refresh/finalize the handoff through the supported feature
+lifecycle path first. Progress rows cannot be used to implicitly end design.
+
 When you start implementation, apply the session-owned main fast path first:
 if only your session is fresh, and dirty paths are current-session Maestro state
 or unrelated files you will not touch, stay on main. Worktree-isolate only for
@@ -155,4 +168,4 @@ Read the reference for the job at hand; they share the ground rules below.
 
 ## Pipeline
 
-`maestro-design -> feature finalize -> [maestro-card: qa-baseline -> feature accept -> prepare -> work -> verify -> qa-slice -> feature close]`
+`maestro-design -> feature finalize -> [maestro-card: design-to-card gate -> qa-baseline -> feature accept -> prepare -> work -> verify -> qa-slice -> feature close]`

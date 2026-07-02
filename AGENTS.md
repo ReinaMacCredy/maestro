@@ -87,14 +87,19 @@ maestro/
   interleave at file boundaries, so treat a failed command as partial unless its
   operation documents rollback.
 - Agent-facing read contracts are JSON, not human text. `maestro ready --json`
-  emits `version`, `schema`, and `cards` with stable `rank`, `id`, `type`,
-  `title`, `status`, `parent`, and `claimed_by`. `maestro list --json` emits
-  `version`, `schema`, and `cards` with stable `id`, `type`, `title`, `status`,
-  `parent`, `claimed_by`, `claimed_at`, and `archived`. These fields are
-  additive-only: new fields may appear, but existing meanings are not silently
-  renamed or reinterpreted. In a repo without a card store the JSON verbs
-  still emit a valid envelope with zero cards (exit 0); the guiding notice
-  goes to stderr so stdout stays parseable.
+  emits `version`, `schema: maestro.ready.v2`, `parallel_wave`,
+  `serial_gates`, and `blocked_next`; `maestro ready --plan --json` adds
+  `projected_waves`. Rows carry stable `id`, `title`, `lane`, `gate`,
+  `execution_mode`, `blocked_by`, `remaining_blockers`, and a start `command`
+  when executable. `maestro card ready --json` is the explicit legacy card
+  readiness escape hatch and emits `schema: maestro.ready.v1` plus `cards`.
+  `maestro list --json` emits `version`, `schema`, and `cards` with stable
+  `id`, `type`, `title`, `status`, `parent`, `claimed_by`, `claimed_at`, and
+  `archived`. These fields are additive-only: new fields may appear, but
+  existing meanings are not silently renamed or reinterpreted. In a repo
+  without the relevant store, JSON read verbs still emit a valid envelope with
+  zero rows/cards (exit 0); guiding notices go to stderr so stdout stays
+  parseable.
 
 ## ANTI-PATTERNS (THIS PROJECT)
 

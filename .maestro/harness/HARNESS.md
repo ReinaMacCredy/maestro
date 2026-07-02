@@ -1,5 +1,5 @@
 ---
-version: 1.29.6
+version: 1.29.9
 ---
 
 # Maestro Harness Protocol
@@ -31,6 +31,13 @@ artifacts and never writes cards, tasks, features, decisions, proof, QA, git,
 releases, archives, or files. After choosing, read the recipe with
 `maestro loop show <recipe>` and perform writes only through the existing
 Maestro verbs named by the recipe.
+
+Rule: loop next recommends; outcome/proof/memory verbs write. Use
+`maestro loop outcome` to append structured attempt outcomes after action, proof
+or repair. Use `maestro loop improve` for read-only improvement proposals over
+sourced outcomes; apply only by running the explicit memory, harness, proof, or
+QA command it prints. No hidden stores, hidden schedulers, silent recipe mutation,
+and proof/QA bypass are forbidden.
 
 Choose the closest shipped lifecycle recipe and stay inside its grammar:
 
@@ -70,10 +77,31 @@ Progress rows. If hooks are unavailable, run multi-row `maestro task setup`
 yourself before editing, or use the explicit atomic override for genuinely
 single-step work.
 
+Design-to-card gate: before executable work after a design or brainstorm
+session, ask:
+
+- Am I coming from design or brainstorm?
+- What card/feature owns this work?
+- Is that card/feature handoff finalized and fresh?
+
+If the answer starts in design and the owning card/feature or fresh handoff is
+missing, stop before creating Progress rows, running `feature prepare`, editing
+source, or running implementation tests. First bind standalone chat or Decision
+records to a Feature/card contract and refresh the handoff through the supported
+feature lifecycle path. Do not let Progress tasks or source edits implicitly end
+the design phase.
+
 Linked-card inbox messages are advisory coordination signals only. They do not
 block execution. When order matters, record an explicit Task blocker or
 dependency; readiness, next, claim, and verification gates consult Task
 blockers, not messages or unread state.
+
+Canonical work readiness is `maestro ready`: a task-wave projection from the
+Task DAG. It shows the parallel executable wave, ready serial gates, and the
+bounded blocked-next frontier. `maestro loop next` reads that same projection
+and routes to existing lifecycle recipes; it does not create a second scheduler
+or separate gate loop. Use `maestro card ready` only as the explicit legacy
+card-board readiness surface.
 
 ## Proof And Corrections
 

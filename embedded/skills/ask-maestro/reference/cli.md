@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: 72b16c07f3731cc814078f41317a7419f664fb06f276c8d77f4098902ad7ca61 -->
+<!-- maestro:cli-reference-sha256: 339b2bf0695f937bc5653587df9bafd0347b8ce5e49d3a83b3b9d7c13da74de1 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -31,7 +31,7 @@ a spelling not found here is outside this skill's CLI surface.
 ## maestro task
 
 - `maestro task add <TITLE> [--card <CARD>] [--project <PROJECT>] [--id-only]` -- Add a low-ceremony task ready to start
-- `maestro task setup --task <TASK>... [--start] [--atomic] [--reason <REASON>] [--project <PROJECT>]` -- Set up a low-ceremony Progress checklist before work starts
+- `maestro task setup [--task <TASK>]... [--from <PLAN_FILE>] [--lane <LANE>]... [--after <AFTER>]... [--gate <GATE>]... [--start] [--atomic] [--reason <REASON>] [--project <PROJECT>]` -- Set up a low-ceremony Progress checklist before work starts
 - `maestro task start <REF_OR_ID>` -- Start a ready task (alias for claim)
 - `maestro task done <REF_OR_ID> [--summary <SUMMARY>] --proof <PROOF>...` -- Mark a low-ceremony task done when it has no explicit gate
 - `maestro task show [REF_OR_ID]` -- Show a task's detail: state, claim, blockers
@@ -61,6 +61,10 @@ a spelling not found here is outside this skill's CLI surface.
 
 - `maestro card list [--parent <PARENT>] [--type <TYPE>] [--assignee <ASSIGNEE>] [--status <STATUS>] [--project <PROJECT>] [--grep <TERM>] [--archived] [--all] [--json]` -- List cards filtered by parent, type, assignee, or coarse status
 - `maestro card show <ID> [--json] [--compact-json]` -- Show a card's header, edges, and body
+
+## maestro ready
+
+- `maestro ready [FEATURE] [--json] [--plan] [--project <PROJECT>]` -- Show canonical task-wave readiness from the task DAG
 
 ## maestro active
 
