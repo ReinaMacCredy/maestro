@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: c2de1eb725dd5009859f5412386d8d350f5796d2d314274b6d85862e50192431 -->
+<!-- maestro:cli-reference-sha256: 266618c6b2860deb305555149d7272d28fc31541efa341fbdf4ea95291018953 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -129,6 +129,12 @@ a spelling not found here is outside this skill's CLI surface.
 ## maestro conflict
 
 - `maestro conflict <PEER> [REASON] [--clear]` -- Flag a work conflict on a peer card so it holds off (no link, no git)
+
+## maestro archive
+
+- `maestro archive candidates [--json]` -- List archive candidates and their gate status
+- `maestro archive check <ID> [--json]` -- Show the archive gate result for one target
+- `maestro archive apply [ID] [--all] [--json]` -- Apply archive to one ARCHIVE_NOW target, or every ARCHIVE_NOW target
 
 ## maestro harness
 

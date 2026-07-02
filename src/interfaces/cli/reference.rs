@@ -146,6 +146,8 @@ const ASK_MAESTRO_COMMANDS: &[&str] = &[
     "maestro decision show",
     "maestro card show",
     "maestro card list",
+    "maestro archive candidates",
+    "maestro archive check",
     "maestro qa baseline",
     "maestro qa slice",
     "maestro harness list",
@@ -245,6 +247,9 @@ const MAESTRO_CARD_COMMANDS: &[&str] = &[
     "maestro card update",
     "maestro card close",
     "maestro card graph",
+    "maestro archive candidates",
+    "maestro archive check",
+    "maestro archive apply",
     "maestro harness list",
     "maestro harness show",
     "maestro harness apply",
@@ -283,6 +288,8 @@ const MAESTRO_DESIGN_COMMANDS: &[&str] = &[
     "maestro decision list",
     "maestro card list",
     "maestro card show",
+    "maestro archive candidates",
+    "maestro archive check",
     "maestro link add",
     "maestro link remove",
     "maestro msg send",
@@ -309,6 +316,8 @@ const MAESTRO_AUDIT_COMMANDS: &[&str] = &[
     "maestro decision list",
     "maestro card list",
     "maestro card show",
+    "maestro archive candidates",
+    "maestro archive check",
     "maestro harness list",
     "maestro harness show",
     "maestro harness propose",
@@ -530,13 +539,13 @@ mod tests {
     #[test]
     fn hidden_duplicates_and_relocations_shape_the_reference() {
         let reference = render_cli_reference();
-        // The 11 flat card verbs + top-level verify + both migrations are hidden:
-        // no top-level section renders for them.
+        // The flat card verbs + top-level verify + both migrations are hidden:
+        // no top-level section renders for them. Archive is now a canonical
+        // top-level engine, so it intentionally renders its own section.
         for hidden in [
             "## maestro ready",
             "## maestro list",
             "## maestro dep",
-            "## maestro archive",
             "## maestro claim",
             "## maestro assign",
             "## maestro note",

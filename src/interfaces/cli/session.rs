@@ -21,6 +21,10 @@ fn show(args: SessionShowArgs) -> Result<()> {
         println!("{}", serde_json::to_string(&readout)?);
         return Ok(());
     }
+    if let Some(line) = super::active::archive_summary_line_for_paths(&paths) {
+        println!("{line}");
+        println!();
+    }
     render_text(&readout);
     Ok(())
 }

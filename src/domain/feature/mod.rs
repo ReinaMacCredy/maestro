@@ -11,7 +11,9 @@ mod verification;
 pub(crate) mod worktree;
 
 pub use archive::{
-    AutoArchiveReceipt, FeatureArchiveReport, LooseSweepReport, append_auto_archive_receipt,
+    ArchiveApplyPlan, ArchiveApplySelection, ArchiveCandidate, ArchiveCandidateAction,
+    ArchiveGateEvidence, AutoArchiveReceipt, FeatureArchiveReport, LooseSweepReport,
+    append_auto_archive_receipt, archive_apply_plan, archive_candidate, archive_candidates,
     archive_feature, archive_feature_with_expected_hash, archive_loose, unarchive_feature,
 };
 pub use reconcile::{

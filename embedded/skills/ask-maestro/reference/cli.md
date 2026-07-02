@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: b986500b7217a9864f672bc46758664d31a0197b49e734a450a53b991527f382 -->
+<!-- maestro:cli-reference-sha256: 72b16c07f3731cc814078f41317a7419f664fb06f276c8d77f4098902ad7ca61 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -74,6 +74,11 @@ a spelling not found here is outside this skill's CLI surface.
 
 - `maestro msg send <TO> <TEXT> [--from <CARD>]` -- Send a message to a linked card (sender is your current card)
 - `maestro msg read [CARD]` -- Read unread messages; with no card, aggregate every linked partner
+
+## maestro archive
+
+- `maestro archive candidates [--json]` -- List archive candidates and their gate status
+- `maestro archive check <ID> [--json]` -- Show the archive gate result for one target
 
 ## maestro harness
 

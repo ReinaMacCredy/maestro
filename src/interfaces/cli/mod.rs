@@ -454,9 +454,8 @@ pub enum RootCommand {
     )]
     Conflict(ConflictArgs),
     #[command(
-        hide = true,
-        about = "Archive a feature card and its child cards (card store)",
-        after_help = "Examples:\n  maestro archive csv-export   # archives the feature card + every parent=csv-export card\n  maestro archive --loose      # sweeps closed loose tasks/ideas + superseded decisions"
+        about = "Inspect and apply the canonical archive engine",
+        after_help = "Examples:\n  maestro archive candidates\n  maestro archive check csv-export\n  maestro archive apply csv-export\n  maestro archive apply --all\n  maestro archive csv-export   # compatibility path: archives the feature card + every parent=csv-export card\n  maestro archive --loose      # compatibility path: sweeps closed loose tasks/ideas + superseded decisions"
     )]
     Archive(ArchiveArgs),
     #[command(
@@ -2092,6 +2091,20 @@ pub struct ArchiveArgs {
 
 #[derive(Debug, Subcommand)]
 pub enum ArchiveCommand {
+    #[command(about = "List archive candidates and their gate status")]
+    Candidates {
+        #[arg(long, help = "Emit a stable JSON envelope")]
+        json: bool,
+    },
+    #[command(about = "Show the archive gate result for one target")]
+    Check {
+        #[arg(help = "Feature id to inspect")]
+        id: String,
+        #[arg(long, help = "Emit a stable JSON envelope")]
+        json: bool,
+    },
+    #[command(about = "Apply archive to one ARCHIVE_NOW target, or every ARCHIVE_NOW target")]
+    Apply(ArchiveApplyArgs),
     #[command(about = "Migrate folder-backed archived cards into cards.sqlite")]
     MigrateDb(ArchiveMigrateDbArgs),
     #[command(about = "Verify the DB-backed archive store")]
@@ -2111,6 +2124,16 @@ pub struct ArchiveMigrateDbArgs {
         help = "Import folder-backed archives and move them to quarantine"
     )]
     pub apply: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct ArchiveApplyArgs {
+    #[arg(help = "Feature id to archive (omit when using --all)")]
+    pub id: Option<String>,
+    #[arg(long, help = "Apply every ARCHIVE_NOW target")]
+    pub all: bool,
+    #[arg(long, help = "Emit a stable JSON envelope")]
+    pub json: bool,
 }
 
 #[derive(Debug, Args)]

@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: b6838f4e38abab9658c100f3a308b6848016fb231bd425d3428c6f24598dfd92 -->
+<!-- maestro:cli-reference-sha256: ae56f7de49fcf3a30d0a0df28723c17b1d29af8cfb21fcd6df08bc68a5ccec32 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -35,6 +35,11 @@ a spelling not found here is outside this skill's CLI surface.
 ## maestro active
 
 - `maestro active [--all] [--connect]` -- Show what other live sessions are doing (cross-session awareness)
+
+## maestro archive
+
+- `maestro archive candidates [--json]` -- List archive candidates and their gate status
+- `maestro archive check <ID> [--json]` -- Show the archive gate result for one target
 
 ## maestro harness
 

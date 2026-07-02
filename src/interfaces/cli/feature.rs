@@ -260,7 +260,6 @@ pub fn run(args: FeatureArgs) -> Result<()> {
                 worker_source,
                 target_card_hash,
                 allow_dirty_target_card: false,
-                preflight: None,
                 dry_run,
             },
         ),
@@ -863,8 +862,10 @@ fn auto_archive_after_close(
         CloseAutoArchivePlan::Run(args) => *args,
         CloseAutoArchivePlan::Skip(reason) => return Ok(CloseAutoArchiveOutcome::Skipped(reason)),
     };
-    auto_archive_feature(paths, args)?;
-    Ok(CloseAutoArchiveOutcome::Archived)
+    match auto_archive_feature(paths, args) {
+        Ok(()) => Ok(CloseAutoArchiveOutcome::Archived),
+        Err(error) => Ok(CloseAutoArchiveOutcome::Skipped(format!("{error:#}"))),
+    }
 }
 
 enum CloseAutoArchivePlan {
@@ -947,10 +948,6 @@ fn close_auto_archive_plan(
         worker_source: close_worker_source(paths, snapshot.branch.as_deref()),
         target_card_hash,
         allow_dirty_target_card: true,
-        preflight: Some(AutoArchivePreflight {
-            unresolved_conflicts,
-            open_work,
-        }),
         dry_run: false,
     })))
 }
@@ -1021,14 +1018,7 @@ struct AutoArchiveArgs {
     worker_source: String,
     target_card_hash: Option<String>,
     allow_dirty_target_card: bool,
-    preflight: Option<AutoArchivePreflight>,
     dry_run: bool,
-}
-
-#[derive(Debug)]
-struct AutoArchivePreflight {
-    unresolved_conflicts: Vec<String>,
-    open_work: Vec<String>,
 }
 
 fn auto_archive_feature(paths: &MaestroPaths, args: AutoArchiveArgs) -> Result<()> {
@@ -1056,105 +1046,33 @@ fn auto_archive_feature(paths: &MaestroPaths, args: AutoArchiveArgs) -> Result<(
     let current_store = current_store_path.display().to_string();
     let canonical_store = canonical_store_path.display().to_string();
     let invoking_checkout = invoking_checkout_path.display().to_string();
-    if current_store_path != canonical_store_path {
-        bail!(
-            "cannot auto-archive {id} — current store `{}` is not canonical store `{}`; run from the owning/orchestrator checkout that owns the live target card",
-            current_store,
-            canonical_store
-        );
-    }
-    if feature::ensure_exists(paths, &id).is_err() {
-        bail!(
-            "cannot auto-archive {id} — target feature is missing from current store `{}`; run from the owning/orchestrator checkout that owns the live target card",
-            current_store
-        );
-    }
-    if let Some(expected_hash) = target_card_hash.as_deref() {
-        let target_card_path = paths.cards_dir().join(&id).join("card.yaml");
-        let target_card_bytes = if target_card_path.is_file() {
-            fs::read(&target_card_path)?
-        } else {
-            let Some(resolved) = card::store::resolve(paths, &id)? else {
-                bail!(
-                    "cannot auto-archive {id} — target feature is missing from current store `{current_store}`; run from the owning/orchestrator checkout that owns the live target card"
-                );
-            };
-            serde_yaml::to_string(&resolved.card)
-                .map(String::into_bytes)
-                .map_err(anyhow::Error::from)?
-        };
-        let actual_hash = sha256_prefixed(&target_card_bytes);
-        if expected_hash != actual_hash {
-            bail!(
-                "cannot auto-archive {id} — target card changed since preflight (expected {expected_hash}, found {actual_hash}); re-run the command"
-            );
-        }
-    }
 
-    if authority_target != id {
+    let evidence = feature::ArchiveGateEvidence {
+        authority_ref: Some(authority_ref.clone()),
+        authority_target: Some(authority_target.clone()),
+        authority_head: Some(authority_head.clone()),
+        authority_state: Some(authority_state.clone()),
+        tested_head: Some(tested_head.clone()),
+        qa_result: Some(qa_result.clone()),
+        qa_evidence: qa_evidence.clone(),
+        run_id: Some(run_id.clone()),
+        canonical_store: Some(canonical_store.clone()),
+        target_card_hash: target_card_hash.clone(),
+        allow_dirty_target_card: args.allow_dirty_target_card,
+    };
+    let candidate = feature::archive_candidate(paths, &id, &evidence)?;
+    if candidate.action != feature::ArchiveCandidateAction::ArchiveNow {
         bail!(
-            "cannot auto-archive {id} — authority target `{authority_target}` does not match feature id `{id}`; retry with a current target-scoped authority"
+            "cannot auto-archive {id} — {}: {}",
+            candidate.action.as_str(),
+            candidate.reasons.join("; ")
         );
-    }
-    if authority_state != "current" {
-        bail!(
-            "cannot auto-archive {id} — authority `{authority_ref}` is `{authority_state}`, not current; retry with current target-scoped bounded ship authority"
-        );
-    }
-    if !qa_passed(&qa_result) {
-        bail!("cannot auto-archive {id} — --qa-result must be pass/passed, got `{qa_result}`");
-    }
-    if qa_evidence.is_empty() {
-        bail!("cannot auto-archive {id} — at least one --qa-evidence item is required");
     }
 
     let snapshot = git::snapshot(paths.repo_root())?;
     let Some(current_head) = snapshot.head.as_deref() else {
         bail!("cannot auto-archive {id} — git HEAD is unborn; commit the delivered work first");
     };
-    if current_head != tested_head {
-        bail!(
-            "cannot auto-archive {id} — tested head {tested_head} does not match current HEAD {current_head}"
-        );
-    }
-    if authority_head != current_head {
-        bail!(
-            "cannot auto-archive {id} — authority head {authority_head} does not match current HEAD {current_head}"
-        );
-    }
-    let allowed_dirty_paths = close_allowed_dirty_paths(&id, args.allow_dirty_target_card);
-    let relevant_dirty = relevant_dirty_paths(
-        &snapshot.dirty_paths,
-        &id,
-        &run_id,
-        &qa_evidence,
-        &allowed_dirty_paths,
-    );
-    if !relevant_dirty.is_empty() {
-        bail!(
-            "cannot auto-archive {id} — relevant dirty path(s) at {current_head}: {}; commit or clean before archive",
-            relevant_dirty.join(", ")
-        );
-    }
-    let preflight = match args.preflight {
-        Some(preflight) => preflight,
-        None => AutoArchivePreflight {
-            unresolved_conflicts: unresolved_conflicts_for_target(paths, &id)?,
-            open_work: blocking_work_items(paths, &id)?,
-        },
-    };
-    if !preflight.unresolved_conflicts.is_empty() {
-        bail!(
-            "cannot auto-archive {id} — unresolved Maestro conflict(s): {}; clear conflicts before archive",
-            preflight.unresolved_conflicts.join(", ")
-        );
-    }
-    if !preflight.open_work.is_empty() {
-        bail!(
-            "cannot auto-archive {id} — live or claimed descendant/linked work item(s): {}; verify/archive or release them first",
-            preflight.open_work.join(", ")
-        );
-    }
 
     let before_state = feature::status(paths, &id)
         .map(|status| status.as_str().to_string())
@@ -1378,80 +1296,6 @@ fn canonical_path(path: &Path) -> PathBuf {
     path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
 }
 
-fn relevant_dirty_paths(
-    dirty_paths: &[PathBuf],
-    id: &str,
-    run_id: &str,
-    qa_evidence: &[String],
-    allowed_dirty_paths: &[PathBuf],
-) -> Vec<String> {
-    let evidence_paths = qa_evidence_paths(qa_evidence);
-    dirty_paths
-        .iter()
-        .filter(|path| {
-            !allowed_dirty_paths.iter().any(|allowed| *path == allowed)
-                && path_is_auto_archive_relevant(path, id, run_id, &evidence_paths)
-        })
-        .map(|path| path.display().to_string())
-        .collect()
-}
-
-fn close_allowed_dirty_paths(id: &str, allow_dirty_target_card: bool) -> Vec<PathBuf> {
-    if allow_dirty_target_card {
-        vec![
-            Path::new(".maestro")
-                .join("cards")
-                .join(id)
-                .join("card.yaml"),
-        ]
-    } else {
-        Vec::new()
-    }
-}
-
-fn qa_evidence_paths(qa_evidence: &[String]) -> Vec<PathBuf> {
-    let mut paths = Vec::new();
-    for item in qa_evidence {
-        for token in item.split_whitespace() {
-            let Some(value) = token
-                .strip_prefix("path=")
-                .or_else(|| token.strip_prefix("paths="))
-            else {
-                continue;
-            };
-            for path in value
-                .split(',')
-                .map(str::trim)
-                .filter(|path| !path.is_empty())
-            {
-                paths.push(PathBuf::from(path));
-            }
-        }
-    }
-    paths.sort();
-    paths.dedup();
-    paths
-}
-
-fn path_is_auto_archive_relevant(
-    path: &Path,
-    id: &str,
-    run_id: &str,
-    evidence_paths: &[PathBuf],
-) -> bool {
-    path.starts_with(Path::new(".maestro").join("cards").join(id))
-        || path == Path::new(".maestro/archive/cards/INDEX.md")
-        || path.starts_with(Path::new(".maestro").join("archive").join("cards").join(id))
-        || path.starts_with(
-            Path::new(".maestro")
-                .join("runs")
-                .join(run::run_dir_name(run_id)),
-        )
-        || evidence_paths
-            .iter()
-            .any(|evidence_path| path == evidence_path || path.starts_with(evidence_path))
-}
-
 fn blocking_work_items(paths: &MaestroPaths, id: &str) -> Result<Vec<String>> {
     let mut blockers = Vec::new();
     for card in card::query::scan(paths)? {
@@ -1512,13 +1356,6 @@ fn required_cli_values(name: &str, values: Vec<String>) -> Result<Vec<String>> {
         .into_iter()
         .map(|value| required_cli_value(name, &value))
         .collect()
-}
-
-fn qa_passed(value: &str) -> bool {
-    matches!(
-        value.trim().to_ascii_lowercase().as_str(),
-        "pass" | "passed"
-    )
 }
 
 struct AutoArchiveCommandParts<'a> {

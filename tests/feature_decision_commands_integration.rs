@@ -4830,6 +4830,130 @@ fn feature_create_refuses_a_slug_held_in_the_archive() {
     assert!(stderr.contains("archive"));
 }
 
+#[test]
+fn archive_command_candidates_check_and_apply_use_candidate_engine() {
+    let temp_dir = TestTempDir::new("maestro-archive-command-candidates");
+    let root = temp_dir.path();
+    init_git_marker(root);
+    stdout(maestro(&["init", "--yes"], root), &["init", "--yes"]);
+
+    close_feature(root, "Alpha export", "alpha-export", "task-001");
+    stdout(
+        maestro(&["feature", "new", "Draft export"], root),
+        &["feature", "new", "Draft export"],
+    );
+
+    let candidates = stdout(
+        maestro(&["archive", "candidates"], root),
+        &["archive", "candidates"],
+    );
+    assert!(
+        candidates.contains("alpha-export\tARCHIVE_NOW\tclosed\t1"),
+        "{candidates}"
+    );
+    assert!(
+        candidates.contains("draft-export\tNEEDS_DECISION\tproposed\t0"),
+        "{candidates}"
+    );
+    let status = stdout(maestro(&["status"], root), &["status"]);
+    assert!(
+        status.contains("[archive] ARCHIVE_NOW=1; inspect: maestro archive candidates"),
+        "{status}"
+    );
+    let candidates_json = stdout(
+        maestro(&["archive", "candidates", "--json"], root),
+        &["archive", "candidates", "--json"],
+    );
+    let candidates_report: JsonValue =
+        serde_json::from_str(candidates_json.trim()).expect("archive candidates JSON parses");
+    assert_eq!(candidates_report["schema"], "maestro.archive.candidates.v1");
+    assert!(
+        candidates_report["candidates"]
+            .as_array()
+            .expect("candidates array")
+            .iter()
+            .any(|candidate| {
+                candidate["id"] == "alpha-export" && candidate["action"] == "ARCHIVE_NOW"
+            }),
+        "{candidates_report}"
+    );
+
+    let draft_check = stdout(
+        maestro(&["archive", "check", "draft-export"], root),
+        &["archive", "check", "draft-export"],
+    );
+    assert!(
+        draft_check.contains("action: NEEDS_DECISION"),
+        "{draft_check}"
+    );
+    assert!(
+        draft_check.contains("decide whether to close"),
+        "{draft_check}"
+    );
+    let draft_check_json = stdout(
+        maestro(&["archive", "check", "draft-export", "--json"], root),
+        &["archive", "check", "draft-export", "--json"],
+    );
+    let draft_check_report: JsonValue =
+        serde_json::from_str(draft_check_json.trim()).expect("archive check JSON parses");
+    assert_eq!(draft_check_report["schema"], "maestro.archive.check.v1");
+    assert_eq!(draft_check_report["candidate"]["action"], "NEEDS_DECISION");
+
+    let blocked_apply = assert_failure(
+        maestro(&["archive", "apply", "draft-export"], root),
+        &["archive", "apply", "draft-export"],
+    );
+    assert!(
+        blocked_apply.contains("NEEDS_DECISION")
+            && blocked_apply.contains("decide whether to close"),
+        "{blocked_apply}"
+    );
+    let blocked_apply_json = stdout(
+        maestro(&["archive", "apply", "draft-export", "--json"], root),
+        &["archive", "apply", "draft-export", "--json"],
+    );
+    let blocked_apply_report: JsonValue =
+        serde_json::from_str(blocked_apply_json.trim()).expect("archive apply JSON parses");
+    assert_eq!(blocked_apply_report["schema"], "maestro.archive.apply.v1");
+    assert_eq!(blocked_apply_report["results"][0]["result"], "skipped");
+    assert_eq!(
+        blocked_apply_report["results"][0]["action"],
+        "NEEDS_DECISION"
+    );
+
+    let alpha_apply = stdout(
+        maestro(&["archive", "apply", "alpha-export"], root),
+        &["archive", "apply", "alpha-export"],
+    );
+    assert!(
+        alpha_apply.contains("archived alpha-export"),
+        "{alpha_apply}"
+    );
+    assert!(alpha_apply.contains("child_tasks: 1"), "{alpha_apply}");
+    assert!(
+        !root.join(".maestro/cards/alpha-export").exists(),
+        "archive apply removes the live feature"
+    );
+
+    let archived_check = stdout(
+        maestro(&["archive", "check", "alpha-export"], root),
+        &["archive", "check", "alpha-export"],
+    );
+    assert!(
+        archived_check.contains("action: RELEASE_ONLY"),
+        "{archived_check}"
+    );
+
+    let release_only = stdout(
+        maestro(&["archive", "apply", "alpha-export"], root),
+        &["archive", "apply", "alpha-export"],
+    );
+    assert!(
+        release_only.contains("released archive ownership for alpha-export"),
+        "{release_only}"
+    );
+}
+
 /// Drive a feature to Closed, then archive it: the feature card dir + its
 /// terminal child card dirs leave the live scan, the QA sidecar travels inside
 /// the archived feature dir, reads fall through (L6b), and unarchive

@@ -22,10 +22,13 @@ use crate::domain::card::store::{
     remove_dir_with_snapshot, save_entries,
 };
 use crate::domain::card::{archive_db, live_db};
+use crate::domain::conflict;
 use crate::domain::feature::registry::{
-    archived_card_path, load_archived_record, load_record, validate_feature_id,
+    archived_card_path, list as list_features, load_archived_record, load_record,
+    validate_feature_id,
 };
 use crate::foundation::core::fs::{append_text_file, ensure_dir};
+use crate::foundation::core::git;
 use crate::foundation::core::hash::sha256_prefixed;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::time::utc_now_timestamp;
@@ -58,6 +61,90 @@ pub struct AutoArchiveReceipt {
     pub event_path: String,
     pub archive_path: String,
     pub restore_command: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ArchiveCandidateAction {
+    ArchiveNow,
+    ReleaseOnly,
+    NeedsClose,
+    NeedsDecision,
+    Blocked,
+}
+
+impl ArchiveCandidateAction {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::ArchiveNow => "ARCHIVE_NOW",
+            Self::ReleaseOnly => "RELEASE_ONLY",
+            Self::NeedsClose => "NEEDS_CLOSE",
+            Self::NeedsDecision => "NEEDS_DECISION",
+            Self::Blocked => "BLOCKED",
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ArchiveCandidate {
+    pub id: String,
+    pub title: String,
+    pub status: String,
+    pub action: ArchiveCandidateAction,
+    pub reasons: Vec<String>,
+    pub child_tasks: usize,
+    pub archived: bool,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ArchiveGateEvidence {
+    pub authority_ref: Option<String>,
+    pub authority_target: Option<String>,
+    pub authority_head: Option<String>,
+    pub authority_state: Option<String>,
+    pub tested_head: Option<String>,
+    pub qa_result: Option<String>,
+    pub qa_evidence: Vec<String>,
+    pub run_id: Option<String>,
+    pub canonical_store: Option<String>,
+    pub target_card_hash: Option<String>,
+    pub allow_dirty_target_card: bool,
+}
+
+impl ArchiveGateEvidence {
+    fn requires_exact_head(&self) -> bool {
+        self.authority_ref.is_some()
+            || self.authority_target.is_some()
+            || self.authority_head.is_some()
+            || self.authority_state.is_some()
+            || self.tested_head.is_some()
+            || self.qa_result.is_some()
+            || !self.qa_evidence.is_empty()
+            || self.run_id.is_some()
+            || self.canonical_store.is_some()
+            || self.target_card_hash.is_some()
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ArchiveApplySelection {
+    One(String),
+    All,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ArchiveApplyPlan {
+    pub selection: ArchiveApplySelection,
+    pub candidates: Vec<ArchiveCandidate>,
+}
+
+impl ArchiveApplyPlan {
+    pub fn archive_targets(&self) -> Vec<String> {
+        self.candidates
+            .iter()
+            .filter(|candidate| candidate.action == ArchiveCandidateAction::ArchiveNow)
+            .map(|candidate| candidate.id.clone())
+            .collect()
+    }
 }
 
 struct DirArchiveMove {
@@ -141,6 +228,388 @@ pub fn archive_feature_with_expected_hash(
     expected_live_card_hash: Option<&str>,
 ) -> Result<FeatureArchiveReport> {
     archive_feature_checked(paths, id, dry_run, expected_live_card_hash)
+}
+
+pub fn archive_candidate(
+    paths: &MaestroPaths,
+    id: &str,
+    evidence: &ArchiveGateEvidence,
+) -> Result<ArchiveCandidate> {
+    validate_feature_id(id)?;
+    if let Ok(record) = load_record(paths, id) {
+        return candidate_from_live_record(paths, record, evidence);
+    }
+    if let Ok(record) = load_archived_record(paths, id) {
+        return Ok(ArchiveCandidate {
+            id: record.id,
+            title: record.title,
+            status: record.status.as_str().to_string(),
+            action: ArchiveCandidateAction::ReleaseOnly,
+            reasons: vec![
+                "target is already archived; release stale active ownership only".to_string(),
+            ],
+            child_tasks: 0,
+            archived: true,
+        });
+    }
+    Ok(ArchiveCandidate {
+        id: id.to_string(),
+        title: String::new(),
+        status: "missing".to_string(),
+        action: ArchiveCandidateAction::Blocked,
+        reasons: vec![format!(
+            "target feature is missing from current store `{}`; run from the owning/orchestrator checkout that owns the live target card",
+            canonical_path(&paths.maestro_dir()).display()
+        )],
+        child_tasks: 0,
+        archived: false,
+    })
+}
+
+pub fn archive_candidates(
+    paths: &MaestroPaths,
+    evidence: &ArchiveGateEvidence,
+) -> Result<Vec<ArchiveCandidate>> {
+    let mut candidates = Vec::new();
+    for view in list_features(paths)? {
+        candidates.push(archive_candidate(paths, &view.id, evidence)?);
+    }
+    candidates.sort_by(|a, b| a.id.cmp(&b.id));
+    Ok(candidates)
+}
+
+pub fn archive_apply_plan(
+    paths: &MaestroPaths,
+    selection: ArchiveApplySelection,
+    evidence: &ArchiveGateEvidence,
+) -> Result<ArchiveApplyPlan> {
+    let candidates = match &selection {
+        ArchiveApplySelection::One(id) => vec![archive_candidate(paths, id, evidence)?],
+        ArchiveApplySelection::All => archive_candidates(paths, evidence)?,
+    };
+    Ok(ArchiveApplyPlan {
+        selection,
+        candidates,
+    })
+}
+
+fn candidate_from_live_record(
+    paths: &MaestroPaths,
+    record: crate::domain::feature::schema::FeatureRecord,
+    evidence: &ArchiveGateEvidence,
+) -> Result<ArchiveCandidate> {
+    let (child_tasks, mut blockers) = archive_target_blockers(paths, &record.id)?;
+    let action = if !record.status.is_terminal() {
+        if matches!(
+            record.status,
+            crate::domain::feature::schema::FeatureStatus::Proposed
+                | crate::domain::feature::schema::FeatureStatus::Ready
+        ) {
+            blockers.push(format!(
+                "not terminal (status: {}); decide whether to close, cancel, or keep it live",
+                record.status.as_str()
+            ));
+            ArchiveCandidateAction::NeedsDecision
+        } else {
+            blockers.push(format!(
+                "not terminal (status: {}); close or cancel it first",
+                record.status.as_str()
+            ));
+            ArchiveCandidateAction::NeedsClose
+        }
+    } else {
+        blockers.extend(exact_head_gate_blockers(paths, &record.id, evidence)?);
+        if blockers.is_empty() {
+            ArchiveCandidateAction::ArchiveNow
+        } else {
+            ArchiveCandidateAction::Blocked
+        }
+    };
+
+    let reasons = if blockers.is_empty() {
+        vec!["terminal feature with no archive blockers".to_string()]
+    } else {
+        blockers
+    };
+
+    Ok(ArchiveCandidate {
+        id: record.id,
+        title: record.title,
+        status: record.status.as_str().to_string(),
+        action,
+        reasons,
+        child_tasks,
+        archived: false,
+    })
+}
+
+fn archive_target_blockers(paths: &MaestroPaths, id: &str) -> Result<(usize, Vec<String>)> {
+    let mut terminal_children = 0usize;
+    let mut blockers = Vec::new();
+    for (card, _path) in scan_with_paths(paths)? {
+        if !card.card_type.workable() {
+            continue;
+        }
+        let linked_to_target =
+            card.parent.as_deref() == Some(id) || card.deps.iter().any(|dep| dep.target == id);
+        if !linked_to_target {
+            continue;
+        }
+        let coarse = coarse_of(&card.status);
+        if card.parent.as_deref() == Some(id) && coarse == Some(Coarse::Closed) {
+            terminal_children += 1;
+        }
+        if coarse != Some(Coarse::Closed) || card.claimed_by.is_some() {
+            let claimed = card
+                .claimed_by
+                .as_deref()
+                .map(|owner| format!(", claimed_by={owner}"))
+                .unwrap_or_default();
+            blockers.push(format!("{} status={}{}", card.id, card.status, claimed));
+        }
+    }
+    blockers.sort();
+    if !blockers.is_empty() {
+        blockers = vec![format!(
+            "live or claimed descendant/linked work item(s): {}",
+            blockers.join(", ")
+        )];
+    }
+    Ok((terminal_children, blockers))
+}
+
+fn exact_head_gate_blockers(
+    paths: &MaestroPaths,
+    id: &str,
+    evidence: &ArchiveGateEvidence,
+) -> Result<Vec<String>> {
+    let mut blockers = archive_conflict_blockers(paths, id)?;
+    if !evidence.requires_exact_head() {
+        return Ok(blockers);
+    }
+
+    let required = [
+        ("authority ref", evidence.authority_ref.as_deref()),
+        ("authority target", evidence.authority_target.as_deref()),
+        ("authority head", evidence.authority_head.as_deref()),
+        ("authority state", evidence.authority_state.as_deref()),
+        ("tested head", evidence.tested_head.as_deref()),
+        ("qa result", evidence.qa_result.as_deref()),
+        ("canonical store", evidence.canonical_store.as_deref()),
+    ];
+    for (name, value) in required {
+        if value.is_none_or(|value| value.trim().is_empty()) {
+            blockers.push(format!("missing {name} for exact-HEAD archive authority"));
+        }
+    }
+    if evidence.qa_evidence.is_empty() {
+        blockers.push("missing QA evidence for exact-HEAD archive authority".to_string());
+    }
+    if !blockers.is_empty() {
+        return Ok(blockers);
+    }
+
+    let authority_target = evidence.authority_target.as_deref().unwrap_or_default();
+    if authority_target != id {
+        blockers.push(format!(
+            "authority target `{authority_target}` does not match feature id `{id}`"
+        ));
+    }
+    let authority_state = evidence.authority_state.as_deref().unwrap_or_default();
+    if authority_state != "current" {
+        let authority_ref = evidence.authority_ref.as_deref().unwrap_or("<unknown>");
+        blockers.push(format!(
+            "authority `{authority_ref}` is `{authority_state}`, not current"
+        ));
+    }
+    let qa_result = evidence.qa_result.as_deref().unwrap_or_default();
+    if !qa_passed(qa_result) {
+        blockers.push(format!("QA result must be pass/passed, got `{qa_result}`"));
+    }
+
+    let current_store_path = canonical_path(&paths.maestro_dir());
+    let canonical_store_path = canonical_path(Path::new(
+        evidence.canonical_store.as_deref().unwrap_or_default(),
+    ));
+    if current_store_path != canonical_store_path {
+        blockers.push(format!(
+            "current store `{}` is not canonical store `{}`",
+            current_store_path.display(),
+            canonical_store_path.display()
+        ));
+    }
+
+    if let Some(expected_hash) = evidence.target_card_hash.as_deref() {
+        match live_target_card_hash(paths, id)? {
+            Some(actual_hash) if actual_hash == expected_hash => {}
+            Some(actual_hash) => blockers.push(format!(
+                "target card changed since preflight (expected {expected_hash}, found {actual_hash})"
+            )),
+            None => blockers.push(format!(
+                "target feature is missing from current store `{}`",
+                current_store_path.display()
+            )),
+        }
+    }
+
+    match git::snapshot(paths.repo_root()) {
+        Ok(snapshot) => {
+            let Some(current_head) = snapshot.head.as_deref() else {
+                blockers.push("git HEAD is unborn; commit the delivered work first".to_string());
+                return Ok(blockers);
+            };
+            let tested_head = evidence.tested_head.as_deref().unwrap_or_default();
+            if current_head != tested_head {
+                blockers.push(format!(
+                    "tested head {tested_head} does not match current HEAD {current_head}"
+                ));
+            }
+            let authority_head = evidence.authority_head.as_deref().unwrap_or_default();
+            if authority_head != current_head {
+                blockers.push(format!(
+                    "authority head {authority_head} does not match current HEAD {current_head}"
+                ));
+            }
+            let allowed_dirty_paths =
+                archive_allowed_dirty_paths(id, evidence.allow_dirty_target_card);
+            let run_id = evidence.run_id.as_deref().unwrap_or_default();
+            let relevant_dirty = relevant_dirty_paths(
+                &snapshot.dirty_paths,
+                id,
+                run_id,
+                &evidence.qa_evidence,
+                &allowed_dirty_paths,
+            );
+            if !relevant_dirty.is_empty() {
+                blockers.push(format!(
+                    "relevant dirty path(s) at {current_head}: {}",
+                    relevant_dirty.join(", ")
+                ));
+            }
+        }
+        Err(error) => blockers.push(format!(
+            "git state is unavailable: {error:#}; commit the delivered work first"
+        )),
+    }
+
+    Ok(blockers)
+}
+
+fn archive_conflict_blockers(paths: &MaestroPaths, id: &str) -> Result<Vec<String>> {
+    let roots = git::worktree_roots(paths.repo_root())
+        .unwrap_or_else(|_| vec![paths.repo_root().to_path_buf()]);
+    let root_paths = roots.iter().map(MaestroPaths::new).collect::<Vec<_>>();
+    let now = utc_now_timestamp();
+    let mut conflicts = conflict::active_notices(&root_paths, &now)?
+        .into_iter()
+        .filter(|notice| notice.peer_card == id || notice.asserter_card == id)
+        .map(|notice| {
+            format!(
+                "{}->{}: {}",
+                notice.asserter_session, notice.peer_card, notice.reason
+            )
+        })
+        .collect::<Vec<_>>();
+    conflicts.sort();
+    if conflicts.is_empty() {
+        Ok(Vec::new())
+    } else {
+        Ok(vec![format!(
+            "unresolved Maestro conflict(s): {}",
+            conflicts.join(", ")
+        )])
+    }
+}
+
+fn live_target_card_hash(paths: &MaestroPaths, id: &str) -> Result<Option<String>> {
+    let live_card = card_path(paths, id);
+    if live_card.is_file() {
+        let bytes = fs::read(&live_card)
+            .with_context(|| format!("failed to read {}", live_card.display()))?;
+        return Ok(Some(sha256_prefixed(&bytes)));
+    }
+    Ok(live_db::resolve(paths, id)?.map(|card| sha256_prefixed(card.raw.as_bytes())))
+}
+
+fn canonical_path(path: &Path) -> PathBuf {
+    path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
+}
+
+fn archive_allowed_dirty_paths(id: &str, allow_dirty_target_card: bool) -> Vec<PathBuf> {
+    if allow_dirty_target_card {
+        vec![
+            Path::new(".maestro")
+                .join("cards")
+                .join(id)
+                .join("card.yaml"),
+        ]
+    } else {
+        Vec::new()
+    }
+}
+
+fn relevant_dirty_paths(
+    dirty_paths: &[PathBuf],
+    id: &str,
+    run_id: &str,
+    qa_evidence: &[String],
+    allowed_dirty_paths: &[PathBuf],
+) -> Vec<String> {
+    let evidence_paths = qa_evidence_paths(qa_evidence);
+    dirty_paths
+        .iter()
+        .filter(|path| {
+            !allowed_dirty_paths.iter().any(|allowed| *path == allowed)
+                && path_is_auto_archive_relevant(path, id, run_id, &evidence_paths)
+        })
+        .map(|path| path.display().to_string())
+        .collect()
+}
+
+fn qa_evidence_paths(qa_evidence: &[String]) -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    for item in qa_evidence {
+        for token in item.split_whitespace() {
+            let Some(value) = token
+                .strip_prefix("path=")
+                .or_else(|| token.strip_prefix("paths="))
+            else {
+                continue;
+            };
+            for path in value
+                .split(',')
+                .map(str::trim)
+                .filter(|path| !path.is_empty())
+            {
+                paths.push(PathBuf::from(path));
+            }
+        }
+    }
+    paths.sort();
+    paths.dedup();
+    paths
+}
+
+fn path_is_auto_archive_relevant(
+    path: &Path,
+    id: &str,
+    run_id: &str,
+    evidence_paths: &[PathBuf],
+) -> bool {
+    path.starts_with(Path::new(".maestro").join("cards").join(id))
+        || path == Path::new(".maestro/archive/cards/INDEX.md")
+        || path.starts_with(Path::new(".maestro").join("archive").join("cards").join(id))
+        || (!run_id.is_empty() && path.starts_with(Path::new(".maestro").join("runs").join(run_id)))
+        || evidence_paths
+            .iter()
+            .any(|evidence_path| path == evidence_path || path.starts_with(evidence_path))
+}
+
+fn qa_passed(value: &str) -> bool {
+    matches!(
+        value.trim().to_ascii_lowercase().as_str(),
+        "pass" | "passed"
+    )
 }
 
 fn archive_feature_checked(

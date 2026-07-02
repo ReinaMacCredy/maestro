@@ -337,6 +337,7 @@ fn build_task_next_report(paths: &MaestroPaths) -> Result<StatusReport> {
         current_feature,
         git: None,
         merge_lock_holder: None,
+        archive_summary: super::active::archive_summary_line_for_paths(paths),
         close_or_verify_pending: false,
         proof_concern,
         warnings,
@@ -405,6 +406,9 @@ fn print_status(report: StatusReport, json: bool) -> Result<()> {
     }
     if let Some(holder) = report.merge_lock_holder.as_deref() {
         println!("{}", merge_busy_advisory(holder));
+    }
+    if let Some(line) = report.archive_summary.as_deref() {
+        println!("{line}");
     }
     print_loop_hint(report.loop_hint.as_ref());
     print_harness_friction(&report.harness_friction);
@@ -856,6 +860,7 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
         current_feature,
         git,
         merge_lock_holder,
+        archive_summary: super::active::archive_summary_line_for_paths(paths),
         close_or_verify_pending,
         proof_concern,
         warnings,
@@ -1279,6 +1284,8 @@ struct StatusReport {
     git: Option<GitReadout>,
     #[serde(skip_serializing_if = "Option::is_none")]
     merge_lock_holder: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    archive_summary: Option<String>,
     /// Whether the next verb is close/verify-shaped; drives the clean-worktree
     /// note. Render-only, not part of the serialized contract.
     #[serde(skip)]
@@ -1359,6 +1366,7 @@ impl StatusReport {
             current_feature: None,
             git: None,
             merge_lock_holder: None,
+            archive_summary: None,
             close_or_verify_pending: false,
             proof_concern: None,
             loop_hint: None,

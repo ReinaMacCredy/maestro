@@ -2,10 +2,12 @@ mod support;
 
 use std::fs;
 
+use git2::{IndexAddOption, Repository, Signature};
 use maestro::domain::card::schema::Card;
 use maestro::domain::card::{self};
 use maestro::domain::feature::{self, ContractAdditions, ContractEdits};
 use maestro::foundation::core::fs::ensure_dir;
+use maestro::foundation::core::hash::sha256_prefixed;
 use maestro::foundation::core::paths::MaestroPaths;
 use support::TestTempDir;
 
@@ -84,6 +86,59 @@ fn verify_contract(paths: &MaestroPaths, id: &str) {
     )
     .expect("invariant: proof should record");
     feature::verify_feature(paths, id, Vec::new()).expect("invariant: sweep should succeed");
+}
+
+fn init_git_repo(repo: &std::path::Path) -> Repository {
+    Repository::init(repo).expect("invariant: git repo should initialize")
+}
+
+fn commit_all(repository: &Repository, message: &str) -> String {
+    let mut index = repository
+        .index()
+        .expect("invariant: git index should be readable");
+    index
+        .add_all(["."].iter(), IndexAddOption::DEFAULT, None)
+        .expect("invariant: git index add should succeed");
+    index
+        .write()
+        .expect("invariant: git index write should succeed");
+    let tree_id = index
+        .write_tree()
+        .expect("invariant: git tree write should succeed");
+    let tree = repository
+        .find_tree(tree_id)
+        .expect("invariant: git tree should exist");
+    let signature = Signature::now("Maestro Test", "maestro@example.test")
+        .expect("invariant: git signature should be constructable");
+    let parent = repository
+        .head()
+        .ok()
+        .and_then(|head| head.target())
+        .and_then(|oid| repository.find_commit(oid).ok());
+    let parents: Vec<&git2::Commit> = parent.iter().collect();
+    repository
+        .commit(
+            Some("HEAD"),
+            &signature,
+            &signature,
+            message,
+            &tree,
+            &parents,
+        )
+        .expect("invariant: git commit should succeed")
+        .to_string()
+}
+
+fn close_ready_feature(paths: &MaestroPaths, title: &str) -> String {
+    feature::create(paths, title, None).expect("invariant: create should succeed");
+    let id = title.to_ascii_lowercase().replace(' ', "-");
+    author_contract(paths, &id);
+    feature::accept(paths, &id, false).expect("invariant: accept should succeed");
+    feature::start(paths, &id).expect("invariant: start should succeed");
+    verify_contract(paths, &id);
+    feature::close(paths, &id, Some("done".to_string()), false)
+        .expect("invariant: close should succeed");
+    id
 }
 
 #[test]
@@ -368,6 +423,197 @@ fn full_lifecycle_new_set_accept_start_close() {
     let closed = feature::close(&paths, "billing-csv", None, false)
         .expect("invariant: close should succeed");
     assert_eq!(closed.status, feature::FeatureStatus::Closed);
+}
+
+#[test]
+fn archive_candidates_classify_lifecycle_states_and_apply_targets() {
+    let temp = TestTempDir::new("maestro-feature-archive-candidates");
+    let paths = MaestroPaths::new(temp.path());
+    let evidence = feature::ArchiveGateEvidence::default();
+
+    feature::create(&paths, "Proposed Export", None).expect("invariant: create should succeed");
+
+    feature::create(&paths, "Ready Export", None).expect("invariant: create should succeed");
+    author_contract(&paths, "ready-export");
+    feature::accept(&paths, "ready-export", false).expect("invariant: accept should succeed");
+
+    feature::create(&paths, "Active Export", None).expect("invariant: create should succeed");
+    author_contract(&paths, "active-export");
+    feature::accept(&paths, "active-export", false).expect("invariant: accept should succeed");
+    feature::start(&paths, "active-export").expect("invariant: start should succeed");
+
+    let closed_id = close_ready_feature(&paths, "Closed Export");
+    write_task(&paths, "task-archive-child", &closed_id, "verified");
+
+    let proposed = feature::archive_candidate(&paths, "proposed-export", &evidence)
+        .expect("invariant: proposed candidate should classify");
+    assert_eq!(
+        proposed.action,
+        feature::ArchiveCandidateAction::NeedsDecision
+    );
+    assert!(
+        proposed.reasons[0].contains("decide whether to close"),
+        "{proposed:?}"
+    );
+
+    let ready = feature::archive_candidate(&paths, "ready-export", &evidence)
+        .expect("invariant: ready candidate should classify");
+    assert_eq!(ready.action, feature::ArchiveCandidateAction::NeedsDecision);
+
+    let active = feature::archive_candidate(&paths, "active-export", &evidence)
+        .expect("invariant: active candidate should classify");
+    assert_eq!(active.action, feature::ArchiveCandidateAction::NeedsClose);
+
+    let closed = feature::archive_candidate(&paths, &closed_id, &evidence)
+        .expect("invariant: closed candidate should classify");
+    assert_eq!(closed.action, feature::ArchiveCandidateAction::ArchiveNow);
+    assert_eq!(closed.child_tasks, 1);
+
+    let all_plan =
+        feature::archive_apply_plan(&paths, feature::ArchiveApplySelection::All, &evidence)
+            .expect("invariant: all-target plan should build");
+    assert_eq!(all_plan.archive_targets(), vec![closed_id.clone()]);
+
+    feature::archive_feature(&paths, &closed_id, false).expect("invariant: archive should succeed");
+    let archived = feature::archive_candidate(&paths, &closed_id, &evidence)
+        .expect("invariant: archived candidate should classify");
+    assert_eq!(
+        archived.action,
+        feature::ArchiveCandidateAction::ReleaseOnly
+    );
+    assert!(archived.archived);
+
+    let one_plan = feature::archive_apply_plan(
+        &paths,
+        feature::ArchiveApplySelection::One(closed_id),
+        &evidence,
+    )
+    .expect("invariant: one-target plan should build");
+    assert!(one_plan.archive_targets().is_empty());
+}
+
+#[test]
+fn archive_candidate_exact_head_evidence_blocks_when_stale_or_unsafe() {
+    let temp = TestTempDir::new("maestro-feature-archive-exact-head");
+    let root = temp.path();
+    let repository = init_git_repo(root);
+    let paths = MaestroPaths::new(root);
+    let id = close_ready_feature(&paths, "Bounded Export");
+    let card_path = paths.cards_dir().join(&id).join("card.yaml");
+    let target_card_hash = if card_path.is_file() {
+        sha256_prefixed(&fs::read(&card_path).expect("invariant: target card should be readable"))
+    } else {
+        let db_card = card::live_db::resolve(&paths, &id)
+            .expect("invariant: live DB should be readable")
+            .expect("invariant: target card should exist");
+        sha256_prefixed(db_card.raw.as_bytes())
+    };
+    let head = commit_all(&repository, "closed feature ready for archive");
+    let canonical_store = paths
+        .maestro_dir()
+        .canonicalize()
+        .expect("invariant: maestro dir should canonicalize")
+        .display()
+        .to_string();
+    let evidence = feature::ArchiveGateEvidence {
+        authority_ref: Some("feature-close:bounded-export".to_string()),
+        authority_target: Some(id.clone()),
+        authority_head: Some(head.clone()),
+        authority_state: Some("current".to_string()),
+        tested_head: Some(head.clone()),
+        qa_result: Some("pass".to_string()),
+        qa_evidence: vec![format!("cargo test head={head}")],
+        run_id: Some("run-auto".to_string()),
+        canonical_store: Some(canonical_store.clone()),
+        target_card_hash: Some(target_card_hash),
+        allow_dirty_target_card: false,
+    };
+
+    let current = feature::archive_candidate(&paths, &id, &evidence)
+        .expect("invariant: current evidence should classify");
+    assert_eq!(current.action, feature::ArchiveCandidateAction::ArchiveNow);
+
+    let mut expired = evidence.clone();
+    expired.authority_state = Some("expired".to_string());
+    let expired_candidate = feature::archive_candidate(&paths, &id, &expired)
+        .expect("invariant: expired authority should classify");
+    assert_eq!(
+        expired_candidate.action,
+        feature::ArchiveCandidateAction::Blocked
+    );
+    assert!(
+        expired_candidate
+            .reasons
+            .iter()
+            .any(|reason| reason.contains("not current")),
+        "{expired_candidate:?}"
+    );
+
+    let mut wrong_head = evidence.clone();
+    wrong_head.tested_head = Some("0000000000000000000000000000000000000000".to_string());
+    let wrong_head_candidate = feature::archive_candidate(&paths, &id, &wrong_head)
+        .expect("invariant: wrong head should classify");
+    assert_eq!(
+        wrong_head_candidate.action,
+        feature::ArchiveCandidateAction::Blocked
+    );
+    assert!(
+        wrong_head_candidate
+            .reasons
+            .iter()
+            .any(|reason| reason.contains("does not match current HEAD")),
+        "{wrong_head_candidate:?}"
+    );
+
+    let mut stale_store = evidence.clone();
+    stale_store.canonical_store = Some(root.join("other-store").display().to_string());
+    let stale_store_candidate = feature::archive_candidate(&paths, &id, &stale_store)
+        .expect("invariant: stale store should classify");
+    assert_eq!(
+        stale_store_candidate.action,
+        feature::ArchiveCandidateAction::Blocked
+    );
+    assert!(
+        stale_store_candidate
+            .reasons
+            .iter()
+            .any(|reason| reason.contains("not canonical store")),
+        "{stale_store_candidate:?}"
+    );
+
+    let mut stale_snapshot = evidence.clone();
+    stale_snapshot.target_card_hash = Some("sha256:0000".to_string());
+    let stale_snapshot_candidate = feature::archive_candidate(&paths, &id, &stale_snapshot)
+        .expect("invariant: stale snapshot should classify");
+    assert_eq!(
+        stale_snapshot_candidate.action,
+        feature::ArchiveCandidateAction::Blocked
+    );
+    assert!(
+        stale_snapshot_candidate
+            .reasons
+            .iter()
+            .any(|reason| reason.contains("target card changed since preflight")),
+        "{stale_snapshot_candidate:?}"
+    );
+
+    let dirty_dir = paths.cards_dir().join(&id);
+    ensure_dir(&dirty_dir).expect("invariant: dirty note dir should be creatable");
+    fs::write(dirty_dir.join("notes.md"), "dirty\n")
+        .expect("invariant: dirty note should be writable");
+    let dirty_candidate = feature::archive_candidate(&paths, &id, &evidence)
+        .expect("invariant: dirty state should classify");
+    assert_eq!(
+        dirty_candidate.action,
+        feature::ArchiveCandidateAction::Blocked
+    );
+    assert!(
+        dirty_candidate
+            .reasons
+            .iter()
+            .any(|reason| reason.contains("relevant dirty path")),
+        "{dirty_candidate:?}"
+    );
 }
 
 #[test]

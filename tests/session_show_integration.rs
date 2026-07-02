@@ -129,6 +129,34 @@ fn session_show_renders_joined_text_and_json_readouts() {
     assert!(!raw.contains("top-secret") && !raw.contains("api_key"));
 }
 
+#[test]
+fn session_show_reports_archive_readout_without_mutating() {
+    let temp = cards_repo("session-show-archive-readout");
+    let repo = temp.path();
+    let feature_dir = repo.join(".maestro/cards/archivable-feature");
+    fs::create_dir_all(&feature_dir).expect("invariant: feature dir should be creatable");
+    fs::write(
+        feature_dir.join("card.yaml"),
+        "schema_version: maestro.card.v1\nid: archivable-feature\ntype: feature\ntitle: Archivable Feature\nstatus: closed\ncreated_at: \"1\"\nupdated_at: \"1\"\n",
+    )
+    .expect("invariant: feature card should be writable");
+    record(
+        repo,
+        r#"{"session_id":"sess-archive","event_type":"card_touch","card_id":"archivable-feature"}"#,
+    );
+
+    let text = run(repo, &["session", "show", "sess-archive"]);
+    assert!(
+        text.contains("[archive] ARCHIVE_NOW=1; inspect: maestro archive candidates"),
+        "session show should include read-only archive summary:\n{text}"
+    );
+    assert!(
+        repo.join(".maestro/cards/archivable-feature/card.yaml")
+            .is_file(),
+        "session show must not archive the feature"
+    );
+}
+
 fn seed_codex_transcript(repo: &Path, session_id: &str) {
     let dir = repo.join(".codex-test-home/sessions/2026/07/01");
     fs::create_dir_all(&dir).expect("invariant: transcript dir should be creatable");
