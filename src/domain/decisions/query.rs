@@ -31,6 +31,8 @@ pub struct DecisionListEntry {
     pub id: String,
     pub title: String,
     pub status: String,
+    pub kind: String,
+    pub decision_set_id: Option<String>,
     pub source: DecisionSource,
     pub path: PathBuf,
     pub created_at: String,
@@ -59,6 +61,15 @@ pub enum DecisionContent {
         contents: String,
         path: PathBuf,
     },
+}
+
+impl DecisionContent {
+    pub fn render(&self) -> String {
+        match self {
+            Self::Structured { record, .. } => render_record(record),
+            Self::Legacy { contents, .. } => contents.clone(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -150,6 +161,8 @@ fn decision_list_entry(
         id: record.id,
         title: record.title,
         status: record.status.as_str().to_string(),
+        kind: record.kind.as_str().to_string(),
+        decision_set_id: record.decision_set_id,
         source,
         path,
         created_at: record.created_at,
@@ -174,6 +187,8 @@ fn legacy_decision_entry(legacy: DecisionEntry, title: String) -> DecisionListEn
         id: decision_display_id(&legacy.file_name),
         title,
         status: "legacy".to_string(),
+        kind: "legacy".to_string(),
+        decision_set_id: None,
         source: DecisionSource::Legacy,
         path: legacy.path,
         created_at: String::new(),
@@ -355,8 +370,14 @@ pub fn render_record(record: &DecisionRecord) -> String {
     out.push_str(&format!("id: {}\n", record.id));
     out.push_str(&format!("title: {}\n", record.title));
     out.push_str(&format!("status: {}\n", record.status.as_str()));
+    if !record.kind.is_individual() {
+        out.push_str(&format!("kind: {}\n", record.kind.as_str()));
+    }
     if let Some(feature) = record.feature.as_deref() {
         out.push_str(&format!("feature: {feature}\n"));
+    }
+    if let Some(project) = record.project.as_deref() {
+        out.push_str(&format!("project: {project}\n"));
     }
     out.push_str(&format!("created_at: {}\n", record.created_at));
     if let Some(locked_at) = record.locked_at.as_deref() {
@@ -388,6 +409,55 @@ pub fn render_record(record: &DecisionRecord) -> String {
     }
     if let Some(id) = record.superseded_by.as_deref() {
         out.push_str(&format!("superseded_by: {id}\n"));
+    }
+    if let Some(id) = record.decision_set_id.as_deref() {
+        out.push_str(&format!("decision_set_id: {id}\n"));
+    }
+    if let Some(version) = record.decision_set_schema_version {
+        out.push_str(&format!("decision_set_schema_version: {version}\n"));
+    }
+    if let Some(hash) = record.input_hash.as_deref() {
+        out.push_str(&format!("input_hash: {hash}\n"));
+    }
+    if let Some(override_record) = record.summary_override.as_ref() {
+        out.push_str("summary_override:\n");
+        out.push_str(&format!("  reason: {}\n", override_record.reason));
+        out.push_str(&format!("  accepted_at: {}\n", override_record.accepted_at));
+        out.push_str("  signals:\n");
+        for signal in &override_record.signals {
+            out.push_str(&format!("  - {signal}\n"));
+        }
+    }
+    if let Some(source) = record.source_approval.as_ref() {
+        out.push_str("source_approval:\n");
+        out.push_str(&indent(&source.summary));
+        if let Some(raw) = source.raw.as_deref() {
+            out.push_str("source_approval_raw:\n");
+            out.push_str(&indent(raw));
+        }
+    }
+    if let Some(review) = record.advisor_review.as_ref() {
+        out.push_str("advisor_review:\n");
+        out.push_str(&indent(&review.summary));
+        if let Some(raw) = review.raw.as_deref() {
+            out.push_str("advisor_review_raw:\n");
+            out.push_str(&indent(raw));
+        }
+    }
+    if !record.decision_set_children.is_empty() {
+        out.push_str("children:\n");
+        for child in &record.decision_set_children {
+            out.push_str(&format!("- key: {}\n", child.key));
+            out.push_str(&format!("  title: {}\n", child.title));
+            out.push_str(&format!("  order: {}\n", child.order));
+            if let Some(id) = child.child_decision_id.as_deref() {
+                out.push_str(&format!("  child_decision_id: {id}\n"));
+            }
+            if let Some(preview) = child.preview.as_deref() {
+                out.push_str("  preview:\n");
+                out.push_str(&indent(preview));
+            }
+        }
     }
     out
 }

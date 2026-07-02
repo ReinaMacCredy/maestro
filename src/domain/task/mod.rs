@@ -17,9 +17,9 @@ pub(crate) mod display;
 pub(crate) mod doctor;
 pub(crate) mod lifecycle;
 pub(crate) mod lookup;
-pub mod plan;
+pub(crate) mod plan;
 pub mod progress;
-pub mod readiness;
+mod readiness;
 pub(crate) mod template;
 
 pub use blockers::has_unresolved_blockers;
@@ -33,8 +33,14 @@ pub use doctor::{
     render_report,
 };
 pub use lifecycle::TransitionDetails;
+pub(crate) use plan::{NormalizedPlanTask, normalize_new_task_plan};
 pub use plan::{TaskPlanInput, TaskPlanItem, parse_plan_file, plan_from_cli, read_plan_file};
 pub use progress::{PROGRESS_FILE, ProgressSetupOptions};
+pub use readiness::{
+    READY_SCHEMA_V2, ReadinessFilter, ReadyProjection, ReadyTaskRow,
+    projection as ready_projection, projection_from_records as ready_projection_from_records,
+    remaining_start_blockers, remaining_start_blockers_from_records,
+};
 pub use template::{
     AcceptanceFile, Blocker, BlockerKind, BlockerRef, BlockerSource, ClaimCheckReceipt,
     ProofSourceReceipt, TaskRecord, TaskState, VerificationBinding, VerificationCommandReceipt,
@@ -420,6 +426,7 @@ pub struct TaskFilter {
 /// The `blocks` target is resolved against the full input set before any
 /// narrowing, and only `BlockerKind::Task` edges count toward the task graph.
 pub fn filter_tasks(mut tasks: Vec<TaskRecord>, filter: &TaskFilter) -> Vec<TaskRecord> {
+    let all_tasks = tasks.clone();
     let blocking_ids = filter.blocks.as_deref().map(|blocks| {
         tasks
             .iter()
@@ -440,10 +447,13 @@ pub fn filter_tasks(mut tasks: Vec<TaskRecord>, filter: &TaskFilter) -> Vec<Task
         tasks.retain(|task| task.state.is_live());
     }
     if filter.ready {
-        tasks.retain(|task| task.state == TaskState::Ready && !has_unresolved_blockers(task));
+        tasks.retain(|task| {
+            task.state == TaskState::Ready
+                && remaining_start_blockers_from_records(task, &all_tasks).is_empty()
+        });
     }
     if filter.blocked {
-        tasks.retain(has_unresolved_blockers);
+        tasks.retain(|task| !remaining_start_blockers_from_records(task, &all_tasks).is_empty());
     }
     if let Some(feature_id) = filter.feature_id.as_deref() {
         tasks.retain(|task| task.feature_id.as_deref() == Some(feature_id));

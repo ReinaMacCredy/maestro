@@ -144,6 +144,11 @@ const ASK_MAESTRO_COMMANDS: &[&str] = &[
     "maestro feature list",
     "maestro decision new",
     "maestro decision lock",
+    "maestro decision audit",
+    "maestro decision set draft",
+    "maestro decision set lock",
+    "maestro decision set repair",
+    "maestro decision set show",
     "maestro decision show",
     "maestro card show",
     "maestro card list",
@@ -217,6 +222,9 @@ const MAESTRO_CARD_COMMANDS: &[&str] = &[
     "maestro feature archive",
     "maestro feature auto-archive",
     "maestro feature unarchive",
+    "maestro decision audit",
+    "maestro decision set repair",
+    "maestro decision set show",
     "maestro worktree plan",
     "maestro worktree mark",
     "maestro worktree cleanup-record",
@@ -286,6 +294,11 @@ const MAESTRO_DESIGN_COMMANDS: &[&str] = &[
     "maestro decision new",
     "maestro decision lock",
     "maestro decision supersede",
+    "maestro decision audit",
+    "maestro decision set draft",
+    "maestro decision set lock",
+    "maestro decision set repair",
+    "maestro decision set show",
     "maestro decision show",
     "maestro decision list",
     "maestro card list",
@@ -314,6 +327,9 @@ const MAESTRO_AUDIT_COMMANDS: &[&str] = &[
     "maestro task list",
     "maestro feature show",
     "maestro feature list",
+    "maestro decision audit",
+    "maestro decision set repair",
+    "maestro decision set show",
     "maestro decision show",
     "maestro decision list",
     "maestro card list",
@@ -620,6 +636,8 @@ mod tests {
         assert!(card.contains("maestro feature finalize <ID>"), "{card}");
         assert!(card.contains("maestro feature reopen <ID>"), "{card}");
         assert!(card.contains("maestro feature prepare <ID>"), "{card}");
+        assert!(card.contains("maestro decision audit"), "{card}");
+        assert!(card.contains("maestro decision set repair"), "{card}");
         assert!(card.contains("maestro qa slice <ID>"), "{card}");
         assert!(card.contains("maestro memory"), "{card}");
         assert!(card.contains("maestro scorer"), "{card}");
@@ -633,6 +651,8 @@ mod tests {
         assert!(design.contains("maestro feature finalize <ID>"), "{design}");
         assert!(design.contains("maestro feature reopen <ID>"), "{design}");
         assert!(design.contains("maestro decision lock <ID>"), "{design}");
+        assert!(design.contains("maestro decision set draft"), "{design}");
+        assert!(design.contains("maestro decision set lock"), "{design}");
         assert!(design.contains("maestro card show <ID>"), "{design}");
         assert!(!design.contains("maestro task complete"), "{design}");
         assert!(!design.contains("maestro qa baseline"), "{design}");
@@ -640,6 +660,8 @@ mod tests {
         let audit = render_cli_reference_for_skill("maestro-audit");
         assert!(audit.contains("maestro harness propose"), "{audit}");
         assert!(audit.contains("maestro harness apply"), "{audit}");
+        assert!(audit.contains("maestro decision audit"), "{audit}");
+        assert!(audit.contains("maestro decision set repair"), "{audit}");
         assert!(audit.contains("maestro lean [TARGET]"), "{audit}");
         assert!(audit.contains("maestro query friction"), "{audit}");
         assert!(audit.contains("maestro card show <ID>"), "{audit}");

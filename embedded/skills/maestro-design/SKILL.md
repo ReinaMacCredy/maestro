@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-version: 1.36.4
+version: 1.36.5
 description: "Design Maestro changes before implementation: use for brainstorm, plan, PRD synthesis, grill me, grilling, stress-test, domain model, deepening candidate, wording, workflow, skill, harness, card/task/feature, architecture, UX, or agent-process decisions."
 ---
 
@@ -155,7 +155,10 @@ maestro never auto-reads or auto-replies; you do.
    `maestro decision new --lock --decision "<chosen>"`. Put the chosen ASCII
    sketch into `--preview` as multiline text. The lock echoes the entry and
    appends the dated feature-note pointer automatically; do not add a manual
-   duplicate note.
+   duplicate note. For "lock all", "all rec", or all-recommendations batches,
+   use `maestro decision set draft` / `maestro decision set lock`, or lock each
+   child decision separately. Do not compress multiple independent forks into
+   one summary `maestro decision lock`.
 6. If a chosen answer removes a field, file, command, behavior, or workflow,
    enumerate consumers before locking the removal.
 7. Before locking a material or hard-to-reverse fork, get an independent
@@ -236,6 +239,8 @@ locked as Maestro decisions. Full branch:
 
 - Do not implement from this skill.
 - Do not batch unrelated decisions into one lock.
+- Do not turn "lock all" or all-recommendations replies into one compressed
+  summary decision. Use a DecisionSet or separate child decisions.
 - Do not keep a contradicted locked decision silently. To reopen a locked
   ruling, supersede it with `maestro decision supersede`; never edit or unlock
   the locked Decision record.

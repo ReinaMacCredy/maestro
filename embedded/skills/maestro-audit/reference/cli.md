@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: ae56f7de49fcf3a30d0a0df28723c17b1d29af8cfb21fcd6df08bc68a5ccec32 -->
+<!-- maestro:cli-reference-sha256: 834851fbd8fe4a63bfc5253cd1ec621d8215b958b4bd808c72f549c094f571f5 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -24,7 +24,10 @@ a spelling not found here is outside this skill's CLI surface.
 
 ## maestro decision
 
-- `maestro decision show <ID>` -- Show a decision card by id
+- `maestro decision audit [--compressed] [--json]` -- Audit decision records for repairable conditions
+- `maestro decision set repair <ID> --from <PATH> [--dry-run] [--json]` -- Repair one compressed summary into a DecisionSet replacement
+- `maestro decision set show <ID> [--json]` -- Show a locked DecisionSet by id
+- `maestro decision show <ID> [--include-set]` -- Show a decision card by id
 - `maestro decision list [--all] [--feature <FEATURE>]` -- List decision cards (recent 20 by activity unless --all)
 
 ## maestro card

@@ -868,6 +868,35 @@ fn ready_v2_projects_parallel_wave_serial_gates_and_blocked_next() {
         json["blocked_next"].as_array().expect("blocked_next").len(),
         2
     );
+    let task_ready = stdout(&maestro_with_env(
+        repo,
+        &["task", "list", "--ready"],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    ));
+    assert!(task_ready.contains("Build settings API"), "{task_ready}");
+    assert!(task_ready.contains("Build settings UI"), "{task_ready}");
+    assert!(task_ready.contains("Document settings"), "{task_ready}");
+    assert!(
+        !task_ready.contains("Wire real integration"),
+        "{task_ready}"
+    );
+    assert!(!task_ready.contains("Ship settings"), "{task_ready}");
+
+    let task_blocked = stdout(&maestro_with_env(
+        repo,
+        &["task", "list", "--blocked"],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    ));
+    assert!(
+        task_blocked.contains("Wire real integration"),
+        "{task_blocked}"
+    );
+    assert!(task_blocked.contains("Ship settings"), "{task_blocked}");
+    assert!(
+        !task_blocked.contains("Build settings API"),
+        "{task_blocked}"
+    );
+
     let argv = json["parallel_wave"][0]["command"]["argv"]
         .as_array()
         .expect("command argv is an array");

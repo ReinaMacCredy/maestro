@@ -612,7 +612,7 @@ fn claim_task(paths: &MaestroPaths, id: &str, actor: &str) -> Result<()> {
             bail!("{}", claim_not_ready_message(&task, &checks));
         }
         if task.state == TaskState::Ready && !task::has_unresolved_blockers(&task) {
-            let remaining = task::readiness::remaining_start_blockers(paths, &task)?;
+            let remaining = task::remaining_start_blockers(paths, &task)?;
             if !remaining.is_empty() {
                 bail!(
                     "task {} is blocked by {}; run `maestro ready` for the executable wave",
@@ -642,17 +642,13 @@ fn claim_next_task(paths: &MaestroPaths, actor: &str) -> Result<()> {
         .iter()
         .find(|task| {
             task.state == TaskState::Ready
-                && task::readiness::remaining_start_blockers(paths, task)
-                    .map(|remaining| remaining.is_empty())
-                    .unwrap_or(false)
+                && task::remaining_start_blockers_from_records(task, &tasks).is_empty()
                 && !task.gate
         })
         .or_else(|| {
             tasks.iter().find(|task| {
                 task.state == TaskState::Ready
-                    && task::readiness::remaining_start_blockers(paths, task)
-                        .map(|remaining| remaining.is_empty())
-                        .unwrap_or(false)
+                    && task::remaining_start_blockers_from_records(task, &tasks).is_empty()
             })
         })
     else {
@@ -1266,17 +1262,17 @@ fn render_task_list_json(paths: &MaestroPaths, tasks: &[TaskRecord]) -> Result<(
                 });
             serde_json::json!({
                 "ref": index + 1,
-                  "id": &task.id,
-                  "state": task.state.as_str(),
-                  "title": &task.title,
-                  "lane": &task.lane,
-                  "blocked_by": &task.blocked_by,
-                  "gate": task.gate,
-                  "gate_kind": &task.gate_kind,
-                  "execution_mode": if task.gate { "serial" } else { "parallel" },
-                  "order": task.order,
-                  "claimed_by": &task.claimed_by,
-                  "proof": {
+                "id": &task.id,
+                "state": task.state.as_str(),
+                "title": &task.title,
+                "lane": &task.lane,
+                "blocked_by": &task.blocked_by,
+                "gate": task.gate,
+                "gate_kind": &task.gate_kind,
+                "execution_mode": if task.gate { "serial" } else { "parallel" },
+                "order": task.order,
+                "claimed_by": &task.claimed_by,
+                "proof": {
                     "status": proof_status,
                     "claims_only": task.verification.claims_only,
                     "claim_checks": &task.verification.claim_checks,

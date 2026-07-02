@@ -3,10 +3,13 @@ use anyhow::{Context, Result, anyhow, bail};
 use crate::domain::card::schema::CardType;
 use crate::domain::card::store as card_store;
 use crate::domain::decisions::cards;
+use crate::domain::decisions::decision_set;
 use crate::domain::decisions::query::{
     DecisionSource, decision_exists, normalize_decision_id, not_found,
 };
-use crate::domain::decisions::schema::{DecisionRecord, DecisionStatus, DecisionStore};
+use crate::domain::decisions::schema::{
+    DecisionRecord, DecisionRecordKind, DecisionStatus, DecisionStore, SummaryDecisionOverride,
+};
 use crate::domain::feature;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::slug::slugify_ascii;
@@ -85,7 +88,9 @@ fn open_record(
         id,
         title: title.trim().to_string(),
         status: DecisionStatus::Open,
+        kind: DecisionRecordKind::Individual,
         feature: feature.map(str::to_string),
+        project: None,
         context: context
             .map(str::trim)
             .filter(|value| !value.is_empty())
@@ -95,6 +100,13 @@ fn open_record(
         preview: None,
         supersedes: Vec::new(),
         superseded_by: None,
+        decision_set_id: None,
+        decision_set_children: Vec::new(),
+        source_approval: None,
+        advisor_review: None,
+        input_hash: None,
+        decision_set_schema_version: None,
+        summary_override: None,
         created_at: utc_now_timestamp(),
         locked_at: None,
     }
@@ -107,6 +119,7 @@ pub struct LockInputs<'a> {
     pub rejected: &'a [String],
     pub preview: Option<&'a str>,
     pub supersedes: &'a [String],
+    pub allow_summary_decision: bool,
 }
 
 /// One-shot open+lock for pre-decided forks. The lock inputs are validated
@@ -127,6 +140,12 @@ pub fn create_locked(
     if inputs.rejected.iter().any(|value| value.trim().is_empty()) {
         bail!("--rejected values must not be empty");
     }
+    validate_summary_policy(
+        inputs.decision,
+        inputs.rejected,
+        inputs.preview,
+        inputs.allow_summary_decision,
+    )?;
     let report = create_open(paths, title, context, feature, project)?;
     let id = report.record.id;
     lock_card(
@@ -136,6 +155,7 @@ pub fn create_locked(
         inputs.rejected,
         inputs.preview,
         inputs.supersedes,
+        inputs.allow_summary_decision,
     )
     .with_context(|| {
         format!(
@@ -151,6 +171,7 @@ pub fn lock(
     rejected: &[String],
     preview: Option<&str>,
     supersedes: &[String],
+    allow_summary_decision: bool,
 ) -> Result<DecisionLockReport> {
     if decision.trim().is_empty() {
         bail!("--decision must not be empty");
@@ -158,8 +179,17 @@ pub fn lock(
     if rejected.iter().any(|value| value.trim().is_empty()) {
         bail!("--rejected values must not be empty");
     }
+    validate_summary_policy(decision, rejected, preview, allow_summary_decision)?;
     let id = normalize_decision_id(id)?;
-    lock_card(paths, &id, decision, rejected, preview, supersedes)
+    lock_card(
+        paths,
+        &id,
+        decision,
+        rejected,
+        preview,
+        supersedes,
+        allow_summary_decision,
+    )
 }
 
 pub fn supersede(
@@ -176,6 +206,7 @@ pub fn supersede(
     if inputs.rejected.iter().any(|value| value.trim().is_empty()) {
         bail!("--rejected values must not be empty");
     }
+    validate_summary_policy(inputs.decision, inputs.rejected, inputs.preview, false)?;
     if let Some(title) = inputs.title
         && title.trim().is_empty()
     {
@@ -254,6 +285,7 @@ pub fn supersede(
         inputs.rejected,
         inputs.preview,
         std::slice::from_ref(&old_record.id),
+        false,
         utc_now_timestamp(),
     );
     cards::save(&new_record, &new_resolved)?;
@@ -340,6 +372,7 @@ fn lock_card(
     rejected: &[String],
     preview: Option<&str>,
     supersedes: &[String],
+    allow_summary_decision: bool,
 ) -> Result<DecisionLockReport> {
     let Some((mut record, source, resolved)) = cards::load_one(paths, id)? else {
         // The card lookup already failed, so a hit here is a frozen legacy
@@ -365,6 +398,7 @@ fn lock_card(
         rejected,
         preview,
         &supersedes,
+        allow_summary_decision,
         utc_now_timestamp(),
     );
     cards::save(&record, &resolved)?;
@@ -431,6 +465,7 @@ fn apply_lock(
     rejected: &[String],
     preview: Option<&str>,
     supersedes: &[String],
+    allow_summary_decision: bool,
     now: String,
 ) {
     record.status = DecisionStatus::Locked;
@@ -444,7 +479,60 @@ fn apply_lock(
         .filter(|value| !value.is_empty())
         .map(str::to_string);
     record.supersedes = supersedes.to_vec();
+    record.summary_override =
+        summary_override(decision, rejected, preview, allow_summary_decision, &now);
     record.locked_at = Some(now);
+}
+
+fn validate_summary_policy(
+    decision: &str,
+    rejected: &[String],
+    preview: Option<&str>,
+    allow_summary_decision: bool,
+) -> Result<()> {
+    let text = summary_detection_text(decision, rejected, preview);
+    if let Some(detection) = decision_set::detect_compressed_summary(&text)
+        && detection.blocking
+        && !allow_summary_decision
+    {
+        bail!(
+            "decision text looks like a compressed multi-decision summary; use `maestro decision set lock` for batches, or pass --allow-summary-decision to store an audited intentional summary (signals: {})",
+            detection.signals.join(", ")
+        );
+    }
+    Ok(())
+}
+
+fn summary_override(
+    decision: &str,
+    rejected: &[String],
+    preview: Option<&str>,
+    allow_summary_decision: bool,
+    now: &str,
+) -> Option<SummaryDecisionOverride> {
+    if !allow_summary_decision {
+        return None;
+    }
+    let text = summary_detection_text(decision, rejected, preview);
+    let detection = decision_set::detect_compressed_summary(&text)?;
+    Some(SummaryDecisionOverride {
+        accepted_at: now.to_string(),
+        reason: "--allow-summary-decision".to_string(),
+        signals: detection.signals,
+    })
+}
+
+fn summary_detection_text(decision: &str, rejected: &[String], preview: Option<&str>) -> String {
+    let mut text = decision.to_string();
+    for value in rejected {
+        text.push('\n');
+        text.push_str(value);
+    }
+    if let Some(preview) = preview {
+        text.push('\n');
+        text.push_str(preview);
+    }
+    text
 }
 
 /// Append the feature note for a locked decision, returning the note line. The

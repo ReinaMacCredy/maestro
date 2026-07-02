@@ -64,7 +64,12 @@ pub struct ReadyCommand {
 }
 
 pub fn projection(paths: &MaestroPaths, filter: ReadinessFilter) -> Result<ReadyProjection> {
-    let mut tasks = doctor::load_task_records(&paths.tasks_dir())?;
+    let tasks = doctor::load_task_records(&paths.tasks_dir())?;
+    Ok(projection_from_records(&tasks, filter))
+}
+
+pub fn projection_from_records(tasks: &[TaskRecord], filter: ReadinessFilter) -> ReadyProjection {
+    let mut tasks = tasks.to_vec();
     tasks.retain(|task| {
         filter
             .project
@@ -92,7 +97,7 @@ pub fn projection(paths: &MaestroPaths, filter: ReadinessFilter) -> Result<Ready
     } else {
         Vec::new()
     };
-    Ok(ReadyProjection {
+    ReadyProjection {
         version: 1,
         schema: READY_SCHEMA_V2.to_string(),
         parallel_wave: rows.parallel_wave,
@@ -101,15 +106,22 @@ pub fn projection(paths: &MaestroPaths, filter: ReadinessFilter) -> Result<Ready
         projected_waves,
         diagnostics,
         blocked_next_hidden: hidden,
-    })
+    }
 }
 
 pub fn remaining_start_blockers(paths: &MaestroPaths, task: &TaskRecord) -> Result<Vec<String>> {
     let tasks = doctor::load_task_records(&paths.tasks_dir())?;
+    Ok(remaining_start_blockers_from_records(task, &tasks))
+}
+
+pub fn remaining_start_blockers_from_records(
+    task: &TaskRecord,
+    tasks: &[TaskRecord],
+) -> Vec<String> {
     let task_map: BTreeMap<&str, &TaskRecord> =
         tasks.iter().map(|task| (task.id.as_str(), task)).collect();
     let mut diagnostics = Vec::new();
-    Ok(remaining_blockers(task, &task_map, &mut diagnostics))
+    remaining_blockers(task, &task_map, &mut diagnostics)
 }
 
 #[derive(Default)]
@@ -148,13 +160,27 @@ fn remaining_blockers(
     task_map: &BTreeMap<&str, &TaskRecord>,
     diagnostics: &mut Vec<String>,
 ) -> Vec<String> {
+    remaining_blockers_with(task, task_map, diagnostics, |_, dependency| {
+        dependency.is_some_and(|dependency| dependency.state == TaskState::Verified)
+    })
+}
+
+fn remaining_blockers_with(
+    task: &TaskRecord,
+    task_map: &BTreeMap<&str, &TaskRecord>,
+    diagnostics: &mut Vec<String>,
+    mut is_satisfied: impl FnMut(&str, Option<&TaskRecord>) -> bool,
+) -> Vec<String> {
     let mut remaining = Vec::new();
     if has_unresolved_blockers(task) {
         remaining.push("impediment blockers".to_string());
     }
     for blocked_by in &task.blocked_by {
-        match task_map.get(blocked_by.as_str()) {
-            Some(dep) if dep.state == TaskState::Verified => {}
+        let dependency = task_map.get(blocked_by.as_str()).copied();
+        if is_satisfied(blocked_by, dependency) {
+            continue;
+        }
+        match dependency {
             Some(dep)
                 if matches!(
                     dep.state,
@@ -277,42 +303,9 @@ fn remaining_blockers_for_projection(
     satisfied: &BTreeSet<String>,
     diagnostics: &mut Vec<String>,
 ) -> Vec<String> {
-    let mut remaining = Vec::new();
-    if has_unresolved_blockers(task) {
-        remaining.push("impediment blockers".to_string());
-    }
-    for blocked_by in &task.blocked_by {
-        if satisfied.contains(blocked_by) {
-            continue;
-        }
-        match task_map.get(blocked_by.as_str()) {
-            Some(dep)
-                if matches!(
-                    dep.state,
-                    TaskState::Rejected | TaskState::Abandoned | TaskState::Superseded
-                ) =>
-            {
-                diagnostics.push(format!(
-                    "{} blocked_by {} is terminal {}",
-                    task.id,
-                    dep.id,
-                    dep.state.as_str()
-                ));
-                remaining.push(dep.id.clone());
-            }
-            Some(dep) => remaining.push(dep.id.clone()),
-            None => {
-                diagnostics.push(format!(
-                    "{} blocked_by missing task {}",
-                    task.id, blocked_by
-                ));
-                remaining.push(blocked_by.clone());
-            }
-        }
-    }
-    remaining.sort();
-    remaining.dedup();
-    remaining
+    remaining_blockers_with(task, task_map, diagnostics, |blocked_by, _| {
+        satisfied.contains(blocked_by)
+    })
 }
 
 fn compare_ready_rows(left: &ReadyTaskRow, right: &ReadyTaskRow) -> std::cmp::Ordering {

@@ -37,14 +37,14 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 20] = [
     (
         "skill",
         "ask-maestro",
-        "1.0.1",
-        "8133e01490250799b98eaf6026021301d223344e3ae830fef262bb3af32fb228",
+        "1.0.2",
+        "aaf65e331342fd91d1acd553c603a26d7edc0d1d042addcc8befc368c54e9de9",
     ),
     (
         "skill",
         "maestro-card",
-        "1.37.14",
-        "6666de94f7df432f873ec059f3ca8ac85750597bd2d13761fd414de4e29ea31f",
+        "1.37.15",
+        "ae1f5950fdbcb1cae12111d8f8fc3c97f933af555f643930d39db8324d71d898",
     ),
     (
         "skill",
@@ -55,8 +55,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 20] = [
     (
         "skill",
         "maestro-design",
-        "1.36.4",
-        "5d29a175898a70390d033f54828e3b429661b98936f5040a16d4a1ea4b88b5c8",
+        "1.36.5",
+        "a967836a184575fe56ee1255585db8df62fb34485d5d81e5553be537b7255570",
     ),
     (
         "skill",
@@ -653,6 +653,45 @@ fn ask_maestro_routes_to_the_shipped_skill_family() {
         assert!(
             ask.contains(phrase),
             "ask-maestro must retain routing phrase {phrase:?}"
+        );
+    }
+}
+
+#[test]
+fn shipped_guidance_preserves_decisionset_anti_compression_rule() {
+    let harness = HARNESS_MD.replace('\n', " ");
+    let design = shipped_skill_body("maestro-design").replace('\n', " ");
+    let card = shipped_skill_body("maestro-card").replace('\n', " ");
+    let ask = shipped_skill_body("ask-maestro").replace('\n', " ");
+
+    for (name, body) in [
+        ("HARNESS.md", harness.as_str()),
+        ("maestro-design", design.as_str()),
+        ("maestro-card", card.as_str()),
+        ("ask-maestro", ask.as_str()),
+    ] {
+        for phrase in [
+            "lock all",
+            "all-recommendations",
+            "DecisionSet",
+            "separate child decisions",
+        ] {
+            assert!(
+                body.contains(phrase),
+                "{name} must retain anti-compression phrase {phrase:?}"
+            );
+        }
+    }
+
+    for phrase in [
+        "maestro decision set draft",
+        "maestro decision set lock",
+        "maestro decision audit --compressed",
+        "maestro decision set repair",
+    ] {
+        assert!(
+            harness.contains(phrase),
+            "harness must retain DecisionSet repair command phrase {phrase:?}"
         );
     }
 }

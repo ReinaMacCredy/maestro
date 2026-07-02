@@ -25,16 +25,16 @@ const CARD_QUERY_JSON_VERSION: u8 = 1;
 pub fn ready(args: ReadyArgs) -> Result<()> {
     let paths = repo_paths()?;
     if !paths.maestro_dir().is_dir() {
-        let projection = task::readiness::ReadyProjection {
+        let projection = task::ReadyProjection {
             version: 1,
-            schema: task::readiness::READY_SCHEMA_V2.to_string(),
-            ..task::readiness::ReadyProjection::default()
+            schema: task::READY_SCHEMA_V2.to_string(),
+            ..task::ReadyProjection::default()
         };
         return render_ready_v2(&projection, args.json);
     }
-    let projection = task::readiness::projection(
+    let projection = task::ready_projection(
         &paths,
-        task::readiness::ReadinessFilter {
+        task::ReadinessFilter {
             project: args.project,
             feature: args.feature,
             blocked_next_limit: if args.plan { usize::MAX } else { 5 },
@@ -1022,10 +1022,8 @@ fn legacy_notice() {
     println!("{LEGACY_NOTICE}");
 }
 
-/// Render `ready` in the beads structure (SPEC DN9): a count header plus numbered
-/// `[P#] id type title @claim` rows, emoji-free. `[P#]` is the 1-based ready rank
-/// (the card schema carries no priority field, so position is the priority).
-fn render_ready_v2(projection: &task::readiness::ReadyProjection, json: bool) -> Result<()> {
+/// Render task-wave readiness from the Task DAG.
+fn render_ready_v2(projection: &task::ReadyProjection, json: bool) -> Result<()> {
     if json {
         println!("{}", serde_json::to_string(projection)?);
         return Ok(());
@@ -1052,7 +1050,7 @@ fn render_ready_v2(projection: &task::readiness::ReadyProjection, json: bool) ->
     Ok(())
 }
 
-fn render_parallel_wave(rows: &[task::readiness::ReadyTaskRow]) {
+fn render_parallel_wave(rows: &[task::ReadyTaskRow]) {
     if rows.is_empty() {
         println!("Parallel wave: none");
         return;
@@ -1069,7 +1067,7 @@ fn render_parallel_wave(rows: &[task::readiness::ReadyTaskRow]) {
     render_rows_by_lane(rows);
 }
 
-fn render_serial_gates(rows: &[task::readiness::ReadyTaskRow]) {
+fn render_serial_gates(rows: &[task::ReadyTaskRow]) {
     println!();
     if rows.is_empty() {
         println!("Serial gates: none ready");
@@ -1079,7 +1077,7 @@ fn render_serial_gates(rows: &[task::readiness::ReadyTaskRow]) {
     render_rows_by_lane(rows);
 }
 
-fn render_blocked_next(projection: &task::readiness::ReadyProjection) {
+fn render_blocked_next(projection: &task::ReadyProjection) {
     println!();
     if projection.blocked_next.is_empty() {
         println!("Blocked next: none");
@@ -1104,8 +1102,8 @@ fn render_blocked_next(projection: &task::readiness::ReadyProjection) {
     }
 }
 
-fn render_rows_by_lane(rows: &[task::readiness::ReadyTaskRow]) {
-    let mut by_lane: BTreeMap<&str, Vec<&task::readiness::ReadyTaskRow>> = BTreeMap::new();
+fn render_rows_by_lane(rows: &[task::ReadyTaskRow]) {
+    let mut by_lane: BTreeMap<&str, Vec<&task::ReadyTaskRow>> = BTreeMap::new();
     for row in rows {
         by_lane.entry(row.lane.as_str()).or_default().push(row);
     }

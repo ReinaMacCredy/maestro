@@ -1,6 +1,6 @@
 ---
 name: ask-maestro
-version: 1.0.1
+version: 1.0.2
 description: "Routes Maestro requests to the right shipped skill and lifecycle recipe. Use when the user asks what Maestro route, skill, loop, card, task, feature, setup, audit, design, bugfix, ship, archive, progress, or continuation workflow to use."
 disable-model-invocation: true
 ---
@@ -34,7 +34,8 @@ Most Maestro work moves through this path:
 1. `maestro-design` - use for unsettled behavior, brainstorm, workflow design,
    specs, PRD synthesis, domain modeling, grilling, UX shape, or skill/harness
    design. Stay here until material forks are locked and the feature handoff is
-   finalized.
+   finalized. "lock all", "all rec", and all-recommendations batches must be a
+   DecisionSet or separate child decisions, not one compressed summary lock.
 2. `maestro-card` - use after design approval or for already-scoped executable
    work: implement, bugfix, verify, QA, close, release, archive, or continue
    active work. Behavior-changing implementation defaults to test-first work

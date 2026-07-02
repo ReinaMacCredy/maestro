@@ -324,7 +324,7 @@ fn prepare_structured_plan_for_feature(
     actor: &str,
 ) -> Result<PrepareReport> {
     let existing_tasks = task::load_task_records(&paths.tasks_dir())?;
-    let normalized = task::plan::normalize_new_task_plan(paths, input, &existing_tasks)?;
+    let normalized = task::normalize_new_task_plan(paths, input, &existing_tasks)?;
     let mut created = Vec::with_capacity(normalized.len());
     let result = (|| -> Result<PrepareReport> {
         let mut accepted = Vec::with_capacity(normalized.len());
@@ -374,13 +374,16 @@ fn prepare_structured_plan_for_feature(
             )?);
         }
         let prepared = reload_created_tasks(paths, &accepted)?;
-        let ready_count = prepared
+        let all_tasks = task::load_task_records(&paths.tasks_dir())?;
+        let startable = prepared
             .iter()
-            .filter(|task| task_is_startable(paths, task))
-            .count();
+            .map(|task| task_is_startable(task, &all_tasks))
+            .collect::<Vec<_>>();
+        let ready_count = startable.iter().filter(|startable| **startable).count();
         let blocked_count = prepared
             .iter()
-            .filter(|task| task.state == TaskState::Ready && !task_is_startable(paths, task))
+            .zip(&startable)
+            .filter(|(task, startable)| task.state == TaskState::Ready && !**startable)
             .count();
         let started = ready_count > 0 && view.status == FeatureStatus::Ready;
         if started {
@@ -395,9 +398,9 @@ fn prepare_structured_plan_for_feature(
             remained_ready: ready_count == 0 && view.status == FeatureStatus::Ready,
             prepared: prepared
                 .into_iter()
-                .map(|task| {
-                    let blocked =
-                        task.state == TaskState::Ready && !task_is_startable(paths, &task);
+                .zip(startable)
+                .map(|(task, startable)| {
+                    let blocked = task.state == TaskState::Ready && !startable;
                     PreparedTask {
                         id: task.id,
                         title: task.title,
@@ -593,11 +596,9 @@ fn looks_like_structured_task_plan(contents: &str) -> bool {
     trimmed.starts_with("schema:") || trimmed.starts_with("schema_version:")
 }
 
-fn task_is_startable(paths: &MaestroPaths, task: &TaskRecord) -> bool {
+fn task_is_startable(task: &TaskRecord, all_tasks: &[TaskRecord]) -> bool {
     task.state == TaskState::Ready
-        && task::readiness::remaining_start_blockers(paths, task)
-            .map(|remaining| remaining.is_empty())
-            .unwrap_or(false)
+        && task::remaining_start_blockers_from_records(task, all_tasks).is_empty()
 }
 
 fn remove_owned_prepare_file(plan_path: &Path, owned_paths: &[PathBuf]) -> Result<()> {

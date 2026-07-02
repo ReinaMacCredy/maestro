@@ -1,5 +1,11 @@
 use std::collections::BTreeMap;
+use std::fs::{self, OpenOptions};
+use std::io::{ErrorKind, Write};
+#[cfg(unix)]
+use std::os::unix::fs::OpenOptionsExt;
+use std::path::PathBuf;
 use std::process::Command;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, bail};
 use serde_json::{Value, json};
@@ -200,6 +206,21 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
             json!({"type":"object","properties":{"title":{"type":"string"}},"required":["title"]}),
         ),
         tool(
+            "maestro_decision_set_draft",
+            "Drafts a DecisionSet through the CLI contract from YAML or plain text; returns a structured envelope.",
+            json!({"type":"object","properties":{"yaml":{"type":"string"},"from_text":{"type":"string"}},"anyOf":[{"required":["yaml"]},{"required":["from_text"]}]}),
+        ),
+        tool(
+            "maestro_decision_set_lock",
+            "Locks a DecisionSet through the CLI contract from YAML; dry_run previews without writing.",
+            json!({"type":"object","properties":{"yaml":{"type":"string"},"dry_run":{"type":"boolean"}},"required":["yaml"]}),
+        ),
+        tool(
+            "maestro_decision_set_show",
+            "Shows a locked DecisionSet using the CLI JSON projection.",
+            json!({"type":"object","properties":{"id":{"type":"string"}},"required":["id"]}),
+        ),
+        tool(
             "maestro_verify",
             "Runs maestro task verify on a task; returns the verification result.",
             json!({"type":"object","properties":{"id":{"type":"string"}},"required":["id"]}),
@@ -256,6 +277,9 @@ pub fn call_tool(paths: &MaestroPaths, name: &str, arguments: &Value) -> Result<
         "maestro_card_graph" => card_graph(arguments),
         "maestro_decision_list" => decision_list(arguments),
         "maestro_decision_new" => cli(required_args(arguments, &["decision", "new"], &["title"])?),
+        "maestro_decision_set_draft" => decision_set_draft(arguments),
+        "maestro_decision_set_lock" => decision_set_lock(arguments),
+        "maestro_decision_set_show" => decision_set_show(arguments),
         "maestro_verify" => cli(required_args(arguments, &["task", "verify"], &["id"])?),
         "maestro_query_matrix" => cli(vec!["query".to_string(), "matrix".to_string()]),
         "maestro_sync" => sync_tool(arguments),
@@ -442,6 +466,169 @@ fn feature_list(arguments: &Value) -> Result<String> {
 
 fn decision_list(arguments: &Value) -> Result<String> {
     list_with_all("decision", arguments)
+}
+
+fn decision_set_draft(arguments: &Value) -> Result<String> {
+    if let Some(yaml) = string_arg(arguments, "yaml") {
+        let path = write_temp_decision_set_yaml(&yaml)?;
+        let args = vec![
+            "decision".to_string(),
+            "set".to_string(),
+            "draft".to_string(),
+            "--from".to_string(),
+            path.display().to_string(),
+            "--json".to_string(),
+        ];
+        return run_decision_set_tool("maestro_decision_set_draft", args, false, Some(path));
+    }
+    let from_text = required_non_empty_string(arguments, "from_text")?;
+    run_decision_set_tool(
+        "maestro_decision_set_draft",
+        vec![
+            "decision".to_string(),
+            "set".to_string(),
+            "draft".to_string(),
+            "--from-text".to_string(),
+            from_text,
+            "--json".to_string(),
+        ],
+        false,
+        None,
+    )
+}
+
+fn decision_set_lock(arguments: &Value) -> Result<String> {
+    let yaml = required_non_empty_string(arguments, "yaml")?;
+    let path = write_temp_decision_set_yaml(&yaml)?;
+    let dry_run = bool_arg(arguments, "dry_run");
+    let mut args = vec![
+        "decision".to_string(),
+        "set".to_string(),
+        "lock".to_string(),
+        "--from".to_string(),
+        path.display().to_string(),
+    ];
+    if dry_run {
+        args.push("--dry-run".to_string());
+    }
+    args.push("--json".to_string());
+    run_decision_set_tool("maestro_decision_set_lock", args, !dry_run, Some(path))
+}
+
+fn decision_set_show(arguments: &Value) -> Result<String> {
+    run_decision_set_tool(
+        "maestro_decision_set_show",
+        vec![
+            "decision".to_string(),
+            "set".to_string(),
+            "show".to_string(),
+            required_string(arguments, "id")?,
+            "--json".to_string(),
+        ],
+        false,
+        None,
+    )
+}
+
+fn run_decision_set_tool(
+    tool_name: &str,
+    args: Vec<String>,
+    changed_on_success: bool,
+    temp_file: Option<PathBuf>,
+) -> Result<String> {
+    let _cleanup = temp_file.map(TempFileCleanup::new);
+    let output = run_cli(&args)?;
+    let (ok, changed, result, diagnostics, reason_code, message, raw) = if output.success {
+        let raw = output.stdout.trim_end().to_string();
+        let result = serde_json::from_str::<Value>(&raw).unwrap_or_else(|_| json!(raw));
+        (
+            true,
+            changed_on_success,
+            result,
+            json!([]),
+            Value::Null,
+            Value::String("ok".to_string()),
+            raw,
+        )
+    } else {
+        let raw = output.stderr.trim().to_string();
+        let message = lifecycle_message(&raw);
+        (
+            false,
+            false,
+            Value::Null,
+            json!([{"code": "decision_set_cli_blocked", "message": message}]),
+            Value::String("decision_set_cli_blocked".to_string()),
+            Value::String(message),
+            raw,
+        )
+    };
+    serde_json::to_string_pretty(&json!({
+        "ok": ok,
+        "changed": changed,
+        "tool": tool_name,
+        "result": result,
+        "diagnostics": diagnostics,
+        "reason_code": reason_code,
+        "message": message,
+        "raw": raw,
+    }))
+    .context("failed to encode DecisionSet MCP response")
+}
+
+fn write_temp_decision_set_yaml(contents: &str) -> Result<PathBuf> {
+    let temp_dir = std::env::temp_dir();
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    for attempt in 0..16 {
+        let path = temp_dir.join(format!(
+            "maestro-decision-set-{}-{nanos}-{attempt}.yml",
+            std::process::id()
+        ));
+        let mut options = OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        options.mode(0o600);
+        match options.open(&path) {
+            Ok(mut file) => {
+                file.write_all(contents.as_bytes()).with_context(|| {
+                    format!(
+                        "failed to write temporary DecisionSet YAML {}",
+                        path.display()
+                    )
+                })?;
+                return Ok(path);
+            }
+            Err(error) if error.kind() == ErrorKind::AlreadyExists => continue,
+            Err(error) => {
+                return Err(error).with_context(|| {
+                    format!(
+                        "failed to create temporary DecisionSet YAML {}",
+                        path.display()
+                    )
+                });
+            }
+        }
+    }
+    bail!("failed to create a unique temporary DecisionSet YAML file")
+}
+
+struct TempFileCleanup {
+    path: PathBuf,
+}
+
+impl TempFileCleanup {
+    fn new(path: PathBuf) -> Self {
+        Self { path }
+    }
+}
+
+impl Drop for TempFileCleanup {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.path);
+    }
 }
 
 fn list_with_all(noun: &str, arguments: &Value) -> Result<String> {

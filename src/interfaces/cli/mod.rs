@@ -2042,6 +2042,18 @@ pub struct DecisionArgs {
 
 #[derive(Debug, Subcommand)]
 pub enum DecisionCommand {
+    #[command(about = "Audit decision records for repairable conditions")]
+    Audit {
+        #[arg(long, help = "Report compressed multi-decision summary candidates")]
+        compressed: bool,
+        #[arg(long, help = "Emit a stable JSON report")]
+        json: bool,
+    },
+    #[command(about = "Draft, lock, and show a multi-decision DecisionSet")]
+    Set {
+        #[command(subcommand)]
+        command: DecisionSetCommand,
+    },
     #[command(
         about = "Open a structured decision fork (mints a decision card)",
         after_help = "Examples:\n  maestro decision new \"Adopt X for Y\" --feature csv-export\n  maestro decision new \"Adopt X for Y\" --feature csv-export --lock --decision \"X\" --rejected \"Z: slower\"   # pre-decided fork, one call"
@@ -2078,6 +2090,12 @@ pub enum DecisionCommand {
             requires = "lock"
         )]
         supersedes: Vec<String>,
+        #[arg(
+            long,
+            help = "Allow an intentional summary decision when compressed-batch detection would block it",
+            requires = "lock"
+        )]
+        allow_summary_decision: bool,
         #[arg(long, help = "Project/service scope stored on the card")]
         project: Option<String>,
         #[arg(long, help = "Print only the new card id on stdout")]
@@ -2097,6 +2115,11 @@ pub enum DecisionCommand {
             help = "Decision id superseded by this lock (repeatable)"
         )]
         supersedes: Vec<String>,
+        #[arg(
+            long,
+            help = "Allow an intentional summary decision when compressed-batch detection would block it"
+        )]
+        allow_summary_decision: bool,
     },
     #[command(
         about = "Replace a locked decision by superseding it",
@@ -2118,7 +2141,14 @@ pub enum DecisionCommand {
         id_only: bool,
     },
     #[command(about = "Show a decision card by id")]
-    Show { id: String },
+    Show {
+        id: String,
+        #[arg(
+            long,
+            help = "For child decisions, include the parent DecisionSet pointer"
+        )]
+        include_set: bool,
+    },
     #[command(about = "List decision cards (recent 20 by activity unless --all)")]
     List {
         /// List all decisions, not just the recent window.
@@ -2127,6 +2157,76 @@ pub enum DecisionCommand {
         /// Scope to one feature's decisions.
         #[arg(long, value_name = "FEATURE")]
         feature: Option<String>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum DecisionSetCommand {
+    #[command(about = "Draft a DecisionSet from YAML, fenced YAML, or plain text")]
+    Draft {
+        #[arg(
+            long,
+            value_name = "PATH",
+            conflicts_with = "from_text",
+            help = "Read DecisionSet YAML, or markdown containing a yaml fenced block"
+        )]
+        from: Option<PathBuf>,
+        #[arg(
+            long,
+            value_name = "TEXT",
+            help = "Infer a reviewable DecisionSet draft from plain text"
+        )]
+        from_text: Option<String>,
+        #[arg(long, value_name = "PATH", help = "Write the draft output to a file")]
+        output: Option<PathBuf>,
+        #[arg(long, help = "Emit the planned DecisionSet as JSON")]
+        json: bool,
+    },
+    #[command(about = "Atomically lock a DecisionSet and its child decisions")]
+    Lock {
+        #[arg(
+            long,
+            value_name = "PATH",
+            help = "Read DecisionSet YAML, or markdown containing a yaml fenced block"
+        )]
+        from: PathBuf,
+        #[arg(long, help = "Preview the lock without writing decision cards")]
+        dry_run: bool,
+        #[arg(long, help = "Emit a stable JSON receipt")]
+        json: bool,
+        #[arg(long, help = "Print the nested set after locking")]
+        show: bool,
+    },
+    #[command(about = "Repair one compressed summary into a DecisionSet replacement")]
+    Repair {
+        id: String,
+        #[arg(
+            long,
+            value_name = "PATH",
+            help = "Read replacement DecisionSet YAML, or markdown containing a yaml fenced block"
+        )]
+        from: PathBuf,
+        #[arg(long, help = "Preview the repair without writing decision cards")]
+        dry_run: bool,
+        #[arg(long, help = "Emit a stable JSON receipt")]
+        json: bool,
+    },
+    #[command(about = "Archive a DecisionSet record with an explicit child scope")]
+    Archive {
+        id: String,
+        #[arg(long, help = "Archive only the DecisionSet grouping record")]
+        set_only: bool,
+        #[arg(
+            long,
+            help = "Archive the DecisionSet grouping record and all child decisions"
+        )]
+        include_children: bool,
+    },
+    #[command(about = "Show a locked DecisionSet by id")]
+    Show {
+        id: String,
+        #[arg(long, help = "Emit a stable JSON projection")]
+        json: bool,
     },
 }
 

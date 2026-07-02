@@ -54,7 +54,10 @@ fn codex_project_matching_excludes_ambiguous_sessions_by_default() {
     assert!(!ambiguous.visible_in_project_by_default("/tmp/repo"));
 
     let explicit = ambiguous.project_match_reasons("/tmp/repo", Some("ambiguous"), false);
-    assert_eq!(explicit, vec!["explicit_session"]);
+    assert!(
+        explicit.is_empty(),
+        "explicit session filters still require project evidence: {explicit:?}"
+    );
     let global = ambiguous.project_match_reasons("/tmp/repo", None, true);
     assert_eq!(global, vec!["scope_global"]);
 }

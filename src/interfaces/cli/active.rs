@@ -11,9 +11,9 @@ use std::collections::{HashMap, HashSet};
 
 use anyhow::{Result, bail};
 
+use crate::domain::card;
 use crate::domain::gate_lock;
 use crate::domain::run::{self, Presence, SessionActivity};
-use crate::domain::{card, feature};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::table;
 use crate::foundation::core::time::utc_now_timestamp;
@@ -117,52 +117,8 @@ pub fn run(args: ActiveArgs) -> Result<()> {
     Ok(())
 }
 
-pub(super) fn archive_summary_line_for_paths(paths: &MaestroPaths) -> Option<String> {
-    archive_readout(paths)
-        .ok()
-        .and_then(|readout| archive_summary_line(&readout))
-}
-
-#[derive(Default)]
-struct ArchiveReadout {
-    archive_now: usize,
-    release_only: usize,
-    blocked: usize,
-}
-
-fn archive_readout(paths: &MaestroPaths) -> Result<ArchiveReadout> {
-    let mut readout = ArchiveReadout::default();
-    for candidate in feature::archive_candidates(paths, &feature::ArchiveGateEvidence::default())? {
-        match candidate.action {
-            feature::ArchiveCandidateAction::ArchiveNow => readout.archive_now += 1,
-            feature::ArchiveCandidateAction::ReleaseOnly => readout.release_only += 1,
-            feature::ArchiveCandidateAction::Blocked => readout.blocked += 1,
-            feature::ArchiveCandidateAction::NeedsClose
-            | feature::ArchiveCandidateAction::NeedsDecision => {}
-        }
-    }
-    Ok(readout)
-}
-
-fn archive_summary_line(readout: &ArchiveReadout) -> Option<String> {
-    let mut parts = Vec::new();
-    if readout.archive_now > 0 {
-        parts.push(format!("ARCHIVE_NOW={}", readout.archive_now));
-    }
-    if readout.release_only > 0 {
-        parts.push(format!("RELEASE_ONLY={}", readout.release_only));
-    }
-    if readout.blocked > 0 {
-        parts.push(format!("BLOCKED={}", readout.blocked));
-    }
-    if parts.is_empty() {
-        None
-    } else {
-        Some(format!(
-            "[archive] {}; inspect: maestro archive candidates",
-            parts.join(" ")
-        ))
-    }
+pub(super) fn archive_summary_line_for_paths(_paths: &MaestroPaths) -> Option<String> {
+    None
 }
 
 fn release_ownership(paths: &MaestroPaths, args: ActiveReleaseArgs) -> Result<()> {
@@ -1072,23 +1028,6 @@ mod tests {
         assert_eq!(
             presence_label(Presence::Unconfirmed, 121),
             "[unconfirmed 121m]"
-        );
-    }
-
-    #[test]
-    fn archive_summary_line_prints_only_nonzero_counts() {
-        assert!(archive_summary_line(&ArchiveReadout::default()).is_none());
-
-        let line = archive_summary_line(&ArchiveReadout {
-            archive_now: 2,
-            release_only: 1,
-            blocked: 0,
-        })
-        .expect("nonzero archive readout should render");
-
-        assert_eq!(
-            line,
-            "[archive] ARCHIVE_NOW=2 RELEASE_ONLY=1; inspect: maestro archive candidates"
         );
     }
 }

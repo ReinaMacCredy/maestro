@@ -320,3 +320,34 @@ fn session_grep_matches_explicit_transcript_session_filter() {
     assert_eq!(session_json["hits"][0]["proof_eligible"], false);
     assert!(!session_out.contains("hunter2"));
 }
+
+#[test]
+fn explicit_transcript_session_filter_does_not_cross_project_boundary() {
+    let fixture = transcript_repo("grep-transcript-project-boundary");
+    let other = TestTempDir::new("grep-transcript-project-boundary-other");
+    git(&["init", "-q"], other.path());
+    stdout(
+        maestro(&["init", "--yes"], other.path()),
+        &["init", "--yes"],
+    );
+
+    let out = stdout(
+        maestro_with_env(
+            &[
+                "grep",
+                "--json",
+                "rocket corpus:transcript session:019f-transcript",
+            ],
+            other.path(),
+            &fixture.envs(),
+        ),
+        &[
+            "grep",
+            "--json",
+            "rocket corpus:transcript session:019f-transcript",
+        ],
+    );
+    let json: Value = serde_json::from_str(&out).expect("grep output should be JSON");
+    assert_eq!(json["ok"], true);
+    assert_eq!(json["hits"].as_array().unwrap().len(), 0, "{json}");
+}

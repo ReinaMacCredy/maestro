@@ -435,7 +435,7 @@ pub(crate) fn build_loop_next_report_from_snapshot(
     git: Option<&GitReadout>,
     mut warnings: Vec<String>,
 ) -> Result<loop_recipes::LoopNextReport> {
-    let readiness = loop_readiness_index(paths, &mut warnings);
+    let readiness = loop_readiness_index(task_entries);
     let tasks = task_entries
         .iter()
         .map(|entry| loop_task_input(entry, &readiness))
@@ -761,20 +761,18 @@ struct LoopReadinessIndex {
     remaining_blockers: BTreeMap<String, Vec<String>>,
 }
 
-fn loop_readiness_index(paths: &MaestroPaths, warnings: &mut Vec<String>) -> LoopReadinessIndex {
-    let projection = match task::readiness::projection(
-        paths,
-        task::readiness::ReadinessFilter {
+fn loop_readiness_index(task_entries: &[task::TaskEntry]) -> LoopReadinessIndex {
+    let tasks = task_entries
+        .iter()
+        .map(|entry| entry.task.clone())
+        .collect::<Vec<_>>();
+    let projection = task::ready_projection_from_records(
+        &tasks,
+        task::ReadinessFilter {
             blocked_next_limit: usize::MAX,
             ..Default::default()
         },
-    ) {
-        Ok(projection) => projection,
-        Err(error) => {
-            warnings.push(format!("ready projection unavailable: {error:#}"));
-            return LoopReadinessIndex::default();
-        }
-    };
+    );
     let mut index = LoopReadinessIndex::default();
     for row in projection
         .parallel_wave

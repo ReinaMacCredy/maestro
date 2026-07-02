@@ -1609,7 +1609,7 @@ fn mcp_serve_lists_tools_and_calls_status_over_stdio() {
     let tools = lines[1]["result"]["tools"]
         .as_array()
         .expect("invariant: tools/list should return an array");
-    assert_eq!(tools.len(), 39);
+    assert_eq!(tools.len(), 42);
     assert!(tools.iter().any(|tool| tool["name"] == "maestro_ready"));
     assert!(tools.iter().any(|tool| tool["name"] == "maestro_task_next"));
     assert!(
@@ -2278,6 +2278,148 @@ fn mcp_decision_list_windows_by_default_and_all_reaches_full() {
     assert!(
         !all_text.contains("recent") && all_text.matches("open").count() == 21,
         "all=true reaches the full decision history:\n{all_text}"
+    );
+}
+
+#[test]
+fn mcp_decision_set_tools_draft_lock_and_show_with_cli_envelopes() {
+    let temp = setup_repo("maestro-mcp-decision-set");
+    let repo = temp.path();
+    let yaml = r#"
+title: MCP DecisionSet
+children:
+  - key: first
+    title: First MCP child
+    decision: Keep first child separate.
+  - key: second
+    title: Second MCP child
+    decision: Keep second child separate.
+"#;
+    let draft_request = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "tools/call",
+        "params": {
+            "name": "maestro_decision_set_draft",
+            "arguments": {"yaml": yaml}
+        }
+    })
+    .to_string();
+    let dry_run_request = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 4,
+        "method": "tools/call",
+        "params": {
+            "name": "maestro_decision_set_lock",
+            "arguments": {"yaml": yaml, "dry_run": true}
+        }
+    })
+    .to_string();
+    let lock_request = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 5,
+        "method": "tools/call",
+        "params": {
+            "name": "maestro_decision_set_lock",
+            "arguments": {"yaml": yaml}
+        }
+    })
+    .to_string();
+
+    let initial_refs = [
+        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"#,
+        r#"{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}"#,
+        draft_request.as_str(),
+        dry_run_request.as_str(),
+        lock_request.as_str(),
+    ];
+    let initial = run_mcp_requests(repo, &initial_refs);
+    let tools = initial[1]["result"]["tools"]
+        .as_array()
+        .expect("invariant: tools/list should return tools");
+    for name in [
+        "maestro_decision_set_draft",
+        "maestro_decision_set_lock",
+        "maestro_decision_set_show",
+    ] {
+        assert!(
+            tools.iter().any(|tool| tool["name"] == name),
+            "{name} should be listed: {tools:#?}"
+        );
+    }
+    let lock_tool = tools
+        .iter()
+        .find(|tool| tool["name"] == "maestro_decision_set_lock")
+        .expect("lock tool should exist");
+    assert!(
+        !lock_tool["inputSchema"]["properties"]["dry_run"].is_null(),
+        "lock schema should advertise dry_run:\n{lock_tool}"
+    );
+
+    let draft: JsonValue = serde_json::from_str(
+        initial[2]["result"]["content"][0]["text"]
+            .as_str()
+            .expect("draft returns text"),
+    )
+    .expect("draft envelope parses");
+    assert_eq!(draft["ok"], JsonValue::Bool(true));
+    assert_eq!(draft["changed"], JsonValue::Bool(false));
+    let set_id = draft["result"]["set_id"]
+        .as_str()
+        .expect("set_id should be present")
+        .to_string();
+    assert!(set_id.starts_with("decset-mcp-decisionset-"));
+
+    let dry_run: JsonValue = serde_json::from_str(
+        initial[3]["result"]["content"][0]["text"]
+            .as_str()
+            .expect("dry-run returns text"),
+    )
+    .expect("dry-run envelope parses");
+    assert_eq!(dry_run["ok"], JsonValue::Bool(true));
+    assert_eq!(dry_run["changed"], JsonValue::Bool(false));
+    assert_eq!(dry_run["result"]["dry_run"], JsonValue::Bool(true));
+
+    let lock: JsonValue = serde_json::from_str(
+        initial[4]["result"]["content"][0]["text"]
+            .as_str()
+            .expect("lock returns text"),
+    )
+    .expect("lock envelope parses");
+    assert_eq!(lock["ok"], JsonValue::Bool(true));
+    assert_eq!(lock["changed"], JsonValue::Bool(true));
+    assert_eq!(lock["result"]["id"], JsonValue::String(set_id.clone()));
+
+    let show_request = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 6,
+        "method": "tools/call",
+        "params": {
+            "name": "maestro_decision_set_show",
+            "arguments": {"id": set_id}
+        }
+    })
+    .to_string();
+    let show_refs = [show_request.as_str()];
+    let show_frames = run_mcp_requests(repo, &show_refs);
+    let show: JsonValue = serde_json::from_str(
+        show_frames[0]["result"]["content"][0]["text"]
+            .as_str()
+            .expect("show returns text"),
+    )
+    .expect("show envelope parses");
+    assert_eq!(show["ok"], JsonValue::Bool(true));
+    assert_eq!(show["changed"], JsonValue::Bool(false));
+    assert_eq!(
+        show["result"]["kind"],
+        JsonValue::String("decision_set".into())
+    );
+    assert_eq!(
+        show["result"]["children"]
+            .as_array()
+            .expect("children")
+            .len(),
+        2
     );
 }
 

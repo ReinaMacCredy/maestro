@@ -7,8 +7,8 @@ use crate::domain::card::live_db;
 use crate::domain::card::query::{self, Coarse};
 use crate::domain::card::schema::{Card, CardType};
 use crate::domain::card::store::{self, CardHome};
+use crate::domain::task::NormalizedPlanTask;
 use crate::domain::task::lifecycle::{self, TransitionDetails};
-use crate::domain::task::plan::NormalizedPlanTask;
 use crate::domain::task::template::{TaskRecord, TaskState};
 use crate::foundation::core::fs::{
     append_text_file, ensure_dir, read_to_string_if_exists, write_string_if_unchanged,

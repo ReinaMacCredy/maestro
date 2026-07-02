@@ -7,6 +7,10 @@ use std::path::Path;
 use std::process::{Command, Output, Stdio};
 
 use card_support::{cards_repo, id_by_title};
+use maestro::domain::search::transcript::{
+    TranscriptConsentRecord, TranscriptConsentScope, TranscriptProvider, TranscriptSegmentInput,
+    TranscriptStore,
+};
 use serde_json::Value;
 
 fn maestro(cwd: &Path, args: &[&str]) -> Output {
@@ -17,6 +21,7 @@ fn maestro(cwd: &Path, args: &[&str]) -> Output {
         .env("MAESTRO_SESSION_ID", "test-driver")
         .env("MAESTRO_AUTO_UPDATE", "0")
         .env("CODEX_HOME", cwd.join(".codex-test-home"))
+        .env("MAESTRO_TRANSCRIPT_HOME", cwd.join(".transcript-test-home"))
         .output()
         .expect("invariant: compiled maestro binary should run in integration tests")
 }
@@ -38,6 +43,7 @@ fn record(cwd: &Path, payload: &str) {
         .current_dir(cwd)
         .env("MAESTRO_AUTO_UPDATE", "0")
         .env("CODEX_HOME", cwd.join(".codex-test-home"))
+        .env("MAESTRO_TRANSCRIPT_HOME", cwd.join(".transcript-test-home"))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -130,7 +136,7 @@ fn session_show_renders_joined_text_and_json_readouts() {
 }
 
 #[test]
-fn session_show_reports_archive_readout_without_mutating() {
+fn session_show_does_not_run_archive_readout_by_default() {
     let temp = cards_repo("session-show-archive-readout");
     let repo = temp.path();
     let feature_dir = repo.join(".maestro/cards/archivable-feature");
@@ -147,8 +153,8 @@ fn session_show_reports_archive_readout_without_mutating() {
 
     let text = run(repo, &["session", "show", "sess-archive"]);
     assert!(
-        text.contains("[archive] ARCHIVE_NOW=1; inspect: maestro archive candidates"),
-        "session show should include read-only archive summary:\n{text}"
+        !text.contains("[archive]"),
+        "session show should leave archive inspection to explicit archive commands:\n{text}"
     );
     assert!(
         repo.join(".maestro/cards/archivable-feature/card.yaml")
@@ -157,38 +163,92 @@ fn session_show_reports_archive_readout_without_mutating() {
     );
 }
 
-fn seed_codex_transcript(repo: &Path, session_id: &str) {
-    let dir = repo.join(".codex-test-home/sessions/2026/07/01");
-    fs::create_dir_all(&dir).expect("invariant: transcript dir should be creatable");
-    fs::write(
-        dir.join(format!("rollout-2026-07-01T00-00-00-{session_id}.jsonl")),
-        concat!(
-            "{\"timestamp\":\"2026-07-01T00:00:00Z\",\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"# AGENTS.md instructions\\n<INSTRUCTIONS>ignore</INSTRUCTIONS>\\n<environment_context>ignore</environment_context>\"}]}}\n",
-            "{\"timestamp\":\"2026-07-01T00:00:01Z\",\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"show the session transcript\"}]}}\n",
-            "{\"timestamp\":\"2026-07-01T00:00:02Z\",\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"reading the transcript now\"}]}}\n",
-            "{\"type\":\"response_item\",\"payload\":{\"type\":\"function_call\",\"name\":\"exec_command\",\"arguments\":\"secret=abc\"}}\n",
-            "{\"type\":\"response_item\",\"payload\":{\"type\":\"function_call\",\"name\":\"apply_patch\",\"arguments\":\"token=def\"}}\n",
-            "{\"type\":\"compacted\",\"payload\":{\"note\":\"private\"}}\n"
-        ),
-    )
-    .expect("invariant: transcript fixture should write");
+fn seed_redacted_transcript_store(repo: &Path, session_id: &str) {
+    let store = TranscriptStore::new(repo.join(".transcript-test-home"));
+    let workspace = repo.display().to_string();
+    store
+        .grant_consent(TranscriptConsentRecord {
+            provider: TranscriptProvider::Codex,
+            workspace: workspace.clone(),
+            scope: TranscriptConsentScope::Project,
+            granted: true,
+            reason: Some("test fixture".to_string()),
+        })
+        .expect("invariant: consent should write");
+    for input in [
+        TranscriptSegmentInput {
+            provider: TranscriptProvider::Codex,
+            session_id: session_id.to_string(),
+            segment_id: "user-1".to_string(),
+            source_kind: "codex_user_message".to_string(),
+            workspace: workspace.clone(),
+            text: "show the session transcript".to_string(),
+            raw_tool_arguments: None,
+            raw_tool_output: None,
+            raw_reasoning: None,
+            raw_environment: None,
+        },
+        TranscriptSegmentInput {
+            provider: TranscriptProvider::Codex,
+            session_id: session_id.to_string(),
+            segment_id: "assistant-1".to_string(),
+            source_kind: "codex_assistant_message".to_string(),
+            workspace: workspace.clone(),
+            text: "reading the transcript now".to_string(),
+            raw_tool_arguments: None,
+            raw_tool_output: None,
+            raw_reasoning: None,
+            raw_environment: None,
+        },
+        TranscriptSegmentInput {
+            provider: TranscriptProvider::Codex,
+            session_id: session_id.to_string(),
+            segment_id: "tool-1".to_string(),
+            source_kind: "codex_tool_call".to_string(),
+            workspace: workspace.clone(),
+            text: "tool call: exec_command".to_string(),
+            raw_tool_arguments: Some("secret=abc".to_string()),
+            raw_tool_output: None,
+            raw_reasoning: None,
+            raw_environment: None,
+        },
+        TranscriptSegmentInput {
+            provider: TranscriptProvider::Codex,
+            session_id: session_id.to_string(),
+            segment_id: "tool-2".to_string(),
+            source_kind: "codex_tool_call".to_string(),
+            workspace: workspace.clone(),
+            text: "tool call: apply_patch".to_string(),
+            raw_tool_arguments: Some("token=def".to_string()),
+            raw_tool_output: None,
+            raw_reasoning: None,
+            raw_environment: None,
+        },
+    ] {
+        store
+            .append_redacted_segment(input)
+            .expect("invariant: segment should append");
+    }
 }
 
 #[test]
-fn session_show_uses_local_codex_transcript_as_labeled_backfill() {
+fn session_show_uses_redacted_transcript_store_as_labeled_backfill() {
     let temp = cards_repo("session-show-transcript-backfill");
     let repo = temp.path();
-    seed_codex_transcript(repo, "legacy-sess");
+    seed_redacted_transcript_store(repo, "legacy-sess");
 
     let text = run(repo, &["session", "show", "legacy-sess"]);
     assert!(text.contains("commands: 2"), "{text}");
-    assert!(text.contains("compactions: 1"), "{text}");
+    assert!(text.contains("compactions: 0"), "{text}");
     assert!(
-        text.contains("activity: ledger + transcript backfill"),
+        text.contains("activity: ledger + transcript store"),
         "{text}"
     );
-    assert!(text.contains("transcript: backfill"), "{text}");
-    assert!(!text.contains("transcript backfill unavailable"), "{text}");
+    assert!(text.contains("transcript: transcript store"), "{text}");
+    assert!(
+        !text.contains("redacted transcript store unavailable"),
+        "{text}"
+    );
     assert!(!text.contains("Transcript:"), "{text}");
     assert!(
         !text.contains("secret=abc") && !text.contains("token=def"),
@@ -198,20 +258,13 @@ fn session_show_uses_local_codex_transcript_as_labeled_backfill() {
     let json_out = run(repo, &["session", "show", "legacy-sess", "--json"]);
     let parsed: Value = serde_json::from_str(&json_out).expect("session JSON should parse");
     assert_eq!(parsed["activity"]["commands"], 2);
-    assert_eq!(parsed["activity"]["compactions"], 1);
+    assert_eq!(parsed["activity"]["compactions"], 0);
     assert_eq!(
         parsed["activity"]["counts"]["transcript_command_observed"],
         2
     );
-    assert_eq!(
-        parsed["activity"]["counts"]["transcript_compaction_observed"],
-        1
-    );
-    assert_eq!(
-        parsed["sources"]["activity"],
-        "ledger + transcript backfill"
-    );
-    assert_eq!(parsed["sources"]["transcript"], "backfill");
+    assert_eq!(parsed["sources"]["activity"], "ledger + transcript store");
+    assert_eq!(parsed["sources"]["transcript"], "transcript store");
     assert!(
         parsed["gaps"].as_array().is_some_and(Vec::is_empty),
         "{parsed}"
@@ -239,10 +292,6 @@ fn session_show_uses_local_codex_transcript_as_labeled_backfill() {
         "{transcript_text}"
     );
     assert!(
-        transcript_text.contains("- compaction observed"),
-        "{transcript_text}"
-    );
-    assert!(
         !transcript_text.contains("# AGENTS.md instructions")
             && !transcript_text.contains("secret=abc")
             && !transcript_text.contains("token=def"),
@@ -260,7 +309,6 @@ fn session_show_uses_local_codex_transcript_as_labeled_backfill() {
     assert!(entries.iter().any(|entry| entry["role"] == "user"));
     assert!(entries.iter().any(|entry| entry["role"] == "assistant"));
     assert!(entries.iter().any(|entry| entry["kind"] == "tool_call"));
-    assert!(entries.iter().any(|entry| entry["kind"] == "compaction"));
     let raw = serde_json::to_string(&parsed).expect("session JSON should serialize");
     assert!(!raw.contains("secret=abc") && !raw.contains("token=def"));
 }

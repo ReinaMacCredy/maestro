@@ -1,12 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::fs::{self, File};
-use std::io::{BufRead, BufReader, ErrorKind};
-use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use serde::Serialize;
-use serde_json::Value;
 
+use crate::domain::search::transcript as transcript_search;
 use crate::domain::{card, task};
 use crate::foundation::core::paths::MaestroPaths;
 
@@ -125,7 +122,7 @@ fn session_readout_with_options(
     include_transcript: bool,
 ) -> Result<SessionReadout> {
     let activities = read_session_activity(paths, session_id)?;
-    let transcript = read_transcript_backfill(session_id, include_transcript)?;
+    let transcript = read_transcript_backfill(paths, session_id, include_transcript)?;
     let activity = summarize_activity(&activities, transcript.as_ref());
     let mut fold = fold_lifecycle(paths, session_id)?;
     for activity in &activities {
@@ -169,14 +166,14 @@ fn session_readout_with_options(
             lifecycle: "runs".to_string(),
             proof: "task store + run events".to_string(),
             transcript: if transcript.is_some() {
-                "backfill".to_string()
+                "transcript store".to_string()
             } else {
                 "unavailable".to_string()
             },
         },
         gaps: transcript
             .is_none()
-            .then(|| "transcript backfill unavailable".to_string())
+            .then(|| "redacted transcript store unavailable".to_string())
             .into_iter()
             .collect(),
         transcript: transcript.as_ref().and_then(|transcript| {
@@ -248,7 +245,7 @@ fn activity_source(
     transcript: Option<&TranscriptBackfill>,
 ) -> &'static str {
     if records.is_empty() && transcript.is_some() {
-        "ledger + transcript backfill"
+        "ledger + transcript store"
     } else {
         "ledger"
     }
@@ -314,163 +311,28 @@ fn fold_lifecycle(paths: &MaestroPaths, session_id: &str) -> Result<EventFold> {
 }
 
 fn read_transcript_backfill(
+    paths: &MaestroPaths,
     session_id: &str,
     include_entries: bool,
 ) -> Result<Option<TranscriptBackfill>> {
-    let Some(path) = find_transcript_file(session_id)? else {
+    let Some(readout) = transcript_search::session_readout(paths, session_id, include_entries)?
+    else {
         return Ok(None);
     };
-    summarize_transcript_file(&path, include_entries).map(Some)
-}
-
-fn find_transcript_file(session_id: &str) -> Result<Option<PathBuf>> {
-    let Some(root) = codex_sessions_dir() else {
-        return Ok(None);
-    };
-    find_transcript_file_under(&root, session_id)
-}
-
-fn codex_sessions_dir() -> Option<PathBuf> {
-    if let Some(home) = std::env::var_os("CODEX_HOME") {
-        return Some(PathBuf::from(home).join("sessions"));
-    }
-    std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".codex/sessions"))
-}
-
-fn find_transcript_file_under(root: &Path, session_id: &str) -> Result<Option<PathBuf>> {
-    match fs::read_dir(root) {
-        Ok(entries) => {
-            for entry in entries {
-                let entry = entry?;
-                let file_type = entry.file_type()?;
-                let path = entry.path();
-                if file_type.is_dir() {
-                    if let Some(found) = find_transcript_file_under(&path, session_id)? {
-                        return Ok(Some(found));
-                    }
-                } else if file_type.is_file()
-                    && path
-                        .file_name()
-                        .and_then(|name| name.to_str())
-                        .is_some_and(|name| name.ends_with(".jsonl") && name.contains(session_id))
-                {
-                    return Ok(Some(path));
-                }
-            }
-            Ok(None)
-        }
-        Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(error.into()),
-    }
-}
-
-fn summarize_transcript_file(path: &Path, include_entries: bool) -> Result<TranscriptBackfill> {
-    let file = File::open(path)?;
-    let mut backfill = TranscriptBackfill::default();
-    for line in BufReader::new(file).lines() {
-        let line = line?;
-        let Ok(value) = serde_json::from_str::<Value>(&line) else {
-            continue;
-        };
-        let ts = value
-            .get("timestamp")
-            .and_then(Value::as_str)
-            .map(str::to_string);
-        match value.get("type").and_then(Value::as_str) {
-            Some("compacted") => {
-                backfill.compactions += 1;
-                *backfill
-                    .counts
-                    .entry("transcript_compaction_observed".to_string())
-                    .or_default() += 1;
-                if include_entries {
-                    backfill.entries.push(SessionTranscriptEntry {
-                        kind: "compaction".to_string(),
-                        ts,
-                        role: None,
-                        name: None,
-                        text: None,
-                    });
-                }
-            }
-            Some("response_item")
-                if value
-                    .get("payload")
-                    .and_then(|payload| payload.get("type"))
-                    .and_then(Value::as_str)
-                    == Some("function_call") =>
-            {
-                backfill.commands += 1;
-                *backfill
-                    .counts
-                    .entry("transcript_command_observed".to_string())
-                    .or_default() += 1;
-                if include_entries
-                    && let Some(name) = value
-                        .get("payload")
-                        .and_then(|payload| payload.get("name"))
-                        .and_then(Value::as_str)
-                {
-                    backfill.entries.push(SessionTranscriptEntry {
-                        kind: "tool_call".to_string(),
-                        ts,
-                        role: None,
-                        name: Some(name.to_string()),
-                        text: None,
-                    });
-                }
-            }
-            Some("response_item")
-                if include_entries
-                    && value
-                        .get("payload")
-                        .and_then(|payload| payload.get("type"))
-                        .and_then(Value::as_str)
-                        == Some("message") =>
-            {
-                if let Some(entry) = transcript_message_entry(&value, ts) {
-                    backfill.entries.push(entry);
-                }
-            }
-            _ => {}
-        }
-    }
-    Ok(backfill)
-}
-
-fn transcript_message_entry(value: &Value, ts: Option<String>) -> Option<SessionTranscriptEntry> {
-    let payload = value.get("payload")?;
-    let role = payload.get("role").and_then(Value::as_str)?;
-    if !matches!(role, "user" | "assistant") {
-        return None;
-    }
-    let text = transcript_message_text(payload)?;
-    if is_bootstrap_context_message(&text) {
-        return None;
-    }
-    Some(SessionTranscriptEntry {
-        kind: "message".to_string(),
-        ts,
-        role: Some(role.to_string()),
-        name: None,
-        text: Some(text),
-    })
-}
-
-fn transcript_message_text(payload: &Value) -> Option<String> {
-    let content = payload.get("content")?.as_array()?;
-    let mut parts = Vec::new();
-    for part in content {
-        if let Some(text) = part.get("text").and_then(Value::as_str) {
-            parts.push(text);
-        }
-    }
-    let text = parts.join("\n");
-    (!text.trim().is_empty()).then_some(text)
-}
-
-fn is_bootstrap_context_message(text: &str) -> bool {
-    let trimmed = text.trim_start();
-    trimmed.starts_with("# AGENTS.md instructions")
-        || (trimmed.contains("<INSTRUCTIONS>") && trimmed.contains("<environment_context>"))
+    Ok(Some(TranscriptBackfill {
+        commands: readout.commands,
+        compactions: readout.compactions,
+        counts: readout.counts,
+        entries: readout
+            .entries
+            .into_iter()
+            .map(|entry| SessionTranscriptEntry {
+                kind: entry.kind,
+                ts: None,
+                role: entry.role,
+                name: entry.name,
+                text: entry.text,
+            })
+            .collect(),
+    }))
 }

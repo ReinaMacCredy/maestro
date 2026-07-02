@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: b30f225f5af3b3b253876427d1810f0f0f1bc0278268bc21219ffd02f537a12d -->
+<!-- maestro:cli-reference-sha256: 64b7374fb924d1c7c9bb5b3cde87258249b0be79bef7ed6d27e17c21135a0436 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -29,10 +29,15 @@ a spelling not found here is outside this skill's CLI surface.
 
 ## maestro decision
 
-- `maestro decision new <TITLE> [--context <CONTEXT>] [--feature <FEATURE>] [--lock] [--decision <DECISION>] [--rejected <REJECTED>]... [--preview <PREVIEW>] [--supersedes <SUPERSEDES>]... [--project <PROJECT>] [--id-only]` -- Open a structured decision fork (mints a decision card)
-- `maestro decision lock <ID> --decision <DECISION> [--rejected <REJECTED>]... [--preview <PREVIEW>] [--supersedes <SUPERSEDES>]...` -- Lock an open decision with the chosen answer
+- `maestro decision audit [--compressed] [--json]` -- Audit decision records for repairable conditions
+- `maestro decision set draft [--from <PATH>] [--from-text <TEXT>] [--output <PATH>] [--json]` -- Draft a DecisionSet from YAML, fenced YAML, or plain text
+- `maestro decision set lock --from <PATH> [--dry-run] [--json] [--show]` -- Atomically lock a DecisionSet and its child decisions
+- `maestro decision set repair <ID> --from <PATH> [--dry-run] [--json]` -- Repair one compressed summary into a DecisionSet replacement
+- `maestro decision set show <ID> [--json]` -- Show a locked DecisionSet by id
+- `maestro decision new <TITLE> [--context <CONTEXT>] [--feature <FEATURE>] [--lock] [--decision <DECISION>] [--rejected <REJECTED>]... [--preview <PREVIEW>] [--supersedes <SUPERSEDES>]... [--allow-summary-decision] [--project <PROJECT>] [--id-only]` -- Open a structured decision fork (mints a decision card)
+- `maestro decision lock <ID> --decision <DECISION> [--rejected <REJECTED>]... [--preview <PREVIEW>] [--supersedes <SUPERSEDES>]... [--allow-summary-decision]` -- Lock an open decision with the chosen answer
 - `maestro decision supersede <OLD_ID> --decision <DECISION> --reason <REASON> [--title <TITLE>] [--rejected <REJECTED>]... [--preview <PREVIEW>] [--id-only]` -- Replace a locked decision by superseding it
-- `maestro decision show <ID>` -- Show a decision card by id
+- `maestro decision show <ID> [--include-set]` -- Show a decision card by id
 - `maestro decision list [--all] [--feature <FEATURE>]` -- List decision cards (recent 20 by activity unless --all)
 
 ## maestro card

@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: 068afadfcf6d9583564f5a321fe673e2130fc1eea665d9fdc845b095bbaed764 -->
+<!-- maestro:cli-reference-sha256: e0f737bab208f76386db884fc98a53f7a346c8b2763e141b1ae9fdb5a674db16 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -94,6 +94,12 @@ a spelling not found here is outside this skill's CLI surface.
 - `maestro scorer run <CONTRACT_REF>` -- Run a typed scorer contract reference
 - `maestro scorer show <RECEIPT_REF>` -- Show one scorer receipt by memory-id#receipt-id
 - `maestro scorer list --memory <MEMORY_ID>` -- List scorer receipts for a Memory card
+
+## maestro decision
+
+- `maestro decision audit [--compressed] [--json]` -- Audit decision records for repairable conditions
+- `maestro decision set repair <ID> --from <PATH> [--dry-run] [--json]` -- Repair one compressed summary into a DecisionSet replacement
+- `maestro decision set show <ID> [--json]` -- Show a locked DecisionSet by id
 
 ## maestro card
 

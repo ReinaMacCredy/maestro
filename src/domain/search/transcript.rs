@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use regex::{Regex, RegexBuilder};
@@ -105,9 +105,6 @@ impl CodexTranscript {
         if scope_global {
             return vec!["scope_global".to_string()];
         }
-        if explicit_session.is_some_and(|session| session == self.session_id) {
-            return vec!["explicit_session".to_string()];
-        }
         let mut reasons = Vec::new();
         if self
             .workspace_roots
@@ -122,6 +119,10 @@ impl CodexTranscript {
             .is_some_and(|cwd| paths_overlap(cwd, current_workspace))
         {
             reasons.push("cwd".to_string());
+        }
+        if !reasons.is_empty() && explicit_session.is_some_and(|session| session == self.session_id)
+        {
+            reasons.push("explicit_session".to_string());
         }
         reasons.sort();
         reasons.dedup();
@@ -177,6 +178,22 @@ pub struct TranscriptIndexHealth {
     pub manifest_present: bool,
     pub sessions: usize,
     pub segments: usize,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct TranscriptSessionReadout {
+    pub commands: usize,
+    pub compactions: usize,
+    pub counts: BTreeMap<String, usize>,
+    pub entries: Vec<TranscriptSessionEntry>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TranscriptSessionEntry {
+    pub kind: String,
+    pub role: Option<String>,
+    pub name: Option<String>,
+    pub text: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -474,7 +491,10 @@ pub(crate) fn grep_transcript_parsed(
     raw_query: &str,
     parsed: &ParsedQuery,
 ) -> GrepEnvelope {
-    let load = match load_configured_store() {
+    let load = match load_configured_store_filtered(
+        parsed.filters.provider.as_deref(),
+        parsed.filters.session.as_deref(),
+    ) {
         Ok(load) => load,
         Err(diagnostic) => return unavailable_envelope_with(raw_query, parsed, diagnostic),
     };
@@ -514,6 +534,31 @@ pub(crate) fn attach_results(
     envelope.partial = true;
     envelope.diagnostics.extend(transcript.diagnostics);
     envelope
+}
+
+pub fn session_readout(
+    paths: &MaestroPaths,
+    session_id: &str,
+    include_entries: bool,
+) -> Result<Option<TranscriptSessionReadout>> {
+    let load = match load_configured_store_filtered(None, Some(session_id)) {
+        Ok(load) => load,
+        Err(diagnostic) if diagnostic.code == "transcript_corpus_unavailable" => return Ok(None),
+        Err(diagnostic) => bail!("{}: {}", diagnostic.code, diagnostic.message),
+    };
+    let target_workspace = paths.repo_root().display().to_string();
+    let mut readout = TranscriptSessionReadout::default();
+    for segment in consented_segments(&load) {
+        if segment.session_id != session_id {
+            continue;
+        }
+        let reasons = project_match_reasons(&segment, &target_workspace, Some(session_id), false);
+        if reasons.is_empty() {
+            continue;
+        }
+        observe_session_segment(&segment, include_entries, &mut readout);
+    }
+    Ok((!readout.counts.is_empty() || !readout.entries.is_empty()).then_some(readout))
 }
 
 pub fn parse_codex_transcript_jsonl(
@@ -690,6 +735,13 @@ fn unavailable_envelope_with(
 }
 
 fn load_configured_store() -> Result<TranscriptLoad, SearchDiagnostic> {
+    load_configured_store_filtered(None, None)
+}
+
+fn load_configured_store_filtered(
+    provider_filter: Option<&str>,
+    session_filter: Option<&str>,
+) -> Result<TranscriptLoad, SearchDiagnostic> {
     let Some(home) = global_transcript_home() else {
         return Err(unavailable_diagnostic());
     };
@@ -707,15 +759,23 @@ fn load_configured_store() -> Result<TranscriptLoad, SearchDiagnostic> {
     if consent_records.is_empty() {
         return Err(unavailable_diagnostic());
     }
-    let segments = load_stored_segments(&home)
-        .map_err(|error| transcript_store_diagnostic(format!("{error:#}")))?;
+    let segments = load_stored_segments(
+        &home,
+        transcript_provider_filter(provider_filter),
+        session_filter,
+    )
+    .map_err(|error| transcript_store_diagnostic(format!("{error:#}")))?;
     Ok(TranscriptLoad {
         consent_records,
         segments,
     })
 }
 
-fn load_stored_segments(root: &Path) -> Result<Vec<TranscriptStoredSegment>> {
+fn load_stored_segments(
+    root: &Path,
+    provider_filter: Option<TranscriptProvider>,
+    session_filter: Option<&str>,
+) -> Result<Vec<TranscriptStoredSegment>> {
     let segments_dir = root.join("segments");
     if !segments_dir.is_dir() {
         return Ok(Vec::new());
@@ -727,8 +787,18 @@ fn load_stored_segments(root: &Path) -> Result<Vec<TranscriptStoredSegment>> {
         TranscriptProvider::Claude,
         TranscriptProvider::Factory,
     ] {
+        if provider_filter.is_some_and(|filter| filter != provider) {
+            continue;
+        }
         let provider_dir = segments_dir.join(provider.as_str());
         if !provider_dir.is_dir() {
+            continue;
+        }
+        if let Some(session_id) = session_filter {
+            let path = provider_dir.join(format!("{}.jsonl", safe_component(session_id)));
+            if path.is_file() {
+                load_segment_file(&path, &mut segments)?;
+            }
             continue;
         }
         let mut files = std::fs::read_dir(&provider_dir)
@@ -738,33 +808,44 @@ fn load_stored_segments(root: &Path) -> Result<Vec<TranscriptStoredSegment>> {
         files.sort_by_key(|entry| entry.path());
         for entry in files {
             let path = entry.path();
-            if path.extension().and_then(|ext| ext.to_str()) != Some("jsonl") {
-                continue;
-            }
-            let contents = std::fs::read_to_string(&path)
-                .with_context(|| format!("failed to read {}", path.display()))?;
-            for (idx, line) in contents.lines().enumerate() {
-                let line = line.trim();
-                if line.is_empty() {
-                    continue;
-                }
-                let segment: TranscriptStoredSegment =
-                    serde_json::from_str(line).with_context(|| {
-                        format!("failed to parse {} line {}", path.display(), idx + 1)
-                    })?;
-                if segment.schema_version != SEGMENT_SCHEMA_VERSION {
-                    bail!(
-                        "{} line {} has stale transcript segment schema {}",
-                        path.display(),
-                        idx + 1,
-                        segment.schema_version
-                    );
-                }
-                segments.push(segment);
+            if path.extension().and_then(|ext| ext.to_str()) == Some("jsonl") {
+                load_segment_file(&path, &mut segments)?;
             }
         }
     }
     Ok(segments)
+}
+
+fn transcript_provider_filter(value: Option<&str>) -> Option<TranscriptProvider> {
+    Some(match value? {
+        "codex" => TranscriptProvider::Codex,
+        "claude" => TranscriptProvider::Claude,
+        "factory" => TranscriptProvider::Factory,
+        _ => return None,
+    })
+}
+
+fn load_segment_file(path: &Path, segments: &mut Vec<TranscriptStoredSegment>) -> Result<()> {
+    let contents = std::fs::read_to_string(path)
+        .with_context(|| format!("failed to read {}", path.display()))?;
+    for (idx, line) in contents.lines().enumerate() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let segment: TranscriptStoredSegment = serde_json::from_str(line)
+            .with_context(|| format!("failed to parse {} line {}", path.display(), idx + 1))?;
+        if segment.schema_version != SEGMENT_SCHEMA_VERSION {
+            bail!(
+                "{} line {} has stale transcript segment schema {}",
+                path.display(),
+                idx + 1,
+                segment.schema_version
+            );
+        }
+        segments.push(segment);
+    }
+    Ok(())
 }
 
 fn transcript_store_diagnostic(message: String) -> SearchDiagnostic {
@@ -925,15 +1006,84 @@ fn project_match_reasons(
         return vec!["scope_global".to_string()];
     }
     let mut reasons = Vec::new();
-    if explicit_session.is_some_and(|session| session == segment.session_id) {
-        reasons.push("explicit_session".to_string());
-    }
     if paths_overlap(&segment.workspace, target_workspace) {
         reasons.push("workspace".to_string());
+    }
+    if !reasons.is_empty() && explicit_session.is_some_and(|session| session == segment.session_id)
+    {
+        reasons.push("explicit_session".to_string());
     }
     reasons.sort();
     reasons.dedup();
     reasons
+}
+
+fn observe_session_segment(
+    segment: &TranscriptStoredSegment,
+    include_entries: bool,
+    readout: &mut TranscriptSessionReadout,
+) {
+    if is_tool_call_segment(&segment.source_kind) {
+        readout.commands += 1;
+        *readout
+            .counts
+            .entry("transcript_command_observed".to_string())
+            .or_default() += 1;
+    } else if is_message_segment(&segment.source_kind) {
+        *readout
+            .counts
+            .entry("transcript_message_observed".to_string())
+            .or_default() += 1;
+    }
+    if include_entries && let Some(entry) = session_entry_from_segment(segment) {
+        readout.entries.push(entry);
+    }
+}
+
+fn session_entry_from_segment(segment: &TranscriptStoredSegment) -> Option<TranscriptSessionEntry> {
+    if is_message_segment(&segment.source_kind) {
+        return Some(TranscriptSessionEntry {
+            kind: "message".to_string(),
+            role: message_role(&segment.source_kind).map(str::to_string),
+            name: None,
+            text: Some(segment.redacted_text.clone()),
+        });
+    }
+    if is_tool_call_segment(&segment.source_kind) {
+        return Some(TranscriptSessionEntry {
+            kind: "tool_call".to_string(),
+            role: None,
+            name: tool_name_from_redacted_text(&segment.redacted_text),
+            text: None,
+        });
+    }
+    None
+}
+
+fn is_message_segment(source_kind: &str) -> bool {
+    source_kind.ends_with("_user_message") || source_kind.ends_with("_assistant_message")
+}
+
+fn message_role(source_kind: &str) -> Option<&'static str> {
+    if source_kind.ends_with("_user_message") {
+        Some("user")
+    } else if source_kind.ends_with("_assistant_message") {
+        Some("assistant")
+    } else {
+        None
+    }
+}
+
+fn is_tool_call_segment(source_kind: &str) -> bool {
+    source_kind.ends_with("_tool_call") || source_kind.ends_with("_tool_use")
+}
+
+fn tool_name_from_redacted_text(text: &str) -> Option<String> {
+    text.strip_prefix("tool call: ")
+        .or_else(|| text.strip_prefix("tool use: "))
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
 }
 
 fn evaluate_expr(
@@ -1251,15 +1401,35 @@ fn is_bootstrap_context_text(text: &str) -> bool {
 }
 
 fn paths_overlap(left: &str, right: &str) -> bool {
+    if left.trim().is_empty() || right.trim().is_empty() {
+        return false;
+    }
     let left = normalized_path(left);
     let right = normalized_path(right);
     left == right || left.starts_with(&right) || right.starts_with(&left)
 }
 
 fn normalized_path(path: &str) -> PathBuf {
-    Path::new(path)
+    let path = Path::new(path)
         .canonicalize()
-        .unwrap_or_else(|_| PathBuf::from(path))
+        .unwrap_or_else(|_| PathBuf::from(path));
+    normalize_path_components(&path)
+}
+
+fn normalize_path_components(path: &Path) -> PathBuf {
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::Prefix(prefix) => normalized.push(prefix.as_os_str()),
+            Component::RootDir => normalized.push(component.as_os_str()),
+            Component::CurDir => {}
+            Component::ParentDir => {
+                normalized.pop();
+            }
+            Component::Normal(part) => normalized.push(part),
+        }
+    }
+    normalized
 }
 
 fn redact_text(text: &str) -> (String, Vec<String>) {
@@ -1299,5 +1469,74 @@ fn safe_component(value: &str) -> String {
         "unknown".to_string()
     } else {
         component
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn segment(session_id: &str, workspace: &str) -> TranscriptStoredSegment {
+        TranscriptStoredSegment {
+            schema_version: SEGMENT_SCHEMA_VERSION.to_string(),
+            provider: TranscriptProvider::Codex,
+            session_id: session_id.to_string(),
+            segment_id: "seg-1".to_string(),
+            source_kind: "codex_user_message".to_string(),
+            workspace: workspace.to_string(),
+            authority: "transcript_context".to_string(),
+            proof_eligible: false,
+            redacted_text: "hello".to_string(),
+            redacted_text_hash: "sha256:test".to_string(),
+            redaction: TranscriptRedactionMetadata {
+                state: "redacted".to_string(),
+                excluded: Vec::new(),
+            },
+            excluded_fields: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn explicit_session_filter_still_requires_workspace_overlap() {
+        let segment = segment("sess-1", "/tmp/maestro-alpha");
+        assert!(
+            project_match_reasons(&segment, "/tmp/maestro-beta", Some("sess-1"), false).is_empty()
+        );
+        assert_eq!(
+            project_match_reasons(&segment, "/tmp/maestro-alpha", Some("sess-1"), false),
+            vec!["explicit_session".to_string(), "workspace".to_string()]
+        );
+    }
+
+    #[test]
+    fn parsed_codex_explicit_session_filter_still_requires_workspace_overlap() {
+        let transcript = CodexTranscript {
+            provider: TranscriptProvider::Codex,
+            session_id: "sess-1".to_string(),
+            cwd: Some("/tmp/maestro-alpha".to_string()),
+            workspace_roots: Vec::new(),
+            segments: Vec::new(),
+        };
+        assert!(
+            transcript
+                .project_match_reasons("/tmp/maestro-beta", Some("sess-1"), false)
+                .is_empty()
+        );
+        assert_eq!(
+            transcript.project_match_reasons("/tmp/maestro-alpha", Some("sess-1"), false),
+            vec!["cwd".to_string(), "explicit_session".to_string()]
+        );
+    }
+
+    #[test]
+    fn path_overlap_uses_components_not_sibling_prefixes() {
+        assert!(!paths_overlap(
+            "/tmp/maestro-alpha",
+            "/tmp/maestro-alpha-copy"
+        ));
+        assert!(paths_overlap(
+            "/tmp/maestro-alpha/child/..",
+            "/tmp/maestro-alpha"
+        ));
     }
 }

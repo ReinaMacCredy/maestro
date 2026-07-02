@@ -271,7 +271,7 @@ fn build_task_next_report(paths: &MaestroPaths) -> Result<StatusReport> {
             Ok(task) if task.state.is_live() => {
                 current_task = Some(task.id.clone());
                 current_feature = task.feature_id.clone();
-                task_action(paths, &task)?
+                task_action(paths, &task, &tasks)?
             }
             Ok(task) => {
                 warnings.push(WarningJson {
@@ -297,7 +297,7 @@ fn build_task_next_report(paths: &MaestroPaths) -> Result<StatusReport> {
 
     let next_action = match current_task_action {
         Some(action) => Some(action),
-        None => choose_next_task_action(paths, &live_tasks)?,
+        None => choose_next_task_action(paths, &live_tasks, &tasks)?,
     };
     let proof_concern = focal_proof_concern(paths, next_action.as_ref(), &live_tasks);
     let ready_to_close_features = ready_to_close_features(&features);
@@ -742,7 +742,7 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
             Ok(task) if task.state.is_live() => {
                 current_task = Some(task.id.clone());
                 current_feature = task.feature_id.clone();
-                task_action(paths, &task)?
+                task_action(paths, &task, &tasks)?
             }
             Ok(task) => {
                 warnings.push(WarningJson {
@@ -770,9 +770,9 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
     for task in &live_tasks {
         rows.push(TaskRowJson {
             id: task.id.clone(),
-            state: task_state_label(paths, task)?,
+            state: task_state_label(task, &tasks),
             title: task.title.clone(),
-            next: compact_next(paths, task)?,
+            next: compact_next(paths, task, &tasks)?,
             inspect: format!("maestro task show {}", task.id),
             project: task.project.clone(),
         });
@@ -780,7 +780,7 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
 
     let next_action = match current_task_action {
         Some(action) => Some(action),
-        None => choose_next_task_action(paths, &live_tasks)?,
+        None => choose_next_task_action(paths, &live_tasks, &tasks)?,
     };
     let proof_concern = focal_proof_concern(paths, next_action.as_ref(), &live_tasks);
     let ready_to_close_features = ready_to_close_features(&features);
@@ -888,6 +888,7 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
 fn choose_next_task_action(
     paths: &MaestroPaths,
     tasks: &[TaskRecord],
+    all_tasks: &[TaskRecord],
 ) -> Result<Option<NextAction>> {
     for state in [
         TaskState::NeedsVerification,
@@ -901,11 +902,9 @@ fn choose_next_task_action(
             .filter(|task| task.state == state)
             .filter(|task| {
                 state != TaskState::Ready
-                    || task::readiness::remaining_start_blockers(paths, task)
-                        .map(|remaining| remaining.is_empty())
-                        .unwrap_or(false)
+                    || task::remaining_start_blockers_from_records(task, all_tasks).is_empty()
             })
-            .find_map(|task| task_action(paths, task).transpose())
+            .find_map(|task| task_action(paths, task, all_tasks).transpose())
             .transpose()?
         {
             return Ok(Some(action));
@@ -915,9 +914,7 @@ fn choose_next_task_action(
         .iter()
         .find(|task| {
             task::has_unresolved_blockers(task)
-                || task::readiness::remaining_start_blockers(paths, task)
-                    .map(|remaining| !remaining.is_empty())
-                    .unwrap_or(false)
+                || !task::remaining_start_blockers_from_records(task, all_tasks).is_empty()
         })
         .map(blocked_action)
     {
@@ -926,12 +923,16 @@ fn choose_next_task_action(
     Ok(None)
 }
 
-fn task_action(paths: &MaestroPaths, task: &TaskRecord) -> Result<Option<NextAction>> {
+fn task_action(
+    paths: &MaestroPaths,
+    task: &TaskRecord,
+    all_tasks: &[TaskRecord],
+) -> Result<Option<NextAction>> {
     if task::has_unresolved_blockers(task) {
         return Ok(Some(blocked_action(task)));
     }
     if task.state == TaskState::Ready
-        && !task::readiness::remaining_start_blockers(paths, task)?.is_empty()
+        && !task::remaining_start_blockers_from_records(task, all_tasks).is_empty()
     {
         return Ok(None);
     }
@@ -1013,21 +1014,23 @@ fn blocked_action(task: &TaskRecord) -> NextAction {
     )
 }
 
-fn compact_next(paths: &MaestroPaths, task: &TaskRecord) -> Result<String> {
-    Ok(task_action(paths, task)?
+fn compact_next(
+    paths: &MaestroPaths,
+    task: &TaskRecord,
+    all_tasks: &[TaskRecord],
+) -> Result<String> {
+    Ok(task_action(paths, task, all_tasks)?
         .map(|action| action.kind)
         .unwrap_or_else(|| "status".to_string()))
 }
 
-fn task_state_label(paths: &MaestroPaths, task: &TaskRecord) -> Result<String> {
+fn task_state_label(task: &TaskRecord, all_tasks: &[TaskRecord]) -> String {
     if task::has_unresolved_blockers(task)
-        || task::readiness::remaining_start_blockers(paths, task)
-            .map(|remaining| !remaining.is_empty())
-            .unwrap_or(false)
+        || !task::remaining_start_blockers_from_records(task, all_tasks).is_empty()
     {
-        Ok(format!("{} / blocked", task.state.as_str()))
+        format!("{} / blocked", task.state.as_str())
     } else {
-        Ok(task.state.as_str().to_string())
+        task.state.as_str().to_string()
     }
 }
 

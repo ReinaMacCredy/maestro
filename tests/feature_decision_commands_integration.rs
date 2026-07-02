@@ -2836,6 +2836,516 @@ fn decision_new_list_show_mint_card_ids_and_preserve_template() {
 }
 
 #[test]
+fn decision_lock_blocks_compressed_summary_unless_override_is_audited() {
+    let temp_dir = TestTempDir::new("maestro-decision-compressed-summary");
+    init_git_marker(temp_dir.path());
+    stdout(
+        maestro(&["init", "--yes"], temp_dir.path()),
+        &["init", "--yes"],
+    );
+
+    let summary = "Locked all 10 remaining recommendations as design decisions.\n- dec-task-setup-uses-one-flag-per-task-first-5e9b\n- dec-setup-blockers-use-local-aliases-b4f0\n- dec-task-rows-store-blocker-lane-gate-fields-78f7";
+    let blocked_args = [
+        "decision",
+        "new",
+        "Compressed lock all summary",
+        "--lock",
+        "--decision",
+        summary,
+        "--rejected",
+        "separate decisions: skipped",
+    ];
+    let blocked = assert_failure(maestro(&blocked_args, temp_dir.path()), &blocked_args);
+    assert!(
+        blocked.contains("compressed multi-decision summary"),
+        "{blocked}"
+    );
+    assert!(blocked.contains("--allow-summary-decision"), "{blocked}");
+
+    let allowed_args = [
+        "decision",
+        "new",
+        "Intentional summary",
+        "--lock",
+        "--decision",
+        summary,
+        "--rejected",
+        "separate decisions: intentionally not needed",
+        "--allow-summary-decision",
+    ];
+    let allowed = stdout(maestro(&allowed_args, temp_dir.path()), &allowed_args);
+    assert!(allowed.contains("locked "), "{allowed}");
+    let id = id_by_title(temp_dir.path(), "Intentional summary");
+    let show = stdout(
+        maestro(&["decision", "show", &id], temp_dir.path()),
+        &["decision", "show"],
+    );
+    assert!(show.contains("summary_override:"), "{show}");
+    assert!(show.contains("multiple_decision_ids"), "{show}");
+}
+
+#[test]
+fn decision_supersede_blocks_compressed_summary_before_opening_replacement() {
+    let temp_dir = TestTempDir::new("maestro-decision-supersede-compressed-summary");
+    init_git_marker(temp_dir.path());
+    stdout(
+        maestro(&["init", "--yes"], temp_dir.path()),
+        &["init", "--yes"],
+    );
+
+    let original_args = [
+        "decision",
+        "new",
+        "Original decision",
+        "--lock",
+        "--decision",
+        "Keep decisions atomic",
+        "--rejected",
+        "batch summary: ambiguous",
+    ];
+    stdout(maestro(&original_args, temp_dir.path()), &original_args);
+    let original_id = id_by_title(temp_dir.path(), "Original decision");
+    let summary = "Locked all 10 remaining recommendations as design decisions.\n- dec-task-setup-uses-one-flag-per-task-first-5e9b\n- dec-setup-blockers-use-local-aliases-b4f0\n- dec-task-rows-store-blocker-lane-gate-fields-78f7";
+
+    let supersede_args = [
+        "decision",
+        "supersede",
+        &original_id,
+        "--decision",
+        summary,
+        "--reason",
+        "new evidence arrived",
+        "--title",
+        "Compressed replacement",
+        "--rejected",
+        "separate decisions: skipped",
+    ];
+    let blocked = assert_failure(maestro(&supersede_args, temp_dir.path()), &supersede_args);
+    assert!(
+        blocked.contains("compressed multi-decision summary"),
+        "{blocked}"
+    );
+
+    let list = stdout(
+        maestro(&["decision", "list", "--all"], temp_dir.path()),
+        &["decision", "list", "--all"],
+    );
+    assert!(list.contains("Original decision"), "{list}");
+    assert!(
+        !list.contains("Compressed replacement"),
+        "supersede should reject the summary before opening a replacement:\n{list}"
+    );
+}
+
+#[test]
+fn decision_set_draft_lock_dry_run_and_show_round_trip() {
+    let temp_dir = TestTempDir::new("maestro-decision-set-cli");
+    init_git_marker(temp_dir.path());
+    stdout(
+        maestro(&["init", "--yes"], temp_dir.path()),
+        &["init", "--yes"],
+    );
+    let input = temp_dir.path().join("decision-set.yml");
+    fs::write(
+        &input,
+        r#"
+title: Lock all DecisionSet forks
+children:
+  - key: storage-shape
+    title: Storage shape
+    decision: Use one DecisionSet plus child decisions.
+  - key: cli-output
+    title: CLI output
+    decision: Show compact receipts by default.
+"#,
+    )
+    .expect("invariant: input should be writable");
+    let input_arg = input.to_string_lossy().to_string();
+
+    let draft_args = [
+        "decision",
+        "set",
+        "draft",
+        "--from",
+        input_arg.as_str(),
+        "--json",
+    ];
+    let draft = stdout(maestro(&draft_args, temp_dir.path()), &draft_args);
+    let draft_json: JsonValue = serde_json::from_str(&draft).expect("draft JSON should parse");
+    let set_id = draft_json["set_id"]
+        .as_str()
+        .expect("set_id should be present")
+        .to_string();
+    assert!(set_id.starts_with("decset-lock-all-decisionset-forks-"));
+    assert_eq!(
+        draft_json["children"].as_array().expect("children").len(),
+        2
+    );
+
+    let dry_run_args = [
+        "decision",
+        "set",
+        "lock",
+        "--from",
+        input_arg.as_str(),
+        "--dry-run",
+        "--json",
+    ];
+    let dry_run = stdout(maestro(&dry_run_args, temp_dir.path()), &dry_run_args);
+    let dry_run_json: JsonValue =
+        serde_json::from_str(&dry_run).expect("dry-run JSON should parse");
+    assert_eq!(dry_run_json["dry_run"], JsonValue::Bool(true));
+    assert_failure(
+        maestro(&["decision", "set", "show", &set_id], temp_dir.path()),
+        &["decision", "set", "show"],
+    );
+
+    let lock_args = ["decision", "set", "lock", "--from", input_arg.as_str()];
+    let locked = stdout(maestro(&lock_args, temp_dir.path()), &lock_args);
+    assert!(locked.contains(&format!("locked {set_id}")), "{locked}");
+    assert!(locked.contains("children: 2"), "{locked}");
+
+    let show_args = ["decision", "set", "show", &set_id, "--json"];
+    let show = stdout(maestro(&show_args, temp_dir.path()), &show_args);
+    let show_json: JsonValue = serde_json::from_str(&show).expect("show JSON should parse");
+    assert_eq!(show_json["id"], JsonValue::String(set_id.clone()));
+    assert_eq!(show_json["kind"], JsonValue::String("decision_set".into()));
+    assert_eq!(show_json["children"].as_array().expect("children").len(), 2);
+
+    let human = stdout(
+        maestro(&["decision", "set", "show", &set_id], temp_dir.path()),
+        &["decision", "set", "show"],
+    );
+    assert!(human.contains("Storage shape"), "{human}");
+    assert!(human.contains("CLI output"), "{human}");
+}
+
+#[test]
+fn decision_set_draft_accepts_fenced_yaml_and_from_text_warns() {
+    let temp_dir = TestTempDir::new("maestro-decision-set-draft-inputs");
+    init_git_marker(temp_dir.path());
+    stdout(
+        maestro(&["init", "--yes"], temp_dir.path()),
+        &["init", "--yes"],
+    );
+    let fenced = temp_dir.path().join("decision-set.md");
+    fs::write(
+        &fenced,
+        r#"```yaml
+title: Fenced decisions
+children:
+  - title: First ruling
+    decision: Use YAML.
+```
+"#,
+    )
+    .expect("invariant: fenced input should be writable");
+    let fenced_arg = fenced.to_string_lossy().to_string();
+    let fenced_args = [
+        "decision",
+        "set",
+        "draft",
+        "--from",
+        fenced_arg.as_str(),
+        "--json",
+    ];
+    let fenced_out = stdout(maestro(&fenced_args, temp_dir.path()), &fenced_args);
+    let fenced_json: JsonValue = serde_json::from_str(&fenced_out).expect("fenced JSON");
+    assert_eq!(
+        fenced_json["title"],
+        JsonValue::String("Fenced decisions".into())
+    );
+
+    let text_args = [
+        "decision",
+        "set",
+        "draft",
+        "--from-text",
+        "A. Use YAML\nB. Keep summary only",
+        "--json",
+    ];
+    let text_out = stdout(maestro(&text_args, temp_dir.path()), &text_args);
+    let text_json: JsonValue = serde_json::from_str(&text_out).expect("from-text JSON");
+    assert!(
+        text_json["warnings"]
+            .as_array()
+            .expect("warnings")
+            .iter()
+            .any(|warning| warning["code"] == "inferred_from_text"),
+        "{text_json}"
+    );
+}
+
+#[test]
+fn decision_audit_reports_compressed_candidates_with_evidence() {
+    let temp_dir = TestTempDir::new("maestro-decision-audit-compressed");
+    init_git_marker(temp_dir.path());
+    stdout(
+        maestro(&["init", "--yes"], temp_dir.path()),
+        &["init", "--yes"],
+    );
+
+    let summary = "Locked all remaining recommendations as design decisions.\n- dec-task-setup-uses-one-flag-per-task-first-5e9b\n- dec-setup-blockers-use-local-aliases-b4f0\n- dec-task-rows-store-blocker-lane-gate-fields-78f7";
+    stdout(
+        maestro(
+            &[
+                "decision",
+                "new",
+                "Intentional compressed summary",
+                "--lock",
+                "--decision",
+                summary,
+                "--rejected",
+                "separate decisions: intentionally deferred",
+                "--allow-summary-decision",
+            ],
+            temp_dir.path(),
+        ),
+        &["decision", "new"],
+    );
+    let id = id_by_title(temp_dir.path(), "Intentional compressed summary");
+
+    let audit_args = ["decision", "audit", "--compressed", "--json"];
+    let audit = stdout(maestro(&audit_args, temp_dir.path()), &audit_args);
+    let audit_json: JsonValue = serde_json::from_str(&audit).expect("audit JSON should parse");
+    let candidates = audit_json["candidates"]
+        .as_array()
+        .expect("candidates should be an array");
+    assert_eq!(candidates.len(), 1, "{audit_json}");
+    assert_eq!(candidates[0]["id"], JsonValue::String(id));
+    assert_eq!(candidates[0]["audited_override"], JsonValue::Bool(true));
+    assert!(
+        candidates[0]["signals"]
+            .as_array()
+            .expect("signals")
+            .iter()
+            .any(|signal| signal == "multiple_decision_ids"),
+        "{audit_json}"
+    );
+}
+
+#[test]
+fn decision_set_repair_dry_run_and_apply_supersedes_summary() {
+    let temp_dir = TestTempDir::new("maestro-decision-set-repair");
+    init_git_marker(temp_dir.path());
+    stdout(
+        maestro(&["init", "--yes"], temp_dir.path()),
+        &["init", "--yes"],
+    );
+
+    let summary = "Locked all remaining recommendations as design decisions.\n- dec-task-setup-uses-one-flag-per-task-first-5e9b\n- dec-setup-blockers-use-local-aliases-b4f0\n- dec-task-rows-store-blocker-lane-gate-fields-78f7";
+    stdout(
+        maestro(
+            &[
+                "decision",
+                "new",
+                "Compressed summary to repair",
+                "--lock",
+                "--decision",
+                summary,
+                "--rejected",
+                "separate decisions: intentionally deferred",
+                "--allow-summary-decision",
+            ],
+            temp_dir.path(),
+        ),
+        &["decision", "new"],
+    );
+    let old_id = id_by_title(temp_dir.path(), "Compressed summary to repair");
+    let replacement = temp_dir.path().join("replacement.yml");
+    fs::write(
+        &replacement,
+        r#"
+title: Expanded locked recommendations
+children:
+  - key: task-setup-flag
+    title: Task setup flag
+    decision: Use one setup flag per task.
+  - key: blocker-aliases
+    title: Blocker aliases
+    decision: Use local aliases for blocker ids.
+"#,
+    )
+    .expect("invariant: replacement input should be writable");
+    let replacement_arg = replacement.to_string_lossy().to_string();
+
+    let dry_run_args = [
+        "decision",
+        "set",
+        "repair",
+        &old_id,
+        "--from",
+        replacement_arg.as_str(),
+        "--dry-run",
+        "--json",
+    ];
+    let dry_run = stdout(maestro(&dry_run_args, temp_dir.path()), &dry_run_args);
+    let dry_run_json: JsonValue = serde_json::from_str(&dry_run).expect("dry-run JSON");
+    let set_id = dry_run_json["set_id"]
+        .as_str()
+        .expect("set_id should be present")
+        .to_string();
+    assert_eq!(dry_run_json["dry_run"], JsonValue::Bool(true));
+    assert_eq!(
+        dry_run_json["supersedes"],
+        JsonValue::String(old_id.clone())
+    );
+    let before = stdout(
+        maestro(&["decision", "show", &old_id], temp_dir.path()),
+        &["decision", "show"],
+    );
+    assert!(before.contains("status: locked"), "{before}");
+
+    let apply_args = [
+        "decision",
+        "set",
+        "repair",
+        &old_id,
+        "--from",
+        replacement_arg.as_str(),
+        "--json",
+    ];
+    let apply = stdout(maestro(&apply_args, temp_dir.path()), &apply_args);
+    let apply_json: JsonValue = serde_json::from_str(&apply).expect("apply JSON");
+    assert_eq!(apply_json["id"], JsonValue::String(set_id.clone()));
+    assert_eq!(apply_json["supersedes"], JsonValue::String(old_id.clone()));
+    assert_eq!(
+        apply_json["children"].as_array().expect("children").len(),
+        2
+    );
+
+    let old_show = stdout(
+        maestro(&["decision", "show", &old_id], temp_dir.path()),
+        &["decision", "show"],
+    );
+    assert!(old_show.contains("status: superseded"), "{old_show}");
+    assert!(
+        old_show.contains(&format!("superseded_by: {set_id}")),
+        "{old_show}"
+    );
+    let set_show = stdout(
+        maestro(&["decision", "set", "show", &set_id], temp_dir.path()),
+        &["decision", "set", "show"],
+    );
+    assert!(set_show.contains("kind: decision_set"), "{set_show}");
+    assert!(set_show.contains(&format!("- {old_id}")), "{set_show}");
+}
+
+#[test]
+fn decision_set_read_search_child_show_and_archive_scope_are_explicit() {
+    let temp_dir = TestTempDir::new("maestro-decision-set-read-surfaces");
+    init_git_marker(temp_dir.path());
+    stdout(
+        maestro(&["init", "--yes"], temp_dir.path()),
+        &["init", "--yes"],
+    );
+    let input = temp_dir.path().join("decision-set.yml");
+    fs::write(
+        &input,
+        r#"
+title: Read surface decisions
+children:
+  - key: child-one
+    title: Child one
+    decision: Keep child one separate.
+  - key: child-two
+    title: Child two
+    decision: Keep child two separate.
+"#,
+    )
+    .expect("invariant: decision set input should be writable");
+    let input_arg = input.to_string_lossy().to_string();
+    let draft = stdout(
+        maestro(
+            &[
+                "decision",
+                "set",
+                "draft",
+                "--from",
+                input_arg.as_str(),
+                "--json",
+            ],
+            temp_dir.path(),
+        ),
+        &["decision", "set", "draft"],
+    );
+    let draft_json: JsonValue = serde_json::from_str(&draft).expect("draft JSON");
+    let set_id = draft_json["set_id"]
+        .as_str()
+        .expect("set id should be present")
+        .to_string();
+    stdout(
+        maestro(
+            &["decision", "set", "lock", "--from", input_arg.as_str()],
+            temp_dir.path(),
+        ),
+        &["decision", "set", "lock"],
+    );
+    let show_json = stdout(
+        maestro(
+            &["decision", "set", "show", &set_id, "--json"],
+            temp_dir.path(),
+        ),
+        &["decision", "set", "show"],
+    );
+    let show_json: JsonValue = serde_json::from_str(&show_json).expect("set show JSON");
+    let children = show_json["children"].as_array().expect("children");
+    let child_id = children[0]["child_decision_id"]
+        .as_str()
+        .expect("child id should be present")
+        .to_string();
+    assert_eq!(children[0]["live"], JsonValue::Bool(true));
+
+    let list = stdout(
+        maestro(&["decision", "list", "--all"], temp_dir.path()),
+        &["decision", "list", "--all"],
+    );
+    assert!(list.contains("[set] Read surface decisions"), "{list}");
+    assert!(
+        list.contains(&format!("[child:{set_id}] Child one")),
+        "{list}"
+    );
+    let query = stdout(
+        maestro(&["query", "decisions", "--all"], temp_dir.path()),
+        &["query", "decisions", "--all"],
+    );
+    assert!(query.contains("[set] Read surface decisions"), "{query}");
+    assert!(
+        query.contains(&format!("[child:{set_id}] Child one")),
+        "{query}"
+    );
+
+    let child_show = stdout(
+        maestro(
+            &["decision", "show", &child_id, "--include-set"],
+            temp_dir.path(),
+        ),
+        &["decision", "show", "--include-set"],
+    );
+    assert!(child_show.contains("decision_set:"), "{child_show}");
+    assert!(
+        child_show.contains(&format!("  id: {set_id}")),
+        "{child_show}"
+    );
+    assert!(child_show.contains("  children: 2"), "{child_show}");
+
+    let human_set = stdout(
+        maestro(&["decision", "set", "show", &set_id], temp_dir.path()),
+        &["decision", "set", "show"],
+    );
+    assert!(human_set.contains("child_status:"), "{human_set}");
+    assert!(human_set.contains("live"), "{human_set}");
+    assert!(human_set.contains("Child one"), "{human_set}");
+
+    let archive_err = assert_failure(
+        maestro(&["decision", "set", "archive", &set_id], temp_dir.path()),
+        &["decision", "set", "archive"],
+    );
+    assert!(archive_err.contains("--set-only"), "{archive_err}");
+    assert!(archive_err.contains("--include-children"), "{archive_err}");
+}
+
+#[test]
 fn decision_supersede_creates_locked_replacement_and_marks_old_metadata_only() {
     let temp_dir = TestTempDir::new("maestro-decision-supersede-command");
     init_git_marker(temp_dir.path());
@@ -4951,10 +5461,7 @@ fn archive_command_candidates_check_and_apply_use_candidate_engine() {
         "{candidates}"
     );
     let status = stdout(maestro(&["status"], root), &["status"]);
-    assert!(
-        status.contains("[archive] ARCHIVE_NOW=1; inspect: maestro archive candidates"),
-        "{status}"
-    );
+    assert!(!status.contains("[archive]"), "{status}");
     let candidates_json = stdout(
         maestro(&["archive", "candidates", "--json"], root),
         &["archive", "candidates", "--json"],

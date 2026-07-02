@@ -1,6 +1,6 @@
 ---
 name: maestro-card
-version: 1.37.14
+version: 1.37.15
 description: "Active Maestro card work after design approval: use for implement, fix, verify, QA, close, release, continue, or unattended prompts like use loop, keep looping, work while away/asleep."
 ---
 
@@ -41,6 +41,11 @@ If the answer starts in design and the owning card/feature or fresh handoff is
 missing, stop. Bind chat-only or standalone Decision records to a Feature/card
 contract and refresh/finalize the handoff through the supported feature
 lifecycle path first. Progress rows cannot be used to implicitly end design.
+If the design approval included "lock all", "all rec", or all-recommendations
+decisions, confirm they landed as a DecisionSet or separate child decisions. Do
+not build on a compressed summary lock; run `maestro decision audit --compressed`
+and route repair through `maestro decision set repair` or back to
+`maestro-design`.
 
 When you start implementation, apply the session-owned main fast path first:
 if only your session is fresh, and dirty paths are current-session Maestro state

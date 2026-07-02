@@ -855,7 +855,9 @@ mod tests {
     use super::*;
     use crate::domain::card::schema::{Card, CardType};
     use crate::domain::card::store::{hash_id, load as load_card};
-    use crate::domain::decisions::schema::{DecisionRecord, DecisionStatus, DecisionStore};
+    use crate::domain::decisions::schema::{
+        DecisionRecord, DecisionRecordKind, DecisionStatus, DecisionStore,
+    };
     use crate::domain::feature::FeatureStatus;
     use crate::domain::feature::schema::FeatureRecord;
     use crate::domain::harness::{BacklogConfig, BacklogItem, HistoryEntry};
@@ -939,13 +941,22 @@ mod tests {
             id: id.to_string(),
             title: format!("Decision {id}"),
             status,
+            kind: DecisionRecordKind::Individual,
             feature: feature.map(str::to_string),
+            project: None,
             context: None,
             decision: None,
             rejected: Vec::new(),
             preview: None,
             supersedes: Vec::new(),
             superseded_by: None,
+            decision_set_id: None,
+            decision_set_children: Vec::new(),
+            source_approval: None,
+            advisor_review: None,
+            input_hash: None,
+            decision_set_schema_version: None,
+            summary_override: None,
             created_at: "2026-06-01T04:00:00Z".to_string(),
             locked_at: None,
         }

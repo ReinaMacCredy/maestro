@@ -24,7 +24,7 @@ use crate::domain::card::fold;
 use crate::domain::card::schema::{Card, CardType};
 use crate::domain::card::store::{self as card_store, CardHome, ResolvedCard};
 use crate::domain::decisions::query::DecisionSource;
-use crate::domain::decisions::schema::{DecisionRecord, DecisionStatus};
+use crate::domain::decisions::schema::{DecisionRecord, DecisionRecordKind, DecisionStatus};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::time::utc_now_timestamp;
 
@@ -101,13 +101,22 @@ fn record_from_native_card(card: Card) -> DecisionRecord {
         id: card.id,
         title: card.title,
         status: decision_status_from_word(&card.status).unwrap_or(DecisionStatus::Open),
+        kind: DecisionRecordKind::Individual,
         feature: card.parent,
+        project: card.project,
         context: card.description,
         decision: None,
         rejected: Vec::new(),
         preview: None,
         supersedes: Vec::new(),
         superseded_by: None,
+        decision_set_id: None,
+        decision_set_children: Vec::new(),
+        source_approval: None,
+        advisor_review: None,
+        input_hash: None,
+        decision_set_schema_version: None,
+        summary_override: None,
         created_at: card.created_at,
         locked_at: None,
     }
@@ -117,12 +126,14 @@ fn record_from_native_card(card: Card) -> DecisionRecord {
 /// the explicit `feature_parent` arg is only a fallback; passing the record's own
 /// `feature` keeps live-save and migration in step.
 fn card_for(record: &DecisionRecord) -> Result<Card> {
-    Ok(fold::decision_card(
+    let mut card = fold::decision_card(
         record.id.clone(),
         fold::record_to_mapping(record, "decision record")?,
         record.feature.clone(),
         &utc_now_timestamp(),
-    ))
+    );
+    card.project = record.project.clone();
+    Ok(card)
 }
 
 /// The decision's home in card mode, recovered from `card.parent`: per-feature
@@ -264,13 +275,22 @@ mod tests {
             id: "decision-002".to_string(),
             title: "Use a replay queue for hooks".to_string(),
             status: DecisionStatus::Locked,
+            kind: DecisionRecordKind::Individual,
             feature: Some("csv-export".to_string()),
+            project: None,
             context: Some("hooks dropped events under load".to_string()),
             decision: Some("buffer to a replay queue".to_string()),
             rejected: vec!["fire-and-forget".to_string()],
             preview: Some("queue depth gauge".to_string()),
             supersedes: vec!["decision-001".to_string()],
             superseded_by: None,
+            decision_set_id: None,
+            decision_set_children: Vec::new(),
+            source_approval: None,
+            advisor_review: None,
+            input_hash: None,
+            decision_set_schema_version: None,
+            summary_override: None,
             created_at: "2026-06-08T00:00:00Z".to_string(),
             locked_at: Some("2026-06-08T01:00:00Z".to_string()),
         }
