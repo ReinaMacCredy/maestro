@@ -1,5 +1,5 @@
 ---
-version: 1.29.11
+version: 1.29.12
 ---
 
 # Maestro Harness Protocol
@@ -86,36 +86,34 @@ When the user corrects your behavior, record it:
 
 ## Design
 
-For brainstorm or unsettled behavior, use the design loop. Map real code and
-artifacts, ask one open question at a time, lock each decision, and record the
-note. Do not batch-decide independent forks, edit locked decisions in place, or
-cross into implementation before the user approves build.
+For brainstorm/unsettled behavior, use the design loop: map real code/artifacts,
+ask one question at a time, lock each decision, record the note, and do not
+implement until build is approved. Do not batch independent forks or edit locked
+decisions.
 
-When the user says "lock all", "all rec", "all-recommendations", or otherwise
-settles multiple forks at once, preserve each fork as its own DecisionSet child
-record. Use `maestro decision set draft` / `maestro decision set lock` for the
-batch, or lock separate child decisions. Never compress a batch into one summary
-`maestro decision lock`; if one exists, run `maestro decision audit --compressed`
-and repair it with `maestro decision set repair`.
+For "lock all", "all rec", or "all-recommendations", preserve each fork as a
+DecisionSet child: use `maestro decision set draft` /
+`maestro decision set lock`, or separate child decisions. Never compress to one
+`maestro decision lock`; repair with `maestro decision audit --compressed` then
+`maestro decision set repair`.
 
-Before proposing an idea or reopening a settled question, search precedent with
-`maestro grep "<topic> corpus:memory"` and cite the best matching card, decision,
-task, proof, or note. Use `maestro card list --grep <topic> --archived` only for
-exact legacy rows or compatibility checks.
+Before new/reopened ideas, search `maestro grep "<topic> corpus:memory"` and
+cite the best card, decision, task, proof, or note. Use
+`maestro card list --grep <topic> --archived` only for exact legacy rows or
+compatibility checks.
 
 ## Coordination
 
-Linked-card inbox messages are advisory only. When order matters, record an
-explicit Task blocker or dependency; readiness, next, claim, and verification
-gates consult Task blockers, not messages or unread state.
+Inbox messages are advisory. If order matters, record a Task blocker/dependency;
+readiness, next, claim, and verification gates use blockers, not messages.
 
-The card store is shared state. In fan-out, the orchestrator performs
-store-mutating verbs; sub-agents return data unless isolated. Use worktrees for
-overlapping code or shared-store writes. Coordinate with `maestro active`,
-`[overlap]`, `[CONFLICT]`, `[busy]`, and `maestro loop show conflict-handoff`.
+The card store is shared state. In fan-out, the orchestrator owns store writes;
+sub-agents return data unless isolated. Use worktrees for overlapping code/store
+writes. Coordinate with `maestro active`, `[overlap]`, `[CONFLICT]`, `[busy]`,
+and `maestro loop show conflict-handoff`.
 
-A failed multi-file store command can be partial. Re-run it so Maestro reads the
-latest store and reapplies the intended change.
+If a multi-file store command fails, re-run it so Maestro rereads current state
+and reapplies the change.
 
 ## Harness Improvement
 
