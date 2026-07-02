@@ -21,7 +21,7 @@ Then read the Maestro artifacts it points at:
   sections such as `Language`, `Relationships`, and `Flagged ambiguities` for
   domain terms.
 - `.maestro/cards/<feature>/handoff.md` is the clean continuation index after
-  `maestro feature finalize`.
+  `maestro feature reconcile` and `maestro feature finalize`.
 - `.maestro/cards/<feature>/notes.md` carries dated context and corrections.
 - `maestro decision list --feature <id>` and `maestro decision show <id>` hold
   locked rulings and rejected alternatives.

@@ -1,6 +1,6 @@
 ---
 name: ask-maestro
-version: 1.0.2
+version: 1.0.3
 description: "Routes Maestro requests to the right shipped skill and lifecycle recipe. Use when the user asks what Maestro route, skill, loop, card, task, feature, setup, audit, design, bugfix, ship, archive, progress, or continuation workflow to use."
 disable-model-invocation: true
 ---
@@ -67,8 +67,9 @@ unsettled product, lifecycle, schema, command, or UX decision.
 
 Use Maestro artifacts instead of chat memory:
 
-- Design continuation: `maestro feature finalize <id>` writes the handoff; the
-  next session starts from that handoff.
+- Design continuation: `maestro feature reconcile <id>` writes or refreshes the
+  pre-finalize receipt, then `maestro feature finalize <id>` writes the handoff;
+  the next session starts from that handoff.
 - Active work continuation: `maestro status`, `maestro task show <id>`, and
   `maestro card show <id>` reveal the current task, locked acceptance, and
   proof state.

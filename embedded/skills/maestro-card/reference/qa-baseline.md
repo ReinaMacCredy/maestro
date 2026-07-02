@@ -9,8 +9,9 @@ card store after finalize; use Maestro commands to read it.
 
 - `maestro feature accept` is blocked on a missing or empty QA baseline.
 - `maestro feature accept` also requires a fresh finalized handoff; when the
-  blocker names handoff, run `maestro feature finalize <id>` first, then read
-  with `maestro feature spec <id>` or `maestro feature show <id>`.
+  blocker names handoff, run `maestro feature reconcile <id>` and then
+  `maestro feature finalize <id>` first, then read with
+  `maestro feature spec <id>` or `maestro feature show <id>`.
 - A behavioral amend added acceptance or area and the baseline must be fresh.
 - The feature touches user-visible, data, security, persistence,
   compatibility, release, or workflow behavior.

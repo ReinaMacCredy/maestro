@@ -1058,10 +1058,16 @@ fn finalize_receipt_error(id: &str, receipt: &ReconcileReceipt) -> String {
         }
     }
     out.push_str("next:\n");
-    out.push_str(&format!("  maestro feature reconcile {id}\n"));
-    out.push_str("details:\n");
-    out.push_str(&format!("  maestro feature reconcile {id} --full\n"));
-    out.push_str(&format!("  maestro feature reconcile {id} --json"));
+    out.push_str(&format!(
+        "  maestro feature reconcile {id}        # writes/refreshes receipt when clean\n"
+    ));
+    out.push_str("inspect:\n");
+    out.push_str(&format!(
+        "  maestro feature reconcile {id} --full # read-only\n"
+    ));
+    out.push_str(&format!(
+        "  maestro feature reconcile {id} --json # read-only"
+    ));
     out
 }
 

@@ -2018,6 +2018,19 @@ fn feature_finalize_requires_current_reconcile_receipt_and_reports_stale() {
         missing.contains("maestro feature reconcile finalize-gate"),
         "{missing}"
     );
+    assert!(
+        missing.contains("# writes/refreshes receipt when clean"),
+        "{missing}"
+    );
+    assert!(missing.contains("inspect:"), "{missing}");
+    assert!(
+        missing.contains("maestro feature reconcile finalize-gate --full # read-only"),
+        "{missing}"
+    );
+    assert!(
+        missing.contains("maestro feature reconcile finalize-gate --json # read-only"),
+        "{missing}"
+    );
 
     stdout(
         maestro(&["feature", "reconcile", "finalize-gate"], root),
@@ -2049,6 +2062,11 @@ fn feature_finalize_requires_current_reconcile_receipt_and_reports_stale() {
     assert!(stale.contains("current=sha256:"), "{stale}");
     assert!(
         stale.contains("maestro feature reconcile finalize-gate"),
+        "{stale}"
+    );
+    assert!(stale.contains("inspect:"), "{stale}");
+    assert!(
+        stale.contains("maestro feature reconcile finalize-gate --full # read-only"),
         "{stale}"
     );
 

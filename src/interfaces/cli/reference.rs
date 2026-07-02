@@ -138,6 +138,7 @@ const ASK_MAESTRO_COMMANDS: &[&str] = &[
     "maestro task list",
     "maestro feature new",
     "maestro feature set",
+    "maestro feature reconcile",
     "maestro feature finalize",
     "maestro feature reopen",
     "maestro feature show",
@@ -205,6 +206,7 @@ const MAESTRO_CARD_COMMANDS: &[&str] = &[
     "maestro task doctor",
     "maestro event create",
     "maestro event intervention",
+    "maestro feature reconcile",
     "maestro feature finalize",
     "maestro feature reopen",
     "maestro feature accept",
@@ -286,6 +288,7 @@ const MAESTRO_DESIGN_COMMANDS: &[&str] = &[
     "maestro loop validate",
     "maestro feature new",
     "maestro feature set",
+    "maestro feature reconcile",
     "maestro feature finalize",
     "maestro feature reopen",
     "maestro feature show",
@@ -620,6 +623,7 @@ mod tests {
         assert!(ask.contains("maestro status"), "{ask}");
         assert!(ask.contains("maestro loop next"), "{ask}");
         assert!(ask.contains("maestro task setup"), "{ask}");
+        assert!(ask.contains("maestro feature reconcile <ID>"), "{ask}");
         assert!(ask.contains("maestro feature finalize <ID>"), "{ask}");
         assert!(ask.contains("maestro feature reopen <ID>"), "{ask}");
         assert!(ask.contains("maestro harness apply <ID>"), "{ask}");
@@ -633,6 +637,7 @@ mod tests {
         assert!(card.contains("maestro task done <REF_OR_ID>"), "{card}");
         assert!(card.contains("maestro task complete <ID>"), "{card}");
         assert!(card.contains("maestro loop validate <NAME>"), "{card}");
+        assert!(card.contains("maestro feature reconcile <ID>"), "{card}");
         assert!(card.contains("maestro feature finalize <ID>"), "{card}");
         assert!(card.contains("maestro feature reopen <ID>"), "{card}");
         assert!(card.contains("maestro feature prepare <ID>"), "{card}");
@@ -648,6 +653,10 @@ mod tests {
 
         let design = render_cli_reference_for_skill("maestro-design");
         assert!(design.contains("maestro feature spec <ID>"), "{design}");
+        assert!(
+            design.contains("maestro feature reconcile <ID>"),
+            "{design}"
+        );
         assert!(design.contains("maestro feature finalize <ID>"), "{design}");
         assert!(design.contains("maestro feature reopen <ID>"), "{design}");
         assert!(design.contains("maestro decision lock <ID>"), "{design}");

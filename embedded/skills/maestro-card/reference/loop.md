@@ -75,6 +75,7 @@ tool, daemon, scheduler, or separate goal lifecycle. Existing feature, task,
 decision, proof, and QA gates remain the only durable contract.
 
 For a new broad goal, draft or update a proposed feature, run
+`feature reconcile` to write or refresh the pre-finalize receipt, then
 `feature finalize` to write the clean handoff, then accept it locally when the
 contract is explicit enough for Maestro's normal `feature accept` gate to pass.
 For a goal already backed by proposed, ready, or current work, continue into the
@@ -153,7 +154,7 @@ the same records and stop conditions.
 
 ## Boundaries
 
-Night MAY: `feature finalize`, `feature accept`, `feature prepare`,
+Night MAY: `feature reconcile`, `feature finalize`, `feature accept`, `feature prepare`,
 `task unblock` for local Maestro blockers, dependency additions covered by the
 accepted contract or blocker authority, `claim`, work, `complete`, `verify`,
 `note`, `block`, local per-step commits on the feature branch, QA-slice, and

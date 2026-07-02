@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: f0f51684dc0d70628de1b622ea38fa6be4aa3ffd9d42aba7ea6f726f44276cc3 -->
+<!-- maestro:cli-reference-sha256: 915afde51f8573233181477528e45c98025784dc2980363d38fcbaae38aba5ac -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -43,6 +43,7 @@ a spelling not found here is outside this skill's CLI surface.
 - `maestro feature set <ID> [--acceptance <ACCEPTANCE>]... [--area <AREA>]... [--non-goal <NON_GOAL>]... [--question <QUESTION>]... [--description <DESCRIPTION>] [--request <REQUEST>] [--type <INPUT_TYPE>]` -- Author a proposed feature's contract (replace or append fields)
 - `maestro feature finalize <ID>` -- Write or refresh the clean design handoff before accept/prepare
 - `maestro feature reopen <ID>` -- Reopen a DB-backed finalized feature into .maestro/workbench/<id>
+- `maestro feature reconcile <ID> [--full] [--json] [--apply-plan <PLAN_FILE>]` -- Report or apply feature contract reconciliation before finalize
 - `maestro feature show <ID>` -- Show a feature's status, full contract, and task counts
 - `maestro feature list [--all]` -- List features with their statuses and task counts
 

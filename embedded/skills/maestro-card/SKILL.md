@@ -1,6 +1,6 @@
 ---
 name: maestro-card
-version: 1.37.15
+version: 1.37.16
 description: "Active Maestro card work after design approval: use for implement, fix, verify, QA, close, release, continue, or unattended prompts like use loop, keep looping, work while away/asleep."
 ---
 
@@ -173,4 +173,4 @@ Read the reference for the job at hand; they share the ground rules below.
 
 ## Pipeline
 
-`maestro-design -> feature finalize -> [maestro-card: design-to-card gate -> qa-baseline -> feature accept -> prepare -> work -> verify -> qa-slice -> feature close]`
+`maestro-design -> feature reconcile -> feature finalize -> [maestro-card: design-to-card gate -> qa-baseline -> feature accept -> prepare -> work -> verify -> qa-slice -> feature close]`
