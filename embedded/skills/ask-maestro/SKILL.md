@@ -1,6 +1,6 @@
 ---
 name: ask-maestro
-version: 1.0.0
+version: 1.0.1
 description: "Routes Maestro requests to the right shipped skill and lifecycle recipe. Use when the user asks what Maestro route, skill, loop, card, task, feature, setup, audit, design, bugfix, ship, archive, progress, or continuation workflow to use."
 disable-model-invocation: true
 ---
@@ -21,6 +21,11 @@ session, run `maestro active` and respect any conflict-handoff hard stop.
 If the next move is still unclear, run `maestro loop next`. It is read-only and
 routes from local artifacts. Read the selected recipe with
 `maestro loop show <recipe>`.
+
+Rule: loop next recommends; outcome/proof/memory verbs write. Use
+`maestro loop outcome` to record structured attempt outcomes and
+`maestro loop improve` for read-only improvement proposals. No hidden stores,
+hidden schedulers, silent recipe mutation, and proof/QA bypass are forbidden.
 
 ## The Main Flow: Idea To Ship
 

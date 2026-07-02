@@ -1,6 +1,6 @@
 ---
 name: maestro-card
-version: 1.37.11
+version: 1.37.12
 description: "Active Maestro card work after design approval: use for implement, fix, verify, QA, close, release, continue, or unattended prompts like use loop, keep looping, work while away/asleep."
 ---
 
@@ -41,7 +41,12 @@ lifecycle grammar. Use `maestro loop show work` for task/card implementation,
 `maestro loop show ship` before close/release/archive gates,
 `maestro loop show unattended` for away-mode autonomy, and
 `maestro loop show learning` when recording reusable lessons. Writes still use
-the existing Maestro verbs named by the recipe. Custom card/run recipes are
+the existing Maestro verbs named by the recipe. Rule: loop next recommends;
+outcome/proof/memory verbs write. Use `maestro loop outcome` to append
+structured attempt outcomes, and `maestro loop improve` for read-only
+improvement proposals whose apply commands must be run explicitly. No hidden
+stores, hidden schedulers, silent recipe mutation, and proof/QA bypass are
+forbidden. Custom card/run recipes are
 allowed only when no shipped recipe fits, and must keep the same six phases,
 current Maestro verbs, hard stops, and continue output. Work Lease is only a
 choose-phase helper; it may select or reserve one safe unit, but it is not a

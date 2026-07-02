@@ -1,6 +1,6 @@
 ---
 name: maestro-setup
-version: 1.11.2
+version: 1.11.3
 description: "Setup Maestro in a project: use for init/install/sync/doctor, global skills, hooks, harness setup, or agent integration diagnosis/repair."
 ---
 
@@ -15,7 +15,11 @@ Recipe checkpoint: Maestro's main workflow is the loop. Use `maestro status`
 for current state and `maestro loop next` as the read-only router when the next
 lifecycle is not obvious. Setup writes still use the existing Maestro verbs
 named by this skill (`init`, `install`, `sync`, `doctor`, `upgrade`,
-`uninstall`, and `shell-init`), not hidden setup state.
+`uninstall`, and `shell-init`), not hidden setup state. Rule: loop next
+recommends; outcome/proof/memory verbs write. `maestro loop outcome` appends
+structured outcomes; `maestro loop improve` is a read-only proposer. No hidden
+stores, hidden schedulers, silent recipe mutation, and proof/QA bypass are
+forbidden.
 
 ## Use
 

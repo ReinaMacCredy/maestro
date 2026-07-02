@@ -1,5 +1,5 @@
 ---
-version: 1.29.6
+version: 1.29.7
 ---
 
 # Maestro Harness Protocol
@@ -31,6 +31,13 @@ artifacts and never writes cards, tasks, features, decisions, proof, QA, git,
 releases, archives, or files. After choosing, read the recipe with
 `maestro loop show <recipe>` and perform writes only through the existing
 Maestro verbs named by the recipe.
+
+Rule: loop next recommends; outcome/proof/memory verbs write. Use
+`maestro loop outcome` to append structured attempt outcomes after action, proof
+or repair. Use `maestro loop improve` for read-only improvement proposals over
+sourced outcomes; apply only by running the explicit memory, harness, proof, or
+QA command it prints. No hidden stores, hidden schedulers, silent recipe mutation,
+and proof/QA bypass are forbidden.
 
 Choose the closest shipped lifecycle recipe and stay inside its grammar:
 

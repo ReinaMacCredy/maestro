@@ -4,7 +4,9 @@ use std::fs;
 use std::os::unix::fs as unix_fs;
 use std::path::Path;
 use std::process::{Command, Output};
+use std::time::{SystemTime, UNIX_EPOCH};
 
+use maestro::foundation::core::time::format_utc_seconds_rfc3339_millis;
 use serde_json::Value;
 
 use support::TestTempDir;
@@ -14,6 +16,20 @@ fn maestro(cwd: &Path, args: &[&str]) -> Output {
         .args(args)
         .current_dir(cwd)
         .env("MAESTRO_AUTO_UPDATE", "0")
+        .output()
+        .expect("invariant: compiled maestro binary should run in integration tests")
+}
+
+fn maestro_with_env(cwd: &Path, args: &[&str], envs: &[(&str, &str)]) -> Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_maestro"));
+    command
+        .args(args)
+        .current_dir(cwd)
+        .env("MAESTRO_AUTO_UPDATE", "0");
+    for (key, value) in envs {
+        command.env(key, value);
+    }
+    command
         .output()
         .expect("invariant: compiled maestro binary should run in integration tests")
 }
@@ -40,6 +56,14 @@ fn stderr(cwd: &Path, args: &[&str]) -> String {
     String::from_utf8(output.stderr).expect("invariant: stderr should be UTF-8")
 }
 
+fn first_id(output: &str, prefix: &str) -> String {
+    output
+        .split_whitespace()
+        .find(|word| word.starts_with(prefix))
+        .unwrap_or_else(|| panic!("no {prefix} id in output:\n{output}"))
+        .to_string()
+}
+
 fn write_custom_recipe(repo: &Path, name: &str, body: &str) {
     let dir = repo.join(".maestro/loop-recipes");
     fs::create_dir_all(&dir).expect("custom recipe dir should be creatable");
@@ -48,6 +72,31 @@ fn write_custom_recipe(repo: &Path, name: &str, body: &str) {
 
 fn init_git_marker(repo: &Path) {
     fs::create_dir(repo.join(".git")).expect("invariant: .git marker should be creatable");
+}
+
+fn ts_minutes_ago(minutes: u64) -> String {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("invariant: clock is after the Unix epoch")
+        .as_secs();
+    format_utc_seconds_rfc3339_millis(now - minutes * 60)
+}
+
+fn seed_run(repo: &Path, session: &str, lines: &[String]) {
+    let run_dir = repo.join(".maestro/runs").join(session);
+    fs::create_dir_all(&run_dir).expect("invariant: run dir should be creatable");
+    fs::write(
+        run_dir.join("events.jsonl"),
+        format!("{}\n", lines.join("\n")),
+    )
+    .expect("invariant: events fixture should be writable");
+}
+
+fn ownership_event(session: &str, card: &str, minutes_ago: u64) -> String {
+    let ts = ts_minutes_ago(minutes_ago);
+    format!(
+        r#"{{"event_type":"ownership_acquire","session_id":"{session}","card_id":"{card}","ts":"{ts}"}}"#
+    )
 }
 
 fn snapshot_dir(dir: &Path) -> Vec<(String, Vec<u8>)> {
@@ -141,6 +190,16 @@ fn loop_next_routes_ready_task_and_does_not_mutate_maestro_store() {
     assert_eq!(value["status"], "recommended");
     assert_eq!(value["recommended_recipe"], "work");
     assert_eq!(value["recommended_status"], "work");
+    assert_eq!(value["recommended_phase"], "perceive");
+    assert!(
+        value["score"]
+            .as_u64()
+            .is_some_and(|score| score > 0 && score <= 100),
+        "{value}"
+    );
+    assert!(value["attempt_policy"].is_object(), "{value}");
+    assert!(value["constraints"].is_array(), "{value}");
+    assert!(value["context_refs"].is_array(), "{value}");
     let expected_inspect = format!("maestro task show {task_id}");
     assert!(
         value["inspect"]
@@ -166,6 +225,308 @@ fn loop_next_routes_ready_task_and_does_not_mutate_maestro_store() {
             .any(|edge| edge["kind"] == "invocation" && edge["to"] == "audit"),
         "{value}"
     );
+}
+
+#[test]
+fn loop_next_json_includes_scoped_memory_preflight_without_mutating_store() {
+    let temp = TestTempDir::new("maestro-loop-next-memory-preflight");
+    init_git_marker(temp.path());
+    stdout(temp.path(), &["init", "--yes"]);
+    let task_id = stdout(
+        temp.path(),
+        &["task", "add", "--id-only", "Implement memory router"],
+    );
+    let task_id = task_id.trim();
+    let suggestion = stdout(
+        temp.path(),
+        &[
+            "memory",
+            "suggest",
+            "create",
+            "--source-ref",
+            "run_event:run-1",
+            "--signal-type",
+            "failure",
+            "--summary",
+            "Remember loop routing failure",
+            "--scope-kind",
+            "task",
+            "--scope-ref",
+            task_id,
+        ],
+    );
+    let suggestion_id = first_id(&suggestion, "msug-");
+    let before = snapshot_dir(&temp.path().join(".maestro"));
+
+    let out = stdout(temp.path(), &["loop", "next", "--json"]);
+    let after = snapshot_dir(&temp.path().join(".maestro"));
+    let value: Value = serde_json::from_str(&out).expect("loop next JSON should parse");
+
+    assert_eq!(
+        before, after,
+        "loop next memory preflight must stay read-only"
+    );
+    assert_eq!(value["recommended_recipe"], "work");
+    assert!(
+        value["memory_hits"]
+            .as_array()
+            .expect("memory_hits should be an array")
+            .iter()
+            .any(|hit| hit["id"] == suggestion_id && hit["kind"] == "prior_failure"),
+        "{value}"
+    );
+    assert!(
+        value["constraints"]
+            .as_array()
+            .expect("constraints should be an array")
+            .iter()
+            .any(|constraint| constraint["id"] == "memory_relevance"
+                && constraint["status"] == "pass"),
+        "{value}"
+    );
+    assert!(
+        value["constraints"]
+            .as_array()
+            .expect("constraints should be an array")
+            .iter()
+            .any(|constraint| constraint["id"] == "prior_failure_risk"
+                && constraint["status"] == "warn"),
+        "{value}"
+    );
+}
+
+#[test]
+fn loop_outcome_appends_run_event_and_routes_failure_class() {
+    let temp = TestTempDir::new("maestro-loop-outcome-event");
+    init_git_marker(temp.path());
+    stdout(temp.path(), &["init", "--yes"]);
+    let task_id = stdout(temp.path(), &["task", "add", "--id-only", "Repair proof"]);
+    let task_id = task_id.trim();
+
+    let out = stdout(
+        temp.path(),
+        &[
+            "loop",
+            "outcome",
+            "--recipe",
+            "work",
+            "--phase",
+            "observe",
+            "--selected-unit",
+            task_id,
+            "--constraint",
+            "proof_ready",
+            "--proof-result",
+            "failed",
+            "--failure-class",
+            "proof_gap",
+            "--blocker-class",
+            "proof",
+            "--retry-count",
+            "1",
+            "--duration-ms",
+            "42",
+            "--learning-candidate",
+            "Similar proof gap should route to repair",
+            "--source-ref",
+            &format!("task:{task_id}"),
+            "--run",
+            "loop-outcome-test",
+            "--json",
+        ],
+    );
+    let value: Value = serde_json::from_str(&out).expect("loop outcome JSON should parse");
+    assert_eq!(value["event_type"], "loop_outcome");
+    assert_eq!(value["schema_version"], "maestro.loop_outcome.v1");
+    assert_eq!(value["route"]["action"], "repair");
+    assert_eq!(value["route"]["recipe"], "work");
+
+    let second = stdout(
+        temp.path(),
+        &[
+            "loop",
+            "outcome",
+            "--recipe",
+            "work",
+            "--phase",
+            "observe",
+            "--selected-unit",
+            task_id,
+            "--failure-class",
+            "test_failure",
+            "--run",
+            "loop-outcome-test",
+        ],
+    );
+    assert!(second.contains("recorded loop_outcome event"), "{second}");
+
+    let events = fs::read_to_string(
+        temp.path()
+            .join(".maestro/runs/loop-outcome-test/events.jsonl"),
+    )
+    .expect("loop outcome event log should be readable");
+    let rows = events.lines().collect::<Vec<_>>();
+    assert_eq!(rows.len(), 2, "loop outcome appends one JSONL row per call");
+    let first: Value = serde_json::from_str(rows[0]).expect("first event should parse");
+    assert_eq!(first["event_type"], "loop_outcome");
+    assert_eq!(first["recipe"], "work");
+    assert_eq!(first["phase"], "observe");
+    assert_eq!(first["selected_unit"], task_id);
+    assert_eq!(first["constraints"][0], "proof_ready");
+    assert_eq!(first["proof_result"], "failed");
+    assert_eq!(first["failure_class"], "proof_gap");
+    assert_eq!(first["blocker_class"], "proof");
+    assert_eq!(first["retry_count"], 1);
+    assert_eq!(first["duration_ms"], 42);
+    assert_eq!(
+        first["learning_candidate"],
+        "Similar proof gap should route to repair"
+    );
+    assert_eq!(first["source_refs"][0]["kind"], "task");
+    assert_eq!(first["source_refs"][0]["id"], task_id);
+
+    let session = stdout(
+        temp.path(),
+        &["session", "show", "loop-outcome-test", "--json"],
+    );
+    let session: Value = serde_json::from_str(&session).expect("session JSON should parse");
+    assert_eq!(session["lifecycle"]["counts"]["loop_outcome"], 2);
+}
+
+#[test]
+fn loop_improve_emits_typed_read_only_proposals_from_outcomes() {
+    let temp = TestTempDir::new("maestro-loop-improve-proposals");
+    init_git_marker(temp.path());
+    stdout(temp.path(), &["init", "--yes"]);
+    let task_id = stdout(temp.path(), &["task", "add", "--id-only", "Improve loop"]);
+    let task_id = task_id.trim();
+
+    for (run_id, failure_class) in [
+        ("loop-proof-a", "proof_gap"),
+        ("loop-proof-b", "proof_gap"),
+        ("loop-test-a", "test_failure"),
+        ("loop-test-b", "test_failure"),
+        ("loop-scope-a", "scope_ambiguity"),
+        ("loop-scope-b", "scope_ambiguity"),
+        ("loop-repeat-a", "repeated_failure"),
+        ("loop-repeat-b", "repeated_failure"),
+    ] {
+        stdout(
+            temp.path(),
+            &[
+                "loop",
+                "outcome",
+                "--recipe",
+                "work",
+                "--phase",
+                "observe",
+                "--selected-unit",
+                task_id,
+                "--failure-class",
+                failure_class,
+                "--source-ref",
+                &format!("run_event:{run_id}"),
+                "--run",
+                run_id,
+            ],
+        );
+    }
+
+    let before = snapshot_dir(&temp.path().join(".maestro"));
+    let out = stdout(temp.path(), &["loop", "improve", "--json"]);
+    let after = snapshot_dir(&temp.path().join(".maestro"));
+    assert_eq!(
+        before, after,
+        "loop improve planning must not mutate .maestro"
+    );
+    let value: Value = serde_json::from_str(&out).expect("loop improve JSON should parse");
+    assert_eq!(value["schema"], "maestro.loop_improve.v1");
+    assert_eq!(value["read_only"], true);
+    let proposals = value["proposals"]
+        .as_array()
+        .expect("proposals should be an array");
+    for kind in [
+        "memory_suggestion",
+        "harness_friction",
+        "recipe_edit_proposal",
+        "skill_update_proposal",
+        "qa_guard",
+        "proof_guard",
+    ] {
+        assert!(
+            proposals.iter().any(|proposal| proposal["kind"] == kind),
+            "missing {kind} proposal in {value}"
+        );
+    }
+    for proposal in proposals {
+        assert!(
+            proposal["source_refs"]
+                .as_array()
+                .expect("source_refs should be an array")
+                .len()
+                >= 2,
+            "proposal must carry repeated sourced outcomes: {proposal}"
+        );
+        assert!(
+            proposal["dry_plan"]
+                .as_array()
+                .expect("dry_plan should be an array")
+                .iter()
+                .all(|step| step.as_str().is_some_and(|step| !step.trim().is_empty())),
+            "proposal must carry a dry plan: {proposal}"
+        );
+        assert!(
+            proposal["apply_command"]
+                .as_str()
+                .is_some_and(|command| command.starts_with("maestro ")),
+            "proposal must name an explicit apply command: {proposal}"
+        );
+        if proposal["kind"] == "recipe_edit_proposal" || proposal["kind"] == "skill_update_proposal"
+        {
+            assert!(
+                proposal["outcome_count"].as_u64().unwrap_or_default() >= 2
+                    || proposal["severity"] == "high",
+                "recipe/skill proposals need repeated outcomes or high severity: {proposal}"
+            );
+        }
+    }
+}
+
+#[test]
+fn loop_next_human_output_names_score_phase_and_blocked_alternatives() {
+    let temp = TestTempDir::new("maestro-loop-next-scored-human");
+    init_git_marker(temp.path());
+    stdout(temp.path(), &["init", "--yes"]);
+    let task_id = stdout(
+        temp.path(),
+        &["task", "add", "--id-only", "Implement scored router"],
+    );
+    let task_id = task_id.trim();
+    seed_run(temp.path(), "me", &[ownership_event("me", task_id, 1)]);
+    seed_run(
+        temp.path(),
+        "other",
+        &[ownership_event("other", task_id, 1)],
+    );
+
+    let output = maestro_with_env(
+        temp.path(),
+        &["loop", "next"],
+        &[("MAESTRO_SESSION_ID", "me")],
+    );
+    assert!(
+        output.status.success(),
+        "maestro loop next failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let out = String::from_utf8(output.stdout).expect("stdout should be utf8");
+
+    assert!(out.contains("recipe: conflict-handoff"), "{out}");
+    assert!(out.contains("score: "), "{out}");
+    assert!(out.contains("recommended_phase: perceive"), "{out}");
+    assert!(out.contains("why_not:"), "{out}");
+    assert!(out.contains("- work blocked_by: conflict_risk"), "{out}");
 }
 
 #[test]

@@ -1,6 +1,6 @@
 ---
 name: maestro-audit
-version: 1.13.1
+version: 1.13.2
 description: "Audit Maestro projects read-only: use for code review, architecture review, deepening opportunities, backlog proposals, harness-improvement findings, or repo-wide improvement audits without fixes."
 ---
 
@@ -23,6 +23,11 @@ checks, observe findings, record durable proposals, then return the next audit
 or hard stop. Writes still use the existing Maestro verbs named by the recipe.
 Custom card/run recipes are allowed only when no shipped recipe fits, and must
 use the same six phases, current Maestro verbs, hard stops, and continue output.
+Rule: loop next recommends; outcome/proof/memory verbs write. Use
+`maestro loop outcome` to preserve structured attempt outcomes and
+`maestro loop improve` for read-only proposals over sourced outcomes. Audit may
+file explicit harness or memory proposals, but silent recipe mutation, hidden
+stores, hidden schedulers, and proof/QA bypass are forbidden.
 
 ## Stop
 
