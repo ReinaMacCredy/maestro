@@ -1534,6 +1534,7 @@ mod tests {
             agent_runtime: None,
             mode: mode.map(str::to_string),
             bound_card: card.map(str::to_string),
+            owns_bound_card: false,
             last_action: "card_touch".to_string(),
             last_ts: "t0".to_string(),
             age_minutes: age,

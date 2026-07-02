@@ -82,7 +82,7 @@ pub fn run(args: ActiveArgs) -> Result<()> {
         println!();
     }
 
-    let selection = select_rows(&rows, all);
+    let selection = select_rows(&rows, all, &me);
     let shown = selection.shown;
 
     if shown.is_empty() {
@@ -173,7 +173,7 @@ impl HiddenRows {
     }
 }
 
-fn select_rows(rows: &[SessionActivity], all: bool) -> ActiveSelection<'_> {
+fn select_rows<'a>(rows: &'a [SessionActivity], all: bool, me: &str) -> ActiveSelection<'a> {
     if all {
         return ActiveSelection {
             shown: rows.iter().collect(),
@@ -181,6 +181,7 @@ fn select_rows(rows: &[SessionActivity], all: bool) -> ActiveSelection<'_> {
         };
     }
 
+    let conflict_cards = owner_conflict_cards(rows.iter());
     let mut hidden = HiddenRows::default();
     let mut seen_work: HashSet<&str> = HashSet::new();
     let mut shown = Vec::new();
@@ -191,9 +192,17 @@ fn select_rows(rows: &[SessionActivity], all: bool) -> ActiveSelection<'_> {
         }
 
         let key = row.bound_card.as_deref().unwrap_or(row.session_id.as_str());
-        if !seen_work.insert(key) {
+        let is_self = row.session_id == me;
+        let is_conflict = row
+            .bound_card
+            .as_deref()
+            .is_some_and(|card| conflict_cards.contains(card));
+        if !is_self && !is_conflict && !seen_work.insert(key) {
             hidden.duplicates += 1;
             continue;
+        }
+        if is_self {
+            seen_work.insert(key);
         }
         shown.push(row);
     }
@@ -227,8 +236,8 @@ fn render_hidden_summary(hidden: &HiddenRows) {
     println!("({}; --all to show)", parts.join(", "));
 }
 
-/// Whether the live cards `a` and `b` share a `related` edge in either
-/// direction, delegating to the domain predicate so the LINK column and the
+/// Whether the live cards `a` and `b` share an explicit `related` edge in either
+/// direction, delegating to the domain predicate so relation rendering and the
 /// `msg`/banner gate read relatedness the same way. Both must be in the live
 /// scan; a peer absent from it (e.g. archived) reads as not-linked here -- the
 /// archive-aware check lives in `card::query::pair_linked` for the verbs.
@@ -274,7 +283,8 @@ struct Cells {
     session: String,
     mode: String,
     card: String,
-    link: String,
+    relation: String,
+    ownership: String,
     status: String,
     progress: String,
     age: String,
@@ -291,9 +301,15 @@ fn render_table(
     activity_hints: &HashMap<String, String>,
 ) {
     let progress_by_parent = progress_by_parent(cards);
+    let conflict_cards = owner_conflict_cards(shown.iter().copied());
     let rows: Vec<Cells> = shown
         .iter()
         .map(|row| {
+            let conflict = row.owns_bound_card
+                && row
+                    .bound_card
+                    .as_deref()
+                    .is_some_and(|card| conflict_cards.contains(card));
             cells_for(
                 row,
                 by_id,
@@ -301,6 +317,7 @@ fn render_table(
                 me,
                 your_card,
                 activity_hints.get(&row.session_id).map(String::as_str),
+                conflict,
             )
         })
         .collect();
@@ -310,7 +327,8 @@ fn render_table(
         "SESSION",
         "MODE",
         "CARD",
-        "LINK",
+        "RELATION",
+        "OWNERSHIP",
         "STATUS",
         "PROGRESS",
         "AGE",
@@ -328,7 +346,8 @@ impl Cells {
             self.session,
             self.mode,
             self.card,
-            self.link,
+            self.relation,
+            self.ownership,
             self.status,
             self.progress,
             self.age,
@@ -345,6 +364,7 @@ fn cells_for(
     me: &str,
     your_card: Option<&str>,
     activity_hint: Option<&str>,
+    conflict: bool,
 ) -> Cells {
     let (card, status, progress) = match &row.bound_card {
         Some(id) => match by_id.get(id.as_str()) {
@@ -358,15 +378,8 @@ fn cells_for(
         None => (dash(), dash(), String::new()),
     };
 
-    let link = if row.session_id == me {
-        "(you)".to_string()
-    } else {
-        match (your_card, row.bound_card.as_deref()) {
-            (Some(mine), Some(peer)) if related_pair(by_id, mine, peer) => "linked".to_string(),
-            (Some(mine), Some(peer)) if same_feature(by_id, mine, peer) => "team".to_string(),
-            _ => dash(),
-        }
-    };
+    let relation = relation_label(row, by_id, me, your_card);
+    let ownership = ownership_label(row, me);
 
     let last_action = match activity_hint {
         Some(hint) => format!("{} | {hint}", row.last_action),
@@ -378,7 +391,8 @@ fn cells_for(
         session: row.session_id.clone(),
         mode: row.mode.as_deref().map(mode_label).unwrap_or_else(dash),
         card,
-        link,
+        relation,
+        ownership,
         status: if status.is_empty() { dash() } else { status },
         progress: if progress.is_empty() {
             dash()
@@ -386,9 +400,56 @@ fn cells_for(
             progress
         },
         age: format!("{}m", row.age_minutes),
-        state: presence_label(row.presence, row.age_minutes),
+        state: if conflict {
+            "[CONFLICT]".to_string()
+        } else {
+            presence_label(row.presence, row.age_minutes)
+        },
         last_action,
     }
+}
+
+fn relation_label(
+    row: &SessionActivity,
+    by_id: &HashMap<&str, &card::schema::Card>,
+    me: &str,
+    your_card: Option<&str>,
+) -> String {
+    if row.session_id == me {
+        return "self".to_string();
+    }
+    match (your_card, row.bound_card.as_deref()) {
+        (Some(mine), Some(peer)) if mine == peer => "same-card".to_string(),
+        (Some(mine), Some(peer)) if related_pair(by_id, mine, peer) => "linked".to_string(),
+        (Some(mine), Some(peer)) if same_feature(by_id, mine, peer) => "related".to_string(),
+        (Some(_), Some(peer)) if by_id.contains_key(peer) => "related".to_string(),
+        _ => dash(),
+    }
+}
+
+fn ownership_label(row: &SessionActivity, me: &str) -> String {
+    if row.owns_bound_card {
+        "owner".to_string()
+    } else if row.session_id == me && row.bound_card.is_some() {
+        "observer".to_string()
+    } else {
+        dash()
+    }
+}
+
+fn owner_conflict_cards<'a>(rows: impl Iterator<Item = &'a SessionActivity>) -> HashSet<&'a str> {
+    let mut counts: HashMap<&'a str, usize> = HashMap::new();
+    for row in rows {
+        if row.owns_bound_card
+            && let Some(card) = row.bound_card.as_deref()
+        {
+            *counts.entry(card).or_default() += 1;
+        }
+    }
+    counts
+        .into_iter()
+        .filter_map(|(card, count)| (count > 1).then_some(card))
+        .collect()
 }
 
 #[derive(Default)]
@@ -801,6 +862,7 @@ mod tests {
             agent_runtime: None,
             mode: None,
             bound_card: bound.map(str::to_string),
+            owns_bound_card: false,
             last_action: "card_touch".to_string(),
             last_ts: "t0".to_string(),
             age_minutes: 1,
@@ -808,7 +870,7 @@ mod tests {
         }
     }
 
-    fn link_of(
+    fn relation_of(
         session: &str,
         bound: Option<&str>,
         cards: &[Card],
@@ -824,8 +886,9 @@ mod tests {
             me,
             your_card,
             None,
+            false,
         )
-        .link
+        .relation
     }
 
     fn temp_root(label: &str) -> std::path::PathBuf {
@@ -857,7 +920,7 @@ mod tests {
     }
 
     #[test]
-    fn link_column_precedence_is_you_then_linked_then_team_then_dash() {
+    fn relation_column_precedence_is_self_then_same_card_then_linked_then_related_then_dash() {
         use card::schema::CardType::{Feature, Task};
         let mut mine = card("task-1", Task, Some("auth"));
         // an explicit pairwise edge mine<->task-3, which must win over same-feature
@@ -877,11 +940,25 @@ mod tests {
         let me = "meS";
         let mine_id = Some("task-1");
 
-        assert_eq!(link_of(me, mine_id, &cards, me, mine_id), "(you)");
-        assert_eq!(link_of("p2", Some("task-3"), &cards, me, mine_id), "linked");
-        assert_eq!(link_of("p1", Some("task-2"), &cards, me, mine_id), "team");
-        assert_eq!(link_of("p3", Some("task-o"), &cards, me, mine_id), "-");
-        assert_eq!(link_of("p4", Some("task-x"), &cards, me, mine_id), "-");
+        assert_eq!(relation_of(me, mine_id, &cards, me, mine_id), "self");
+        assert_eq!(relation_of("p0", mine_id, &cards, me, mine_id), "same-card");
+        assert_eq!(
+            relation_of("p2", Some("task-3"), &cards, me, mine_id),
+            "linked"
+        );
+        assert_eq!(
+            relation_of("p1", Some("task-2"), &cards, me, mine_id),
+            "related"
+        );
+        assert_eq!(
+            relation_of("p3", Some("task-o"), &cards, me, mine_id),
+            "related"
+        );
+        assert_eq!(
+            relation_of("p4", Some("task-x"), &cards, me, mine_id),
+            "related"
+        );
+        assert_eq!(relation_of("p5", None, &cards, me, mine_id), "-");
     }
 
     #[test]
@@ -921,10 +998,10 @@ mod tests {
             card("auth", Feature, None),
             card("task-1", Task, Some("auth")),
         ];
-        // me on a child, peer on the feature card itself -> team
+        // me on a child, peer on the feature card itself -> related
         assert_eq!(
-            link_of("p1", Some("auth"), &cards, "meS", Some("task-1")),
-            "team"
+            relation_of("p1", Some("auth"), &cards, "meS", Some("task-1")),
+            "related"
         );
     }
 
@@ -950,7 +1027,7 @@ mod tests {
             stale_row("stale", Some("task-4")),
         ];
 
-        let default = select_rows(&rows, false);
+        let default = select_rows(&rows, false, "meS");
         assert_eq!(
             default
                 .shown
@@ -962,7 +1039,7 @@ mod tests {
         assert_eq!(default.hidden.duplicates, 1);
         assert_eq!(default.hidden.inactive, 2);
 
-        let all = select_rows(&rows, true);
+        let all = select_rows(&rows, true, "meS");
         assert_eq!(all.shown.len(), rows.len());
         assert!(all.hidden.is_empty());
     }

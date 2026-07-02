@@ -1,7 +1,7 @@
 //! End-to-end for the `maestro active` cross-session awareness verb. Exercises
-//! only the NEW CLI surface -- column render + enrichment, the `you` marker,
-//! `--all` stale filtering, and the copy-pasteable link hint with no auto-link
-//! side effect (bl-001/002/003/005). The liveness model itself
+//! only the NEW CLI surface -- column render + enrichment, relation/ownership
+//! labels, `--all` stale filtering, and the copy-pasteable link hint with no
+//! auto-link side effect (bl-001/002/003/005). The liveness model itself
 //! (`src/domain/run/active.rs`) is covered by its own unit tests and is not
 //! re-tested here.
 
@@ -1262,11 +1262,11 @@ fn default_collapses_link_hint_and_creates_no_edge() {
 }
 
 #[test]
-fn link_column_and_footer_reflect_existing_related_edges() {
-    // Thread 2: the LINK column reads (you)/linked/-, computed from BOTH cards'
-    // deps; the footer suggests `link add` only for unlinked peers and names
-    // already-linked ones instead of re-suggesting them.
-    let temp = cards_repo("active-link-column");
+fn relation_and_ownership_columns_reflect_current_caller_and_peers() {
+    // RELATION names how the row relates to the current session. OWNERSHIP names
+    // current ownership only. The footer still suggests `link add` only for
+    // unlinked peers and names already-linked ones instead of re-suggesting them.
+    let temp = cards_repo("active-relation-ownership-columns");
     let repo = temp.path();
 
     let a = create_id(repo, &["-t", "chore", "Card A"]);
@@ -1281,22 +1281,42 @@ fn link_column_and_footer_reflect_existing_related_edges() {
         "you-sess",
         &[card_touch_event("you-sess", &a, &recent)],
     );
-    seed_run(repo, "peer-b", &[card_touch_event("peer-b", &b, &recent)]);
+    seed_run(
+        repo,
+        "same-owner",
+        &[ownership_acquire_event("same-owner", &a, &recent)],
+    );
+    seed_run(
+        repo,
+        "peer-b",
+        &[ownership_acquire_event("peer-b", &b, &recent)],
+    );
     seed_run(repo, "peer-c", &[card_touch_event("peer-c", &c, &recent)]);
 
     let out = run(repo, &[("MAESTRO_SESSION_ID", "you-sess")], &["active"]);
 
+    let header = line_with(&out, "AGENT");
     assert!(
-        line_with(&out, "you-sess").contains("(you)"),
-        "own row LINK cell reads (you)\n{out}"
+        header.contains("RELATION") && header.contains("OWNERSHIP") && !header.contains("LINK"),
+        "active table should expose relation/ownership instead of LINK\n{out}"
     );
     assert!(
-        line_with(&out, "peer-b").contains("linked"),
-        "linked peer row reads linked\n{out}"
+        !out.contains("(you)"),
+        "active output must not render the old ambiguous you marker\n{out}"
+    );
+    let you = line_with(&out, "you-sess");
+    assert!(
+        you.contains("self") && you.contains("observer"),
+        "own non-owner row reads self observer\n{out}"
     );
     assert!(
-        !line_with(&out, "peer-c").contains("linked"),
-        "unlinked peer row does not read linked\n{out}"
+        line_with(&out, "peer-b").contains("linked") && line_with(&out, "peer-b").contains("owner"),
+        "linked owner peer row reads linked owner\n{out}"
+    );
+    assert!(
+        line_with(&out, "peer-c").contains("related")
+            && !line_with(&out, "peer-c").contains("linked"),
+        "unlinked peer row reads related, not linked\n{out}"
     );
 
     // Default footer: summarizes link/message opportunities without expanding
@@ -1332,6 +1352,56 @@ fn link_column_and_footer_reflect_existing_related_edges() {
     assert!(
         connect.contains(format!("maestro msg send --from {a} {c} \"<text>\"").as_str()),
         "expanded footer offers a msg-send template for the unlinked peer too (link, then message)\n{connect}"
+    );
+
+    let all = run(
+        repo,
+        &[("MAESTRO_SESSION_ID", "you-sess")],
+        &["active", "--all"],
+    );
+    let all_header = line_with(&all, "AGENT");
+    assert!(
+        all_header.contains("RELATION") && all_header.contains("OWNERSHIP"),
+        "--all keeps the default table schema\n{all}"
+    );
+    assert!(
+        line_with(&all, "same-owner").contains("same-card")
+            && line_with(&all, "same-owner").contains("owner"),
+        "same-card owner stays visible in --all with explicit relation/ownership\n{all}"
+    );
+}
+
+#[test]
+fn active_marks_current_owner_conflicts_without_overwriting_relation() {
+    let temp = cards_repo("active-relation-ownership-conflict");
+    let repo = temp.path();
+
+    let card = create_id(repo, &["-t", "chore", "Contended card"]);
+    clear_runs(repo);
+
+    let recent = ts_minutes_ago(1);
+    seed_run(
+        repo,
+        "you-sess",
+        &[ownership_acquire_event("you-sess", &card, &recent)],
+    );
+    seed_run(
+        repo,
+        "peer-owner",
+        &[ownership_acquire_event("peer-owner", &card, &recent)],
+    );
+
+    let out = run(repo, &[("MAESTRO_SESSION_ID", "you-sess")], &["active"]);
+
+    let you = line_with(&out, "you-sess");
+    let peer = line_with(&out, "peer-owner");
+    assert!(
+        you.contains("self") && you.contains("owner") && you.contains("[CONFLICT]"),
+        "self conflict row keeps relation and ownership\n{out}"
+    );
+    assert!(
+        peer.contains("same-card") && peer.contains("owner") && peer.contains("[CONFLICT]"),
+        "peer conflict row keeps relation and ownership\n{out}"
     );
 }
 

@@ -59,6 +59,8 @@ pub struct SessionActivity {
     pub mode: Option<String>,
     /// Card id to display for the session: active ownership first, then context binding.
     pub bound_card: Option<String>,
+    /// True when `bound_card` comes from an unreleased ownership acquisition.
+    pub owns_bound_card: bool,
     /// Normalized event type of the session's latest event.
     pub last_action: String,
     /// Timestamp of the session's latest event.
@@ -230,6 +232,10 @@ pub fn active_sessions_union(roots: &[MaestroPaths], now: &str) -> Result<Vec<Se
         let presence =
             classify_with_ownership(age_minutes, last_action, acc.ownership.as_ref(), last_nanos);
         let bound_card = display_card(&acc, last_nanos);
+        let owns_bound_card = acc
+            .ownership
+            .as_ref()
+            .is_some_and(|ownership| ownership.state == OwnershipState::Active);
         rows.push((
             last_nanos,
             SessionActivity {
@@ -237,6 +243,7 @@ pub fn active_sessions_union(roots: &[MaestroPaths], now: &str) -> Result<Vec<Se
                 agent_runtime: acc.agent_runtime.map(|(_, agent_runtime)| agent_runtime),
                 mode: acc.skill.map(|(_, skill)| skill),
                 bound_card,
+                owns_bound_card,
                 last_action: last_action.clone(),
                 last_ts: last_ts.clone(),
                 age_minutes,
@@ -707,6 +714,7 @@ mod tests {
         assert_eq!(working.presence, Presence::Working);
         assert_eq!(working.mode.as_deref(), Some("maestro-card"));
         assert_eq!(working.bound_card.as_deref(), Some("card-bar"));
+        assert!(!working.owns_bound_card);
         assert_eq!(working.last_action, "card_touch");
         assert_eq!(working.age_minutes, 1);
 
@@ -754,6 +762,7 @@ mod tests {
             "a recent non-Stop card_touch keeps the session live"
         );
         assert_eq!(touch.bound_card.as_deref(), Some("card-zed"));
+        assert!(!touch.owns_bound_card);
     }
 
     #[test]
@@ -806,6 +815,7 @@ mod tests {
         let owned = row(&rows, "s-owned");
         assert_eq!(owned.presence, Presence::QuietWorking);
         assert_eq!(owned.bound_card.as_deref(), Some("task-owned"));
+        assert!(owned.owns_bound_card);
         assert_eq!(owned.age_minutes, 10);
 
         let boundary = row(&rows, "s-boundary");
@@ -877,10 +887,12 @@ mod tests {
         let released = row(&rows, "s-released");
         assert_eq!(released.presence, Presence::Released);
         assert_eq!(released.bound_card.as_deref(), Some("task-released"));
+        assert!(!released.owns_bound_card);
 
         let done = row(&rows, "s-done");
         assert_eq!(done.presence, Presence::Done);
         assert_eq!(done.bound_card.as_deref(), Some("task-done"));
+        assert!(!done.owns_bound_card);
 
         let old_done = row(&rows, "s-old-done");
         assert_eq!(
@@ -914,6 +926,7 @@ mod tests {
             "Stop is a latest event but not an ownership release"
         );
         assert_eq!(owned.bound_card.as_deref(), Some("task-owned"));
+        assert!(owned.owns_bound_card);
         assert_eq!(owned.last_action, "Stop");
     }
 
