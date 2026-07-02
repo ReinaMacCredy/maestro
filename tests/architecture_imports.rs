@@ -368,6 +368,7 @@ fn feature_domain_facade_exposes_the_deliberate_surface() {
             "ensure_exists".to_string(),
             "feature_sidecar_dir".to_string(),
             "finalize".to_string(),
+            "finalize_requires_reopen".to_string(),
             "handoff_gap".to_string(),
             "is_stale_proposed".to_string(),
             "list".to_string(),
