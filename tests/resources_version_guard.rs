@@ -55,8 +55,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 20] = [
     (
         "skill",
         "maestro-design",
-        "1.36.3",
-        "4a084c36e607f7e10788d2906287b06ca3d96f6d251bfc0b726f634dedbd9e3e",
+        "1.36.4",
+        "5d29a175898a70390d033f54828e3b429661b98936f5040a16d4a1ea4b88b5c8",
     ),
     (
         "skill",
@@ -368,6 +368,15 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
             && design.contains("existing Maestro verbs")
             && design.contains("perceive -> choose -> act"),
         "maestro-design must adopt the loop-first design lifecycle recipe"
+    );
+    assert!(
+        design.contains("Before technical forks, decide scope depth")
+            && design.contains("Full durable design")
+            && design.contains("First slice / MVP")
+            && design.contains("Full design, staged build")
+            && design.contains("Scope target and implementation staging are separate")
+            && design.contains("stop recommending first-slice scope"),
+        "maestro-design must separate full design scope from implementation staging"
     );
     for phrase in [
         "maestro loop outcome",

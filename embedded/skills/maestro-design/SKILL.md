@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-version: 1.36.3
+version: 1.36.4
 description: "Design Maestro changes before implementation: use for brainstorm, plan, PRD synthesis, grill me, grilling, stress-test, domain model, deepening candidate, wording, workflow, skill, harness, card/task/feature, architecture, UX, or agent-process decisions."
 ---
 
@@ -56,6 +56,20 @@ Keep a working thesis from the user's latest correction, selected text,
 sidechat paste, example, and preference. Before opening or revising a fork,
 fold that thesis into the option framing instead of treating the new detail as
 a loose comment.
+
+Before technical forks, decide scope depth when the request could be handled as
+either a first slice or a full system. Ask or infer one of:
+
+- Full durable design: lock the complete intended system. Implementation may
+  still be staged, but the design target is full.
+- First slice / MVP: lock only the smallest useful verified behavior.
+- Full design, staged build: lock the full target now, then split implementation
+  into safe phases.
+
+Scope target and implementation staging are separate. If the user says "full",
+"deep", "complete", "make one forever", or rejects MVP, stop recommending
+first-slice scope. Treat the accepted design target as full and discuss staging
+only as an implementation safety plan.
 
 Keep a short fork queue. After each locked decision or clarified user answer,
 derive the next unresolved fork from the feature spec, open questions, locked
