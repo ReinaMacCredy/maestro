@@ -12,7 +12,11 @@ pub fn run(args: SessionArgs) -> Result<()> {
 
 fn show(args: SessionShowArgs) -> Result<()> {
     let paths = MaestroPaths::new(discover_repo_root()?);
-    let readout = run::session_readout(&paths, &args.session_id)?;
+    let readout = if args.transcript {
+        run::session_readout_with_transcript(&paths, &args.session_id)?
+    } else {
+        run::session_readout(&paths, &args.session_id)?
+    };
     if args.json {
         println!("{}", serde_json::to_string(&readout)?);
         return Ok(());
@@ -73,5 +77,36 @@ fn render_text(readout: &run::SessionReadout) {
         for gap in &readout.gaps {
             println!("- {gap}");
         }
+    }
+    if let Some(transcript) = &readout.transcript {
+        println!();
+        println!("Transcript:");
+        if transcript.entries.is_empty() {
+            println!("- none");
+        } else {
+            for entry in &transcript.entries {
+                render_transcript_entry(entry);
+            }
+        }
+    }
+}
+
+fn render_transcript_entry(entry: &run::SessionTranscriptEntry) {
+    match entry.kind.as_str() {
+        "message" => {
+            let role = entry.role.as_deref().unwrap_or("message");
+            println!("- {role}:");
+            if let Some(text) = entry.text.as_deref() {
+                for line in text.lines() {
+                    println!("  {line}");
+                }
+            }
+        }
+        "tool_call" => {
+            let name = entry.name.as_deref().unwrap_or("tool");
+            println!("- tool: {name}");
+        }
+        "compaction" => println!("- compaction observed"),
+        kind => println!("- {kind}"),
     }
 }

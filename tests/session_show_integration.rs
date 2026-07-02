@@ -135,6 +135,9 @@ fn seed_codex_transcript(repo: &Path, session_id: &str) {
     fs::write(
         dir.join(format!("rollout-2026-07-01T00-00-00-{session_id}.jsonl")),
         concat!(
+            "{\"timestamp\":\"2026-07-01T00:00:00Z\",\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"# AGENTS.md instructions\\n<INSTRUCTIONS>ignore</INSTRUCTIONS>\\n<environment_context>ignore</environment_context>\"}]}}\n",
+            "{\"timestamp\":\"2026-07-01T00:00:01Z\",\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"show the session transcript\"}]}}\n",
+            "{\"timestamp\":\"2026-07-01T00:00:02Z\",\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"reading the transcript now\"}]}}\n",
             "{\"type\":\"response_item\",\"payload\":{\"type\":\"function_call\",\"name\":\"exec_command\",\"arguments\":\"secret=abc\"}}\n",
             "{\"type\":\"response_item\",\"payload\":{\"type\":\"function_call\",\"name\":\"apply_patch\",\"arguments\":\"token=def\"}}\n",
             "{\"type\":\"compacted\",\"payload\":{\"note\":\"private\"}}\n"
@@ -158,6 +161,7 @@ fn session_show_uses_local_codex_transcript_as_labeled_backfill() {
     );
     assert!(text.contains("transcript: backfill"), "{text}");
     assert!(!text.contains("transcript backfill unavailable"), "{text}");
+    assert!(!text.contains("Transcript:"), "{text}");
     assert!(
         !text.contains("secret=abc") && !text.contains("token=def"),
         "session show must not leak raw transcript input:\n{text}"
@@ -184,6 +188,51 @@ fn session_show_uses_local_codex_transcript_as_labeled_backfill() {
         parsed["gaps"].as_array().is_some_and(Vec::is_empty),
         "{parsed}"
     );
+    let raw = serde_json::to_string(&parsed).expect("session JSON should serialize");
+    assert!(!raw.contains("secret=abc") && !raw.contains("token=def"));
+    assert!(parsed.get("transcript").is_none(), "{parsed}");
+
+    let transcript_text = run(repo, &["session", "show", "legacy-sess", "--transcript"]);
+    assert!(transcript_text.contains("Transcript:"), "{transcript_text}");
+    assert!(
+        transcript_text.contains("- user:\n  show the session transcript"),
+        "{transcript_text}"
+    );
+    assert!(
+        transcript_text.contains("- assistant:\n  reading the transcript now"),
+        "{transcript_text}"
+    );
+    assert!(
+        transcript_text.contains("- tool: exec_command"),
+        "{transcript_text}"
+    );
+    assert!(
+        transcript_text.contains("- tool: apply_patch"),
+        "{transcript_text}"
+    );
+    assert!(
+        transcript_text.contains("- compaction observed"),
+        "{transcript_text}"
+    );
+    assert!(
+        !transcript_text.contains("# AGENTS.md instructions")
+            && !transcript_text.contains("secret=abc")
+            && !transcript_text.contains("token=def"),
+        "transcript output must omit bootstrap context and raw tool input:\n{transcript_text}"
+    );
+
+    let transcript_json = run(
+        repo,
+        &["session", "show", "legacy-sess", "--json", "--transcript"],
+    );
+    let parsed: Value = serde_json::from_str(&transcript_json).expect("session JSON should parse");
+    let entries = parsed["transcript"]["entries"]
+        .as_array()
+        .expect("transcript entries should be present");
+    assert!(entries.iter().any(|entry| entry["role"] == "user"));
+    assert!(entries.iter().any(|entry| entry["role"] == "assistant"));
+    assert!(entries.iter().any(|entry| entry["kind"] == "tool_call"));
+    assert!(entries.iter().any(|entry| entry["kind"] == "compaction"));
     let raw = serde_json::to_string(&parsed).expect("session JSON should serialize");
     assert!(!raw.contains("secret=abc") && !raw.contains("token=def"));
 }

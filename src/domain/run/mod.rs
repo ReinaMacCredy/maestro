@@ -34,6 +34,7 @@ pub use reader::{RunEvent, RunEventRecord, visit_managed_event_logs, visit_manag
 pub(crate) use record::{RecordOutcome, record_hook_event};
 pub use session::{
     SessionActivitySummary, SessionLifecycleSummary, SessionProofSummary, SessionReadout,
-    SessionSources, SessionTaskSummary, session_readout,
+    SessionSources, SessionTaskSummary, SessionTranscript, SessionTranscriptEntry, session_readout,
+    session_readout_with_transcript,
 };
 pub use trace::{RunStatus, RunTrace, TraceEntry, assemble_trace};

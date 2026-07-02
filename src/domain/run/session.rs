@@ -25,6 +25,8 @@ pub struct SessionReadout {
     pub tasks: Vec<SessionTaskSummary>,
     pub sources: SessionSources,
     pub gaps: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transcript: Option<SessionTranscript>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -68,6 +70,24 @@ pub struct SessionSources {
     pub transcript: String,
 }
 
+#[derive(Clone, Debug, Serialize)]
+pub struct SessionTranscript {
+    pub entries: Vec<SessionTranscriptEntry>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct SessionTranscriptEntry {
+    pub kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ts: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+}
+
 #[derive(Default)]
 struct EventFold {
     counts: BTreeMap<String, usize>,
@@ -85,11 +105,27 @@ struct TranscriptBackfill {
     commands: usize,
     compactions: usize,
     counts: BTreeMap<String, usize>,
+    entries: Vec<SessionTranscriptEntry>,
 }
 
 pub fn session_readout(paths: &MaestroPaths, session_id: &str) -> Result<SessionReadout> {
+    session_readout_with_options(paths, session_id, false)
+}
+
+pub fn session_readout_with_transcript(
+    paths: &MaestroPaths,
+    session_id: &str,
+) -> Result<SessionReadout> {
+    session_readout_with_options(paths, session_id, true)
+}
+
+fn session_readout_with_options(
+    paths: &MaestroPaths,
+    session_id: &str,
+    include_transcript: bool,
+) -> Result<SessionReadout> {
     let activities = read_session_activity(paths, session_id)?;
-    let transcript = read_transcript_backfill(session_id)?;
+    let transcript = read_transcript_backfill(session_id, include_transcript)?;
     let activity = summarize_activity(&activities, transcript.as_ref());
     let mut fold = fold_lifecycle(paths, session_id)?;
     for activity in &activities {
@@ -143,6 +179,11 @@ pub fn session_readout(paths: &MaestroPaths, session_id: &str) -> Result<Session
             .then(|| "transcript backfill unavailable".to_string())
             .into_iter()
             .collect(),
+        transcript: transcript.as_ref().and_then(|transcript| {
+            include_transcript.then(|| SessionTranscript {
+                entries: transcript.entries.clone(),
+            })
+        }),
     })
 }
 
@@ -272,11 +313,14 @@ fn fold_lifecycle(paths: &MaestroPaths, session_id: &str) -> Result<EventFold> {
     Ok(fold)
 }
 
-fn read_transcript_backfill(session_id: &str) -> Result<Option<TranscriptBackfill>> {
+fn read_transcript_backfill(
+    session_id: &str,
+    include_entries: bool,
+) -> Result<Option<TranscriptBackfill>> {
     let Some(path) = find_transcript_file(session_id)? else {
         return Ok(None);
     };
-    summarize_transcript_file(&path).map(Some)
+    summarize_transcript_file(&path, include_entries).map(Some)
 }
 
 fn find_transcript_file(session_id: &str) -> Result<Option<PathBuf>> {
@@ -320,7 +364,7 @@ fn find_transcript_file_under(root: &Path, session_id: &str) -> Result<Option<Pa
     }
 }
 
-fn summarize_transcript_file(path: &Path) -> Result<TranscriptBackfill> {
+fn summarize_transcript_file(path: &Path, include_entries: bool) -> Result<TranscriptBackfill> {
     let file = File::open(path)?;
     let mut backfill = TranscriptBackfill::default();
     for line in BufReader::new(file).lines() {
@@ -328,6 +372,10 @@ fn summarize_transcript_file(path: &Path) -> Result<TranscriptBackfill> {
         let Ok(value) = serde_json::from_str::<Value>(&line) else {
             continue;
         };
+        let ts = value
+            .get("timestamp")
+            .and_then(Value::as_str)
+            .map(str::to_string);
         match value.get("type").and_then(Value::as_str) {
             Some("compacted") => {
                 backfill.compactions += 1;
@@ -335,6 +383,15 @@ fn summarize_transcript_file(path: &Path) -> Result<TranscriptBackfill> {
                     .counts
                     .entry("transcript_compaction_observed".to_string())
                     .or_default() += 1;
+                if include_entries {
+                    backfill.entries.push(SessionTranscriptEntry {
+                        kind: "compaction".to_string(),
+                        ts,
+                        role: None,
+                        name: None,
+                        text: None,
+                    });
+                }
             }
             Some("response_item")
                 if value
@@ -348,9 +405,72 @@ fn summarize_transcript_file(path: &Path) -> Result<TranscriptBackfill> {
                     .counts
                     .entry("transcript_command_observed".to_string())
                     .or_default() += 1;
+                if include_entries
+                    && let Some(name) = value
+                        .get("payload")
+                        .and_then(|payload| payload.get("name"))
+                        .and_then(Value::as_str)
+                {
+                    backfill.entries.push(SessionTranscriptEntry {
+                        kind: "tool_call".to_string(),
+                        ts,
+                        role: None,
+                        name: Some(name.to_string()),
+                        text: None,
+                    });
+                }
+            }
+            Some("response_item")
+                if include_entries
+                    && value
+                        .get("payload")
+                        .and_then(|payload| payload.get("type"))
+                        .and_then(Value::as_str)
+                        == Some("message") =>
+            {
+                if let Some(entry) = transcript_message_entry(&value, ts) {
+                    backfill.entries.push(entry);
+                }
             }
             _ => {}
         }
     }
     Ok(backfill)
+}
+
+fn transcript_message_entry(value: &Value, ts: Option<String>) -> Option<SessionTranscriptEntry> {
+    let payload = value.get("payload")?;
+    let role = payload.get("role").and_then(Value::as_str)?;
+    if !matches!(role, "user" | "assistant") {
+        return None;
+    }
+    let text = transcript_message_text(payload)?;
+    if is_bootstrap_context_message(&text) {
+        return None;
+    }
+    Some(SessionTranscriptEntry {
+        kind: "message".to_string(),
+        ts,
+        role: Some(role.to_string()),
+        name: None,
+        text: Some(text),
+    })
+}
+
+fn transcript_message_text(payload: &Value) -> Option<String> {
+    let content = payload.get("content")?.as_array()?;
+    let mut parts = Vec::new();
+    for part in content {
+        if let Some(text) = part.get("text").and_then(Value::as_str) {
+            parts.push(text);
+        }
+    }
+    let text = parts.join("\n");
+    (!text.trim().is_empty()).then_some(text)
+}
+
+fn is_bootstrap_context_message(text: &str) -> bool {
+    let trimmed = text.trim_start();
+    trimmed.starts_with("# AGENTS.md instructions")
+        || (trimmed.contains("<INSTRUCTIONS>") && trimmed.contains("<environment_context>"))
 }

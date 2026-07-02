@@ -417,7 +417,7 @@ pub enum RootCommand {
     Active(ActiveArgs),
     #[command(
         about = "Show the joined activity, lifecycle, and proof story for one session",
-        after_help = "Examples:\n  maestro session show 019f180a-fcf7-7891-ae54-59654b1a56ff\n  maestro session show 019f180a-fcf7-7891-ae54-59654b1a56ff --json"
+        after_help = "Examples:\n  maestro session show 019f180a-fcf7-7891-ae54-59654b1a56ff\n  maestro session show 019f180a-fcf7-7891-ae54-59654b1a56ff --json\n  maestro session show 019f180a-fcf7-7891-ae54-59654b1a56ff --transcript"
     )]
     Session(SessionArgs),
     #[command(
@@ -850,6 +850,9 @@ pub struct SessionShowArgs {
     /// Print machine-readable JSON.
     #[arg(long)]
     pub json: bool,
+    /// Include local Codex transcript messages and tool-call summaries.
+    #[arg(long)]
+    pub transcript: bool,
 }
 
 #[derive(Debug, Args)]
