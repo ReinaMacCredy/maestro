@@ -41,7 +41,7 @@ authority_scope:
   - write only design decisions, notes, and feature contract fields before build approval
 autonomy:
   - human-guided while decisions or acceptance change
-  - may continue without human only for readback, contradiction checks, and handoff refresh
+  - may continue without human only for readback and contradiction checks
 router:
   status: design
   priority: 30
@@ -66,8 +66,7 @@ invocations: []
 outputs:
   - locked decision
   - updated feature contract
-  - fresh handoff
-  - next fork or build gate
+  - next fork or explicit build-approval gate
 applies_when:
   - user asks to brainstorm, design, refine, lock, or decide a Maestro feature
   - a proposed feature has open questions, unsettled acceptance, or contradictory decisions
@@ -122,11 +121,11 @@ phases:
     durable_learning: ["locked decision", "card note", "intervention event", "memory candidate"]
     outputs: ["durable note", "no learning needed"]
   continue:
-    goal: Return the next design fork, finalization gate, or hard stop.
-    bricks: ["feature finalize", "handoff", "next question"]
-    reads: ["feature next", "handoff freshness", "open questions"]
-    allowed_verbs: ["maestro feature finalize <id>", "maestro feature show <id>"]
-    forbidden_verbs: ["maestro feature accept <id> without QA baseline", "external ship action"]
-    checks: ["user has approved build before crossing to implementation"]
+    goal: Return the next design fork, explicit build-approval gate, or hard stop.
+    bricks: ["feature show", "open questions", "build gate"]
+    reads: ["feature next", "open questions"]
+    allowed_verbs: ["maestro feature show <id>", "maestro decision list --feature <id>"]
+    forbidden_verbs: ["maestro feature finalize <id> without explicit build approval", "maestro feature accept <id> without QA baseline", "external ship action"]
+    checks: ["user has approved build before recommending handoff finalization"]
     durable_learning: []
-    outputs: ["next fork", "maestro feature finalize <id>", "hard stop"]
+    outputs: ["next fork", "await explicit build approval before reconcile/finalize", "hard stop"]

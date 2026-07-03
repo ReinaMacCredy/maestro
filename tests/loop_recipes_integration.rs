@@ -189,6 +189,39 @@ fn loop_show_renders_design_relay_recipe() {
 }
 
 #[test]
+fn loop_show_design_continue_waits_for_build_approval_before_finalize() {
+    let temp = TestTempDir::new("maestro-loop-show-design-continue");
+    let out = stdout(
+        temp.path(),
+        &["loop", "show", "design", "--compact", "--phase", "continue"],
+    );
+
+    assert!(
+        out.contains("await explicit build approval before reconcile/finalize"),
+        "{out}"
+    );
+    assert!(
+        !out.contains("allowed_verbs:\n  - maestro feature finalize <id>"),
+        "{out}"
+    );
+    assert!(
+        !out.contains("next:\n  - maestro feature finalize <id>"),
+        "{out}"
+    );
+    assert!(
+        out.contains("maestro feature finalize <id> without explicit build approval"),
+        "{out}"
+    );
+
+    let full = stdout(temp.path(), &["loop", "show", "design"]);
+    assert!(
+        full.contains("user approves build and feature has zero open decisions"),
+        "{full}"
+    );
+    assert!(full.contains("maestro feature finalize <id>"), "{full}");
+}
+
+#[test]
 fn loop_validate_and_compact_render_design_relay_packet() {
     let temp = TestTempDir::new("maestro-loop-design-relay-packet");
     let valid = stdout(temp.path(), &["loop", "validate", "design-relay"]);

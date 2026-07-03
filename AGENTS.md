@@ -70,6 +70,9 @@ maestro/
   cards, `decision list`/`query decisions` show only the recent window. The full
   set is one `--all` away, and `--feature <id>` scopes decisions; the count
   header names what was hidden and how to widen.
+- When you notice an out-of-scope Maestro UX gap while working, append a concise
+  entry to `UX_GAPS.md` with the date, surface, observed friction, and why it is
+  not part of the current fix. Do not silently widen scope to fix it.
 
 ## CONCURRENT AGENT CONTRACT
 

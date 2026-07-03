@@ -1,15 +1,16 @@
 ---
 name: maestro-design
-version: 1.36.9
+version: 1.36.10
 description: "Design Maestro changes before implementation: use for brainstorm, plan, PRD synthesis, grill me, grilling, stress-test, domain model, deepening candidate, wording, workflow, skill, harness, card/task/feature, architecture, UX, or agent-process decisions."
 ---
 
 # Maestro Design
 
 Use this when the deliverable is the design of record, not code. The feature
-stays `proposed` while the contract is still editable; `feature reconcile`
+stays `proposed` while the contract is still editable. `feature reconcile`
 writes or refreshes the pre-finalize receipt, `feature finalize` writes the
-clean continuation handoff, and `feature accept` later freezes the contract.
+clean continuation handoff, and `feature accept` later freezes the contract
+only after the user has approved the build transition.
 
 Maestro work has three levels:
 
@@ -78,8 +79,9 @@ Keep a short fork queue. After each locked decision or clarified user answer,
 derive the next unresolved fork from the feature design, open questions, locked
 decisions, and working thesis. If a concrete next fork exists, present it in
 the same turn; do not make the user send "next fork" just to continue. If no
-fork remains, say that directly and name the next lifecycle gate, usually
-`maestro feature reconcile <id>` before `maestro feature finalize <id>`.
+fork remains, say that directly and stop at the explicit build-approval gate.
+Do not run `maestro feature reconcile <id>` or `maestro feature finalize <id>`
+until the user approves the build transition.
 
 Every material fork needs a detail floor:
 
@@ -177,16 +179,18 @@ maestro never auto-reads or auto-replies; you do.
    fork is opened as a decision and removed from questions.
 9. Author the implementation contract only after decisions are stable:
    `maestro feature set <id> --acceptance "<observable behavior>" --area "<surface>"`.
-10. When design is done, run `maestro feature reconcile <id>` first to write or
+10. When design is done, stop at the build-approval gate. After the user
+   approves build, run `maestro feature reconcile <id>` first to write or
    refresh the pre-finalize receipt, then write the canonical clean handoff with
    `maestro feature finalize <id>`. The next agent starts at
    `.maestro/cards/<id>/handoff.md`; raw `design.md`, legacy `spec.md`, `notes.md`, and decision
    cards stay preserved for audit.
 
-Completion criterion: design is done only when every material fork is locked or
-left as an explicit feature question, acceptance criteria and affected areas
-exist, `feature reconcile` has a current receipt, and `feature finalize` has
-refreshed `handoff.md`.
+Completion criterion: design is ready for build approval when every material
+fork is locked or left as an explicit feature question, acceptance criteria and
+affected areas exist, and the next gate is explicit. The implementation handoff
+is complete only after the user approves build and `feature reconcile` plus
+`feature finalize` refresh `handoff.md`.
 
 ## Taste Forks
 
@@ -261,11 +265,12 @@ locked as Maestro decisions. Full branch:
 
 ## Hand-off
 
-Pipeline: `[maestro-design: feature reconcile -> feature finalize] -> maestro-card (qa-baseline -> feature accept -> prepare -> work -> verify -> qa-slice -> feature close)`
+Pipeline: `[maestro-design: explicit build approval -> feature reconcile -> feature finalize] -> maestro-card (qa-baseline -> feature accept -> prepare -> work -> verify -> qa-slice -> feature close)`
 
-Next: decisions locked and contract authored -> run `maestro feature reconcile
-<id>`, then `maestro feature finalize <id>`, then hand to `maestro-card` (its
-qa-baseline reference, then `feature accept`). The hand-off is a lifecycle gate:
+Next: decisions locked and contract authored -> stop at explicit build approval.
+After build approval, run `maestro feature reconcile <id>`, then `maestro
+feature finalize <id>`, then hand to `maestro-card` (its qa-baseline reference,
+then `feature accept`). The hand-off is a lifecycle gate:
 `feature accept` and `feature prepare` fail when `.maestro/cards/<id>/handoff.md`
 is missing or stale. When the user authorizes building, do not re-ask -- flow
 straight through reconcile -> finalize -> qa-baseline -> accept -> prepare ->
