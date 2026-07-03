@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-version: 1.36.8
+version: 1.36.9
 description: "Design Maestro changes before implementation: use for brainstorm, plan, PRD synthesis, grill me, grilling, stress-test, domain model, deepening candidate, wording, workflow, skill, harness, card/task/feature, architecture, UX, or agent-process decisions."
 ---
 
@@ -24,7 +24,7 @@ Decision, Idea, and Progress are CardKinds / workflow kinds on cards. A Task is
 the low executable unit, not a CardType in the target model; legacy `type: task`
 cards stay readable for compatibility. For tiny same-session work, design
 toward the low-ceremony `task add/start/done/list` surface backed by a Progress
-card's `progress.yml`. Use facets (`spec.md`, `qa.md`, `notes.md`) for any card
+card's `progress.yml`. Use facets (`design.md`, `qa.md`, `notes.md`) for any card
 type that needs contract, evidence, or history, not only features.
 
 Activate with a known session id:
@@ -39,7 +39,7 @@ spelling variations.
 Native Maestro MCP tools may be used for supported orientation reads
 (`maestro_status`, `maestro_feature_show`, `maestro_card_list`, and related
 list/show tools) when the host exposes them. Design authoring still uses the
-CLI because `feature spec`, `feature set`, and `decision lock` are not MCP
+CLI because `feature design`, `feature set`, and `decision lock` are not MCP
 tools yet. After the design hand-off, `maestro-card` prefers MCP for supported
 work-card and feature-lifecycle steps.
 
@@ -47,7 +47,7 @@ Routing: external PRD with open forks -> decide forks in design, then intake per
 PRD synthesis from settled context -> use [reference/prd.md](reference/prd.md).
 Grill/stress-test session -> use [reference/grilling.md](reference/grilling.md).
 Domain-modeling session -> use [reference/domain-model.md](reference/domain-model.md).
-Grill-with-docs session -> use [reference/grilling.md](reference/grilling.md), plus [reference/domain-model.md](reference/domain-model.md) for Maestro spec/decision updates.
+Grill-with-docs session -> use [reference/grilling.md](reference/grilling.md), plus [reference/domain-model.md](reference/domain-model.md) for Maestro design/decision updates.
 Chosen architecture deepening candidate -> use [reference/deepening-candidate.md](reference/deepening-candidate.md).
 
 ## Conversation Driver
@@ -75,7 +75,7 @@ When anti-MVP authority applies, every design answer separates:
 - Deferred work: only implementation sequencing, not reduced vision.
 
 Keep a short fork queue. After each locked decision or clarified user answer,
-derive the next unresolved fork from the feature spec, open questions, locked
+derive the next unresolved fork from the feature design, open questions, locked
 decisions, and working thesis. If a concrete next fork exists, present it in
 the same turn; do not make the user send "next fork" just to continue. If no
 fork remains, say that directly and name the next lifecycle gate, usually
@@ -136,8 +136,8 @@ maestro never auto-reads or auto-replies; you do.
    seeding `--description` with the problem.
 2. Map the current state from real evidence before options:
    files, commands, outputs, screenshots, or repo artifacts with `file:line`
-   where code is involved. Write what you map into the spec as you go:
-   `maestro feature spec <id> --section "Current state" --append "<finding>"`.
+   where code is involved. Write what you map into the design facet as you go:
+   `maestro feature design <id> --section "Current state" --append "<finding>"`.
    The same verb fills `Problem` and creates any new section; `--replace`
    rewrites a section wholesale. For a complex core domain, model it here: run
    the DDD fitness gate in [reference/ddd.md](reference/ddd.md) before reaching
@@ -180,7 +180,7 @@ maestro never auto-reads or auto-replies; you do.
 10. When design is done, run `maestro feature reconcile <id>` first to write or
    refresh the pre-finalize receipt, then write the canonical clean handoff with
    `maestro feature finalize <id>`. The next agent starts at
-   `.maestro/cards/<id>/handoff.md`; raw `spec.md`, `notes.md`, and decision
+   `.maestro/cards/<id>/handoff.md`; raw `design.md`, legacy `spec.md`, `notes.md`, and decision
    cards stay preserved for audit.
 
 Completion criterion: design is done only when every material fork is locked or
@@ -238,9 +238,9 @@ harness. Preserve the answer, not the code.
 
 When a fork hinges on project language or boundaries, challenge the terms before
 locking the design. Use `maestro grep "<topic>"` as the native search path,
-then read the feature spec, handoff, notes, decisions, memory, and relevant code
+then read the feature design, handoff, notes, decisions, memory, and relevant code
 before asking; if evidence can answer a question, inspect it instead. Resolved
-domain terms are captured in the feature spec and material trade-offs are
+domain terms are captured in the feature design and material trade-offs are
 locked as Maestro decisions. Full branch:
 [reference/domain-model.md](reference/domain-model.md).
 
@@ -253,9 +253,9 @@ locked as Maestro decisions. Full branch:
 - Do not keep a contradicted locked decision silently. To reopen a locked
   ruling, supersede it with `maestro decision supersede`; never edit or unlock
   the locked Decision record.
-- Do not resume from chat memory. Resume from `maestro feature spec <id>`,
+- Do not resume from chat memory. Resume from `maestro feature design <id>`,
   `.maestro/cards/<id>/handoff.md` first when it exists, then raw
-  `spec.md`, `notes.md`, and `maestro decision list --feature <id>` for audit
+  `design.md`, legacy `spec.md`, `notes.md`, and `maestro decision list --feature <id>` for audit
   or deeper context (the bare list windows to recent decisions, so scope it to
   your feature).
 

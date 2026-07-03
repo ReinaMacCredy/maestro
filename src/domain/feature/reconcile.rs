@@ -967,7 +967,7 @@ fn current_fingerprints(
     let decisions = decisions::decisions_for_feature(paths, feature_id)?;
     let qa = registry::read_sidecar_text(paths, feature_id, "qa.md")?;
     let handoff = registry::read_sidecar_text(paths, feature_id, "handoff.md")?;
-    let spec = registry::read_sidecar_text(paths, feature_id, "spec.md")?;
+    let design = registry::read_design_text(paths, feature_id)?;
     let notes = registry::read_sidecar_text(paths, feature_id, "notes.md")?;
     let worktree = registry::read_sidecar_text(paths, feature_id, "worktree.yml")?;
     let mut fingerprints = BTreeMap::new();
@@ -1007,7 +1007,7 @@ fn current_fingerprints(
         "handoff".to_string(),
         digest_json(&json!({
             "handoff": handoff,
-            "spec": spec,
+            "design": design,
             "notes": notes,
             "worktree": worktree,
         }))?,

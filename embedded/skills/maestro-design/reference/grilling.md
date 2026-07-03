@@ -28,5 +28,5 @@ language, bounded contexts, business concepts, glossary, or durable trade-offs,
 also use [domain-model.md](domain-model.md).
 
 The docs-backed variant keeps the same one-question-at-a-time grilling rhythm,
-but resolved domain terms are captured immediately in feature spec sections, and
+but resolved domain terms are captured immediately in feature design sections, and
 Maestro decisions are locked only for hard-to-reverse, surprising trade-offs.

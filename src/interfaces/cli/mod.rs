@@ -1907,7 +1907,24 @@ pub enum FeatureCommand {
     #[command(about = "Show a feature's status, full contract, and task counts")]
     Show { id: String },
     #[command(
-        about = "Render a feature's spec-of-record, or fill one section (--section with --append/--replace)"
+        about = "Render a feature's design-of-record, or fill one section (--section with --append/--replace)"
+    )]
+    Design {
+        id: String,
+        #[arg(long, help = "Design section to write, e.g. \"Current state\"")]
+        section: Option<String>,
+        #[arg(long, help = "Append text to the section body", value_name = "TEXT")]
+        append: Option<String>,
+        #[arg(
+            long,
+            help = "Replace the section body with the text",
+            value_name = "TEXT",
+            conflicts_with = "append"
+        )]
+        replace: Option<String>,
+    },
+    #[command(
+        about = "Compatibility alias for `feature design`; reads legacy spec.md when design.md is absent"
     )]
     Spec {
         id: String,

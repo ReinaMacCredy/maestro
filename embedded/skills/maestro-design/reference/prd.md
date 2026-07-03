@@ -6,12 +6,12 @@ Synthesize what is already known; do not start a discovery interview.
 ## Process
 
 1. Map current codebase state if it has not already been mapped. Use the
-   feature spec's domain language, locked decisions, notes, memory, and relevant
+   feature design's domain language, locked decisions, notes, memory, and relevant
    source evidence.
 2. Sketch the test seams for the feature. Prefer existing seams and the highest
    useful seam; the ideal is one seam. If publishing externally, pause only to
    confirm the seam sketch before publication.
-3. Write the PRD. In Maestro, preserve it on the feature with `feature spec`
+3. Write the PRD. In Maestro, preserve it on the feature with `feature design`
    sections and use `feature finalize` for the clean handoff. If an external
    issue tracker is configured and the user asked to publish there, publish the
    PRD and apply the `ready-for-agent` label.

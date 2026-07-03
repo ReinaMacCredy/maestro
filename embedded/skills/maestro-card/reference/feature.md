@@ -25,7 +25,7 @@ maestro_feature_verify -> maestro_qa_slice -> maestro_feature_close
 
 Use the CLI for lifecycle and maintenance verbs not yet exposed as MCP tools
 (`feature reconcile`, `feature finalize`, `feature amend`, archive, and unarchive), or when MCP is unavailable. Design
-authoring (`feature new`, `feature set`, and `feature spec`) belongs in
+authoring (`feature new`, `feature set`, and `feature design`) belongs in
 `maestro-design`. MCP tool schemas come from the host; CLI signatures live in
 [cli.md](cli.md).
 
@@ -55,7 +55,7 @@ forks; `--question` is for loose questions not yet forks, both handled in
 `maestro-design`.
 
 At the approval moment, read `maestro feature show <id>` and
-`maestro feature spec <id>` first. They are the authority-aware continuation
+`maestro feature design <id>` first. They are the authority-aware continuation
 index after finalize, including DB-backed finalized cards that no longer have a
 live `.maestro/cards/<id>/` directory. Use raw editable files only while a card
 folder or workbench is the current authority surface. If the handoff is missing
@@ -102,9 +102,9 @@ Accept passes only when the feature has:
 - at least one affected area
 - a current reconcile receipt from `maestro feature reconcile <id>`
 - a fresh finalized handoff from `maestro feature finalize <id>`, readable with
-  `maestro feature spec <id>` / `maestro feature show <id>`
+  `maestro feature design <id>` / `maestro feature show <id>`
 - a non-empty QA baseline from [qa-baseline.md](qa-baseline.md), readable through
-  `maestro feature spec <id>` and the QA verbs
+  `maestro feature design <id>` and the QA verbs
 
 On pass, the contract and baseline freeze. Later growth uses:
 

@@ -798,7 +798,7 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
             state: "unreadable".to_string(),
             title: error,
             next: recovery_label(hint.as_deref()),
-            inspect: format!("maestro feature spec {id}"),
+            inspect: format!("maestro feature design {id}"),
             project: None,
             stale_proposed: false,
         });

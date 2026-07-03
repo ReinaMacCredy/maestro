@@ -278,6 +278,128 @@ fn assert_dated_note_line(notes: &str, expected_text: &str) {
 }
 
 #[test]
+fn feature_design_command_writes_design_sidecar_and_spec_aliases_it() {
+    let temp_dir = TestTempDir::new("maestro-feature-design-command");
+    let root = temp_dir.path();
+    init_git_marker(root);
+    stdout(maestro(&["init", "--yes"], root), &["init", "--yes"]);
+    stdout(
+        maestro(&["feature", "new", "Design Facet"], root),
+        &["feature", "new", "Design Facet"],
+    );
+
+    let design_append = stdout(
+        maestro(
+            &[
+                "feature",
+                "design",
+                "design-facet",
+                "--section",
+                "Current state",
+                "--append",
+                "primary design detail",
+            ],
+            root,
+        ),
+        &["feature", "design", "design-facet"],
+    );
+    assert!(design_append.contains("design: .maestro/cards/design-facet/design.md"));
+    assert!(design_append.contains("inspect: maestro feature design design-facet"));
+
+    let card_dir = root.join(".maestro/cards/design-facet");
+    let design = fs::read_to_string(card_dir.join("design.md"))
+        .expect("design.md should be written by feature design");
+    assert!(design.contains("primary design detail"), "{design}");
+
+    let spec_alias = stdout(
+        maestro(
+            &[
+                "feature",
+                "spec",
+                "design-facet",
+                "--section",
+                "Problem",
+                "--replace",
+                "compat alias detail",
+            ],
+            root,
+        ),
+        &["feature", "spec", "design-facet"],
+    );
+    assert!(spec_alias.contains("design: .maestro/cards/design-facet/design.md"));
+    assert!(spec_alias.contains("inspect: maestro feature design design-facet"));
+
+    let design = fs::read_to_string(card_dir.join("design.md"))
+        .expect("design.md should remain the alias write target");
+    assert!(design.contains("compat alias detail"), "{design}");
+    let legacy_spec = fs::read_to_string(card_dir.join("spec.md")).unwrap_or_default();
+    assert!(
+        !legacy_spec.contains("compat alias detail"),
+        "feature spec must not create a second mutable spec.md truth: {legacy_spec}"
+    );
+
+    let shown = stdout(
+        maestro(&["feature", "design", "design-facet"], root),
+        &["feature", "design", "design-facet"],
+    );
+    assert!(shown.contains("primary design detail"), "{shown}");
+    assert!(shown.contains("compat alias detail"), "{shown}");
+}
+
+#[test]
+fn feature_design_reads_legacy_spec_and_stops_on_divergent_dual_files() {
+    let temp_dir = TestTempDir::new("maestro-feature-design-legacy");
+    let root = temp_dir.path();
+    init_git_marker(root);
+    stdout(maestro(&["init", "--yes"], root), &["init", "--yes"]);
+    stdout(
+        maestro(&["feature", "new", "Legacy Spec"], root),
+        &["feature", "new", "Legacy Spec"],
+    );
+
+    let card_dir = root.join(".maestro/cards/legacy-spec");
+    let design_path = card_dir.join("design.md");
+    if design_path.exists() {
+        fs::remove_file(&design_path).expect("design.md should be removable in fixture");
+    }
+    fs::write(
+        card_dir.join("spec.md"),
+        "# Legacy Spec\n\n## Current state\n\nlegacy spec detail\n",
+    )
+    .expect("legacy spec.md fixture should be writable");
+
+    let shown = stdout(
+        maestro(&["feature", "design", "legacy-spec"], root),
+        &["feature", "design", "legacy-spec"],
+    );
+    assert!(shown.contains("legacy spec detail"), "{shown}");
+    let compat_shown = stdout(
+        maestro(&["feature", "spec", "legacy-spec"], root),
+        &["feature", "spec", "legacy-spec"],
+    );
+    assert!(
+        compat_shown.contains("legacy spec detail"),
+        "{compat_shown}"
+    );
+
+    fs::write(
+        &design_path,
+        "# Legacy Spec\n\n## Current state\n\ndesign truth detail\n",
+    )
+    .expect("design.md fixture should be writable");
+    let error = assert_failure(
+        maestro(&["feature", "design", "legacy-spec"], root),
+        &["feature", "design", "legacy-spec"],
+    );
+    assert!(error.contains("design.md"), "{error}");
+    assert!(error.contains("spec.md"), "{error}");
+    assert!(
+        error.contains("diverge") || error.contains("migration"),
+        "{error}"
+    );
+}
+
+#[test]
 fn feature_set_large_contract_edit_finishes_under_timeout() {
     let temp_dir = TestTempDir::new("maestro-feature-set-large-contract");
     init_git_marker(temp_dir.path());
@@ -1086,7 +1208,7 @@ fn feature_finalize_writes_handoff_and_gates_accept_prepare() {
     );
     assert!(handoff.contains("`ac-1`: handoff exists"), "{handoff}");
     assert!(
-        handoff.contains("`.maestro/cards/clean-handoff/spec.md`"),
+        handoff.contains("`.maestro/cards/clean-handoff/design.md`"),
         "{handoff}"
     );
 
@@ -1292,7 +1414,7 @@ fn feature_finalize_moves_authority_to_db_and_reopen_uses_workbench() {
         "{finalize}"
     );
     assert!(
-        finalize.contains("read: maestro feature spec db-backed-contract"),
+        finalize.contains("read: maestro feature design db-backed-contract"),
         "{finalize}"
     );
     assert!(
@@ -1428,7 +1550,7 @@ fn feature_finalize_moves_authority_to_db_and_reopen_uses_workbench() {
     assert!(reopen.contains("reopened db-backed-contract"), "{reopen}");
     let workbench = root.join(".maestro/workbench/db-backed-contract");
     assert!(workbench.join("card.yaml").is_file());
-    assert!(workbench.join("spec.md").is_file());
+    assert!(workbench.join("design.md").is_file());
 
     stdout(
         maestro(
@@ -1445,8 +1567,8 @@ fn feature_finalize_moves_authority_to_db_and_reopen_uses_workbench() {
         ),
         &["feature", "spec", "db-backed-contract"],
     );
-    let workbench_spec =
-        fs::read_to_string(workbench.join("spec.md")).expect("workbench spec should be readable");
+    let workbench_spec = fs::read_to_string(workbench.join("design.md"))
+        .expect("workbench design should be readable");
     assert!(
         workbench_spec.contains("workbench redesign detail"),
         "{workbench_spec}"
@@ -1467,7 +1589,7 @@ fn feature_finalize_moves_authority_to_db_and_reopen_uses_workbench() {
         "{refinalize}"
     );
     assert!(
-        refinalize.contains("read: maestro feature spec db-backed-contract"),
+        refinalize.contains("read: maestro feature design db-backed-contract"),
         "{refinalize}"
     );
     assert!(
@@ -3842,11 +3964,11 @@ fn decision_list_windows_to_recent_and_all_feature_restore() {
     );
 }
 
-/// S3d: `feature new` scaffolds `spec.md` beside the card and every spec
+/// S3d: `feature new` scaffolds `design.md` beside the card and every design
 /// surface (receipt, `feature spec` read, subsequent edits) resolves through
 /// `.maestro/cards/<id>/` -- with no legacy `features/` tree ever created.
 #[test]
-fn feature_new_scaffolds_spec_in_the_card_dir_and_feature_spec_reads_it() {
+fn feature_new_scaffolds_design_in_the_card_dir_and_feature_spec_reads_it() {
     let temp_dir = TestTempDir::new("maestro-feature-spec-scaffold");
     init_git_marker(temp_dir.path());
     stdout(
@@ -3857,7 +3979,7 @@ fn feature_new_scaffolds_spec_in_the_card_dir_and_feature_spec_reads_it() {
     let create_args = ["feature", "new", "Billing CSV export"];
     let receipt = stdout(maestro(&create_args, temp_dir.path()), &create_args);
     assert!(
-        receipt.contains("spec: .maestro/cards/billing-csv-export/spec.md"),
+        receipt.contains("design: .maestro/cards/billing-csv-export/design.md"),
         "{receipt}"
     );
     assert!(
@@ -3865,25 +3987,25 @@ fn feature_new_scaffolds_spec_in_the_card_dir_and_feature_spec_reads_it() {
         "the retired per-feature decisions.yaml must not be advertised: {receipt}"
     );
 
-    let spec_path = temp_dir
+    let design_path = temp_dir
         .path()
-        .join(".maestro/cards/billing-csv-export/spec.md");
-    let scaffold = fs::read_to_string(&spec_path).expect("spec.md scaffolded beside the card");
+        .join(".maestro/cards/billing-csv-export/design.md");
+    let scaffold = fs::read_to_string(&design_path).expect("design.md scaffolded beside the card");
     assert!(scaffold.starts_with("# Billing CSV export"), "{scaffold}");
 
     fs::write(
-        &spec_path,
+        &design_path,
         "# Billing CSV export\n\n## Current state\n\nrows export by hand today\n",
     )
-    .expect("invariant: spec.md should be writable");
+    .expect("invariant: design.md should be writable");
     let spec_args = ["feature", "spec", "billing-csv-export"];
     let spec = stdout(maestro(&spec_args, temp_dir.path()), &spec_args);
     assert!(
         spec.contains("rows export by hand today"),
-        "feature spec must read the card-dir spec.md: {spec}"
+        "feature spec must read the card-dir design.md: {spec}"
     );
     assert!(spec.contains("## Contract"), "{spec}");
-    assert!(!spec.contains("(no spec.md found)"), "{spec}");
+    assert!(!spec.contains("(no design.md found)"), "{spec}");
 
     assert!(
         !temp_dir.path().join(".maestro/features").exists(),
@@ -3892,7 +4014,7 @@ fn feature_new_scaffolds_spec_in_the_card_dir_and_feature_spec_reads_it() {
 }
 
 /// L6b: `feature spec` crosses the archive boundary like `feature show` -- an
-/// archived feature renders its archived spec.md, not the unreadable-card
+/// archived feature renders its archived design.md, not the unreadable-card
 /// recovery view.
 #[test]
 fn feature_spec_falls_through_to_an_archived_feature() {
@@ -3904,10 +4026,10 @@ fn feature_spec_falls_through_to_an_archived_feature() {
     let create_args = ["feature", "new", "Billing CSV export"];
     stdout(maestro(&create_args, root), &create_args);
     fs::write(
-        root.join(".maestro/cards/billing-csv-export/spec.md"),
+        root.join(".maestro/cards/billing-csv-export/design.md"),
         "# Billing CSV export\n\n## Current state\n\nrows export by hand today\n",
     )
-    .expect("invariant: spec.md should be writable");
+    .expect("invariant: design.md should be writable");
     let cancel_args = [
         "feature",
         "cancel",
@@ -3924,7 +4046,7 @@ fn feature_spec_falls_through_to_an_archived_feature() {
     assert!(spec.contains("archived: true"), "{spec}");
     assert!(
         spec.contains("rows export by hand today"),
-        "the archived spec.md renders: {spec}"
+        "the archived design.md renders: {spec}"
     );
     assert!(!spec.contains("status: unreadable"), "{spec}");
 }
@@ -4330,11 +4452,11 @@ fn feature_auto_archive_blocks_worker_missing_store_stale_store_and_stale_snapsh
     );
 }
 
-/// S8: `feature spec --section --append/--replace` fills the spec during
+/// S8: `feature spec --section --append/--replace` fills the design during
 /// brainstorm/plan -- appends accumulate, replace overwrites, an unknown
 /// section is created, and the bare verb renders what was written.
 #[test]
-fn feature_spec_section_writes_fill_the_spec_from_the_cli() {
+fn feature_spec_section_writes_fill_design_from_the_cli() {
     let temp_dir = TestTempDir::new("maestro-feature-spec-write");
     init_git_marker(temp_dir.path());
     stdout(
@@ -4346,9 +4468,9 @@ fn feature_spec_section_writes_fill_the_spec_from_the_cli() {
     let receipt = stdout(maestro(&create_args, temp_dir.path()), &create_args);
     assert!(
         receipt.contains(
-            "fill: maestro feature spec billing-csv-export --section \"Current state\" --append"
+            "fill: maestro feature design billing-csv-export --section \"Current state\" --append"
         ),
-        "feature new must advertise the spec write verb: {receipt}"
+        "feature new must advertise the design write verb: {receipt}"
     );
 
     let id = "billing-csv-export";
@@ -4401,9 +4523,9 @@ fn feature_spec_section_writes_fill_the_spec_from_the_cli() {
     let spec = fs::read_to_string(
         temp_dir
             .path()
-            .join(".maestro/cards/billing-csv-export/spec.md"),
+            .join(".maestro/cards/billing-csv-export/design.md"),
     )
-    .expect("spec.md present");
+    .expect("design.md present");
     assert_eq!(
         spec,
         "# Billing CSV export\n\n## Current state\n\nrows export by hand today\n\n## Problem\n\nno streaming path\n\n## Fork walkthroughs\n\nF1: stream vs buffer\n"

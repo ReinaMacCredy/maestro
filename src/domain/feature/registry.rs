@@ -19,6 +19,7 @@
 //! errors that name the gap and the fix command.
 
 use std::collections::BTreeMap;
+use std::fs;
 use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Context, Result, anyhow, bail};
@@ -53,6 +54,8 @@ use crate::foundation::core::slug::slugify_ascii;
 use crate::foundation::core::time::utc_now_timestamp;
 
 const HANDOFF_FILE: &str = "handoff.md";
+const DESIGN_FILE: &str = "design.md";
+const LEGACY_SPEC_FILE: &str = "spec.md";
 const HANDOFF_VERSION: &str = "1";
 const HANDOFF_VERSION_MARKER: &str = "<!-- maestro:feature-handoff-version: ";
 const HANDOFF_HASH_MARKER: &str = "<!-- maestro:feature-handoff-source-sha256: ";
@@ -334,7 +337,7 @@ pub fn create(paths: &MaestroPaths, title: &str, project: Option<String>) -> Res
     }
     let record = FeatureRecord::proposed(&id, title, &utc_now_timestamp());
     save_new_record(paths, &record, project)?;
-    scaffold_spec_file(paths, &id, title)?;
+    scaffold_design_file(paths, &id, title)?;
     Ok(id)
 }
 
@@ -558,7 +561,7 @@ fn handoff_gate_gap(id: &str, state: &str, detail: &str) -> String {
 }
 
 struct HandoffSources {
-    spec: Option<String>,
+    design: Option<String>,
     notes: Option<String>,
     worktree_ledger: Option<String>,
     decisions: Vec<DecisionRecord>,
@@ -566,18 +569,18 @@ struct HandoffSources {
 }
 
 fn handoff_sources(paths: &MaestroPaths, record: &FeatureRecord) -> Result<HandoffSources> {
-    let spec = read_sidecar_text(paths, &record.id, "spec.md")?;
+    let design = read_design_text(paths, &record.id)?;
     let notes = read_sidecar_text(paths, &record.id, "notes.md")?;
     let worktree_ledger = read_sidecar_text(paths, &record.id, "worktree.yml")?;
     let decisions = decisions::decisions_for_feature(paths, &record.id)?;
     let fingerprint = handoff_source_fingerprint(
         record,
-        spec.as_deref(),
+        design.as_deref(),
         worktree_ledger.as_deref(),
         &decisions,
     );
     Ok(HandoffSources {
-        spec,
+        design,
         notes,
         worktree_ledger,
         decisions,
@@ -587,7 +590,7 @@ fn handoff_sources(paths: &MaestroPaths, record: &FeatureRecord) -> Result<Hando
 
 fn handoff_source_fingerprint(
     record: &FeatureRecord,
-    spec: Option<&str>,
+    design: Option<&str>,
     worktree_ledger: Option<&str>,
     decisions: &[DecisionRecord],
 ) -> String {
@@ -602,7 +605,7 @@ fn handoff_source_fingerprint(
     push_source_list(&mut source, "affected_areas", &record.affected_areas);
     push_source_list(&mut source, "non_goals", &record.non_goals);
     push_source_list(&mut source, "open_questions", &record.open_questions);
-    push_source_optional_field(&mut source, "spec.md", spec);
+    push_source_optional_field(&mut source, "design.md", design);
     // `notes.md` is commentary and coordination evidence. It stays visible in
     // handoff audit trails and feature show output, but it must not stale the
     // finalized contract when agents append post-finalize authorization notes.
@@ -779,8 +782,11 @@ fn render_handoff(
     push_handoff_worktrees(&mut out, worktree_statuses);
 
     out.push_str("\n## Audit Trail\n\n");
-    out.push_str(&format!("- Spec: `.maestro/cards/{}/spec.md`", record.id));
-    if sources.spec.is_none() {
+    out.push_str(&format!(
+        "- Design: `.maestro/cards/{}/design.md`",
+        record.id
+    ));
+    if sources.design.is_none() {
         out.push_str(" (missing)");
     }
     out.push('\n');
@@ -1951,6 +1957,41 @@ pub fn read_sidecar_text(paths: &MaestroPaths, id: &str, name: &str) -> Result<O
     Ok(None)
 }
 
+fn remove_sidecar_text(paths: &MaestroPaths, id: &str, name: &str) -> Result<bool> {
+    validate_feature_id(id)?;
+    validate_sidecar_name(name)?;
+    let workbench = paths.workbench_dir().join(id).join(name);
+    if workbench.is_file() {
+        fs::remove_file(&workbench)
+            .with_context(|| format!("failed to remove {}", workbench.display()))?;
+        return Ok(true);
+    }
+    if live_db::contains_card_id(paths, id)? {
+        return live_db::remove_file(paths, id, name);
+    }
+    let card_file = paths.cards_dir().join(id).join(name);
+    if card_file.is_file() {
+        fs::remove_file(&card_file)
+            .with_context(|| format!("failed to remove {}", card_file.display()))?;
+        return Ok(true);
+    }
+    Ok(false)
+}
+
+pub fn read_design_text(paths: &MaestroPaths, id: &str) -> Result<Option<String>> {
+    let design = read_sidecar_text(paths, id, DESIGN_FILE)?;
+    let legacy_spec = read_sidecar_text(paths, id, LEGACY_SPEC_FILE)?;
+    match (design, legacy_spec) {
+        (Some(design), Some(spec)) if design != spec => {
+            bail!(
+                "feature {id} has divergent design.md and spec.md; migrate explicitly so there is only one design truth"
+            )
+        }
+        (Some(design), _) => Ok(Some(design)),
+        (None, spec) => Ok(spec),
+    }
+}
+
 pub fn write_sidecar_text(
     paths: &MaestroPaths,
     id: &str,
@@ -2030,8 +2071,8 @@ fn append_note_sidecar(
     Ok(NoteAppend { created, line })
 }
 
-fn scaffold_spec_file(paths: &MaestroPaths, id: &str, title: &str) -> Result<()> {
-    let path = feature_sidecar_dir(paths, id).join("spec.md");
+fn scaffold_design_file(paths: &MaestroPaths, id: &str, title: &str) -> Result<()> {
+    let path = feature_sidecar_dir(paths, id).join(DESIGN_FILE);
     if path.exists() {
         return Ok(());
     }
@@ -2042,18 +2083,18 @@ fn scaffold_spec_file(paths: &MaestroPaths, id: &str, title: &str) -> Result<()>
         .with_context(|| format!("failed to write {}", path.display()))
 }
 
-/// Outcome of a spec-section write, for the verb echo.
+/// Outcome of a design-section write, for the verb echo.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SpecSectionReport {
     /// Whether the section heading was newly added by this write.
     pub created_section: bool,
 }
 
-/// Write prose into one `## <section>` of a feature's `spec.md` (S8): append
+/// Write prose into one `## <section>` of a feature's `design.md`: append
 /// to or replace the section body, scaffolding the file and creating the
-/// section when absent. The spec is owner-edited prose, not record state, so
+/// section when absent. The design facet is owner-edited prose, not record state, so
 /// the write is an atomic replace without a CAS.
-pub fn write_spec_section(
+pub fn write_design_section(
     paths: &MaestroPaths,
     id: &str,
     section: &str,
@@ -2069,11 +2110,22 @@ pub fn write_spec_section(
     if text.is_empty() {
         bail!("section text must not be empty");
     }
-    let original = read_sidecar_text(paths, id, "spec.md")?
+    let original = read_design_text(paths, id)?
         .unwrap_or_else(|| format!("# {}\n\n## Current state\n\n## Problem\n\n", record.title));
     let (contents, created_section) = patch_spec_section(&original, section, text, replace);
-    write_sidecar_text(paths, id, "spec.md", &contents)?;
+    write_sidecar_text(paths, id, DESIGN_FILE, &contents)?;
+    let _ = remove_sidecar_text(paths, id, LEGACY_SPEC_FILE)?;
     Ok(SpecSectionReport { created_section })
+}
+
+pub fn write_spec_section(
+    paths: &MaestroPaths,
+    id: &str,
+    section: &str,
+    text: &str,
+    replace: bool,
+) -> Result<SpecSectionReport> {
+    write_design_section(paths, id, section, text, replace)
 }
 
 /// Patch one `## <section>` body in spec prose. A missing section is appended
@@ -2448,21 +2500,21 @@ mod cutover_tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    /// S8: the spec verb fills sections during brainstorm/plan -- appends
+    /// S8: the design verb fills sections during brainstorm/plan -- appends
     /// accumulate, replace overwrites, an unknown section is created, and the
     /// rest of the file is left byte-identical.
     #[test]
-    fn spec_section_writes_fill_the_scaffold() {
+    fn design_section_writes_fill_the_scaffold() {
         let (root, paths) = card_mode_repo("spec-section");
-        let id = create(&paths, "Csv export", None).expect("create scaffolds spec.md");
-        let spec_path = feature_sidecar_dir(&paths, &id).join("spec.md");
+        let id = create(&paths, "Csv export", None).expect("create scaffolds design.md");
+        let design_path = feature_sidecar_dir(&paths, &id).join(DESIGN_FILE);
 
         let first = write_spec_section(&paths, &id, "Current state", "One writer.", false)
             .expect("append into a scaffold section");
         assert!(!first.created_section);
         write_spec_section(&paths, &id, "Current state", "Two formats.", false)
             .expect("second append accumulates");
-        let appended = std::fs::read_to_string(&spec_path).expect("spec");
+        let appended = std::fs::read_to_string(&design_path).expect("design");
         assert_eq!(
             appended,
             "# Csv export\n\n## Current state\n\nOne writer.\n\nTwo formats.\n\n## Problem\n\n"
@@ -2470,7 +2522,7 @@ mod cutover_tests {
 
         write_spec_section(&paths, &id, "Current state", "Rewritten.", true)
             .expect("replace overwrites the body");
-        let replaced = std::fs::read_to_string(&spec_path).expect("spec");
+        let replaced = std::fs::read_to_string(&design_path).expect("design");
         assert_eq!(
             replaced,
             "# Csv export\n\n## Current state\n\nRewritten.\n\n## Problem\n\n"
@@ -2479,7 +2531,7 @@ mod cutover_tests {
         let created = write_spec_section(&paths, &id, "Fork walkthroughs", "F1 vs F2.", false)
             .expect("an unknown section is created at the end");
         assert!(created.created_section);
-        let grown = std::fs::read_to_string(&spec_path).expect("spec");
+        let grown = std::fs::read_to_string(&design_path).expect("design");
         assert_eq!(
             grown,
             "# Csv export\n\n## Current state\n\nRewritten.\n\n## Problem\n\n## Fork walkthroughs\n\nF1 vs F2.\n"
@@ -2600,12 +2652,12 @@ mod cutover_tests {
 
         let report = reopen(&paths, &id).expect("reopen DB feature");
         assert!(report.path.join("card.yaml").is_file());
-        assert!(report.path.join("spec.md").is_file());
+        assert!(report.path.join(DESIGN_FILE).is_file());
         std::fs::write(
-            report.path.join("spec.md"),
+            report.path.join(DESIGN_FILE),
             "# Workbench Feature\n\n## Current state\n\nedited in workbench\n",
         )
-        .expect("edit workbench spec");
+        .expect("edit workbench design");
 
         crate::domain::feature::reconcile_clean_check(
             &paths,
@@ -2619,10 +2671,10 @@ mod cutover_tests {
             !report.path.exists(),
             "finalize removes imported workbench surface"
         );
-        let spec = read_sidecar_text(&paths, &id, "spec.md")
-            .expect("read DB spec")
-            .expect("DB spec exists");
-        assert!(spec.contains("edited in workbench"), "{spec}");
+        let design = read_design_text(&paths, &id)
+            .expect("read DB design")
+            .expect("DB design exists");
+        assert!(design.contains("edited in workbench"), "{design}");
 
         let _ = std::fs::remove_dir_all(&root);
     }

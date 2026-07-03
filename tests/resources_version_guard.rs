@@ -43,8 +43,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 20] = [
     (
         "skill",
         "maestro-card",
-        "1.37.16",
-        "3dfa71b1e9a57f1b5472835a251ebb65fc2b6e0e7575c78b119076bf0ca8a09d",
+        "1.37.17",
+        "5887ee1b7642c32405c4fe71acf1c478c5bfdc0de6a0de6c59f99225b74bf785",
     ),
     (
         "skill",
@@ -55,14 +55,14 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 20] = [
     (
         "skill",
         "maestro-design",
-        "1.36.8",
-        "30b9a022a66c31c4a8320e395667a4785c9fc19de930e2ba77a18b4c090871e3",
+        "1.36.9",
+        "8a89597f96eb931d9ca98236310a8a901cc76e61f0454105091d767fb94540fd",
     ),
     (
         "skill",
         "maestro-audit",
-        "1.13.2",
-        "cea3209daef0eac3ff34827a68f0df1bdf437296719cdd83dbff2dc6d277cf77",
+        "1.13.3",
+        "da31bac62ec62d7cd01c67310b06326bf61b879295ffedc79f5b0396ac791c3b",
     ),
     (
         "hook",
@@ -445,7 +445,7 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
     assert!(
         design.contains("domain model")
             && design.contains("reference/domain-model.md")
-            && design.contains("feature spec")
+            && design.contains("feature design")
             && design.contains("maestro decision")
             && design.contains("maestro grep"),
         "maestro-design must retain the domain-modeling branch"

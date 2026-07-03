@@ -14,7 +14,7 @@ or DB-backed; use Maestro commands instead of editing storage paths directly.
 ## Do
 
 1. Read changed files/commands, `maestro feature show <id>`, and
-   `maestro feature spec <id>` for the baseline contract.
+   `maestro feature design <id>` for the baseline contract.
 2. Select the affected `[bl-NNN]` scenarios. If the wave adds behavior, extend
    the baseline with a new id instead of hiding it behind a unit test.
 3. Run the smallest useful probes:

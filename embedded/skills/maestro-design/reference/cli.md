@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: 760700671b26ac0e5e9f96a25c314683a90cd34c4793ab8b681e7914ec65d9a7 -->
+<!-- maestro:cli-reference-sha256: 650cbff41faa76dc1bcd77c66c21d6be21f91ab47c26155d8fe019ac54994430 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -25,7 +25,8 @@ a spelling not found here is outside this skill's CLI surface.
 - `maestro feature reopen <ID>` -- Reopen a DB-backed finalized feature into .maestro/workbench/<id>
 - `maestro feature reconcile <ID> [--full] [--json] [--apply-plan <PLAN_FILE>]` -- Report or apply feature contract reconciliation before finalize
 - `maestro feature show <ID>` -- Show a feature's status, full contract, and task counts
-- `maestro feature spec <ID> [--section <SECTION>] [--append <TEXT>] [--replace <TEXT>]` -- Render a feature's spec-of-record, or fill one section (--section with --append/--replace)
+- `maestro feature design <ID> [--section <SECTION>] [--append <TEXT>] [--replace <TEXT>]` -- Render a feature's design-of-record, or fill one section (--section with --append/--replace)
+- `maestro feature spec <ID> [--section <SECTION>] [--append <TEXT>] [--replace <TEXT>]` -- Compatibility alias for `feature design`; reads legacy spec.md when design.md is absent
 - `maestro feature list [--all]` -- List features with their statuses and task counts
 
 ## maestro decision

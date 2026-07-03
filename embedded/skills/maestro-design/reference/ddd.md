@@ -49,7 +49,7 @@ patterns. Do this work first, during mapping.
 - **Ubiquitous language.** Name things in the spec the way the domain names
   them, and reuse exactly those names in code, tests, and decisions -- no
   translation layer between conversation and code. Capture the glossary in the
-  spec: `maestro feature spec <id> --section "Ubiquitous language" --append`.
+  design facet: `maestro feature design <id> --section "Ubiquitous language" --append`.
 - **Subdomain classification.** Split the area into *core* (your differentiator
   -- model it deeply), *supporting* (needed, not special -- keep it plain), and
   *generic* (buy / borrow / copy -- do not model it). Effort goes to the core.

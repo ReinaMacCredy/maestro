@@ -292,6 +292,7 @@ const MAESTRO_DESIGN_COMMANDS: &[&str] = &[
     "maestro feature finalize",
     "maestro feature reopen",
     "maestro feature show",
+    "maestro feature design",
     "maestro feature spec",
     "maestro feature list",
     "maestro decision new",
@@ -652,6 +653,7 @@ mod tests {
         assert!(!card.contains("maestro harness propose"), "{card}");
 
         let design = render_cli_reference_for_skill("maestro-design");
+        assert!(design.contains("maestro feature design <ID>"), "{design}");
         assert!(design.contains("maestro feature spec <ID>"), "{design}");
         assert!(
             design.contains("maestro feature reconcile <ID>"),

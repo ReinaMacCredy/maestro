@@ -629,6 +629,7 @@ pub fn query_scanned<'a>(
 pub(crate) const GREP_SIDECARS: &[&str] = &[
     CARD_FILE,
     TASK_FILE,
+    "design.md",
     "notes.md",
     "spec.md",
     "qa.md",

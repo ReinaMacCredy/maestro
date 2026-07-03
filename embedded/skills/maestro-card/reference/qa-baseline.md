@@ -11,7 +11,7 @@ card store after finalize; use Maestro commands to read it.
 - `maestro feature accept` also requires a fresh finalized handoff; when the
   blocker names handoff, run `maestro feature reconcile <id>` and then
   `maestro feature finalize <id>` first, then read with
-  `maestro feature spec <id>` or `maestro feature show <id>`.
+  `maestro feature design <id>` or `maestro feature show <id>`.
 - A behavioral amend added acceptance or area and the baseline must be fresh.
 - The feature touches user-visible, data, security, persistence,
   compatibility, release, or workflow behavior.
@@ -26,7 +26,7 @@ maestro feature accept <id> --qa none --reason "<why there is nothing to QA>"
 ```
 
 This waives the baseline at accept and lets the feature close with no slices; the
-reason persists on the feature and prints on `feature show` / `feature spec`. The
+reason persists on the feature and prints on `feature show` / `feature design`. The
 waiver stays fresh until a *behavioral* amend lands: adding acceptance or an
 affected area re-arms the full gate, so capture a real `qa.md` then (re-declare
 `--qa none` only if the new scope is still non-behavioral). A non-behavioral

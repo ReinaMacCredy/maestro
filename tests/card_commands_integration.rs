@@ -2761,6 +2761,47 @@ fn text_index_accelerates_grep_transparently_with_silent_fallback() {
     );
 }
 
+#[test]
+fn list_grep_searches_design_sidecars_live_and_archived() {
+    let temp = cards_repo("s2-grep-design-sidecar");
+    let repo = temp.path();
+    run(repo, &["feature", "new", "Design Search"]);
+    let design_path = repo.join(".maestro/cards/design-search/design.md");
+    fs::write(
+        &design_path,
+        "# Design Search\n\n## Current state\n\nunique-design-sidecar-token\n",
+    )
+    .expect("invariant: design sidecar should be writable");
+
+    let live = run(repo, &["list", "--grep", "unique-design-sidecar-token"]);
+    assert!(live.contains("design-search"), "{live}");
+
+    run(
+        repo,
+        &[
+            "feature",
+            "cancel",
+            "design-search",
+            "--reason",
+            "scope cut",
+        ],
+    );
+    run(repo, &["feature", "archive", "design-search"]);
+
+    let live_only = run(repo, &["list", "--grep", "unique-design-sidecar-token"]);
+    assert!(!live_only.contains("design-search"), "{live_only}");
+    let archived = run(
+        repo,
+        &[
+            "list",
+            "--grep",
+            "unique-design-sidecar-token",
+            "--archived",
+        ],
+    );
+    assert!(archived.contains("design-search"), "{archived}");
+}
+
 /// Drive a verb under a fixed session id. `MAESTRO_SESSION_ID` is the first key
 /// `cli_run_id()` reads, so it wins over any ambient agent-runtime var and the
 /// `card_touch` run event lands in a deterministic `runs/<session>/` bucket.

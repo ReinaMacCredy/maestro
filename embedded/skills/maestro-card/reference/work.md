@@ -179,7 +179,7 @@ path.
 Progress is still a card, but the rows inside `progress.yml` are Tasks, not
 CardTypes. Keep a Task in Progress while it only needs executable tracking. Lift
 it into a card-backed Task/Bug/Custom/Chore when it needs its own lifecycle
-record, facets (`spec.md`, `qa.md`, `notes.md`), discussion/history, child
+record, facets (`design.md`, `qa.md`, `notes.md`), discussion/history, child
 tasks, product/defect/custom identity, or governance beyond execution.
 
 Focus discipline (the task tool's one-active-item rule):

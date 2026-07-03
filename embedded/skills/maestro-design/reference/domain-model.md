@@ -17,7 +17,7 @@ maestro grep "<topic> corpus:source"
 
 Then read the Maestro artifacts it points at:
 
-- `.maestro/cards/<feature>/spec.md` is the editable design record. Use
+- `.maestro/cards/<feature>/design.md` is the editable design record. Use
   sections such as `Language`, `Relationships`, and `Flagged ambiguities` for
   domain terms.
 - `.maestro/cards/<feature>/handoff.md` is the clean continuation index after
@@ -39,7 +39,7 @@ skill. Code and ordinary docs are evidence, not the domain record of authority.
    inspect them instead of asking the user.
 3. Give each question a recommended answer.
 4. Challenge terminology immediately when the user uses a term that conflicts
-   with feature spec language, locked decisions, memory, or code evidence.
+   with feature design language, locked decisions, memory, or code evidence.
 5. Sharpen vague or overloaded language into one canonical term.
 6. Stress-test relationships with concrete scenarios that probe boundaries,
    edge cases, and cardinality.
@@ -49,20 +49,20 @@ skill. Code and ordinary docs are evidence, not the domain record of authority.
    `maestro decision lock` path once the fork is settled.
 
 Completion criterion: every material domain term used by the design has an
-existing Maestro-backed definition, a new feature-spec entry, or an explicit
+existing Maestro-backed definition, a new feature-design entry, or an explicit
 unresolved feature question; every settled domain fork is reflected in the
 feature decision record.
 
 ## Update Maestro Artifacts
 
-When a term is resolved, update the feature spec immediately. Do not batch
+When a term is resolved, update the feature design immediately. Do not batch
 glossary updates. Keep the language domain-facing, not implementation-facing.
 Use:
 
 ```sh
-maestro feature spec <id> --section "Language" --append "<entry>"
-maestro feature spec <id> --section "Relationships" --append "<entry>"
-maestro feature spec <id> --section "Flagged ambiguities" --append "<entry>"
+maestro feature design <id> --section "Language" --append "<entry>"
+maestro feature design <id> --section "Relationships" --append "<entry>"
+maestro feature design <id> --section "Flagged ambiguities" --append "<entry>"
 ```
 
 Use this shape:

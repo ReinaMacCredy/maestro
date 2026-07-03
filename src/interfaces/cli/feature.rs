@@ -216,12 +216,18 @@ pub fn run(args: FeatureArgs) -> Result<()> {
             dry_run,
         } => cancel_feature(&paths, &id, &reason, dry_run),
         FeatureCommand::Show { id } => show_feature(&paths, &id),
+        FeatureCommand::Design {
+            id,
+            section,
+            append,
+            replace,
+        } => feature_design(&paths, &id, section, append, replace, "design"),
         FeatureCommand::Spec {
             id,
             section,
             append,
             replace,
-        } => feature_spec(&paths, &id, section, append, replace),
+        } => feature_design(&paths, &id, section, append, replace, "spec"),
         FeatureCommand::List { all } => list_features(&paths, all),
         FeatureCommand::Archive {
             id,
@@ -301,7 +307,7 @@ fn finalize_feature(paths: &MaestroPaths, id: &str) -> Result<()> {
     println!("finalized {}", report.id);
     if report.path.starts_with(paths.store_db_file()) {
         println!("handoff: DB-backed in {}", paths.store_db_file().display());
-        println!("read: maestro feature spec {}", report.id);
+        println!("read: maestro feature design {}", report.id);
         println!("show: maestro feature show {}", report.id);
     } else {
         println!("handoff: {}", report.path.display());
@@ -1514,8 +1520,8 @@ fn new_feature(
         return Ok(());
     }
     println!("created feature {id} (proposed)");
-    println!("spec: .maestro/cards/{id}/spec.md");
-    println!("fill: maestro feature spec {id} --section \"Current state\" --append \"<text>\"");
+    println!("design: .maestro/cards/{id}/design.md");
+    println!("fill: maestro feature design {id} --section \"Current state\" --append \"<text>\"");
     println!("decisions: maestro decision new \"<title>\" --feature {id}");
     if initialized {
         println!("initialized contract fields");
@@ -2032,35 +2038,38 @@ fn print_decision_summary(paths: &MaestroPaths, id: &str) -> Result<()> {
     Ok(())
 }
 
-fn feature_spec(
+fn feature_design(
     paths: &MaestroPaths,
     id: &str,
     section: Option<String>,
     append: Option<String>,
     replace: Option<String>,
+    command: &str,
 ) -> Result<()> {
     match (section, append, replace) {
-        (None, None, None) => show_feature_spec(paths, id),
-        (Some(section), Some(text), None) => write_feature_spec(paths, id, &section, &text, false),
-        (Some(section), None, Some(text)) => write_feature_spec(paths, id, &section, &text, true),
+        (None, None, None) => show_feature_design(paths, id),
+        (Some(section), Some(text), None) => {
+            write_feature_design(paths, id, &section, &text, false)
+        }
+        (Some(section), None, Some(text)) => write_feature_design(paths, id, &section, &text, true),
         (Some(section), None, None) => bail!(
-            "--section needs the text to write\n  append: maestro feature spec {id} --section \"{section}\" --append \"<text>\"\n  replace: maestro feature spec {id} --section \"{section}\" --replace \"<text>\""
+            "--section needs the text to write\n  append: maestro feature {command} {id} --section \"{section}\" --append \"<text>\"\n  replace: maestro feature {command} {id} --section \"{section}\" --replace \"<text>\""
         ),
         (None, _, _) => bail!(
-            "--append/--replace need --section\n  maestro feature spec {id} --section \"<name>\" --append \"<text>\""
+            "--append/--replace need --section\n  maestro feature {command} {id} --section \"<name>\" --append \"<text>\""
         ),
         (Some(_), Some(_), Some(_)) => unreachable!("clap rejects --append with --replace"),
     }
 }
 
-fn write_feature_spec(
+fn write_feature_design(
     paths: &MaestroPaths,
     id: &str,
     section: &str,
     text: &str,
     replace: bool,
 ) -> Result<()> {
-    let report = feature::write_spec_section(paths, id, section, text, replace)?;
+    let report = feature::write_design_section(paths, id, section, text, replace)?;
     super::emit_work_touch(paths, id);
     let verb = if replace { "replaced" } else { "appended to" };
     let created = if report.created_section {
@@ -2080,12 +2089,12 @@ fn write_feature_spec(
             section.trim()
         );
     }
-    println!("spec: .maestro/cards/{id}/spec.md");
-    println!("inspect: maestro feature spec {id}");
+    println!("design: .maestro/cards/{id}/design.md");
+    println!("inspect: maestro feature design {id}");
     Ok(())
 }
 
-fn show_feature_spec(paths: &MaestroPaths, id: &str) -> Result<()> {
+fn show_feature_design(paths: &MaestroPaths, id: &str) -> Result<()> {
     // L6b: reads cross the boundary -- mirror `show_feature`'s archive
     // fallthrough so a historical spec still renders. Only when neither tree
     // resolves does the unreadable-card recovery view take over, carrying the
@@ -2104,25 +2113,33 @@ fn show_feature_spec(paths: &MaestroPaths, id: &str) -> Result<()> {
     }
     println!();
     if archived {
-        match card::read_archived_file(paths, &view.id, "spec.md")? {
+        match card::read_archived_file(paths, &view.id, "design.md")? {
             Some(bytes) => {
-                let spec = String::from_utf8(bytes)
-                    .map_err(|error| anyhow::anyhow!("archived spec.md is not UTF-8: {error}"))?;
-                print!("{}", spec.trim_end());
+                let design = String::from_utf8(bytes)
+                    .map_err(|error| anyhow::anyhow!("archived design.md is not UTF-8: {error}"))?;
+                print!("{}", design.trim_end());
             }
-            None => {
-                println!("# {}", view.title);
-                println!();
-                println!("(no spec.md found)");
-            }
+            None => match card::read_archived_file(paths, &view.id, "spec.md")? {
+                Some(bytes) => {
+                    let spec = String::from_utf8(bytes).map_err(|error| {
+                        anyhow::anyhow!("archived spec.md is not UTF-8: {error}")
+                    })?;
+                    print!("{}", spec.trim_end());
+                }
+                None => {
+                    println!("# {}", view.title);
+                    println!();
+                    println!("(no design.md found)");
+                }
+            },
         }
     } else {
-        match feature::read_sidecar_text(paths, &view.id, "spec.md")? {
-            Some(spec) => print!("{}", spec.trim_end()),
+        match feature::read_design_text(paths, &view.id)? {
+            Some(design) => print!("{}", design.trim_end()),
             None => {
                 println!("# {}", view.title);
                 println!();
-                println!("(no spec.md found)");
+                println!("(no design.md found)");
             }
         }
     }

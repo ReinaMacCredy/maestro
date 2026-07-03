@@ -15,7 +15,7 @@ architecture claim.
 1. Use the Maestro-native search engine first: `maestro grep "<topic>"`. Narrow
    with `maestro grep "<topic> corpus:memory"` for artifact precedent or
    `maestro grep "<topic> corpus:source"` for source evidence. Read the
-   matching feature spec, handoff, notes, locked decisions, memory hits, and
+   matching feature design, handoff, notes, locked decisions, memory hits, and
    source evidence when present.
 2. Explore organically and note where understanding a concept requires bouncing
    through many small modules, where interfaces are as complex as

@@ -7,7 +7,7 @@ drives the active lifecycle; there is no CLI parser for external documents.
 1. Use `maestro-design` to create the feature, preserve the source text, decide
    open forks, and author observable acceptance criteria.
 2. Return here after the contract is stable.
-3. Read `maestro feature show <id>` and `maestro feature spec <id>` first. If
+3. Read `maestro feature show <id>` and `maestro feature design <id>` first. If
    the finalized handoff is missing or stale, run `maestro feature reconcile
    <id>` and then `maestro feature finalize <id>`, then reread through those
    commands.

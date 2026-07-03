@@ -235,6 +235,20 @@ pub fn write_text_file(
     upsert_file(&conn, card_id, &relative, 0o644, contents.as_bytes())
 }
 
+pub fn remove_file(paths: &MaestroPaths, card_id: &str, relative: &str) -> Result<bool> {
+    validate_card_id(card_id)?;
+    let conn = open_for_write(paths)?;
+    if !card_exists(&conn, card_id)? {
+        bail!("card {card_id} not found in the DB store");
+    }
+    let relative = normalize_relative(Path::new(relative))?;
+    let changed = conn.execute(
+        "DELETE FROM card_files WHERE card_id = ?1 AND path = ?2",
+        params![card_id, relative],
+    )?;
+    Ok(changed > 0)
+}
+
 pub fn write_text_file_if_unchanged(
     paths: &MaestroPaths,
     card_id: &str,
