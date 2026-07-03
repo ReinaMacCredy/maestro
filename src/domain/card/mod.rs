@@ -24,3 +24,9 @@ pub use archive_db::{
     migration_plan as archive_migration_plan, read_file as read_archived_file,
     resolve as resolve_archived,
 };
+pub use store::{
+    CardArchiveMove, ScannedArchiveItem, archive_card_move, archive_entry_stages,
+    archived_card_exists, archived_dir_card_exists, card_dir_move, live_card_exists,
+    live_card_hash, live_dir_card_exists, prepare_entry_archive_stages, prepare_live_archive_move,
+    prepare_scanned_archive_item, prepare_scanned_archive_move, restore_archived_feature_snapshot,
+};

@@ -49,16 +49,16 @@ fn common_cli_harness_does_not_hide_unused_public_surface() {
     let mut previous_nonempty = "";
     for line in source.lines() {
         let trimmed = line.trim_start();
-        if let Some(rest) = trimmed.strip_prefix("pub fn ") {
-            if let Some((name, _)) = rest.split_once('(') {
-                exported.push(name.to_string());
-                if name != "maestro" {
-                    assert!(
-                        previous_nonempty.starts_with("#[allow(dead_code, reason = "),
-                        "{} public method `{name}` must carry method-level dead_code allowance so the shared per-crate harness suppression stays explicit",
-                        path.display()
-                    );
-                }
+        if let Some(rest) = trimmed.strip_prefix("pub fn ")
+            && let Some((name, _)) = rest.split_once('(')
+        {
+            exported.push(name.to_string());
+            if name != "maestro" {
+                assert!(
+                    previous_nonempty.starts_with("#[allow(dead_code, reason = "),
+                    "{} public method `{name}` must carry method-level dead_code allowance so the shared per-crate harness suppression stays explicit",
+                    path.display()
+                );
             }
         }
         if !trimmed.is_empty() {

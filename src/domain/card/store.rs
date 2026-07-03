@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process;
@@ -14,7 +14,7 @@ use crate::foundation::core::fs::{
     child_dirs, ensure_dir, read_to_string_if_exists, remove_dir_if_file_unchanged,
     sorted_child_dirs, write_string_if_unchanged,
 };
-use crate::foundation::core::hash::sha256_hex;
+use crate::foundation::core::hash::{sha256_hex, sha256_prefixed};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::schema::{CARD_SCHEMA_VERSION, Compat, classify};
 use crate::foundation::core::slug::slugify_ascii;
@@ -875,6 +875,379 @@ pub(crate) fn remove_dir_with_snapshot(path: &Path, snapshot: &CardSnapshot) -> 
         .parent()
         .with_context(|| format!("card path missing parent: {}", path.display()))?;
     remove_dir_if_file_unchanged(path, snapshot.raw.as_deref(), dir)
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum ScannedArchiveItem {
+    Move(CardArchiveMove),
+    Entry { file: PathBuf, id: String },
+}
+
+/// A live card snapshot prepared for an archive move. The enum stays private so
+/// callers can check targets and execute the move without learning whether the
+/// source was a directory or the SQLite-backed store.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CardArchiveMove {
+    card_id: String,
+    basis: CardArchiveBasis,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+enum CardArchiveBasis {
+    Dir {
+        record_path: PathBuf,
+        source_dir: PathBuf,
+        target_dir: PathBuf,
+        snapshot: Box<CardSnapshot>,
+    },
+    Db {
+        source_relpath: PathBuf,
+        expected_raw: String,
+    },
+}
+
+impl CardArchiveMove {
+    pub fn card_id(&self) -> &str {
+        &self.card_id
+    }
+
+    pub fn archive_target_dir(&self, paths: &MaestroPaths) -> PathBuf {
+        match &self.basis {
+            CardArchiveBasis::Dir { target_dir, .. } => target_dir.clone(),
+            CardArchiveBasis::Db { source_relpath, .. } => {
+                paths.archive_cards_dir().join(source_relpath)
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CardArchiveEntryStage {
+    live_file: PathBuf,
+    live_snapshot: EntriesSnapshot,
+    keep: Vec<Card>,
+    relative: PathBuf,
+    sweep: Vec<Card>,
+}
+
+pub fn live_card_exists(paths: &MaestroPaths, id: &str) -> Result<bool> {
+    Ok(resolve(paths, id)?.is_some())
+}
+
+pub fn archived_card_exists(paths: &MaestroPaths, id: &str) -> Result<bool> {
+    Ok(locate_in(&paths.archive_cards_dir(), id)?.is_some()
+        || archive_db::contains_card_id(paths, id)?)
+}
+
+pub fn live_dir_card_exists(paths: &MaestroPaths, id: &str) -> bool {
+    card_path(paths, id).is_file()
+}
+
+pub fn archived_dir_card_exists(paths: &MaestroPaths, id: &str) -> bool {
+    paths.archive_cards_dir().join(id).join(CARD_FILE).is_file()
+}
+
+pub fn live_card_hash(paths: &MaestroPaths, id: &str) -> Result<Option<String>> {
+    let Some(resolved) = resolve(paths, id)? else {
+        return Ok(None);
+    };
+    let raw = match &resolved.basis {
+        ResolvedBasis::Dir { snapshot, .. } => snapshot
+            .raw
+            .as_deref()
+            .context("resolved dir-backed card missing raw snapshot")?,
+        ResolvedBasis::Entry { snapshot, .. } => snapshot
+            .raw
+            .as_deref()
+            .context("resolved entry-backed card missing raw snapshot")?,
+        ResolvedBasis::Db { raw, .. } => raw.as_str(),
+    };
+    Ok(Some(sha256_prefixed(raw.as_bytes())))
+}
+
+pub fn prepare_live_archive_move(
+    paths: &MaestroPaths,
+    card_id: &str,
+) -> Result<Option<CardArchiveMove>> {
+    let record_path = card_path(paths, card_id);
+    if record_path.is_file() {
+        let source_dir = paths.cards_dir().join(card_id);
+        let target_dir = paths.archive_cards_dir().join(card_id);
+        return Ok(Some(CardArchiveMove {
+            card_id: card_id.to_string(),
+            basis: CardArchiveBasis::Dir {
+                record_path: record_path.clone(),
+                source_dir,
+                target_dir,
+                snapshot: Box::new(load_with_snapshot(&record_path)?),
+            },
+        }));
+    }
+    let Some(db_card) = live_db::resolve(paths, card_id)? else {
+        return Ok(None);
+    };
+    Ok(Some(CardArchiveMove {
+        card_id: card_id.to_string(),
+        basis: CardArchiveBasis::Db {
+            source_relpath: PathBuf::from(card_id),
+            expected_raw: db_card.raw,
+        },
+    }))
+}
+
+pub fn prepare_scanned_archive_item(
+    paths: &MaestroPaths,
+    card_id: &str,
+    record_path: &Path,
+    from_root: &Path,
+    to_root: &Path,
+) -> Result<ScannedArchiveItem> {
+    if record_path.starts_with(live_db::db_file(paths)) {
+        let Some(db_card) = live_db::resolve(paths, card_id)? else {
+            bail!(
+                "cannot archive {card_id} — DB-backed card changed since preflight; re-run the command"
+            );
+        };
+        return Ok(ScannedArchiveItem::Move(CardArchiveMove {
+            card_id: card_id.to_string(),
+            basis: CardArchiveBasis::Db {
+                source_relpath: PathBuf::from(card_id),
+                expected_raw: db_card.raw,
+            },
+        }));
+    }
+    if is_dir_backed(record_path) {
+        let (source_dir, target_dir) = card_dir_move(card_id, record_path, from_root, to_root)?;
+        return Ok(ScannedArchiveItem::Move(CardArchiveMove {
+            card_id: card_id.to_string(),
+            basis: CardArchiveBasis::Dir {
+                record_path: record_path.to_path_buf(),
+                source_dir,
+                target_dir,
+                snapshot: Box::new(load_with_snapshot(record_path)?),
+            },
+        }));
+    }
+    Ok(ScannedArchiveItem::Entry {
+        file: record_path.to_path_buf(),
+        id: card_id.to_string(),
+    })
+}
+
+pub fn prepare_scanned_archive_move(
+    paths: &MaestroPaths,
+    card_id: &str,
+    record_path: &Path,
+    from_root: &Path,
+    to_root: &Path,
+) -> Result<CardArchiveMove> {
+    match prepare_scanned_archive_item(paths, card_id, record_path, from_root, to_root)? {
+        ScannedArchiveItem::Move(item) => Ok(item),
+        ScannedArchiveItem::Entry { file, .. } => {
+            bail!(
+                "cannot cascade {card_id} — it is an entry in {}; move it by hand",
+                file.display()
+            )
+        }
+    }
+}
+
+pub fn card_dir_move(
+    card_id: &str,
+    record_path: &Path,
+    from_root: &Path,
+    to_root: &Path,
+) -> Result<(PathBuf, PathBuf)> {
+    if !is_dir_backed(record_path) {
+        bail!(
+            "cannot cascade {card_id} — it is an entry in {}; move it by hand",
+            record_path.display()
+        );
+    }
+    let dir = record_path
+        .parent()
+        .with_context(|| format!("record path missing parent: {}", record_path.display()))?;
+    let relative = dir.strip_prefix(from_root).with_context(|| {
+        format!(
+            "card {card_id} lives outside the store root: {}",
+            dir.display()
+        )
+    })?;
+    Ok((dir.to_path_buf(), to_root.join(relative)))
+}
+
+pub fn prepare_entry_archive_stages(
+    paths: &MaestroPaths,
+    entry_sweeps: BTreeMap<PathBuf, Vec<String>>,
+) -> Result<Vec<CardArchiveEntryStage>> {
+    let mut stages = Vec::new();
+    for (live_file, ids) in entry_sweeps {
+        let live = load_entries(&live_file)?;
+        let relative = live_file
+            .strip_prefix(paths.cards_dir())
+            .with_context(|| format!("entry file outside the store root: {}", live_file.display()))?
+            .to_path_buf();
+        for id in &ids {
+            if archive_db::contains_card_id(paths, id)? {
+                bail!("cannot sweep {id} — an archived copy already exists in the archive DB");
+            }
+        }
+        let (sweep, keep): (Vec<_>, Vec<_>) = live
+            .cards
+            .iter()
+            .cloned()
+            .partition(|card| ids.contains(&card.id));
+        stages.push(CardArchiveEntryStage {
+            live_file,
+            live_snapshot: live,
+            keep,
+            relative,
+            sweep,
+        });
+    }
+    Ok(stages)
+}
+
+pub fn archive_entry_stages(paths: &MaestroPaths, stages: &[CardArchiveEntryStage]) -> Result<()> {
+    for stage in stages {
+        for card in &stage.sweep {
+            let source_relpath = PathBuf::from("entries")
+                .join(&stage.relative)
+                .join(&card.id);
+            archive_db::archive_virtual_card(paths, &card.id, card, &source_relpath)?;
+        }
+        save_entries(&stage.live_file, &stage.keep, &stage.live_snapshot)?;
+    }
+    Ok(())
+}
+
+pub fn archive_card_move(paths: &MaestroPaths, item: &CardArchiveMove) -> Result<()> {
+    match &item.basis {
+        CardArchiveBasis::Dir {
+            record_path,
+            source_dir,
+            snapshot,
+            ..
+        } => {
+            let relative = source_dir
+                .strip_prefix(paths.cards_dir())
+                .with_context(|| {
+                    format!(
+                        "failed to make {} relative to card store",
+                        source_dir.display()
+                    )
+                })?;
+            archive_db::archive_directory(paths, &item.card_id, source_dir, relative)?;
+            if let Err(error) = maybe_trigger_archive_race(record_path, &item.card_id) {
+                rollback_archive_snapshot(paths, &item.card_id)?;
+                return Err(error);
+            }
+            if let Err(error) = remove_dir_with_snapshot(record_path, snapshot) {
+                let detail = error.to_string();
+                rollback_archive_snapshot(paths, &item.card_id)?;
+                bail!(
+                    "failed to remove archived live card {}: {detail}",
+                    source_dir.display()
+                );
+            }
+            Ok(())
+        }
+        CardArchiveBasis::Db {
+            source_relpath,
+            expected_raw,
+        } => {
+            let archived = live_db::archive_card_snapshot(paths, &item.card_id, source_relpath)?;
+            if archived.raw != *expected_raw {
+                rollback_archive_snapshot(paths, &item.card_id)?;
+                let expected_hash = sha256_prefixed(expected_raw.as_bytes());
+                let current_hash = sha256_prefixed(archived.raw.as_bytes());
+                bail!(
+                    "cannot archive {} — target card changed since preflight (expected {expected_hash}, found {current_hash}); re-run the command",
+                    item.card_id
+                );
+            }
+            if let Err(error) =
+                live_db::remove_card_if_unchanged(paths, &archived.card, &archived.raw)
+            {
+                let detail = error.to_string();
+                rollback_archive_snapshot(paths, &item.card_id)?;
+                bail!(
+                    "failed to remove archived DB card {}: {detail}",
+                    item.card_id
+                );
+            }
+            Ok(())
+        }
+    }
+}
+
+pub fn restore_archived_feature_snapshot(
+    paths: &MaestroPaths,
+    id: &str,
+) -> Result<Option<Vec<String>>> {
+    let Some(feature) = archive_db::resolve(paths, id)? else {
+        return Ok(None);
+    };
+    if feature.card.card_type != CardType::Feature {
+        return Ok(None);
+    }
+    let mut children: Vec<_> = archive_db::scan(paths)?
+        .into_iter()
+        .filter(|archived| {
+            archived.card.parent.as_deref() == Some(id) && archived.card.card_type.workable()
+        })
+        .collect();
+    children.sort_by(|a, b| a.card.id.cmp(&b.card.id));
+    let mut snapshot_ids = vec![feature.snapshot_id];
+    for child in &children {
+        if child.snapshot_id != snapshot_ids[0] {
+            snapshot_ids.push(child.snapshot_id.clone());
+        }
+    }
+    snapshot_ids.sort();
+    snapshot_ids.dedup();
+    archive_db::restore_snapshots(paths, &snapshot_ids)?;
+    Ok(Some(
+        children.into_iter().map(|child| child.card.id).collect(),
+    ))
+}
+
+fn rollback_archive_snapshot(paths: &MaestroPaths, card_id: &str) -> Result<()> {
+    archive_db::delete_snapshots(paths, &[card_id.to_string()])
+        .with_context(|| format!("failed to roll back archive DB snapshot {card_id}"))?;
+    Ok(())
+}
+
+#[cfg(debug_assertions)]
+fn maybe_trigger_archive_race(record_path: &Path, card_id: &str) -> Result<()> {
+    if std::env::var("MAESTRO_TEST_ARCHIVE_RACE").ok().as_deref()
+        != Some("feature-archive-stale-before-remove")
+    {
+        return Ok(());
+    }
+    if record_path.file_name().and_then(|name| name.to_str()) != Some(CARD_FILE) {
+        return Ok(());
+    }
+    let current = read_to_string_if_exists(record_path)?;
+    write_string_if_unchanged(
+        record_path,
+        current.as_deref(),
+        format!(
+            "schema_version: maestro.card.v1\nid: {card_id}\ntype: feature\ntitle: Race changed before archive remove\nstatus: cancelled\ncreated_at: \"1\"\nupdated_at: \"1\"\n"
+        )
+        .as_str(),
+    )
+    .with_context(|| {
+        format!(
+            "failed to plant racing archive change at {}",
+            record_path.display()
+        )
+    })
+}
+
+#[cfg(not(debug_assertions))]
+fn maybe_trigger_archive_race(_record_path: &Path, _card_id: &str) -> Result<()> {
+    Ok(())
 }
 
 #[cfg(test)]

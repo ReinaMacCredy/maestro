@@ -1313,6 +1313,59 @@ fn non_task_sources_do_not_reach_into_task_domain_leaf_modules() {
 }
 
 #[test]
+fn feature_archive_stays_behind_card_persistence_seam() {
+    let file = Path::new("src/domain/feature/archive.rs");
+    let source = read_source_file(file);
+    let mut violations = Vec::new();
+
+    for (line_number, import_statement) in crate_import_statements(&source) {
+        let compact = compact_import_statement(&import_statement);
+        for forbidden in ["store", "archive_db", "live_db"] {
+            let direct_root = format!("usecrate::domain::card::{forbidden}");
+            let direct_import = compact.contains(&format!("{direct_root}::"))
+                || compact.contains(&format!("{direct_root};"))
+                || compact.contains(&format!("{direct_root},"))
+                || compact.contains(&format!("{direct_root}as"));
+            let grouped_import = compact
+                .split("usecrate::domain::card::{")
+                .skip(1)
+                .any(|grouped| contains_grouped_root_reference_segment(grouped, forbidden));
+
+            if direct_import || grouped_import {
+                violations.push(format!(
+                    "{}:{} imports card persistence implementation detail `{forbidden}` via `{import_statement}`",
+                    file.display(),
+                    line_number
+                ));
+            }
+        }
+    }
+
+    let code = code_for_path_scan(&source_without_import_statements(&source));
+    for (line_index, line) in code.lines().enumerate() {
+        for forbidden_path in [
+            "crate::domain::card::store::",
+            "crate::domain::card::archive_db::",
+            "crate::domain::card::live_db::",
+        ] {
+            if line.contains(forbidden_path) {
+                violations.push(format!(
+                    "{}:{} references card persistence implementation path `{forbidden_path}`",
+                    file.display(),
+                    line_index + 1
+                ));
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "feature archive movement must go through the card-domain persistence seam, not card store/live-db/archive-db internals:\n{}",
+        violations.join("\n")
+    );
+}
+
+#[test]
 fn transitional_public_surfaces_match_phase_policy() {
     assert_public_modules(
         Path::new("src/domain/mod.rs"),
