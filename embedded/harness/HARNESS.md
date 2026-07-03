@@ -1,5 +1,5 @@
 ---
-version: 1.29.13
+version: 1.29.14
 ---
 
 # Maestro Harness Protocol
@@ -69,6 +69,11 @@ For brainstorm/unsettled behavior, use the design loop: map real code/artifacts,
 ask one question at a time, lock each decision, record the note, and do not
 implement until build is approved. Do not batch independent forks or edit locked
 decisions.
+Anti-MVP scope authority: if the user says anti-MVP, full, deep, complete,
+make one forever, full framework, or rejects MVP, treat Full Durable Design as
+the scope authority. Do not offer MVP, first-slice, or reduced product scope
+unless the user explicitly asks for MVP. Stage the build, proof, or delivery
+when needed; do not shrink the design target.
 For "lock all", "all rec", or "all-recommendations", preserve each fork as a
 DecisionSet child: use `maestro decision set draft` /
 `maestro decision set lock`, or separate child decisions. Never compress to one

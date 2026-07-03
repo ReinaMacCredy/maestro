@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-version: 1.36.6
+version: 1.36.7
 description: "Design Maestro changes before implementation: use for brainstorm, plan, PRD synthesis, grill me, grilling, stress-test, domain model, deepening candidate, wording, workflow, skill, harness, card/task/feature, architecture, UX, or agent-process decisions."
 ---
 
@@ -57,19 +57,22 @@ sidechat paste, example, and preference. Before opening or revising a fork,
 fold that thesis into the option framing instead of treating the new detail as
 a loose comment.
 
-Before technical forks, decide scope depth when the request could be handled as
-either a first slice or a full system. Ask or infer one of:
+Before technical forks, decide scope depth before offering options. Default to
+Full Durable Design: lock the complete intended system. Scope target and
+implementation staging are separate.
 
-- Full durable design: lock the complete intended system. Implementation may
-  still be staged, but the design target is full.
-- First slice / MVP: lock only the smallest useful verified behavior.
-- Full design, staged build: lock the full target now, then split implementation
-  into safe phases.
+Anti-MVP scope authority: if the user says "anti-MVP", "full", "deep",
+"complete", "make one forever", "full framework", or rejects MVP, treat Full
+Durable Design as the scope authority. Do not offer MVP, first-slice, or
+reduced product scope unless the user explicitly asks for MVP. If risk is high,
+stage the build, proof, or delivery; do not shrink the design target.
 
-Scope target and implementation staging are separate. If the user says "full",
-"deep", "complete", "make one forever", or rejects MVP, stop recommending
-first-slice scope. Treat the accepted design target as full and discuss staging
-only as an implementation safety plan.
+When anti-MVP authority applies, every design answer separates:
+
+- Full target: the complete system being designed.
+- Build stages: safe implementation phases.
+- Proof gates: how each stage is verified.
+- Deferred work: only implementation sequencing, not reduced vision.
 
 Keep a short fork queue. After each locked decision or clarified user answer,
 derive the next unresolved fork from the feature spec, open questions, locked

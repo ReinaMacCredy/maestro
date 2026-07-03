@@ -55,8 +55,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 20] = [
     (
         "skill",
         "maestro-design",
-        "1.36.6",
-        "4fa85cd1a2ca9aafd69fd0097aa549442ac172ab6e78718d6b694eaf7f6c033b",
+        "1.36.7",
+        "cf7ea08bb8b2bc44d89c7e9c8eb3eb9f1f60e645ed32c9de465a5578248d6198",
     ),
     (
         "skill",
@@ -73,8 +73,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 20] = [
     (
         "harness",
         "HARNESS.md",
-        "1.29.13",
-        "3228a9fe4e82e1a83fdf4362ea61f82ac61feed071e4311b84cf4b075fc60984",
+        "1.29.14",
+        "adc02b9f91961b8e06a1a0bb2c53105d348acd7f2124a133eec75c2ed3359d7c",
     ),
     (
         "playbook",
@@ -362,6 +362,17 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
         );
     }
     for phrase in [
+        "Anti-MVP scope authority",
+        "treat Full Durable Design as the scope authority",
+        "Do not offer MVP, first-slice, or reduced product scope",
+        "do not shrink the design target",
+    ] {
+        assert!(
+            harness.contains(phrase),
+            "harness must retain anti-MVP scope authority phrase {phrase:?}"
+        );
+    }
+    for phrase in [
         "Canonical work readiness is `maestro ready`",
         "task-wave projection from the Task DAG",
         "parallel executable wave",
@@ -397,12 +408,13 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
     );
     assert!(
         design.contains("Before technical forks, decide scope depth")
-            && design.contains("Full durable design")
-            && design.contains("First slice / MVP")
-            && design.contains("Full design, staged build")
+            && design.contains("Full Durable Design")
             && design.contains("Scope target and implementation staging are separate")
-            && design.contains("stop recommending first-slice scope"),
-        "maestro-design must separate full design scope from implementation staging"
+            && design.contains("Anti-MVP scope authority")
+            && design.contains("Do not offer MVP, first-slice, or reduced product scope")
+            && design.contains("Full target: the complete system being designed")
+            && design.contains("Deferred work: only implementation sequencing"),
+        "maestro-design must separate full design scope from implementation staging and reject MVP by default"
     );
     for phrase in [
         "maestro loop outcome",
