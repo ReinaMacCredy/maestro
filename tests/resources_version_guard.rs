@@ -55,8 +55,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 20] = [
     (
         "skill",
         "maestro-design",
-        "1.36.7",
-        "cf7ea08bb8b2bc44d89c7e9c8eb3eb9f1f60e645ed32c9de465a5578248d6198",
+        "1.36.8",
+        "30b9a022a66c31c4a8320e395667a4785c9fc19de930e2ba77a18b4c090871e3",
     ),
     (
         "skill",
@@ -73,8 +73,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 20] = [
     (
         "harness",
         "HARNESS.md",
-        "1.29.14",
-        "adc02b9f91961b8e06a1a0bb2c53105d348acd7f2124a133eec75c2ed3359d7c",
+        "1.29.15",
+        "b48b8dcd1664cfbb6fbc01167b2b789e39a4cb35bbb9c905be7ea2d4ba56a594",
     ),
     (
         "playbook",
@@ -394,17 +394,31 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
             && harness.contains("maestro loop show learning"),
         "harness must route agents to shipped lifecycle recipe checkpoints"
     );
+    assert!(
+        harness.contains("maestro loop show design-relay")
+            && harness.contains("bounded design mandate")
+            && harness.contains("subagents/advisors provide evidence only")
+            && harness.contains("return to the parent design loop"),
+        "harness must route delegated design mandates to the design-relay recipe"
+    );
 
     let design = shipped_skill_body("maestro-design").replace('\n', " ");
     assert!(
         design.contains("Recipe checkpoint")
             && design.contains("maestro loop show design")
+            && design.contains("maestro loop show design-relay")
             && design.contains("maestro status")
             && design.contains("maestro loop next")
             && design.contains("read-only")
             && design.contains("existing Maestro verbs")
             && design.contains("perceive -> choose -> act"),
         "maestro-design must adopt the loop-first design lifecycle recipe"
+    );
+    assert!(
+        design.contains("bounded design mandate")
+            && design.contains("subagents/advisors provide evidence only")
+            && design.contains("returns to the parent design loop"),
+        "maestro-design must explain delegated design relay authority"
     );
     assert!(
         design.contains("Before technical forks, decide scope depth")

@@ -1,5 +1,5 @@
 ---
-version: 1.29.14
+version: 1.29.15
 ---
 
 # Maestro Harness Protocol
@@ -31,6 +31,10 @@ or proof/QA bypass.
 Use the closest shipped lifecycle recipe: `maestro loop show design`,
 `maestro loop show work`, `maestro loop show audit`, `maestro loop show ship`,
 `maestro loop show unattended`, or `maestro loop show learning`.
+When the user is unavailable but has provided a bounded design mandate, use
+`maestro loop show design-relay`: the main session may make only in-mandate
+design decisions, subagents/advisors provide evidence only, and the relay must
+return to the parent design loop.
 If no shipped recipe fits, custom card/run recipes still use perceive -> choose
 -> act -> observe -> learn -> continue, current Maestro verbs, hard stops,
 continue output, and no skipped proof, QA, authority, approval, or hard-stop

@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-version: 1.36.7
+version: 1.36.8
 description: "Design Maestro changes before implementation: use for brainstorm, plan, PRD synthesis, grill me, grilling, stress-test, domain model, deepening candidate, wording, workflow, skill, harness, card/task/feature, architecture, UX, or agent-process decisions."
 ---
 
@@ -103,7 +103,11 @@ for current state and `maestro loop next` as the read-only router when the next
 recipe is not obvious. Design work normally uses the shipped `design` lifecycle
 recipe. Before deciding or changing the proposed contract, read or cite
 `maestro loop show design` and keep the work inside perceive -> choose -> act
--> observe -> learn -> continue. Writes still use the existing Maestro verbs
+-> observe -> learn -> continue. If the user is unavailable but gave a bounded
+design mandate, read or cite `maestro loop show design-relay` first: the main
+session may make only in-mandate design decisions, subagents/advisors provide
+evidence only, and the relay returns to the parent design loop. Writes still use
+the existing Maestro verbs
 named by the recipe. Custom recipes are allowed only for the current card/run,
 and only when no shipped recipe fits; they must use the same six phases, current
 Maestro verbs, hard stops, and continue output. Rule: loop next recommends;
