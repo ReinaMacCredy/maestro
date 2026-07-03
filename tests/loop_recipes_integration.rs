@@ -132,6 +132,7 @@ fn loop_index_lists_unified_structured_recipe_catalog() {
 
     assert!(out.contains("## Shipped Recipe Catalog"), "{out}");
     assert!(out.contains("design  [lifecycle]"), "{out}");
+    assert!(out.contains("design-relay  [orchestration]"), "{out}");
     assert!(out.contains("work  [lifecycle]"), "{out}");
     assert!(out.contains("unattended  [lifecycle]"), "{out}");
     assert!(out.contains("conflict-handoff  [orchestration]"), "{out}");
@@ -167,6 +168,57 @@ fn loop_next_json_routes_missing_maestro_without_writes() {
         !temp.path().join(".maestro").exists(),
         "loop next must not initialize or write Maestro artifacts"
     );
+}
+
+#[test]
+fn loop_show_renders_design_relay_recipe() {
+    let temp = TestTempDir::new("maestro-loop-show-design-relay");
+    let out = stdout(temp.path(), &["loop", "show", "design-relay"]);
+
+    assert!(out.contains("# Design relay"), "{out}");
+    assert!(out.contains("schema_version: maestro.recipe.v2"), "{out}");
+    assert!(out.contains("mandate_ref"), "{out}");
+    assert!(
+        out.contains("advisor and subagent output is evidence, not user consent"),
+        "{out}"
+    );
+    assert!(out.contains("return to design"), "{out}");
+    assert!(out.contains("out-of-scope flags"), "{out}");
+    assert!(out.contains("maestro decision lock <id>"), "{out}");
+    assert!(out.contains("feature accept"), "{out}");
+}
+
+#[test]
+fn loop_validate_and_compact_render_design_relay_packet() {
+    let temp = TestTempDir::new("maestro-loop-design-relay-packet");
+    let valid = stdout(temp.path(), &["loop", "validate", "design-relay"]);
+    assert!(
+        valid.contains("valid shipped loop recipe: design-relay"),
+        "{valid}"
+    );
+
+    let out = stdout(
+        temp.path(),
+        &[
+            "loop",
+            "show",
+            "design-relay",
+            "--compact",
+            "--phase",
+            "act",
+        ],
+    );
+
+    assert!(
+        out.contains("schema: maestro.loop_compact_packet.v1"),
+        "{out}"
+    );
+    assert!(out.contains("recipe: design-relay"), "{out}");
+    assert!(out.contains("phase: act"), "{out}");
+    assert!(out.contains("progress_task: execute-move"), "{out}");
+    assert!(out.contains("maestro msg send <card> <text>"), "{out}");
+    assert!(out.contains("feature accept"), "{out}");
+    assert!(out.contains("no recorded mandate_ref"), "{out}");
 }
 
 #[test]

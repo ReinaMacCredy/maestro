@@ -26,11 +26,12 @@ const CONTRACT_SCHEMA_VERSION: &str = "maestro.recipe.v2";
 const LOOP_COMPACT_PACKET_SCHEMA: &str = "maestro.loop_compact_packet.v1";
 const LOOP_IMPROVE_SCHEMA: &str = "maestro.loop_improve.v1";
 const REQUIRED_PHASES: [&str; 6] = ["perceive", "choose", "act", "observe", "learn", "continue"];
-const CANONICAL_RECIPE_IDS: [&str; 14] = [
+const CANONICAL_RECIPE_IDS: [&str; 15] = [
     "adversarial-review",
     "audit",
     "conflict-handoff",
     "design",
+    "design-relay",
     "feature-fanout",
     "generate-filter",
     "intake-triage",
