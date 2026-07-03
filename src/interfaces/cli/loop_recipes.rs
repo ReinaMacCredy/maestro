@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::path::PathBuf;
 
-use anyhow::{Result, bail};
+use anyhow::{Result, bail, ensure};
 use serde::Serialize;
 use serde_json::{Value, json};
 
@@ -12,7 +12,7 @@ use crate::foundation::core::session::agent_runtime_from_env;
 use crate::foundation::core::time::{timestamp_nanos, utc_now_timestamp};
 use crate::interfaces::cli::{
     GitReadout, LoopArgs, LoopCommand, LoopImproveArgs, LoopNextArgs, LoopOutcomeArgs,
-    WorkLeaseArgs,
+    LoopTraceArgs, WorkLeaseArgs,
 };
 use crate::interfaces::hooks::record;
 use crate::operations::harness;
@@ -22,6 +22,8 @@ use crate::operations::memory::{
 };
 
 const LOOP_OUTCOME_SCHEMA: &str = "maestro.loop_outcome.v1";
+const LOOP_TRACE_SCHEMA: &str = "maestro.loop_trace.v1";
+const LOOP_TRACE_RECENT_LIMIT: usize = 5;
 const WORK_LEASE_JSON_SCHEMA: &str = "maestro.work_lease.v1";
 const WORK_LEASE_JSON_VERSION: u8 = 1;
 const DEFAULT_HARD_STOPS: &[&str] = &[
@@ -102,6 +104,7 @@ pub fn run(args: LoopArgs) -> Result<()> {
             }
             print!("{}", loop_recipes::custom_recipe_template());
         }
+        Some(LoopCommand::Trace(args)) => run_trace(args)?,
         Some(LoopCommand::Next(args)) => run_next(args, custom_dir.as_deref())?,
         Some(LoopCommand::Improve(args)) => run_improve(args)?,
         Some(LoopCommand::Outcome(args)) => run_outcome(*args)?,
@@ -117,6 +120,22 @@ fn custom_recipe_dir() -> Option<PathBuf> {
 }
 
 fn run_next(args: LoopNextArgs, custom_dir: Option<&std::path::Path>) -> Result<()> {
+    if args.chain {
+        if args.compact {
+            bail!("--chain cannot be combined with --compact");
+        }
+        if args.phase.is_some() {
+            bail!("--phase requires --compact");
+        }
+        let chain = build_loop_chain_report(custom_dir)?;
+        if args.json {
+            println!("{}", serde_json::to_string_pretty(&chain)?);
+        } else {
+            print_loop_chain(&chain);
+        }
+        return Ok(());
+    }
+
     let report = build_loop_next_report()?;
     if args.compact {
         let packet = loop_recipes::compact_packet_for_next_report(
@@ -206,6 +225,148 @@ fn print_loop_improve(report: &loop_recipes::LoopImproveReport) {
     }
 }
 
+#[derive(Clone, Debug, Serialize)]
+struct LoopTraceReport {
+    schema: &'static str,
+    card: String,
+    total_events: usize,
+    hidden: usize,
+    events: Vec<LoopTraceEvent>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct LoopTraceEvent {
+    receipt: String,
+    recipe: String,
+    phase: String,
+    selected_unit: String,
+    transition_to: String,
+    transition_reason: String,
+    trigger: String,
+    return_condition: Vec<String>,
+    evidence_refs: Vec<Value>,
+}
+
+fn run_trace(args: LoopTraceArgs) -> Result<()> {
+    let repo_root = discover_repo_root()?;
+    let paths = MaestroPaths::new(repo_root);
+    let report = build_loop_trace_report(&paths, &required_arg(args.card, "card")?, args.all)?;
+    if args.json {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+    } else {
+        print_loop_trace(&report, args.all);
+    }
+    Ok(())
+}
+
+fn build_loop_trace_report(paths: &MaestroPaths, card: &str, all: bool) -> Result<LoopTraceReport> {
+    let mut events = Vec::new();
+    run::visit_managed_events(paths, |record| {
+        let event = record.event();
+        if event.event_type() != Some("loop_outcome") {
+            return Ok(());
+        }
+        let value: Value = serde_json::from_str(record.raw_line())?;
+        if let Some(trace_event) = loop_trace_event(card, record.session_id(), &value) {
+            events.push(trace_event);
+        }
+        Ok(())
+    })?;
+    let total_events = events.len();
+    let hidden = if all || events.len() <= LOOP_TRACE_RECENT_LIMIT {
+        0
+    } else {
+        events.len() - LOOP_TRACE_RECENT_LIMIT
+    };
+    if hidden > 0 {
+        events = events.split_off(hidden);
+    }
+    Ok(LoopTraceReport {
+        schema: LOOP_TRACE_SCHEMA,
+        card: card.to_string(),
+        total_events,
+        hidden,
+        events,
+    })
+}
+
+fn loop_trace_event(card: &str, session_id: &str, value: &Value) -> Option<LoopTraceEvent> {
+    let transition_to = optional_json_string(value, "transition_to")?;
+    if !loop_trace_matches_card(card, value) {
+        return None;
+    }
+    Some(LoopTraceEvent {
+        receipt: format!("run:{session_id}"),
+        recipe: json_string(value, "recipe"),
+        phase: json_string(value, "phase"),
+        selected_unit: json_string(value, "selected_unit"),
+        transition_to,
+        transition_reason: json_string(value, "transition_reason"),
+        trigger: json_string(value, "trigger"),
+        return_condition: value
+            .get("return_condition")
+            .and_then(Value::as_array)
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default(),
+        evidence_refs: value_array(value, "evidence_refs"),
+    })
+}
+
+fn loop_trace_matches_card(card: &str, value: &Value) -> bool {
+    json_string(value, "selected_unit") == card
+        || value_refs_match_card(value, "evidence_refs", card)
+        || value_refs_match_card(value, "source_refs", card)
+}
+
+fn value_refs_match_card(value: &Value, field: &str, card: &str) -> bool {
+    value
+        .get(field)
+        .and_then(Value::as_array)
+        .is_some_and(|refs| {
+            refs.iter()
+                .any(|reference| json_string(reference, "id") == card)
+        })
+}
+
+fn value_array(value: &Value, field: &str) -> Vec<Value> {
+    value
+        .get(field)
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default()
+}
+
+fn print_loop_trace(report: &LoopTraceReport, all: bool) {
+    if all {
+        println!("chain history: {} events", report.total_events);
+    } else {
+        println!("chain history: {} recent events", report.events.len());
+    }
+    if report.hidden > 0 {
+        println!("hidden: {} older events; use --all", report.hidden);
+    }
+    for event in &report.events {
+        println!(
+            "- {}.{} -> {}",
+            event.recipe, event.phase, event.transition_to
+        );
+        println!("  trigger: {}", event.trigger);
+        println!("  receipt: {}", event.receipt);
+        if !event.return_condition.is_empty() {
+            println!("  return:");
+            for condition in &event.return_condition {
+                println!("  - {condition}");
+            }
+        }
+    }
+}
+
 fn loop_outcome_source_refs(session_id: &str, value: &Value) -> Vec<loop_recipes::LoopContextRef> {
     let mut refs = vec![loop_recipes::LoopContextRef {
         kind: "run_event".to_string(),
@@ -269,10 +430,63 @@ struct LoopOutcomeRoute {
 fn run_outcome(args: LoopOutcomeArgs) -> Result<()> {
     let repo_root = discover_repo_root()?;
     let paths = MaestroPaths::new(repo_root);
+    let transition_to = optional_arg(args.transition_to.clone(), "--transition-to")?;
+    let transition_reason = optional_arg(args.transition_reason.clone(), "--transition-reason")?;
+    let trigger = optional_arg(args.trigger.clone(), "--trigger")?;
+    let return_condition = args
+        .return_condition
+        .iter()
+        .map(|condition| required_arg(condition.clone(), "--return-condition"))
+        .collect::<Result<Vec<_>>>()?;
+    for raw in &args.evidence_ref {
+        validate_evidence_ref(raw)?;
+    }
+    let evidence_refs = args
+        .evidence_ref
+        .iter()
+        .map(|raw| parse_source_ref(raw))
+        .collect::<Vec<_>>();
+    let has_transition_receipt = transition_to.is_some()
+        || transition_reason.is_some()
+        || trigger.is_some()
+        || !return_condition.is_empty()
+        || !evidence_refs.is_empty();
+    if has_transition_receipt {
+        let allowed = loop_outcome_allowed_recipe_names(&paths)?;
+        let transition_to = transition_to.as_deref().ok_or_else(|| {
+            anyhow::anyhow!("--transition-to is required for transition receipts")
+        })?;
+        loop_recipes::validate_recipe_phase_endpoint(transition_to, &allowed)?;
+        let trigger = trigger
+            .as_deref()
+            .ok_or_else(|| anyhow::anyhow!("--trigger is required for transition receipts"))?;
+        loop_recipes::validate_trigger_key(trigger)?;
+        ensure!(
+            transition_reason.is_some(),
+            "--transition-reason is required for transition receipts"
+        );
+        ensure!(
+            !return_condition.is_empty(),
+            "--return-condition is required for transition receipts"
+        );
+        for condition in &return_condition {
+            loop_recipes::validate_return_condition_key(condition)?;
+        }
+        ensure!(
+            !evidence_refs.is_empty(),
+            "--evidence-ref is required for transition receipts"
+        );
+    }
     let recipe = required_arg(args.recipe, "--recipe")?;
     let phase = required_arg(args.phase, "--phase")?;
     let selected_unit = required_arg(args.selected_unit, "--selected-unit")?;
-    let failure_class = required_arg(args.failure_class, "--failure-class")?.to_ascii_lowercase();
+    let failure_class = optional_arg(args.failure_class, "--failure-class")?
+        .map(|value| value.to_ascii_lowercase())
+        .unwrap_or_default();
+    ensure!(
+        !failure_class.is_empty() || has_transition_receipt,
+        "--failure-class is required unless recording a transition receipt"
+    );
     let proof_result =
         optional_arg(args.proof_result, "--proof-result")?.unwrap_or_else(|| "unknown".to_string());
     let blocker_class =
@@ -288,26 +502,38 @@ fn run_outcome(args: LoopOutcomeArgs) -> Result<()> {
         .map(|raw| parse_source_ref(raw))
         .collect::<Vec<_>>();
     let learning_candidate = optional_arg(args.learning_candidate, "--learning-candidate")?;
-    let route = loop_outcome_route(&failure_class)?;
+    let route = if failure_class.is_empty() {
+        loop_outcome_transition_route()
+    } else {
+        loop_outcome_route(&failure_class)?
+    };
     let run_id = args.run.unwrap_or_else(super::cli_run_id);
     let mut event = json!({
-        "schema_version": LOOP_OUTCOME_SCHEMA,
-        "ts": utc_now_timestamp(),
-        "event_type": "loop_outcome",
-        "session_id": run_id,
-        "recipe": recipe,
-        "phase": phase,
-        "selected_unit": selected_unit,
-        "constraints": constraints,
-        "proof_result": proof_result,
-        "failure_class": failure_class,
-        "blocker_class": blocker_class,
-        "retry_count": args.retry_count,
-        "duration_ms": args.duration_ms,
-        "learning_candidate": learning_candidate,
+      "schema_version": LOOP_OUTCOME_SCHEMA,
+      "ts": utc_now_timestamp(),
+      "event_type": "loop_outcome",
+      "session_id": run_id,
+      "recipe": recipe,
+      "phase": phase,
+      "selected_unit": selected_unit,
+      "constraints": constraints,
+      "proof_result": proof_result,
+      "failure_class": failure_class,
+      "blocker_class": blocker_class,
+      "retry_count": args.retry_count,
+      "duration_ms": args.duration_ms,
+      "learning_candidate": learning_candidate,
         "source_refs": source_refs,
         "route": route,
     });
+    if has_transition_receipt {
+        event["transition_to"] = json!(transition_to.expect("transition receipt validated"));
+        event["transition_reason"] =
+            json!(transition_reason.expect("transition receipt validated"));
+        event["trigger"] = json!(trigger.expect("transition receipt validated"));
+        event["return_condition"] = json!(return_condition);
+        event["evidence_refs"] = json!(evidence_refs);
+    }
     run::insert_agent_runtime(&mut event, agent_runtime_from_env());
     run::append_manual_event(&paths, &run_id, &event)?;
     if args.json {
@@ -329,6 +555,40 @@ fn required_arg(value: String, flag: &str) -> Result<String> {
 
 fn optional_arg(value: Option<String>, flag: &str) -> Result<Option<String>> {
     value.map(|value| required_arg(value, flag)).transpose()
+}
+
+fn loop_outcome_allowed_recipe_names(paths: &MaestroPaths) -> Result<BTreeSet<String>> {
+    let mut names = loop_recipes::contract_names()
+        .into_iter()
+        .map(str::to_string)
+        .collect::<BTreeSet<_>>();
+    names.extend(loop_recipes::custom_contract_names(
+        &paths.loop_recipes_dir(),
+    )?);
+    Ok(names)
+}
+
+fn validate_evidence_ref(raw: &str) -> Result<()> {
+    let (kind, value) = raw
+        .split_once(':')
+        .ok_or_else(|| anyhow::anyhow!("--evidence-ref must use <kind>:<value>, got {raw}"))?;
+    ensure!(
+        matches!(kind, "feature" | "decision" | "task" | "run" | "command"),
+        "unsupported --evidence-ref kind {kind}; supported: feature, decision, task, run, command"
+    );
+    ensure!(
+        !value.trim().is_empty(),
+        "--evidence-ref must include a value after {kind}:"
+    );
+    Ok(())
+}
+
+fn loop_outcome_transition_route() -> LoopOutcomeRoute {
+    LoopOutcomeRoute {
+        action: "record",
+        recipe: "loop",
+        reason: "structured transition receipt recorded; native lifecycle verbs remain authority",
+    }
 }
 
 fn loop_outcome_route(failure_class: &str) -> Result<LoopOutcomeRoute> {
@@ -384,21 +644,30 @@ fn loop_outcome_route(failure_class: &str) -> Result<LoopOutcomeRoute> {
     }
 }
 
-fn build_loop_next_report() -> Result<loop_recipes::LoopNextReport> {
-    let repo_root = discover_repo_root().or_else(|_| env::current_dir())?;
-    let paths = MaestroPaths::new(repo_root);
-    build_loop_next_report_for_paths(&paths)
+struct LoopNextRouteState {
+    input: loop_recipes::LoopRouterInput,
+    report: loop_recipes::LoopNextReport,
 }
 
-pub(crate) fn build_loop_next_report_for_paths(
-    paths: &MaestroPaths,
-) -> Result<loop_recipes::LoopNextReport> {
+fn build_loop_next_report() -> Result<loop_recipes::LoopNextReport> {
+    Ok(build_loop_next_state()?.report)
+}
+
+fn build_loop_next_state() -> Result<LoopNextRouteState> {
+    let repo_root = discover_repo_root().or_else(|_| env::current_dir())?;
+    let paths = MaestroPaths::new(repo_root);
+    build_loop_next_state_for_paths(&paths)
+}
+
+fn build_loop_next_state_for_paths(paths: &MaestroPaths) -> Result<LoopNextRouteState> {
     if !paths.maestro_dir().is_dir() {
-        return loop_recipes::route_next(loop_recipes::LoopRouterInput {
+        let input = loop_recipes::LoopRouterInput {
             repo: paths.repo_root().display().to_string(),
             initialized: false,
             ..loop_recipes::LoopRouterInput::default()
-        });
+        };
+        let report = loop_recipes::route_next(input.clone())?;
+        return Ok(LoopNextRouteState { input, report });
     }
 
     let mut warnings = Vec::new();
@@ -425,7 +694,7 @@ pub(crate) fn build_loop_next_report_for_paths(
     }
 
     let git = super::git_readout(paths);
-    build_loop_next_report_from_snapshot(paths, &task_entries, &features, git.as_ref(), warnings)
+    build_loop_next_state_from_snapshot(paths, &task_entries, &features, git.as_ref(), warnings)
 }
 
 pub(crate) fn build_loop_next_report_from_snapshot(
@@ -433,8 +702,18 @@ pub(crate) fn build_loop_next_report_from_snapshot(
     task_entries: &[task::TaskEntry],
     features: &[feature::FeatureView],
     git: Option<&GitReadout>,
-    mut warnings: Vec<String>,
+    warnings: Vec<String>,
 ) -> Result<loop_recipes::LoopNextReport> {
+    Ok(build_loop_next_state_from_snapshot(paths, task_entries, features, git, warnings)?.report)
+}
+
+fn build_loop_next_state_from_snapshot(
+    paths: &MaestroPaths,
+    task_entries: &[task::TaskEntry],
+    features: &[feature::FeatureView],
+    git: Option<&GitReadout>,
+    mut warnings: Vec<String>,
+) -> Result<LoopNextRouteState> {
     let readiness = loop_readiness_index(task_entries);
     let tasks = task_entries
         .iter()
@@ -506,7 +785,33 @@ pub(crate) fn build_loop_next_report_from_snapshot(
     };
     let report = loop_recipes::route_next(input.clone())?;
     input.memory_hits = loop_memory_preflight_hits(paths, &input, &report);
-    loop_recipes::route_next(input)
+    let report = loop_recipes::route_next(input.clone())?;
+    Ok(LoopNextRouteState { input, report })
+}
+
+fn build_loop_chain_report(
+    custom_dir: Option<&std::path::Path>,
+) -> Result<loop_recipes::LoopChainReport> {
+    let state = build_loop_next_state()?;
+    let facts = loop_recipes::chain_facts_from_router(&state.input, &state.report);
+    let contract = match state.report.recommended_recipe.as_deref() {
+        Some(recipe) => Some(loop_chain_contract(recipe, custom_dir)?),
+        None => None,
+    };
+    loop_recipes::chain_report_from_facts(facts, contract.as_ref())
+}
+
+fn loop_chain_contract(
+    recipe: &str,
+    custom_dir: Option<&std::path::Path>,
+) -> Result<loop_recipes::RecipeContract> {
+    if loop_recipes::contract_names().contains(&recipe) {
+        return loop_recipes::contract(recipe);
+    }
+    if let Some(custom_dir) = custom_dir {
+        return loop_recipes::custom_contract(custom_dir, recipe);
+    }
+    bail!("loop chain cannot load recipe {recipe:?}");
 }
 
 fn loop_memory_preflight_hits(
@@ -849,7 +1154,10 @@ fn print_loop_next(report: &loop_recipes::LoopNextReport) {
     if !report.edges.is_empty() {
         println!("edges:");
         for edge in &report.edges {
-            println!("- {}: {} -> {}", edge.kind, edge.trigger, edge.to);
+            println!(
+                "- {}: {} -> {} trigger={}",
+                edge.kind, edge.from, edge.to, edge.trigger
+            );
         }
     }
     print_loop_next_list("hard_stops", &report.hard_stops);
@@ -863,6 +1171,39 @@ fn print_loop_next(report: &loop_recipes::LoopNextReport) {
                 alternative.recipe,
                 alternative.blocked_by.join(", ")
             );
+        }
+    }
+}
+
+fn print_loop_chain(report: &loop_recipes::LoopChainReport) {
+    println!("chain: {}", report.chain.join(" -> "));
+    println!("current: {}", report.current);
+    if let Some(unit) = report.selected_unit.as_ref() {
+        println!("selected_unit: {}:{}", unit.kind, unit.id);
+    }
+    if let Some(transition) = report.transition.as_ref() {
+        println!("transition: {} -> {}", transition.from, transition.to);
+        println!("trigger: {}", transition.trigger);
+    } else {
+        println!("transition: none");
+    }
+    if report.next.is_empty() {
+        println!("next: <none>");
+    } else {
+        println!("next: {}", report.next[0]);
+        for command in report.next.iter().skip(1) {
+            println!("  - {command}");
+        }
+    }
+    if !report.return_conditions.is_empty() {
+        println!("return:");
+        for condition in &report.return_conditions {
+            let status = if condition.satisfied {
+                "satisfied"
+            } else {
+                "missing"
+            };
+            println!("- {}: {status}", condition.key);
         }
     }
 }

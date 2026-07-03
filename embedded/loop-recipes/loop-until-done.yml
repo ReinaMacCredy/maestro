@@ -47,8 +47,9 @@ router:
   priority: 9
   confidence: medium
 transitions:
-  - trigger: a finding is minted as work
-    to: work
+  - trigger: work_ready.finding_minted
+    from: loop-until-done.continue
+    to: work.perceive
     authority_scope:
       - minted finding task
     allowed_verbs:
@@ -59,10 +60,12 @@ transitions:
       - working a finding before recording it
     hard_stops:
       - stop query or cap is reached
-    return_condition: finding is verified, blocked, or superseded
+    return_condition:
+      - work.verified_blocked_or_superseded
 invocations:
-  - trigger: sweep produces high-risk claims
-    to: adversarial-review
+  - trigger: audit_needed.high_risk_claim
+    from: loop-until-done.observe
+    to: adversarial-review.perceive
     authority_scope:
       - generated finding claim
     allowed_verbs:
@@ -71,7 +74,8 @@ invocations:
       - verify contested claim without refutation pass
     hard_stops:
       - claim lacks reproduction evidence
-    return_condition: claim is upheld or blocked
+    return_condition:
+      - proof.claim_upheld_or_blocked
 outputs:
   - discovery sweep result
   - minted findings

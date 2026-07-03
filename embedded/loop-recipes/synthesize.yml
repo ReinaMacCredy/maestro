@@ -48,8 +48,9 @@ router:
   priority: 35
   confidence: high
 transitions:
-  - trigger: synthesis lane is merged and verified but feature close or archive remains
-    to: ship
+  - trigger: ship_ready.synthesis_merged
+    from: synthesize.continue
+    to: ship.perceive
     authority_scope:
       - verified merged target and feature close/archive authority
     allowed_verbs:
@@ -62,10 +63,12 @@ transitions:
     hard_stops:
       - QA slice is missing
       - archive authority is absent or stale
-    return_condition: feature is closed/archived or blocker is recorded
+    return_condition:
+      - feature.closed_archived_or_blocked
 invocations:
-  - trigger: merge diff or cleanup gate is risky or surprising
-    to: audit
+  - trigger: audit_needed.merge_surprise
+    from: synthesize.observe
+    to: audit.perceive
     authority_scope:
       - bounded worker lane and target merge surface
     allowed_verbs:
@@ -77,7 +80,8 @@ invocations:
       - deleting unknown worktrees
     hard_stops:
       - audit cannot tie findings to this lane
-    return_condition: issue is fixed, waived, or blocked with evidence
+    return_condition:
+      - audit.issue_resolved_or_blocked
 outputs:
   - claimed synthesis handoff
   - verified branch/head/target freshness

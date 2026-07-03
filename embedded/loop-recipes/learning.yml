@@ -47,8 +47,9 @@ router:
   priority: 5
   confidence: medium
 transitions:
-  - trigger: learning reveals current work still needs a fix
-    to: work
+  - trigger: work_needed.learning_fix
+    from: learning.continue
+    to: work.perceive
     authority_scope:
       - current accepted task or feature
     allowed_verbs:
@@ -59,7 +60,8 @@ transitions:
       - external ship action
     hard_stops:
       - lesson has no durable source
-    return_condition: reusable lesson is recorded or no learning is needed
+    return_condition:
+      - learning.recorded_or_not_needed
 invocations: []
 outputs:
   - memory suggestion

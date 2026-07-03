@@ -48,8 +48,9 @@ router:
   priority: 12
   confidence: high
 transitions:
-  - trigger: selected unit needs ordinary implementation
-    to: work
+  - trigger: work_ready.selected_unit
+    from: unattended.choose
+    to: work.perceive
     authority_scope:
       - selected card or task from Work Lease
     allowed_verbs:
@@ -61,9 +62,11 @@ transitions:
       - external ship action without authority
     hard_stops:
       - selected unit is not accepted or safe
-    return_condition: selected unit is verified, blocked, or dry
-  - trigger: backlog is dry but acceptable local features exist
-    to: design
+    return_condition:
+      - work.accepted_or_dry
+  - trigger: design_needed.dry_backlog
+    from: unattended.continue
+    to: design.choose
     authority_scope:
       - proposed local feature contract
     allowed_verbs:
@@ -75,10 +78,12 @@ transitions:
       - external ship action
     hard_stops:
       - proposed feature has open decisions or missing QA baseline
-    return_condition: local work is replenished or dry report is produced
+    return_condition:
+      - feature.handoff_fresh
 invocations:
-  - trigger: selected unit is risky or contested
-    to: audit
+  - trigger: audit_needed.selected_unit_risk
+    from: unattended.observe
+    to: audit.perceive
     authority_scope:
       - selected unit and touched files
     allowed_verbs:
@@ -90,7 +95,8 @@ invocations:
       - external ship action
     hard_stops:
       - audit cannot produce evidence
-    return_condition: finding is recorded or unit returns to work
+    return_condition:
+      - audit.finding_recorded_or_clear
 outputs:
   - one selected unit, dry report, blocked report, or hard stop
   - run event acquisition and outcome evidence

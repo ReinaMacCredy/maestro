@@ -21,3 +21,24 @@ and why it is not part of the current fix.
   adopt path for a locally edited skill.
   Later scope: add a guided global-skill reconcile/adopt flow that preserves
   local edits and applies shipped updates intentionally.
+- Surface: `maestro feature accept --qa`.
+  Observed friction: `maestro feature accept loop-chain-readout-and-trace --qa
+  cli --dry-run` failed with `unsupported --qa value 'cli'; only '--qa none' is
+  accepted`, even though behavioral CLI work needs a way to name an explicit QA
+  surface.
+  Later scope: either support typed QA surfaces or make the accepted `--qa none`
+  escape hatch and baseline command the only surfaced workflow.
+- Surface: `maestro feature prepare` inline task flags.
+  Observed friction: `maestro feature prepare ... --task ... --check ...`
+  failed with `prepare plan must contain at least one explicit task entry`, while
+  generated CLI reference advertises inline `--task`, `--check`, `--covers`,
+  `--blocker`, and `--after` flags.
+  Later scope: reconcile CLI behavior, help text, and skill references so inline
+  task setup either works or is not advertised.
+- Surface: concurrent run busy notice.
+  Observed friction: task completion printed `[busy]
+  019f28bf-02cf-7322-b982-4d2a117a90ac is running the full-suite gate; hold
+  heavy runs until it clears`. It explains the contention but gives no exact
+  read command to check when the hold has cleared.
+  Later scope: add a next-step pointer such as `maestro active` or a session
+  status command to busy notices.

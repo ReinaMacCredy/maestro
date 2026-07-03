@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-version: 1.36.10
+version: 1.36.11
 description: "Design Maestro changes before implementation: use for brainstorm, plan, PRD synthesis, grill me, grilling, stress-test, domain model, deepening candidate, wording, workflow, skill, harness, card/task/feature, architecture, UX, or agent-process decisions."
 ---
 
@@ -113,10 +113,14 @@ the existing Maestro verbs
 named by the recipe. Custom recipes are allowed only for the current card/run,
 and only when no shipped recipe fits; they must use the same six phases, current
 Maestro verbs, hard stops, and continue output. Rule: loop next recommends;
-outcome/proof/memory verbs write. Use `maestro loop outcome` for structured
-attempt evidence and `maestro loop improve` for read-only improvement proposals;
-do not silently edit recipes or skills from router output. No hidden stores, hidden
-schedulers, silent recipe mutation, and proof/QA bypass are forbidden.
+outcome/proof/memory verbs write. Use `maestro loop next --chain` to explain
+the current chain position, transition trigger, next native command, and return
+conditions without writing. Use `maestro loop outcome` for structured attempt
+evidence and transition receipts after native work, `maestro loop trace <card>`
+to audit card-scoped chain receipts, and `maestro loop improve` for read-only
+improvement proposals; do not silently edit recipes or skills from router
+output. No hidden stores, hidden schedulers, silent recipe mutation, and
+proof/QA bypass are forbidden.
 
 First step in a session: run `maestro active` (pull-only) to see what other
 live sessions are working on -- their card, mode, and progress -- before you

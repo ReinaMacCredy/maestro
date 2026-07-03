@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: b5f25dcb76f75f59e19ff451bd84288a4b29ee82b7f3ce6ace8bc20e2350c4a1 -->
+<!-- maestro:cli-reference-sha256: 5ca700e46459c0d73113869736480d6d8b3b8101397543384245c06f604acd38 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -163,9 +163,9 @@ a spelling not found here is outside this skill's CLI surface.
 ## maestro loop
 
 - `maestro loop list` -- List shipped and project custom recipes
-- `maestro loop next [--json] [--compact] [--phase <PHASE>]` -- Recommend the next loop recipe without mutating state
+- `maestro loop next [--json] [--chain] [--compact] [--phase <PHASE>]` -- Recommend the next loop recipe without mutating state
 - `maestro loop improve [--json]` -- Plan loop improvement proposals without mutating state
 - `maestro loop show <NAME> [--compact] [--phase <PHASE>] [--json]` -- Print one shipped or project custom recipe
 - `maestro loop validate <NAME>` -- Validate one structured shipped or project custom loop recipe
-- `maestro loop outcome --recipe <RECIPE> --phase <PHASE> --selected-unit <SELECTED_UNIT> [--constraint <CONSTRAINTS>]... [--proof-result <PROOF_RESULT>] --failure-class <FAILURE_CLASS> [--blocker-class <BLOCKER_CLASS>] [--retry-count <RETRY_COUNT>] [--duration-ms <DURATION_MS>] [--learning-candidate <LEARNING_CANDIDATE>] [--source-ref <SOURCE_REF>]... [--run <RUN>] [--json]` -- Record a write-side loop outcome event
+- `maestro loop outcome --recipe <RECIPE> --phase <PHASE> --selected-unit <SELECTED_UNIT> [--constraint <CONSTRAINTS>]... [--proof-result <PROOF_RESULT>] [--failure-class <FAILURE_CLASS>] [--blocker-class <BLOCKER_CLASS>] [--transition-to <TRANSITION_TO>] [--transition-reason <TRANSITION_REASON>] [--trigger <TRIGGER>] [--return-condition <RETURN_CONDITION>]... [--evidence-ref <EVIDENCE_REF>]... [--retry-count <RETRY_COUNT>] [--duration-ms <DURATION_MS>] [--learning-candidate <LEARNING_CANDIDATE>] [--source-ref <SOURCE_REF>]... [--run <RUN>] [--json]` -- Record a write-side loop outcome event
 - `maestro loop work-lease [--json] [--project <PROJECT>] [--feature <FEATURE>] [--authority-ref <REF>] [--authority-summary <SUMMARY>] [--authority-scope <SCOPE>] [--authority-target <TARGET>] [--allow-external-action <ACTION>]... [--required-evidence <EVIDENCE>]... [--authority-expires-at <TIMESTAMP>] [--authority-hard-stop <STOP>]...` -- Run the internal Work Lease choose-phase helper and print JSON

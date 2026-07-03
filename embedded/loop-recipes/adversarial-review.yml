@@ -47,8 +47,9 @@ router:
   priority: 16
   confidence: high
 transitions:
-  - trigger: a reproducible refutation identifies fix work
-    to: work
+  - trigger: work_needed.refutation_found
+    from: adversarial-review.continue
+    to: work.perceive
     authority_scope:
       - refuted task or claim
     allowed_verbs:
@@ -58,7 +59,8 @@ transitions:
       - verify over a reproducible refutation
     hard_stops:
       - verifier cannot tie verdict to evidence
-    return_condition: claim is fixed, blocked, or upheld
+    return_condition:
+      - claim.upheld_fixed_or_blocked
 invocations: []
 outputs:
   - upheld claim

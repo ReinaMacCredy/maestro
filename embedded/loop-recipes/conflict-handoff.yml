@@ -47,8 +47,9 @@ router:
   priority: 40
   confidence: high
 transitions:
-  - trigger: isolated slice is verified and ready to land
-    to: work
+  - trigger: work_ready.conflict_resolved
+    from: conflict-handoff.continue
+    to: work.perceive
     authority_scope:
       - verified branch and shared branch
     allowed_verbs:
@@ -61,7 +62,8 @@ transitions:
     hard_stops:
       - "[stale] or [merge-busy] remains unresolved"
       - git conflict requires peer intent
-    return_condition: slice is merged and notices are clear
+    return_condition:
+      - conflict.slice_merged_and_clear
 invocations: []
 outputs:
   - isolated worktree path

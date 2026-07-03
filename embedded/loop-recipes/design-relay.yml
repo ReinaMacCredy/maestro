@@ -49,8 +49,9 @@ router:
   priority: 12
   confidence: medium
 transitions:
-  - trigger: relay result is normalized
-    to: design
+  - trigger: design_ready.relay_normalized
+    from: design-relay.continue
+    to: design.choose
     authority_scope:
       - active design feature, mandate_ref, and current fork
     allowed_verbs:
@@ -71,7 +72,8 @@ transitions:
       - fork falls outside mandate bounds
       - advisor response claims user authority
       - multiple independent forks are bundled
-    return_condition: relay output is recorded and the design loop owns the next gate
+    return_condition:
+      - design.relay_returned
 invocations: []
 outputs:
   - relay packet

@@ -47,8 +47,9 @@ router:
   priority: 20
   confidence: high
 transitions:
-  - trigger: implementation discovers accepted task scope is too unclear or too large
-    to: design
+  - trigger: design_needed.scope_unclear
+    from: work.act
+    to: design.choose
     authority_scope:
       - clarify or split within the accepted feature contract
     allowed_verbs:
@@ -62,10 +63,14 @@ transitions:
     hard_stops:
       - authority, non-goal, or user intent would change
       - feature contract would broaden
-    return_condition: clarified contract or sliced work returns to work
+    return_condition:
+      - decision.all_blockers_locked
+      - feature.reconcile_current
+      - feature.handoff_fresh
 invocations:
-  - trigger: implementation result is risky or contested
-    to: audit
+  - trigger: audit_needed.implementation_risk
+    from: work.observe
+    to: audit.perceive
     authority_scope:
       - bounded changed surface
     allowed_verbs:
@@ -77,7 +82,8 @@ invocations:
       - external ship action
     hard_stops:
       - audit cannot tie findings to evidence
-    return_condition: findings are recorded or no issue remains
+    return_condition:
+      - audit.finding_recorded_or_clear
 outputs:
   - code or resource diff
   - verification evidence

@@ -48,8 +48,9 @@ router:
   confidence: high
 transitions: []
 invocations:
-  - trigger: ship gate exposes risky or missing evidence
-    to: audit
+  - trigger: audit_needed.ship_evidence_risk
+    from: ship.observe
+    to: audit.perceive
     authority_scope:
       - bounded closeout surface
     allowed_verbs:
@@ -61,7 +62,8 @@ invocations:
       - release without bounded authority
     hard_stops:
       - evidence cannot be tied to current HEAD
-    return_condition: blocker is recorded or evidence is restored
+    return_condition:
+      - ship.evidence_restored_or_blocked
 outputs:
   - QA slice
   - closed feature

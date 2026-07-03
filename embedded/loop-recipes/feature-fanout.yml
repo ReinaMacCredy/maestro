@@ -47,8 +47,9 @@ router:
   priority: 25
   confidence: medium
 transitions:
-  - trigger: each worker receives a selected unit
-    to: work
+  - trigger: work_ready.selected_unit
+    from: feature-fanout.choose
+    to: work.perceive
     authority_scope:
       - one selected task or card
     allowed_verbs:
@@ -60,10 +61,12 @@ transitions:
       - changing another worker unit
     hard_stops:
       - selected units share files or dependency edge without isolation
-    return_condition: worker returns proof data or verified unit
+    return_condition:
+      - work.verified_blocked_or_superseded
 invocations:
-  - trigger: worker proof is contested
-    to: adversarial-review
+  - trigger: audit_needed.worker_proof_contested
+    from: feature-fanout.observe
+    to: adversarial-review.perceive
     authority_scope:
       - returned claim and locked check
     allowed_verbs:
@@ -73,7 +76,8 @@ invocations:
       - verify over reproducible refutation
     hard_stops:
       - refuter returns reproducible failure
-    return_condition: claim is upheld or task is blocked
+    return_condition:
+      - proof.claim_upheld_or_blocked
 outputs:
   - independent worker contracts
   - verified slices

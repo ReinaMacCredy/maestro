@@ -1,5 +1,5 @@
 ---
-version: 1.29.15
+version: 1.29.16
 ---
 
 # Maestro Harness Protocol
@@ -24,7 +24,11 @@ recommends from local artifacts and never writes cards, tasks, features,
 decisions, proof, QA, git, releases, archives, or files. Read
 `maestro loop show <recipe>` and write only through existing Maestro verbs.
 Rule: loop next recommends; outcome/proof/memory verbs write. Use
-`maestro loop outcome` after action/proof/repair. Use `maestro loop improve` for
+`maestro loop next --chain` when you need the current chain position,
+transition trigger, next native command, and return conditions without writing.
+Use `maestro loop outcome` after action/proof/repair; transition receipts are
+explicit outcome evidence, not lifecycle authority. Use `maestro loop trace
+<card>` to audit card-scoped chain receipts. Use `maestro loop improve` for
 read-only proposals; apply only the explicit memory, harness, proof, or QA
 command it prints. No hidden stores, hidden schedulers, silent recipe mutation,
 or proof/QA bypass.
@@ -59,8 +63,9 @@ Do not let Progress tasks or source edits implicitly end the design phase.
 Canonical work readiness is `maestro ready`: a task-wave projection from the
 Task DAG. It shows the parallel executable wave, ready serial gates, and the
 bounded blocked-next frontier. `maestro loop next` uses that projection and
-does not create a second scheduler. `maestro card ready` is the explicit legacy
-card-board readiness surface.
+does not create a second scheduler; `maestro loop next --chain` explains the
+derived chain overlay over the same artifacts. `maestro card ready` is the
+explicit legacy card-board readiness surface.
 Complete executable work with `maestro task complete` using summary, claim, and
 proof. Close Progress rows with `maestro task done <ref> --proof "<evidence>"`.
 Verification matches each `--claim` against recorded/inline proof; empty claims

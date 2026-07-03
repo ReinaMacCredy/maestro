@@ -47,8 +47,9 @@ router:
   priority: 15
   confidence: high
 transitions:
-  - trigger: audit produces accepted local fix work
-    to: work
+  - trigger: work_needed.audit_finding
+    from: audit.continue
+    to: work.perceive
     authority_scope:
       - recorded finding task or accepted feature contract
     allowed_verbs:
@@ -60,7 +61,8 @@ transitions:
       - external ship action
     hard_stops:
       - finding lacks evidence
-    return_condition: finding has a task or is explicitly non-actionable
+    return_condition:
+      - audit.finding_tasked_or_non_actionable
 invocations: []
 outputs:
   - findings report

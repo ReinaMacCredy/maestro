@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: 97e294c742e525b94aaaaf5400e37f2d9dd084c8ad1485afd507d0dbfdbb8fdd -->
+<!-- maestro:cli-reference-sha256: b661e60462c2dd71da42ea5f882db4827869323deab95967c65e1b69cf0c5641 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -99,7 +99,7 @@ a spelling not found here is outside this skill's CLI surface.
 ## maestro loop
 
 - `maestro loop list` -- List shipped and project custom recipes
-- `maestro loop next [--json] [--compact] [--phase <PHASE>]` -- Recommend the next loop recipe without mutating state
+- `maestro loop next [--json] [--chain] [--compact] [--phase <PHASE>]` -- Recommend the next loop recipe without mutating state
 - `maestro loop improve [--json]` -- Plan loop improvement proposals without mutating state
 - `maestro loop show <NAME> [--compact] [--phase <PHASE>] [--json]` -- Print one shipped or project custom recipe
-- `maestro loop outcome --recipe <RECIPE> --phase <PHASE> --selected-unit <SELECTED_UNIT> [--constraint <CONSTRAINTS>]... [--proof-result <PROOF_RESULT>] --failure-class <FAILURE_CLASS> [--blocker-class <BLOCKER_CLASS>] [--retry-count <RETRY_COUNT>] [--duration-ms <DURATION_MS>] [--learning-candidate <LEARNING_CANDIDATE>] [--source-ref <SOURCE_REF>]... [--run <RUN>] [--json]` -- Record a write-side loop outcome event
+- `maestro loop outcome --recipe <RECIPE> --phase <PHASE> --selected-unit <SELECTED_UNIT> [--constraint <CONSTRAINTS>]... [--proof-result <PROOF_RESULT>] [--failure-class <FAILURE_CLASS>] [--blocker-class <BLOCKER_CLASS>] [--transition-to <TRANSITION_TO>] [--transition-reason <TRANSITION_REASON>] [--trigger <TRIGGER>] [--return-condition <RETURN_CONDITION>]... [--evidence-ref <EVIDENCE_REF>]... [--retry-count <RETRY_COUNT>] [--duration-ms <DURATION_MS>] [--learning-candidate <LEARNING_CANDIDATE>] [--source-ref <SOURCE_REF>]... [--run <RUN>] [--json]` -- Record a write-side loop outcome event

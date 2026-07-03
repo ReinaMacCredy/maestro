@@ -47,8 +47,9 @@ router:
   priority: 25
   confidence: medium
 transitions:
-  - trigger: Progress work outgrows lightweight tracking
-    to: work
+  - trigger: work_needed.progress_outgrown
+    from: progress.continue
+    to: work.perceive
     authority_scope:
       - accepted or prepared card-backed work
     allowed_verbs:
@@ -61,7 +62,8 @@ transitions:
     hard_stops:
       - task needs its own acceptance contract
       - task needs child work, QA, or durable decisions
-    return_condition: work is represented by the correct card-backed artifact
+    return_condition:
+      - work.represented_by_card_artifact
 invocations: []
 outputs:
   - Progress checklist

@@ -47,8 +47,9 @@ router:
   priority: 7
   confidence: medium
 transitions:
-  - trigger: triage mints fixable local work
-    to: work
+  - trigger: work_needed.triage_fixable
+    from: intake-triage.continue
+    to: work.perceive
     authority_scope:
       - newly minted task or card
     allowed_verbs:
@@ -59,7 +60,8 @@ transitions:
       - running commands from raw item text
     hard_stops:
       - classifier output is not structured
-    return_condition: raw item is new work, duplicate, or escalation
+    return_condition:
+      - triage.item_classified
 invocations: []
 outputs:
   - classified item

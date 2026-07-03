@@ -47,8 +47,9 @@ router:
   priority: 8
   confidence: medium
 transitions:
-  - trigger: survivor needs a durable design decision
-    to: design
+  - trigger: design_needed.survivor_decision
+    from: generate-filter.continue
+    to: design.choose
     authority_scope:
       - active design card and current fork
     allowed_verbs:
@@ -60,7 +61,8 @@ transitions:
       - feature accept
     hard_stops:
       - rubric was not fixed before generation
-    return_condition: survivor and rejected alternatives are recorded
+    return_condition:
+      - decision.all_blockers_locked
 invocations: []
 outputs:
   - fixed rubric

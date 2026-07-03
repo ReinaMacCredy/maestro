@@ -693,6 +693,8 @@ pub enum LoopCommand {
         #[arg(value_name = "KIND")]
         kind: String,
     },
+    #[command(about = "Trace card-scoped loop transition receipts without mutating state")]
+    Trace(LoopTraceArgs),
     #[command(about = "Record a write-side loop outcome event")]
     Outcome(Box<LoopOutcomeArgs>),
     #[command(about = "Run the internal Work Lease choose-phase helper and print JSON")]
@@ -704,6 +706,9 @@ pub struct LoopNextArgs {
     /// Print machine-readable router or compact packet JSON.
     #[arg(long)]
     pub json: bool,
+    /// Print the receipt-backed chain read model for the next route.
+    #[arg(long)]
+    pub chain: bool,
     /// Print a compact execution packet for the recommended recipe.
     #[arg(long)]
     pub compact: bool,
@@ -715,6 +720,18 @@ pub struct LoopNextArgs {
 #[derive(Debug, Args)]
 pub struct LoopImproveArgs {
     /// Print machine-readable loop improvement proposal JSON.
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct LoopTraceArgs {
+    #[arg(value_name = "CARD")]
+    pub card: String,
+    /// Include the full card-scoped trace instead of the recent default window.
+    #[arg(long)]
+    pub all: bool,
+    /// Print machine-readable loop trace JSON.
     #[arg(long)]
     pub json: bool,
 }
@@ -732,9 +749,19 @@ pub struct LoopOutcomeArgs {
     #[arg(long = "proof-result")]
     pub proof_result: Option<String>,
     #[arg(long = "failure-class")]
-    pub failure_class: String,
+    pub failure_class: Option<String>,
     #[arg(long = "blocker-class")]
     pub blocker_class: Option<String>,
+    #[arg(long = "transition-to")]
+    pub transition_to: Option<String>,
+    #[arg(long = "transition-reason")]
+    pub transition_reason: Option<String>,
+    #[arg(long = "trigger")]
+    pub trigger: Option<String>,
+    #[arg(long = "return-condition")]
+    pub return_condition: Vec<String>,
+    #[arg(long = "evidence-ref")]
+    pub evidence_ref: Vec<String>,
     #[arg(long = "retry-count", default_value_t = 0)]
     pub retry_count: u32,
     #[arg(long = "duration-ms", default_value_t = 0)]

@@ -47,8 +47,9 @@ router:
   priority: 30
   confidence: high
 transitions:
-  - trigger: user approves build and feature has zero open decisions
-    to: work
+  - trigger: work_ready.design_locked
+    from: design.continue
+    to: work.perceive
     authority_scope:
       - accepted feature contract
     allowed_verbs:
@@ -61,7 +62,10 @@ transitions:
     hard_stops:
       - open design decision remains
       - acceptance or non-goal would change without human choice
-    return_condition: accepted feature is ready for prepared work
+    return_condition:
+      - decision.all_blockers_locked
+      - feature.reconcile_current
+      - feature.handoff_fresh
 invocations: []
 outputs:
   - locked decision

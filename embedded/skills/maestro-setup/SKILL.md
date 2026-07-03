@@ -1,6 +1,6 @@
 ---
 name: maestro-setup
-version: 1.11.3
+version: 1.11.4
 description: "Setup Maestro in a project: use for init/install/sync/doctor, global skills, hooks, harness setup, or agent integration diagnosis/repair."
 ---
 
@@ -16,10 +16,12 @@ for current state and `maestro loop next` as the read-only router when the next
 lifecycle is not obvious. Setup writes still use the existing Maestro verbs
 named by this skill (`init`, `install`, `sync`, `doctor`, `upgrade`,
 `uninstall`, and `shell-init`), not hidden setup state. Rule: loop next
-recommends; outcome/proof/memory verbs write. `maestro loop outcome` appends
-structured outcomes; `maestro loop improve` is a read-only proposer. No hidden
-stores, hidden schedulers, silent recipe mutation, and proof/QA bypass are
-forbidden.
+recommends; outcome/proof/memory verbs write. `maestro loop next --chain`
+explains current chain position without writing; `maestro loop outcome` appends
+structured outcomes and transition receipts after native work; `maestro loop
+trace <card>` audits card-scoped receipts; `maestro loop improve` is a read-only
+proposer. No hidden stores, hidden schedulers, silent recipe mutation, and
+proof/QA bypass are forbidden.
 
 ## Use
 

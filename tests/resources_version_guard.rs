@@ -37,32 +37,32 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 20] = [
     (
         "skill",
         "ask-maestro",
-        "1.0.3",
-        "ad9a3e4cc2f6cf6211c54260798f97ca7b8cea36646bd320c50a6e64a9ed9be0",
+        "1.0.4",
+        "7cc63fa14a4b1f4ef4c14879031c69a340161572f1aaa4de82815ee95f2ffb44",
     ),
     (
         "skill",
         "maestro-card",
-        "1.37.17",
-        "5887ee1b7642c32405c4fe71acf1c478c5bfdc0de6a0de6c59f99225b74bf785",
+        "1.37.18",
+        "e90dc0a08668ab67528f805449b962f47321904f17b03f9d570cd3f940b1eadf",
     ),
     (
         "skill",
         "maestro-setup",
-        "1.11.3",
-        "bd59bd51b707573a04cdfc9473aacf24e7d8e23788663ce2a6f7b4dd800321ff",
+        "1.11.4",
+        "98307f4f02d8f42084cb23082e8ee855586626e764cb441bdab97678272263c3",
     ),
     (
         "skill",
         "maestro-design",
-        "1.36.10",
-        "ab5b06ed64dde01a625417a03ef46f455137e667b07fe1db532a39f8562a93cb",
+        "1.36.11",
+        "6769e2a62522464af64fe942e0105999efb5d928c9be9a3fab653035e84bbecd",
     ),
     (
         "skill",
         "maestro-audit",
-        "1.13.3",
-        "da31bac62ec62d7cd01c67310b06326bf61b879295ffedc79f5b0396ac791c3b",
+        "1.13.4",
+        "bae1680b1d5a1ca7abdab76647b70dc3ec419a1ac258e2e566ab37759d709edc",
     ),
     (
         "hook",
@@ -73,8 +73,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 20] = [
     (
         "harness",
         "HARNESS.md",
-        "1.29.15",
-        "b48b8dcd1664cfbb6fbc01167b2b789e39a4cb35bbb9c905be7ea2d4ba56a594",
+        "1.29.16",
+        "053c7500c7b2f1e8931c4ed6f6c3e11887c6d49710a99fc1cefdd580d87193a0",
     ),
     (
         "playbook",

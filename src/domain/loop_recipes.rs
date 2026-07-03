@@ -24,6 +24,7 @@ static LOOP_RECIPE_CONTRACTS_DIR: Dir<'_> =
 
 const CONTRACT_SCHEMA_VERSION: &str = "maestro.recipe.v2";
 const LOOP_COMPACT_PACKET_SCHEMA: &str = "maestro.loop_compact_packet.v1";
+const LOOP_CHAIN_SCHEMA: &str = "maestro.loop_chain.v1";
 const LOOP_IMPROVE_SCHEMA: &str = "maestro.loop_improve.v1";
 const REQUIRED_PHASES: [&str; 6] = ["perceive", "choose", "act", "observe", "learn", "continue"];
 const CANONICAL_RECIPE_IDS: [&str; 15] = [
@@ -66,6 +67,50 @@ const FORBIDDEN_BYPASS_PHRASES: [&str; 10] = [
     "create hidden store",
     "separate lifecycle",
     "second lifecycle",
+];
+const TRIGGER_KEYS: &[&str] = &[
+    "audit_needed.high_risk_claim",
+    "audit_needed.implementation_risk",
+    "audit_needed.merge_surprise",
+    "audit_needed.selected_unit_risk",
+    "audit_needed.ship_evidence_risk",
+    "audit_needed.worker_proof_contested",
+    "custom.work_needed",
+    "design_needed.dry_backlog",
+    "design_needed.survivor_decision",
+    "design_needed.scope_unclear",
+    "design_ready.relay_normalized",
+    "work_needed.audit_finding",
+    "work_needed.learning_fix",
+    "work_needed.progress_outgrown",
+    "work_needed.refutation_found",
+    "work_needed.triage_fixable",
+    "work_ready.conflict_resolved",
+    "work_ready.design_locked",
+    "work_ready.finding_minted",
+    "work_ready.selected_unit",
+    "ship_ready.synthesis_merged",
+];
+const RETURN_CONDITION_KEYS: &[&str] = &[
+    "audit.finding_recorded_or_clear",
+    "audit.finding_tasked_or_non_actionable",
+    "audit.issue_resolved_or_blocked",
+    "claim.upheld_fixed_or_blocked",
+    "conflict.slice_merged_and_clear",
+    "custom.scope_complete",
+    "decision.all_blockers_locked",
+    "design.relay_returned",
+    "feature.closed_archived_or_blocked",
+    "feature.handoff_fresh",
+    "feature.reconcile_current",
+    "learning.recorded_or_not_needed",
+    "proof.claim_upheld_or_blocked",
+    "ship.evidence_restored_or_blocked",
+    "ship.feature_closed_or_archived",
+    "triage.item_classified",
+    "work.accepted_or_dry",
+    "work.represented_by_card_artifact",
+    "work.verified_blocked_or_superseded",
 ];
 
 #[derive(Clone, Debug, Deserialize)]
@@ -117,12 +162,13 @@ pub struct RouterMetadata {
 #[serde(deny_unknown_fields)]
 pub struct RecipeEdge {
     pub trigger: String,
+    pub from: String,
     pub to: String,
     pub authority_scope: Vec<String>,
     pub allowed_verbs: Vec<String>,
     pub forbidden_verbs: Vec<String>,
     pub hard_stops: Vec<String>,
-    pub return_condition: String,
+    pub return_condition: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -198,6 +244,72 @@ pub struct LoopFeatureInput {
     pub total_tasks: usize,
     pub verified_tasks: usize,
     pub open_questions: usize,
+}
+
+#[derive(Clone, Debug, Default, Serialize)]
+pub struct LoopChainFacts {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selected_unit: Option<LoopChainSelectedUnit>,
+    pub current_recipe: String,
+    pub current_phase: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub feature_status: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub open_decisions: Vec<String>,
+    pub handoff_fresh: bool,
+    pub feature_reconcile_current: bool,
+    pub ready_progress_rows: usize,
+    pub proof_failed: bool,
+    pub qa_failed: bool,
+    pub contested: bool,
+    pub backlog_dry: bool,
+    pub closed_or_archived: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub latest_transition_receipts: Vec<LoopRecentOutcome>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub source_refs: Vec<LoopContextRef>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct LoopChainSelectedUnit {
+    pub kind: String,
+    pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct LoopChainTransitionMatch {
+    pub trigger: String,
+    pub from: String,
+    pub to: String,
+    pub transition_reason: String,
+    pub authority_scope: Vec<String>,
+    pub allowed_verbs: Vec<String>,
+    pub forbidden_verbs: Vec<String>,
+    pub hard_stops: Vec<String>,
+    pub return_conditions: Vec<LoopChainReturnConditionStatus>,
+    pub source_refs: Vec<LoopContextRef>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct LoopChainReturnConditionStatus {
+    pub key: String,
+    pub satisfied: bool,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct LoopChainReport {
+    pub schema: &'static str,
+    pub chain: Vec<&'static str>,
+    pub current: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selected_unit: Option<LoopChainSelectedUnit>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transition: Option<LoopChainTransitionMatch>,
+    pub return_conditions: Vec<LoopChainReturnConditionStatus>,
+    pub next: Vec<String>,
+    pub source_refs: Vec<LoopContextRef>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -426,12 +538,13 @@ pub struct LoopNextReport {
 pub struct LoopNextEdge {
     pub kind: &'static str,
     pub trigger: String,
+    pub from: String,
     pub to: String,
     pub authority_scope: Vec<String>,
     pub allowed_verbs: Vec<String>,
     pub forbidden_verbs: Vec<String>,
     pub hard_stops: Vec<String>,
-    pub return_condition: String,
+    pub return_condition: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -1830,10 +1943,332 @@ fn edge_reports(contract: &RecipeContract) -> Vec<LoopNextEdge> {
         .collect()
 }
 
+pub fn match_chain_transition(
+    facts: &LoopChainFacts,
+    contract: &RecipeContract,
+) -> Result<Option<LoopChainTransitionMatch>> {
+    let current = facts.current_endpoint();
+    for edge in &contract.transitions {
+        if edge.from != current {
+            continue;
+        }
+        if !chain_trigger_matches(&edge.trigger, facts)? {
+            continue;
+        }
+        return Ok(Some(chain_transition_match(edge, facts)?));
+    }
+    Ok(None)
+}
+
+pub fn chain_report_from_facts(
+    facts: LoopChainFacts,
+    contract: Option<&RecipeContract>,
+) -> Result<LoopChainReport> {
+    let transition = match contract {
+        Some(contract) => match_chain_transition(&facts, contract)?,
+        None => None,
+    };
+    let return_conditions = transition
+        .as_ref()
+        .map(|transition| transition.return_conditions.clone())
+        .unwrap_or_default();
+    let next = transition
+        .as_ref()
+        .map(|transition| chain_next_verbs(transition, &facts))
+        .unwrap_or_default();
+    Ok(LoopChainReport {
+        schema: LOOP_CHAIN_SCHEMA,
+        chain: vec!["design", "work", "verify", "close", "archive"],
+        current: facts.current_endpoint(),
+        selected_unit: facts.selected_unit.clone(),
+        transition,
+        return_conditions,
+        next,
+        source_refs: facts.source_refs,
+    })
+}
+
+pub fn chain_facts_from_router(input: &LoopRouterInput, report: &LoopNextReport) -> LoopChainFacts {
+    let selected_task = input
+        .current_task
+        .as_ref()
+        .or_else(|| input.tasks.iter().find(|task| task.state == "in_progress"))
+        .or_else(|| {
+            input
+                .tasks
+                .iter()
+                .find(|task| task.state == "needs_verification")
+        })
+        .or_else(|| {
+            input
+                .tasks
+                .iter()
+                .find(|task| task.state == "ready" && task.ready_startable)
+        });
+    let selected_feature = selected_task
+        .and_then(|task| {
+            task.feature_id.as_deref().and_then(|feature_id| {
+                input
+                    .features
+                    .iter()
+                    .find(|feature| feature.id == feature_id)
+            })
+        })
+        .or_else(|| {
+            input
+                .features
+                .iter()
+                .find(|feature| feature.status == "in_progress" || feature.status == "proposed")
+        });
+    let selected_unit = selected_task
+        .map(|task| LoopChainSelectedUnit {
+            kind: "task".to_string(),
+            id: task.id.clone(),
+            title: Some(task.title.clone()),
+        })
+        .or_else(|| {
+            selected_feature.map(|feature| LoopChainSelectedUnit {
+                kind: "feature".to_string(),
+                id: feature.id.clone(),
+                title: Some(feature.title.clone()),
+            })
+        });
+    let open_decisions = selected_feature
+        .map(|feature| {
+            (0..feature.open_questions)
+                .map(|index| format!("{}:open-question:{}", feature.id, index + 1))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let handoff_fresh = selected_feature
+        .map(|feature| feature.open_questions == 0 && feature.status != "proposed")
+        .unwrap_or(true);
+    let feature_reconcile_current = selected_feature
+        .map(|feature| feature.open_questions == 0 && feature.status != "proposed")
+        .unwrap_or(true);
+    LoopChainFacts {
+        selected_unit,
+        current_recipe: report
+            .recommended_recipe
+            .clone()
+            .unwrap_or_else(|| report.recommended_status.clone()),
+        current_phase: report
+            .recommended_phase
+            .clone()
+            .unwrap_or_else(|| "perceive".to_string()),
+        feature_status: selected_feature.map(|feature| feature.status.clone()),
+        open_decisions,
+        handoff_fresh,
+        feature_reconcile_current,
+        ready_progress_rows: input
+            .tasks
+            .iter()
+            .filter(|task| task.state == "ready" && task.ready_startable)
+            .count(),
+        source_refs: report.context_refs.clone(),
+        ..LoopChainFacts::default()
+    }
+}
+
+pub fn validate_trigger_key(trigger: &str) -> Result<()> {
+    ensure!(
+        TRIGGER_KEYS.contains(&trigger),
+        "unknown trigger key {trigger}"
+    );
+    Ok(())
+}
+
+pub fn validate_return_condition_key(condition: &str) -> Result<()> {
+    ensure!(
+        RETURN_CONDITION_KEYS.contains(&condition),
+        "unknown return_condition key {condition}"
+    );
+    Ok(())
+}
+
+pub fn validate_recipe_phase_endpoint(endpoint: &str, allowed: &BTreeSet<String>) -> Result<()> {
+    let (recipe, phase) = parse_edge_endpoint("transition", "to", endpoint)?;
+    ensure!(
+        allowed.contains(recipe),
+        "transition.to references unknown recipe {recipe}"
+    );
+    ensure!(
+        REQUIRED_PHASES.contains(&phase),
+        "transition.to references unknown phase {phase}"
+    );
+    Ok(())
+}
+
+fn chain_transition_match(
+    edge: &RecipeEdge,
+    facts: &LoopChainFacts,
+) -> Result<LoopChainTransitionMatch> {
+    let return_conditions = edge
+        .return_condition
+        .iter()
+        .map(|key| {
+            Ok(LoopChainReturnConditionStatus {
+                key: key.clone(),
+                satisfied: return_condition_satisfied(key, facts)?,
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    Ok(LoopChainTransitionMatch {
+        trigger: edge.trigger.clone(),
+        from: edge.from.clone(),
+        to: edge.to.clone(),
+        transition_reason: trigger_reason(&edge.trigger).to_string(),
+        authority_scope: edge.authority_scope.clone(),
+        allowed_verbs: edge.allowed_verbs.clone(),
+        forbidden_verbs: edge.forbidden_verbs.clone(),
+        hard_stops: edge.hard_stops.clone(),
+        return_conditions,
+        source_refs: facts.source_refs.clone(),
+    })
+}
+
+impl LoopChainFacts {
+    fn current_endpoint(&self) -> String {
+        if self.current_recipe.is_empty() || self.current_phase.is_empty() {
+            return String::new();
+        }
+        format!("{}.{}", self.current_recipe, self.current_phase)
+    }
+}
+
+fn chain_trigger_matches(trigger: &str, facts: &LoopChainFacts) -> Result<bool> {
+    ensure!(
+        TRIGGER_KEYS.contains(&trigger),
+        "unknown trigger key {trigger}"
+    );
+    Ok(match trigger {
+        "design_needed.scope_unclear" => !facts.open_decisions.is_empty() || !facts.handoff_fresh,
+        "design_needed.dry_backlog" => facts.backlog_dry,
+        "design_needed.survivor_decision" => !facts.open_decisions.is_empty(),
+        "design_ready.relay_normalized" => facts.open_decisions.is_empty() && facts.handoff_fresh,
+        "work_ready.design_locked" => {
+            facts.open_decisions.is_empty()
+                && facts.handoff_fresh
+                && facts.feature_reconcile_current
+        }
+        "work_ready.selected_unit" => {
+            facts.selected_unit.is_some() || facts.ready_progress_rows > 0
+        }
+        "work_ready.conflict_resolved" | "work_ready.finding_minted" => {
+            facts.selected_unit.is_some()
+        }
+        "work_needed.audit_finding"
+        | "work_needed.learning_fix"
+        | "work_needed.progress_outgrown"
+        | "work_needed.refutation_found"
+        | "work_needed.triage_fixable" => facts.selected_unit.is_some(),
+        "audit_needed.high_risk_claim"
+        | "audit_needed.implementation_risk"
+        | "audit_needed.merge_surprise"
+        | "audit_needed.selected_unit_risk"
+        | "audit_needed.ship_evidence_risk"
+        | "audit_needed.worker_proof_contested" => {
+            facts.proof_failed || facts.qa_failed || facts.contested
+        }
+        "ship_ready.synthesis_merged" => facts.closed_or_archived || !facts.proof_failed,
+        "custom.work_needed" => facts.selected_unit.is_some() || facts.ready_progress_rows > 0,
+        _ => false,
+    })
+}
+
+fn return_condition_satisfied(key: &str, facts: &LoopChainFacts) -> Result<bool> {
+    ensure!(
+        RETURN_CONDITION_KEYS.contains(&key),
+        "unknown return_condition key {key}"
+    );
+    Ok(match key {
+        "decision.all_blockers_locked" => facts.open_decisions.is_empty(),
+        "feature.reconcile_current" => facts.feature_reconcile_current,
+        "feature.handoff_fresh" => facts.handoff_fresh,
+        "work.accepted_or_dry" => facts.selected_unit.is_some() || facts.backlog_dry,
+        "work.verified_blocked_or_superseded" => !facts.proof_failed,
+        "work.represented_by_card_artifact" => facts.selected_unit.is_some(),
+        "audit.finding_recorded_or_clear"
+        | "audit.finding_tasked_or_non_actionable"
+        | "audit.issue_resolved_or_blocked"
+        | "claim.upheld_fixed_or_blocked"
+        | "proof.claim_upheld_or_blocked"
+        | "ship.evidence_restored_or_blocked" => !facts.proof_failed && !facts.contested,
+        "conflict.slice_merged_and_clear" => !facts.contested,
+        "custom.scope_complete" => facts.selected_unit.is_some(),
+        "design.relay_returned" => facts.handoff_fresh,
+        "feature.closed_archived_or_blocked" | "ship.feature_closed_or_archived" => {
+            facts.closed_or_archived
+        }
+        "learning.recorded_or_not_needed" | "triage.item_classified" => {
+            facts.selected_unit.is_some()
+        }
+        _ => false,
+    })
+}
+
+fn trigger_reason(trigger: &str) -> &'static str {
+    match trigger {
+        "design_needed.scope_unclear" => {
+            "unresolved or stale design facts require returning to the design loop"
+        }
+        "work_ready.design_locked" => "locked design facts indicate the feature can move into work",
+        "work_ready.selected_unit" => "a selected unit is ready for work",
+        "audit_needed.implementation_risk"
+        | "audit_needed.high_risk_claim"
+        | "audit_needed.merge_surprise"
+        | "audit_needed.selected_unit_risk"
+        | "audit_needed.ship_evidence_risk"
+        | "audit_needed.worker_proof_contested" => {
+            "risk or contested evidence requires an audit route"
+        }
+        "ship_ready.synthesis_merged" => "synthesis facts indicate the ship loop is next",
+        _ => "registered trigger matched LoopChainFacts",
+    }
+}
+
+fn chain_next_verbs(transition: &LoopChainTransitionMatch, facts: &LoopChainFacts) -> Vec<String> {
+    if transition.to.starts_with("design.") {
+        let feature_id = facts
+            .selected_unit
+            .as_ref()
+            .filter(|unit| unit.kind == "feature")
+            .map(|unit| unit.id.clone())
+            .or_else(|| {
+                facts
+                    .feature_status
+                    .as_ref()
+                    .and_then(|_| facts.open_decisions.first())
+                    .and_then(|decision| decision.split_once(":open-question:"))
+                    .map(|(feature, _)| feature.to_string())
+            })
+            .unwrap_or_else(|| "<feature-id>".to_string());
+        return vec![
+            format!("maestro decision new \"<title>\" --feature {feature_id}"),
+            format!("maestro feature reconcile {feature_id} --current"),
+            format!("maestro feature finalize {feature_id}"),
+        ];
+    }
+    if transition.to.starts_with("work.") {
+        return vec![
+            "maestro task start <id>".to_string(),
+            "maestro ready".to_string(),
+        ];
+    }
+    if transition.to.starts_with("audit.") {
+        return vec!["maestro loop show audit".to_string()];
+    }
+    if transition.to.starts_with("ship.") {
+        return vec!["maestro loop show ship".to_string()];
+    }
+    Vec::new()
+}
+
 fn edge_report(kind: &'static str, edge: &RecipeEdge) -> LoopNextEdge {
     LoopNextEdge {
         kind,
         trigger: edge.trigger.clone(),
+        from: edge.from.clone(),
         to: edge.to.clone(),
         authority_scope: edge.authority_scope.clone(),
         allowed_verbs: edge.allowed_verbs.clone(),
@@ -2549,15 +2984,13 @@ fn render_edges(out: &mut String, title: &str, edges: &[RecipeEdge]) {
     }
     out.push_str(&format!("\n## {title}\n\n"));
     for edge in edges {
-        out.push_str(&format!("- {} -> {}\n", edge.trigger, edge.to));
+        out.push_str(&format!("- {} -> {}\n", edge.from, edge.to));
+        out.push_str(&format!("  - trigger: {}\n", edge.trigger));
         push_nested_named_list(out, "authority_scope", &edge.authority_scope);
         push_nested_named_list(out, "allowed_verbs", &edge.allowed_verbs);
         push_nested_named_list(out, "forbidden_verbs", &edge.forbidden_verbs);
         push_nested_named_list(out, "hard_stops", &edge.hard_stops);
-        out.push_str(&format!(
-            "  - return_condition: {}\n",
-            edge.return_condition
-        ));
+        push_nested_named_list(out, "return_condition", &edge.return_condition);
     }
 }
 
@@ -2824,16 +3257,42 @@ fn validate_edges(recipe_id: &str, field: &str, edges: &[RecipeEdge]) -> Result<
     for (index, edge) in edges.iter().enumerate() {
         let prefix = format!("recipe {recipe_id}.{field}[{index}]");
         require_non_empty(&format!("{prefix}.trigger"), &edge.trigger)?;
+        ensure!(
+            TRIGGER_KEYS.contains(&edge.trigger.as_str()),
+            "{prefix}.trigger references unknown trigger key {}",
+            edge.trigger
+        );
+        require_non_empty(&format!("{prefix}.from"), &edge.from)?;
+        validate_edge_source(recipe_id, &prefix, &edge.from)?;
         require_non_empty(&format!("{prefix}.to"), &edge.to)?;
         require_non_empty_list(&format!("{prefix}.authority_scope"), &edge.authority_scope)?;
         require_non_empty_list(&format!("{prefix}.allowed_verbs"), &edge.allowed_verbs)?;
         require_non_empty_list(&format!("{prefix}.forbidden_verbs"), &edge.forbidden_verbs)?;
         require_non_empty_list(&format!("{prefix}.hard_stops"), &edge.hard_stops)?;
-        require_non_empty(
+        require_non_empty_list(
             &format!("{prefix}.return_condition"),
             &edge.return_condition,
         )?;
+        for condition in &edge.return_condition {
+            ensure!(
+                RETURN_CONDITION_KEYS.contains(&condition.as_str()),
+                "{prefix}.return_condition references unknown return_condition key {condition}"
+            );
+        }
     }
+    Ok(())
+}
+
+fn validate_edge_source(recipe_id: &str, prefix: &str, from: &str) -> Result<()> {
+    let (from_recipe, from_phase) = parse_edge_endpoint(prefix, "from", from)?;
+    ensure!(
+        from_recipe == recipe_id,
+        "{prefix}.from must name source recipe {recipe_id}, got {from_recipe}",
+    );
+    ensure!(
+        REQUIRED_PHASES.contains(&from_phase),
+        "{prefix}.from references unknown phase {from_phase}",
+    );
     Ok(())
 }
 
@@ -2852,17 +3311,42 @@ fn validate_edge_targets(contract: &RecipeContract, allowed: &BTreeSet<String>) 
         ("invocations", contract.invocations.as_slice()),
     ] {
         for (index, edge) in edges.iter().enumerate() {
+            let prefix = format!("recipe {}.{}[{}]", contract.id, field, index);
+            let (target_recipe, target_phase) = parse_edge_endpoint(&prefix, "to", &edge.to)?;
             ensure!(
-                allowed.contains(&edge.to),
+                allowed.contains(target_recipe),
                 "recipe {}.{}[{}].to references unknown recipe {}",
                 contract.id,
                 field,
                 index,
-                edge.to
+                target_recipe
+            );
+            ensure!(
+                REQUIRED_PHASES.contains(&target_phase),
+                "recipe {}.{}[{}].to references unknown phase {}",
+                contract.id,
+                field,
+                index,
+                target_phase
             );
         }
     }
     Ok(())
+}
+
+fn parse_edge_endpoint<'a>(
+    prefix: &str,
+    field: &str,
+    endpoint: &'a str,
+) -> Result<(&'a str, &'a str)> {
+    let Some((recipe, phase)) = endpoint.split_once('.') else {
+        bail!("{prefix}.{field} must use <recipe>.<phase>, got {endpoint}");
+    };
+    ensure!(
+        !recipe.trim().is_empty() && !phase.trim().is_empty() && !phase.contains('.'),
+        "{prefix}.{field} must use <recipe>.<phase>, got {endpoint}"
+    );
+    Ok((recipe, phase))
 }
 
 fn require_non_empty(field: &str, value: &str) -> Result<()> {
@@ -2907,11 +3391,8 @@ fn reject_forbidden_text(contract: &RecipeContract) -> Result<()> {
         .iter()
         .chain(contract.invocations.iter())
     {
-        values.extend([
-            edge.trigger.as_str(),
-            edge.to.as_str(),
-            edge.return_condition.as_str(),
-        ]);
+        values.extend([edge.trigger.as_str(), edge.from.as_str(), edge.to.as_str()]);
+        values.extend(edge.return_condition.iter().map(String::as_str));
         values.extend(edge.authority_scope.iter().map(String::as_str));
         values.extend(edge.allowed_verbs.iter().map(String::as_str));
         values.extend(edge.forbidden_verbs.iter().map(String::as_str));
@@ -3162,13 +3643,16 @@ mod tests {
                 .contains(&"maestro task show task-router".to_string())
         );
         assert!(report.edges.iter().any(|edge| {
-            edge.kind == "transition" && edge.to == "design" && edge.trigger.contains("too unclear")
+            edge.kind == "transition"
+                && edge.trigger == "design_needed.scope_unclear"
+                && edge.from == "work.act"
+                && edge.to == "design.choose"
         }));
         assert!(
             report
                 .edges
                 .iter()
-                .any(|edge| { edge.kind == "invocation" && edge.to == "audit" })
+                .any(|edge| { edge.kind == "invocation" && edge.to == "audit.perceive" })
         );
     }
 
@@ -3476,7 +3960,7 @@ mod tests {
     #[test]
     fn rejects_edge_targets_that_do_not_name_known_recipes() {
         let mut contract = contract("work").expect("work contract should validate");
-        contract.transitions[0].to = "typo-recipe".to_string();
+        contract.transitions[0].to = "typo-recipe.choose".to_string();
         let error = validate_edge_targets(&contract, &allowed_edge_targets(&[]))
             .unwrap_err()
             .to_string();

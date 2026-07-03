@@ -44,7 +44,11 @@ executable task-wave projection, and `maestro loop next` for read-only routing
 when the next lifecycle is not obvious. `loop next` consumes the readiness graph
 and chooses the lifecycle recipe: parallel work -> work, serial integration gate
 -> work, ship gate -> ship, design gap -> design, conflict -> conflict-handoff.
-It is not a queue, scheduler, executor, or hidden gate loop. Use
+Use `maestro loop next --chain` when you need to see the derived chain position,
+transition trigger, next native command, and return conditions; it is still
+read-only. Use `maestro loop outcome` after the native action to append any
+transition receipt, and `maestro loop trace <card>` to audit card-scoped receipt
+history. It is not a queue, scheduler, executor, or hidden gate loop. Use
 `maestro loop work-lease --json` only when you are intentionally running the
 legacy card-board choose-phase helper. Work Lease selects one ready card in the
 requested scope, claims it through the normal card claim policy, emits the

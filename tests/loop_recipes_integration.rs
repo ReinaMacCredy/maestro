@@ -6,6 +6,7 @@ use std::path::Path;
 use std::process::{Command, Output};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use maestro::domain::loop_recipes::{self, LoopChainFacts, LoopChainSelectedUnit};
 use maestro::foundation::core::time::format_utc_seconds_rfc3339_millis;
 use serde_json::Value;
 
@@ -215,7 +216,8 @@ fn loop_show_design_continue_waits_for_build_approval_before_finalize() {
 
     let full = stdout(temp.path(), &["loop", "show", "design"]);
     assert!(
-        full.contains("user approves build and feature has zero open decisions"),
+        full.contains("design.continue -> work.perceive")
+            && full.contains("trigger: work_ready.design_locked"),
         "{full}"
     );
     assert!(full.contains("maestro feature finalize <id>"), "{full}");
@@ -299,7 +301,10 @@ fn loop_next_routes_ready_task_and_does_not_mutate_maestro_store() {
             .as_array()
             .expect("edges should be an array")
             .iter()
-            .any(|edge| edge["kind"] == "transition" && edge["to"] == "design"),
+            .any(|edge| edge["kind"] == "transition"
+                && edge["trigger"] == "design_needed.scope_unclear"
+                && edge["from"] == "work.act"
+                && edge["to"] == "design.choose"),
         "{value}"
     );
     assert!(
@@ -307,9 +312,189 @@ fn loop_next_routes_ready_task_and_does_not_mutate_maestro_store() {
             .as_array()
             .expect("edges should be an array")
             .iter()
-            .any(|edge| edge["kind"] == "invocation" && edge["to"] == "audit"),
+            .any(|edge| edge["kind"] == "invocation" && edge["to"] == "audit.perceive"),
         "{value}"
     );
+}
+
+#[test]
+fn loop_next_chain_text_explains_current_transition_without_mutating_store() {
+    let temp = TestTempDir::new("maestro-loop-next-chain-text");
+    init_git_marker(temp.path());
+    stdout(temp.path(), &["init", "--yes"]);
+    stdout(
+        temp.path(),
+        &[
+            "feature",
+            "new",
+            "Chain UX",
+            "--question",
+            "Which acceptance path is current?",
+        ],
+    );
+    let task_id = stdout(
+        temp.path(),
+        &[
+            "task",
+            "create",
+            "Implement chain UX",
+            "--feature",
+            "chain-ux",
+            "--id-only",
+        ],
+    );
+    let task_id = task_id.trim();
+    stdout(temp.path(), &["task", "explore", task_id]);
+    stdout(temp.path(), &["task", "accept", task_id]);
+    stdout(temp.path(), &["task", "claim", task_id]);
+    let before = snapshot_dir(&temp.path().join(".maestro"));
+
+    let out = stdout(temp.path(), &["loop", "next", "--chain"]);
+    let after = snapshot_dir(&temp.path().join(".maestro"));
+
+    assert_eq!(before, after, "loop next --chain must stay read-only");
+    assert!(
+        out.contains("chain: design -> work -> verify -> close -> archive"),
+        "{out}"
+    );
+    assert!(out.contains("current: work.act"), "{out}");
+    assert!(out.contains("selected_unit: task:"), "{out}");
+    assert!(
+        out.contains("transition: work.act -> design.choose"),
+        "{out}"
+    );
+    assert!(
+        out.contains("trigger: design_needed.scope_unclear"),
+        "{out}"
+    );
+    assert!(out.contains("next: maestro decision new"), "{out}");
+    assert!(
+        out.contains("- decision.all_blockers_locked: missing"),
+        "{out}"
+    );
+}
+
+#[test]
+fn loop_next_chain_json_uses_stable_envelope() {
+    let temp = TestTempDir::new("maestro-loop-next-chain-json");
+    init_git_marker(temp.path());
+    stdout(temp.path(), &["init", "--yes"]);
+    stdout(
+        temp.path(),
+        &[
+            "feature",
+            "new",
+            "Chain JSON",
+            "--question",
+            "Which scope is current?",
+        ],
+    );
+    let task_id = stdout(
+        temp.path(),
+        &[
+            "task",
+            "create",
+            "Implement chain JSON",
+            "--feature",
+            "chain-json",
+            "--id-only",
+        ],
+    );
+    let task_id = task_id.trim();
+    stdout(temp.path(), &["task", "explore", task_id]);
+    stdout(temp.path(), &["task", "accept", task_id]);
+    stdout(temp.path(), &["task", "claim", task_id]);
+
+    let out = stdout(temp.path(), &["loop", "next", "--chain", "--json"]);
+    let value: Value = serde_json::from_str(&out).expect("loop chain JSON should parse");
+
+    assert_eq!(value["schema"], "maestro.loop_chain.v1");
+    assert_eq!(value["chain"][0], "design");
+    assert_eq!(value["current"], "work.act");
+    assert_eq!(value["selected_unit"]["kind"], "task");
+    assert_eq!(value["selected_unit"]["id"], task_id);
+    assert_eq!(value["transition"]["from"], "work.act");
+    assert_eq!(value["transition"]["to"], "design.choose");
+    assert_eq!(
+        value["transition"]["trigger"],
+        "design_needed.scope_unclear"
+    );
+    assert!(
+        value["return_conditions"]
+            .as_array()
+            .expect("return_conditions should be an array")
+            .iter()
+            .any(
+                |condition| condition["key"] == "decision.all_blockers_locked"
+                    && condition["satisfied"] == false
+            ),
+        "{value}"
+    );
+}
+
+#[test]
+fn loop_chain_matcher_selects_registered_transition_from_typed_facts() {
+    let contract = loop_recipes::contract("work").expect("work recipe should validate");
+    let facts = LoopChainFacts {
+        selected_unit: Some(LoopChainSelectedUnit {
+            kind: "feature".to_string(),
+            id: "feature-x".to_string(),
+            title: Some("Feature X".to_string()),
+        }),
+        current_recipe: "work".to_string(),
+        current_phase: "act".to_string(),
+        feature_status: Some("in_progress".to_string()),
+        open_decisions: vec!["dec-new-scope".to_string()],
+        handoff_fresh: false,
+        ready_progress_rows: 2,
+        ..LoopChainFacts::default()
+    };
+
+    let selected = loop_recipes::match_chain_transition(&facts, &contract)
+        .expect("matcher should evaluate")
+        .expect("work should transition to design");
+
+    assert_eq!(selected.trigger, "design_needed.scope_unclear");
+    assert_eq!(selected.from, "work.act");
+    assert_eq!(selected.to, "design.choose");
+    assert!(
+        selected
+            .return_conditions
+            .iter()
+            .any(
+                |condition| condition.key == "decision.all_blockers_locked" && !condition.satisfied
+            )
+    );
+}
+
+#[test]
+fn loop_chain_matcher_uses_recipe_order_for_multiple_matching_triggers() {
+    let mut contract =
+        loop_recipes::contract("unattended").expect("unattended recipe should validate");
+    contract.transitions[1].from = "unattended.choose".to_string();
+    let facts = LoopChainFacts {
+        selected_unit: Some(LoopChainSelectedUnit {
+            kind: "task".to_string(),
+            id: "task-ready".to_string(),
+            title: None,
+        }),
+        current_recipe: "unattended".to_string(),
+        current_phase: "choose".to_string(),
+        open_decisions: vec!["dec-scope".to_string()],
+        handoff_fresh: false,
+        ready_progress_rows: 1,
+        ..LoopChainFacts::default()
+    };
+
+    let selected = loop_recipes::match_chain_transition(&facts, &contract)
+        .expect("matcher should evaluate")
+        .expect("unattended should select a transition");
+
+    assert_eq!(
+        selected.trigger, "work_ready.selected_unit",
+        "recipe order should choose the first matching transition"
+    );
+    assert_eq!(selected.to, "work.perceive");
 }
 
 #[test]
@@ -587,6 +772,211 @@ fn loop_outcome_appends_run_event_and_routes_failure_class() {
     );
     let session: Value = serde_json::from_str(&session).expect("session JSON should parse");
     assert_eq!(session["lifecycle"]["counts"]["loop_outcome"], 2);
+}
+
+#[test]
+fn loop_outcome_records_structured_transition_receipt() {
+    let temp = TestTempDir::new("maestro-loop-outcome-transition-receipt");
+    init_git_marker(temp.path());
+    stdout(temp.path(), &["init", "--yes"]);
+
+    let out = stdout(
+        temp.path(),
+        &[
+            "loop",
+            "outcome",
+            "--recipe",
+            "work",
+            "--phase",
+            "act",
+            "--selected-unit",
+            "feature-x",
+            "--transition-to",
+            "design.choose",
+            "--transition-reason",
+            "acceptance mismatch found during implementation",
+            "--trigger",
+            "design_needed.scope_unclear",
+            "--return-condition",
+            "decision.all_blockers_locked",
+            "--return-condition",
+            "feature.handoff_fresh",
+            "--evidence-ref",
+            "feature:feature-x",
+            "--evidence-ref",
+            "decision:dec-new-scope",
+            "--run",
+            "loop-transition-test",
+            "--json",
+        ],
+    );
+    let value: Value =
+        serde_json::from_str(&out).expect("loop transition receipt JSON should parse");
+
+    assert_eq!(value["event_type"], "loop_outcome");
+    assert_eq!(value["transition_to"], "design.choose");
+    assert_eq!(
+        value["transition_reason"],
+        "acceptance mismatch found during implementation"
+    );
+    assert_eq!(value["trigger"], "design_needed.scope_unclear");
+    assert_eq!(value["return_condition"][0], "decision.all_blockers_locked");
+    assert_eq!(value["return_condition"][1], "feature.handoff_fresh");
+    assert_eq!(value["evidence_refs"][0]["kind"], "feature");
+    assert_eq!(value["evidence_refs"][0]["id"], "feature-x");
+    assert_eq!(value["failure_class"], "");
+    assert_eq!(value["route"]["action"], "record");
+
+    let events = fs::read_to_string(
+        temp.path()
+            .join(".maestro/runs/loop-transition-test/events.jsonl"),
+    )
+    .expect("loop transition event log should be readable");
+    let stored: Value = serde_json::from_str(events.lines().next().unwrap())
+        .expect("stored transition event should parse");
+    assert_eq!(stored["transition_to"], "design.choose");
+    assert_eq!(stored["evidence_refs"][1]["kind"], "decision");
+}
+
+#[test]
+fn loop_outcome_rejects_unknown_transition_trigger_key() {
+    let temp = TestTempDir::new("maestro-loop-outcome-transition-trigger-invalid");
+    init_git_marker(temp.path());
+    stdout(temp.path(), &["init", "--yes"]);
+
+    let error = stderr(
+        temp.path(),
+        &[
+            "loop",
+            "outcome",
+            "--recipe",
+            "work",
+            "--phase",
+            "act",
+            "--selected-unit",
+            "feature-x",
+            "--transition-to",
+            "design.choose",
+            "--transition-reason",
+            "bad trigger",
+            "--trigger",
+            "missing.trigger",
+            "--return-condition",
+            "feature.handoff_fresh",
+            "--evidence-ref",
+            "feature:feature-x",
+            "--run",
+            "loop-transition-invalid",
+        ],
+    );
+
+    assert!(
+        error.contains("unknown trigger key missing.trigger"),
+        "{error}"
+    );
+}
+
+#[test]
+fn loop_trace_reads_card_scoped_transition_receipts() {
+    let temp = TestTempDir::new("maestro-loop-trace-receipts");
+    init_git_marker(temp.path());
+    stdout(temp.path(), &["init", "--yes"]);
+    stdout(temp.path(), &["feature", "new", "Feature X"]);
+    stdout(
+        temp.path(),
+        &[
+            "loop",
+            "outcome",
+            "--recipe",
+            "work",
+            "--phase",
+            "act",
+            "--selected-unit",
+            "feature-x",
+            "--transition-to",
+            "design.choose",
+            "--transition-reason",
+            "acceptance mismatch found during implementation",
+            "--trigger",
+            "design_needed.scope_unclear",
+            "--return-condition",
+            "decision.all_blockers_locked",
+            "--evidence-ref",
+            "feature:feature-x",
+            "--run",
+            "trace-receipt",
+        ],
+    );
+    let before = snapshot_dir(&temp.path().join(".maestro"));
+
+    let out = stdout(temp.path(), &["loop", "trace", "feature-x"]);
+    let after = snapshot_dir(&temp.path().join(".maestro"));
+
+    assert_eq!(before, after, "loop trace must stay read-only");
+    assert!(out.contains("chain history: 1 recent events"), "{out}");
+    assert!(out.contains("- work.act -> design.choose"), "{out}");
+    assert!(
+        out.contains("trigger: design_needed.scope_unclear"),
+        "{out}"
+    );
+    assert!(out.contains("receipt: run:trace-receipt"), "{out}");
+    assert!(out.contains("- decision.all_blockers_locked"), "{out}");
+
+    let json = stdout(temp.path(), &["loop", "trace", "feature-x", "--json"]);
+    let value: Value = serde_json::from_str(&json).expect("loop trace JSON should parse");
+    assert_eq!(value["schema"], "maestro.loop_trace.v1");
+    assert_eq!(value["card"], "feature-x");
+    assert_eq!(value["events"][0]["transition_to"], "design.choose");
+    assert_eq!(value["events"][0]["receipt"], "run:trace-receipt");
+}
+
+#[test]
+fn loop_trace_defaults_to_recent_window_and_all_widens() {
+    let temp = TestTempDir::new("maestro-loop-trace-window");
+    init_git_marker(temp.path());
+    stdout(temp.path(), &["init", "--yes"]);
+    stdout(temp.path(), &["feature", "new", "Feature X"]);
+    for index in 0..6 {
+        stdout(
+            temp.path(),
+            &[
+                "loop",
+                "outcome",
+                "--recipe",
+                "work",
+                "--phase",
+                "act",
+                "--selected-unit",
+                "feature-x",
+                "--transition-to",
+                "design.choose",
+                "--transition-reason",
+                "acceptance mismatch found during implementation",
+                "--trigger",
+                "design_needed.scope_unclear",
+                "--return-condition",
+                "decision.all_blockers_locked",
+                "--evidence-ref",
+                "feature:feature-x",
+                "--run",
+                &format!("trace-window-{index}"),
+            ],
+        );
+    }
+
+    let recent = stdout(temp.path(), &["loop", "trace", "feature-x"]);
+    assert!(
+        recent.contains("chain history: 5 recent events"),
+        "{recent}"
+    );
+    assert!(
+        recent.contains("hidden: 1 older events; use --all"),
+        "{recent}"
+    );
+
+    let all = stdout(temp.path(), &["loop", "trace", "feature-x", "--all"]);
+    assert!(all.contains("chain history: 6 events"), "{all}");
+    assert!(!all.contains("hidden:"), "{all}");
 }
 
 #[test]
@@ -971,6 +1361,41 @@ fn loop_rejects_project_custom_recipe_with_invalid_progress_task_phase() {
 }
 
 #[test]
+fn loop_rejects_project_custom_recipe_with_unknown_transition_trigger_key() {
+    let temp = TestTempDir::new("maestro-loop-custom-unknown-transition-trigger");
+    write_custom_recipe(
+        temp.path(),
+        "brief",
+        &CUSTOM_RECIPE.replace(
+            "trigger: custom.work_needed",
+            "trigger: not_registered.trigger",
+        ),
+    );
+
+    let error = stderr(temp.path(), &["loop", "validate", "brief"]);
+    assert!(
+        error.contains("unknown trigger key not_registered.trigger"),
+        "{error}"
+    );
+}
+
+#[test]
+fn loop_rejects_project_custom_recipe_with_unknown_return_condition_key() {
+    let temp = TestTempDir::new("maestro-loop-custom-unknown-return-condition");
+    write_custom_recipe(
+        temp.path(),
+        "brief",
+        &CUSTOM_RECIPE.replace("  - custom.scope_complete", "  - not_registered.condition"),
+    );
+
+    let error = stderr(temp.path(), &["loop", "validate", "brief"]);
+    assert!(
+        error.contains("unknown return_condition key not_registered.condition"),
+        "{error}"
+    );
+}
+
+#[test]
 fn loop_rejects_project_custom_recipes_that_collide_with_shipped_ids() {
     let temp = TestTempDir::new("maestro-loop-custom-id-collision");
     write_custom_recipe(temp.path(), "work", CUSTOM_RECIPE);
@@ -1037,8 +1462,9 @@ router:
   priority: 3
   confidence: medium
 transitions:
-  - trigger: brief needs ordinary implementation
-    to: work
+  - trigger: custom.work_needed
+    from: brief.continue
+    to: work.perceive
     authority_scope:
       - selected card
     allowed_verbs:
@@ -1048,7 +1474,8 @@ transitions:
       - external ship action
     hard_stops:
       - brief requires external approval
-    return_condition: selected card is verified or blocked
+    return_condition:
+      - custom.scope_complete
 invocations: []
 outputs:
   - selected card
