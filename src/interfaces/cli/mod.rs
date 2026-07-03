@@ -704,9 +704,6 @@ pub struct LoopNextArgs {
     /// Print machine-readable router or compact packet JSON.
     #[arg(long)]
     pub json: bool,
-    /// Print the receipt-backed chain read model for the next route.
-    #[arg(long)]
-    pub chain: bool,
     /// Print a compact execution packet for the recommended recipe.
     #[arg(long)]
     pub compact: bool,
