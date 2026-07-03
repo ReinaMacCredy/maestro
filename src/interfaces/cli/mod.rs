@@ -704,6 +704,9 @@ pub struct LoopNextArgs {
     /// Print machine-readable router or compact packet JSON.
     #[arg(long)]
     pub json: bool,
+    /// Print the receipt-backed chain read model for the next route.
+    #[arg(long)]
+    pub chain: bool,
     /// Print a compact execution packet for the recommended recipe.
     #[arg(long)]
     pub compact: bool,
@@ -838,6 +841,9 @@ pub struct ActiveArgs {
     /// Print explicit link/message/conflict suggestions without mutating links.
     #[arg(long)]
     pub connect: bool,
+    /// Show only sessions bound to this card or its feature.
+    #[arg(long, value_name = "CARD_ID")]
+    pub card: Option<String>,
 }
 
 #[derive(Debug, Subcommand)]
@@ -2022,6 +2028,11 @@ pub enum FeatureCommand {
             help = "Preview the auto-archive without moving cards or writing receipts"
         )]
         dry_run: bool,
+        #[arg(
+            long = "refresh-receipt",
+            help = "Refresh the auto-archive receipt for an already archived feature"
+        )]
+        refresh_receipt: bool,
     },
     #[command(about = "Restore an archived feature and its archived child tasks")]
     Unarchive { id: String },

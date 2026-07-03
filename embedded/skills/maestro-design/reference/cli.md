@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: 650cbff41faa76dc1bcd77c66c21d6be21f91ab47c26155d8fe019ac54994430 -->
+<!-- maestro:cli-reference-sha256: 0bdc7bcf06c8dcdca304f4c6b4d4381c898bec584a97d725cc74cbaba739552a -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -49,7 +49,7 @@ a spelling not found here is outside this skill's CLI surface.
 
 ## maestro active
 
-- `maestro active [--all] [--connect]` -- Show what other live sessions are doing (cross-session awareness)
+- `maestro active [--all] [--connect] [--card <CARD_ID>]` -- Show what other live sessions are doing (cross-session awareness)
 
 ## maestro link
 

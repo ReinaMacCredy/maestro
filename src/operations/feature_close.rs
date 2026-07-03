@@ -7,10 +7,17 @@
 //! feature domain owns the evidence gate; this operation layers the suite run on
 //! top so the feature aggregate never reaches into proof's command runner.
 
+use std::path::PathBuf;
+
 use anyhow::{Result, bail};
 
 use crate::domain::{feature, proof};
 use crate::foundation::core::paths::MaestroPaths;
+
+pub(crate) struct CloseReport {
+    pub transition: feature::TransitionReport,
+    pub suite_log_path: Option<PathBuf>,
+}
 
 /// Coordinate `feature close`: evidence gate -> full suite (real close only) -> transition.
 ///
@@ -23,10 +30,13 @@ pub(crate) fn close(
     id: &str,
     outcome: Option<String>,
     dry_run: bool,
-) -> Result<feature::TransitionReport> {
+) -> Result<CloseReport> {
     if dry_run {
         // Pure preview: the domain gate decides close-ability; the suite is not run.
-        return feature::close(paths, id, outcome, true);
+        return Ok(CloseReport {
+            transition: feature::close(paths, id, outcome, true)?,
+            suite_log_path: None,
+        });
     }
 
     // Run the full suite only once the evidence gate is clear, so a feature with
@@ -34,6 +44,7 @@ pub(crate) fn close(
     let gaps = feature::close_gaps(paths, id)?;
     if gaps.is_empty() {
         let suite = proof::run_stack_verify(paths)?;
+        let suite_log_path = suite.log_path.clone();
         let failed = suite.failed();
         if !failed.is_empty() {
             let lines = failed
@@ -41,14 +52,25 @@ pub(crate) fn close(
                 .map(|command| format!("{} (exit {})", command.cmd, command.exit_code))
                 .collect::<Vec<_>>()
                 .join("\n  ");
+            let log = suite_log_path
+                .as_ref()
+                .map(|path| format!("\n  log: {}", path.display()))
+                .unwrap_or_default();
             bail!(
-                "cannot close {id}: full verify suite failed (stack: {})\n  {lines}\n  fix: make the suite green, then re-close\n  retry: maestro feature close {id} --outcome \"<outcome>\"",
+                "cannot close {id}: full verify suite failed (stack: {})\n  {lines}{log}\n  fix: make the suite green, then re-close\n  retry: maestro feature close {id} --outcome \"<outcome>\"",
                 suite.stack_kind
             );
         }
+        return Ok(CloseReport {
+            transition: feature::close(paths, id, outcome, false)?,
+            suite_log_path,
+        });
     }
 
     // Real transition: the domain re-checks the evidence gate (it bails on gaps),
     // so a feature that did not clear above never reaches the suite or the flip.
-    feature::close(paths, id, outcome, false)
+    Ok(CloseReport {
+        transition: feature::close(paths, id, outcome, false)?,
+        suite_log_path: None,
+    })
 }

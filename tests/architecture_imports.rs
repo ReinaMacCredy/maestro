@@ -348,6 +348,7 @@ fn feature_domain_facade_exposes_the_deliberate_surface() {
             "TransitionReport".to_string(),
             "accept".to_string(),
             "accept_with_qa_none".to_string(),
+            "accept_with_qa_surface".to_string(),
             "acceptance_coverage".to_string(),
             "acceptance_coverage_archived".to_string(),
             "acceptance_id".to_string(),

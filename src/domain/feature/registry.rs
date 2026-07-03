@@ -101,6 +101,8 @@ pub struct FeatureView {
     pub cancel_reason: Option<String>,
     /// Reason for an explicit `qa: none` declaration.
     pub qa_none_reason: Option<String>,
+    /// Explicit QA surface declared at accept, e.g. `cli` or `none`.
+    pub qa_surface: Option<String>,
     /// Design notes (`notes.md`), read on demand by `show`. None elsewhere.
     pub notes: Option<String>,
     /// Project/service scope carried on the underlying card base. Read-time
@@ -935,35 +937,46 @@ pub fn accept_with_qa_none(
     if reason.trim().is_empty() {
         bail!("--reason is required with --qa none");
     }
-    accept_inner(paths, id, Some(reason), dry_run)
+    accept_inner(paths, id, Some(QaAccept::none(reason)), dry_run)
+}
+
+pub fn accept_with_qa_surface(
+    paths: &MaestroPaths,
+    id: &str,
+    surface: &str,
+    dry_run: bool,
+) -> Result<TransitionReport> {
+    let surface = surface.trim();
+    if surface.is_empty() {
+        bail!("--qa must not be empty");
+    }
+    if surface == "none" {
+        bail!("--reason is required with --qa none");
+    }
+    accept_inner(paths, id, Some(QaAccept::surface(surface)), dry_run)
 }
 
 fn accept_inner(
     paths: &MaestroPaths,
     id: &str,
-    qa_none_reason: Option<&str>,
+    qa: Option<QaAccept<'_>>,
     dry_run: bool,
 ) -> Result<TransitionReport> {
     let (mut record, write) = load_record_for_update(paths, id)?;
-    if let Some(reason) = qa_none_reason
+    if let Some(qa) = qa.as_ref()
         && matches!(
             record.status,
             FeatureStatus::Ready | FeatureStatus::InProgress
         )
     {
-        let reason = reason.trim();
         if dry_run {
             return Ok(no_op_report(
                 id,
                 record.status,
-                format!("would record qa: none for {id} ({reason})"),
+                format!("would record {} for {id}", qa.redeclare_label()),
             ));
         }
-        record.qa = Some(QaDeclaration {
-            surface: "none".to_string(),
-            reason: reason.to_string(),
-            amend_log_position: record.amends.len(),
-        });
+        record.qa = Some(qa.declaration(record.amends.len()));
         record.updated_at = utc_now_timestamp();
         let status = record.status.clone();
         save_record(&record, &write)?;
@@ -971,7 +984,7 @@ fn accept_inner(
             id: id.to_string(),
             status,
             changed: true,
-            note: format!("recorded qa: none for {id} ({reason})"),
+            note: format!("recorded {} for {id}", qa.redeclare_label()),
         });
     }
     let target = match legal_transition(id, &record.status, FeatureVerb::Accept) {
@@ -1002,7 +1015,8 @@ fn accept_inner(
     }
     // F — a captured behavior baseline is a precondition of accept (before edits).
     let qa_contents = read_sidecar_text(paths, id, "qa.md")?;
-    if qa_none_reason.is_none()
+    let qa_none = qa.as_ref().is_some_and(QaAccept::is_none);
+    if !qa_none
         && qa_contents
             .as_deref()
             .and_then(qa::baseline_from_contents)
@@ -1030,8 +1044,8 @@ fn accept_inner(
                 "would accept {id} (-> ready); contract complete (acceptance={}, areas={}){}",
                 record.acceptance.len(),
                 record.affected_areas.len(),
-                qa_none_reason
-                    .map(|reason| format!("; qa: none ({})", reason.trim()))
+                qa.as_ref()
+                    .map(|qa| format!("; {}", qa.label()))
                     .unwrap_or_default()
             )
         } else {
@@ -1058,8 +1072,9 @@ fn accept_inner(
             record.open_questions.len()
         )
     };
-    let qa_note = qa_none_reason
-        .map(|reason| format!("; qa: none ({})", reason.trim()))
+    let qa_note = qa
+        .as_ref()
+        .map(|qa| format!("; {}", qa.label()))
         .unwrap_or_default();
     let summary = format!(
         "accepted {id} (-> ready); contract frozen (acceptance={}, areas={}){}{}",
@@ -1070,12 +1085,8 @@ fn accept_inner(
     );
     record.status = target.clone();
     record.updated_at = utc_now_timestamp();
-    if let Some(reason) = qa_none_reason {
-        record.qa = Some(QaDeclaration {
-            surface: "none".to_string(),
-            reason: reason.trim().to_string(),
-            amend_log_position: record.amends.len(),
-        });
+    if let Some(qa) = qa {
+        record.qa = Some(qa.declaration(record.amends.len()));
     }
     save_record(&record, &write)?;
     Ok(TransitionReport {
@@ -1084,6 +1095,55 @@ fn accept_inner(
         changed: true,
         note: summary,
     })
+}
+
+struct QaAccept<'a> {
+    surface: &'a str,
+    reason: &'a str,
+}
+
+impl<'a> QaAccept<'a> {
+    fn none(reason: &'a str) -> Self {
+        Self {
+            surface: "none",
+            reason: reason.trim(),
+        }
+    }
+
+    fn surface(surface: &'a str) -> Self {
+        Self {
+            surface,
+            reason: "explicit behavioral QA surface",
+        }
+    }
+
+    fn is_none(&self) -> bool {
+        self.surface == "none"
+    }
+
+    fn label(&self) -> String {
+        if self.is_none() {
+            format!("qa: none ({})", self.reason)
+        } else {
+            format!("qa: {}", self.surface)
+        }
+    }
+
+    fn redeclare_label(&self) -> String {
+        if self.is_none() {
+            "qa: none".to_string()
+        } else {
+            self.label()
+        }
+    }
+
+    fn declaration(&self, amend_log_position: usize) -> QaDeclaration {
+        QaDeclaration {
+            surface: self.surface.to_string(),
+            reason: self.reason.to_string(),
+            amend_log_position,
+        }
+    }
 }
 
 /// Grow a frozen contract additively (append-only, audited). Ready / InProgress.
@@ -1891,6 +1951,7 @@ fn view_from_record(
         open_questions: record.open_questions,
         outcome: record.outcome,
         cancel_reason: record.cancel_reason,
+        qa_surface: record.qa.as_ref().map(|qa| qa.surface.clone()),
         qa_none_reason: record
             .qa
             .filter(|qa| qa.surface == "none")

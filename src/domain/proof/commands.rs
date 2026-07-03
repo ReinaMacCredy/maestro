@@ -1,5 +1,6 @@
 //! Verification command execution sourced from on-disk harness config.
 
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Instant;
 
@@ -11,6 +12,8 @@ use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::fs::read_to_string_if_exists;
 use crate::foundation::core::managed_path::{SymlinkPolicy, managed_path};
 use crate::foundation::core::paths::MaestroPaths;
+use crate::foundation::core::safe_write::write_string_atomic;
+use crate::foundation::core::time::utc_now_filesystem_millis_timestamp;
 
 pub(super) struct VerificationCommandRun {
     pub commands: Vec<VerificationCommand>,
@@ -24,6 +27,8 @@ pub struct StackVerifyOutcome {
     pub commands: Vec<VerificationCommand>,
     /// Detected stack kind, for messaging.
     pub stack_kind: String,
+    /// Full captured stdout/stderr for the stack verify run, when commands ran.
+    pub log_path: Option<PathBuf>,
 }
 
 impl StackVerifyOutcome {
@@ -53,10 +58,12 @@ pub(crate) fn run_stack_verify(paths: &MaestroPaths) -> Result<StackVerifyOutcom
     let _gate = (!verify.is_empty()).then(|| {
         crate::domain::gate_lock::acquire(paths, &crate::foundation::core::session::session_token())
     });
-    let commands = run_commands(paths, verify)?;
+    let log_path = (!verify.is_empty()).then(|| stack_verify_log_path(paths));
+    let commands = run_commands(paths, verify, log_path.as_deref())?;
     Ok(StackVerifyOutcome {
         commands,
         stack_kind,
+        log_path,
     })
 }
 
@@ -73,7 +80,7 @@ pub(super) fn run_verify_commands(
     verify_command: Option<&str>,
 ) -> Result<VerificationCommandRun> {
     let (commands, claims_only) = match verify_command {
-        Some(command) => (run_commands(paths, vec![command.to_string()])?, false),
+        Some(command) => (run_commands(paths, vec![command.to_string()], None)?, false),
         None => (
             Vec::new(),
             harness_verify_config(paths)?.claims_only_verification,
@@ -86,21 +93,54 @@ pub(super) fn run_verify_commands(
 }
 
 /// Run a list of shell verify commands from the repo root, in order.
-fn run_commands(paths: &MaestroPaths, commands: Vec<String>) -> Result<Vec<VerificationCommand>> {
+fn run_commands(
+    paths: &MaestroPaths,
+    commands: Vec<String>,
+    log_path: Option<&Path>,
+) -> Result<Vec<VerificationCommand>> {
     let mut results = Vec::new();
+    let mut log = String::new();
     for command in commands {
         let started = Instant::now();
-        let status = shell_command(&command)
+        log.push_str(&format!("$ {command}\n"));
+        let output = shell_command(&command)
             .current_dir(paths.repo_root())
-            .status()
+            .output()
             .with_context(|| format!("failed to run verify command `{command}`"))?;
+        if !output.stdout.is_empty() {
+            log.push_str("[stdout]\n");
+            log.push_str(&String::from_utf8_lossy(&output.stdout));
+            if !log.ends_with('\n') {
+                log.push('\n');
+            }
+        }
+        if !output.stderr.is_empty() {
+            log.push_str("[stderr]\n");
+            log.push_str(&String::from_utf8_lossy(&output.stderr));
+            if !log.ends_with('\n') {
+                log.push('\n');
+            }
+        }
+        let status = output.status;
+        log.push_str(&format!("[exit] {}\n\n", status.code().unwrap_or(1)));
         results.push(VerificationCommand {
             cmd: command,
             exit_code: status.code().unwrap_or(1),
             duration_ms: started.elapsed().as_millis(),
         });
     }
+    if let Some(path) = log_path {
+        write_string_atomic(path, &log)?;
+    }
     Ok(results)
+}
+
+fn stack_verify_log_path(paths: &MaestroPaths) -> PathBuf {
+    paths.runs_dir().join(format!(
+        "feature-close-suite-{}-{}.log",
+        utc_now_filesystem_millis_timestamp(),
+        std::process::id()
+    ))
 }
 
 fn harness_verify_config(paths: &MaestroPaths) -> Result<HarnessConfig> {

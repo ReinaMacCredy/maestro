@@ -565,13 +565,26 @@ fn path_is_auto_archive_relevant(
     run_id: &str,
     evidence_paths: &[PathBuf],
 ) -> bool {
-    path.starts_with(Path::new(".maestro").join("cards").join(id))
-        || path == Path::new(".maestro/archive/cards/INDEX.md")
-        || path.starts_with(Path::new(".maestro").join("archive").join("cards").join(id))
-        || (!run_id.is_empty() && path.starts_with(Path::new(".maestro").join("runs").join(run_id)))
-        || evidence_paths
-            .iter()
-            .any(|evidence_path| path == evidence_path || path.starts_with(evidence_path))
+    if path.starts_with(".maestro") {
+        return path.starts_with(Path::new(".maestro").join("cards").join(id))
+            || path == Path::new(".maestro/archive/cards/INDEX.md")
+            || path.starts_with(Path::new(".maestro").join("archive").join("cards").join(id))
+            || (!run_id.is_empty()
+                && path.starts_with(Path::new(".maestro").join("runs").join(run_id)))
+            || evidence_paths
+                .iter()
+                .any(|evidence_path| path == evidence_path || path.starts_with(evidence_path));
+    }
+    !path_is_auto_archive_ignored_dirty(path)
+}
+
+fn path_is_auto_archive_ignored_dirty(path: &Path) -> bool {
+    path.starts_with(".worktrees")
+        || path.starts_with(Path::new(".claude").join("workflows"))
+        || path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name == "CLAUDE.md" || name == "AGENTS.md")
 }
 
 fn qa_passed(value: &str) -> bool {

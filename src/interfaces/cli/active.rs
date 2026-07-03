@@ -34,6 +34,7 @@ pub fn run(args: ActiveArgs) -> Result<()> {
         command,
         all,
         connect,
+        card,
     } = args;
     if let Some(command) = command {
         return match command {
@@ -53,6 +54,9 @@ pub fn run(args: ActiveArgs) -> Result<()> {
     };
     let by_id: HashMap<&str, &card::schema::Card> =
         cards.iter().map(|card| (card.id.as_str(), card)).collect();
+    if let Some(card_id) = card.as_deref() {
+        card::store::validate_card_id(card_id)?;
+    }
 
     let me = run::union_session_id(&paths, &roots, &super::cli_run_id());
     let your_card = rows
@@ -82,7 +86,7 @@ pub fn run(args: ActiveArgs) -> Result<()> {
         println!();
     }
 
-    let selection = select_rows(&rows, all, &me);
+    let selection = select_rows(&rows, all, &me, card.as_deref(), &by_id);
     let shown = selection.shown;
 
     if shown.is_empty() {
@@ -173,7 +177,22 @@ impl HiddenRows {
     }
 }
 
-fn select_rows<'a>(rows: &'a [SessionActivity], all: bool, me: &str) -> ActiveSelection<'a> {
+fn select_rows<'a>(
+    rows: &'a [SessionActivity],
+    all: bool,
+    me: &str,
+    card_filter: Option<&str>,
+    by_id: &HashMap<&str, &card::schema::Card>,
+) -> ActiveSelection<'a> {
+    if let Some(card_id) = card_filter {
+        return ActiveSelection {
+            shown: rows
+                .iter()
+                .filter(|row| row_matches_card_filter(row, card_id, by_id))
+                .collect(),
+            hidden: HiddenRows::default(),
+        };
+    }
     if all {
         return ActiveSelection {
             shown: rows.iter().collect(),
@@ -208,6 +227,17 @@ fn select_rows<'a>(rows: &'a [SessionActivity], all: bool, me: &str) -> ActiveSe
     }
 
     ActiveSelection { shown, hidden }
+}
+
+fn row_matches_card_filter(
+    row: &SessionActivity,
+    card_id: &str,
+    by_id: &HashMap<&str, &card::schema::Card>,
+) -> bool {
+    let Some(bound) = row.bound_card.as_deref() else {
+        return false;
+    };
+    bound == card_id || same_feature(by_id, bound, card_id)
 }
 
 fn default_active_presence(presence: Presence) -> bool {
@@ -1027,7 +1057,8 @@ mod tests {
             stale_row("stale", Some("task-4")),
         ];
 
-        let default = select_rows(&rows, false, "meS");
+        let by_id = HashMap::new();
+        let default = select_rows(&rows, false, "meS", None, &by_id);
         assert_eq!(
             default
                 .shown
@@ -1039,7 +1070,7 @@ mod tests {
         assert_eq!(default.hidden.duplicates, 1);
         assert_eq!(default.hidden.inactive, 2);
 
-        let all = select_rows(&rows, true, "meS");
+        let all = select_rows(&rows, true, "meS", None, &by_id);
         assert_eq!(all.shown.len(), rows.len());
         assert!(all.hidden.is_empty());
     }

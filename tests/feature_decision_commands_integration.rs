@@ -5685,6 +5685,12 @@ fn archive_command_candidates_check_and_apply_use_candidate_engine() {
         archived_check.contains("action: RELEASE_ONLY"),
         "{archived_check}"
     );
+    assert!(
+        archived_check.contains(
+            "next: maestro active release alpha-export --reason \"archive check: release stale active ownership\""
+        ),
+        "{archived_check}"
+    );
 
     let release_only = stdout(
         maestro(&["archive", "apply", "alpha-export"], root),

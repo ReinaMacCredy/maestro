@@ -217,6 +217,43 @@ fn qa_baseline_helper_writes_acceptance_baseline() {
 }
 
 #[test]
+fn feature_accept_records_explicit_qa_surface() {
+    let temp = TestTempDir::new("maestro-feature-accept-explicit-qa");
+    let repo = temp.path();
+    init_and_author(repo, "report-builder", "Report builder");
+    stdout(
+        maestro(
+            &[
+                "qa",
+                "baseline",
+                "report-builder",
+                "--observed",
+                "current report command prints a summary",
+            ],
+            repo,
+        ),
+        &["qa", "baseline", "report-builder"],
+    );
+    finalize(repo, "report-builder");
+
+    let accepted = stdout(
+        maestro(
+            &["feature", "accept", "report-builder", "--qa", "cli"],
+            repo,
+        ),
+        &["feature", "accept", "report-builder", "--qa", "cli"],
+    );
+
+    assert!(accepted.contains("accepted report-builder"), "{accepted}");
+    assert!(accepted.contains("qa: cli"), "{accepted}");
+    let shown = stdout(
+        maestro(&["feature", "show", "report-builder"], repo),
+        &["feature", "show", "report-builder"],
+    );
+    assert!(shown.contains("qa: cli"), "{shown}");
+}
+
+#[test]
 fn qa_baseline_helper_records_current_amend_position_after_refresh() {
     let temp = TestTempDir::new("maestro-qa-baseline-amend-position");
     let repo = temp.path();

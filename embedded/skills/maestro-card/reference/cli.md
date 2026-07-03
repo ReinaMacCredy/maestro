@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: a86b3e6aed1e4553ec2e160e13df5733544a41a2c6ecaa87b9bb962cdaedf0f5 -->
+<!-- maestro:cli-reference-sha256: b5f25dcb76f75f59e19ff451bd84288a4b29ee82b7f3ce6ace8bc20e2350c4a1 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -62,7 +62,7 @@ a spelling not found here is outside this skill's CLI surface.
 - `maestro feature show <ID>` -- Show a feature's status, full contract, and task counts
 - `maestro feature list [--all]` -- List features with their statuses and task counts
 - `maestro feature archive [ID] [--closed] [--dry-run]` -- Archive a terminal feature and its terminal child tasks (-> .maestro/archive/features)
-- `maestro feature auto-archive <ID> --authority-ref <AUTHORITY_REF> --authority-target <AUTHORITY_TARGET> --authority-head <AUTHORITY_HEAD> --authority-state <AUTHORITY_STATE> --tested-head <TESTED_HEAD> --qa-result <QA_RESULT> [--qa-evidence <QA_EVIDENCE>]... --run <RUN> --multi-agent <MULTI_AGENT> --canonical-store <CANONICAL_STORE> --worker-source <WORKER_SOURCE> [--target-card-hash <TARGET_CARD_HASH>] [--dry-run]` -- Archive a terminal feature after commit-bound QA evidence passes
+- `maestro feature auto-archive <ID> --authority-ref <AUTHORITY_REF> --authority-target <AUTHORITY_TARGET> --authority-head <AUTHORITY_HEAD> --authority-state <AUTHORITY_STATE> --tested-head <TESTED_HEAD> --qa-result <QA_RESULT> [--qa-evidence <QA_EVIDENCE>]... --run <RUN> --multi-agent <MULTI_AGENT> --canonical-store <CANONICAL_STORE> --worker-source <WORKER_SOURCE> [--target-card-hash <TARGET_CARD_HASH>] [--dry-run] [--refresh-receipt]` -- Archive a terminal feature after commit-bound QA evidence passes
 - `maestro feature unarchive <ID>` -- Restore an archived feature and its archived child tasks
 
 ## maestro qa
@@ -124,7 +124,7 @@ a spelling not found here is outside this skill's CLI surface.
 
 ## maestro active
 
-- `maestro active [--all] [--connect]` -- Show what other live sessions are doing (cross-session awareness)
+- `maestro active [--all] [--connect] [--card <CARD_ID>]` -- Show what other live sessions are doing (cross-session awareness)
 
 ## maestro link
 

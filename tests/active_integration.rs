@@ -688,6 +688,46 @@ fn ownership_events_keep_quiet_sessions_visible_and_moves_old_context_to_all() {
 }
 
 #[test]
+fn active_card_filter_includes_stale_rows_for_that_feature_only() {
+    let temp = cards_repo("active-card-filter");
+    let repo = temp.path();
+    run(repo, &[], &["create", "-t", "feature", "Peer topic"]);
+    let task = create_id(repo, &["-t", "task", "Task one", "--parent", "peer-topic"]);
+    let other = create_id(repo, &["-t", "task", "Other task"]);
+    clear_runs(repo);
+
+    seed_run(
+        repo,
+        "old-feature-sess",
+        &[ownership_acquire_event(
+            "old-feature-sess",
+            &task,
+            &ts_minutes_ago(121),
+        )],
+    );
+    seed_run(
+        repo,
+        "old-unrelated-sess",
+        &[ownership_acquire_event(
+            "old-unrelated-sess",
+            &other,
+            &ts_minutes_ago(121),
+        )],
+    );
+
+    let out = run(repo, &[], &["active", "--card", "peer-topic"]);
+
+    assert!(
+        out.contains("old-feature-sess"),
+        "focused filter should include stale work under the target feature\n{out}"
+    );
+    assert!(
+        !out.contains("old-unrelated-sess"),
+        "focused filter must not require active --all or show unrelated stale rows\n{out}"
+    );
+}
+
+#[test]
 fn design_mutations_acquire_ownership_so_quiet_design_is_not_idle() {
     let temp = cards_repo("active-design-mutations-own");
     let repo = temp.path();

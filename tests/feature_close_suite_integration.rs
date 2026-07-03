@@ -55,6 +55,17 @@ fn write_stack_verify(repo: &Path, command: &str) {
     .expect("invariant: harness.yml should be writable");
 }
 
+fn close_suite_log_path(output: &str) -> &str {
+    output
+        .lines()
+        .find_map(|line| {
+            line.trim_start()
+                .strip_prefix("full verify log: ")
+                .or_else(|| line.trim_start().strip_prefix("log: "))
+        })
+        .unwrap_or_else(|| panic!("expected close-suite log path in output:\n{output}"))
+}
+
 /// Drive a feature to a state where every evidence gate (live tasks / QA /
 /// acceptance sweep) is clear, so only the full-suite backstop is left to decide.
 fn closable_feature(repo: &Path, id: &str) {
@@ -162,7 +173,10 @@ fn feature_close_blocks_when_the_full_suite_fails() {
     let temp = TestTempDir::new("maestro-close-suite-fail");
     let repo = temp.path();
     closable_feature(repo, "report-builder");
-    write_stack_verify(repo, "false");
+    write_stack_verify(
+        repo,
+        "printf '\\116\\117\\111\\123\\131\\137\\123\\125\\111\\124\\105\\n'; false",
+    );
 
     let close = ["feature", "close", "report-builder", "--outcome", "done"];
     let stderr = assert_failure(maestro(&close, repo), &close);
@@ -171,8 +185,20 @@ fn feature_close_blocks_when_the_full_suite_fails() {
         "close must block on a failing suite: {stderr}"
     );
     assert!(
-        stderr.contains("false (exit"),
+        stderr.contains(
+            "printf '\\116\\117\\111\\123\\131\\137\\123\\125\\111\\124\\105\\n'; false (exit"
+        ),
         "the failing command is named: {stderr}"
+    );
+    assert!(
+        !stderr.contains("NOISY_SUITE"),
+        "close stderr should summarize failure without dumping command stdout: {stderr}"
+    );
+    let log = fs::read_to_string(close_suite_log_path(&stderr))
+        .expect("invariant: close-suite log should be readable");
+    assert!(
+        log.contains("NOISY_SUITE"),
+        "full command output belongs in the close-suite log:\n{log}"
     );
 
     // The feature did NOT transition; it stays in_progress.
@@ -197,6 +223,10 @@ fn feature_close_succeeds_when_the_full_suite_passes() {
     let closed = stdout(maestro(&close, repo), &close);
     assert!(closed.contains("closed report-builder"), "{closed}");
     assert!(closed.contains("full verify suite passed"), "{closed}");
+    assert!(
+        fs::metadata(close_suite_log_path(&closed)).is_ok(),
+        "successful close prints a readable full-suite log path:\n{closed}"
+    );
     assert!(
         closed.contains("auto-archive skipped:"),
         "a marker-only git repo should keep close successful and explain skipped archive:\n{closed}"
@@ -276,6 +306,62 @@ fn feature_close_auto_archives_when_git_head_exists() {
         !index.contains(&canonical_root),
         "archive index must not persist absolute checkout paths:\n{index}"
     );
+
+    let canonical_store = repo
+        .join(".maestro")
+        .canonicalize()
+        .expect("invariant: maestro store should canonicalize")
+        .display()
+        .to_string();
+    let refresh = [
+        "feature",
+        "auto-archive",
+        "report-builder",
+        "--authority-ref",
+        "receipt-refresh:test",
+        "--authority-target",
+        "report-builder",
+        "--authority-head",
+        head.as_str(),
+        "--authority-state",
+        "current",
+        "--tested-head",
+        head.as_str(),
+        "--qa-result",
+        "pass",
+        "--qa-evidence",
+        "refresh receipt after archived",
+        "--run",
+        "receipt-refresh-run",
+        "--multi-agent",
+        "none",
+        "--canonical-store",
+        canonical_store.as_str(),
+        "--worker-source",
+        "none",
+        "--refresh-receipt",
+    ];
+    let refreshed = stdout(maestro(&refresh, repo), &refresh);
+    assert!(
+        refreshed.contains("refreshed auto-archive receipt for report-builder"),
+        "{refreshed}"
+    );
+    let refreshed_index = fs::read_to_string(repo.join(".maestro/archive/cards/INDEX.md"))
+        .expect("invariant: archive index should be readable");
+    assert!(
+        refreshed_index
+            .matches("auto_archive report-builder")
+            .count()
+            >= 2,
+        "receipt refresh appends a second receipt without unarchiving:\n{refreshed_index}"
+    );
+    let refresh_events =
+        fs::read_to_string(repo.join(".maestro/runs/receipt-refresh-run/events.jsonl"))
+            .expect("invariant: refresh event should be written");
+    assert!(
+        refresh_events.contains("auto_archive_receipt_refresh"),
+        "refresh command records a distinct run event:\n{refresh_events}"
+    );
 }
 
 fn write_claimed_verified_task(repo: &Path, id: &str, feature_id: &str) {
@@ -338,6 +424,36 @@ fn feature_close_auto_archives_with_unrelated_dirty_paths() {
     assert!(
         index.contains("auto_archive report-builder"),
         "close-owned archive writes the auto-archive receipt:\n{index}"
+    );
+}
+
+#[test]
+fn feature_close_skips_auto_archive_with_dirty_implementation_paths() {
+    let temp = TestTempDir::new("maestro-close-auto-archive-relevant-dirty");
+    let repo = temp.path();
+    let repository = init_git_repo(repo);
+    seed_closable_feature(repo, "report-builder");
+    write_stack_verify(repo, "true");
+    commit_all(&repository, "verified feature ready to close");
+    fs::create_dir_all(repo.join("src")).expect("invariant: src dir should be writable");
+    fs::write(repo.join("src/report.rs"), "dirty implementation\n")
+        .expect("invariant: dirty source file should be writable");
+
+    let close = ["feature", "close", "report-builder", "--outcome", "done"];
+    let closed = stdout(maestro(&close, repo), &close);
+
+    assert!(closed.contains("closed report-builder"), "{closed}");
+    assert!(
+        closed.contains("auto-archive skipped:"),
+        "dirty implementation files should block close-owned auto-archive:\n{closed}"
+    );
+    assert!(
+        closed.contains("relevant dirty path(s)") && closed.contains("src/report.rs"),
+        "skip reason names the dirty implementation path:\n{closed}"
+    );
+    assert!(
+        feature::show(&MaestroPaths::new(repo), "report-builder").is_ok(),
+        "close succeeds but auto-archive leaves the closed feature live"
     );
 }
 

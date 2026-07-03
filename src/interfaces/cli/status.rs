@@ -2054,6 +2054,7 @@ mod tests {
             outcome: None,
             cancel_reason: None,
             qa_none_reason: None,
+            qa_surface: None,
             notes: None,
             project: None,
         }

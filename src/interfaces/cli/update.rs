@@ -95,17 +95,29 @@ pub fn run_auto_check() -> Result<()> {
         return Ok(());
     }
 
+    let current_dir = env::current_dir()?;
+    let auto_check_paths = auto_check_paths_from(&current_dir)?;
+    let now = current_unix_seconds()?;
+
     // Out-of-band binary advances (a dev rebuild + cp to ~/.local/bin, a
     // side-load) never reach the curl-gated GitHub check below, so the global
     // skill cache agents load could silently lag the binary. Resync it here --
     // ahead of the curl gate so non-curl installs are covered, un-throttled so
     // it fires on the first command after a binary jump, and under the kill
     // switch above. A resync failure must not suppress the GitHub nag, so warn
-    // and keep going.
+    // at most once per day in a Maestro repo and keep going.
     match skills::resync_global_skills_if_drifted() {
         Ok(Some(outcome)) => eprint!("{}", skills::render_global_skills_resync_notice(&outcome)),
         Ok(None) => {}
-        Err(error) => eprintln!("warning: global skill resync failed: {error:#}"),
+        Err(error) => {
+            if global_skills_warning_due(auto_check_paths.as_ref(), now)? {
+                eprintln!("warning: global skill resync failed: {error:#}");
+                eprintln!(
+                    "remediation: run `maestro sync --global-skills --dry-run` for details, then `maestro sync --global-skills` after resolving unmanaged files"
+                );
+                record_global_skills_warning(auto_check_paths.as_ref(), now)?;
+            }
+        }
     }
 
     let executable_path = env::current_exe()?;
@@ -113,10 +125,9 @@ pub fn run_auto_check() -> Result<()> {
         return Ok(());
     }
 
-    let Some(paths) = auto_check_paths_from(env::current_dir()?)? else {
+    let Some(paths) = auto_check_paths else {
         return Ok(());
     };
-    let now = current_unix_seconds()?;
     let Some(outcome) = run_due_auto_check(&paths, now, || {
         update::run_update(&update::UpdateOptions {
             paths: Some(&paths),
@@ -392,6 +403,33 @@ fn auto_check_stamp_path(paths: &MaestroPaths) -> std::path::PathBuf {
     paths.maestro_dir().join("update-check")
 }
 
+fn global_skills_warning_due(paths: Option<&MaestroPaths>, now: u64) -> Result<bool> {
+    let Some(paths) = paths else {
+        return Ok(true);
+    };
+    let path = global_skills_warning_stamp_path(paths);
+    let Some(contents) = read_to_string_if_exists(&path)? else {
+        return Ok(true);
+    };
+    let Some(last_warning) = contents.trim().parse::<u64>().ok() else {
+        return Ok(true);
+    };
+    Ok(now.saturating_sub(last_warning) >= AUTO_CHECK_INTERVAL_SECONDS)
+}
+
+fn record_global_skills_warning(paths: Option<&MaestroPaths>, now: u64) -> Result<()> {
+    let Some(paths) = paths else {
+        return Ok(());
+    };
+    let path = global_skills_warning_stamp_path(paths);
+    write_string_atomic(path, &now.to_string())?;
+    Ok(())
+}
+
+fn global_skills_warning_stamp_path(paths: &MaestroPaths) -> std::path::PathBuf {
+    paths.maestro_dir().join("global-skills-warning")
+}
+
 fn current_unix_seconds() -> Result<u64> {
     Ok(SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs())
 }
@@ -467,8 +505,9 @@ fn sentence(message: impl AsRef<str>) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        Colors, auto_check_due, auto_check_paths_from, record_auto_check, render_failure,
-        render_outcome, run_due_auto_check,
+        Colors, auto_check_due, auto_check_paths_from, global_skills_warning_due,
+        record_auto_check, record_global_skills_warning, render_failure, render_outcome,
+        run_due_auto_check,
     };
     use crate::foundation::core::paths::MaestroPaths;
     use crate::operations::update;
@@ -742,6 +781,33 @@ mod tests {
         assert!(
             auto_check_due(&paths, 100 + 24 * 60 * 60)
                 .expect("invariant: day-old stamp should be due")
+        );
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn global_skills_warning_stamp_enforces_24_hour_interval() {
+        let temp_dir = std::env::temp_dir().join(format!(
+            "maestro-global-skills-warning-test-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&temp_dir);
+        let paths = MaestroPaths::new(&temp_dir);
+
+        assert!(
+            global_skills_warning_due(Some(&paths), 100)
+                .expect("invariant: fresh warning stamp should be due")
+        );
+        record_global_skills_warning(Some(&paths), 100)
+            .expect("invariant: warning stamp should write");
+        assert!(
+            !global_skills_warning_due(Some(&paths), 100 + 60)
+                .expect("invariant: recent warning stamp should skip")
+        );
+        assert!(
+            global_skills_warning_due(Some(&paths), 100 + 24 * 60 * 60)
+                .expect("invariant: day-old warning stamp should be due")
         );
 
         let _ = std::fs::remove_dir_all(&temp_dir);

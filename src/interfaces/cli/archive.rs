@@ -253,7 +253,10 @@ fn print_candidate(candidate: &feature::ArchiveCandidate) {
             println!("next: maestro archive apply {}", candidate.id);
         }
         feature::ArchiveCandidateAction::ReleaseOnly => {
-            println!("next: release stale active ownership for {}", candidate.id);
+            println!(
+                "next: maestro active release {} --reason \"archive check: release stale active ownership\"",
+                candidate.id
+            );
         }
         feature::ArchiveCandidateAction::NeedsClose => {
             println!(

@@ -249,6 +249,7 @@ pub fn run(args: FeatureArgs) -> Result<()> {
             worker_source,
             target_card_hash,
             dry_run,
+            refresh_receipt,
         } => auto_archive_feature(
             &paths,
             AutoArchiveArgs {
@@ -267,6 +268,7 @@ pub fn run(args: FeatureArgs) -> Result<()> {
                 target_card_hash,
                 allow_dirty_target_card: false,
                 dry_run,
+                refresh_receipt,
             },
         ),
         FeatureCommand::Unarchive { id } => match feature::unarchive_feature(&paths, &id) {
@@ -296,7 +298,8 @@ fn accept_feature(
         }
         (Some("none"), Some(reason)) => feature::accept_with_qa_none(paths, id, reason, dry_run),
         (Some("none"), None) => bail!("--reason is required with --qa none"),
-        (Some(other), _) => bail!("unsupported --qa value `{other}`; only `--qa none` is accepted"),
+        (Some(_), Some(_)) => bail!("--reason is only valid with --qa none"),
+        (Some(surface), None) => feature::accept_with_qa_surface(paths, id, surface, dry_run),
         (None, Some(_)) => bail!("--reason requires --qa none"),
     }
 }
@@ -779,7 +782,8 @@ fn after_prove_autoclose(
     if gaps.is_empty() {
         let outcome = Some(outcome.unwrap_or_else(|| default_close_outcome(sweep.as_ref())));
         println!("close-ready: auto-closing (full verify suite + close)");
-        let report = feature_close::close(paths, id, outcome, false)?;
+        let close = feature_close::close(paths, id, outcome, false)?;
+        let report = close.transition;
         if report.changed && report.status == FeatureStatus::Closed {
             super::emit_ownership_release(
                 paths,
@@ -789,7 +793,7 @@ fn after_prove_autoclose(
             );
         }
         println!("{}", report.note);
-        print_close_receipt(paths, &report)?;
+        print_close_receipt(paths, &report, close.suite_log_path.as_deref())?;
         return Ok(());
     }
 
@@ -822,12 +826,20 @@ fn default_close_outcome(sweep: Option<&feature::AcceptanceSweepReport>) -> Stri
 
 /// Print the post-close receipt, shared by explicit `feature close` and the
 /// auto-close triggered from `feature verify --prove`.
-fn print_close_receipt(paths: &MaestroPaths, report: &feature::TransitionReport) -> Result<()> {
+fn print_close_receipt(
+    paths: &MaestroPaths,
+    report: &feature::TransitionReport,
+    suite_log_path: Option<&Path>,
+) -> Result<()> {
     println!("close receipt:");
     println!("  feature: {}", report.id);
     println!("  status: closed");
     println!("  full verify suite passed");
+    if let Some(path) = suite_log_path {
+        println!("  full verify log: {}", path.display());
+    }
     if let Ok(view) = feature::show(paths, &report.id)
+        && view.qa_surface.as_deref() == Some("none")
         && let Some(reason) = view.qa_none_reason.as_deref()
     {
         println!("  qa: none ({reason})");
@@ -955,6 +967,7 @@ fn close_auto_archive_plan(
         target_card_hash,
         allow_dirty_target_card: true,
         dry_run: false,
+        refresh_receipt: false,
     })))
 }
 
@@ -1025,6 +1038,7 @@ struct AutoArchiveArgs {
     target_card_hash: Option<String>,
     allow_dirty_target_card: bool,
     dry_run: bool,
+    refresh_receipt: bool,
 }
 
 fn auto_archive_feature(paths: &MaestroPaths, args: AutoArchiveArgs) -> Result<()> {
@@ -1067,6 +1081,36 @@ fn auto_archive_feature(paths: &MaestroPaths, args: AutoArchiveArgs) -> Result<(
         allow_dirty_target_card: args.allow_dirty_target_card,
     };
     let candidate = feature::archive_candidate(paths, &id, &evidence)?;
+    if args.refresh_receipt {
+        if candidate.action == feature::ArchiveCandidateAction::ReleaseOnly && candidate.archived {
+            return refresh_auto_archive_receipt(
+                paths,
+                AutoArchiveRefreshArgs {
+                    id,
+                    authority_ref,
+                    authority_target,
+                    authority_head,
+                    authority_state,
+                    tested_head,
+                    qa_result,
+                    qa_evidence,
+                    run_id,
+                    multi_agent,
+                    canonical_store,
+                    current_store,
+                    invoking_checkout,
+                    worker_source,
+                    target_card_hash,
+                    dry_run: args.dry_run,
+                },
+            );
+        }
+        bail!(
+            "--refresh-receipt requires an already archived feature; {} is {}",
+            id,
+            candidate.action.as_str()
+        );
+    }
     if candidate.action != feature::ArchiveCandidateAction::ArchiveNow {
         bail!(
             "cannot auto-archive {id} — {}: {}",
@@ -1138,6 +1182,7 @@ fn auto_archive_feature(paths: &MaestroPaths, args: AutoArchiveArgs) -> Result<(
         canonical_store: &current_store,
         worker_source: &worker_source,
         target_card_hash: target_card_hash.as_deref(),
+        refresh_receipt: false,
     });
     let mut event = auto_archive_event(AutoArchiveEventParts {
         event_id: &event_id,
@@ -1214,6 +1259,217 @@ fn auto_archive_feature(paths: &MaestroPaths, args: AutoArchiveArgs) -> Result<(
     println!("  restore: {restore_command}");
     println!("  index: {}", index_line.trim());
     Ok(())
+}
+
+struct AutoArchiveRefreshArgs {
+    id: String,
+    authority_ref: String,
+    authority_target: String,
+    authority_head: String,
+    authority_state: String,
+    tested_head: String,
+    qa_result: String,
+    qa_evidence: Vec<String>,
+    run_id: String,
+    multi_agent: String,
+    canonical_store: String,
+    current_store: String,
+    invoking_checkout: String,
+    worker_source: String,
+    target_card_hash: Option<String>,
+    dry_run: bool,
+}
+
+fn refresh_auto_archive_receipt(paths: &MaestroPaths, args: AutoArchiveRefreshArgs) -> Result<()> {
+    if args.authority_target != args.id {
+        bail!(
+            "cannot refresh auto-archive receipt for {} — authority target {} does not match",
+            args.id,
+            args.authority_target
+        );
+    }
+    if args.authority_state.trim() != "current" {
+        bail!(
+            "cannot refresh auto-archive receipt for {} — authority state must be current",
+            args.id
+        );
+    }
+    if !qa_passed_cli(&args.qa_result) {
+        bail!(
+            "cannot refresh auto-archive receipt for {} — qa result must be pass/passed",
+            args.id
+        );
+    }
+    if args.canonical_store != args.current_store {
+        bail!(
+            "cannot refresh auto-archive receipt for {} — canonical store {} does not match current store {}",
+            args.id,
+            args.canonical_store,
+            args.current_store
+        );
+    }
+    let snapshot = git::snapshot(paths.repo_root())?;
+    let Some(current_head) = snapshot.head.as_deref() else {
+        bail!(
+            "cannot refresh auto-archive receipt for {} — git HEAD is unborn; commit the delivered work first",
+            args.id
+        );
+    };
+    if args.tested_head != current_head {
+        bail!(
+            "cannot refresh auto-archive receipt for {} — tested head {} does not match current HEAD {}",
+            args.id,
+            args.tested_head,
+            current_head
+        );
+    }
+    if args.authority_head != current_head {
+        bail!(
+            "cannot refresh auto-archive receipt for {} — authority head {} does not match current HEAD {}",
+            args.id,
+            args.authority_head,
+            current_head
+        );
+    }
+
+    let archive_path = format!(".maestro/archive/cards.sqlite#{}", args.id);
+    let restore_command = format!("maestro feature unarchive {}", args.id);
+    let event_path = format!(
+        ".maestro/runs/{}/events.jsonl",
+        run::run_dir_name(&args.run_id)
+    );
+    let event_id = format!(
+        "auto_archive_refresh:{}:{}:{}",
+        args.id,
+        short_commit(current_head),
+        utc_now_timestamp()
+    );
+    let command = auto_archive_command(AutoArchiveCommandParts {
+        id: &args.id,
+        authority_ref: &args.authority_ref,
+        authority_target: &args.authority_target,
+        authority_head: &args.authority_head,
+        tested_head: current_head,
+        qa_result: &args.qa_result,
+        qa_evidence: &args.qa_evidence,
+        run_id: &args.run_id,
+        multi_agent: &args.multi_agent,
+        canonical_store: &args.current_store,
+        worker_source: &args.worker_source,
+        target_card_hash: args.target_card_hash.as_deref(),
+        refresh_receipt: true,
+    });
+    if args.dry_run {
+        println!(
+            "dry-run: auto-archive receipt refresh preflight passed for {}",
+            args.id
+        );
+        println!("  authority: {}", args.authority_ref);
+        println!("  canonical store: {}", args.current_store);
+        println!("  invoking checkout: {}", args.invoking_checkout);
+        println!("  worker source: {}", args.worker_source);
+        println!("  tested head: {current_head}");
+        println!(
+            "  qa: {} ({} evidence item(s))",
+            args.qa_result,
+            args.qa_evidence.len()
+        );
+        println!("writes: none");
+        return Ok(());
+    }
+
+    let mut event = json!({
+        "schema_version": EVENT_SCHEMA_VERSION,
+        "event_id": event_id,
+        "event_type": "auto_archive_receipt_refresh",
+        "target_kind": "feature",
+        "target_id": args.id,
+        "authority_ref": args.authority_ref,
+        "canonical_store_path": args.current_store,
+        "invoking_checkout_path": args.invoking_checkout,
+        "worker_source": args.worker_source,
+        "current_head": current_head,
+        "tested_head": current_head,
+        "qa_result": args.qa_result,
+        "qa_evidence": args.qa_evidence,
+        "target_card_hash": args.target_card_hash,
+        "run_id": args.run_id,
+        "multi_agent": args.multi_agent,
+        "before_state": "archived",
+        "after_state": "archived",
+        "command": command,
+        "result": "receipt_refreshed",
+        "archive_path": archive_path,
+        "restore_command": restore_command,
+    });
+    run::insert_agent_runtime(&mut event, agent_runtime_from_env());
+    let event_hash = sha256_prefixed(&serde_json::to_vec(&event)?);
+    event
+        .as_object_mut()
+        .expect("invariant: auto_archive_receipt_refresh event is an object")
+        .insert("event_hash".to_string(), json!(event_hash.clone()));
+    run::append_manual_event(paths, event["run_id"].as_str().unwrap_or_default(), &event)?;
+
+    let receipt = feature::AutoArchiveReceipt {
+        feature_id: event["target_id"].as_str().unwrap_or_default().to_string(),
+        canonical_store_path: event["canonical_store_path"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string(),
+        invoking_checkout_path: event["invoking_checkout_path"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string(),
+        worker_source: event["worker_source"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string(),
+        target_card_hash: event["target_card_hash"].as_str().map(ToString::to_string),
+        final_target_head: current_head.to_string(),
+        tested_head: current_head.to_string(),
+        authority_ref: event["authority_ref"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string(),
+        merge_back_disposition: event["multi_agent"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string(),
+        qa_result: event["qa_result"].as_str().unwrap_or_default().to_string(),
+        run_id: event["run_id"].as_str().unwrap_or_default().to_string(),
+        event_id: event["event_id"].as_str().unwrap_or_default().to_string(),
+        event_hash: event_hash.clone(),
+        event_path: event_path.clone(),
+        archive_path: event["archive_path"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string(),
+        restore_command: event["restore_command"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string(),
+    };
+    let index_line = feature::append_auto_archive_receipt(paths, &receipt)?;
+
+    println!("refreshed auto-archive receipt for {}", receipt.feature_id);
+    println!("  authority: {}", receipt.authority_ref);
+    println!("  canonical store: {}", receipt.canonical_store_path);
+    println!("  invoking checkout: {}", receipt.invoking_checkout_path);
+    println!("  worker source: {}", receipt.worker_source);
+    println!("  tested head: {}", receipt.tested_head);
+    println!("  qa: {} (receipt refresh)", receipt.qa_result);
+    println!("  run event: {event_path} ({event_hash})");
+    println!("  archive: {}", receipt.archive_path);
+    println!("  restore: {}", receipt.restore_command);
+    println!("  index: {}", index_line.trim());
+    Ok(())
+}
+
+fn qa_passed_cli(value: &str) -> bool {
+    matches!(
+        value.trim().to_ascii_lowercase().as_str(),
+        "pass" | "passed"
+    )
 }
 
 struct AutoArchiveEventParts<'a> {
@@ -1377,6 +1633,7 @@ struct AutoArchiveCommandParts<'a> {
     canonical_store: &'a str,
     worker_source: &'a str,
     target_card_hash: Option<&'a str>,
+    refresh_receipt: bool,
 }
 
 fn auto_archive_command(parts: AutoArchiveCommandParts<'_>) -> String {
@@ -1415,6 +1672,9 @@ fn auto_archive_command(parts: AutoArchiveCommandParts<'_>) -> String {
     if let Some(hash) = parts.target_card_hash {
         args.push("--target-card-hash");
         args.push(hash);
+    }
+    if parts.refresh_receipt {
+        args.push("--refresh-receipt");
     }
     args.into_iter()
         .map(shell_word)
@@ -1702,7 +1962,8 @@ fn close_feature(
     outcome: Option<String>,
     dry_run: bool,
 ) -> Result<()> {
-    let report = feature_close::close(paths, id, outcome, dry_run)?;
+    let close = feature_close::close(paths, id, outcome, dry_run)?;
+    let report = close.transition;
     println!("{}", report.note);
     if dry_run {
         println!("close preview:");
@@ -1732,7 +1993,7 @@ fn close_feature(
             super::OwnershipReleaseStatus::Done,
             Some("feature close"),
         );
-        print_close_receipt(paths, &report)?;
+        print_close_receipt(paths, &report, close.suite_log_path.as_deref())?;
     } else {
         println!("inspect: maestro feature show {}", report.id);
         println!("next: maestro status");
@@ -1895,8 +2156,12 @@ fn show_feature(paths: &MaestroPaths, id: &str) -> Result<()> {
     if let Some(cancel_reason) = view.cancel_reason.as_deref() {
         println!("cancel_reason: {cancel_reason}");
     }
-    if let Some(reason) = view.qa_none_reason.as_deref() {
+    if view.qa_surface.as_deref() == Some("none")
+        && let Some(reason) = view.qa_none_reason.as_deref()
+    {
         println!("qa: none ({reason})");
+    } else if let Some(surface) = view.qa_surface.as_deref() {
+        println!("qa: {surface}");
     }
     print_decision_summary(paths, &view.id)?;
     print_acceptance(
@@ -2552,6 +2817,7 @@ mod tests {
             outcome: None,
             cancel_reason: None,
             qa_none_reason: None,
+            qa_surface: None,
             notes: None,
             project: None,
         }
