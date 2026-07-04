@@ -1,7 +1,7 @@
 ---
 name: maestro-card
-version: 1.37.18
-description: "Active Maestro card work after design approval: use for implement, fix, verify, QA, close, release, continue, or unattended prompts like use loop, keep looping, work while away/asleep."
+version: 1.37.19
+description: "Card work in a project using Maestro after design approval: use for implement, fix, verify, QA, close, release, continue, or unattended prompts like use loop, keep looping, work while away/asleep."
 ---
 
 # Maestro Card
@@ -69,8 +69,8 @@ current chain position without writing, `maestro loop outcome` to append
 structured attempt outcomes and transition receipts after native work,
 `maestro loop trace <card>` to audit card-scoped receipts, and `maestro loop
 improve` for read-only improvement proposals whose apply commands must be run
-explicitly. No hidden stores, hidden schedulers, silent recipe mutation, and
-proof/QA bypass are forbidden. Custom card/run recipes are
+explicitly. Do not use hidden stores, hidden schedulers, silent recipe mutation,
+or proof/QA bypass. Custom card/run recipes are
 allowed only when no shipped recipe fits, and must keep the same six phases,
 current Maestro verbs, hard stops, and continue output. Work Lease is only a
 choose-phase helper; it may select or reserve one safe unit, but it is not a
@@ -79,7 +79,8 @@ lifecycle.
 
 ## Route
 
-Read the reference for the job at hand; they share the ground rules below.
+Pick one branch, read its reference, then apply the shared ground rules below.
+Load extra references only when the chosen branch points at them.
 
 - Pick up, progress, finish, or unblock executable Tasks:
   [reference/work.md](reference/work.md). Its implement step is test-first

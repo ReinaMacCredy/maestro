@@ -1,7 +1,7 @@
 ---
 name: maestro-setup
-version: 1.11.4
-description: "Setup Maestro in a project: use for init/install/sync/doctor, global skills, hooks, harness setup, or agent integration diagnosis/repair."
+version: 1.11.5
+description: "Setup Maestro in a project using or adopting Maestro: use for init/install/sync/doctor, global skills, hooks, harness setup, or agent integration diagnosis/repair."
 ---
 
 # Maestro Setup
@@ -20,8 +20,8 @@ recommends; outcome/proof/memory verbs write. `maestro loop next --chain`
 explains current chain position without writing; `maestro loop outcome` appends
 structured outcomes and transition receipts after native work; `maestro loop
 trace <card>` audits card-scoped receipts; `maestro loop improve` is a read-only
-proposer. No hidden stores, hidden schedulers, silent recipe mutation, and
-proof/QA bypass are forbidden.
+proposer. Do not use hidden stores, hidden schedulers, silent recipe mutation,
+or proof/QA bypass.
 
 ## Use
 
@@ -86,3 +86,6 @@ proof/QA bypass are forbidden.
 - Setup is healthy, or the remaining setup blocker is explicit.
 - The next handoff is visible from `maestro status`.
 - Harness guidance changes cite inspected files or commands.
+- Completion criterion: every write was preceded by the matching dry-run or
+  current-state read, and every changed managed resource is named with its
+  backup path or blocker.

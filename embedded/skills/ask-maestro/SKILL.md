@@ -1,7 +1,7 @@
 ---
 name: ask-maestro
-version: 1.0.4
-description: "Routes Maestro requests to the right shipped skill and lifecycle recipe. Use when the user asks what Maestro route, skill, loop, card, task, feature, setup, audit, design, bugfix, ship, archive, progress, or continuation workflow to use."
+version: 1.0.5
+description: "Router for choosing the next Maestro skill or lifecycle recipe."
 disable-model-invocation: true
 ---
 
@@ -26,9 +26,9 @@ Rule: loop next recommends; outcome/proof/memory verbs write. Use
 `maestro loop next --chain` to explain current chain position without writing,
 `maestro loop outcome` to record structured attempt outcomes and transition
 receipts after native work, `maestro loop trace <card>` to audit card-scoped
-receipts, and `maestro loop improve` for read-only improvement proposals. No
-hidden stores, hidden schedulers, silent recipe mutation, and proof/QA bypass
-are forbidden.
+receipts, and `maestro loop improve` for read-only improvement proposals. Do
+not use hidden stores, hidden schedulers, silent recipe mutation, or proof/QA
+bypass.
 
 ## The Main Flow: Idea To Ship
 
@@ -92,6 +92,9 @@ Use Maestro artifacts instead of chat memory:
   `maestro loop show learning`.
 - "There are active sessions or possible overlap" -> `maestro loop show
   conflict-handoff`.
+
+Completion criterion: one route is chosen with the exact next skill, recipe, or
+command; if no route fits, the missing fact is explicit before fallback.
 
 ## Stop
 

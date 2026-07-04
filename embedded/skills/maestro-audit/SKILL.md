@@ -1,7 +1,7 @@
 ---
 name: maestro-audit
-version: 1.13.4
-description: "Audit Maestro projects read-only: use for code review, architecture review, deepening opportunities, backlog proposals, harness-improvement findings, or repo-wide improvement audits without fixes."
+version: 1.13.5
+description: "Audit a project using Maestro read-only: use for code review, architecture review, deepening opportunities, backlog proposals, harness-improvement findings, or repo-wide improvement audits without fixes."
 ---
 
 # Maestro Audit
@@ -28,9 +28,8 @@ Rule: loop next recommends; outcome/proof/memory verbs write. Use
 `maestro loop outcome` to preserve structured attempt outcomes and transition
 receipts after native work, `maestro loop trace <card>` to audit card-scoped
 receipts, and `maestro loop improve` for read-only proposals over sourced
-outcomes. Audit may file explicit harness or memory proposals, but silent
-recipe mutation, hidden stores, hidden schedulers, and proof/QA bypass are
-forbidden.
+outcomes. Audit may file explicit harness or memory proposals. Do not use silent
+recipe mutation, hidden stores, hidden schedulers, or proof/QA bypass.
 
 ## Stop
 
@@ -41,7 +40,8 @@ architecture-review branch asks for them.
 ## Do
 
 1. Read known state: `maestro status`, `maestro harness list --all`, active
-   features, active tasks, decisions, and repo instructions.
+   features, active tasks, decisions, and repo instructions. Pick the bounded
+   audit surface before proposing findings.
 2. Map the bounded audit surface from repo evidence: docs, code ownership
    boundaries, tests, scripts, and shipped embedded resources relevant to the finding.
    Sweep every lens so coverage is checkable, not just whatever surfaced

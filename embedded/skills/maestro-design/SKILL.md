@@ -1,7 +1,7 @@
 ---
 name: maestro-design
-version: 1.36.11
-description: "Design Maestro changes before implementation: use for brainstorm, plan, PRD synthesis, grill me, grilling, stress-test, domain model, deepening candidate, wording, workflow, skill, harness, card/task/feature, architecture, UX, or agent-process decisions."
+version: 1.36.12
+description: "Design in a project using Maestro before implementation: use for brainstorm, plan, PRD synthesis, grilling/stress-test, domain model, deepening candidate, wording, workflow, skill/harness, card/task/feature, architecture, UX, or agent-process decisions."
 ---
 
 # Maestro Design
@@ -44,12 +44,18 @@ CLI because `feature design`, `feature set`, and `decision lock` are not MCP
 tools yet. After the design hand-off, `maestro-card` prefers MCP for supported
 work-card and feature-lifecycle steps.
 
-Routing: external PRD with open forks -> decide forks in design, then intake per maestro-card.
-PRD synthesis from settled context -> use [reference/prd.md](reference/prd.md).
-Grill/stress-test session -> use [reference/grilling.md](reference/grilling.md).
-Domain-modeling session -> use [reference/domain-model.md](reference/domain-model.md).
-Grill-with-docs session -> use [reference/grilling.md](reference/grilling.md), plus [reference/domain-model.md](reference/domain-model.md) for Maestro design/decision updates.
-Chosen architecture deepening candidate -> use [reference/deepening-candidate.md](reference/deepening-candidate.md).
+Routing: choose the matching branch and load only its reference first.
+
+- External PRD with open forks -> decide forks in design, then intake per
+  `maestro-card`.
+- PRD synthesis from settled context -> use [reference/prd.md](reference/prd.md).
+- Grill/stress-test session -> use [reference/grilling.md](reference/grilling.md).
+- Domain-modeling session -> use [reference/domain-model.md](reference/domain-model.md).
+- Grill With Docs session -> use [reference/grilling.md](reference/grilling.md),
+  plus [reference/domain-model.md](reference/domain-model.md) for Maestro
+  design/decision updates.
+- Chosen architecture deepening candidate -> use
+  [reference/deepening-candidate.md](reference/deepening-candidate.md).
 
 ## Conversation Driver
 
@@ -119,8 +125,8 @@ conditions without writing. Use `maestro loop outcome` for structured attempt
 evidence and transition receipts after native work, `maestro loop trace <card>`
 to audit card-scoped chain receipts, and `maestro loop improve` for read-only
 improvement proposals; do not silently edit recipes or skills from router
-output. No hidden stores, hidden schedulers, silent recipe mutation, and
-proof/QA bypass are forbidden.
+output. Do not use hidden stores, hidden schedulers, silent recipe mutation, or
+proof/QA bypass.
 
 First step in a session: run `maestro active` (pull-only) to see what other
 live sessions are working on -- their card, mode, and progress -- before you
