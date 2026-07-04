@@ -8,6 +8,7 @@ use crate::domain::card;
 use crate::domain::decisions;
 use crate::domain::feature::{
     self, ContractAdditions, ContractChangeCounts, ContractEdits, FeatureStatus,
+    QuestionRemovalEdit,
 };
 use crate::domain::task;
 use crate::domain::{conflict, run};
@@ -49,6 +50,8 @@ pub fn run(args: FeatureArgs) -> Result<()> {
             add_area,
             add_non_goal,
             add_question,
+            remove_question,
+            reason,
             edit_acceptance,
             text,
             description,
@@ -75,6 +78,7 @@ pub fn run(args: FeatureArgs) -> Result<()> {
                 add_affected_areas: add_area,
                 add_non_goals: add_non_goal,
                 add_open_questions: add_question,
+                remove_open_questions: question_removals(remove_question, reason)?,
                 edit_acceptance: paired_acceptance_edits(edit_acceptance, text)?,
             },
         ),
@@ -1825,6 +1829,28 @@ fn paired_acceptance_edits(
         .collect())
 }
 
+fn question_removals(
+    remove_question: Vec<String>,
+    reason: Option<String>,
+) -> Result<Vec<QuestionRemovalEdit>> {
+    if remove_question.is_empty() {
+        if reason.is_some() {
+            bail!("--reason is only valid with --remove-question");
+        }
+        return Ok(Vec::new());
+    }
+    let Some(reason) = reason else {
+        bail!("--reason is required with --remove-question");
+    };
+    Ok(remove_question
+        .into_iter()
+        .map(|reference| QuestionRemovalEdit {
+            reference,
+            reason: reason.clone(),
+        })
+        .collect())
+}
+
 fn print_set_report(id: &str, report: &feature::SetReport) {
     println!("set {id}");
     for line in change_lines("replaced", &report.replaced, &report.view) {
@@ -1833,10 +1859,17 @@ fn print_set_report(id: &str, report: &feature::SetReport) {
     for line in change_lines("added", &report.added, &report.view) {
         println!("  {line}");
     }
+    for line in change_lines("removed", &report.removed, &report.view) {
+        println!("  {line}");
+    }
     if report.edited_acceptance > 0 {
         println!("  acceptance edited ({})", report.edited_acceptance);
     }
-    if report.replaced.is_empty() && report.added.is_empty() && report.edited_acceptance == 0 {
+    if report.replaced.is_empty()
+        && report.added.is_empty()
+        && report.removed.is_empty()
+        && report.edited_acceptance == 0
+    {
         println!("  no list values changed; scalar fields may have been refreshed");
     }
     println!(
@@ -1900,6 +1933,8 @@ fn push_count_line(lines: &mut Vec<String>, mode: &str, label: &str, changed: us
     }
     if mode == "added" {
         lines.push(format!("+{changed} {label} ({total} total)"));
+    } else if mode == "removed" {
+        lines.push(format!("{label} removed ({changed}); {total} remain"));
     } else {
         lines.push(format!(
             "{label} replaced ({total}); other fields untouched"

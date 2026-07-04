@@ -47,5 +47,6 @@ and why it is not part of the current fix.
   Observed friction: after locking a decision that answers one feature question,
   `maestro feature show` still lists the resolved question and the generated CLI
   reference does not expose an obvious single-question removal command.
-  Later scope: add a narrow question-resolve/remove path, or make decision locks
-  mark linked questions as answered without rewriting unrelated contract fields.
+  Fixed: `maestro feature set <id> --remove-question q-1 --reason "<decision>"`
+  removes one open question by ref or exact text and records the reason in the
+  feature notes.

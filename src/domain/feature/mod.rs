@@ -25,13 +25,13 @@ pub use reconcile::{
 pub use registry::{
     AcceptanceTextEdit, AmendReport, CancelReport, ContractAdditions, ContractChangeCounts,
     ContractEdits, FeatureDiagnostic, FeatureRosterEntry, FeatureView, FinalizeReport, NoteReport,
-    ReopenReport, SetReport, SpecSectionReport, TransitionReport, accept, accept_with_qa_none,
-    accept_with_qa_surface, amend, amend_log_position, cancel, close, close_gaps, create, diagnose,
-    ensure_exists, feature_sidecar_dir, finalize, finalize_requires_reopen, handoff_gap, list,
-    list_archived, list_tolerant, list_tolerant_with_entries, list_with_entries, note,
-    read_design_text, read_sidecar_text, reopen, set, set_with_report, show, show_archived, start,
-    status, status_label, titles, verified_child_commit_drift, write_design_section,
-    write_sidecar_text, write_spec_section,
+    QuestionRemovalEdit, ReopenReport, SetReport, SpecSectionReport, TransitionReport, accept,
+    accept_with_qa_none, accept_with_qa_surface, amend, amend_log_position, cancel, close,
+    close_gaps, create, diagnose, ensure_exists, feature_sidecar_dir, finalize,
+    finalize_requires_reopen, handoff_gap, list, list_archived, list_tolerant,
+    list_tolerant_with_entries, list_with_entries, note, read_design_text, read_sidecar_text,
+    reopen, set, set_with_report, show, show_archived, start, status, status_label, titles,
+    verified_child_commit_drift, write_design_section, write_sidecar_text, write_spec_section,
 };
 pub use schema::{FeatureStatus, normalize_acceptance_id};
 pub use staleness::{RETIRE_REMINDER, STALE_PROPOSED_THRESHOLD_DAYS, age_days, is_stale_proposed};

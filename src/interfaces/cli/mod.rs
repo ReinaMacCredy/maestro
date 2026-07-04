@@ -1767,6 +1767,20 @@ pub enum FeatureCommand {
         )]
         add_question: Vec<String>,
         #[arg(
+            long = "remove-question",
+            value_name = "REF_OR_TEXT",
+            conflicts_with_all = ["question", "clear_questions"],
+            requires = "reason",
+            help = "Open question ref (q-1/q1) or exact text to remove"
+        )]
+        remove_question: Vec<String>,
+        #[arg(
+            long,
+            requires = "remove_question",
+            help = "Reason recorded when removing open questions"
+        )]
+        reason: Option<String>,
+        #[arg(
             long = "edit-acceptance",
             value_name = "AC_ID",
             hide = true,

@@ -163,6 +163,8 @@ pub struct ContractEdits {
     pub add_non_goals: Vec<String>,
     /// Proposed-stage open-question additions.
     pub add_open_questions: Vec<String>,
+    /// Proposed-stage open questions to remove by ref (`q-1`, `q1`) or exact text.
+    pub remove_open_questions: Vec<QuestionRemovalEdit>,
     /// Proposed-stage in-place acceptance text edits.
     pub edit_acceptance: Vec<AcceptanceTextEdit>,
 }
@@ -181,6 +183,7 @@ impl ContractEdits {
             && self.add_affected_areas.is_empty()
             && self.add_non_goals.is_empty()
             && self.add_open_questions.is_empty()
+            && self.remove_open_questions.is_empty()
             && self.edit_acceptance.is_empty()
     }
 }
@@ -189,6 +192,12 @@ impl ContractEdits {
 pub struct AcceptanceTextEdit {
     pub id: String,
     pub text: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct QuestionRemovalEdit {
+    pub reference: String,
+    pub reason: String,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -219,6 +228,7 @@ pub struct SetReport {
     pub view: FeatureView,
     pub replaced: ContractChangeCounts,
     pub added: ContractChangeCounts,
+    pub removed: ContractChangeCounts,
     pub edited_acceptance: usize,
 }
 
@@ -400,6 +410,7 @@ pub fn set_with_report(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> 
     }
     let mut replaced = ContractChangeCounts::default();
     let mut added = ContractChangeCounts::default();
+    let mut removed = ContractChangeCounts::default();
     if let Some(value) = edits.acceptance {
         replaced.acceptance = value.len();
         record.acceptance = value;
@@ -440,14 +451,28 @@ pub fn set_with_report(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> 
     let open_questions = dedup_new(&record.open_questions, &edits.add_open_questions);
     added.open_questions = open_questions.len();
     record.open_questions.extend(open_questions);
+    let removed_questions =
+        remove_open_question_refs(id, &mut record.open_questions, &edits.remove_open_questions)?;
+    removed.open_questions = removed_questions.len();
     apply_acceptance_text_edits(id, &mut record.acceptance, &edits.edit_acceptance)?;
     record.updated_at = utc_now_timestamp();
     save_record(&record, &write)?;
+    for removal in &removed_questions {
+        append_note_for_record(
+            paths,
+            &record,
+            &format!(
+                "resolved open question `{}`: {}",
+                removal.text, removal.reason
+            ),
+        )?;
+    }
     let counts = count_tasks_for_feature(&paths.tasks_dir(), &record.id)?;
     Ok(SetReport {
         view: view_from_record(record, counts, None),
         replaced,
         added,
+        removed,
         edited_acceptance: edits.edit_acceptance.len(),
     })
 }
@@ -1243,14 +1268,7 @@ pub fn note(paths: &MaestroPaths, id: &str, text: &str) -> Result<NoteReport> {
     if text.trim().is_empty() {
         bail!("feature note text cannot be empty");
     }
-    let path = feature_sidecar_dir(paths, &record.id).join("notes.md");
-    let append = if path.parent().is_some_and(Path::exists)
-        && !live_db::contains_card_id(paths, &record.id)?
-    {
-        append_note_file(&path, &record.title, text)?
-    } else {
-        append_note_sidecar(paths, &record.id, &record.title, text)?
-    };
+    let append = append_note_for_record(paths, &record, text)?;
     Ok(NoteReport {
         id: record.id,
         created: append.created,
@@ -1929,6 +1947,77 @@ fn apply_acceptance_text_edits(
     Ok(())
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct RemovedQuestion {
+    text: String,
+    reason: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct RemovedQuestionMatch {
+    index: usize,
+    removed: RemovedQuestion,
+}
+
+fn remove_open_question_refs(
+    feature_id: &str,
+    questions: &mut Vec<String>,
+    removals: &[QuestionRemovalEdit],
+) -> Result<Vec<RemovedQuestion>> {
+    let mut matched = Vec::new();
+    for removal in removals {
+        let reference = removal.reference.trim();
+        if reference.is_empty() {
+            bail!("--remove-question requires a non-empty ref or exact question text");
+        }
+        let reason = removal.reason.trim();
+        if reason.is_empty() {
+            bail!("--reason must not be empty with --remove-question");
+        }
+        let matches = questions
+            .iter()
+            .enumerate()
+            .filter(|(index, question)| question_ref_matches(reference, *index, question))
+            .map(|(index, question)| (index, question.clone()))
+            .collect::<Vec<_>>();
+        let (index, text) = match matches.as_slice() {
+            [(index, text)] => (*index, text.clone()),
+            [] => bail!("open question `{reference}` did not match {feature_id}"),
+            _ => bail!("open question `{reference}` matched multiple questions on {feature_id}"),
+        };
+        if matched
+            .iter()
+            .any(|removed: &RemovedQuestionMatch| removed.index == index)
+        {
+            bail!("open question `{reference}` was requested for removal more than once");
+        }
+        matched.push(RemovedQuestionMatch {
+            index,
+            removed: RemovedQuestion {
+                text,
+                reason: reason.to_string(),
+            },
+        });
+    }
+
+    let mut indexes = matched
+        .iter()
+        .map(|removal| removal.index)
+        .collect::<Vec<_>>();
+    indexes.sort_unstable_by(|a, b| b.cmp(a));
+    for index in indexes {
+        questions.remove(index);
+    }
+
+    Ok(matched.into_iter().map(|removal| removal.removed).collect())
+}
+
+fn question_ref_matches(reference: &str, index: usize, question: &str) -> bool {
+    reference == format!("q-{}", index + 1)
+        || reference == format!("q{}", index + 1)
+        || reference == question
+}
+
 fn view_from_record(
     record: FeatureRecord,
     counts: FeatureTaskCounts,
@@ -2107,6 +2196,19 @@ fn append_note_file(path: &Path, title: &str, text: &str) -> Result<NoteAppend> 
     let created = append_text_file(path, &format!("# {title}\n\n"), &format!("{line}\n"))
         .with_context(|| format!("failed to append feature note {}", path.display()))?;
     Ok(NoteAppend { created, line })
+}
+
+fn append_note_for_record(
+    paths: &MaestroPaths,
+    record: &FeatureRecord,
+    text: &str,
+) -> Result<NoteAppend> {
+    let path = feature_sidecar_dir(paths, &record.id).join("notes.md");
+    if path.parent().is_some_and(Path::exists) && !live_db::contains_card_id(paths, &record.id)? {
+        append_note_file(&path, &record.title, text)
+    } else {
+        append_note_sidecar(paths, &record.id, &record.title, text)
+    }
 }
 
 fn append_note_sidecar(

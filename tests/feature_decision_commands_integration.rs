@@ -1035,7 +1035,51 @@ fn feature_guarded_lifecycle_via_cli() {
         &["feature", "set", "--help"],
     );
     assert!(help.contains("REPLACES the full questions list"), "{help}");
+    assert!(help.contains("--remove-question"), "{help}");
     assert!(!help.contains("--add-acceptance"), "{help}");
+
+    let remove_question_args = [
+        "feature",
+        "set",
+        "billing-csv-export",
+        "--remove-question",
+        "q-1",
+        "--reason",
+        "answered by decision dec-export-filename",
+    ];
+    let remove_question_output = stdout(
+        maestro(&remove_question_args, temp_dir.path()),
+        &remove_question_args,
+    );
+    assert!(
+        remove_question_output.contains("questions removed (1); 0 remain"),
+        "{remove_question_output}"
+    );
+    assert!(
+        remove_question_output.contains("questions=0"),
+        "{remove_question_output}"
+    );
+    let show_after_question_remove = stdout(
+        maestro(&["feature", "show", "billing-csv-export"], temp_dir.path()),
+        &["feature", "show", "billing-csv-export"],
+    );
+    assert!(
+        !show_after_question_remove.contains("open_questions:"),
+        "{show_after_question_remove}"
+    );
+    let notes = feature::read_sidecar_text(
+        &MaestroPaths::new(temp_dir.path()),
+        "billing-csv-export",
+        "notes.md",
+    )
+    .expect("notes read should succeed")
+    .expect("question removal should record a note");
+    assert!(
+        notes.contains(
+            "resolved open question `Which export filename?`: answered by decision dec-export-filename"
+        ),
+        "{notes}"
+    );
 
     let redundant_clear_args = [
         "feature",
