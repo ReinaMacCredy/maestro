@@ -43,3 +43,9 @@ and why it is not part of the current fix.
   read command to check when the hold has cleared.
   Later scope: add a next-step pointer such as `maestro active` or a session
   status command to busy notices.
+- Surface: proposed feature question cleanup.
+  Observed friction: after locking a decision that answers one feature question,
+  `maestro feature show` still lists the resolved question and the generated CLI
+  reference does not expose an obvious single-question removal command.
+  Later scope: add a narrow question-resolve/remove path, or make decision locks
+  mark linked questions as answered without rewriting unrelated contract fields.
