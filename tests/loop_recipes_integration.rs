@@ -233,6 +233,27 @@ fn loop_next_text_renders_compact_unknown_gap_for_ready_work() {
 }
 
 #[test]
+fn loop_next_json_keeps_return_condition_field_compatible() {
+    let temp = TestTempDir::new("maestro-loop-next-edge-json-compatible");
+    init_git_marker(temp.path());
+    stdout(temp.path(), &["init", "--yes"]);
+    stdout(
+        temp.path(),
+        &["task", "add", "--id-only", "Render edge JSON"],
+    );
+
+    let out = stdout(temp.path(), &["loop", "next", "--json"]);
+    let value: Value = serde_json::from_str(&out).expect("loop next JSON should parse");
+    let edge = value["edges"]
+        .as_array()
+        .and_then(|edges| edges.first())
+        .unwrap_or_else(|| panic!("expected at least one edge in loop next JSON:\n{value}"));
+
+    assert!(edge["return_condition"].is_string(), "{edge}");
+    assert!(edge["return_conditions"].is_array(), "{edge}");
+}
+
+#[test]
 fn loop_next_unknown_gap_omits_source_less_memory_candidates() {
     let report = loop_recipes::route_next(loop_recipes::LoopRouterInput {
         repo: "test-repo".to_string(),
@@ -913,6 +934,47 @@ fn loop_outcome_appends_run_event_and_routes_failure_class() {
 }
 
 #[test]
+fn loop_chain_facts_do_not_guess_feature_freshness_from_status() {
+    let report = loop_recipes::route_next(loop_recipes::LoopRouterInput {
+        repo: "/repo".to_string(),
+        initialized: true,
+        features: vec![loop_recipes::LoopFeatureInput {
+            id: "feature-router".to_string(),
+            title: "Feature Router".to_string(),
+            status: "in_progress".to_string(),
+            total_tasks: 0,
+            verified_tasks: 0,
+            open_questions: 0,
+            handoff_fresh: None,
+            reconcile_current: None,
+        }],
+        ..loop_recipes::LoopRouterInput::default()
+    })
+    .expect("router should recommend design for stale ungrounded feature");
+    let facts = loop_recipes::chain_facts_from_router(
+        &loop_recipes::LoopRouterInput {
+            repo: "/repo".to_string(),
+            initialized: true,
+            features: vec![loop_recipes::LoopFeatureInput {
+                id: "feature-router".to_string(),
+                title: "Feature Router".to_string(),
+                status: "in_progress".to_string(),
+                total_tasks: 0,
+                verified_tasks: 0,
+                open_questions: 0,
+                handoff_fresh: None,
+                reconcile_current: None,
+            }],
+            ..loop_recipes::LoopRouterInput::default()
+        },
+        &report,
+    );
+
+    assert!(!facts.handoff_fresh, "{facts:?}");
+    assert!(!facts.feature_reconcile_current, "{facts:?}");
+}
+
+#[test]
 fn loop_outcome_records_structured_transition_receipt() {
     let temp = TestTempDir::new("maestro-loop-outcome-transition-receipt");
     init_git_marker(temp.path());
@@ -938,6 +1000,8 @@ fn loop_outcome_records_structured_transition_receipt() {
             "--return-condition",
             "decision.all_blockers_locked",
             "--return-condition",
+            "feature.reconcile_current",
+            "--return-condition",
             "feature.handoff_fresh",
             "--evidence-ref",
             "feature:feature-x",
@@ -959,7 +1023,8 @@ fn loop_outcome_records_structured_transition_receipt() {
     );
     assert_eq!(value["trigger"], "design_needed.scope_unclear");
     assert_eq!(value["return_condition"][0], "decision.all_blockers_locked");
-    assert_eq!(value["return_condition"][1], "feature.handoff_fresh");
+    assert_eq!(value["return_condition"][1], "feature.reconcile_current");
+    assert_eq!(value["return_condition"][2], "feature.handoff_fresh");
     assert_eq!(value["evidence_refs"][0]["kind"], "feature");
     assert_eq!(value["evidence_refs"][0]["id"], "feature-x");
     assert_eq!(value["failure_class"], "");
@@ -1000,6 +1065,8 @@ fn loop_outcome_rejects_unknown_transition_trigger_key() {
             "--trigger",
             "missing.trigger",
             "--return-condition",
+            "feature.reconcile_current",
+            "--return-condition",
             "feature.handoff_fresh",
             "--evidence-ref",
             "feature:feature-x",
@@ -1010,6 +1077,44 @@ fn loop_outcome_rejects_unknown_transition_trigger_key() {
 
     assert!(
         error.contains("unknown trigger key missing.trigger"),
+        "{error}"
+    );
+}
+
+#[test]
+fn loop_outcome_rejects_transition_receipt_without_matching_edge() {
+    let temp = TestTempDir::new("maestro-loop-outcome-transition-edge-invalid");
+    init_git_marker(temp.path());
+    stdout(temp.path(), &["init", "--yes"]);
+
+    let error = stderr(
+        temp.path(),
+        &[
+            "loop",
+            "outcome",
+            "--recipe",
+            "work",
+            "--phase",
+            "act",
+            "--selected-unit",
+            "feature-x",
+            "--transition-to",
+            "design.choose",
+            "--transition-reason",
+            "mismatched edge",
+            "--trigger",
+            "work_ready.selected_unit",
+            "--return-condition",
+            "work.accepted_or_dry",
+            "--evidence-ref",
+            "feature:feature-x",
+            "--run",
+            "loop-transition-edge-invalid",
+        ],
+    );
+
+    assert!(
+        error.contains("transition receipt does not match a registered edge"),
         "{error}"
     );
 }
@@ -1039,6 +1144,10 @@ fn loop_trace_reads_card_scoped_transition_receipts() {
             "design_needed.scope_unclear",
             "--return-condition",
             "decision.all_blockers_locked",
+            "--return-condition",
+            "feature.reconcile_current",
+            "--return-condition",
+            "feature.handoff_fresh",
             "--evidence-ref",
             "feature:feature-x",
             "--run",
@@ -1094,6 +1203,10 @@ fn loop_trace_defaults_to_recent_window_and_all_widens() {
                 "design_needed.scope_unclear",
                 "--return-condition",
                 "decision.all_blockers_locked",
+                "--return-condition",
+                "feature.reconcile_current",
+                "--return-condition",
+                "feature.handoff_fresh",
                 "--evidence-ref",
                 "feature:feature-x",
                 "--run",
@@ -1115,6 +1228,53 @@ fn loop_trace_defaults_to_recent_window_and_all_widens() {
     let all = stdout(temp.path(), &["loop", "trace", "feature-x", "--all"]);
     assert!(all.contains("chain history: 6 events"), "{all}");
     assert!(!all.contains("hidden:"), "{all}");
+}
+
+#[test]
+fn loop_trace_recent_window_uses_event_timestamp_order() {
+    let temp = TestTempDir::new("maestro-loop-trace-timestamp-window");
+    init_git_marker(temp.path());
+    stdout(temp.path(), &["init", "--yes"]);
+    stdout(temp.path(), &["feature", "new", "Feature X"]);
+
+    for (session, ts) in [
+        ("z-oldest", "2026-07-04T00:00:00.000Z"),
+        ("a-newest", "2026-07-04T00:05:00.000Z"),
+        ("b-second", "2026-07-04T00:01:00.000Z"),
+        ("c-third", "2026-07-04T00:02:00.000Z"),
+        ("d-fourth", "2026-07-04T00:03:00.000Z"),
+        ("e-fifth", "2026-07-04T00:04:00.000Z"),
+    ] {
+        seed_run(
+            temp.path(),
+            session,
+            &[format!(
+                r#"{{"event_type":"loop_outcome","ts":"{ts}","recipe":"work","phase":"act","selected_unit":"feature-x","transition_to":"design.choose","transition_reason":"timestamp order","trigger":"design_needed.scope_unclear","return_condition":["decision.all_blockers_locked","feature.reconcile_current","feature.handoff_fresh"],"evidence_refs":[{{"kind":"feature","id":"feature-x"}}]}}"#
+            )],
+        );
+    }
+
+    let out = stdout(temp.path(), &["loop", "trace", "feature-x", "--json"]);
+    let value: Value = serde_json::from_str(&out).expect("loop trace JSON should parse");
+    assert_eq!(value["hidden"], 1, "{value}");
+    let receipts = value["events"]
+        .as_array()
+        .expect("events should be an array")
+        .iter()
+        .map(|event| event["receipt"].as_str().unwrap_or_default())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        receipts,
+        vec![
+            "run:b-second",
+            "run:c-third",
+            "run:d-fourth",
+            "run:e-fifth",
+            "run:a-newest",
+        ],
+        "{value}"
+    );
 }
 
 #[test]

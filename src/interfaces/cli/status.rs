@@ -12,7 +12,7 @@ use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::table;
 use crate::foundation::core::time::{timestamp_nanos, utc_now_timestamp};
 use crate::interfaces::cli::{
-    ClaimArgs, GitReadout, NextArgs, StatusArgs, clean_worktree_note, feature_next_label,
+    ClaimArgs, FeatureNextLabelCache, GitReadout, NextArgs, StatusArgs, clean_worktree_note,
     git_readout, merge_busy_advisory, proof_concern_line, recovery_label, render_git_line,
     shell_word, stale_merge_advisory,
 };
@@ -1055,6 +1055,7 @@ fn active_feature_rows(
     features: &[feature::FeatureView],
     now_nanos: i128,
 ) -> Vec<FeatureRowJson> {
+    let mut next_labels = FeatureNextLabelCache::default();
     features
         .iter()
         .filter(|view| !view.status.is_terminal())
@@ -1062,7 +1063,7 @@ fn active_feature_rows(
             id: view.id.clone(),
             state: feature::status_label(&view.status).to_string(),
             title: view.title.clone(),
-            next: feature_next_label(paths, view),
+            next: next_labels.label(paths, view),
             inspect: format!("maestro feature show {}", view.id),
             project: view.project.clone(),
             stale_proposed: feature::is_stale_proposed(&view.status, &view.updated_at, now_nanos),

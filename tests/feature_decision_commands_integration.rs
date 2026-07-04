@@ -1004,7 +1004,7 @@ fn feature_guarded_lifecycle_via_cli() {
     assert!(set_output.contains("areas=1"));
     // Footer is a single next: pointer, not the old next:/or:/then: trio.
     assert!(
-        set_output.contains("next: maestro feature finalize billing-csv-export"),
+        set_output.contains("next: maestro feature reconcile billing-csv-export"),
         "{set_output}"
     );
     assert!(
@@ -1018,6 +1018,14 @@ fn feature_guarded_lifecycle_via_cli() {
     assert!(
         !set_output.contains("then: maestro feature accept"),
         "feature set dropped the then: footer line: {set_output}"
+    );
+    let show_contract_set = stdout(
+        maestro(&["feature", "show", "billing-csv-export"], temp_dir.path()),
+        &["feature", "show", "billing-csv-export"],
+    );
+    assert!(
+        show_contract_set.contains("next: maestro feature reconcile billing-csv-export"),
+        "{show_contract_set}"
     );
 
     let question_args = [
@@ -1239,6 +1247,18 @@ fn feature_finalize_writes_handoff_and_gates_accept_prepare() {
 
     let finalize_args = ["feature", "finalize", "clean-handoff"];
     reconcile_clean(temp_dir.path(), "clean-handoff");
+    stdout(
+        maestro(
+            &[
+                "card",
+                "note",
+                "clean-handoff",
+                "coordination note after reconcile",
+            ],
+            temp_dir.path(),
+        ),
+        &["card", "note", "clean-handoff"],
+    );
     let finalized = stdout(maestro(&finalize_args, temp_dir.path()), &finalize_args);
     assert!(finalized.contains("finalized clean-handoff"), "{finalized}");
     assert!(finalized.contains("source_sha256:"), "{finalized}");
@@ -1400,6 +1420,72 @@ tasks:
     assert_eq!(
         gate["blocked_by"],
         YamlValue::Sequence(vec![YamlValue::String(ui_id)])
+    );
+}
+
+#[test]
+fn feature_prepare_accepts_plain_inline_task_title() {
+    let temp_dir = TestTempDir::new("maestro-feature-inline-task-title");
+    let root = temp_dir.path();
+    init_git_marker(root);
+    stdout(maestro(&["init", "--yes"], root), &["init", "--yes"]);
+    stdout(
+        maestro(&["feature", "new", "Inline Prepare Feature"], root),
+        &["feature", "new", "Inline Prepare Feature"],
+    );
+    stdout(
+        maestro(
+            &[
+                "feature",
+                "set",
+                "inline-prepare-feature",
+                "--acceptance",
+                "inline task prepare works",
+                "--area",
+                "feature prepare",
+            ],
+            root,
+        ),
+        &["feature", "set"],
+    );
+    let cards_dir = root.join(".maestro/cards");
+    write_baseline(&cards_dir, "inline-prepare-feature");
+    reconcile_clean(root, "inline-prepare-feature");
+    stdout(
+        maestro(&["feature", "finalize", "inline-prepare-feature"], root),
+        &["feature", "finalize", "inline-prepare-feature"],
+    );
+    stdout(
+        maestro(&["feature", "accept", "inline-prepare-feature"], root),
+        &["feature", "accept", "inline-prepare-feature"],
+    );
+
+    let prepared = stdout(
+        maestro(
+            &[
+                "feature",
+                "prepare",
+                "inline-prepare-feature",
+                "--task",
+                "Prepare plain inline task",
+                "--check",
+                "plain inline task exists",
+                "--covers",
+                "ac-1",
+            ],
+            root,
+        ),
+        &["feature", "prepare", "--task"],
+    );
+
+    assert!(prepared.contains("prepared 1 task(s)"), "{prepared}");
+    let task_id = id_by_title(root, "Prepare plain inline task");
+    let task = task_record(root, &task_id);
+    assert_eq!(
+        task["acceptance"]["checks"],
+        YamlValue::Sequence(vec![YamlValue::String(
+            "plain inline task exists".to_string()
+        )])
     );
 }
 
@@ -1845,11 +1931,26 @@ fn feature_reconcile_apply_plan_updates_contract_tasks_and_receipt() {
         ),
         &["feature", "set", "reconcile-apply"],
     );
+    let removed_task = stdout(
+        maestro(
+            &[
+                "task",
+                "create",
+                "Remove stale reconcile task",
+                "--feature",
+                "reconcile-apply",
+                "--id-only",
+            ],
+            root,
+        ),
+        &["task", "create"],
+    );
+    let removed_task = removed_task.trim().to_string();
     let plan = root.join("reconcile.yml");
     fs::write(
         &plan,
-        r#"
-vision: Apply the reviewed reconcile plan.
+        format!(
+            r#"vision: Apply the reviewed reconcile plan.
 description: Updated description from explicit reconcile.yml.
 acceptance:
   - applied contract is explicit
@@ -1876,12 +1977,14 @@ tasks:
         - receipt is current after apply
       depends_on:
         - parser
-  remove: []
+  remove:
+    - {removed_task}
   order:
     - parser
     - receipt
 rationale: Human or authorized agent reviewed the full context.
-"#,
+"#
+        ),
     )
     .expect("write reconcile plan");
 
@@ -1937,6 +2040,117 @@ rationale: Human or authorized agent reviewed the full context.
             .len(),
         2
     );
+    let removed = task_record(root, &removed_task);
+    assert_eq!(removed["state"], "superseded");
+}
+
+#[test]
+fn feature_reconcile_write_plan_handles_colon_text() {
+    let temp_dir = TestTempDir::new("maestro-feature-reconcile-colon-plan");
+    let root = temp_dir.path();
+    init_git_marker(root);
+    stdout(maestro(&["init", "--yes"], root), &["init", "--yes"]);
+    stdout(
+        maestro(
+            &[
+                "feature",
+                "new",
+                "Colon Plan",
+                "--description",
+                "Contract split: code vs embedded resources",
+                "--question",
+                "Which side owns recipes: code or files?",
+            ],
+            root,
+        ),
+        &["feature", "new", "Colon Plan"],
+    );
+    stdout(
+        maestro(
+            &[
+                "feature",
+                "set",
+                "colon-plan",
+                "--acceptance",
+                "schema version: current resources are explicit",
+                "--area",
+                "feature reconcile: write-plan",
+            ],
+            root,
+        ),
+        &["feature", "set", "colon-plan"],
+    );
+
+    let compact = stdout(
+        maestro(&["feature", "reconcile", "colon-plan"], root),
+        &["feature", "reconcile", "colon-plan"],
+    );
+    assert!(
+        compact.contains("maestro feature reconcile colon-plan --write-plan reconcile.yml"),
+        "{compact}"
+    );
+
+    let plan = root.join("reconcile.yml");
+    let write_out = stdout(
+        maestro_owned(
+            &[
+                "feature".to_string(),
+                "reconcile".to_string(),
+                "colon-plan".to_string(),
+                "--write-plan".to_string(),
+                plan.display().to_string(),
+            ],
+            root,
+        ),
+        &["feature", "reconcile", "colon-plan", "--write-plan"],
+    );
+    assert!(write_out.contains("wrote reconcile plan:"), "{write_out}");
+
+    let raw_plan = fs::read_to_string(&plan).expect("read generated reconcile plan");
+    let mut plan_yaml: YamlValue =
+        serde_yaml::from_str(&raw_plan).expect("generated plan is valid YAML");
+    assert_eq!(
+        plan_yaml["description"],
+        YamlValue::String("Contract split: code vs embedded resources".to_string())
+    );
+    assert_eq!(
+        plan_yaml["questions"]["remove"][0]["ref"],
+        YamlValue::String("q-1".to_string())
+    );
+    assert_eq!(
+        plan_yaml["questions"]["remove"][0]["reason"],
+        YamlValue::String(String::new())
+    );
+
+    plan_yaml["questions"]["remove"][0]["reason"] =
+        YamlValue::String("Answered by review: resources own inspectable text.".to_string());
+    plan_yaml["rationale"] =
+        YamlValue::String("Reviewed generated plan: colon text stays valid YAML.".to_string());
+    fs::write(
+        &plan,
+        serde_yaml::to_string(&plan_yaml).expect("serialize edited reconcile plan"),
+    )
+    .expect("write edited reconcile plan");
+
+    let apply_out = stdout(
+        maestro_owned(
+            &[
+                "feature".to_string(),
+                "reconcile".to_string(),
+                "colon-plan".to_string(),
+                "--apply-plan".to_string(),
+                plan.display().to_string(),
+            ],
+            root,
+        ),
+        &["feature", "reconcile", "colon-plan", "--apply-plan"],
+    );
+    assert!(apply_out.contains("status: applied"), "{apply_out}");
+    let show = stdout(
+        maestro(&["feature", "show", "colon-plan"], root),
+        &["feature", "show", "colon-plan"],
+    );
+    assert!(!show.contains("Which side owns recipes"), "{show}");
 }
 
 #[test]

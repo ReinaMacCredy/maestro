@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::env;
 use std::path::PathBuf;
 
@@ -11,6 +12,7 @@ use crate::domain::feature::FeatureView;
 use crate::domain::feature::finalize_requires_reopen;
 use crate::domain::feature::handoff_gap;
 use crate::domain::feature::read_sidecar_text;
+use crate::domain::feature::reconcile_report;
 use crate::domain::proof;
 use crate::domain::run;
 use crate::domain::task::{TaskRecord, TaskState};
@@ -86,6 +88,22 @@ pub(crate) fn feature_next_label(paths: &MaestroPaths, view: &FeatureView) -> St
     feature_next_label_and_command(paths, view).0.to_string()
 }
 
+#[derive(Default)]
+pub(crate) struct FeatureNextLabelCache {
+    labels: BTreeMap<String, String>,
+}
+
+impl FeatureNextLabelCache {
+    pub(crate) fn label(&mut self, paths: &MaestroPaths, view: &FeatureView) -> String {
+        if let Some(label) = self.labels.get(&view.id) {
+            return label.clone();
+        }
+        let label = feature_next_label(paths, view);
+        self.labels.insert(view.id.clone(), label.clone());
+        label
+    }
+}
+
 /// Concrete next command for detail surfaces where a compact table label is too
 /// easy to misread as a contradictory lifecycle state.
 pub(crate) fn feature_next_command(paths: &MaestroPaths, view: &FeatureView) -> String {
@@ -106,6 +124,16 @@ fn feature_next_label_and_command(
                 ),
             )
         }
+        FeatureStatus::Proposed
+            if matches!(finalize_requires_reopen(paths, &view.id), Ok(true))
+                && !handoff_is_fresh(paths, view) =>
+        {
+            handoff_repair_next(paths, view)
+        }
+        FeatureStatus::Proposed if !reconcile_receipt_is_current(paths, &view.id) => (
+            "run: reconcile_feature",
+            format!("maestro feature reconcile {}", view.id),
+        ),
         FeatureStatus::Proposed if !handoff_is_fresh(paths, view) => {
             handoff_repair_next(paths, view)
         }
@@ -143,10 +171,6 @@ fn feature_next_label_and_command(
     }
 }
 
-pub(crate) fn handoff_repair_command(paths: &MaestroPaths, view: &FeatureView) -> String {
-    handoff_repair_next(paths, view).1
-}
-
 fn handoff_repair_next(paths: &MaestroPaths, view: &FeatureView) -> (&'static str, String) {
     if matches!(finalize_requires_reopen(paths, &view.id), Ok(true)) {
         (
@@ -158,6 +182,30 @@ fn handoff_repair_next(paths: &MaestroPaths, view: &FeatureView) -> (&'static st
             "run: finalize_feature",
             format!("maestro feature finalize {}", view.id),
         )
+    }
+}
+
+fn reconcile_receipt_is_current(paths: &MaestroPaths, id: &str) -> bool {
+    match reconcile_report(paths, id) {
+        Ok(report) if report.receipt.state == "current" => true,
+        Ok(report)
+            if report.receipt.stale.len() == 1
+                && report
+                    .receipt
+                    .stale
+                    .first()
+                    .is_some_and(|item| item == "handoff")
+                && matches!(handoff_gap(paths, id), Ok(None)) =>
+        {
+            true
+        }
+        Err(_)
+            if matches!(finalize_requires_reopen(paths, id), Ok(true))
+                && matches!(handoff_gap(paths, id), Ok(None)) =>
+        {
+            true
+        }
+        _ => false,
     }
 }
 
@@ -1811,16 +1859,32 @@ pub enum FeatureCommand {
     #[command(about = "Report or apply feature contract reconciliation before finalize")]
     Reconcile {
         id: String,
-        #[arg(long, help = "Print full human-readable reconciliation context")]
+        #[arg(
+            long,
+            conflicts_with_all = ["json", "apply_plan", "write_plan"],
+            help = "Print full human-readable reconciliation context"
+        )]
         full: bool,
-        #[arg(long, help = "Emit the full agent-readable reconciliation JSON")]
+        #[arg(
+            long,
+            conflicts_with_all = ["full", "apply_plan", "write_plan"],
+            help = "Emit the full agent-readable reconciliation JSON"
+        )]
         json: bool,
         #[arg(
             long = "apply-plan",
             value_name = "PLAN_FILE",
+            conflicts_with_all = ["full", "json", "write_plan"],
             help = "Apply an explicit full-contract reconcile.yml plan"
         )]
         apply_plan: Option<PathBuf>,
+        #[arg(
+            long = "write-plan",
+            value_name = "PLAN_FILE",
+            conflicts_with_all = ["full", "json", "apply_plan"],
+            help = "Write a valid editable full-contract reconcile.yml template"
+        )]
+        write_plan: Option<PathBuf>,
     },
     #[command(about = "Accept a feature into ready, freezing its contract (-> ready; gated)")]
     Accept {

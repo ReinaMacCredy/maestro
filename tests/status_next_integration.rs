@@ -249,13 +249,18 @@ fn proposed_feature_next_hint_tracks_handoff_and_qa_baseline_readiness() {
 
     let status = run(repo, &["status"]);
     assert!(status.contains("authored-contract"), "{status}");
-    assert!(status.contains("run: finalize_feature"), "{status}");
+    assert!(status.contains("run: reconcile_feature"), "{status}");
+    assert!(!status.contains("run: finalize_feature"), "{status}");
     assert!(!status.contains("template: set_contract"), "{status}");
 
     let feature_list = run(repo, &["feature", "list"]);
     assert!(feature_list.contains("authored-contract"), "{feature_list}");
     assert!(
-        feature_list.contains("run: finalize_feature"),
+        feature_list.contains("run: reconcile_feature"),
+        "{feature_list}"
+    );
+    assert!(
+        !feature_list.contains("run: finalize_feature"),
         "{feature_list}"
     );
     assert!(
@@ -1995,7 +2000,11 @@ fn feature_prepare_builds_sequenced_queue_and_claim_next_shows_chain() {
         "{complete}"
     );
     assert!(
-        complete.contains("next: maestro task claim --next"),
+        complete.contains(&format!("next: maestro task start {t2}")),
+        "{complete}"
+    );
+    assert!(
+        !complete.contains("next: maestro task claim --next"),
         "{complete}"
     );
 

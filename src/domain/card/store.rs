@@ -371,6 +371,7 @@ pub(crate) const RESERVED_CONTAINER_NAMES: &[&str] = &[
     CARD_FILE,
     "notes.md",
     "spec.md",
+    "design.md",
 ];
 
 /// Where a card lives in the container layout.
@@ -1677,7 +1678,15 @@ mod tests {
     #[test]
     fn home_for_new_rejects_reserved_feature_ids() {
         let paths = temp_cards_repo("home-reserved");
-        for reserved in ["tasks", "decisions.yaml", "ideas.yaml", "card.yaml"] {
+        for reserved in [
+            "tasks",
+            "decisions.yaml",
+            "ideas.yaml",
+            "card.yaml",
+            "notes.md",
+            "spec.md",
+            "design.md",
+        ] {
             assert!(
                 home_for_new(&paths, &typed_card(reserved, CardType::Feature, None)).is_err(),
                 "{reserved:?} must be rejected as a feature id"

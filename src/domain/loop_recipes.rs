@@ -215,6 +215,7 @@ pub struct LoopRouterInput {
     pub tasks: Vec<LoopTaskInput>,
     pub features: Vec<LoopFeatureInput>,
     pub memory_hits: Vec<LoopMemoryHit>,
+    pub recent_outcomes: Vec<LoopRecentOutcome>,
     pub active_conflicts: usize,
     pub active_sessions: usize,
     pub pending_synthesis: usize,
@@ -244,6 +245,8 @@ pub struct LoopFeatureInput {
     pub total_tasks: usize,
     pub verified_tasks: usize,
     pub open_questions: usize,
+    pub handoff_fresh: Option<bool>,
+    pub reconcile_current: Option<bool>,
 }
 
 #[derive(Clone, Debug, Default, Serialize)]
@@ -546,7 +549,8 @@ pub struct LoopNextEdge {
     pub allowed_verbs: Vec<String>,
     pub forbidden_verbs: Vec<String>,
     pub hard_stops: Vec<String>,
-    pub return_condition: Vec<String>,
+    pub return_condition: String,
+    pub return_conditions: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -1023,6 +1027,10 @@ impl LoopContext {
         for hit in &memory {
             refs.extend(hit.source_refs.iter().cloned());
         }
+        let recent_outcomes = input.recent_outcomes.clone();
+        for outcome in &recent_outcomes {
+            refs.extend(outcome.source_refs.iter().cloned());
+        }
         refs.sort_by_key(context_ref_sort_key);
         refs.dedup();
 
@@ -1042,7 +1050,7 @@ impl LoopContext {
             pending_synthesis: input.pending_synthesis,
             blockers,
             memory,
-            recent_outcomes: Vec::new(),
+            recent_outcomes,
             context_refs: refs,
         }
     }
@@ -2178,37 +2186,8 @@ pub fn chain_report_from_facts(
 }
 
 pub fn chain_facts_from_router(input: &LoopRouterInput, report: &LoopNextReport) -> LoopChainFacts {
-    let selected_task = input
-        .current_task
-        .as_ref()
-        .or_else(|| input.tasks.iter().find(|task| task.state == "in_progress"))
-        .or_else(|| {
-            input
-                .tasks
-                .iter()
-                .find(|task| task.state == "needs_verification")
-        })
-        .or_else(|| {
-            input
-                .tasks
-                .iter()
-                .find(|task| task.state == "ready" && task.ready_startable)
-        });
-    let selected_feature = selected_task
-        .and_then(|task| {
-            task.feature_id.as_deref().and_then(|feature_id| {
-                input
-                    .features
-                    .iter()
-                    .find(|feature| feature.id == feature_id)
-            })
-        })
-        .or_else(|| {
-            input
-                .features
-                .iter()
-                .find(|feature| feature.status == "in_progress" || feature.status == "proposed")
-        });
+    let selected_task = selected_chain_task(input);
+    let selected_feature = selected_chain_feature(input);
     let selected_unit = selected_task
         .map(|task| LoopChainSelectedUnit {
             kind: "task".to_string(),
@@ -2230,11 +2209,17 @@ pub fn chain_facts_from_router(input: &LoopRouterInput, report: &LoopNextReport)
         })
         .unwrap_or_default();
     let handoff_fresh = selected_feature
-        .map(|feature| feature.open_questions == 0 && feature.status != "proposed")
-        .unwrap_or(true);
+        .and_then(|feature| feature.handoff_fresh)
+        .unwrap_or(false);
     let feature_reconcile_current = selected_feature
-        .map(|feature| feature.open_questions == 0 && feature.status != "proposed")
-        .unwrap_or(true);
+        .and_then(|feature| feature.reconcile_current)
+        .unwrap_or(false);
+    let mut source_refs = report.context_refs.clone();
+    for outcome in &input.recent_outcomes {
+        source_refs.extend(outcome.source_refs.iter().cloned());
+    }
+    source_refs.sort_by_key(context_ref_sort_key);
+    source_refs.dedup();
     LoopChainFacts {
         selected_unit,
         current_recipe: report
@@ -2254,9 +2239,54 @@ pub fn chain_facts_from_router(input: &LoopRouterInput, report: &LoopNextReport)
             .iter()
             .filter(|task| task.state == "ready" && task.ready_startable)
             .count(),
-        source_refs: report.context_refs.clone(),
+        latest_transition_receipts: input.recent_outcomes.clone(),
+        source_refs,
         ..LoopChainFacts::default()
     }
+}
+
+pub fn selected_chain_feature_id<'a>(
+    input: &'a LoopRouterInput,
+    _report: &LoopNextReport,
+) -> Option<&'a str> {
+    selected_chain_feature(input).map(|feature| feature.id.as_str())
+}
+
+fn selected_chain_task(input: &LoopRouterInput) -> Option<&LoopTaskInput> {
+    input
+        .current_task
+        .as_ref()
+        .or_else(|| input.tasks.iter().find(|task| task.state == "in_progress"))
+        .or_else(|| {
+            input
+                .tasks
+                .iter()
+                .find(|task| task.state == "needs_verification")
+        })
+        .or_else(|| {
+            input
+                .tasks
+                .iter()
+                .find(|task| task.state == "ready" && task.ready_startable)
+        })
+}
+
+fn selected_chain_feature(input: &LoopRouterInput) -> Option<&LoopFeatureInput> {
+    selected_chain_task(input)
+        .and_then(|task| {
+            task.feature_id.as_deref().and_then(|feature_id| {
+                input
+                    .features
+                    .iter()
+                    .find(|feature| feature.id == feature_id)
+            })
+        })
+        .or_else(|| {
+            input
+                .features
+                .iter()
+                .find(|feature| feature.status == "in_progress" || feature.status == "proposed")
+        })
 }
 
 pub fn validate_trigger_key(trigger: &str) -> Result<()> {
@@ -2284,6 +2314,27 @@ pub fn validate_recipe_phase_endpoint(endpoint: &str, allowed: &BTreeSet<String>
     ensure!(
         REQUIRED_PHASES.contains(&phase),
         "transition.to references unknown phase {phase}"
+    );
+    Ok(())
+}
+
+pub fn validate_transition_receipt_edge(
+    contract: &RecipeContract,
+    phase: &str,
+    transition_to: &str,
+    trigger: &str,
+    return_condition: &[String],
+) -> Result<()> {
+    let from = format!("{}.{}", contract.id, phase);
+    let matches = contract.transitions.iter().any(|edge| {
+        edge.from == from
+            && edge.to == transition_to
+            && edge.trigger == trigger
+            && edge.return_condition == return_condition
+    });
+    ensure!(
+        matches,
+        "transition receipt does not match a registered edge from {from} to {transition_to}"
     );
     Ok(())
 }
@@ -2434,7 +2485,7 @@ fn chain_next_verbs(transition: &LoopChainTransitionMatch, facts: &LoopChainFact
             .unwrap_or_else(|| "<feature-id>".to_string());
         return vec![
             format!("maestro decision new \"<title>\" --feature {feature_id}"),
-            format!("maestro feature reconcile {feature_id} --current"),
+            format!("maestro feature reconcile {feature_id}"),
             format!("maestro feature finalize {feature_id}"),
         ];
     }
@@ -2463,7 +2514,8 @@ fn edge_report(kind: &'static str, edge: &RecipeEdge) -> LoopNextEdge {
         allowed_verbs: edge.allowed_verbs.clone(),
         forbidden_verbs: edge.forbidden_verbs.clone(),
         hard_stops: edge.hard_stops.clone(),
-        return_condition: edge.return_condition.clone(),
+        return_condition: edge.return_condition.join(", "),
+        return_conditions: edge.return_condition.clone(),
     }
 }
 
@@ -4186,6 +4238,8 @@ mod tests {
             total_tasks,
             verified_tasks,
             open_questions,
+            handoff_fresh: Some(open_questions == 0 && status != "proposed"),
+            reconcile_current: Some(open_questions == 0 && status != "proposed"),
         }
     }
 }

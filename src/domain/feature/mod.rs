@@ -20,7 +20,7 @@ pub use reconcile::{
     ReconcileAction, ReconcileActor, ReconcileContract, ReconcileIssue, ReconcileIssueRef,
     ReconcileQuestions, ReconcileReceipt, ReconcileReport, ReconcileStatus, ReconcileSurfaceError,
     ReconcileTasks, ReconcileTextItem, apply_reconcile_plan, reconcile_clean_check,
-    reconcile_report,
+    reconcile_plan_template, reconcile_report,
 };
 pub use registry::{
     AcceptanceTextEdit, AmendReport, CancelReport, ContractAdditions, ContractChangeCounts,

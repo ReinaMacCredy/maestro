@@ -21,8 +21,8 @@ use crate::foundation::core::session::agent_runtime_from_env;
 use crate::foundation::core::table;
 use crate::foundation::core::time::{render_timestamp, timestamp_nanos, utc_now_timestamp};
 use crate::interfaces::cli::{
-    FeatureArgs, FeatureCommand, FeatureProofCommand, feature_next_command, feature_next_label,
-    handoff_repair_command, recovery_label, shell_word,
+    FeatureArgs, FeatureCommand, FeatureNextLabelCache, FeatureProofCommand, feature_next_command,
+    recovery_label, shell_word,
 };
 use crate::operations::{feature_close, feature_prepare, harness};
 
@@ -89,7 +89,15 @@ pub fn run(args: FeatureArgs) -> Result<()> {
             full,
             json,
             apply_plan,
-        } => reconcile_feature(&paths, &id, full, json, apply_plan.as_deref()),
+            write_plan,
+        } => reconcile_feature(
+            &paths,
+            &id,
+            full,
+            json,
+            apply_plan.as_deref(),
+            write_plan.as_deref(),
+        ),
         FeatureCommand::Accept {
             id,
             qa,
@@ -335,7 +343,10 @@ fn reopen_feature(paths: &MaestroPaths, id: &str) -> Result<()> {
     println!("reopened {}", report.id);
     println!("workbench: {}", report.path.display());
     println!("files: {}", report.files);
-    println!("next: maestro feature finalize {}", report.id);
+    let next = feature::show(paths, &report.id)
+        .map(|view| feature_next_command(paths, &view))
+        .unwrap_or_else(|_| format!("maestro feature finalize {}", report.id));
+    println!("next: {next}");
     Ok(())
 }
 
@@ -345,6 +356,7 @@ fn reconcile_feature(
     full: bool,
     json: bool,
     apply_plan: Option<&Path>,
+    write_plan: Option<&Path>,
 ) -> Result<()> {
     if full && json {
         bail!("use either --full or --json, not both");
@@ -360,6 +372,18 @@ fn reconcile_feature(
             ),
         )?;
         return print_reconcile_compact(&report);
+    }
+    if let Some(plan) = write_plan {
+        let contents = feature::reconcile_plan_template(paths, id)?;
+        write_string_atomic(plan, &contents)?;
+        println!("wrote reconcile plan: {}", plan.display());
+        println!("edit required fields, then:");
+        println!(
+            "  maestro feature reconcile {} --apply-plan {}",
+            shell_word(id),
+            shell_word(&plan.display().to_string())
+        );
+        return Ok(());
     }
 
     let report = if full || json {
@@ -597,7 +621,12 @@ fn inline_prepare_plan(
         if task.is_empty() {
             bail!("--task must not be empty");
         }
-        plan.push_str("## Task ");
+        plan.push_str("## Task");
+        if inline_task_starts_with_local_ref(task) {
+            plan.push(' ');
+        } else {
+            plan.push_str(": ");
+        }
         plan.push_str(task);
         plan.push('\n');
         if !covers.is_empty() {
@@ -623,6 +652,18 @@ fn inline_prepare_plan(
         plan.push('\n');
     }
     Ok(plan)
+}
+
+fn inline_task_starts_with_local_ref(task: &str) -> bool {
+    let Some((candidate, _)) = task.split_once(':').or_else(|| task.split_once(" - ")) else {
+        return false;
+    };
+    let candidate = candidate.trim();
+    !candidate.is_empty()
+        && candidate.chars().any(|ch| ch.is_ascii_digit())
+        && candidate
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_')
 }
 
 fn print_prepare_report(report: &feature_prepare::PrepareReport) {
@@ -1802,7 +1843,7 @@ fn set_feature(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> Result<(
     let report = feature::set_with_report(paths, id, edits)?;
     super::emit_work_touch(paths, id);
     print_set_report(id, &report);
-    println!("next: maestro feature finalize {id}");
+    println!("next: {}", feature_next_command(paths, &report.view));
     if !report.view.open_questions.is_empty() {
         println!(
             "fork hint: open real forks with `maestro decision new \"<title>\" --feature {id} --context \"<why>\"`; keep --question for loose questions"
@@ -2693,6 +2734,7 @@ fn list_features(paths: &MaestroPaths, all: bool) -> Result<()> {
     if shown.is_empty() && unreadable.is_empty() && (!all || stale.is_empty()) {
         println!("no features found");
     } else {
+        let mut next_labels = FeatureNextLabelCache::default();
         let mut rows: Vec<Vec<String>> = shown
             .iter()
             .map(|view| {
@@ -2703,7 +2745,7 @@ fn list_features(paths: &MaestroPaths, all: bool) -> Result<()> {
                 vec![
                     view.id.clone(),
                     feature::status_label(&view.status).to_string(),
-                    feature_next_label(paths, view),
+                    next_labels.label(paths, view),
                     view.counts.total.to_string(),
                     view.counts.verified.to_string(),
                     title,
@@ -2732,7 +2774,7 @@ fn list_features(paths: &MaestroPaths, all: bool) -> Result<()> {
 
     if all {
         let stale_refs: Vec<&feature::FeatureView> = stale.iter().collect();
-        print!("{}", stale_reveal_block(paths, &stale_refs, now_nanos));
+        print!("{}", stale_reveal_block(&stale_refs, now_nanos));
     } else {
         if terminal_hidden > 0 {
             println!("# {terminal_hidden} terminal feature(s) hidden; use --all to include");
@@ -2752,11 +2794,7 @@ fn list_features(paths: &MaestroPaths, all: bool) -> Result<()> {
 /// The `feature list --all` reveal for stale proposed features: each one with
 /// its age marker and the existing build / retire verbs surfaced as guidance
 /// text (no new command). Returns the empty string when nothing is stale.
-fn stale_reveal_block(
-    paths: &MaestroPaths,
-    stale: &[&feature::FeatureView],
-    now_nanos: i128,
-) -> String {
+fn stale_reveal_block(stale: &[&feature::FeatureView], now_nanos: i128) -> String {
     if stale.is_empty() {
         return String::new();
     }
@@ -2765,7 +2803,7 @@ fn stale_reveal_block(
         let age = feature::age_days(&view.updated_at, now_nanos).unwrap_or(0);
         out.push_str(&format!("  {}\n", view.id));
         out.push_str(&format!("    proposed [stale {age}d]\n"));
-        out.push_str(&format!("    build:  {}\n", stale_build_hint(paths, view)));
+        out.push_str(&format!("    build:  {}\n", stale_build_hint(view)));
         out.push_str(&format!(
             "    retire: maestro feature cancel {0} --reason \"...\"  then  maestro feature archive {0}\n",
             view.id
@@ -2777,11 +2815,11 @@ fn stale_reveal_block(
 }
 
 /// The happy-path build command for a stale proposed feature: keep authoring
-/// the contract while it is incomplete, otherwise finalize it. Mirrors the
+/// the contract while it is incomplete, otherwise reconcile it. Mirrors the
 /// proposed branch of `feature_next_label`, rendered as a runnable command.
-fn stale_build_hint(paths: &MaestroPaths, view: &feature::FeatureView) -> String {
+fn stale_build_hint(view: &feature::FeatureView) -> String {
     if !view.acceptance.is_empty() && !view.affected_areas.is_empty() {
-        handoff_repair_command(paths, view)
+        format!("maestro feature reconcile {}", view.id)
     } else {
         format!("maestro feature set {}", view.id)
     }
@@ -2862,25 +2900,18 @@ mod tests {
         timestamp_nanos("2026-06-21T00:00:00.000Z").expect("fixed now parses")
     }
 
-    fn non_db_paths() -> MaestroPaths {
-        MaestroPaths::new(
-            std::env::temp_dir().join(format!("maestro-cli-feature-tests-{}", std::process::id())),
-        )
-    }
-
     #[test]
     fn reveal_block_shows_age_marker_build_and_retire_for_each_stale() {
-        let paths = non_db_paths();
         let v1 = proposed_view("incomplete-feat", "2026-06-01T00:00:00.000Z", false); // 20d
         let v2 = proposed_view("ready-feat", "2026-05-22T00:00:00.000Z", true); // 30d
-        let block = stale_reveal_block(&paths, &[&v1, &v2], now());
+        let block = stale_reveal_block(&[&v1, &v2], now());
         assert!(block.contains("STALE PROPOSED (review or retire):"));
         assert!(block.contains("incomplete-feat"));
         assert!(block.contains("proposed [stale 20d]"));
         assert!(block.contains("build:  maestro feature set incomplete-feat"));
         assert!(block.contains("ready-feat"));
         assert!(block.contains("proposed [stale 30d]"));
-        assert!(block.contains("build:  maestro feature finalize ready-feat"));
+        assert!(block.contains("build:  maestro feature reconcile ready-feat"));
         assert!(block.contains(
             "retire: maestro feature cancel incomplete-feat --reason \"...\"  then  maestro feature archive incomplete-feat"
         ));
@@ -2890,7 +2921,7 @@ mod tests {
 
     #[test]
     fn reveal_block_is_empty_without_stale() {
-        assert!(stale_reveal_block(&non_db_paths(), &[], now()).is_empty());
+        assert!(stale_reveal_block(&[], now()).is_empty());
     }
 
     #[test]
@@ -2901,9 +2932,8 @@ mod tests {
             .map(|i| proposed_view(&format!("f{i}"), "2026-06-01T00:00:00.000Z", false))
             .collect();
         let many_refs: Vec<&feature::FeatureView> = many.iter().collect();
-        let paths = non_db_paths();
-        let block_one = stale_reveal_block(&paths, &[&many[0]], now());
-        let block_many = stale_reveal_block(&paths, &many_refs, now());
+        let block_one = stale_reveal_block(&[&many[0]], now());
+        let block_many = stale_reveal_block(&many_refs, now());
         assert_eq!(block_one.matches(feature::RETIRE_REMINDER).count(), 1);
         assert_eq!(block_many.matches(feature::RETIRE_REMINDER).count(), 1);
         assert!(block_one.trim_end().ends_with(feature::RETIRE_REMINDER));
@@ -2911,17 +2941,10 @@ mod tests {
     }
 
     #[test]
-    fn build_hint_is_set_until_contract_complete_then_finalize() {
-        let paths = non_db_paths();
+    fn build_hint_is_set_until_contract_complete_then_reconcile() {
         let incomplete = proposed_view("f", "2026-06-01T00:00:00.000Z", false);
         let complete = proposed_view("f", "2026-06-01T00:00:00.000Z", true);
-        assert_eq!(
-            stale_build_hint(&paths, &incomplete),
-            "maestro feature set f"
-        );
-        assert_eq!(
-            stale_build_hint(&paths, &complete),
-            "maestro feature finalize f"
-        );
+        assert_eq!(stale_build_hint(&incomplete), "maestro feature set f");
+        assert_eq!(stale_build_hint(&complete), "maestro feature reconcile f");
     }
 }

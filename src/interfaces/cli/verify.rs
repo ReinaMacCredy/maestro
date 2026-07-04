@@ -101,13 +101,13 @@ pub(super) fn render_verified_handoff(paths: &MaestroPaths, task_id: &str) -> Re
                     view.counts.verified, view.counts.total
                 );
                 print_feature_close_handoff(paths, feature_id)?;
-            } else if next_ready_task_for_feature(paths, feature_id)?.is_some() {
+            } else if let Some(next_task_id) = next_ready_task_for_feature(paths, feature_id)? {
                 println!("feature progress:");
                 println!(
                     "  {feature_id} tasks: {}/{} verified",
                     view.counts.verified, view.counts.total
                 );
-                println!("next: maestro task claim --next");
+                println!("next: maestro task start {next_task_id}");
             } else {
                 println!("feature progress:");
                 println!(

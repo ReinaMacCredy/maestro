@@ -11,6 +11,7 @@ use crate::domain::card::locator::{ArtifactLocator, SurfaceLocator};
 use crate::domain::card::{live_db, store as card_store};
 use crate::domain::decisions;
 use crate::domain::feature::registry;
+use crate::domain::feature::schema::FeatureRecord;
 use crate::domain::feature::verification::acceptance_id;
 use crate::domain::proof;
 use crate::domain::task::{self, BlockerTarget, TaskRecord, TaskState, TransitionDetails};
@@ -242,8 +243,10 @@ struct PlanQuestions {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct QuestionRemoval {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     reference: Option<String>,
     #[serde(rename = "ref")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     ref_: Option<String>,
     reason: String,
 }
@@ -274,6 +277,12 @@ struct ValidatedPlan {
     changed_fields: Vec<String>,
 }
 
+#[derive(Clone, Debug)]
+struct TaskRollbackSnapshot {
+    record: TaskRecord,
+    snapshot: task::template::TaskSnapshot,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 struct StoredReconcileReceipt {
     mode: String,
@@ -287,6 +296,59 @@ struct StoredReconcileReceipt {
 
 pub fn reconcile_report(paths: &MaestroPaths, id: &str) -> Result<ReconcileReport> {
     build_reconcile_report(paths, id, None)
+}
+
+pub fn reconcile_plan_template(paths: &MaestroPaths, id: &str) -> Result<String> {
+    let report = reconcile_report(paths, id)?;
+    let plan = ReconcilePlan {
+        vision: report
+            .contract
+            .vision
+            .clone()
+            .unwrap_or_else(|| report.feature.title.clone()),
+        description: report
+            .contract
+            .description
+            .clone()
+            .unwrap_or_else(|| report.feature.title.clone()),
+        acceptance: report
+            .contract
+            .acceptance
+            .iter()
+            .map(|item| item.text.clone())
+            .collect(),
+        non_goals: report
+            .contract
+            .non_goals
+            .iter()
+            .map(|item| item.text.clone())
+            .collect(),
+        affected_areas: report
+            .contract
+            .affected_areas
+            .iter()
+            .map(|item| item.text.clone())
+            .collect(),
+        questions: PlanQuestions {
+            remove: report
+                .questions
+                .open
+                .iter()
+                .map(|question| QuestionRemoval {
+                    reference: None,
+                    ref_: Some(question.id.clone()),
+                    reason: String::new(),
+                })
+                .collect(),
+        },
+        tasks: PlanTasks {
+            order: report.tasks.order.clone(),
+            add: Vec::new(),
+            remove: Vec::new(),
+        },
+        rationale: String::new(),
+    };
+    serde_yaml::to_string(&plan).context("failed to serialize reconcile plan template")
 }
 
 pub fn reconcile_clean_check(
@@ -340,8 +402,11 @@ pub fn apply_reconcile_plan(
         },
     );
     let validated = validate_plan(&record.open_questions, &tasks, &plan)?;
+    let original_record = record.clone();
+    let existing_task_snapshots = snapshot_existing_reconcile_tasks(paths, &validated, &plan)?;
 
     let mut created = Vec::new();
+    let mut feature_record_saved = false;
     let result = (|| -> Result<ReconcileReport> {
         let mut task_id_by_ref = validated.task_id_by_ref.clone();
         for item in &plan.tasks.add {
@@ -408,6 +473,7 @@ pub fn apply_reconcile_plan(
             .collect();
         record.updated_at = utc_now_timestamp();
         registry::save_record(&record, &write)?;
+        feature_record_saved = true;
 
         let receipt = store_current_receipt(
             paths,
@@ -425,7 +491,13 @@ pub fn apply_reconcile_plan(
     })();
 
     if result.is_err() {
-        rollback_created_tasks(paths, &created)?;
+        rollback_reconcile_apply(
+            paths,
+            id,
+            &created,
+            &existing_task_snapshots,
+            feature_record_saved.then_some(&original_record),
+        )?;
     }
     result
 }
@@ -768,14 +840,6 @@ fn apply_task_dependencies(
 fn apply_task_removals(paths: &MaestroPaths, remove: &[String], actor: Option<&str>) -> Result<()> {
     let actor = actor.unwrap_or("maestro");
     for id in remove {
-        let task = task::load_task_record(&paths.tasks_dir(), id)?;
-        if safely_deletable(&task) {
-            if let Some(resolved) = card_store::resolve(paths, id)? {
-                card_store::remove_resolved(&resolved)
-                    .with_context(|| format!("failed to remove task card {id}"))?;
-            }
-            continue;
-        }
         let now = utc_now_timestamp();
         task::transition_task(
             &paths.tasks_dir(),
@@ -790,18 +854,6 @@ fn apply_task_removals(paths: &MaestroPaths, remove: &[String], actor: Option<&s
         )?;
     }
     Ok(())
-}
-
-fn safely_deletable(task: &TaskRecord) -> bool {
-    matches!(
-        task.state,
-        TaskState::Draft | TaskState::Exploring | TaskState::Ready
-    ) && task.claimed_by.is_none()
-        && task.blockers.is_empty()
-        && task.state_history.is_empty()
-        && task.verification.status.is_none()
-        && task.verification.claim_checks.is_empty()
-        && task.verification.proof_sources.is_empty()
 }
 
 fn task_items(paths: &MaestroPaths, feature_id: &str) -> Result<ReconcileTasks> {
@@ -968,7 +1020,6 @@ fn current_fingerprints(
     let qa = registry::read_sidecar_text(paths, feature_id, "qa.md")?;
     let handoff = registry::read_sidecar_text(paths, feature_id, "handoff.md")?;
     let design = registry::read_design_text(paths, feature_id)?;
-    let notes = registry::read_sidecar_text(paths, feature_id, "notes.md")?;
     let worktree = registry::read_sidecar_text(paths, feature_id, "worktree.yml")?;
     let mut fingerprints = BTreeMap::new();
     fingerprints.insert(
@@ -1008,7 +1059,6 @@ fn current_fingerprints(
         digest_json(&json!({
             "handoff": handoff,
             "design": design,
-            "notes": notes,
             "worktree": worktree,
         }))?,
     );
@@ -1132,8 +1182,12 @@ fn reconcile_next(id: &str, status: &ReconcileStatus) -> Vec<ReconcileAction> {
             ReconcileAction::manual(
                 "Human or authorized agent chooses the intended contract and task order.",
             ),
+            ReconcileAction::command(
+                "Write a valid editable reconcile plan template.",
+                format!("maestro feature reconcile {id} --write-plan reconcile.yml"),
+            ),
             ReconcileAction::plan_change(
-                "Write the reviewed full-contract reconcile.yml.",
+                "Edit the generated full-contract reconcile.yml.",
                 json!({"target": "reconcile.yml"}),
             ),
             ReconcileAction::command(
@@ -1219,6 +1273,48 @@ fn rollback_created_tasks(paths: &MaestroPaths, created: &[TaskRecord]) -> Resul
             card_store::remove_resolved(&resolved)
                 .with_context(|| format!("failed to remove task card {}", task.id))?;
         }
+    }
+    Ok(())
+}
+
+fn snapshot_existing_reconcile_tasks(
+    paths: &MaestroPaths,
+    validated: &ValidatedPlan,
+    plan: &ReconcilePlan,
+) -> Result<Vec<TaskRollbackSnapshot>> {
+    let mut ids = validated
+        .task_id_by_ref
+        .values()
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    ids.extend(plan.tasks.remove.iter().cloned());
+    ids.into_iter()
+        .map(|id| {
+            let (record, snapshot, _) =
+                task::lookup::load_task_with_snapshot(&paths.tasks_dir(), &id).with_context(
+                    || format!("failed to snapshot task {id} before reconcile apply"),
+                )?;
+            Ok(TaskRollbackSnapshot { record, snapshot })
+        })
+        .collect()
+}
+
+fn rollback_reconcile_apply(
+    paths: &MaestroPaths,
+    feature_id: &str,
+    created: &[TaskRecord],
+    existing_tasks: &[TaskRollbackSnapshot],
+    original_record: Option<&FeatureRecord>,
+) -> Result<()> {
+    for task in existing_tasks.iter().rev() {
+        task::template::save_task_with_snapshot(&task.record, &task.snapshot)
+            .with_context(|| format!("failed to restore task {}", task.record.id))?;
+    }
+    rollback_created_tasks(paths, created)?;
+    if let Some(original) = original_record {
+        let (_, write) = registry::load_record_for_update(paths, feature_id)?;
+        registry::save_record(original, &write)
+            .with_context(|| format!("failed to restore feature {feature_id}"))?;
     }
     Ok(())
 }

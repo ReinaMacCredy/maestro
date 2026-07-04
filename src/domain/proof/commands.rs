@@ -27,7 +27,7 @@ pub struct StackVerifyOutcome {
     pub commands: Vec<VerificationCommand>,
     /// Detected stack kind, for messaging.
     pub stack_kind: String,
-    /// Full captured stdout/stderr for the stack verify run, when commands ran.
+    /// Bounded metadata log for the stack verify run, when commands ran.
     pub log_path: Option<PathBuf>,
 }
 
@@ -102,27 +102,17 @@ fn run_commands(
     let mut log = String::new();
     for command in commands {
         let started = Instant::now();
-        log.push_str(&format!("$ {command}\n"));
-        let output = shell_command(&command)
+        if log_path.is_some() {
+            log.push_str(&format!("$ {}\n", log_command(&command)));
+            log.push_str("[output] inherited by the invoking terminal; raw stdout/stderr are not persisted\n");
+        }
+        let status = shell_command(&command)
             .current_dir(paths.repo_root())
-            .output()
+            .status()
             .with_context(|| format!("failed to run verify command `{command}`"))?;
-        if !output.stdout.is_empty() {
-            log.push_str("[stdout]\n");
-            log.push_str(&String::from_utf8_lossy(&output.stdout));
-            if !log.ends_with('\n') {
-                log.push('\n');
-            }
+        if log_path.is_some() {
+            log.push_str(&format!("[exit] {}\n\n", status.code().unwrap_or(1)));
         }
-        if !output.stderr.is_empty() {
-            log.push_str("[stderr]\n");
-            log.push_str(&String::from_utf8_lossy(&output.stderr));
-            if !log.ends_with('\n') {
-                log.push('\n');
-            }
-        }
-        let status = output.status;
-        log.push_str(&format!("[exit] {}\n\n", status.code().unwrap_or(1)));
         results.push(VerificationCommand {
             cmd: command,
             exit_code: status.code().unwrap_or(1),
@@ -133,6 +123,25 @@ fn run_commands(
         write_string_atomic(path, &log)?;
     }
     Ok(results)
+}
+
+fn log_command(command: &str) -> String {
+    let lower = command.to_ascii_lowercase();
+    let sensitive = ["token", "secret", "password", "api_key", "apikey", "bearer"]
+        .iter()
+        .any(|marker| lower.contains(marker));
+    if sensitive {
+        return "[redacted command containing sensitive marker]".to_string();
+    }
+    const MAX_COMMAND_LOG_CHARS: usize = 4096;
+    let mut value = command
+        .chars()
+        .take(MAX_COMMAND_LOG_CHARS)
+        .collect::<String>();
+    if command.chars().count() > MAX_COMMAND_LOG_CHARS {
+        value.push_str("...[truncated]");
+    }
+    value
 }
 
 fn stack_verify_log_path(paths: &MaestroPaths) -> PathBuf {

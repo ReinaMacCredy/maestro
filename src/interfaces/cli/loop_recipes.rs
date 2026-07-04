@@ -237,6 +237,8 @@ struct LoopTraceReport {
 #[derive(Clone, Debug, Serialize)]
 struct LoopTraceEvent {
     receipt: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    ts: String,
     recipe: String,
     phase: String,
     selected_unit: String,
@@ -272,6 +274,11 @@ fn build_loop_trace_report(paths: &MaestroPaths, card: &str, all: bool) -> Resul
         }
         Ok(())
     })?;
+    events.sort_by(|left, right| {
+        left.ts
+            .cmp(&right.ts)
+            .then(left.receipt.cmp(&right.receipt))
+    });
     let total_events = events.len();
     let hidden = if all || events.len() <= LOOP_TRACE_RECENT_LIMIT {
         0
@@ -297,6 +304,7 @@ fn loop_trace_event(card: &str, session_id: &str, value: &Value) -> Option<LoopT
     }
     Some(LoopTraceEvent {
         receipt: format!("run:{session_id}"),
+        ts: json_string(value, "ts"),
         recipe: json_string(value, "recipe"),
         phase: json_string(value, "phase"),
         selected_unit: json_string(value, "selected_unit"),
@@ -451,6 +459,9 @@ fn run_outcome(args: LoopOutcomeArgs) -> Result<()> {
         || trigger.is_some()
         || !return_condition.is_empty()
         || !evidence_refs.is_empty();
+    let recipe = required_arg(args.recipe, "--recipe")?;
+    let phase = required_arg(args.phase, "--phase")?;
+    let selected_unit = required_arg(args.selected_unit, "--selected-unit")?;
     if has_transition_receipt {
         let allowed = loop_outcome_allowed_recipe_names(&paths)?;
         let transition_to = transition_to.as_deref().ok_or_else(|| {
@@ -476,10 +487,15 @@ fn run_outcome(args: LoopOutcomeArgs) -> Result<()> {
             !evidence_refs.is_empty(),
             "--evidence-ref is required for transition receipts"
         );
+        let contract = loop_chain_contract(&recipe, custom_recipe_dir().as_deref())?;
+        loop_recipes::validate_transition_receipt_edge(
+            &contract,
+            &phase,
+            transition_to,
+            trigger,
+            &return_condition,
+        )?;
     }
-    let recipe = required_arg(args.recipe, "--recipe")?;
-    let phase = required_arg(args.phase, "--phase")?;
-    let selected_unit = required_arg(args.selected_unit, "--selected-unit")?;
     let failure_class = optional_arg(args.failure_class, "--failure-class")?
         .map(|value| value.to_ascii_lowercase())
         .unwrap_or_default();
@@ -729,6 +745,8 @@ fn build_loop_next_state_from_snapshot(
             total_tasks: view.counts.total,
             verified_tasks: view.counts.verified,
             open_questions: view.open_questions.len(),
+            handoff_fresh: None,
+            reconcile_current: None,
         })
         .collect::<Vec<_>>();
     let pending_synthesis = pending_synthesis_count(paths, features.as_slice(), &mut warnings);
@@ -763,6 +781,7 @@ fn build_loop_next_state_from_snapshot(
         tasks,
         features,
         memory_hits: Vec::new(),
+        recent_outcomes: Vec::new(),
         active_conflicts,
         active_sessions,
         pending_synthesis,
@@ -793,12 +812,99 @@ fn build_loop_chain_report(
     custom_dir: Option<&std::path::Path>,
 ) -> Result<loop_recipes::LoopChainReport> {
     let state = build_loop_next_state()?;
-    let facts = loop_recipes::chain_facts_from_router(&state.input, &state.report);
+    let mut input = state.input;
+    populate_chain_feature_freshness(
+        &MaestroPaths::new(PathBuf::from(&input.repo)),
+        &mut input,
+        &state.report,
+    );
+    input.recent_outcomes =
+        recent_transition_outcomes(&MaestroPaths::new(PathBuf::from(&input.repo)))?;
+    let facts = loop_recipes::chain_facts_from_router(&input, &state.report);
     let contract = match state.report.recommended_recipe.as_deref() {
         Some(recipe) => Some(loop_chain_contract(recipe, custom_dir)?),
         None => None,
     };
     loop_recipes::chain_report_from_facts(facts, contract.as_ref())
+}
+
+fn populate_chain_feature_freshness(
+    paths: &MaestroPaths,
+    input: &mut loop_recipes::LoopRouterInput,
+    report: &loop_recipes::LoopNextReport,
+) {
+    let Some(feature_id) =
+        loop_recipes::selected_chain_feature_id(input, report).map(str::to_string)
+    else {
+        return;
+    };
+    let Some(feature) = input
+        .features
+        .iter_mut()
+        .find(|feature| feature.id == feature_id)
+    else {
+        return;
+    };
+    feature.handoff_fresh = Some(matches!(feature::handoff_gap(paths, &feature.id), Ok(None)));
+    feature.reconcile_current = Some(chain_reconcile_receipt_is_current(paths, &feature.id));
+}
+
+fn chain_reconcile_receipt_is_current(paths: &MaestroPaths, id: &str) -> bool {
+    match feature::reconcile_report(paths, id) {
+        Ok(report) if report.receipt.state == "current" => true,
+        Ok(report)
+            if report.receipt.stale.len() == 1
+                && report
+                    .receipt
+                    .stale
+                    .first()
+                    .is_some_and(|item| item == "handoff")
+                && matches!(feature::handoff_gap(paths, id), Ok(None)) =>
+        {
+            true
+        }
+        Err(_)
+            if matches!(feature::finalize_requires_reopen(paths, id), Ok(true))
+                && matches!(feature::handoff_gap(paths, id), Ok(None)) =>
+        {
+            true
+        }
+        _ => false,
+    }
+}
+
+fn recent_transition_outcomes(
+    paths: &MaestroPaths,
+) -> Result<Vec<loop_recipes::LoopRecentOutcome>> {
+    let mut outcomes = Vec::new();
+    run::visit_managed_events(paths, |record| {
+        let event = record.event();
+        if event.event_type() != Some("loop_outcome") {
+            return Ok(());
+        }
+        let value: Value = serde_json::from_str(record.raw_line())?;
+        if optional_json_string(&value, "transition_to").is_none() {
+            return Ok(());
+        }
+        outcomes.push((
+            json_string(&value, "ts"),
+            loop_recipes::LoopRecentOutcome {
+                id: format!("run:{}", record.session_id()),
+                recipe: json_string(&value, "recipe"),
+                phase: json_string(&value, "phase"),
+                result: json_string(&value, "transition_to"),
+                source_refs: loop_outcome_source_refs(record.session_id(), &value),
+            },
+        ));
+        Ok(())
+    })?;
+    outcomes.sort_by(|left, right| left.0.cmp(&right.0).then(left.1.id.cmp(&right.1.id)));
+    let hidden = outcomes.len().saturating_sub(LOOP_TRACE_RECENT_LIMIT);
+    Ok(outcomes
+        .into_iter()
+        .skip(hidden)
+        .map(|(_, outcome)| outcome)
+        .collect())
 }
 
 fn loop_chain_contract(

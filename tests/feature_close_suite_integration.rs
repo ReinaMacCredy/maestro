@@ -197,8 +197,12 @@ fn feature_close_blocks_when_the_full_suite_fails() {
     let log = fs::read_to_string(close_suite_log_path(&stderr))
         .expect("invariant: close-suite log should be readable");
     assert!(
-        log.contains("NOISY_SUITE"),
-        "full command output belongs in the close-suite log:\n{log}"
+        !log.contains("NOISY_SUITE"),
+        "full command output must not be persisted in the close-suite log:\n{log}"
+    );
+    assert!(
+        log.contains("raw stdout/stderr are not persisted"),
+        "close-suite log should explain the bounded output policy:\n{log}"
     );
 
     // The feature did NOT transition; it stays in_progress.
