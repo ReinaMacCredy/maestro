@@ -609,6 +609,9 @@ pub struct SyncArgs {
     /// Resync the user-level Maestro global skill cache and supported agent skill links.
     #[arg(long = "global-skills")]
     pub global_skills: bool,
+    /// Back up unmanaged global skill cache edits, then replace them with this binary's shipped skills.
+    #[arg(long = "adopt-unmanaged", requires = "global_skills")]
+    pub adopt_unmanaged: bool,
 }
 
 #[derive(Debug, Args)]

@@ -86,6 +86,26 @@ fn assert_symlink_target(path: &Path, target: &Path) {
     );
 }
 
+fn find_file_named(root: &Path, name: &str) -> std::path::PathBuf {
+    find_file_named_optional(root, name)
+        .unwrap_or_else(|| panic!("no {name} under {}", root.display()))
+}
+
+fn find_file_named_optional(root: &Path, name: &str) -> Option<std::path::PathBuf> {
+    for entry in fs::read_dir(root).expect("invariant: search root should be readable") {
+        let entry = entry.expect("invariant: directory entry should be readable");
+        let path = entry.path();
+        if path.is_dir() {
+            if let Some(found) = find_file_named_optional(&path, name) {
+                return Some(found);
+            }
+        } else if path.file_name().and_then(|file| file.to_str()) == Some(name) {
+            return Some(path);
+        }
+    }
+    None
+}
+
 #[test]
 fn install_syncs_global_cache_lock_and_supported_agent_links() {
     let temp = TestTempDir::new("maestro-global-skills-test");
@@ -244,6 +264,77 @@ fn sync_global_skills_refreshes_the_global_cache() {
         fs::read_to_string(home.join(".maestro/skills/maestro-card/SKILL.md"))
             .expect("invariant: global task skill should be readable"),
         bundled_task_skill_md()
+    );
+}
+
+#[test]
+fn sync_global_skills_adopts_unmanaged_cache_edits_with_backup_when_explicit() {
+    let temp = TestTempDir::new("maestro-global-skills-adopt-unmanaged");
+    let repo = temp.path().join("repo");
+    let home = temp.path().join("home");
+    fs::create_dir(&repo).expect("invariant: repo should be creatable");
+    fs::create_dir(&home).expect("invariant: home should be creatable");
+    init_repo(&repo, &home);
+    assert_success(&maestro(&["sync", "--global-skills"], &repo, &home));
+    let global_task = home.join(".maestro/skills/maestro-card/SKILL.md");
+    fs::write(&global_task, "user edit\n").expect("invariant: global skill should be writable");
+
+    let blocked = maestro(&["sync", "--global-skills"], &repo, &home);
+
+    assert_failure(&blocked);
+    let blocked_output = format!(
+        "{}{}",
+        String::from_utf8_lossy(&blocked.stdout),
+        String::from_utf8_lossy(&blocked.stderr)
+    );
+    assert!(
+        blocked_output.contains("maestro sync --global-skills --dry-run --adopt-unmanaged"),
+        "{blocked_output}"
+    );
+
+    let preview = maestro(
+        &["sync", "--global-skills", "--dry-run", "--adopt-unmanaged"],
+        &repo,
+        &home,
+    );
+
+    assert_success(&preview);
+    let preview_stdout = String::from_utf8_lossy(&preview.stdout);
+    assert!(
+        preview_stdout.contains("would back up and replace 1 unmanaged global skill file(s):"),
+        "{preview_stdout}"
+    );
+    assert!(
+        preview_stdout.contains("maestro-card/SKILL.md"),
+        "{preview_stdout}"
+    );
+    assert_eq!(
+        fs::read_to_string(&global_task).expect("invariant: global task skill should be readable"),
+        "user edit\n",
+        "dry-run must not replace the unmanaged cache file"
+    );
+
+    let adopted = maestro(
+        &["sync", "--global-skills", "--adopt-unmanaged"],
+        &repo,
+        &home,
+    );
+
+    assert_success(&adopted);
+    let adopted_stdout = String::from_utf8_lossy(&adopted.stdout);
+    assert!(
+        adopted_stdout.contains("backed up and replaced 1 unmanaged global skill file(s):"),
+        "{adopted_stdout}"
+    );
+    assert_eq!(
+        fs::read_to_string(&global_task).expect("invariant: global task skill should be readable"),
+        bundled_task_skill_md()
+    );
+    let backup_root = home.join(".maestro/skill-backups");
+    let backup = find_file_named(&backup_root, "SKILL.md");
+    assert_eq!(
+        fs::read_to_string(backup).expect("invariant: backup should be readable"),
+        "user edit\n"
     );
 }
 

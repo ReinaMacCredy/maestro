@@ -32,6 +32,8 @@ pub struct SyncOptions {
     pub dry_run: bool,
     /// Resync the user-level Maestro global skill cache instead of repo-local resources.
     pub global_skills: bool,
+    /// For global skill sync, back up unmanaged cache edits before replacing them.
+    pub adopt_unmanaged_global_skills: bool,
 }
 
 /// Result of a sync operation.
@@ -63,7 +65,10 @@ pub enum SyncOutcome {
 /// edit-preserving; backs up drifted folders before overwriting them.
 pub fn run(options: &SyncOptions) -> Result<SyncOutcome> {
     if options.global_skills {
-        let prepared = skills::prepare_global_skills()?;
+        let prepared =
+            skills::prepare_global_skills_with_options(skills::GlobalSkillsSyncOptions {
+                adopt_unmanaged: options.adopt_unmanaged_global_skills,
+            })?;
         if options.dry_run {
             return Ok(SyncOutcome::GlobalSkillsDryRun(
                 skills::render_global_skills_dry_run(&prepared),
@@ -71,6 +76,9 @@ pub fn run(options: &SyncOptions) -> Result<SyncOutcome> {
         }
         let outcome = skills::write_prepared_global_skills(prepared)?;
         return Ok(SyncOutcome::GlobalSkills(outcome));
+    }
+    if options.adopt_unmanaged_global_skills {
+        bail!("--adopt-unmanaged requires --global-skills");
     }
 
     let paths = sync_paths()?;

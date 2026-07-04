@@ -19,8 +19,9 @@ and why it is not part of the current fix.
   the embedded skill and is not recorded as Maestro-managed. The warning gives a
   blunt move-aside-or-restore remediation, but there is no safe guided diff or
   adopt path for a locally edited skill.
-  Later scope: add a guided global-skill reconcile/adopt flow that preserves
-  local edits and applies shipped updates intentionally.
+  Fixed: `maestro sync --global-skills --adopt-unmanaged` now backs up unmanaged
+  cache edits and replaces them with this binary's shipped skills; dry-run
+  previews the affected files first.
 - Surface: `maestro feature accept --qa`.
   Observed friction: `maestro feature accept loop-chain-readout-and-trace --qa
   cli --dry-run` failed with `unsupported --qa value 'cli'; only '--qa none' is

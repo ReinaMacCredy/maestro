@@ -113,7 +113,7 @@ pub fn run_auto_check() -> Result<()> {
             if global_skills_warning_due(auto_check_paths.as_ref(), now)? {
                 eprintln!("warning: global skill resync failed: {error:#}");
                 eprintln!(
-                    "remediation: run `maestro sync --global-skills --dry-run` for details, then `maestro sync --global-skills` after resolving unmanaged files"
+                    "remediation: run `maestro sync --global-skills --dry-run` for details; for unmanaged cache edits, preview and apply `--adopt-unmanaged`"
                 );
                 record_global_skills_warning(auto_check_paths.as_ref(), now)?;
             }

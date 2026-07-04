@@ -10,6 +10,7 @@ pub fn run(args: SyncArgs) -> Result<()> {
     let outcome = sync::run(&SyncOptions {
         dry_run: args.dry_run,
         global_skills: args.global_skills,
+        adopt_unmanaged_global_skills: args.adopt_unmanaged,
     })?;
     print!("{}", sync::render(&outcome));
     if !args.global_skills {

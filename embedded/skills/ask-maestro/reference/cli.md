@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: b661e60462c2dd71da42ea5f882db4827869323deab95967c65e1b69cf0c5641 -->
+<!-- maestro:cli-reference-sha256: f09cc78631f5ac29de2831fa50736718ee0ed75c6fb4c842cdecd7ce55ff52c1 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -18,7 +18,7 @@ a spelling not found here is outside this skill's CLI surface.
 
 ## maestro sync
 
-- `maestro sync [--dry-run] [--global-skills]` -- Resync bundled resources to this binary's versions (offline)
+- `maestro sync [--dry-run] [--global-skills] [--adopt-unmanaged]` -- Resync bundled resources to this binary's versions (offline)
 
 ## maestro doctor
 

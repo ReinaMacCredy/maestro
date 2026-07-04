@@ -8,6 +8,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
 
 use crate::domain::skills::catalog::{frontmatter_version, skills};
+use crate::foundation::core::backup::backup_operation_timestamp;
 use crate::foundation::core::fs::{create_directory_symlink, ensure_dir};
 use crate::foundation::core::hash::sha256_prefixed;
 use crate::foundation::core::safe_write::{write_atomic, write_string_atomic};
@@ -15,6 +16,7 @@ use crate::foundation::core::schema::GLOBAL_SKILLS_LOCK_SCHEMA_VERSION;
 
 const LOCK_FILE_NAME: &str = "skills-lock.yaml";
 const REMEDIATION: &str = "move the path aside or restore the Maestro-managed target, then rerun `maestro sync --global-skills`";
+const ADOPT_UNMANAGED_REMEDIATION: &str = "run `maestro sync --global-skills --dry-run --adopt-unmanaged` to preview backing it up and replacing it, then run `maestro sync --global-skills --adopt-unmanaged` to apply";
 
 const SUPPORTED_ROOTS: &[SupportedRoot] = &[
     SupportedRoot {
@@ -39,6 +41,7 @@ pub struct PreparedGlobalSkills {
     home_dir: PathBuf,
     cache_dir: PathBuf,
     lock_path: PathBuf,
+    adopt_backup_timestamp: Option<String>,
     roots: Vec<RootPlan>,
     skills: Vec<SkillPlan>,
     links: Vec<LinkPlan>,
@@ -68,6 +71,24 @@ pub struct GlobalSkillsOutcome {
     pub pruned_skills: Vec<String>,
     /// Stale per-agent symlinks into the cache pruned alongside them.
     pub pruned_link_count: usize,
+    /// Unmanaged cache files explicitly backed up and replaced.
+    pub adopted_unmanaged_files: Vec<GlobalSkillAdoption>,
+}
+
+/// One unmanaged global skill cache file backed up before replacement.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GlobalSkillAdoption {
+    /// Original unmanaged cache file path.
+    pub path: PathBuf,
+    /// Backup path containing the user's previous contents.
+    pub backup_path: PathBuf,
+}
+
+/// Explicit write policy for global skill sync.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct GlobalSkillsSyncOptions {
+    /// Back up unmanaged cache edits and replace them with shipped skill files.
+    pub adopt_unmanaged: bool,
 }
 
 /// One skill version transition reported by a global sync.
@@ -143,10 +164,12 @@ struct SkillPlan {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct SkillFilePlan {
+    skill_name: String,
     relative_path: String,
     path: PathBuf,
     contents: &'static [u8],
     hash: String,
+    adopt_unmanaged: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -188,25 +211,46 @@ struct GlobalLinkRecord {
 
 /// Preflight global skills using the current user's home directory.
 pub fn prepare_global_skills() -> Result<PreparedGlobalSkills> {
-    prepare_global_skills_at(&home_dir()?)
+    prepare_global_skills_with_options(GlobalSkillsSyncOptions::default())
+}
+
+/// Preflight global skills using the current user's home directory and write policy.
+pub fn prepare_global_skills_with_options(
+    options: GlobalSkillsSyncOptions,
+) -> Result<PreparedGlobalSkills> {
+    prepare_global_skills_at_with_options(&home_dir()?, options)
 }
 
 /// Preflight global skills under an explicit home directory.
 pub fn prepare_global_skills_at(home_dir: &Path) -> Result<PreparedGlobalSkills> {
+    prepare_global_skills_at_with_options(home_dir, GlobalSkillsSyncOptions::default())
+}
+
+fn prepare_global_skills_at_with_options(
+    home_dir: &Path,
+    options: GlobalSkillsSyncOptions,
+) -> Result<PreparedGlobalSkills> {
     let cache_dir = cache_dir(home_dir);
     let lock_path = lock_path(home_dir);
     let previous_lock = load_lock_if_exists(&lock_path)?;
     let roots = prepare_roots(home_dir)?;
-    let skills = prepare_cache_skills(&cache_dir, previous_lock.as_ref())?;
+    let skills = prepare_cache_skills(&cache_dir, previous_lock.as_ref(), options)?;
     let links = prepare_links(&roots, &skills, &cache_dir)?;
     let stale_skills = stale_cache_skills(&cache_dir)?;
     let stale_links = stale_root_links(&roots, &cache_dir)?;
     let changes = version_changes(previous_lock.as_ref(), &skills);
+    let adopt_backup_timestamp = skills
+        .iter()
+        .flat_map(|skill| skill.files.iter())
+        .any(|file| file.adopt_unmanaged)
+        .then(backup_operation_timestamp)
+        .transpose()?;
 
     Ok(PreparedGlobalSkills {
         home_dir: home_dir.to_path_buf(),
         cache_dir,
         lock_path,
+        adopt_backup_timestamp,
         roots,
         skills,
         links,
@@ -399,6 +443,19 @@ pub fn render_global_skills_outcome(outcome: &GlobalSkillsOutcome) -> String {
             outcome.pruned_link_count
         ));
     }
+    if !outcome.adopted_unmanaged_files.is_empty() {
+        out.push_str(&format!(
+            "backed up and replaced {} unmanaged global skill file(s):\n",
+            outcome.adopted_unmanaged_files.len()
+        ));
+        for adoption in &outcome.adopted_unmanaged_files {
+            out.push_str(&format!(
+                "  {} -> {}\n",
+                adoption.path.display(),
+                adoption.backup_path.display()
+            ));
+        }
+    }
     out
 }
 
@@ -476,7 +533,26 @@ pub fn render_global_skills_dry_run(prepared: &PreparedGlobalSkills) -> String {
             prepared.stale_links.len()
         ));
     }
+    let unmanaged_files = unmanaged_adoption_files(prepared);
+    if !unmanaged_files.is_empty() {
+        out.push_str(&format!(
+            "would back up and replace {} unmanaged global skill file(s):\n",
+            unmanaged_files.len()
+        ));
+        for file in unmanaged_files {
+            out.push_str(&format!("  {}\n", file.path.display()));
+        }
+    }
     out
+}
+
+fn unmanaged_adoption_files(prepared: &PreparedGlobalSkills) -> Vec<&SkillFilePlan> {
+    prepared
+        .skills
+        .iter()
+        .flat_map(|skill| skill.files.iter())
+        .filter(|file| file.adopt_unmanaged)
+        .collect()
 }
 
 fn render_version_change(change: &SkillVersionChange) -> String {
@@ -492,10 +568,21 @@ fn write_prepared_inner(
     rollback: &mut Rollback,
 ) -> Result<GlobalSkillsOutcome> {
     ensure_dir_tracked(&prepared.cache_dir, rollback)?;
+    let mut adopted_unmanaged_files = Vec::new();
+    let adopt_backup_root = prepared.adopt_backup_timestamp.as_ref().map(|timestamp| {
+        prepared
+            .home_dir
+            .join(".maestro")
+            .join("skill-backups")
+            .join(timestamp)
+    });
     for skill in &prepared.skills {
         ensure_dir_tracked(&prepared.cache_dir.join(&skill.name), rollback)?;
         for file in &skill.files {
-            write_skill_file(file, rollback)?;
+            if let Some(adoption) = write_skill_file(file, adopt_backup_root.as_deref(), rollback)?
+            {
+                adopted_unmanaged_files.push(adoption);
+            }
         }
     }
 
@@ -542,6 +629,7 @@ fn write_prepared_inner(
             .map(|skill| skill.name.clone())
             .collect(),
         pruned_link_count: prepared.stale_links.len(),
+        adopted_unmanaged_files,
     })
 }
 
@@ -605,6 +693,7 @@ fn prepare_root(home_dir: &Path, root: &SupportedRoot) -> Result<RootPlan> {
 fn prepare_cache_skills(
     cache_dir: &Path,
     previous_lock: Option<&GlobalSkillsLock>,
+    options: GlobalSkillsSyncOptions,
 ) -> Result<Vec<SkillPlan>> {
     let mut plans = Vec::new();
     for skill in skills() {
@@ -632,12 +721,21 @@ fn prepare_cache_skills(
         for file in &skill.files {
             let path = skill_dir.join(file.relative_path);
             let hash = sha256_prefixed(file.contents);
-            preflight_cache_file(skill.name, file.relative_path, &path, &hash, previous_lock)?;
+            let adopt_unmanaged = preflight_cache_file(
+                skill.name,
+                file.relative_path,
+                &path,
+                &hash,
+                previous_lock,
+                options,
+            )?;
             file_plans.push(SkillFilePlan {
+                skill_name: skill.name.to_string(),
                 relative_path: file.relative_path.to_string(),
                 path,
                 contents: file.contents,
                 hash,
+                adopt_unmanaged,
             });
         }
 
@@ -656,7 +754,8 @@ fn preflight_cache_file(
     path: &Path,
     expected_hash: &str,
     previous_lock: Option<&GlobalSkillsLock>,
-) -> Result<()> {
+    options: GlobalSkillsSyncOptions,
+) -> Result<bool> {
     match fs::symlink_metadata(path) {
         Ok(metadata) if metadata.is_file() && !metadata.file_type().is_symlink() => {
             let contents = fs::read(path)
@@ -667,11 +766,14 @@ fn preflight_cache_file(
                     .and_then(|lock| previous_file_hash(lock, skill_name, relative_path))
                     .is_some_and(|previous_hash| previous_hash == actual_hash)
             {
-                return Ok(());
+                return Ok(false);
+            }
+            if options.adopt_unmanaged {
+                return Ok(true);
             }
 
             bail!(
-                "refusing global skill install: {} differs from the embedded skill and is not recorded as Maestro-managed in {}; remediation: {REMEDIATION}",
+                "refusing global skill install: {} differs from the embedded skill and is not recorded as Maestro-managed in {}; remediation: {ADOPT_UNMANAGED_REMEDIATION}",
                 path.display(),
                 path_for_message(previous_lock)
             );
@@ -682,7 +784,7 @@ fn preflight_cache_file(
                 path.display()
             );
         }
-        Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(false),
         Err(error) => Err(error)
             .with_context(|| format!("failed to inspect global skill file {}", path.display())),
     }
@@ -858,7 +960,11 @@ fn preflight_link(link_path: &Path, target_path: &Path) -> Result<()> {
     }
 }
 
-fn write_skill_file(file: &SkillFilePlan, rollback: &mut Rollback) -> Result<()> {
+fn write_skill_file(
+    file: &SkillFilePlan,
+    adopt_backup_root: Option<&Path>,
+    rollback: &mut Rollback,
+) -> Result<Option<GlobalSkillAdoption>> {
     ensure_dir_tracked(
         file.path
             .parent()
@@ -866,7 +972,7 @@ fn write_skill_file(file: &SkillFilePlan, rollback: &mut Rollback) -> Result<()>
         rollback,
     )?;
     let previous = match fs::read(&file.path) {
-        Ok(contents) if contents == file.contents => return Ok(()),
+        Ok(contents) if contents == file.contents => return Ok(None),
         Ok(contents) => Some(contents),
         Err(error) if error.kind() == ErrorKind::NotFound => None,
         Err(error) => {
@@ -875,10 +981,36 @@ fn write_skill_file(file: &SkillFilePlan, rollback: &mut Rollback) -> Result<()>
             });
         }
     };
+    let adoption = if file.adopt_unmanaged {
+        let backup_root = adopt_backup_root
+            .context("invariant: unmanaged global skill adoption has a backup root")?;
+        let backup_path = backup_root.join(&file.skill_name).join(&file.relative_path);
+        if let Some(parent) = backup_path.parent() {
+            ensure_dir(parent)?;
+        }
+        if let Some(contents) = &previous {
+            write_atomic(&backup_path, contents).with_context(|| {
+                format!(
+                    "failed to back up unmanaged global skill file {} to {}",
+                    file.path.display(),
+                    backup_path.display()
+                )
+            })?;
+            Some(GlobalSkillAdoption {
+                path: file.path.clone(),
+                backup_path,
+            })
+        } else {
+            None
+        }
+    } else {
+        None
+    };
 
     rollback.track_file_write(file.path.clone(), previous);
     write_atomic(&file.path, file.contents)
-        .with_context(|| format!("failed to write global skill file {}", file.path.display()))
+        .with_context(|| format!("failed to write global skill file {}", file.path.display()))?;
+    Ok(adoption)
 }
 
 fn write_roots(

@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: 1ecf6f3f71f094de08c0545b375ab456e2d74bd5a32584d21f0de6f9c1aaff4b -->
+<!-- maestro:cli-reference-sha256: fc2a8188d86aa4a675f4bbda46bc851ec1fd5bfcccb772e8314ba9739163bee9 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -22,7 +22,7 @@ a spelling not found here is outside this skill's CLI surface.
 
 ## maestro sync
 
-- `maestro sync [--dry-run] [--global-skills]` -- Resync bundled resources to this binary's versions (offline)
+- `maestro sync [--dry-run] [--global-skills] [--adopt-unmanaged]` -- Resync bundled resources to this binary's versions (offline)
 
 ## maestro uninstall
 
