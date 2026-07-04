@@ -65,6 +65,21 @@ fn first_id(output: &str, prefix: &str) -> String {
         .to_string()
 }
 
+fn ready_loop_task(id: &str) -> loop_recipes::LoopTaskInput {
+    loop_recipes::LoopTaskInput {
+        id: id.to_string(),
+        title: "Implement unknown gap".to_string(),
+        state: "ready".to_string(),
+        feature_id: None,
+        blocked: false,
+        ready_startable: true,
+        gate: false,
+        gate_kind: None,
+        lane: Some("general".to_string()),
+        remaining_blockers: Vec::new(),
+    }
+}
+
 fn write_custom_recipe(repo: &Path, name: &str, body: &str) {
     let dir = repo.join(".maestro/loop-recipes");
     fs::create_dir_all(&dir).expect("custom recipe dir should be creatable");
@@ -168,6 +183,129 @@ fn loop_next_json_routes_missing_maestro_without_writes() {
     assert!(
         !temp.path().join(".maestro").exists(),
         "loop next must not initialize or write Maestro artifacts"
+    );
+}
+
+#[test]
+fn loop_next_json_exposes_grounded_unknown_gap_for_ready_work() {
+    let temp = TestTempDir::new("maestro-loop-next-unknown-gap");
+    init_git_marker(temp.path());
+    stdout(temp.path(), &["init", "--yes"]);
+    stdout(
+        temp.path(),
+        &["task", "add", "--id-only", "Implement unknown gap"],
+    );
+
+    let out = stdout(temp.path(), &["loop", "next", "--json"]);
+    let value: Value = serde_json::from_str(&out).expect("loop next JSON should parse");
+    let unknown_gap = &value["unknown_gap"];
+
+    assert!(unknown_gap.is_object(), "{value}");
+    assert!(unknown_gap["known_knowns"].is_array(), "{unknown_gap}");
+    assert!(unknown_gap["known_unknowns"].is_array(), "{unknown_gap}");
+    assert!(unknown_gap["unknown_knowns"].is_array(), "{unknown_gap}");
+    assert!(
+        unknown_gap["unknown_unknown_risks"].is_array(),
+        "{unknown_gap}"
+    );
+    assert_eq!(unknown_gap["action"], "probe");
+    assert_eq!(unknown_gap["known_knowns"][0]["source"], "current_command");
+    assert_eq!(unknown_gap["known_unknowns"][0]["source"], "proof");
+}
+
+#[test]
+fn loop_next_text_renders_compact_unknown_gap_for_ready_work() {
+    let temp = TestTempDir::new("maestro-loop-next-unknown-gap-text");
+    init_git_marker(temp.path());
+    stdout(temp.path(), &["init", "--yes"]);
+    stdout(
+        temp.path(),
+        &["task", "add", "--id-only", "Render unknown gap"],
+    );
+
+    let out = stdout(temp.path(), &["loop", "next"]);
+
+    assert!(out.contains("unknown_gap:"), "{out}");
+    assert!(out.contains("  action: probe"), "{out}");
+    assert!(out.contains("  known_knowns:"), "{out}");
+    assert!(out.contains("[current_command]"), "{out}");
+    assert!(!out.contains("maestro unknowns"), "{out}");
+}
+
+#[test]
+fn loop_next_unknown_gap_omits_source_less_memory_candidates() {
+    let report = loop_recipes::route_next(loop_recipes::LoopRouterInput {
+        repo: "test-repo".to_string(),
+        initialized: true,
+        tasks: vec![ready_loop_task("task-unknown-gap-source")],
+        memory_hits: vec![
+            loop_recipes::LoopMemoryHit {
+                id: "memory-source-less".to_string(),
+                kind: "user_correction".to_string(),
+                reason: "source-less preference should not render".to_string(),
+                source_refs: Vec::new(),
+            },
+            loop_recipes::LoopMemoryHit {
+                id: "memory-sourced".to_string(),
+                kind: "user_correction".to_string(),
+                reason: "sourced preference should render".to_string(),
+                source_refs: vec![loop_recipes::LoopContextRef {
+                    kind: "memory".to_string(),
+                    id: Some("memory-sourced".to_string()),
+                    path: None,
+                    command: Some("maestro grep \"unknowns\" corpus:memory".to_string()),
+                }],
+            },
+        ],
+        ..loop_recipes::LoopRouterInput::default()
+    })
+    .expect("loop next should route ready work");
+    let gap = report.unknown_gap.expect("unknown_gap should be present");
+
+    assert_eq!(gap.unknown_knowns.len(), 1, "{gap:?}");
+    assert_eq!(gap.unknown_knowns[0].source, "memory");
+    assert!(
+        gap.unknown_knowns[0]
+            .text
+            .contains("sourced preference should render"),
+        "{gap:?}"
+    );
+    assert!(
+        !gap.unknown_knowns.iter().any(|item| item
+            .text
+            .contains("source-less preference should not render")),
+        "{gap:?}"
+    );
+    assert!(gap.known_knowns.len() <= 3, "{gap:?}");
+    assert!(gap.known_unknowns.len() <= 3, "{gap:?}");
+    assert!(gap.unknown_unknown_risks.len() <= 3, "{gap:?}");
+}
+
+#[test]
+fn loop_next_unknown_gap_action_probes_for_warn_constraints() {
+    let report = loop_recipes::route_next(loop_recipes::LoopRouterInput {
+        repo: "test-repo".to_string(),
+        initialized: true,
+        tasks: vec![ready_loop_task("task-unknown-gap-probe")],
+        git: Some(loop_recipes::LoopGitInput {
+            branch: Some("main".to_string()),
+            code_other_dirty: 1,
+            maestro_dirty: 0,
+            ahead: 0,
+            behind: 0,
+        }),
+        ..loop_recipes::LoopRouterInput::default()
+    })
+    .expect("loop next should route ready work");
+    let gap = report.unknown_gap.expect("unknown_gap should be present");
+
+    assert_eq!(gap.action, "probe");
+    assert!(
+        gap.unknown_unknown_risks
+            .iter()
+            .any(|item| item.source == "current_fact_gap"
+                && item.text.contains("working tree has dirty")),
+        "{gap:?}"
     );
 }
 

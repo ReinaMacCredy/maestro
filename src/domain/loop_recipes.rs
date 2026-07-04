@@ -521,6 +521,8 @@ pub struct LoopNextReport {
     pub next_verbs: Vec<String>,
     pub candidates: Vec<LoopNextCandidate>,
     pub constraints: Vec<LoopConstraint>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unknown_gap: Option<LoopUnknownGap>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub memory_hits: Vec<LoopMemoryHit>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -580,6 +582,22 @@ pub struct LoopNextGit {
     pub maestro_dirty: usize,
     pub ahead: usize,
     pub behind: usize,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct LoopUnknownGap {
+    pub known_knowns: Vec<LoopUnknownGapItem>,
+    pub known_unknowns: Vec<LoopUnknownGapItem>,
+    pub unknown_knowns: Vec<LoopUnknownGapItem>,
+    pub unknown_unknown_risks: Vec<LoopUnknownGapItem>,
+    pub action: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct LoopUnknownGapItem {
+    pub text: String,
+    pub source: &'static str,
+    pub source_refs: Vec<LoopContextRef>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -841,6 +859,7 @@ fn report_for_candidate(
     let recommended_phase = default_phase_for_next(&contract.id, &candidate.reason).to_string();
     let why_not = why_not_candidates(&context, &candidate, &candidates)?;
     let attempt_policy = attempt_policy_for(&contract.id, &constraints);
+    let unknown_gap = unknown_gap_for(&context, Some(&candidate), Some(&constraints), status);
     let candidates = if candidates.is_empty() {
         vec![candidate_report(&contract, &candidate)]
     } else {
@@ -865,6 +884,7 @@ fn report_for_candidate(
         next_verbs: candidate.next_verbs,
         candidates,
         constraints,
+        unknown_gap,
         memory_hits: context.memory.clone(),
         why_not,
         attempt_policy: Some(attempt_policy),
@@ -896,6 +916,7 @@ fn uncertain_report_with_actions(
 ) -> Result<LoopNextReport> {
     let context = LoopContext::from_input(input);
     let constraints = evaluate_base_constraints(&context, None, None);
+    let unknown_gap = unknown_gap_for(&context, None, Some(&constraints), "uncertain");
     Ok(LoopNextReport {
         schema: "maestro.loop_next.v1",
         status: "uncertain".to_string(),
@@ -919,6 +940,7 @@ fn uncertain_report_with_actions(
         next_verbs,
         candidates: Vec::new(),
         constraints,
+        unknown_gap,
         memory_hits: context.memory.clone(),
         why_not: Vec::new(),
         attempt_policy: None,
@@ -1044,6 +1066,173 @@ impl LoopContextRef {
             path: None,
             command: Some(command.into()),
         }
+    }
+}
+
+fn unknown_gap_for(
+    context: &LoopContext,
+    candidate: Option<&RouterCandidate>,
+    constraints: Option<&[LoopConstraint]>,
+    status: &str,
+) -> Option<LoopUnknownGap> {
+    let mut known_knowns = Vec::new();
+    if let Some(candidate) = candidate {
+        known_knowns.push(unknown_item(
+            format!(
+                "loop next routed from current command evidence: {}",
+                candidate.reason
+            ),
+            "current_command",
+            vec![LoopContextRef::command(
+                "loop_next",
+                None,
+                "maestro loop next",
+            )],
+        ));
+    }
+    if let Some(task) = context.current_task.as_ref().or_else(|| {
+        context
+            .candidate_tasks
+            .iter()
+            .find(|task| task.ready_startable || task.state == "in_progress")
+    }) {
+        known_knowns.push(unknown_item(
+            format!("selected task context is visible: {}", task.id),
+            "current_command",
+            task.source_refs.clone(),
+        ));
+    }
+    known_knowns.truncate(3);
+
+    let mut known_unknowns = Vec::new();
+    for feature in context
+        .features
+        .iter()
+        .filter(|feature| feature.open_questions > 0)
+        .take(3)
+    {
+        known_unknowns.push(unknown_item(
+            format!(
+                "feature {} has {} open question{}",
+                feature.id,
+                feature.open_questions,
+                if feature.open_questions == 1 { "" } else { "s" }
+            ),
+            "question",
+            feature.source_refs.clone(),
+        ));
+    }
+    for blocker in context.blockers.iter().take(3 - known_unknowns.len()) {
+        known_unknowns.push(unknown_item(
+            format!(
+                "{} {} is blocked: {}",
+                blocker.target_kind, blocker.target_id, blocker.reason
+            ),
+            "blocker",
+            blocker.source_refs.clone(),
+        ));
+    }
+    if known_unknowns.len() < 3
+        && context
+            .proof
+            .reason
+            .contains("not yet included in loop context")
+    {
+        known_unknowns.push(unknown_item(
+            "proof state is not included in the router snapshot; final proof remains enforced by task and feature gates",
+            "proof",
+            context.proof.source_refs.clone(),
+        ));
+    }
+
+    let mut unknown_knowns = context
+        .memory
+        .iter()
+        .filter(|hit| !hit.source_refs.is_empty())
+        .take(3)
+        .map(|hit| {
+            unknown_item(
+                format!("prior memory may affect this route: {}", hit.reason),
+                "memory",
+                hit.source_refs.clone(),
+            )
+        })
+        .collect::<Vec<_>>();
+    unknown_knowns.truncate(3);
+
+    let mut unknown_unknown_risks = Vec::new();
+    if let Some(constraints) = constraints {
+        for constraint in constraints.iter().filter(|constraint| {
+            matches!(
+                constraint.status,
+                LoopConstraintStatus::Unknown | LoopConstraintStatus::Warn
+            )
+        }) {
+            let Some(source) = unknown_risk_source(&constraint.id) else {
+                continue;
+            };
+            unknown_unknown_risks.push(unknown_item(
+                constraint.reason.clone(),
+                source,
+                constraint.source_refs.clone(),
+            ));
+            if unknown_unknown_risks.len() >= 3 {
+                break;
+            }
+        }
+    }
+
+    if known_knowns.is_empty()
+        && known_unknowns.is_empty()
+        && unknown_knowns.is_empty()
+        && unknown_unknown_risks.is_empty()
+    {
+        return None;
+    }
+
+    let has_probe_risks = !unknown_unknown_risks.is_empty();
+
+    Some(LoopUnknownGap {
+        known_knowns,
+        known_unknowns,
+        unknown_knowns,
+        unknown_unknown_risks,
+        action: unknown_gap_action(status, context, has_probe_risks).to_string(),
+    })
+}
+
+fn unknown_item(
+    text: impl Into<String>,
+    source: &'static str,
+    source_refs: Vec<LoopContextRef>,
+) -> LoopUnknownGapItem {
+    LoopUnknownGapItem {
+        text: text.into(),
+        source,
+        source_refs,
+    }
+}
+
+fn unknown_risk_source(id: &str) -> Option<&'static str> {
+    match id {
+        "dirty_tree_risk" | "route_confidence" | "prior_failure_risk" => Some("current_fact_gap"),
+        "conflict_risk" => Some("conflict"),
+        "proof_ready" => Some("proof_probe"),
+        "qa_ready" => Some("proof_probe"),
+        "memory_relevance" => Some("current_fact_gap"),
+        _ => None,
+    }
+}
+
+fn unknown_gap_action(status: &str, context: &LoopContext, has_probe_risks: bool) -> &'static str {
+    if status == "uncertain" {
+        "ask"
+    } else if !context.blockers.is_empty() {
+        "decide"
+    } else if has_probe_risks {
+        "probe"
+    } else {
+        "proceed"
     }
 }
 

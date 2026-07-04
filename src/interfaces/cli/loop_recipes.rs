@@ -1163,6 +1163,9 @@ fn print_loop_next(report: &loop_recipes::LoopNextReport) {
     print_loop_next_list("hard_stops", &report.hard_stops);
     print_loop_next_list("inspect", &report.inspect);
     print_loop_next_list("next_verbs", &report.next_verbs);
+    if let Some(unknown_gap) = report.unknown_gap.as_ref() {
+        print_unknown_gap(unknown_gap);
+    }
     if !report.why_not.is_empty() {
         println!("why_not:");
         for alternative in &report.why_not {
@@ -1172,6 +1175,25 @@ fn print_loop_next(report: &loop_recipes::LoopNextReport) {
                 alternative.blocked_by.join(", ")
             );
         }
+    }
+}
+
+fn print_unknown_gap(gap: &loop_recipes::LoopUnknownGap) {
+    println!("unknown_gap:");
+    println!("  action: {}", gap.action);
+    print_unknown_gap_items("known_knowns", &gap.known_knowns);
+    print_unknown_gap_items("known_unknowns", &gap.known_unknowns);
+    print_unknown_gap_items("unknown_knowns", &gap.unknown_knowns);
+    print_unknown_gap_items("unknown_unknown_risks", &gap.unknown_unknown_risks);
+}
+
+fn print_unknown_gap_items(label: &str, items: &[loop_recipes::LoopUnknownGapItem]) {
+    if items.is_empty() {
+        return;
+    }
+    println!("  {label}:");
+    for item in items {
+        println!("  - [{}] {}", item.source, item.text);
     }
 }
 

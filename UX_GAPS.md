@@ -50,3 +50,9 @@ and why it is not part of the current fix.
   Fixed: `maestro feature set <id> --remove-question q-1 --reason "<decision>"`
   removes one open question by ref or exact text and records the reason in the
   feature notes.
+- Surface: `maestro qa baseline --observed-stdin`.
+  Observed friction: passing a full baseline contract through the helper nests
+  that contract inside the helper scaffold and raw observed block, which makes
+  baseline scenario discovery noisy before `qa slice`.
+  Later scope: accept structured baseline content directly or expose a read
+  command that prints the parsed baseline ids.

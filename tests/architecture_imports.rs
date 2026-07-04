@@ -328,6 +328,7 @@ fn feature_domain_facade_exposes_the_deliberate_surface() {
             "FinalizeReport".to_string(),
             "LooseSweepReport".to_string(),
             "NoteReport".to_string(),
+            "QuestionRemovalEdit".to_string(),
             "ReconcileAction".to_string(),
             "ReconcileActor".to_string(),
             "ReconcileContract".to_string(),
