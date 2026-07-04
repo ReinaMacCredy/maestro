@@ -338,6 +338,92 @@ fn feature_design_command_writes_design_sidecar_and_spec_aliases_it() {
         "feature spec must not create a second mutable spec.md truth: {legacy_spec}"
     );
 
+    let current_section = stdout(
+        maestro(
+            &[
+                "feature",
+                "design",
+                "design-facet",
+                "--section",
+                "Current state",
+            ],
+            root,
+        ),
+        &[
+            "feature",
+            "design",
+            "design-facet",
+            "--section",
+            "Current state",
+        ],
+    );
+    assert!(
+        current_section.contains("status: proposed"),
+        "{current_section}"
+    );
+    assert!(
+        current_section.contains("feature: design-facet"),
+        "{current_section}"
+    );
+    assert!(
+        current_section.contains("section: Current state"),
+        "{current_section}"
+    );
+    assert!(
+        current_section.contains("## Current state\n\nprimary design detail"),
+        "{current_section}"
+    );
+    assert!(
+        !current_section.contains("compat alias detail"),
+        "{current_section}"
+    );
+
+    let problem_section = stdout(
+        maestro(
+            &["feature", "spec", "design-facet", "--section", "Problem"],
+            root,
+        ),
+        &["feature", "spec", "design-facet", "--section", "Problem"],
+    );
+    assert!(
+        problem_section.contains("section: Problem"),
+        "{problem_section}"
+    );
+    assert!(
+        problem_section.contains("## Problem\n\ncompat alias detail"),
+        "{problem_section}"
+    );
+    assert!(
+        !problem_section.contains("primary design detail"),
+        "{problem_section}"
+    );
+
+    let missing_section = assert_failure(
+        maestro(
+            &["feature", "design", "design-facet", "--section", "Missing"],
+            root,
+        ),
+        &["feature", "design", "design-facet", "--section", "Missing"],
+    );
+    assert!(
+        missing_section.contains("design section \"Missing\" not found"),
+        "{missing_section}"
+    );
+    assert!(
+        missing_section.contains("available: Current state, Problem"),
+        "{missing_section}"
+    );
+    assert!(
+        missing_section.contains("read all: maestro feature design design-facet"),
+        "{missing_section}"
+    );
+    assert!(
+        missing_section.contains(
+            "append: maestro feature design design-facet --section \"Missing\" --append \"<text>\""
+        ),
+        "{missing_section}"
+    );
+
     let shown = stdout(
         maestro(&["feature", "design", "design-facet"], root),
         &["feature", "design", "design-facet"],
@@ -1673,12 +1759,26 @@ fn feature_finalize_moves_authority_to_db_and_reopen_uses_workbench() {
         "DB-backed writes must not recreate the live card folder"
     );
 
+    let workbench = root.join(".maestro/workbench/db-backed-contract");
+    fs::create_dir_all(&workbench).expect("stale workbench should be creatable");
+    let scratch = workbench.join("scratch.txt");
+    fs::write(&scratch, "keep user scratch").expect("scratch fixture should be writable");
+    let non_empty_reopen = assert_failure(
+        maestro(&["feature", "reopen", "db-backed-contract"], root),
+        &["feature", "reopen", "db-backed-contract"],
+    );
+    assert!(
+        non_empty_reopen.contains("target already exists"),
+        "{non_empty_reopen}"
+    );
+    assert!(scratch.exists(), "non-empty workbench must not be removed");
+    fs::remove_file(&scratch).expect("scratch fixture should be removable");
+
     let reopen = stdout(
         maestro(&["feature", "reopen", "db-backed-contract"], root),
         &["feature", "reopen", "db-backed-contract"],
     );
     assert!(reopen.contains("reopened db-backed-contract"), "{reopen}");
-    let workbench = root.join(".maestro/workbench/db-backed-contract");
     assert!(workbench.join("card.yaml").is_file());
     assert!(workbench.join("design.md").is_file());
 
@@ -4712,7 +4812,8 @@ fn feature_auto_archive_blocks_worker_missing_store_stale_store_and_stale_snapsh
 
 /// S8: `feature spec --section --append/--replace` fills the design during
 /// brainstorm/plan -- appends accumulate, replace overwrites, an unknown
-/// section is created, and the bare verb renders what was written.
+/// section is created, a section-only command renders that section, and the
+/// bare verb renders what was written.
 #[test]
 fn feature_spec_section_writes_fill_design_from_the_cli() {
     let temp_dir = TestTempDir::new("maestro-feature-spec-write");
@@ -4801,8 +4902,13 @@ fn feature_spec_section_writes_fill_design_from_the_cli() {
         "{orphan}"
     );
     let bare_args = ["feature", "spec", id, "--section", "Current state"];
-    let bare = assert_failure(maestro(&bare_args, temp_dir.path()), &bare_args);
-    assert!(bare.contains("--section needs the text to write"), "{bare}");
+    let section = stdout(maestro(&bare_args, temp_dir.path()), &bare_args);
+    assert!(section.contains("section: Current state"), "{section}");
+    assert!(
+        section.contains("## Current state\n\nrows export by hand today"),
+        "{section}"
+    );
+    assert!(!section.contains("no streaming path"), "{section}");
 }
 
 /// S8 receipt: written text containing markdown headings gets a note -- the

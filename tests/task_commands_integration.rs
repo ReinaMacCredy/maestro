@@ -280,6 +280,51 @@ fn task_show_renders_implement_method_routing() {
 }
 
 #[test]
+fn task_start_renders_verification_only_method_without_tdd_red_green() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    let verify = maestro(
+        repo,
+        &[
+            "task",
+            "create",
+            "Verify resource contract kernel gates",
+            "--check",
+            "resource contract tests pass",
+            "--id-only",
+        ],
+    );
+    assert_success(&verify, &["task", "create", "Verify resource..."]);
+    let verify_id = stdout(&verify).trim().to_string();
+    assert_success(
+        &maestro(repo, &["task", "explore", &verify_id]),
+        &["task", "explore", &verify_id],
+    );
+    assert_success(
+        &maestro(repo, &["task", "accept", &verify_id]),
+        &["task", "accept", &verify_id],
+    );
+
+    let started = maestro(repo, &["task", "start", &verify_id]);
+    assert_success(&started, &["task", "start", &verify_id]);
+    let out = stdout(&started);
+    assert!(out.contains("implement_method: TDD skipped"), "{out}");
+    assert!(
+        out.contains("method_reason: verification-only task"),
+        "{out}"
+    );
+    assert!(
+        out.contains("proof_required: skip-reason claim + relevant verification"),
+        "{out}"
+    );
+    assert!(
+        !out.contains("proof_required: RED claim + GREEN claim"),
+        "{out}"
+    );
+}
+
+#[test]
 fn task_progress_cli_flow_add_start_done_is_low_ceremony_and_verifies_simple_completion() {
     let temp = setup_repo();
     let repo = temp.path();
@@ -577,6 +622,76 @@ fn task_note_appends_to_db_backed_progress_sidecar() {
         .expect("DB notes sidecar exists");
     assert!(notes.contains("# map loop schema"), "{notes}");
     assert!(notes.contains("Correction recorded"), "{notes}");
+}
+
+#[test]
+fn task_note_appends_to_db_backed_card_sidecar() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    let create = maestro_with_env(
+        repo,
+        &[
+            "task",
+            "create",
+            "DB backed task",
+            "--check",
+            "note records",
+        ],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    );
+    assert_success(&create, &["task", "create", "DB backed task"]);
+    let id = id_by_title(repo, "DB backed task");
+    let task_dir = card_dir(repo, &id);
+    let paths = MaestroPaths::new(repo);
+    live_db::import_card_dir(&paths, &id, &task_dir, true).expect("task card imports into live DB");
+    assert!(
+        !task_dir.exists(),
+        "fixture should leave only the DB-backed task card"
+    );
+
+    let note = maestro_with_env(
+        repo,
+        &["task", "note", &id, "Correction recorded"],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    );
+    assert_success(&note, &["task", "note", &id, "..."]);
+
+    let notes = live_db::read_text_file(&paths, &id, "notes.md")
+        .expect("DB note read succeeds")
+        .expect("DB notes sidecar exists");
+    assert!(notes.contains("# DB backed task"), "{notes}");
+    assert!(notes.contains("Correction recorded"), "{notes}");
+}
+
+#[test]
+fn task_start_does_not_suggest_check_edit_after_acceptance_lock() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    let add = maestro_with_env(
+        repo,
+        &["task", "add", "verify closeout", "--id-only"],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    );
+    assert_success(&add, &["task", "add", "verify closeout", "--id-only"]);
+    let id = stdout(&add).trim().to_string();
+
+    let started = maestro_with_env(
+        repo,
+        &["task", "start", &id],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    );
+    assert_success(&started, &["task", "start", &id]);
+    let out = stdout(&started);
+    assert!(
+        !out.contains(&format!("maestro task set {id} --check")),
+        "{out}"
+    );
+    assert!(
+        out.contains(&format!("maestro task complete {id}")),
+        "{out}"
+    );
 }
 
 #[test]

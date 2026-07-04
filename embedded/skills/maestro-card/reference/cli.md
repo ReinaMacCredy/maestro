@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: 5ca700e46459c0d73113869736480d6d8b3b8101397543384245c06f604acd38 -->
+<!-- maestro:cli-reference-sha256: d86f1e05fa21ac23bb582334076b337e5539b29b96ad1c67b831937ba5b4068c -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -48,7 +48,7 @@ a spelling not found here is outside this skill's CLI surface.
 
 - `maestro feature finalize <ID>` -- Write or refresh the clean design handoff before accept/prepare
 - `maestro feature reopen <ID>` -- Reopen a DB-backed finalized feature into .maestro/workbench/<id>
-- `maestro feature reconcile <ID> [--full] [--json] [--apply-plan <PLAN_FILE>]` -- Report or apply feature contract reconciliation before finalize
+- `maestro feature reconcile <ID> [--full] [--json] [--apply-plan <PLAN_FILE>] [--write-plan <PLAN_FILE>]` -- Report or apply feature contract reconciliation before finalize
 - `maestro feature accept <ID> [--qa <SURFACE>] [--reason <REASON>] [--dry-run]` -- Accept a feature into ready, freezing its contract (-> ready; gated)
 - `maestro feature prepare <ID> [--from <PLAN_FILE>] [--draft] [--task <TASK>]... [--check <CHECK>]... [--covers <COVERS>]... [--blocker <BLOCKER>]... [--after <AFTER>]...` -- Prepare an accepted feature into a ready implementation queue
 - `maestro feature amend <ID> [--add-acceptance <ADD_ACCEPTANCE>]... [--add-area <ADD_AREA>]... [--add-non-goal <ADD_NON_GOAL>]... [--add-question <ADD_QUESTION>]... --reason <REASON>` -- Grow a frozen contract additively with an audit reason (ready/in_progress)

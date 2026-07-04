@@ -91,6 +91,7 @@ fn install_writes_nested_gitignore_and_root_agent_settings_block() {
         "index/",
         "install-lock.yaml",
         "update-check",
+        "global-skills-warning",
         "tasks/*/evidence/",
         "tasks/*/local/",
         "archive/**/evidence/",
@@ -172,6 +173,7 @@ fn install_migrates_legacy_root_gitignore_block_and_preserves_user_lines() {
         .expect("invariant: .maestro/.gitignore should be written in the same operation");
     assert!(maestro_gitignore.contains("runs/"));
     assert!(maestro_gitignore.contains("update-check"));
+    assert!(maestro_gitignore.contains("global-skills-warning"));
 }
 
 #[test]

@@ -1,5 +1,5 @@
 ---
-version: 1.29.16
+version: 1.29.18
 ---
 
 # Maestro Harness Protocol
@@ -35,6 +35,14 @@ or proof/QA bypass.
 Use the closest shipped lifecycle recipe: `maestro loop show design`,
 `maestro loop show work`, `maestro loop show audit`, `maestro loop show ship`,
 `maestro loop show unattended`, or `maestro loop show learning`.
+Loop readiness is native evidence, not a claim. Use
+`maestro loop validate <pattern>` and `maestro status` to read the L0 draft,
+L1 report, L2 assisted, or L3 unattended level, effective operating limits,
+scheduler stance, liveness, gaps, and `blocked_from_next_level`. Do not claim
+L3 unattended unless those readouts say L3 and list no next-level blockers.
+External schedulers stay external; Maestro remains passive/local-first and
+reports readiness for external drivers instead of becoming a daemon, cron,
+queue, worker launcher, or hidden executor.
 When the user is unavailable but has provided a bounded design mandate, use
 `maestro loop show design-relay`: the main session may make only in-mandate
 design decisions, subagents/advisors provide evidence only, and the relay must
@@ -52,6 +60,12 @@ Before write-like work, create a visible Progress breakdown with
 `maestro task setup --task ... --start`: at least two rows, or one row only with
 `--atomic --reason "<why one row is enough>"`. `MAESTRO_CURRENT_TASK` does not
 bypass this.
+Concrete repeatable form:
+`maestro task setup --task "Map current behavior" --task "Implement scoped fix" --task "Verify" --start`.
+During implementation, keep running notes with `maestro note <card-or-task-id> "<text>"`:
+record decisions not in the handoff/spec, changes from the plan, tradeoffs,
+gotchas, risks, and follow-up work. If a note changes scope or acceptance,
+amend the owning Feature/Card contract instead of treating notes as authority.
 Design-to-card gate: before executable work after design/brainstorm, ask:
 - Am I coming from design or brainstorm?
 - What card/feature owns this work?

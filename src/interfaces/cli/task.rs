@@ -133,7 +133,7 @@ pub fn run(args: TaskArgs) -> Result<()> {
         }
         TaskCommand::Next { json } => status::run_task_next(&paths, json),
         TaskCommand::Note { id, text } => {
-            let report = task::note(&paths.tasks_dir(), &id, &text)?;
+            let report = task::note(&paths, &id, &text)?;
             if report.created {
                 println!("noted {} (notes.md created)", report.id);
             } else {
@@ -912,7 +912,7 @@ fn print_verify_block(task: &TaskRecord, checks: &[String]) {
         return;
     }
 
-    if task.feature_id.is_none() {
+    if task.feature_id.is_none() && matches!(task.state, TaskState::Draft | TaskState::Exploring) {
         println!("verify+ missing:");
         println!(
             "  next: maestro task set {} --check \"<observable result>\"",

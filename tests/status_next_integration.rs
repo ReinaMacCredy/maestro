@@ -328,6 +328,72 @@ fn status_before_init_is_friendly_and_read_only() {
 }
 
 #[test]
+fn status_foregrounds_current_session_card_before_repo_queue() {
+    let temp = setup_repo("maestro-status-current-session");
+    let repo = temp.path();
+
+    run(
+        repo,
+        &["feature", "new", "Harness engineering map for Maestro"],
+    );
+    let feature_id = id_by_title(repo, "Harness engineering map for Maestro");
+    let unrelated_task = run(repo, &["task", "add", "--id-only", "Unrelated repo task"]);
+    let unrelated_task = unrelated_task.trim();
+    clear_runs(repo);
+    seed_run(
+        repo,
+        "design-session",
+        &[ownership_event("design-session", &feature_id, 1)],
+    );
+
+    let status_output = maestro_with_env(
+        repo,
+        &["status"],
+        &[("MAESTRO_SESSION_ID", "design-session")],
+    );
+    assert_success(&status_output, &["status"]);
+    let status = stdout(&status_output);
+
+    assert!(status.contains("CURRENT SESSION"), "{status}");
+    assert!(
+        status.contains(&format!("card: feature {feature_id}")),
+        "{status}"
+    );
+    assert!(
+        status.contains("Harness engineering map for Maestro"),
+        "{status}"
+    );
+    assert!(
+        status.contains("session: design-session  owner"),
+        "{status}"
+    );
+    assert!(status.contains("inspect: maestro active"), "{status}");
+    assert!(status.contains("REPO NEXT"), "{status}");
+    assert!(status.contains(unrelated_task), "{status}");
+    assert!(
+        status.find("CURRENT SESSION").unwrap() < status.find("REPO NEXT").unwrap(),
+        "{status}"
+    );
+
+    let json_output = maestro_with_env(
+        repo,
+        &["status", "--json"],
+        &[("MAESTRO_SESSION_ID", "design-session")],
+    );
+    assert_success(&json_output, &["status", "--json"]);
+    let parsed: JsonValue =
+        serde_json::from_str(&stdout(&json_output)).expect("status JSON should parse");
+    assert_eq!(parsed["current_session"]["session_id"], "design-session");
+    assert_eq!(parsed["current_session"]["card_id"], feature_id);
+    assert_eq!(
+        parsed["current_session"]["card_title"],
+        "Harness engineering map for Maestro"
+    );
+    assert_eq!(parsed["current_session"]["ownership"], "owner");
+    assert_eq!(parsed["current_session"]["inspect"], "maestro active");
+}
+
+#[test]
 fn status_surfaces_active_progress_checklist() {
     let temp = setup_repo("maestro-status-progress");
     let repo = temp.path();
@@ -1436,6 +1502,48 @@ fn status_shows_uncertain_loop_pointer_without_router_reason() {
     assert!(parsed["loop_hint"]["recommended_recipe"].is_null());
     assert!(parsed["loop_hint"]["reason"].is_null());
     assert_eq!(parsed["loop_hint"]["next"], "maestro loop next");
+}
+
+#[test]
+fn status_surfaces_evidence_backed_loop_readiness_packet() {
+    let temp = setup_repo("maestro-status-loop-readiness");
+    let repo = temp.path();
+
+    let human = run(repo, &["status"]);
+    assert!(human.contains("loop readiness: L"), "{human}");
+    assert!(human.contains("scheduler: passive_local_first"), "{human}");
+    assert!(
+        human.contains("blocked_from_next_level:"),
+        "status should expose next-level readiness blockers: {human}"
+    );
+    assert!(
+        human.contains("external schedulers stay external"),
+        "status should keep the passive/local-first scheduler stance explicit: {human}"
+    );
+
+    let json = run(repo, &["status", "--json"]);
+    let parsed: JsonValue =
+        serde_json::from_str(&json).expect("invariant: status JSON should parse");
+    assert_eq!(
+        parsed["loop_readiness"]["schema"],
+        "maestro.loop_readiness.v1"
+    );
+    assert_eq!(
+        parsed["loop_readiness"]["scheduler_stance"]["stance"],
+        "passive_local_first"
+    );
+    assert!(
+        parsed["loop_readiness"]["effective_limits"]
+            .as_array()
+            .is_some_and(|limits| limits.iter().any(|limit| limit["name"] == "kill_switch")),
+        "{parsed}"
+    );
+    assert!(
+        parsed["loop_readiness"]["blocked_from_next_level"]
+            .as_array()
+            .is_some_and(|blockers| !blockers.is_empty()),
+        "{parsed}"
+    );
 }
 
 #[test]

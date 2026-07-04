@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-version: 1.36.12
+version: 1.36.13
 description: "Design in a project using Maestro before implementation: use for brainstorm, plan, PRD synthesis, grilling/stress-test, domain model, deepening candidate, wording, workflow, skill/harness, card/task/feature, architecture, UX, or agent-process decisions."
 ---
 
@@ -127,6 +127,14 @@ to audit card-scoped chain receipts, and `maestro loop improve` for read-only
 improvement proposals; do not silently edit recipes or skills from router
 output. Do not use hidden stores, hidden schedulers, silent recipe mutation, or
 proof/QA bypass.
+When designing loop automation, map it into native Maestro pattern packs,
+recipe templates, readiness levels, and operating limits. Name the intended
+readiness target (L0 draft, L1 report, L2 assisted, or L3 unattended), the
+evidence `maestro loop validate <pattern>` and `maestro status` must show, and
+the cadence/max-attempts/max-subagents/denylist/budget/kill-switch/connector
+permission limits. Do not design a separate daemon, cron owner, queue, hidden
+executor, STATE.md, LOOP.md, or scheduler inside Maestro; external schedulers
+stay external and Maestro reports readiness for them.
 
 First step in a session: run `maestro active` (pull-only) to see what other
 live sessions are working on -- their card, mode, and progress -- before you

@@ -368,6 +368,58 @@ fn active_connect_prints_advisory_commands_without_linking() {
 }
 
 #[test]
+fn active_connect_messages_parent_card_for_peer_task_endpoint() {
+    let temp = cards_repo("active-connect-task-parent");
+    let repo = temp.path();
+
+    let mine = create_id(repo, &["-t", "feature", "Sender topic"]);
+    let parent = create_id(repo, &["-t", "feature", "Peer topic"]);
+    let peer_task = create_id(repo, &["-t", "task", "Task one", "--parent", &parent]);
+    clear_runs(repo);
+
+    let recent = ts_minutes_ago(1);
+    seed_run(
+        repo,
+        "peer-sess",
+        &[
+            skill_event("peer-sess", "maestro-card", &recent),
+            card_touch_event("peer-sess", &peer_task, &recent),
+        ],
+    );
+    seed_run(
+        repo,
+        "you-sess",
+        &[
+            skill_event("you-sess", "maestro-card", &recent),
+            card_touch_event("you-sess", &mine, &recent),
+        ],
+    );
+
+    let out = run(
+        repo,
+        &[("MAESTRO_SESSION_ID", "you-sess")],
+        &["active", "--connect"],
+    );
+
+    assert!(
+        out.contains(&format!("maestro link add {mine} {parent}")),
+        "{out}"
+    );
+    assert!(
+        out.contains(&format!(
+            "maestro msg send --from {mine} {parent} \"<text>\""
+        )),
+        "{out}"
+    );
+    assert!(
+        !out.contains(&format!(
+            "maestro msg send --from {mine} {peer_task} \"<text>\""
+        )),
+        "{out}"
+    );
+}
+
+#[test]
 fn all_reveals_stale_sessions_hidden_by_default() {
     // bl-002: a session whose latest event is beyond the window is absent
     // without `--all`, present and tagged `[stale Nm]` with it.

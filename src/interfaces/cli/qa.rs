@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::fs;
 use std::io::{self, Read};
 use std::path::PathBuf;
@@ -48,17 +49,55 @@ pub fn run(args: QaArgs) -> Result<()> {
 fn baseline(paths: &MaestroPaths, id: &str, observed: &str) -> Result<()> {
     non_empty(observed, "--observed")?;
     let amend_log_position = feature::amend_log_position(paths, id)?;
-    let mut contents = format!(
-        "---\namend_log_position: {amend_log_position}\n---\n\n### QA Baseline Contract\n\n- Scope: {id}\n- Critical workflow chains:\n  - CLI helper baseline\n    - Steps: setup -> action -> inspect output\n    - Touched link: feature QA gate\n    - Minimal proof: {observed}\n- Scenario Matrix:\n  - [bl-001] observed baseline behavior\n    - Dimensions: agent/CLI/local artifact\n    - Setup: repo initialized with feature {id}\n    - Action: {observed}\n    - Oracle: behavior remains observable\n    - Evidence to capture: command output or artifact diff\n    - Reproduction: rerun the observed command or workflow\n- Preserved behaviors:\n  - {observed} -> Proof: manual/CLI observation\n- Changed behaviors:\n  - None captured at baseline\n- Critical probes before commit:\n  - focused CLI/helper test\n- Security gates:\n  - Risk classes: destructive_fs_git; dependency_version; schema_migration; secrets; external_side_effects; release_publish_push\n  - Enforcement: task verify/complete plus feature verify/close\n  - Required proof: task proof, QA evidence, or feature acceptance evidence\n  - Waiver/block: feature verify --waive or task block --reason\n- Required artifacts:\n  - .maestro/cards/{id}/qa.md\n- Baseline gaps:\n  - None\n"
-    );
-    append_raw_observed_block(&mut contents, "baseline", observed);
+    let contents = if looks_like_full_baseline_contract(observed) {
+        normalize_full_baseline_contract(observed, amend_log_position)
+    } else {
+        let mut contents = format!(
+            "---\namend_log_position: {amend_log_position}\n---\n\n### QA Baseline Contract\n\n- Scope: {id}\n- Critical workflow chains:\n  - CLI helper baseline\n    - Steps: setup -> action -> inspect output\n    - Touched link: feature QA gate\n    - Minimal proof: {observed}\n- Scenario Matrix:\n  - [bl-001] observed baseline behavior\n    - Dimensions: agent/CLI/local artifact\n    - Setup: repo initialized with feature {id}\n    - Action: {observed}\n    - Oracle: behavior remains observable\n    - Evidence to capture: command output or artifact diff\n    - Reproduction: rerun the observed command or workflow\n- Preserved behaviors:\n  - {observed} -> Proof: manual/CLI observation\n- Changed behaviors:\n  - None captured at baseline\n- Critical probes before commit:\n  - focused CLI/helper test\n- Security gates:\n  - Risk classes: destructive_fs_git; dependency_version; schema_migration; secrets; external_side_effects; release_publish_push\n  - Enforcement: task verify/complete plus feature verify/close\n  - Required proof: task proof, QA evidence, or feature acceptance evidence\n  - Waiver/block: feature verify --waive or task block --reason\n- Required artifacts:\n  - .maestro/cards/{id}/qa.md\n- Baseline gaps:\n  - None\n"
+        );
+        append_raw_observed_block(&mut contents, "baseline", observed);
+        contents
+    };
+    let scenario_ids = bracketed_bl_ids(&contents);
     let path = feature::write_sidecar_text(paths, id, "qa.md", &contents)?;
-    println!("recorded baseline bl-001");
+    println!("recorded baseline {}", scenario_ids.join(", "));
     println!("feature: {id}");
     println!("file: {}", path.display());
     println!("{}", harness::security_qa_gate_line());
     println!("next: maestro feature accept {id}");
     Ok(())
+}
+
+fn looks_like_full_baseline_contract(observed: &str) -> bool {
+    observed.contains("### QA Baseline Contract") && observed.contains("[bl-")
+}
+
+fn normalize_full_baseline_contract(observed: &str, amend_log_position: usize) -> String {
+    let body = strip_frontmatter(observed).unwrap_or(observed).trim_start();
+    let mut contents = format!("---\namend_log_position: {amend_log_position}\n---\n\n{body}");
+    if !contents.ends_with('\n') {
+        contents.push('\n');
+    }
+    contents
+}
+
+fn strip_frontmatter(contents: &str) -> Option<&str> {
+    let trimmed = contents.trim_start();
+    let rest = trimmed.strip_prefix("---\n")?;
+    let (_frontmatter, body) = rest.split_once("\n---")?;
+    Some(body.strip_prefix('\n').unwrap_or(body))
+}
+
+fn bracketed_bl_ids(contents: &str) -> Vec<String> {
+    let mut ids = BTreeSet::new();
+    for (idx, _) in contents.match_indices("[bl-") {
+        let rest = &contents[idx + "[bl-".len()..];
+        let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
+        if !digits.is_empty() && rest[digits.len()..].starts_with(']') {
+            ids.insert(format!("bl-{digits}"));
+        }
+    }
+    ids.into_iter().collect()
 }
 
 fn slice(paths: &MaestroPaths, id: &str, scenarios: &[String], observed: &str) -> Result<()> {

@@ -1061,7 +1061,7 @@ fn agents_md_block() -> &'static str {
 /// they must never be committed. `playbook/` is deliberately absent so its files
 /// stay tracked.
 fn maestro_gitignore_block() -> &'static str {
-    "# Maestro local-only paths\nruns/\nchannels/\nconflicts.jsonl\nmaestro-gate.lock\nbackups/\nworktree/\nindex/\ninstall-lock.yaml\nupdate-check\ntasks/*/evidence/\ntasks/*/local/\narchive/**/evidence/\narchive/**/local/\narchive/**/runs/"
+    "# Maestro local-only paths\nruns/\nchannels/\nconflicts.jsonl\nmaestro-gate.lock\nbackups/\nworktree/\nindex/\ninstall-lock.yaml\nupdate-check\nglobal-skills-warning\ntasks/*/evidence/\ntasks/*/local/\narchive/**/evidence/\narchive/**/local/\narchive/**/runs/"
 }
 
 fn agent_settings_gitignore_block() -> &'static str {

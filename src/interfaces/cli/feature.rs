@@ -1425,27 +1425,27 @@ fn refresh_auto_archive_receipt(paths: &MaestroPaths, args: AutoArchiveRefreshAr
 
     let mut event = json!({
         "schema_version": EVENT_SCHEMA_VERSION,
-        "event_id": event_id,
+        "event_id": event_id.clone(),
         "event_type": "auto_archive_receipt_refresh",
         "target_kind": "feature",
-        "target_id": args.id,
-        "authority_ref": args.authority_ref,
-        "canonical_store_path": args.current_store,
-        "invoking_checkout_path": args.invoking_checkout,
-        "worker_source": args.worker_source,
+        "target_id": args.id.clone(),
+        "authority_ref": args.authority_ref.clone(),
+        "canonical_store_path": args.current_store.clone(),
+        "invoking_checkout_path": args.invoking_checkout.clone(),
+        "worker_source": args.worker_source.clone(),
         "current_head": current_head,
         "tested_head": current_head,
-        "qa_result": args.qa_result,
-        "qa_evidence": args.qa_evidence,
-        "target_card_hash": args.target_card_hash,
-        "run_id": args.run_id,
-        "multi_agent": args.multi_agent,
+        "qa_result": args.qa_result.clone(),
+        "qa_evidence": args.qa_evidence.clone(),
+        "target_card_hash": args.target_card_hash.clone(),
+        "run_id": args.run_id.clone(),
+        "multi_agent": args.multi_agent.clone(),
         "before_state": "archived",
         "after_state": "archived",
         "command": command,
         "result": "receipt_refreshed",
-        "archive_path": archive_path,
-        "restore_command": restore_command,
+        "archive_path": archive_path.clone(),
+        "restore_command": restore_command.clone(),
     });
     run::insert_agent_runtime(&mut event, agent_runtime_from_env());
     let event_hash = sha256_prefixed(&serde_json::to_vec(&event)?);
@@ -1453,46 +1453,25 @@ fn refresh_auto_archive_receipt(paths: &MaestroPaths, args: AutoArchiveRefreshAr
         .as_object_mut()
         .expect("invariant: auto_archive_receipt_refresh event is an object")
         .insert("event_hash".to_string(), json!(event_hash.clone()));
-    run::append_manual_event(paths, event["run_id"].as_str().unwrap_or_default(), &event)?;
+    run::append_manual_event(paths, &args.run_id, &event)?;
 
     let receipt = feature::AutoArchiveReceipt {
-        feature_id: event["target_id"].as_str().unwrap_or_default().to_string(),
-        canonical_store_path: event["canonical_store_path"]
-            .as_str()
-            .unwrap_or_default()
-            .to_string(),
-        invoking_checkout_path: event["invoking_checkout_path"]
-            .as_str()
-            .unwrap_or_default()
-            .to_string(),
-        worker_source: event["worker_source"]
-            .as_str()
-            .unwrap_or_default()
-            .to_string(),
-        target_card_hash: event["target_card_hash"].as_str().map(ToString::to_string),
+        feature_id: args.id,
+        canonical_store_path: args.current_store,
+        invoking_checkout_path: args.invoking_checkout,
+        worker_source: args.worker_source,
+        target_card_hash: args.target_card_hash,
         final_target_head: current_head.to_string(),
         tested_head: current_head.to_string(),
-        authority_ref: event["authority_ref"]
-            .as_str()
-            .unwrap_or_default()
-            .to_string(),
-        merge_back_disposition: event["multi_agent"]
-            .as_str()
-            .unwrap_or_default()
-            .to_string(),
-        qa_result: event["qa_result"].as_str().unwrap_or_default().to_string(),
-        run_id: event["run_id"].as_str().unwrap_or_default().to_string(),
-        event_id: event["event_id"].as_str().unwrap_or_default().to_string(),
+        authority_ref: args.authority_ref,
+        merge_back_disposition: args.multi_agent,
+        qa_result: args.qa_result,
+        run_id: args.run_id,
+        event_id,
         event_hash: event_hash.clone(),
         event_path: event_path.clone(),
-        archive_path: event["archive_path"]
-            .as_str()
-            .unwrap_or_default()
-            .to_string(),
-        restore_command: event["restore_command"]
-            .as_str()
-            .unwrap_or_default()
-            .to_string(),
+        archive_path: archive_path.clone(),
+        restore_command: restore_command.clone(),
     };
     let index_line = feature::append_auto_archive_receipt(paths, &receipt)?;
 
@@ -2393,9 +2372,7 @@ fn feature_design(
             write_feature_design(paths, id, &section, &text, false)
         }
         (Some(section), None, Some(text)) => write_feature_design(paths, id, &section, &text, true),
-        (Some(section), None, None) => bail!(
-            "--section needs the text to write\n  append: maestro feature {command} {id} --section \"{section}\" --append \"<text>\"\n  replace: maestro feature {command} {id} --section \"{section}\" --replace \"<text>\""
-        ),
+        (Some(section), None, None) => show_feature_design_section(paths, id, &section, command),
         (None, _, _) => bail!(
             "--append/--replace need --section\n  maestro feature {command} {id} --section \"<name>\" --append \"<text>\""
         ),
@@ -2435,17 +2412,57 @@ fn write_feature_design(
     Ok(())
 }
 
+fn show_feature_design_section(
+    paths: &MaestroPaths,
+    id: &str,
+    section: &str,
+    command: &str,
+) -> Result<()> {
+    let section = normalized_section_name(section)?;
+    let Some((view, archived)) = readable_feature_view(paths, id)? else {
+        return Ok(());
+    };
+    let design = if archived {
+        archived_design_text(paths, &view.id)?
+    } else {
+        feature::read_design_text(paths, &view.id)?
+    };
+    let Some(design) = design else {
+        bail!(
+            "feature {id} has no design.md\n  read all: maestro feature {command} {id}\n  append: maestro feature {command} {id} --section \"{section}\" --append \"<text>\""
+        );
+    };
+    let Some(section_text) = markdown_section(&design, &section) else {
+        let available = markdown_section_names(&design);
+        let available = if available.is_empty() {
+            "none".to_string()
+        } else {
+            available.join(", ")
+        };
+        bail!(
+            "design section \"{section}\" not found for feature {id}\n  available: {available}\n  read all: maestro feature {command} {id}\n  append: maestro feature {command} {id} --section \"{section}\" --append \"<text>\""
+        );
+    };
+
+    println!("status: {}", feature::status_label(&view.status));
+    println!("feature: {}", view.id);
+    if archived {
+        println!("archived: true");
+    }
+    println!("section: {section}");
+    println!();
+    print!("{}", section_text.trim_end());
+    println!();
+    Ok(())
+}
+
 fn show_feature_design(paths: &MaestroPaths, id: &str) -> Result<()> {
     // L6b: reads cross the boundary -- mirror `show_feature`'s archive
     // fallthrough so a historical spec still renders. Only when neither tree
     // resolves does the unreadable-card recovery view take over, carrying the
     // live error.
-    let (view, archived) = match feature::show(paths, id) {
-        Ok(view) => (view, false),
-        Err(live_err) => match feature::show_archived(paths, id) {
-            Ok(view) => (view, true),
-            Err(_) => return show_unreadable_feature_spec(paths, id, live_err),
-        },
+    let Some((view, archived)) = readable_feature_view(paths, id)? else {
+        return Ok(());
     };
     println!("status: {}", feature::status_label(&view.status));
     println!("feature: {}", view.id);
@@ -2454,25 +2471,13 @@ fn show_feature_design(paths: &MaestroPaths, id: &str) -> Result<()> {
     }
     println!();
     if archived {
-        match card::read_archived_file(paths, &view.id, "design.md")? {
-            Some(bytes) => {
-                let design = String::from_utf8(bytes)
-                    .map_err(|error| anyhow::anyhow!("archived design.md is not UTF-8: {error}"))?;
-                print!("{}", design.trim_end());
+        match archived_design_text(paths, &view.id)? {
+            Some(design) => print!("{}", design.trim_end()),
+            None => {
+                println!("# {}", view.title);
+                println!();
+                println!("(no design.md found)");
             }
-            None => match card::read_archived_file(paths, &view.id, "spec.md")? {
-                Some(bytes) => {
-                    let spec = String::from_utf8(bytes).map_err(|error| {
-                        anyhow::anyhow!("archived spec.md is not UTF-8: {error}")
-                    })?;
-                    print!("{}", spec.trim_end());
-                }
-                None => {
-                    println!("# {}", view.title);
-                    println!();
-                    println!("(no design.md found)");
-                }
-            },
         }
     } else {
         match feature::read_design_text(paths, &view.id)? {
@@ -2552,6 +2557,68 @@ fn show_feature_design(paths: &MaestroPaths, id: &str) -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn readable_feature_view(
+    paths: &MaestroPaths,
+    id: &str,
+) -> Result<Option<(feature::FeatureView, bool)>> {
+    match feature::show(paths, id) {
+        Ok(view) => Ok(Some((view, false))),
+        Err(live_err) => match feature::show_archived(paths, id) {
+            Ok(view) => Ok(Some((view, true))),
+            Err(_) => {
+                show_unreadable_feature_spec(paths, id, live_err)?;
+                Ok(None)
+            }
+        },
+    }
+}
+
+fn archived_design_text(paths: &MaestroPaths, id: &str) -> Result<Option<String>> {
+    if let Some(bytes) = card::read_archived_file(paths, id, "design.md")? {
+        let design = String::from_utf8(bytes)
+            .map_err(|error| anyhow::anyhow!("archived design.md is not UTF-8: {error}"))?;
+        return Ok(Some(design));
+    }
+    if let Some(bytes) = card::read_archived_file(paths, id, "spec.md")? {
+        let spec = String::from_utf8(bytes)
+            .map_err(|error| anyhow::anyhow!("archived spec.md is not UTF-8: {error}"))?;
+        return Ok(Some(spec));
+    }
+    Ok(None)
+}
+
+fn normalized_section_name(section: &str) -> Result<String> {
+    let section = section.trim();
+    if section.is_empty() || section.contains('\n') {
+        bail!("section name must be one non-empty line");
+    }
+    Ok(section.to_string())
+}
+
+fn markdown_section(markdown: &str, section: &str) -> Option<String> {
+    let heading = format!("## {section}");
+    let lines: Vec<&str> = markdown.lines().collect();
+    let start = lines
+        .iter()
+        .position(|line| line.trim_end() == heading.as_str())?;
+    let end = lines[start + 1..]
+        .iter()
+        .position(|line| line.starts_with("## ") || line.starts_with("# "))
+        .map(|offset| start + 1 + offset)
+        .unwrap_or(lines.len());
+    Some(lines[start..end].join("\n"))
+}
+
+fn markdown_section_names(markdown: &str) -> Vec<String> {
+    markdown
+        .lines()
+        .filter_map(|line| line.strip_prefix("## "))
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .map(ToOwned::to_owned)
+        .collect()
 }
 
 fn show_unreadable_feature_spec(

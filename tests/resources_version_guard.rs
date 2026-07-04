@@ -43,8 +43,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 20] = [
     (
         "skill",
         "maestro-card",
-        "1.37.19",
-        "62daa140e3dd2c1dcc5882abcfe7c514d923d9b32450013c3d05dc6c197d0944",
+        "1.37.20",
+        "bd31ee26870e12d54d3eec2aaf7d58b449812589450ce22b6e684b2ff86ec1db",
     ),
     (
         "skill",
@@ -55,8 +55,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 20] = [
     (
         "skill",
         "maestro-design",
-        "1.36.12",
-        "08d36f5146ef50feb0e1c5e959a627194441276d0f038ce07c912036ee531092",
+        "1.36.13",
+        "29520723cbc095143141b2e3ffe265b3ec5a741732b9f3dbb4bd1e0b02711b97",
     ),
     (
         "skill",
@@ -73,8 +73,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 20] = [
     (
         "harness",
         "HARNESS.md",
-        "1.29.16",
-        "053c7500c7b2f1e8931c4ed6f6c3e11887c6d49710a99fc1cefdd580d87193a0",
+        "1.29.18",
+        "4f45021b71ed6c1d3872bb2b22f180626778aaa9123161edf185ebaed09ce11e",
     ),
     (
         "playbook",
@@ -373,6 +373,11 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
         );
     }
     for phrase in [
+        "Concrete repeatable form",
+        "maestro task setup --task \"Map current behavior\" --task \"Implement scoped fix\" --task \"Verify\" --start",
+        "During implementation, keep running notes with `maestro note <card-or-task-id> \"<text>\"`",
+        "decisions not in the handoff/spec",
+        "scope or acceptance, amend the owning Feature/Card contract",
         "Canonical work readiness is `maestro ready`",
         "task-wave projection from the Task DAG",
         "parallel executable wave",
@@ -401,6 +406,18 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
             && harness.contains("return to the parent design loop"),
         "harness must route delegated design mandates to the design-relay recipe"
     );
+    for phrase in [
+        "Loop readiness is native evidence",
+        "maestro loop validate <pattern>",
+        "blocked_from_next_level",
+        "Do not claim L3 unattended",
+        "External schedulers stay external",
+    ] {
+        assert!(
+            harness.contains(phrase),
+            "harness must retain loop readiness evidence phrase {phrase:?}"
+        );
+    }
 
     let design = shipped_skill_body("maestro-design").replace('\n', " ");
     assert!(
@@ -440,6 +457,18 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
         assert!(
             design.contains(phrase),
             "maestro-design must explain loop intelligence boundary phrase {phrase:?}"
+        );
+    }
+    for phrase in [
+        "When designing loop automation",
+        "native Maestro pattern packs",
+        "readiness target (L0 draft, L1 report, L2 assisted, or L3 unattended)",
+        "cadence/max-attempts/max-subagents/denylist/budget/kill-switch/connector",
+        "Do not design a separate daemon",
+    ] {
+        assert!(
+            design.contains(phrase),
+            "maestro-design must retain loop readiness design phrase {phrase:?}"
         );
     }
     assert!(
@@ -533,12 +562,27 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
         );
     }
     for phrase in [
+        "Loop readiness is an evidence gate",
+        "For production loop patterns",
+        "blocked_from_next_level",
+        "Do not claim L3",
+        "External schedulers stay external",
+    ] {
+        assert!(
+            card.contains(phrase),
+            "maestro-card must retain loop readiness evidence phrase {phrase:?}"
+        );
+    }
+    for phrase in [
         "Phase 0: design-to-card gate",
         "Before `task setup`",
         "Am I coming from design or brainstorm?",
         "What card/feature owns this work?",
         "Is that card/feature handoff finalized and fresh?",
         "Progress rows cannot be used",
+        "Record implementation discoveries with `maestro note <card-or-task-id> \"<text>\"`",
+        "plan changes, tradeoffs, gotchas, risks, and follow-up work",
+        "scope or acceptance changes still require Feature/Card contract amendment",
     ] {
         assert!(
             card.contains(phrase),

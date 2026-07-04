@@ -159,9 +159,69 @@ fn loop_index_lists_unified_structured_recipe_catalog() {
     assert!(out.contains("## Custom Recipe Policy"), "{out}");
     assert!(out.contains("conflict-handoff"), "{out}");
     assert!(out.contains("synthesize"), "{out}");
+    assert!(out.contains("## Shipped Pattern Packs"), "{out}");
+    assert!(out.contains("daily-triage"), "{out}");
+    assert!(out.contains("pr-babysitter"), "{out}");
+    assert!(out.contains("ci-sweeper"), "{out}");
+    assert!(out.contains("dependency-sweeper"), "{out}");
+    assert!(out.contains("changelog-drafter"), "{out}");
+    assert!(out.contains("post-merge-cleanup"), "{out}");
+    assert!(out.contains("issue-triage"), "{out}");
     assert!(!out.contains("feature-fan-out"), "{out}");
     assert!(!out.contains("adversarial-fan-out"), "{out}");
     assert!(!out.contains("generate-and-filter"), "{out}");
+}
+
+#[test]
+fn loop_show_and_validate_render_recipe_native_pattern_packs() {
+    let temp = TestTempDir::new("maestro-loop-pattern-packs");
+
+    let shown = stdout(temp.path(), &["loop", "show", "pr-babysitter"]);
+    assert!(
+        shown.contains("schema_version: maestro.recipe_pattern.v1"),
+        "{shown}"
+    );
+    assert!(shown.contains("id: pr-babysitter"), "{shown}");
+    assert!(shown.contains("readiness_floor: L2 assisted"), "{shown}");
+    assert!(shown.contains("- feature-fanout"), "{shown}");
+    assert!(shown.contains("- work"), "{shown}");
+    assert!(shown.contains("- synthesize"), "{shown}");
+    for limit in [
+        "cadence",
+        "max_attempts",
+        "max_subagents",
+        "denylist",
+        "budget",
+        "kill_switch",
+        "connector_permissions",
+    ] {
+        assert!(shown.contains(limit), "{limit} missing from {shown}");
+    }
+
+    let valid = stdout(temp.path(), &["loop", "validate", "ci-sweeper"]);
+    assert!(
+        valid.contains("valid shipped loop pattern: ci-sweeper"),
+        "{valid}"
+    );
+    assert!(
+        valid.contains("schema: maestro.loop_readiness.v1"),
+        "{valid}"
+    );
+    assert!(valid.contains("readiness_floor: L1 report"), "{valid}");
+    assert!(valid.contains("effective_level: L0 draft"), "{valid}");
+    assert!(valid.contains("base_recipes: audit -> work"), "{valid}");
+    assert!(
+        valid.contains("scheduler_stance: passive_local_first"),
+        "{valid}"
+    );
+    assert!(valid.contains("liveness:"), "{valid}");
+    assert!(valid.contains("gaps:"), "{valid}");
+    assert!(valid.contains("blocked_from_next_level:"), "{valid}");
+    assert!(
+        valid.contains("external schedulers stay external"),
+        "{valid}"
+    );
+    assert!(valid.contains("- connector_permissions"), "{valid}");
 }
 
 #[test]
@@ -572,6 +632,7 @@ fn loop_next_chain_json_uses_stable_envelope() {
     assert_eq!(value["current"], "work.act");
     assert_eq!(value["selected_unit"]["kind"], "task");
     assert_eq!(value["selected_unit"]["id"], task_id);
+    assert_eq!(value["selected_feature_id"], "chain-json");
     assert_eq!(value["transition"]["from"], "work.act");
     assert_eq!(value["transition"]["to"], "design.choose");
     assert_eq!(
@@ -587,6 +648,17 @@ fn loop_next_chain_json_uses_stable_envelope() {
                 |condition| condition["key"] == "decision.all_blockers_locked"
                     && condition["satisfied"] == false
             ),
+        "{value}"
+    );
+    let next = value["next"].as_array().expect("next should be an array");
+    assert!(
+        next.iter()
+            .all(|entry| !entry.as_str().unwrap_or("").contains("<feature-id>")),
+        "{value}"
+    );
+    assert!(
+        next.iter()
+            .any(|entry| entry.as_str() == Some("maestro feature reconcile chain-json")),
         "{value}"
     );
 }

@@ -1,6 +1,6 @@
 ---
 name: maestro-card
-version: 1.37.19
+version: 1.37.20
 description: "Card work in a project using Maestro after design approval: use for implement, fix, verify, QA, close, release, continue, or unattended prompts like use loop, keep looping, work while away/asleep."
 ---
 
@@ -76,6 +76,12 @@ current Maestro verbs, hard stops, and continue output. Work Lease is only a
 choose-phase helper; it may select or reserve one safe unit, but it is not a
 scheduler, daemon, queue, worker launcher, executor, hidden store, or second
 lifecycle.
+Loop readiness is an evidence gate. For production loop patterns or any
+unattended/away-mode claim, read `maestro loop validate <pattern>` and
+`maestro status`; report the effective L0/L1/L2/L3 level, gaps, operating-limit
+sources, scheduler stance, liveness, and `blocked_from_next_level`. Do not
+claim L3 or use unattended wording unless the readouts say L3 and no blockers
+remain. External schedulers stay external; Maestro stays passive/local-first.
 
 ## Route
 
@@ -127,6 +133,8 @@ Load extra references only when the chosen branch points at them.
   need stable ids. The Progress card itself appears in card views. Take and annotate tasks with
   `maestro task start`/`maestro task claim`, `maestro task update`, and
   `maestro task note`.
+- Record implementation discoveries with `maestro note <card-or-task-id> "<text>"`
+  for decisions not in the handoff/spec. Record plan changes, tradeoffs, gotchas, risks, and follow-up work; scope or acceptance changes still require Feature/Card contract amendment.
 - Ids are stable and opaque (`card-<hash>`; features keep their creation
   slug). The dotted alias `show` prints is display-only; never address a card
   with it.

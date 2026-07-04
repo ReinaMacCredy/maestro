@@ -16,6 +16,9 @@ fn implement_method(task: &TaskRecord, checks: &[String]) -> ImplementMethod {
     if let Some(reason) = task.lane.as_deref().and_then(skip_reason_for_lane) {
         return tdd_skipped(reason);
     }
+    if is_verification_only_task(task, checks) {
+        return tdd_skipped("verification-only task");
+    }
     if let Some(reason) = skip_reason_for_checks(checks) {
         return tdd_skipped(reason);
     }
@@ -272,6 +275,32 @@ fn skip_reason_for_lane(lane: &str) -> Option<&'static str> {
         "spike" => Some("lane spike"),
         _ => None,
     }
+}
+
+fn is_verification_only_task(task: &TaskRecord, checks: &[String]) -> bool {
+    let title = task.title.to_ascii_lowercase();
+    let title_marks_verification = title.starts_with("verify ")
+        || title.contains("verification-only")
+        || title.contains("verification gate")
+        || title.contains("ship gate");
+    title_marks_verification
+        && (checks.is_empty()
+            || checks
+                .iter()
+                .all(|check| check_marks_verification_only(check)))
+}
+
+fn check_marks_verification_only(check: &str) -> bool {
+    let text = check.to_ascii_lowercase();
+    text.contains("verification-only")
+        || text.contains("pure verification")
+        || text.contains("test passes")
+        || text.contains("tests pass")
+        || text.contains("gate passes")
+        || text.contains("gate is green")
+        || text.contains("contract tests")
+        || text.starts_with("cargo ")
+        || text.starts_with("maestro ")
 }
 
 fn skip_reason_for_checks(checks: &[String]) -> Option<&'static str> {

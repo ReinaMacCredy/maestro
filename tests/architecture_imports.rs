@@ -384,6 +384,7 @@ fn feature_domain_facade_exposes_the_deliberate_surface() {
             "read_sidecar_text".to_string(),
             "reconcile_clean_check".to_string(),
             "reconcile_plan_template".to_string(),
+            "reconcile_receipt_is_current".to_string(),
             "reconcile_report".to_string(),
             "reopen".to_string(),
             "set".to_string(),

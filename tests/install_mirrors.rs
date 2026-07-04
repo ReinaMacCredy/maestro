@@ -45,6 +45,7 @@ fn mirror_plan_writes_managed_content_for_claude() {
         .expect("invariant: root .gitignore plan should exist");
     assert!(gitignore_plan.contents.contains("runs/"));
     assert!(gitignore_plan.contents.contains("update-check"));
+    assert!(gitignore_plan.contents.contains("global-skills-warning"));
     assert!(!gitignore_plan.contents.contains(".maestro/"));
     assert!(
         !gitignore_plan

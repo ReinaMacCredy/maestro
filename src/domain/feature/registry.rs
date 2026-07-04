@@ -542,12 +542,25 @@ pub fn reopen(paths: &MaestroPaths, id: &str) -> Result<ReopenReport> {
         );
     }
     let path = paths.workbench_dir().join(id);
+    remove_empty_reopen_workbench(&path)?;
     let files = live_db::export_card_to_dir(paths, id, &path)?;
     Ok(ReopenReport {
         id: id.to_string(),
         path,
         files,
     })
+}
+
+fn remove_empty_reopen_workbench(path: &Path) -> Result<()> {
+    if !path.is_dir() {
+        return Ok(());
+    }
+    let mut entries =
+        fs::read_dir(path).with_context(|| format!("failed to read {}", path.display()))?;
+    if entries.next().transpose()?.is_none() {
+        fs::remove_dir(path).with_context(|| format!("failed to remove {}", path.display()))?;
+    }
+    Ok(())
 }
 
 pub fn handoff_gap(paths: &MaestroPaths, id: &str) -> Result<Option<String>> {

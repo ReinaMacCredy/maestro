@@ -22,6 +22,7 @@ use crate::operations::memory::{
 };
 
 const LOOP_OUTCOME_SCHEMA: &str = "maestro.loop_outcome.v1";
+const LOOP_READINESS_SCHEMA: &str = "maestro.loop_readiness.v1";
 const LOOP_TRACE_SCHEMA: &str = "maestro.loop_trace.v1";
 const LOOP_TRACE_RECENT_LIMIT: usize = 5;
 const WORK_LEASE_JSON_SCHEMA: &str = "maestro.work_lease.v1";
@@ -51,6 +52,86 @@ const RECURRENCE_EVIDENCE: &[&str] = &[
     "locked decision",
 ];
 const WORK_LEASE_RESTART_POLICY: &str = "Cold-start from the card store plus the run ledger: rerun the inspect/status/reconcile handles; no daemon, queue, scheduler, executor, or hidden store exists.";
+
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct LoopReadinessPacket {
+    pub schema: String,
+    pub target: LoopReadinessTarget,
+    pub status: String,
+    pub effective_level: String,
+    pub effective_level_name: String,
+    pub readiness_floor: Option<String>,
+    pub effective_limits: Vec<LoopReadinessLimit>,
+    pub scheduler_stance: LoopReadinessSchedulerStance,
+    pub liveness: LoopReadinessLiveness,
+    pub gaps: Vec<LoopReadinessGap>,
+    pub blocked_from_next_level: Vec<LoopReadinessBlocker>,
+    pub evidence: Vec<LoopReadinessEvidence>,
+    pub next: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct LoopReadinessTarget {
+    pub kind: String,
+    pub id: String,
+    pub title: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub recipes: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct LoopReadinessLimit {
+    pub name: String,
+    pub status: String,
+    pub source: String,
+    pub evidence: Vec<String>,
+    pub note: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct LoopReadinessSchedulerStance {
+    pub stance: String,
+    pub owner: String,
+    pub status: String,
+    pub source: String,
+    pub note: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct LoopReadinessLiveness {
+    pub status: String,
+    pub heartbeat_events: usize,
+    pub active_sessions: usize,
+    pub stale_sessions: usize,
+    pub missed_runs: usize,
+    pub dead_runs: usize,
+    pub source: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct LoopReadinessGap {
+    pub level: String,
+    pub requirement: String,
+    pub evidence: String,
+    pub inspect: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct LoopReadinessBlocker {
+    pub level: String,
+    pub requirement: String,
+    pub reason: String,
+    pub inspect: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct LoopReadinessEvidence {
+    pub level: String,
+    pub requirement: String,
+    pub status: String,
+    pub source: String,
+    pub detail: String,
+}
 
 /// Execute `maestro loop [list | show <name>]`: print the recipe index (the
 /// default and `list`), or one recipe verbatim. Served from the binary, so it
@@ -94,10 +175,21 @@ pub fn run(args: LoopArgs) -> Result<()> {
                 );
             }
         }
-        Some(LoopCommand::Validate { name }) => print!(
-            "{}",
-            loop_recipes::validate_with_custom_dir(&name, custom_dir.as_deref())?
-        ),
+        Some(LoopCommand::Validate { name }) => {
+            if loop_recipes::pattern_pack(&name).is_some() {
+                let packet = build_loop_readiness_packet_for_pattern(&name)?;
+                print!(
+                    "{}{}",
+                    loop_recipes::validate_with_custom_dir(&name, custom_dir.as_deref())?,
+                    render_loop_readiness_packet(&packet)
+                );
+            } else {
+                print!(
+                    "{}",
+                    loop_recipes::validate_with_custom_dir(&name, custom_dir.as_deref())?
+                );
+            }
+        }
         Some(LoopCommand::Template { kind }) => {
             if kind != "custom" {
                 bail!("unknown loop template {kind:?}; available: custom");
@@ -117,6 +209,599 @@ fn custom_recipe_dir() -> Option<PathBuf> {
     let repo_root = discover_repo_root().ok()?;
     let paths = MaestroPaths::new(repo_root);
     Some(paths.loop_recipes_dir())
+}
+
+pub(crate) fn build_loop_readiness_packet_for_status(
+    paths: &MaestroPaths,
+    task_entries: &[task::TaskEntry],
+    feature_count: usize,
+    card_count: usize,
+    complete_harness: &harness::CompleteHarnessReadout,
+) -> LoopReadinessPacket {
+    let snapshot = LoopReadinessSnapshot {
+        repo_initialized: true,
+        repo: Some(paths.repo_root().display().to_string()),
+        task_count: task_entries.len(),
+        feature_count,
+        card_count,
+        complete_harness: Some(complete_harness.clone()),
+    };
+    build_loop_readiness_packet(None, snapshot)
+}
+
+fn build_loop_readiness_packet_for_pattern(name: &str) -> Result<LoopReadinessPacket> {
+    let Some(pattern) = loop_recipes::pattern_pack(name) else {
+        bail!("unknown loop pattern {name}");
+    };
+    build_loop_readiness_snapshot()
+        .map(|snapshot| build_loop_readiness_packet(Some(pattern), snapshot))
+}
+
+#[derive(Clone, Debug)]
+struct LoopReadinessSnapshot {
+    repo_initialized: bool,
+    repo: Option<String>,
+    task_count: usize,
+    feature_count: usize,
+    card_count: usize,
+    complete_harness: Option<harness::CompleteHarnessReadout>,
+}
+
+fn build_loop_readiness_snapshot() -> Result<LoopReadinessSnapshot> {
+    let Ok(repo_root) = discover_repo_root() else {
+        return Ok(LoopReadinessSnapshot {
+            repo_initialized: false,
+            repo: None,
+            task_count: 0,
+            feature_count: 0,
+            card_count: 0,
+            complete_harness: None,
+        });
+    };
+    let paths = MaestroPaths::new(repo_root);
+    let task_entries = task::load_task_entries(&paths.tasks_dir())?;
+    let cards = card::query::scan(&paths)?;
+    let feature_count = cards
+        .iter()
+        .filter(|card| card.card_type.as_str() == "feature")
+        .count();
+    Ok(LoopReadinessSnapshot {
+        repo_initialized: true,
+        repo: Some(paths.repo_root().display().to_string()),
+        task_count: task_entries.len(),
+        feature_count,
+        card_count: cards.len(),
+        complete_harness: Some(harness::complete_readout(&paths)?),
+    })
+}
+
+fn build_loop_readiness_packet(
+    pattern: Option<&'static loop_recipes::LoopPatternPack>,
+    snapshot: LoopReadinessSnapshot,
+) -> LoopReadinessPacket {
+    let target = match pattern {
+        Some(pattern) => LoopReadinessTarget {
+            kind: "pattern".to_string(),
+            id: pattern.id.to_string(),
+            title: pattern.title.to_string(),
+            recipes: pattern
+                .recipes
+                .iter()
+                .map(|recipe| (*recipe).to_string())
+                .collect(),
+        },
+        None => LoopReadinessTarget {
+            kind: "repo".to_string(),
+            id: snapshot
+                .repo
+                .clone()
+                .unwrap_or_else(|| "uninitialized".to_string()),
+            title: "Maestro loop system".to_string(),
+            recipes: Vec::new(),
+        },
+    };
+    let readiness_floor = pattern.map(|pattern| readiness_label(&pattern.readiness_floor));
+    let limit_names = loop_readiness_limit_names(pattern);
+    let effective_limits = limit_names
+        .iter()
+        .map(|limit| loop_readiness_limit(limit, pattern))
+        .collect::<Vec<_>>();
+    let scheduler_stance = loop_readiness_scheduler_stance(snapshot.complete_harness.as_ref());
+    let liveness = loop_readiness_liveness(snapshot.complete_harness.as_ref());
+    let checks = loop_readiness_checks(&snapshot, pattern, !effective_limits.is_empty());
+    let (effective_level, effective_level_name) = effective_readiness_level(&checks);
+    let status = if checks.iter().all(|check| check.passed) {
+        "complete"
+    } else if effective_level == "L0" {
+        "draft"
+    } else {
+        "partial"
+    }
+    .to_string();
+    let evidence = checks
+        .iter()
+        .map(|check| LoopReadinessEvidence {
+            level: check.level.to_string(),
+            requirement: check.requirement.to_string(),
+            status: if check.passed { "pass" } else { "gap" }.to_string(),
+            source: check.source.clone(),
+            detail: check.detail.clone(),
+        })
+        .collect::<Vec<_>>();
+    let gaps = checks
+        .iter()
+        .filter(|check| !check.passed)
+        .map(|check| LoopReadinessGap {
+            level: check.level.to_string(),
+            requirement: check.requirement.to_string(),
+            evidence: check.detail.clone(),
+            inspect: check.inspect.clone(),
+        })
+        .collect::<Vec<_>>();
+    let blocked_from_next_level = next_level_blockers(&effective_level, &checks);
+    let next = if let Some(pattern) = pattern {
+        vec![
+            format!("maestro loop show {}", pattern.id),
+            "maestro status --json".to_string(),
+        ]
+    } else {
+        vec![
+            "maestro loop validate pr-babysitter".to_string(),
+            "maestro status --json".to_string(),
+        ]
+    };
+    LoopReadinessPacket {
+        schema: LOOP_READINESS_SCHEMA.to_string(),
+        target,
+        status,
+        effective_level,
+        effective_level_name,
+        readiness_floor,
+        effective_limits,
+        scheduler_stance,
+        liveness,
+        gaps,
+        blocked_from_next_level,
+        evidence,
+        next,
+    }
+}
+
+#[derive(Clone, Debug)]
+struct LoopReadinessCheck {
+    level: &'static str,
+    requirement: &'static str,
+    passed: bool,
+    source: String,
+    detail: String,
+    inspect: Vec<String>,
+}
+
+fn loop_readiness_checks(
+    snapshot: &LoopReadinessSnapshot,
+    pattern: Option<&loop_recipes::LoopPatternPack>,
+    has_limits: bool,
+) -> Vec<LoopReadinessCheck> {
+    let complete = snapshot.complete_harness.as_ref();
+    let scheduler = complete.map(|readout| &readout.scheduler);
+    let scheduler_passive = scheduler.is_some_and(|scheduler| {
+        scheduler.stance == "passive_local_first" && scheduler.owner == "none"
+    });
+    let durable_state = snapshot.repo_initialized
+        && (snapshot.card_count > 0
+            || snapshot.task_count > 0
+            || snapshot.feature_count > 0
+            || complete.is_some());
+    let verifier_split = complete.is_some_and(|readout| !readout.proof_matrix.is_empty());
+    let human_gate = complete.is_some_and(|readout| {
+        !readout.security_gates.classes.is_empty()
+            && !readout.security_gates.proof_path.trim().is_empty()
+            && !readout.security_gates.waiver_path.trim().is_empty()
+            && !readout.security_gates.block_path.trim().is_empty()
+    });
+    let bounded_action_path = !DEFAULT_HARD_STOPS.is_empty() && !FOLLOW_UP_VERBS.is_empty();
+    let heartbeat_liveness = scheduler.is_some_and(|scheduler| {
+        scheduler.dead_runs == 0
+            && (scheduler.heartbeat_events > 0 || scheduler.active_sessions > 0)
+    });
+    let proof_complete = complete.is_some_and(|readout| {
+        readout
+            .proof_matrix
+            .iter()
+            .all(|row| row.status == "complete")
+    });
+    let qa_artifacts = complete.is_some_and(|readout| readout.security_gates.qa_artifacts > 0);
+    vec![
+        LoopReadinessCheck {
+            level: "L0",
+            requirement: "intent",
+            passed: true,
+            source: "loop target".to_string(),
+            detail: pattern
+                .map(|pattern| format!("pattern {} is declared in the shipped loop catalog", pattern.id))
+                .unwrap_or_else(|| "repo loop readiness target is status-visible".to_string()),
+            inspect: vec!["maestro loop".to_string()],
+        },
+        LoopReadinessCheck {
+            level: "L0",
+            requirement: "scoped_target",
+            passed: true,
+            source: "loop target".to_string(),
+            detail: pattern
+                .map(|pattern| format!("target is scoped to pattern {}", pattern.id))
+                .unwrap_or_else(|| "target is scoped to the current Maestro repo".to_string()),
+            inspect: vec!["maestro status --json".to_string()],
+        },
+        LoopReadinessCheck {
+            level: "L1",
+            requirement: "read_only_behavior",
+            passed: scheduler_passive,
+            source: "complete harness scheduler readout".to_string(),
+            detail: scheduler
+                .map(|scheduler| {
+                    format!(
+                        "stance={}; owner={}; status={}",
+                        scheduler.stance, scheduler.owner, scheduler.status
+                    )
+                })
+                .unwrap_or_else(|| "no scheduler artifact was available".to_string()),
+            inspect: vec!["maestro status --json".to_string()],
+        },
+        LoopReadinessCheck {
+            level: "L1",
+            requirement: "durable_maestro_state",
+            passed: durable_state,
+            source: "card/task/harness artifacts".to_string(),
+            detail: format!(
+                "repo_initialized={}; cards={}; tasks={}; features={}",
+                snapshot.repo_initialized, snapshot.card_count, snapshot.task_count, snapshot.feature_count
+            ),
+            inspect: vec!["maestro card list --json".to_string(), "maestro task list --json".to_string()],
+        },
+        LoopReadinessCheck {
+            level: "L2",
+            requirement: "verifier_split",
+            passed: verifier_split,
+            source: "complete harness proof matrix".to_string(),
+            detail: complete
+                .map(|readout| format!("proof_matrix_rows={}", readout.proof_matrix.len()))
+                .unwrap_or_else(|| "no proof matrix artifact was available".to_string()),
+            inspect: vec!["maestro status --json".to_string()],
+        },
+        LoopReadinessCheck {
+            level: "L2",
+            requirement: "operating_limits",
+            passed: has_limits,
+            source: "shipped loop pattern contract".to_string(),
+            detail: format!("declared_limits={}", loop_readiness_limit_names(pattern).join(",")),
+            inspect: vec!["maestro loop show pr-babysitter".to_string()],
+        },
+        LoopReadinessCheck {
+            level: "L2",
+            requirement: "human_gate",
+            passed: human_gate,
+            source: "security gate readout".to_string(),
+            detail: complete
+                .map(|readout| {
+                    format!(
+                        "classes={}; proof_path={}; waiver_path={}",
+                        readout.security_gates.classes.len(),
+                        readout.security_gates.proof_path,
+                        readout.security_gates.waiver_path
+                    )
+                })
+                .unwrap_or_else(|| "no security gate readout was available".to_string()),
+            inspect: vec!["maestro status --json".to_string()],
+        },
+        LoopReadinessCheck {
+            level: "L2",
+            requirement: "bounded_action_path",
+            passed: bounded_action_path,
+            source: "loop work-lease hard stops".to_string(),
+            detail: format!(
+                "hard_stops={}; follow_up_verbs={}",
+                DEFAULT_HARD_STOPS.len(),
+                FOLLOW_UP_VERBS.len()
+            ),
+            inspect: vec!["maestro loop work-lease --dry-run <card-id>".to_string()],
+        },
+        LoopReadinessCheck {
+            level: "L3",
+            requirement: "budget",
+            passed: false,
+            source: "effective limit source".to_string(),
+            detail: "budget is declared by pattern contracts, but no unattended executor budget artifact is present".to_string(),
+            inspect: vec!["maestro loop show <pattern>".to_string()],
+        },
+        LoopReadinessCheck {
+            level: "L3",
+            requirement: "kill_switch",
+            passed: false,
+            source: "effective limit source".to_string(),
+            detail: "kill_switch is declared by pattern contracts, but no unattended executor kill-switch artifact is present".to_string(),
+            inspect: vec!["maestro loop show <pattern>".to_string()],
+        },
+        LoopReadinessCheck {
+            level: "L3",
+            requirement: "heartbeat_liveness",
+            passed: heartbeat_liveness,
+            source: "scheduler liveness readout".to_string(),
+            detail: scheduler
+                .map(|scheduler| {
+                    format!(
+                        "heartbeat_events={}; active_sessions={}; dead_runs={}",
+                        scheduler.heartbeat_events, scheduler.active_sessions, scheduler.dead_runs
+                    )
+                })
+                .unwrap_or_else(|| "no liveness artifact was available".to_string()),
+            inspect: vec!["maestro active --all".to_string(), "maestro status --json".to_string()],
+        },
+        LoopReadinessCheck {
+            level: "L3",
+            requirement: "denylist",
+            passed: false,
+            source: "effective limit source".to_string(),
+            detail: "denylist is declared by pattern contracts, but no unattended executor denylist artifact is present".to_string(),
+            inspect: vec!["maestro loop show <pattern>".to_string()],
+        },
+        LoopReadinessCheck {
+            level: "L3",
+            requirement: "connector_boundaries",
+            passed: false,
+            source: "effective limit source".to_string(),
+            detail: "connector_permissions is declared by pattern contracts, but no unattended executor connector grant artifact is present".to_string(),
+            inspect: vec!["maestro loop show <pattern>".to_string()],
+        },
+        LoopReadinessCheck {
+            level: "L3",
+            requirement: "proof",
+            passed: proof_complete,
+            source: "complete harness proof matrix".to_string(),
+            detail: complete
+                .map(|readout| {
+                    let incomplete = readout
+                        .proof_matrix
+                        .iter()
+                        .filter(|row| row.status == "incomplete")
+                        .count();
+                    format!("proof_matrix_rows={}; incomplete={incomplete}", readout.proof_matrix.len())
+                })
+                .unwrap_or_else(|| "no proof matrix artifact was available".to_string()),
+            inspect: vec!["maestro status --json".to_string()],
+        },
+        LoopReadinessCheck {
+            level: "L3",
+            requirement: "qa",
+            passed: qa_artifacts,
+            source: "security gate QA artifacts".to_string(),
+            detail: complete
+                .map(|readout| format!("qa_artifacts={}", readout.security_gates.qa_artifacts))
+                .unwrap_or_else(|| "no QA artifact count was available".to_string()),
+            inspect: vec!["maestro qa status <feature-id>".to_string()],
+        },
+    ]
+}
+
+fn effective_readiness_level(checks: &[LoopReadinessCheck]) -> (String, String) {
+    let l0 = readiness_requirements_pass(checks, "L0");
+    let l1 = l0 && readiness_requirements_pass(checks, "L1");
+    let l2 = l1 && readiness_requirements_pass(checks, "L2");
+    let l3 = l2 && readiness_requirements_pass(checks, "L3");
+    let level_id = if l3 {
+        "L3"
+    } else if l2 {
+        "L2"
+    } else if l1 {
+        "L1"
+    } else {
+        "L0"
+    };
+    let name = loop_recipes::readiness_levels()
+        .iter()
+        .find(|level| level.id == level_id)
+        .map(|level| level.name)
+        .unwrap_or("draft");
+    (level_id.to_string(), name.to_string())
+}
+
+fn readiness_requirements_pass(checks: &[LoopReadinessCheck], level: &str) -> bool {
+    checks
+        .iter()
+        .filter(|check| check.level == level)
+        .all(|check| check.passed)
+}
+
+fn next_level_blockers(
+    effective_level: &str,
+    checks: &[LoopReadinessCheck],
+) -> Vec<LoopReadinessBlocker> {
+    let next_level = match effective_level {
+        "L0" => "L1",
+        "L1" => "L2",
+        "L2" => "L3",
+        "L3" => return Vec::new(),
+        _ => "L1",
+    };
+    checks
+        .iter()
+        .filter(|check| check.level == next_level && !check.passed)
+        .map(|check| LoopReadinessBlocker {
+            level: check.level.to_string(),
+            requirement: check.requirement.to_string(),
+            reason: check.detail.clone(),
+            inspect: check.inspect.clone(),
+        })
+        .collect()
+}
+
+fn loop_readiness_limit_names(pattern: Option<&loop_recipes::LoopPatternPack>) -> Vec<String> {
+    let mut names = match pattern {
+        Some(pattern) => pattern
+            .operating_limits
+            .iter()
+            .map(|limit| (*limit).to_string())
+            .collect::<Vec<_>>(),
+        None => loop_recipes::pattern_packs()
+            .iter()
+            .flat_map(|pattern| pattern.operating_limits.iter().copied())
+            .map(str::to_string)
+            .collect::<Vec<_>>(),
+    };
+    names.sort();
+    names.dedup();
+    names
+}
+
+fn loop_readiness_limit(
+    name: &str,
+    pattern: Option<&loop_recipes::LoopPatternPack>,
+) -> LoopReadinessLimit {
+    let source = pattern
+        .map(|pattern| format!("shipped_pattern_contract:{}", pattern.id))
+        .unwrap_or_else(|| "shipped_pattern_pack_catalog".to_string());
+    let evidence = pattern
+        .map(|pattern| vec![format!("maestro loop show {}", pattern.id)])
+        .unwrap_or_else(|| vec!["maestro loop".to_string()]);
+    let note = if name == "cadence" {
+        "declared for operators or external schedulers; Maestro only reports local liveness"
+    } else {
+        "declared by recipe pattern contract; no hidden executor state is inferred"
+    };
+    LoopReadinessLimit {
+        name: name.to_string(),
+        status: "declared".to_string(),
+        source,
+        evidence,
+        note: note.to_string(),
+    }
+}
+
+fn loop_readiness_scheduler_stance(
+    complete_harness: Option<&harness::CompleteHarnessReadout>,
+) -> LoopReadinessSchedulerStance {
+    match complete_harness {
+        Some(readout) => LoopReadinessSchedulerStance {
+            stance: readout.scheduler.stance.clone(),
+            owner: readout.scheduler.owner.clone(),
+            status: readout.scheduler.status.clone(),
+            source: readout.scheduler.heartbeat_source.clone(),
+            note: "external schedulers stay external; Maestro stays passive/local-first"
+                .to_string(),
+        },
+        None => LoopReadinessSchedulerStance {
+            stance: "passive_local_first".to_string(),
+            owner: "none".to_string(),
+            status: "unknown".to_string(),
+            source: "no repo harness artifacts loaded".to_string(),
+            note: "external schedulers stay external; Maestro stays passive/local-first"
+                .to_string(),
+        },
+    }
+}
+
+fn loop_readiness_liveness(
+    complete_harness: Option<&harness::CompleteHarnessReadout>,
+) -> LoopReadinessLiveness {
+    match complete_harness {
+        Some(readout) => LoopReadinessLiveness {
+            status: if readout.scheduler.dead_runs > 0 {
+                "degraded"
+            } else if readout.scheduler.heartbeat_events > 0
+                || readout.scheduler.active_sessions > 0
+            {
+                "observed"
+            } else {
+                "idle"
+            }
+            .to_string(),
+            heartbeat_events: readout.scheduler.heartbeat_events,
+            active_sessions: readout.scheduler.active_sessions,
+            stale_sessions: readout.scheduler.stale_sessions,
+            missed_runs: readout.scheduler.missed_runs,
+            dead_runs: readout.scheduler.dead_runs,
+            source: readout.scheduler.heartbeat_source.clone(),
+        },
+        None => LoopReadinessLiveness {
+            status: "unknown".to_string(),
+            heartbeat_events: 0,
+            active_sessions: 0,
+            stale_sessions: 0,
+            missed_runs: 0,
+            dead_runs: 0,
+            source: "no repo harness artifacts loaded".to_string(),
+        },
+    }
+}
+
+fn readiness_label(level: &loop_recipes::ReadinessLevelContract) -> String {
+    format!("{} {}", level.id, level.name)
+}
+
+fn render_loop_readiness_packet(packet: &LoopReadinessPacket) -> String {
+    let mut out = format!(
+        "schema: {}\ntarget: {} {}\neffective_level: {} {}\nstatus: {}\n",
+        packet.schema,
+        packet.target.kind,
+        packet.target.id,
+        packet.effective_level,
+        packet.effective_level_name,
+        packet.status
+    );
+    if let Some(floor) = packet.readiness_floor.as_deref() {
+        out.push_str(&format!("readiness_floor: {floor}\n"));
+    }
+    if !packet.target.recipes.is_empty() {
+        out.push_str(&format!(
+            "base_recipes: {}\n",
+            packet.target.recipes.join(" -> ")
+        ));
+    }
+    out.push_str(&format!(
+        "scheduler_stance: {} (owner={}, status={})\n",
+        packet.scheduler_stance.stance,
+        packet.scheduler_stance.owner,
+        packet.scheduler_stance.status
+    ));
+    out.push_str(&format!(
+        "liveness: {} (heartbeat_events={}, active_sessions={}, stale_sessions={}, missed_runs={}, dead_runs={})\n",
+        packet.liveness.status,
+        packet.liveness.heartbeat_events,
+        packet.liveness.active_sessions,
+        packet.liveness.stale_sessions,
+        packet.liveness.missed_runs,
+        packet.liveness.dead_runs
+    ));
+    out.push_str("effective_limits:\n");
+    for limit in &packet.effective_limits {
+        out.push_str(&format!(
+            "  - {}: {} source={} note={}\n",
+            limit.name, limit.status, limit.source, limit.note
+        ));
+    }
+    out.push_str("gaps:\n");
+    if packet.gaps.is_empty() {
+        out.push_str("  - none\n");
+    } else {
+        for gap in &packet.gaps {
+            out.push_str(&format!(
+                "  - {}.{}: {}\n",
+                gap.level, gap.requirement, gap.evidence
+            ));
+        }
+    }
+    out.push_str("blocked_from_next_level:\n");
+    if packet.blocked_from_next_level.is_empty() {
+        out.push_str("  - none\n");
+    } else {
+        for blocker in &packet.blocked_from_next_level {
+            out.push_str(&format!(
+                "  - {}.{}: {}\n",
+                blocker.level, blocker.requirement, blocker.reason
+            ));
+        }
+    }
+    out.push_str(&format!("note: {}\n", packet.scheduler_stance.note));
+    out
 }
 
 fn run_next(args: LoopNextArgs, custom_dir: Option<&std::path::Path>) -> Result<()> {
@@ -803,7 +1488,11 @@ fn build_loop_next_state_from_snapshot(
         warnings,
     };
     let report = loop_recipes::route_next(input.clone())?;
-    input.memory_hits = loop_memory_preflight_hits(paths, &input, &report);
+    let memory_hits = loop_memory_preflight_hits(paths, &input, &report);
+    if memory_hits.is_empty() {
+        return Ok(LoopNextRouteState { input, report });
+    }
+    input.memory_hits = memory_hits;
     let report = loop_recipes::route_next(input.clone())?;
     Ok(LoopNextRouteState { input, report })
 }
@@ -846,31 +1535,7 @@ fn populate_chain_feature_freshness(
         return;
     };
     feature.handoff_fresh = Some(matches!(feature::handoff_gap(paths, &feature.id), Ok(None)));
-    feature.reconcile_current = Some(chain_reconcile_receipt_is_current(paths, &feature.id));
-}
-
-fn chain_reconcile_receipt_is_current(paths: &MaestroPaths, id: &str) -> bool {
-    match feature::reconcile_report(paths, id) {
-        Ok(report) if report.receipt.state == "current" => true,
-        Ok(report)
-            if report.receipt.stale.len() == 1
-                && report
-                    .receipt
-                    .stale
-                    .first()
-                    .is_some_and(|item| item == "handoff")
-                && matches!(feature::handoff_gap(paths, id), Ok(None)) =>
-        {
-            true
-        }
-        Err(_)
-            if matches!(feature::finalize_requires_reopen(paths, id), Ok(true))
-                && matches!(feature::handoff_gap(paths, id), Ok(None)) =>
-        {
-            true
-        }
-        _ => false,
-    }
+    feature.reconcile_current = Some(feature::reconcile_receipt_is_current(paths, &feature.id));
 }
 
 fn recent_transition_outcomes(
@@ -896,15 +1561,13 @@ fn recent_transition_outcomes(
                 source_refs: loop_outcome_source_refs(record.session_id(), &value),
             },
         ));
+        outcomes.sort_by(|left, right| left.0.cmp(&right.0).then(left.1.id.cmp(&right.1.id)));
+        if outcomes.len() > LOOP_TRACE_RECENT_LIMIT {
+            outcomes.remove(0);
+        }
         Ok(())
     })?;
-    outcomes.sort_by(|left, right| left.0.cmp(&right.0).then(left.1.id.cmp(&right.1.id)));
-    let hidden = outcomes.len().saturating_sub(LOOP_TRACE_RECENT_LIMIT);
-    Ok(outcomes
-        .into_iter()
-        .skip(hidden)
-        .map(|(_, outcome)| outcome)
-        .collect())
+    Ok(outcomes.into_iter().map(|(_, outcome)| outcome).collect())
 }
 
 fn loop_chain_contract(

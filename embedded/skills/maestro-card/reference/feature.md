@@ -34,6 +34,12 @@ all child tasks verify. Before close, local install, push, release, publish,
 archive, or any other ship-style gate, switch to `maestro loop show ship` and
 fail closed unless authority, target, allowed actions, hard stops, and evidence
 are explicit.
+When the feature introduces loop patterns, production automation, or
+unattended/away-mode behavior, add the native readiness check to QA/close:
+`maestro loop validate <pattern>` plus `maestro status`. The close evidence must
+name the effective L0/L1/L2/L3 level, readiness gaps, operating-limit sources,
+scheduler stance, liveness, and `blocked_from_next_level`. Do not describe the
+result as L3 or unattended unless the readouts say L3 and no blockers remain.
 
 ```sh
 maestro feature reconcile <id>   # writes/refreshes the pre-finalize receipt when clean

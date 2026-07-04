@@ -253,6 +253,8 @@ pub struct LoopFeatureInput {
 pub struct LoopChainFacts {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub selected_unit: Option<LoopChainSelectedUnit>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selected_feature_id: Option<String>,
     pub current_recipe: String,
     pub current_phase: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -308,6 +310,8 @@ pub struct LoopChainReport {
     pub current: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub selected_unit: Option<LoopChainSelectedUnit>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selected_feature_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transition: Option<LoopChainTransitionMatch>,
     pub return_conditions: Vec<LoopChainReturnConditionStatus>,
@@ -617,6 +621,172 @@ pub struct LoopCompactPacket {
     pub hard_stops: Vec<String>,
     pub next: Vec<String>,
 }
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+pub struct ReadinessLevelContract {
+    pub id: &'static str,
+    pub name: &'static str,
+    pub summary: &'static str,
+    pub requires: &'static [&'static str],
+}
+
+impl ReadinessLevelContract {
+    fn label(&self) -> String {
+        format!("{} {}", self.id, self.name)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+pub struct LoopPatternPack {
+    pub id: &'static str,
+    pub title: &'static str,
+    pub summary: &'static str,
+    pub recipes: &'static [&'static str],
+    pub readiness_floor: ReadinessLevelContract,
+    pub gates: &'static [&'static str],
+    pub operating_limits: &'static [&'static str],
+}
+
+const L0_DRAFT: ReadinessLevelContract = ReadinessLevelContract {
+    id: "L0",
+    name: "draft",
+    summary: "declared intent and a scoped recipe/card target",
+    requires: &["intent", "scoped_target"],
+};
+
+const L1_REPORT: ReadinessLevelContract = ReadinessLevelContract {
+    id: "L1",
+    name: "report",
+    summary: "read-only recipe behavior plus durable Maestro state writes",
+    requires: &["L0", "read_only_behavior", "durable_maestro_state"],
+};
+
+const L2_ASSISTED: ReadinessLevelContract = ReadinessLevelContract {
+    id: "L2",
+    name: "assisted",
+    summary: "bounded assisted actions behind limits, proof, verifier split, and human gates",
+    requires: &[
+        "L1",
+        "verifier_split",
+        "operating_limits",
+        "human_gate",
+        "bounded_action_path",
+    ],
+};
+
+const L3_UNATTENDED: ReadinessLevelContract = ReadinessLevelContract {
+    id: "L3",
+    name: "unattended",
+    summary: "unattended action only when Maestro evidence proves budgets, stop gates, liveness, denylist, permissions, proof, and QA",
+    requires: &[
+        "L2",
+        "budget",
+        "kill_switch",
+        "heartbeat_liveness",
+        "denylist",
+        "connector_boundaries",
+        "proof",
+        "qa",
+    ],
+};
+
+const READINESS_LEVELS: &[ReadinessLevelContract] =
+    &[L0_DRAFT, L1_REPORT, L2_ASSISTED, L3_UNATTENDED];
+
+const DEFAULT_PATTERN_LIMITS: &[&str] = &[
+    "cadence",
+    "max_attempts",
+    "max_subagents",
+    "denylist",
+    "budget",
+    "kill_switch",
+    "connector_permissions",
+];
+
+const DAILY_TRIAGE_RECIPES: &[&str] = &["intake-triage", "audit"];
+const PR_BABYSITTER_RECIPES: &[&str] = &["feature-fanout", "work", "synthesize"];
+const CI_SWEEPER_RECIPES: &[&str] = &["audit", "work"];
+const DEPENDENCY_SWEEPER_RECIPES: &[&str] = &["audit", "work", "adversarial-review"];
+const CHANGELOG_DRAFTER_RECIPES: &[&str] = &["ship", "audit"];
+const POST_MERGE_CLEANUP_RECIPES: &[&str] = &["synthesize", "audit", "learning"];
+const ISSUE_TRIAGE_RECIPES: &[&str] = &["intake-triage"];
+
+const REPORT_GATES: &[&str] = &["intent", "scoped_target", "read_only_behavior"];
+const ASSISTED_GATES: &[&str] = &[
+    "intent",
+    "scoped_target",
+    "read_only_behavior",
+    "verifier_split",
+    "operating_limits",
+    "human_gate",
+    "bounded_action_path",
+];
+
+const LOOP_PATTERN_PACKS: &[LoopPatternPack] = &[
+    LoopPatternPack {
+        id: "daily-triage",
+        title: "Daily triage",
+        summary: "Review daily intake, classify work, and produce durable follow-up routing.",
+        recipes: DAILY_TRIAGE_RECIPES,
+        readiness_floor: L1_REPORT,
+        gates: REPORT_GATES,
+        operating_limits: DEFAULT_PATTERN_LIMITS,
+    },
+    LoopPatternPack {
+        id: "pr-babysitter",
+        title: "PR babysitter",
+        summary: "Track a pull request through fanout, implementation follow-up, and synthesis.",
+        recipes: PR_BABYSITTER_RECIPES,
+        readiness_floor: L2_ASSISTED,
+        gates: ASSISTED_GATES,
+        operating_limits: DEFAULT_PATTERN_LIMITS,
+    },
+    LoopPatternPack {
+        id: "ci-sweeper",
+        title: "CI sweeper",
+        summary: "Audit CI failures and route bounded repair work through native Maestro tasks.",
+        recipes: CI_SWEEPER_RECIPES,
+        readiness_floor: L1_REPORT,
+        gates: REPORT_GATES,
+        operating_limits: DEFAULT_PATTERN_LIMITS,
+    },
+    LoopPatternPack {
+        id: "dependency-sweeper",
+        title: "Dependency sweeper",
+        summary: "Audit dependency drift, perform bounded assisted work, and route adversarial review.",
+        recipes: DEPENDENCY_SWEEPER_RECIPES,
+        readiness_floor: L2_ASSISTED,
+        gates: ASSISTED_GATES,
+        operating_limits: DEFAULT_PATTERN_LIMITS,
+    },
+    LoopPatternPack {
+        id: "changelog-drafter",
+        title: "Changelog drafter",
+        summary: "Draft release notes from ship evidence and audit them before publication.",
+        recipes: CHANGELOG_DRAFTER_RECIPES,
+        readiness_floor: L1_REPORT,
+        gates: REPORT_GATES,
+        operating_limits: DEFAULT_PATTERN_LIMITS,
+    },
+    LoopPatternPack {
+        id: "post-merge-cleanup",
+        title: "Post-merge cleanup",
+        summary: "Synthesize merged work, audit cleanup, and preserve reusable learning.",
+        recipes: POST_MERGE_CLEANUP_RECIPES,
+        readiness_floor: L1_REPORT,
+        gates: REPORT_GATES,
+        operating_limits: DEFAULT_PATTERN_LIMITS,
+    },
+    LoopPatternPack {
+        id: "issue-triage",
+        title: "Issue triage",
+        summary: "Classify incoming issues and route follow-up cards without taking external action.",
+        recipes: ISSUE_TRIAGE_RECIPES,
+        readiness_floor: L1_REPORT,
+        gates: REPORT_GATES,
+        operating_limits: DEFAULT_PATTERN_LIMITS,
+    },
+];
 
 #[derive(Clone, Debug)]
 struct RouterCandidate {
@@ -2178,6 +2348,7 @@ pub fn chain_report_from_facts(
         chain: vec!["design", "work", "verify", "close", "archive"],
         current: facts.current_endpoint(),
         selected_unit: facts.selected_unit.clone(),
+        selected_feature_id: facts.selected_feature_id.clone(),
         transition,
         return_conditions,
         next,
@@ -2188,6 +2359,9 @@ pub fn chain_report_from_facts(
 pub fn chain_facts_from_router(input: &LoopRouterInput, report: &LoopNextReport) -> LoopChainFacts {
     let selected_task = selected_chain_task(input);
     let selected_feature = selected_chain_feature(input);
+    let selected_feature_id = selected_feature
+        .map(|feature| feature.id.clone())
+        .or_else(|| selected_task.and_then(|task| task.feature_id.clone()));
     let selected_unit = selected_task
         .map(|task| LoopChainSelectedUnit {
             kind: "task".to_string(),
@@ -2222,6 +2396,7 @@ pub fn chain_facts_from_router(input: &LoopRouterInput, report: &LoopNextReport)
     source_refs.dedup();
     LoopChainFacts {
         selected_unit,
+        selected_feature_id,
         current_recipe: report
             .recommended_recipe
             .clone()
@@ -2249,7 +2424,9 @@ pub fn selected_chain_feature_id<'a>(
     input: &'a LoopRouterInput,
     _report: &LoopNextReport,
 ) -> Option<&'a str> {
-    selected_chain_feature(input).map(|feature| feature.id.as_str())
+    selected_chain_feature(input)
+        .map(|feature| feature.id.as_str())
+        .or_else(|| selected_chain_task(input).and_then(|task| task.feature_id.as_deref()))
 }
 
 fn selected_chain_task(input: &LoopRouterInput) -> Option<&LoopTaskInput> {
@@ -2474,6 +2651,7 @@ fn chain_next_verbs(transition: &LoopChainTransitionMatch, facts: &LoopChainFact
             .as_ref()
             .filter(|unit| unit.kind == "feature")
             .map(|unit| unit.id.clone())
+            .or_else(|| facts.selected_feature_id.clone())
             .or_else(|| {
                 facts
                     .feature_status
@@ -2661,6 +2839,15 @@ pub fn index() -> String {
             contract.id, contract.kind.category, contract.summary
         ));
     }
+    out.push_str("\n\n## Shipped Pattern Packs\n\n");
+    for pattern in pattern_packs() {
+        out.push_str(&format!(
+            "    {}  [{}]  --  {}\n",
+            pattern.id,
+            pattern.readiness_floor.label(),
+            pattern.summary
+        ));
+    }
     out.push_str("\n\n## Custom Recipe Policy\n\n");
     push_bullets(&mut out, "", &CUSTOM_RECIPE_POLICY);
     out
@@ -2685,6 +2872,9 @@ pub fn show(name: &str) -> Result<String> {
     if contract_names().contains(&name) {
         return Ok(render_contract(&contract(name)?));
     }
+    if let Some(pattern) = pattern_pack(name) {
+        return Ok(render_pattern_pack(pattern));
+    }
     bail!(
         "unknown loop recipe \"{name}\"; run `maestro loop` for the index (available: {})",
         available_names().join(", ")
@@ -2698,6 +2888,9 @@ pub fn show_with_custom_dir(name: &str, custom_dir: Option<&Path>) -> Result<Str
     };
     if contract_names().contains(&name) {
         return show(name);
+    }
+    if let Some(pattern) = pattern_pack(name) {
+        return Ok(render_pattern_pack(pattern));
     }
     if let Some(custom_dir) = custom_dir
         && custom_names.iter().any(|custom| custom == name)
@@ -2768,6 +2961,9 @@ pub fn validate_with_custom_dir(name: &str, custom_dir: Option<&Path>) -> Result
     if contract_names().contains(&name) {
         contract(name)?;
         return Ok(format!("valid shipped loop recipe: {name}\n"));
+    }
+    if let Some(pattern) = pattern_pack(name) {
+        return Ok(render_pattern_validation(pattern));
     }
     if let Some(custom_dir) = custom_dir
         && custom_names.iter().any(|custom| custom == name)
@@ -3312,6 +3508,55 @@ fn push_compact_list(out: &mut String, name: &str, values: &[String]) {
     push_bullets(out, "  ", values);
 }
 
+pub fn readiness_levels() -> &'static [ReadinessLevelContract] {
+    READINESS_LEVELS
+}
+
+pub fn pattern_packs() -> &'static [LoopPatternPack] {
+    LOOP_PATTERN_PACKS
+}
+
+pub fn pattern_names() -> Vec<&'static str> {
+    LOOP_PATTERN_PACKS
+        .iter()
+        .map(|pattern| pattern.id)
+        .collect()
+}
+
+pub fn pattern_pack(name: &str) -> Option<&'static LoopPatternPack> {
+    LOOP_PATTERN_PACKS.iter().find(|pattern| pattern.id == name)
+}
+
+fn render_pattern_pack(pattern: &LoopPatternPack) -> String {
+    let mut out = format!(
+        "# {}\n\nschema_version: maestro.recipe_pattern.v1\nid: {}\nkind: pattern\nsummary: {}\nreadiness_floor: {}\n\n",
+        pattern.title,
+        pattern.id,
+        pattern.summary,
+        pattern.readiness_floor.label()
+    );
+    out.push_str("recipes:\n");
+    push_bullets(&mut out, "  ", pattern.recipes);
+    out.push_str("gates:\n");
+    push_bullets(&mut out, "  ", pattern.gates);
+    out.push_str("operating_limits:\n");
+    push_bullets(&mut out, "  ", pattern.operating_limits);
+    out.push_str("\nRule: pattern packs constrain and label existing recipe chains; they do not schedule work, own hidden state, or bypass proof, QA, gate, or passive/local-first boundaries.\n");
+    out
+}
+
+fn render_pattern_validation(pattern: &LoopPatternPack) -> String {
+    let mut out = format!(
+        "valid shipped loop pattern: {}\nreadiness_floor: {}\nbase_recipes: {}\n",
+        pattern.id,
+        pattern.readiness_floor.label(),
+        pattern.recipes.join(" -> ")
+    );
+    out.push_str("operating_limits:\n");
+    push_bullets(&mut out, "  ", pattern.operating_limits);
+    out
+}
+
 fn parse_contract_body(name: &str, body: &str) -> Result<RecipeContract> {
     let contract: RecipeContract = serde_yaml::from_str(body)
         .with_context(|| format!("failed to parse loop recipe contract {name}.yml"))?;
@@ -3350,14 +3595,18 @@ fn ensure_contract_set(contracts: &[RecipeContract]) -> Result<()> {
     Ok(())
 }
 
-fn available_names() -> Vec<&'static str> {
-    let mut names = contract_names();
-    names.sort_unstable();
+fn available_names() -> Vec<String> {
+    let mut names = contract_names()
+        .into_iter()
+        .chain(pattern_names())
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    names.sort();
     names
 }
 
 fn available_names_with_custom(custom_dir: Option<&Path>) -> Result<Vec<String>> {
-    let mut names: Vec<String> = contract_names().into_iter().map(str::to_string).collect();
+    let mut names = available_names();
     if let Some(custom_dir) = custom_dir {
         names.extend(custom_contract_names(custom_dir)?);
     }
@@ -3822,8 +4071,91 @@ mod tests {
         for name in contract_names() {
             assert!(idx.contains(name), "index lists recipe {name}");
         }
+        for name in pattern_names() {
+            assert!(idx.contains(name), "index lists pattern {name}");
+        }
         assert!(idx.contains("## Custom Recipe Policy"), "{idx}");
         assert!(idx.contains("Maestro is the loop"), "{idx}");
+    }
+
+    #[test]
+    fn ships_loop_readiness_ladder_and_pattern_packs() {
+        let levels = readiness_levels();
+        assert_eq!(
+            levels.iter().map(|level| level.id).collect::<Vec<_>>(),
+            vec!["L0", "L1", "L2", "L3"]
+        );
+        assert!(
+            levels
+                .iter()
+                .find(|level| level.id == "L3")
+                .expect("L3 should exist")
+                .requires
+                .contains(&"denylist")
+        );
+
+        let names = pattern_names();
+        assert_eq!(
+            names,
+            vec![
+                "daily-triage",
+                "pr-babysitter",
+                "ci-sweeper",
+                "dependency-sweeper",
+                "changelog-drafter",
+                "post-merge-cleanup",
+                "issue-triage",
+            ]
+        );
+        for pattern in pattern_packs() {
+            for required_limit in DEFAULT_PATTERN_LIMITS {
+                assert!(
+                    pattern.operating_limits.contains(required_limit),
+                    "{} missing {required_limit}",
+                    pattern.id
+                );
+            }
+        }
+        assert_eq!(
+            pattern_pack("pr-babysitter")
+                .expect("pr-babysitter should exist")
+                .recipes,
+            ["feature-fanout", "work", "synthesize"]
+        );
+        assert_eq!(
+            pattern_pack("dependency-sweeper")
+                .expect("dependency-sweeper should exist")
+                .readiness_floor
+                .id,
+            "L2"
+        );
+    }
+
+    #[test]
+    fn show_and_validate_pattern_pack_contracts() {
+        let body = show("ci-sweeper").expect("pattern should render");
+        assert!(
+            body.contains("schema_version: maestro.recipe_pattern.v1"),
+            "{body}"
+        );
+        assert!(body.contains("id: ci-sweeper"), "{body}");
+        assert!(body.contains("readiness_floor: L1 report"), "{body}");
+        assert!(body.contains("- audit"), "{body}");
+        assert!(body.contains("- work"), "{body}");
+        assert!(body.contains("- connector_permissions"), "{body}");
+
+        let valid =
+            validate_with_custom_dir("dependency-sweeper", None).expect("pattern should validate");
+        assert!(
+            valid.contains("valid shipped loop pattern: dependency-sweeper"),
+            "{valid}"
+        );
+        assert!(valid.contains("readiness_floor: L2 assisted"), "{valid}");
+        assert!(
+            valid.contains("base_recipes: audit -> work -> adversarial-review"),
+            "{valid}"
+        );
+        assert!(valid.contains("- kill_switch"), "{valid}");
     }
 
     #[test]

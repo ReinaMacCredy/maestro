@@ -5,9 +5,9 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
+use crate::domain::card::edit as card_edit;
 use crate::domain::card::schema::CardType;
 use crate::domain::card::store as card_store;
-use crate::foundation::core::fs::append_text_file;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::time::{parse_utc_timestamp, utc_now_timestamp};
 
@@ -553,8 +553,8 @@ pub(crate) fn load_task_for_update(tasks_dir: &Path, id: &str) -> Result<TaskHan
 }
 
 /// Append one dated line to a task's `notes.md`, creating it on first write.
-pub fn note(tasks_dir: &Path, id: &str, text: &str) -> Result<NoteReport> {
-    let (task, snapshot, task_dir) = lookup::load_task_with_snapshot(tasks_dir, id)?;
+pub fn note(paths: &MaestroPaths, id: &str, text: &str) -> Result<NoteReport> {
+    let (task, snapshot, _task_dir) = lookup::load_task_with_snapshot(&paths.tasks_dir(), id)?;
     if text.trim().is_empty() {
         bail!("task note text cannot be empty");
     }
@@ -564,8 +564,7 @@ pub fn note(tasks_dir: &Path, id: &str, text: &str) -> Result<NoteReport> {
             progress::append_note_sidecar(snapshot, &initial_contents, &appended_contents)?
         }
         template::TaskSnapshot::Card(_) => {
-            let path = task_dir.join("notes.md");
-            append_note_file(&path, &initial_contents, &appended_contents)?
+            card_edit::append_note(paths, &task.id, text, &utc_now_timestamp())?
         }
     };
     Ok(NoteReport {
@@ -583,11 +582,6 @@ fn note_contents(title: &str, text: &str) -> (String, String) {
         format!("# {title}\n\n"),
         format!("{date}  {}\n", text.trim()),
     )
-}
-
-fn append_note_file(path: &Path, initial_contents: &str, appended_contents: &str) -> Result<bool> {
-    append_text_file(path, initial_contents, appended_contents)
-        .with_context(|| format!("failed to append task note {}", path.display()))
 }
 
 /// Lock acceptance criteria and move a task to ready.

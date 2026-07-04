@@ -7,7 +7,7 @@ use serde::Serialize;
 
 use crate::domain::feature::{self, FeatureRosterEntry, FeatureStatus};
 use crate::domain::task::{self, TaskRecord, TaskState};
-use crate::domain::{card, gate_lock, loop_recipes as loop_recipe_domain};
+use crate::domain::{card, gate_lock, loop_recipes as loop_recipe_domain, run as run_domain};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::table;
 use crate::foundation::core::time::{timestamp_nanos, utc_now_timestamp};
@@ -335,6 +335,7 @@ fn build_task_next_report(paths: &MaestroPaths) -> Result<StatusReport> {
         repo: paths.repo_root().display().to_string(),
         current_task,
         current_feature,
+        current_session: None,
         git: None,
         merge_lock_holder: None,
         archive_summary: super::active::archive_summary_line_for_paths(paths),
@@ -342,6 +343,7 @@ fn build_task_next_report(paths: &MaestroPaths) -> Result<StatusReport> {
         proof_concern,
         warnings,
         loop_hint: None,
+        loop_readiness: None,
         next_action,
         tasks: TaskSummaryJson::default(),
         features: FeatureSummaryJson::default(),
@@ -410,7 +412,9 @@ fn print_status(report: StatusReport, json: bool) -> Result<()> {
     if let Some(line) = report.archive_summary.as_deref() {
         println!("{line}");
     }
+    print_current_session(report.current_session.as_ref());
     print_loop_hint(report.loop_hint.as_ref());
+    print_loop_readiness(report.loop_readiness.as_ref());
     print_harness_friction(&report.harness_friction);
     if let Some(complete_harness) = &report.complete_harness {
         println!("{}", complete_harness.summary_line());
@@ -428,6 +432,9 @@ fn print_status(report: StatusReport, json: bool) -> Result<()> {
     );
     print_worktree_actions(&report.worktree_actions);
     print_progress_block(&report.progress);
+    if report.current_session.is_some() {
+        println!("REPO NEXT");
+    }
     if let Some(action) = &report.next_action {
         if action.requires_input {
             println!("template: {}", action.command.display);
@@ -470,6 +477,39 @@ fn print_status(report: StatusReport, json: bool) -> Result<()> {
     }
     println!("more: maestro resume");
     Ok(())
+}
+
+fn print_current_session(focus: Option<&CurrentSessionJson>) {
+    let Some(focus) = focus else {
+        return;
+    };
+    println!("CURRENT SESSION");
+    println!(
+        "session: {}  {}  {}  age={}m",
+        focus.session_id, focus.ownership, focus.presence, focus.age_minutes
+    );
+    match (
+        focus.card_type.as_deref(),
+        focus.card_id.as_deref(),
+        focus.card_status.as_deref(),
+        focus.card_title.as_deref(),
+    ) {
+        (Some(card_type), Some(card_id), Some(card_status), Some(title)) => {
+            println!("card: {card_type} {card_id}  {card_status}  {title}");
+        }
+        (_, Some(card_id), _, Some(title)) => {
+            println!("card: {card_id}  {title}");
+        }
+        (_, Some(card_id), _, _) => {
+            println!("card: {card_id}");
+        }
+        _ => {}
+    }
+    if let Some(mode) = focus.mode.as_deref() {
+        println!("mode: {mode}");
+    }
+    println!("last_action: {}", focus.last_action);
+    println!("inspect: {}", focus.inspect);
 }
 
 fn print_task_next(report: &StatusReport) {
@@ -553,6 +593,36 @@ fn print_loop_hint(hint: Option<&LoopStatusHintJson>) {
         println!("loop: uncertain");
     }
     println!("  next: {}", hint.next);
+}
+
+fn print_loop_readiness(readiness: Option<&super::loop_recipes::LoopReadinessPacket>) {
+    let Some(readiness) = readiness else {
+        return;
+    };
+    println!(
+        "loop readiness: {} {} ({})",
+        readiness.effective_level, readiness.effective_level_name, readiness.status
+    );
+    println!(
+        "  scheduler: {} owner={} liveness={}",
+        readiness.scheduler_stance.stance,
+        readiness.scheduler_stance.owner,
+        readiness.liveness.status
+    );
+    println!("  {}", readiness.scheduler_stance.note);
+    println!("  limits: {} source(s)", readiness.effective_limits.len());
+    println!("  blocked_from_next_level:");
+    if readiness.blocked_from_next_level.is_empty() {
+        println!("    - none");
+    } else {
+        for blocker in &readiness.blocked_from_next_level {
+            println!(
+                "    - {}.{}: {}",
+                blocker.level, blocker.requirement, blocker.reason
+            );
+        }
+    }
+    println!("  inspect: {}", readiness.next.join(" | "));
 }
 
 fn print_approved_memory(memories: &[ApprovedMemory], omitted: usize) {
@@ -736,6 +806,9 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
         .into_iter()
         .map(|card| card.id.clone())
         .collect();
+    let now = utc_now_timestamp();
+    let now_nanos = timestamp_nanos(&now).unwrap_or(0);
+    let current_session = current_session_focus(paths, &summary_cards, &now)?;
 
     let current_task_action = match env::var("MAESTRO_CURRENT_TASK") {
         Ok(id) if !id.trim().is_empty() => match task::load_task_record(&paths.tasks_dir(), &id) {
@@ -784,7 +857,6 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
     };
     let proof_concern = focal_proof_concern(paths, next_action.as_ref(), &live_tasks);
     let ready_to_close_features = ready_to_close_features(&features);
-    let now_nanos = timestamp_nanos(&utc_now_timestamp()).unwrap_or(0);
     let mut active_features = active_feature_rows(paths, &features, now_nanos);
     let worktree_actions = worktree_actions(paths, &features)?;
     let progress = progress_status_rows(paths, &task_entries)?;
@@ -809,6 +881,13 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
         .collect::<Vec<_>>();
     let audit_hint = harness::audit_overdue_hint(paths)?.map(AuditHintJson::from);
     let complete_harness = harness::complete_readout(paths)?;
+    let loop_readiness = Some(super::loop_recipes::build_loop_readiness_packet_for_status(
+        paths,
+        &task_entries,
+        features.len(),
+        summary_cards.len(),
+        &complete_harness,
+    ));
     let approved_memory =
         memory::approved_memory(paths, MemoryReadSurface::Status, MemoryReadScope::default())?;
     let memory_suggestions =
@@ -858,6 +937,7 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
         repo: paths.repo_root().display().to_string(),
         current_task,
         current_feature,
+        current_session,
         git,
         merge_lock_holder,
         archive_summary: super::active::archive_summary_line_for_paths(paths),
@@ -865,6 +945,7 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
         proof_concern,
         warnings,
         loop_hint,
+        loop_readiness,
         next_action,
         tasks: TaskSummaryJson::from_cards(&summary_cards, &blocked_ids),
         features: FeatureSummaryJson::from_features(&features),
@@ -883,6 +964,64 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
         sections,
         ready_to_close_features,
     })
+}
+
+fn current_session_focus(
+    paths: &MaestroPaths,
+    cards: &[card::schema::Card],
+    now: &str,
+) -> Result<Option<CurrentSessionJson>> {
+    let Ok(session_id) = env::var("MAESTRO_SESSION_ID") else {
+        return Ok(None);
+    };
+    let session_id = session_id.trim();
+    if session_id.is_empty() {
+        return Ok(None);
+    }
+    let Some(row) = run_domain::active_sessions(paths, now)?
+        .into_iter()
+        .find(|row| row.session_id == session_id)
+    else {
+        return Ok(None);
+    };
+    let card = row
+        .bound_card
+        .as_deref()
+        .and_then(|id| cards.iter().find(|card| card.id == id));
+    Ok(Some(CurrentSessionJson {
+        session_id: row.session_id,
+        mode: row.mode.as_deref().map(mode_label),
+        card_id: row.bound_card,
+        card_title: card.map(|card| card.title.clone()),
+        card_type: card.map(|card| card.card_type.as_str().to_string()),
+        card_status: card.map(|card| card::query::canonical_status(&card.status).to_string()),
+        ownership: if row.owns_bound_card {
+            "owner".to_string()
+        } else {
+            "observer".to_string()
+        },
+        presence: presence_label(row.presence, row.age_minutes),
+        age_minutes: row.age_minutes,
+        last_action: row.last_action,
+        inspect: "maestro active".to_string(),
+    }))
+}
+
+fn mode_label(skill: &str) -> String {
+    skill.strip_prefix("maestro-").unwrap_or(skill).to_string()
+}
+
+fn presence_label(presence: run_domain::Presence, age_minutes: u64) -> String {
+    match presence {
+        run_domain::Presence::Working => "[working]".to_string(),
+        run_domain::Presence::QuietWorking => format!("[quiet-working {age_minutes}m]"),
+        run_domain::Presence::Waiting => "[waiting]".to_string(),
+        run_domain::Presence::Released => format!("[idle/released {age_minutes}m]"),
+        run_domain::Presence::Done => format!("[done {age_minutes}m]"),
+        run_domain::Presence::Unconfirmed => format!("[unconfirmed {age_minutes}m]"),
+        run_domain::Presence::Idle => format!("[idle {age_minutes}m]"),
+        run_domain::Presence::Stale => format!("[stale {age_minutes}m]"),
+    }
 }
 
 fn choose_next_task_action(
@@ -1302,6 +1441,8 @@ struct StatusReport {
     repo: String,
     current_task: Option<String>,
     current_feature: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    current_session: Option<CurrentSessionJson>,
     /// Working-tree git readout; `None` when not a git repository or on the
     /// `task next` surface, which does not render it.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1321,6 +1462,8 @@ struct StatusReport {
     proof_concern: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     loop_hint: Option<LoopStatusHintJson>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    loop_readiness: Option<super::loop_recipes::LoopReadinessPacket>,
     warnings: Vec<WarningJson>,
     next_action: Option<NextAction>,
     tasks: TaskSummaryJson,
@@ -1347,6 +1490,26 @@ struct StatusReport {
     memory_suggestions_omitted: usize,
     sections: StatusSectionsJson,
     ready_to_close_features: Vec<ReadyFeatureJson>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct CurrentSessionJson {
+    session_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mode: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    card_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    card_title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    card_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    card_status: Option<String>,
+    ownership: String,
+    presence: String,
+    age_minutes: u64,
+    last_action: String,
+    inspect: String,
 }
 
 #[derive(Clone, Debug, Default, Serialize)]
@@ -1388,12 +1551,14 @@ impl StatusReport {
             repo: repo.display().to_string(),
             current_task: None,
             current_feature: None,
+            current_session: None,
             git: None,
             merge_lock_holder: None,
             archive_summary: None,
             close_or_verify_pending: false,
             proof_concern: None,
             loop_hint: None,
+            loop_readiness: None,
             warnings: vec![WarningJson {
                 code: "not_initialized".to_string(),
                 message: reason,

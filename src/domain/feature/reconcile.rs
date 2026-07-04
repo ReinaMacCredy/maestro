@@ -280,7 +280,6 @@ struct ValidatedPlan {
 #[derive(Clone, Debug)]
 struct TaskRollbackSnapshot {
     record: TaskRecord,
-    snapshot: task::template::TaskSnapshot,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -508,6 +507,30 @@ pub(crate) fn ensure_current_receipt_for_finalize(paths: &MaestroPaths, id: &str
         return Ok(());
     }
     bail!("{}", finalize_receipt_error(id, &receipt));
+}
+
+pub fn reconcile_receipt_is_current(paths: &MaestroPaths, id: &str) -> bool {
+    match reconcile_report(paths, id) {
+        Ok(report) if report.receipt.state == "current" => true,
+        Ok(report)
+            if report.receipt.stale.len() == 1
+                && report
+                    .receipt
+                    .stale
+                    .first()
+                    .is_some_and(|item| item == "handoff")
+                && matches!(registry::handoff_gap(paths, id), Ok(None)) =>
+        {
+            true
+        }
+        Err(_)
+            if matches!(registry::finalize_requires_reopen(paths, id), Ok(true))
+                && matches!(registry::handoff_gap(paths, id), Ok(None)) =>
+        {
+            true
+        }
+        _ => false,
+    }
 }
 
 fn build_reconcile_report(
@@ -1290,11 +1313,9 @@ fn snapshot_existing_reconcile_tasks(
     ids.extend(plan.tasks.remove.iter().cloned());
     ids.into_iter()
         .map(|id| {
-            let (record, snapshot, _) =
-                task::lookup::load_task_with_snapshot(&paths.tasks_dir(), &id).with_context(
-                    || format!("failed to snapshot task {id} before reconcile apply"),
-                )?;
-            Ok(TaskRollbackSnapshot { record, snapshot })
+            let (record, _, _) = task::lookup::load_task_with_snapshot(&paths.tasks_dir(), &id)
+                .with_context(|| format!("failed to snapshot task {id} before reconcile apply"))?;
+            Ok(TaskRollbackSnapshot { record })
         })
         .collect()
 }
@@ -1307,7 +1328,10 @@ fn rollback_reconcile_apply(
     original_record: Option<&FeatureRecord>,
 ) -> Result<()> {
     for task in existing_tasks.iter().rev() {
-        task::template::save_task_with_snapshot(&task.record, &task.snapshot)
+        let (_, current_snapshot, _) =
+            task::lookup::load_task_with_snapshot(&paths.tasks_dir(), &task.record.id)
+                .with_context(|| format!("failed to reload task {}", task.record.id))?;
+        task::template::save_task_with_snapshot(&task.record, &current_snapshot)
             .with_context(|| format!("failed to restore task {}", task.record.id))?;
     }
     rollback_created_tasks(paths, created)?;
@@ -1317,4 +1341,93 @@ fn rollback_reconcile_apply(
             .with_context(|| format!("failed to restore feature {feature_id}"))?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::process;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    use super::*;
+    use crate::domain::task::CreateTaskOptions;
+
+    struct TestTempDir {
+        path: std::path::PathBuf,
+    }
+
+    impl TestTempDir {
+        fn new(label: &str) -> Self {
+            let nanos = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("invariant: test clock after Unix epoch")
+                .as_nanos();
+            let path = std::env::temp_dir().join(format!(
+                "maestro-feature-reconcile-{label}-{}-{nanos}",
+                process::id()
+            ));
+            std::fs::create_dir_all(&path).expect("invariant: temp dir should be created");
+            Self { path }
+        }
+
+        fn path(&self) -> &std::path::Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TestTempDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.path);
+        }
+    }
+
+    #[test]
+    fn rollback_reloads_current_task_snapshot_before_restore() {
+        let temp = TestTempDir::new("rollback-task-snapshot");
+        let paths = MaestroPaths::new(temp.path());
+        let original = task::create_task(
+            &paths.tasks_dir(),
+            "Rollback Me",
+            CreateTaskOptions {
+                id: Some("task-rollback-me".to_string()),
+                feature: Some("feature-rollback".to_string()),
+                covers: Vec::new(),
+                lane: None,
+                risk: None,
+                checks: vec!["rollback proof restores the task".to_string()],
+                project: None,
+                created_at: "2026-07-04T00:00:00Z".to_string(),
+            },
+        )
+        .expect("task should be created");
+
+        let mutated = task::transition_task(
+            &paths.tasks_dir(),
+            &original.id,
+            TaskState::Exploring,
+            "tester",
+            "2026-07-04T00:01:00Z",
+            TransitionDetails {
+                summary: Some("mutation before failed reconcile apply".to_string()),
+                ..TransitionDetails::default()
+            },
+        )
+        .expect("task should mutate before rollback");
+        assert_eq!(mutated.state, TaskState::Exploring);
+
+        rollback_reconcile_apply(
+            &paths,
+            "feature-rollback",
+            &[],
+            &[TaskRollbackSnapshot {
+                record: original.clone(),
+            }],
+            None,
+        )
+        .expect("rollback should restore through the current task snapshot");
+
+        let restored = task::load_task_record(&paths.tasks_dir(), &original.id)
+            .expect("restored task should load");
+        assert_eq!(restored.state, TaskState::Draft);
+        assert_eq!(restored.state_history, original.state_history);
+    }
 }

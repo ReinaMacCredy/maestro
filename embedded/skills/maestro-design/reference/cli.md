@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: 169a1100f748004a45da746da5e4daa3a8d7af0103dbf898cd73f10e5b1b3ce8 -->
+<!-- maestro:cli-reference-sha256: d83bd170ea9e7828938a4996d310e54d80f75be7084dd3555ff10e26812997e7 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -23,9 +23,9 @@ a spelling not found here is outside this skill's CLI surface.
 - `maestro feature set <ID> [--acceptance <ACCEPTANCE>]... [--area <AREA>]... [--non-goal <NON_GOAL>]... [--question <QUESTION>]... [--remove-question <REF_OR_TEXT>]... [--reason <REASON>] [--description <DESCRIPTION>] [--request <REQUEST>] [--type <INPUT_TYPE>]` -- Author a proposed feature's contract (replace or append fields)
 - `maestro feature finalize <ID>` -- Write or refresh the clean design handoff before accept/prepare
 - `maestro feature reopen <ID>` -- Reopen a DB-backed finalized feature into .maestro/workbench/<id>
-- `maestro feature reconcile <ID> [--full] [--json] [--apply-plan <PLAN_FILE>]` -- Report or apply feature contract reconciliation before finalize
+- `maestro feature reconcile <ID> [--full] [--json] [--apply-plan <PLAN_FILE>] [--write-plan <PLAN_FILE>]` -- Report or apply feature contract reconciliation before finalize
 - `maestro feature show <ID>` -- Show a feature's status, full contract, and task counts
-- `maestro feature design <ID> [--section <SECTION>] [--append <TEXT>] [--replace <TEXT>]` -- Render a feature's design-of-record, or fill one section (--section with --append/--replace)
+- `maestro feature design <ID> [--section <SECTION>] [--append <TEXT>] [--replace <TEXT>]` -- Render a feature's design-of-record, render one section, or fill one section (--section with --append/--replace)
 - `maestro feature spec <ID> [--section <SECTION>] [--append <TEXT>] [--replace <TEXT>]` -- Compatibility alias for `feature design`; reads legacy spec.md when design.md is absent
 - `maestro feature list [--all]` -- List features with their statuses and task counts
 

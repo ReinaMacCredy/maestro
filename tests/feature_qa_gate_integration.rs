@@ -358,6 +358,37 @@ fn qa_baseline_observed_file_preserves_frontmatter_verbatim() {
 }
 
 #[test]
+fn qa_baseline_stdin_accepts_full_contract_without_helper_nesting() {
+    let temp = TestTempDir::new("maestro-qa-baseline-full-contract");
+    let repo = temp.path();
+    init_and_author(repo, "report-builder", "Report builder");
+    let observed = "\
+---
+amend_log_position: 0
+---
+
+### QA Baseline Contract
+
+- Scope: report-builder full baseline
+- Scenario Matrix:
+  - [bl-001] current summary behavior
+  - [bl-002] current export behavior
+";
+    let args = ["qa", "baseline", "report-builder", "--observed-stdin"];
+
+    let out = stdout(maestro_with_stdin(&args, repo, observed), &args);
+
+    assert!(out.contains("recorded baseline bl-001, bl-002"), "{out}");
+    let qa = read_qa(repo, "report-builder");
+    assert!(qa.starts_with("---\namend_log_position: 0\n---"), "{qa}");
+    assert_eq!(qa.matches("### QA Baseline Contract").count(), 1, "{qa}");
+    assert!(!qa.contains("CLI helper baseline"), "{qa}");
+    assert!(!qa.contains("Raw Observed Evidence"), "{qa}");
+    assert!(qa.contains("[bl-001]"), "{qa}");
+    assert!(qa.contains("[bl-002]"), "{qa}");
+}
+
+#[test]
 fn qa_slice_observed_stdin_preserves_frontmatter_verbatim() {
     let temp = TestTempDir::new("maestro-qa-slice-observed-stdin");
     let repo = temp.path();

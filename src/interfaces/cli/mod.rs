@@ -12,7 +12,7 @@ use crate::domain::feature::FeatureView;
 use crate::domain::feature::finalize_requires_reopen;
 use crate::domain::feature::handoff_gap;
 use crate::domain::feature::read_sidecar_text;
-use crate::domain::feature::reconcile_report;
+use crate::domain::feature::reconcile_receipt_is_current;
 use crate::domain::proof;
 use crate::domain::run;
 use crate::domain::task::{TaskRecord, TaskState};
@@ -182,30 +182,6 @@ fn handoff_repair_next(paths: &MaestroPaths, view: &FeatureView) -> (&'static st
             "run: finalize_feature",
             format!("maestro feature finalize {}", view.id),
         )
-    }
-}
-
-fn reconcile_receipt_is_current(paths: &MaestroPaths, id: &str) -> bool {
-    match reconcile_report(paths, id) {
-        Ok(report) if report.receipt.state == "current" => true,
-        Ok(report)
-            if report.receipt.stale.len() == 1
-                && report
-                    .receipt
-                    .stale
-                    .first()
-                    .is_some_and(|item| item == "handoff")
-                && matches!(handoff_gap(paths, id), Ok(None)) =>
-        {
-            true
-        }
-        Err(_)
-            if matches!(finalize_requires_reopen(paths, id), Ok(true))
-                && matches!(handoff_gap(paths, id), Ok(None)) =>
-        {
-            true
-        }
-        _ => false,
     }
 }
 
@@ -2018,11 +1994,11 @@ pub enum FeatureCommand {
     #[command(about = "Show a feature's status, full contract, and task counts")]
     Show { id: String },
     #[command(
-        about = "Render a feature's design-of-record, or fill one section (--section with --append/--replace)"
+        about = "Render a feature's design-of-record, render one section, or fill one section (--section with --append/--replace)"
     )]
     Design {
         id: String,
-        #[arg(long, help = "Design section to write, e.g. \"Current state\"")]
+        #[arg(long, help = "Design section to read or write, e.g. \"Current state\"")]
         section: Option<String>,
         #[arg(long, help = "Append text to the section body", value_name = "TEXT")]
         append: Option<String>,
@@ -2039,7 +2015,7 @@ pub enum FeatureCommand {
     )]
     Spec {
         id: String,
-        #[arg(long, help = "Spec section to write, e.g. \"Current state\"")]
+        #[arg(long, help = "Spec section to read or write, e.g. \"Current state\"")]
         section: Option<String>,
         #[arg(long, help = "Append text to the section body", value_name = "TEXT")]
         append: Option<String>,

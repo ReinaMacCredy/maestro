@@ -53,7 +53,9 @@ impl LockKind {
     fn waiting_line(self, holder: &str) -> String {
         match self {
             Self::Gate => {
-                format!("[busy] waiting for {holder}'s full-suite gate to finish (Ctrl-C to abort)")
+                format!(
+                    "[busy] waiting for {holder}'s full-suite gate to finish (Ctrl-C to abort); inspect: maestro active"
+                )
             }
             Self::Merge => {
                 format!(
@@ -66,7 +68,11 @@ impl LockKind {
     #[cfg(unix)]
     fn still_waiting_line(self, holder: &str, elapsed: u64) -> String {
         match self {
-            Self::Gate => format!("[busy] still waiting ({elapsed}s) for {holder}'s gate"),
+            Self::Gate => {
+                format!(
+                    "[busy] still waiting ({elapsed}s) for {holder}'s gate; inspect: maestro active"
+                )
+            }
             Self::Merge => {
                 format!("[merge-busy] still waiting ({elapsed}s) for {holder}'s merge-back")
             }
@@ -420,11 +426,11 @@ mod tests {
     fn wait_lines_name_the_holder_and_elapsed() {
         assert_eq!(
             LockKind::Gate.waiting_line("task-7"),
-            "[busy] waiting for task-7's full-suite gate to finish (Ctrl-C to abort)"
+            "[busy] waiting for task-7's full-suite gate to finish (Ctrl-C to abort); inspect: maestro active"
         );
         assert_eq!(
             LockKind::Gate.still_waiting_line("task-7", 90),
-            "[busy] still waiting (90s) for task-7's gate"
+            "[busy] still waiting (90s) for task-7's gate; inspect: maestro active"
         );
         assert_eq!(
             LockKind::Merge.waiting_line("task-7"),

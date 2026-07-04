@@ -65,7 +65,9 @@ pub fn run(args: ActiveArgs) -> Result<()> {
         .and_then(|row| row.bound_card.as_deref());
 
     if let Some(busy) = gate_lock::holder(&paths) {
-        println!("[busy] {busy} is running the full-suite gate (heavy run in progress)");
+        println!(
+            "[busy] {busy} is running the full-suite gate (heavy run in progress); inspect: maestro active"
+        );
         println!();
     }
     if let Some(git) = super::git_readout(&paths)
@@ -634,12 +636,13 @@ fn render_link_hint(
     connect: bool,
 ) {
     let mut seen_peers = HashSet::new();
-    let peers: Vec<&str> = shown
+    let peers: Vec<CoordinationPeer<'_>> = shown
         .iter()
         .filter(|row| row.session_id != me)
         .filter_map(|row| row.bound_card.as_deref())
         .filter(|peer| your_card != Some(*peer))
-        .filter(|peer| seen_peers.insert(*peer))
+        .filter_map(|peer| coordination_peer(by_id, peer))
+        .filter(|peer| seen_peers.insert(peer.link_target))
         .collect();
     if peers.is_empty() {
         return;
@@ -647,10 +650,10 @@ fn render_link_hint(
 
     // Without a bound card the running session cannot be linked to anyone, so
     // every peer reads as a suggestion against the <your-card> placeholder.
-    let (linked, unlinked): (Vec<&str>, Vec<&str>) = peers
-        .iter()
-        .copied()
-        .partition(|peer| your_card.is_some_and(|mine| related_pair(by_id, mine, peer)));
+    let (linked, unlinked): (Vec<CoordinationPeer<'_>>, Vec<CoordinationPeer<'_>>) =
+        peers.iter().copied().partition(|peer| {
+            your_card.is_some_and(|mine| related_pair(by_id, mine, peer.link_target))
+        });
 
     // Never suggest opening a link the guard will refuse: a peer bound to a
     // terminal (coarse-Closed) card is dropped from the suggestion list. An
@@ -660,22 +663,25 @@ fn render_link_hint(
     // linked (link add resolves ids in the local store), so it gets no link
     // suggestion -- it still renders '<id> (missing)' in the table
     // (`dec-cross-worktree-active-auto-unions-read-51b9`).
-    let unlinked: Vec<&str> = unlinked
+    let unlinked: Vec<CoordinationPeer<'_>> = unlinked
         .into_iter()
-        .filter(|peer| !peer_terminal(by_id, peer))
-        .filter(|peer| by_id.contains_key(*peer))
+        .filter(|peer| !peer_terminal(by_id, peer.link_target))
+        .filter(|peer| by_id.contains_key(peer.link_target))
         .collect();
 
     if !linked.is_empty() {
         println!();
         if connect {
             println!("suggested coordination:");
-            for their_card in &linked {
+            for peer in &linked {
                 let your = your_card.unwrap_or("<your-card>");
                 println!("  message:");
-                println!("    maestro msg send --from {your} {their_card} \"<text>\"");
+                println!(
+                    "    maestro msg send --from {your} {} \"<text>\"",
+                    peer.message_target
+                );
                 println!("  conflict notice:");
-                println!("    maestro conflict {their_card} \"<why>\"");
+                println!("    maestro conflict {} \"<why>\"", peer.conflict_target);
             }
         } else {
             println!(
@@ -683,7 +689,14 @@ fn render_link_hint(
                 linked.len(),
                 if linked.len() == 1 { "" } else { "s" }
             );
-            println!("  {}", linked.join(", "));
+            println!(
+                "  {}",
+                linked
+                    .iter()
+                    .map(|peer| peer.message_target)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
         }
     }
 
@@ -692,13 +705,16 @@ fn render_link_hint(
         println!();
         if connect {
             println!("suggested coordination:");
-            for their_card in &unlinked {
+            for peer in &unlinked {
                 println!("  link:");
-                println!("    maestro link add {your} {their_card}");
+                println!("    maestro link add {your} {}", peer.link_target);
                 println!("  message:");
-                println!("    maestro msg send --from {your} {their_card} \"<text>\"");
+                println!(
+                    "    maestro msg send --from {your} {} \"<text>\"",
+                    peer.message_target
+                );
                 println!("  conflict notice:");
-                println!("    maestro conflict {their_card} \"<why>\"");
+                println!("    maestro conflict {} \"<why>\"", peer.conflict_target);
             }
         } else {
             println!(
@@ -706,9 +722,40 @@ fn render_link_hint(
                 unlinked.len(),
                 if unlinked.len() == 1 { "" } else { "s" }
             );
-            println!("  {}", unlinked.join(", "));
+            println!(
+                "  {}",
+                unlinked
+                    .iter()
+                    .map(|peer| peer.message_target)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
         }
     }
+}
+
+#[derive(Clone, Copy)]
+struct CoordinationPeer<'a> {
+    link_target: &'a str,
+    message_target: &'a str,
+    conflict_target: &'a str,
+}
+
+fn coordination_peer<'a>(
+    by_id: &HashMap<&'a str, &'a card::schema::Card>,
+    peer: &'a str,
+) -> Option<CoordinationPeer<'a>> {
+    let card = by_id.get(peer)?;
+    let message_target = if card.card_type == card::schema::CardType::Task {
+        card.parent.as_deref().unwrap_or(peer)
+    } else {
+        peer
+    };
+    Some(CoordinationPeer {
+        link_target: message_target,
+        message_target,
+        conflict_target: peer,
+    })
 }
 
 /// The ambient warm-file overlap line: when another live session is editing a
@@ -764,7 +811,7 @@ pub(super) fn busy_banner() -> Result<()> {
     let paths = MaestroPaths::new(root);
     if let Some(holder) = gate_lock::holder(&paths) {
         eprintln!(
-            "[busy] {holder} is running the full-suite gate; hold heavy runs until it clears"
+            "[busy] {holder} is running the full-suite gate; hold heavy runs until it clears; inspect: maestro active"
         );
     }
     Ok(())

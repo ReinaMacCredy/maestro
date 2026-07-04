@@ -20,6 +20,10 @@ or DB-backed; use Maestro commands instead of editing storage paths directly.
 3. Run the smallest useful probes:
    focused tests for local invariants, plus a real command/manual/API/UI flow
    when composition risk exists.
+   If the wave touched loop patterns, operating limits, scheduler stance, or
+   unattended behavior, include `maestro loop validate <pattern>` and
+   `maestro status` as probes and capture the readiness level, gaps, liveness,
+   effective limit sources, and `blocked_from_next_level`.
 4. Compare against the baseline. Unexplained output, schema, state, permission,
    performance, compatibility, or UI drift is a blocker.
 5. Record a counting slice with `maestro qa slice <id> --scenario <bl-NNN>

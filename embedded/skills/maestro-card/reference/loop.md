@@ -55,6 +55,13 @@ requested scope, claims it through the normal card claim policy, emits the
 existing work-touch run evidence, and prints the bounded worker contract. It
 never launches a worker, sleeps, polls, owns a queue, schedules the next tick,
 or becomes a second lifecycle.
+Before calling a pattern or away workflow unattended, check native loop
+readiness: `maestro loop validate <pattern>` and `maestro status` must show the
+effective level, gaps, operating-limit sources, scheduler stance, liveness, and
+`blocked_from_next_level`. L0/L1/L2 can still guide local work, but L3
+unattended wording is allowed only when the readouts say L3 and no blockers
+remain. External schedulers may fire ordinary sessions; Maestro itself never
+becomes the scheduler or executor.
 
 If the kickoff is a broad goal instead of a named card or accepted feature,
 infer a minimal GoalBrief before work starts:
