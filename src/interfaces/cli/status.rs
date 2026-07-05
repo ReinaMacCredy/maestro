@@ -677,6 +677,34 @@ fn print_progress_block(progress: &[ProgressStatusJson]) {
         } else {
             println!("progress: {} 0/{}", row.state, row.total);
         }
+        if !row.blocked_next.is_empty() {
+            println!("  blocked_next:");
+            for blocked in row.blocked_next.iter().take(3) {
+                let waits_on = blocked
+                    .waits_on
+                    .iter()
+                    .map(render_progress_dependency)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                println!(
+                    "    - {} {} waits on: {}",
+                    blocked.task_ref, blocked.title, waits_on
+                );
+            }
+            let hidden = row.blocked_next.len().saturating_sub(3);
+            if hidden > 0 {
+                println!("    +{hidden} more blocked: maestro ready");
+            }
+        }
+    }
+}
+
+fn render_progress_dependency(dependency: &ProgressDependencyJson) -> String {
+    match (dependency.task_ref, dependency.title.as_deref()) {
+        (Some(task_ref), Some(title)) => format!("{task_ref} {title}"),
+        (Some(task_ref), None) => format!("{task_ref} {}", dependency.id),
+        (None, Some(title)) => format!("{} {title}", dependency.id),
+        (None, None) => dependency.id.clone(),
     }
 }
 
@@ -1215,6 +1243,14 @@ fn progress_status_rows(
     task_entries: &[task::TaskEntry],
 ) -> Result<Vec<ProgressStatusJson>> {
     let progress_task_infos = task::progress_task_infos(&paths.tasks_dir())?;
+    let all_tasks: Vec<TaskRecord> = task_entries
+        .iter()
+        .map(|entry| entry.task.clone())
+        .collect();
+    let all_task_titles: BTreeMap<&str, &str> = all_tasks
+        .iter()
+        .map(|task| (task.id.as_str(), task.title.as_str()))
+        .collect();
     let mut grouped: BTreeMap<String, Vec<&TaskRecord>> = BTreeMap::new();
     for entry in task_entries {
         if let Some(info) = progress_task_infos.get(&entry.task.id) {
@@ -1231,6 +1267,36 @@ fn progress_status_rows(
             if !tasks.iter().any(|task| task.state.is_live()) {
                 return None;
             }
+            let task_refs: BTreeMap<&str, usize> = tasks
+                .iter()
+                .enumerate()
+                .map(|(index, task)| (task.id.as_str(), index + 1))
+                .collect();
+            let blocked_next = tasks
+                .iter()
+                .enumerate()
+                .filter_map(|(index, task)| {
+                    if task.state != TaskState::Ready {
+                        return None;
+                    }
+                    let remaining = task::remaining_start_blockers_from_records(task, &all_tasks);
+                    if remaining.is_empty() {
+                        return None;
+                    }
+                    let waits_on = remaining
+                        .iter()
+                        .map(|id| progress_dependency_json(id, &task_refs, &all_task_titles))
+                        .collect();
+                    Some(ProgressBlockedJson {
+                        task_ref: index + 1,
+                        id: task.id.clone(),
+                        title: task.title.clone(),
+                        blocked_by: task.blocked_by.clone(),
+                        remaining_blockers: remaining,
+                        waits_on,
+                    })
+                })
+                .collect();
             let current = tasks
                 .iter()
                 .enumerate()
@@ -1258,9 +1324,22 @@ fn progress_status_rows(
                 total: tasks.len(),
                 done: tasks.iter().filter(|task| !task.state.is_live()).count(),
                 current,
+                blocked_next,
             })
         })
         .collect())
+}
+
+fn progress_dependency_json(
+    id: &str,
+    task_refs: &BTreeMap<&str, usize>,
+    all_task_titles: &BTreeMap<&str, &str>,
+) -> ProgressDependencyJson {
+    ProgressDependencyJson {
+        task_ref: task_refs.get(id).copied(),
+        id: id.to_string(),
+        title: all_task_titles.get(id).map(|title| (*title).to_string()),
+    }
 }
 
 /// Render the ACTIVE FEATURES block: a table of the features still worth a row,
@@ -2144,6 +2223,8 @@ struct ProgressStatusJson {
     total: usize,
     done: usize,
     current: Option<ProgressCurrentJson>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    blocked_next: Vec<ProgressBlockedJson>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -2154,6 +2235,26 @@ struct ProgressCurrentJson {
     title: String,
     state: String,
     next: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct ProgressBlockedJson {
+    #[serde(rename = "ref")]
+    task_ref: usize,
+    id: String,
+    title: String,
+    blocked_by: Vec<String>,
+    remaining_blockers: Vec<String>,
+    waits_on: Vec<ProgressDependencyJson>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct ProgressDependencyJson {
+    #[serde(rename = "ref", skip_serializing_if = "Option::is_none")]
+    task_ref: Option<usize>,
+    id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    title: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]

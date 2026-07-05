@@ -903,6 +903,87 @@ fn task_progress_setup_accepts_alias_keyed_dag_metadata() {
 }
 
 #[test]
+fn status_progress_block_renders_setup_dependencies() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    let setup = maestro_with_env(
+        repo,
+        &[
+            "task",
+            "setup",
+            "--task",
+            "api=Build settings API",
+            "--task",
+            "ui=Wire settings UI",
+            "--task",
+            "ship=Ship settings integration",
+            "--after",
+            "ui=api",
+            "--after",
+            "ship=ui",
+            "--start",
+        ],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    );
+    assert_success(&setup, &["task", "setup", "--after"]);
+
+    let tasks = progress_tasks(repo);
+    let api_id = tasks[0]["id"].as_str().expect("api task has id");
+    let ui_id = tasks[1]["id"].as_str().expect("ui task has id");
+    let ship_id = tasks[2]["id"].as_str().expect("ship task has id");
+
+    let status = maestro_with_env(repo, &["status"], &[("MAESTRO_ACTOR", "codex#s1")]);
+    assert_success(&status, &["status"]);
+    let status_out = stdout(&status);
+    assert!(status_out.contains("blocked_next:"), "{status_out}");
+    assert!(
+        status_out.contains("2 Wire settings UI waits on: 1 Build settings API"),
+        "{status_out}"
+    );
+    assert!(
+        status_out.contains("3 Ship settings integration waits on: 2 Wire settings UI"),
+        "{status_out}"
+    );
+
+    let status_json: JsonValue = serde_json::from_str(&stdout(&maestro_with_env(
+        repo,
+        &["status", "--json"],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    )))
+    .expect("status JSON parses");
+    let blocked_next = status_json["progress"][0]["blocked_next"]
+        .as_array()
+        .expect("progress blocked_next should be an array");
+    assert_eq!(blocked_next.len(), 2);
+    assert_eq!(blocked_next[0]["ref"], JsonValue::from(2));
+    assert_eq!(blocked_next[0]["id"], JsonValue::String(ui_id.to_string()));
+    assert_eq!(
+        blocked_next[0]["blocked_by"],
+        JsonValue::Array(vec![JsonValue::String(api_id.to_string())])
+    );
+    assert_eq!(
+        blocked_next[0]["remaining_blockers"],
+        JsonValue::Array(vec![JsonValue::String(api_id.to_string())])
+    );
+    assert_eq!(blocked_next[1]["ref"], JsonValue::from(3));
+    assert_eq!(
+        blocked_next[1]["id"],
+        JsonValue::String(ship_id.to_string())
+    );
+
+    let blocked_start = maestro_with_env(
+        repo,
+        &["task", "start", ui_id],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    );
+    assert_failure(&blocked_start, &["task", "start", ui_id]);
+    let blocked_stderr = stderr(&blocked_start);
+    assert!(blocked_stderr.contains("is blocked by"), "{blocked_stderr}");
+    assert!(blocked_stderr.contains(api_id), "{blocked_stderr}");
+}
+
+#[test]
 fn ready_v2_projects_parallel_wave_serial_gates_and_blocked_next() {
     let temp = setup_repo();
     let repo = temp.path();
