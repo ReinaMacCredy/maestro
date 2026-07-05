@@ -23,6 +23,7 @@ use crate::interfaces::hooks::record;
 
 pub mod active;
 pub mod archive;
+pub mod capability;
 pub mod card;
 pub mod conflict;
 pub mod decision;
@@ -413,6 +414,11 @@ pub enum RootCommand {
     Event(EventArgs),
     #[command(about = "Manage features: the product contract and its lifecycle")]
     Feature(FeatureArgs),
+    #[command(
+        about = "Report optional repo/tool/connector capability state",
+        after_help = "Examples:\n  maestro capability\n  maestro capability --json\n  maestro capability --from .maestro/capabilities.yml --json"
+    )]
+    Capability(CapabilityArgs),
     #[command(about = "Record feature QA baseline and slice evidence")]
     Qa(QaArgs),
     #[command(about = "Record passive worktree handoff and cleanup ledger facts")]
@@ -656,6 +662,16 @@ pub struct IntakeArgs {
     #[arg(long = "from", value_name = "PATH|-")]
     pub from: String,
     /// Print the stable maestro.intake.v1 JSON envelope.
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct CapabilityArgs {
+    /// Capability manifest path; defaults to .maestro/capabilities.yml.
+    #[arg(long = "from", value_name = "PATH")]
+    pub from: Option<PathBuf>,
+    /// Print the stable maestro.capability.v1 JSON envelope.
     #[arg(long)]
     pub json: bool,
 }
@@ -3009,6 +3025,7 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Task(args) => task::run(args),
         RootCommand::Event(args) => event::run(args),
         RootCommand::Feature(args) => feature::run(args),
+        RootCommand::Capability(args) => capability::run(args),
         RootCommand::Qa(args) => qa::run(args),
         RootCommand::Worktree(args) => worktree::run(args),
         RootCommand::Synthesize(args) => synthesize::run(args),

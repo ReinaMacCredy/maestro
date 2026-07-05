@@ -1,5 +1,6 @@
 //! Domain module root for Maestro's durable concepts.
 
+pub mod capability;
 pub mod card;
 pub mod channel;
 pub mod conflict;
