@@ -1177,7 +1177,7 @@ fn feature_guarded_lifecycle_via_cli() {
     );
     assert!(help.contains("REPLACES the full questions list"), "{help}");
     assert!(help.contains("--remove-question"), "{help}");
-    assert!(!help.contains("--add-acceptance"), "{help}");
+    assert!(help.contains("--add-acceptance"), "{help}");
 
     let remove_question_args = [
         "feature",
