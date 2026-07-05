@@ -73,8 +73,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 20] = [
     (
         "harness",
         "HARNESS.md",
-        "1.29.18",
-        "4f45021b71ed6c1d3872bb2b22f180626778aaa9123161edf185ebaed09ce11e",
+        "1.29.19",
+        "4e1a0880a6aba6bd156d49613ebfa1f5be3def29c067d1361d3317e45dba4428",
     ),
     (
         "playbook",
@@ -375,6 +375,10 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
     for phrase in [
         "Concrete repeatable form",
         "maestro task setup --task \"Map current behavior\" --task \"Implement scoped fix\" --task \"Verify\" --start",
+        "maestro task setup --after <task-alias>=<dependency-alias-or-task-id>",
+        "plan `after`/`blocked_by`",
+        "blocked Progress successors under `blocked_next`",
+        "finish and verify the blocker first",
         "During implementation, keep running notes with `maestro note <card-or-task-id> \"<text>\"`",
         "decisions not in the handoff/spec",
         "scope or acceptance, amend the owning Feature/Card contract",

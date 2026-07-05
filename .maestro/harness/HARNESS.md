@@ -1,5 +1,5 @@
 ---
-version: 1.29.18
+version: 1.29.19
 ---
 
 # Maestro Harness Protocol
@@ -62,6 +62,11 @@ Before write-like work, create a visible Progress breakdown with
 bypass this.
 Concrete repeatable form:
 `maestro task setup --task "Map current behavior" --task "Implement scoped fix" --task "Verify" --start`.
+For setup-time ordering, use `maestro task setup --after <task-alias>=<dependency-alias-or-task-id>`
+or plan `after`/`blocked_by`; do not use inbox messages for execution order.
+`maestro status` shows blocked Progress successors under `blocked_next`;
+finish and verify the blocker first, then use `maestro ready` for the
+executable wave.
 During implementation, keep running notes with `maestro note <card-or-task-id> "<text>"`:
 record decisions not in the handoff/spec, changes from the plan, tradeoffs,
 gotchas, risks, and follow-up work. If a note changes scope or acceptance,
