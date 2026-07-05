@@ -620,6 +620,47 @@ pub struct LoopCompactPacket {
     pub checks: Vec<String>,
     pub hard_stops: Vec<String>,
     pub next: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transition: Option<LoopCompactTransition>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub selected_units: Vec<LoopCompactSelectedUnit>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub conductor: Option<LoopCompactConductor>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workers: Option<LoopCompactWorkers>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub proof_collection: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub return_conditions: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub read_only: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct LoopCompactTransition {
+    pub trigger: String,
+    pub from: String,
+    pub to: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct LoopCompactSelectedUnit {
+    pub id: String,
+    pub title: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lane: Option<String>,
+    pub command: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct LoopCompactConductor {
+    pub owns: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct LoopCompactWorkers {
+    pub may: Vec<String>,
+    pub may_not: Vec<String>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
@@ -939,8 +980,13 @@ pub fn route_next(input: LoopRouterInput) -> Result<LoopNextReport> {
             .copied()
             .filter(|task| task.state == "ready" && task.ready_startable && !task.gate)
             .collect::<Vec<_>>();
-        if !parallel_wave.is_empty() {
-            candidates.push(parallel_wave_candidate(&parallel_wave));
+        if parallel_wave.len() >= 2 {
+            candidates.push(feature_fanout_candidate(&parallel_wave));
+        } else if let Some(task) = parallel_wave.first() {
+            candidates.push(work_candidate(
+                task,
+                "1 executable task ready across 1 lane",
+            ));
         } else if let Some(task) = live_tasks
             .iter()
             .find(|task| task.state == "ready" && task.ready_startable && task.gate)
@@ -2712,13 +2758,13 @@ fn work_candidate(task: &LoopTaskInput, reason: &str) -> RouterCandidate {
     }
 }
 
-fn parallel_wave_candidate(tasks: &[&LoopTaskInput]) -> RouterCandidate {
+fn feature_fanout_candidate(tasks: &[&LoopTaskInput]) -> RouterCandidate {
     let first = tasks[0];
     let lanes = ready_lane_count(tasks);
     RouterCandidate {
-        recipe: "work",
+        recipe: "feature-fanout",
         reason: format!(
-            "{} executable task{} ready now across {} lane{}",
+            "{} executable task{} ready for fanout now across {} lane{}",
             tasks.len(),
             if tasks.len() == 1 { " is" } else { "s are" },
             lanes,
@@ -2726,12 +2772,12 @@ fn parallel_wave_candidate(tasks: &[&LoopTaskInput]) -> RouterCandidate {
         ),
         inspect: vec![
             "maestro ready".to_string(),
+            "maestro loop show feature-fanout".to_string(),
             format!("maestro task show {}", first.id),
         ],
         next_verbs: vec![
-            "maestro loop show work".to_string(),
+            "maestro loop show feature-fanout".to_string(),
             "maestro ready".to_string(),
-            format!("maestro task start {}", first.id),
         ],
     }
 }
@@ -2931,12 +2977,25 @@ pub fn compact_packet_for_next_report(
     custom_dir: Option<&Path>,
     phase: Option<&str>,
 ) -> Result<LoopCompactPacket> {
+    compact_packet_for_next_state(None, report, custom_dir, phase)
+}
+
+pub fn compact_packet_for_next_state(
+    input: Option<&LoopRouterInput>,
+    report: &LoopNextReport,
+    custom_dir: Option<&Path>,
+    phase: Option<&str>,
+) -> Result<LoopCompactPacket> {
     let recipe = report
         .recommended_recipe
         .as_deref()
         .with_context(|| format!("loop next has no recommended recipe: {}", report.reason))?;
     let selected_phase = phase.unwrap_or_else(|| default_phase_for_next(recipe, &report.reason));
-    compact_packet_with_custom_dir(recipe, custom_dir, Some(selected_phase))
+    let mut packet = compact_packet_with_custom_dir(recipe, custom_dir, Some(selected_phase))?;
+    if recipe == "feature-fanout" {
+        add_feature_fanout_packet_fields(&mut packet, input);
+    }
+    Ok(packet)
 }
 
 pub fn render_compact_packet(packet: &LoopCompactPacket) -> String {
@@ -2950,7 +3009,96 @@ pub fn render_compact_packet(packet: &LoopCompactPacket) -> String {
     push_compact_list(&mut out, "checks", &packet.checks);
     push_compact_list(&mut out, "hard_stops", &packet.hard_stops);
     push_compact_list(&mut out, "next", &packet.next);
+    if let Some(transition) = &packet.transition {
+        out.push_str("transition:\n");
+        out.push_str(&format!("  trigger: {}\n", transition.trigger));
+        out.push_str(&format!("  from: {}\n", transition.from));
+        out.push_str(&format!("  to: {}\n", transition.to));
+    }
+    if !packet.selected_units.is_empty() {
+        out.push_str("selected_units:\n");
+        for unit in &packet.selected_units {
+            out.push_str(&format!("  - {}: {}\n", unit.id, unit.title));
+            if let Some(lane) = &unit.lane {
+                out.push_str(&format!("    lane: {lane}\n"));
+            }
+            out.push_str(&format!("    command: {}\n", unit.command));
+        }
+    }
+    if let Some(conductor) = &packet.conductor {
+        out.push_str("conductor:\n");
+        out.push_str("  owns:\n");
+        push_bullets(&mut out, "    ", &conductor.owns);
+    }
+    if let Some(workers) = &packet.workers {
+        out.push_str("workers:\n");
+        out.push_str("  may:\n");
+        push_bullets(&mut out, "    ", &workers.may);
+        out.push_str("  may_not:\n");
+        push_bullets(&mut out, "    ", &workers.may_not);
+    }
+    push_optional_compact_list(&mut out, "proof_collection", &packet.proof_collection);
+    push_optional_compact_list(&mut out, "return_conditions", &packet.return_conditions);
+    if let Some(read_only) = &packet.read_only {
+        out.push_str(&format!("read_only: {read_only}\n"));
+    }
     out
+}
+
+fn add_feature_fanout_packet_fields(
+    packet: &mut LoopCompactPacket,
+    input: Option<&LoopRouterInput>,
+) {
+    packet.transition = Some(LoopCompactTransition {
+        trigger: "ready.parallel_wave".to_string(),
+        from: "work.choose".to_string(),
+        to: "feature-fanout.perceive".to_string(),
+    });
+    packet.selected_units = input.map(feature_fanout_selected_units).unwrap_or_default();
+    packet.conductor = Some(LoopCompactConductor {
+        owns: vec![
+            "shared Maestro store writes".to_string(),
+            "task verification".to_string(),
+            "merge-back and conflict resolution".to_string(),
+            "feature close and ship gates".to_string(),
+        ],
+    });
+    packet.workers = Some(LoopCompactWorkers {
+        may: vec![
+            "edit isolated files for one selected unit".to_string(),
+            "run focused checks for that unit".to_string(),
+            "return proof to the conductor".to_string(),
+        ],
+        may_not: vec![
+            "feature close".to_string(),
+            "shared card writes".to_string(),
+            "release".to_string(),
+            "edit another selected unit".to_string(),
+        ],
+    });
+    packet.proof_collection = vec![
+        "workers return unit proof".to_string(),
+        "conductor runs maestro task verify <id>".to_string(),
+        "conductor records blocked or superseded units".to_string(),
+    ];
+    packet.return_conditions =
+        vec!["all selected units verified, blocked, or superseded".to_string()];
+    packet.read_only =
+        Some("loop next recommends only; task/proof/feature verbs perform writes".to_string());
+}
+
+fn feature_fanout_selected_units(input: &LoopRouterInput) -> Vec<LoopCompactSelectedUnit> {
+    input
+        .tasks
+        .iter()
+        .filter(|task| task.state == "ready" && task.ready_startable && !task.blocked && !task.gate)
+        .map(|task| LoopCompactSelectedUnit {
+            id: task.id.clone(),
+            title: task.title.clone(),
+            lane: task.lane.clone(),
+            command: format!("maestro task start {}", task.id),
+        })
+        .collect()
 }
 
 pub fn validate_with_custom_dir(name: &str, custom_dir: Option<&Path>) -> Result<String> {
@@ -3397,6 +3545,13 @@ fn compact_packet_for_contract(
         checks: phase.checks.clone(),
         hard_stops: contract.hard_stops.clone(),
         next: phase.outputs.clone(),
+        transition: None,
+        selected_units: Vec::new(),
+        conductor: None,
+        workers: None,
+        proof_collection: Vec::new(),
+        return_conditions: Vec::new(),
+        read_only: None,
     })
 }
 
@@ -3506,6 +3661,13 @@ fn push_bullets<S: AsRef<str>>(out: &mut String, indent: &str, values: &[S]) {
 fn push_compact_list(out: &mut String, name: &str, values: &[String]) {
     out.push_str(&format!("{name}:\n"));
     push_bullets(out, "  ", values);
+}
+
+fn push_optional_compact_list(out: &mut String, name: &str, values: &[String]) {
+    if values.is_empty() {
+        return;
+    }
+    push_compact_list(out, name, values);
 }
 
 pub fn readiness_levels() -> &'static [ReadinessLevelContract] {
@@ -4418,7 +4580,7 @@ mod tests {
     }
 
     #[test]
-    fn route_next_recommends_parallel_wave_as_work() {
+    fn route_next_recommends_parallel_wave_as_feature_fanout() {
         let first = task_input("task-one", "ready", Some("feature-router"));
         let second = task_input("task-two", "ready", Some("feature-router"));
         let report = route_next(LoopRouterInput {
@@ -4427,9 +4589,9 @@ mod tests {
             tasks: vec![first, second],
             ..LoopRouterInput::default()
         })
-        .expect("router should recommend work for the executable wave");
+        .expect("router should recommend fanout for the executable wave");
 
-        assert_eq!(report.recommended_recipe.as_deref(), Some("work"));
+        assert_eq!(report.recommended_recipe.as_deref(), Some("feature-fanout"));
         assert!(
             report
                 .candidates

@@ -806,11 +806,23 @@ fn render_loop_readiness_packet(packet: &LoopReadinessPacket) -> String {
 
 fn run_next(args: LoopNextArgs, custom_dir: Option<&std::path::Path>) -> Result<()> {
     if args.chain {
-        if args.compact {
-            bail!("--chain cannot be combined with --compact");
-        }
-        if args.phase.is_some() {
+        if args.phase.is_some() && !args.compact {
             bail!("--phase requires --compact");
+        }
+        if args.compact {
+            let state = build_loop_next_state()?;
+            let packet = loop_recipes::compact_packet_for_next_state(
+                Some(&state.input),
+                &state.report,
+                custom_dir,
+                args.phase.as_deref(),
+            )?;
+            if args.json {
+                println!("{}", serde_json::to_string_pretty(&packet)?);
+            } else {
+                print!("{}", loop_recipes::render_compact_packet(&packet));
+            }
+            return Ok(());
         }
         let chain = build_loop_chain_report(custom_dir)?;
         if args.json {
@@ -821,10 +833,11 @@ fn run_next(args: LoopNextArgs, custom_dir: Option<&std::path::Path>) -> Result<
         return Ok(());
     }
 
-    let report = build_loop_next_report()?;
     if args.compact {
-        let packet = loop_recipes::compact_packet_for_next_report(
-            &report,
+        let state = build_loop_next_state()?;
+        let packet = loop_recipes::compact_packet_for_next_state(
+            Some(&state.input),
+            &state.report,
             custom_dir,
             args.phase.as_deref(),
         )?;
@@ -836,8 +849,10 @@ fn run_next(args: LoopNextArgs, custom_dir: Option<&std::path::Path>) -> Result<
     } else if args.phase.is_some() {
         bail!("--phase requires --compact");
     } else if args.json {
+        let report = build_loop_next_report()?;
         println!("{}", serde_json::to_string_pretty(&report)?);
     } else {
+        let report = build_loop_next_report()?;
         print_loop_next(&report);
     }
     Ok(())

@@ -729,7 +729,7 @@ fn loop_chain_matcher_uses_recipe_order_for_multiple_matching_triggers() {
 }
 
 #[test]
-fn loop_next_routes_ready_v2_parallel_wave_as_work() {
+fn loop_next_routes_ready_v2_parallel_wave_as_feature_fanout() {
     let temp = TestTempDir::new("maestro-loop-next-ready-v2-wave");
     init_git_marker(temp.path());
     stdout(temp.path(), &["init", "--yes"]);
@@ -755,8 +755,8 @@ fn loop_next_routes_ready_v2_parallel_wave_as_work() {
     let value: Value = serde_json::from_str(&out).expect("loop next JSON should parse");
 
     assert_eq!(before, after, "loop next must not mutate .maestro");
-    assert_eq!(value["recommended_recipe"], "work");
-    assert_eq!(value["recommended_status"], "work");
+    assert_eq!(value["recommended_recipe"], "feature-fanout");
+    assert_eq!(value["recommended_status"], "feature_fanout");
     assert!(
         value["reason"].as_str().is_some_and(
             |reason| reason.contains("2 executable tasks") && reason.contains("2 lanes")
@@ -770,6 +770,148 @@ fn loop_next_routes_ready_v2_parallel_wave_as_work() {
             .iter()
             .any(|entry| entry.as_str() == Some("maestro ready")),
         "{value}"
+    );
+}
+
+#[test]
+fn loop_next_compact_chain_json_renders_feature_fanout_conductor_packet() {
+    let temp = TestTempDir::new("maestro-loop-next-fanout-packet-json");
+    init_git_marker(temp.path());
+    stdout(temp.path(), &["init", "--yes"]);
+    stdout(
+        temp.path(),
+        &[
+            "task",
+            "setup",
+            "--wave",
+            "api=Build API",
+            "--wave",
+            "ui=Build UI",
+            "--lane",
+            "api=backend",
+            "--lane",
+            "ui=frontend",
+        ],
+    );
+    let before = snapshot_dir(&temp.path().join(".maestro"));
+
+    let out = stdout(
+        temp.path(),
+        &["loop", "next", "--compact", "--chain", "--json"],
+    );
+    let after = snapshot_dir(&temp.path().join(".maestro"));
+    let value: Value = serde_json::from_str(&out).expect("fanout packet JSON should parse");
+
+    assert_eq!(
+        before, after,
+        "loop next --compact --chain must stay read-only"
+    );
+    assert_eq!(value["schema"], "maestro.loop_compact_packet.v1");
+    assert_eq!(value["recipe"], "feature-fanout");
+    assert_eq!(value["phase"], "perceive");
+    assert_eq!(value["transition"]["trigger"], "ready.parallel_wave");
+    assert_eq!(value["transition"]["from"], "work.choose");
+    assert_eq!(value["transition"]["to"], "feature-fanout.perceive");
+    let units = value["selected_units"]
+        .as_array()
+        .expect("selected_units should be an array");
+    assert_eq!(units.len(), 2, "{value}");
+    assert!(
+        units.iter().any(|unit| {
+            unit["title"] == "Build API"
+                && unit["lane"] == "backend"
+                && unit["command"]
+                    .as_str()
+                    .is_some_and(|command| command.starts_with("maestro task start task-"))
+        }),
+        "{value}"
+    );
+    assert!(
+        units.iter().any(|unit| {
+            unit["title"] == "Build UI"
+                && unit["lane"] == "frontend"
+                && unit["command"]
+                    .as_str()
+                    .is_some_and(|command| command.starts_with("maestro task start task-"))
+        }),
+        "{value}"
+    );
+    assert!(
+        value["conductor"]["owns"]
+            .as_array()
+            .expect("conductor owns should be an array")
+            .iter()
+            .any(|item| item.as_str() == Some("shared Maestro store writes")),
+        "{value}"
+    );
+    assert!(
+        value["workers"]["may_not"]
+            .as_array()
+            .expect("worker forbidden verbs should be an array")
+            .iter()
+            .any(|item| item.as_str() == Some("feature close")),
+        "{value}"
+    );
+    assert!(
+        value["proof_collection"]
+            .as_array()
+            .expect("proof_collection should be an array")
+            .iter()
+            .any(|item| item.as_str() == Some("conductor runs maestro task verify <id>")),
+        "{value}"
+    );
+    assert!(
+        value["return_conditions"]
+            .as_array()
+            .expect("return_conditions should be an array")
+            .iter()
+            .any(
+                |item| item.as_str() == Some("all selected units verified, blocked, or superseded")
+            ),
+        "{value}"
+    );
+    assert_eq!(
+        value["read_only"],
+        "loop next recommends only; task/proof/feature verbs perform writes"
+    );
+}
+
+#[test]
+fn loop_next_compact_chain_text_renders_feature_fanout_conductor_packet() {
+    let temp = TestTempDir::new("maestro-loop-next-fanout-packet-text");
+    init_git_marker(temp.path());
+    stdout(temp.path(), &["init", "--yes"]);
+    stdout(
+        temp.path(),
+        &[
+            "task",
+            "setup",
+            "--wave",
+            "api=Build API",
+            "--wave",
+            "ui=Build UI",
+            "--lane",
+            "api=backend",
+            "--lane",
+            "ui=frontend",
+        ],
+    );
+
+    let out = stdout(temp.path(), &["loop", "next", "--compact", "--chain"]);
+
+    assert!(out.contains("recipe: feature-fanout"), "{out}");
+    assert!(out.contains("transition:"), "{out}");
+    assert!(out.contains("trigger: ready.parallel_wave"), "{out}");
+    assert!(out.contains("selected_units:"), "{out}");
+    assert!(out.contains("Build API"), "{out}");
+    assert!(out.contains("lane: backend"), "{out}");
+    assert!(out.contains("conductor:"), "{out}");
+    assert!(out.contains("shared Maestro store writes"), "{out}");
+    assert!(out.contains("workers:"), "{out}");
+    assert!(out.contains("feature close"), "{out}");
+    assert!(
+        out.contains("loop next recommends only; task/proof/feature verbs perform writes"),
+        "{out}"
     );
 }
 
