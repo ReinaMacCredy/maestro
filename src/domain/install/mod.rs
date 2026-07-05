@@ -12,12 +12,15 @@ mod mirrors;
 
 pub use lock::{AgentInstall, FileOwnership, InstallLock, InstallState, MirrorKind};
 pub use mirrors::{
-    MirrorBlockFate, MirrorBlockSync, MirrorPlan, mirror_plan, preview_mirror_block_resync,
-    resync_mirror_blocks,
+    InstallMirrorAction, InstallMirrorPreview, MirrorBlockFate, MirrorBlockSync, MirrorPlan,
+    mirror_plan, preview_mirror_block_resync, resync_mirror_blocks,
 };
 
 use lock::remove_lock_file;
-use mirrors::{migrate_legacy_root_gitignore, prepare_mirrors, write_prepared_mirrors};
+use mirrors::{
+    migrate_legacy_root_gitignore, prepare_mirrors, preview_prepared_mirrors,
+    write_prepared_mirrors,
+};
 
 /// Agent integrations supported by V1 install.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -49,6 +52,32 @@ impl InstallAgent {
 /// Install one agent integration into the repository.
 pub fn install_agent(paths: &MaestroPaths, agent: InstallAgent) -> Result<()> {
     install_agent_with_writer(paths, agent, write_prepared_mirrors)
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct InstallPreview {
+    pub agent: InstallAgent,
+    pub mirrors: Vec<InstallMirrorPreview>,
+}
+
+/// Preview one agent integration install without mutating lock or mirror files.
+pub fn preview_install_agent(paths: &MaestroPaths, agent: InstallAgent) -> Result<InstallPreview> {
+    harness::ensure_harness_protocol_exists(paths)?;
+    extraction::ensure_hook_script_exists(paths)?;
+    let lock = InstallLock::load(&paths.install_lock_file())?;
+    let previous_install = lock.agents.get(agent.key()).cloned();
+    let sibling_created_fresh = lock.paths_created_fresh_by_other_agents(agent);
+    let prepared = prepare_mirrors(
+        paths,
+        agent,
+        timestamp()?,
+        previous_install.as_ref(),
+        &sibling_created_fresh,
+    )?;
+    Ok(InstallPreview {
+        agent,
+        mirrors: preview_prepared_mirrors(&prepared),
+    })
 }
 
 fn install_agent_with_writer<F>(

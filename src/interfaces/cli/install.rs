@@ -2,19 +2,24 @@ use anyhow::Result;
 
 use crate::domain::extraction;
 use crate::domain::harness;
-use crate::domain::install;
+use crate::domain::install::{self, InstallMirrorAction};
 use crate::domain::skills;
 use crate::foundation::core::paths::{MaestroPaths, announce_repo_root, discover_repo_root};
-use crate::interfaces::cli::{Agent, AgentArgs};
+use crate::interfaces::cli::{Agent, InstallArgs};
 
 /// Execute `maestro install --agent`.
-pub fn run(args: AgentArgs) -> Result<()> {
+pub fn run(args: InstallArgs) -> Result<()> {
     let agent = install::InstallAgent::from(args.agent());
     let repo_root = discover_repo_root()?;
     announce_repo_root(&repo_root);
     let paths = MaestroPaths::new(repo_root);
     harness::ensure_harness_protocol_exists(&paths)?;
     extraction::ensure_hook_script_exists(&paths)?;
+    if args.dry_run {
+        let preview = install::preview_install_agent(&paths, agent)?;
+        print_install_preview(&preview);
+        return Ok(());
+    }
     install::install_agent(&paths, agent)?;
     // The mirror writes above print their diffs; close with a uniform success
     // line plus the per-agent next step so both agents end the same way (T6.4).
@@ -47,6 +52,39 @@ pub fn run(args: AgentArgs) -> Result<()> {
     println!("{}", readout.runtime_summary_line());
 
     Ok(())
+}
+
+fn print_install_preview(preview: &install::InstallPreview) {
+    println!("install dry-run: {}", preview.agent.key());
+    println!(
+        "safety: writes=false backup_if_changed=true managed-block refresh=true shim refresh=true stale-resource detection=maestro sync --dry-run resource guards=tests/resources_version_guard.rs"
+    );
+    for mirror in &preview.mirrors {
+        let action = match mirror.action {
+            InstallMirrorAction::Current => "current",
+            InstallMirrorAction::Create => "create",
+            InstallMirrorAction::Refresh => "refresh",
+        };
+        let backup = if mirror.backup_if_changed {
+            "backup"
+        } else {
+            "no-backup"
+        };
+        let managed = if mirror.managed_block_refresh {
+            "managed-block"
+        } else {
+            "plain"
+        };
+        let shim = if mirror.shim_refresh {
+            "shim refresh"
+        } else {
+            "resource"
+        };
+        println!(
+            "- {} action={} kind={:?} {} {} {}",
+            mirror.relative_path, action, mirror.kind, backup, managed, shim
+        );
+    }
 }
 
 impl From<Agent> for install::InstallAgent {

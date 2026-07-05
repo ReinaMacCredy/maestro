@@ -84,6 +84,23 @@ pub(crate) struct PreparedMirrors {
     backup_timestamp: String,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct InstallMirrorPreview {
+    pub relative_path: String,
+    pub kind: MirrorKind,
+    pub action: InstallMirrorAction,
+    pub backup_if_changed: bool,
+    pub managed_block_refresh: bool,
+    pub shim_refresh: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum InstallMirrorAction {
+    Current,
+    Create,
+    Refresh,
+}
+
 #[derive(Debug)]
 struct MirrorUpdate {
     relative_path: String,
@@ -312,6 +329,44 @@ pub(crate) fn prepare_mirrors(
         updates,
         backup_timestamp,
     })
+}
+
+pub(crate) fn preview_prepared_mirrors(prepared: &PreparedMirrors) -> Vec<InstallMirrorPreview> {
+    prepared
+        .updates
+        .iter()
+        .map(|update| {
+            let ownership = prepared
+                .install
+                .files
+                .get(&update.relative_path)
+                .expect("invariant: prepared mirror update should have ownership");
+            let action = if update.existing.as_deref() == Some(update.contents.as_str()) {
+                InstallMirrorAction::Current
+            } else if update.existing.is_some() {
+                InstallMirrorAction::Refresh
+            } else {
+                InstallMirrorAction::Create
+            };
+            InstallMirrorPreview {
+                relative_path: update.relative_path.clone(),
+                kind: ownership.kind.clone(),
+                action,
+                backup_if_changed: action == InstallMirrorAction::Refresh,
+                managed_block_refresh: matches!(
+                    ownership.kind,
+                    MirrorKind::MarkdownManagedBlock
+                        | MirrorKind::GitignoreSection
+                        | MirrorKind::TomlSection
+                        | MirrorKind::JsonManagedKeys
+                ),
+                shim_refresh: matches!(
+                    update.relative_path.as_str(),
+                    "CLAUDE.md" | "AGENTS.md" | ".codex/config.toml" | ".factory/hooks.json"
+                ),
+            }
+        })
+        .collect()
 }
 
 /// Write a prepared mirror plan after caller-owned metadata has been persisted.

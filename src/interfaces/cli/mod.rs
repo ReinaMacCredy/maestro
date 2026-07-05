@@ -356,7 +356,7 @@ pub enum RootCommand {
     )]
     Init(InitArgs),
     #[command(about = "Install maestro hooks and config for an agent (claude, codex, droid)")]
-    Install(AgentArgs),
+    Install(InstallArgs),
     #[command(
         about = "Upgrade the maestro binary and refresh bundled resources",
         after_help = "Examples:\n  maestro upgrade               # upgrade to the latest release and refresh resources\n  maestro upgrade --check       # report whether an update is available, install nothing\n  maestro upgrade --force       # reinstall the latest even when already up to date"
@@ -617,6 +617,35 @@ pub struct AgentArgs {
         conflicts_with = "agent_positional"
     )]
     pub agent_flag: Option<Agent>,
+}
+
+#[derive(Debug, Args)]
+pub struct InstallArgs {
+    /// Agent to target as a positional, e.g. `claude` (defaults to codex).
+    #[arg(value_enum, value_name = "AGENT")]
+    pub agent_positional: Option<Agent>,
+    /// Agent as a flag, e.g. `--agent claude`; cannot be combined with the positional.
+    #[arg(
+        long = "agent",
+        value_enum,
+        value_name = "AGENT",
+        conflicts_with = "agent_positional"
+    )]
+    pub agent_flag: Option<Agent>,
+    /// Preview mirror writes, backups, managed-block/shim refresh, and guards without writing.
+    #[arg(long)]
+    pub dry_run: bool,
+}
+
+impl InstallArgs {
+    /// Resolve the selected agent from either the positional or `--agent` flag,
+    /// defaulting to codex. clap rejects supplying both, so at most one is set.
+    pub fn agent(&self) -> Agent {
+        self.agent_positional
+            .clone()
+            .or_else(|| self.agent_flag.clone())
+            .unwrap_or(Agent::Codex)
+    }
 }
 
 impl AgentArgs {
