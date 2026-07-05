@@ -197,3 +197,12 @@ and why it is not part of the current fix.
   repository-harness-native Maestro layer, not changing decision authoring UX.
   A focused follow-up should consider stdin/file input or safer generated
   guidance for multiline decision text that contains commands.
+- Surface: `maestro feature set` next-step output after adding an open question.
+  Observed friction: after adding a new open design question to a proposed
+  feature, `maestro feature set` still printed `next: maestro feature reconcile
+  <id>`, even though the design loop should not reconcile/finalize while a
+  material fork remains unresolved.
+  Why not part of the current fix: this session is still designing the
+  repository-harness-native Maestro layer. The feature-next readout needs a
+  separate lifecycle UX fix so open questions point agents back to decision
+  resolution instead of reconcile.
