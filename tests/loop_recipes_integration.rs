@@ -738,9 +738,9 @@ fn loop_next_routes_ready_v2_parallel_wave_as_work() {
         &[
             "task",
             "setup",
-            "--task",
+            "--wave",
             "api=Build API",
-            "--task",
+            "--wave",
             "ui=Build UI",
             "--lane",
             "api=backend",

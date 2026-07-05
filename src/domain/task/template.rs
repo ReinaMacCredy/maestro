@@ -86,6 +86,8 @@ pub struct TaskRecord {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub order: Option<usize>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wave: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub risk: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub raw_request: Option<String>,
@@ -273,6 +275,7 @@ impl TaskRecord {
             gate: false,
             gate_kind: None,
             order: None,
+            wave: None,
             risk: Some("medium".to_string()),
             raw_request: None,
             atomic: false,

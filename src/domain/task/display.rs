@@ -92,6 +92,9 @@ pub fn render_task(task: &TaskRecord, checks: &[String]) -> String {
     if let Some(order) = task.order {
         out.push_str(&format!("order: {order}\n"));
     }
+    if let Some(wave) = task.wave {
+        out.push_str(&format!("wave: {wave}\n"));
+    }
     if let Some(risk) = task.risk.as_deref() {
         out.push_str(&format!("risk: {risk}\n"));
     }

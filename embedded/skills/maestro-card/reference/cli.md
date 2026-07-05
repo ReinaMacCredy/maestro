@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: d86f1e05fa21ac23bb582334076b337e5539b29b96ad1c67b831937ba5b4068c -->
+<!-- maestro:cli-reference-sha256: 59b708a3bd354c77ecd876d3dbca16ed2ceb2c4658f49804059fd7c5d58f8fc6 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -15,7 +15,7 @@ a spelling not found here is outside this skill's CLI surface.
 ## maestro task
 
 - `maestro task add <TITLE> [--card <CARD>] [--project <PROJECT>] [--id-only]` -- Add a low-ceremony task ready to start
-- `maestro task setup [--task <TASK>]... [--from <PLAN_FILE>] [--lane <LANE>]... [--after <AFTER>]... [--gate <GATE>]... [--start] [--atomic] [--reason <REASON>] [--project <PROJECT>]` -- Set up a low-ceremony Progress checklist before work starts
+- `maestro task setup [--task <TASK>]... [--wave <WAVE>]... [--then <THEN>]... [--from <PLAN_FILE>] [--lane <LANE>]... [--after <AFTER>]... [--gate <GATE>]... [--start] [--atomic] [--reason <REASON>] [--project <PROJECT>]` -- Set up a low-ceremony Progress checklist before work starts
 - `maestro task create <TITLE> [--feature <FEATURE>] [--card <CARD>] [--lane <LANE>] [--risk <RISK>] [--check <CHECK>]... [--covers <COVERS>]... [--project <PROJECT>] [--id-only]` -- Create a task (-> draft)
 - `maestro task set <ID> [--check <CHECK>]... [--feature <FEATURE>] [--no-feature] [--covers <COVERS>]... [--verify-command <VERIFY_COMMAND>] [--clear-verify-command]` -- Author task checks or change its feature link
 - `maestro task explore <ID>` -- Move a draft into exploring (-> exploring)

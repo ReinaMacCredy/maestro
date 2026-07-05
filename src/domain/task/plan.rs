@@ -25,6 +25,7 @@ pub struct TaskPlanItem {
     pub gate: bool,
     pub gate_kind: Option<String>,
     pub order: Option<usize>,
+    pub wave: Option<usize>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -38,6 +39,7 @@ pub struct NormalizedPlanTask {
     pub gate: bool,
     pub gate_kind: Option<String>,
     pub order: usize,
+    pub wave: Option<usize>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -67,6 +69,8 @@ struct TaskPlanFileItem {
     gate_kind: Option<String>,
     #[serde(default)]
     order: Option<usize>,
+    #[serde(default)]
+    wave: Option<usize>,
 }
 
 pub fn parse_plan_file(contents: &str) -> Result<TaskPlanInput> {
@@ -89,6 +93,7 @@ pub fn parse_plan_file(contents: &str) -> Result<TaskPlanInput> {
             gate: item.gate,
             gate_kind: item.gate_kind.and_then(nonempty_owned),
             order: item.order,
+            wave: item.wave,
         })
         .collect();
     Ok(TaskPlanInput { tasks })
@@ -96,11 +101,20 @@ pub fn parse_plan_file(contents: &str) -> Result<TaskPlanInput> {
 
 pub fn plan_from_cli(
     task_specs: &[String],
+    wave_specs: &[String],
+    then_specs: &[String],
     lane_specs: &[String],
     after_specs: &[String],
     gate_specs: &[String],
 ) -> Result<TaskPlanInput> {
-    let mut tasks = Vec::with_capacity(task_specs.len());
+    if !task_specs.is_empty() && (!wave_specs.is_empty() || !then_specs.is_empty()) {
+        bail!("use either serial --task rows or wave-shaped --wave/--then rows, not both");
+    }
+    if !then_specs.is_empty() && wave_specs.is_empty() {
+        bail!("--then requires at least one --wave row");
+    }
+
+    let mut tasks = Vec::with_capacity(task_specs.len() + wave_specs.len() + then_specs.len());
     let mut alias_index = BTreeMap::new();
     for (index, spec) in task_specs.iter().enumerate() {
         let (alias, title) = parse_task_spec(spec)?;
@@ -115,6 +129,43 @@ pub fn plan_from_cli(
             covers: Vec::new(),
             checks: Vec::new(),
             order: Some(index),
+            wave: Some(index + 1),
+            ..TaskPlanItem::default()
+        });
+    }
+    for spec in wave_specs {
+        let index = tasks.len();
+        let (alias, title) = parse_task_spec(spec)?;
+        if let Some(alias) = alias.as_deref()
+            && alias_index.insert(alias.to_string(), index).is_some()
+        {
+            bail!("duplicate task alias {alias:?}");
+        }
+        tasks.push(TaskPlanItem {
+            alias,
+            title,
+            covers: Vec::new(),
+            checks: Vec::new(),
+            order: Some(index),
+            wave: Some(1),
+            ..TaskPlanItem::default()
+        });
+    }
+    for (then_index, spec) in then_specs.iter().enumerate() {
+        let index = tasks.len();
+        let (alias, title) = parse_task_spec(spec)?;
+        if let Some(alias) = alias.as_deref()
+            && alias_index.insert(alias.to_string(), index).is_some()
+        {
+            bail!("duplicate task alias {alias:?}");
+        }
+        tasks.push(TaskPlanItem {
+            alias,
+            title,
+            covers: Vec::new(),
+            checks: Vec::new(),
+            order: Some(index),
+            wave: Some(then_index + 2),
             ..TaskPlanItem::default()
         });
     }
@@ -178,10 +229,18 @@ pub fn normalize_new_task_plan(
         .map(|task| (task.id.as_str(), task))
         .collect();
     let generated_ids: BTreeSet<&str> = generated.iter().map(String::as_str).collect();
+    let waves = input
+        .tasks
+        .iter()
+        .enumerate()
+        .map(|(index, task)| task.wave.unwrap_or(index + 1))
+        .collect::<Vec<_>>();
+    let wave_dependencies = implicit_wave_dependencies(&waves, &generated)?;
     let mut rows = Vec::with_capacity(input.tasks.len());
     for (index, item) in input.tasks.into_iter().enumerate() {
         let id = generated[index].clone();
-        let mut blocked_by = Vec::with_capacity(item.blocked_by.len());
+        let mut blocked_by =
+            Vec::with_capacity(item.blocked_by.len() + wave_dependencies[index].len());
         for reference in item.blocked_by {
             let reference = nonempty(&reference, "dependency ref")?;
             let resolved = if let Some(dep_index) = aliases.get(&reference) {
@@ -200,6 +259,7 @@ pub fn normalize_new_task_plan(
             }
             blocked_by.push(resolved);
         }
+        blocked_by.extend(wave_dependencies[index].iter().cloned());
         blocked_by.sort();
         blocked_by.dedup();
         rows.push(NormalizedPlanTask {
@@ -212,10 +272,41 @@ pub fn normalize_new_task_plan(
             gate: item.gate,
             gate_kind: item.gate_kind.and_then(nonempty_owned),
             order: item.order.unwrap_or(index),
+            wave: Some(waves[index]),
         });
     }
     reject_cycles(&rows, &generated_ids)?;
     Ok(rows)
+}
+
+fn implicit_wave_dependencies(waves: &[usize], generated: &[String]) -> Result<Vec<Vec<String>>> {
+    let mut by_wave: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+    for (index, wave) in waves.iter().copied().enumerate() {
+        if wave == 0 {
+            bail!("task wave values are 1-based; use wave: 1 for the first wave");
+        }
+        by_wave.entry(wave).or_default().push(index);
+    }
+
+    let mut dependencies = vec![Vec::new(); waves.len()];
+    for (wave, indexes) in &by_wave {
+        if *wave == 1 {
+            continue;
+        }
+        let previous = wave - 1;
+        let Some(previous_indexes) = by_wave.get(&previous) else {
+            bail!("task wave {wave} requires at least one task in previous wave {previous}");
+        };
+        let previous_ids = previous_indexes
+            .iter()
+            .map(|index| generated[*index].clone())
+            .collect::<Vec<_>>();
+        for index in indexes {
+            dependencies[*index].extend(previous_ids.iter().cloned());
+        }
+    }
+
+    Ok(dependencies)
 }
 
 fn validate_existing_dependency(task: &TaskRecord) -> Result<()> {

@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: 84f90237da98a120c9221d07211d388a9f1c8857e8ad6ec5513053db7730aa6f -->
+<!-- maestro:cli-reference-sha256: b23c02dee57e41e42db5923c4d35d3eae5b168819882c2f6c3ee36ecdce79ec8 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -31,7 +31,7 @@ a spelling not found here is outside this skill's CLI surface.
 ## maestro task
 
 - `maestro task add <TITLE> [--card <CARD>] [--project <PROJECT>] [--id-only]` -- Add a low-ceremony task ready to start
-- `maestro task setup [--task <TASK>]... [--from <PLAN_FILE>] [--lane <LANE>]... [--after <AFTER>]... [--gate <GATE>]... [--start] [--atomic] [--reason <REASON>] [--project <PROJECT>]` -- Set up a low-ceremony Progress checklist before work starts
+- `maestro task setup [--task <TASK>]... [--wave <WAVE>]... [--then <THEN>]... [--from <PLAN_FILE>] [--lane <LANE>]... [--after <AFTER>]... [--gate <GATE>]... [--start] [--atomic] [--reason <REASON>] [--project <PROJECT>]` -- Set up a low-ceremony Progress checklist before work starts
 - `maestro task start <REF_OR_ID>` -- Start a ready task (alias for claim)
 - `maestro task done <REF_OR_ID> [--summary <SUMMARY>] --proof <PROOF>...` -- Mark a low-ceremony task done when it has no explicit gate
 - `maestro task show [REF_OR_ID]` -- Show a task's detail: state, claim, blockers

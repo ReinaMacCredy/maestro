@@ -309,6 +309,7 @@ pub fn setup_planned_tasks(
         task.gate = row.gate;
         task.gate_kind = row.gate_kind;
         task.order = Some(row.order);
+        task.wave = row.wave;
         if index == 0
             && let Some(reason) = atomic_reason
         {

@@ -914,6 +914,12 @@ fn ready_v2_chains_same_lane_progress_tasks_by_setup_order() {
     let tasks = progress_tasks(repo);
     let implement_id = tasks[0]["id"].as_str().expect("implement task has id");
     let verify_id = tasks[1]["id"].as_str().expect("verify task has id");
+    assert_eq!(tasks[0]["wave"], Value::Number(serde_yaml::Number::from(1)));
+    assert_eq!(tasks[1]["wave"], Value::Number(serde_yaml::Number::from(2)));
+    assert_eq!(
+        tasks[1]["blocked_by"],
+        Value::Sequence(vec![Value::String(implement_id.to_string())])
+    );
 
     let human = stdout(&maestro_with_env(
         repo,
@@ -972,6 +978,92 @@ fn ready_v2_chains_same_lane_progress_tasks_by_setup_order() {
     let blocked_stderr = stderr(&blocked_start);
     assert!(blocked_stderr.contains("is blocked by"), "{blocked_stderr}");
     assert!(blocked_stderr.contains(implement_id), "{blocked_stderr}");
+}
+
+#[test]
+fn task_progress_setup_wave_then_authors_parallel_wave_one() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    let setup = maestro_with_env(
+        repo,
+        &[
+            "task",
+            "setup",
+            "--wave",
+            "ui=Implement dashboard UI",
+            "--wave",
+            "api=Implement dashboard API",
+            "--then",
+            "verify=Verify dashboard integration",
+        ],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    );
+    assert_success(&setup, &["task", "setup", "--wave", "--then"]);
+
+    let tasks = progress_tasks(repo);
+    assert_eq!(tasks.len(), 3);
+    let ui_id = tasks[0]["id"].as_str().expect("ui task has id");
+    let api_id = tasks[1]["id"].as_str().expect("api task has id");
+    let verify_id = tasks[2]["id"].as_str().expect("verify task has id");
+    assert_eq!(tasks[0]["wave"], Value::Number(serde_yaml::Number::from(1)));
+    assert_eq!(tasks[1]["wave"], Value::Number(serde_yaml::Number::from(1)));
+    assert_eq!(tasks[2]["wave"], Value::Number(serde_yaml::Number::from(2)));
+    assert_eq!(tasks[0]["blocked_by"], Value::Null);
+    assert_eq!(tasks[1]["blocked_by"], Value::Null);
+    let mut expected_blockers = [ui_id.to_string(), api_id.to_string()];
+    expected_blockers.sort();
+    assert_eq!(
+        tasks[2]["blocked_by"],
+        Value::Sequence(
+            expected_blockers
+                .iter()
+                .map(|id| Value::String(id.clone()))
+                .collect()
+        )
+    );
+
+    let json: JsonValue = serde_json::from_str(&stdout(&maestro_with_env(
+        repo,
+        &["ready", "--json"],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    )))
+    .expect("ready JSON parses");
+    let parallel_wave = json["parallel_wave"].as_array().expect("parallel_wave");
+    assert_eq!(parallel_wave.len(), 2);
+    let mut ready_ids = parallel_wave
+        .iter()
+        .map(|row| row["id"].as_str().expect("ready row id").to_string())
+        .collect::<Vec<_>>();
+    ready_ids.sort();
+    let mut expected_ready = [ui_id.to_string(), api_id.to_string()];
+    expected_ready.sort();
+    assert_eq!(ready_ids, expected_ready);
+    let blocked_next = json["blocked_next"].as_array().expect("blocked_next");
+    assert_eq!(blocked_next.len(), 1);
+    assert_eq!(
+        blocked_next[0]["id"],
+        JsonValue::String(verify_id.to_string())
+    );
+    assert_eq!(
+        blocked_next[0]["remaining_blockers"],
+        JsonValue::Array(
+            expected_blockers
+                .iter()
+                .map(|id| JsonValue::String(id.clone()))
+                .collect()
+        )
+    );
+
+    let blocked_start = maestro_with_env(
+        repo,
+        &["task", "start", verify_id],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    );
+    assert_failure(&blocked_start, &["task", "start", verify_id]);
+    let blocked_stderr = stderr(&blocked_start);
+    assert!(blocked_stderr.contains(ui_id), "{blocked_stderr}");
+    assert!(blocked_stderr.contains(api_id), "{blocked_stderr}");
 }
 
 #[test]
@@ -1135,15 +1227,15 @@ fn ready_v2_projects_parallel_wave_serial_gates_and_blocked_next() {
         &[
             "task",
             "setup",
-            "--task",
+            "--wave",
             "api=Build settings API",
-            "--task",
+            "--wave",
             "ui=Build settings UI",
-            "--task",
+            "--wave",
             "docs=Document settings",
-            "--task",
+            "--wave",
             "gate=Wire real integration",
-            "--task",
+            "--wave",
             "ship=Ship settings",
             "--lane",
             "api=backend",
@@ -1166,7 +1258,7 @@ fn ready_v2_projects_parallel_wave_serial_gates_and_blocked_next() {
         ],
         &[("MAESTRO_ACTOR", "codex#s1")],
     );
-    assert_success(&setup, &["task", "setup", "--task", "..."]);
+    assert_success(&setup, &["task", "setup", "--wave", "..."]);
 
     let human = stdout(&maestro_with_env(
         repo,

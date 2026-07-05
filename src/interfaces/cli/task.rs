@@ -37,6 +37,8 @@ pub fn run(args: TaskArgs) -> Result<()> {
         } => add_task(&paths, &title, card, project, id_only, &actor),
         TaskCommand::Setup {
             task,
+            wave,
+            then,
             from,
             lane,
             after,
@@ -49,6 +51,8 @@ pub fn run(args: TaskArgs) -> Result<()> {
             &paths,
             TaskSetupRequest {
                 titles: &task,
+                waves: &wave,
+                thens: &then,
                 from: from.as_deref(),
                 lanes: &lane,
                 after: &after,
@@ -290,6 +294,8 @@ fn add_task(
 
 struct TaskSetupRequest<'a> {
     titles: &'a [String],
+    waves: &'a [String],
+    thens: &'a [String],
     from: Option<&'a Path>,
     lanes: &'a [String],
     after: &'a [String],
@@ -304,6 +310,8 @@ struct TaskSetupRequest<'a> {
 fn setup_tasks(paths: &MaestroPaths, request: TaskSetupRequest<'_>) -> Result<()> {
     let TaskSetupRequest {
         titles,
+        waves,
+        thens,
         from,
         lanes,
         after,
@@ -321,14 +329,14 @@ fn setup_tasks(paths: &MaestroPaths, request: TaskSetupRequest<'_>) -> Result<()
         (false, None) => None,
     };
     let project = super::resolve_project(project, paths)?;
-    if from.is_some() && !titles.is_empty() {
-        bail!("use either --from <PLAN_FILE> or inline --task flags, not both");
+    if from.is_some() && (!titles.is_empty() || !waves.is_empty() || !thens.is_empty()) {
+        bail!("use either --from <PLAN_FILE> or inline --task/--wave/--then flags, not both");
     }
     let input = if let Some(from) = from {
         let contents = task::read_plan_file(from)?;
         task::parse_plan_file(&contents)?
     } else {
-        task::plan_from_cli(titles, lanes, after, gates)?
+        task::plan_from_cli(titles, waves, thens, lanes, after, gates)?
     };
     let tasks = task::setup_planned_tasks(
         &paths.tasks_dir(),
@@ -341,7 +349,14 @@ fn setup_tasks(paths: &MaestroPaths, request: TaskSetupRequest<'_>) -> Result<()
     )?;
     println!("setup {} task(s)", tasks.len());
     for (index, task) in tasks.iter().enumerate() {
-        println!("{}. {} ({})", index + 1, task.id, task.state.as_str());
+        let mut details = vec![task.state.as_str().to_string()];
+        if let Some(wave) = task.wave {
+            details.push(format!("wave {wave}"));
+        }
+        if !task.blocked_by.is_empty() {
+            details.push(format!("waits on: {}", task.blocked_by.join(", ")));
+        }
+        println!("{}. {} ({})", index + 1, task.id, details.join(", "));
     }
     if start {
         if let Some(started) = tasks
@@ -1271,6 +1286,7 @@ fn render_task_list_json(paths: &MaestroPaths, tasks: &[TaskRecord]) -> Result<(
                 "gate_kind": &task.gate_kind,
                 "execution_mode": if task.gate { "serial" } else { "parallel" },
                 "order": task.order,
+                "wave": task.wave,
                 "claimed_by": &task.claimed_by,
                 "proof": {
                     "status": proof_status,

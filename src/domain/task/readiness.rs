@@ -284,6 +284,9 @@ fn lane_for_task(task: &TaskRecord) -> &str {
 }
 
 fn precedes_in_same_serial_sequence(candidate: &TaskRecord, task: &TaskRecord) -> bool {
+    if let (Some(candidate_wave), Some(task_wave)) = (candidate.wave, task.wave) {
+        return candidate_wave < task_wave;
+    }
     match (candidate.order, task.order) {
         (Some(candidate_order), Some(task_order)) => candidate_order < task_order,
         (None, None) if candidate.progress_backed && task.progress_backed => {

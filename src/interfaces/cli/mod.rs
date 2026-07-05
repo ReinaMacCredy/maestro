@@ -1203,9 +1203,19 @@ pub enum TaskCommand {
     Setup {
         #[arg(
             long = "task",
-            help = "Task title to add to the Progress checklist (repeatable)"
+            help = "Serial task title to add to the Progress checklist (repeatable)"
         )]
         task: Vec<String>,
+        #[arg(
+            long = "wave",
+            help = "Wave 1 task title that can run in parallel with sibling --wave rows (repeatable)"
+        )]
+        wave: Vec<String>,
+        #[arg(
+            long = "then",
+            help = "Serial follow-up task after the previous wave, e.g. verify=Verify integration (repeatable)"
+        )]
+        then: Vec<String>,
         #[arg(
             long = "from",
             value_name = "PLAN_FILE",

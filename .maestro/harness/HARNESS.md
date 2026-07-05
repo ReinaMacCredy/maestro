@@ -1,5 +1,5 @@
 ---
-version: 1.29.19
+version: 1.29.20
 ---
 
 # Maestro Harness Protocol
@@ -62,11 +62,15 @@ Before write-like work, create a visible Progress breakdown with
 bypass this.
 Concrete repeatable form:
 `maestro task setup --task "Map current behavior" --task "Implement scoped fix" --task "Verify" --start`.
-For setup-time ordering, use `maestro task setup --after <task-alias>=<dependency-alias-or-task-id>`
-or plan `after`/`blocked_by`; do not use inbox messages for execution order.
-`maestro status` shows blocked Progress successors under `blocked_next`;
-finish and verify the blocker first, then use `maestro ready` for the
-executable wave.
+Plain `--task` rows are serial by default: row 2 waits on row 1, row 3 waits
+on row 2. To author parallel Wave 1 work, use repeatable `--wave` rows and
+follow-up `--then` rows, e.g.
+`maestro task setup --wave "ui=Implement UI" --wave "api=Implement API" --then "verify=Verify integration" --start`.
+Use `maestro task setup --after <task-alias>=<dependency-alias-or-task-id>` or
+plan `after`/`blocked_by` for extra explicit dependencies; do not use inbox
+messages for execution order. `maestro status` shows blocked Progress
+successors under `blocked_next`; finish and verify blockers first, then use
+`maestro ready` for the next executable wave.
 During implementation, keep running notes with `maestro note <card-or-task-id> "<text>"`:
 record decisions not in the handoff/spec, changes from the plan, tradeoffs,
 gotchas, risks, and follow-up work. If a note changes scope or acceptance,
@@ -80,9 +84,13 @@ Progress rows, running `feature prepare`, editing source, or running tests. Bind
 standalone chat or Decision records to a Feature/card and refresh the handoff.
 Do not let Progress tasks or source edits implicitly end the design phase.
 Canonical work readiness is `maestro ready`: a task-wave projection from the
-Task DAG. It shows the parallel executable wave, ready serial gates, and the
-bounded blocked-next frontier. `maestro loop next` uses that projection and
-does not create a second scheduler; `maestro loop next --chain` explains the
+Task DAG. Wave 1 / `parallel_wave` rows are independent executable tasks and
+may run in parallel when their files, cards, and external side effects do not
+overlap. Use subagents or worktrees for that fan-out when the user allowed
+delegation or the wave benefits from parallel execution; the orchestrator still
+owns shared Maestro store writes. `maestro ready` also shows ready serial gates
+and the bounded blocked-next frontier. `maestro loop next` uses that projection
+and does not create a second scheduler; `maestro loop next --chain` explains the
 derived chain overlay over the same artifacts. `maestro card ready` is the
 explicit legacy card-board readiness surface.
 Complete executable work with `maestro task complete` using summary, claim, and
