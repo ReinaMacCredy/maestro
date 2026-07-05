@@ -183,3 +183,17 @@ and why it is not part of the current fix.
   Why not part of the current fix: this task is adding implementation-note
   guidance to shipped harness/card resources; command visibility and help
   hierarchy need a separate CLI UX decision.
+
+## 2026-07-06
+
+- Surface: `maestro decision new --lock` / `maestro decision supersede` with
+  command-shaped prose in shell arguments.
+  Observed friction: while locking a design decision, backticked command text in
+  the shell argument was evaluated by the shell before Maestro received it, so
+  the locked decision lost the literal command phrase and had to be repaired
+  with a superseding decision. Maestro accepted the already-corrupted argument;
+  the only reliable catch was a manual `decision show` readback.
+  Why not part of the current fix: this session is designing the
+  repository-harness-native Maestro layer, not changing decision authoring UX.
+  A focused follow-up should consider stdin/file input or safer generated
+  guidance for multiline decision text that contains commands.
