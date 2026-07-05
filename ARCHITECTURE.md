@@ -149,6 +149,25 @@ plan/apply, approved-Memory read selection, and bounded maintenance contracts.
 Normal work and Work Lease can read compact approved Memory refs; current user
 instructions, locked acceptance, proof/QA, and run authority outrank Memory.
 
+### Native repository-harness layer
+
+The native repository-harness layer is a read-model and router layer over
+existing Maestro artifacts. It adopts intake, capability, maturity, and setup
+visibility ideas without copying a second repository-harness authority model.
+`maestro intake` routes into Feature, Card, Task, and Loop gates; it records
+source provenance and downgrades or refuses unsafe input instead of creating
+work. `maestro capability` reports optional provider evidence and never grants
+permission; local policy, host receipts, proof gates, and human approval remain
+the authority. `maestro maturity` joins Feature acceptance/proof, Harness
+backlog, and UX_GAPS into one readout of context, proof gaps, friction, level,
+and next owner.
+
+The boundary is explicit: no repository-harness docs tree, harness.db, daemon,
+scheduler, connector broker, or hidden authority store. The only durable
+records remain Maestro cards, features, tasks, decisions, run/proof events,
+Harness backlog, install locks, shipped resources, and safe-write/CAS managed
+files already listed in this document.
+
 ---
 
 ## 3. What the rewrite collapsed (deepenings, all landed)
