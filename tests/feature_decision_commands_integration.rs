@@ -534,6 +534,53 @@ fn feature_set_large_contract_edit_finishes_under_timeout() {
 }
 
 #[test]
+fn feature_set_additive_flags_append_without_double_numbering() {
+    let temp_dir = TestTempDir::new("maestro-feature-set-additive");
+    init_git_marker(temp_dir.path());
+    stdout(
+        maestro(&["init", "--yes"], temp_dir.path()),
+        &["init", "--yes"],
+    );
+    stdout(
+        maestro(&["feature", "new", "Additive Contract"], temp_dir.path()),
+        &["feature", "new", "Additive Contract"],
+    );
+
+    let seed_args = [
+        "feature",
+        "set",
+        "additive-contract",
+        "--acceptance",
+        "first criterion",
+        "--area",
+        "first area",
+    ];
+    stdout(maestro(&seed_args, temp_dir.path()), &seed_args);
+
+    let add_args = [
+        "feature",
+        "set",
+        "additive-contract",
+        "--add-acceptance",
+        "[ac-2] second criterion",
+        "--add-area",
+        "second area",
+    ];
+    let output = stdout(maestro(&add_args, temp_dir.path()), &add_args);
+    assert!(output.contains("+1 acceptance (2 total)"), "{output}");
+    assert!(output.contains("+1 areas (2 total)"), "{output}");
+    assert!(output.contains("totals: acceptance=2, areas=2"), "{output}");
+
+    let show = stdout(
+        maestro(&["feature", "show", "additive-contract"], temp_dir.path()),
+        &["feature", "show", "additive-contract"],
+    );
+    assert!(show.contains("[ac-1] first criterion"), "{show}");
+    assert!(show.contains("[ac-2] second criterion"), "{show}");
+    assert!(!show.contains("[ac-2] [ac-2] second criterion"), "{show}");
+}
+
+#[test]
 fn feature_set_fails_fast_when_card_write_lock_is_held() {
     let temp_dir = TestTempDir::new("maestro-feature-set-held-write-lock");
     init_git_marker(temp_dir.path());

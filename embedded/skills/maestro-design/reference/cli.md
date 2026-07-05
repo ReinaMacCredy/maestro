@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: d83bd170ea9e7828938a4996d310e54d80f75be7084dd3555ff10e26812997e7 -->
+<!-- maestro:cli-reference-sha256: 0b6c694e4efac7759baf2343a907c6bc2e4a3ce37fc86e217b5a2fb94cf1826c -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -20,7 +20,7 @@ a spelling not found here is outside this skill's CLI surface.
 ## maestro feature
 
 - `maestro feature new <TITLE> [--description <DESCRIPTION>] [--question <QUESTION>]... [--project <PROJECT>] [--id-only]` -- Propose a new feature (-> proposed)
-- `maestro feature set <ID> [--acceptance <ACCEPTANCE>]... [--area <AREA>]... [--non-goal <NON_GOAL>]... [--question <QUESTION>]... [--remove-question <REF_OR_TEXT>]... [--reason <REASON>] [--description <DESCRIPTION>] [--request <REQUEST>] [--type <INPUT_TYPE>]` -- Author a proposed feature's contract (replace or append fields)
+- `maestro feature set <ID> [--acceptance <ACCEPTANCE>]... [--area <AREA>]... [--non-goal <NON_GOAL>]... [--question <QUESTION>]... [--add-acceptance <ADD_ACCEPTANCE>]... [--add-area <ADD_AREA>]... [--add-non-goal <ADD_NON_GOAL>]... [--add-question <ADD_QUESTION>]... [--remove-question <REF_OR_TEXT>]... [--reason <REASON>] [--description <DESCRIPTION>] [--request <REQUEST>] [--type <INPUT_TYPE>]` -- Author a proposed feature's contract (replace fields; use --add-* to append)
 - `maestro feature finalize <ID>` -- Write or refresh the clean design handoff before accept/prepare
 - `maestro feature reopen <ID>` -- Reopen a DB-backed finalized feature into .maestro/workbench/<id>
 - `maestro feature reconcile <ID> [--full] [--json] [--apply-plan <PLAN_FILE>] [--write-plan <PLAN_FILE>]` -- Report or apply feature contract reconciliation before finalize

@@ -1747,22 +1747,24 @@ pub enum FeatureCommand {
         #[arg(long, help = "Print only the new card id on stdout")]
         id_only: bool,
     },
-    #[command(about = "Author a proposed feature's contract (replace or append fields)")]
+    #[command(
+        about = "Author a proposed feature's contract (replace fields; use --add-* to append)"
+    )]
     Set {
         id: String,
         #[arg(
             long = "acceptance",
-            help = "Acceptance criterion (repeatable); replaces the current acceptance list"
+            help = "Acceptance criterion (repeatable); replaces the current acceptance list; use --add-acceptance to append"
         )]
         acceptance: Vec<String>,
         #[arg(
             long = "area",
-            help = "Affected area (repeatable); replaces the current areas list"
+            help = "Affected area (repeatable); replaces the current areas list; use --add-area to append"
         )]
         area: Vec<String>,
         #[arg(
             long = "non-goal",
-            help = "Non-goal (repeatable); replaces the current non-goals list"
+            help = "Non-goal (repeatable); replaces the current non-goals list; use --add-non-goal to append"
         )]
         non_goal: Vec<String>,
         #[arg(
@@ -1778,25 +1780,21 @@ pub enum FeatureCommand {
         clear_questions: bool,
         #[arg(
             long = "add-acceptance",
-            hide = true,
             help = "Acceptance criterion to append while proposed (repeatable)"
         )]
         add_acceptance: Vec<String>,
         #[arg(
             long = "add-area",
-            hide = true,
             help = "Affected area to append while proposed (repeatable)"
         )]
         add_area: Vec<String>,
         #[arg(
             long = "add-non-goal",
-            hide = true,
             help = "Non-goal to append while proposed (repeatable)"
         )]
         add_non_goal: Vec<String>,
         #[arg(
             long = "add-question",
-            hide = true,
             help = "Open question to append while proposed (repeatable)"
         )]
         add_question: Vec<String>,

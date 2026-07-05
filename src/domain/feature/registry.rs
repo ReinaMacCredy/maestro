@@ -373,7 +373,11 @@ pub fn set(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> Result<Featu
     Ok(set_with_report(paths, id, edits)?.view)
 }
 
-pub fn set_with_report(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> Result<SetReport> {
+pub fn set_with_report(
+    paths: &MaestroPaths,
+    id: &str,
+    mut edits: ContractEdits,
+) -> Result<SetReport> {
     let (mut record, write) = load_record_for_update(paths, id)?;
     match record.status {
         FeatureStatus::Proposed => {}
@@ -389,6 +393,7 @@ pub fn set_with_report(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> 
             record.status.as_str()
         ),
     }
+    normalize_acceptance_inputs(&mut edits);
     for (field, values) in [
         ("acceptance", edits.acceptance.as_deref()),
         ("affected_areas", edits.affected_areas.as_deref()),
@@ -1196,7 +1201,7 @@ impl<'a> QaAccept<'a> {
 pub fn amend(
     paths: &MaestroPaths,
     id: &str,
-    additions: ContractAdditions,
+    mut additions: ContractAdditions,
     reason: &str,
 ) -> Result<AmendReport> {
     let (mut record, write) = load_record_for_update(paths, id)?;
@@ -1213,6 +1218,7 @@ pub fn amend(
         }
     }
 
+    normalize_acceptance_values(&mut additions.acceptance);
     for (field, values) in [
         ("acceptance", &additions.acceptance),
         ("affected_areas", &additions.affected_areas),
@@ -1930,6 +1936,63 @@ fn dedup_new(current: &[String], incoming: &[String]) -> Vec<String> {
     added
 }
 
+fn normalize_acceptance_inputs(edits: &mut ContractEdits) {
+    if let Some(values) = edits.acceptance.as_mut() {
+        normalize_acceptance_values(values);
+    }
+    normalize_acceptance_values(&mut edits.add_acceptance);
+    for edit in &mut edits.edit_acceptance {
+        edit.text = normalize_acceptance_text(&edit.text);
+    }
+}
+
+fn normalize_acceptance_values(values: &mut [String]) {
+    for value in values {
+        *value = normalize_acceptance_text(value);
+    }
+}
+
+fn normalize_acceptance_text(value: &str) -> String {
+    let trimmed_start = value.trim_start();
+    if let Some(rest) = stripped_bracketed_acceptance_label(trimmed_start)
+        .or_else(|| stripped_bare_acceptance_label(trimmed_start))
+    {
+        return rest.to_string();
+    }
+    value.to_string()
+}
+
+fn stripped_bracketed_acceptance_label(value: &str) -> Option<&str> {
+    let rest = value.strip_prefix('[')?;
+    let close = rest.find(']')?;
+    normalize_acceptance_id(&rest[..close])?;
+    Some(strip_acceptance_label_separator(&rest[close + 1..]))
+}
+
+fn stripped_bare_acceptance_label(value: &str) -> Option<&str> {
+    let digits = value.strip_prefix("ac-")?;
+    let digit_count = digits.chars().take_while(|ch| ch.is_ascii_digit()).count();
+    if digit_count == 0 {
+        return None;
+    }
+    normalize_acceptance_id(&value[..3 + digit_count])?;
+    let rest = digits[digit_count..].trim_start();
+    let first = rest.chars().next()?;
+    if first != ':' && first != '-' {
+        return None;
+    }
+    Some(strip_acceptance_label_separator(rest))
+}
+
+fn strip_acceptance_label_separator(value: &str) -> &str {
+    let trimmed = value.trim_start();
+    let stripped = trimmed
+        .strip_prefix(':')
+        .or_else(|| trimmed.strip_prefix('-'))
+        .unwrap_or(trimmed);
+    stripped.trim_start()
+}
+
 fn apply_acceptance_text_edits(
     feature_id: &str,
     acceptance: &mut [String],
@@ -2621,6 +2684,26 @@ mod cutover_tests {
         let reconstructed =
             record_from_card(card, "test".to_string()).expect("reconstruct the feature");
         assert_eq!(reconstructed, record);
+    }
+
+    #[test]
+    fn acceptance_text_normalization_strips_rendered_ids() {
+        assert_eq!(normalize_acceptance_text("[ac-1] Export CSV"), "Export CSV");
+        assert_eq!(
+            normalize_acceptance_text("  [ac-02]  Export CSV"),
+            "Export CSV"
+        );
+        assert_eq!(normalize_acceptance_text("ac-3: Export CSV"), "Export CSV");
+        assert_eq!(normalize_acceptance_text("ac-4 - Export CSV"), "Export CSV");
+        assert_eq!(
+            normalize_acceptance_text("ac-4 Export CSV"),
+            "ac-4 Export CSV",
+            "do not strip ambiguous prose without a delimiter"
+        );
+        assert_eq!(
+            normalize_acceptance_text("[note] Export CSV"),
+            "[note] Export CSV"
+        );
     }
 
     /// In card mode the feature write race is closed: two readers each take a
