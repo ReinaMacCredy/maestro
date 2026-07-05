@@ -36,6 +36,7 @@ pub mod hook;
 pub mod index;
 pub mod init;
 pub mod install;
+pub mod intake;
 pub mod lean;
 pub mod loop_recipes;
 pub mod mcp;
@@ -370,6 +371,11 @@ pub enum RootCommand {
     )]
     Design(DesignArgs),
     #[command(
+        about = "Classify an external plan/spec/prompt into a Maestro lifecycle route",
+        after_help = "Examples:\n  maestro intake --from external-plan.md\n  cat external-plan.md | maestro intake --from - --json"
+    )]
+    Intake(IntakeArgs),
+    #[command(
         hide = true,
         about = "Migrate v1 Maestro artifacts to the reduced v2 layout"
     )]
@@ -642,6 +648,16 @@ pub struct SyncArgs {
 pub struct DesignArgs {
     #[command(subcommand)]
     pub command: DesignCommand,
+}
+
+#[derive(Debug, Args)]
+pub struct IntakeArgs {
+    /// File path to classify, or '-' to read stdin.
+    #[arg(long = "from", value_name = "PATH|-")]
+    pub from: String,
+    /// Print the stable maestro.intake.v1 JSON envelope.
+    #[arg(long)]
+    pub json: bool,
 }
 
 #[derive(Debug, Subcommand)]
@@ -2981,6 +2997,7 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Upgrade(args) => update::run(args),
         RootCommand::Sync(args) => sync::run(args),
         RootCommand::Design(args) => design::run(args),
+        RootCommand::Intake(args) => intake::run(args),
         RootCommand::MigrateV2 => migrate::run(),
         RootCommand::Migrate => migrate::run_card_fold(),
         RootCommand::Uninstall(args) => uninstall::run(args),

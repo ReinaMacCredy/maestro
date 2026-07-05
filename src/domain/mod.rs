@@ -10,6 +10,7 @@ pub mod feature;
 pub mod gate_lock;
 pub mod harness;
 pub mod install;
+pub mod intake;
 pub mod lean;
 pub mod loop_recipes;
 pub mod memory;
