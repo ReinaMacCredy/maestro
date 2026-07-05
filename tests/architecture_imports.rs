@@ -567,6 +567,8 @@ fn install_domain_facade_does_not_publish_leaf_modules() {
             "AgentInstall".to_string(),
             "FileOwnership".to_string(),
             "InstallLock".to_string(),
+            "InstallMirrorAction".to_string(),
+            "InstallMirrorPreview".to_string(),
             "InstallState".to_string(),
             "MirrorBlockFate".to_string(),
             "MirrorBlockSync".to_string(),
@@ -1376,6 +1378,7 @@ fn transitional_public_surfaces_match_phase_policy() {
     assert_public_modules(
         Path::new("src/domain/mod.rs"),
         &[
+            "capability",
             "card",
             "channel",
             "conflict",
@@ -1386,8 +1389,10 @@ fn transitional_public_surfaces_match_phase_policy() {
             "gate_lock",
             "harness",
             "install",
+            "intake",
             "lean",
             "loop_recipes",
+            "maturity",
             "memory",
             "playbook",
             "proof",
