@@ -426,12 +426,14 @@ pub fn load_task_with_snapshot(
             continue;
         };
         if let Some(task) = progress.tasks.iter().find(|task| task.id == id) {
+            let mut task = task.clone();
+            task.progress_backed = true;
             let progress_dir = path
                 .parent()
                 .context("progress sidecar path is missing parent directory")?
                 .to_path_buf();
             return Ok(Some((
-                task.clone(),
+                task,
                 ProgressTaskSnapshot {
                     path,
                     progress,
@@ -467,6 +469,7 @@ pub fn scan_with_cards(paths: &MaestroPaths) -> Result<Vec<(TaskRecord, Card, Pa
                 .to_path_buf();
             records.extend(progress.tasks.into_iter().map(|mut task| {
                 task.project = card.project.clone();
+                task.progress_backed = true;
                 (task, card.clone(), progress_dir.clone())
             }));
         }
@@ -502,6 +505,7 @@ fn collect_tasks_from_progress_card(
             .to_path_buf();
         records.extend(progress.tasks.into_iter().map(|mut task| {
             task.project = card.project.clone();
+            task.progress_backed = true;
             (task, progress_dir.clone())
         }));
     }

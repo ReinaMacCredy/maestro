@@ -180,38 +180,82 @@ fn remaining_blockers_with(
         if is_satisfied(blocked_by, dependency) {
             continue;
         }
-        match dependency {
-            Some(dep)
-                if matches!(
-                    dep.state,
-                    TaskState::Rejected | TaskState::Abandoned | TaskState::Superseded
-                ) =>
-            {
-                diagnostics.push(format!(
-                    "{} blocked_by {} is terminal {}",
-                    task.id,
-                    dep.id,
-                    dep.state.as_str()
-                ));
-                remaining.push(dep.id.clone());
-            }
-            Some(dep) => remaining.push(dep.id.clone()),
-            None => {
-                diagnostics.push(format!(
-                    "{} blocked_by missing task {}",
-                    task.id, blocked_by
-                ));
-                remaining.push(blocked_by.clone());
-            }
+        push_unsatisfied_dependency(
+            task,
+            blocked_by,
+            dependency,
+            "blocked_by",
+            diagnostics,
+            &mut remaining,
+        );
+    }
+    let lane = lane_for_task(task);
+    let mut predecessor: Option<&TaskRecord> = None;
+    for dependency in task_map.values().copied() {
+        if dependency.id == task.id
+            || lane_for_task(dependency) != lane
+            || !precedes_in_same_serial_sequence(dependency, task)
+            || is_satisfied(dependency.id.as_str(), Some(dependency))
+        {
+            continue;
         }
+        let replace =
+            predecessor.is_none_or(|current| precedes_in_same_serial_sequence(current, dependency));
+        if replace {
+            predecessor = Some(dependency);
+        }
+    }
+    if let Some(dependency) = predecessor {
+        push_unsatisfied_dependency(
+            task,
+            &dependency.id,
+            Some(dependency),
+            "same-lane predecessor",
+            diagnostics,
+            &mut remaining,
+        );
     }
     remaining.sort();
     remaining.dedup();
     remaining
 }
 
+fn push_unsatisfied_dependency(
+    task: &TaskRecord,
+    dependency_ref: &str,
+    dependency: Option<&TaskRecord>,
+    relation: &str,
+    diagnostics: &mut Vec<String>,
+    remaining: &mut Vec<String>,
+) {
+    match dependency {
+        Some(dep)
+            if matches!(
+                dep.state,
+                TaskState::Rejected | TaskState::Abandoned | TaskState::Superseded
+            ) =>
+        {
+            diagnostics.push(format!(
+                "{} {relation} {} is terminal {}",
+                task.id,
+                dep.id,
+                dep.state.as_str()
+            ));
+            remaining.push(dep.id.clone());
+        }
+        Some(dep) => remaining.push(dep.id.clone()),
+        None => {
+            diagnostics.push(format!(
+                "{} {relation} missing task {}",
+                task.id, dependency_ref
+            ));
+            remaining.push(dependency_ref.to_string());
+        }
+    }
+}
+
 fn row_for_task(task: &TaskRecord, remaining_blockers: Vec<String>, serial: bool) -> ReadyTaskRow {
-    let lane = task.lane.clone().unwrap_or_else(|| "general".to_string());
+    let lane = lane_for_task(task).to_string();
     let execution_mode = if serial || task.gate {
         "serial".to_string()
     } else {
@@ -232,6 +276,21 @@ fn row_for_task(task: &TaskRecord, remaining_blockers: Vec<String>, serial: bool
         blocked_by: task.blocked_by.clone(),
         remaining_blockers,
         command,
+    }
+}
+
+fn lane_for_task(task: &TaskRecord) -> &str {
+    task.lane.as_deref().unwrap_or("general")
+}
+
+fn precedes_in_same_serial_sequence(candidate: &TaskRecord, task: &TaskRecord) -> bool {
+    match (candidate.order, task.order) {
+        (Some(candidate_order), Some(task_order)) => candidate_order < task_order,
+        (None, None) if candidate.progress_backed && task.progress_backed => {
+            (&candidate.created_at, &candidate.title, &candidate.id)
+                < (&task.created_at, &task.title, &task.id)
+        }
+        _ => false,
     }
 }
 

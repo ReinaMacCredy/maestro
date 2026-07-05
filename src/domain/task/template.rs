@@ -69,6 +69,9 @@ pub struct TaskRecord {
     /// the card fold, fully skipped on serialize/deserialize.
     #[serde(default, skip)]
     pub project: Option<String>,
+    /// Read-time marker for tasks folded out of a Progress card. Never stored.
+    #[serde(default, skip)]
+    pub progress_backed: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub covers: Vec<String>,
     pub title: String,
@@ -262,6 +265,7 @@ impl TaskRecord {
             id: id.to_string(),
             feature_id: None,
             project: None,
+            progress_backed: false,
             covers: Vec::new(),
             title: title.to_string(),
             lane: Some("normal".to_string()),

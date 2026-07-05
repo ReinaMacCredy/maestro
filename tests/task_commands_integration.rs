@@ -833,6 +833,148 @@ fn task_progress_setup_creates_checklist_and_starts_first_task() {
 }
 
 #[test]
+fn ready_v2_chains_legacy_same_lane_progress_tasks_by_creation_order() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    let implement = maestro_with_env(
+        repo,
+        &[
+            "task",
+            "add",
+            "Implement split-page dashboard navigation",
+            "--id-only",
+        ],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    );
+    assert_success(&implement, &["task", "add", "Implement...", "--id-only"]);
+    let implement_id = stdout(&implement).trim().to_string();
+
+    let verify = maestro_with_env(
+        repo,
+        &[
+            "task",
+            "add",
+            "Verify split-page dashboard in browser",
+            "--id-only",
+        ],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    );
+    assert_success(&verify, &["task", "add", "Verify...", "--id-only"]);
+    let verify_id = stdout(&verify).trim().to_string();
+
+    let json: JsonValue = serde_json::from_str(&stdout(&maestro_with_env(
+        repo,
+        &["ready", "--json"],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    )))
+    .expect("ready JSON parses");
+    let parallel_wave = json["parallel_wave"].as_array().expect("parallel_wave");
+    assert_eq!(parallel_wave.len(), 1);
+    assert_eq!(
+        parallel_wave[0]["id"],
+        JsonValue::String(implement_id.clone())
+    );
+    let blocked_next = json["blocked_next"].as_array().expect("blocked_next");
+    assert_eq!(blocked_next.len(), 1);
+    assert_eq!(blocked_next[0]["id"], JsonValue::String(verify_id.clone()));
+    assert_eq!(
+        blocked_next[0]["remaining_blockers"],
+        JsonValue::Array(vec![JsonValue::String(implement_id.clone())])
+    );
+
+    let blocked_start = maestro_with_env(
+        repo,
+        &["task", "start", &verify_id],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    );
+    assert_failure(&blocked_start, &["task", "start", &verify_id]);
+    assert!(stderr(&blocked_start).contains(&implement_id));
+}
+
+#[test]
+fn ready_v2_chains_same_lane_progress_tasks_by_setup_order() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    let setup = maestro_with_env(
+        repo,
+        &[
+            "task",
+            "setup",
+            "--task",
+            "Implement split-page dashboard navigation",
+            "--task",
+            "Verify split-page dashboard in browser",
+        ],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    );
+    assert_success(&setup, &["task", "setup", "--task", "..."]);
+
+    let tasks = progress_tasks(repo);
+    let implement_id = tasks[0]["id"].as_str().expect("implement task has id");
+    let verify_id = tasks[1]["id"].as_str().expect("verify task has id");
+
+    let human = stdout(&maestro_with_env(
+        repo,
+        &["ready"],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    ));
+    assert!(
+        human.contains("Parallel wave (1 ready, 1 lanes)"),
+        "{human}"
+    );
+    assert!(human.contains(implement_id), "{human}");
+    assert!(human.contains("Blocked next (1 shown"), "{human}");
+    assert!(
+        human.contains(&format!(
+            "{verify_id}  Verify split-page dashboard in browser  waits on: {implement_id}"
+        )),
+        "{human}"
+    );
+
+    let json: JsonValue = serde_json::from_str(&stdout(&maestro_with_env(
+        repo,
+        &["ready", "--plan", "--json"],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    )))
+    .expect("ready plan JSON parses");
+    let parallel_wave = json["parallel_wave"].as_array().expect("parallel_wave");
+    assert_eq!(parallel_wave.len(), 1);
+    assert_eq!(
+        parallel_wave[0]["id"],
+        JsonValue::String(implement_id.into())
+    );
+    let blocked_next = json["blocked_next"].as_array().expect("blocked_next");
+    assert_eq!(blocked_next.len(), 1);
+    assert_eq!(blocked_next[0]["id"], JsonValue::String(verify_id.into()));
+    assert_eq!(
+        blocked_next[0]["remaining_blockers"],
+        JsonValue::Array(vec![JsonValue::String(implement_id.into())])
+    );
+    let waves = json["projected_waves"].as_array().expect("projected_waves");
+    assert_eq!(waves.len(), 2);
+    assert_eq!(
+        waves[0]["parallel_wave"][0]["id"],
+        JsonValue::String(implement_id.into())
+    );
+    assert_eq!(
+        waves[1]["parallel_wave"][0]["id"],
+        JsonValue::String(verify_id.into())
+    );
+
+    let blocked_start = maestro_with_env(
+        repo,
+        &["task", "start", verify_id],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    );
+    assert_failure(&blocked_start, &["task", "start", verify_id]);
+    let blocked_stderr = stderr(&blocked_start);
+    assert!(blocked_stderr.contains("is blocked by"), "{blocked_stderr}");
+    assert!(blocked_stderr.contains(implement_id), "{blocked_stderr}");
+}
+
+#[test]
 fn task_progress_setup_accepts_alias_keyed_dag_metadata() {
     let temp = setup_repo();
     let repo = temp.path();

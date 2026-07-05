@@ -993,6 +993,20 @@ pub fn transition_task(
     details: TransitionDetails,
 ) -> Result<TaskRecord> {
     let (mut task, snapshot, _) = lookup::load_task_with_snapshot(tasks_dir, id)?;
+    if task.state == TaskState::Ready
+        && to == TaskState::InProgress
+        && !has_unresolved_blockers(&task)
+    {
+        let all_tasks = doctor::load_task_records(tasks_dir)?;
+        let remaining = readiness::remaining_start_blockers_from_records(&task, &all_tasks);
+        if !remaining.is_empty() {
+            bail!(
+                "task {} is blocked by {}; finish and verify blockers first",
+                task.id,
+                remaining.join(", ")
+            );
+        }
+    }
     lifecycle::transition(&mut task, to, actor, transitioned_at, details)?;
     template::save_task_with_snapshot(&task, &snapshot)?;
     Ok(task)
