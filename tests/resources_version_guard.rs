@@ -11,7 +11,7 @@
 //! user-visible, bump its version per `AGENTS.md`). It enforces acknowledgement,
 //! not a mechanical bump.
 
-use include_dir::{include_dir, Dir};
+use include_dir::{Dir, include_dir};
 use maestro::domain::skills::catalog::skills;
 use maestro::foundation::core::hash::sha256_hex;
 
@@ -56,7 +56,7 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 20] = [
         "skill",
         "maestro-design",
         "1.36.14",
-        "fc6d9e4b8a6244d91c46fc510e7ae4cb8220b7cd97a94d87da294dc5328f58f8",
+        "f400dd7841c2aee579d9704f83ba25ddbd3cd773d0e4935e733078bcbc1b1428",
     ),
     (
         "skill",
@@ -486,10 +486,15 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
         "loop next `unknown_gap` framing",
         "Material unknowns reopen a fork",
         "Only a clean sweep reaches the explicit build-approval gate",
+        "bounded edge sweep chained to Maestro's shipped Unknowns Lens",
+        "maestro loop next --json",
+        "compare `unknown_gap` against locked decisions",
+        "edge-case pressure: what each option could miss",
+        "No forks remain. Edge sweep found no material unresolved choices. Waiting for explicit build approval.",
     ] {
         assert!(
             design.contains(phrase),
-            "maestro-design must retain no-fork edge sweep phrase {phrase:?}"
+            "maestro-design must retain no-fork Unknowns Lens sweep phrase {phrase:?}"
         );
     }
     assert!(

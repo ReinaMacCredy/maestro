@@ -85,22 +85,31 @@ Keep a short fork queue. After each locked decision or clarified user answer,
 derive the next unresolved fork from the feature design, open questions, locked
 decisions, and working thesis. If a concrete next fork exists, present it in
 the same turn; do not make the user send "next fork" just to continue. If no
-fork remains, run the no-fork edge sweep before stopping at the explicit
-build-approval gate: pressure-test the locked design for edge cases that could
-change acceptance, proof, non-goals, ownership, or safety; then use the shipped
-loop next `unknown_gap` framing to decide whether remaining unknowns are
-material. Material unknowns reopen a fork. Implementation risks become
-acceptance/proof wording. Only a clean sweep reaches the explicit
-build-approval gate. Do not run `maestro feature reconcile <id>` or
-`maestro feature finalize <id>` until the user approves the build transition.
+fork remains, do not go straight to build approval. First run a bounded edge
+sweep chained to Maestro's shipped Unknowns Lens as the no-fork edge sweep:
+pressure-test the locked design for edge cases that could change acceptance,
+proof, non-goals, ownership, or safety; then read `maestro loop next` or
+`maestro loop next --json` and compare `unknown_gap` against locked decisions,
+feature questions, acceptance, affected areas, removals, proof gates, and
+shared-state risks.
+Use the shipped loop next `unknown_gap` framing to decide whether remaining
+unknowns are material. Material unknowns reopen a fork. If the sweep finds only
+implementation risk, add acceptance/proof wording. If it finds no material
+issue, say: "No forks remain. Edge sweep found no material unresolved choices.
+Waiting for explicit build approval." Only a clean sweep reaches the explicit
+build-approval gate.
+Do not run `maestro feature reconcile <id>` or `maestro feature finalize <id>`
+until the user approves the build transition.
 
 Every material fork needs a detail floor:
 
 - the concrete problem being decided
 - A/B/C options with artifact-level previews
 - one real Maestro example
-- edge pressure: state the failure mode, safety boundary, stale-state risk, or
-  unknown that would make the option wrong
+- edge-case pressure: what each option could miss; edge pressure must state the
+  failure mode, safety boundary, stale-state risk, or unknown that would make
+  the option wrong, and whether it creates a known_unknown, unknown_known, or
+  unknown_unknown_risk for the final sweep
 - the tradeoff and why rejected options lose
 - a clear recommendation
 - the exact answer format expected from the user
