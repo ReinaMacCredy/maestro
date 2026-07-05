@@ -206,3 +206,13 @@ and why it is not part of the current fix.
   repository-harness-native Maestro layer. The feature-next readout needs a
   separate lifecycle UX fix so open questions point agents back to decision
   resolution instead of reconcile.
+- Surface: `maestro feature set --acceptance/--area` during design contract
+  updates.
+  Observed friction: adding one acceptance or area line replaced the entire
+  existing list, while the generated CLI reference says the verb can "replace
+  or append fields." Restoring the list with literal `[ac-n]` prefixes also
+  double-numbered the readout because Maestro owns acceptance numbering.
+  Why not part of the current fix: this session is locking the fanout routing
+  packet design, not changing feature-contract authoring UX. A focused follow-up
+  should make append-vs-replace behavior explicit and prevent accidental list
+  loss during design updates.
