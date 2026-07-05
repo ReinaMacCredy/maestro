@@ -1,6 +1,6 @@
 ---
 name: maestro-card
-version: 1.37.20
+version: 1.37.21
 description: "Card work in a project using Maestro after design approval: use for implement, fix, verify, QA, close, release, continue, or unattended prompts like use loop, keep looping, work while away/asleep."
 ---
 
@@ -123,6 +123,13 @@ Load extra references only when the chosen branch points at them.
   exposes them. The host-loaded tool schema is authoritative. Use CLI commands
   when MCP is unavailable, for verbs not yet exposed as MCP tools, or when
   debugging unsupported behavior.
+- Native harness layer work route: run `maestro intake` for settled external
+  specs or plans before creating executable tasks; run `maestro capability`
+  when work depends on optional tools, files, connectors, or host receipts; run
+  `maestro maturity` before proof or close when context, acceptance, proof gaps,
+  UX friction, maturity level, or next owner is unclear. Generated CLI
+  references prove command shape; Harness and targeted skills teach the
+  workflow.
 - Exact command signatures live in [reference/cli.md](reference/cli.md),
   generated from the binary. A verb or flag not listed there does not exist;
   read it instead of probing `--help`. CLI remains the compatibility and

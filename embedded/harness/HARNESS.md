@@ -1,5 +1,5 @@
 ---
-version: 1.29.20
+version: 1.29.21
 ---
 
 # Maestro Harness Protocol
@@ -15,6 +15,15 @@ current task, read `maestro task show <id>`. Read locked acceptance with
 printed ids, routine `task list` REF values, or `task list --json`. The generated
 `reference/cli.md` for installed/shipped skills matching this binary is
 authoritative; unlisted verbs or flags do not exist.
+
+Native harness layer route: route imported specs, external plans, forked
+repo-harness prompts, or sidechat design material through `maestro intake`
+before creating work. Use `maestro capability` to read optional tools, files,
+connectors, and host receipts; use `maestro maturity` to read context,
+acceptance, proof gaps, UX friction, maturity level, and next owner. Use
+`maestro install --dry-run` and `maestro sync --dry-run` before setup writes so
+mirror and harness mutations are visible. Generated CLI references prove command
+shape; Harness and targeted skills teach the workflow.
 
 ## Route
 

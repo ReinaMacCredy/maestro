@@ -1,6 +1,6 @@
 ---
 name: maestro-audit
-version: 1.13.5
+version: 1.13.6
 description: "Audit a project using Maestro read-only: use for code review, architecture review, deepening opportunities, backlog proposals, harness-improvement findings, or repo-wide improvement audits without fixes."
 ---
 
@@ -44,6 +44,11 @@ architecture-review branch asks for them.
    audit surface before proposing findings.
 2. Map the bounded audit surface from repo evidence: docs, code ownership
    boundaries, tests, scripts, and shipped embedded resources relevant to the finding.
+   Native harness layer audit route: run `maestro capability` when a finding or
+   review depends on optional tools, files, connectors, or host receipts; run
+   `maestro maturity` when the audit needs context, acceptance, proof gaps, UX
+   friction, maturity level, or next-owner evidence. Generated CLI references
+   prove command shape; Harness and targeted skills teach the workflow.
    Sweep every lens so coverage is checkable, not just whatever surfaced
    first: correctness, security, performance, test coverage, tech debt,
    dependencies, developer experience, docs. The tech-debt lens includes the

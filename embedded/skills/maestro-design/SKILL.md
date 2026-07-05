@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-version: 1.36.14
+version: 1.36.15
 description: "Design in a project using Maestro before implementation: use for brainstorm, plan, PRD synthesis, grilling/stress-test, domain model, deepening candidate, wording, workflow, skill/harness, card/task/feature, architecture, UX, or agent-process decisions."
 ---
 
@@ -36,6 +36,14 @@ generated from the binary. A verb or flag not listed there does not exist;
 read it instead of probing `--help`. Never chain a guessed id: use only ids
 read from verb output, and when a lookup misses, re-list instead of retrying
 spelling variations.
+
+Native harness layer design route: when an external plan, repository-harness
+idea, prompt pack, PRD, or forked workflow is still unsettled, decide forks here
+before card work, then route settled text through `maestro intake`. Use
+`maestro capability` and `maestro maturity` only as read-only evidence when a
+fork depends on optional providers, proof gaps, UX friction, or next owner.
+Generated CLI references prove command shape; Harness and targeted skills teach
+the workflow.
 
 Native Maestro MCP tools may be used for supported orientation reads
 (`maestro_status`, `maestro_feature_show`, `maestro_card_list`, and related

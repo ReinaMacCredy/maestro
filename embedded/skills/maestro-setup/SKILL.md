@@ -1,6 +1,6 @@
 ---
 name: maestro-setup
-version: 1.11.5
+version: 1.11.6
 description: "Setup Maestro in a project using or adopting Maestro: use for init/install/sync/doctor, global skills, hooks, harness setup, or agent integration diagnosis/repair."
 ---
 
@@ -70,6 +70,12 @@ or proof/QA bypass.
 ## Stop
 
 - `maestro init --dry-run` writes nothing; use it before init writes.
+- Native harness layer setup route: use `maestro install --dry-run` before
+  agent mirror writes, `maestro sync --dry-run` before setup refresh writes,
+  `maestro capability` to explain optional provider state, and
+  `maestro maturity` to read context, proof gaps, friction, maturity level, and
+  next owner before claiming setup readiness. Generated CLI references prove
+  command shape; Harness and targeted skills teach the workflow.
 - `maestro init --yes` keeps existing files and creates missing files.
 - `maestro sync --dry-run` is the cheap already-initialized update check; do not
   run broader setup read-in when it proves the setup is current and no doctor

@@ -43,26 +43,26 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 20] = [
     (
         "skill",
         "maestro-card",
-        "1.37.20",
-        "bd31ee26870e12d54d3eec2aaf7d58b449812589450ce22b6e684b2ff86ec1db",
+        "1.37.21",
+        "66a530ed160b760133ea521b7d736ea10fb7b9a5da63da323bc8559299d66c68",
     ),
     (
         "skill",
         "maestro-setup",
-        "1.11.5",
-        "fbf4bf2e02d8619f80987dabb281959e80e3c41d3e9d41eaa1449eedba435448",
+        "1.11.6",
+        "c9e3a9ab4d20e7beedcb1b11430e586b5b5aa2bcb826b0bb31b614a33a5916bb",
     ),
     (
         "skill",
         "maestro-design",
-        "1.36.14",
-        "f400dd7841c2aee579d9704f83ba25ddbd3cd773d0e4935e733078bcbc1b1428",
+        "1.36.15",
+        "505243d07e1811e4e83d0c50a5102d5fff36d3d84638bfe2d01da614f34998f5",
     ),
     (
         "skill",
         "maestro-audit",
-        "1.13.5",
-        "2017f1ee16f168d8c3ce4fc3df4306b1c7b9c07bae48e11daa395bc2f2153630",
+        "1.13.6",
+        "e979f7e5b87bce68ae9794890e49eac941031bed30718fcb4608fbb73eb5fc8b",
     ),
     (
         "hook",
@@ -73,8 +73,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 20] = [
     (
         "harness",
         "HARNESS.md",
-        "1.29.20",
-        "20d68c8e20fffd60d7a3d1f990e4aa36657f09299e35ac3d8e09181514c5a50f",
+        "1.29.21",
+        "07944a3675bc44cee7e17426412f3fd0ffc8e18b99802e1212301f13928e62df",
     ),
     (
         "playbook",
@@ -427,6 +427,20 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
             "harness must retain loop readiness evidence phrase {phrase:?}"
         );
     }
+    for phrase in [
+        "Native harness layer route",
+        "`maestro intake`",
+        "`maestro capability`",
+        "`maestro maturity`",
+        "`maestro install --dry-run`",
+        "`maestro sync --dry-run`",
+        "Generated CLI references prove command shape; Harness and targeted skills teach the workflow.",
+    ] {
+        assert!(
+            harness.contains(phrase),
+            "harness must teach native layer routing phrase {phrase:?}"
+        );
+    }
 
     let design = shipped_skill_body("maestro-design").replace('\n', " ");
     assert!(
@@ -670,6 +684,74 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
     }
 }
 
+#[test]
+fn native_layer_guidance_lives_in_targeted_teaching_surfaces() {
+    let harness = normalize_markdown(HARNESS_MD);
+    let design = normalize_markdown(&shipped_skill_md("maestro-design"));
+    let card = normalize_markdown(&shipped_skill_md("maestro-card"));
+    let audit = normalize_markdown(&shipped_skill_md("maestro-audit"));
+    let setup = normalize_markdown(&shipped_skill_md("maestro-setup"));
+
+    for phrase in [
+        "Native harness layer route",
+        "`maestro intake`",
+        "`maestro capability`",
+        "`maestro maturity`",
+        "Generated CLI references prove command shape; Harness and targeted skills teach the workflow.",
+    ] {
+        assert!(
+            harness.contains(phrase),
+            "harness must teach native layer phrase {phrase:?}"
+        );
+    }
+    for phrase in [
+        "Native harness layer design route",
+        "`maestro intake`",
+        "Generated CLI references prove command shape; Harness and targeted skills teach the workflow.",
+    ] {
+        assert!(
+            design.contains(phrase),
+            "maestro-design SKILL.md must teach native layer phrase {phrase:?}"
+        );
+    }
+    for phrase in [
+        "Native harness layer work route",
+        "`maestro intake`",
+        "`maestro capability`",
+        "`maestro maturity`",
+        "Generated CLI references prove command shape; Harness and targeted skills teach the workflow.",
+    ] {
+        assert!(
+            card.contains(phrase),
+            "maestro-card SKILL.md must teach native layer phrase {phrase:?}"
+        );
+    }
+    for phrase in [
+        "Native harness layer audit route",
+        "`maestro capability`",
+        "`maestro maturity`",
+        "Generated CLI references prove command shape; Harness and targeted skills teach the workflow.",
+    ] {
+        assert!(
+            audit.contains(phrase),
+            "maestro-audit SKILL.md must teach native layer phrase {phrase:?}"
+        );
+    }
+    for phrase in [
+        "Native harness layer setup route",
+        "`maestro install --dry-run`",
+        "`maestro sync --dry-run`",
+        "`maestro capability`",
+        "`maestro maturity`",
+        "Generated CLI references prove command shape; Harness and targeted skills teach the workflow.",
+    ] {
+        assert!(
+            setup.contains(phrase),
+            "maestro-setup SKILL.md must teach native layer phrase {phrase:?}"
+        );
+    }
+}
+
 fn shipped_skill_body(name: &str) -> String {
     let skill = skills()
         .iter()
@@ -681,6 +763,18 @@ fn shipped_skill_body(name: &str) -> String {
         body.push('\n');
     }
     body
+}
+
+fn shipped_skill_md(name: &str) -> String {
+    let skill = skills()
+        .iter()
+        .find(|skill| skill.name == name)
+        .unwrap_or_else(|| panic!("{name} skill should ship"));
+    skill.skill_md().to_owned()
+}
+
+fn normalize_markdown(body: &str) -> String {
+    body.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 #[test]
