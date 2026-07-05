@@ -11,7 +11,7 @@
 //! user-visible, bump its version per `AGENTS.md`). It enforces acknowledgement,
 //! not a mechanical bump.
 
-use include_dir::{Dir, include_dir};
+use include_dir::{include_dir, Dir};
 use maestro::domain::skills::catalog::skills;
 use maestro::foundation::core::hash::sha256_hex;
 
@@ -55,8 +55,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 20] = [
     (
         "skill",
         "maestro-design",
-        "1.36.13",
-        "29520723cbc095143141b2e3ffe265b3ec5a741732b9f3dbb4bd1e0b02711b97",
+        "1.36.14",
+        "fc6d9e4b8a6244d91c46fc510e7ae4cb8220b7cd97a94d87da294dc5328f58f8",
     ),
     (
         "skill",
@@ -478,6 +478,18 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
         assert!(
             design.contains(phrase),
             "maestro-design must retain loop readiness design phrase {phrase:?}"
+        );
+    }
+    for phrase in [
+        "no-fork edge sweep",
+        "edge pressure",
+        "loop next `unknown_gap` framing",
+        "Material unknowns reopen a fork",
+        "Only a clean sweep reaches the explicit build-approval gate",
+    ] {
+        assert!(
+            design.contains(phrase),
+            "maestro-design must retain no-fork edge sweep phrase {phrase:?}"
         );
     }
     assert!(
