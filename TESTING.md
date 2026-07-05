@@ -114,6 +114,22 @@ has callers or user data safety impact.
 
 `tests/support.rs` is shared test support, not a standalone suite.
 
+## Native repository-harness layer verification matrix
+
+The native repository-harness layer is additive over existing Maestro
+artifacts, so each proof category must stay mapped to a concrete test surface:
+
+| Category | Required checks |
+| --- | --- |
+| parser/classifier downgrade behavior | `tests/intake_integration.rs` covers freeform downgrade, structured `card_ready`, `work_ready` downgrade, ready-owner routing, unsafe source refusal, and raw-content non-leakage. |
+| capability status, permission boundary, redaction, and scoped provider lookup | `tests/capability_integration.rs` covers missing registries, present/missing/denied/unverified providers, inactive capabilities, `grants_permission: false`, receipt redaction, out-of-scope denial, and nested manifest relative paths. |
+| maturity/context/friction readout stability | `tests/maturity_integration.rs` covers the `maestro.maturity.v1` JSON envelope, context rows, proof gaps, UX_GAPS friction count, maturity level, and next owner. |
+| installer, sync, and shim safety | `tests/install_dry_run_integration.rs`, `tests/install_mirrors.rs`, `tests/install_uninstall_integration.rs`, and `tests/skills_symlink_integration.rs` cover dry-run, managed mirrors, backups/restore snapshots, symlink ownership, and no partial hidden writes. |
+| versioned additive JSON contracts | `tests/intake_integration.rs`, `tests/capability_integration.rs`, `tests/maturity_integration.rs`, `tests/project_scope_read_surface.rs`, and schema fixture tests cover stable `{version,schema,...}` envelopes and additive fields. |
+| resource guards and shipped guidance drift | `tests/resources_version_guard.rs` guards shipped Harness/skill versions and targeted guidance; `tests/cli_reference_freshness.rs` guards generated CLI reference drift. |
+| edge-case guardrails | `tests/intake_integration.rs`, `tests/capability_integration.rs`, and `tests/native_layer_authority.rs` cover malformed/unsafe input, redaction, permissions, scope, stale guidance, and MIT/source-attribution non-leakage boundaries. |
+| absence of forbidden lifecycle side effects | `tests/native_layer_authority.rs`, `tests/architecture_write_safety.rs`, `tests/install_dry_run_integration.rs`, and `tests/resources_version_guard.rs` cover no repository-harness docs tree, harness.db, daemon, scheduler, connector broker, hidden authority store, CAS bypass, unmanaged install write, or silent guidance drift. |
+
 ## Change Selection Rules
 
 If changing private code inside one module, run that module's contract tests.
