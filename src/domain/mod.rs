@@ -14,6 +14,7 @@ pub mod install;
 pub mod intake;
 pub mod lean;
 pub mod loop_recipes;
+pub mod maturity;
 pub mod memory;
 pub mod playbook;
 pub mod proof;

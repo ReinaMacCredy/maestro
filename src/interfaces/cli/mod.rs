@@ -40,6 +40,7 @@ pub mod install;
 pub mod intake;
 pub mod lean;
 pub mod loop_recipes;
+pub mod maturity;
 pub mod mcp;
 pub mod memory;
 pub mod migrate;
@@ -419,6 +420,11 @@ pub enum RootCommand {
         after_help = "Examples:\n  maestro capability\n  maestro capability --json\n  maestro capability --from .maestro/capabilities.yml --json"
     )]
     Capability(CapabilityArgs),
+    #[command(
+        about = "Report context, proof gaps, friction, maturity level, and next owner",
+        after_help = "Examples:\n  maestro maturity\n  maestro maturity <feature-id>\n  maestro maturity <feature-id> --json"
+    )]
+    Maturity(MaturityArgs),
     #[command(about = "Record feature QA baseline and slice evidence")]
     Qa(QaArgs),
     #[command(about = "Record passive worktree handoff and cleanup ledger facts")]
@@ -672,6 +678,16 @@ pub struct CapabilityArgs {
     #[arg(long = "from", value_name = "PATH")]
     pub from: Option<PathBuf>,
     /// Print the stable maestro.capability.v1 JSON envelope.
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct MaturityArgs {
+    /// Optional feature id to join acceptance/proof context.
+    #[arg(value_name = "FEATURE_ID")]
+    pub target: Option<String>,
+    /// Print the stable maestro.maturity.v1 JSON envelope.
     #[arg(long)]
     pub json: bool,
 }
@@ -3026,6 +3042,7 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Event(args) => event::run(args),
         RootCommand::Feature(args) => feature::run(args),
         RootCommand::Capability(args) => capability::run(args),
+        RootCommand::Maturity(args) => maturity::run(args),
         RootCommand::Qa(args) => qa::run(args),
         RootCommand::Worktree(args) => worktree::run(args),
         RootCommand::Synthesize(args) => synthesize::run(args),
