@@ -2,6 +2,8 @@ mod common;
 mod support;
 
 use std::fs;
+#[cfg(unix)]
+use std::os::unix::fs as unix_fs;
 use std::path::Path;
 
 use common::cli_harness::maestro as cli_maestro;
@@ -33,6 +35,15 @@ fn assert_success(output: &std::process::Output) {
     assert!(
         output.status.success(),
         "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+fn assert_failure(output: &std::process::Output) {
+    assert!(
+        !output.status.success(),
+        "command unexpectedly succeeded\nstdout:\n{}\nstderr:\n{}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
@@ -264,4 +275,79 @@ evidence:
     assert_eq!(json["owner"], owner);
     assert!(json["blocked_by"].as_array().unwrap().is_empty());
     assert!(json["next"].as_str().unwrap().contains("maestro ready"));
+}
+
+#[cfg(unix)]
+#[test]
+fn intake_refuses_symlinked_sources_without_leaking_source_contents() {
+    let repo = init_repo("maestro-intake-symlink");
+    let outside = repo.path().join("outside-secret-plan.md");
+    fs::write(
+        &outside,
+        "---\nroute_hint: work_ready\n---\napi_key=top-secret-token\nMIT License\n",
+    )
+    .expect("invariant: outside fixture should write");
+    let intake = repo.path().join("linked-plan.md");
+    unix_fs::symlink(&outside, &intake).expect("invariant: symlink fixture should write");
+
+    let output = maestro(
+        &[
+            "intake",
+            "--from",
+            intake.to_str().expect("fixture path should be UTF-8"),
+            "--json",
+        ],
+        repo.path(),
+    );
+
+    assert_failure(&output);
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(combined.contains("symlink"), "{combined}");
+    assert!(!combined.contains("top-secret-token"), "{combined}");
+    assert!(!combined.contains("MIT License"), "{combined}");
+}
+
+#[test]
+fn intake_refuses_binary_and_oversized_sources() {
+    let repo = init_repo("maestro-intake-unsafe-bytes");
+    let binary = repo.path().join("binary-plan.md");
+    fs::write(&binary, b"---\nroute_hint: card_ready\n---\n\0secret")
+        .expect("invariant: binary fixture should write");
+    let output = maestro(
+        &[
+            "intake",
+            "--from",
+            binary.to_str().expect("fixture path should be UTF-8"),
+            "--json",
+        ],
+        repo.path(),
+    );
+    assert_failure(&output);
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("binary"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let huge = repo.path().join("huge-plan.md");
+    fs::write(&huge, "x".repeat(1_048_577)).expect("invariant: huge fixture should write");
+    let output = maestro(
+        &[
+            "intake",
+            "--from",
+            huge.to_str().expect("fixture path should be UTF-8"),
+            "--json",
+        ],
+        repo.path(),
+    );
+    assert_failure(&output);
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("too large"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 }

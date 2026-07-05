@@ -1,8 +1,10 @@
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use anyhow::{Context, Result};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 use crate::foundation::core::paths::MaestroPaths;
@@ -28,6 +30,7 @@ pub struct RegistryReadout {
 pub struct CapabilityReadout {
     pub id: String,
     pub active: bool,
+    pub grants_permission: bool,
     pub status: CapabilityStatus,
     pub providers: Vec<ProviderReadout>,
 }
@@ -123,6 +126,7 @@ struct HostReceipt {
 }
 
 pub fn report(paths: &MaestroPaths, from: Option<&Path>) -> Result<CapabilityReport> {
+    let custom_registry = from.is_some();
     let registry_path = from
         .map(Path::to_path_buf)
         .unwrap_or_else(|| paths.maestro_dir().join(DEFAULT_REGISTRY_FILE));
@@ -139,15 +143,34 @@ pub fn report(paths: &MaestroPaths, from: Option<&Path>) -> Result<CapabilityRep
         });
     }
 
+    let metadata = fs::symlink_metadata(&registry_path)
+        .with_context(|| format!("failed to inspect {}", registry_path.display()))?;
+    if metadata.file_type().is_symlink() {
+        anyhow::bail!(
+            "capability registry {} must not be a symlink",
+            registry_path.display()
+        );
+    }
+    if !metadata.is_file() {
+        anyhow::bail!(
+            "capability registry {} is not a regular file",
+            registry_path.display()
+        );
+    }
     let raw = fs::read_to_string(&registry_path)
         .with_context(|| format!("failed to read {}", registry_path.display()))?;
     let manifest: CapabilityManifest = serde_yaml::from_str(&raw)
         .with_context(|| format!("failed to parse {}", registry_path.display()))?;
-    let base_dir = registry_path.parent().unwrap_or(paths.repo_root());
+    let registry_base_dir = registry_path.parent().unwrap_or(paths.repo_root());
+    let file_base_dir = if custom_registry {
+        registry_base_dir
+    } else {
+        paths.repo_root()
+    };
     let capabilities = manifest
         .capabilities
         .iter()
-        .map(|capability| evaluate_capability(paths, base_dir, capability))
+        .map(|capability| evaluate_capability(paths, file_base_dir, registry_base_dir, capability))
         .collect();
 
     Ok(CapabilityReport {
@@ -160,14 +183,15 @@ pub fn report(paths: &MaestroPaths, from: Option<&Path>) -> Result<CapabilityRep
 
 fn evaluate_capability(
     paths: &MaestroPaths,
-    base_dir: &Path,
+    file_base_dir: &Path,
+    registry_base_dir: &Path,
     capability: &CapabilityDeclaration,
 ) -> CapabilityReadout {
     let providers: Vec<ProviderReadout> = if capability.active {
         capability
             .providers
             .iter()
-            .map(|provider| evaluate_provider(paths, base_dir, provider))
+            .map(|provider| evaluate_provider(paths, file_base_dir, registry_base_dir, provider))
             .collect()
     } else {
         Vec::new()
@@ -177,6 +201,7 @@ fn evaluate_capability(
     CapabilityReadout {
         id: capability.id.clone(),
         active: capability.active,
+        grants_permission: false,
         status,
         providers,
     }
@@ -184,14 +209,15 @@ fn evaluate_capability(
 
 fn evaluate_provider(
     paths: &MaestroPaths,
-    base_dir: &Path,
+    file_base_dir: &Path,
+    registry_base_dir: &Path,
     provider: &ProviderDeclaration,
 ) -> ProviderReadout {
     let kind = provider.kind.trim().to_ascii_lowercase();
     let (status, evidence) = match kind.as_str() {
         "cli" => evaluate_cli_provider(provider),
-        "file" => evaluate_file_provider(paths, provider),
-        "host_receipt" => evaluate_receipt_provider(base_dir, provider),
+        "file" => evaluate_file_provider(paths, file_base_dir, provider),
+        "host_receipt" => evaluate_receipt_provider(paths, registry_base_dir, provider),
         _ => (
             ProviderStatus::Unverified,
             ProviderEvidence {
@@ -248,6 +274,7 @@ fn evaluate_cli_provider(provider: &ProviderDeclaration) -> (ProviderStatus, Pro
 
 fn evaluate_file_provider(
     paths: &MaestroPaths,
+    base_dir: &Path,
     provider: &ProviderDeclaration,
 ) -> (ProviderStatus, ProviderEvidence) {
     let Some(path) = provider
@@ -265,7 +292,19 @@ fn evaluate_file_provider(
             },
         );
     };
-    let resolved = resolve_repo_path(paths, path);
+    let resolved = match resolve_scoped_path(paths, base_dir, path) {
+        ScopedPath::Allowed(path) => path,
+        ScopedPath::Denied { path, detail } => {
+            return (
+                ProviderStatus::Denied,
+                ProviderEvidence {
+                    kind: "local_file".to_string(),
+                    reference: Some(path.display().to_string()),
+                    detail,
+                },
+            );
+        }
+    };
     if resolved.exists() {
         (
             ProviderStatus::Present,
@@ -288,6 +327,7 @@ fn evaluate_file_provider(
 }
 
 fn evaluate_receipt_provider(
+    paths: &MaestroPaths,
     base_dir: &Path,
     provider: &ProviderDeclaration,
 ) -> (ProviderStatus, ProviderEvidence) {
@@ -306,7 +346,19 @@ fn evaluate_receipt_provider(
             },
         );
     };
-    let path = base_dir.join(receipt);
+    let path = match resolve_scoped_path(paths, base_dir, receipt) {
+        ScopedPath::Allowed(path) => path,
+        ScopedPath::Denied { path, detail } => {
+            return (
+                ProviderStatus::Denied,
+                ProviderEvidence {
+                    kind: "host_receipt".to_string(),
+                    reference: Some(path.display().to_string()),
+                    detail,
+                },
+            );
+        }
+    };
     let reference = Some(path.display().to_string());
     let Ok(raw) = fs::read_to_string(&path) else {
         return (
@@ -337,9 +389,11 @@ fn evaluate_receipt_provider(
         ProviderEvidence {
             kind: "host_receipt".to_string(),
             reference,
-            detail: receipt
-                .detail
-                .unwrap_or_else(|| "host receipt supplied status".to_string()),
+            detail: redact_sensitive_detail(
+                &receipt
+                    .detail
+                    .unwrap_or_else(|| "host receipt supplied status".to_string()),
+            ),
         },
     )
 }
@@ -393,13 +447,72 @@ fn resolve_command(command: &str) -> Option<PathBuf> {
         })
 }
 
-fn resolve_repo_path(paths: &MaestroPaths, path: &str) -> PathBuf {
+enum ScopedPath {
+    Allowed(PathBuf),
+    Denied { path: PathBuf, detail: String },
+}
+
+fn resolve_scoped_path(paths: &MaestroPaths, base_dir: &Path, path: &str) -> ScopedPath {
     let path = Path::new(path);
-    if path.is_absolute() {
+    let resolved = if path.is_absolute() {
         path.to_path_buf()
     } else {
-        paths.repo_root().join(path)
+        base_dir.join(path)
+    };
+    match fs::symlink_metadata(&resolved) {
+        Ok(metadata) if metadata.file_type().is_symlink() => {
+            return ScopedPath::Denied {
+                path: resolved,
+                detail: "path is symlinked; capability declarations do not follow symlinks"
+                    .to_string(),
+            };
+        }
+        _ => {}
     }
+
+    if is_within_repo(paths.repo_root(), &resolved) {
+        ScopedPath::Allowed(resolved)
+    } else {
+        ScopedPath::Denied {
+            path: resolved,
+            detail:
+                "path is outside repository scope; capability declarations do not grant permission"
+                    .to_string(),
+        }
+    }
+}
+
+fn is_within_repo(repo_root: &Path, path: &Path) -> bool {
+    let repo_root = repo_root
+        .canonicalize()
+        .unwrap_or_else(|_| repo_root.to_path_buf());
+    let comparable = match path.canonicalize() {
+        Ok(path) => path,
+        Err(_) => {
+            let Some(parent) = path.parent() else {
+                return false;
+            };
+            match parent.canonicalize() {
+                Ok(parent) => path
+                    .file_name()
+                    .map(|name| parent.join(name))
+                    .unwrap_or(parent),
+                Err(_) => path.to_path_buf(),
+            }
+        }
+    };
+    comparable.starts_with(repo_root)
+}
+
+fn redact_sensitive_detail(detail: &str) -> String {
+    static SECRET_ASSIGNMENT: OnceLock<Regex> = OnceLock::new();
+    let secret_assignment = SECRET_ASSIGNMENT.get_or_init(|| {
+        Regex::new(r"(?i)\b(api[_-]?key|apikey|token|secret|password)\s*[:=]\s*[^\s,;]+")
+            .expect("invariant: capability redaction regex compiles")
+    });
+    secret_assignment
+        .replace_all(detail, "$1=[redacted]")
+        .into_owned()
 }
 
 fn executable_file(path: &Path) -> bool {

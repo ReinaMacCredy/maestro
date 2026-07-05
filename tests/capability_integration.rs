@@ -140,6 +140,115 @@ capabilities:
     assert_eq!(deploy["active"], false);
 }
 
+#[test]
+fn capability_report_preserves_permission_and_scope_boundaries() {
+    let repo = init_repo("maestro-capability-boundaries");
+    let outside = repo.path().join("../outside-capability-token.txt");
+    fs::write(&outside, "secret provider fixture")
+        .expect("invariant: outside fixture should write");
+    let receipts = repo.path().join(".maestro/receipts");
+    fs::create_dir_all(&receipts).expect("invariant: receipt dir should write");
+    fs::write(
+        receipts.join("host.yml"),
+        "schema: maestro.capability-receipt.v1\nstatus: present\ndetail: api_key=top-secret-token host allowed local read\n",
+    )
+    .expect("invariant: receipt fixture should write");
+    fs::write(
+        repo.path().join(".maestro/capabilities.yml"),
+        format!(
+            "\
+schema: maestro.capabilities.v1
+capabilities:
+  - id: out-of-scope-file
+    providers:
+      - name: outside
+        kind: file
+        path: {}
+  - id: host-receipt
+    providers:
+      - name: host
+        kind: host_receipt
+        receipt: receipts/host.yml
+",
+            outside.display()
+        ),
+    )
+    .expect("invariant: capability manifest should write");
+
+    let output = maestro(&["capability", "--json"], repo.path());
+
+    assert_success(&output);
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be UTF-8");
+    assert!(!stdout.contains("top-secret-token"), "{stdout}");
+    let json: JsonValue = serde_json::from_str(&stdout).expect("stdout should be JSON");
+    assert_eq!(json["schema"], "maestro.capability.v1");
+    let capabilities = json["capabilities"].as_array().unwrap();
+
+    let scoped = capability(capabilities, "out-of-scope-file");
+    assert_eq!(scoped["grants_permission"], false);
+    assert_eq!(scoped["status"], "denied");
+    let scoped_provider = provider(scoped, "outside");
+    assert_eq!(scoped_provider["status"], "denied");
+    assert!(
+        scoped_provider["evidence"]["detail"]
+            .as_str()
+            .unwrap()
+            .contains("outside repository scope")
+    );
+
+    let receipt = capability(capabilities, "host-receipt");
+    assert_eq!(receipt["grants_permission"], false);
+    assert_eq!(receipt["status"], "present");
+    assert!(
+        provider(receipt, "host")["evidence"]["detail"]
+            .as_str()
+            .unwrap()
+            .contains("[redacted]")
+    );
+}
+
+#[test]
+fn capability_manifest_from_nested_scope_resolves_relative_file_providers_there() {
+    let repo = init_repo("maestro-capability-nested-scope");
+    let nested = repo.path().join("packages/app/.maestro");
+    fs::create_dir_all(nested.join("tools")).expect("invariant: nested tools dir should write");
+    fs::write(nested.join("tools/local-tool"), "available")
+        .expect("invariant: nested tool should write");
+    fs::write(
+        nested.join("capabilities.yml"),
+        "\
+schema: maestro.capabilities.v1
+capabilities:
+  - id: nested-tooling
+    providers:
+      - name: local-tool
+        kind: file
+        path: tools/local-tool
+",
+    )
+    .expect("invariant: nested manifest should write");
+
+    let output = maestro(
+        &[
+            "capability",
+            "--from",
+            nested
+                .join("capabilities.yml")
+                .to_str()
+                .expect("fixture path should be UTF-8"),
+            "--json",
+        ],
+        repo.path(),
+    );
+
+    assert_success(&output);
+    let json = stdout_json(&output);
+    let capabilities = json["capabilities"].as_array().unwrap();
+    let nested_tooling = capability(capabilities, "nested-tooling");
+    assert_eq!(nested_tooling["status"], "present");
+    assert_eq!(provider(nested_tooling, "local-tool")["status"], "present");
+}
+
 fn capability<'a>(capabilities: &'a [JsonValue], id: &str) -> &'a JsonValue {
     capabilities
         .iter()

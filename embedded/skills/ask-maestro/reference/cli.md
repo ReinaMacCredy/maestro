@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: 6ac6a0f2ae054e1e820ad7678cf0ee83b4b36e8bbd9e7de34fe4415d9af7dbd8 -->
+<!-- maestro:cli-reference-sha256: fc16a9fe8025d203e4f7f0f81783a26b09a1aeccbaf1b583409bee7813feefca -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -14,7 +14,7 @@ a spelling not found here is outside this skill's CLI surface.
 
 ## maestro install
 
-- `maestro install [AGENT] [--agent <AGENT>]` -- Install maestro hooks and config for an agent (claude, codex, droid)
+- `maestro install [AGENT] [--agent <AGENT>] [--dry-run]` -- Install maestro hooks and config for an agent (claude, codex, droid)
 
 ## maestro sync
 
