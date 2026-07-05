@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-version: 1.36.13
+version: 1.36.14
 description: "Design in a project using Maestro before implementation: use for brainstorm, plan, PRD synthesis, grilling/stress-test, domain model, deepening candidate, wording, workflow, skill/harness, card/task/feature, architecture, UX, or agent-process decisions."
 ---
 
@@ -85,7 +85,14 @@ Keep a short fork queue. After each locked decision or clarified user answer,
 derive the next unresolved fork from the feature design, open questions, locked
 decisions, and working thesis. If a concrete next fork exists, present it in
 the same turn; do not make the user send "next fork" just to continue. If no
-fork remains, say that directly and stop at the explicit build-approval gate.
+fork remains, do not go straight to build approval. First run a bounded edge
+sweep chained to Maestro's shipped Unknowns Lens: read `maestro loop next` or
+`maestro loop next --json` and compare `unknown_gap` against locked decisions,
+feature questions, acceptance, affected areas, removals, proof gates, and
+shared-state risks. If the sweep finds a material unresolved choice, open it as
+the next fork. If it finds only implementation risk, add acceptance/proof
+wording. If it finds no material issue, say: "No forks remain. Edge sweep found
+no material unresolved choices. Waiting for explicit build approval."
 Do not run `maestro feature reconcile <id>` or `maestro feature finalize <id>`
 until the user approves the build transition.
 
@@ -94,6 +101,8 @@ Every material fork needs a detail floor:
 - the concrete problem being decided
 - A/B/C options with artifact-level previews
 - one real Maestro example
+- edge-case pressure: what each option could miss, and whether it creates a
+  known_unknown, unknown_known, or unknown_unknown_risk for the final sweep
 - the tradeoff and why rejected options lose
 - a clear recommendation
 - the exact answer format expected from the user

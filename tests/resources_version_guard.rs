@@ -55,8 +55,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 20] = [
     (
         "skill",
         "maestro-design",
-        "1.36.13",
-        "29520723cbc095143141b2e3ffe265b3ec5a741732b9f3dbb4bd1e0b02711b97",
+        "1.36.14",
+        "68dca21b98a627b38376c9374f2e666715c62e3d17ab484dc6e5da73c38f2e2f",
     ),
     (
         "skill",
@@ -478,6 +478,18 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
         assert!(
             design.contains(phrase),
             "maestro-design must retain loop readiness design phrase {phrase:?}"
+        );
+    }
+    for phrase in [
+        "bounded edge sweep chained to Maestro's shipped Unknowns Lens",
+        "maestro loop next --json",
+        "compare `unknown_gap` against locked decisions",
+        "edge-case pressure: what each option could miss",
+        "No forks remain. Edge sweep found no material unresolved choices. Waiting for explicit build approval.",
+    ] {
+        assert!(
+            design.contains(phrase),
+            "maestro-design must retain no-fork Unknowns Lens sweep phrase {phrase:?}"
         );
     }
     assert!(
