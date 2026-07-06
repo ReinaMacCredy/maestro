@@ -435,6 +435,51 @@ fn status_surfaces_active_progress_checklist() {
 }
 
 #[test]
+fn status_skips_malformed_local_card_with_repair_hint() {
+    let temp = setup_repo("maestro-status-malformed-card");
+    let repo = temp.path();
+    let task_id = run(repo, &["task", "add", "--id-only", "Healthy task"]);
+    let task_id = task_id.trim();
+    let stale_card =
+        repo.join(".maestro/cards/progress-progress-for-maestro-019f0fd4-e24e-7551-d233");
+    fs::create_dir_all(&stale_card).expect("invariant: stale card dir should be writable");
+    fs::write(
+        stale_card.join("card.yaml"),
+        "schema_version: maestro.card.v1\nid: progress-progress-for-maestro-019f0fd4-e24e-7551-d233\ntype: stale_progress\ntitle: Progress for Maestro\nstatus: in_progress\ncreated_at: \"2026-07-06T00:00:00.000Z\"\nupdated_at: \"2026-07-06T00:00:00.000Z\"\n",
+    )
+    .expect("invariant: stale card should be writable");
+
+    let status_output = maestro(repo, &["status"]);
+
+    assert_success(&status_output, &["status"]);
+    let status = stdout(&status_output);
+    assert!(
+        status.contains("warning: skipping unreadable local card progress-progress-for-maestro-019f0fd4-e24e-7551-d233"),
+        "{status}"
+    );
+    assert!(status.contains("repair: fix or move aside"), "{status}");
+    assert!(status.contains("rerun maestro status"), "{status}");
+    assert!(status.contains(task_id), "{status}");
+
+    let json_output = maestro(repo, &["status", "--json"]);
+    assert_success(&json_output, &["status", "--json"]);
+    let parsed: JsonValue =
+        serde_json::from_str(&stdout(&json_output)).expect("status JSON should parse");
+    let warnings = parsed["warnings"]
+        .as_array()
+        .expect("warnings should be an array");
+    assert!(
+        warnings
+            .iter()
+            .any(|warning| warning["code"] == "card_store_unreadable"
+                && warning["message"]
+                    .as_str()
+                    .is_some_and(|message| message.contains("rerun maestro status"))),
+        "{parsed:#}"
+    );
+}
+
+#[test]
 fn task_next_no_action_prints_summary_and_exits_nonzero() {
     let temp = setup_repo("maestro-task-next-empty");
     let repo = temp.path();

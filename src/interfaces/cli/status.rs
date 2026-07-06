@@ -232,7 +232,8 @@ fn print_next_suggest(report: &StatusReport, mode: &str, json: bool, brief: bool
 }
 
 fn build_task_next_report(paths: &MaestroPaths) -> Result<StatusReport> {
-    let task_entries = task::load_task_entries(&paths.tasks_dir())?;
+    let card_scan = card::query::scan_with_failures(paths)?;
+    let task_entries = task::load_task_entries_from_cards(paths, &card_scan.cards)?;
     let mut features = Vec::new();
     let mut unreadable_features = Vec::new();
     for entry in feature::list_tolerant_with_entries(paths, &task_entries) {
@@ -307,15 +308,13 @@ fn build_task_next_report(paths: &MaestroPaths) -> Result<StatusReport> {
             message: format!("{} is unreadable: {error}", path.display()),
         });
     }
-    let harness_friction = harness::over_threshold_items(paths)?
-        .into_iter()
-        .map(HarnessFrictionJson::from)
-        .collect::<Vec<_>>();
-    let audit_hint = harness::audit_overdue_hint(paths)?.map(AuditHintJson::from);
-    let approved_memory =
-        memory::approved_memory(paths, MemoryReadSurface::Status, MemoryReadScope::default())?;
-    let memory_suggestions =
-        memory::suggestion_hints(paths, MemoryReadSurface::Status, MemoryReadScope::default())?;
+    for failure in card_scan.failures {
+        warnings.push(card_store_warning(&failure));
+    }
+    let harness_friction = harness_friction_for_status(paths, &mut warnings);
+    let audit_hint = audit_hint_for_status(paths, &mut warnings);
+    let approved_memory = approved_memory_for_status(paths, &mut warnings);
+    let memory_suggestions = memory_suggestions_for_status(paths, &mut warnings);
     let sections = StatusSectionsJson {
         ready_to_close: ready_to_close_features.clone(),
     };
@@ -789,7 +788,8 @@ fn focal_proof_concern(
 fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
     // One task scan feeds both the report and the per-feature counts inside the
     // roster (list_tolerant would otherwise re-scan the same cards).
-    let task_entries = task::load_task_entries(&paths.tasks_dir())?;
+    let card_scan = card::query::scan_with_failures(paths)?;
+    let task_entries = task::load_task_entries_from_cards(paths, &card_scan.cards)?;
     let mut features = Vec::new();
     let mut unreadable_features = Vec::new();
     for entry in feature::list_tolerant_with_entries(paths, &task_entries) {
@@ -829,7 +829,11 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
     // projection, so they read the same buckets the `maestro watch` board does
     // (the projection counted a card-model `blocks` dep as unblocked and any
     // open card as `active`). Rows and next-action still ride the records.
-    let summary_cards = card::query::scan(paths)?;
+    let summary_cards: Vec<card::schema::Card> = card_scan
+        .cards
+        .iter()
+        .map(|(card, _)| card.clone())
+        .collect();
     let blocked_ids: BTreeSet<String> = card::query::blocked(&summary_cards)
         .into_iter()
         .map(|card| card.id.clone())
@@ -887,7 +891,7 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
     let ready_to_close_features = ready_to_close_features(&features);
     let mut active_features = active_feature_rows(paths, &features, now_nanos);
     let worktree_actions = worktree_actions(paths, &features)?;
-    let progress = progress_status_rows(paths, &task_entries)?;
+    let progress = progress_status_rows(&task_entries);
     for (id, path, error, hint, _) in unreadable_features {
         warnings.push(WarningJson {
             code: "feature_unreadable".to_string(),
@@ -903,23 +907,23 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
             stale_proposed: false,
         });
     }
-    let harness_friction = harness::over_threshold_items(paths)?
-        .into_iter()
-        .map(HarnessFrictionJson::from)
-        .collect::<Vec<_>>();
-    let audit_hint = harness::audit_overdue_hint(paths)?.map(AuditHintJson::from);
-    let complete_harness = harness::complete_readout(paths)?;
-    let loop_readiness = Some(super::loop_recipes::build_loop_readiness_packet_for_status(
-        paths,
-        &task_entries,
-        features.len(),
-        summary_cards.len(),
-        &complete_harness,
-    ));
-    let approved_memory =
-        memory::approved_memory(paths, MemoryReadSurface::Status, MemoryReadScope::default())?;
-    let memory_suggestions =
-        memory::suggestion_hints(paths, MemoryReadSurface::Status, MemoryReadScope::default())?;
+    for failure in card_scan.failures {
+        warnings.push(card_store_warning(&failure));
+    }
+    let harness_friction = harness_friction_for_status(paths, &mut warnings);
+    let audit_hint = audit_hint_for_status(paths, &mut warnings);
+    let complete_harness = complete_harness_for_status(paths, &mut warnings);
+    let loop_readiness = complete_harness.as_ref().map(|complete_harness| {
+        super::loop_recipes::build_loop_readiness_packet_for_status(
+            paths,
+            &task_entries,
+            features.len(),
+            summary_cards.len(),
+            complete_harness,
+        )
+    });
+    let approved_memory = approved_memory_for_status(paths, &mut warnings);
+    let memory_suggestions = memory_suggestions_for_status(paths, &mut warnings);
     let sections = StatusSectionsJson {
         ready_to_close: ready_to_close_features.clone(),
     };
@@ -983,8 +987,10 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
         worktree_actions,
         harness_friction,
         audit_hint,
-        scheduler: Some(complete_harness.scheduler.clone()),
-        complete_harness: Some(complete_harness),
+        scheduler: complete_harness
+            .as_ref()
+            .map(|complete_harness| complete_harness.scheduler.clone()),
+        complete_harness,
         approved_memory: approved_memory.memories,
         approved_memory_omitted: approved_memory.omitted,
         memory_suggestions: memory_suggestions.suggestions,
@@ -992,6 +998,117 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
         sections,
         ready_to_close_features,
     })
+}
+
+fn card_store_warning(failure: &card::query::StoreScanFailure) -> WarningJson {
+    let detail = failure
+        .error
+        .lines()
+        .next()
+        .unwrap_or("unreadable card record");
+    WarningJson {
+        code: "card_store_unreadable".to_string(),
+        message: format!(
+            "skipping unreadable local card {}: {detail}; repair: fix or move aside {}, then rerun maestro status",
+            failure.id,
+            failure.path.display()
+        ),
+    }
+}
+
+fn harness_friction_for_status(
+    paths: &MaestroPaths,
+    warnings: &mut Vec<WarningJson>,
+) -> Vec<HarnessFrictionJson> {
+    match harness::over_threshold_items(paths) {
+        Ok(items) => items.into_iter().map(HarnessFrictionJson::from).collect(),
+        Err(error) => {
+            warnings.push(status_unavailable_warning(
+                "harness_friction_unavailable",
+                error,
+            ));
+            Vec::new()
+        }
+    }
+}
+
+fn audit_hint_for_status(
+    paths: &MaestroPaths,
+    warnings: &mut Vec<WarningJson>,
+) -> Option<AuditHintJson> {
+    match harness::audit_overdue_hint(paths) {
+        Ok(hint) => hint.map(AuditHintJson::from),
+        Err(error) => {
+            warnings.push(status_unavailable_warning("audit_hint_unavailable", error));
+            None
+        }
+    }
+}
+
+fn complete_harness_for_status(
+    paths: &MaestroPaths,
+    warnings: &mut Vec<WarningJson>,
+) -> Option<harness::CompleteHarnessReadout> {
+    match harness::complete_readout(paths) {
+        Ok(readout) => Some(readout),
+        Err(error) => {
+            warnings.push(status_unavailable_warning(
+                "complete_harness_unavailable",
+                error,
+            ));
+            None
+        }
+    }
+}
+
+fn approved_memory_for_status(
+    paths: &MaestroPaths,
+    warnings: &mut Vec<WarningJson>,
+) -> memory::ApprovedMemorySet {
+    match memory::approved_memory(paths, MemoryReadSurface::Status, MemoryReadScope::default()) {
+        Ok(memories) => memories,
+        Err(error) => {
+            warnings.push(status_unavailable_warning(
+                "approved_memory_unavailable",
+                error,
+            ));
+            memory::ApprovedMemorySet {
+                memories: Vec::new(),
+                omitted: 0,
+            }
+        }
+    }
+}
+
+fn memory_suggestions_for_status(
+    paths: &MaestroPaths,
+    warnings: &mut Vec<WarningJson>,
+) -> memory::MemorySuggestionSet {
+    match memory::suggestion_hints(paths, MemoryReadSurface::Status, MemoryReadScope::default()) {
+        Ok(suggestions) => suggestions,
+        Err(error) => {
+            warnings.push(status_unavailable_warning(
+                "memory_suggestions_unavailable",
+                error,
+            ));
+            memory::MemorySuggestionSet {
+                suggestions: Vec::new(),
+                omitted: 0,
+            }
+        }
+    }
+}
+
+fn status_unavailable_warning(code: &str, error: anyhow::Error) -> WarningJson {
+    let detail = format!("{error:#}")
+        .lines()
+        .next()
+        .unwrap_or("readout unavailable")
+        .to_string();
+    WarningJson {
+        code: code.to_string(),
+        message: format!("{detail}; repair unreadable local cards, then rerun maestro status"),
+    }
 }
 
 fn current_session_focus(
@@ -1238,11 +1355,7 @@ fn active_feature_rows(
         .collect()
 }
 
-fn progress_status_rows(
-    paths: &MaestroPaths,
-    task_entries: &[task::TaskEntry],
-) -> Result<Vec<ProgressStatusJson>> {
-    let progress_task_infos = task::progress_task_infos(&paths.tasks_dir())?;
+fn progress_status_rows(task_entries: &[task::TaskEntry]) -> Vec<ProgressStatusJson> {
     let all_tasks: Vec<TaskRecord> = task_entries
         .iter()
         .map(|entry| entry.task.clone())
@@ -1253,15 +1366,17 @@ fn progress_status_rows(
         .collect();
     let mut grouped: BTreeMap<String, Vec<&TaskRecord>> = BTreeMap::new();
     for entry in task_entries {
-        if let Some(info) = progress_task_infos.get(&entry.task.id) {
+        if entry.task.progress_backed
+            && let Some(progress_id) = entry.task_dir.file_name().and_then(|name| name.to_str())
+        {
             grouped
-                .entry(info.card_id.clone())
+                .entry(progress_id.to_string())
                 .or_default()
                 .push(&entry.task);
         }
     }
 
-    Ok(grouped
+    grouped
         .into_iter()
         .filter_map(|(card_id, tasks)| {
             if !tasks.iter().any(|task| task.state.is_live()) {
@@ -1327,7 +1442,7 @@ fn progress_status_rows(
                 blocked_next,
             })
         })
-        .collect())
+        .collect()
 }
 
 fn progress_dependency_json(

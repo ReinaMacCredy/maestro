@@ -4,6 +4,16 @@ Use this as a lightweight backlog for out-of-scope Maestro UX gaps noticed
 while doing other work. Keep entries short: date, surface, observed friction,
 and why it is not part of the current fix.
 
+## 2026-07-06
+
+- Surface: repo harness versus installed local binary.
+  Observed friction: `.maestro/harness/HARNESS.md` instructs agents to create
+  Progress rows with `maestro task setup --task ... --start`, but the installed
+  `maestro` on PATH in this worktree rejected `task setup` as an unrecognized
+  subcommand. This blocks the harness-prescribed setup step before code work.
+  Not part of this fix because the requested CloudBrief issue is status
+  tolerance for malformed local cards, not local binary/resource drift.
+
 ## 2026-07-04
 
 - Surface: `maestro task setup` harness guidance.

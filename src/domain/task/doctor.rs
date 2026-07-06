@@ -1,10 +1,10 @@
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
 use crate::domain::card::query as card_query;
-use crate::domain::card::schema::Card;
+use crate::domain::card::schema::{Card, CardType};
 use crate::domain::decisions;
 use crate::domain::task::lookup::paths_for_tasks_dir;
 use crate::domain::task::template::{BlockerKind, TaskRecord};
@@ -47,12 +47,30 @@ pub fn load_task_records(tasks_dir: &Path) -> Result<Vec<TaskRecord>> {
 pub fn load_task_entries(tasks_dir: &Path) -> Result<Vec<TaskEntry>> {
     let paths =
         paths_for_tasks_dir(tasks_dir).context("cannot resolve maestro paths from tasks dir")?;
-    let mut entries: Vec<TaskEntry> = cards::scan(&paths)?
-        .into_iter()
-        .map(|(task, task_dir)| TaskEntry { task, task_dir })
-        .collect();
+    let scanned = crate::domain::card::query::scan_with_paths(&paths)?;
+    load_task_entries_from_cards(&paths, &scanned)
+}
+
+/// Load task entries from an already scanned card store snapshot. Callers that
+/// need tolerant card reads can use this after filtering unreadable records.
+pub fn load_task_entries_from_cards(
+    paths: &MaestroPaths,
+    card_rows: &[(Card, PathBuf)],
+) -> Result<Vec<TaskEntry>> {
+    let mut entries = Vec::new();
+    for (card, path) in card_rows {
+        if card.card_type != CardType::Task {
+            continue;
+        }
+        let task_dir = path
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| paths.cards_dir());
+        let task = cards::record_from_card(card.clone(), path.display().to_string())?;
+        entries.push(TaskEntry { task, task_dir });
+    }
     entries.extend(
-        progress::scan(&paths)?
+        progress::scan_in_cards(paths, card_rows)?
             .into_iter()
             .map(|(task, task_dir)| TaskEntry { task, task_dir }),
     );

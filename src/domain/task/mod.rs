@@ -29,8 +29,8 @@ pub use display::{
 };
 pub use doctor::{
     TaskDoctorReport, TaskEntry, check_blocker_graph, check_blocker_graph_in_cards,
-    load_archived_task_entries, load_progress_task_entries, load_task_entries, load_task_records,
-    render_report,
+    load_archived_task_entries, load_progress_task_entries, load_task_entries,
+    load_task_entries_from_cards, load_task_records, render_report,
 };
 pub use lifecycle::TransitionDetails;
 pub(crate) use plan::{NormalizedPlanTask, normalize_new_task_plan};
