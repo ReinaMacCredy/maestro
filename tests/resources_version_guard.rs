@@ -43,8 +43,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 22] = [
     (
         "skill",
         "maestro-research",
-        "1.0.0",
-        "ed95c1d0f8563abdd05e8ab5fbf7c36fea24f76a88cca600ffa9742bffbd6295",
+        "1.0.1",
+        "f6672d507fa78f2a40fc568d43af880ff4789a130ee44dc8f094c635b81ce486",
     ),
     (
         "skill",

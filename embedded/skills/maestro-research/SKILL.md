@@ -1,7 +1,7 @@
 ---
 name: maestro-research
-version: 1.0.0
-description: "Breadth-first Maestro research before design: use for zero-context features, unfamiliar domains, externally pasted ideas, stakeholder-heavy discovery, hosting-unclear work, or when maestro-design needs a fresh research receipt before forks."
+version: 1.0.1
+description: "Pre-design research for Maestro cards: creates or validates a same-card research.md receipt, maps context, stakeholders, hosting, unknowns, and the first design fork. Use before maestro-design when the user brings a new idea, zero-context feature, external/pasted plan, unfamiliar domain, stakeholder-heavy request, hosting-unclear work, or when research is missing, stale, skipped-risky, or needed for READY_FOR_DESIGN."
 ---
 
 # Maestro Research
