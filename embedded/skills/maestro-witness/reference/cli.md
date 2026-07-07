@@ -1,5 +1,5 @@
 <!-- maestro:cli-reference-version: 1.1.0 -->
-<!-- maestro:cli-reference-sha256: 1d7915e00742798a38c52d6955ed7c354f413231e4ce753319e8924a52df3e1e -->
+<!-- maestro:cli-reference-sha256: 8b77833bb1e93cf938de221c0895f5bd3fed6e4b34eb7aa7443264be011bb915 -->
 <!-- generated; do not edit by hand; regenerate: cargo test --test cli_reference_freshness regenerate_cli_md -- --ignored -->
 # maestro CLI reference
 
@@ -8,292 +8,38 @@ filtered for the `maestro-witness` skill. Every listed verb and flag is exact;
 a spelling not found here is outside this skill's CLI surface.
 `<X>` required, `[X]` optional, `...` repeatable.
 
-## maestro init
-
-- `maestro init [--dry-run] [--merge] [--force] [--yes]` -- Scaffold .maestro/ and extract bundled resources into this repo
-
-## maestro install
-
-- `maestro install [AGENT] [--agent <AGENT>] [--dry-run]` -- Install maestro hooks and config for an agent (claude, codex, droid)
-
-## maestro upgrade
-
-- `maestro upgrade [--check] [--verbose] [--force]` -- Upgrade the maestro binary and refresh bundled resources
-
-## maestro sync
-
-- `maestro sync [--dry-run] [--global-skills] [--adopt-unmanaged]` -- Resync bundled resources to this binary's versions (offline)
-
-## maestro design
-
-- `maestro design list` -- List shipped DESIGN.md style tokens
-- `maestro design init [--style <STYLE>] [--dry-run] [--force]` -- Write repo-root DESIGN.md from a shipped style
-
-## maestro intake
-
-- `maestro intake --from <PATH|-> [--json]` -- Classify an external plan/spec/prompt into a Maestro lifecycle route
-
-## maestro research
-
-- `maestro research check <CARD_ID> [--intended-project <PROJECT>] [--json]` -- Read-only validation for a card's research.md receipt
-
-## maestro uninstall
-
-- `maestro uninstall [AGENT] [--agent <AGENT>]` -- Remove maestro hooks and config for an agent
-
-## maestro doctor
-
-- `maestro doctor` -- Diagnose the maestro installation and report problems
-
-## maestro shell-init
-
-- `maestro shell-init` -- Print the shell init snippet for maestro
-
 ## maestro status
 
 - `maestro status [--json]` -- Show the repo's current agent handoff and next action
 
-## maestro next
-
-- `maestro next [--brief] [--json] [--run] [--loop] [--max-steps <MAX_STEPS>]` -- Show or run the next safe agent action
-
-## maestro resume
-
-- `maestro resume [--task <TASK_ID>] [--feature <FEATURE_ID>] [--full] [--handoff] [--write] [--json]` -- Print a clean-session resume packet from current repo artifacts
-
 ## maestro task
 
-- `maestro task add <TITLE> [--card <CARD>] [--project <PROJECT>] [--id-only]` -- Add a low-ceremony task ready to start
-- `maestro task setup [--task <TASK>]... [--wave <WAVE>]... [--then <THEN>]... [--from <PLAN_FILE>] [--lane <LANE>]... [--after <AFTER>]... [--gate <GATE>]... [--start] [--atomic] [--reason <REASON>] [--project <PROJECT>]` -- Set up a low-ceremony Progress checklist before work starts
-- `maestro task create <TITLE> [--feature <FEATURE>] [--card <CARD>] [--lane <LANE>] [--risk <RISK>] [--check <CHECK>]... [--covers <COVERS>]... [--project <PROJECT>] [--id-only]` -- Create a task (-> draft)
-- `maestro task set <ID> [--check <CHECK>]... [--feature <FEATURE>] [--no-feature] [--covers <COVERS>]... [--verify-command <VERIFY_COMMAND>] [--clear-verify-command]` -- Author task checks or change its feature link
-- `maestro task explore <ID>` -- Move a draft into exploring (-> exploring)
-- `maestro task accept <ID>` -- Lock acceptance and mark the task ready (-> ready)
-- `maestro task claim [ID] [--next]` -- Claim a ready, unblocked task to work on it (-> in_progress)
-- `maestro task start <REF_OR_ID>` -- Start a ready task (alias for claim)
-- `maestro task done <REF_OR_ID> [--summary <SUMMARY>] --proof <PROOF>...` -- Mark a low-ceremony task done when it has no explicit gate
-- `maestro task complete <ID> --summary <SUMMARY> --claim <CLAIM>... [--proof <PROOF>]...` -- Submit work for verification (-> needs_verification)
-- `maestro task verify [ID]` -- Run the evidence gate; on pass marks the task verified
-- `maestro task next [--json]` -- Print the next task action for the current repo
-- `maestro task note <ID> <TEXT>` -- Append a dated note to a task's notes.md
-- `maestro task update <ID> [--summary <SUMMARY>] [--claim <CLAIM>]...` -- Record progress (summary and/or claims) without changing state
-- `maestro task block <ID> --reason <REASON> [--by <BY>]` -- Add a blocker to a task
-- `maestro task unblock <ID> --blocker <BLOCKER>` -- Resolve a blocker by its blk- id
-- `maestro task reject <ID> --reason <REASON>` -- Terminally reject a task (-> rejected)
-- `maestro task abandon <ID> --reason <REASON>` -- Terminally abandon a task (-> abandoned)
-- `maestro task supersede <ID> --by <BY> --reason <REASON>` -- Replace a task with another (-> superseded)
 - `maestro task show [REF_OR_ID]` -- Show a task's detail: state, claim, blockers
 - `maestro task list [--blocked] [--blocked-by <BLOCKED_BY>] [--blocks <BLOCKS>] [--feature <FEATURE>] [--ready] [--mine] [--all] [--json] [--interval <INTERVAL>]` -- List tasks, with optional filters
-- `maestro task watch [ID] [--interval <INTERVAL>]` -- Watch tasks live, refreshing on an interval
 - `maestro task proof [TASK_ID] [--task-id <TASK_ID>]` -- Show a task's proof status
-- `maestro task doctor` -- Check the task blocker graph for cycles and dangling refs
-
-## maestro event
-
-- `maestro event create [--task-id <TASK_ID>] [--message <MESSAGE>] [--payload <PAYLOAD>] [--claim <CLAIM>]... [--run <RUN>]` -- Record a run event, optionally bound to a task and carrying claims
-- `maestro event intervention --note <NOTE> [--topic <TOPIC>] [--run <RUN>]` -- Record an explicit human correction/intervention event
 
 ## maestro feature
 
-- `maestro feature new <TITLE> [--description <DESCRIPTION>] [--question <QUESTION>]... [--project <PROJECT>] [--id-only]` -- Propose a new feature (-> proposed)
-- `maestro feature set <ID> [--acceptance <ACCEPTANCE>]... [--area <AREA>]... [--non-goal <NON_GOAL>]... [--question <QUESTION>]... [--add-acceptance <ADD_ACCEPTANCE>]... [--add-area <ADD_AREA>]... [--add-non-goal <ADD_NON_GOAL>]... [--add-question <ADD_QUESTION>]... [--remove-question <REF_OR_TEXT>]... [--reason <REASON>] [--description <DESCRIPTION>] [--request <REQUEST>] [--type <INPUT_TYPE>]` -- Author a proposed feature's contract (replace fields; use --add-* to append)
-- `maestro feature finalize <ID>` -- Write or refresh the clean design handoff before accept/prepare
-- `maestro feature reopen <ID>` -- Reopen a DB-backed finalized feature into .maestro/workbench/<id>
-- `maestro feature reconcile <ID> [--full] [--json] [--apply-plan <PLAN_FILE>] [--write-plan <PLAN_FILE>]` -- Report or apply feature contract reconciliation before finalize
-- `maestro feature accept <ID> [--qa <SURFACE>] [--reason <REASON>] [--dry-run]` -- Accept a feature into ready, freezing its contract (-> ready; gated)
-- `maestro feature prepare <ID> [--from <PLAN_FILE>] [--draft] [--task <TASK>]... [--check <CHECK>]... [--covers <COVERS>]... [--blocker <BLOCKER>]... [--after <AFTER>]...` -- Prepare an accepted feature into a ready implementation queue
-- `maestro feature amend <ID> [--add-acceptance <ADD_ACCEPTANCE>]... [--add-area <ADD_AREA>]... [--add-non-goal <ADD_NON_GOAL>]... [--add-question <ADD_QUESTION>]... --reason <REASON>` -- Grow a frozen contract additively with an audit reason (ready/in_progress)
-- `maestro feature start <ID>` -- Start work on a ready feature (-> in_progress)
 - `maestro feature verify <ID> [--prove <AC_ID>]... [--evidence <EVIDENCE>]... [--waive <AC_ID>]... [--reason <REASON>]... [--no-close] [--outcome <OUTCOME>]` -- Sweep or record proof for a feature's acceptance contract
 - `maestro feature proof add <ID> --ac <AC> --evidence <EVIDENCE> [--no-close] [--outcome <OUTCOME>]` -- Record explicit feature acceptance proof
 - `maestro feature proof waive <ID> --ac <AC> --reason <REASON>` -- Waive a feature acceptance item with an explicit reason
-- `maestro feature note <ID> <TEXT>` -- Append a dated note to a feature's notes.md
 - `maestro feature close <ID> [--outcome <OUTCOME>] [--dry-run]` -- Close an in-progress feature (-> closed; gated)
-- `maestro feature cancel <ID> --reason <REASON> [--dry-run]` -- Cancel a non-terminal feature, abandoning its live child tasks (-> cancelled)
 - `maestro feature show <ID>` -- Show a feature's status, full contract, and task counts
 - `maestro feature design <ID> [--section <SECTION>] [--append <TEXT>] [--replace <TEXT>]` -- Render a feature's design-of-record, render one section, or fill one section (--section with --append/--replace)
-- `maestro feature spec <ID> [--section <SECTION>] [--append <TEXT>] [--replace <TEXT>]` -- Compatibility alias for `feature design`; reads legacy spec.md when design.md is absent
-- `maestro feature list [--all]` -- List features with their statuses and task counts
-- `maestro feature archive [ID] [--closed] [--dry-run]` -- Archive a terminal feature and its terminal child tasks (-> .maestro/archive/features)
-- `maestro feature auto-archive <ID> --authority-ref <AUTHORITY_REF> --authority-target <AUTHORITY_TARGET> --authority-head <AUTHORITY_HEAD> --authority-state <AUTHORITY_STATE> --tested-head <TESTED_HEAD> --qa-result <QA_RESULT> [--qa-evidence <QA_EVIDENCE>]... --run <RUN> --multi-agent <MULTI_AGENT> --canonical-store <CANONICAL_STORE> --worker-source <WORKER_SOURCE> [--target-card-hash <TARGET_CARD_HASH>] [--dry-run] [--refresh-receipt]` -- Archive a terminal feature after commit-bound QA evidence passes
-- `maestro feature unarchive <ID>` -- Restore an archived feature and its archived child tasks
-
-## maestro capability
-
-- `maestro capability [--from <PATH>] [--json]` -- Report optional repo/tool/connector capability state
-
-## maestro maturity
-
-- `maestro maturity [FEATURE_ID] [--json]` -- Report context, proof gaps, friction, maturity level, and next owner
 
 ## maestro qa
 
 - `maestro qa baseline <ID> [--observed <OBSERVED>] [--observed-file <PATH>] [--observed-stdin]` -- Write a feature QA baseline from explicit observed behavior
 - `maestro qa slice <ID> [--scenario <SCENARIO>]... [--observed <OBSERVED>] [--observed-file <PATH>] [--observed-stdin]` -- Append counting QA slice evidence for baseline scenarios
 
-## maestro worktree
-
-- `maestro worktree plan <CARD> --slug <SLUG> --branch <BRANCH> --path <PATH> --base <BASE> [--owner-checkout <OWNER_CHECKOUT>] [--worker-checkout <WORKER_CHECKOUT>]` -- Plan a worker lane in the owning card ledger; does not run git
-- `maestro worktree mark <CARD> --slug <SLUG> [--lane-created] [--merged-back] [--verified] [--commit <COMMIT>]` -- Mark a worktree ledger milestone; does not run git
-- `maestro worktree cleanup-record <CARD> --slug <SLUG> --removed-path <REMOVED_PATH> --deleted-branch <DELETED_BRANCH> [--pruned] [--recorded-by <RECORDED_BY>]` -- Record that the agent already cleaned a worker lane; does not run git
-- `maestro worktree cleanup <CARD> --slug <SLUG> [--apply]` -- Dry-run or apply gated cleanup for a worker lane
-- `maestro worktree handoff <CARD> --slug <SLUG> --created-by-session <CREATED_BY_SESSION> --head <HEAD> --target <TARGET> --blocker <BLOCKER> [--verified-check <VERIFIED_CHECK>]...` -- Record that a worker lane needs root/main synthesis
-
-## maestro synthesize
-
-- `maestro synthesize claim <CARD> --slug <SLUG> [--session <SESSION>]` -- Claim one pending needs_synthesis worktree handoff
-
-## maestro grep
-
-- `maestro grep <QUERY>... [--json]` -- Search Maestro memory and source with the indexed grep engine
-
-## maestro memory
-
-- `maestro memory create --from <SOURCE_OR_SUGGESTION> [--summary <SUMMARY>] [--lesson <LESSON>] [--signal-type <SIGNAL_TYPE>] [--scope-kind <SCOPE_KIND>] [--scope-ref <SCOPE_REF>]... [--target-surface <TARGET_SURFACE>] [--id-only]` -- Create a Memory card from an explicit source or suggestion id
-- `maestro memory list [--all]` -- List Memory cards
-- `maestro memory show <ID>` -- Show a Memory card, candidate metadata, and lesson
-- `maestro memory search [QUERY]...` -- Search approved Memory
-- `maestro memory promote <MEMORY_OR_PROMOTION_ID> [--plan] [--apply] [--scorer-receipt <REF>] [--review-evidence <EVIDENCE>]` -- Plan or apply a gated Memory promotion
-- `maestro memory maintain [--level <L0|L1|L2|L3>] [--scope-kind <SCOPE_KIND>] [--scope-ref <SCOPE_REF>]... [--source-ref <SOURCE_REF>]... --reason <REASON> [--proof-link <PROOF_LINK>]... [--run-link <RUN_LINK>]... [--human-approved] [--tokens <TOKENS>] [--wall-minutes <WALL_MINUTES>] [--max-source-refs <MAX_SOURCE_REFS>] [--max-files <MAX_FILES>] [--subagents <SUBAGENTS>] [--id-only]` -- Create a bounded Memory maintenance contract
-- `maestro memory dream [--level <L0|L1|L2|L3>] [--scope-kind <SCOPE_KIND>] [--scope-ref <SCOPE_REF>]... [--source-ref <SOURCE_REF>]... --reason <REASON> [--proof-link <PROOF_LINK>]... [--run-link <RUN_LINK>]... [--human-approved] [--tokens <TOKENS>] [--wall-minutes <WALL_MINUTES>] [--max-source-refs <MAX_SOURCE_REFS>] [--max-files <MAX_FILES>] [--subagents <SUBAGENTS>] [--id-only]` -- Create a bounded Memory-dream maintenance contract
-- `maestro memory scorer attach <ID> --contract-file <PATH>` -- Attach an inline scorer contract file to memory/candidate.yml
-- `maestro memory suggest list [--all]` -- List Memory suggestions
-- `maestro memory suggest create [--source-ref <SOURCE_REF>]... --signal-type <SIGNAL_TYPE> --summary <SUMMARY> [--scope-kind <SCOPE_KIND>] [--scope-ref <SCOPE_REF>]... [--target-surface <TARGET_SURFACE>] [--dedupe-key <DEDUPE_KEY>] [--expires-at <EXPIRES_AT>]` -- Create or upsert a visible Memory suggestion
-- `maestro memory suggest dismiss <ID> --reason <REASON>` -- Dismiss an open Memory suggestion
-
-## maestro scorer
-
-- `maestro scorer run <CONTRACT_REF>` -- Run a typed scorer contract reference
-- `maestro scorer show <RECEIPT_REF>` -- Show one scorer receipt by memory-id#receipt-id
-- `maestro scorer list --memory <MEMORY_ID>` -- List scorer receipts for a Memory card
-
-## maestro decision
-
-- `maestro decision audit [--compressed] [--json]` -- Audit decision records for repairable conditions
-- `maestro decision set draft [--from <PATH>] [--from-text <TEXT>] [--output <PATH>] [--json]` -- Draft a DecisionSet from YAML, fenced YAML, or plain text
-- `maestro decision set lock --from <PATH> [--dry-run] [--json] [--show]` -- Atomically lock a DecisionSet and its child decisions
-- `maestro decision set repair <ID> --from <PATH> [--dry-run] [--json]` -- Repair one compressed summary into a DecisionSet replacement
-- `maestro decision set archive <ID> [--set-only] [--include-children]` -- Archive a DecisionSet record with an explicit child scope
-- `maestro decision set show <ID> [--json]` -- Show a locked DecisionSet by id
-- `maestro decision new <TITLE> [--context <CONTEXT>] [--feature <FEATURE>] [--lock] [--decision <DECISION>] [--rejected <REJECTED>]... [--preview <PREVIEW>] [--supersedes <SUPERSEDES>]... [--allow-summary-decision] [--project <PROJECT>] [--id-only]` -- Open a structured decision fork (mints a decision card)
-- `maestro decision lock <ID> --decision <DECISION> [--rejected <REJECTED>]... [--preview <PREVIEW>] [--supersedes <SUPERSEDES>]... [--allow-summary-decision]` -- Lock an open decision with the chosen answer
-- `maestro decision supersede <OLD_ID> --decision <DECISION> --reason <REASON> [--title <TITLE>] [--rejected <REJECTED>]... [--preview <PREVIEW>] [--id-only]` -- Replace a locked decision by superseding it
-- `maestro decision show <ID> [--include-set]` -- Show a decision card by id
-- `maestro decision list [--all] [--feature <FEATURE>]` -- List decision cards (recent 20 by activity unless --all)
-
 ## maestro card
 
-- `maestro card ready [FEATURE] [--json] [--project <PROJECT>]` -- List workable cards with no open blockers
-- `maestro card list [--parent <PARENT>] [--type <TYPE>] [--assignee <ASSIGNEE>] [--status <STATUS>] [--project <PROJECT>] [--grep <TERM>] [--archived] [--all] [--json]` -- List cards filtered by parent, type, assignee, or coarse status
-- `maestro card dep add <CHILD> <PARENT>` -- Add a blocking edge: CHILD waits until PARENT closes
-- `maestro card dep remove <CHILD> <PARENT>` -- Remove a blocking edge so CHILD no longer waits on PARENT
-- `maestro card archive [FEATURE] [--loose]` -- Archive a feature card and its child cards
-- `maestro card claim <ID>` -- Claim a workable card for this session
-- `maestro card assign <ID> [WHO] [--clear]` -- Suggest an owner for a workable card (advisory; never blocks a claim)
-- `maestro card note <ID> <TEXT>` -- Append a dated note to a card's notes.md
-- `maestro card create <TITLE>... -t|--type <TYPE> [--parent <PARENT>] [--description <TEXT>] [--active-form <TEXT>] [--project <PROJECT>] [--kind <KIND>] [--id-only]` -- Create a card of any type
-- `maestro card prepare <ID> [--from <PLAN_FILE>] [--draft] [--task <TASK>]... [--check <CHECK>]... [--covers <COVERS>]... [--blocker <BLOCKER>]... [--after <AFTER>]...` -- Prepare a card container into owned tasks
 - `maestro card show <ID> [--json] [--compact-json]` -- Show a card's header, edges, and body
-- `maestro card update [ID] [--status <STATUS>] [--title <TITLE>] [--description <TEXT>] [--active-form <TEXT>] [--claim] [--json]` -- Update a card's status, title, description, or claim
-- `maestro card close <ID>` -- Close a card: status -> closed
-- `maestro card graph [ID] [--dot]` -- Walk a card's typed edges (parent/blocks/related/supersedes)
-
-## maestro ready
-
-- `maestro ready [FEATURE] [--json] [--plan] [--project <PROJECT>]` -- Show canonical task-wave readiness from the task DAG
 
 ## maestro active
 
 - `maestro active [--all] [--connect] [--card <CARD_ID>]` -- Show what other live sessions are doing (cross-session awareness)
-- `maestro active release <CARD_ID> --reason <REASON>` -- Release this session's ownership of a card without changing card status
-
-## maestro session
-
-- `maestro session show <SESSION_ID> [--json] [--transcript]` -- Show a joined readout for one logical session id
-- `maestro session grep <SESSION_ID> <QUERY>... [--json]` -- Search exactly one visible transcript session
-
-## maestro link
-
-- `maestro link add <CARD-A> <CARD-B>` -- Add a non-blocking related link between two live cards
-- `maestro link remove <FROM> <TO>` -- Remove a related link between two live cards
-
-## maestro msg
-
-- `maestro msg send <TO> <TEXT> [--from <CARD>]` -- Send a message to a linked card (sender is your current card)
-- `maestro msg read [CARD]` -- Read unread messages; with no card, aggregate every linked partner
-- `maestro msg list [CARD]` -- Channel overview, or one partner's full timeline
-
-## maestro conflict
-
-- `maestro conflict <PEER> [REASON] [--clear]` -- Flag a work conflict on a peer card so it holds off (no link, no git)
-
-## maestro archive
-
-- `maestro archive [FEATURE] [--loose]` -- Inspect and apply the canonical archive engine
-- `maestro archive candidates [--json]` -- List archive candidates and their gate status
-- `maestro archive check <ID> [--json]` -- Show the archive gate result for one target
-- `maestro archive apply [ID] [--all] [--json]` -- Apply archive to one ARCHIVE_NOW target, or every ARCHIVE_NOW target
-- `maestro archive migrate-db [--dry-run] [--apply]` -- Migrate folder-backed archived cards into cards.sqlite
-- `maestro archive doctor` -- Verify the DB-backed archive store
-- `maestro archive cleanup [--dry-run] [--apply]` -- Delete legacy archive quarantine folders after doctor passes
-- `maestro archive stats` -- Show DB-backed archive store counts
 
 ## maestro harness
 
-- `maestro harness list [--all]` -- List proposals (proposed + accepted; --all adds the terminal ledger)
-- `maestro harness show <ID>` -- Show a proposal's detail and history
-- `maestro harness set [--claims-only]` -- Set harness policy flags
 - `maestro harness propose --title <TITLE> --evidence <EVIDENCE>... [--topic <TOPIC>]` -- File an agent-authored repo audit proposal
-- `maestro harness apply <ID> [--check <CHECK>]...` -- Accept a proposal and spawn a linked task (-> accepted)
-- `maestro harness unapply <ID> [--reason <REASON>]` -- Undo an accepted proposal before its linked task is claimed
-- `maestro harness dismiss <ID> --reason <REASON>` -- Dismiss a noisy proposal and suppress its fingerprint
-- `maestro harness measure <ID> [--force]` -- Re-run the detector to close or revert a proposal (-> measured)
-
-## maestro query
-
-- `maestro query matrix` -- Show the feature x task matrix (FEATURE/TASK/STATE/PROOF/TITLE)
-- `maestro query friction` -- Summarize recorded run friction (events, prompts, corrections)
-- `maestro query backlog` -- List improvement backlog items (ID/TITLE)
-- `maestro query run [--since <TS>] [--json]` -- Reassemble the run trace for a window from the durable run log
-
-## maestro index
-
-- `maestro index rebuild [--memory] [--source] [--cards] [--transcript]` -- Rebuild local derived indexes from scratch
-
-## maestro mcp
-
-- `maestro mcp serve` -- Run the MCP server over stdio
-- `maestro mcp tools` -- List the MCP tool names maestro exposes
-
-## maestro hook
-
-- `maestro hook record [--event <EVENT>] [--skill <SKILL>] [--session <SESSION>]`
-
-## maestro watch
-
-- `maestro watch [ID] [--interval <INTERVAL>]` -- Live dependency-tree board (bare) or a one-shot snapshot; optional feature-id focuses one feature
-- `maestro watch snapshot [ID]` -- Render the live board once and exit
-
-## maestro playbook
-
-- `maestro playbook [LANGUAGE]` -- Print a language code styleguide, or the index with no language
-
-## maestro loop
-
-- `maestro loop list` -- List shipped and project custom recipes
-- `maestro loop next [--json] [--chain] [--compact] [--phase <PHASE>]` -- Recommend the next loop recipe without mutating state
-- `maestro loop improve [--json]` -- Plan loop improvement proposals without mutating state
-- `maestro loop show <NAME> [--compact] [--phase <PHASE>] [--json]` -- Print one shipped or project custom recipe
-- `maestro loop validate <NAME>` -- Validate one structured shipped or project custom loop recipe
-- `maestro loop template <KIND>` -- Print a non-mutating custom recipe template
-- `maestro loop trace <CARD> [--all] [--json]` -- Trace card-scoped loop transition receipts without mutating state
-- `maestro loop outcome --recipe <RECIPE> --phase <PHASE> --selected-unit <SELECTED_UNIT> [--constraint <CONSTRAINTS>]... [--proof-result <PROOF_RESULT>] [--failure-class <FAILURE_CLASS>] [--blocker-class <BLOCKER_CLASS>] [--transition-to <TRANSITION_TO>] [--transition-reason <TRANSITION_REASON>] [--trigger <TRIGGER>] [--return-condition <RETURN_CONDITION>]... [--evidence-ref <EVIDENCE_REF>]... [--retry-count <RETRY_COUNT>] [--duration-ms <DURATION_MS>] [--learning-candidate <LEARNING_CANDIDATE>] [--source-ref <SOURCE_REF>]... [--run <RUN>] [--json]` -- Record a write-side loop outcome event
-- `maestro loop work-lease [--json] [--project <PROJECT>] [--feature <FEATURE>] [--authority-ref <REF>] [--authority-summary <SUMMARY>] [--authority-scope <SCOPE>] [--authority-target <TARGET>] [--allow-external-action <ACTION>]... [--required-evidence <EVIDENCE>]... [--authority-expires-at <TIMESTAMP>] [--authority-hard-stop <STOP>]...` -- Run the internal Work Lease choose-phase helper and print JSON
-
-## maestro lean
-
-- `maestro lean [TARGET] [--card]` -- Lean reach-ladder tooling: show/set the session strictness mode, emit review/audit guidance, or harvest debt markers
-
-## maestro version
-
-- `maestro version` -- Print the maestro version and binary path

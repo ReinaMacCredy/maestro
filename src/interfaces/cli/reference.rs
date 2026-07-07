@@ -97,7 +97,9 @@ impl CommandScope {
             "maestro-audit" => Some(MAESTRO_AUDIT_COMMANDS),
             "maestro-card" => Some(MAESTRO_CARD_COMMANDS),
             "maestro-design" => Some(MAESTRO_DESIGN_COMMANDS),
+            "maestro-research" => Some(MAESTRO_RESEARCH_COMMANDS),
             "maestro-setup" => Some(MAESTRO_SETUP_COMMANDS),
+            "maestro-witness" => Some(MAESTRO_WITNESS_COMMANDS),
             _ => None,
         };
         Self { paths }
@@ -366,6 +368,40 @@ const MAESTRO_SETUP_COMMANDS: &[&str] = &[
     "maestro loop improve",
     "maestro loop outcome",
     "maestro loop validate",
+];
+
+const MAESTRO_RESEARCH_COMMANDS: &[&str] = &[
+    "maestro status",
+    "maestro active",
+    "maestro intake",
+    "maestro research check",
+    "maestro grep",
+    "maestro card list",
+    "maestro card show",
+    "maestro card create",
+    "maestro card note",
+    "maestro feature new",
+    "maestro feature show",
+    "maestro feature list",
+    "maestro feature note",
+];
+
+const MAESTRO_WITNESS_COMMANDS: &[&str] = &[
+    "maestro status",
+    "maestro active",
+    "maestro feature show",
+    "maestro feature design",
+    "maestro feature verify",
+    "maestro feature proof add",
+    "maestro feature proof waive",
+    "maestro feature close",
+    "maestro task show",
+    "maestro task list",
+    "maestro task proof",
+    "maestro qa baseline",
+    "maestro qa slice",
+    "maestro card show",
+    "maestro harness propose",
 ];
 
 /// Check the header's sha256 stamp against the body it covers, so a hand edit
@@ -685,6 +721,34 @@ mod tests {
         assert!(setup.contains("maestro loop validate <NAME>"), "{setup}");
         assert!(!setup.contains("maestro task claim"), "{setup}");
         assert!(!setup.contains("maestro decision new"), "{setup}");
+
+        let research = render_cli_reference_for_skill("maestro-research");
+        assert!(
+            research.contains("maestro research check <CARD_ID>"),
+            "{research}"
+        );
+        assert!(research.contains("maestro grep <QUERY>"), "{research}");
+        assert!(research.contains("maestro intake --from"), "{research}");
+        assert!(
+            research.contains("maestro card create <TITLE>"),
+            "{research}"
+        );
+        assert!(research.contains("maestro feature note <ID>"), "{research}");
+        assert!(!research.contains("maestro task complete"), "{research}");
+        assert!(!research.contains("maestro feature close"), "{research}");
+        assert!(!research.contains("maestro sync"), "{research}");
+
+        let witness = render_cli_reference_for_skill("maestro-witness");
+        assert!(witness.contains("maestro feature show <ID>"), "{witness}");
+        assert!(witness.contains("maestro feature design <ID>"), "{witness}");
+        assert!(witness.contains("maestro feature verify <ID>"), "{witness}");
+        assert!(witness.contains("maestro feature close <ID>"), "{witness}");
+        assert!(witness.contains("maestro task proof"), "{witness}");
+        assert!(witness.contains("maestro qa slice <ID>"), "{witness}");
+        assert!(witness.contains("maestro harness propose"), "{witness}");
+        assert!(!witness.contains("maestro research check"), "{witness}");
+        assert!(!witness.contains("maestro memory"), "{witness}");
+        assert!(!witness.contains("maestro sync"), "{witness}");
     }
 
     #[test]
