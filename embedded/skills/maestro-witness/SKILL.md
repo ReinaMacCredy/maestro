@@ -1,7 +1,7 @@
 ---
 name: maestro-witness
-version: 1.0.1
-description: "Witness feature close: use after Maestro feature proof and QA pass, before feature close, to write current witness.md/advisor.md receipts, apply risk-tier and human-demo policy, and emit Gate: APPROVED."
+version: 1.0.2
+description: "Witness feature close: use after Maestro feature proof and QA pass, before feature close, to write current witness.md/advisor.md receipts, auto-invoke an independent advisor when allowed, apply risk-tier and human-demo policy, and emit Gate: APPROVED."
 ---
 
 # Maestro Witness
@@ -64,7 +64,7 @@ when all accepted `ac-N` rows are present, all anchors are current, and the risk
 tier matches the changed surface.
 
 `advisor.md` is the independent review receipt. It must be written by a
-different session, subagent, or human reviewer from the worker:
+different fresh-context session, subagent, or human reviewer from the worker:
 
 ```yaml
 verdict: APPROVE
@@ -82,6 +82,16 @@ must both be present, must be distinct, and must show separate review authority.
 `advisor.md` is complete only when the advisor independently checked the
 acceptance mapping, proof matrix, proof spot-check, risk tier, and human-demo
 policy and returned `verdict: APPROVE`.
+
+Default advisor shape: the conductor may automatically invoke a fresh-context
+subagent and pass it the evidence packet. That is independent when the subagent
+performs its own review and returns the receipt. Human review is required only
+when the risk tier, user instruction, policy, or tool boundary explicitly
+requires a human demo, human reviewer, or expert escalation. If the subagent
+cannot write `advisor.md` in the owning checkout, the conductor may transcribe
+the returned receipt verbatim and record `advisor_ref: subagent:<advisor>` plus
+the source output or run ref. The conductor must not invent approval or reuse
+the worker session as advisor.
 
 ## Risk Tiers
 
@@ -116,8 +126,10 @@ T1 and above never skip the witness/advisor pair.
 2. Refresh `witness.md`. Include the current anchors, risk tier, and one PASS
    row per accepted `ac-N`. The receipt is not current after any handoff, proof,
    QA, sweep, or git-head change.
-3. Get independent advisor review. The advisor checks acceptance mapping, proof
-   matrix, proof spot-check, risk tier, and human-demo policy, then writes
+3. Get independent advisor review. Auto-invoke a fresh-context advisor subagent
+   for routine T1 close unless the risk tier, policy, or user requires human
+   review. The advisor checks acceptance mapping, proof matrix,
+   proof spot-check, risk tier, and human-demo policy, then writes or returns
    `advisor.md` only for `verdict: APPROVE`.
 4. Approve and close. Emit the conductor line `Gate: APPROVED` only after both
    receipts are current and complete, then run
@@ -140,5 +152,7 @@ batch.
   skip receipt.
 - Do not accept `Gate: APPROVED` from the worker alone.
 - Do not let the advisor be the same session as the worker.
+- Do not require a human for routine T1 when an independent fresh-context
+  subagent can complete the advisor receipt.
 - Do not paste large code dumps into either receipt.
 - Do not treat backlog audit ideas as failed witness gates.

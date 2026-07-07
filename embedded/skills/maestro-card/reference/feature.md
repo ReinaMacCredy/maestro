@@ -38,6 +38,10 @@ For terminal feature close, after [qa-slice.md](qa-slice.md), run
 `maestro-witness` -> `maestro feature close`. The witness/advisor receipt does
 not replace `maestro feature verify`, task proof, or QA; it signs off that those
 artifacts are current and independently reviewed.
+Routine T1 close may satisfy the advisor receipt with an auto-invoked
+fresh-context subagent controlled by the main session. Human review is required
+only when risk tier, policy, tool boundary, or explicit user direction demands a
+human, demo, or expert escalation.
 Close route: `maestro-witness` -> `maestro feature close`.
 When the feature introduces loop patterns, production automation, or
 unattended/away-mode behavior, add the native readiness check to QA/close:

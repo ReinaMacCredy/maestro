@@ -1,5 +1,5 @@
 ---
-version: 1.29.24
+version: 1.29.25
 ---
 
 # Maestro Harness Protocol
@@ -119,6 +119,10 @@ and QA slice evidence are current, route through `maestro-witness` before
 `maestro feature close`. The witness does not replace task proof, feature
 verify, or QA; it signs off the current handoff, proof, QA, and tree refs and
 requires an independent advisor receipt unless an explicit T0 user skip applies.
+Routine T1 close may satisfy the advisor receipt with an auto-invoked
+fresh-context subagent controlled by the main session; human review or demo is
+required only when risk tier, policy, tool boundary, or explicit user direction
+demands it.
 
 ## Design + Coordination
 

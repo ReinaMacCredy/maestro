@@ -49,14 +49,14 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 22] = [
     (
         "skill",
         "maestro-card",
-        "1.37.23",
-        "c36be5936a57bd076e15c2d459bf29fbcb7c38a0de92a778a8e93bf9dc7f593b",
+        "1.37.24",
+        "8e1416b4a324b81b24e5077c23d5c17c04fe21b20d005c3101913b98af8a1c5d",
     ),
     (
         "skill",
         "maestro-witness",
-        "1.0.1",
-        "554cb2e28d16383dea636e443910b30158ad50981b56f48b14cdfefa0de2b1a6",
+        "1.0.2",
+        "f11027171e322fdafd9ad673f1cf3933121e0ac635e10546205367648e7222b7",
     ),
     (
         "skill",
@@ -85,8 +85,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 22] = [
     (
         "harness",
         "HARNESS.md",
-        "1.29.24",
-        "a0f4ec145a68502f16c9684ff2e561858689da07684e7703cc1e1babed1a9569",
+        "1.29.25",
+        "46859ec176e0f4c7802056cfacb58bcc0e3e20518b0ac925a4d54d84d5c2affe",
     ),
     (
         "playbook",
@@ -813,6 +813,9 @@ fn maestro_witness_skill_teaches_close_receipt_contract() {
         "Gate: APPROVED",
         "witness conductor",
         "advisor independence",
+        "Auto-invoke a fresh-context advisor subagent",
+        "Human review is required only when the risk tier",
+        "The conductor must not invent approval",
         "independent_session: true",
         "risk_tier: T0",
         "risk_tier: T1",
@@ -845,6 +848,8 @@ fn lifecycle_guidance_routes_close_through_witness_without_replacing_proof() {
         "`maestro-witness`",
         "after task proof, `maestro feature verify`, and QA slice evidence",
         "witness does not replace task proof, feature verify, or QA",
+        "auto-invoked fresh-context subagent controlled by the main session",
+        "human review or demo is required only when risk tier, policy, tool boundary, or explicit user direction demands it",
     ] {
         assert!(
             harness.contains(phrase),
@@ -856,6 +861,7 @@ fn lifecycle_guidance_routes_close_through_witness_without_replacing_proof() {
         "`maestro-witness` -> `maestro feature close`",
         "after [qa-slice.md](qa-slice.md)",
         "does not replace `maestro feature verify`, task proof, or QA",
+        "Routine T1 close may satisfy the advisor receipt with an auto-invoked fresh-context subagent controlled by the main session",
     ] {
         assert!(
             card.contains(phrase),
