@@ -271,3 +271,17 @@ and why it is not part of the current fix.
   approval gate, not changing passive sync output. A focused follow-up should
   make read-command side effects explicit, suppress unrelated sync chatter, or
   move it behind a separate actionable notice.
+
+## 2026-07-07 proof recovery dogfood
+
+- Surface: `maestro task proof` recovery guidance for locked low-ceremony
+  Progress tasks.
+  Observed friction: proof recovery for
+  `task-implement-codex-thread-primary-linked-938d` suggested
+  `maestro task set --check`, but the task acceptance was already locked and
+  that command correctly refused to change checks. The supported recovery path
+  was `maestro task done --proof`, but the resulting claims-only verification
+  reads back as stale because it records no commit or contract hash.
+  Fix in this session: locked low-ceremony proof failures now point at
+  `maestro task done --proof`, and simple-done proof records the same contract
+  hash and commit freshness fields used by normal task verification.

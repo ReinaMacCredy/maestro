@@ -1,11 +1,10 @@
 //! Task verification orchestration, report DTOs, and hashing.
 
-use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde_json::Value;
 
 use super::claims::{check_claims, collect_evidence};
 use super::commands::run_verify_commands;
@@ -161,7 +160,7 @@ pub(crate) fn evaluate_task_report(
 ) -> Result<VerificationReport> {
     let command_run = run_verify_commands(paths, task.verify_command.as_deref())?;
     let inputs = freshness_inputs_for_task(task, git::head(paths.repo_root()).unwrap_or(None))?;
-    let claims = completion_claims(task);
+    let claims = task::verification_claims(task);
     let evidence = collect_evidence(paths, task_dir, &task.id)?;
     let claim_checks = check_claims(&claims, &evidence, paths.repo_root());
     let standalone_without_checks = task.feature_id.is_none() && task.acceptance.checks.is_empty();
@@ -255,7 +254,7 @@ pub fn freshness_inputs_for_task(
 ) -> Result<FreshnessInputs> {
     Ok(FreshnessInputs {
         commit,
-        contract_hash: task_contract_hash(task),
+        contract_hash: task::verification_contract_hash(task),
     })
 }
 
@@ -357,12 +356,20 @@ fn failures_for(
     standalone_without_checks: bool,
 ) -> Vec<String> {
     let mut failures = Vec::new();
+    let simple_done_recovery = locked_simple_done_recovery(task);
 
     if standalone_without_checks {
-        failures.push(format!(
-            "standalone task {} requires at least one check; add one with `maestro task set {} --check \"...\"`",
-            task.id, task.id
-        ));
+        if simple_done_recovery {
+            failures.push(format!(
+                "standalone task {} has locked low-ceremony acceptance; recover proof with `maestro task done {} --proof \"<evidence>\"`",
+                task.id, task.id
+            ));
+        } else {
+            failures.push(format!(
+                "standalone task {} requires at least one check; add one with `maestro task set {} --check \"...\"`",
+                task.id, task.id
+            ));
+        }
     }
 
     if task.state != TaskState::NeedsVerification && task.state != TaskState::Verified {
@@ -387,6 +394,7 @@ fn failures_for(
     if command_policy.commands.is_empty()
         && !command_policy.claims_only
         && task.feature_id.is_none()
+        && !simple_done_recovery
     {
         // A standalone slice no longer falls back to the repo-global stack.verify
         // suite, so with no narrow falsifier it must opt into claims-only or set
@@ -418,6 +426,13 @@ fn failures_for(
     failures
 }
 
+fn locked_simple_done_recovery(task: &TaskRecord) -> bool {
+    task.feature_id.is_none()
+        && task.acceptance.checks.is_empty()
+        && task.verify_command.is_none()
+        && (task.acceptance_locked || task.acceptance.locked_by.is_some())
+}
+
 struct VerificationCommandPolicy<'a> {
     commands: &'a [VerificationCommand],
     claims_only: bool,
@@ -435,48 +450,12 @@ fn is_false(value: &bool) -> bool {
     !*value
 }
 
-fn completion_claims(task: &TaskRecord) -> Vec<String> {
-    if !task.claims.is_empty() {
-        return task.claims.clone();
-    }
-    let mut seen = BTreeSet::new();
-    let mut claims = Vec::new();
-    for claim in task
-        .state_history
-        .iter()
-        .flat_map(|entry| entry.claims.iter())
-        .map(|claim| claim.trim())
-        .filter(|claim| !claim.is_empty())
-    {
-        if seen.insert(claim.to_string()) {
-            claims.push(claim.to_string());
-        }
-    }
-    claims
-}
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct EvidenceText {
     pub(super) kind: String,
     pub(super) path: PathBuf,
     pub(super) text: String,
     pub(super) claims: Vec<String>,
-}
-
-fn task_contract_hash(task: &TaskRecord) -> String {
-    let mut contract = json!({
-        "id": task.id,
-        "title": task.title,
-        "acceptance": task.acceptance,
-        "claims": completion_claims(task),
-    });
-    // Only fold the falsifier into the hash when one is set, so tasks verified
-    // before this field existed keep their original hash and are not re-staled
-    // on upgrade. Setting/clearing the command still changes the hash.
-    if let Some(command) = &task.verify_command {
-        contract["verify_command"] = json!(command);
-    }
-    sha256_hex(contract.to_string().as_bytes())
 }
 
 fn display_path(root: &Path, path: &Path) -> String {
@@ -489,6 +468,9 @@ fn display_path(root: &Path, path: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
+
+    use crate::foundation::core::hash::sha256_hex;
 
     #[test]
     fn editing_the_per_task_verify_command_invalidates_freshness() {
@@ -515,13 +497,13 @@ mod tests {
         // `verify_command: null`), so it equals the hash computed before the field
         // was added.
         let task = TaskRecord::draft("task-001", "Slice", "2026-06-13T00:00:00Z");
-        let with_skip = task_contract_hash(&task);
+        let with_skip = task::verification_contract_hash(&task);
 
         let legacy = json!({
             "id": task.id,
             "title": task.title,
             "acceptance": task.acceptance,
-            "claims": completion_claims(&task),
+            "claims": task::verification_claims(&task),
         });
         let legacy_hash = sha256_hex(legacy.to_string().as_bytes());
 

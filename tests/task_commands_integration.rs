@@ -84,6 +84,27 @@ fn progress_task_record(repo: &Path, id: &str) -> (PathBuf, Value) {
     panic!("no progress task {id} under {}", cards.display());
 }
 
+fn set_progress_task_state(repo: &Path, id: &str, state: &str) {
+    let (progress_dir, _) = progress_task_record(repo, id);
+    let progress_path = progress_dir.join("progress.yml");
+    let mut progress: Value = serde_yaml::from_str(
+        &fs::read_to_string(&progress_path).expect("invariant: progress.yml reads"),
+    )
+    .expect("invariant: progress.yml parses");
+    let task = progress["tasks"]
+        .as_sequence_mut()
+        .expect("progress tasks sequence")
+        .iter_mut()
+        .find(|task| task["id"] == id)
+        .expect("progress task exists");
+    task["state"] = Value::String(state.to_string());
+    fs::write(
+        &progress_path,
+        serde_yaml::to_string(&progress).expect("progress serializes"),
+    )
+    .expect("invariant: progress.yml writes");
+}
+
 fn progress_tasks(repo: &Path) -> Vec<Value> {
     let cards = repo.join(".maestro/cards");
     for entry in fs::read_dir(&cards).expect("invariant: cards dir should be readable") {
@@ -447,10 +468,21 @@ fn task_progress_cli_flow_add_start_done_is_low_ceremony_and_verifies_simple_com
     let (_, record) = progress_task_record(repo, &id);
     assert_eq!(record["state"], Value::String("verified".to_string()));
     assert_eq!(record["verification"]["claims_only"], Value::Bool(true));
+    assert!(
+        record["verification"]["contract_hash"].as_str().is_some(),
+        "simple-done proof must bind the task contract for fresh proof reads: {record:?}"
+    );
     assert_eq!(
         record["verification"]["claim_checks"][0]["source"],
         Value::String("task done --proof".to_string())
     );
+    let proof = stdout(&maestro_with_env(
+        repo,
+        &["task", "proof", &id],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    ));
+    assert!(proof.contains(&format!("proof {id}: accepted")), "{proof}");
+    assert!(!proof.contains("stale_reasons"), "{proof}");
 }
 
 #[test]
@@ -538,24 +570,7 @@ fn task_done_recovers_low_ceremony_progress_task_stuck_needs_verification() {
         .as_str()
         .expect("progress task has id")
         .to_string();
-    let (progress_dir, _) = progress_task_record(repo, &id);
-    let progress_path = progress_dir.join("progress.yml");
-    let mut progress: Value = serde_yaml::from_str(
-        &fs::read_to_string(&progress_path).expect("invariant: progress.yml reads"),
-    )
-    .expect("invariant: progress.yml parses");
-    let task = progress["tasks"]
-        .as_sequence_mut()
-        .expect("progress tasks sequence")
-        .iter_mut()
-        .find(|task| task["id"] == id)
-        .expect("progress task exists");
-    task["state"] = Value::String("needs_verification".to_string());
-    fs::write(
-        &progress_path,
-        serde_yaml::to_string(&progress).expect("progress serializes"),
-    )
-    .expect("invariant: progress.yml writes");
+    set_progress_task_state(repo, &id, "needs_verification");
 
     let done = maestro_with_env(
         repo,
@@ -569,6 +584,49 @@ fn task_done_recovers_low_ceremony_progress_task_stuck_needs_verification() {
     assert_eq!(
         record["verification"]["claim_checks"][0]["source"],
         Value::String("task done --proof".to_string())
+    );
+}
+
+#[test]
+fn task_verify_points_locked_low_ceremony_recovery_to_task_done() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    let setup = maestro_with_env(
+        repo,
+        &[
+            "task",
+            "setup",
+            "--task",
+            "map loop schema",
+            "--start",
+            "--atomic",
+            "--reason",
+            "one schema mapping fixture",
+        ],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    );
+    assert_success(&setup, &["task", "setup", "--task", "...", "--start"]);
+    let id = progress_tasks(repo)[0]["id"]
+        .as_str()
+        .expect("progress task has id")
+        .to_string();
+    set_progress_task_state(repo, &id, "needs_verification");
+
+    let verify = maestro_with_env(
+        repo,
+        &["task", "verify", &id],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    );
+    assert_failure(&verify, &["task", "verify", &id]);
+    let message = stderr(&verify);
+    assert!(
+        message.contains(&format!("maestro task done {id} --proof")),
+        "locked low-ceremony proof recovery should point at task done:\n{message}"
+    );
+    assert!(
+        !message.contains("task set") && !message.contains("--check"),
+        "locked low-ceremony proof recovery must not recommend an impossible check edit:\n{message}"
     );
 }
 

@@ -4,10 +4,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
+use serde_json::json;
 
 use crate::domain::card::edit as card_edit;
 use crate::domain::card::schema::CardType;
 use crate::domain::card::store as card_store;
+use crate::foundation::core::git;
+use crate::foundation::core::hash::sha256_hex;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::time::{parse_utc_timestamp, utc_now_timestamp};
 
@@ -521,6 +524,39 @@ pub fn verification_duration_seconds(
     end.checked_sub(start)
 }
 
+pub fn verification_claims(task: &TaskRecord) -> Vec<String> {
+    if !task.claims.is_empty() {
+        return task.claims.clone();
+    }
+    let mut seen = BTreeSet::new();
+    let mut claims = Vec::new();
+    for claim in task
+        .state_history
+        .iter()
+        .flat_map(|entry| entry.claims.iter())
+        .map(|claim| claim.trim())
+        .filter(|claim| !claim.is_empty())
+    {
+        if seen.insert(claim.to_string()) {
+            claims.push(claim.to_string());
+        }
+    }
+    claims
+}
+
+pub fn verification_contract_hash(task: &TaskRecord) -> String {
+    let mut contract = json!({
+        "id": task.id,
+        "title": task.title,
+        "acceptance": task.acceptance,
+        "claims": verification_claims(task),
+    });
+    if let Some(command) = &task.verify_command {
+        contract["verify_command"] = json!(command);
+    }
+    sha256_hex(contract.to_string().as_bytes())
+}
+
 fn parse_timestamp_seconds(value: &str) -> Option<u64> {
     if value.chars().all(|character| character.is_ascii_digit()) {
         return parse_numeric_timestamp_seconds(value);
@@ -692,12 +728,16 @@ pub fn complete_simple_task(
             );
         }
     }
+    let verified_commit = git::head(paths.repo_root()).unwrap_or(None);
+    let contract_hash = verification_contract_hash(&task);
     apply_verification_outcome(
         &mut task,
         VerificationOutcome::Passed(VerificationPassed {
             binding: VerificationBinding {
                 status: Some(VerificationStatus::Passed),
                 verified_at: Some(completed_at.to_string()),
+                verified_commit,
+                contract_hash: Some(contract_hash),
                 claim_checks: claims
                     .into_iter()
                     .map(|claim| ClaimCheckReceipt {
