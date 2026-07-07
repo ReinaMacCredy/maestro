@@ -40,25 +40,24 @@ pub fn card_path(paths: &MaestroPaths, id: &str) -> PathBuf {
 /// path. Minted ids are safe by construction, but the read/verb surface
 /// accepts arbitrary ids; this mirrors the task and feature id guards.
 pub fn validate_card_id(id: &str) -> Result<()> {
-    let mut components = Path::new(id).components();
-    if id.is_empty()
-        || !matches!(components.next(), Some(Component::Normal(_)))
-        || components.next().is_some()
-    {
+    if !is_single_normal_component(id) {
         bail!("invalid card id: {id}");
     }
     Ok(())
 }
 
 pub fn validate_sidecar_name(name: &str) -> Result<()> {
-    let mut components = Path::new(name).components();
-    if name.is_empty()
-        || !matches!(components.next(), Some(Component::Normal(_)))
-        || components.next().is_some()
-    {
+    if !is_single_normal_component(name) {
         bail!("invalid card sidecar name: {name}");
     }
     Ok(())
+}
+
+fn is_single_normal_component(value: &str) -> bool {
+    let mut components = Path::new(value).components();
+    !value.is_empty()
+        && matches!(components.next(), Some(Component::Normal(_)))
+        && components.next().is_none()
 }
 
 pub fn read_sidecar_text(paths: &MaestroPaths, id: &str, name: &str) -> Result<Option<String>> {

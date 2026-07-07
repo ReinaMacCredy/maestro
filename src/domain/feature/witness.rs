@@ -77,9 +77,13 @@ fn full_witness_gaps(
     );
     for index in 0..record.acceptance.len() {
         let ac_id = format!("ac-{}", index + 1);
-        if !witness.contains(&ac_id) {
-            gaps.push(format!("witness acceptance mapping missing {ac_id}"));
-        }
+        let ac_key = format!("ac_{}", index + 1);
+        require_equals(
+            &mut gaps,
+            &format!("witness acceptance mapping {ac_id}"),
+            field(witness_fields, &ac_key),
+            "PASS",
+        );
     }
 
     let Some(advisor) = registry::read_sidecar_text(paths, id, ADVISOR_FILE)? else {
@@ -163,7 +167,8 @@ fn risk_gaps(
             let demo_present = field(witness_fields, "demo_evidence").is_some();
             let waived = truthy(field(witness_fields, "demo_waived"));
             let reason_present = field(witness_fields, "demo_waiver_reason").is_some();
-            if !(demo_present || waived && reason_present) {
+            let has_valid_waiver = waived && reason_present;
+            if !(demo_present || has_valid_waiver) {
                 gaps.push(format!(
                     "witness risk tier T2 needs demo evidence or advisor waiver reason\n    gate: NEEDS_HUMAN_DEMO\n    retry: maestro feature close {id} --outcome \"<outcome>\""
                 ));
@@ -453,6 +458,26 @@ mod tests {
         let gaps = close_gaps(&paths, id, &record).expect("gaps");
 
         assert!(gaps.is_empty(), "{gaps:?}");
+    }
+
+    #[test]
+    fn acceptance_mapping_requires_exact_pass_rows() {
+        let paths = paths("acceptance");
+        let id = "witness-feature";
+        let record = record(id);
+        seed_sidecars(&paths, id);
+        let witness = valid_witness(&paths, id, &record, "T1").replace("ac-1: PASS", "ac-10: PASS");
+        let advisor = valid_advisor(&witness);
+        write_sidecar(&paths, id, "witness.md", &witness);
+        write_sidecar(&paths, id, "advisor.md", &advisor);
+
+        let gaps = close_gaps(&paths, id, &record).expect("gaps");
+
+        assert!(
+            gaps.iter()
+                .any(|gap| gap.contains("witness acceptance mapping ac-1")),
+            "{gaps:?}"
+        );
     }
 
     #[test]
