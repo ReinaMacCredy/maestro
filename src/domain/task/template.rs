@@ -1,8 +1,12 @@
+use std::collections::BTreeSet;
+
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 
 use crate::domain::card::store::ResolvedCard;
 use crate::domain::task::{cards, progress};
+use crate::foundation::core::hash::sha256_hex;
 use crate::foundation::core::schema::TASK_SCHEMA_VERSION;
 use crate::foundation::core::slug::slugify_ascii;
 
@@ -307,6 +311,39 @@ impl TaskRecord {
     /// Repo-local task directory name.
     pub fn directory_name(&self) -> String {
         format!("{}-{}", self.id, slugify_ascii(&self.title))
+    }
+
+    pub fn verification_claims(&self) -> Vec<String> {
+        if !self.claims.is_empty() {
+            return self.claims.clone();
+        }
+        let mut seen = BTreeSet::new();
+        let mut claims = Vec::new();
+        for claim in self
+            .state_history
+            .iter()
+            .flat_map(|entry| entry.claims.iter())
+            .map(|claim| claim.trim())
+            .filter(|claim| !claim.is_empty())
+        {
+            if seen.insert(claim.to_string()) {
+                claims.push(claim.to_string());
+            }
+        }
+        claims
+    }
+
+    pub fn verification_contract_hash(&self) -> String {
+        let mut contract = json!({
+            "id": self.id,
+            "title": self.title,
+            "acceptance": self.acceptance,
+            "claims": self.verification_claims(),
+        });
+        if let Some(command) = &self.verify_command {
+            contract["verify_command"] = json!(command);
+        }
+        sha256_hex(contract.to_string().as_bytes())
     }
 }
 

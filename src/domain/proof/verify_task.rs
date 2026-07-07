@@ -160,7 +160,7 @@ pub(crate) fn evaluate_task_report(
 ) -> Result<VerificationReport> {
     let command_run = run_verify_commands(paths, task.verify_command.as_deref())?;
     let inputs = freshness_inputs_for_task(task, git::head(paths.repo_root()).unwrap_or(None))?;
-    let claims = task::verification_claims(task);
+    let claims = task.verification_claims();
     let evidence = collect_evidence(paths, task_dir, &task.id)?;
     let claim_checks = check_claims(&claims, &evidence, paths.repo_root());
     let standalone_without_checks = task.feature_id.is_none() && task.acceptance.checks.is_empty();
@@ -254,7 +254,7 @@ pub fn freshness_inputs_for_task(
 ) -> Result<FreshnessInputs> {
     Ok(FreshnessInputs {
         commit,
-        contract_hash: task::verification_contract_hash(task),
+        contract_hash: task.verification_contract_hash(),
     })
 }
 
@@ -497,13 +497,13 @@ mod tests {
         // `verify_command: null`), so it equals the hash computed before the field
         // was added.
         let task = TaskRecord::draft("task-001", "Slice", "2026-06-13T00:00:00Z");
-        let with_skip = task::verification_contract_hash(&task);
+        let with_skip = task.verification_contract_hash();
 
         let legacy = json!({
             "id": task.id,
             "title": task.title,
             "acceptance": task.acceptance,
-            "claims": task::verification_claims(&task),
+            "claims": task.verification_claims(),
         });
         let legacy_hash = sha256_hex(legacy.to_string().as_bytes());
 
