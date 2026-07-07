@@ -112,7 +112,7 @@ has callers or user data safety impact.
 | Template and resource content | Owning module tests for Harness, Skills, Shell, Decision, Task, or Install | At least one command integration test that writes or renders the resource. |
 | End-to-end demos | `tests/phase3_core_verbs_e2e.rs`, `tests/v1_demo.rs` | Use after broad architecture, schema, or workflow changes. |
 
-`tests/support.rs` is shared test support, not a standalone suite.
+`tests/support/mod.rs` is shared test support, not a standalone suite.
 
 ## Native repository-harness layer verification matrix
 
