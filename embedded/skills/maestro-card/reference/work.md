@@ -15,10 +15,11 @@ Progress is the lightweight Task container for small same-session work.
   or `maestro task start <ref-or-id>` / `maestro task claim <id>` for one ready
   task.
 - Record progress: `task update --summary` and/or `--claim`.
-- Record implementation discoveries with `maestro note <card-or-task-id> "<text>"`
+- Record implementation discoveries with `maestro task note <task-id> "<text>"`
   for decisions not in the handoff/spec, plan changes, tradeoffs, gotchas,
-  risks, and follow-up work. If a discovery would change the contract, scope or
-  acceptance changes still require Feature/Card contract amendment.
+  risks, and follow-up work. Use `maestro note <card-id>` only for card-store
+  notes. If a discovery would change the contract, scope or acceptance changes
+  still require Feature/Card contract amendment.
 - Finish work: `task complete --summary --claim --proof`, then verify.
 - Handle pauses or terminal outcomes: `block`, `unblock`, `reject`,
   `abandon`, `supersede`.

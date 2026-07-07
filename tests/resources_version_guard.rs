@@ -43,8 +43,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 20] = [
     (
         "skill",
         "maestro-card",
-        "1.37.21",
-        "66a530ed160b760133ea521b7d736ea10fb7b9a5da63da323bc8559299d66c68",
+        "1.37.22",
+        "27911aaa4f69ca6c7763e4d92fe18e12cb79c71d8d855f74e0ad68f97f31d3fc",
     ),
     (
         "skill",
@@ -73,8 +73,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 20] = [
     (
         "harness",
         "HARNESS.md",
-        "1.29.21",
-        "07944a3675bc44cee7e17426412f3fd0ffc8e18b99802e1212301f13928e62df",
+        "1.29.22",
+        "469911be9d0bae9044ebab0e30e081f605d98a9629cf10031f981b1658ab2a3e",
     ),
     (
         "playbook",
@@ -382,7 +382,8 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
         "plan `after`/`blocked_by`",
         "blocked Progress successors under `blocked_next`",
         "finish and verify blockers first",
-        "During implementation, keep running notes with `maestro note <card-or-task-id> \"<text>\"`",
+        "During implementation, keep running task notes with `maestro task note <task-id> \"<text>\"`",
+        "Use `maestro note <card-id>` only for card-store",
         "decisions not in the handoff/spec",
         "scope or acceptance, amend the owning Feature/Card contract",
         "Canonical work readiness is `maestro ready`",
@@ -620,9 +621,10 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
         "What card/feature owns this work?",
         "Is that card/feature handoff finalized and fresh?",
         "Progress rows cannot be used",
-        "Record implementation discoveries with `maestro note <card-or-task-id> \"<text>\"`",
+        "Record implementation discoveries with `maestro task note <task-id> \"<text>\"`",
+        "use `maestro note <card-id>` only for card-store notes",
         "plan changes, tradeoffs, gotchas, risks, and follow-up work",
-        "scope or acceptance changes still require Feature/Card contract amendment",
+        "Scope or acceptance changes still require Feature/Card contract amendment",
     ] {
         assert!(
             card.contains(phrase),

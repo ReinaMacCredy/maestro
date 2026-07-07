@@ -226,3 +226,37 @@ and why it is not part of the current fix.
   packet design, not changing feature-contract authoring UX. A focused follow-up
   should make append-vs-replace behavior explicit and prevent accidental list
   loss during design updates.
+
+## 2026-07-07 demo-project dogfood audit
+
+- Surface: `maestro status` in a fresh git repo before the first commit.
+  Observed friction: `git status --short --branch` reported `No commits yet on
+  main`, but `maestro status` rendered the repo as `git: detached`, making a
+  normal unborn branch look like a detached checkout.
+  Fix in this session: preserve the unborn branch name from `.git/HEAD` when
+  building the git snapshot.
+- Surface: `maestro install --agent codex --dry-run`.
+  Observed friction: dry-run previewed repo mirror writes but omitted the global
+  skill-sync side effects that the real install performed afterward.
+  Fix in this session: include the global skill-sync dry-run renderer in install
+  dry-run output without writing the global lock or cache.
+- Surface: shipped Harness running-note guidance.
+  Observed friction: the installed harness told agents to run
+  `maestro note <card-or-task-id>`, but low-ceremony task ids require
+  `maestro task note`; the top-level note command is card-store scoped.
+  Fix in this session: update shipped and local Harness plus maestro-card skill
+  guidance to use `maestro task note <task-id>` for task implementation notes.
+- Surface: `maestro task list` after serial Progress setup.
+  Observed friction: the installed binary showed dependency-blocked ready tasks
+  as claimable in the compact list even though `maestro ready --plan` and
+  `maestro task claim` enforced the dependency.
+  Fix in this session: make the compact task-list renderer use the readiness
+  dependency check and render blocked ready rows as `ready / blocked` with an
+  inspect-blocker next action.
+- Surface: `maestro task start <id>` on low-ceremony Progress tasks.
+  Observed friction: after starting a low-ceremony task, the handoff pointed at
+  `maestro task complete`, but that command is rejected for tasks without an
+  explicit verification gate and the working closure path is `maestro task done`.
+  Fix in this session: reuse the simple-done contract predicate for claim/start
+  handoff output and print `maestro task done <id> --proof "<evidence>"` for
+  low-ceremony tasks.

@@ -1,4 +1,5 @@
 use std::collections::BTreeSet;
+use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
@@ -11,7 +12,7 @@ pub struct GitSnapshot {
     pub head: Option<String>,
     /// Whether tracked or untracked worktree changes are present.
     pub dirty: bool,
-    /// Current branch name, or `None` for a detached or unborn HEAD.
+    /// Current branch name, or `None` for a detached HEAD.
     pub branch: Option<String>,
     /// Uncommitted changes under `.maestro/` (the card store).
     pub maestro_dirty: usize,
@@ -305,10 +306,22 @@ fn branch_name(repository: &Repository) -> Result<Option<String>> {
     match repository.head() {
         Ok(reference) if reference.is_branch() => Ok(reference.shorthand().map(str::to_string)),
         Ok(_) => Ok(None),
-        Err(error) if error.code() == git2::ErrorCode::UnbornBranch => Ok(None),
+        Err(error) if error.code() == git2::ErrorCode::UnbornBranch => {
+            unborn_branch_name(repository)
+        }
         Err(error) if error.code() == git2::ErrorCode::NotFound => Ok(None),
         Err(error) => Err(error).context("failed to read git branch"),
     }
+}
+
+fn unborn_branch_name(repository: &Repository) -> Result<Option<String>> {
+    let head = fs::read_to_string(repository.path().join("HEAD"))
+        .context("failed to read unborn git HEAD")?;
+    Ok(head
+        .trim()
+        .strip_prefix("ref: refs/heads/")
+        .filter(|branch| !branch.is_empty())
+        .map(str::to_string))
 }
 
 fn head_commit_oid(repository: &Repository) -> Result<Option<Oid>> {

@@ -89,6 +89,16 @@ fn setup_git_repo(prefix: &str) -> (TestTempDir, Repository) {
     (temp, repository)
 }
 
+fn setup_unborn_git_repo(prefix: &str) -> (TestTempDir, Repository) {
+    let temp = TestTempDir::new(prefix);
+    let repository = Repository::init(temp.path()).expect("invariant: git repo should initialize");
+    let init = maestro(temp.path(), &["init", "--yes"]);
+    assert_success(&init, &["init", "--yes"]);
+    let claims_only = maestro(temp.path(), &["harness", "set", "--claims-only"]);
+    assert_success(&claims_only, &["harness", "set", "--claims-only"]);
+    (temp, repository)
+}
+
 /// Commit every non-ignored worktree change (initial commit when HEAD is unborn,
 /// otherwise on top of HEAD). `.maestro/` ignore rules are respected, so this
 /// drives the code/other dirty count to zero without forcing the card store in.
@@ -431,6 +441,45 @@ fn status_surfaces_active_progress_checklist() {
     assert!(
         status.contains(&format!("next: maestro task done {task_id} --proof")),
         "{status}"
+    );
+
+    let second_id = setup_out
+        .lines()
+        .find_map(|line| line.strip_prefix("2. "))
+        .and_then(|line| line.split_whitespace().next())
+        .expect("setup output includes second stable task id");
+    let task_list = maestro_with_env(repo, &["task", "list"], &[("MAESTRO_ACTOR", "codex#s1")]);
+    assert_success(&task_list, &["task", "list"]);
+    let task_list = untabify(&stdout(&task_list));
+    assert!(
+        task_list.contains("1\tin_progress\ttemplate: done\tReproduce current behavior"),
+        "{task_list}"
+    );
+    assert!(
+        task_list.contains("2\tready / blocked\trun: inspect_blocker\tImplement setup command"),
+        "{task_list}"
+    );
+    assert!(!task_list.contains("2\tready\trun: claim"), "{task_list}");
+    let done = maestro_with_env(
+        repo,
+        &["task", "done", task_id, "--proof", "first step proof"],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    );
+    assert_success(&done, &["task", "done", task_id, "--proof", "..."]);
+    let start_second = maestro_with_env(
+        repo,
+        &["task", "start", second_id],
+        &[("MAESTRO_ACTOR", "codex#s1")],
+    );
+    assert_success(&start_second, &["task", "start", second_id]);
+    let start_second = stdout(&start_second);
+    assert!(
+        start_second.contains(&format!("maestro task done {second_id} --proof")),
+        "{start_second}"
+    );
+    assert!(
+        !start_second.contains("maestro task complete"),
+        "{start_second}"
     );
 }
 
@@ -1031,6 +1080,23 @@ fn resume_and_status_show_git_line_and_clean_note_for_close_or_verify_state() {
         !status_clean.contains("before the close/verify step"),
         "clean worktree must drop the note on status: {status_clean}"
     );
+}
+
+#[test]
+fn status_names_unborn_git_branch_instead_of_detached() {
+    let (temp, repository) = setup_unborn_git_repo("maestro-git-line-unborn");
+    let repo = temp.path();
+    let head = fs::read_to_string(repository.path().join("HEAD"))
+        .expect("invariant: unborn HEAD file should be readable");
+    let branch = head
+        .trim()
+        .strip_prefix("ref: refs/heads/")
+        .expect("invariant: unborn HEAD should point at a branch");
+
+    let status = run(repo, &["status"]);
+
+    assert!(status.contains(&format!("git: {branch},")), "{status}");
+    assert!(!status.contains("git: detached"), "{status}");
 }
 
 #[test]

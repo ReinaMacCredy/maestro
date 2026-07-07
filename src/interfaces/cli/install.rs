@@ -18,6 +18,13 @@ pub fn run(args: InstallArgs) -> Result<()> {
     if args.dry_run {
         let preview = install::preview_install_agent(&paths, agent)?;
         print_install_preview(&preview);
+        match skills::prepare_global_skills() {
+            Ok(prepared) => print!("{}", skills::render_global_skills_dry_run(&prepared)),
+            Err(error) => {
+                println!("warning: global skill dry-run failed: {error:#}");
+                println!("repair, then rerun `maestro sync --global-skills --dry-run`");
+            }
+        }
         return Ok(());
     }
     install::install_agent(&paths, agent)?;

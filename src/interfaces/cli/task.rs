@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::path::Path;
 
 use anyhow::{Context, Result, bail};
@@ -643,11 +644,7 @@ fn claim_task(paths: &MaestroPaths, id: &str, actor: &str) -> Result<()> {
     super::emit_work_touch(paths, &task.id);
     println!("updated {} -> {}", task.id, task.state.as_str());
     print_verify_block(&task, &checks);
-    println!("finish with proof:");
-    println!(
-        "  maestro task complete {} --summary \"<summary>\" --claim \"<claim>\" --proof \"<observed evidence>\"",
-        task.id
-    );
+    print_finish_handoff(paths, &task)?;
     Ok(())
 }
 
@@ -677,11 +674,7 @@ fn claim_next_task(paths: &MaestroPaths, actor: &str) -> Result<()> {
     print_claim_next_context(paths, &task)?;
     println!("title: {}", task.title);
     print_acceptance_checks(&checks);
-    println!("finish with proof:");
-    println!(
-        "  maestro task complete {} --summary \"<summary>\" --claim \"<claim>\" --proof \"<observed evidence>\"",
-        task.id
-    );
+    print_finish_handoff(paths, &task)?;
     Ok(())
 }
 
@@ -746,6 +739,19 @@ fn print_acceptance_checks(checks: &[String]) {
     for check in checks {
         println!("- {check}");
     }
+}
+
+fn print_finish_handoff(paths: &MaestroPaths, task: &TaskRecord) -> Result<()> {
+    println!("finish with proof:");
+    if uses_task_done_handoff(paths, task)? {
+        println!("  maestro task done {} --proof \"<evidence>\"", task.id);
+    } else {
+        println!(
+            "  maestro task complete {} --summary \"<summary>\" --claim \"<claim>\" --proof \"<observed evidence>\"",
+            task.id
+        );
+    }
+    Ok(())
 }
 
 fn explore_task(paths: &MaestroPaths, id: &str, actor: &str) -> Result<()> {
@@ -1190,12 +1196,15 @@ fn list_tasks(paths: &MaestroPaths, filters: TaskListFilters, actor: &str) -> Re
         println!("no tasks found");
     } else {
         let missing_verify_contract_ids = task::missing_verify_contract_ids(paths, &shown)?;
+        let simple_done_ids = simple_done_contract_ids(paths, &shown)?;
         print!(
             "{}",
-            task::render_task_list_with_missing_checks(
+            task::render_task_list_with_context(
                 &shown,
+                &all_tasks,
                 &archived_ids,
                 &missing_verify_contract_ids,
+                &simple_done_ids,
             )
         );
         println!("inspect any: maestro task show <ref>");
@@ -1208,6 +1217,24 @@ fn list_tasks(paths: &MaestroPaths, filters: TaskListFilters, actor: &str) -> Re
         }
     }
     Ok(())
+}
+
+fn simple_done_contract_ids(
+    paths: &MaestroPaths,
+    tasks: &[TaskRecord],
+) -> Result<BTreeSet<String>> {
+    let mut ids = BTreeSet::new();
+    for task in tasks {
+        if uses_task_done_handoff(paths, task)? {
+            ids.insert(task.id.clone());
+        }
+    }
+    Ok(ids)
+}
+
+fn uses_task_done_handoff(paths: &MaestroPaths, task: &TaskRecord) -> Result<bool> {
+    Ok((task.order.is_some() || task.wave.is_some() || task.atomic)
+        && task::uses_simple_done_contract(paths, task)?)
 }
 
 fn current_task_list(

@@ -24,7 +24,7 @@ pub(crate) mod template;
 
 pub use blockers::has_unresolved_blockers;
 pub use display::{
-    render_implement_method_block, render_task, render_task_list,
+    render_implement_method_block, render_task, render_task_list, render_task_list_with_context,
     render_task_list_with_missing_checks,
 };
 pub use doctor::{

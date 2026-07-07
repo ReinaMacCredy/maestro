@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 
 use crate::domain::task::blockers::has_unresolved_blockers;
+use crate::domain::task::readiness::remaining_start_blockers_from_records;
 use crate::domain::task::template::{StateHistoryEntry, TaskRecord, TaskState};
 use crate::foundation::core::table;
 use crate::foundation::core::time::{render_timestamp, timestamp_nanos};
@@ -57,7 +58,10 @@ pub fn render_task(task: &TaskRecord, checks: &[String]) -> String {
     let mut out = String::new();
     out.push_str(&format!("id: {}\n", task.id));
     out.push_str(&format!("title: {}\n", task.title));
-    out.push_str(&format!("state: {}\n", state_label(task)));
+    out.push_str(&format!(
+        "state: {}\n",
+        state_label(task, has_unresolved_blockers(task))
+    ));
     if task.state == TaskState::Superseded
         && let Some(by) = task
             .state_history
@@ -209,7 +213,13 @@ pub fn render_task(task: &TaskRecord, checks: &[String]) -> String {
 /// marked `(archived)` so `--all` distinguishes an archived row from a
 /// live-terminal one sharing the same state (e.g. both `rejected`).
 pub fn render_task_list(tasks: &[TaskRecord], archived_ids: &BTreeSet<String>) -> String {
-    render_task_list_with_missing_checks(tasks, archived_ids, &BTreeSet::new())
+    render_task_list_with_context(
+        tasks,
+        tasks,
+        archived_ids,
+        &BTreeSet::new(),
+        &BTreeSet::new(),
+    )
 }
 
 pub fn render_task_list_with_missing_checks(
@@ -217,18 +227,41 @@ pub fn render_task_list_with_missing_checks(
     archived_ids: &BTreeSet<String>,
     missing_verify_contract_ids: &BTreeSet<String>,
 ) -> String {
+    render_task_list_with_context(
+        tasks,
+        tasks,
+        archived_ids,
+        missing_verify_contract_ids,
+        &BTreeSet::new(),
+    )
+}
+
+pub fn render_task_list_with_context(
+    tasks: &[TaskRecord],
+    all_tasks: &[TaskRecord],
+    archived_ids: &BTreeSet<String>,
+    missing_verify_contract_ids: &BTreeSet<String>,
+    simple_done_ids: &BTreeSet<String>,
+) -> String {
     let rows: Vec<Vec<String>> = tasks
         .iter()
         .enumerate()
         .map(|(index, task)| {
-            let mut state = state_label(task);
+            let blocked = is_blocked_for_list(task, all_tasks);
+            let mut state = state_label(task, blocked);
             if archived_ids.contains(&task.id) {
                 state.push_str(" (archived)");
             }
             vec![
                 (index + 1).to_string(),
                 state,
-                compact_next(task, missing_verify_contract_ids.contains(&task.id)).to_string(),
+                compact_next(
+                    task,
+                    missing_verify_contract_ids.contains(&task.id),
+                    blocked,
+                    simple_done_ids.contains(&task.id),
+                )
+                .to_string(),
                 task.title.clone(),
             ]
         })
@@ -236,17 +269,28 @@ pub fn render_task_list_with_missing_checks(
     table::render_table(&["REF", "STATE", "NEXT", "TITLE"], &rows)
 }
 
-fn state_label(task: &TaskRecord) -> String {
+fn is_blocked_for_list(task: &TaskRecord, all_tasks: &[TaskRecord]) -> bool {
+    has_unresolved_blockers(task)
+        || (task.state == TaskState::Ready
+            && !remaining_start_blockers_from_records(task, all_tasks).is_empty())
+}
+
+fn state_label(task: &TaskRecord, blocked: bool) -> String {
     let base = task.state.as_str();
-    if has_unresolved_blockers(task) {
+    if blocked {
         format!("{base} / blocked")
     } else {
         base.to_string()
     }
 }
 
-fn compact_next(task: &TaskRecord, missing_verify_contract: bool) -> &'static str {
-    if has_unresolved_blockers(task) {
+fn compact_next(
+    task: &TaskRecord,
+    missing_verify_contract: bool,
+    blocked: bool,
+    simple_done: bool,
+) -> &'static str {
+    if blocked {
         return "run: inspect_blocker";
     }
     match task.state {
@@ -254,6 +298,7 @@ fn compact_next(task: &TaskRecord, missing_verify_contract: bool) -> &'static st
         TaskState::Draft => "run: explore",
         TaskState::Exploring => "run: accept",
         TaskState::Ready => "run: claim",
+        TaskState::InProgress if simple_done => "template: done",
         TaskState::InProgress => "template: complete",
         TaskState::NeedsVerification => "run: verify",
         TaskState::Verified

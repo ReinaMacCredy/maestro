@@ -50,9 +50,16 @@ fn install_dry_run_exposes_safety_and_shim_plan_without_writing() {
     assert!(stdout.contains("resource guards"), "{stdout}");
     assert!(stdout.contains("AGENTS.md"), "{stdout}");
     assert!(stdout.contains(".codex/config.toml"), "{stdout}");
+    assert!(
+        stdout.contains("global Maestro skills would sync for all supported agents"),
+        "{stdout}"
+    );
+    assert!(stdout.contains("cache:"), "{stdout}");
+    assert!(stdout.contains("links:"), "{stdout}");
     assert!(!repo.path().join("AGENTS.md").exists());
     assert!(!repo.path().join(".codex/config.toml").exists());
     assert!(!repo.path().join(".maestro/install-lock.yaml").exists());
+    assert!(!repo.path().join("home/.maestro/skills-lock.yaml").exists());
 }
 
 #[test]

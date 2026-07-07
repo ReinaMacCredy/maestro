@@ -1,6 +1,6 @@
 ---
 name: maestro-card
-version: 1.37.21
+version: 1.37.22
 description: "Card work in a project using Maestro after design approval: use for implement, fix, verify, QA, close, release, continue, or unattended prompts like use loop, keep looping, work while away/asleep."
 ---
 
@@ -140,8 +140,8 @@ Load extra references only when the chosen branch points at them.
   need stable ids. The Progress card itself appears in card views. Take and annotate tasks with
   `maestro task start`/`maestro task claim`, `maestro task update`, and
   `maestro task note`.
-- Record implementation discoveries with `maestro note <card-or-task-id> "<text>"`
-  for decisions not in the handoff/spec. Record plan changes, tradeoffs, gotchas, risks, and follow-up work; scope or acceptance changes still require Feature/Card contract amendment.
+- Record implementation discoveries with `maestro task note <task-id> "<text>"`
+  for decisions not in the handoff/spec. Record plan changes, tradeoffs, gotchas, risks, and follow-up work; use `maestro note <card-id>` only for card-store notes. Scope or acceptance changes still require Feature/Card contract amendment.
 - Ids are stable and opaque (`card-<hash>`; features keep their creation
   slug). The dotted alias `show` prints is display-only; never address a card
   with it.

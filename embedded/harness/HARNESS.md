@@ -1,5 +1,5 @@
 ---
-version: 1.29.21
+version: 1.29.22
 ---
 
 # Maestro Harness Protocol
@@ -80,10 +80,11 @@ plan `after`/`blocked_by` for extra explicit dependencies; do not use inbox
 messages for execution order. `maestro status` shows blocked Progress
 successors under `blocked_next`; finish and verify blockers first, then use
 `maestro ready` for the next executable wave.
-During implementation, keep running notes with `maestro note <card-or-task-id> "<text>"`:
+During implementation, keep running task notes with `maestro task note <task-id> "<text>"`:
 record decisions not in the handoff/spec, changes from the plan, tradeoffs,
-gotchas, risks, and follow-up work. If a note changes scope or acceptance,
-amend the owning Feature/Card contract instead of treating notes as authority.
+gotchas, risks, and follow-up work. Use `maestro note <card-id>` only for card-store
+notes. If a note changes scope or acceptance, amend the owning Feature/Card
+contract instead of treating notes as authority.
 Design-to-card gate: before executable work after design/brainstorm, ask:
 - Am I coming from design or brainstorm?
 - What card/feature owns this work?

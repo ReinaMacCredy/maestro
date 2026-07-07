@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, OpenOptions};
 use std::io::{ErrorKind, Write};
 #[cfg(unix)]
@@ -436,10 +436,13 @@ fn task_list(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
     };
     let shown = task::filter_tasks(tasks.clone(), &filter(all));
     let missing_verify_contract_ids = task::missing_verify_contract_ids(paths, &shown)?;
-    let mut out = task::render_task_list_with_missing_checks(
+    let simple_done_ids = simple_done_contract_ids(paths, &shown)?;
+    let mut out = task::render_task_list_with_context(
         &shown,
+        &tasks,
         &archived_ids,
         &missing_verify_contract_ids,
+        &simple_done_ids,
     );
     if !all {
         let hidden = task::filter_tasks(tasks, &filter(true)).len() - shown.len();
@@ -450,6 +453,24 @@ fn task_list(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
         }
     }
     Ok(out)
+}
+
+fn simple_done_contract_ids(
+    paths: &MaestroPaths,
+    tasks: &[task::TaskRecord],
+) -> Result<BTreeSet<String>> {
+    let mut ids = BTreeSet::new();
+    for task in tasks {
+        if uses_task_done_handoff(paths, task)? {
+            ids.insert(task.id.clone());
+        }
+    }
+    Ok(ids)
+}
+
+fn uses_task_done_handoff(paths: &MaestroPaths, task: &task::TaskRecord) -> Result<bool> {
+    Ok((task.order.is_some() || task.wave.is_some() || task.atomic)
+        && task::uses_simple_done_contract(paths, task)?)
 }
 
 fn sync_tool(arguments: &Value) -> Result<String> {
