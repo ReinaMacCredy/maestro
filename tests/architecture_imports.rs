@@ -1396,6 +1396,7 @@ fn transitional_public_surfaces_match_phase_policy() {
             "memory",
             "playbook",
             "proof",
+            "research",
             "resource_contracts",
             "run",
             "schema_contracts",

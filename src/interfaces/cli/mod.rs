@@ -50,6 +50,7 @@ pub mod playbook;
 pub mod qa;
 pub mod query;
 pub mod reference;
+pub mod research;
 pub mod resume;
 pub mod scorer;
 pub mod session;
@@ -378,6 +379,11 @@ pub enum RootCommand {
     )]
     Intake(IntakeArgs),
     #[command(
+        about = "Validate research receipts before design",
+        after_help = "Examples:\n  maestro research check sales-copilot\n  maestro research check sales-copilot --intended-project current-repo\n  maestro research check sales-copilot --json"
+    )]
+    Research(ResearchArgs),
+    #[command(
         hide = true,
         about = "Migrate v1 Maestro artifacts to the reduced v2 layout"
     )]
@@ -702,6 +708,12 @@ pub struct IntakeArgs {
 }
 
 #[derive(Debug, Args)]
+pub struct ResearchArgs {
+    #[command(subcommand)]
+    pub command: ResearchCommand,
+}
+
+#[derive(Debug, Args)]
 pub struct CapabilityArgs {
     /// Capability manifest path; defaults to .maestro/capabilities.yml.
     #[arg(long = "from", value_name = "PATH")]
@@ -739,6 +751,19 @@ pub enum DesignCommand {
         /// Overwrite an existing DESIGN.md after backing it up.
         #[arg(long)]
         force: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ResearchCommand {
+    #[command(about = "Read-only validation for a card's research.md receipt")]
+    Check {
+        #[arg(value_name = "CARD_ID")]
+        card_id: String,
+        #[arg(long = "intended-project", value_name = "PROJECT")]
+        intended_project: Option<String>,
+        #[arg(long)]
+        json: bool,
     },
 }
 
@@ -3059,6 +3084,7 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Sync(args) => sync::run(args),
         RootCommand::Design(args) => design::run(args),
         RootCommand::Intake(args) => intake::run(args),
+        RootCommand::Research(args) => research::run(args),
         RootCommand::MigrateV2 => migrate::run(),
         RootCommand::Migrate => migrate::run_card_fold(),
         RootCommand::Uninstall(args) => uninstall::run(args),

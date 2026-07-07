@@ -33,12 +33,18 @@ static PLAYBOOK_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/embedded/playbo
 /// The shipped DESIGN.md catalog, served from the binary instead of extracted.
 static DESIGN_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/embedded/design");
 /// `(group, name, shipped version, sha256 tree-hash of the resource files)`.
-const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 20] = [
+const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 21] = [
     (
         "skill",
         "ask-maestro",
         "1.0.5",
         "bb56afd9b527d1d50ce670e8713fdb652a39781ac0728656efa7596ca7b693fa",
+    ),
+    (
+        "skill",
+        "maestro-research",
+        "1.0.0",
+        "ed95c1d0f8563abdd05e8ab5fbf7c36fea24f76a88cca600ffa9742bffbd6295",
     ),
     (
         "skill",
@@ -55,8 +61,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 20] = [
     (
         "skill",
         "maestro-design",
-        "1.36.15",
-        "505243d07e1811e4e83d0c50a5102d5fff36d3d84638bfe2d01da614f34998f5",
+        "1.36.16",
+        "26d81998ca2ee4bd40c1eb3703b834176acab8a45872533aefc5799abb8caee1",
     ),
     (
         "skill",
@@ -73,8 +79,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 20] = [
     (
         "harness",
         "HARNESS.md",
-        "1.29.22",
-        "469911be9d0bae9044ebab0e30e081f605d98a9629cf10031f981b1658ab2a3e",
+        "1.29.23",
+        "91eff2ec8ef49713d5ac29e4d893bd9812fac45a75abe4e128a701d5aa61b61a",
     ),
     (
         "playbook",
@@ -750,6 +756,44 @@ fn native_layer_guidance_lives_in_targeted_teaching_surfaces() {
         assert!(
             setup.contains(phrase),
             "maestro-setup SKILL.md must teach native layer phrase {phrase:?}"
+        );
+    }
+}
+
+#[test]
+fn shipped_guidance_routes_weak_context_to_maestro_research_without_harness_sprawl() {
+    let harness = normalize_markdown(HARNESS_MD);
+    let design = normalize_markdown(&shipped_skill_md("maestro-design"));
+
+    for phrase in [
+        "zero-context, unfamiliar-domain, externally pasted, stakeholder-heavy, or hosting-unclear ideas",
+        "route through `maestro-research` before `maestro-design`",
+        "fresh `research.md`, an explicit skip receipt, or clearly settled context recorded with evidence",
+    ] {
+        assert!(
+            harness.contains(phrase),
+            "harness must retain thin research router phrase {phrase:?}"
+        );
+    }
+    for phrase in [
+        "maestro-research",
+        "fresh `research.md`",
+        "explicit skip receipt",
+        "clearly settled context recorded with evidence",
+    ] {
+        assert!(
+            design.contains(phrase),
+            "maestro-design must retain research entry gate phrase {phrase:?}"
+        );
+    }
+    for forbidden in [
+        "Research Status:",
+        "Sales Copilot Regression",
+        "blocking unknowns are zero",
+    ] {
+        assert!(
+            !harness.contains(forbidden),
+            "harness must stay router-only and exclude research contract phrase {forbidden:?}"
         );
     }
 }

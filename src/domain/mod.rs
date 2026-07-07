@@ -18,6 +18,7 @@ pub mod maturity;
 pub mod memory;
 pub mod playbook;
 pub mod proof;
+pub mod research;
 pub mod resource_contracts;
 pub mod run;
 pub mod schema_contracts;

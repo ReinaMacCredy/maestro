@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-version: 1.36.15
+version: 1.36.16
 description: "Design in a project using Maestro before implementation: use for brainstorm, plan, PRD synthesis, grilling/stress-test, domain model, deepening candidate, wording, workflow, skill/harness, card/task/feature, architecture, UX, or agent-process decisions."
 ---
 
@@ -44,6 +44,14 @@ before card work, then route settled text through `maestro intake`. Use
 fork depends on optional providers, proof gaps, UX friction, or next owner.
 Generated CLI references prove command shape; Harness and targeted skills teach
 the workflow.
+
+Research entry gate: for zero-context, unfamiliar-domain, externally pasted,
+stakeholder-heavy, or hosting-unclear ideas, route through `maestro-research`
+before opening design forks. `maestro-design` may start only from fresh
+`research.md`, an explicit skip receipt, or clearly settled context recorded
+with evidence. When `maestro research check <card-id>` exists, use it as a
+read-only receipt validator and route to `maestro-research` if research is
+missing, stale, risky-skipped, or hosting-incompatible.
 
 Native Maestro MCP tools may be used for supported orientation reads
 (`maestro_status`, `maestro_feature_show`, `maestro_card_list`, and related
