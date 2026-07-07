@@ -20,7 +20,7 @@ MCP when available:
 
 ```text
 maestro feature reconcile <id> -> maestro feature finalize <id> -> maestro_qa_baseline -> maestro_feature_accept -> maestro_feature_prepare
-maestro_feature_verify -> maestro_qa_slice -> maestro_feature_close
+maestro_feature_verify -> maestro_qa_slice -> maestro-witness -> maestro_feature_close
 ```
 
 Use the CLI for lifecycle and maintenance verbs not yet exposed as MCP tools
@@ -34,6 +34,11 @@ all child tasks verify. Before close, local install, push, release, publish,
 archive, or any other ship-style gate, switch to `maestro loop show ship` and
 fail closed unless authority, target, allowed actions, hard stops, and evidence
 are explicit.
+For terminal feature close, after [qa-slice.md](qa-slice.md), run
+`maestro-witness` -> `maestro feature close`. The witness/advisor receipt does
+not replace `maestro feature verify`, task proof, or QA; it signs off that those
+artifacts are current and independently reviewed.
+Close route: `maestro-witness` -> `maestro feature close`.
 When the feature introduces loop patterns, production automation, or
 unattended/away-mode behavior, add the native readiness check to QA/close:
 `maestro loop validate <pattern>` plus `maestro status`. The close evidence must
@@ -127,6 +132,9 @@ Close passes only when:
 - the baseline is fresh for behavioral amends
 - every behavioral `[bl-NNN]` in the baseline has a counting slice in the
   fenced `slices:` block of `qa.md`
+- `witness.md` and `advisor.md` from `maestro-witness` approve the current
+  handoff, proof, QA, and tree anchors, or an explicit T0 user skip receipt
+  exists
 
 Use `accept --dry-run` or `close --dry-run` to preview a gate without changing
 state.
@@ -184,7 +192,8 @@ isolation, collection): `maestro loop show feature-fanout`.
 ## Hand-off
 
 Next: accepted feature -> [work.md](work.md); all children verified ->
-[qa-slice.md](qa-slice.md), then `feature close --outcome "<one line>"`. After
+[qa-slice.md](qa-slice.md), then `maestro-witness` and
+`feature close --outcome "<one line>"`. After
 close, run `maestro feature auto-archive <id> ...` when bounded ship or
 auto-archive authority plus exact-HEAD QA evidence are satisfied; otherwise use
 `maestro card archive <id>` only for explicit terminal retirement.

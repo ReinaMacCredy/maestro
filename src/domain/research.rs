@@ -1,10 +1,7 @@
-use std::path::{Component, Path};
-
-use anyhow::{Result, bail};
+use anyhow::Result;
 use serde::Serialize;
 
-use crate::domain::card::{live_db, store as card_store};
-use crate::foundation::core::fs::read_to_string_if_exists;
+use crate::domain::card::store as card_store;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::time::{parse_utc_timestamp, utc_now_timestamp};
 
@@ -183,29 +180,7 @@ fn next_step(status: &str, reasons: &[String]) -> String {
 }
 
 fn read_research_text(paths: &MaestroPaths, card_id: &str) -> Result<Option<String>> {
-    validate_sidecar_name(RESEARCH_FILE)?;
-    let workbench = paths.workbench_dir().join(card_id).join(RESEARCH_FILE);
-    if let Some(contents) = read_to_string_if_exists(&workbench)? {
-        return Ok(Some(contents));
-    }
-    if live_db::contains_card_id(paths, card_id)?
-        && let Some(contents) = live_db::read_text_file(paths, card_id, RESEARCH_FILE)?
-    {
-        return Ok(Some(contents));
-    }
-    let card_file = paths.cards_dir().join(card_id).join(RESEARCH_FILE);
-    read_to_string_if_exists(&card_file)
-}
-
-fn validate_sidecar_name(name: &str) -> Result<()> {
-    let mut components = Path::new(name).components();
-    if name.is_empty()
-        || !matches!(components.next(), Some(Component::Normal(_)))
-        || components.next().is_some()
-    {
-        bail!("invalid research sidecar name: {name}");
-    }
-    Ok(())
+    card_store::read_sidecar_text(paths, card_id, RESEARCH_FILE)
 }
 
 #[derive(Clone, Debug, Default)]

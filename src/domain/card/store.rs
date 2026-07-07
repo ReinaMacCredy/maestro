@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::process;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -42,12 +42,39 @@ pub fn card_path(paths: &MaestroPaths, id: &str) -> PathBuf {
 pub fn validate_card_id(id: &str) -> Result<()> {
     let mut components = Path::new(id).components();
     if id.is_empty()
-        || !matches!(components.next(), Some(std::path::Component::Normal(_)))
+        || !matches!(components.next(), Some(Component::Normal(_)))
         || components.next().is_some()
     {
         bail!("invalid card id: {id}");
     }
     Ok(())
+}
+
+pub fn validate_sidecar_name(name: &str) -> Result<()> {
+    let mut components = Path::new(name).components();
+    if name.is_empty()
+        || !matches!(components.next(), Some(Component::Normal(_)))
+        || components.next().is_some()
+    {
+        bail!("invalid card sidecar name: {name}");
+    }
+    Ok(())
+}
+
+pub fn read_sidecar_text(paths: &MaestroPaths, id: &str, name: &str) -> Result<Option<String>> {
+    validate_card_id(id)?;
+    validate_sidecar_name(name)?;
+    let workbench = paths.workbench_dir().join(id).join(name);
+    if let Some(contents) = read_to_string_if_exists(&workbench)? {
+        return Ok(Some(contents));
+    }
+    if live_db::contains_card_id(paths, id)?
+        && let Some(contents) = live_db::read_text_file(paths, id, name)?
+    {
+        return Ok(Some(contents));
+    }
+    let card_file = paths.cards_dir().join(id).join(name);
+    read_to_string_if_exists(&card_file)
 }
 
 /// Sorted ids of the card-bearing child directories of `cards_dir` -- the one

@@ -4,6 +4,7 @@
 //! leaves read-only paths (`--dry-run`) free of suite execution.
 
 mod support;
+mod witness_support;
 
 use std::fs;
 use std::path::Path;
@@ -13,6 +14,7 @@ use git2::{IndexAddOption, Repository, Signature};
 use maestro::domain::feature;
 use maestro::foundation::core::paths::MaestroPaths;
 use support::TestTempDir;
+use witness_support::write_valid_witness;
 
 fn maestro(args: &[&str], cwd: &Path) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_maestro"))
@@ -125,6 +127,7 @@ fn seed_closable_feature(repo: &Path, id: &str) {
         maestro(&["feature", "verify", id], repo),
         &["feature", "verify"],
     );
+    write_valid_witness(&paths, id);
 }
 
 fn init_git_repo(repo: &Path) -> Repository {
@@ -256,6 +259,7 @@ fn feature_close_auto_archives_when_git_head_exists() {
     write_claimed_verified_task(repo, "task-report-builder-child", "report-builder");
     write_stack_verify(repo, "true");
     let head = commit_all(&repository, "verified feature ready to close");
+    write_valid_witness(&MaestroPaths::new(repo), "report-builder");
 
     let close = ["feature", "close", "report-builder", "--outcome", "done"];
     let closed = stdout(maestro(&close, repo), &close);
@@ -388,6 +392,7 @@ fn feature_close_auto_archives_with_unrelated_dirty_paths() {
     seed_closable_feature(repo, "report-builder");
     write_stack_verify(repo, "true");
     let head = commit_all(&repository, "verified feature ready to close");
+    write_valid_witness(&MaestroPaths::new(repo), "report-builder");
     fs::create_dir_all(repo.join(".claude/workflows"))
         .expect("invariant: .claude workflow dir should be writable");
     fs::write(repo.join(".claude/workflows/ux-resweep.js"), "dirty\n")
@@ -439,6 +444,7 @@ fn feature_close_skips_auto_archive_with_dirty_implementation_paths() {
     seed_closable_feature(repo, "report-builder");
     write_stack_verify(repo, "true");
     commit_all(&repository, "verified feature ready to close");
+    write_valid_witness(&MaestroPaths::new(repo), "report-builder");
     fs::create_dir_all(repo.join("src")).expect("invariant: src dir should be writable");
     fs::write(repo.join("src/report.rs"), "dirty implementation\n")
         .expect("invariant: dirty source file should be writable");
@@ -474,6 +480,7 @@ fn feature_close_auto_archives_from_linked_worktree() {
     repository
         .worktree("linked-close", &linked, None)
         .expect("invariant: linked worktree should be creatable");
+    write_valid_witness(&MaestroPaths::new(&linked), "report-builder");
 
     let close = ["feature", "close", "report-builder", "--outcome", "done"];
     let closed = stdout(maestro(&close, &linked), &close);

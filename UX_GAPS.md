@@ -260,3 +260,14 @@ and why it is not part of the current fix.
   Fix in this session: reuse the simple-done contract predicate for claim/start
   handoff output and print `maestro task done <id> --proof "<evidence>"` for
   low-ceremony tasks.
+
+## 2026-07-07 witness design dogfood
+
+- Surface: `maestro decision show <id>` during a design session.
+  Observed friction: a read command printed `global skills resynced to this
+  maestro` output, which made a read-only inspection look like it had mutated
+  global skill state.
+  Why not part of the current fix: this session is designing the witness
+  approval gate, not changing passive sync output. A focused follow-up should
+  make read-command side effects explicit, suppress unrelated sync chatter, or
+  move it behind a separate actionable notice.

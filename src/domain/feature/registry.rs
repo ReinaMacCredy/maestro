@@ -41,10 +41,10 @@ use crate::domain::feature::schema::{
     normalize_acceptance_id,
 };
 use crate::domain::feature::verification;
-use crate::domain::feature::{qa, worktree};
+use crate::domain::feature::{qa, witness, worktree};
 use crate::domain::task::{self, TaskEntry, TaskState, TransitionDetails};
 use crate::foundation::core::error::MaestroError;
-use crate::foundation::core::fs::{append_text_file, ensure_dir, read_to_string_if_exists};
+use crate::foundation::core::fs::{append_text_file, ensure_dir};
 use crate::foundation::core::git;
 use crate::foundation::core::hash::sha256_hex;
 use crate::foundation::core::paths::MaestroPaths;
@@ -1493,6 +1493,7 @@ fn close_gaps_for_record(
     if let Some(gap) = verification::acceptance_close_gap(record, &task_entries)? {
         gaps.push(gap);
     }
+    gaps.extend(witness::close_gaps(paths, id, record)?);
     Ok(CloseGateReport {
         gaps,
         qa_declared_none,
@@ -2154,11 +2155,7 @@ fn db_sidecar_path(paths: &MaestroPaths, id: &str, name: &str) -> PathBuf {
 }
 
 fn validate_sidecar_name(name: &str) -> Result<()> {
-    let mut components = Path::new(name).components();
-    if name.is_empty()
-        || !matches!(components.next(), Some(Component::Normal(_)))
-        || components.next().is_some()
-    {
+    if card_store::validate_sidecar_name(name).is_err() {
         bail!("invalid feature sidecar name: {name}");
     }
     Ok(())
@@ -2166,21 +2163,7 @@ fn validate_sidecar_name(name: &str) -> Result<()> {
 
 pub fn read_sidecar_text(paths: &MaestroPaths, id: &str, name: &str) -> Result<Option<String>> {
     validate_feature_id(id)?;
-    validate_sidecar_name(name)?;
-    let workbench = paths.workbench_dir().join(id).join(name);
-    if let Some(contents) = read_to_string_if_exists(&workbench)? {
-        return Ok(Some(contents));
-    }
-    if live_db::contains_card_id(paths, id)?
-        && let Some(contents) = live_db::read_text_file(paths, id, name)?
-    {
-        return Ok(Some(contents));
-    }
-    let card_file = paths.cards_dir().join(id).join(name);
-    if let Some(contents) = read_to_string_if_exists(&card_file)? {
-        return Ok(Some(contents));
-    }
-    Ok(None)
+    card_store::read_sidecar_text(paths, id, name)
 }
 
 fn remove_sidecar_text(paths: &MaestroPaths, id: &str, name: &str) -> Result<bool> {

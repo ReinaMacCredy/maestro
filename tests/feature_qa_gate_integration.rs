@@ -5,6 +5,7 @@
 
 mod common;
 mod support;
+mod witness_support;
 
 use std::fs;
 use std::path::Path;
@@ -14,6 +15,7 @@ use common::cli_harness::maestro as cli_maestro;
 use maestro::domain::feature;
 use maestro::foundation::core::paths::MaestroPaths;
 use support::TestTempDir;
+use witness_support::write_valid_witness;
 
 fn maestro(args: &[&str], cwd: &Path) -> std::process::Output {
     cli_maestro(cwd).args(args).output().into_raw()
@@ -155,6 +157,7 @@ fn verify_contract_from_qa(repo: &Path, id: &str) {
         output.contains("ok: every acceptance item has evidence"),
         "{output}"
     );
+    write_valid_witness(&MaestroPaths::new(repo), id);
 }
 
 fn prove_contract(repo: &Path, id: &str) {
@@ -178,6 +181,7 @@ fn prove_contract(repo: &Path, id: &str) {
         output.contains("ok: every acceptance item has evidence"),
         "{output}"
     );
+    write_valid_witness(&MaestroPaths::new(repo), id);
 }
 
 #[test]

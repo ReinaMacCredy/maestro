@@ -33,10 +33,11 @@ static SKILLS_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/embedded/skills")
 /// iteration order, so the catalog is sorted by position here (unknown names
 /// fall to the end, ordered by name) to keep extraction deterministic and
 /// behavior-preserving against the original hand-authored skill order.
-const SKILL_ORDER: [&str; 6] = [
+const SKILL_ORDER: [&str; 7] = [
     "ask-maestro",
     "maestro-research",
     "maestro-card",
+    "maestro-witness",
     "maestro-setup",
     "maestro-design",
     "maestro-audit",

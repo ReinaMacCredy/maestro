@@ -7,6 +7,7 @@
 
 pub mod card_support;
 mod support;
+mod witness_support;
 
 use std::fs;
 use std::path::Path;
@@ -14,9 +15,11 @@ use std::process::{Command, Output};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use card_support::cards_repo;
+use maestro::foundation::core::paths::MaestroPaths;
 use maestro::foundation::core::schema::SESSION_ACTIVITY_SCHEMA_VERSION;
 use maestro::foundation::core::time::format_utc_seconds_rfc3339_millis;
 use serde_json::Value;
+use witness_support::write_valid_witness;
 
 /// Mint a card and return its id, captured from `create --id-only`.
 fn create_id(repo: &Path, args: &[&str]) -> String {
@@ -1297,6 +1300,7 @@ fn feature_prepare_start_and_close_emit_ownership_lifecycle() {
             "--no-close",
         ],
     );
+    write_valid_witness(&MaestroPaths::new(repo), "closable-feature");
     run(
         repo,
         &[("MAESTRO_SESSION_ID", "close-sess")],

@@ -1,5 +1,6 @@
 pub mod card_support;
 mod support;
+mod witness_support;
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -11,9 +12,11 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use card_support::{card_dir, card_doc, card_record_path, id_by_title, sole_idea_id, task_record};
+use maestro::foundation::core::paths::MaestroPaths;
 use serde_json::Value as JsonValue;
 use serde_yaml::{Mapping as YamlMapping, Value as YamlValue};
 use support::TestTempDir;
+use witness_support::write_valid_witness;
 
 const BASE_HARNESS_YAML: &str = concat!(
     "schema_version: maestro.harness.v1\n",
@@ -1989,19 +1992,17 @@ fn mcp_feature_gate_tools_verify_slice_and_close_without_autoclose() {
         ],
     );
 
-    let close_requests = [
+    let proof_requests = [
         r#"{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"maestro_feature_verify","arguments":{"feature_id":"mcp-feature-gate","prove":["ac-1"],"evidence":["MCP feature gate AC is covered"]}}}"#.to_string(),
         r#"{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"maestro_qa_slice","arguments":{"feature_id":"mcp-feature-gate","scenarios":["bl-001"],"observed":"MCP feature gate scenario still passes"}}}"#.to_string(),
-        r#"{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"maestro_feature_close","arguments":{"feature_id":"mcp-feature-gate","dry_run":true}}}"#.to_string(),
-        r#"{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"maestro_feature_close","arguments":{"feature_id":"mcp-feature-gate","outcome":"MCP feature gate closed through typed MCP tools"}}}"#.to_string(),
     ];
-    let close_refs = close_requests
+    let proof_refs = proof_requests
         .iter()
         .map(String::as_str)
         .collect::<Vec<_>>();
-    let frames = run_mcp_requests(repo, &close_refs);
+    let proof_frames = run_mcp_requests(repo, &proof_refs);
 
-    let verify_text = frames[0]["result"]["content"][0]["text"]
+    let verify_text = proof_frames[0]["result"]["content"][0]["text"]
         .as_str()
         .expect("invariant: verify should return text");
     let verify_envelope: JsonValue =
@@ -2020,14 +2021,25 @@ fn mcp_feature_gate_tools_verify_slice_and_close_without_autoclose() {
         "{verify_text}"
     );
 
-    let slice_text = frames[1]["result"]["content"][0]["text"]
+    let slice_text = proof_frames[1]["result"]["content"][0]["text"]
         .as_str()
         .expect("invariant: qa slice should return text");
     let slice_envelope: JsonValue =
         serde_json::from_str(slice_text).expect("qa slice should return envelope JSON");
     assert_eq!(slice_envelope["ok"], true, "{slice_text}");
+    write_valid_witness(&MaestroPaths::new(repo), "mcp-feature-gate");
 
-    let dry_run_text = frames[2]["result"]["content"][0]["text"]
+    let close_requests = [
+        r#"{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"maestro_feature_close","arguments":{"feature_id":"mcp-feature-gate","dry_run":true}}}"#.to_string(),
+        r#"{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"maestro_feature_close","arguments":{"feature_id":"mcp-feature-gate","outcome":"MCP feature gate closed through typed MCP tools"}}}"#.to_string(),
+    ];
+    let close_refs = close_requests
+        .iter()
+        .map(String::as_str)
+        .collect::<Vec<_>>();
+    let frames = run_mcp_requests(repo, &close_refs);
+
+    let dry_run_text = frames[0]["result"]["content"][0]["text"]
         .as_str()
         .expect("invariant: dry-run close should return text");
     let dry_run_envelope: JsonValue =
@@ -2039,7 +2051,7 @@ fn mcp_feature_gate_tools_verify_slice_and_close_without_autoclose() {
         "{dry_run_text}"
     );
 
-    let close_text = frames[3]["result"]["content"][0]["text"]
+    let close_text = frames[1]["result"]["content"][0]["text"]
         .as_str()
         .expect("invariant: close should return text");
     let close_envelope: JsonValue =

@@ -1,5 +1,6 @@
 pub mod card_support;
 mod support;
+mod witness_support;
 
 use std::fs;
 use std::path::Path;
@@ -14,6 +15,7 @@ use maestro::foundation::core::time::format_utc_seconds_rfc3339_millis;
 use serde_json::{Value as JsonValue, json};
 use serde_yaml::Value as YamlValue;
 use support::TestTempDir;
+use witness_support::write_valid_witness;
 
 fn maestro(cwd: &Path, args: &[&str]) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_maestro"))
@@ -2589,6 +2591,7 @@ fn feature_close_dry_run_flags_verified_children_at_older_commits_without_blocki
     feature::write_sidecar_text(&MaestroPaths::new(repo), "close-advisory", "qa.md", &qa)
         .expect("invariant: qa.md should be writable");
     run(repo, &["feature", "verify", "close-advisory"]);
+    write_valid_witness(&MaestroPaths::new(repo), "close-advisory");
 
     // Before HEAD moves: the verified child matches HEAD -> would close, no advisory.
     let fresh = run(repo, &["feature", "close", "close-advisory", "--dry-run"]);
@@ -2603,6 +2606,7 @@ fn feature_close_dry_run_flags_verified_children_at_older_commits_without_blocki
 
     // Advance HEAD past the child's recorded proof commit.
     commit_worktree(&repository, "advance head past the verified child commit");
+    write_valid_witness(&MaestroPaths::new(repo), "close-advisory");
 
     let drifted = run(repo, &["feature", "close", "close-advisory", "--dry-run"]);
     assert!(

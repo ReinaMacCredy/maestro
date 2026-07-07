@@ -1,5 +1,5 @@
 ---
-version: 1.29.23
+version: 1.29.24
 ---
 
 # Maestro Harness Protocol
@@ -114,6 +114,11 @@ proof. Close Progress rows with `maestro task done <ref> --proof "<evidence>"`.
 Verification matches each `--claim` against recorded/inline proof; empty claims
 fail. Repair proof/verification failures with the active recipe or
 `maestro task proof`. Corrections: `maestro event intervention --note "<what was wrong>"`.
+post-implementation close witness: after task proof, `maestro feature verify`,
+and QA slice evidence are current, route through `maestro-witness` before
+`maestro feature close`. The witness does not replace task proof, feature
+verify, or QA; it signs off the current handoff, proof, QA, and tree refs and
+requires an independent advisor receipt unless an explicit T0 user skip applies.
 
 ## Design + Coordination
 

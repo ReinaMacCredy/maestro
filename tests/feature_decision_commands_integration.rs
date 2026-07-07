@@ -1,5 +1,6 @@
 pub mod card_support;
 mod support;
+mod witness_support;
 
 use std::fs;
 use std::os::unix::fs as unix_fs;
@@ -23,6 +24,7 @@ use maestro::foundation::core::time::utc_now_timestamp;
 use serde_json::{Value as JsonValue, json};
 use serde_yaml::Value as YamlValue;
 use support::TestTempDir;
+use witness_support::write_valid_witness;
 
 fn maestro(args: &[&str], cwd: &Path) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_maestro"))
@@ -791,6 +793,7 @@ fn feature_verify_sweeps_acceptance_contract() {
         sweep.contains("ok: every acceptance item has evidence"),
         "{sweep}"
     );
+    write_valid_witness(&MaestroPaths::new(temp_dir.path()), "contract-sweep");
 
     let close_preview = stdout(
         maestro(
@@ -971,6 +974,7 @@ fn feature_contract_display_warnings_waivers_and_stale_sweep() {
         sweep.contains("ok: every acceptance item has evidence"),
         "{sweep}"
     );
+    write_valid_witness(&MaestroPaths::new(temp_dir.path()), "coverage-display");
     let close_preview = stdout(
         maestro(
             &[
@@ -3184,7 +3188,7 @@ fn feature_verify_green_sweep_prints_state_appropriate_next_hint() {
     );
     assert!(close_sweep.contains("ok: every acceptance item has evidence"));
     assert!(
-        close_sweep.contains("next: maestro feature close close-hint --outcome \"<outcome>\""),
+        close_sweep.contains("not yet closable:") && close_sweep.contains("skill: maestro-witness"),
         "{close_sweep}"
     );
 
@@ -5957,6 +5961,7 @@ fn verify_acceptance(root: &Path, slug: &str) {
         maestro(&["feature", "verify", slug], root),
         &["feature", "verify", slug],
     );
+    write_valid_witness(&MaestroPaths::new(root), slug);
 }
 
 #[test]

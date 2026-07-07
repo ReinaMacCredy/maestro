@@ -1,6 +1,6 @@
 ---
 name: maestro-audit
-version: 1.13.6
+version: 1.13.7
 description: "Audit a project using Maestro read-only: use for code review, architecture review, deepening opportunities, backlog proposals, harness-improvement findings, or repo-wide improvement audits without fixes."
 ---
 
@@ -36,6 +36,9 @@ recipe mutation, hidden stores, hidden schedulers, or proof/QA bypass.
 Do not implement, edit code, or change repo artifacts during this skill run.
 Produce proposals only. Temp HTML architecture reports are allowed when the
 architecture-review branch asks for them.
+Audit findings are backlog-only during witness sign-off. File durable proposals
+with `maestro harness propose`; they do not become close blockers unless they
+invalidate the accepted contract, proof, QA, or risk-tier policy.
 
 ## Do
 

@@ -1,4 +1,5 @@
 mod support;
+mod witness_support;
 
 use std::fs;
 
@@ -10,6 +11,7 @@ use maestro::foundation::core::fs::ensure_dir;
 use maestro::foundation::core::hash::sha256_prefixed;
 use maestro::foundation::core::paths::MaestroPaths;
 use support::TestTempDir;
+use witness_support::write_valid_witness;
 
 /// Write a feature card directly into the flat card store. `contents` is the raw
 /// `card.yaml` body; callers pass a well-formed card envelope (`BAD_RECORD`) or
@@ -86,6 +88,7 @@ fn verify_contract(paths: &MaestroPaths, id: &str) {
     )
     .expect("invariant: proof should record");
     feature::verify_feature(paths, id, Vec::new()).expect("invariant: sweep should succeed");
+    write_valid_witness(paths, id);
 }
 
 fn init_git_repo(repo: &std::path::Path) -> Repository {
@@ -686,6 +689,33 @@ fn close_blocks_on_live_child_task() {
     let closed =
         feature::close(&paths, "billing-csv", None, false).expect("invariant: close succeeds");
     assert_eq!(closed.status, feature::FeatureStatus::Closed);
+}
+
+#[test]
+fn close_blocks_without_witness_receipt() {
+    let temp = TestTempDir::new("maestro-feature-witness-missing");
+    let paths = MaestroPaths::new(temp.path());
+
+    feature::create(&paths, "Billing CSV", None).expect("invariant: create should succeed");
+    author_contract(&paths, "billing-csv");
+    feature::accept(&paths, "billing-csv", false).expect("invariant: accept should succeed");
+    feature::start(&paths, "billing-csv").expect("invariant: start should succeed");
+    feature::verify_feature(
+        &paths,
+        "billing-csv",
+        vec![feature::FeatureProofUpdate::Explicit {
+            ac_id: "ac-1".to_string(),
+            evidence: "fixture evidence".to_string(),
+        }],
+    )
+    .expect("invariant: proof should record");
+    feature::verify_feature(&paths, "billing-csv", Vec::new())
+        .expect("invariant: sweep should succeed");
+
+    let error = feature::close(&paths, "billing-csv", None, false)
+        .expect_err("invariant: close must block without witness");
+
+    assert!(error.to_string().contains("witness.md missing"), "{error}");
 }
 
 #[test]

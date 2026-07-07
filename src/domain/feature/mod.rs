@@ -8,6 +8,7 @@ pub(crate) mod registry;
 pub mod schema;
 mod staleness;
 mod verification;
+mod witness;
 pub(crate) mod worktree;
 
 pub use archive::{

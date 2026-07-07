@@ -33,7 +33,7 @@ static PLAYBOOK_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/embedded/playbo
 /// The shipped DESIGN.md catalog, served from the binary instead of extracted.
 static DESIGN_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/embedded/design");
 /// `(group, name, shipped version, sha256 tree-hash of the resource files)`.
-const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 21] = [
+const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 22] = [
     (
         "skill",
         "ask-maestro",
@@ -49,8 +49,14 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 21] = [
     (
         "skill",
         "maestro-card",
-        "1.37.22",
-        "27911aaa4f69ca6c7763e4d92fe18e12cb79c71d8d855f74e0ad68f97f31d3fc",
+        "1.37.23",
+        "c36be5936a57bd076e15c2d459bf29fbcb7c38a0de92a778a8e93bf9dc7f593b",
+    ),
+    (
+        "skill",
+        "maestro-witness",
+        "1.0.1",
+        "554cb2e28d16383dea636e443910b30158ad50981b56f48b14cdfefa0de2b1a6",
     ),
     (
         "skill",
@@ -67,8 +73,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 21] = [
     (
         "skill",
         "maestro-audit",
-        "1.13.6",
-        "e979f7e5b87bce68ae9794890e49eac941031bed30718fcb4608fbb73eb5fc8b",
+        "1.13.7",
+        "386d1e23ea9c12720a76721ec395344ee157bc4e4202ed11fbdd1cbdb7992157",
     ),
     (
         "hook",
@@ -79,8 +85,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 21] = [
     (
         "harness",
         "HARNESS.md",
-        "1.29.23",
-        "91eff2ec8ef49713d5ac29e4d893bd9812fac45a75abe4e128a701d5aa61b61a",
+        "1.29.24",
+        "a0f4ec145a68502f16c9684ff2e561858689da07684e7703cc1e1babed1a9569",
     ),
     (
         "playbook",
@@ -696,7 +702,7 @@ fn shipped_harness_and_skills_adopt_lifecycle_recipe_checkpoints() {
 fn native_layer_guidance_lives_in_targeted_teaching_surfaces() {
     let harness = normalize_markdown(HARNESS_MD);
     let design = normalize_markdown(&shipped_skill_md("maestro-design"));
-    let card = normalize_markdown(&shipped_skill_md("maestro-card"));
+    let card = normalize_markdown(&shipped_skill_body("maestro-card"));
     let audit = normalize_markdown(&shipped_skill_md("maestro-audit"));
     let setup = normalize_markdown(&shipped_skill_md("maestro-setup"));
 
@@ -794,6 +800,77 @@ fn shipped_guidance_routes_weak_context_to_maestro_research_without_harness_spra
         assert!(
             !harness.contains(forbidden),
             "harness must stay router-only and exclude research contract phrase {forbidden:?}"
+        );
+    }
+}
+
+#[test]
+fn maestro_witness_skill_teaches_close_receipt_contract() {
+    let witness = shipped_skill_body("maestro-witness").replace('\n', " ");
+    for phrase in [
+        "witness.md",
+        "advisor.md",
+        "Gate: APPROVED",
+        "witness conductor",
+        "advisor independence",
+        "independent_session: true",
+        "risk_tier: T0",
+        "risk_tier: T1",
+        "risk_tier: T2",
+        "risk_tier: T3",
+        "demo_waived: true",
+        "expert_escalation: satisfied",
+        "contract_ref",
+        "proof_ref",
+        "qa_ref",
+        "tree_ref",
+        "Do not paste large code dumps",
+        "audit is backlog-only",
+    ] {
+        assert!(
+            witness.contains(phrase),
+            "maestro-witness must teach close receipt phrase {phrase:?}"
+        );
+    }
+}
+
+#[test]
+fn lifecycle_guidance_routes_close_through_witness_without_replacing_proof() {
+    let harness = normalize_markdown(HARNESS_MD);
+    let card = normalize_markdown(&shipped_skill_body("maestro-card"));
+    let audit = normalize_markdown(&shipped_skill_md("maestro-audit"));
+
+    for phrase in [
+        "post-implementation close witness",
+        "`maestro-witness`",
+        "after task proof, `maestro feature verify`, and QA slice evidence",
+        "witness does not replace task proof, feature verify, or QA",
+    ] {
+        assert!(
+            harness.contains(phrase),
+            "harness must route close through witness phrase {phrase:?}"
+        );
+    }
+
+    for phrase in [
+        "`maestro-witness` -> `maestro feature close`",
+        "after [qa-slice.md](qa-slice.md)",
+        "does not replace `maestro feature verify`, task proof, or QA",
+    ] {
+        assert!(
+            card.contains(phrase),
+            "maestro-card must route close through witness phrase {phrase:?}"
+        );
+    }
+
+    for phrase in [
+        "Audit findings are backlog-only during witness sign-off",
+        "`maestro harness propose`",
+        "do not become close blockers unless they invalidate the accepted contract, proof, QA, or risk-tier policy",
+    ] {
+        assert!(
+            audit.contains(phrase),
+            "maestro-audit must preserve witness audit-boundary phrase {phrase:?}"
         );
     }
 }

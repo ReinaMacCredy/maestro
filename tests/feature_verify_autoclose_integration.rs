@@ -5,6 +5,7 @@
 //! the trigger confinement (a non-`--prove` verify must not auto-close).
 
 mod support;
+mod witness_support;
 
 use std::fs;
 use std::path::Path;
@@ -13,6 +14,7 @@ use std::process::Command;
 use maestro::domain::feature;
 use maestro::foundation::core::paths::MaestroPaths;
 use support::TestTempDir;
+use witness_support::write_valid_witness;
 
 fn maestro(args: &[&str], cwd: &Path) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_maestro"))
@@ -112,10 +114,22 @@ fn prove(repo: &Path, id: &str, ac: &str, extra: &[&str]) -> std::process::Outpu
     maestro(&args, repo)
 }
 
-/// bl-001: proving the last acceptance item auto-runs the full gate + terminal
-/// close in the same call, with no separate `feature close`.
+fn write_t0_skip_witness(repo: &Path, id: &str) {
+    let witness = "# Witness Brief\n\
+skipped: true\n\
+tier: T0\n\
+skipped_by: user\n\
+user_authorization_ref: test:user-authorization\n\
+skip_reason: fixture has no independent review surface\n\
+changed_surface: none\n";
+    feature::write_sidecar_text(&MaestroPaths::new(repo), id, "witness.md", witness)
+        .expect("invariant: witness.md should be writable");
+}
+
+/// bl-001: proving the last acceptance item keeps the proof, but witness/advisor
+/// receipts now block the terminal close until the independent review exists.
 #[test]
-fn last_prove_auto_closes_in_the_same_call() {
+fn last_prove_reports_missing_witness_instead_of_auto_closing() {
     let temp = TestTempDir::new("maestro-autoclose-last-prove");
     let repo = temp.path();
     started_feature_two_acceptances(repo, "report-builder");
@@ -125,45 +139,30 @@ fn last_prove_auto_closes_in_the_same_call() {
     let first = prove(repo, "report-builder", "ac-1", &[]);
     assert!(first.status.success());
 
-    // Second (last) proof: completes readiness -> auto-close.
+    // Second (last) proof completes proof readiness, but close now needs witness.
     let last = prove(repo, "report-builder", "ac-2", &[]);
     let out = stdout(last, &["feature", "verify", "--prove", "ac-2"]);
     assert!(
-        out.contains("auto-closing"),
-        "should announce auto-close: {out}"
-    );
-    assert!(
-        out.contains("full verify suite passed"),
-        "the full suite ran: {out}"
-    );
-    assert!(
-        out.contains("close receipt"),
-        "close receipt printed: {out}"
-    );
-    assert!(
-        out.contains("auto-archive skipped:"),
-        "marker-only autoclose should keep close successful and explain skipped archive: {out}"
-    );
-    assert!(
-        out.contains("git state is unavailable"),
-        "skipped archive names the missing git authority: {out}"
+        out.contains("not yet closable") && out.contains("witness.md missing"),
+        "last proof should preserve proof and name the witness gate: {out}"
     );
 
     let show = stdout(
         maestro(&["feature", "show", "report-builder"], repo),
         &["feature", "show"],
     );
-    assert!(show.contains("closed"), "feature must be closed: {show}");
+    assert!(show.contains("in_progress"), "feature stays open: {show}");
 }
 
-/// bl-005: an auto-close with no `--outcome` records a generated AC-proof summary;
-/// `--outcome` on the triggering verify is recorded verbatim.
+/// bl-005: when an explicit T0 user-authorized skip receipt lets auto-close run,
+/// no `--outcome` records a generated AC-proof summary.
 #[test]
-fn auto_close_records_default_outcome() {
+fn auto_close_records_default_outcome_with_t0_skip() {
     let temp = TestTempDir::new("maestro-autoclose-default-outcome");
     let repo = temp.path();
     started_feature_two_acceptances(repo, "report-builder");
     write_stack_verify(repo, "true");
+    write_t0_skip_witness(repo, "report-builder");
 
     stdout(
         prove(repo, "report-builder", "ac-1", &[]),
@@ -185,11 +184,12 @@ fn auto_close_records_default_outcome() {
 }
 
 #[test]
-fn auto_close_uses_explicit_outcome_override() {
+fn auto_close_uses_explicit_outcome_override_with_t0_skip() {
     let temp = TestTempDir::new("maestro-autoclose-outcome-override");
     let repo = temp.path();
     started_feature_two_acceptances(repo, "report-builder");
     write_stack_verify(repo, "true");
+    write_t0_skip_witness(repo, "report-builder");
 
     stdout(
         prove(repo, "report-builder", "ac-1", &[]),
@@ -246,7 +246,8 @@ fn no_close_defers_the_auto_fire() {
         "deferred feature stays in_progress: {show}"
     );
 
-    // Explicit close still closes it.
+    // Explicit close still closes it once the post-proof witness exists.
+    write_valid_witness(&MaestroPaths::new(repo), "report-builder");
     let closed = stdout(
         maestro(
             &["feature", "close", "report-builder", "--outcome", "done"],
@@ -288,14 +289,15 @@ fn one_acceptance_left_nudges_on_stderr() {
     assert!(show.contains("in_progress"), "still in_progress: {show}");
 }
 
-/// bl-006: when the auto-fired suite fails, the proof is kept, the feature stays
-/// in_progress, the suite output is surfaced, and the command exits non-zero.
+/// bl-006: when auto-close is authorized by a T0 skip but the suite fails, the
+/// proof is kept, the feature stays in_progress, and the command exits non-zero.
 #[test]
-fn auto_close_suite_failure_keeps_proof_and_stays_in_progress() {
+fn auto_close_suite_failure_keeps_proof_and_stays_in_progress_with_t0_skip() {
     let temp = TestTempDir::new("maestro-autoclose-suite-fail");
     let repo = temp.path();
     started_feature_two_acceptances(repo, "report-builder");
     write_stack_verify(repo, "false");
+    write_t0_skip_witness(repo, "report-builder");
 
     stdout(
         prove(repo, "report-builder", "ac-1", &[]),
@@ -331,16 +333,15 @@ fn auto_close_suite_failure_keeps_proof_and_stays_in_progress() {
     );
 }
 
-/// A `--waive` that completes close-readiness also auto-closes: the trigger is the
-/// recorded-update branch (prove OR waive), consistent with the fully-automatic
-/// decision. D4 confines the trigger to `feature verify` (never task verify); it
-/// does not single out `--prove` over `--waive` within a feature verify.
+/// A `--waive` that completes close-readiness also auto-closes when a T0 skip
+/// receipt has explicit user authorization.
 #[test]
-fn waive_completing_readiness_also_auto_closes() {
+fn waive_completing_readiness_auto_closes_with_t0_skip() {
     let temp = TestTempDir::new("maestro-autoclose-waive");
     let repo = temp.path();
     started_feature_two_acceptances(repo, "report-builder");
     write_stack_verify(repo, "true");
+    write_t0_skip_witness(repo, "report-builder");
 
     stdout(
         prove(repo, "report-builder", "ac-1", &[]),
