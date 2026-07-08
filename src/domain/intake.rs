@@ -1,5 +1,7 @@
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
+use crate::domain::card::store as card_store;
 use crate::domain::feature::{self, FeatureStatus};
 use crate::foundation::core::hash::sha256_hex;
 use crate::foundation::core::paths::MaestroPaths;
@@ -115,7 +117,7 @@ pub fn classify(
     paths: &MaestroPaths,
     raw: &str,
     source_provenance: SourceProvenance,
-) -> IntakeReport {
+) -> Result<IntakeReport> {
     let parsed = parse_frontmatter(raw);
     let mut missing = Vec::new();
     let mut blocked_by = Vec::new();
@@ -141,9 +143,10 @@ pub fn classify(
         missing.push(STRUCTURED_ROUTE_HINT.to_string());
     }
 
-    let owner = frontmatter
+    let raw_owner = frontmatter
         .as_ref()
         .and_then(|frontmatter| present(frontmatter.owner.as_deref()).map(str::to_string));
+    let owner = validate_owner(paths, raw_owner.as_deref(), &mut missing, &mut blocked_by)?;
     let route = match route_hint.as_deref() {
         Some("design_required") => IntakeRoute::DesignRequired,
         Some("card_ready") => classify_card_ready(frontmatter.as_ref(), &owner, &mut missing),
@@ -162,7 +165,7 @@ pub fn classify(
         None => IntakeRoute::DesignRequired,
     };
 
-    IntakeReport {
+    Ok(IntakeReport {
         version: 1,
         schema: "maestro.intake.v1",
         next: next_command(&route, owner.as_deref()),
@@ -173,7 +176,7 @@ pub fn classify(
         blocked_by,
         writes_allowed: false,
         source_provenance,
-    }
+    })
 }
 
 fn classify_card_ready(
@@ -258,6 +261,28 @@ fn card_ready_missing(
         found_gap = true;
     }
     found_gap
+}
+
+fn validate_owner(
+    paths: &MaestroPaths,
+    owner: Option<&str>,
+    missing: &mut Vec<String>,
+    blocked_by: &mut Vec<String>,
+) -> Result<Option<String>> {
+    let Some(owner) = owner else {
+        return Ok(None);
+    };
+    if card_store::validate_card_id(owner).is_err() {
+        missing.push("valid owner".to_string());
+        blocked_by.push("owner must be a single Maestro card or feature id".to_string());
+        return Ok(None);
+    }
+    if feature::show(paths, owner).is_err() {
+        missing.push("existing owner".to_string());
+        blocked_by.push(format!("owner feature {owner} does not exist"));
+        return Ok(Some(owner.to_string()));
+    }
+    Ok(Some(owner.to_string()))
 }
 
 fn next_command(route: &IntakeRoute, owner: Option<&str>) -> String {

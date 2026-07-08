@@ -8,9 +8,26 @@ use crate::foundation::core::time::{parse_utc_timestamp, utc_now_timestamp};
 const SCHEMA: &str = "maestro.research_check.v1";
 const RESEARCH_FILE: &str = "research.md";
 const FRESH_NANOS: i128 = 7 * 86_400 * 1_000_000_000;
+const SECTION_HEADINGS: &[&str] = &[
+    "Research Status",
+    "Hosting",
+    "Problem",
+    "Users / Stakeholders",
+    "Current Context",
+    "Constraints",
+    "Unknowns",
+    "Assumptions",
+    "Landscape",
+    "Recommended First Design Fork",
+    "Stakeholder Actions",
+    "Research Validity",
+    "Gate",
+];
+const SUBSECTION_HEADINGS: &[&str] = &["Blocking", "Important but non-blocking", "Safe to defer"];
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct ResearchCheckReport {
+    pub version: u32,
     pub schema: &'static str,
     pub card: String,
     pub status: String,
@@ -103,6 +120,7 @@ pub fn check(
     let status = public_status(&receipt, &reasons);
     let next = next_step(&status, &reasons);
     Ok(ResearchCheckReport {
+        version: 1,
         schema: SCHEMA,
         card: card_id.to_string(),
         status,
@@ -123,6 +141,7 @@ pub fn check(
 fn missing_report(card_id: &str) -> ResearchCheckReport {
     ResearchCheckReport {
         schema: SCHEMA,
+        version: 1,
         card: card_id.to_string(),
         status: "missing".to_string(),
         gate: None,
@@ -144,6 +163,8 @@ fn public_status(receipt: &Receipt, reasons: &[String]) -> String {
         "hosting_mismatch".to_string()
     } else if reasons.iter().any(|reason| reason == "stale") {
         "stale".to_string()
+    } else if receipt.skipped && reasons.iter().any(|reason| reason == "skip_risky") {
+        "risky_skipped".to_string()
     } else if receipt.skipped {
         "skipped".to_string()
     } else if reasons.is_empty() && receipt.gate.as_deref() == Some("READY_FOR_DESIGN") {
@@ -156,6 +177,8 @@ fn public_status(receipt: &Receipt, reasons: &[String]) -> String {
 fn next_step(status: &str, reasons: &[String]) -> String {
     if status == "ready" {
         "maestro-design may start".to_string()
+    } else if status == "skipped" && reasons.iter().any(|reason| reason == "skip_valid") {
+        "maestro-design may start from the valid skip receipt".to_string()
     } else if reasons.iter().any(|reason| reason == "research_missing") {
         "run maestro-research or record an explicit skip receipt".to_string()
     } else if reasons.iter().any(|reason| reason == "hosting_mismatch") {
@@ -239,7 +262,7 @@ impl Receipt {
                 | "clearly settled context"
         );
         whitelisted
-            && by != "user"
+            && by == "agent"
             && self.skip_evidence.is_some()
             && self.unresolved_risks.is_empty()
     }
@@ -256,6 +279,16 @@ fn section(raw: &str, heading: &str) -> Option<String> {
             }
             active = current.trim().eq_ignore_ascii_case(heading);
             continue;
+        }
+        if is_label_heading(line, heading) {
+            if active {
+                break;
+            }
+            active = true;
+            continue;
+        }
+        if active && is_any_section_heading(line) {
+            break;
         }
         if active {
             body.push(line);
@@ -276,11 +309,60 @@ fn subsection(raw: &str, heading: &str) -> Option<String> {
             active = current.trim().eq_ignore_ascii_case(heading);
             continue;
         }
+        if is_label_heading(line, heading) {
+            if active {
+                break;
+            }
+            active = true;
+            continue;
+        }
+        if active && is_any_subsection_heading(line) {
+            break;
+        }
         if active {
             body.push(line);
         }
     }
     active.then(|| body.join("\n"))
+}
+
+fn is_label_heading(line: &str, heading: &str) -> bool {
+    label_heading(line).is_some_and(|label| label.eq_ignore_ascii_case(heading))
+}
+
+fn is_any_section_heading(line: &str) -> bool {
+    let trimmed = line.trim();
+    if trimmed.starts_with("## ") {
+        return true;
+    }
+    label_heading(line).is_some_and(|label| {
+        SECTION_HEADINGS
+            .iter()
+            .any(|heading| label.eq_ignore_ascii_case(heading))
+    })
+}
+
+fn is_any_subsection_heading(line: &str) -> bool {
+    let trimmed = line.trim();
+    if trimmed.starts_with("### ") {
+        return true;
+    }
+    label_heading(line).is_some_and(|label| {
+        SUBSECTION_HEADINGS
+            .iter()
+            .any(|heading| label.eq_ignore_ascii_case(heading))
+    })
+}
+
+fn label_heading(line: &str) -> Option<&str> {
+    let trimmed = line.trim();
+    if line.starts_with(char::is_whitespace) || trimmed.starts_with('-') {
+        return None;
+    }
+    trimmed
+        .strip_suffix(':')
+        .map(str::trim)
+        .filter(|label| !label.is_empty())
 }
 
 fn bool_field(body: &str, key: &str) -> bool {

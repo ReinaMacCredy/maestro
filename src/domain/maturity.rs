@@ -1,9 +1,11 @@
 use std::fs;
+use std::io::ErrorKind;
 
 use anyhow::Result;
 use serde::Serialize;
 
 use crate::domain::feature;
+use crate::domain::feature::AcceptanceProof;
 use crate::domain::harness;
 use crate::foundation::core::paths::MaestroPaths;
 
@@ -68,6 +70,7 @@ pub struct FrictionReadout {
     pub ux_gap_entries: usize,
     pub harness_backlog_items: usize,
     pub recurring_items: Vec<FrictionItem>,
+    pub diagnostics: Vec<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -102,7 +105,7 @@ pub fn report(paths: &MaestroPaths, target: Option<&str>) -> Result<MaturityRepo
         },
         None => FeatureReadout::NotRequested,
     };
-    let proof = proof_readout(&feature_readout);
+    let proof = proof_readout(paths, &feature_readout)?;
     let friction = friction_readout(paths);
     let context = context_readout(paths, target, &feature_readout, &proof);
     let maturity = maturity_level(&context, &proof, &friction);
@@ -126,48 +129,58 @@ enum FeatureReadout {
     Missing { id: String, error: String },
 }
 
-fn proof_readout(feature: &FeatureReadout) -> ProofReadout {
+fn proof_readout(paths: &MaestroPaths, feature: &FeatureReadout) -> Result<ProofReadout> {
     let FeatureReadout::Present(feature) = feature else {
-        return ProofReadout {
+        return Ok(ProofReadout {
             total: 0,
             complete: 0,
             partial: 0,
             incomplete: 0,
             gaps: Vec::new(),
-        };
+        });
     };
-    let coverage = feature.acceptance_coverage.clone().unwrap_or_default();
-    let gaps = coverage
+    let sweep = feature::current_acceptance_sweep(paths, &feature.id)?;
+    let gaps = sweep
+        .items
         .iter()
-        .filter(|item| item.tasks.is_empty())
+        .filter(|item| matches!(item.proof, AcceptanceProof::Missing))
         .map(|item| ProofGap {
             ac_id: item.ac_id.clone(),
             text: item.text.clone(),
             owner_surface: "feature_proof".to_string(),
         })
         .collect::<Vec<_>>();
-    let total = coverage.len();
+    let total = sweep.items.len();
     let incomplete = gaps.len();
-    ProofReadout {
+    Ok(ProofReadout {
         total,
         complete: total.saturating_sub(incomplete),
         partial: 0,
         incomplete,
         gaps,
-    }
+    })
 }
 
 fn friction_readout(paths: &MaestroPaths) -> FrictionReadout {
-    let ux_gap_entries = fs::read_to_string(paths.repo_root().join("UX_GAPS.md"))
-        .map(|raw| {
-            raw.lines()
-                .filter(|line| line.trim_start().starts_with("- Surface:"))
-                .count()
-        })
-        .unwrap_or(0);
-    let items = harness::backlog::load(paths)
-        .map(|backlog| backlog.items)
-        .unwrap_or_default();
+    let mut diagnostics = Vec::new();
+    let ux_gap_entries = match fs::read_to_string(paths.repo_root().join("UX_GAPS.md")) {
+        Ok(raw) => raw
+            .lines()
+            .filter(|line| line.trim_start().starts_with("- Surface:"))
+            .count(),
+        Err(error) if error.kind() == ErrorKind::NotFound => 0,
+        Err(error) => {
+            diagnostics.push(format!("UX_GAPS.md unreadable: {error}"));
+            0
+        }
+    };
+    let items = match harness::backlog::load(paths) {
+        Ok(backlog) => backlog.items,
+        Err(error) => {
+            diagnostics.push(format!("harness backlog unreadable: {error}"));
+            Vec::new()
+        }
+    };
     let recurring_items = items
         .iter()
         .filter(|item| item.occurrences > 1 || item.sessions_hit.len() > 1)
@@ -183,6 +196,7 @@ fn friction_readout(paths: &MaestroPaths) -> FrictionReadout {
         ux_gap_entries,
         harness_backlog_items: items.len(),
         recurring_items,
+        diagnostics,
     }
 }
 
@@ -285,7 +299,10 @@ fn maturity_level(
     if proof.incomplete > 0 {
         blocked.push("proof_gaps".to_string());
     }
-    if friction.ux_gap_entries > 0 || !friction.recurring_items.is_empty() {
+    if friction.ux_gap_entries > 0
+        || !friction.recurring_items.is_empty()
+        || !friction.diagnostics.is_empty()
+    {
         blocked.push("friction".to_string());
     }
 
@@ -300,6 +317,7 @@ fn maturity_level(
     } else if proof.incomplete > 0
         || friction.ux_gap_entries > 0
         || !friction.recurring_items.is_empty()
+        || !friction.diagnostics.is_empty()
     {
         (
             "L1 report",
@@ -342,7 +360,10 @@ fn next_owner(
             command: format!("maestro feature prepare {target} --draft"),
         };
     }
-    if friction.ux_gap_entries > 0 || !friction.recurring_items.is_empty() {
+    if friction.ux_gap_entries > 0
+        || !friction.recurring_items.is_empty()
+        || !friction.diagnostics.is_empty()
+    {
         return NextOwnerReadout {
             surface: "harness_backlog".to_string(),
             command: "maestro harness list".to_string(),

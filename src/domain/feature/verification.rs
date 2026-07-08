@@ -88,6 +88,20 @@ pub fn uncovered_acceptance(paths: &MaestroPaths, feature_id: &str) -> Result<Ve
         .collect())
 }
 
+pub fn current_acceptance_sweep(
+    paths: &MaestroPaths,
+    feature_id: &str,
+) -> Result<AcceptanceSweepReport> {
+    let record = registry::load_record(paths, feature_id)?;
+    let task_entries = task::load_task_entries(&paths.tasks_dir())?;
+    sweep_acceptance(
+        paths,
+        &record,
+        record.acceptance_sweeps.last().map(|run| run.at.as_str()),
+        &task_entries,
+    )
+}
+
 pub fn verify_feature(
     paths: &MaestroPaths,
     feature_id: &str,

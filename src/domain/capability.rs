@@ -121,8 +121,11 @@ struct ProviderDeclaration {
 
 #[derive(Clone, Debug, Default, Deserialize)]
 struct HostReceipt {
+    schema: Option<String>,
     status: Option<String>,
     detail: Option<String>,
+    issued_by: Option<String>,
+    issued_at: Option<String>,
 }
 
 pub fn report(paths: &MaestroPaths, from: Option<&Path>) -> Result<CapabilityReport> {
@@ -383,6 +386,38 @@ fn evaluate_receipt_provider(
             );
         }
     };
+    if receipt.schema.as_deref() != Some("maestro.capability-receipt.v1") {
+        return (
+            ProviderStatus::Unverified,
+            ProviderEvidence {
+                kind: "host_receipt".to_string(),
+                reference,
+                detail: "receipt schema missing or unsupported".to_string(),
+            },
+        );
+    }
+    if receipt
+        .issued_by
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .is_none()
+        || receipt
+            .issued_at
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .is_none()
+    {
+        return (
+            ProviderStatus::Unverified,
+            ProviderEvidence {
+                kind: "host_receipt".to_string(),
+                reference,
+                detail: "receipt issuer metadata missing".to_string(),
+            },
+        );
+    }
     let status = parse_provider_status(receipt.status.as_deref());
     (
         status,
@@ -506,12 +541,34 @@ fn is_within_repo(repo_root: &Path, path: &Path) -> bool {
 
 fn redact_sensitive_detail(detail: &str) -> String {
     static SECRET_ASSIGNMENT: OnceLock<Regex> = OnceLock::new();
+    static BEARER_TOKEN: OnceLock<Regex> = OnceLock::new();
+    static COMMON_TOKEN: OnceLock<Regex> = OnceLock::new();
+    static PEM_BLOCK: OnceLock<Regex> = OnceLock::new();
     let secret_assignment = SECRET_ASSIGNMENT.get_or_init(|| {
         Regex::new(r"(?i)\b(api[_-]?key|apikey|token|secret|password)\s*[:=]\s*[^\s,;]+")
             .expect("invariant: capability redaction regex compiles")
     });
-    secret_assignment
+    let bearer_token = BEARER_TOKEN.get_or_init(|| {
+        Regex::new(r"(?i)\b(bearer|authorization)\s+[^,\s;]+")
+            .expect("invariant: capability bearer redaction regex compiles")
+    });
+    let common_token = COMMON_TOKEN.get_or_init(|| {
+        Regex::new(r"\b(sk-[A-Za-z0-9_-]{8,}|gh[pousr]_[A-Za-z0-9_]{8,})\b")
+            .expect("invariant: capability token redaction regex compiles")
+    });
+    let pem_block = PEM_BLOCK.get_or_init(|| {
+        Regex::new(r"(?s)-----BEGIN [^-]+-----.*?-----END [^-]+-----")
+            .expect("invariant: capability PEM redaction regex compiles")
+    });
+    let detail = secret_assignment
         .replace_all(detail, "$1=[redacted]")
+        .into_owned();
+    let detail = bearer_token
+        .replace_all(&detail, "$1 [redacted]")
+        .into_owned();
+    let detail = common_token.replace_all(&detail, "[redacted]").into_owned();
+    pem_block
+        .replace_all(&detail, "[redacted-pem-block]")
         .into_owned()
 }
 

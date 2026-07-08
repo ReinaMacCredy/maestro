@@ -366,6 +366,7 @@ fn feature_domain_facade_exposes_the_deliberate_surface() {
             "archive_loose".to_string(),
             "cancel".to_string(),
             "create".to_string(),
+            "current_acceptance_sweep".to_string(),
             "diagnose".to_string(),
             "ensure_exists".to_string(),
             "feature_sidecar_dir".to_string(),

@@ -67,14 +67,19 @@ fn capability_report_distinguishes_provider_states() {
         .expect("invariant: receipt fixture dir should write");
     fs::write(
         maestro_dir.join("receipts/github-write.yml"),
-        "schema: maestro.capability-receipt.v1\nstatus: denied\ndetail: host policy denied write access\n",
+        "schema: maestro.capability-receipt.v1\nissued_by: codex-host\nissued_at: 2026-07-08T00:00:00.000Z\nstatus: denied\ndetail: host policy denied write access\n",
     )
     .expect("invariant: denied receipt should write");
     fs::write(
         maestro_dir.join("receipts/docs-lookup.yml"),
-        "schema: maestro.capability-receipt.v1\nstatus: unverified\ndetail: connector was not exercised in this session\n",
+        "schema: maestro.capability-receipt.v1\nissued_by: codex-host\nissued_at: 2026-07-08T00:00:00.000Z\nstatus: unverified\ndetail: connector was not exercised in this session\n",
     )
     .expect("invariant: unverified receipt should write");
+    fs::write(
+        maestro_dir.join("receipts/self-declared.yml"),
+        "schema: maestro.capability-receipt.v1\nstatus: present\ndetail: no host issuer metadata\n",
+    )
+    .expect("invariant: self-declared receipt should write");
     fs::write(
         maestro_dir.join("capabilities.yml"),
         "\
@@ -103,6 +108,12 @@ capabilities:
       - name: browser
         kind: host_receipt
         receipt: receipts/docs-lookup.yml
+  - id: self-declared
+    active: true
+    providers:
+      - name: local-note
+        kind: host_receipt
+        receipt: receipts/self-declared.yml
   - id: deploy-verification
     active: false
     providers:
@@ -119,7 +130,7 @@ capabilities:
     let json = stdout_json(&output);
     assert_eq!(json["registry"]["present"], true);
     let capabilities = json["capabilities"].as_array().unwrap();
-    assert_eq!(capabilities.len(), 4);
+    assert_eq!(capabilities.len(), 5);
 
     let impact = capability(capabilities, "impact-analysis");
     assert_eq!(impact["status"], "present");
@@ -134,6 +145,17 @@ capabilities:
     let docs_lookup = capability(capabilities, "docs-lookup");
     assert_eq!(docs_lookup["status"], "unverified");
     assert_eq!(provider(docs_lookup, "browser")["status"], "unverified");
+
+    let self_declared = capability(capabilities, "self-declared");
+    assert_eq!(self_declared["status"], "unverified");
+    assert_eq!(
+        provider(self_declared, "local-note")["status"],
+        "unverified"
+    );
+    assert_eq!(
+        provider(self_declared, "local-note")["evidence"]["detail"],
+        "receipt issuer metadata missing"
+    );
 
     let deploy = capability(capabilities, "deploy-verification");
     assert_eq!(deploy["status"], "inactive");
@@ -150,7 +172,7 @@ fn capability_report_preserves_permission_and_scope_boundaries() {
     fs::create_dir_all(&receipts).expect("invariant: receipt dir should write");
     fs::write(
         receipts.join("host.yml"),
-        "schema: maestro.capability-receipt.v1\nstatus: present\ndetail: api_key=top-secret-token host allowed local read\n",
+        "schema: maestro.capability-receipt.v1\nissued_by: codex-host\nissued_at: 2026-07-08T00:00:00.000Z\nstatus: present\ndetail: api_key=top-secret-token Authorization Bearer sk-testsecret123 ghp_testsecret123 host allowed local read\n",
     )
     .expect("invariant: receipt fixture should write");
     fs::write(
@@ -180,6 +202,8 @@ capabilities:
     assert_success(&output);
     let stdout = String::from_utf8(output.stdout).expect("stdout should be UTF-8");
     assert!(!stdout.contains("top-secret-token"), "{stdout}");
+    assert!(!stdout.contains("sk-testsecret123"), "{stdout}");
+    assert!(!stdout.contains("ghp_testsecret123"), "{stdout}");
     let json: JsonValue = serde_json::from_str(&stdout).expect("stdout should be JSON");
     assert_eq!(json["schema"], "maestro.capability.v1");
     let capabilities = json["capabilities"].as_array().unwrap();

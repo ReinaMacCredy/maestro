@@ -1,5 +1,5 @@
 ---
-version: 1.29.23
+version: 1.29.25
 ---
 
 # Maestro Harness Protocol
@@ -24,6 +24,12 @@ acceptance, proof gaps, UX friction, maturity level, and next owner. Use
 `maestro install --dry-run` and `maestro sync --dry-run` before setup writes so
 mirror and harness mutations are visible. Generated CLI references prove command
 shape; Harness and targeted skills teach the workflow.
+For zero-context, unfamiliar-domain, externally pasted, stakeholder-heavy, or
+hosting-unclear ideas, route through `maestro-research` before `maestro-design`.
+`maestro-design` may start only from fresh `research.md`, an explicit skip
+receipt, or clearly settled context recorded with evidence. When available, run
+`maestro research check <card-id>` first; if research is missing, stale,
+risky-skipped, or hosting-incompatible, route to `maestro-research`.
 
 ## Route
 

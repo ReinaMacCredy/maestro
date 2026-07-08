@@ -83,7 +83,7 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
         tool(
             "maestro_task_done",
             "Marks a low-ceremony standalone or Chore-owned task done when no explicit verification gate exists.",
-            json!({"type":"object","properties":{"id":{"type":"string"},"summary":{"type":"string"}},"required":["id"]}),
+            json!({"type":"object","properties":{"id":{"type":"string"},"summary":{"type":"string"},"proof":{"type":"array","items":{"type":"string"},"minItems":1}},"required":["id","proof"]}),
         ),
         tool(
             "maestro_task_complete",
@@ -410,6 +410,7 @@ fn task_done(arguments: &Value) -> Result<String> {
         required_string(arguments, "id")?,
     ];
     push_optional_flag(arguments, &mut args, "summary", "--summary");
+    push_repeated_flag(arguments, &mut args, "proof", "--proof")?;
     cli(args)
 }
 

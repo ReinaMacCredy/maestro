@@ -93,13 +93,69 @@ fn freeform_prompt_routes_to_design_required_with_provenance() {
 #[test]
 fn structured_card_ready_intake_routes_to_card_ready() {
     let repo = init_repo("maestro-intake-card-ready");
+    let feature = maestro(
+        &[
+            "feature",
+            "new",
+            "Import API",
+            "--description",
+            "Existing owner",
+            "--id-only",
+        ],
+        repo.path(),
+    );
+    assert_success(&feature);
+    let owner = String::from_utf8(feature.stdout)
+        .expect("feature id should be UTF-8")
+        .trim()
+        .to_string();
+    let intake = repo.path().join("external-spec.md");
+    fs::write(
+        &intake,
+        format!(
+            "\
+---
+route_hint: card_ready
+owner: {owner}
+evidence:
+  acceptance: true
+  affected_areas: true
+---
+# Imported spec
+"
+        ),
+    )
+    .expect("invariant: intake fixture should write");
+
+    let output = maestro(
+        &[
+            "intake",
+            "--from",
+            intake.to_str().expect("fixture path should be UTF-8"),
+            "--json",
+        ],
+        repo.path(),
+    );
+
+    assert_success(&output);
+    let json = stdout_json(&output);
+    assert_eq!(json["route"], "card_ready");
+    assert_eq!(json["route_hint"], "card_ready");
+    assert_eq!(json["owner"], owner);
+    assert!(json["missing"].as_array().unwrap().is_empty());
+    assert_eq!(json["writes_allowed"], false);
+}
+
+#[test]
+fn structured_intake_blocks_unvalidated_owner_strings() {
+    let repo = init_repo("maestro-intake-invalid-owner");
     let intake = repo.path().join("external-spec.md");
     fs::write(
         &intake,
         "\
 ---
 route_hint: card_ready
-owner: import-api
+owner: $(touch /tmp/maestro-owned)
 evidence:
   acceptance: true
   affected_areas: true
@@ -121,11 +177,22 @@ evidence:
 
     assert_success(&output);
     let json = stdout_json(&output);
-    assert_eq!(json["route"], "card_ready");
-    assert_eq!(json["route_hint"], "card_ready");
-    assert_eq!(json["owner"], "import-api");
-    assert!(json["missing"].as_array().unwrap().is_empty());
-    assert_eq!(json["writes_allowed"], false);
+    assert_eq!(json["route"], "design_required");
+    assert_eq!(json["owner"], JsonValue::Null);
+    assert!(
+        json["missing"]
+            .as_array()
+            .unwrap()
+            .contains(&JsonValue::String("valid owner".to_string()))
+    );
+    assert!(
+        json["blocked_by"]
+            .as_array()
+            .unwrap()
+            .contains(&JsonValue::String(
+                "owner must be a single Maestro card or feature id".to_string()
+            ))
+    );
 }
 
 #[test]

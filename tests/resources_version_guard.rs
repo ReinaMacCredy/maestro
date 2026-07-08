@@ -11,6 +11,8 @@
 //! user-visible, bump its version per `AGENTS.md`). It enforces acknowledgement,
 //! not a mechanical bump.
 
+use std::fs;
+
 use include_dir::{Dir, include_dir};
 use maestro::domain::skills::catalog::skills;
 use maestro::foundation::core::hash::sha256_hex;
@@ -800,6 +802,28 @@ fn shipped_guidance_routes_weak_context_to_maestro_research_without_harness_spra
         assert!(
             !harness.contains(forbidden),
             "harness must stay router-only and exclude research contract phrase {forbidden:?}"
+        );
+    }
+}
+
+#[test]
+fn repo_local_harness_copy_retains_shipped_research_router() {
+    let local = normalize_markdown(
+        &fs::read_to_string(".maestro/harness/HARNESS.md")
+            .expect("repo-local harness copy should be readable"),
+    );
+
+    for phrase in [
+        "version: 1.29.25",
+        "zero-context, unfamiliar-domain, externally pasted, stakeholder-heavy, or hosting-unclear ideas",
+        "route through `maestro-research` before `maestro-design`",
+        "fresh `research.md`, an explicit skip receipt, or clearly settled context recorded with evidence",
+        "`maestro research check <card-id>`",
+        "risky-skipped, or hosting-incompatible",
+    ] {
+        assert!(
+            local.contains(phrase),
+            "repo-local harness copy must retain research router phrase {phrase:?}"
         );
     }
 }

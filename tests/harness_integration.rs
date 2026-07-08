@@ -1627,6 +1627,21 @@ fn mcp_serve_lists_tools_and_calls_status_over_stdio() {
             .any(|tool| tool["name"] == "maestro_task_start")
     );
     assert!(tools.iter().any(|tool| tool["name"] == "maestro_task_done"));
+    let task_done_tool = tools
+        .iter()
+        .find(|tool| tool["name"] == "maestro_task_done")
+        .expect("invariant: maestro_task_done should be listed");
+    assert!(
+        task_done_tool["inputSchema"]["required"]
+            .as_array()
+            .expect("task_done required fields should be listed")
+            .contains(&JsonValue::String("proof".to_string())),
+        "maestro_task_done must require proof in its MCP schema"
+    );
+    assert_eq!(
+        task_done_tool["inputSchema"]["properties"]["proof"]["minItems"],
+        JsonValue::from(1)
+    );
     assert!(
         tools
             .iter()
@@ -1698,6 +1713,62 @@ fn mcp_serve_lists_tools_and_calls_status_over_stdio() {
             .expect("invariant: tool response should contain text")
             .contains("MCP workflow guidance")
     );
+}
+
+#[test]
+fn mcp_task_done_forwards_required_proof_to_low_ceremony_completion() {
+    let temp = setup_repo("maestro-mcp-task-done-proof");
+    let repo = temp.path();
+    let id = run_success(repo, &["task", "add", "MCP done task", "--id-only"])
+        .trim()
+        .to_string();
+    let requests = [
+        r#"{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}"#.to_string(),
+        format!(
+            r#"{{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{{"name":"maestro_task_start","arguments":{{"id":"{id}"}}}}}}"#
+        ),
+        format!(
+            r#"{{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{{"name":"maestro_task_done","arguments":{{"id":"{id}","summary":"missing proof is rejected"}}}}}}"#
+        ),
+        format!(
+            r#"{{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{{"name":"maestro_task_done","arguments":{{"id":"{id}","summary":"done through MCP task_done","proof":["observed MCP completion proof"]}}}}}}"#
+        ),
+    ];
+    let request_refs = requests.iter().map(String::as_str).collect::<Vec<_>>();
+    let frames = run_mcp_requests(repo, &request_refs);
+
+    let task_done = frames[0]["result"]["tools"]
+        .as_array()
+        .expect("tools/list should return tools")
+        .iter()
+        .find(|tool| tool["name"] == "maestro_task_done")
+        .expect("maestro_task_done should be listed")
+        .clone();
+    assert!(
+        task_done["inputSchema"]["required"]
+            .as_array()
+            .expect("task_done required fields should be listed")
+            .contains(&JsonValue::String("proof".to_string())),
+        "maestro_task_done must advertise required proof"
+    );
+    assert!(
+        frames[2]["error"]["message"]
+            .as_str()
+            .expect("missing proof should produce an MCP error")
+            .contains("--proof"),
+        "{}",
+        frames[2]
+    );
+    assert!(
+        frames[3]["result"]["content"][0]["text"]
+            .as_str()
+            .expect("task_done returns text")
+            .contains(&format!("done {id} -> verified"))
+    );
+
+    let show = run_success(repo, &["task", "show", &id]);
+    assert!(show.contains("state: verified"), "{show}");
+    assert!(show.contains("observed MCP completion proof"), "{show}");
 }
 
 #[test]

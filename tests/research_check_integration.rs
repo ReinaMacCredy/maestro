@@ -107,6 +107,63 @@ READY_FOR_DESIGN
     )
 }
 
+fn colon_label_receipt(project: &str) -> String {
+    format!(
+        r#"# Research Brief
+
+Research Status:
+skipped: false
+skip_reason:
+skipped_by:
+
+Hosting:
+project: {project}
+rationale: intended repo is confirmed
+
+Problem:
+Help sales operators handle leads.
+
+Users / Stakeholders:
+Sales operators.
+
+Current Context:
+The target repo and workflow are known.
+
+Constraints:
+None.
+
+Unknowns:
+Blocking:
+None.
+Important but non-blocking:
+None.
+Safe to defer:
+None.
+
+Assumptions:
+None.
+
+Landscape:
+Dedicated assistant.
+
+Recommended First Design Fork:
+Where should Copilot live in the Sales workflow?
+
+Stakeholder Actions:
+None.
+
+Research Validity:
+as_of: {as_of}
+invalidates_when:
+- stakeholder changes primary workflow
+
+Gate:
+READY_FOR_DESIGN
+"#,
+        as_of = today()
+    )
+}
+
 fn json_check(repo: &Path, id: &str, extra: &[&str]) -> Value {
     let mut args = vec!["research", "check", id];
     args.extend(extra);
@@ -126,6 +183,7 @@ fn research_check_reports_fresh_ready_json() {
     let json = json_check(repo, &id, &["--intended-project", "current-repo"]);
 
     assert_eq!(json["schema"], "maestro.research_check.v1");
+    assert_eq!(json["version"], 1);
     assert_eq!(json["card"], id);
     assert_eq!(json["status"], "ready");
     assert_eq!(json["gate"], "READY_FOR_DESIGN");
@@ -135,6 +193,21 @@ fn research_check_reports_fresh_ready_json() {
         json["first_design_fork"],
         "Where should Copilot live in the Sales workflow?"
     );
+}
+
+#[test]
+fn research_check_accepts_documented_colon_label_receipt() {
+    let temp = TestTempDir::new("maestro-research-colon-labels");
+    let repo = temp.path();
+    init_repo(repo);
+    let id = create_feature(repo, "Colon Research");
+    write_research(repo, &id, &colon_label_receipt("current-repo"));
+
+    let json = json_check(repo, &id, &["--intended-project", "current-repo"]);
+
+    assert_eq!(json["status"], "ready");
+    assert_eq!(json["gate"], "READY_FOR_DESIGN");
+    assert_eq!(json["fresh"], true);
 }
 
 #[test]
@@ -273,13 +346,17 @@ fn research_check_distinguishes_valid_and_risky_skips() {
     let risky_json = json_check(repo, &risky_id, &[]);
 
     assert_eq!(valid_json["status"], "skipped");
+    assert_eq!(
+        valid_json["next"],
+        "maestro-design may start from the valid skip receipt"
+    );
     assert!(
         valid_json["reasons"]
             .as_array()
             .unwrap()
             .contains(&Value::from("skip_valid"))
     );
-    assert_eq!(risky_json["status"], "skipped");
+    assert_eq!(risky_json["status"], "risky_skipped");
     assert!(
         risky_json["reasons"]
             .as_array()

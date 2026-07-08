@@ -124,6 +124,22 @@ pub fn remaining_start_blockers_from_records(
     remaining_blockers(task, &task_map, &mut diagnostics)
 }
 
+pub fn remaining_start_blockers_by_task_id(tasks: &[TaskRecord]) -> BTreeMap<String, Vec<String>> {
+    let task_map: BTreeMap<&str, &TaskRecord> =
+        tasks.iter().map(|task| (task.id.as_str(), task)).collect();
+    let mut diagnostics = Vec::new();
+    tasks
+        .iter()
+        .filter(|task| task.state == TaskState::Ready)
+        .map(|task| {
+            (
+                task.id.clone(),
+                remaining_blockers(task, &task_map, &mut diagnostics),
+            )
+        })
+        .collect()
+}
+
 #[derive(Default)]
 struct ClassifiedRows {
     parallel_wave: Vec<ReadyTaskRow>,

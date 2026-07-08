@@ -35,6 +35,10 @@ fn full_witness_gaps(
 ) -> Result<Vec<String>> {
     let mut gaps = Vec::new();
     let refs = current_refs(paths, id, record)?;
+    if let Some(missing) = refs.missing.as_deref() {
+        gaps.push(format!("witness {missing}"));
+        return Ok(render_gaps(id, gaps));
+    }
     require_equals(
         &mut gaps,
         "witness gate",
@@ -126,6 +130,16 @@ fn advisor_gaps(
     let advisor_ref = field(advisor_fields, "advisor_ref");
     require_present(&mut gaps, "advisor worker_ref", worker_ref);
     require_present(&mut gaps, "advisor advisor_ref", advisor_ref);
+    if !matches!(worker_ref, Some(value) if value.starts_with("session:") || value.starts_with("worker:"))
+    {
+        gaps.push("advisor worker_ref must name a worker/session authority".to_string());
+    }
+    if !matches!(advisor_ref, Some(value) if value.starts_with("subagent:") || value.starts_with("human:"))
+    {
+        gaps.push(
+            "advisor advisor_ref must name an independent subagent/human authority".to_string(),
+        );
+    }
     if worker_ref.is_some() && worker_ref == advisor_ref {
         gaps.push("advisor worker_ref and advisor_ref must be distinct".to_string());
     }
@@ -230,8 +244,15 @@ fn skip_gaps(id: &str, fields: &BTreeMap<String, String>) -> Vec<String> {
 }
 
 fn current_refs(paths: &MaestroPaths, id: &str, record: &FeatureRecord) -> Result<WitnessRefs> {
-    let handoff = registry::read_sidecar_text(paths, id, "handoff.md")?
-        .context("handoff.md missing while computing witness contract_ref")?;
+    let Some(handoff) = registry::read_sidecar_text(paths, id, "handoff.md")? else {
+        return Ok(WitnessRefs {
+            contract_ref: "handoff:missing".to_string(),
+            proof_ref: "proof:unavailable".to_string(),
+            qa_ref: "qa:unavailable".to_string(),
+            tree_ref: "git:unavailable".to_string(),
+            missing: Some("handoff.md missing while computing witness contract_ref".to_string()),
+        });
+    };
     let proof_yaml =
         serde_yaml::to_string(&(&record.acceptance_evidence, &record.acceptance_sweeps))
             .context("failed to serialize feature proof anchors")?;
@@ -252,6 +273,7 @@ fn current_refs(paths: &MaestroPaths, id: &str, record: &FeatureRecord) -> Resul
         proof_ref: format!("proof:{}", sha256_hex(proof_yaml.as_bytes())),
         qa_ref,
         tree_ref,
+        missing: None,
     })
 }
 
@@ -261,6 +283,7 @@ struct WitnessRefs {
     proof_ref: String,
     qa_ref: String,
     tree_ref: String,
+    missing: Option<String>,
 }
 
 fn fields(contents: &str) -> BTreeMap<String, String> {
@@ -461,6 +484,32 @@ mod tests {
     }
 
     #[test]
+    fn missing_handoff_reports_witness_gap_instead_of_error() {
+        let paths = paths("missing-handoff");
+        let id = "witness-feature";
+        let record = record(id);
+        write_sidecar(&paths, id, "qa.md", "# QA\n");
+        let witness = "# Witness Brief\n\
+             gate: APPROVED\n\
+             contract_ref: handoff:anything\n\
+             proof_ref: proof:anything\n\
+             qa_ref: qa:anything\n\
+             tree_ref: git:anything\n\
+             risk_tier: T1\n\
+             acceptance_mapping_complete: true\n\
+             proof_matrix_complete: true\n\
+             ac-1: PASS\n";
+        write_sidecar(&paths, id, "witness.md", witness);
+
+        let gaps = close_gaps(&paths, id, &record).expect("gaps");
+
+        assert!(
+            gaps.iter().any(|gap| gap.contains("handoff.md missing")),
+            "{gaps:?}"
+        );
+    }
+
+    #[test]
     fn acceptance_mapping_requires_exact_pass_rows() {
         let paths = paths("acceptance");
         let id = "witness-feature";
@@ -503,6 +552,11 @@ mod tests {
 
         assert!(
             gaps.iter().any(|gap| gap.contains("must be distinct")),
+            "{gaps:?}"
+        );
+        assert!(
+            gaps.iter()
+                .any(|gap| gap.contains("advisor advisor_ref must name")),
             "{gaps:?}"
         );
         assert!(

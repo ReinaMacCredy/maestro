@@ -39,7 +39,7 @@ pub use staleness::{RETIRE_REMINDER, STALE_PROPOSED_THRESHOLD_DAYS, age_days, is
 pub use verification::{
     AcceptanceCoverage, AcceptanceProof, AcceptanceSweepItem, AcceptanceSweepReport,
     FeatureProofUpdate, FeatureVerifyReport, acceptance_coverage, acceptance_coverage_archived,
-    acceptance_id, uncovered_acceptance, verify_feature,
+    acceptance_id, current_acceptance_sweep, uncovered_acceptance, verify_feature,
 };
 pub(crate) use worktree::{
     WorktreeCleanupReceipt, WorktreeComputedState, WorktreeIntent, WorktreeLaneStatus,

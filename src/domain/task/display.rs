@@ -1,7 +1,7 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::domain::task::blockers::has_unresolved_blockers;
-use crate::domain::task::readiness::remaining_start_blockers_from_records;
+use crate::domain::task::readiness::remaining_start_blockers_by_task_id;
 use crate::domain::task::template::{StateHistoryEntry, TaskRecord, TaskState};
 use crate::foundation::core::table;
 use crate::foundation::core::time::{render_timestamp, timestamp_nanos};
@@ -243,11 +243,12 @@ pub fn render_task_list_with_context(
     missing_verify_contract_ids: &BTreeSet<String>,
     simple_done_ids: &BTreeSet<String>,
 ) -> String {
+    let start_blockers_by_task = remaining_start_blockers_by_task_id(all_tasks);
     let rows: Vec<Vec<String>> = tasks
         .iter()
         .enumerate()
         .map(|(index, task)| {
-            let blocked = is_blocked_for_list(task, all_tasks);
+            let blocked = is_blocked_for_list(task, &start_blockers_by_task);
             let mut state = state_label(task, blocked);
             if archived_ids.contains(&task.id) {
                 state.push_str(" (archived)");
@@ -269,10 +270,15 @@ pub fn render_task_list_with_context(
     table::render_table(&["REF", "STATE", "NEXT", "TITLE"], &rows)
 }
 
-fn is_blocked_for_list(task: &TaskRecord, all_tasks: &[TaskRecord]) -> bool {
+fn is_blocked_for_list(
+    task: &TaskRecord,
+    start_blockers_by_task: &BTreeMap<String, Vec<String>>,
+) -> bool {
     has_unresolved_blockers(task)
         || (task.state == TaskState::Ready
-            && !remaining_start_blockers_from_records(task, all_tasks).is_empty())
+            && start_blockers_by_task
+                .get(&task.id)
+                .is_some_and(|blockers| !blockers.is_empty()))
 }
 
 fn state_label(task: &TaskRecord, blocked: bool) -> String {

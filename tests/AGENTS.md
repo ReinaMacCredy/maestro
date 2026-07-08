@@ -24,7 +24,7 @@ runtime flows, safety surfaces, resources, and architecture import boundaries.
   when public contracts, path layout, schemas, or safety behavior changed.
 - Test fixture writes should go through the same domain/operation path as the
   production behavior unless the test is specifically about malformed input.
-- `tests/support.rs` is shared support, not a standalone suite.
+- `tests/support/mod.rs` is shared support, not a standalone suite.
 
 ## ANTI-PATTERNS (THIS PROJECT)
 

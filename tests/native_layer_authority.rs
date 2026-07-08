@@ -5,9 +5,11 @@ const NATIVE_LAYER_SOURCES: &[&str] = &[
     "src/domain/intake.rs",
     "src/domain/capability.rs",
     "src/domain/maturity.rs",
+    "src/domain/research.rs",
     "src/interfaces/cli/intake.rs",
     "src/interfaces/cli/capability.rs",
     "src/interfaces/cli/maturity.rs",
+    "src/interfaces/cli/research.rs",
     "src/domain/install/mod.rs",
     "src/domain/install/mirrors.rs",
 ];

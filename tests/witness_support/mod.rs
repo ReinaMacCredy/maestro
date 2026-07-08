@@ -55,7 +55,7 @@ pub fn write_valid_witness(paths: &MaestroPaths, id: &str) {
          verdict: APPROVE\n\
          reviewed_witness_ref: witness:{witness_ref}\n\
          worker_ref: worker:test-worker\n\
-         advisor_ref: advisor:test-advisor\n\
+         advisor_ref: subagent:test-advisor\n\
          independent_session: true\n\
          acceptance_audit_complete: true\n\
          proof_spot_check_result: pass\n\

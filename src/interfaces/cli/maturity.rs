@@ -38,11 +38,15 @@ fn render_human(report: &maturity::MaturityReport) {
         println!("- gap {} owner={}", gap.ac_id, gap.owner_surface);
     }
     println!(
-        "friction: ux_gaps={} harness_backlog={} recurring={}",
+        "friction: ux_gaps={} harness_backlog={} recurring={} diagnostics={}",
         report.friction.ux_gap_entries,
         report.friction.harness_backlog_items,
-        report.friction.recurring_items.len()
+        report.friction.recurring_items.len(),
+        report.friction.diagnostics.len()
     );
+    for diagnostic in &report.friction.diagnostics {
+        println!("- diagnostic {diagnostic}");
+    }
     println!("next_owner: {}", report.next_owner.surface);
     println!("  command: {}", report.next_owner.command);
 }

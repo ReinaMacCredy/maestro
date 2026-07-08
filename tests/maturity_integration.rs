@@ -119,6 +119,60 @@ fn maturity_human_output_names_the_routing_sections() {
     assert!(stdout.contains("next_owner:"), "{stdout}");
 }
 
+#[test]
+fn maturity_does_not_count_unverified_task_covers_as_feature_proof() {
+    let repo = init_repo("maestro-maturity-unverified-covers");
+    let feature = maestro(
+        &[
+            "feature",
+            "new",
+            "Covered Feature",
+            "--description",
+            "Fixture feature",
+            "--id-only",
+        ],
+        repo.path(),
+    );
+    assert_success(&feature);
+    let feature_id = String::from_utf8(feature.stdout)
+        .expect("feature id should be UTF-8")
+        .trim()
+        .to_string();
+    assert_success(&maestro(
+        &[
+            "feature",
+            "set",
+            &feature_id,
+            "--acceptance",
+            "Covered acceptance",
+        ],
+        repo.path(),
+    ));
+    assert_success(&maestro(
+        &[
+            "task",
+            "create",
+            "Unverified cover task",
+            "--feature",
+            &feature_id,
+            "--covers",
+            "ac-1",
+            "--check",
+            "Covered acceptance",
+        ],
+        repo.path(),
+    ));
+
+    let output = maestro(&["maturity", &feature_id, "--json"], repo.path());
+
+    assert_success(&output);
+    let json = stdout_json(&output);
+    assert_eq!(json["proof"]["total"], 1);
+    assert_eq!(json["proof"]["incomplete"], 1);
+    assert_eq!(json["maturity"]["level"], "L1 report");
+    assert_eq!(json["next_owner"]["surface"], "feature_proof");
+}
+
 fn context_item<'a>(context: &'a [JsonValue], name: &str) -> &'a JsonValue {
     context
         .iter()
