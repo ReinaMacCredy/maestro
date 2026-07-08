@@ -124,12 +124,19 @@ pub fn remaining_start_blockers_from_records(
     remaining_blockers(task, &task_map, &mut diagnostics)
 }
 
-pub fn remaining_start_blockers_by_task_id(tasks: &[TaskRecord]) -> BTreeMap<String, Vec<String>> {
+pub fn remaining_start_blockers_by_task_id<'a, I>(
+    tasks: &[TaskRecord],
+    task_ids: I,
+) -> BTreeMap<String, Vec<String>>
+where
+    I: IntoIterator<Item = &'a str>,
+{
     let task_map: BTreeMap<&str, &TaskRecord> =
         tasks.iter().map(|task| (task.id.as_str(), task)).collect();
     let mut diagnostics = Vec::new();
-    tasks
-        .iter()
+    task_ids
+        .into_iter()
+        .filter_map(|task_id| task_map.get(task_id))
         .filter(|task| task.state == TaskState::Ready)
         .map(|task| {
             (

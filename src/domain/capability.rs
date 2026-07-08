@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -549,7 +550,7 @@ fn redact_sensitive_detail(detail: &str) -> String {
             .expect("invariant: capability redaction regex compiles")
     });
     let bearer_token = BEARER_TOKEN.get_or_init(|| {
-        Regex::new(r"(?i)\b(bearer|authorization)\s+[^,\s;]+")
+        Regex::new(r"(?i)\b((?:authorization\s*[:=]?\s*)?bearer)\s+[^,\s;]+")
             .expect("invariant: capability bearer redaction regex compiles")
     });
     let common_token = COMMON_TOKEN.get_or_init(|| {
@@ -560,16 +561,23 @@ fn redact_sensitive_detail(detail: &str) -> String {
         Regex::new(r"(?s)-----BEGIN [^-]+-----.*?-----END [^-]+-----")
             .expect("invariant: capability PEM redaction regex compiles")
     });
-    let detail = secret_assignment
-        .replace_all(detail, "$1=[redacted]")
-        .into_owned();
-    let detail = bearer_token
-        .replace_all(&detail, "$1 [redacted]")
-        .into_owned();
-    let detail = common_token.replace_all(&detail, "[redacted]").into_owned();
-    pem_block
-        .replace_all(&detail, "[redacted-pem-block]")
-        .into_owned()
+    let detail = Cow::Borrowed(detail);
+    let detail = redact_match(detail, secret_assignment, "$1=[redacted]");
+    let detail = redact_match(detail, bearer_token, "$1 [redacted]");
+    let detail = redact_match(detail, common_token, "[redacted]");
+    redact_match(detail, pem_block, "[redacted-pem-block]").into_owned()
+}
+
+fn redact_match<'a>(detail: Cow<'a, str>, pattern: &Regex, replacement: &str) -> Cow<'a, str> {
+    if pattern.is_match(detail.as_ref()) {
+        Cow::Owned(
+            pattern
+                .replace_all(detail.as_ref(), replacement)
+                .into_owned(),
+        )
+    } else {
+        detail
+    }
 }
 
 fn executable_file(path: &Path) -> bool {

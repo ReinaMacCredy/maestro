@@ -243,7 +243,8 @@ pub fn render_task_list_with_context(
     missing_verify_contract_ids: &BTreeSet<String>,
     simple_done_ids: &BTreeSet<String>,
 ) -> String {
-    let start_blockers_by_task = remaining_start_blockers_by_task_id(all_tasks);
+    let displayed_ids = tasks.iter().map(|task| task.id.as_str());
+    let start_blockers_by_task = remaining_start_blockers_by_task_id(all_tasks, displayed_ids);
     let rows: Vec<Vec<String>> = tasks
         .iter()
         .enumerate()

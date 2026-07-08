@@ -14,7 +14,7 @@ pub fn run(args: IntakeArgs) -> Result<()> {
     let repo_root = discover_repo_root()?;
     let paths = MaestroPaths::new(repo_root);
     let (raw, source_provenance) = read_source(&args.from)?;
-    let report = intake::classify(&paths, &raw, source_provenance)?;
+    let report = intake::classify(&paths, &raw, source_provenance);
 
     if args.json {
         println!("{}", serde_json::to_string_pretty(&report)?);

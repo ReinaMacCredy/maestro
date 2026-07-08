@@ -130,11 +130,13 @@ fn advisor_gaps(
     let advisor_ref = field(advisor_fields, "advisor_ref");
     require_present(&mut gaps, "advisor worker_ref", worker_ref);
     require_present(&mut gaps, "advisor advisor_ref", advisor_ref);
-    if !matches!(worker_ref, Some(value) if value.starts_with("session:") || value.starts_with("worker:"))
+    if let Some(worker_ref) = worker_ref
+        && !(worker_ref.starts_with("session:") || worker_ref.starts_with("worker:"))
     {
         gaps.push("advisor worker_ref must name a worker/session authority".to_string());
     }
-    if !matches!(advisor_ref, Some(value) if value.starts_with("subagent:") || value.starts_with("human:"))
+    if let Some(advisor_ref) = advisor_ref
+        && !(advisor_ref.starts_with("subagent:") || advisor_ref.starts_with("human:"))
     {
         gaps.push(
             "advisor advisor_ref must name an independent subagent/human authority".to_string(),
@@ -562,6 +564,50 @@ mod tests {
         assert!(
             gaps.iter()
                 .any(|gap| gap.contains("proof_spot_check_result")),
+            "{gaps:?}"
+        );
+    }
+
+    #[test]
+    fn missing_advisor_refs_emit_only_missing_ref_gaps() {
+        let paths = paths("advisor-missing-refs");
+        let id = "witness-feature";
+        let record = record(id);
+        seed_sidecars(&paths, id);
+        let witness = valid_witness(&paths, id, &record, "T1");
+        let advisor = valid_advisor(&witness)
+            .lines()
+            .filter(|line| {
+                let trimmed = line.trim_start();
+                !trimmed.starts_with("worker_ref:") && !trimmed.starts_with("advisor_ref:")
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        write_sidecar(&paths, id, "witness.md", &witness);
+        write_sidecar(&paths, id, "advisor.md", &advisor);
+
+        let gaps = close_gaps(&paths, id, &record).expect("gaps");
+
+        assert!(
+            gaps.iter()
+                .any(|gap| gap.contains("advisor worker_ref missing")),
+            "{gaps:?}"
+        );
+        assert!(
+            gaps.iter()
+                .any(|gap| gap.contains("advisor advisor_ref missing")),
+            "{gaps:?}"
+        );
+        assert!(
+            !gaps
+                .iter()
+                .any(|gap| gap.contains("must name a worker/session")),
+            "{gaps:?}"
+        );
+        assert!(
+            !gaps
+                .iter()
+                .any(|gap| gap.contains("must name an independent")),
             "{gaps:?}"
         );
     }

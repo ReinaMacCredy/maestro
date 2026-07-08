@@ -1,4 +1,3 @@
-use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 use crate::domain::card::store as card_store;
@@ -117,7 +116,7 @@ pub fn classify(
     paths: &MaestroPaths,
     raw: &str,
     source_provenance: SourceProvenance,
-) -> Result<IntakeReport> {
+) -> IntakeReport {
     let parsed = parse_frontmatter(raw);
     let mut missing = Vec::new();
     let mut blocked_by = Vec::new();
@@ -146,7 +145,7 @@ pub fn classify(
     let raw_owner = frontmatter
         .as_ref()
         .and_then(|frontmatter| present(frontmatter.owner.as_deref()).map(str::to_string));
-    let owner = validate_owner(paths, raw_owner.as_deref(), &mut missing, &mut blocked_by)?;
+    let owner = validate_owner(paths, raw_owner.as_deref(), &mut missing, &mut blocked_by);
     let route = match route_hint.as_deref() {
         Some("design_required") => IntakeRoute::DesignRequired,
         Some("card_ready") => classify_card_ready(frontmatter.as_ref(), &owner, &mut missing),
@@ -165,7 +164,7 @@ pub fn classify(
         None => IntakeRoute::DesignRequired,
     };
 
-    Ok(IntakeReport {
+    IntakeReport {
         version: 1,
         schema: "maestro.intake.v1",
         next: next_command(&route, owner.as_deref()),
@@ -176,7 +175,7 @@ pub fn classify(
         blocked_by,
         writes_allowed: false,
         source_provenance,
-    })
+    }
 }
 
 fn classify_card_ready(
@@ -219,15 +218,11 @@ fn classify_work_ready(
         missing.push("blockers_clear evidence".to_string());
     }
 
-    match feature::show(paths, owner) {
-        Ok(view)
-            if matches!(
-                view.status,
-                FeatureStatus::Ready | FeatureStatus::InProgress
-            ) => {}
-        Ok(view) => blocked_by.push(format!(
+    match feature::status(paths, owner) {
+        Ok(FeatureStatus::Ready | FeatureStatus::InProgress) => {}
+        Ok(status) => blocked_by.push(format!(
             "owner feature {owner} status is {}",
-            view.status.as_str()
+            status.as_str()
         )),
         Err(error) => blocked_by.push(format!("owner feature {owner} is not ready: {error}")),
     }
@@ -268,21 +263,19 @@ fn validate_owner(
     owner: Option<&str>,
     missing: &mut Vec<String>,
     blocked_by: &mut Vec<String>,
-) -> Result<Option<String>> {
-    let Some(owner) = owner else {
-        return Ok(None);
-    };
+) -> Option<String> {
+    let owner = owner?;
     if card_store::validate_card_id(owner).is_err() {
         missing.push("valid owner".to_string());
         blocked_by.push("owner must be a single Maestro card or feature id".to_string());
-        return Ok(None);
+        return None;
     }
-    if feature::show(paths, owner).is_err() {
+    if feature::ensure_exists(paths, owner).is_err() {
         missing.push("existing owner".to_string());
         blocked_by.push(format!("owner feature {owner} does not exist"));
-        return Ok(Some(owner.to_string()));
+        return Some(owner.to_string());
     }
-    Ok(Some(owner.to_string()))
+    Some(owner.to_string())
 }
 
 fn next_command(route: &IntakeRoute, owner: Option<&str>) -> String {

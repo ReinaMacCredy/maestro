@@ -50,116 +50,94 @@ fn today() -> String {
     utc_now_timestamp()[..10].to_string()
 }
 
+#[derive(Clone, Copy)]
+enum HeadingStyle {
+    Markdown,
+    Label,
+}
+
 fn ready_receipt(project: &str) -> String {
-    format!(
-        r#"# Research Brief
-
-## Research Status
-skipped: false
-skip_reason:
-skipped_by:
-
-## Hosting
-project: {project}
-rationale: intended repo is confirmed
-
-## Problem
-Help sales operators handle leads.
-
-## Users / Stakeholders
-Sales operators.
-
-## Current Context
-The target repo and workflow are known.
-
-## Constraints
-None.
-
-## Unknowns
-### Blocking
-None.
-### Important but non-blocking
-None.
-### Safe to defer
-None.
-
-## Assumptions
-None.
-
-## Landscape
-Dedicated assistant.
-
-## Recommended First Design Fork
-Where should Copilot live in the Sales workflow?
-
-## Stakeholder Actions
-None.
-
-## Research Validity
-as_of: {as_of}
-invalidates_when:
-- stakeholder changes primary workflow
-
-## Gate
-READY_FOR_DESIGN
-"#,
-        as_of = today()
-    )
+    ready_receipt_with_style(project, HeadingStyle::Markdown)
 }
 
 fn colon_label_receipt(project: &str) -> String {
-    format!(
-        r#"# Research Brief
+    ready_receipt_with_style(project, HeadingStyle::Label)
+}
 
-Research Status:
+fn ready_receipt_with_style(project: &str, style: HeadingStyle) -> String {
+    let heading = |level: usize, title: &str| match style {
+        HeadingStyle::Markdown => format!("{} {title}", "#".repeat(level)),
+        HeadingStyle::Label => format!("{title}:"),
+    };
+    format!(
+        r#"{title}
+
+{research_status}
 skipped: false
 skip_reason:
 skipped_by:
 
-Hosting:
+{hosting}
 project: {project}
 rationale: intended repo is confirmed
 
-Problem:
+{problem}
 Help sales operators handle leads.
 
-Users / Stakeholders:
+{users}
 Sales operators.
 
-Current Context:
+{current_context}
 The target repo and workflow are known.
 
-Constraints:
+{constraints}
 None.
 
-Unknowns:
-Blocking:
+{unknowns}
+{blocking}
 None.
-Important but non-blocking:
+{important}
 None.
-Safe to defer:
-None.
-
-Assumptions:
+{safe_to_defer}
 None.
 
-Landscape:
+{assumptions}
+None.
+
+{landscape}
 Dedicated assistant.
 
-Recommended First Design Fork:
+{first_fork}
 Where should Copilot live in the Sales workflow?
 
-Stakeholder Actions:
+{stakeholder_actions}
 None.
 
-Research Validity:
+{validity}
 as_of: {as_of}
 invalidates_when:
 - stakeholder changes primary workflow
 
-Gate:
+{gate}
 READY_FOR_DESIGN
 "#,
+        title = heading(1, "Research Brief"),
+        research_status = heading(2, "Research Status"),
+        hosting = heading(2, "Hosting"),
+        problem = heading(2, "Problem"),
+        users = heading(2, "Users / Stakeholders"),
+        current_context = heading(2, "Current Context"),
+        constraints = heading(2, "Constraints"),
+        unknowns = heading(2, "Unknowns"),
+        blocking = heading(3, "Blocking"),
+        important = heading(3, "Important but non-blocking"),
+        safe_to_defer = heading(3, "Safe to defer"),
+        assumptions = heading(2, "Assumptions"),
+        landscape = heading(2, "Landscape"),
+        first_fork = heading(2, "Recommended First Design Fork"),
+        stakeholder_actions = heading(2, "Stakeholder Actions"),
+        validity = heading(2, "Research Validity"),
+        gate = heading(2, "Gate"),
         as_of = today()
     )
 }

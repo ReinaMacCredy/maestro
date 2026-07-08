@@ -8,22 +8,38 @@ use crate::foundation::core::time::{parse_utc_timestamp, utc_now_timestamp};
 const SCHEMA: &str = "maestro.research_check.v1";
 const RESEARCH_FILE: &str = "research.md";
 const FRESH_NANOS: i128 = 7 * 86_400 * 1_000_000_000;
+const H_RESEARCH_STATUS: &str = "Research Status";
+const H_HOSTING: &str = "Hosting";
+const H_PROBLEM: &str = "Problem";
+const H_USERS_STAKEHOLDERS: &str = "Users / Stakeholders";
+const H_CURRENT_CONTEXT: &str = "Current Context";
+const H_CONSTRAINTS: &str = "Constraints";
+const H_UNKNOWNS: &str = "Unknowns";
+const H_ASSUMPTIONS: &str = "Assumptions";
+const H_LANDSCAPE: &str = "Landscape";
+const H_RECOMMENDED_FIRST_DESIGN_FORK: &str = "Recommended First Design Fork";
+const H_STAKEHOLDER_ACTIONS: &str = "Stakeholder Actions";
+const H_RESEARCH_VALIDITY: &str = "Research Validity";
+const H_GATE: &str = "Gate";
+const H_BLOCKING: &str = "Blocking";
+const H_IMPORTANT_NON_BLOCKING: &str = "Important but non-blocking";
+const H_SAFE_TO_DEFER: &str = "Safe to defer";
 const SECTION_HEADINGS: &[&str] = &[
-    "Research Status",
-    "Hosting",
-    "Problem",
-    "Users / Stakeholders",
-    "Current Context",
-    "Constraints",
-    "Unknowns",
-    "Assumptions",
-    "Landscape",
-    "Recommended First Design Fork",
-    "Stakeholder Actions",
-    "Research Validity",
-    "Gate",
+    H_RESEARCH_STATUS,
+    H_HOSTING,
+    H_PROBLEM,
+    H_USERS_STAKEHOLDERS,
+    H_CURRENT_CONTEXT,
+    H_CONSTRAINTS,
+    H_UNKNOWNS,
+    H_ASSUMPTIONS,
+    H_LANDSCAPE,
+    H_RECOMMENDED_FIRST_DESIGN_FORK,
+    H_STAKEHOLDER_ACTIONS,
+    H_RESEARCH_VALIDITY,
+    H_GATE,
 ];
-const SUBSECTION_HEADINGS: &[&str] = &["Blocking", "Important but non-blocking", "Safe to defer"];
+const SUBSECTION_HEADINGS: &[&str] = &[H_BLOCKING, H_IMPORTANT_NON_BLOCKING, H_SAFE_TO_DEFER];
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct ResearchCheckReport {
@@ -224,11 +240,11 @@ struct Receipt {
 
 impl Receipt {
     fn parse(raw: &str) -> Self {
-        let status = section(raw, "Research Status").unwrap_or_default();
-        let hosting = section(raw, "Hosting").unwrap_or_default();
-        let unknowns = section(raw, "Unknowns").unwrap_or_default();
-        let stakeholders = section(raw, "Stakeholder Actions").unwrap_or_default();
-        let validity = section(raw, "Research Validity").unwrap_or_default();
+        let status = section(raw, H_RESEARCH_STATUS).unwrap_or_default();
+        let hosting = section(raw, H_HOSTING).unwrap_or_default();
+        let unknowns = section(raw, H_UNKNOWNS).unwrap_or_default();
+        let stakeholders = section(raw, H_STAKEHOLDER_ACTIONS).unwrap_or_default();
+        let validity = section(raw, H_RESEARCH_VALIDITY).unwrap_or_default();
         Self {
             skipped: bool_field(&status, "skipped"),
             skip_reason: field(&status, "skip_reason"),
@@ -236,15 +252,15 @@ impl Receipt {
             skip_evidence: field(&status, "evidence"),
             unresolved_risks: list_under_field(&status, "unresolved_risks"),
             hosting_project: field(&hosting, "project"),
-            problem: section(raw, "Problem").and_then(|body| first_content_line(&body)),
-            blocking_unknowns: subsection(&unknowns, "Blocking")
+            problem: section(raw, H_PROBLEM).and_then(|body| first_content_line(&body)),
+            blocking_unknowns: subsection(&unknowns, H_BLOCKING)
                 .map(|body| content_items(&body))
                 .unwrap_or_default(),
             stakeholder_actions: parse_stakeholder_actions(&stakeholders),
-            first_design_fork: section(raw, "Recommended First Design Fork")
+            first_design_fork: section(raw, H_RECOMMENDED_FIRST_DESIGN_FORK)
                 .and_then(|body| first_content_line(&body)),
             fresh: fresh_validity(&validity),
-            gate: section(raw, "Gate").and_then(|body| first_content_line(&body)),
+            gate: section(raw, H_GATE).and_then(|body| first_content_line(&body)),
         }
     }
 

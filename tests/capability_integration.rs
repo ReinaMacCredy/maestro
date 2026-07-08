@@ -172,7 +172,7 @@ fn capability_report_preserves_permission_and_scope_boundaries() {
     fs::create_dir_all(&receipts).expect("invariant: receipt dir should write");
     fs::write(
         receipts.join("host.yml"),
-        "schema: maestro.capability-receipt.v1\nissued_by: codex-host\nissued_at: 2026-07-08T00:00:00.000Z\nstatus: present\ndetail: api_key=top-secret-token Authorization Bearer sk-testsecret123 ghp_testsecret123 host allowed local read\n",
+        "schema: maestro.capability-receipt.v1\nissued_by: codex-host\nissued_at: 2026-07-08T00:00:00.000Z\nstatus: present\ndetail: \"api_key=top-secret-token Authorization: Bearer sk-testsecret123 ghp_testsecret123 host allowed local read\"\n",
     )
     .expect("invariant: receipt fixture should write");
     fs::write(

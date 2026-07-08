@@ -95,17 +95,7 @@ pub struct NextOwnerReadout {
 }
 
 pub fn report(paths: &MaestroPaths, target: Option<&str>) -> Result<MaturityReport> {
-    let feature_readout = match target {
-        Some(id) => match feature::show(paths, id) {
-            Ok(feature) => FeatureReadout::Present(Box::new(feature)),
-            Err(error) => FeatureReadout::Missing {
-                id: id.to_string(),
-                error: error.to_string(),
-            },
-        },
-        None => FeatureReadout::NotRequested,
-    };
-    let proof = proof_readout(paths, &feature_readout)?;
+    let (feature_readout, proof) = target_readout(paths, target)?;
     let friction = friction_readout(paths);
     let context = context_readout(paths, target, &feature_readout, &proof);
     let maturity = maturity_level(&context, &proof, &friction);
@@ -125,21 +115,53 @@ pub fn report(paths: &MaestroPaths, target: Option<&str>) -> Result<MaturityRepo
 
 enum FeatureReadout {
     NotRequested,
-    Present(Box<feature::FeatureView>),
+    Present { id: String, acceptance_count: usize },
     Missing { id: String, error: String },
 }
 
-fn proof_readout(paths: &MaestroPaths, feature: &FeatureReadout) -> Result<ProofReadout> {
-    let FeatureReadout::Present(feature) = feature else {
-        return Ok(ProofReadout {
-            total: 0,
-            complete: 0,
-            partial: 0,
-            incomplete: 0,
-            gaps: Vec::new(),
-        });
+fn target_readout(
+    paths: &MaestroPaths,
+    target: Option<&str>,
+) -> Result<(FeatureReadout, ProofReadout)> {
+    let Some(id) = target else {
+        return Ok((FeatureReadout::NotRequested, empty_proof_readout()));
     };
-    let sweep = feature::current_acceptance_sweep(paths, &feature.id)?;
+    let sweep = match feature::current_acceptance_sweep(paths, id) {
+        Ok(sweep) => sweep,
+        Err(error) => {
+            if feature::ensure_exists(paths, id).is_err() {
+                return Ok((
+                    FeatureReadout::Missing {
+                        id: id.to_string(),
+                        error: error.to_string(),
+                    },
+                    empty_proof_readout(),
+                ));
+            }
+            return Err(error);
+        }
+    };
+    let proof = proof_readout_from_sweep(&sweep);
+    Ok((
+        FeatureReadout::Present {
+            id: id.to_string(),
+            acceptance_count: sweep.items.len(),
+        },
+        proof,
+    ))
+}
+
+fn empty_proof_readout() -> ProofReadout {
+    ProofReadout {
+        total: 0,
+        complete: 0,
+        partial: 0,
+        incomplete: 0,
+        gaps: Vec::new(),
+    }
+}
+
+fn proof_readout_from_sweep(sweep: &feature::AcceptanceSweepReport) -> ProofReadout {
     let gaps = sweep
         .items
         .iter()
@@ -152,13 +174,13 @@ fn proof_readout(paths: &MaestroPaths, feature: &FeatureReadout) -> Result<Proof
         .collect::<Vec<_>>();
     let total = sweep.items.len();
     let incomplete = gaps.len();
-    Ok(ProofReadout {
+    ProofReadout {
         total,
         complete: total.saturating_sub(incomplete),
         partial: 0,
         incomplete,
         gaps,
-    })
+    }
 }
 
 fn friction_readout(paths: &MaestroPaths) -> FrictionReadout {
@@ -218,22 +240,25 @@ fn context_readout(
     }];
 
     match feature {
-        FeatureReadout::Present(feature) => {
+        FeatureReadout::Present {
+            id,
+            acceptance_count,
+        } => {
             context.push(ContextReadout {
                 name: "feature".to_string(),
                 required: true,
                 status: ContextStatus::Present,
-                evidence: feature.id.clone(),
+                evidence: id.clone(),
             });
             context.push(ContextReadout {
                 name: "acceptance".to_string(),
                 required: true,
-                status: if feature.acceptance.is_empty() {
+                status: if *acceptance_count == 0 {
                     ContextStatus::Missing
                 } else {
                     ContextStatus::Present
                 },
-                evidence: format!("{} acceptance item(s)", feature.acceptance.len()),
+                evidence: format!("{acceptance_count} acceptance item(s)"),
             });
         }
         FeatureReadout::Missing { id, error } => {
