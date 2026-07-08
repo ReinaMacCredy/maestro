@@ -4,6 +4,12 @@ Use this as a lightweight backlog for out-of-scope Maestro UX gaps noticed
 while doing other work. Keep entries short: date, surface, observed friction,
 and why it is not part of the current fix.
 
+## 2026-07-08
+
+- Surface: `maestro feature set --add-acceptance --reason` on proposed features.
+  Observed friction: while adding verdict-shape acceptance to `ai-code-evaluation-support`, `maestro feature set <id> --add-acceptance ... --reason ...` failed at argument parsing with a required `--remove-question` message. Retrying the same additive acceptance without `--reason` worked.
+  Why not part of the current fix: this session is design-only for AI-code evaluation; parser/CLI-shape cleanup needs a separate focused fix.
+
 ## 2026-07-06
 
 - Surface: repo harness versus installed local binary.
@@ -226,6 +232,15 @@ and why it is not part of the current fix.
   packet design, not changing feature-contract authoring UX. A focused follow-up
   should make append-vs-replace behavior explicit and prevent accidental list
   loss during design updates.
+- Surface: `maestro feature set --reason` during acceptance updates.
+  Observed friction: while adding acceptance for a locked design decision,
+  `maestro feature set <id> --acceptance ... --reason ...` failed because
+  `--reason` required `--remove-question`, even though the generated reference
+  presents `--reason` as a general feature-set option.
+  Why not part of the current fix: this session is locking the
+  repository-harness-native Maestro design decision, not changing
+  feature-contract authoring UX. A focused follow-up should either make
+  `--reason` general or render its remove-question-only scope explicitly.
 
 ## 2026-07-07 demo-project dogfood audit
 
