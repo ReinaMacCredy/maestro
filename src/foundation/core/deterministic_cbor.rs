@@ -72,6 +72,18 @@ pub fn validate(bytes: &[u8]) -> Result<(), CborError> {
     Ok(())
 }
 
+pub fn decode(bytes: &[u8]) -> Result<CborValue, CborError> {
+    if bytes.len() > MAX_CANONICAL_CBOR_BYTES {
+        return Err(CborError::LimitExceeded("encoded bytes"));
+    }
+    let mut cursor = 0;
+    let value = decode_item(bytes, &mut cursor, 0)?;
+    if cursor != bytes.len() {
+        return Err(CborError::TrailingBytes);
+    }
+    Ok(value)
+}
+
 fn encode_into(value: &CborValue, depth: usize, output: &mut Vec<u8>) -> Result<(), CborError> {
     if depth > MAX_NESTING_DEPTH {
         return Err(CborError::NestingTooDeep);
@@ -152,6 +164,63 @@ fn validate_item(bytes: &[u8], cursor: &mut usize, depth: usize) -> Result<(), C
     }
 
     Ok(())
+}
+
+fn decode_item(bytes: &[u8], cursor: &mut usize, depth: usize) -> Result<CborValue, CborError> {
+    if depth > MAX_NESTING_DEPTH {
+        return Err(CborError::NestingTooDeep);
+    }
+    let initial = take_byte(bytes, cursor)?;
+    let major = initial >> 5;
+    let additional = initial & 0x1f;
+
+    match major {
+        0 => Ok(CborValue::Unsigned(read_argument(
+            bytes, cursor, additional,
+        )?)),
+        2 | 3 => {
+            let length = u64_to_usize(read_argument(bytes, cursor, additional)?)?;
+            let (limit, label) = if major == 2 {
+                (MAX_BYTE_STRING_BYTES, "byte string")
+            } else {
+                (MAX_TEXT_BYTES, "text string")
+            };
+            enforce_limit(length, limit, label)?;
+            let value = take_slice(bytes, cursor, length)?;
+            if major == 2 {
+                Ok(CborValue::Bytes(value.to_vec()))
+            } else if value.is_ascii() {
+                Ok(CborValue::Text(
+                    String::from_utf8(value.to_vec())
+                        .expect("invariant: ASCII bytes are valid UTF-8"),
+                ))
+            } else {
+                Err(CborError::NonAsciiText)
+            }
+        }
+        4 => {
+            let length = u64_to_usize(read_argument(bytes, cursor, additional)?)?;
+            enforce_limit(length, MAX_ARRAY_ITEMS, "array item count")?;
+            let mut values = Vec::with_capacity(length);
+            for _ in 0..length {
+                values.push(decode_item(bytes, cursor, depth + 1)?);
+            }
+            Ok(CborValue::Array(values))
+        }
+        1 | 5 | 6 => {
+            if additional == 31 {
+                return Err(CborError::IndefiniteLength);
+            }
+            Err(CborError::UnsupportedMajorType(major))
+        }
+        7 => match initial {
+            0xf4 => Ok(CborValue::Bool(false)),
+            0xf5 => Ok(CborValue::Bool(true)),
+            0xff => Err(CborError::IndefiniteLength),
+            _ => Err(CborError::UnsupportedSimpleValue(initial)),
+        },
+        _ => unreachable!("invariant: CBOR major type occupies three bits"),
+    }
 }
 
 fn append_head(major: u8, value: u64, output: &mut Vec<u8>) {

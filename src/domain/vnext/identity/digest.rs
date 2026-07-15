@@ -181,6 +181,81 @@ identity_kind!(
     Stage0ProofManifestIdV1,
     "maestro.vnext.stage0-proof-manifest.v1"
 );
+identity_kind!(
+    StoreDomainIdentityKindV1,
+    StoreDomainIdV1,
+    "maestro.vnext.store-domain.v1"
+);
+identity_kind!(
+    StoreObjectIdentityKindV1,
+    StoreObjectIdV1,
+    "maestro.vnext.store-object.v1"
+);
+identity_kind!(
+    StoreGenerationIdentityKindV1,
+    StoreGenerationIdV1,
+    "maestro.vnext.store-generation.v1"
+);
+identity_kind!(
+    StoreHeadIdentityKindV1,
+    StoreHeadIdV1,
+    "maestro.vnext.store-head.v1"
+);
+identity_kind!(
+    ReachabilitySnapshotIdentityKindV1,
+    ReachabilitySnapshotIdV1,
+    "maestro.vnext.reachability-snapshot.v1"
+);
+identity_kind!(
+    RetentionPinIdentityKindV1,
+    RetentionPinIdV1,
+    "maestro.vnext.retention-pin.v1"
+);
+identity_kind!(
+    LogicalTombstoneIdentityKindV1,
+    LogicalTombstoneIdV1,
+    "maestro.vnext.logical-tombstone.v1"
+);
+identity_kind!(
+    CollectionPlanIdentityKindV1,
+    CollectionPlanIdV1,
+    "maestro.vnext.collection-plan.v1"
+);
+identity_kind!(
+    SealedExportIdentityKindV1,
+    SealedExportIdV1,
+    "maestro.vnext.sealed-export.v1"
+);
+identity_kind!(
+    BackupReceiptIdentityKindV1,
+    BackupReceiptIdV1,
+    "maestro.vnext.backup-receipt.v1"
+);
+identity_kind!(
+    StoreSchemaManifestIdentityKindV1,
+    StoreSchemaManifestIdV1,
+    "maestro.vnext.store-schema-manifest.v1"
+);
+identity_kind!(
+    StoreExportFamilyManifestIdentityKindV1,
+    StoreExportFamilyManifestIdV1,
+    "maestro.vnext.store-export-family-manifest.v1"
+);
+identity_kind!(
+    StoreExportChunkIdentityKindV1,
+    StoreExportChunkIdV1,
+    "maestro.vnext.store-export-chunk.v1"
+);
+identity_kind!(
+    StoreSnapshotRootIdentityKindV1,
+    StoreSnapshotRootIdV1,
+    "maestro.vnext.store-snapshot-root.v1"
+);
+identity_kind!(
+    RestoreCandidateIdentityKindV1,
+    RestoreCandidateIdV1,
+    "maestro.vnext.restore-candidate.v1"
+);
 
 pub fn design_revision_identity(value: &CborValue) -> Result<DesignRevisionIdV1, IdentityError> {
     derive_identity(value)

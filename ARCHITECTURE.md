@@ -1,6 +1,6 @@
 # ARCHITECTURE
 
-**Status:** as-built, 2026-06-28. §2 describes the shipped card/task model (the
+**Status:** as-built, 2026-07-15. §2 describes the shipped card/task model (the
 unified card store from `SPEC-beads-model.md`, updated with the D17 Progress card
 model, the Card/CardKind/Task taxonomy, and native Memory cards). §3 records what the rewrite
 collapsed and the deviations kept.
@@ -16,8 +16,8 @@ Four layers; dependencies point one way: **interfaces -> operations -> domain ->
 
 | Layer | Path | Owns |
 |---|---|---|
-| foundation/core | `src/foundation/core/` | paths, schema-version consts, atomic + content-hash-CAS writes, id-reservation markers, hashing, slugs, time, managed blocks, deterministic bounded CBOR, `MaestroError` + `.hint()` |
-| domain | `src/domain/` | durable concepts: Card (core + `CardType` enum dispatch), Feature, Task, Harness, Decision, Proof, Run, Memory, Install, Skills, Extraction; candidate-only vNext identity, Contract, execution, distribution, migration, Integration, Orchestration, and capability contracts live under `domain::vnext` |
+| foundation/core | `src/foundation/core/` | paths, schema-version consts, atomic + content-hash-CAS writes, descriptor-anchored Store filesystem access, id-reservation markers, hashing, slugs, time, managed blocks, deterministic bounded CBOR, `MaestroError` + `.hint()` |
+| domain | `src/domain/` | durable concepts: Card (core + `CardType` enum dispatch), Feature, Task, Harness, Decision, Proof, Run, Memory, Install, Skills, Extraction; vNext identity, Contract, canonical Store persistence, execution, distribution, migration, Integration, Orchestration, and capability contracts live under `domain::vnext` |
 | operations | `src/operations/` | cross-domain workflows: init, sync, update, task_verify, harness apply/measure, feature_prepare, migrate, Memory suggestion/scorer/promotion/maintenance |
 | interfaces | `src/interfaces/` | adapters: cli, mcp, tui, hooks, shell — parse + render; domain rules stay behind owning facades |
 
@@ -29,15 +29,16 @@ Four layers; dependencies point one way: **interfaces -> operations -> domain ->
 - `child_dirs` — symlink-safe directory walk — `fs.rs:324`
 - `write_string_atomic` — temp-sibling + rename without blocking fsync on the hot path — `safe_write.rs`
 - `deterministic_cbor` — bounded closed CBOR subset and canonical shortest-form validation for vNext content identities — `deterministic_cbor.rs`
+- `secure_fs` — descriptor-anchored, owner/mode/link-checked immutable Store object publication, exact-byte reads, and digest-addressed crash-recoverable removal that fail closed on root substitution or surviving hard-link aliases — `secure_fs.rs`
 
-### Candidate-only vNext boundary
+### vNext foundation boundary
 
-`src/domain/vnext/` owns the typed, deterministic Stage 0 candidate contracts.
-They are inert: importing the module does not publish a Contract Root, activate
-runtime behavior, migrate state, or grant authority. `identity/` owns the one
-domain-separated `ManifestIdentityV1` protocol; `contract/` owns exact
+`src/domain/vnext/` owns the typed deterministic vNext foundation. Stage 0
+contracts remain inert: importing them does not publish a Contract Root,
+activate runtime behavior, migrate state, or grant authority. `identity/` owns
+the one domain-separated `ManifestIdentityV1` protocol; `contract/` owns exact
 Components, Decision materialization/closure, candidate Root, finalization,
-Handoff, Submission Claim, and proof contracts. The remaining vNext children
+Handoff, Submission Claim, and proof contracts. The remaining Stage 0 children
 hold frozen literal contracts for later stages and contain no adapter-private
 state or write path.
 
@@ -48,6 +49,76 @@ Decision closures, materialization identities, candidate Root, finalization,
 and Handoff. Exact root bindings are valid only when they match the Root's
 Decision-materialized `NormativeInputs` components, the initial closure base,
 and the same finalization manifest.
+
+Stage 1 adds `domain::vnext::persistence` as the canonical Store foundation.
+Exactly two nominal roles exist: Repository Store and Installation Store. Each
+Store binds one exact domain identity, uses SQLite as its sole mutable metadata
+authority, and publishes immutable digest-addressed Store Objects through the
+descriptor-anchored filesystem primitive. Generation and Head publication is a
+monotonic non-ABA compare-and-swap. Runtime currentness exists only for an
+active Store whose complete current object closure and frozen compatibility
+lineage validate; an imported restore candidate stays inactive.
+
+Each Store admits one SQLite handle only after proving that the process opened
+the exact descriptor-identified database leaf; later main-file substitution,
+unsafe WAL/shared-memory sidecars, owner/mode drift, links, or root replacement
+fail closed before and after every complete logical read or publication. The
+database and optional WAL/shared-memory leaves are rebound by exact file
+identity for each operation, so a successful stale query is suppressed if a
+leaf changes mid-read. Admission also requires exact schema, SQLite integrity,
+foreign-key closure, at most 65,536 typed snapshot rows, 1 KiB per canonical
+row, 7 MiB aggregate row bytes, and 7 MiB aggregate available Object bytes.
+Every logical read holds one deferred SQLite snapshot from admission validation
+through result construction, so a concurrent WAL writer cannot move the read
+past its validated bounds. Immutable file reads are byte-bounded even under
+concurrent growth. All mutation remains inside the Store-owned publication
+transaction, whose bounds are checked immediately after `BEGIN IMMEDIATE` and
+again before its clock advances exactly once and commits. The only clock-jump
+exception is a verified import into a pristine inactive Store: before any
+history is restored, that transaction resumes at exactly one tick after the
+source backup receipt's committed clock. The schema trigger rejects the same
+rebase after any Head, active state, or prior local publication exists. Full
+root, database, WAL, and shared-memory bindings are verified before commit and
+after a successful commit. A commit error or post-commit binding failure is
+reported as typed recovery-required uncertainty rather than an ordinary failed
+write. A stale export cut cannot commit its receipt after any intervening
+authoritative write.
+
+Reachability snapshots, retention pins, logical tombstones, collection plans,
+collection occurrences, sealed exports, restore candidates, and idempotency
+records are Store-owned history. A deterministic sealed export binds one
+coherent logical metadata cut and its object/tombstone closure. The public
+carrier is `SealedBackupV1`: one full-history V2 export plus a canonical
+`BackupReceiptV1` binding its source role/domain, lineage, snapshot/schema
+identities, exact inner bytes, and the source and committed publication clocks.
+Raw `SealedExportV1` is audit-only and is never accepted for import. Provisional
+carrier bytes remain under a private pending name until the receipt transaction
+commits; an explicit recovery operation completes public placement after a
+post-commit crash. Snapshot closure bytes publish idempotently while that
+pending carrier still exists, before the public rename; recovery accepts only
+the exact receipt-bound pending or public carrier and can reconstruct a missing
+closure from the latter. V2 exports carry an exact eight-family, 25-table, 115-column typed history in flat
+reference-only blocks; top-level lineage, authority, reachability, retention,
+entries, bytes, tombstones, and every prior-root commitment must match that
+closure exactly. Every prior receipt must also bind the reconstructed active
+Head, Generation, Reachability snapshot, active retention pins, and complete
+available/tombstoned object sidecars. The prior export ID, byte length, and
+bytes digest are verified by deterministically reconstructing that canonical
+export and receipt from its typed snapshot and exact subclosure; reconstruction
+work is bounded and does not recursively re-enter receipt validation. Snapshot
+import materializes the verified closure for every referenced prior root as
+well as the imported current root, so activate-then-reseal can continue the
+entire receipt chain without consulting the source Store. Snapshot
+block closures are capped at 15 MiB, final backup carriers at 31 MiB, prior
+roots at 1,024, and graph traversal at 65,536 discovered objects. Traversal is
+cycle-safe and rejects the first over-limit identity before loading it. A
+committed sealed export is also an intrinsic retention root for every available
+Object it names; sealing advances the retention revision, invalidates older GC
+plans, and no Stage 1 release API weakens that hold. Restore replays exact
+history into an empty inactive sibling, keeps source pointer facts audit-only,
+and requires fresh destination activation. No Store operation creates
+cross-Store authority or a cross-Store transaction, and a failed publication
+never changes the active Head.
 
 ---
 

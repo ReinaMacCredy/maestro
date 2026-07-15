@@ -11,6 +11,7 @@ pub mod paths;
 pub mod retention;
 pub mod safe_write;
 pub mod schema;
+pub mod secure_fs;
 pub mod session;
 pub mod slug;
 pub mod table;

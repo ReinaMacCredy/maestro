@@ -11,3 +11,4 @@ pub mod identity;
 pub mod integration;
 pub mod migration;
 pub mod orchestration;
+pub mod persistence;
