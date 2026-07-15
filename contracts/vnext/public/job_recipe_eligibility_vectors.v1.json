@@ -1,0 +1,3365 @@
+{
+  "schema": "maestro.vnext.job-recipe-eligibility-vectors.v1",
+  "candidate_only": true,
+  "runtime_activation": false,
+  "runtime_registration": false,
+  "row_count": 10,
+  "positive_edges": 22,
+  "negative_edges": 48,
+  "rows": [
+    {
+      "recipe_id": "bounded-continuation",
+      "exact_recipe_resource_ref": "candidate:orchestration:recipe:bounded-continuation:v1",
+      "eligible_jobs": [
+        "Setup",
+        "Research",
+        "Design",
+        "Review",
+        "Execute",
+        "Recover",
+        "Adapt"
+      ],
+      "refused_jobs": []
+    },
+    {
+      "recipe_id": "conflict-handoff",
+      "exact_recipe_resource_ref": "candidate:orchestration:recipe:conflict-handoff:v1",
+      "eligible_jobs": [
+        "Execute",
+        "Recover"
+      ],
+      "refused_jobs": [
+        "Setup",
+        "Research",
+        "Design",
+        "Review",
+        "Adapt"
+      ]
+    },
+    {
+      "recipe_id": "design-relay",
+      "exact_recipe_resource_ref": "candidate:orchestration:recipe:design-relay:v1",
+      "eligible_jobs": [
+        "Design"
+      ],
+      "refused_jobs": [
+        "Setup",
+        "Research",
+        "Review",
+        "Execute",
+        "Recover",
+        "Adapt"
+      ]
+    },
+    {
+      "recipe_id": "fanout",
+      "exact_recipe_resource_ref": "candidate:orchestration:recipe:fanout:v1",
+      "eligible_jobs": [
+        "Execute"
+      ],
+      "refused_jobs": [
+        "Setup",
+        "Research",
+        "Design",
+        "Review",
+        "Recover",
+        "Adapt"
+      ]
+    },
+    {
+      "recipe_id": "intake-triage",
+      "exact_recipe_resource_ref": "candidate:orchestration:recipe:intake-triage:v1",
+      "eligible_jobs": [
+        "Research",
+        "Design"
+      ],
+      "refused_jobs": [
+        "Setup",
+        "Review",
+        "Execute",
+        "Recover",
+        "Adapt"
+      ]
+    },
+    {
+      "recipe_id": "learning",
+      "exact_recipe_resource_ref": "candidate:orchestration:recipe:learning:v1",
+      "eligible_jobs": [
+        "Review",
+        "Recover",
+        "Adapt"
+      ],
+      "refused_jobs": [
+        "Setup",
+        "Research",
+        "Design",
+        "Execute"
+      ]
+    },
+    {
+      "recipe_id": "setup",
+      "exact_recipe_resource_ref": "candidate:orchestration:recipe:setup:v1",
+      "eligible_jobs": [
+        "Setup"
+      ],
+      "refused_jobs": [
+        "Research",
+        "Design",
+        "Review",
+        "Execute",
+        "Recover",
+        "Adapt"
+      ]
+    },
+    {
+      "recipe_id": "ship",
+      "exact_recipe_resource_ref": "candidate:orchestration:recipe:ship:v1",
+      "eligible_jobs": [
+        "Execute"
+      ],
+      "refused_jobs": [
+        "Setup",
+        "Research",
+        "Design",
+        "Review",
+        "Recover",
+        "Adapt"
+      ]
+    },
+    {
+      "recipe_id": "synthesize",
+      "exact_recipe_resource_ref": "candidate:orchestration:recipe:synthesize:v1",
+      "eligible_jobs": [
+        "Execute",
+        "Recover"
+      ],
+      "refused_jobs": [
+        "Setup",
+        "Research",
+        "Design",
+        "Review",
+        "Adapt"
+      ]
+    },
+    {
+      "recipe_id": "wayfinding",
+      "exact_recipe_resource_ref": "candidate:orchestration:recipe:wayfinding:v1",
+      "eligible_jobs": [
+        "Research",
+        "Design"
+      ],
+      "refused_jobs": [
+        "Setup",
+        "Review",
+        "Execute",
+        "Recover",
+        "Adapt"
+      ]
+    }
+  ],
+  "application_vector_count": 210,
+  "admitted_application_count": 66,
+  "refused_application_count": 144,
+  "application_vectors": [
+    {
+      "job": "Setup",
+      "selection_shape_ordinal": 1,
+      "shape": {
+        "primary": "Absent",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [],
+      "outcome": "NoRecipe",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Setup",
+      "selection_shape_ordinal": 2,
+      "shape": {
+        "primary": "Absent",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Setup",
+      "selection_shape_ordinal": 3,
+      "shape": {
+        "primary": "Absent",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Setup",
+      "selection_shape_ordinal": 4,
+      "shape": {
+        "primary": "conflict-handoff",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "conflict-handoff"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Setup",
+      "selection_shape_ordinal": 5,
+      "shape": {
+        "primary": "conflict-handoff",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "conflict-handoff",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Setup",
+      "selection_shape_ordinal": 6,
+      "shape": {
+        "primary": "conflict-handoff",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "conflict-handoff",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Setup",
+      "selection_shape_ordinal": 7,
+      "shape": {
+        "primary": "design-relay",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "design-relay"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Setup",
+      "selection_shape_ordinal": 8,
+      "shape": {
+        "primary": "design-relay",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "design-relay",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Setup",
+      "selection_shape_ordinal": 9,
+      "shape": {
+        "primary": "design-relay",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "design-relay",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Setup",
+      "selection_shape_ordinal": 10,
+      "shape": {
+        "primary": "fanout",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "fanout"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Setup",
+      "selection_shape_ordinal": 11,
+      "shape": {
+        "primary": "fanout",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "fanout",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Setup",
+      "selection_shape_ordinal": 12,
+      "shape": {
+        "primary": "fanout",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "fanout",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Setup",
+      "selection_shape_ordinal": 13,
+      "shape": {
+        "primary": "intake-triage",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "intake-triage"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Setup",
+      "selection_shape_ordinal": 14,
+      "shape": {
+        "primary": "intake-triage",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "intake-triage",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Setup",
+      "selection_shape_ordinal": 15,
+      "shape": {
+        "primary": "intake-triage",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "intake-triage",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Setup",
+      "selection_shape_ordinal": 16,
+      "shape": {
+        "primary": "learning",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "learning"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Setup",
+      "selection_shape_ordinal": 17,
+      "shape": {
+        "primary": "learning",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "learning",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Setup",
+      "selection_shape_ordinal": 18,
+      "shape": {
+        "primary": "learning",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "learning",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Setup",
+      "selection_shape_ordinal": 19,
+      "shape": {
+        "primary": "setup",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "setup"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:setup:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Setup",
+      "selection_shape_ordinal": 20,
+      "shape": {
+        "primary": "setup",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "setup",
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:setup:v1",
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Setup",
+      "selection_shape_ordinal": 21,
+      "shape": {
+        "primary": "setup",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "setup",
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:setup:v1",
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Setup",
+      "selection_shape_ordinal": 22,
+      "shape": {
+        "primary": "ship",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "ship"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Setup",
+      "selection_shape_ordinal": 23,
+      "shape": {
+        "primary": "ship",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "ship",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Setup",
+      "selection_shape_ordinal": 24,
+      "shape": {
+        "primary": "ship",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "ship",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Setup",
+      "selection_shape_ordinal": 25,
+      "shape": {
+        "primary": "synthesize",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "synthesize"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Setup",
+      "selection_shape_ordinal": 26,
+      "shape": {
+        "primary": "synthesize",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "synthesize",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Setup",
+      "selection_shape_ordinal": 27,
+      "shape": {
+        "primary": "synthesize",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "synthesize",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Setup",
+      "selection_shape_ordinal": 28,
+      "shape": {
+        "primary": "wayfinding",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "wayfinding"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Setup",
+      "selection_shape_ordinal": 29,
+      "shape": {
+        "primary": "wayfinding",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "wayfinding",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Setup",
+      "selection_shape_ordinal": 30,
+      "shape": {
+        "primary": "wayfinding",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "wayfinding",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Research",
+      "selection_shape_ordinal": 1,
+      "shape": {
+        "primary": "Absent",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [],
+      "outcome": "NoRecipe",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Research",
+      "selection_shape_ordinal": 2,
+      "shape": {
+        "primary": "Absent",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Research",
+      "selection_shape_ordinal": 3,
+      "shape": {
+        "primary": "Absent",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Research",
+      "selection_shape_ordinal": 4,
+      "shape": {
+        "primary": "conflict-handoff",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "conflict-handoff"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Research",
+      "selection_shape_ordinal": 5,
+      "shape": {
+        "primary": "conflict-handoff",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "conflict-handoff",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Research",
+      "selection_shape_ordinal": 6,
+      "shape": {
+        "primary": "conflict-handoff",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "conflict-handoff",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Research",
+      "selection_shape_ordinal": 7,
+      "shape": {
+        "primary": "design-relay",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "design-relay"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Research",
+      "selection_shape_ordinal": 8,
+      "shape": {
+        "primary": "design-relay",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "design-relay",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Research",
+      "selection_shape_ordinal": 9,
+      "shape": {
+        "primary": "design-relay",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "design-relay",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Research",
+      "selection_shape_ordinal": 10,
+      "shape": {
+        "primary": "fanout",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "fanout"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Research",
+      "selection_shape_ordinal": 11,
+      "shape": {
+        "primary": "fanout",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "fanout",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Research",
+      "selection_shape_ordinal": 12,
+      "shape": {
+        "primary": "fanout",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "fanout",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Research",
+      "selection_shape_ordinal": 13,
+      "shape": {
+        "primary": "intake-triage",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "intake-triage"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:intake-triage:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Research",
+      "selection_shape_ordinal": 14,
+      "shape": {
+        "primary": "intake-triage",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "intake-triage",
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:intake-triage:v1",
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Research",
+      "selection_shape_ordinal": 15,
+      "shape": {
+        "primary": "intake-triage",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "intake-triage",
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:intake-triage:v1",
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Research",
+      "selection_shape_ordinal": 16,
+      "shape": {
+        "primary": "learning",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "learning"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Research",
+      "selection_shape_ordinal": 17,
+      "shape": {
+        "primary": "learning",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "learning",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Research",
+      "selection_shape_ordinal": 18,
+      "shape": {
+        "primary": "learning",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "learning",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Research",
+      "selection_shape_ordinal": 19,
+      "shape": {
+        "primary": "setup",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "setup"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Research",
+      "selection_shape_ordinal": 20,
+      "shape": {
+        "primary": "setup",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "setup",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Research",
+      "selection_shape_ordinal": 21,
+      "shape": {
+        "primary": "setup",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "setup",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Research",
+      "selection_shape_ordinal": 22,
+      "shape": {
+        "primary": "ship",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "ship"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Research",
+      "selection_shape_ordinal": 23,
+      "shape": {
+        "primary": "ship",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "ship",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Research",
+      "selection_shape_ordinal": 24,
+      "shape": {
+        "primary": "ship",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "ship",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Research",
+      "selection_shape_ordinal": 25,
+      "shape": {
+        "primary": "synthesize",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "synthesize"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Research",
+      "selection_shape_ordinal": 26,
+      "shape": {
+        "primary": "synthesize",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "synthesize",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Research",
+      "selection_shape_ordinal": 27,
+      "shape": {
+        "primary": "synthesize",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "synthesize",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Research",
+      "selection_shape_ordinal": 28,
+      "shape": {
+        "primary": "wayfinding",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "wayfinding"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:wayfinding:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Research",
+      "selection_shape_ordinal": 29,
+      "shape": {
+        "primary": "wayfinding",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "wayfinding",
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:wayfinding:v1",
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Research",
+      "selection_shape_ordinal": 30,
+      "shape": {
+        "primary": "wayfinding",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "wayfinding",
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:wayfinding:v1",
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Design",
+      "selection_shape_ordinal": 1,
+      "shape": {
+        "primary": "Absent",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [],
+      "outcome": "NoRecipe",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Design",
+      "selection_shape_ordinal": 2,
+      "shape": {
+        "primary": "Absent",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Design",
+      "selection_shape_ordinal": 3,
+      "shape": {
+        "primary": "Absent",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Design",
+      "selection_shape_ordinal": 4,
+      "shape": {
+        "primary": "conflict-handoff",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "conflict-handoff"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Design",
+      "selection_shape_ordinal": 5,
+      "shape": {
+        "primary": "conflict-handoff",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "conflict-handoff",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Design",
+      "selection_shape_ordinal": 6,
+      "shape": {
+        "primary": "conflict-handoff",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "conflict-handoff",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Design",
+      "selection_shape_ordinal": 7,
+      "shape": {
+        "primary": "design-relay",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "design-relay"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:design-relay:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Design",
+      "selection_shape_ordinal": 8,
+      "shape": {
+        "primary": "design-relay",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "design-relay",
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:design-relay:v1",
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Design",
+      "selection_shape_ordinal": 9,
+      "shape": {
+        "primary": "design-relay",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "design-relay",
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:design-relay:v1",
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Design",
+      "selection_shape_ordinal": 10,
+      "shape": {
+        "primary": "fanout",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "fanout"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Design",
+      "selection_shape_ordinal": 11,
+      "shape": {
+        "primary": "fanout",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "fanout",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Design",
+      "selection_shape_ordinal": 12,
+      "shape": {
+        "primary": "fanout",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "fanout",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Design",
+      "selection_shape_ordinal": 13,
+      "shape": {
+        "primary": "intake-triage",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "intake-triage"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:intake-triage:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Design",
+      "selection_shape_ordinal": 14,
+      "shape": {
+        "primary": "intake-triage",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "intake-triage",
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:intake-triage:v1",
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Design",
+      "selection_shape_ordinal": 15,
+      "shape": {
+        "primary": "intake-triage",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "intake-triage",
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:intake-triage:v1",
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Design",
+      "selection_shape_ordinal": 16,
+      "shape": {
+        "primary": "learning",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "learning"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Design",
+      "selection_shape_ordinal": 17,
+      "shape": {
+        "primary": "learning",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "learning",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Design",
+      "selection_shape_ordinal": 18,
+      "shape": {
+        "primary": "learning",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "learning",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Design",
+      "selection_shape_ordinal": 19,
+      "shape": {
+        "primary": "setup",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "setup"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Design",
+      "selection_shape_ordinal": 20,
+      "shape": {
+        "primary": "setup",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "setup",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Design",
+      "selection_shape_ordinal": 21,
+      "shape": {
+        "primary": "setup",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "setup",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Design",
+      "selection_shape_ordinal": 22,
+      "shape": {
+        "primary": "ship",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "ship"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Design",
+      "selection_shape_ordinal": 23,
+      "shape": {
+        "primary": "ship",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "ship",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Design",
+      "selection_shape_ordinal": 24,
+      "shape": {
+        "primary": "ship",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "ship",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Design",
+      "selection_shape_ordinal": 25,
+      "shape": {
+        "primary": "synthesize",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "synthesize"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Design",
+      "selection_shape_ordinal": 26,
+      "shape": {
+        "primary": "synthesize",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "synthesize",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Design",
+      "selection_shape_ordinal": 27,
+      "shape": {
+        "primary": "synthesize",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "synthesize",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Design",
+      "selection_shape_ordinal": 28,
+      "shape": {
+        "primary": "wayfinding",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "wayfinding"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:wayfinding:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Design",
+      "selection_shape_ordinal": 29,
+      "shape": {
+        "primary": "wayfinding",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "wayfinding",
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:wayfinding:v1",
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Design",
+      "selection_shape_ordinal": 30,
+      "shape": {
+        "primary": "wayfinding",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "wayfinding",
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:wayfinding:v1",
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Review",
+      "selection_shape_ordinal": 1,
+      "shape": {
+        "primary": "Absent",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [],
+      "outcome": "NoRecipe",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Review",
+      "selection_shape_ordinal": 2,
+      "shape": {
+        "primary": "Absent",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Review",
+      "selection_shape_ordinal": 3,
+      "shape": {
+        "primary": "Absent",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Review",
+      "selection_shape_ordinal": 4,
+      "shape": {
+        "primary": "conflict-handoff",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "conflict-handoff"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Review",
+      "selection_shape_ordinal": 5,
+      "shape": {
+        "primary": "conflict-handoff",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "conflict-handoff",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Review",
+      "selection_shape_ordinal": 6,
+      "shape": {
+        "primary": "conflict-handoff",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "conflict-handoff",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Review",
+      "selection_shape_ordinal": 7,
+      "shape": {
+        "primary": "design-relay",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "design-relay"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Review",
+      "selection_shape_ordinal": 8,
+      "shape": {
+        "primary": "design-relay",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "design-relay",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Review",
+      "selection_shape_ordinal": 9,
+      "shape": {
+        "primary": "design-relay",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "design-relay",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Review",
+      "selection_shape_ordinal": 10,
+      "shape": {
+        "primary": "fanout",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "fanout"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Review",
+      "selection_shape_ordinal": 11,
+      "shape": {
+        "primary": "fanout",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "fanout",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Review",
+      "selection_shape_ordinal": 12,
+      "shape": {
+        "primary": "fanout",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "fanout",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Review",
+      "selection_shape_ordinal": 13,
+      "shape": {
+        "primary": "intake-triage",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "intake-triage"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Review",
+      "selection_shape_ordinal": 14,
+      "shape": {
+        "primary": "intake-triage",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "intake-triage",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Review",
+      "selection_shape_ordinal": 15,
+      "shape": {
+        "primary": "intake-triage",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "intake-triage",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Review",
+      "selection_shape_ordinal": 16,
+      "shape": {
+        "primary": "learning",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "learning"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:learning:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Review",
+      "selection_shape_ordinal": 17,
+      "shape": {
+        "primary": "learning",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "learning",
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:learning:v1",
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Review",
+      "selection_shape_ordinal": 18,
+      "shape": {
+        "primary": "learning",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "learning",
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:learning:v1",
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Review",
+      "selection_shape_ordinal": 19,
+      "shape": {
+        "primary": "setup",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "setup"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Review",
+      "selection_shape_ordinal": 20,
+      "shape": {
+        "primary": "setup",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "setup",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Review",
+      "selection_shape_ordinal": 21,
+      "shape": {
+        "primary": "setup",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "setup",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Review",
+      "selection_shape_ordinal": 22,
+      "shape": {
+        "primary": "ship",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "ship"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Review",
+      "selection_shape_ordinal": 23,
+      "shape": {
+        "primary": "ship",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "ship",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Review",
+      "selection_shape_ordinal": 24,
+      "shape": {
+        "primary": "ship",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "ship",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Review",
+      "selection_shape_ordinal": 25,
+      "shape": {
+        "primary": "synthesize",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "synthesize"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Review",
+      "selection_shape_ordinal": 26,
+      "shape": {
+        "primary": "synthesize",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "synthesize",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Review",
+      "selection_shape_ordinal": 27,
+      "shape": {
+        "primary": "synthesize",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "synthesize",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Review",
+      "selection_shape_ordinal": 28,
+      "shape": {
+        "primary": "wayfinding",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "wayfinding"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Review",
+      "selection_shape_ordinal": 29,
+      "shape": {
+        "primary": "wayfinding",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "wayfinding",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Review",
+      "selection_shape_ordinal": 30,
+      "shape": {
+        "primary": "wayfinding",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "wayfinding",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Execute",
+      "selection_shape_ordinal": 1,
+      "shape": {
+        "primary": "Absent",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [],
+      "outcome": "NoRecipe",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Execute",
+      "selection_shape_ordinal": 2,
+      "shape": {
+        "primary": "Absent",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Execute",
+      "selection_shape_ordinal": 3,
+      "shape": {
+        "primary": "Absent",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Execute",
+      "selection_shape_ordinal": 4,
+      "shape": {
+        "primary": "conflict-handoff",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "conflict-handoff"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:conflict-handoff:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Execute",
+      "selection_shape_ordinal": 5,
+      "shape": {
+        "primary": "conflict-handoff",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "conflict-handoff",
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:conflict-handoff:v1",
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Execute",
+      "selection_shape_ordinal": 6,
+      "shape": {
+        "primary": "conflict-handoff",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "conflict-handoff",
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:conflict-handoff:v1",
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Execute",
+      "selection_shape_ordinal": 7,
+      "shape": {
+        "primary": "design-relay",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "design-relay"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Execute",
+      "selection_shape_ordinal": 8,
+      "shape": {
+        "primary": "design-relay",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "design-relay",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Execute",
+      "selection_shape_ordinal": 9,
+      "shape": {
+        "primary": "design-relay",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "design-relay",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Execute",
+      "selection_shape_ordinal": 10,
+      "shape": {
+        "primary": "fanout",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "fanout"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:fanout:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Execute",
+      "selection_shape_ordinal": 11,
+      "shape": {
+        "primary": "fanout",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "fanout",
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:fanout:v1",
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Execute",
+      "selection_shape_ordinal": 12,
+      "shape": {
+        "primary": "fanout",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "fanout",
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:fanout:v1",
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Execute",
+      "selection_shape_ordinal": 13,
+      "shape": {
+        "primary": "intake-triage",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "intake-triage"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Execute",
+      "selection_shape_ordinal": 14,
+      "shape": {
+        "primary": "intake-triage",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "intake-triage",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Execute",
+      "selection_shape_ordinal": 15,
+      "shape": {
+        "primary": "intake-triage",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "intake-triage",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Execute",
+      "selection_shape_ordinal": 16,
+      "shape": {
+        "primary": "learning",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "learning"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Execute",
+      "selection_shape_ordinal": 17,
+      "shape": {
+        "primary": "learning",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "learning",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Execute",
+      "selection_shape_ordinal": 18,
+      "shape": {
+        "primary": "learning",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "learning",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Execute",
+      "selection_shape_ordinal": 19,
+      "shape": {
+        "primary": "setup",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "setup"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Execute",
+      "selection_shape_ordinal": 20,
+      "shape": {
+        "primary": "setup",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "setup",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Execute",
+      "selection_shape_ordinal": 21,
+      "shape": {
+        "primary": "setup",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "setup",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Execute",
+      "selection_shape_ordinal": 22,
+      "shape": {
+        "primary": "ship",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "ship"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:ship:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Execute",
+      "selection_shape_ordinal": 23,
+      "shape": {
+        "primary": "ship",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "ship",
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:ship:v1",
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Execute",
+      "selection_shape_ordinal": 24,
+      "shape": {
+        "primary": "ship",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "ship",
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:ship:v1",
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Execute",
+      "selection_shape_ordinal": 25,
+      "shape": {
+        "primary": "synthesize",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "synthesize"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:synthesize:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Execute",
+      "selection_shape_ordinal": 26,
+      "shape": {
+        "primary": "synthesize",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "synthesize",
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:synthesize:v1",
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Execute",
+      "selection_shape_ordinal": 27,
+      "shape": {
+        "primary": "synthesize",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "synthesize",
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:synthesize:v1",
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Execute",
+      "selection_shape_ordinal": 28,
+      "shape": {
+        "primary": "wayfinding",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "wayfinding"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Execute",
+      "selection_shape_ordinal": 29,
+      "shape": {
+        "primary": "wayfinding",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "wayfinding",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Execute",
+      "selection_shape_ordinal": 30,
+      "shape": {
+        "primary": "wayfinding",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "wayfinding",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Recover",
+      "selection_shape_ordinal": 1,
+      "shape": {
+        "primary": "Absent",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [],
+      "outcome": "NoRecipe",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Recover",
+      "selection_shape_ordinal": 2,
+      "shape": {
+        "primary": "Absent",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Recover",
+      "selection_shape_ordinal": 3,
+      "shape": {
+        "primary": "Absent",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Recover",
+      "selection_shape_ordinal": 4,
+      "shape": {
+        "primary": "conflict-handoff",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "conflict-handoff"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:conflict-handoff:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Recover",
+      "selection_shape_ordinal": 5,
+      "shape": {
+        "primary": "conflict-handoff",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "conflict-handoff",
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:conflict-handoff:v1",
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Recover",
+      "selection_shape_ordinal": 6,
+      "shape": {
+        "primary": "conflict-handoff",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "conflict-handoff",
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:conflict-handoff:v1",
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Recover",
+      "selection_shape_ordinal": 7,
+      "shape": {
+        "primary": "design-relay",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "design-relay"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Recover",
+      "selection_shape_ordinal": 8,
+      "shape": {
+        "primary": "design-relay",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "design-relay",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Recover",
+      "selection_shape_ordinal": 9,
+      "shape": {
+        "primary": "design-relay",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "design-relay",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Recover",
+      "selection_shape_ordinal": 10,
+      "shape": {
+        "primary": "fanout",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "fanout"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Recover",
+      "selection_shape_ordinal": 11,
+      "shape": {
+        "primary": "fanout",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "fanout",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Recover",
+      "selection_shape_ordinal": 12,
+      "shape": {
+        "primary": "fanout",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "fanout",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Recover",
+      "selection_shape_ordinal": 13,
+      "shape": {
+        "primary": "intake-triage",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "intake-triage"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Recover",
+      "selection_shape_ordinal": 14,
+      "shape": {
+        "primary": "intake-triage",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "intake-triage",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Recover",
+      "selection_shape_ordinal": 15,
+      "shape": {
+        "primary": "intake-triage",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "intake-triage",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Recover",
+      "selection_shape_ordinal": 16,
+      "shape": {
+        "primary": "learning",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "learning"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:learning:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Recover",
+      "selection_shape_ordinal": 17,
+      "shape": {
+        "primary": "learning",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "learning",
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:learning:v1",
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Recover",
+      "selection_shape_ordinal": 18,
+      "shape": {
+        "primary": "learning",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "learning",
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:learning:v1",
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Recover",
+      "selection_shape_ordinal": 19,
+      "shape": {
+        "primary": "setup",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "setup"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Recover",
+      "selection_shape_ordinal": 20,
+      "shape": {
+        "primary": "setup",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "setup",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Recover",
+      "selection_shape_ordinal": 21,
+      "shape": {
+        "primary": "setup",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "setup",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Recover",
+      "selection_shape_ordinal": 22,
+      "shape": {
+        "primary": "ship",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "ship"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Recover",
+      "selection_shape_ordinal": 23,
+      "shape": {
+        "primary": "ship",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "ship",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Recover",
+      "selection_shape_ordinal": 24,
+      "shape": {
+        "primary": "ship",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "ship",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Recover",
+      "selection_shape_ordinal": 25,
+      "shape": {
+        "primary": "synthesize",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "synthesize"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:synthesize:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Recover",
+      "selection_shape_ordinal": 26,
+      "shape": {
+        "primary": "synthesize",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "synthesize",
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:synthesize:v1",
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Recover",
+      "selection_shape_ordinal": 27,
+      "shape": {
+        "primary": "synthesize",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "synthesize",
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:synthesize:v1",
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Recover",
+      "selection_shape_ordinal": 28,
+      "shape": {
+        "primary": "wayfinding",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "wayfinding"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Recover",
+      "selection_shape_ordinal": 29,
+      "shape": {
+        "primary": "wayfinding",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "wayfinding",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Recover",
+      "selection_shape_ordinal": 30,
+      "shape": {
+        "primary": "wayfinding",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "wayfinding",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Adapt",
+      "selection_shape_ordinal": 1,
+      "shape": {
+        "primary": "Absent",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [],
+      "outcome": "NoRecipe",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Adapt",
+      "selection_shape_ordinal": 2,
+      "shape": {
+        "primary": "Absent",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Adapt",
+      "selection_shape_ordinal": 3,
+      "shape": {
+        "primary": "Absent",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Adapt",
+      "selection_shape_ordinal": 4,
+      "shape": {
+        "primary": "conflict-handoff",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "conflict-handoff"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Adapt",
+      "selection_shape_ordinal": 5,
+      "shape": {
+        "primary": "conflict-handoff",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "conflict-handoff",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Adapt",
+      "selection_shape_ordinal": 6,
+      "shape": {
+        "primary": "conflict-handoff",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "conflict-handoff",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Adapt",
+      "selection_shape_ordinal": 7,
+      "shape": {
+        "primary": "design-relay",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "design-relay"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Adapt",
+      "selection_shape_ordinal": 8,
+      "shape": {
+        "primary": "design-relay",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "design-relay",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Adapt",
+      "selection_shape_ordinal": 9,
+      "shape": {
+        "primary": "design-relay",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "design-relay",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Adapt",
+      "selection_shape_ordinal": 10,
+      "shape": {
+        "primary": "fanout",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "fanout"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Adapt",
+      "selection_shape_ordinal": 11,
+      "shape": {
+        "primary": "fanout",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "fanout",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Adapt",
+      "selection_shape_ordinal": 12,
+      "shape": {
+        "primary": "fanout",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "fanout",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Adapt",
+      "selection_shape_ordinal": 13,
+      "shape": {
+        "primary": "intake-triage",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "intake-triage"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Adapt",
+      "selection_shape_ordinal": 14,
+      "shape": {
+        "primary": "intake-triage",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "intake-triage",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Adapt",
+      "selection_shape_ordinal": 15,
+      "shape": {
+        "primary": "intake-triage",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "intake-triage",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Adapt",
+      "selection_shape_ordinal": 16,
+      "shape": {
+        "primary": "learning",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "learning"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:learning:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Adapt",
+      "selection_shape_ordinal": 17,
+      "shape": {
+        "primary": "learning",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "learning",
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:learning:v1",
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Adapt",
+      "selection_shape_ordinal": 18,
+      "shape": {
+        "primary": "learning",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "learning",
+        "bounded-continuation"
+      ],
+      "outcome": "Admitted",
+      "admitted_recipe_resource_refs": [
+        "candidate:orchestration:recipe:learning:v1",
+        "candidate:orchestration:recipe:bounded-continuation:v1"
+      ],
+      "partial_fallback": false
+    },
+    {
+      "job": "Adapt",
+      "selection_shape_ordinal": 19,
+      "shape": {
+        "primary": "setup",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "setup"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Adapt",
+      "selection_shape_ordinal": 20,
+      "shape": {
+        "primary": "setup",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "setup",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Adapt",
+      "selection_shape_ordinal": 21,
+      "shape": {
+        "primary": "setup",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "setup",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Adapt",
+      "selection_shape_ordinal": 22,
+      "shape": {
+        "primary": "ship",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "ship"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Adapt",
+      "selection_shape_ordinal": 23,
+      "shape": {
+        "primary": "ship",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "ship",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Adapt",
+      "selection_shape_ordinal": 24,
+      "shape": {
+        "primary": "ship",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "ship",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Adapt",
+      "selection_shape_ordinal": 25,
+      "shape": {
+        "primary": "synthesize",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "synthesize"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Adapt",
+      "selection_shape_ordinal": 26,
+      "shape": {
+        "primary": "synthesize",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "synthesize",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Adapt",
+      "selection_shape_ordinal": 27,
+      "shape": {
+        "primary": "synthesize",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "synthesize",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Adapt",
+      "selection_shape_ordinal": 28,
+      "shape": {
+        "primary": "wayfinding",
+        "continuation": "Absent"
+      },
+      "selected_recipe_ids": [
+        "wayfinding"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Adapt",
+      "selection_shape_ordinal": 29,
+      "shape": {
+        "primary": "wayfinding",
+        "continuation": "attended"
+      },
+      "selected_recipe_ids": [
+        "wayfinding",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    },
+    {
+      "job": "Adapt",
+      "selection_shape_ordinal": 30,
+      "shape": {
+        "primary": "wayfinding",
+        "continuation": "unattended"
+      },
+      "selected_recipe_ids": [
+        "wayfinding",
+        "bounded-continuation"
+      ],
+      "outcome": "Refused",
+      "admitted_recipe_resource_refs": [],
+      "partial_fallback": false
+    }
+  ]
+}

@@ -25,3 +25,4 @@ pub mod schema_contracts;
 pub mod search;
 pub mod skills;
 pub mod task;
+pub mod vnext;

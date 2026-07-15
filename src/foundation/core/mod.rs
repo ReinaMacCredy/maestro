@@ -1,4 +1,5 @@
 pub mod backup;
+pub mod deterministic_cbor;
 pub mod diff;
 pub mod error;
 pub mod fs;

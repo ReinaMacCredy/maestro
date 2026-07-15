@@ -1,0 +1,431 @@
+{
+  "canonical_value": [
+    1,
+    [
+      [
+        "authoritative:.maestro/cards/maestro-whole-flow-architecture-refoundation/design.md",
+        {
+          "bytes": "85787cfb4fb32eefe078adbf9ede66114b12c6304af10857bd676a1cd9875d18"
+        }
+      ],
+      [
+        "authoritative:.maestro/cards/maestro-whole-flow-architecture-refoundation/decisions.yaml",
+        {
+          "bytes": "1f97e67b156d5a17d13b94ff955ad17efeb3bb71a4b74b1aec14e20dac1100dd"
+        }
+      ],
+      [
+        "authoritative:.maestro/cards/maestro-whole-flow-architecture-refoundation/card.yaml",
+        {
+          "bytes": "2cdf1f74843a6eca926ff3bc48e060654350e6a03b65342f8d7be48d111379b4"
+        }
+      ],
+      [
+        "contracts/vnext/public/public_contracts.v1.json",
+        {
+          "bytes": "3220a6e927983acaf797225d3dca997dba934f4b5e2ba88c96267110073875fd"
+        }
+      ],
+      [
+        "contracts/vnext/public/recipe_selection_application_vectors.v1.json",
+        {
+          "bytes": "d286a98d5d6d7146652a5a114bef15ef15e30fe49bab29ed996100c6d2357635"
+        }
+      ],
+      [
+        "contracts/vnext/public/recipe_return_reasons.v1.json",
+        {
+          "bytes": "30b80df9a97ff63852bfbf27694660c9aa26a803195c381701acaab85045c215"
+        }
+      ],
+      [
+        "contracts/vnext/public/job_recipe_eligibility_vectors.v1.json",
+        {
+          "bytes": "c6d9f2c21b8860302b7efcb0ce843c2953862acd5e024d0a9b975cc165bf1870"
+        }
+      ],
+      [
+        "contracts/vnext/public/job_route_contract.v1.json",
+        {
+          "bytes": "4fab8c4dfff5f3bba76633a5424401096876b99b121e3418b74cb82441289647"
+        }
+      ],
+      [
+        "contracts/vnext/public/capability_method_contracts.v1.json",
+        {
+          "bytes": "a32159ea9560182b60f264d4bbd868f0dd2ebeae4b940218aefe38604a33aeff"
+        }
+      ],
+      [
+        "contracts/vnext/public/context_budget_profiles.v1.json",
+        {
+          "bytes": "a7f80aa690cc602b6cae6f236e905cc12b3cafb5662a5a6962fd7065d4cb2d35"
+        }
+      ],
+      [
+        "contracts/vnext/public/setup_operation_compatibility.v1.json",
+        {
+          "bytes": "ea513590f652948f6f8808fafa44c11d4179cf6da00f35ff77bd948973a68334"
+        }
+      ],
+      [
+        "contracts/vnext/public/skill_activation_contract.v1.json",
+        {
+          "bytes": "58b21f6a965fdc1cd0abffce952f7c67281d49d7acf9ab3166c1618b743c2560"
+        }
+      ],
+      [
+        "contracts/vnext/public/v1_skill_ledger.v1.json",
+        {
+          "bytes": "2246b81858c8ed20d05595bfbf44d34532d3ea57c7ff2102f2449bd369b01ee4"
+        }
+      ],
+      [
+        "contracts/vnext/public/census_admission_report.v1.json",
+        {
+          "bytes": "1659d28dd49f3d0c004ef39d54997f498cf6bacb8a75b1626dc418b057afda34"
+        }
+      ],
+      [
+        "contracts/vnext/public/physical_census.commitment.v1.json",
+        {
+          "bytes": "863ba097df5f1aa3c73266f0eb68661234991bffcbba3a6706e38d4845ddc063"
+        }
+      ],
+      [
+        "contracts/vnext/public/physical_census.historical-output.txt",
+        {
+          "bytes": "5b27eb5d880e9b8ab313672676fc25b5b39d95b1bd476b10b626ed13b5155341"
+        }
+      ],
+      [
+        "contracts/vnext/public/direct_consumers.c325.v1.json",
+        {
+          "bytes": "ccd22243030aa3bbbd02fefd4ab17371b9bfb2c9842311c5acddbee5bd220c29"
+        }
+      ],
+      [
+        "contracts/vnext/public/embedded_resources.e204.v1.json",
+        {
+          "bytes": "70139c212c5533805e066d6625b7fbdf168407690a79c564ceb46488383c24bc"
+        }
+      ],
+      [
+        "contracts/vnext/public/historical_source_coverage_inputs.v1.json",
+        {
+          "bytes": "40b1d37adc0119dfabd461ee7f74ad257a5bd0207a1c41dcceeea979c95a76b0"
+        }
+      ],
+      [
+        "contracts/vnext/public/bundle_membership_inputs.v1.json",
+        {
+          "bytes": "92c3e188b73686c2ac77b52a1254fa7046dc13adecdaf67d64529ec41be45d61"
+        }
+      ],
+      [
+        "embedded/vnext/capability/instruction-tree.v1.json",
+        {
+          "bytes": "891d034a3ccb0cc698484fad413d05f345cdf556ce75e31a852522759bf28b55"
+        }
+      ],
+      [
+        "embedded/vnext/capability/context-budget/agents-compatible-cli.v1.json",
+        {
+          "bytes": "f9e84cf934a1fcd9600820c5f47f2fd5160c3d20ea45a73fabf6fc5987678760"
+        }
+      ],
+      [
+        "embedded/vnext/capability/context-budget/claude-code.v1.json",
+        {
+          "bytes": "554b5e6843c556cbaf38d6710442049a8b7468f0746c85cb10a0cfaea1625d15"
+        }
+      ],
+      [
+        "embedded/vnext/adapter/mcp-tools.v1.json",
+        {
+          "bytes": "945ae506a1dbed88df25061fc75e8d90fe1f3ce64bf97a8ecb14531f0c507ee9"
+        }
+      ],
+      [
+        "embedded/vnext/orchestration/recipe-catalog.v1.json",
+        {
+          "bytes": "2d185d48a521786680258d89517af37853bedfec4ea09c2db95cba979a611a1d"
+        }
+      ],
+      [
+        "contracts/vnext/catalogs/generated/catalog-profile-grammar-v1.json",
+        {
+          "bytes": "38fd4e88ecaa185fc76f7dd20cf221304daf4a5e8058d8b5187d74828d1d5196"
+        }
+      ],
+      [
+        "contracts/vnext/catalogs/generated/catalog-01-observation.json",
+        {
+          "bytes": "3f9acd1efb25c1ade2555a538f603d9c09d7bc9349a7634263bee88fc5529091"
+        }
+      ],
+      [
+        "contracts/vnext/catalogs/generated/catalog-02-effect.json",
+        {
+          "bytes": "39a1c4795b02933c83b54c17faafa23add55643501a5b9dd7154bc1ec0f3c910"
+        }
+      ],
+      [
+        "contracts/vnext/catalogs/generated/catalog-05-ceremony.json",
+        {
+          "bytes": "efb01184d39c5384a2ddac2237ada963468f606d2b4a85b339b420635b4ffb3e"
+        }
+      ],
+      [
+        "contracts/vnext/catalogs/generated/catalog-09-action-spec.json",
+        {
+          "bytes": "df15c67ba312585869836aaeda1c849b3bb84e98ba65baf78c51fde85473113c"
+        }
+      ],
+      [
+        "embedded/vnext/orchestration/recipes/bounded-continuation/manifest.v1.json",
+        {
+          "bytes": "db1877ba0a737d3c8f68e1751a1bb23d50e57f9eea02373f55ddb1a0c664c463"
+        }
+      ],
+      [
+        "embedded/vnext/orchestration/recipes/conflict-handoff/manifest.v1.json",
+        {
+          "bytes": "4a2f8b7e10a58677d8f0c423ab07c31e998348ce17fd899146532c8254984f73"
+        }
+      ],
+      [
+        "embedded/vnext/orchestration/recipes/design-relay/manifest.v1.json",
+        {
+          "bytes": "dff37c9873f03153671cf5877f93a91d80573a931b4f33c1cbc9f23e5f6be3f4"
+        }
+      ],
+      [
+        "embedded/vnext/orchestration/recipes/fanout/manifest.v1.json",
+        {
+          "bytes": "be55f0be709b4f4721e10e65d7c1af93a94852e1b4816cdaf85f6612d1ac0c23"
+        }
+      ],
+      [
+        "embedded/vnext/orchestration/recipes/intake-triage/manifest.v1.json",
+        {
+          "bytes": "9bdba94ee245503952a1d207ea7f2fdf57a2ff708822303b628a00026e48ead2"
+        }
+      ],
+      [
+        "embedded/vnext/orchestration/recipes/learning/manifest.v1.json",
+        {
+          "bytes": "1b195f77f5968457512724a82ba7e941f9b546f77fcf5afd11775f7fd265c488"
+        }
+      ],
+      [
+        "embedded/vnext/orchestration/recipes/setup/manifest.v1.json",
+        {
+          "bytes": "d0a34c510aad9b41bbfe9d1d3b6bf623e9e2a518fbbe3d91a94174e4ca5d1464"
+        }
+      ],
+      [
+        "embedded/vnext/orchestration/recipes/ship/manifest.v1.json",
+        {
+          "bytes": "df5d727e35cad825b2e2d2dd327a770b34bdd27ae9d5e7333dd731f0a4edddbc"
+        }
+      ],
+      [
+        "embedded/vnext/orchestration/recipes/synthesize/manifest.v1.json",
+        {
+          "bytes": "a0dde2a620b8c003be25da0de9f3fc4a607288d29d370ba6eedf892893336663"
+        }
+      ],
+      [
+        "embedded/vnext/orchestration/recipes/wayfinding/manifest.v1.json",
+        {
+          "bytes": "30f900490d5f06697702a2ee02e0b4b92bbdf2e35e1caa1e85e1abeaad6851c7"
+        }
+      ],
+      [
+        "embedded/vnext/orchestration/profiles/bounded-continuation/attended.v1.json",
+        {
+          "bytes": "e4c5e1455fa2217abdc5a366b068911ab142c4369e0ff078f6e4da649c4fc1e2"
+        }
+      ],
+      [
+        "embedded/vnext/orchestration/profiles/bounded-continuation/unattended.v1.json",
+        {
+          "bytes": "ad4dc1f942c584c6152fb1160ff321753c45b5d72e2549bc425355c90310a7df"
+        }
+      ]
+    ]
+  ],
+  "inputs": [
+    {
+      "path": "authoritative:.maestro/cards/maestro-whole-flow-architecture-refoundation/design.md",
+      "sha256": "85787cfb4fb32eefe078adbf9ede66114b12c6304af10857bd676a1cd9875d18"
+    },
+    {
+      "path": "authoritative:.maestro/cards/maestro-whole-flow-architecture-refoundation/decisions.yaml",
+      "sha256": "1f97e67b156d5a17d13b94ff955ad17efeb3bb71a4b74b1aec14e20dac1100dd"
+    },
+    {
+      "path": "authoritative:.maestro/cards/maestro-whole-flow-architecture-refoundation/card.yaml",
+      "sha256": "2cdf1f74843a6eca926ff3bc48e060654350e6a03b65342f8d7be48d111379b4"
+    },
+    {
+      "path": "contracts/vnext/public/public_contracts.v1.json",
+      "sha256": "3220a6e927983acaf797225d3dca997dba934f4b5e2ba88c96267110073875fd"
+    },
+    {
+      "path": "contracts/vnext/public/recipe_selection_application_vectors.v1.json",
+      "sha256": "d286a98d5d6d7146652a5a114bef15ef15e30fe49bab29ed996100c6d2357635"
+    },
+    {
+      "path": "contracts/vnext/public/recipe_return_reasons.v1.json",
+      "sha256": "30b80df9a97ff63852bfbf27694660c9aa26a803195c381701acaab85045c215"
+    },
+    {
+      "path": "contracts/vnext/public/job_recipe_eligibility_vectors.v1.json",
+      "sha256": "c6d9f2c21b8860302b7efcb0ce843c2953862acd5e024d0a9b975cc165bf1870"
+    },
+    {
+      "path": "contracts/vnext/public/job_route_contract.v1.json",
+      "sha256": "4fab8c4dfff5f3bba76633a5424401096876b99b121e3418b74cb82441289647"
+    },
+    {
+      "path": "contracts/vnext/public/capability_method_contracts.v1.json",
+      "sha256": "a32159ea9560182b60f264d4bbd868f0dd2ebeae4b940218aefe38604a33aeff"
+    },
+    {
+      "path": "contracts/vnext/public/context_budget_profiles.v1.json",
+      "sha256": "a7f80aa690cc602b6cae6f236e905cc12b3cafb5662a5a6962fd7065d4cb2d35"
+    },
+    {
+      "path": "contracts/vnext/public/setup_operation_compatibility.v1.json",
+      "sha256": "ea513590f652948f6f8808fafa44c11d4179cf6da00f35ff77bd948973a68334"
+    },
+    {
+      "path": "contracts/vnext/public/skill_activation_contract.v1.json",
+      "sha256": "58b21f6a965fdc1cd0abffce952f7c67281d49d7acf9ab3166c1618b743c2560"
+    },
+    {
+      "path": "contracts/vnext/public/v1_skill_ledger.v1.json",
+      "sha256": "2246b81858c8ed20d05595bfbf44d34532d3ea57c7ff2102f2449bd369b01ee4"
+    },
+    {
+      "path": "contracts/vnext/public/census_admission_report.v1.json",
+      "sha256": "1659d28dd49f3d0c004ef39d54997f498cf6bacb8a75b1626dc418b057afda34"
+    },
+    {
+      "path": "contracts/vnext/public/physical_census.commitment.v1.json",
+      "sha256": "863ba097df5f1aa3c73266f0eb68661234991bffcbba3a6706e38d4845ddc063"
+    },
+    {
+      "path": "contracts/vnext/public/physical_census.historical-output.txt",
+      "sha256": "5b27eb5d880e9b8ab313672676fc25b5b39d95b1bd476b10b626ed13b5155341"
+    },
+    {
+      "path": "contracts/vnext/public/direct_consumers.c325.v1.json",
+      "sha256": "ccd22243030aa3bbbd02fefd4ab17371b9bfb2c9842311c5acddbee5bd220c29"
+    },
+    {
+      "path": "contracts/vnext/public/embedded_resources.e204.v1.json",
+      "sha256": "70139c212c5533805e066d6625b7fbdf168407690a79c564ceb46488383c24bc"
+    },
+    {
+      "path": "contracts/vnext/public/historical_source_coverage_inputs.v1.json",
+      "sha256": "40b1d37adc0119dfabd461ee7f74ad257a5bd0207a1c41dcceeea979c95a76b0"
+    },
+    {
+      "path": "contracts/vnext/public/bundle_membership_inputs.v1.json",
+      "sha256": "92c3e188b73686c2ac77b52a1254fa7046dc13adecdaf67d64529ec41be45d61"
+    },
+    {
+      "path": "embedded/vnext/capability/instruction-tree.v1.json",
+      "sha256": "891d034a3ccb0cc698484fad413d05f345cdf556ce75e31a852522759bf28b55"
+    },
+    {
+      "path": "embedded/vnext/capability/context-budget/agents-compatible-cli.v1.json",
+      "sha256": "f9e84cf934a1fcd9600820c5f47f2fd5160c3d20ea45a73fabf6fc5987678760"
+    },
+    {
+      "path": "embedded/vnext/capability/context-budget/claude-code.v1.json",
+      "sha256": "554b5e6843c556cbaf38d6710442049a8b7468f0746c85cb10a0cfaea1625d15"
+    },
+    {
+      "path": "embedded/vnext/adapter/mcp-tools.v1.json",
+      "sha256": "945ae506a1dbed88df25061fc75e8d90fe1f3ce64bf97a8ecb14531f0c507ee9"
+    },
+    {
+      "path": "embedded/vnext/orchestration/recipe-catalog.v1.json",
+      "sha256": "2d185d48a521786680258d89517af37853bedfec4ea09c2db95cba979a611a1d"
+    },
+    {
+      "path": "contracts/vnext/catalogs/generated/catalog-profile-grammar-v1.json",
+      "sha256": "38fd4e88ecaa185fc76f7dd20cf221304daf4a5e8058d8b5187d74828d1d5196"
+    },
+    {
+      "path": "contracts/vnext/catalogs/generated/catalog-01-observation.json",
+      "sha256": "3f9acd1efb25c1ade2555a538f603d9c09d7bc9349a7634263bee88fc5529091"
+    },
+    {
+      "path": "contracts/vnext/catalogs/generated/catalog-02-effect.json",
+      "sha256": "39a1c4795b02933c83b54c17faafa23add55643501a5b9dd7154bc1ec0f3c910"
+    },
+    {
+      "path": "contracts/vnext/catalogs/generated/catalog-05-ceremony.json",
+      "sha256": "efb01184d39c5384a2ddac2237ada963468f606d2b4a85b339b420635b4ffb3e"
+    },
+    {
+      "path": "contracts/vnext/catalogs/generated/catalog-09-action-spec.json",
+      "sha256": "df15c67ba312585869836aaeda1c849b3bb84e98ba65baf78c51fde85473113c"
+    },
+    {
+      "path": "embedded/vnext/orchestration/recipes/bounded-continuation/manifest.v1.json",
+      "sha256": "db1877ba0a737d3c8f68e1751a1bb23d50e57f9eea02373f55ddb1a0c664c463"
+    },
+    {
+      "path": "embedded/vnext/orchestration/recipes/conflict-handoff/manifest.v1.json",
+      "sha256": "4a2f8b7e10a58677d8f0c423ab07c31e998348ce17fd899146532c8254984f73"
+    },
+    {
+      "path": "embedded/vnext/orchestration/recipes/design-relay/manifest.v1.json",
+      "sha256": "dff37c9873f03153671cf5877f93a91d80573a931b4f33c1cbc9f23e5f6be3f4"
+    },
+    {
+      "path": "embedded/vnext/orchestration/recipes/fanout/manifest.v1.json",
+      "sha256": "be55f0be709b4f4721e10e65d7c1af93a94852e1b4816cdaf85f6612d1ac0c23"
+    },
+    {
+      "path": "embedded/vnext/orchestration/recipes/intake-triage/manifest.v1.json",
+      "sha256": "9bdba94ee245503952a1d207ea7f2fdf57a2ff708822303b628a00026e48ead2"
+    },
+    {
+      "path": "embedded/vnext/orchestration/recipes/learning/manifest.v1.json",
+      "sha256": "1b195f77f5968457512724a82ba7e941f9b546f77fcf5afd11775f7fd265c488"
+    },
+    {
+      "path": "embedded/vnext/orchestration/recipes/setup/manifest.v1.json",
+      "sha256": "d0a34c510aad9b41bbfe9d1d3b6bf623e9e2a518fbbe3d91a94174e4ca5d1464"
+    },
+    {
+      "path": "embedded/vnext/orchestration/recipes/ship/manifest.v1.json",
+      "sha256": "df5d727e35cad825b2e2d2dd327a770b34bdd27ae9d5e7333dd731f0a4edddbc"
+    },
+    {
+      "path": "embedded/vnext/orchestration/recipes/synthesize/manifest.v1.json",
+      "sha256": "a0dde2a620b8c003be25da0de9f3fc4a607288d29d370ba6eedf892893336663"
+    },
+    {
+      "path": "embedded/vnext/orchestration/recipes/wayfinding/manifest.v1.json",
+      "sha256": "30f900490d5f06697702a2ee02e0b4b92bbdf2e35e1caa1e85e1abeaad6851c7"
+    },
+    {
+      "path": "embedded/vnext/orchestration/profiles/bounded-continuation/attended.v1.json",
+      "sha256": "e4c5e1455fa2217abdc5a366b068911ab142c4369e0ff078f6e4da649c4fc1e2"
+    },
+    {
+      "path": "embedded/vnext/orchestration/profiles/bounded-continuation/unattended.v1.json",
+      "sha256": "ad4dc1f942c584c6152fb1160ff321753c45b5d72e2549bc425355c90310a7df"
+    }
+  ],
+  "resource_input_id": "sha256:30753104cceece9fb3154740b15928eb16caff1e3878de21b1bcdc5930f39778",
+  "schema": "maestro.vnext.stage0-public-identity-resource-input.v1"
+}

@@ -1,0 +1,1404 @@
+{
+  "byte_length": 983,
+  "catalog_slug": "repository-capacity",
+  "catalog_tag": 3,
+  "catalog_type": "RepositoryGovernedCapacitySlotKindV1",
+  "cbor_hex": "8578366d61657374726f2e766e6578742e676f7665726e65642d63617061636974792e7265706f7369746f72792e6d616e69666573742e763158208f28075f9c9cd3f1eeefe325e39ac1fa4553d22e546cfe22353d5fbc5a16716f5820ad19a84a87bfe7e5fd27df6cd3e152a813f077d9e6732fd31474d90a52d6f3758b0301015820b7ef635dcd29af4fc41f20cd670b726e5627c2f7210344d058e7c188ace69647805820295f78c06fa583384b656a3e254e2612c39da5f18830cad00408561f832cf58806065820157d5a2be7924d1aea2d5a1886541dbe9a132bc0828516cbdf5555652e4d9f6c5820768af72dbe4663f14de4f24f904920d308d1b961ad16e674b882802557fe0ad00186830158202b4b3204e08532f9f6b22999945f3d47efbb1a69b53128af7ea839384eff2e428601781a5265706f7369746f72794f7264696e6172794d75746174696f6e82095820fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709018301011bfffffffffffffffff5830258207a7d79ffa481faffe3ae24e1ba1c256148e2147e7b16a2e24ec7834fd974db38860278215265706f7369746f7279417574686f7269747941646d696e697374726174696f6e82095820fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709018301011bfffffffffffffffff5830358209b2e5d193e7f6ef43c06aa3e20a533f2d89cf431dbe62cfd45bf0e04434b90fd8603781d5265706f7369746f727945766964656e63654163717569736974696f6e82095820fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709018301011bfffffffffffffffff583045820825f06584835267236e63b99972b5cfa2a8beecfd2dcdd6f069f880c37527d5e8604781d5265706f7369746f7279506c616e6e696e675075626c69636174696f6e82095820fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709018301011bfffffffffffffffff583055820b1b55f5147727db39f1b71327df8ca41fa37919ec188165a86dd2a5b26563485860578185265706f7369746f727945787465726e616c45666665637482095820fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709018301011bfffffffffffffffff5830658204ac1d625810a59ab1893376987ffb86429cbeec9496731340cd48c4fbfe5267b860678205265706f7369746f727950657273697374656e63654d61696e74656e616e636582095820fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709018301011bfffffffffffffffff5",
+  "descriptors": [
+    {
+      "byte_length": 173,
+      "cbor_hex": "8378386d61657374726f2e766e6578742e676f7665726e65642d63617061636974792e7265706f7369746f72792e64657363726970746f722e76315820ad19a84a87bfe7e5fd27df6cd3e152a813f077d9e6732fd31474d90a52d6f3758601781a5265706f7369746f72794f7264696e6172794d75746174696f6e82095820fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709018301011bfffffffffffffffff5",
+      "descriptor_id": "2b4b3204e08532f9f6b22999945f3d47efbb1a69b53128af7ea839384eff2e42",
+      "identity_envelope": [
+        "maestro.vnext.governed-capacity.repository.descriptor.v1",
+        {
+          "bytes": "ad19a84a87bfe7e5fd27df6cd3e152a813f077d9e6732fd31474d90a52d6f375"
+        },
+        [
+          1,
+          "RepositoryOrdinaryMutation",
+          [
+            9,
+            {
+              "bytes": "fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709"
+            }
+          ],
+          1,
+          [
+            1,
+            1,
+            18446744073709551615
+          ],
+          true
+        ]
+      ],
+      "value": [
+        1,
+        "RepositoryOrdinaryMutation",
+        [
+          9,
+          {
+            "bytes": "fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709"
+          }
+        ],
+        1,
+        [
+          1,
+          1,
+          18446744073709551615
+        ],
+        true
+      ]
+    },
+    {
+      "byte_length": 180,
+      "cbor_hex": "8378386d61657374726f2e766e6578742e676f7665726e65642d63617061636974792e7265706f7369746f72792e64657363726970746f722e76315820ad19a84a87bfe7e5fd27df6cd3e152a813f077d9e6732fd31474d90a52d6f375860278215265706f7369746f7279417574686f7269747941646d696e697374726174696f6e82095820fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709018301011bfffffffffffffffff5",
+      "descriptor_id": "7a7d79ffa481faffe3ae24e1ba1c256148e2147e7b16a2e24ec7834fd974db38",
+      "identity_envelope": [
+        "maestro.vnext.governed-capacity.repository.descriptor.v1",
+        {
+          "bytes": "ad19a84a87bfe7e5fd27df6cd3e152a813f077d9e6732fd31474d90a52d6f375"
+        },
+        [
+          2,
+          "RepositoryAuthorityAdministration",
+          [
+            9,
+            {
+              "bytes": "fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709"
+            }
+          ],
+          1,
+          [
+            1,
+            1,
+            18446744073709551615
+          ],
+          true
+        ]
+      ],
+      "value": [
+        2,
+        "RepositoryAuthorityAdministration",
+        [
+          9,
+          {
+            "bytes": "fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709"
+          }
+        ],
+        1,
+        [
+          1,
+          1,
+          18446744073709551615
+        ],
+        true
+      ]
+    },
+    {
+      "byte_length": 176,
+      "cbor_hex": "8378386d61657374726f2e766e6578742e676f7665726e65642d63617061636974792e7265706f7369746f72792e64657363726970746f722e76315820ad19a84a87bfe7e5fd27df6cd3e152a813f077d9e6732fd31474d90a52d6f3758603781d5265706f7369746f727945766964656e63654163717569736974696f6e82095820fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709018301011bfffffffffffffffff5",
+      "descriptor_id": "9b2e5d193e7f6ef43c06aa3e20a533f2d89cf431dbe62cfd45bf0e04434b90fd",
+      "identity_envelope": [
+        "maestro.vnext.governed-capacity.repository.descriptor.v1",
+        {
+          "bytes": "ad19a84a87bfe7e5fd27df6cd3e152a813f077d9e6732fd31474d90a52d6f375"
+        },
+        [
+          3,
+          "RepositoryEvidenceAcquisition",
+          [
+            9,
+            {
+              "bytes": "fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709"
+            }
+          ],
+          1,
+          [
+            1,
+            1,
+            18446744073709551615
+          ],
+          true
+        ]
+      ],
+      "value": [
+        3,
+        "RepositoryEvidenceAcquisition",
+        [
+          9,
+          {
+            "bytes": "fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709"
+          }
+        ],
+        1,
+        [
+          1,
+          1,
+          18446744073709551615
+        ],
+        true
+      ]
+    },
+    {
+      "byte_length": 176,
+      "cbor_hex": "8378386d61657374726f2e766e6578742e676f7665726e65642d63617061636974792e7265706f7369746f72792e64657363726970746f722e76315820ad19a84a87bfe7e5fd27df6cd3e152a813f077d9e6732fd31474d90a52d6f3758604781d5265706f7369746f7279506c616e6e696e675075626c69636174696f6e82095820fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709018301011bfffffffffffffffff5",
+      "descriptor_id": "825f06584835267236e63b99972b5cfa2a8beecfd2dcdd6f069f880c37527d5e",
+      "identity_envelope": [
+        "maestro.vnext.governed-capacity.repository.descriptor.v1",
+        {
+          "bytes": "ad19a84a87bfe7e5fd27df6cd3e152a813f077d9e6732fd31474d90a52d6f375"
+        },
+        [
+          4,
+          "RepositoryPlanningPublication",
+          [
+            9,
+            {
+              "bytes": "fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709"
+            }
+          ],
+          1,
+          [
+            1,
+            1,
+            18446744073709551615
+          ],
+          true
+        ]
+      ],
+      "value": [
+        4,
+        "RepositoryPlanningPublication",
+        [
+          9,
+          {
+            "bytes": "fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709"
+          }
+        ],
+        1,
+        [
+          1,
+          1,
+          18446744073709551615
+        ],
+        true
+      ]
+    },
+    {
+      "byte_length": 171,
+      "cbor_hex": "8378386d61657374726f2e766e6578742e676f7665726e65642d63617061636974792e7265706f7369746f72792e64657363726970746f722e76315820ad19a84a87bfe7e5fd27df6cd3e152a813f077d9e6732fd31474d90a52d6f375860578185265706f7369746f727945787465726e616c45666665637482095820fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709018301011bfffffffffffffffff5",
+      "descriptor_id": "b1b55f5147727db39f1b71327df8ca41fa37919ec188165a86dd2a5b26563485",
+      "identity_envelope": [
+        "maestro.vnext.governed-capacity.repository.descriptor.v1",
+        {
+          "bytes": "ad19a84a87bfe7e5fd27df6cd3e152a813f077d9e6732fd31474d90a52d6f375"
+        },
+        [
+          5,
+          "RepositoryExternalEffect",
+          [
+            9,
+            {
+              "bytes": "fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709"
+            }
+          ],
+          1,
+          [
+            1,
+            1,
+            18446744073709551615
+          ],
+          true
+        ]
+      ],
+      "value": [
+        5,
+        "RepositoryExternalEffect",
+        [
+          9,
+          {
+            "bytes": "fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709"
+          }
+        ],
+        1,
+        [
+          1,
+          1,
+          18446744073709551615
+        ],
+        true
+      ]
+    },
+    {
+      "byte_length": 179,
+      "cbor_hex": "8378386d61657374726f2e766e6578742e676f7665726e65642d63617061636974792e7265706f7369746f72792e64657363726970746f722e76315820ad19a84a87bfe7e5fd27df6cd3e152a813f077d9e6732fd31474d90a52d6f375860678205265706f7369746f727950657273697374656e63654d61696e74656e616e636582095820fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709018301011bfffffffffffffffff5",
+      "descriptor_id": "4ac1d625810a59ab1893376987ffb86429cbeec9496731340cd48c4fbfe5267b",
+      "identity_envelope": [
+        "maestro.vnext.governed-capacity.repository.descriptor.v1",
+        {
+          "bytes": "ad19a84a87bfe7e5fd27df6cd3e152a813f077d9e6732fd31474d90a52d6f375"
+        },
+        [
+          6,
+          "RepositoryPersistenceMaintenance",
+          [
+            9,
+            {
+              "bytes": "fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709"
+            }
+          ],
+          1,
+          [
+            1,
+            1,
+            18446744073709551615
+          ],
+          true
+        ]
+      ],
+      "value": [
+        6,
+        "RepositoryPersistenceMaintenance",
+        [
+          9,
+          {
+            "bytes": "fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709"
+          }
+        ],
+        1,
+        [
+          1,
+          1,
+          18446744073709551615
+        ],
+        true
+      ]
+    }
+  ],
+  "grammar_id": "b7ef635dcd29af4fc41f20cd670b726e5627c2f7210344d058e7c188ace69647",
+  "manifest_header": [
+    3,
+    1,
+    1,
+    {
+      "bytes": "b7ef635dcd29af4fc41f20cd670b726e5627c2f7210344d058e7c188ace69647"
+    },
+    [],
+    {
+      "bytes": "295f78c06fa583384b656a3e254e2612c39da5f18830cad00408561f832cf588"
+    },
+    6,
+    6,
+    {
+      "bytes": "157d5a2be7924d1aea2d5a1886541dbe9a132bc0828516cbdf5555652e4d9f6c"
+    },
+    {
+      "bytes": "768af72dbe4663f14de4f24f904920d308d1b961ad16e674b882802557fe0ad0"
+    },
+    1
+  ],
+  "manifest_id": "a1dd1dc6210548029d3e1f2f8697c80a8c1dd9a7c80cf4144f062a95cd54806e",
+  "manifest_identity_envelope": [
+    "maestro.vnext.governed-capacity.repository.manifest.v1",
+    {
+      "bytes": "8f28075f9c9cd3f1eeefe325e39ac1fa4553d22e546cfe22353d5fbc5a16716f"
+    },
+    {
+      "bytes": "ad19a84a87bfe7e5fd27df6cd3e152a813f077d9e6732fd31474d90a52d6f375"
+    },
+    [
+      3,
+      1,
+      1,
+      {
+        "bytes": "b7ef635dcd29af4fc41f20cd670b726e5627c2f7210344d058e7c188ace69647"
+      },
+      [],
+      {
+        "bytes": "295f78c06fa583384b656a3e254e2612c39da5f18830cad00408561f832cf588"
+      },
+      6,
+      6,
+      {
+        "bytes": "157d5a2be7924d1aea2d5a1886541dbe9a132bc0828516cbdf5555652e4d9f6c"
+      },
+      {
+        "bytes": "768af72dbe4663f14de4f24f904920d308d1b961ad16e674b882802557fe0ad0"
+      },
+      1
+    ],
+    [
+      [
+        1,
+        {
+          "bytes": "2b4b3204e08532f9f6b22999945f3d47efbb1a69b53128af7ea839384eff2e42"
+        },
+        [
+          1,
+          "RepositoryOrdinaryMutation",
+          [
+            9,
+            {
+              "bytes": "fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709"
+            }
+          ],
+          1,
+          [
+            1,
+            1,
+            18446744073709551615
+          ],
+          true
+        ]
+      ],
+      [
+        2,
+        {
+          "bytes": "7a7d79ffa481faffe3ae24e1ba1c256148e2147e7b16a2e24ec7834fd974db38"
+        },
+        [
+          2,
+          "RepositoryAuthorityAdministration",
+          [
+            9,
+            {
+              "bytes": "fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709"
+            }
+          ],
+          1,
+          [
+            1,
+            1,
+            18446744073709551615
+          ],
+          true
+        ]
+      ],
+      [
+        3,
+        {
+          "bytes": "9b2e5d193e7f6ef43c06aa3e20a533f2d89cf431dbe62cfd45bf0e04434b90fd"
+        },
+        [
+          3,
+          "RepositoryEvidenceAcquisition",
+          [
+            9,
+            {
+              "bytes": "fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709"
+            }
+          ],
+          1,
+          [
+            1,
+            1,
+            18446744073709551615
+          ],
+          true
+        ]
+      ],
+      [
+        4,
+        {
+          "bytes": "825f06584835267236e63b99972b5cfa2a8beecfd2dcdd6f069f880c37527d5e"
+        },
+        [
+          4,
+          "RepositoryPlanningPublication",
+          [
+            9,
+            {
+              "bytes": "fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709"
+            }
+          ],
+          1,
+          [
+            1,
+            1,
+            18446744073709551615
+          ],
+          true
+        ]
+      ],
+      [
+        5,
+        {
+          "bytes": "b1b55f5147727db39f1b71327df8ca41fa37919ec188165a86dd2a5b26563485"
+        },
+        [
+          5,
+          "RepositoryExternalEffect",
+          [
+            9,
+            {
+              "bytes": "fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709"
+            }
+          ],
+          1,
+          [
+            1,
+            1,
+            18446744073709551615
+          ],
+          true
+        ]
+      ],
+      [
+        6,
+        {
+          "bytes": "4ac1d625810a59ab1893376987ffb86429cbeec9496731340cd48c4fbfe5267b"
+        },
+        [
+          6,
+          "RepositoryPersistenceMaintenance",
+          [
+            9,
+            {
+              "bytes": "fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709"
+            }
+          ],
+          1,
+          [
+            1,
+            1,
+            18446744073709551615
+          ],
+          true
+        ]
+      ]
+    ]
+  ],
+  "manifest_rows": [
+    [
+      1,
+      {
+        "bytes": "2b4b3204e08532f9f6b22999945f3d47efbb1a69b53128af7ea839384eff2e42"
+      },
+      [
+        1,
+        "RepositoryOrdinaryMutation",
+        [
+          9,
+          {
+            "bytes": "fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709"
+          }
+        ],
+        1,
+        [
+          1,
+          1,
+          18446744073709551615
+        ],
+        true
+      ]
+    ],
+    [
+      2,
+      {
+        "bytes": "7a7d79ffa481faffe3ae24e1ba1c256148e2147e7b16a2e24ec7834fd974db38"
+      },
+      [
+        2,
+        "RepositoryAuthorityAdministration",
+        [
+          9,
+          {
+            "bytes": "fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709"
+          }
+        ],
+        1,
+        [
+          1,
+          1,
+          18446744073709551615
+        ],
+        true
+      ]
+    ],
+    [
+      3,
+      {
+        "bytes": "9b2e5d193e7f6ef43c06aa3e20a533f2d89cf431dbe62cfd45bf0e04434b90fd"
+      },
+      [
+        3,
+        "RepositoryEvidenceAcquisition",
+        [
+          9,
+          {
+            "bytes": "fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709"
+          }
+        ],
+        1,
+        [
+          1,
+          1,
+          18446744073709551615
+        ],
+        true
+      ]
+    ],
+    [
+      4,
+      {
+        "bytes": "825f06584835267236e63b99972b5cfa2a8beecfd2dcdd6f069f880c37527d5e"
+      },
+      [
+        4,
+        "RepositoryPlanningPublication",
+        [
+          9,
+          {
+            "bytes": "fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709"
+          }
+        ],
+        1,
+        [
+          1,
+          1,
+          18446744073709551615
+        ],
+        true
+      ]
+    ],
+    [
+      5,
+      {
+        "bytes": "b1b55f5147727db39f1b71327df8ca41fa37919ec188165a86dd2a5b26563485"
+      },
+      [
+        5,
+        "RepositoryExternalEffect",
+        [
+          9,
+          {
+            "bytes": "fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709"
+          }
+        ],
+        1,
+        [
+          1,
+          1,
+          18446744073709551615
+        ],
+        true
+      ]
+    ],
+    [
+      6,
+      {
+        "bytes": "4ac1d625810a59ab1893376987ffb86429cbeec9496731340cd48c4fbfe5267b"
+      },
+      [
+        6,
+        "RepositoryPersistenceMaintenance",
+        [
+          9,
+          {
+            "bytes": "fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709"
+          }
+        ],
+        1,
+        [
+          1,
+          1,
+          18446744073709551615
+        ],
+        true
+      ]
+    ]
+  ],
+  "predecessor_disposition": "immutable_non_current_evidence_only",
+  "primary_owner_relation": {
+    "byte_length": 275,
+    "cbor_hex": "8278316d61657374726f2e766e6578742e636174616c6f672e7072696d6172792d6f776e65722d72656c6174696f6e2e332e7631868301095820fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a7098302095820fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a7098303095820fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a7098304095820fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a7098305095820fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a7098306095820fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709",
+    "identity_envelope": [
+      "maestro.vnext.catalog.primary-owner-relation.3.v1",
+      [
+        [
+          1,
+          9,
+          {
+            "bytes": "fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709"
+          }
+        ],
+        [
+          2,
+          9,
+          {
+            "bytes": "fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709"
+          }
+        ],
+        [
+          3,
+          9,
+          {
+            "bytes": "fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709"
+          }
+        ],
+        [
+          4,
+          9,
+          {
+            "bytes": "fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709"
+          }
+        ],
+        [
+          5,
+          9,
+          {
+            "bytes": "fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709"
+          }
+        ],
+        [
+          6,
+          9,
+          {
+            "bytes": "fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709"
+          }
+        ]
+      ]
+    ],
+    "relation_id": "295f78c06fa583384b656a3e254e2612c39da5f18830cad00408561f832cf588",
+    "rows": [
+      [
+        1,
+        9,
+        {
+          "bytes": "fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709"
+        }
+      ],
+      [
+        2,
+        9,
+        {
+          "bytes": "fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709"
+        }
+      ],
+      [
+        3,
+        9,
+        {
+          "bytes": "fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709"
+        }
+      ],
+      [
+        4,
+        9,
+        {
+          "bytes": "fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709"
+        }
+      ],
+      [
+        5,
+        9,
+        {
+          "bytes": "fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709"
+        }
+      ],
+      [
+        6,
+        9,
+        {
+          "bytes": "fad15a86dd5e7cb5c755fc77c0d2583f551480a0c22351cb99badfac4a21a709"
+        }
+      ]
+    ]
+  },
+  "publication_state": "inactive_candidate",
+  "schema_version": "maestro.vnext.catalog.literal.v1",
+  "schemas": {
+    "descriptor": {
+      "byte_length": 222,
+      "cbor_hex": "82776d61657374726f2e766e6578742e736368656d612e763184783d6d61657374726f2e766e6578742e636174616c6f672e7265706f7369746f72792d63617061636974792e64657363726970746f722d76616c75652e7631018684016374616781018181018402646e616d65810381810184036d7072696d6172795f6f776e6572820882810182041820818101840466646f6d61696e810181810184057819696e636f6d696e675f63617061636974795f6d6178696d756d820883810181018101818101840670726566696c6c5f666f7262696464656e810281810180",
+      "identity_envelope": [
+        "maestro.vnext.schema.v1",
+        [
+          "maestro.vnext.catalog.repository-capacity.descriptor-value.v1",
+          1,
+          [
+            [
+              1,
+              "tag",
+              [
+                1
+              ],
+              [
+                [
+                  1
+                ]
+              ]
+            ],
+            [
+              2,
+              "name",
+              [
+                3
+              ],
+              [
+                [
+                  1
+                ]
+              ]
+            ],
+            [
+              3,
+              "primary_owner",
+              [
+                8,
+                [
+                  [
+                    1
+                  ],
+                  [
+                    4,
+                    32
+                  ]
+                ]
+              ],
+              [
+                [
+                  1
+                ]
+              ]
+            ],
+            [
+              4,
+              "domain",
+              [
+                1
+              ],
+              [
+                [
+                  1
+                ]
+              ]
+            ],
+            [
+              5,
+              "incoming_capacity_maximum",
+              [
+                8,
+                [
+                  [
+                    1
+                  ],
+                  [
+                    1
+                  ],
+                  [
+                    1
+                  ]
+                ]
+              ],
+              [
+                [
+                  1
+                ]
+              ]
+            ],
+            [
+              6,
+              "refill_forbidden",
+              [
+                2
+              ],
+              [
+                [
+                  1
+                ]
+              ]
+            ]
+          ],
+          []
+        ]
+      ],
+      "schema_id": "ad19a84a87bfe7e5fd27df6cd3e152a813f077d9e6732fd31474d90a52d6f375",
+      "value": [
+        "maestro.vnext.catalog.repository-capacity.descriptor-value.v1",
+        1,
+        [
+          [
+            1,
+            "tag",
+            [
+              1
+            ],
+            [
+              [
+                1
+              ]
+            ]
+          ],
+          [
+            2,
+            "name",
+            [
+              3
+            ],
+            [
+              [
+                1
+              ]
+            ]
+          ],
+          [
+            3,
+            "primary_owner",
+            [
+              8,
+              [
+                [
+                  1
+                ],
+                [
+                  4,
+                  32
+                ]
+              ]
+            ],
+            [
+              [
+                1
+              ]
+            ]
+          ],
+          [
+            4,
+            "domain",
+            [
+              1
+            ],
+            [
+              [
+                1
+              ]
+            ]
+          ],
+          [
+            5,
+            "incoming_capacity_maximum",
+            [
+              8,
+              [
+                [
+                  1
+                ],
+                [
+                  1
+                ],
+                [
+                  1
+                ]
+              ]
+            ],
+            [
+              [
+                1
+              ]
+            ]
+          ],
+          [
+            6,
+            "refill_forbidden",
+            [
+              2
+            ],
+            [
+              [
+                1
+              ]
+            ]
+          ]
+        ],
+        []
+      ]
+    },
+    "header": {
+      "byte_length": 447,
+      "cbor_hex": "82776d61657374726f2e766e6578742e736368656d612e763184783c6d61657374726f2e766e6578742e636174616c6f672e7265706f7369746f72792d63617061636974792e6d616e69666573742d6865616465722e7631018b84016b636174616c6f675f746167810181810184026f636174616c6f675f76657273696f6e81018181018403781863616e6f6e6963616c697a6174696f6e5f76657273696f6e810181810184046a6772616d6d61725f69648204182081810184056c646570656e64656e636965738207820882810182041820818403818202000000840678197072696d6172795f6f776e65725f72656c6174696f6e5f696482041820818101840769726f775f636f756e74810181810184087266696e6974655f726f775f6d6178696d756d81018181018409746f776e65725f70726f66696c655f7365745f696482041820818101840a781b7072656465636573736f725f65766964656e63655f73686132353682041820818101840b717075626c69636174696f6e5f737461746583097819436174616c6f675075626c69636174696f6e5374617465563181820177496e61637469766553746167653043616e64696461746581810180",
+      "identity_envelope": [
+        "maestro.vnext.schema.v1",
+        [
+          "maestro.vnext.catalog.repository-capacity.manifest-header.v1",
+          1,
+          [
+            [
+              1,
+              "catalog_tag",
+              [
+                1
+              ],
+              [
+                [
+                  1
+                ]
+              ]
+            ],
+            [
+              2,
+              "catalog_version",
+              [
+                1
+              ],
+              [
+                [
+                  1
+                ]
+              ]
+            ],
+            [
+              3,
+              "canonicalization_version",
+              [
+                1
+              ],
+              [
+                [
+                  1
+                ]
+              ]
+            ],
+            [
+              4,
+              "grammar_id",
+              [
+                4,
+                32
+              ],
+              [
+                [
+                  1
+                ]
+              ]
+            ],
+            [
+              5,
+              "dependencies",
+              [
+                7,
+                [
+                  8,
+                  [
+                    [
+                      1
+                    ],
+                    [
+                      4,
+                      32
+                    ]
+                  ]
+                ]
+              ],
+              [
+                [
+                  3,
+                  [
+                    [
+                      2,
+                      0
+                    ]
+                  ],
+                  0,
+                  0
+                ]
+              ]
+            ],
+            [
+              6,
+              "primary_owner_relation_id",
+              [
+                4,
+                32
+              ],
+              [
+                [
+                  1
+                ]
+              ]
+            ],
+            [
+              7,
+              "row_count",
+              [
+                1
+              ],
+              [
+                [
+                  1
+                ]
+              ]
+            ],
+            [
+              8,
+              "finite_row_maximum",
+              [
+                1
+              ],
+              [
+                [
+                  1
+                ]
+              ]
+            ],
+            [
+              9,
+              "owner_profile_set_id",
+              [
+                4,
+                32
+              ],
+              [
+                [
+                  1
+                ]
+              ]
+            ],
+            [
+              10,
+              "predecessor_evidence_sha256",
+              [
+                4,
+                32
+              ],
+              [
+                [
+                  1
+                ]
+              ]
+            ],
+            [
+              11,
+              "publication_state",
+              [
+                9,
+                "CatalogPublicationStateV1",
+                [
+                  [
+                    1,
+                    "InactiveStage0Candidate"
+                  ]
+                ]
+              ],
+              [
+                [
+                  1
+                ]
+              ]
+            ]
+          ],
+          []
+        ]
+      ],
+      "schema_id": "8f896b8634a09fdecc2d4b6909bac21f7eb8d9f1084300eb8112b5e81e9ccd95",
+      "value": [
+        "maestro.vnext.catalog.repository-capacity.manifest-header.v1",
+        1,
+        [
+          [
+            1,
+            "catalog_tag",
+            [
+              1
+            ],
+            [
+              [
+                1
+              ]
+            ]
+          ],
+          [
+            2,
+            "catalog_version",
+            [
+              1
+            ],
+            [
+              [
+                1
+              ]
+            ]
+          ],
+          [
+            3,
+            "canonicalization_version",
+            [
+              1
+            ],
+            [
+              [
+                1
+              ]
+            ]
+          ],
+          [
+            4,
+            "grammar_id",
+            [
+              4,
+              32
+            ],
+            [
+              [
+                1
+              ]
+            ]
+          ],
+          [
+            5,
+            "dependencies",
+            [
+              7,
+              [
+                8,
+                [
+                  [
+                    1
+                  ],
+                  [
+                    4,
+                    32
+                  ]
+                ]
+              ]
+            ],
+            [
+              [
+                3,
+                [
+                  [
+                    2,
+                    0
+                  ]
+                ],
+                0,
+                0
+              ]
+            ]
+          ],
+          [
+            6,
+            "primary_owner_relation_id",
+            [
+              4,
+              32
+            ],
+            [
+              [
+                1
+              ]
+            ]
+          ],
+          [
+            7,
+            "row_count",
+            [
+              1
+            ],
+            [
+              [
+                1
+              ]
+            ]
+          ],
+          [
+            8,
+            "finite_row_maximum",
+            [
+              1
+            ],
+            [
+              [
+                1
+              ]
+            ]
+          ],
+          [
+            9,
+            "owner_profile_set_id",
+            [
+              4,
+              32
+            ],
+            [
+              [
+                1
+              ]
+            ]
+          ],
+          [
+            10,
+            "predecessor_evidence_sha256",
+            [
+              4,
+              32
+            ],
+            [
+              [
+                1
+              ]
+            ]
+          ],
+          [
+            11,
+            "publication_state",
+            [
+              9,
+              "CatalogPublicationStateV1",
+              [
+                [
+                  1,
+                  "InactiveStage0Candidate"
+                ]
+              ]
+            ],
+            [
+              [
+                1
+              ]
+            ]
+          ]
+        ],
+        []
+      ]
+    },
+    "manifest": {
+      "byte_length": 328,
+      "cbor_hex": "82776d61657374726f2e766e6578742e736368656d612e763184783b6d61657374726f2e766e6578742e636174616c6f672e7265706f7369746f72792d63617061636974792e6d616e69666573742d76616c75652e763101828401666865616465728405783c6d61657374726f2e766e6578742e636174616c6f672e7265706f7369746f72792d63617061636974792e6d616e69666573742d6865616465722e76310158208f896b8634a09fdecc2d4b6909bac21f7eb8d9f1084300eb8112b5e81e9ccd95818101840264726f777382078208838101820418208405783d6d61657374726f2e766e6578742e636174616c6f672e7265706f7369746f72792d63617061636974792e64657363726970746f722d76616c75652e7631015820ad19a84a87bfe7e5fd27df6cd3e152a813f077d9e6732fd31474d90a52d6f37581840381820200060680",
+      "identity_envelope": [
+        "maestro.vnext.schema.v1",
+        [
+          "maestro.vnext.catalog.repository-capacity.manifest-value.v1",
+          1,
+          [
+            [
+              1,
+              "header",
+              [
+                5,
+                "maestro.vnext.catalog.repository-capacity.manifest-header.v1",
+                1,
+                {
+                  "bytes": "8f896b8634a09fdecc2d4b6909bac21f7eb8d9f1084300eb8112b5e81e9ccd95"
+                }
+              ],
+              [
+                [
+                  1
+                ]
+              ]
+            ],
+            [
+              2,
+              "rows",
+              [
+                7,
+                [
+                  8,
+                  [
+                    [
+                      1
+                    ],
+                    [
+                      4,
+                      32
+                    ],
+                    [
+                      5,
+                      "maestro.vnext.catalog.repository-capacity.descriptor-value.v1",
+                      1,
+                      {
+                        "bytes": "ad19a84a87bfe7e5fd27df6cd3e152a813f077d9e6732fd31474d90a52d6f375"
+                      }
+                    ]
+                  ]
+                ]
+              ],
+              [
+                [
+                  3,
+                  [
+                    [
+                      2,
+                      0
+                    ]
+                  ],
+                  6,
+                  6
+                ]
+              ]
+            ]
+          ],
+          []
+        ]
+      ],
+      "schema_id": "8f28075f9c9cd3f1eeefe325e39ac1fa4553d22e546cfe22353d5fbc5a16716f",
+      "value": [
+        "maestro.vnext.catalog.repository-capacity.manifest-value.v1",
+        1,
+        [
+          [
+            1,
+            "header",
+            [
+              5,
+              "maestro.vnext.catalog.repository-capacity.manifest-header.v1",
+              1,
+              {
+                "bytes": "8f896b8634a09fdecc2d4b6909bac21f7eb8d9f1084300eb8112b5e81e9ccd95"
+              }
+            ],
+            [
+              [
+                1
+              ]
+            ]
+          ],
+          [
+            2,
+            "rows",
+            [
+              7,
+              [
+                8,
+                [
+                  [
+                    1
+                  ],
+                  [
+                    4,
+                    32
+                  ],
+                  [
+                    5,
+                    "maestro.vnext.catalog.repository-capacity.descriptor-value.v1",
+                    1,
+                    {
+                      "bytes": "ad19a84a87bfe7e5fd27df6cd3e152a813f077d9e6732fd31474d90a52d6f375"
+                    }
+                  ]
+                ]
+              ]
+            ],
+            [
+              [
+                3,
+                [
+                  [
+                    2,
+                    0
+                  ]
+                ],
+                6,
+                6
+              ]
+            ]
+          ]
+        ],
+        []
+      ]
+    }
+  },
+  "status": "stage0_candidate_not_published"
+}

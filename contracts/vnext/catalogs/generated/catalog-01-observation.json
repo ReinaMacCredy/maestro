@@ -1,0 +1,5245 @@
+{
+  "byte_length": 4655,
+  "catalog_slug": "observation",
+  "catalog_tag": 1,
+  "catalog_type": "ObservationKindV1",
+  "cbor_hex": "85782a6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e6d616e69666573742e763158209212bbee467ed31f091815e55cce76cd04ae8733764964eb230dda4ad687fc8b582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada58b0101015820b7ef635dcd29af4fc41f20cd670b726e5627c2f7210344d058e7c188ace6964780582098f6be4175b5e056145e85bddabf9a1ee408ed7843d29a1b1b748fa2d64b08ef182b182b5820157d5a2be7924d1aea2d5a1886541dbe9a132bc0828516cbdf5555652e4d9f6c5820768af72dbe4663f14de4f24f904920d308d1b961ad16e674b882802557fe0ad001982b83015820de6e333128dbefcbe589b9ada2d419c47405259ce7f94e0cc95e8e2d3311ce9d86017644657465726d696e697374696350726f6365647572658207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080830258206df8b48eb97c5ccc5f55ac64454dfdb052d8825e413be59885a9907b2f30c84e860278194e6f6e64657465726d696e697374696350726f6365647572658207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080830358208b35ccf97cd0c9c74fbe49b27f8a82a7046a3e465089296058910c56eda55cc086036f4d616e75616c50726f6365647572658207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080830458207c86e1c1a87c1ea09eb6d05f87137882c12d77aacabe467a78535139eeead79e86046d56697375616c436170747572658207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080830558207babd0212bd2cd7a39fb3655ba6c707c32e1ca71053ee00845c1bdccbd5fd5f986056d52657669657746696e64696e678207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080830658204f4794305f8df18d499b8b92e6da84ba30e21626cb87d6743971b97a29fb690d8606705365637572697479416e616c797369738207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9811827808083075820fbb05de5feb7451bb1a0d3050713d5ac05718204899a3937f236153550e554ee86076f496e7374616c6c656442696e6172798207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9811827808083085820dffa4b01a11acda41a041b83db8d160b6df2b4007349665d5cb4c9425365d8eb86086e52656d6f7465526561646261636b8207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc981182780808309582057e9f4bae8828b3fdf9162331855c9ea36f1bb131946499be9918d967bda43f886096e52656d6f746544656c69766572798207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080830a58204dd7c8e6d69b27df9d8354500ba4c3629ad754d328079d6644afa10f8f127e1b860a6d52656d6f746552656c656173658207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080830b5820669157b2e24664382e90f7072a456be840067a2caaf4b9856a5efe57e6773f58860b6f50726f636573734c6976656e6573738207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080830c5820ddd9a779ea83e6b735b779f8b4a1dbffdac45411250c8f6caf817827c37bf338860c6f536b696c6c41637469766174696f6e8207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080830d5820fa157917cbf1f424309f520cd936c4ca48e881ca13961329811a3a55a93882bf860d6c486f6f6b44656c69766572798207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080830e5820d34388bd9ee7af52392c7e51a93602195347a916a1e80e243188302faabc605b860e744576656e7453747265616d496e746567726974798207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080830f58207b64a80120cae4ce017eba06656070084805c6c23ccb0f7f6307ff7e773e6031860f6e5265736561726368536f757263658207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9811827808083105820afda048a031bad087a5374247d783a81cbec0201d43ee25d2e8a1796e80cffd086106f4361706162696c69747950726f62658207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9811827808083115820f5532c022cd5c0a872dad94801959bb7dd7f3ffd5ebb3462d6d5ed700bfadb988611781c426f6f7473747261704d616e6461746550726573656e746174696f6e8207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc981182b808083125820f2ca7d0aaf87e34c226b3176b5e4b6213e6817517ef0d9b744d994d1613652bc86127818426f6f7473747261704d616e64617465526573706f6e73658207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc981182c80808313582052bb8ad510450ee54f6766cf3f00fbbb789bd4b78b96d6daa45102ec5cae4d018613781a476f7665726e656452657669657750726573656e746174696f6e8207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9811827808083145820d29c3833811ecb023f42e0aa21d97703b19448415d54d0c841e52001e3c8acc9861476476f7665726e6564526576696577526573706f6e73658207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080831558206ab7a693cf0239cd59efcfc85d962213aaecd10a036db2b25a3e39c4985294588615781c48756d616e42696e64696e675375626a65637453656c656374696f6e8207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc981182780808316582016540ced57cda88ecab8a09b62bc0c9977ca78325605584d979e6219702f798886166d48756d616e50726573656e63658207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080831758201d572b741b375b8d730c619b8d090cb59e4cfacd91e2ecb616fa43e2cfb156f986177143726564656e7469616c436f6e74726f6c8207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9811827808083181858203b9d0c24cf1c718e5c941608455d76166c81b1e94eb42b436f42011e95eb33d48618186e48756d616e4173737572616e63658207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9811827808083181958203d406175e6bdb05154e7dfefad85214ffb34cec773d6f3534d1516327a4607558618196f536f757263654173737572616e63658207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9811827808083181a58202fb6b463471dae915460912c5265f7f27538398285974f22d1251717ab19896586181a71536f75726365436f6d6d6f6e43617573658207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9811827808083181b582082a056d948d9684f07142e2cd09a2b1be140c82e4347f9320b8ee865d3376d8d86181b73536f75726365436f6e74726164696374696f6e8207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9811827808083181c5820d9697b5ad747605817dc08a0397b3d79ee7420c9e7fe4e215028e0543cf1986586181c70536f757263655265766f636174696f6e8207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9811827808083181d5820456e30278ff5af6ee96e29972405c12ee5ac3e9230c61ea5e42564b9ebe38ab586181d755472757374656454696d6541746f6d6963556e69748207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc981182d81018182010183181e5820daa9d55fc8948b18b4ed67eac5abfc9f49a4f204f848373f24f97e3bacc822fc86181e765472757374656454696d654163717569736974696f6e8207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc981182d81028182010283181f582011333b7e9d989710a53090179f8140a4b63d737df80eccf9b7591362c98fb6cd86181f781e4d61696e74656e616e63654578656375746f7243757272656e746e6573738207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc981182d81078182040783182058207c7bae89450f488bad93d33e0f25f2d3a75a5a10e4182ad77f5823b9d6e463fa861820781c50726f7370656374697665436f6e74696e75697479436172726965728207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc981182d8108818205088318215820b8d92dbc402b16ded9df48a5b220165a903f7004a768d2f05258f4124ed41463861821781e5265636f7665727945787465726e616c416e63686f725265766973696f6e8207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc981182d82040682820204820306831822582047b3b11eeb5ad198a7a0fb97dbaea434f4979de745a02f474c1298435eb69d45861822781c5265636f7665727945787465726e616c526567697374726174696f6e8207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc981182d81038182020383182358204df5d031c84eddf83ada05d24e142e674beda8d27ca31ec54263cde4d085b757861823765265636f7665727945787465726e616c5374617475738207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc981182d810581820305831824582056268659da5c07c216dff3321ab5e22f090f0a0f515034b7fcb735b1adf4868d861824781945787465726e616c486967685761746572526561646261636b8207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc981182d8109818205098318255820335d4958826fa9b7234982dad1655be55b8fcbd4dcdafb7f5383d9adf18e01198618257543617272696572496e746567726974794661756c748207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc981182d810a8182050a831826582095ce9c89f196d821d6277bb68c0afacd48dadd5925203d1b8ba82ac1520320d6861826781b446973747269627574696f6e46696c6573797374656d53746174658207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc981182780808318275820c8f9ce68a85f148167ecc9642d934741d2442a94155df480f7472cc7ebdcb8a7861827781d446973747269627574696f6e496e7374616c6c65645265736f757263658207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc981182780808318285820915608062af73f2ad17a141ace09b2915ce755e8896972a0b73ed0cf09b3d4e38618287818446973747269627574696f6e4d616e6167657253746174658207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9811827808083182958201b75c785f0a16839ff62257201b92a793cb2b036ddba61eb851f0b9c2f1bfc00861829745075626c69636174696f6e496e746567726974798207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9811827808083182a5820bb5bf4d9bc7f5ca8b5aee0e951813b00b3bf5af3fc5fba530bb58e728e11047586182a6e53746f7265496e746567726974798207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9811827808083182b5820a005b60b92a2e40478845776d4653b0144c9125561ef8d4fdb6fd9c3e0a1e7e486182b781d50726f746563746564436f6e74696e75697479446961676e6f737469638207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080",
+  "descriptors": [
+    {
+      "byte_length": 147,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada586017644657465726d696e697374696350726f6365647572658207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080",
+      "descriptor_id": "de6e333128dbefcbe589b9ada2d419c47405259ce7f94e0cc95e8e2d3311ce9d",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          1,
+          "DeterministicProcedure",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      "value": [
+        1,
+        "DeterministicProcedure",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    },
+    {
+      "byte_length": 151,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5860278194e6f6e64657465726d696e697374696350726f6365647572658207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080",
+      "descriptor_id": "6df8b48eb97c5ccc5f55ac64454dfdb052d8825e413be59885a9907b2f30c84e",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          2,
+          "NondeterministicProcedure",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      "value": [
+        2,
+        "NondeterministicProcedure",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    },
+    {
+      "byte_length": 140,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada586036f4d616e75616c50726f6365647572658207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080",
+      "descriptor_id": "8b35ccf97cd0c9c74fbe49b27f8a82a7046a3e465089296058910c56eda55cc0",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          3,
+          "ManualProcedure",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      "value": [
+        3,
+        "ManualProcedure",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    },
+    {
+      "byte_length": 138,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada586046d56697375616c436170747572658207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080",
+      "descriptor_id": "7c86e1c1a87c1ea09eb6d05f87137882c12d77aacabe467a78535139eeead79e",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          4,
+          "VisualCapture",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      "value": [
+        4,
+        "VisualCapture",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    },
+    {
+      "byte_length": 138,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada586056d52657669657746696e64696e678207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080",
+      "descriptor_id": "7babd0212bd2cd7a39fb3655ba6c707c32e1ca71053ee00845c1bdccbd5fd5f9",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          5,
+          "ReviewFinding",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      "value": [
+        5,
+        "ReviewFinding",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    },
+    {
+      "byte_length": 141,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada58606705365637572697479416e616c797369738207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080",
+      "descriptor_id": "4f4794305f8df18d499b8b92e6da84ba30e21626cb87d6743971b97a29fb690d",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          6,
+          "SecurityAnalysis",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      "value": [
+        6,
+        "SecurityAnalysis",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    },
+    {
+      "byte_length": 140,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada586076f496e7374616c6c656442696e6172798207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080",
+      "descriptor_id": "fbb05de5feb7451bb1a0d3050713d5ac05718204899a3937f236153550e554ee",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          7,
+          "InstalledBinary",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      "value": [
+        7,
+        "InstalledBinary",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    },
+    {
+      "byte_length": 139,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada586086e52656d6f7465526561646261636b8207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080",
+      "descriptor_id": "dffa4b01a11acda41a041b83db8d160b6df2b4007349665d5cb4c9425365d8eb",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          8,
+          "RemoteReadback",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      "value": [
+        8,
+        "RemoteReadback",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    },
+    {
+      "byte_length": 139,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada586096e52656d6f746544656c69766572798207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080",
+      "descriptor_id": "57e9f4bae8828b3fdf9162331855c9ea36f1bb131946499be9918d967bda43f8",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          9,
+          "RemoteDelivery",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      "value": [
+        9,
+        "RemoteDelivery",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    },
+    {
+      "byte_length": 138,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5860a6d52656d6f746552656c656173658207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080",
+      "descriptor_id": "4dd7c8e6d69b27df9d8354500ba4c3629ad754d328079d6644afa10f8f127e1b",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          10,
+          "RemoteRelease",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      "value": [
+        10,
+        "RemoteRelease",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    },
+    {
+      "byte_length": 140,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5860b6f50726f636573734c6976656e6573738207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080",
+      "descriptor_id": "669157b2e24664382e90f7072a456be840067a2caaf4b9856a5efe57e6773f58",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          11,
+          "ProcessLiveness",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      "value": [
+        11,
+        "ProcessLiveness",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    },
+    {
+      "byte_length": 140,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5860c6f536b696c6c41637469766174696f6e8207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080",
+      "descriptor_id": "ddd9a779ea83e6b735b779f8b4a1dbffdac45411250c8f6caf817827c37bf338",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          12,
+          "SkillActivation",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      "value": [
+        12,
+        "SkillActivation",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    },
+    {
+      "byte_length": 137,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5860d6c486f6f6b44656c69766572798207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080",
+      "descriptor_id": "fa157917cbf1f424309f520cd936c4ca48e881ca13961329811a3a55a93882bf",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          13,
+          "HookDelivery",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      "value": [
+        13,
+        "HookDelivery",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    },
+    {
+      "byte_length": 145,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5860e744576656e7453747265616d496e746567726974798207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080",
+      "descriptor_id": "d34388bd9ee7af52392c7e51a93602195347a916a1e80e243188302faabc605b",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          14,
+          "EventStreamIntegrity",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      "value": [
+        14,
+        "EventStreamIntegrity",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    },
+    {
+      "byte_length": 139,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5860f6e5265736561726368536f757263658207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080",
+      "descriptor_id": "7b64a80120cae4ce017eba06656070084805c6c23ccb0f7f6307ff7e773e6031",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          15,
+          "ResearchSource",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      "value": [
+        15,
+        "ResearchSource",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    },
+    {
+      "byte_length": 140,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada586106f4361706162696c69747950726f62658207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080",
+      "descriptor_id": "afda048a031bad087a5374247d783a81cbec0201d43ee25d2e8a1796e80cffd0",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          16,
+          "CapabilityProbe",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      "value": [
+        16,
+        "CapabilityProbe",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    },
+    {
+      "byte_length": 154,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada58611781c426f6f7473747261704d616e6461746550726573656e746174696f6e8207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc981182b8080",
+      "descriptor_id": "f5532c022cd5c0a872dad94801959bb7dd7f3ffd5ebb3462d6d5ed700bfadb98",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          17,
+          "BootstrapMandatePresentation",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            43
+          ],
+          [],
+          []
+        ]
+      ],
+      "value": [
+        17,
+        "BootstrapMandatePresentation",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          43
+        ],
+        [],
+        []
+      ]
+    },
+    {
+      "byte_length": 150,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada586127818426f6f7473747261704d616e64617465526573706f6e73658207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc981182c8080",
+      "descriptor_id": "f2ca7d0aaf87e34c226b3176b5e4b6213e6817517ef0d9b744d994d1613652bc",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          18,
+          "BootstrapMandateResponse",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            44
+          ],
+          [],
+          []
+        ]
+      ],
+      "value": [
+        18,
+        "BootstrapMandateResponse",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          44
+        ],
+        [],
+        []
+      ]
+    },
+    {
+      "byte_length": 152,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada58613781a476f7665726e656452657669657750726573656e746174696f6e8207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080",
+      "descriptor_id": "52bb8ad510450ee54f6766cf3f00fbbb789bd4b78b96d6daa45102ec5cae4d01",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          19,
+          "GovernedReviewPresentation",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      "value": [
+        19,
+        "GovernedReviewPresentation",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    },
+    {
+      "byte_length": 147,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5861476476f7665726e6564526576696577526573706f6e73658207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080",
+      "descriptor_id": "d29c3833811ecb023f42e0aa21d97703b19448415d54d0c841e52001e3c8acc9",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          20,
+          "GovernedReviewResponse",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      "value": [
+        20,
+        "GovernedReviewResponse",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    },
+    {
+      "byte_length": 154,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada58615781c48756d616e42696e64696e675375626a65637453656c656374696f6e8207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080",
+      "descriptor_id": "6ab7a693cf0239cd59efcfc85d962213aaecd10a036db2b25a3e39c498529458",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          21,
+          "HumanBindingSubjectSelection",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      "value": [
+        21,
+        "HumanBindingSubjectSelection",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    },
+    {
+      "byte_length": 138,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada586166d48756d616e50726573656e63658207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080",
+      "descriptor_id": "16540ced57cda88ecab8a09b62bc0c9977ca78325605584d979e6219702f7988",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          22,
+          "HumanPresence",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      "value": [
+        22,
+        "HumanPresence",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    },
+    {
+      "byte_length": 142,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada586177143726564656e7469616c436f6e74726f6c8207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080",
+      "descriptor_id": "1d572b741b375b8d730c619b8d090cb59e4cfacd91e2ecb616fa43e2cfb156f9",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          23,
+          "CredentialControl",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      "value": [
+        23,
+        "CredentialControl",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    },
+    {
+      "byte_length": 140,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada58618186e48756d616e4173737572616e63658207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080",
+      "descriptor_id": "3b9d0c24cf1c718e5c941608455d76166c81b1e94eb42b436f42011e95eb33d4",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          24,
+          "HumanAssurance",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      "value": [
+        24,
+        "HumanAssurance",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    },
+    {
+      "byte_length": 141,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada58618196f536f757263654173737572616e63658207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080",
+      "descriptor_id": "3d406175e6bdb05154e7dfefad85214ffb34cec773d6f3534d1516327a460755",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          25,
+          "SourceAssurance",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      "value": [
+        25,
+        "SourceAssurance",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    },
+    {
+      "byte_length": 143,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada586181a71536f75726365436f6d6d6f6e43617573658207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080",
+      "descriptor_id": "2fb6b463471dae915460912c5265f7f27538398285974f22d1251717ab198965",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          26,
+          "SourceCommonCause",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      "value": [
+        26,
+        "SourceCommonCause",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    },
+    {
+      "byte_length": 145,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada586181b73536f75726365436f6e74726164696374696f6e8207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080",
+      "descriptor_id": "82a056d948d9684f07142e2cd09a2b1be140c82e4347f9320b8ee865d3376d8d",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          27,
+          "SourceContradiction",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      "value": [
+        27,
+        "SourceContradiction",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    },
+    {
+      "byte_length": 142,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada586181c70536f757263655265766f636174696f6e8207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080",
+      "descriptor_id": "d9697b5ad747605817dc08a0397b3d79ee7420c9e7fe4e215028e0543cf19865",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          28,
+          "SourceRevocation",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      "value": [
+        28,
+        "SourceRevocation",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    },
+    {
+      "byte_length": 151,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada586181d755472757374656454696d6541746f6d6963556e69748207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc981182d810181820101",
+      "descriptor_id": "456e30278ff5af6ee96e29972405c12ee5ac3e9230c61ea5e42564b9ebe38ab5",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          29,
+          "TrustedTimeAtomicUnit",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            45
+          ],
+          [
+            1
+          ],
+          [
+            [
+              1,
+              1
+            ]
+          ]
+        ]
+      ],
+      "value": [
+        29,
+        "TrustedTimeAtomicUnit",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          45
+        ],
+        [
+          1
+        ],
+        [
+          [
+            1,
+            1
+          ]
+        ]
+      ]
+    },
+    {
+      "byte_length": 152,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada586181e765472757374656454696d654163717569736974696f6e8207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc981182d810281820102",
+      "descriptor_id": "daa9d55fc8948b18b4ed67eac5abfc9f49a4f204f848373f24f97e3bacc822fc",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          30,
+          "TrustedTimeAcquisition",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            45
+          ],
+          [
+            2
+          ],
+          [
+            [
+              1,
+              2
+            ]
+          ]
+        ]
+      ],
+      "value": [
+        30,
+        "TrustedTimeAcquisition",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          45
+        ],
+        [
+          2
+        ],
+        [
+          [
+            1,
+            2
+          ]
+        ]
+      ]
+    },
+    {
+      "byte_length": 161,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada586181f781e4d61696e74656e616e63654578656375746f7243757272656e746e6573738207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc981182d810781820407",
+      "descriptor_id": "11333b7e9d989710a53090179f8140a4b63d737df80eccf9b7591362c98fb6cd",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          31,
+          "MaintenanceExecutorCurrentness",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            45
+          ],
+          [
+            7
+          ],
+          [
+            [
+              4,
+              7
+            ]
+          ]
+        ]
+      ],
+      "value": [
+        31,
+        "MaintenanceExecutorCurrentness",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          45
+        ],
+        [
+          7
+        ],
+        [
+          [
+            4,
+            7
+          ]
+        ]
+      ]
+    },
+    {
+      "byte_length": 159,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5861820781c50726f7370656374697665436f6e74696e75697479436172726965728207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc981182d810881820508",
+      "descriptor_id": "7c7bae89450f488bad93d33e0f25f2d3a75a5a10e4182ad77f5823b9d6e463fa",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          32,
+          "ProspectiveContinuityCarrier",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            45
+          ],
+          [
+            8
+          ],
+          [
+            [
+              5,
+              8
+            ]
+          ]
+        ]
+      ],
+      "value": [
+        32,
+        "ProspectiveContinuityCarrier",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          45
+        ],
+        [
+          8
+        ],
+        [
+          [
+            5,
+            8
+          ]
+        ]
+      ]
+    },
+    {
+      "byte_length": 165,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5861821781e5265636f7665727945787465726e616c416e63686f725265766973696f6e8207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc981182d82040682820204820306",
+      "descriptor_id": "b8d92dbc402b16ded9df48a5b220165a903f7004a768d2f05258f4124ed41463",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          33,
+          "RecoveryExternalAnchorRevision",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            45
+          ],
+          [
+            4,
+            6
+          ],
+          [
+            [
+              2,
+              4
+            ],
+            [
+              3,
+              6
+            ]
+          ]
+        ]
+      ],
+      "value": [
+        33,
+        "RecoveryExternalAnchorRevision",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          45
+        ],
+        [
+          4,
+          6
+        ],
+        [
+          [
+            2,
+            4
+          ],
+          [
+            3,
+            6
+          ]
+        ]
+      ]
+    },
+    {
+      "byte_length": 159,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5861822781c5265636f7665727945787465726e616c526567697374726174696f6e8207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc981182d810381820203",
+      "descriptor_id": "47b3b11eeb5ad198a7a0fb97dbaea434f4979de745a02f474c1298435eb69d45",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          34,
+          "RecoveryExternalRegistration",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            45
+          ],
+          [
+            3
+          ],
+          [
+            [
+              2,
+              3
+            ]
+          ]
+        ]
+      ],
+      "value": [
+        34,
+        "RecoveryExternalRegistration",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          45
+        ],
+        [
+          3
+        ],
+        [
+          [
+            2,
+            3
+          ]
+        ]
+      ]
+    },
+    {
+      "byte_length": 152,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5861823765265636f7665727945787465726e616c5374617475738207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc981182d810581820305",
+      "descriptor_id": "4df5d031c84eddf83ada05d24e142e674beda8d27ca31ec54263cde4d085b757",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          35,
+          "RecoveryExternalStatus",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            45
+          ],
+          [
+            5
+          ],
+          [
+            [
+              3,
+              5
+            ]
+          ]
+        ]
+      ],
+      "value": [
+        35,
+        "RecoveryExternalStatus",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          45
+        ],
+        [
+          5
+        ],
+        [
+          [
+            3,
+            5
+          ]
+        ]
+      ]
+    },
+    {
+      "byte_length": 156,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5861824781945787465726e616c486967685761746572526561646261636b8207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc981182d810981820509",
+      "descriptor_id": "56268659da5c07c216dff3321ab5e22f090f0a0f515034b7fcb735b1adf4868d",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          36,
+          "ExternalHighWaterReadback",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            45
+          ],
+          [
+            9
+          ],
+          [
+            [
+              5,
+              9
+            ]
+          ]
+        ]
+      ],
+      "value": [
+        36,
+        "ExternalHighWaterReadback",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          45
+        ],
+        [
+          9
+        ],
+        [
+          [
+            5,
+            9
+          ]
+        ]
+      ]
+    },
+    {
+      "byte_length": 151,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada58618257543617272696572496e746567726974794661756c748207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc981182d810a8182050a",
+      "descriptor_id": "335d4958826fa9b7234982dad1655be55b8fcbd4dcdafb7f5383d9adf18e0119",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          37,
+          "CarrierIntegrityFault",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            45
+          ],
+          [
+            10
+          ],
+          [
+            [
+              5,
+              10
+            ]
+          ]
+        ]
+      ],
+      "value": [
+        37,
+        "CarrierIntegrityFault",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          45
+        ],
+        [
+          10
+        ],
+        [
+          [
+            5,
+            10
+          ]
+        ]
+      ]
+    },
+    {
+      "byte_length": 154,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5861826781b446973747269627574696f6e46696c6573797374656d53746174658207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080",
+      "descriptor_id": "95ce9c89f196d821d6277bb68c0afacd48dadd5925203d1b8ba82ac1520320d6",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          38,
+          "DistributionFilesystemState",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      "value": [
+        38,
+        "DistributionFilesystemState",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    },
+    {
+      "byte_length": 156,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5861827781d446973747269627574696f6e496e7374616c6c65645265736f757263658207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080",
+      "descriptor_id": "c8f9ce68a85f148167ecc9642d934741d2442a94155df480f7472cc7ebdcb8a7",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          39,
+          "DistributionInstalledResource",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      "value": [
+        39,
+        "DistributionInstalledResource",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    },
+    {
+      "byte_length": 151,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada58618287818446973747269627574696f6e4d616e6167657253746174658207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080",
+      "descriptor_id": "915608062af73f2ad17a141ace09b2915ce755e8896972a0b73ed0cf09b3d4e3",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          40,
+          "DistributionManagerState",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      "value": [
+        40,
+        "DistributionManagerState",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    },
+    {
+      "byte_length": 146,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5861829745075626c69636174696f6e496e746567726974798207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080",
+      "descriptor_id": "1b75c785f0a16839ff62257201b92a793cb2b036ddba61eb851f0b9c2f1bfc00",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          41,
+          "PublicationIntegrity",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      "value": [
+        41,
+        "PublicationIntegrity",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    },
+    {
+      "byte_length": 140,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada586182a6e53746f7265496e746567726974798207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080",
+      "descriptor_id": "bb5bf4d9bc7f5ca8b5aee0e951813b00b3bf5af3fc5fba530bb58e728e110475",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          42,
+          "StoreIntegrity",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      "value": [
+        42,
+        "StoreIntegrity",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    },
+    {
+      "byte_length": 156,
+      "cbor_hex": "83782c6d61657374726f2e766e6578742e6f62736572766174696f6e2d6b696e642e64657363726970746f722e7631582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada586182b781d50726f746563746564436f6e74696e75697479446961676e6f737469638207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc98118278080",
+      "descriptor_id": "a005b60b92a2e40478845776d4653b0144c9125561ef8d4fdb6fd9c3e0a1e7e4",
+      "identity_envelope": [
+        "maestro.vnext.observation-kind.descriptor.v1",
+        {
+          "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+        },
+        [
+          43,
+          "ProtectedContinuityDiagnostic",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      "value": [
+        43,
+        "ProtectedContinuityDiagnostic",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    }
+  ],
+  "grammar_id": "b7ef635dcd29af4fc41f20cd670b726e5627c2f7210344d058e7c188ace69647",
+  "manifest_header": [
+    1,
+    1,
+    1,
+    {
+      "bytes": "b7ef635dcd29af4fc41f20cd670b726e5627c2f7210344d058e7c188ace69647"
+    },
+    [],
+    {
+      "bytes": "98f6be4175b5e056145e85bddabf9a1ee408ed7843d29a1b1b748fa2d64b08ef"
+    },
+    43,
+    43,
+    {
+      "bytes": "157d5a2be7924d1aea2d5a1886541dbe9a132bc0828516cbdf5555652e4d9f6c"
+    },
+    {
+      "bytes": "768af72dbe4663f14de4f24f904920d308d1b961ad16e674b882802557fe0ad0"
+    },
+    1
+  ],
+  "manifest_id": "9997ffa7f1597c07abd23a3955a634cb321670198e040fb7b5d015b021159688",
+  "manifest_identity_envelope": [
+    "maestro.vnext.observation-kind.manifest.v1",
+    {
+      "bytes": "9212bbee467ed31f091815e55cce76cd04ae8733764964eb230dda4ad687fc8b"
+    },
+    {
+      "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+    },
+    [
+      1,
+      1,
+      1,
+      {
+        "bytes": "b7ef635dcd29af4fc41f20cd670b726e5627c2f7210344d058e7c188ace69647"
+      },
+      [],
+      {
+        "bytes": "98f6be4175b5e056145e85bddabf9a1ee408ed7843d29a1b1b748fa2d64b08ef"
+      },
+      43,
+      43,
+      {
+        "bytes": "157d5a2be7924d1aea2d5a1886541dbe9a132bc0828516cbdf5555652e4d9f6c"
+      },
+      {
+        "bytes": "768af72dbe4663f14de4f24f904920d308d1b961ad16e674b882802557fe0ad0"
+      },
+      1
+    ],
+    [
+      [
+        1,
+        {
+          "bytes": "de6e333128dbefcbe589b9ada2d419c47405259ce7f94e0cc95e8e2d3311ce9d"
+        },
+        [
+          1,
+          "DeterministicProcedure",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      [
+        2,
+        {
+          "bytes": "6df8b48eb97c5ccc5f55ac64454dfdb052d8825e413be59885a9907b2f30c84e"
+        },
+        [
+          2,
+          "NondeterministicProcedure",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      [
+        3,
+        {
+          "bytes": "8b35ccf97cd0c9c74fbe49b27f8a82a7046a3e465089296058910c56eda55cc0"
+        },
+        [
+          3,
+          "ManualProcedure",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      [
+        4,
+        {
+          "bytes": "7c86e1c1a87c1ea09eb6d05f87137882c12d77aacabe467a78535139eeead79e"
+        },
+        [
+          4,
+          "VisualCapture",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      [
+        5,
+        {
+          "bytes": "7babd0212bd2cd7a39fb3655ba6c707c32e1ca71053ee00845c1bdccbd5fd5f9"
+        },
+        [
+          5,
+          "ReviewFinding",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      [
+        6,
+        {
+          "bytes": "4f4794305f8df18d499b8b92e6da84ba30e21626cb87d6743971b97a29fb690d"
+        },
+        [
+          6,
+          "SecurityAnalysis",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      [
+        7,
+        {
+          "bytes": "fbb05de5feb7451bb1a0d3050713d5ac05718204899a3937f236153550e554ee"
+        },
+        [
+          7,
+          "InstalledBinary",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      [
+        8,
+        {
+          "bytes": "dffa4b01a11acda41a041b83db8d160b6df2b4007349665d5cb4c9425365d8eb"
+        },
+        [
+          8,
+          "RemoteReadback",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      [
+        9,
+        {
+          "bytes": "57e9f4bae8828b3fdf9162331855c9ea36f1bb131946499be9918d967bda43f8"
+        },
+        [
+          9,
+          "RemoteDelivery",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      [
+        10,
+        {
+          "bytes": "4dd7c8e6d69b27df9d8354500ba4c3629ad754d328079d6644afa10f8f127e1b"
+        },
+        [
+          10,
+          "RemoteRelease",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      [
+        11,
+        {
+          "bytes": "669157b2e24664382e90f7072a456be840067a2caaf4b9856a5efe57e6773f58"
+        },
+        [
+          11,
+          "ProcessLiveness",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      [
+        12,
+        {
+          "bytes": "ddd9a779ea83e6b735b779f8b4a1dbffdac45411250c8f6caf817827c37bf338"
+        },
+        [
+          12,
+          "SkillActivation",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      [
+        13,
+        {
+          "bytes": "fa157917cbf1f424309f520cd936c4ca48e881ca13961329811a3a55a93882bf"
+        },
+        [
+          13,
+          "HookDelivery",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      [
+        14,
+        {
+          "bytes": "d34388bd9ee7af52392c7e51a93602195347a916a1e80e243188302faabc605b"
+        },
+        [
+          14,
+          "EventStreamIntegrity",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      [
+        15,
+        {
+          "bytes": "7b64a80120cae4ce017eba06656070084805c6c23ccb0f7f6307ff7e773e6031"
+        },
+        [
+          15,
+          "ResearchSource",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      [
+        16,
+        {
+          "bytes": "afda048a031bad087a5374247d783a81cbec0201d43ee25d2e8a1796e80cffd0"
+        },
+        [
+          16,
+          "CapabilityProbe",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      [
+        17,
+        {
+          "bytes": "f5532c022cd5c0a872dad94801959bb7dd7f3ffd5ebb3462d6d5ed700bfadb98"
+        },
+        [
+          17,
+          "BootstrapMandatePresentation",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            43
+          ],
+          [],
+          []
+        ]
+      ],
+      [
+        18,
+        {
+          "bytes": "f2ca7d0aaf87e34c226b3176b5e4b6213e6817517ef0d9b744d994d1613652bc"
+        },
+        [
+          18,
+          "BootstrapMandateResponse",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            44
+          ],
+          [],
+          []
+        ]
+      ],
+      [
+        19,
+        {
+          "bytes": "52bb8ad510450ee54f6766cf3f00fbbb789bd4b78b96d6daa45102ec5cae4d01"
+        },
+        [
+          19,
+          "GovernedReviewPresentation",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      [
+        20,
+        {
+          "bytes": "d29c3833811ecb023f42e0aa21d97703b19448415d54d0c841e52001e3c8acc9"
+        },
+        [
+          20,
+          "GovernedReviewResponse",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      [
+        21,
+        {
+          "bytes": "6ab7a693cf0239cd59efcfc85d962213aaecd10a036db2b25a3e39c498529458"
+        },
+        [
+          21,
+          "HumanBindingSubjectSelection",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      [
+        22,
+        {
+          "bytes": "16540ced57cda88ecab8a09b62bc0c9977ca78325605584d979e6219702f7988"
+        },
+        [
+          22,
+          "HumanPresence",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      [
+        23,
+        {
+          "bytes": "1d572b741b375b8d730c619b8d090cb59e4cfacd91e2ecb616fa43e2cfb156f9"
+        },
+        [
+          23,
+          "CredentialControl",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      [
+        24,
+        {
+          "bytes": "3b9d0c24cf1c718e5c941608455d76166c81b1e94eb42b436f42011e95eb33d4"
+        },
+        [
+          24,
+          "HumanAssurance",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      [
+        25,
+        {
+          "bytes": "3d406175e6bdb05154e7dfefad85214ffb34cec773d6f3534d1516327a460755"
+        },
+        [
+          25,
+          "SourceAssurance",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      [
+        26,
+        {
+          "bytes": "2fb6b463471dae915460912c5265f7f27538398285974f22d1251717ab198965"
+        },
+        [
+          26,
+          "SourceCommonCause",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      [
+        27,
+        {
+          "bytes": "82a056d948d9684f07142e2cd09a2b1be140c82e4347f9320b8ee865d3376d8d"
+        },
+        [
+          27,
+          "SourceContradiction",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      [
+        28,
+        {
+          "bytes": "d9697b5ad747605817dc08a0397b3d79ee7420c9e7fe4e215028e0543cf19865"
+        },
+        [
+          28,
+          "SourceRevocation",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      [
+        29,
+        {
+          "bytes": "456e30278ff5af6ee96e29972405c12ee5ac3e9230c61ea5e42564b9ebe38ab5"
+        },
+        [
+          29,
+          "TrustedTimeAtomicUnit",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            45
+          ],
+          [
+            1
+          ],
+          [
+            [
+              1,
+              1
+            ]
+          ]
+        ]
+      ],
+      [
+        30,
+        {
+          "bytes": "daa9d55fc8948b18b4ed67eac5abfc9f49a4f204f848373f24f97e3bacc822fc"
+        },
+        [
+          30,
+          "TrustedTimeAcquisition",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            45
+          ],
+          [
+            2
+          ],
+          [
+            [
+              1,
+              2
+            ]
+          ]
+        ]
+      ],
+      [
+        31,
+        {
+          "bytes": "11333b7e9d989710a53090179f8140a4b63d737df80eccf9b7591362c98fb6cd"
+        },
+        [
+          31,
+          "MaintenanceExecutorCurrentness",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            45
+          ],
+          [
+            7
+          ],
+          [
+            [
+              4,
+              7
+            ]
+          ]
+        ]
+      ],
+      [
+        32,
+        {
+          "bytes": "7c7bae89450f488bad93d33e0f25f2d3a75a5a10e4182ad77f5823b9d6e463fa"
+        },
+        [
+          32,
+          "ProspectiveContinuityCarrier",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            45
+          ],
+          [
+            8
+          ],
+          [
+            [
+              5,
+              8
+            ]
+          ]
+        ]
+      ],
+      [
+        33,
+        {
+          "bytes": "b8d92dbc402b16ded9df48a5b220165a903f7004a768d2f05258f4124ed41463"
+        },
+        [
+          33,
+          "RecoveryExternalAnchorRevision",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            45
+          ],
+          [
+            4,
+            6
+          ],
+          [
+            [
+              2,
+              4
+            ],
+            [
+              3,
+              6
+            ]
+          ]
+        ]
+      ],
+      [
+        34,
+        {
+          "bytes": "47b3b11eeb5ad198a7a0fb97dbaea434f4979de745a02f474c1298435eb69d45"
+        },
+        [
+          34,
+          "RecoveryExternalRegistration",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            45
+          ],
+          [
+            3
+          ],
+          [
+            [
+              2,
+              3
+            ]
+          ]
+        ]
+      ],
+      [
+        35,
+        {
+          "bytes": "4df5d031c84eddf83ada05d24e142e674beda8d27ca31ec54263cde4d085b757"
+        },
+        [
+          35,
+          "RecoveryExternalStatus",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            45
+          ],
+          [
+            5
+          ],
+          [
+            [
+              3,
+              5
+            ]
+          ]
+        ]
+      ],
+      [
+        36,
+        {
+          "bytes": "56268659da5c07c216dff3321ab5e22f090f0a0f515034b7fcb735b1adf4868d"
+        },
+        [
+          36,
+          "ExternalHighWaterReadback",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            45
+          ],
+          [
+            9
+          ],
+          [
+            [
+              5,
+              9
+            ]
+          ]
+        ]
+      ],
+      [
+        37,
+        {
+          "bytes": "335d4958826fa9b7234982dad1655be55b8fcbd4dcdafb7f5383d9adf18e0119"
+        },
+        [
+          37,
+          "CarrierIntegrityFault",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            45
+          ],
+          [
+            10
+          ],
+          [
+            [
+              5,
+              10
+            ]
+          ]
+        ]
+      ],
+      [
+        38,
+        {
+          "bytes": "95ce9c89f196d821d6277bb68c0afacd48dadd5925203d1b8ba82ac1520320d6"
+        },
+        [
+          38,
+          "DistributionFilesystemState",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      [
+        39,
+        {
+          "bytes": "c8f9ce68a85f148167ecc9642d934741d2442a94155df480f7472cc7ebdcb8a7"
+        },
+        [
+          39,
+          "DistributionInstalledResource",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      [
+        40,
+        {
+          "bytes": "915608062af73f2ad17a141ace09b2915ce755e8896972a0b73ed0cf09b3d4e3"
+        },
+        [
+          40,
+          "DistributionManagerState",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      [
+        41,
+        {
+          "bytes": "1b75c785f0a16839ff62257201b92a793cb2b036ddba61eb851f0b9c2f1bfc00"
+        },
+        [
+          41,
+          "PublicationIntegrity",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      [
+        42,
+        {
+          "bytes": "bb5bf4d9bc7f5ca8b5aee0e951813b00b3bf5af3fc5fba530bb58e728e110475"
+        },
+        [
+          42,
+          "StoreIntegrity",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ],
+      [
+        43,
+        {
+          "bytes": "a005b60b92a2e40478845776d4653b0144c9125561ef8d4fdb6fd9c3e0a1e7e4"
+        },
+        [
+          43,
+          "ProtectedContinuityDiagnostic",
+          [
+            7,
+            {
+              "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+            }
+          ],
+          [
+            39
+          ],
+          [],
+          []
+        ]
+      ]
+    ]
+  ],
+  "manifest_rows": [
+    [
+      1,
+      {
+        "bytes": "de6e333128dbefcbe589b9ada2d419c47405259ce7f94e0cc95e8e2d3311ce9d"
+      },
+      [
+        1,
+        "DeterministicProcedure",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    ],
+    [
+      2,
+      {
+        "bytes": "6df8b48eb97c5ccc5f55ac64454dfdb052d8825e413be59885a9907b2f30c84e"
+      },
+      [
+        2,
+        "NondeterministicProcedure",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    ],
+    [
+      3,
+      {
+        "bytes": "8b35ccf97cd0c9c74fbe49b27f8a82a7046a3e465089296058910c56eda55cc0"
+      },
+      [
+        3,
+        "ManualProcedure",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    ],
+    [
+      4,
+      {
+        "bytes": "7c86e1c1a87c1ea09eb6d05f87137882c12d77aacabe467a78535139eeead79e"
+      },
+      [
+        4,
+        "VisualCapture",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    ],
+    [
+      5,
+      {
+        "bytes": "7babd0212bd2cd7a39fb3655ba6c707c32e1ca71053ee00845c1bdccbd5fd5f9"
+      },
+      [
+        5,
+        "ReviewFinding",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    ],
+    [
+      6,
+      {
+        "bytes": "4f4794305f8df18d499b8b92e6da84ba30e21626cb87d6743971b97a29fb690d"
+      },
+      [
+        6,
+        "SecurityAnalysis",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    ],
+    [
+      7,
+      {
+        "bytes": "fbb05de5feb7451bb1a0d3050713d5ac05718204899a3937f236153550e554ee"
+      },
+      [
+        7,
+        "InstalledBinary",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    ],
+    [
+      8,
+      {
+        "bytes": "dffa4b01a11acda41a041b83db8d160b6df2b4007349665d5cb4c9425365d8eb"
+      },
+      [
+        8,
+        "RemoteReadback",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    ],
+    [
+      9,
+      {
+        "bytes": "57e9f4bae8828b3fdf9162331855c9ea36f1bb131946499be9918d967bda43f8"
+      },
+      [
+        9,
+        "RemoteDelivery",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    ],
+    [
+      10,
+      {
+        "bytes": "4dd7c8e6d69b27df9d8354500ba4c3629ad754d328079d6644afa10f8f127e1b"
+      },
+      [
+        10,
+        "RemoteRelease",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    ],
+    [
+      11,
+      {
+        "bytes": "669157b2e24664382e90f7072a456be840067a2caaf4b9856a5efe57e6773f58"
+      },
+      [
+        11,
+        "ProcessLiveness",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    ],
+    [
+      12,
+      {
+        "bytes": "ddd9a779ea83e6b735b779f8b4a1dbffdac45411250c8f6caf817827c37bf338"
+      },
+      [
+        12,
+        "SkillActivation",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    ],
+    [
+      13,
+      {
+        "bytes": "fa157917cbf1f424309f520cd936c4ca48e881ca13961329811a3a55a93882bf"
+      },
+      [
+        13,
+        "HookDelivery",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    ],
+    [
+      14,
+      {
+        "bytes": "d34388bd9ee7af52392c7e51a93602195347a916a1e80e243188302faabc605b"
+      },
+      [
+        14,
+        "EventStreamIntegrity",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    ],
+    [
+      15,
+      {
+        "bytes": "7b64a80120cae4ce017eba06656070084805c6c23ccb0f7f6307ff7e773e6031"
+      },
+      [
+        15,
+        "ResearchSource",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    ],
+    [
+      16,
+      {
+        "bytes": "afda048a031bad087a5374247d783a81cbec0201d43ee25d2e8a1796e80cffd0"
+      },
+      [
+        16,
+        "CapabilityProbe",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    ],
+    [
+      17,
+      {
+        "bytes": "f5532c022cd5c0a872dad94801959bb7dd7f3ffd5ebb3462d6d5ed700bfadb98"
+      },
+      [
+        17,
+        "BootstrapMandatePresentation",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          43
+        ],
+        [],
+        []
+      ]
+    ],
+    [
+      18,
+      {
+        "bytes": "f2ca7d0aaf87e34c226b3176b5e4b6213e6817517ef0d9b744d994d1613652bc"
+      },
+      [
+        18,
+        "BootstrapMandateResponse",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          44
+        ],
+        [],
+        []
+      ]
+    ],
+    [
+      19,
+      {
+        "bytes": "52bb8ad510450ee54f6766cf3f00fbbb789bd4b78b96d6daa45102ec5cae4d01"
+      },
+      [
+        19,
+        "GovernedReviewPresentation",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    ],
+    [
+      20,
+      {
+        "bytes": "d29c3833811ecb023f42e0aa21d97703b19448415d54d0c841e52001e3c8acc9"
+      },
+      [
+        20,
+        "GovernedReviewResponse",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    ],
+    [
+      21,
+      {
+        "bytes": "6ab7a693cf0239cd59efcfc85d962213aaecd10a036db2b25a3e39c498529458"
+      },
+      [
+        21,
+        "HumanBindingSubjectSelection",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    ],
+    [
+      22,
+      {
+        "bytes": "16540ced57cda88ecab8a09b62bc0c9977ca78325605584d979e6219702f7988"
+      },
+      [
+        22,
+        "HumanPresence",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    ],
+    [
+      23,
+      {
+        "bytes": "1d572b741b375b8d730c619b8d090cb59e4cfacd91e2ecb616fa43e2cfb156f9"
+      },
+      [
+        23,
+        "CredentialControl",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    ],
+    [
+      24,
+      {
+        "bytes": "3b9d0c24cf1c718e5c941608455d76166c81b1e94eb42b436f42011e95eb33d4"
+      },
+      [
+        24,
+        "HumanAssurance",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    ],
+    [
+      25,
+      {
+        "bytes": "3d406175e6bdb05154e7dfefad85214ffb34cec773d6f3534d1516327a460755"
+      },
+      [
+        25,
+        "SourceAssurance",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    ],
+    [
+      26,
+      {
+        "bytes": "2fb6b463471dae915460912c5265f7f27538398285974f22d1251717ab198965"
+      },
+      [
+        26,
+        "SourceCommonCause",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    ],
+    [
+      27,
+      {
+        "bytes": "82a056d948d9684f07142e2cd09a2b1be140c82e4347f9320b8ee865d3376d8d"
+      },
+      [
+        27,
+        "SourceContradiction",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    ],
+    [
+      28,
+      {
+        "bytes": "d9697b5ad747605817dc08a0397b3d79ee7420c9e7fe4e215028e0543cf19865"
+      },
+      [
+        28,
+        "SourceRevocation",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    ],
+    [
+      29,
+      {
+        "bytes": "456e30278ff5af6ee96e29972405c12ee5ac3e9230c61ea5e42564b9ebe38ab5"
+      },
+      [
+        29,
+        "TrustedTimeAtomicUnit",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          45
+        ],
+        [
+          1
+        ],
+        [
+          [
+            1,
+            1
+          ]
+        ]
+      ]
+    ],
+    [
+      30,
+      {
+        "bytes": "daa9d55fc8948b18b4ed67eac5abfc9f49a4f204f848373f24f97e3bacc822fc"
+      },
+      [
+        30,
+        "TrustedTimeAcquisition",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          45
+        ],
+        [
+          2
+        ],
+        [
+          [
+            1,
+            2
+          ]
+        ]
+      ]
+    ],
+    [
+      31,
+      {
+        "bytes": "11333b7e9d989710a53090179f8140a4b63d737df80eccf9b7591362c98fb6cd"
+      },
+      [
+        31,
+        "MaintenanceExecutorCurrentness",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          45
+        ],
+        [
+          7
+        ],
+        [
+          [
+            4,
+            7
+          ]
+        ]
+      ]
+    ],
+    [
+      32,
+      {
+        "bytes": "7c7bae89450f488bad93d33e0f25f2d3a75a5a10e4182ad77f5823b9d6e463fa"
+      },
+      [
+        32,
+        "ProspectiveContinuityCarrier",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          45
+        ],
+        [
+          8
+        ],
+        [
+          [
+            5,
+            8
+          ]
+        ]
+      ]
+    ],
+    [
+      33,
+      {
+        "bytes": "b8d92dbc402b16ded9df48a5b220165a903f7004a768d2f05258f4124ed41463"
+      },
+      [
+        33,
+        "RecoveryExternalAnchorRevision",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          45
+        ],
+        [
+          4,
+          6
+        ],
+        [
+          [
+            2,
+            4
+          ],
+          [
+            3,
+            6
+          ]
+        ]
+      ]
+    ],
+    [
+      34,
+      {
+        "bytes": "47b3b11eeb5ad198a7a0fb97dbaea434f4979de745a02f474c1298435eb69d45"
+      },
+      [
+        34,
+        "RecoveryExternalRegistration",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          45
+        ],
+        [
+          3
+        ],
+        [
+          [
+            2,
+            3
+          ]
+        ]
+      ]
+    ],
+    [
+      35,
+      {
+        "bytes": "4df5d031c84eddf83ada05d24e142e674beda8d27ca31ec54263cde4d085b757"
+      },
+      [
+        35,
+        "RecoveryExternalStatus",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          45
+        ],
+        [
+          5
+        ],
+        [
+          [
+            3,
+            5
+          ]
+        ]
+      ]
+    ],
+    [
+      36,
+      {
+        "bytes": "56268659da5c07c216dff3321ab5e22f090f0a0f515034b7fcb735b1adf4868d"
+      },
+      [
+        36,
+        "ExternalHighWaterReadback",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          45
+        ],
+        [
+          9
+        ],
+        [
+          [
+            5,
+            9
+          ]
+        ]
+      ]
+    ],
+    [
+      37,
+      {
+        "bytes": "335d4958826fa9b7234982dad1655be55b8fcbd4dcdafb7f5383d9adf18e0119"
+      },
+      [
+        37,
+        "CarrierIntegrityFault",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          45
+        ],
+        [
+          10
+        ],
+        [
+          [
+            5,
+            10
+          ]
+        ]
+      ]
+    ],
+    [
+      38,
+      {
+        "bytes": "95ce9c89f196d821d6277bb68c0afacd48dadd5925203d1b8ba82ac1520320d6"
+      },
+      [
+        38,
+        "DistributionFilesystemState",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    ],
+    [
+      39,
+      {
+        "bytes": "c8f9ce68a85f148167ecc9642d934741d2442a94155df480f7472cc7ebdcb8a7"
+      },
+      [
+        39,
+        "DistributionInstalledResource",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    ],
+    [
+      40,
+      {
+        "bytes": "915608062af73f2ad17a141ace09b2915ce755e8896972a0b73ed0cf09b3d4e3"
+      },
+      [
+        40,
+        "DistributionManagerState",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    ],
+    [
+      41,
+      {
+        "bytes": "1b75c785f0a16839ff62257201b92a793cb2b036ddba61eb851f0b9c2f1bfc00"
+      },
+      [
+        41,
+        "PublicationIntegrity",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    ],
+    [
+      42,
+      {
+        "bytes": "bb5bf4d9bc7f5ca8b5aee0e951813b00b3bf5af3fc5fba530bb58e728e110475"
+      },
+      [
+        42,
+        "StoreIntegrity",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    ],
+    [
+      43,
+      {
+        "bytes": "a005b60b92a2e40478845776d4653b0144c9125561ef8d4fdb6fd9c3e0a1e7e4"
+      },
+      [
+        43,
+        "ProtectedContinuityDiagnostic",
+        [
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39
+        ],
+        [],
+        []
+      ]
+    ]
+  ],
+  "predecessor_disposition": "immutable_non_current_evidence_only",
+  "primary_owner_relation": {
+    "byte_length": 1665,
+    "cbor_hex": "8278316d61657374726f2e766e6578742e636174616c6f672e7072696d6172792d6f776e65722d72656c6174696f6e2e312e7631982b830107582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9830207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9830307582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9830407582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9830507582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9830607582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9830707582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9830807582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9830907582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9830a07582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9830b07582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9830c07582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9830d07582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9830e07582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9830f07582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9831007582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9831107582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9831207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9831307582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9831407582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9831507582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9831607582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9831707582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc983181807582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc983181907582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc983181a07582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc983181b07582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc983181c07582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc983181d07582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc983181e07582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc983181f07582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc983182007582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc983182107582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc983182207582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc983182307582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc983182407582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc983182507582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc983182607582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc983182707582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc983182807582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc983182907582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc983182a07582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc983182b07582056d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9",
+    "identity_envelope": [
+      "maestro.vnext.catalog.primary-owner-relation.1.v1",
+      [
+        [
+          1,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          2,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          3,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          4,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          5,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          6,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          7,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          8,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          9,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          10,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          11,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          12,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          13,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          14,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          15,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          16,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          17,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          18,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          19,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          20,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          21,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          22,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          23,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          24,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          25,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          26,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          27,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          28,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          29,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          30,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          31,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          32,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          33,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          34,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          35,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          36,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          37,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          38,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          39,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          40,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          41,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          42,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ],
+        [
+          43,
+          7,
+          {
+            "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+          }
+        ]
+      ]
+    ],
+    "relation_id": "98f6be4175b5e056145e85bddabf9a1ee408ed7843d29a1b1b748fa2d64b08ef",
+    "rows": [
+      [
+        1,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        2,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        3,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        4,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        5,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        6,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        7,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        8,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        9,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        10,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        11,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        12,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        13,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        14,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        15,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        16,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        17,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        18,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        19,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        20,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        21,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        22,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        23,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        24,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        25,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        26,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        27,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        28,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        29,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        30,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        31,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        32,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        33,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        34,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        35,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        36,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        37,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        38,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        39,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        40,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        41,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        42,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ],
+      [
+        43,
+        7,
+        {
+          "bytes": "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
+        }
+      ]
+    ]
+  },
+  "publication_state": "inactive_candidate",
+  "schema_version": "maestro.vnext.catalog.literal.v1",
+  "schemas": {
+    "descriptor": {
+      "byte_length": 222,
+      "cbor_hex": "82776d61657374726f2e766e6578742e736368656d612e76318478356d61657374726f2e766e6578742e636174616c6f672e6f62736572766174696f6e2e64657363726970746f722d76616c75652e7631018684016374616781018181018402646e616d65810381810184036d7072696d6172795f6f776e657282088281018204182081810184047070726f64756365725f616374696f6e7382078101818302010484056d736f757263655f726f75746573820781018183020002840671636d615f636f6d7061746962696c697479820782088281018101818302000280",
+      "identity_envelope": [
+        "maestro.vnext.schema.v1",
+        [
+          "maestro.vnext.catalog.observation.descriptor-value.v1",
+          1,
+          [
+            [
+              1,
+              "tag",
+              [
+                1
+              ],
+              [
+                [
+                  1
+                ]
+              ]
+            ],
+            [
+              2,
+              "name",
+              [
+                3
+              ],
+              [
+                [
+                  1
+                ]
+              ]
+            ],
+            [
+              3,
+              "primary_owner",
+              [
+                8,
+                [
+                  [
+                    1
+                  ],
+                  [
+                    4,
+                    32
+                  ]
+                ]
+              ],
+              [
+                [
+                  1
+                ]
+              ]
+            ],
+            [
+              4,
+              "producer_actions",
+              [
+                7,
+                [
+                  1
+                ]
+              ],
+              [
+                [
+                  2,
+                  1,
+                  4
+                ]
+              ]
+            ],
+            [
+              5,
+              "source_routes",
+              [
+                7,
+                [
+                  1
+                ]
+              ],
+              [
+                [
+                  2,
+                  0,
+                  2
+                ]
+              ]
+            ],
+            [
+              6,
+              "cma_compatibility",
+              [
+                7,
+                [
+                  8,
+                  [
+                    [
+                      1
+                    ],
+                    [
+                      1
+                    ]
+                  ]
+                ]
+              ],
+              [
+                [
+                  2,
+                  0,
+                  2
+                ]
+              ]
+            ]
+          ],
+          []
+        ]
+      ],
+      "schema_id": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5",
+      "value": [
+        "maestro.vnext.catalog.observation.descriptor-value.v1",
+        1,
+        [
+          [
+            1,
+            "tag",
+            [
+              1
+            ],
+            [
+              [
+                1
+              ]
+            ]
+          ],
+          [
+            2,
+            "name",
+            [
+              3
+            ],
+            [
+              [
+                1
+              ]
+            ]
+          ],
+          [
+            3,
+            "primary_owner",
+            [
+              8,
+              [
+                [
+                  1
+                ],
+                [
+                  4,
+                  32
+                ]
+              ]
+            ],
+            [
+              [
+                1
+              ]
+            ]
+          ],
+          [
+            4,
+            "producer_actions",
+            [
+              7,
+              [
+                1
+              ]
+            ],
+            [
+              [
+                2,
+                1,
+                4
+              ]
+            ]
+          ],
+          [
+            5,
+            "source_routes",
+            [
+              7,
+              [
+                1
+              ]
+            ],
+            [
+              [
+                2,
+                0,
+                2
+              ]
+            ]
+          ],
+          [
+            6,
+            "cma_compatibility",
+            [
+              7,
+              [
+                8,
+                [
+                  [
+                    1
+                  ],
+                  [
+                    1
+                  ]
+                ]
+              ]
+            ],
+            [
+              [
+                2,
+                0,
+                2
+              ]
+            ]
+          ]
+        ],
+        []
+      ]
+    },
+    "header": {
+      "byte_length": 439,
+      "cbor_hex": "82776d61657374726f2e766e6578742e736368656d612e76318478346d61657374726f2e766e6578742e636174616c6f672e6f62736572766174696f6e2e6d616e69666573742d6865616465722e7631018b84016b636174616c6f675f746167810181810184026f636174616c6f675f76657273696f6e81018181018403781863616e6f6e6963616c697a6174696f6e5f76657273696f6e810181810184046a6772616d6d61725f69648204182081810184056c646570656e64656e636965738207820882810182041820818403818202000000840678197072696d6172795f6f776e65725f72656c6174696f6e5f696482041820818101840769726f775f636f756e74810181810184087266696e6974655f726f775f6d6178696d756d81018181018409746f776e65725f70726f66696c655f7365745f696482041820818101840a781b7072656465636573736f725f65766964656e63655f73686132353682041820818101840b717075626c69636174696f6e5f737461746583097819436174616c6f675075626c69636174696f6e5374617465563181820177496e61637469766553746167653043616e64696461746581810180",
+      "identity_envelope": [
+        "maestro.vnext.schema.v1",
+        [
+          "maestro.vnext.catalog.observation.manifest-header.v1",
+          1,
+          [
+            [
+              1,
+              "catalog_tag",
+              [
+                1
+              ],
+              [
+                [
+                  1
+                ]
+              ]
+            ],
+            [
+              2,
+              "catalog_version",
+              [
+                1
+              ],
+              [
+                [
+                  1
+                ]
+              ]
+            ],
+            [
+              3,
+              "canonicalization_version",
+              [
+                1
+              ],
+              [
+                [
+                  1
+                ]
+              ]
+            ],
+            [
+              4,
+              "grammar_id",
+              [
+                4,
+                32
+              ],
+              [
+                [
+                  1
+                ]
+              ]
+            ],
+            [
+              5,
+              "dependencies",
+              [
+                7,
+                [
+                  8,
+                  [
+                    [
+                      1
+                    ],
+                    [
+                      4,
+                      32
+                    ]
+                  ]
+                ]
+              ],
+              [
+                [
+                  3,
+                  [
+                    [
+                      2,
+                      0
+                    ]
+                  ],
+                  0,
+                  0
+                ]
+              ]
+            ],
+            [
+              6,
+              "primary_owner_relation_id",
+              [
+                4,
+                32
+              ],
+              [
+                [
+                  1
+                ]
+              ]
+            ],
+            [
+              7,
+              "row_count",
+              [
+                1
+              ],
+              [
+                [
+                  1
+                ]
+              ]
+            ],
+            [
+              8,
+              "finite_row_maximum",
+              [
+                1
+              ],
+              [
+                [
+                  1
+                ]
+              ]
+            ],
+            [
+              9,
+              "owner_profile_set_id",
+              [
+                4,
+                32
+              ],
+              [
+                [
+                  1
+                ]
+              ]
+            ],
+            [
+              10,
+              "predecessor_evidence_sha256",
+              [
+                4,
+                32
+              ],
+              [
+                [
+                  1
+                ]
+              ]
+            ],
+            [
+              11,
+              "publication_state",
+              [
+                9,
+                "CatalogPublicationStateV1",
+                [
+                  [
+                    1,
+                    "InactiveStage0Candidate"
+                  ]
+                ]
+              ],
+              [
+                [
+                  1
+                ]
+              ]
+            ]
+          ],
+          []
+        ]
+      ],
+      "schema_id": "44d934034587debbf6c2a3f27fd559e9c8db46af7dc7655501b3c86cff8020ea",
+      "value": [
+        "maestro.vnext.catalog.observation.manifest-header.v1",
+        1,
+        [
+          [
+            1,
+            "catalog_tag",
+            [
+              1
+            ],
+            [
+              [
+                1
+              ]
+            ]
+          ],
+          [
+            2,
+            "catalog_version",
+            [
+              1
+            ],
+            [
+              [
+                1
+              ]
+            ]
+          ],
+          [
+            3,
+            "canonicalization_version",
+            [
+              1
+            ],
+            [
+              [
+                1
+              ]
+            ]
+          ],
+          [
+            4,
+            "grammar_id",
+            [
+              4,
+              32
+            ],
+            [
+              [
+                1
+              ]
+            ]
+          ],
+          [
+            5,
+            "dependencies",
+            [
+              7,
+              [
+                8,
+                [
+                  [
+                    1
+                  ],
+                  [
+                    4,
+                    32
+                  ]
+                ]
+              ]
+            ],
+            [
+              [
+                3,
+                [
+                  [
+                    2,
+                    0
+                  ]
+                ],
+                0,
+                0
+              ]
+            ]
+          ],
+          [
+            6,
+            "primary_owner_relation_id",
+            [
+              4,
+              32
+            ],
+            [
+              [
+                1
+              ]
+            ]
+          ],
+          [
+            7,
+            "row_count",
+            [
+              1
+            ],
+            [
+              [
+                1
+              ]
+            ]
+          ],
+          [
+            8,
+            "finite_row_maximum",
+            [
+              1
+            ],
+            [
+              [
+                1
+              ]
+            ]
+          ],
+          [
+            9,
+            "owner_profile_set_id",
+            [
+              4,
+              32
+            ],
+            [
+              [
+                1
+              ]
+            ]
+          ],
+          [
+            10,
+            "predecessor_evidence_sha256",
+            [
+              4,
+              32
+            ],
+            [
+              [
+                1
+              ]
+            ]
+          ],
+          [
+            11,
+            "publication_state",
+            [
+              9,
+              "CatalogPublicationStateV1",
+              [
+                [
+                  1,
+                  "InactiveStage0Candidate"
+                ]
+              ]
+            ],
+            [
+              [
+                1
+              ]
+            ]
+          ]
+        ],
+        []
+      ]
+    },
+    "manifest": {
+      "byte_length": 306,
+      "cbor_hex": "82776d61657374726f2e766e6578742e736368656d612e76318478336d61657374726f2e766e6578742e636174616c6f672e6f62736572766174696f6e2e6d616e69666573742d76616c75652e76310182840166686561646572840578346d61657374726f2e766e6578742e636174616c6f672e6f62736572766174696f6e2e6d616e69666573742d6865616465722e763101582044d934034587debbf6c2a3f27fd559e9c8db46af7dc7655501b3c86cff8020ea818101840264726f77738207820883810182041820840578356d61657374726f2e766e6578742e636174616c6f672e6f62736572766174696f6e2e64657363726970746f722d76616c75652e763101582012e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada581840381820200182b182b80",
+      "identity_envelope": [
+        "maestro.vnext.schema.v1",
+        [
+          "maestro.vnext.catalog.observation.manifest-value.v1",
+          1,
+          [
+            [
+              1,
+              "header",
+              [
+                5,
+                "maestro.vnext.catalog.observation.manifest-header.v1",
+                1,
+                {
+                  "bytes": "44d934034587debbf6c2a3f27fd559e9c8db46af7dc7655501b3c86cff8020ea"
+                }
+              ],
+              [
+                [
+                  1
+                ]
+              ]
+            ],
+            [
+              2,
+              "rows",
+              [
+                7,
+                [
+                  8,
+                  [
+                    [
+                      1
+                    ],
+                    [
+                      4,
+                      32
+                    ],
+                    [
+                      5,
+                      "maestro.vnext.catalog.observation.descriptor-value.v1",
+                      1,
+                      {
+                        "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+                      }
+                    ]
+                  ]
+                ]
+              ],
+              [
+                [
+                  3,
+                  [
+                    [
+                      2,
+                      0
+                    ]
+                  ],
+                  43,
+                  43
+                ]
+              ]
+            ]
+          ],
+          []
+        ]
+      ],
+      "schema_id": "9212bbee467ed31f091815e55cce76cd04ae8733764964eb230dda4ad687fc8b",
+      "value": [
+        "maestro.vnext.catalog.observation.manifest-value.v1",
+        1,
+        [
+          [
+            1,
+            "header",
+            [
+              5,
+              "maestro.vnext.catalog.observation.manifest-header.v1",
+              1,
+              {
+                "bytes": "44d934034587debbf6c2a3f27fd559e9c8db46af7dc7655501b3c86cff8020ea"
+              }
+            ],
+            [
+              [
+                1
+              ]
+            ]
+          ],
+          [
+            2,
+            "rows",
+            [
+              7,
+              [
+                8,
+                [
+                  [
+                    1
+                  ],
+                  [
+                    4,
+                    32
+                  ],
+                  [
+                    5,
+                    "maestro.vnext.catalog.observation.descriptor-value.v1",
+                    1,
+                    {
+                      "bytes": "12e627d2c6e89aeec4fdaa37b9f726bcd42f7d8be06c6abc314c1ff02b63ada5"
+                    }
+                  ]
+                ]
+              ]
+            ],
+            [
+              [
+                3,
+                [
+                  [
+                    2,
+                    0
+                  ]
+                ],
+                43,
+                43
+              ]
+            ]
+          ]
+        ],
+        []
+      ]
+    }
+  },
+  "semantic_proof": {
+    "cma_negative_count": 205,
+    "cma_positive_count": 10
+  },
+  "status": "stage0_candidate_not_published"
+}

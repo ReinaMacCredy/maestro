@@ -1,0 +1,35 @@
+{
+  "recipe_id": "setup",
+  "semantic_version": [
+    1,
+    0,
+    0
+  ],
+  "recipe_role": "Primary",
+  "purpose_guidance_resource_ref": "candidate:orchestration:recipe:setup:purpose:v1",
+  "trigger_projection_reason_refs": [
+    "candidate:orchestration:recipe:setup:trigger:v1"
+  ],
+  "required_contract_refs": [],
+  "restrictive_operation_filter_program_ref": "candidate:orchestration:recipe:setup:restrictive-filter:v1",
+  "phase_guidance_resource_refs": [
+    "candidate:orchestration:recipe:setup:phase:perceive:v1",
+    "candidate:orchestration:recipe:setup:phase:choose:v1",
+    "candidate:orchestration:recipe:setup:phase:act:v1",
+    "candidate:orchestration:recipe:setup:phase:observe:v1",
+    "candidate:orchestration:recipe:setup:phase:learn:v1",
+    "candidate:orchestration:recipe:setup:phase:continue:v1"
+  ],
+  "required_projection_predicate_refs": [],
+  "hard_stop_predicate_refs": [],
+  "completion_predicate_refs": [
+    "candidate:orchestration:recipe:setup:completion:v1"
+  ],
+  "return_reason_refs": [
+    "candidate:orchestration:recipe-return-reason:SetupNotApplicable:v1",
+    "candidate:orchestration:recipe-return-reason:SetupRestrictiveAdvice:v1",
+    "candidate:orchestration:recipe-return-reason:SetupHardStop:v1"
+  ],
+  "operating_limit_program_ref": "candidate:orchestration:recipe:setup:operating-limit:v1",
+  "allowed_continuation_profile_refs": []
+}

@@ -1,0 +1,151 @@
+{
+  "artifacts": [
+    {
+      "identity": "b7ef635dcd29af4fc41f20cd670b726e5627c2f7210344d058e7c188ace69647",
+      "kind": "grammar",
+      "path": "catalog-profile-grammar-v1.json",
+      "row_count": 156,
+      "sha256": "38fd4e88ecaa185fc76f7dd20cf221304daf4a5e8058d8b5187d74828d1d5196"
+    },
+    {
+      "identity": "9997ffa7f1597c07abd23a3955a634cb321670198e040fb7b5d015b021159688",
+      "kind": "ObservationKindV1",
+      "path": "catalog-01-observation.json",
+      "row_count": 43,
+      "sha256": "3f9acd1efb25c1ade2555a538f603d9c09d7bc9349a7634263bee88fc5529091"
+    },
+    {
+      "identity": "d28f8e573ddb450c427e628df121dbd516d0e5b05c03caf18d2757782dfd259d",
+      "kind": "EffectOriginV1",
+      "path": "catalog-02-effect.json",
+      "row_count": 23,
+      "sha256": "39a1c4795b02933c83b54c17faafa23add55643501a5b9dd7154bc1ec0f3c910"
+    },
+    {
+      "identity": "a1dd1dc6210548029d3e1f2f8697c80a8c1dd9a7c80cf4144f062a95cd54806e",
+      "kind": "RepositoryGovernedCapacitySlotKindV1",
+      "path": "catalog-03-repository-capacity.json",
+      "row_count": 6,
+      "sha256": "1fb9a54678cd1c05fa4d17546c395c15c46557bfabcdf6256a4b4719f95461ec"
+    },
+    {
+      "identity": "bcccb791b3b136c9cd328a2677f4fe00826e162cda2e9fb7768c49d919aca2a1",
+      "kind": "InstallationGovernedCapacitySlotKindV1",
+      "path": "catalog-04-installation-capacity.json",
+      "row_count": 6,
+      "sha256": "2eb7f66d19786feb12368af6467c335466ea4c06c0b4c83c0d4025d00d7f1208"
+    },
+    {
+      "identity": "fb9ba972eb2fe8f6861e71cd6c2c6af23a9fdb75986ffbed8c0a2ce319288485",
+      "kind": "CeremonySpecV1",
+      "path": "catalog-05-ceremony.json",
+      "row_count": 11,
+      "sha256": "efb01184d39c5384a2ddac2237ada963468f606d2b4a85b339b420635b4ffb3e"
+    },
+    {
+      "identity": "b2f538d76795db0338448cc8cb837419157c1bebdc8bcc7d7b42fd961790d454",
+      "kind": "ActionLeafCensusV1",
+      "path": "catalog-06-action-leaf.json",
+      "row_count": 145,
+      "sha256": "034b914f1caaaa302f8f35286142863f082e7a1e7d244013db5041e378d06259"
+    },
+    {
+      "identity": "c67e88788f8d6636277ae15ba87102ec8fa7ede146256ca99ffc36a356267c1e",
+      "kind": "RepositoryAuthorityContinuityClassV1",
+      "path": "catalog-07-repository-continuity.json",
+      "row_count": 35,
+      "sha256": "1f4e78644fd1361e5a203e868809cccd7d86ea6cd8506bb981e5f1af48c5a8f0"
+    },
+    {
+      "identity": "387bf53ada1fc03bbf8004f1eec366267d7881a81f401d9806994df8b9862795",
+      "kind": "InstallationAuthorityContinuityClassV1",
+      "path": "catalog-08-installation-continuity.json",
+      "row_count": 30,
+      "sha256": "800e581591b3c95ffb245fedcc1fa3613ae32027dffb10228e30e796626901c0"
+    },
+    {
+      "identity": "7a7a1311690fcdec194c0d9c9afbbe4e28f1332b567ed23451daf06ebca02970",
+      "kind": "ActionSpecV1",
+      "path": "catalog-09-action-spec.json",
+      "row_count": 145,
+      "sha256": "df15c67ba312585869836aaeda1c849b3bb84e98ba65baf78c51fde85473113c"
+    }
+  ],
+  "effective_decision": [
+    "dec-close-lifecycle-to-action-totality-and-efa0",
+    "811474c083177cb9b625e001e7431782e0827eec95572562c8a227054c15e147"
+  ],
+  "encoder_input": {
+    "path": "manifest-identity-input.json",
+    "sha256": "8664c3cd3d58384436ea8da2a77cd7d8ac09be20a6eb0dc27efde7b13e2f02a9"
+  },
+  "encoder_receipt": {
+    "path": "encoder-receipt.json",
+    "sha256": "23bf3dcffd0aca82685271915bf0799edb66f276f54ffd82751afea296fd773a"
+  },
+  "grammar_id": "b7ef635dcd29af4fc41f20cd670b726e5627c2f7210344d058e7c188ace69647",
+  "predecessor_evidence": {
+    "artifact_count": 32,
+    "disposition": "immutable_non_current_predecessor_evidence",
+    "missing_count": 0,
+    "receipt_sha256": "768af72dbe4663f14de4f24f904920d308d1b961ad16e674b882802557fe0ad0"
+  },
+  "predecessor_grammar_id": "2b428f8444253794cd0abb41b32da482cc0805359c2a37bf0cba90a70e3186e9",
+  "publication_state": "inactive_candidate",
+  "schema_version": "maestro.vnext.catalog.stage0-inventory.v1",
+  "semantic_counts": {
+    "action_families": {
+      "Authority": 48,
+      "Contract": 2,
+      "Coordination": 9,
+      "Decision": 5,
+      "Design": 4,
+      "Distribution": 13,
+      "Evidence": 7,
+      "Execution": 16,
+      "Intake": 3,
+      "Memory": 7,
+      "Persistence": 10,
+      "Planning": 4,
+      "Research": 4,
+      "SearchMaintenance": 2,
+      "Step": 4,
+      "Work": 7
+    },
+    "action_specs": 145,
+    "actions": 145,
+    "ceremonies": 11,
+    "ceremony_request_modes": 4,
+    "cma_observation_negative": 205,
+    "cma_observation_positive": 10,
+    "dependency_dag_edges": 28,
+    "effect_origins": 23,
+    "effect_routes": 139,
+    "execution_attempt_owners": 3,
+    "grammar_symbols": 156,
+    "installation_capacity_kinds": 6,
+    "observations": 43,
+    "owner_profiles": 21,
+    "owner_relation_domains": [
+      43,
+      23,
+      6,
+      6,
+      11,
+      145,
+      35,
+      30,
+      145
+    ],
+    "owner_relation_rows": 444,
+    "repository_capacity_kinds": 6,
+    "route_roles": 9
+  },
+  "source_hashes": {
+    "builder": "94204dfb2b1f508004027f948e1f2d03b13bf2b2e1f0c478be04835ed65d140f",
+    "e346_nominal_source": "3142ff4334ddeb9b77c49786d29ff75de2ef6f023bb7942c827e1c54a84b69c2",
+    "e346_semantic_baseline": "91e0608c34097b5349b59f5b6f3fd1f5d9e23c44def9d1d714940819fe393278",
+    "predecessor_evidence": "768af72dbe4663f14de4f24f904920d308d1b961ad16e674b882802557fe0ad0"
+  },
+  "status": "stage0_candidate_not_published"
+}

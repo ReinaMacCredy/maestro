@@ -1,0 +1,46 @@
+{
+  "schema": "maestro.vnext.mcp-tool-source.v1",
+  "candidate_only": true,
+  "runtime_activation": false,
+  "runtime_registration": false,
+  "scope": "global-user-agent-installation",
+  "tools": [
+    {
+      "name": "maestro_packet",
+      "read_only": true,
+      "writes": false,
+      "network_io": false,
+      "request_schema": "McpPacketReadRequestV1",
+      "response_schema": "McpPacketReadEnvelopeV1",
+      "request_modes": [
+        "BootstrapNoRecipeV1",
+        "DiscoverSelectionContextV1",
+        "ProjectV1"
+      ],
+      "response_outcomes": [
+        "Packet",
+        "SelectionContext",
+        "NoActiveStore",
+        "Unavailable",
+        "Stale",
+        "Incompatible"
+      ]
+    },
+    {
+      "name": "maestro_cli_search",
+      "read_only": true,
+      "writes": false,
+      "network_io": false,
+      "request_schema": "McpCliSearchRequestV1",
+      "response_schema": "McpCliSearchEnvelopeV1",
+      "cursor_contract": "Complete=Absent; BoundedTruncated=Present",
+      "hit_classifications": [
+        "PureRead",
+        "Action",
+        "Ceremony"
+      ]
+    }
+  ],
+  "project_tools": [],
+  "governed_operation_execution": "installation-bound CLI"
+}

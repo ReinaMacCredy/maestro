@@ -16,8 +16,8 @@ Four layers; dependencies point one way: **interfaces -> operations -> domain ->
 
 | Layer | Path | Owns |
 |---|---|---|
-| foundation/core | `src/foundation/core/` | paths, schema-version consts, atomic + content-hash-CAS writes, id-reservation markers, hashing, slugs, time, managed blocks, `MaestroError` + `.hint()` |
-| domain | `src/domain/` | durable concepts: Card (core + `CardType` enum dispatch), Feature, Task, Harness, Decision, Proof, Run, Memory, Install, Skills, Extraction |
+| foundation/core | `src/foundation/core/` | paths, schema-version consts, atomic + content-hash-CAS writes, id-reservation markers, hashing, slugs, time, managed blocks, deterministic bounded CBOR, `MaestroError` + `.hint()` |
+| domain | `src/domain/` | durable concepts: Card (core + `CardType` enum dispatch), Feature, Task, Harness, Decision, Proof, Run, Memory, Install, Skills, Extraction; candidate-only vNext identity, Contract, execution, distribution, migration, Integration, Orchestration, and capability contracts live under `domain::vnext` |
 | operations | `src/operations/` | cross-domain workflows: init, sync, update, task_verify, harness apply/measure, feature_prepare, migrate, Memory suggestion/scorer/promotion/maintenance |
 | interfaces | `src/interfaces/` | adapters: cli, mcp, tui, hooks, shell — parse + render; domain rules stay behind owning facades |
 
@@ -28,6 +28,26 @@ Four layers; dependencies point one way: **interfaces -> operations -> domain ->
 - `append_text_file` — append-once / create-new, trailing-newline repair — `fs.rs:51`
 - `child_dirs` — symlink-safe directory walk — `fs.rs:324`
 - `write_string_atomic` — temp-sibling + rename without blocking fsync on the hot path — `safe_write.rs`
+- `deterministic_cbor` — bounded closed CBOR subset and canonical shortest-form validation for vNext content identities — `deterministic_cbor.rs`
+
+### Candidate-only vNext boundary
+
+`src/domain/vnext/` owns the typed, deterministic Stage 0 candidate contracts.
+They are inert: importing the module does not publish a Contract Root, activate
+runtime behavior, migrate state, or grant authority. `identity/` owns the one
+domain-separated `ManifestIdentityV1` protocol; `contract/` owns exact
+Components, Decision materialization/closure, candidate Root, finalization,
+Handoff, Submission Claim, and proof contracts. The remaining vNext children
+hold frozen literal contracts for later stages and contain no adapter-private
+state or write path.
+
+Stage 0 generators under `tools/vnext_contracts/` produce the checked-in
+candidate artifacts in `contracts/vnext/`. Python and Ruby independently encode
+the generated catalogs and manifests; Rust reconstructs the same emitted
+Decision closures, materialization identities, candidate Root, finalization,
+and Handoff. Exact root bindings are valid only when they match the Root's
+Decision-materialized `NormativeInputs` components, the initial closure base,
+and the same finalization manifest.
 
 ---
 

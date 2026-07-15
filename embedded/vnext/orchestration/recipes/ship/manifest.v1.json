@@ -1,0 +1,35 @@
+{
+  "recipe_id": "ship",
+  "semantic_version": [
+    1,
+    0,
+    0
+  ],
+  "recipe_role": "Primary",
+  "purpose_guidance_resource_ref": "candidate:orchestration:recipe:ship:purpose:v1",
+  "trigger_projection_reason_refs": [
+    "candidate:orchestration:recipe:ship:trigger:v1"
+  ],
+  "required_contract_refs": [],
+  "restrictive_operation_filter_program_ref": "candidate:orchestration:recipe:ship:restrictive-filter:v1",
+  "phase_guidance_resource_refs": [
+    "candidate:orchestration:recipe:ship:phase:perceive:v1",
+    "candidate:orchestration:recipe:ship:phase:choose:v1",
+    "candidate:orchestration:recipe:ship:phase:act:v1",
+    "candidate:orchestration:recipe:ship:phase:observe:v1",
+    "candidate:orchestration:recipe:ship:phase:learn:v1",
+    "candidate:orchestration:recipe:ship:phase:continue:v1"
+  ],
+  "required_projection_predicate_refs": [],
+  "hard_stop_predicate_refs": [],
+  "completion_predicate_refs": [
+    "candidate:orchestration:recipe:ship:completion:v1"
+  ],
+  "return_reason_refs": [
+    "candidate:orchestration:recipe-return-reason:ShipNotApplicable:v1",
+    "candidate:orchestration:recipe-return-reason:ShipRestrictiveAdvice:v1",
+    "candidate:orchestration:recipe-return-reason:ShipHardStop:v1"
+  ],
+  "operating_limit_program_ref": "candidate:orchestration:recipe:ship:operating-limit:v1",
+  "allowed_continuation_profile_refs": []
+}

@@ -1,0 +1,28 @@
+{
+  "schema": "maestro.vnext.context-budget-profiles.v1",
+  "candidate_only": true,
+  "runtime_activation": false,
+  "runtime_registration": false,
+  "release_ref": "candidate:release:stage0-public-identity:v1",
+  "host_profile_count": 2,
+  "admitted_combined_closure_count": 750,
+  "universal_product_cap": false,
+  "profiles": [
+    {
+      "profile_id": "agents-compatible-cli",
+      "source_path": "embedded/vnext/capability/context-budget/agents-compatible-cli.v1.json",
+      "profile_sha256": "f9e84cf934a1fcd9600820c5f47f2fd5160c3d20ea45a73fabf6fc5987678760",
+      "measurement_count": 750,
+      "maximum_utf8_bytes": 7565,
+      "maximum_host_observed_units": 7565
+    },
+    {
+      "profile_id": "claude-code",
+      "source_path": "embedded/vnext/capability/context-budget/claude-code.v1.json",
+      "profile_sha256": "554b5e6843c556cbaf38d6710442049a8b7468f0746c85cb10a0cfaea1625d15",
+      "measurement_count": 750,
+      "maximum_utf8_bytes": 7565,
+      "maximum_host_observed_units": 1892
+    }
+  ]
+}

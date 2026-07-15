@@ -1,0 +1,47 @@
+{
+  "reproduction_receipt": {
+    "path": "contracts/vnext/catalogs/predecessor/e346/reproduction.json",
+    "sha256": "6ecb1bb6335ee0701a3e5b6e4feed1f324223392c7427be30198985480bba02e"
+  },
+  "schema_version": "maestro.vnext.catalog.predecessor-reproduction-sources.v1",
+  "source_count": 6,
+  "sources": [
+    {
+      "materialized_path": "tools/vnext_contracts/catalogs/predecessor_e346/vnext_catalog_profile_grammar_build.py",
+      "name": "vnext_catalog_profile_grammar_build.py",
+      "sha256": "b987b9ce376ee2bcb8bd8d8016e07b98fb14d64cc7c6cc0d691a7e36d4caa7a5",
+      "source_path": ".maestro/workbench/vnext_catalog_profile_grammar_build.py"
+    },
+    {
+      "materialized_path": "tools/vnext_contracts/catalogs/predecessor_e346/vnext_catalog_profile_grammar_validate.py",
+      "name": "vnext_catalog_profile_grammar_validate.py",
+      "sha256": "907a5bd1c2f1026ca3b69496c578d1a67cf7e6f659f428f8b57858146cc6fdc9",
+      "source_path": ".maestro/workbench/vnext_catalog_profile_grammar_validate.py"
+    },
+    {
+      "materialized_path": "tools/vnext_contracts/catalogs/predecessor_e346/vnext_catalog_suite_build.py",
+      "name": "vnext_catalog_suite_build.py",
+      "sha256": "c1e48c88de19dca9b93ddce225ec4746be935b2d852b8cfbb7dfafc766870d63",
+      "source_path": ".maestro/workbench/vnext_catalog_suite_build.py"
+    },
+    {
+      "materialized_path": "tools/vnext_contracts/catalogs/predecessor_e346/vnext_catalog_suite_validate.py",
+      "name": "vnext_catalog_suite_validate.py",
+      "sha256": "821cfc6e055167f61945a2e11c1f2018bf12efe55fe2ad4e3dbfc01d46b3f043",
+      "source_path": ".maestro/workbench/vnext_catalog_suite_validate.py"
+    },
+    {
+      "materialized_path": "tools/vnext_contracts/catalogs/predecessor_e346/vnext_manifest_encode_py.py",
+      "name": "vnext_manifest_encode_py.py",
+      "sha256": "76c36afa7c730fef8ec8402250c7aab779e2da7e6c373990c58774e58a8fa0c1",
+      "source_path": ".maestro/workbench/vnext_manifest_encode_py.py"
+    },
+    {
+      "materialized_path": "tools/vnext_contracts/catalogs/predecessor_e346/vnext_manifest_encode_rb.rb",
+      "name": "vnext_manifest_encode_rb.rb",
+      "sha256": "1861a6fc37bcbd35b1bbe64717cecd58fb0f115999c8458b928b89771844ca73",
+      "source_path": ".maestro/workbench/vnext_manifest_encode_rb.rb"
+    }
+  ],
+  "status": "immutable_non_current_predecessor_evidence"
+}

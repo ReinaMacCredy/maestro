@@ -1,0 +1,97 @@
+{
+  "schema": "maestro.vnext.physical-census-source-admission.v1",
+  "candidate_only": true,
+  "runtime_activation": false,
+  "runtime_registration": false,
+  "admission_status": "historical_attested_current_live_drift",
+  "stage0_historical_evidence_admission": "pass",
+  "stage11_live_migration_admission": "blocked_pending_recensus",
+  "historical_baseline_is_non_promoting_evidence": true,
+  "current_live_rows_equal_historical_snapshot": false,
+  "current_live_equality_claim_must_fail_closed": true,
+  "historical_attested_receipt": {
+    "node_count": 28102,
+    "regular_file_count": 27883,
+    "symlink_count": 219,
+    "payload_bytes": 2723337235,
+    "locator_digest": "0490f6c1960b840181e119d9a5d493a6906686bc3240dfe55f049e5c09d791be",
+    "identity_digest_pass1": "29bfc337d3b4187c04f9e61c3a9f0bc012bdaef9fb93cc5af9a6ff58b8505d8c",
+    "identity_digest_pass2": "29bfc337d3b4187c04f9e61c3a9f0bc012bdaef9fb93cc5af9a6ff58b8505d8c",
+    "stable": true,
+    "changed_rows": 0
+  },
+  "historical_category_counts": [
+    { "category": "legacy", "count": 4816 },
+    { "category": "c115", "count": 3230 },
+    { "category": "repo", "count": 4665 },
+    { "category": "cache", "count": 15277 },
+    { "category": "binary", "count": 64 },
+    { "category": "perroot", "count": 34 },
+    { "category": "user", "count": 16 }
+  ],
+  "recovered_procedure": {
+    "attestation_kind": "immutable_historical_tool_call_output",
+    "path": "tools/vnext_contracts/public/reproduce_physical_census.rb",
+    "source_call_id": "call_A0D1D7nKo4p9dOyEXjGYyWgN",
+    "source_session_jsonl_sha256": "607854b051f0860377827fe190328b7f11a1d6f5bf902c191c8c4f79d861db52",
+    "exact_exec_command_sha256": "1d7c331f5010c6565098e8a43fa7e29c12cbd103ec95260d8002a5dd71679810",
+    "extracted_ruby_body_sha256": "c016209541b43280719c877491070395572b2dc2cc49aa1e272166280467e46d",
+    "historical_output_path": "contracts/vnext/public/physical_census.historical-output.txt",
+    "historical_output_bytes": 459,
+    "historical_output_sha256": "5b27eb5d880e9b8ab313672676fc25b5b39d95b1bd476b10b626ed13b5155341",
+    "authority_or_currentness": false
+  },
+  "current_live_drift_receipt": {
+    "claim_scope": "informational_current_drift_observation_only",
+    "observed_at": "2026-07-14",
+    "stable_read": true,
+    "changed_rows": 0,
+    "category_counts": [
+      { "category": "legacy", "expected": 4816, "actual": 4789 },
+      { "category": "c115", "expected": 3230, "actual": 3230 },
+      { "category": "repo", "expected": 4665, "actual": 4665 },
+      { "category": "cache", "expected": 15277, "actual": 15277 },
+      { "category": "binary", "expected": 64, "actual": 64 },
+      { "category": "perroot", "expected": 34, "actual": 34 },
+      { "category": "user", "expected": 16, "actual": 16 }
+    ],
+    "node_count": 28075,
+    "regular_file_count": 27856,
+    "symlink_count": 219,
+    "payload_bytes": 2722646745,
+    "locator_digest": "b03799bc3249e3990b604183faf71b402ec53d30670b5684c9bdbe672c7a8664",
+    "identity_digest_pass1": "9fdb5d5207b718a66deff18ee2f955efdfa9e95386560122808cf47f31183902",
+    "identity_digest_pass2": "9fdb5d5207b718a66deff18ee2f955efdfa9e95386560122808cf47f31183902"
+  },
+  "identity_row_grammar": [
+    "type",
+    "payload_length",
+    "payload_sha256",
+    "lexically_normalized_absolute_locator"
+  ],
+  "symlink_payload": "undereferenced link target",
+  "directory_containers_included": false,
+  "literal_historical_rows_retained": false,
+  "cutover_row_semantics": [
+    "display_target",
+    "resolved_target",
+    "aliases_mount_and_manager_realm",
+    "domain",
+    "host_optionality",
+    "source_or_destination_role",
+    "custody_or_explicit_transition_basis",
+    "preimage_and_metadata_commitment",
+    "effect_occurrence_and_recovery_lineage",
+    "discovery_status",
+    "consumer_stage",
+    "quarantine_or_protected_root_disposition",
+    "ordinary_snapshot_eligibility",
+    "removal_gate"
+  ],
+  "consumer_gates": [
+    "before semantic currentness: zero active discovery, dispatch, autoload, old-client, old-catalog, alias, source, or generated-reference consumers",
+    "during protected retention: only explicitly typed sealed migration, audit, or pre-accept rollback readers",
+    "physical pruning: zero readers and protected holds plus fresh custody, authority, rollback and erasure safety and LegacyRemovalAuthorization"
+  ],
+  "stage11_requirement": "Recensus the then-live declared roots with the recovered deterministic grammar before migration; the historical attestation cannot establish future Release closure, current source equality, or global absence."
+}

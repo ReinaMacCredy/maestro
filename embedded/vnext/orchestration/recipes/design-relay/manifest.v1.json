@@ -1,0 +1,35 @@
+{
+  "recipe_id": "design-relay",
+  "semantic_version": [
+    1,
+    0,
+    0
+  ],
+  "recipe_role": "Primary",
+  "purpose_guidance_resource_ref": "candidate:orchestration:recipe:design-relay:purpose:v1",
+  "trigger_projection_reason_refs": [
+    "candidate:orchestration:recipe:design-relay:trigger:v1"
+  ],
+  "required_contract_refs": [],
+  "restrictive_operation_filter_program_ref": "candidate:orchestration:recipe:design-relay:restrictive-filter:v1",
+  "phase_guidance_resource_refs": [
+    "candidate:orchestration:recipe:design-relay:phase:perceive:v1",
+    "candidate:orchestration:recipe:design-relay:phase:choose:v1",
+    "candidate:orchestration:recipe:design-relay:phase:act:v1",
+    "candidate:orchestration:recipe:design-relay:phase:observe:v1",
+    "candidate:orchestration:recipe:design-relay:phase:learn:v1",
+    "candidate:orchestration:recipe:design-relay:phase:continue:v1"
+  ],
+  "required_projection_predicate_refs": [],
+  "hard_stop_predicate_refs": [],
+  "completion_predicate_refs": [
+    "candidate:orchestration:recipe:design-relay:completion:v1"
+  ],
+  "return_reason_refs": [
+    "candidate:orchestration:recipe-return-reason:DesignRelayNotApplicable:v1",
+    "candidate:orchestration:recipe-return-reason:DesignRelayRestrictiveAdvice:v1",
+    "candidate:orchestration:recipe-return-reason:DesignRelayHardStop:v1"
+  ],
+  "operating_limit_program_ref": "candidate:orchestration:recipe:design-relay:operating-limit:v1",
+  "allowed_continuation_profile_refs": []
+}

@@ -1,0 +1,51 @@
+{
+  "schema": "maestro.vnext.bundle-membership-inputs.v1",
+  "candidate_only": true,
+  "identity_materialization": "not_performed",
+  "containing_id_backreferences": false,
+  "bundle_kinds": ["Release", "AgentBootstrap", "Capability", "Orchestration", "SharedContract", "Adapter", "ExternalPattern", "Migration"],
+  "membership_inputs": [
+    {
+      "resource_key": "vnext.public.contract-literals.v1",
+      "source_locator": "contracts/vnext/public/public_contracts.v1.json",
+      "semantic_owner": "Integration",
+      "required_bundle_kind": "SharedContract",
+      "disposition": "retain"
+    },
+    {
+      "resource_key": "vnext.orchestration.recipe-catalog.v1",
+      "source_locator": "embedded/vnext/orchestration/recipe-catalog.v1.json",
+      "semantic_owner": "Orchestration",
+      "required_bundle_kind": "Orchestration",
+      "disposition": "retain"
+    },
+    {
+      "resource_key": "vnext.capability.instruction-tree.v1",
+      "source_locator": "embedded/vnext/capability/instruction-tree.v1.json",
+      "semantic_owner": "Capability",
+      "required_bundle_kind": "Capability",
+      "disposition": "retain"
+    },
+    {
+      "resource_key": "vnext.adapter.mcp-tools.v1",
+      "source_locator": "embedded/vnext/adapter/mcp-tools.v1.json",
+      "semantic_owner": "Integration",
+      "required_bundle_kind": "Adapter",
+      "disposition": "retain"
+    },
+    {
+      "resource_key": "v1.recipe-profile.maestro.standard-six-phase.v1",
+      "source_locator": "embedded/loop-recipes/profiles/maestro.standard-six-phase.v1.yml",
+      "semantic_owner": "Migration",
+      "required_bundle_kind": "Migration",
+      "disposition": "migration-only",
+      "sha256": "266963296668517bd825935f843f6c161b4ed2fa210ebc54a6c3acc83843c133",
+      "runtime_activation": false
+    }
+  ],
+  "unmaterialized_bundle_kinds": {
+    "Release": "Concrete root and identities require the complete admitted Resource ledger and encoder closure.",
+    "AgentBootstrap": "No exact AgentBootstrap candidate bytes are present in the assigned source boundary.",
+    "ExternalPattern": "No exact ExternalPattern candidate bytes are present in the assigned source boundary."
+  }
+}

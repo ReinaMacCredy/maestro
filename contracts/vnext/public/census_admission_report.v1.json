@@ -1,0 +1,40 @@
+{
+  "schema": "maestro.vnext.census-admission-report.v1",
+  "candidate_only": true,
+  "runtime_activation": false,
+  "runtime_registration": false,
+  "stage0_historical_evidence_admission": "pass",
+  "stage11_live_migration_admission": "blocked_pending_recensus",
+  "checks": [
+    {
+      "name": "E204",
+      "status": "non_promoting_historical_coverage_attested",
+      "count": 204,
+      "digest": "c8fc4c6cd53d81272d19c3b402e99a0ca3f69ebd18cf9464539db1d1ecf85388",
+      "ledger": "contracts/vnext/public/embedded_resources.e204.v1.json"
+    },
+    {
+      "name": "C325",
+      "status": "non_promoting_historical_coverage_attested",
+      "count": 325,
+      "digest": "9aee8ea371f770e8694131079d4bfb4845f849d59d0b545005a2f0371a42976a",
+      "ledger": "contracts/vnext/public/direct_consumers.c325.v1.json"
+    },
+    {
+      "name": "declared_root_physical_census",
+      "status": "historical_tool_output_attested_current_live_drift",
+      "historical_count": 28102,
+      "historical_locator_digest": "0490f6c1960b840181e119d9a5d493a6906686bc3240dfe55f049e5c09d791be",
+      "historical_identity_digest": "29bfc337d3b4187c04f9e61c3a9f0bc012bdaef9fb93cc5af9a6ff58b8505d8c",
+      "current_live_count": 28075,
+      "current_live_locator_digest": "b03799bc3249e3990b604183faf71b402ec53d30670b5684c9bdbe672c7a8664",
+      "current_live_identity_digest": "9fdb5d5207b718a66deff18ee2f955efdfa9e95386560122808cf47f31183902",
+      "current_live_equality": false,
+      "source": "contracts/vnext/public/physical_census.commitment.v1.json",
+      "procedure": "tools/vnext_contracts/public/reproduce_physical_census.rb",
+      "historical_output": "contracts/vnext/public/physical_census.historical-output.txt",
+      "historical_output_sha256": "5b27eb5d880e9b8ab313672676fc25b5b39d95b1bd476b10b626ed13b5155341"
+    }
+  ],
+  "claim_boundary": "Stage 0 admits E204 and C325 as non-promoting historical coverage inputs and the 28,102 result as an authenticated historical tool-output attestation. None establishes current-source equality, future Release closure or global absence. Stage 11 remains blocked until it recensuses then-live declared roots before migration."
+}

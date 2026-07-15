@@ -1,0 +1,4163 @@
+{
+  "candidate_only": true,
+  "descriptors": [
+    {
+      "canonical_descriptor_value": [
+        "AcquisitionContextV1",
+        1,
+        "union",
+        [],
+        [
+          [
+            1,
+            "ActiveStore",
+            "ActiveStoreAcquisitionV1"
+          ],
+          [
+            2,
+            "PreStore",
+            "PreStoreAcquisitionV1"
+          ],
+          [
+            3,
+            "NoStoreInstallationGenesis",
+            "NoStoreInstallationGenesisV1"
+          ]
+        ],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:7cd6381c2c94d39ba960cd56dd77e9409d5faf43dc6b3c307e7caa157997b5e1",
+      "field_names": [],
+      "kind": "union",
+      "schema_id": "sha256:3132f7018c5350154a9fa86dd825dc3e550aa8cf531e28fd30f91ea4355d3cc7",
+      "schema_name": "AcquisitionContextV1",
+      "schema_version": 1,
+      "variant_names": [
+        "ActiveStore",
+        "PreStore",
+        "NoStoreInstallationGenesis"
+      ]
+    },
+    {
+      "canonical_descriptor_value": [
+        "ActionRequestV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "schema_version",
+            "Const<1>"
+          ],
+          [
+            2,
+            "request_id",
+            "NominalRequestIdV1"
+          ],
+          [
+            3,
+            "idempotency_key",
+            "NominalIdempotencyKeyV1"
+          ],
+          [
+            4,
+            "semantic_request_hash",
+            "NonZeroSha256"
+          ],
+          [
+            5,
+            "selected_packet_semantic_hash",
+            "NonZeroSha256"
+          ],
+          [
+            6,
+            "action_spec",
+            "ActionSpecRefV1"
+          ],
+          [
+            7,
+            "material_dependency_stamp",
+            "NonZeroSha256"
+          ],
+          [
+            8,
+            "exact_store_generation_ref",
+            "StoreGenerationRefV1"
+          ],
+          [
+            9,
+            "exact_authority_epoch_ref",
+            "AuthorityEpochRefV1"
+          ],
+          [
+            10,
+            "valid_until_ref",
+            "ValidityRefV1"
+          ],
+          [
+            11,
+            "authority_basis",
+            "ActionAuthorityBasisV1"
+          ],
+          [
+            12,
+            "typed_input_cbor",
+            "NonEmptyCanonicalCbor"
+          ],
+          [
+            13,
+            "evidence_refs",
+            "UniqueOrderedVec<EvidenceRefV1>"
+          ],
+          [
+            14,
+            "prerequisite_receipt_refs",
+            "UniqueOrderedVec<ReceiptRefV1>"
+          ],
+          [
+            15,
+            "orchestration_attribution",
+            "Optional<OrchestrationAttributionV1>"
+          ]
+        ],
+        [],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:504fea923100b665033b357f27e0e0f84c3e9eb724739dfbd5066067e4c21ecd",
+      "field_names": [
+        "schema_version",
+        "request_id",
+        "idempotency_key",
+        "semantic_request_hash",
+        "selected_packet_semantic_hash",
+        "action_spec",
+        "material_dependency_stamp",
+        "exact_store_generation_ref",
+        "exact_authority_epoch_ref",
+        "valid_until_ref",
+        "authority_basis",
+        "typed_input_cbor",
+        "evidence_refs",
+        "prerequisite_receipt_refs",
+        "orchestration_attribution"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:73f173d3654625a19278aa6c413714b04349f5d2500924ff0f780168a713192d",
+      "schema_name": "ActionRequestV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "ActionResultV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "schema_version",
+            "Const<1>"
+          ],
+          [
+            2,
+            "request_id",
+            "NominalRequestIdV1"
+          ],
+          [
+            3,
+            "operation_spec_ref",
+            "ActionSpecRefV1"
+          ],
+          [
+            4,
+            "outcome",
+            "OperationSemanticOutcomeV1"
+          ],
+          [
+            5,
+            "before_revision_refs",
+            "UniqueOrderedVec<RevisionRefV1>"
+          ],
+          [
+            6,
+            "after_revision_refs",
+            "UniqueOrderedVec<RevisionRefV1>"
+          ],
+          [
+            7,
+            "transition_receipt_refs",
+            "UniqueOrderedVec<ReceiptRefV1>"
+          ],
+          [
+            8,
+            "produced_record_refs",
+            "UniqueOrderedVec<RecordRefV1>"
+          ],
+          [
+            9,
+            "next_packet",
+            "Optional<AgentPacketV1>"
+          ],
+          [
+            10,
+            "inspect_ref",
+            "Optional<InspectRefV1>"
+          ],
+          [
+            11,
+            "replayed_delivery",
+            "Bool"
+          ]
+        ],
+        [],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:2aa38ca5eea622199a05a75afe994b64c9ff9e43d5746a86c5fc43c603306af2",
+      "field_names": [
+        "schema_version",
+        "request_id",
+        "operation_spec_ref",
+        "outcome",
+        "before_revision_refs",
+        "after_revision_refs",
+        "transition_receipt_refs",
+        "produced_record_refs",
+        "next_packet",
+        "inspect_ref",
+        "replayed_delivery"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:f8e89f01c2d08c83e36e108636914535718edd1fd38c3fd82a16dcc19b08cd1c",
+      "schema_name": "ActionResultV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "AdversarialReviewResultV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "header",
+            "ReviewResultHeaderV1"
+          ],
+          [
+            2,
+            "coverage",
+            "ReviewCoverageV1"
+          ],
+          [
+            3,
+            "claims",
+            "UniqueOrderedVec<AdversarialClaimResultV1>"
+          ]
+        ],
+        [],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:b13ecd72f9786b038dbe3f7885083036bcff2e1634a0a5b0f037c46b014e87f2",
+      "field_names": [
+        "header",
+        "coverage",
+        "claims"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:1e158e7e4ec0cab5d627469e7200b1b2f240b94fa7d70303c6d34daa0a3c8d73",
+      "schema_name": "AdversarialReviewResultV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "AgentPacketV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "schema_version",
+            "Const<1>"
+          ],
+          [
+            2,
+            "packet_id",
+            "NominalPacketIdV1"
+          ],
+          [
+            3,
+            "semantic_audit_hash",
+            "NonZeroSha256"
+          ],
+          [
+            4,
+            "as_of_ref",
+            "AsOfRefV1"
+          ],
+          [
+            5,
+            "valid_until_ref",
+            "ValidityRefV1"
+          ],
+          [
+            6,
+            "visibility_ref",
+            "VisibilityRefV1"
+          ],
+          [
+            7,
+            "scope_manifest",
+            "PacketScopeManifestV1"
+          ],
+          [
+            8,
+            "completeness",
+            "PacketCompletenessV1"
+          ],
+          [
+            9,
+            "bounds",
+            "PacketBoundsV1"
+          ],
+          [
+            10,
+            "snapshot_manifest_ref",
+            "SnapshotManifestRefV1"
+          ],
+          [
+            11,
+            "projection_result",
+            "PacketProjectionResultV1"
+          ],
+          [
+            12,
+            "blockers",
+            "UniqueOrderedVec<BlockerRefV1>"
+          ],
+          [
+            13,
+            "advertised_specs",
+            "UniqueOrderedVec<AdvertisedOperationSpecV1>"
+          ],
+          [
+            14,
+            "required_inputs",
+            "UniqueOrderedVec<RequiredInputRefV1>"
+          ],
+          [
+            15,
+            "effect_classes",
+            "UniqueOrderedVec<EffectClassV1>"
+          ],
+          [
+            16,
+            "idempotency_classes",
+            "UniqueOrderedVec<IdempotencyClassV1>"
+          ],
+          [
+            17,
+            "retry_classes",
+            "UniqueOrderedVec<RetryClassV1>"
+          ],
+          [
+            18,
+            "inspect_refs",
+            "UniqueOrderedVec<InspectRefV1>"
+          ],
+          [
+            19,
+            "recipe_binding",
+            "PacketRecipeBindingV1"
+          ]
+        ],
+        [],
+        [
+          "packet hash covers recipe binding",
+          "projection result and binding use one Frontier",
+          "nonactionable Advice advertises zero Operations"
+        ],
+        "reject"
+      ],
+      "descriptor_id": "sha256:a09e5bf9b381cbf2de169cb3fcce13b5fba75f79a00f2f19c98d685e62213543",
+      "field_names": [
+        "schema_version",
+        "packet_id",
+        "semantic_audit_hash",
+        "as_of_ref",
+        "valid_until_ref",
+        "visibility_ref",
+        "scope_manifest",
+        "completeness",
+        "bounds",
+        "snapshot_manifest_ref",
+        "projection_result",
+        "blockers",
+        "advertised_specs",
+        "required_inputs",
+        "effect_classes",
+        "idempotency_classes",
+        "retry_classes",
+        "inspect_refs",
+        "recipe_binding"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:fb9c70fbbc089ac9ae7ba2fa481d907d047628b9bb6f7f2dc717a8698a3419b4",
+      "schema_name": "AgentPacketV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "AuditResultV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "header",
+            "ReviewResultHeaderV1"
+          ],
+          [
+            2,
+            "coverage",
+            "ReviewCoverageV1"
+          ],
+          [
+            3,
+            "obligations",
+            "UniqueOrderedVec<AuditObligationResultV1>"
+          ]
+        ],
+        [],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:1463ce75d6fce5eeb058e38468957c27ce756fb47052726498c6300a8560899d",
+      "field_names": [
+        "header",
+        "coverage",
+        "obligations"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:66bdbf0d0f91c8470f1494ebda5cd9f61f12f3c38197b14af1305a637d94d59b",
+      "schema_name": "AuditResultV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "BootstrapRouteFactViewV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "schema_version",
+            "Const<1>"
+          ],
+          [
+            2,
+            "bootstrap_context",
+            "BootstrapContextV1"
+          ],
+          [
+            3,
+            "resolution_basis_ref",
+            "ResolutionBasisRefV1"
+          ],
+          [
+            4,
+            "ordered_source_fact_commitments",
+            "NonEmptyUniqueOrderedVec<FactCommitmentV1>"
+          ],
+          [
+            5,
+            "fact_view_hash",
+            "NonZeroSha256"
+          ]
+        ],
+        [],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:5e5db95b42c0d93eca14f1ef3d2c41a5684d7d6994f6419dcff50c47d5ddf374",
+      "field_names": [
+        "schema_version",
+        "bootstrap_context",
+        "resolution_basis_ref",
+        "ordered_source_fact_commitments",
+        "fact_view_hash"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:3b0ba551a225635924e31bd779d19e1da18e9e0d77ce3c3fba1eaa4eb3a7ec9f",
+      "schema_name": "BootstrapRouteFactViewV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "CapabilityInstructionLoadPlanV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "selected_job_resource_ref",
+            "InstructionResourceRefV1"
+          ],
+          [
+            2,
+            "direct_method_resource_refs",
+            "BoundedUniqueOrderedVec<DirectMethodResourceRefV1,0,4>"
+          ],
+          [
+            3,
+            "tdd_child_resource_refs",
+            "BoundedUniqueOrderedVec<InstructionResourceRefV1,0,5>"
+          ],
+          [
+            4,
+            "research_example_resource_ref",
+            "Optional<InstructionResourceRefV1>"
+          ]
+        ],
+        [],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:d278bd8680998a7fa242ae5855eecfed9a4b26570a8de1dd0a1e482fd5935ca4",
+      "field_names": [
+        "selected_job_resource_ref",
+        "direct_method_resource_refs",
+        "tdd_child_resource_refs",
+        "research_example_resource_ref"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:b1044a78aff3716fea7d6bd28a674ca2546e423ef5e45f2b26a1411d88d535b1",
+      "schema_name": "CapabilityInstructionLoadPlanV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "CapabilityMethodIntentV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "schema_version",
+            "Const<1>"
+          ],
+          [
+            2,
+            "exact_scope_ref",
+            "ExactScopeRefV1"
+          ],
+          [
+            3,
+            "requested_direct_methods",
+            "UniqueOrderedVec<RequestedDirectMethodV1>"
+          ],
+          [
+            4,
+            "requested_tdd_children",
+            "UniqueOrderedVec<RequestedTddChildV1>"
+          ],
+          [
+            5,
+            "research_examples",
+            "Optional<RequestedResearchExamplesV1>"
+          ],
+          [
+            6,
+            "requested_review_mode",
+            "Optional<ReviewModeRequestV1>"
+          ]
+        ],
+        [],
+        [
+          "no caller load plan, fallback or private map"
+        ],
+        "reject"
+      ],
+      "descriptor_id": "sha256:3001fb5096703c2eec6f0e6f5ed59c826dcbc89e51a3eede99bd9c2c5ce78610",
+      "field_names": [
+        "schema_version",
+        "exact_scope_ref",
+        "requested_direct_methods",
+        "requested_tdd_children",
+        "research_examples",
+        "requested_review_mode"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:a37afe310627e18e7d3e9dac3da70333f5b61e9e55ab87cdd48e161827903de8",
+      "schema_name": "CapabilityMethodIntentV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "CapabilityMethodResolutionOutcomeV1",
+        1,
+        "union",
+        [],
+        [
+          [
+            1,
+            "Selected",
+            "CapabilityInstructionLoadPlanV1"
+          ],
+          [
+            2,
+            "Ambiguous",
+            "CapabilityMethodAmbiguousReasonV1"
+          ],
+          [
+            3,
+            "Blocked",
+            "CapabilityMethodBlockedReasonV1"
+          ]
+        ],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:27571966a621cd1d06afcda483736d4f93bbae4366d29a078fbb9e649e4278cb",
+      "field_names": [],
+      "kind": "union",
+      "schema_id": "sha256:e189110911ff71490faf94bb13f27791eac5277ce01432f9762a0c9aa4e63ee4",
+      "schema_name": "CapabilityMethodResolutionOutcomeV1",
+      "schema_version": 1,
+      "variant_names": [
+        "Selected",
+        "Ambiguous",
+        "Blocked"
+      ]
+    },
+    {
+      "canonical_descriptor_value": [
+        "CapabilityMethodResolutionV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "schema_version",
+            "Const<1>"
+          ],
+          [
+            2,
+            "resolution_basis_ref",
+            "ResolutionBasisRefV1"
+          ],
+          [
+            3,
+            "exact_selected_job_route_ref",
+            "JobRouteRefV1"
+          ],
+          [
+            4,
+            "exact_intent_ref",
+            "CapabilityMethodIntentRefV1"
+          ],
+          [
+            5,
+            "outcome",
+            "CapabilityMethodResolutionOutcomeV1"
+          ]
+        ],
+        [],
+        [
+          "job-only is successful Selected",
+          "only Selected is activatable"
+        ],
+        "reject"
+      ],
+      "descriptor_id": "sha256:127b5357170b8439345579b3c5b7b3926fdeb52472e15770a00f731fc5112bb1",
+      "field_names": [
+        "schema_version",
+        "resolution_basis_ref",
+        "exact_selected_job_route_ref",
+        "exact_intent_ref",
+        "outcome"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:9dd5893c1c8a946abcccee8d51419aae1174296166930b1474509d3349b9b424",
+      "schema_name": "CapabilityMethodResolutionV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "CapabilityTypedNeedV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "schema_version",
+            "Const<1>"
+          ],
+          [
+            2,
+            "need_kind",
+            "CapabilityNeedKindV1"
+          ],
+          [
+            3,
+            "need_subject_ref",
+            "ExactSubjectRefV1"
+          ]
+        ],
+        [],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:1ee89995dc78160631fc9622528091460e2dfa465a139369b70f8af7b03081ee",
+      "field_names": [
+        "schema_version",
+        "need_kind",
+        "need_subject_ref"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:37fd3ba7810622b0043b91ad0d3a0d716d5ce25d5fa3ccf6ed80bc3c9a5861aa",
+      "schema_name": "CapabilityTypedNeedV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "CeremonyRequestV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "schema_version",
+            "Const<1>"
+          ],
+          [
+            2,
+            "request_id",
+            "NominalRequestIdV1"
+          ],
+          [
+            3,
+            "idempotency_key",
+            "NominalIdempotencyKeyV1"
+          ],
+          [
+            4,
+            "semantic_request_hash",
+            "NonZeroSha256"
+          ],
+          [
+            5,
+            "ceremony_spec",
+            "CeremonySpecRefV1"
+          ],
+          [
+            6,
+            "request_mode",
+            "CeremonyRequestModeV1"
+          ],
+          [
+            7,
+            "context",
+            "NoStoreOrPreStoreContextV1"
+          ],
+          [
+            8,
+            "branch_authority_ref",
+            "BranchAuthorityRefV1"
+          ],
+          [
+            9,
+            "expected_carrier_token_ref",
+            "CarrierTokenRefV1"
+          ],
+          [
+            10,
+            "typed_input_cbor",
+            "NonEmptyCanonicalCbor"
+          ],
+          [
+            11,
+            "prerequisite_receipt_refs",
+            "UniqueOrderedVec<ReceiptRefV1>"
+          ],
+          [
+            12,
+            "orchestration_attribution",
+            "Optional<OrchestrationAttributionV1>"
+          ]
+        ],
+        [],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:d1ef5556147df8a45e643212539553823120c2a07c19aaf7ab21ef3203269949",
+      "field_names": [
+        "schema_version",
+        "request_id",
+        "idempotency_key",
+        "semantic_request_hash",
+        "ceremony_spec",
+        "request_mode",
+        "context",
+        "branch_authority_ref",
+        "expected_carrier_token_ref",
+        "typed_input_cbor",
+        "prerequisite_receipt_refs",
+        "orchestration_attribution"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:101aeb99c80e89812c859976834af2bfd5bcecf1b0344ad9a8c0e60a83b0b18a",
+      "schema_name": "CeremonyRequestV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "CeremonyResultV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "schema_version",
+            "Const<1>"
+          ],
+          [
+            2,
+            "request_id",
+            "NominalRequestIdV1"
+          ],
+          [
+            3,
+            "operation_spec_ref",
+            "CeremonySpecRefV1"
+          ],
+          [
+            4,
+            "outcome",
+            "OperationSemanticOutcomeV1"
+          ],
+          [
+            5,
+            "before_revision_refs",
+            "UniqueOrderedVec<RevisionRefV1>"
+          ],
+          [
+            6,
+            "after_revision_refs",
+            "UniqueOrderedVec<RevisionRefV1>"
+          ],
+          [
+            7,
+            "transition_receipt_refs",
+            "UniqueOrderedVec<ReceiptRefV1>"
+          ],
+          [
+            8,
+            "produced_record_refs",
+            "UniqueOrderedVec<RecordRefV1>"
+          ],
+          [
+            9,
+            "next_packet",
+            "Optional<AgentPacketV1>"
+          ],
+          [
+            10,
+            "inspect_ref",
+            "Optional<InspectRefV1>"
+          ],
+          [
+            11,
+            "replayed_delivery",
+            "Bool"
+          ]
+        ],
+        [],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:0e41bddec94222c311d9d89b0d3fc779e3cd055e46cd2a4cd8f7f007917516d6",
+      "field_names": [
+        "schema_version",
+        "request_id",
+        "operation_spec_ref",
+        "outcome",
+        "before_revision_refs",
+        "after_revision_refs",
+        "transition_receipt_refs",
+        "produced_record_refs",
+        "next_packet",
+        "inspect_ref",
+        "replayed_delivery"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:bf9e3fa00b3a3dc685c3e4621bcab674b20177b2e4abbc4e6b3a8bc87cd8bdd4",
+      "schema_name": "CeremonyResultV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "CloseReviewResultV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "header",
+            "ReviewResultHeaderV1"
+          ],
+          [
+            2,
+            "coverage",
+            "ReviewCoverageV1"
+          ],
+          [
+            3,
+            "requirements",
+            "UniqueOrderedVec<CloseReviewRequirementResultV1>"
+          ]
+        ],
+        [],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:a284aee333c0419e95f049ffb2e8fb0d88880390d03598e54365257966722c56",
+      "field_names": [
+        "header",
+        "coverage",
+        "requirements"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:6ecdcc53840af6f448f2256d524705c25fd3ac9aa18014611b917705904374b2",
+      "schema_name": "CloseReviewResultV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "ContextBudgetMeasurementV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "closure_ref",
+            "ClosureRefV1"
+          ],
+          [
+            2,
+            "ordered_resource_refs",
+            "NonEmptyUniqueVec<ResourceRefV1>"
+          ],
+          [
+            3,
+            "utf8_bytes",
+            "PositiveU64"
+          ],
+          [
+            4,
+            "host_observed_units",
+            "PositiveU64"
+          ]
+        ],
+        [],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:73ed92f1e560d4dd30c9c5e84f73149008f9d5a603b94419d356fc8ffe42dd88",
+      "field_names": [
+        "closure_ref",
+        "ordered_resource_refs",
+        "utf8_bytes",
+        "host_observed_units"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:22061a31e8bd1992b17cebf99093ce25e2e036620b5415bb86732d2e8f104284",
+      "schema_name": "ContextBudgetMeasurementV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "ContextBudgetProfileV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "schema_version",
+            "Const<1>"
+          ],
+          [
+            2,
+            "profile_id",
+            "ContextBudgetProfileIdV1"
+          ],
+          [
+            3,
+            "release_ref",
+            "ReleaseRefV1"
+          ],
+          [
+            4,
+            "host_ref",
+            "HostRefV1"
+          ],
+          [
+            5,
+            "renderer_or_meter_ref",
+            "MeterRefV1"
+          ],
+          [
+            6,
+            "measurement_procedure_ref",
+            "ProcedureRefV1"
+          ],
+          [
+            7,
+            "admitted_resource_refs",
+            "NonEmptyUniqueVec<ResourceRefV1>"
+          ],
+          [
+            8,
+            "maximum_utf8_bytes",
+            "PositiveU64"
+          ],
+          [
+            9,
+            "maximum_host_observed_units",
+            "PositiveU64"
+          ],
+          [
+            10,
+            "measurements",
+            "NonEmptyUniqueVec<ContextBudgetMeasurementV1>"
+          ]
+        ],
+        [],
+        [
+          "Release and host evidence only; not a universal product cap",
+          "every admitted combined closure measured"
+        ],
+        "reject"
+      ],
+      "descriptor_id": "sha256:0fcb09a993105c3b3a3314582332062baa337668073b6d11ae9449b6b0981f9e",
+      "field_names": [
+        "schema_version",
+        "profile_id",
+        "release_ref",
+        "host_ref",
+        "renderer_or_meter_ref",
+        "measurement_procedure_ref",
+        "admitted_resource_refs",
+        "maximum_utf8_bytes",
+        "maximum_host_observed_units",
+        "measurements"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:a1b2afb94f574096213e5e2cadea14a153b415abe10bccfa3f4457fe5db602ed",
+      "schema_name": "ContextBudgetProfileV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "ExactRecipeSelectionV1",
+        1,
+        "union",
+        [],
+        [
+          [
+            1,
+            "Absent",
+            "Unit"
+          ],
+          [
+            2,
+            "Primary",
+            "Tuple<RecipeResourceRefV1,ManifestContentHashV1>"
+          ],
+          [
+            3,
+            "Continuation",
+            "Tuple<RecipeResourceRefV1,ManifestContentHashV1,ContextProfileResourceRefV1>"
+          ]
+        ],
+        [
+          "Primary excludes BoundedContinuation",
+          "Continuation is exactly BoundedContinuation"
+        ],
+        "reject"
+      ],
+      "descriptor_id": "sha256:df50b77cc4ef09ee0d6aebb7ce1595130520e5f67f7e191294d331932938645f",
+      "field_names": [],
+      "kind": "union",
+      "schema_id": "sha256:fbd149a33e0987350d7a993a6991609d850bbf591e2569e65dd89fdd815c5ea3",
+      "schema_name": "ExactRecipeSelectionV1",
+      "schema_version": 1,
+      "variant_names": [
+        "Absent",
+        "Primary",
+        "Continuation"
+      ]
+    },
+    {
+      "canonical_descriptor_value": [
+        "InspectResultV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "header",
+            "ReviewResultHeaderV1"
+          ],
+          [
+            2,
+            "coverage",
+            "ReviewCoverageV1"
+          ],
+          [
+            3,
+            "rows",
+            "UniqueOrderedVec<InspectResultRowV1>"
+          ]
+        ],
+        [],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:0bc97547fb7494de70ab357d26500c3f87317efe21ce2c2e65a6449b8de2063d",
+      "field_names": [
+        "header",
+        "coverage",
+        "rows"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:cf278095121b57b4e091e5a914c304767ff708d080d5ec43d9b508ab6b3e62eb",
+      "schema_name": "InspectResultV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "InstructionResourceRefV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "logical_path",
+            "InstructionLogicalPathV1"
+          ],
+          [
+            2,
+            "resource_ref",
+            "ContentQualifiedResourceRefV1"
+          ]
+        ],
+        [],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:784f54bb9387d6f0e04e6114d1101221003deccea1e2ac1555909f13b74db521",
+      "field_names": [
+        "logical_path",
+        "resource_ref"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:548e17c9e0da09424bdfd190285491ea0a8f94847b964e57f235885836ea8944",
+      "schema_name": "InstructionResourceRefV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "JobGuidanceEnvelopeV1",
+        1,
+        "union",
+        [],
+        [
+          [
+            1,
+            "PacketGuidance",
+            "Tuple<ExactAgentPacketV1,ExactJobRouteV1>"
+          ],
+          [
+            2,
+            "BootstrapGuidance",
+            "Tuple<ExactBootstrapRouteFactViewV1,ExactJobRouteV1>"
+          ]
+        ],
+        [
+          "contained source identity is byte identical",
+          "never enters Packet or MCP"
+        ],
+        "reject"
+      ],
+      "descriptor_id": "sha256:6e45b0e58e6d8f231cbc6604ee8b01f14c09d439e8d3d181e7be54057e73748d",
+      "field_names": [],
+      "kind": "union",
+      "schema_id": "sha256:f7280c934842b2cba9b9ed6055ed8f3f3926950576e2dbab93b8fcfaee3b5cb7",
+      "schema_name": "JobGuidanceEnvelopeV1",
+      "schema_version": 1,
+      "variant_names": [
+        "PacketGuidance",
+        "BootstrapGuidance"
+      ]
+    },
+    {
+      "canonical_descriptor_value": [
+        "JobInstructionLoadPlanV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "job_resource_ref",
+            "InstructionResourceRefV1"
+          ],
+          [
+            2,
+            "method_resource_refs",
+            "ExactEmptyVec"
+          ],
+          [
+            3,
+            "recipe_resource_refs",
+            "ExactEmptyVec"
+          ]
+        ],
+        [],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:2d27b464050494dba53ea1ce338f8fb8d8adb77c59e7ec3b3c35e6f526f34bd8",
+      "field_names": [
+        "job_resource_ref",
+        "method_resource_refs",
+        "recipe_resource_refs"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:6868c61fa97bc649c703914a49b364b6d499da2c7d05cfa31303700aa62eb7ee",
+      "schema_name": "JobInstructionLoadPlanV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "JobMethodEligibilityRowV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "job",
+            "JobV1"
+          ],
+          [
+            2,
+            "direct_method_resource_refs",
+            "UniqueOrderedVec<DirectMethodResourceRefV1>"
+          ]
+        ],
+        [],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:b3a55300e50ae99e072a10620f816daceebfcf87db7e2ffa9a912683c2a15193",
+      "field_names": [
+        "job",
+        "direct_method_resource_refs"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:6cb4be31d1a92db606f4936c02c8bcdfa21523b7ed7c78c6c447033c2cd2f9f5",
+      "schema_name": "JobMethodEligibilityRowV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "JobMethodEligibilityV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "schema_version",
+            "Const<1>"
+          ],
+          [
+            2,
+            "capability_job_catalog_ref",
+            "CatalogRefV1"
+          ],
+          [
+            3,
+            "direct_method_catalog_ref",
+            "CatalogRefV1"
+          ],
+          [
+            4,
+            "rows",
+            "ExactArray<JobMethodEligibilityRowV1,7>"
+          ]
+        ],
+        [],
+        [
+          "19 admitted and 100 refused cells"
+        ],
+        "reject"
+      ],
+      "descriptor_id": "sha256:4c6ea1d7b44496475cb8eb413c495bbc956a6649e747b1b96a7c307a8e40344c",
+      "field_names": [
+        "schema_version",
+        "capability_job_catalog_ref",
+        "direct_method_catalog_ref",
+        "rows"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:96f49a4b7478ede0b02c155c880e963b09affdf6247ba9884383ac4e79ae39bc",
+      "schema_name": "JobMethodEligibilityV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "JobRecipeEligibilityRowV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "exact_recipe_resource_ref",
+            "RecipeResourceRefV1"
+          ],
+          [
+            2,
+            "eligible_jobs",
+            "NonEmptyUniqueOrderedVec<JobV1>"
+          ]
+        ],
+        [],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:ce16101fadb5d161c0e18021ffa6d08ed830d989633495c6915d11f5ca806bd5",
+      "field_names": [
+        "exact_recipe_resource_ref",
+        "eligible_jobs"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:13406948958b36583fd7aff14b4be0702ba45b04c2c539da4b0db544b9725d6c",
+      "schema_name": "JobRecipeEligibilityRowV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "JobRecipeEligibilityV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "schema_version",
+            "Const<1>"
+          ],
+          [
+            2,
+            "orchestration_recipe_catalog_ref",
+            "CatalogRefV1"
+          ],
+          [
+            3,
+            "rows",
+            "ExactArray<JobRecipeEligibilityRowV1,10>"
+          ]
+        ],
+        [],
+        [
+          "22 admitted and 48 refused edges"
+        ],
+        "reject"
+      ],
+      "descriptor_id": "sha256:e1674a6f76c53918504aaf5cb585d237269ed34e552b4b8d43dfcc79417179a3",
+      "field_names": [
+        "schema_version",
+        "orchestration_recipe_catalog_ref",
+        "rows"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:7d4b65af7ee3a7d783313bd1e4dce6a74133c36f2170ee30ef5cd18437685c6a",
+      "schema_name": "JobRecipeEligibilityV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "JobRouteInputV1",
+        1,
+        "union",
+        [],
+        [
+          [
+            1,
+            "Packet",
+            "ExactPacketIdentityHashValidityV1"
+          ],
+          [
+            2,
+            "Bootstrap",
+            "ExactBootstrapFactViewIdentityHashV1"
+          ]
+        ],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:218c7687719a9ae5320e78df3e53856dcabba428ecab4bf32336b825017b9581",
+      "field_names": [],
+      "kind": "union",
+      "schema_id": "sha256:1fd51c6dc38e846cef4de723b6eab183bfb86de6cd76bcdf171bb38c766651bb",
+      "schema_name": "JobRouteInputV1",
+      "schema_version": 1,
+      "variant_names": [
+        "Packet",
+        "Bootstrap"
+      ]
+    },
+    {
+      "canonical_descriptor_value": [
+        "JobRouteOutcomeV1",
+        1,
+        "union",
+        [],
+        [
+          [
+            1,
+            "Selected",
+            "Tuple<JobV1,JobRouteReasonV1,JobInstructionLoadPlanV1>"
+          ],
+          [
+            2,
+            "Ambiguous",
+            "JobRouteReasonV1"
+          ],
+          [
+            3,
+            "Blocked",
+            "JobRouteReasonV1"
+          ]
+        ],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:ee59e69e7ee68a7375703b2079882b7dfc5f08ee84615f7da47edc5df12d055f",
+      "field_names": [],
+      "kind": "union",
+      "schema_id": "sha256:ee342f80a356faaea3c28460916f77d3d92c56cf1cdf783eee0e1fb135725052",
+      "schema_name": "JobRouteOutcomeV1",
+      "schema_version": 1,
+      "variant_names": [
+        "Selected",
+        "Ambiguous",
+        "Blocked"
+      ]
+    },
+    {
+      "canonical_descriptor_value": [
+        "JobRouteV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "schema_version",
+            "Const<1>"
+          ],
+          [
+            2,
+            "resolution_basis_ref",
+            "ResolutionBasisRefV1"
+          ],
+          [
+            3,
+            "input",
+            "JobRouteInputV1"
+          ],
+          [
+            4,
+            "explicit_read_intent",
+            "ExplicitReadIntentV1"
+          ],
+          [
+            5,
+            "basis",
+            "JobRouteBasisV1"
+          ],
+          [
+            6,
+            "outcome",
+            "JobRouteOutcomeV1"
+          ]
+        ],
+        [],
+        [
+          "ten Selected reasons map to one exact job",
+          "two Ambiguous and five Blocked carry no Resource",
+          "Recovery dominates explicit read intent"
+        ],
+        "reject"
+      ],
+      "descriptor_id": "sha256:7817de93f34eefe5ffd74742122e33bda7031b1b3131478f9bf73315ff0a46e4",
+      "field_names": [
+        "schema_version",
+        "resolution_basis_ref",
+        "input",
+        "explicit_read_intent",
+        "basis",
+        "outcome"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:269e3688f816c9eaa20f6be6bf066652767a399dda78dc15b544da5833867c5b",
+      "schema_name": "JobRouteV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "LegacySkillActivationImportV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "schema_version",
+            "Const<1>"
+          ],
+          [
+            2,
+            "source_format",
+            "Const<FORMAT-RUN-EVENT-V1>"
+          ],
+          [
+            3,
+            "source_file_hash",
+            "NonZeroSha256"
+          ],
+          [
+            4,
+            "source_path_bytes",
+            "NonEmptyBytes"
+          ],
+          [
+            5,
+            "record_ordinal",
+            "U64"
+          ],
+          [
+            6,
+            "byte_start",
+            "U64"
+          ],
+          [
+            7,
+            "byte_length",
+            "PositiveU64"
+          ],
+          [
+            8,
+            "newline_state",
+            "LegacyNewlineStateV1"
+          ],
+          [
+            9,
+            "raw_record_hash",
+            "NonZeroSha256"
+          ],
+          [
+            10,
+            "parse_status",
+            "LegacyActivationParseStatusV1"
+          ],
+          [
+            11,
+            "raw_event_spelling",
+            "Optional<Bytes>"
+          ],
+          [
+            12,
+            "skill_name",
+            "Optional<Bytes>"
+          ],
+          [
+            13,
+            "session_annotation",
+            "Optional<Bytes>"
+          ],
+          [
+            14,
+            "agent_runtime_annotation",
+            "Optional<Bytes>"
+          ],
+          [
+            15,
+            "activation_mode_annotation",
+            "Optional<Bytes>"
+          ],
+          [
+            16,
+            "timestamp_annotations",
+            "UniqueVec<Bytes>"
+          ],
+          [
+            17,
+            "disposition",
+            "LegacySkillActivationDispositionV1"
+          ],
+          [
+            18,
+            "reason",
+            "LegacySkillActivationImportReasonV1"
+          ]
+        ],
+        [],
+        [
+          "MappedNormative is absent",
+          "rerun identity is source hash plus byte range",
+          "timestamps never reorder"
+        ],
+        "reject"
+      ],
+      "descriptor_id": "sha256:793d4455a077ca3a280485e1c18ba4e977e9175a8a851603407a94277eb00723",
+      "field_names": [
+        "schema_version",
+        "source_format",
+        "source_file_hash",
+        "source_path_bytes",
+        "record_ordinal",
+        "byte_start",
+        "byte_length",
+        "newline_state",
+        "raw_record_hash",
+        "parse_status",
+        "raw_event_spelling",
+        "skill_name",
+        "session_annotation",
+        "agent_runtime_annotation",
+        "activation_mode_annotation",
+        "timestamp_annotations",
+        "disposition",
+        "reason"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:ffb3d91e8dded7dddefcbdeea4ade63a2e706bd2a0fbdb8b37925acff264c174",
+      "schema_name": "LegacySkillActivationImportV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "LoadedResourceClosureV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "job_resource_ref",
+            "ExactlyOneInstructionResourceRefV1"
+          ],
+          [
+            2,
+            "direct_method_resource_refs",
+            "BoundedUniqueOrderedVec<InstructionResourceRefV1,0,4>"
+          ],
+          [
+            3,
+            "tdd_child_resource_refs",
+            "BoundedUniqueOrderedVec<InstructionResourceRefV1,0,5>"
+          ],
+          [
+            4,
+            "research_example_resource_ref",
+            "Optional<InstructionResourceRefV1>"
+          ],
+          [
+            5,
+            "recipe_resource_refs",
+            "BoundedUniqueOrderedVec<RecipeResourceRefV1,0,2>"
+          ],
+          [
+            6,
+            "closure_digest",
+            "NonZeroSha256"
+          ]
+        ],
+        [],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:b4b1fb7fc2fbde73b4c71c479db403deb9602811d0c2478832f639b790d57916",
+      "field_names": [
+        "job_resource_ref",
+        "direct_method_resource_refs",
+        "tdd_child_resource_refs",
+        "research_example_resource_ref",
+        "recipe_resource_refs",
+        "closure_digest"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:87eb51ffb4087a013f3c3da91d77ac9403c6984874376abb588a0d760ed1136a",
+      "schema_name": "LoadedResourceClosureV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "McpCliSearchEnvelopeV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "schema_version",
+            "Const<1>"
+          ],
+          [
+            2,
+            "request_id",
+            "NominalRequestIdV1"
+          ],
+          [
+            3,
+            "running_binary_release",
+            "ReleaseRefV1"
+          ],
+          [
+            4,
+            "binary_digest",
+            "NonZeroSha256"
+          ],
+          [
+            5,
+            "binary_version",
+            "VersionStringV1"
+          ],
+          [
+            6,
+            "executable_slot",
+            "ExecutableSlotRefV1"
+          ],
+          [
+            7,
+            "core_catalog_ref",
+            "CoreCatalogRefV1"
+          ],
+          [
+            8,
+            "public_catalog_ref",
+            "PublicCatalogRefV1"
+          ],
+          [
+            9,
+            "catalog_snapshot_ref",
+            "CatalogSnapshotRefV1"
+          ],
+          [
+            10,
+            "completeness",
+            "SearchCompletenessV1"
+          ],
+          [
+            11,
+            "bounds",
+            "SearchBoundsV1"
+          ],
+          [
+            12,
+            "cursor",
+            "Optional<OpaqueCursorV1>"
+          ],
+          [
+            13,
+            "hits",
+            "BoundedVec<McpCliSearchHitV1>"
+          ]
+        ],
+        [],
+        [
+          "Complete iff cursor Absent",
+          "BoundedTruncated iff cursor Present",
+          "returned count equals hits"
+        ],
+        "reject"
+      ],
+      "descriptor_id": "sha256:58c4829c004ad354e76ec890ea9c048db1a58c77e18f24ef2d3d29ff4682c1a8",
+      "field_names": [
+        "schema_version",
+        "request_id",
+        "running_binary_release",
+        "binary_digest",
+        "binary_version",
+        "executable_slot",
+        "core_catalog_ref",
+        "public_catalog_ref",
+        "catalog_snapshot_ref",
+        "completeness",
+        "bounds",
+        "cursor",
+        "hits"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:042f7694f96be760ceac2a557e980e99aada4c1dedebd19afff64641215c3710",
+      "schema_name": "McpCliSearchEnvelopeV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "McpCliSearchRequestV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "schema_version",
+            "Const<1>"
+          ],
+          [
+            2,
+            "request_id",
+            "NominalRequestIdV1"
+          ],
+          [
+            3,
+            "query",
+            "ExactCommandIdOrBoundedFuzzyIntentV1"
+          ],
+          [
+            4,
+            "finite_bound",
+            "PositiveU64"
+          ],
+          [
+            5,
+            "expected_release_ref",
+            "ReleaseRefV1"
+          ],
+          [
+            6,
+            "expected_public_catalog_ref",
+            "PublicCatalogRefV1"
+          ]
+        ],
+        [],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:a00d1b18242c09eaf3d04c065626835f1d033a58dfd3c20d371a0fdb84420866",
+      "field_names": [
+        "schema_version",
+        "request_id",
+        "query",
+        "finite_bound",
+        "expected_release_ref",
+        "expected_public_catalog_ref"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:201106a1effbac5f9c158670b52a1428452addd7aeb7331502c9cc04dd0e5356",
+      "schema_name": "McpCliSearchRequestV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "McpPacketReadEnvelopeV1",
+        1,
+        "union",
+        [],
+        [
+          [
+            1,
+            "Packet",
+            "AgentPacketV1"
+          ],
+          [
+            2,
+            "SelectionContext",
+            "SelectionContextV1"
+          ],
+          [
+            3,
+            "NoActiveStore",
+            "Optional<BootstrapRouteFactViewV1>"
+          ],
+          [
+            4,
+            "Unavailable",
+            "ReasonRefV1"
+          ],
+          [
+            5,
+            "Stale",
+            "ReasonRefV1"
+          ],
+          [
+            6,
+            "Incompatible",
+            "ReasonRefV1"
+          ]
+        ],
+        [
+          "Packet only from Project",
+          "bootstrap facts only from BootstrapNoRecipe"
+        ],
+        "reject"
+      ],
+      "descriptor_id": "sha256:2df97e331df9e71b3c4a5c5e6a011f93cace93b729a9d22e4832c75667f12845",
+      "field_names": [],
+      "kind": "union",
+      "schema_id": "sha256:6059c5563f7de262a4d33aabd62d59f0dd88e0eab744f334b0a2c7a2a457dd7c",
+      "schema_name": "McpPacketReadEnvelopeV1",
+      "schema_version": 1,
+      "variant_names": [
+        "Packet",
+        "SelectionContext",
+        "NoActiveStore",
+        "Unavailable",
+        "Stale",
+        "Incompatible"
+      ]
+    },
+    {
+      "canonical_descriptor_value": [
+        "McpPacketReadModeV1",
+        1,
+        "union",
+        [],
+        [
+          [
+            1,
+            "BootstrapNoRecipeV1",
+            "Unit"
+          ],
+          [
+            2,
+            "DiscoverSelectionContextV1",
+            "Unit"
+          ],
+          [
+            3,
+            "ProjectV1",
+            "RecipeSelectionRequestV1"
+          ]
+        ],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:ada6086b4a8da09a2554e0e2e41174c0b6708850b2f63e5f373af4756f246faf",
+      "field_names": [],
+      "kind": "union",
+      "schema_id": "sha256:b92c46e2372b140254c43a9052dafa2d241f923048ba3c4de0392be622e6addf",
+      "schema_name": "McpPacketReadModeV1",
+      "schema_version": 1,
+      "variant_names": [
+        "BootstrapNoRecipeV1",
+        "DiscoverSelectionContextV1",
+        "ProjectV1"
+      ]
+    },
+    {
+      "canonical_descriptor_value": [
+        "McpPacketReadRequestV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "schema_version",
+            "Const<1>"
+          ],
+          [
+            2,
+            "request_id",
+            "NominalRequestIdV1"
+          ],
+          [
+            3,
+            "repository_locator",
+            "RepositoryLocatorV1"
+          ],
+          [
+            4,
+            "authenticated_host_connection_context_ref",
+            "HostConnectionContextRefV1"
+          ],
+          [
+            5,
+            "projection_scope",
+            "ProjectionScopeV1"
+          ],
+          [
+            6,
+            "expected_release_ref",
+            "ReleaseRefV1"
+          ],
+          [
+            7,
+            "expected_public_catalog_ref",
+            "PublicCatalogRefV1"
+          ],
+          [
+            8,
+            "bounded_response_redaction_profile",
+            "RedactionProfileRefV1"
+          ],
+          [
+            9,
+            "read_mode",
+            "McpPacketReadModeV1"
+          ]
+        ],
+        [],
+        [
+          "Bootstrap requires Repository scope and no active Store",
+          "exactly one mode",
+          "no authority, Operation, argv, retry, latest or fallback"
+        ],
+        "reject"
+      ],
+      "descriptor_id": "sha256:dc626d270bcac2a47f46f773d210c44dd1e01e3cc49cfde1a843fad5b1161c22",
+      "field_names": [
+        "schema_version",
+        "request_id",
+        "repository_locator",
+        "authenticated_host_connection_context_ref",
+        "projection_scope",
+        "expected_release_ref",
+        "expected_public_catalog_ref",
+        "bounded_response_redaction_profile",
+        "read_mode"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:660668659806ccee91b8340c751c5da3c963a286fe629e9772877b6c00b97281",
+      "schema_name": "McpPacketReadRequestV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "McpToolDescriptorV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "name",
+            "McpToolNameV1"
+          ],
+          [
+            2,
+            "read_only",
+            "Const<true>"
+          ],
+          [
+            3,
+            "writes",
+            "Const<false>"
+          ],
+          [
+            4,
+            "network_io",
+            "Const<false>"
+          ]
+        ],
+        [],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:4ff43ff62f9eb611682d1aabf87fd652130e70d862b423cc550a85f7545f2f29",
+      "field_names": [
+        "name",
+        "read_only",
+        "writes",
+        "network_io"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:5ba2798878b2b4214f8cc1a7fb3b6d48c776b5c1058afc619a0cfaa9bb3ffb29",
+      "schema_name": "McpToolDescriptorV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "OperationRequestV1",
+        1,
+        "union",
+        [],
+        [
+          [
+            1,
+            "Action",
+            "ActionRequestV1"
+          ],
+          [
+            2,
+            "Ceremony",
+            "CeremonyRequestV1"
+          ]
+        ],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:61367841bd0b2db23ca564248efcc41e9de679f55149627a03fb8d72eba915ca",
+      "field_names": [],
+      "kind": "union",
+      "schema_id": "sha256:72e750411d1e560ef4c30866406b03dd8d60d6a9cfae46ab47b3e10d27ad423a",
+      "schema_name": "OperationRequestV1",
+      "schema_version": 1,
+      "variant_names": [
+        "Action",
+        "Ceremony"
+      ]
+    },
+    {
+      "canonical_descriptor_value": [
+        "OperationResultV1",
+        1,
+        "union",
+        [],
+        [
+          [
+            1,
+            "Action",
+            "ActionResultV1"
+          ],
+          [
+            2,
+            "Ceremony",
+            "CeremonyResultV1"
+          ]
+        ],
+        [
+          "result branch equals request branch"
+        ],
+        "reject"
+      ],
+      "descriptor_id": "sha256:f722fc0c3ec2472ca8d797e51644387021aa22c12c141c37ec1b72584e120282",
+      "field_names": [],
+      "kind": "union",
+      "schema_id": "sha256:597c9a36e89cb18ea8426a758cd4cf9306a3fbd21eb2c3d94e40c6278ca8f3c6",
+      "schema_name": "OperationResultV1",
+      "schema_version": 1,
+      "variant_names": [
+        "Action",
+        "Ceremony"
+      ]
+    },
+    {
+      "canonical_descriptor_value": [
+        "OperationSemanticOutcomeV1",
+        1,
+        "enum",
+        [],
+        [
+          [
+            1,
+            "Committed",
+            "Unit"
+          ],
+          [
+            2,
+            "NoOp",
+            "Unit"
+          ],
+          [
+            3,
+            "Rejected",
+            "Unit"
+          ],
+          [
+            4,
+            "Stale",
+            "Unit"
+          ],
+          [
+            5,
+            "Conflict",
+            "Unit"
+          ],
+          [
+            6,
+            "Unavailable",
+            "Unit"
+          ],
+          [
+            7,
+            "InDoubt",
+            "Unit"
+          ]
+        ],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:98437bca6687af6fa4493ebf852443a3676c176e965c3bdb5bff1d7d9d15bdea",
+      "field_names": [],
+      "kind": "enum",
+      "schema_id": "sha256:52e0f50440d17bd07bb88f6f40ce8906dfe080b4bee44f3f83dcf2be912c4113",
+      "schema_name": "OperationSemanticOutcomeV1",
+      "schema_version": 1,
+      "variant_names": [
+        "Committed",
+        "NoOp",
+        "Rejected",
+        "Stale",
+        "Conflict",
+        "Unavailable",
+        "InDoubt"
+      ]
+    },
+    {
+      "canonical_descriptor_value": [
+        "OperationSpecRefV1",
+        1,
+        "union",
+        [],
+        [
+          [
+            1,
+            "Action",
+            "ActionSpecRefV1"
+          ],
+          [
+            2,
+            "Ceremony",
+            "CeremonySpecRefV1"
+          ]
+        ],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:223be279b904a3b8c070af5e42f4aca6b615d09d38952fc62025817a15dce203",
+      "field_names": [],
+      "kind": "union",
+      "schema_id": "sha256:2208b48980d3dd8920e77b85f7c3843d5f92228d3c9b49ddb2cc1548cd7230a8",
+      "schema_name": "OperationSpecRefV1",
+      "schema_version": 1,
+      "variant_names": [
+        "Action",
+        "Ceremony"
+      ]
+    },
+    {
+      "canonical_descriptor_value": [
+        "PacketRecipeAdviceProvenanceV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "composition_outcome",
+            "PacketRecipeAdviceOutcomeV1"
+          ],
+          [
+            2,
+            "ordered_component_output_hashes",
+            "BoundedVec<NonZeroSha256,0,2>"
+          ],
+          [
+            3,
+            "composed_output_hash",
+            "NonZeroSha256"
+          ]
+        ],
+        [],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:661a4cd7542c0fc3959f254bc36d3a28d53692b7d302e9789a4f22eb2f143219",
+      "field_names": [
+        "composition_outcome",
+        "ordered_component_output_hashes",
+        "composed_output_hash"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:417645c5540ff706ab0e7a171deb5a198ce6e827bf4df10235086bccee23da9d",
+      "schema_name": "PacketRecipeAdviceProvenanceV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "PacketRecipeBindingV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "schema_version",
+            "Const<1>"
+          ],
+          [
+            2,
+            "selection_request_hash",
+            "NonZeroSha256"
+          ],
+          [
+            3,
+            "recipe_application",
+            "RecipeApplicationV1"
+          ],
+          [
+            4,
+            "recipe_application_hash",
+            "NonZeroSha256"
+          ],
+          [
+            5,
+            "component_provenance",
+            "BoundedVec<PacketRecipeComponentProvenanceV1,0,2>"
+          ],
+          [
+            6,
+            "advice_provenance",
+            "PacketRecipeAdviceProvenanceV1"
+          ]
+        ],
+        [],
+        [
+          "recompute two domain-separated hashes",
+          "0/1/2 rows exactly match selected components",
+          "same Frontier throughout",
+          "selected NotApplicable remains bound and nonactionable"
+        ],
+        "reject"
+      ],
+      "descriptor_id": "sha256:53a30bf4e1032175b44fc8a43f4850fd8844e4b7c694b6e8363daa0fcee563b2",
+      "field_names": [
+        "schema_version",
+        "selection_request_hash",
+        "recipe_application",
+        "recipe_application_hash",
+        "component_provenance",
+        "advice_provenance"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:f5c571f1724d7c215d81865769c918153d4c4b42a37e050f01138e59525a6c81",
+      "schema_name": "PacketRecipeBindingV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "PacketRecipeComponentProvenanceV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "component_slot",
+            "PrimaryOrContinuationV1"
+          ],
+          [
+            2,
+            "recipe_return_occurrence",
+            "RecipeReturnOccurrenceV1"
+          ],
+          [
+            3,
+            "component_output_hash",
+            "NonZeroSha256"
+          ]
+        ],
+        [],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:1df245cf3e96434c3180081c6657c5d5099140f8cede020780eda7cf30cd278c",
+      "field_names": [
+        "component_slot",
+        "recipe_return_occurrence",
+        "component_output_hash"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:d404ce2b7547726e59a51c5210430f8122c15a4ded09ffcd558f9da8d501204a",
+      "schema_name": "PacketRecipeComponentProvenanceV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "ProjectionScopeV1",
+        1,
+        "union",
+        [],
+        [
+          [
+            1,
+            "Repository",
+            "Unit"
+          ],
+          [
+            2,
+            "Work",
+            "ExactWorkRefV1"
+          ]
+        ],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:5767833fc8e13d8bbec65d0868b390afbea735bbb5f7e126897a9a9bf0faa391",
+      "field_names": [],
+      "kind": "union",
+      "schema_id": "sha256:fd8ef8a4f18bd43d34544bed58f01342a075deeb64efde7e3cbd71e2e3c76ac8",
+      "schema_name": "ProjectionScopeV1",
+      "schema_version": 1,
+      "variant_names": [
+        "Repository",
+        "Work"
+      ]
+    },
+    {
+      "canonical_descriptor_value": [
+        "QAReplayResultV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "header",
+            "ReviewResultHeaderV1"
+          ],
+          [
+            2,
+            "coverage",
+            "ReviewCoverageV1"
+          ],
+          [
+            3,
+            "scenarios",
+            "UniqueOrderedVec<QAReplayScenarioResultV1>"
+          ]
+        ],
+        [],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:19e317a2dfc12fea9529ac8cec4fc7ba1d3a15ef7fed63e7982045e11fd9a688",
+      "field_names": [
+        "header",
+        "coverage",
+        "scenarios"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:5baa988bcc2e254352d2d69d02adc8f1dbf5121236b251307f89386ecf6d90b8",
+      "schema_name": "QAReplayResultV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "RecipeApplicationV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "schema_version",
+            "Const<1>"
+          ],
+          [
+            2,
+            "resolution_basis_ref",
+            "ResolutionBasisRefV1"
+          ],
+          [
+            3,
+            "frontier_ref",
+            "ActionFrontierRefV1"
+          ],
+          [
+            4,
+            "primary",
+            "ExactRecipeSelectionV1"
+          ],
+          [
+            5,
+            "continuation",
+            "ExactRecipeSelectionV1"
+          ]
+        ],
+        [],
+        [
+          "copies one complete request",
+          "exactly one Projection-supplied Frontier"
+        ],
+        "reject"
+      ],
+      "descriptor_id": "sha256:cb43910194833c8051f9869a64f5501843e12c3d68573c7bd0beb63820f16970",
+      "field_names": [
+        "schema_version",
+        "resolution_basis_ref",
+        "frontier_ref",
+        "primary",
+        "continuation"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:9d45a313268e4a10d3c516b48a789d1087da4cb312ea63e17a280b5de9c49f9b",
+      "schema_name": "RecipeApplicationV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "RecipeComponentEvaluationV1",
+        1,
+        "union",
+        [],
+        [
+          [
+            1,
+            "NotApplicable",
+            "RecipeReturnOccurrenceV1"
+          ],
+          [
+            2,
+            "RestrictiveAdvice",
+            "Tuple<RecipeAdviceRefV1,RecipeReturnOccurrenceV1>"
+          ],
+          [
+            3,
+            "HardStop",
+            "Tuple<RecipeHardStopRefV1,RecipeReturnOccurrenceV1>"
+          ]
+        ],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:fe069bba6032e72a89b77bba58eb2ac8f09ba602b2fc5b52404a3b44aa6c626f",
+      "field_names": [],
+      "kind": "union",
+      "schema_id": "sha256:83ceb793055fbd416e1061ab7ae7aff438bde64ac3003d563704c7519171f104",
+      "schema_name": "RecipeComponentEvaluationV1",
+      "schema_version": 1,
+      "variant_names": [
+        "NotApplicable",
+        "RestrictiveAdvice",
+        "HardStop"
+      ]
+    },
+    {
+      "canonical_descriptor_value": [
+        "RecipeManifestV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "recipe_id",
+            "RecipeIdV1"
+          ],
+          [
+            2,
+            "semantic_version",
+            "Tuple<U64,U64,U64>"
+          ],
+          [
+            3,
+            "recipe_role",
+            "RecipeRoleV1"
+          ],
+          [
+            4,
+            "purpose_guidance_resource_ref",
+            "ResourceRefV1"
+          ],
+          [
+            5,
+            "trigger_projection_reason_refs",
+            "UniqueOrderedVec<ProjectionReasonRefV1>"
+          ],
+          [
+            6,
+            "required_contract_refs",
+            "UniqueOrderedVec<ContractRefV1>"
+          ],
+          [
+            7,
+            "restrictive_operation_filter_program_ref",
+            "ResourceRefV1"
+          ],
+          [
+            8,
+            "phase_guidance_resource_refs",
+            "ExactArray<ResourceRefV1,6>"
+          ],
+          [
+            9,
+            "required_projection_predicate_refs",
+            "UniqueOrderedVec<PredicateRefV1>"
+          ],
+          [
+            10,
+            "hard_stop_predicate_refs",
+            "UniqueOrderedVec<PredicateRefV1>"
+          ],
+          [
+            11,
+            "completion_predicate_refs",
+            "UniqueOrderedVec<PredicateRefV1>"
+          ],
+          [
+            12,
+            "return_reason_refs",
+            "ExactArray<RecipeReturnReasonRefV1,3>"
+          ],
+          [
+            13,
+            "operating_limit_program_ref",
+            "ResourceRefV1"
+          ],
+          [
+            14,
+            "allowed_continuation_profile_refs",
+            "UniqueOrderedVec<ContextProfileRefV1>"
+          ]
+        ],
+        [],
+        [
+          "exactly ten manifests",
+          "BoundedContinuation is sole ContinuationOverlay",
+          "manifest has no self identity or Capability edge"
+        ],
+        "reject"
+      ],
+      "descriptor_id": "sha256:dd05f72c18792ef15f1004c86bbc7d01e38863525576b83c69d184ec1394e8b9",
+      "field_names": [
+        "recipe_id",
+        "semantic_version",
+        "recipe_role",
+        "purpose_guidance_resource_ref",
+        "trigger_projection_reason_refs",
+        "required_contract_refs",
+        "restrictive_operation_filter_program_ref",
+        "phase_guidance_resource_refs",
+        "required_projection_predicate_refs",
+        "hard_stop_predicate_refs",
+        "completion_predicate_refs",
+        "return_reason_refs",
+        "operating_limit_program_ref",
+        "allowed_continuation_profile_refs"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:8013ced385ab92090725e3e0c6fc6ee36eebdc8318484685cac84787edb63598",
+      "schema_name": "RecipeManifestV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "RecipeReturnOccurrenceV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "schema_version",
+            "Const<1>"
+          ],
+          [
+            2,
+            "resolution_basis_ref",
+            "ResolutionBasisRefV1"
+          ],
+          [
+            3,
+            "frontier_ref",
+            "ActionFrontierRefV1"
+          ],
+          [
+            4,
+            "component",
+            "RecipeReturnComponentV1"
+          ],
+          [
+            5,
+            "outcome_tag",
+            "RecipeComponentOutcomeTagV1"
+          ],
+          [
+            6,
+            "return_reason_ref",
+            "RecipeReturnReasonRefV1"
+          ]
+        ],
+        [],
+        [
+          "reason is exact recipe by outcome bijection",
+          "same Frontier as application"
+        ],
+        "reject"
+      ],
+      "descriptor_id": "sha256:6c4a29c7f8f735465a5a1fe06d4d691fa492349fcde6ab2712a4d1c8f4df80dd",
+      "field_names": [
+        "schema_version",
+        "resolution_basis_ref",
+        "frontier_ref",
+        "component",
+        "outcome_tag",
+        "return_reason_ref"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:da6a5d68b5086302d3acfe24212d2726aeb64dd7ee2c43dd91500d3b03249cde",
+      "schema_name": "RecipeReturnOccurrenceV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "RecipeReturnReasonV1",
+        1,
+        "enum",
+        [],
+        [
+          [
+            1,
+            "BoundedContinuationNotApplicable",
+            "Unit"
+          ],
+          [
+            2,
+            "BoundedContinuationRestrictiveAdvice",
+            "Unit"
+          ],
+          [
+            3,
+            "BoundedContinuationHardStop",
+            "Unit"
+          ],
+          [
+            4,
+            "ConflictHandoffNotApplicable",
+            "Unit"
+          ],
+          [
+            5,
+            "ConflictHandoffRestrictiveAdvice",
+            "Unit"
+          ],
+          [
+            6,
+            "ConflictHandoffHardStop",
+            "Unit"
+          ],
+          [
+            7,
+            "DesignRelayNotApplicable",
+            "Unit"
+          ],
+          [
+            8,
+            "DesignRelayRestrictiveAdvice",
+            "Unit"
+          ],
+          [
+            9,
+            "DesignRelayHardStop",
+            "Unit"
+          ],
+          [
+            10,
+            "FanoutNotApplicable",
+            "Unit"
+          ],
+          [
+            11,
+            "FanoutRestrictiveAdvice",
+            "Unit"
+          ],
+          [
+            12,
+            "FanoutHardStop",
+            "Unit"
+          ],
+          [
+            13,
+            "IntakeTriageNotApplicable",
+            "Unit"
+          ],
+          [
+            14,
+            "IntakeTriageRestrictiveAdvice",
+            "Unit"
+          ],
+          [
+            15,
+            "IntakeTriageHardStop",
+            "Unit"
+          ],
+          [
+            16,
+            "LearningNotApplicable",
+            "Unit"
+          ],
+          [
+            17,
+            "LearningRestrictiveAdvice",
+            "Unit"
+          ],
+          [
+            18,
+            "LearningHardStop",
+            "Unit"
+          ],
+          [
+            19,
+            "SetupNotApplicable",
+            "Unit"
+          ],
+          [
+            20,
+            "SetupRestrictiveAdvice",
+            "Unit"
+          ],
+          [
+            21,
+            "SetupHardStop",
+            "Unit"
+          ],
+          [
+            22,
+            "ShipNotApplicable",
+            "Unit"
+          ],
+          [
+            23,
+            "ShipRestrictiveAdvice",
+            "Unit"
+          ],
+          [
+            24,
+            "ShipHardStop",
+            "Unit"
+          ],
+          [
+            25,
+            "SynthesizeNotApplicable",
+            "Unit"
+          ],
+          [
+            26,
+            "SynthesizeRestrictiveAdvice",
+            "Unit"
+          ],
+          [
+            27,
+            "SynthesizeHardStop",
+            "Unit"
+          ],
+          [
+            28,
+            "WayfindingNotApplicable",
+            "Unit"
+          ],
+          [
+            29,
+            "WayfindingRestrictiveAdvice",
+            "Unit"
+          ],
+          [
+            30,
+            "WayfindingHardStop",
+            "Unit"
+          ]
+        ],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:c5c8d48cbc5a5cffb8e9952af4161dde8ae1a79cdc262ba02db538a648e569a5",
+      "field_names": [],
+      "kind": "enum",
+      "schema_id": "sha256:ff944c836b337852aa8778f71668fdb78adaf1750fca99d52d6b42f9092cdff8",
+      "schema_name": "RecipeReturnReasonV1",
+      "schema_version": 1,
+      "variant_names": [
+        "BoundedContinuationNotApplicable",
+        "BoundedContinuationRestrictiveAdvice",
+        "BoundedContinuationHardStop",
+        "ConflictHandoffNotApplicable",
+        "ConflictHandoffRestrictiveAdvice",
+        "ConflictHandoffHardStop",
+        "DesignRelayNotApplicable",
+        "DesignRelayRestrictiveAdvice",
+        "DesignRelayHardStop",
+        "FanoutNotApplicable",
+        "FanoutRestrictiveAdvice",
+        "FanoutHardStop",
+        "IntakeTriageNotApplicable",
+        "IntakeTriageRestrictiveAdvice",
+        "IntakeTriageHardStop",
+        "LearningNotApplicable",
+        "LearningRestrictiveAdvice",
+        "LearningHardStop",
+        "SetupNotApplicable",
+        "SetupRestrictiveAdvice",
+        "SetupHardStop",
+        "ShipNotApplicable",
+        "ShipRestrictiveAdvice",
+        "ShipHardStop",
+        "SynthesizeNotApplicable",
+        "SynthesizeRestrictiveAdvice",
+        "SynthesizeHardStop",
+        "WayfindingNotApplicable",
+        "WayfindingRestrictiveAdvice",
+        "WayfindingHardStop"
+      ]
+    },
+    {
+      "canonical_descriptor_value": [
+        "RecipeSelectionOptionV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "primary_selection",
+            "ExactRecipeSelectionV1"
+          ],
+          [
+            2,
+            "continuation_selection",
+            "ExactRecipeSelectionV1"
+          ]
+        ],
+        [],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:89bbd9305352d73f75e381be186ffdb6cc9009ecb063b01c1d3b66003ff7ebab",
+      "field_names": [
+        "primary_selection",
+        "continuation_selection"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:cf8299aa2b973ca53b8685b51b75f1c8bcfacf2c75017bd9ce38887cd9efa2db",
+      "schema_name": "RecipeSelectionOptionV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "RecipeSelectionRequestV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "schema_version",
+            "Const<1>"
+          ],
+          [
+            2,
+            "resolution_basis_ref",
+            "ResolutionBasisRefV1"
+          ],
+          [
+            3,
+            "primary_selection",
+            "ExactRecipeSelectionV1"
+          ],
+          [
+            4,
+            "continuation_selection",
+            "ExactRecipeSelectionV1"
+          ]
+        ],
+        [],
+        [
+          "both Absent is explicit core",
+          "no Frontier, Packet, authority, cursor, retry, latest or fallback"
+        ],
+        "reject"
+      ],
+      "descriptor_id": "sha256:4d834a1de8df4653da1b560520e5f3ec916568379baadc762e434005ed87d5ac",
+      "field_names": [
+        "schema_version",
+        "resolution_basis_ref",
+        "primary_selection",
+        "continuation_selection"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:255a773ac64a3bf9200598a3955e2f9cedf2e8465c64b930c9a22e3eb800b1bd",
+      "schema_name": "RecipeSelectionRequestV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "ResearchExampleEligibilityV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "schema_version",
+            "Const<1>"
+          ],
+          [
+            2,
+            "exact_resource_ref",
+            "InstructionResourceRefV1"
+          ],
+          [
+            3,
+            "eligible_job",
+            "Const<Research>"
+          ],
+          [
+            4,
+            "default_loaded",
+            "Const<false>"
+          ]
+        ],
+        [],
+        [
+          "one admitted and six refused edges"
+        ],
+        "reject"
+      ],
+      "descriptor_id": "sha256:6064d226a8dc481ce563e4a41a43a918c432ca1fa830998403b44a052d9fa844",
+      "field_names": [
+        "schema_version",
+        "exact_resource_ref",
+        "eligible_job",
+        "default_loaded"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:f4123904401c49eecb4013f8455cb6623aca8747063b041a341998b35e16b566",
+      "schema_name": "ResearchExampleEligibilityV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "ReviewCoverageV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "examined_targets",
+            "UniqueOrderedVec<TargetRefV1>"
+          ],
+          [
+            2,
+            "unexamined_targets",
+            "UniqueOrderedVec<ReviewUnexaminedTargetV1>"
+          ],
+          [
+            3,
+            "coverage_digest",
+            "NonZeroSha256"
+          ]
+        ],
+        [],
+        [
+          "examined and unexamined are disjoint and total"
+        ],
+        "reject"
+      ],
+      "descriptor_id": "sha256:942cac4149d4502b824966398e031723f1b7fd8836c1896d81b1a5a65c2f4d62",
+      "field_names": [
+        "examined_targets",
+        "unexamined_targets",
+        "coverage_digest"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:63f7a6bcb484fe87e83065eaecbb0f925e1e13fbd65cf41e6c1c0fa81f374e4f",
+      "schema_name": "ReviewCoverageV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "ReviewMethodFailureV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "schema_version",
+            "Const<1>"
+          ],
+          [
+            2,
+            "reason",
+            "ReviewMethodFailureReasonV1"
+          ],
+          [
+            3,
+            "exact_invocation_ref",
+            "ReviewInvocationRefV1"
+          ]
+        ],
+        [],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:57dc4c6cd08a391f99b16e5c1b86ddc88c6007e5c85a3ca72639bec444b933d7",
+      "field_names": [
+        "schema_version",
+        "reason",
+        "exact_invocation_ref"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:ae131c587bf7715b3e1ec25efebef0f7cee39b46b88caa7e9b7c08e683759069",
+      "schema_name": "ReviewMethodFailureV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "ReviewMethodInvocationV1",
+        1,
+        "union",
+        [],
+        [
+          [
+            1,
+            "Produced",
+            "ReviewMethodResultV1"
+          ],
+          [
+            2,
+            "Refused",
+            "ReviewMethodRefusalV1"
+          ],
+          [
+            3,
+            "Failed",
+            "ReviewMethodFailureV1"
+          ]
+        ],
+        [
+          "pre-route refusal has no invocation",
+          "crash, transport or effect uncertainty has no result envelope"
+        ],
+        "reject"
+      ],
+      "descriptor_id": "sha256:b576b2d8bf014228d73b54244fe5cb56d7820fcea0310d3b14e8ad17a48cb981",
+      "field_names": [],
+      "kind": "union",
+      "schema_id": "sha256:d61e3d459e4f9a199fc59f599777b75085f1ce2e6d90b06add045f8e00077e72",
+      "schema_name": "ReviewMethodInvocationV1",
+      "schema_version": 1,
+      "variant_names": [
+        "Produced",
+        "Refused",
+        "Failed"
+      ]
+    },
+    {
+      "canonical_descriptor_value": [
+        "ReviewMethodLoadPlanV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "primary_method",
+            "Optional<DirectMethodResourceRefV1>"
+          ],
+          [
+            2,
+            "auxiliary_methods",
+            "UniqueOrderedVec<DirectMethodResourceRefV1>"
+          ]
+        ],
+        [],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:36f6d5c7442fd0c01411d21afb14d86a217c336ddc56e13f59145ad86076e2fd",
+      "field_names": [
+        "primary_method",
+        "auxiliary_methods"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:5dba5b4ae59052e69e40496c064e2940a73765a491a1673fb24f152df78b997a",
+      "schema_name": "ReviewMethodLoadPlanV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "ReviewMethodRefusalV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "schema_version",
+            "Const<1>"
+          ],
+          [
+            2,
+            "reason",
+            "ReviewMethodRefusalReasonV1"
+          ],
+          [
+            3,
+            "exact_request_ref",
+            "ReviewInvocationRequestRefV1"
+          ]
+        ],
+        [],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:3bb07246c0b4b34d69634ff76e1f293723f7e5650e3b1651a5a78afaa60d431c",
+      "field_names": [
+        "schema_version",
+        "reason",
+        "exact_request_ref"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:2b611f34d28944324cd8d51798d5359d15057d3d95467879455ddc3de5b72c5b",
+      "schema_name": "ReviewMethodRefusalV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "ReviewMethodResultV1",
+        1,
+        "union",
+        [],
+        [
+          [
+            1,
+            "Inspect",
+            "InspectResultV1"
+          ],
+          [
+            2,
+            "Audit",
+            "AuditResultV1"
+          ],
+          [
+            3,
+            "AdversarialReview",
+            "AdversarialReviewResultV1"
+          ],
+          [
+            4,
+            "QAReplay",
+            "QAReplayResultV1"
+          ],
+          [
+            5,
+            "CloseReview",
+            "CloseReviewResultV1"
+          ]
+        ],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:3bb9209796be6dda04843fdbcf503eda86f93ef342b2f95646d8d5738dbb6aa8",
+      "field_names": [],
+      "kind": "union",
+      "schema_id": "sha256:df6a33edbec6e13ede4c35a4319fa3f5811dc4941bebad0e9f39b14ddd0ec5dd",
+      "schema_name": "ReviewMethodResultV1",
+      "schema_version": 1,
+      "variant_names": [
+        "Inspect",
+        "Audit",
+        "AdversarialReview",
+        "QAReplay",
+        "CloseReview"
+      ]
+    },
+    {
+      "canonical_descriptor_value": [
+        "ReviewModeRequestV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "schema_version",
+            "Const<1>"
+          ],
+          [
+            2,
+            "basis",
+            "ReviewModeBasisV1"
+          ],
+          [
+            3,
+            "requested_mode",
+            "Optional<ReviewModeV1>"
+          ]
+        ],
+        [],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:4b3ca879934a5e3aae0b7522b679345562a9748247526a2048a33d2f1c1ad652",
+      "field_names": [
+        "schema_version",
+        "basis",
+        "requested_mode"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:8be6504bc39869b8c0de8bc8eb865e9244eb7590e5aa3a1cb2943528ee85a53f",
+      "schema_name": "ReviewModeRequestV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "ReviewModeResolutionOutcomeV1",
+        1,
+        "union",
+        [],
+        [
+          [
+            1,
+            "Selected",
+            "Tuple<ReviewModeV1,ReviewMethodLoadPlanV1>"
+          ],
+          [
+            2,
+            "Ambiguous",
+            "ReviewModeAmbiguousReasonV1"
+          ],
+          [
+            3,
+            "Blocked",
+            "ReviewModeBlockedReasonV1"
+          ]
+        ],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:85315479783dcdf3da95911902174c04cfb3df5c17e5de25bdd74b2d58a57563",
+      "field_names": [],
+      "kind": "union",
+      "schema_id": "sha256:74852249615ffe5494f836ceac75f7ec69c03fa8a2c6d01fff16be00ccf7e479",
+      "schema_name": "ReviewModeResolutionOutcomeV1",
+      "schema_version": 1,
+      "variant_names": [
+        "Selected",
+        "Ambiguous",
+        "Blocked"
+      ]
+    },
+    {
+      "canonical_descriptor_value": [
+        "ReviewModeResolutionV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "schema_version",
+            "Const<1>"
+          ],
+          [
+            2,
+            "resolution_basis_ref",
+            "ResolutionBasisRefV1"
+          ],
+          [
+            3,
+            "exact_request_ref",
+            "ReviewModeRequestRefV1"
+          ],
+          [
+            4,
+            "outcome",
+            "ReviewModeResolutionOutcomeV1"
+          ]
+        ],
+        [],
+        [
+          "five modes",
+          "4/11 auxiliary cells",
+          "13/27 subset shapes"
+        ],
+        "reject"
+      ],
+      "descriptor_id": "sha256:ce1c01bba012d9fcfb7701347d01e6bd3dcca64aebe57a15a052d413a16c0e4e",
+      "field_names": [
+        "schema_version",
+        "resolution_basis_ref",
+        "exact_request_ref",
+        "outcome"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:b40f77115f1c32aaee3e45f3d97918ea1ddd68583196effea75afc7d01872841",
+      "schema_name": "ReviewModeResolutionV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "ReviewResultHeaderV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "schema_version",
+            "Const<1>"
+          ],
+          [
+            2,
+            "mode",
+            "ReviewModeV1"
+          ],
+          [
+            3,
+            "exact_invocation_ref",
+            "ReviewInvocationRefV1"
+          ],
+          [
+            4,
+            "exact_target_universe_ref",
+            "TargetUniverseRefV1"
+          ],
+          [
+            5,
+            "procedure_ref",
+            "ProcedureRefV1"
+          ],
+          [
+            6,
+            "observed_interval_ref",
+            "ObservedIntervalRefV1"
+          ],
+          [
+            7,
+            "provenance_ref",
+            "ProvenanceRefV1"
+          ]
+        ],
+        [],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:909b6f3ee9d9d5d83d9bc464c051f5a6f20a3d357dc1f8cd915dfae436035538",
+      "field_names": [
+        "schema_version",
+        "mode",
+        "exact_invocation_ref",
+        "exact_target_universe_ref",
+        "procedure_ref",
+        "observed_interval_ref",
+        "provenance_ref"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:20e719563502dbd9b029a40d29e040ce08634b26c5ebb2ffcdec557cbe1f18f2",
+      "schema_name": "ReviewResultHeaderV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "SelectedJobRecipeAdmissionOutcomeV1",
+        1,
+        "union",
+        [],
+        [
+          [
+            1,
+            "NoRecipe",
+            "Unit"
+          ],
+          [
+            2,
+            "Admitted",
+            "BoundedUniqueOrderedVec<RecipeResourceRefV1,1,2>"
+          ],
+          [
+            3,
+            "Refused",
+            "JobRecipeAdmissionRefusalV1"
+          ]
+        ],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:570db298a647a1d7bb870cfd9f0127499cbca9c6b10bd56b8709252fb733a4d3",
+      "field_names": [],
+      "kind": "union",
+      "schema_id": "sha256:15f8ac5c79d8dd4768cbc642bca6563167e1c483c3c6db9915df403fbc6ed47e",
+      "schema_name": "SelectedJobRecipeAdmissionOutcomeV1",
+      "schema_version": 1,
+      "variant_names": [
+        "NoRecipe",
+        "Admitted",
+        "Refused"
+      ]
+    },
+    {
+      "canonical_descriptor_value": [
+        "SelectedJobRecipeAdmissionV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "resolution_basis_ref",
+            "ResolutionBasisRefV1"
+          ],
+          [
+            2,
+            "exact_packet_application_ref",
+            "RecipeApplicationRefV1"
+          ],
+          [
+            3,
+            "exact_selected_job_route_ref",
+            "JobRouteRefV1"
+          ],
+          [
+            4,
+            "outcome",
+            "SelectedJobRecipeAdmissionOutcomeV1"
+          ]
+        ],
+        [],
+        [
+          "all or nothing; no partial fallback"
+        ],
+        "reject"
+      ],
+      "descriptor_id": "sha256:e9225988550ec729ad67b802d36a71ed47dd30d7f8b2d36adbebf2177ee87763",
+      "field_names": [
+        "resolution_basis_ref",
+        "exact_packet_application_ref",
+        "exact_selected_job_route_ref",
+        "outcome"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:0932c5ff13962b97e80009a6350fa24383ee98b213242ba515aca760633b3e29",
+      "schema_name": "SelectedJobRecipeAdmissionV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "SelectionContextV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "schema_version",
+            "Const<1>"
+          ],
+          [
+            2,
+            "resolution_basis_ref",
+            "ResolutionBasisRefV1"
+          ],
+          [
+            3,
+            "selection_options",
+            "ExactCanonicalProduct<Primary10,Continuation3>"
+          ]
+        ],
+        [],
+        [
+          "30 distinct complete options",
+          "order is enumeration only"
+        ],
+        "reject"
+      ],
+      "descriptor_id": "sha256:7d09ba4e9f63d26eede35d9176668be0c0248896356c71f654f592a1d1a080cc",
+      "field_names": [
+        "schema_version",
+        "resolution_basis_ref",
+        "selection_options"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:013a8f7c6dde5ebd64247bc426c5dfb194c8facc7921732e0938b7ffd3115497",
+      "schema_name": "SelectionContextV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "SetupFactViewV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "schema_version",
+            "Const<1>"
+          ],
+          [
+            2,
+            "resolver_resource_and_release_catalog_closure",
+            "ResolverReleaseCatalogClosureRefV1"
+          ],
+          [
+            3,
+            "acquisition_context",
+            "AcquisitionContextV1"
+          ],
+          [
+            4,
+            "locality_subject",
+            "ExactLocalitySubjectRefV1"
+          ],
+          [
+            5,
+            "source_owner_fact_commitments",
+            "NonEmptyUniqueOrderedVec<SourceOwnerFactCommitmentV1>"
+          ],
+          [
+            6,
+            "advertised_operation_binding",
+            "SetupAdvertisedOperationBindingV1"
+          ]
+        ],
+        [],
+        [
+          "one coherent locality",
+          "Operation does not contribute to eligibility"
+        ],
+        "reject"
+      ],
+      "descriptor_id": "sha256:44e644506832c3220abbfa1d14bba13b48de5b50c7fe3a3ceb341be9a8093b72",
+      "field_names": [
+        "schema_version",
+        "resolver_resource_and_release_catalog_closure",
+        "acquisition_context",
+        "locality_subject",
+        "source_owner_fact_commitments",
+        "advertised_operation_binding"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:59e23bfd5b3031baf3a2e3ed8edeaf0f515467fc524a99bb5c21d7c6c4abc278",
+      "schema_name": "SetupFactViewV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "SetupModeRequestV1",
+        1,
+        "union",
+        [],
+        [
+          [
+            1,
+            "Require",
+            "SetupModeV1"
+          ],
+          [
+            2,
+            "AcceptUniqueEligible",
+            "Unit"
+          ]
+        ],
+        [
+          "missing/null/default cannot construct a request"
+        ],
+        "reject"
+      ],
+      "descriptor_id": "sha256:9ecf507a69450fe92bac4ec2cff46326840c66da32ad18de671610bed8477ffb",
+      "field_names": [],
+      "kind": "union",
+      "schema_id": "sha256:afb9c25677fc1912a609305c409e143d99babe0b8f3afbc83171a153fac92316",
+      "schema_name": "SetupModeRequestV1",
+      "schema_version": 1,
+      "variant_names": [
+        "Require",
+        "AcceptUniqueEligible"
+      ]
+    },
+    {
+      "canonical_descriptor_value": [
+        "SetupModeResolutionOutcomeV1",
+        1,
+        "union",
+        [],
+        [
+          [
+            1,
+            "Selected",
+            "Tuple<SetupModeV1,SetupAdvertisedOperationBindingV1>"
+          ],
+          [
+            2,
+            "Ambiguous",
+            "Const<MultipleEligibleModes>"
+          ],
+          [
+            3,
+            "Blocked",
+            "SetupModeBlockedReasonV1"
+          ]
+        ],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:d60a08d7ac1c14cf6aae01d0c1554bfcb915e17713549e68616e17139aa37a6a",
+      "field_names": [],
+      "kind": "union",
+      "schema_id": "sha256:fa77155b34f83bcd2de877d8ecfc6c9f83bd87a51082c51b79e469ecfb4f498d",
+      "schema_name": "SetupModeResolutionOutcomeV1",
+      "schema_version": 1,
+      "variant_names": [
+        "Selected",
+        "Ambiguous",
+        "Blocked"
+      ]
+    },
+    {
+      "canonical_descriptor_value": [
+        "SetupModeResolutionV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "schema_version",
+            "Const<1>"
+          ],
+          [
+            2,
+            "resolver_resource_and_release_catalog_closure",
+            "ResolverReleaseCatalogClosureRefV1"
+          ],
+          [
+            3,
+            "fact_view_commitment",
+            "NonZeroSha256"
+          ],
+          [
+            4,
+            "request_commitment",
+            "NonZeroSha256"
+          ],
+          [
+            5,
+            "advertised_operation_binding",
+            "SetupAdvertisedOperationBindingV1"
+          ],
+          [
+            6,
+            "outcome",
+            "SetupModeResolutionOutcomeV1"
+          ]
+        ],
+        [],
+        [
+          "facts first, request second, Operation validation last",
+          "exactly one Ambiguous and 21 Blocked reasons"
+        ],
+        "reject"
+      ],
+      "descriptor_id": "sha256:5ed7ebe0b35d3b1364a4e38c0fd9d24bfd7a24a17486685a7c823d716cbdd710",
+      "field_names": [
+        "schema_version",
+        "resolver_resource_and_release_catalog_closure",
+        "fact_view_commitment",
+        "request_commitment",
+        "advertised_operation_binding",
+        "outcome"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:3bed98dbf608611e12ba3c99218884afa8ea0d16e3bcd5304fe69a9d160bf95e",
+      "schema_name": "SetupModeResolutionV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "SetupModeV1",
+        1,
+        "enum",
+        [],
+        [
+          [
+            1,
+            "Install",
+            "Unit"
+          ],
+          [
+            2,
+            "Adopt",
+            "Unit"
+          ],
+          [
+            3,
+            "Migrate",
+            "Unit"
+          ],
+          [
+            4,
+            "Update",
+            "Unit"
+          ],
+          [
+            5,
+            "Repair",
+            "Unit"
+          ],
+          [
+            6,
+            "Rollback",
+            "Unit"
+          ],
+          [
+            7,
+            "Uninstall",
+            "Unit"
+          ]
+        ],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:51a38436b8e5b5de7012f36de80fcd2ade070216e7d934a42872cd8fe05d2966",
+      "field_names": [],
+      "kind": "enum",
+      "schema_id": "sha256:e6d7ff0cf97087a9ccd132e5a116fc9b2ff59dfdaf2f4ee7a2e5611509656891",
+      "schema_name": "SetupModeV1",
+      "schema_version": 1,
+      "variant_names": [
+        "Install",
+        "Adopt",
+        "Migrate",
+        "Update",
+        "Repair",
+        "Rollback",
+        "Uninstall"
+      ]
+    },
+    {
+      "canonical_descriptor_value": [
+        "SkillActivationAcquisitionContextV1",
+        1,
+        "union",
+        [],
+        [
+          [
+            1,
+            "ActiveStore",
+            "RepositoryOrInstallationStoreGenerationV1"
+          ],
+          [
+            2,
+            "Bootstrap",
+            "RepositoryOrInstallationBootstrapCommitmentV1"
+          ]
+        ],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:3b493414ac5e02ef6774f8609783737e8b275acb45ad26feccd2b89955aa4be8",
+      "field_names": [],
+      "kind": "union",
+      "schema_id": "sha256:5a14bfbf921c2e7ad03ff7e8c99eef674dc5ac550e0597dd6a8f9ab804d51311",
+      "schema_name": "SkillActivationAcquisitionContextV1",
+      "schema_version": 1,
+      "variant_names": [
+        "ActiveStore",
+        "Bootstrap"
+      ]
+    },
+    {
+      "canonical_descriptor_value": [
+        "SkillActivationCandidateV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "schema_version",
+            "Const<1>"
+          ],
+          [
+            2,
+            "subject",
+            "SkillActivationSubjectV1"
+          ],
+          [
+            3,
+            "payload",
+            "SkillActivationPayloadV1"
+          ],
+          [
+            4,
+            "subject_commitment",
+            "NonZeroSha256"
+          ],
+          [
+            5,
+            "payload_commitment",
+            "NonZeroSha256"
+          ],
+          [
+            6,
+            "candidate_commitment",
+            "NonZeroSha256"
+          ]
+        ],
+        [],
+        [
+          "commitments use separate domain tags",
+          "ephemeral non-bearer; zero publication is allowed"
+        ],
+        "reject"
+      ],
+      "descriptor_id": "sha256:a527046dc0ea060570b92a4343e721c776908f529225f3fc2ad5b8a153d65c97",
+      "field_names": [
+        "schema_version",
+        "subject",
+        "payload",
+        "subject_commitment",
+        "payload_commitment",
+        "candidate_commitment"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:21a6f0617df9adab1cce5233052cb0ce31605d0cd15d1d74ff68726f4fd286cf",
+      "schema_name": "SkillActivationCandidateV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "SkillActivationPayloadV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "selected_route",
+            "SelectedJobRouteSnapshotV1"
+          ],
+          [
+            2,
+            "capability_resolution",
+            "SelectedCapabilityMethodResolutionV1"
+          ],
+          [
+            3,
+            "recipe_resolution",
+            "SkillActivationRecipeResolutionV1"
+          ],
+          [
+            4,
+            "context_budget_profile_ref",
+            "ContextBudgetProfileRefV1"
+          ],
+          [
+            5,
+            "loaded_resource_closure",
+            "LoadedResourceClosureV1"
+          ]
+        ],
+        [],
+        [
+          "Ambiguous, Blocked and Refused structurally unrepresentable",
+          "all Resources one Release and relation-valid"
+        ],
+        "reject"
+      ],
+      "descriptor_id": "sha256:edeacf5472f63c05596383333757aa3c9a28e6fa813ba19adf029c0e16e581a2",
+      "field_names": [
+        "selected_route",
+        "capability_resolution",
+        "recipe_resolution",
+        "context_budget_profile_ref",
+        "loaded_resource_closure"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:c7df1e97961232e1a3932f97f3e5632fe82631ff0c2d595ab703e31dfd1a9821",
+      "schema_name": "SkillActivationPayloadV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "SkillActivationRecipeResolutionV1",
+        1,
+        "union",
+        [],
+        [
+          [
+            1,
+            "BootstrapNoRecipe",
+            "Unit"
+          ],
+          [
+            2,
+            "PacketAdmission",
+            "Tuple<SelectedJobRecipeAdmissionV1,NoRecipeOrAdmittedOneToTwoV1>"
+          ]
+        ],
+        [
+          "Refused is structurally unrepresentable",
+          "BootstrapNoRecipe only pre-Packet Setup"
+        ],
+        "reject"
+      ],
+      "descriptor_id": "sha256:adbe712f3eca03a3cc294abb64537937286577d0fe327c3c49ce753749336546",
+      "field_names": [],
+      "kind": "union",
+      "schema_id": "sha256:5854bb958a27ac7aeaa0bf2510c4569ad734dcbe125370394be22d8bd29e9bbe",
+      "schema_name": "SkillActivationRecipeResolutionV1",
+      "schema_version": 1,
+      "variant_names": [
+        "BootstrapNoRecipe",
+        "PacketAdmission"
+      ]
+    },
+    {
+      "canonical_descriptor_value": [
+        "SkillActivationSubjectV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "schema_version",
+            "Const<1>"
+          ],
+          [
+            2,
+            "activation_acquisition_id",
+            "NominalFreshAcquisitionIdV1"
+          ],
+          [
+            3,
+            "acquisition_context",
+            "SkillActivationAcquisitionContextV1"
+          ],
+          [
+            4,
+            "release_ref",
+            "ReleaseRefV1"
+          ],
+          [
+            5,
+            "root_skill_resource_ref",
+            "ExactRootSkillResourceRefV1"
+          ]
+        ],
+        [],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:a0187320b5bc3f82eb33ea9e1f562c89030499720979a8e72bf90daa8a526002",
+      "field_names": [
+        "schema_version",
+        "activation_acquisition_id",
+        "acquisition_context",
+        "release_ref",
+        "root_skill_resource_ref"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:b860a9d46a1fe9ba4023b1a34cf2c567d0260b566423c76130e67f29f45850d0",
+      "schema_name": "SkillActivationSubjectV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "TddChildEligibilityRowV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "child",
+            "TddChildV1"
+          ],
+          [
+            2,
+            "exact_resource_ref",
+            "InstructionResourceRefV1"
+          ],
+          [
+            3,
+            "exact_typed_need",
+            "CapabilityTypedNeedV1"
+          ]
+        ],
+        [],
+        [],
+        "reject"
+      ],
+      "descriptor_id": "sha256:9f4d916ab2aa65a9c7681c5fb82a0301b67b97d740ad3fca399173cf26c5e953",
+      "field_names": [
+        "child",
+        "exact_resource_ref",
+        "exact_typed_need"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:7d886848bcf48e4369c9f126e091e10cd084249bd01d39a92fed37b5875be254",
+      "schema_name": "TddChildEligibilityRowV1",
+      "schema_version": 1,
+      "variant_names": []
+    },
+    {
+      "canonical_descriptor_value": [
+        "TddChildEligibilityV1",
+        1,
+        "record",
+        [
+          [
+            1,
+            "schema_version",
+            "Const<1>"
+          ],
+          [
+            2,
+            "rows",
+            "ExactArray<TddChildEligibilityRowV1,5>"
+          ]
+        ],
+        [],
+        [
+          "only Execute/TDD admits children",
+          "35 direct job-child shapes refuse"
+        ],
+        "reject"
+      ],
+      "descriptor_id": "sha256:9089eee9ab79b95c930154aa50987406fa162a7f46e4b6d632a591cfd7324c64",
+      "field_names": [
+        "schema_version",
+        "rows"
+      ],
+      "kind": "record",
+      "schema_id": "sha256:c13233eb9f821458080fd9898eeedf16498b174180edc780fc155f9801bf4cb6",
+      "schema_name": "TddChildEligibilityV1",
+      "schema_version": 1,
+      "variant_names": []
+    }
+  ],
+  "runtime_activation": false,
+  "runtime_registration": false,
+  "schema": "maestro.vnext.stage0-public-identity-schema-descriptors.v1"
+}

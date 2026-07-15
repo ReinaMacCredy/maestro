@@ -1404,6 +1404,7 @@ fn transitional_public_surfaces_match_phase_policy() {
             "search",
             "skills",
             "task",
+            "vnext",
         ],
         &[],
     );

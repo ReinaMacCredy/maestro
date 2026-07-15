@@ -1,0 +1,211 @@
+{
+  "schema": "maestro.vnext.stage0-input-bindings.v1",
+  "canonical_role": "external_non_promoting_provenance",
+  "feature_id": "maestro-whole-flow-architecture-refoundation",
+  "feature_state": "proposed",
+  "source_repository_realpath": "/Users/reinamaccredy/Code/maestro",
+  "implementation_workspace_path": "/Users/reinamaccredy/Code/maestro-whole-flow-architecture-refoundation-build",
+  "implementation_workspace_policy": "dedicated-clean-worktree-v1",
+  "baseline": {
+    "commit": "ef87d0d473d510ea0fa82035b3e96c8f24c0eb8c",
+    "tree": "fca79bb2194a7d3d10cce648ed70f795720f7c17"
+  },
+  "canonical_source_inputs": {
+    "card_sha256": "2cdf1f74843a6eca926ff3bc48e060654350e6a03b65342f8d7be48d111379b4",
+    "design_sha256": "85787cfb4fb32eefe078adbf9ede66114b12c6304af10857bd676a1cd9875d18",
+    "decisions_sha256": "1f97e67b156d5a17d13b94ff955ad17efeb3bb71a4b74b1aec14e20dac1100dd"
+  },
+  "provenance_evidence_inputs": {
+    "classification": "non_authoritative_coverage_evidence_only",
+    "packet_binding": "excluded_by_design_canonical_card_design_decisions_are_authority",
+    "artifacts": {
+      "final_main_sha256": "6908756b8897e0481c1a0d33f80e662491496069a8d1513264440bfe5348403a",
+      "post_refoundation_brainstorm_sha256": "447bd09114459dca6b472b453bb77837bda97b960571feee3e8cd65a7c90b772"
+    }
+  },
+  "decision_inventory": {
+    "total": 207,
+    "locked": 112,
+    "superseded": 95,
+    "open": 0,
+    "effective_composite_head": "dec-close-lifecycle-to-action-totality-and-efa0",
+    "effective_composite_head_body_sha256": "811474c083177cb9b625e001e7431782e0827eec95572562c8a227054c15e147"
+  },
+  "external_control_bindings": {
+    "source_git_control": {
+      "identity_sha256": "f6f97665f33382254d4196781f0a8caa47b9d0770433794826e1b5b07845a6a3",
+      "git_common_dir_realpath": "/Users/reinamaccredy/Code/maestro/.git",
+      "git_common_dir_device": "16777229",
+      "git_common_dir_inode": "98244813",
+      "git_common_dir_uid": "501",
+      "git_common_dir_gid": "0",
+      "git_common_dir_mode": "0755",
+      "object_directory_realpath": "/Users/reinamaccredy/Code/maestro/.git/objects",
+      "object_directory_device": "16777229",
+      "object_directory_inode": "98244841",
+      "object_directory_uid": "501",
+      "object_directory_gid": "0",
+      "object_directory_mode": "0755",
+      "object_format": "sha1",
+      "repository_config_sha256": "896aff7a1edd03752d0ac2a1cf7c94a99cee230f35d36e4ffe7eee1f533707f2",
+      "git_control_path_manifest_sha256": "141f68a0759cc7a89837f1224e41bd06340c5ca8f98d90dd07760210f7389cc0",
+      "git_control_path_manifest": [
+        "config.worktree\tabsent\t-",
+        "info/attributes\tabsent\t-",
+        "info/grafts\tabsent\t-",
+        "objects/info/alternates\tabsent\t-",
+        "shallow\tabsent\t-"
+      ]
+    },
+    "destination_ancestors": {
+      "identity_sha256": "8463ede045f51f7ec57afa63e2fa49d8344d0977bed7e175e34c56add42a08dc",
+      "ancestors": [
+        {"path": "/", "realpath": "/", "device": "16777229", "inode": "2", "uid": "0", "gid": "0", "mode": "0755", "type": "directory"},
+        {"path": "/Users", "realpath": "/Users", "device": "16777229", "inode": "18339", "uid": "0", "gid": "80", "mode": "0755", "type": "directory"},
+        {"path": "/Users/reinamaccredy", "realpath": "/Users/reinamaccredy", "device": "16777229", "inode": "36819", "uid": "501", "gid": "20", "mode": "0750", "type": "directory"},
+        {"path": "/Users/reinamaccredy/Code", "realpath": "/Users/reinamaccredy/Code", "device": "16777229", "inode": "98226149", "uid": "501", "gid": "20", "mode": "0755", "type": "directory"}
+      ]
+    },
+    "checkout_sandbox_profile": {
+      "identity_sha256": "6e2a9b76f0bb2beb30de890d7c1a3faec09ee203fc41a01a6e27264e65e12a44",
+      "profile_id": "raw-tree-no-exec-v1",
+      "config_sources": "none",
+      "hooks": "disabled",
+      "filters": "disabled",
+      "attributes_transform": "disabled",
+      "external_commands": "disabled",
+      "network": "disabled",
+      "submodule_checkout": "disabled",
+      "object_source": "packet-bound-read-only",
+      "registration": "expected-absent-no-checkout",
+      "materializer": "raw-tree-object-decoder",
+      "verifier": "raw-tree-object-decoder",
+      "symlink_policy": "tree-exact-no-escape-before-edit"
+    }
+  },
+  "external_candidate_input_fields": {
+    "raw_decision_inventory_sha256": "2e5feb5e242de412862bfb12a13da43211385f6729fa70846f26f95fd5b5272b",
+    "external_design_authority_closure_sha256": "62324fe015097c12fa01fcfd473d0a612b68703ce1bec3e82e13fe4bb0b041a7",
+    "capability_census_sha256": "f03df0bcbe8082a3228c21437aa10c203cd73025cbe357fdb0db63ca644aecf8",
+    "resource_consumer_census_sha256": "3e16a5547e47763b616db21859b96b34f2ea96957fd98f6dfb618961acdf6fdb",
+    "migration_rollback_removal_sha256": "e3e2c334e598115279e2d02c6b72598981458e075331dd23065092b44d850e97"
+  },
+  "external_build_plan": {
+    "recipient_task_id": "019f4d99-a48a-7390-9560-7c7a9dc63a8d",
+    "stage_plan_sha256": "a5368dfae5a24d60bc2f549238e900de185b305ec569a5294494d44b69c52e98",
+    "proof_gate_sha256": "19724468f0be242408490f951b3b704fbed0ce653f48cc60ae2a5b8c2c02614a",
+    "risk_recovery_sha256": "e02eafeb4af34c79f5e81f7fbac3134443b973b4ed60eef4bdb6793a83c96107",
+    "adapter_removal_sha256": "a65f315d947d49cef23374c7722abceccd5fb95c2ee304d3a4ae829d70fe43a3",
+    "risk_recovery_canonical_lines": [
+      "risk_platform_attestation=If current user role,event identity,recipient task incarnation or post-packet ordering cannot be attested,refuse before every write.",
+      "risk_workspace_creation=The implementation leaf must remain absent and its parent and ancestor chain unchanged; first write is one atomic exclusive no-follow creation; a crash at or after creation requires fresh-authority recovery.",
+      "risk_git_execution=Registration and materialization are expected-absent,no-checkout,raw-object and no-exec; hooks,filters,attribute transforms,helpers,submodules,configuration commands and network are disabled or Stage 0 refuses.",
+      "risk_literal_identity=Any disagreement between two encoders,semantic validator,declared dependency delta,Design hash,Decision closure or census invalidates the packet and returns to Design.",
+      "risk_concurrency=Every canonical writer uses expected-old CAS or one owning transaction; losers perform zero canonical write,authority spend or external I/O.",
+      "risk_effects=Possible remote crossing remains in_doubt; no blind retry,refund,stale Lease reuse or success inference; fresh authorized reconciliation is required.",
+      "risk_migration=Ambiguity,missing causal join,unknown authority or mixed Release quarantines and blocks activation; no status,name,actor,path,adapter or time inference.",
+      "risk_custody=Unmanaged,foreign,ambiguous,unsafe or post-Plan-drifted targets fail closed; exact preimage,visible diff,backup and domain-local recovery are mandatory.",
+      "risk_rollback=Two selectable prior snapshots are preserved per exact domain while mandatory holds remain separate; cleanup debt never becomes selectable truth.",
+      "remaining_non_material_risks=Stage-0 literal catalog generation,platform no-exec primitive availability,finite bound selection,host-specific registration mechanics,performance and existing legacy CLI readout reliability require implementation proof but introduce no unresolved architecture choice.",
+      "loop_readout_note=Live maestro status and loop readouts terminated without a parseable payload during closeout; they were not used as authority. Canonical files,Decision closure and the Unknowns Lens governed the sweep."
+    ],
+    "adapter_removal_canonical_lines": [
+      "schema\tAdapterRemovalSummaryV1",
+      "retained_public_adapters\tCLI,JSON,TUI,hooks,shell,maestro_skill,maestro_packet,maestro_cli_search",
+      "removed_public_skill_names\tmaestro-setup,maestro-research,maestro-design,maestro-work,maestro-audit,maestro-witness,ask-maestro,maestro-card",
+      "removed_agent_cli_catalog\tcli.md",
+      "removed_mcp_surfaces\tall_individual_lifecycle_tools,generic_mutation_gateways,dynamic_tool_injection,project_mcp",
+      "removed_runtime_vocabulary\tCard,Task,Feature,Progress",
+      "removed_runtime_compatibility\tv1_readers,aliases,request_translation,dual_read,dual_write,fallback_store_generations,writable_failback",
+      "legacy_recipe_disposition\t15_sources_to_10_active_recipes_plus_2_bounded_continuation_profiles",
+      "legacy_schema_disposition\t33_descriptors_and_22_fixtures_migration_or_proof_only",
+      "removal_gate\tzero_live_consumers_or_explicit_sealed_migration_or_audit_readers"
+    ]
+  },
+  "external_packet_sections": {
+    "identity_state": "622d8d7415356c9799e73bd07f29119fff2ce9d6b8db345521de34813e77bb15",
+    "product_constitution": "16a4048dca7045e4faa723e8795eceea9ae799d769ec66a12757bcb050e4b561",
+    "architecture_ownership": "d6cb9f8660c7c4aae8f4a4d543ca8df5ad157b3c2ec7227969030d82c22f43db",
+    "capability_resource_census": "4a27c9d8e5c480a8f7a387ab2b93245680452c03bb515257e59e438c53dfe120",
+    "lifecycle_authority": "79563fa9db119e8fb5cbe9a4180d28551b5d9cfe4f0d5bfd67c06253a5434952",
+    "migration_rollback_removal": "e3e2c334e598115279e2d02c6b72598981458e075331dd23065092b44d850e97",
+    "implementation_stages_proofs": "2a887f13433e3efe2edeadd1aea405f39171c742b9939b134738fe7c5b8e7471",
+    "risk_recovery": "e02eafeb4af34c79f5e81f7fbac3134443b973b4ed60eef4bdb6793a83c96107",
+    "advisor_dispositions_edge_sweep": "5646257f07649f3ee9a06b31dc177891cf1ab715c9b4204a566a30ebcf3d2617",
+    "deviations_recommendation": "05f05a87db923bce656881a8c011e1c33aabeca3afd2b93bdde5ad4b466bb505"
+  },
+  "external_approval_event": {
+    "attestation_source": "pinned_local_codex_session_records_v1",
+    "provenance_assurance": "unsigned_local_platform_log_bound_by_sha256",
+    "log_realpath": "/Users/reinamaccredy/.codex/sessions/2026/07/11/rollout-2026-07-11T02-55-42-019f4d99-a48a-7390-9560-7c7a9dc63a8d.jsonl",
+    "record_set_sha256": "001598f37920ceab2667e2fbefff7d704fbf5099fec19ad57dadf94837d3dafe",
+    "record_sha256": {
+      "session_meta": "881b3b557ba931da032dd30da7f6f6259298c0921ec426444ffd2ecc6718690a",
+      "superseded_packet_task_complete": "bb14b7e34dcdfde31c7f9ff70728e8b0ed54fedd6f40647f4afd3b0594a9709c",
+      "superseded_approval_task_started": "eceaea792d3d18e6b0e309ada370a134305998e7c99b7da8ecedb790f476bce3",
+      "superseded_approval_user_message": "3cb0d943460f29a94a090380b1aa9a2432671a2c7e073c80293ab5bf9aaad6f5",
+      "packet_task_complete": "5c61de79792523062ac8d2f864365c551e7c82cb984f1fb842fa37056c46e829",
+      "approval_task_started": "859e2a72261bc3c37f97d602383f5b4142bfa579b249a03204473c3ac2066d90",
+      "approval_user_message": "3766fcad540b323ad5526345d45c35a9ff73d60ff6de21bdd5c44801d0d44e7b"
+    },
+    "packet_body_sha256": "2a4f29a9f994bb5704bfb761533d938e5fe32ec3c798d831b827498e52933e2c",
+    "packet_publication_kind": "reboot_device_rebind_v1",
+    "superseded_packet": {
+      "packet_sha256": "1a9d98ab46d884d35f673ef43bb96f0b16c8a6eff3276bfac7b236f102be40af",
+      "candidate_input_commitment": "797a90a83715fb3e1af8c3e7421a12be39f29823aa332413a5bf512643e91be1",
+      "build_plan_handoff": "d531194f72c227d881ed64c545637c616d94efd185c95fac554666c942e8e652",
+      "source_git_control_binding_sha256": "bc2d7bf1884da46fa98d7ebe3a0e03d2e8d74a4dff130860cfab7158075c3ab1",
+      "destination_ancestor_binding_sha256": "fc7899edf316d8d6ff054517fda2a1db72329c462721a257376b693d1e94b756",
+      "checkout_sandbox_profile_sha256": "6e2a9b76f0bb2beb30de890d7c1a3faec09ee203fc41a01a6e27264e65e12a44",
+      "packet_body_sha256": "c70598df97a503e444f673517b799fa1adf8d0481d175668aa72434f30881f9e",
+      "packet_turn_id": "019f5e60-6cca-71e0-8225-9e875fe170b1",
+      "packet_turn_completed_at": 1784000056,
+      "approval_turn_id": "019f5eb4-301b-7f01-b2f6-2cab9dc89f9e",
+      "approval_turn_started_at": 1784000294,
+      "user_message_id": "msg_019f5eb4-3040-7823-9192-f85b7eae2d86",
+      "exact_instruction": "APPROVE BUILD PACKET sha256:1a9d98ab46d884d35f673ef43bb96f0b16c8a6eff3276bfac7b236f102be40af. Execute the staged build plan."
+    },
+    "superseded_device": "16777232",
+    "current_device": "16777229",
+    "recipient_thread_id": "019f4d99-a48a-7390-9560-7c7a9dc63a8d",
+    "recipient_thread_created_at": 1783713342,
+    "packet_turn_id": "019f6294-ebbc-7b92-9e92-75fce5ffba61",
+    "packet_turn_completed_at": 1784066269,
+    "approval_turn_id": "019f62c1-f3d6-7aa1-ab1e-3a6b55c86ae5",
+    "approval_turn_started_at": 1784068306,
+    "user_message_id": null,
+    "actor_role": "user",
+    "exact_instruction": "APPROVE BUILD PACKET sha256:15cff07eed551c9ede857805f1ba7d0ddafc175d48baeebd9455dc8eed37bc57. Execute the staged build plan.",
+    "completion_instruction": "Approve go until done"
+  },
+  "external_approval": {
+    "packet_sha256": "15cff07eed551c9ede857805f1ba7d0ddafc175d48baeebd9455dc8eed37bc57",
+    "candidate_input_commitment": "3efee56851bc4d3438d599157019dcc36587e4bb442690d96cc8152ae98dccce",
+    "build_plan_handoff": "86d9042434bc035fd01f3a97d6646ad99a3462cbe7b051039740cd82d8943181",
+    "must_not_be_used_as": [
+      "candidate_contract_root",
+      "canonical_build_handoff",
+      "manifest_identity",
+      "mandate",
+      "action_request",
+      "receipt"
+    ]
+  },
+  "locked_stage0_totals": {
+    "observation_kinds": 43,
+    "effect_origins": 23,
+    "action_leaves": 145,
+    "action_specs": 145,
+    "ceremonies": 11,
+    "repository_capacity_kinds": 6,
+    "installation_capacity_kinds": 6,
+    "owner_profiles": 21,
+    "grammar_symbols": 156,
+    "owner_relation_rows": 444,
+    "effect_routes": 139,
+    "recipes": 10,
+    "bounded_continuation_profiles": 2,
+    "mcp_tools": 2,
+    "execution_attempt_owners": 3
+  }
+}

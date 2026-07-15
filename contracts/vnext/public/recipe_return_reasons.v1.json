@@ -1,0 +1,5122 @@
+{
+  "schema": "maestro.vnext.recipe-return-reasons.v1",
+  "candidate_only": true,
+  "runtime_activation": false,
+  "runtime_registration": false,
+  "member_count": 30,
+  "manifest_subset_count": 10,
+  "members": [
+    {
+      "tag": 1,
+      "name": "BoundedContinuationNotApplicable",
+      "recipe_id": "bounded-continuation",
+      "outcome": "NotApplicable",
+      "resource_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1",
+      "causal_route_meaning": false
+    },
+    {
+      "tag": 2,
+      "name": "BoundedContinuationRestrictiveAdvice",
+      "recipe_id": "bounded-continuation",
+      "outcome": "RestrictiveAdvice",
+      "resource_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1",
+      "causal_route_meaning": false
+    },
+    {
+      "tag": 3,
+      "name": "BoundedContinuationHardStop",
+      "recipe_id": "bounded-continuation",
+      "outcome": "HardStop",
+      "resource_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1",
+      "causal_route_meaning": false
+    },
+    {
+      "tag": 4,
+      "name": "ConflictHandoffNotApplicable",
+      "recipe_id": "conflict-handoff",
+      "outcome": "NotApplicable",
+      "resource_ref": "candidate:orchestration:recipe-return-reason:ConflictHandoffNotApplicable:v1",
+      "causal_route_meaning": false
+    },
+    {
+      "tag": 5,
+      "name": "ConflictHandoffRestrictiveAdvice",
+      "recipe_id": "conflict-handoff",
+      "outcome": "RestrictiveAdvice",
+      "resource_ref": "candidate:orchestration:recipe-return-reason:ConflictHandoffRestrictiveAdvice:v1",
+      "causal_route_meaning": false
+    },
+    {
+      "tag": 6,
+      "name": "ConflictHandoffHardStop",
+      "recipe_id": "conflict-handoff",
+      "outcome": "HardStop",
+      "resource_ref": "candidate:orchestration:recipe-return-reason:ConflictHandoffHardStop:v1",
+      "causal_route_meaning": false
+    },
+    {
+      "tag": 7,
+      "name": "DesignRelayNotApplicable",
+      "recipe_id": "design-relay",
+      "outcome": "NotApplicable",
+      "resource_ref": "candidate:orchestration:recipe-return-reason:DesignRelayNotApplicable:v1",
+      "causal_route_meaning": false
+    },
+    {
+      "tag": 8,
+      "name": "DesignRelayRestrictiveAdvice",
+      "recipe_id": "design-relay",
+      "outcome": "RestrictiveAdvice",
+      "resource_ref": "candidate:orchestration:recipe-return-reason:DesignRelayRestrictiveAdvice:v1",
+      "causal_route_meaning": false
+    },
+    {
+      "tag": 9,
+      "name": "DesignRelayHardStop",
+      "recipe_id": "design-relay",
+      "outcome": "HardStop",
+      "resource_ref": "candidate:orchestration:recipe-return-reason:DesignRelayHardStop:v1",
+      "causal_route_meaning": false
+    },
+    {
+      "tag": 10,
+      "name": "FanoutNotApplicable",
+      "recipe_id": "fanout",
+      "outcome": "NotApplicable",
+      "resource_ref": "candidate:orchestration:recipe-return-reason:FanoutNotApplicable:v1",
+      "causal_route_meaning": false
+    },
+    {
+      "tag": 11,
+      "name": "FanoutRestrictiveAdvice",
+      "recipe_id": "fanout",
+      "outcome": "RestrictiveAdvice",
+      "resource_ref": "candidate:orchestration:recipe-return-reason:FanoutRestrictiveAdvice:v1",
+      "causal_route_meaning": false
+    },
+    {
+      "tag": 12,
+      "name": "FanoutHardStop",
+      "recipe_id": "fanout",
+      "outcome": "HardStop",
+      "resource_ref": "candidate:orchestration:recipe-return-reason:FanoutHardStop:v1",
+      "causal_route_meaning": false
+    },
+    {
+      "tag": 13,
+      "name": "IntakeTriageNotApplicable",
+      "recipe_id": "intake-triage",
+      "outcome": "NotApplicable",
+      "resource_ref": "candidate:orchestration:recipe-return-reason:IntakeTriageNotApplicable:v1",
+      "causal_route_meaning": false
+    },
+    {
+      "tag": 14,
+      "name": "IntakeTriageRestrictiveAdvice",
+      "recipe_id": "intake-triage",
+      "outcome": "RestrictiveAdvice",
+      "resource_ref": "candidate:orchestration:recipe-return-reason:IntakeTriageRestrictiveAdvice:v1",
+      "causal_route_meaning": false
+    },
+    {
+      "tag": 15,
+      "name": "IntakeTriageHardStop",
+      "recipe_id": "intake-triage",
+      "outcome": "HardStop",
+      "resource_ref": "candidate:orchestration:recipe-return-reason:IntakeTriageHardStop:v1",
+      "causal_route_meaning": false
+    },
+    {
+      "tag": 16,
+      "name": "LearningNotApplicable",
+      "recipe_id": "learning",
+      "outcome": "NotApplicable",
+      "resource_ref": "candidate:orchestration:recipe-return-reason:LearningNotApplicable:v1",
+      "causal_route_meaning": false
+    },
+    {
+      "tag": 17,
+      "name": "LearningRestrictiveAdvice",
+      "recipe_id": "learning",
+      "outcome": "RestrictiveAdvice",
+      "resource_ref": "candidate:orchestration:recipe-return-reason:LearningRestrictiveAdvice:v1",
+      "causal_route_meaning": false
+    },
+    {
+      "tag": 18,
+      "name": "LearningHardStop",
+      "recipe_id": "learning",
+      "outcome": "HardStop",
+      "resource_ref": "candidate:orchestration:recipe-return-reason:LearningHardStop:v1",
+      "causal_route_meaning": false
+    },
+    {
+      "tag": 19,
+      "name": "SetupNotApplicable",
+      "recipe_id": "setup",
+      "outcome": "NotApplicable",
+      "resource_ref": "candidate:orchestration:recipe-return-reason:SetupNotApplicable:v1",
+      "causal_route_meaning": false
+    },
+    {
+      "tag": 20,
+      "name": "SetupRestrictiveAdvice",
+      "recipe_id": "setup",
+      "outcome": "RestrictiveAdvice",
+      "resource_ref": "candidate:orchestration:recipe-return-reason:SetupRestrictiveAdvice:v1",
+      "causal_route_meaning": false
+    },
+    {
+      "tag": 21,
+      "name": "SetupHardStop",
+      "recipe_id": "setup",
+      "outcome": "HardStop",
+      "resource_ref": "candidate:orchestration:recipe-return-reason:SetupHardStop:v1",
+      "causal_route_meaning": false
+    },
+    {
+      "tag": 22,
+      "name": "ShipNotApplicable",
+      "recipe_id": "ship",
+      "outcome": "NotApplicable",
+      "resource_ref": "candidate:orchestration:recipe-return-reason:ShipNotApplicable:v1",
+      "causal_route_meaning": false
+    },
+    {
+      "tag": 23,
+      "name": "ShipRestrictiveAdvice",
+      "recipe_id": "ship",
+      "outcome": "RestrictiveAdvice",
+      "resource_ref": "candidate:orchestration:recipe-return-reason:ShipRestrictiveAdvice:v1",
+      "causal_route_meaning": false
+    },
+    {
+      "tag": 24,
+      "name": "ShipHardStop",
+      "recipe_id": "ship",
+      "outcome": "HardStop",
+      "resource_ref": "candidate:orchestration:recipe-return-reason:ShipHardStop:v1",
+      "causal_route_meaning": false
+    },
+    {
+      "tag": 25,
+      "name": "SynthesizeNotApplicable",
+      "recipe_id": "synthesize",
+      "outcome": "NotApplicable",
+      "resource_ref": "candidate:orchestration:recipe-return-reason:SynthesizeNotApplicable:v1",
+      "causal_route_meaning": false
+    },
+    {
+      "tag": 26,
+      "name": "SynthesizeRestrictiveAdvice",
+      "recipe_id": "synthesize",
+      "outcome": "RestrictiveAdvice",
+      "resource_ref": "candidate:orchestration:recipe-return-reason:SynthesizeRestrictiveAdvice:v1",
+      "causal_route_meaning": false
+    },
+    {
+      "tag": 27,
+      "name": "SynthesizeHardStop",
+      "recipe_id": "synthesize",
+      "outcome": "HardStop",
+      "resource_ref": "candidate:orchestration:recipe-return-reason:SynthesizeHardStop:v1",
+      "causal_route_meaning": false
+    },
+    {
+      "tag": 28,
+      "name": "WayfindingNotApplicable",
+      "recipe_id": "wayfinding",
+      "outcome": "NotApplicable",
+      "resource_ref": "candidate:orchestration:recipe-return-reason:WayfindingNotApplicable:v1",
+      "causal_route_meaning": false
+    },
+    {
+      "tag": 29,
+      "name": "WayfindingRestrictiveAdvice",
+      "recipe_id": "wayfinding",
+      "outcome": "RestrictiveAdvice",
+      "resource_ref": "candidate:orchestration:recipe-return-reason:WayfindingRestrictiveAdvice:v1",
+      "causal_route_meaning": false
+    },
+    {
+      "tag": 30,
+      "name": "WayfindingHardStop",
+      "recipe_id": "wayfinding",
+      "outcome": "HardStop",
+      "resource_ref": "candidate:orchestration:recipe-return-reason:WayfindingHardStop:v1",
+      "causal_route_meaning": false
+    }
+  ],
+  "manifest_subsets": [
+    {
+      "recipe_id": "bounded-continuation",
+      "return_reason_refs": [
+        "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1",
+        "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1",
+        "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+      ]
+    },
+    {
+      "recipe_id": "conflict-handoff",
+      "return_reason_refs": [
+        "candidate:orchestration:recipe-return-reason:ConflictHandoffNotApplicable:v1",
+        "candidate:orchestration:recipe-return-reason:ConflictHandoffRestrictiveAdvice:v1",
+        "candidate:orchestration:recipe-return-reason:ConflictHandoffHardStop:v1"
+      ]
+    },
+    {
+      "recipe_id": "design-relay",
+      "return_reason_refs": [
+        "candidate:orchestration:recipe-return-reason:DesignRelayNotApplicable:v1",
+        "candidate:orchestration:recipe-return-reason:DesignRelayRestrictiveAdvice:v1",
+        "candidate:orchestration:recipe-return-reason:DesignRelayHardStop:v1"
+      ]
+    },
+    {
+      "recipe_id": "fanout",
+      "return_reason_refs": [
+        "candidate:orchestration:recipe-return-reason:FanoutNotApplicable:v1",
+        "candidate:orchestration:recipe-return-reason:FanoutRestrictiveAdvice:v1",
+        "candidate:orchestration:recipe-return-reason:FanoutHardStop:v1"
+      ]
+    },
+    {
+      "recipe_id": "intake-triage",
+      "return_reason_refs": [
+        "candidate:orchestration:recipe-return-reason:IntakeTriageNotApplicable:v1",
+        "candidate:orchestration:recipe-return-reason:IntakeTriageRestrictiveAdvice:v1",
+        "candidate:orchestration:recipe-return-reason:IntakeTriageHardStop:v1"
+      ]
+    },
+    {
+      "recipe_id": "learning",
+      "return_reason_refs": [
+        "candidate:orchestration:recipe-return-reason:LearningNotApplicable:v1",
+        "candidate:orchestration:recipe-return-reason:LearningRestrictiveAdvice:v1",
+        "candidate:orchestration:recipe-return-reason:LearningHardStop:v1"
+      ]
+    },
+    {
+      "recipe_id": "setup",
+      "return_reason_refs": [
+        "candidate:orchestration:recipe-return-reason:SetupNotApplicable:v1",
+        "candidate:orchestration:recipe-return-reason:SetupRestrictiveAdvice:v1",
+        "candidate:orchestration:recipe-return-reason:SetupHardStop:v1"
+      ]
+    },
+    {
+      "recipe_id": "ship",
+      "return_reason_refs": [
+        "candidate:orchestration:recipe-return-reason:ShipNotApplicable:v1",
+        "candidate:orchestration:recipe-return-reason:ShipRestrictiveAdvice:v1",
+        "candidate:orchestration:recipe-return-reason:ShipHardStop:v1"
+      ]
+    },
+    {
+      "recipe_id": "synthesize",
+      "return_reason_refs": [
+        "candidate:orchestration:recipe-return-reason:SynthesizeNotApplicable:v1",
+        "candidate:orchestration:recipe-return-reason:SynthesizeRestrictiveAdvice:v1",
+        "candidate:orchestration:recipe-return-reason:SynthesizeHardStop:v1"
+      ]
+    },
+    {
+      "recipe_id": "wayfinding",
+      "return_reason_refs": [
+        "candidate:orchestration:recipe-return-reason:WayfindingNotApplicable:v1",
+        "candidate:orchestration:recipe-return-reason:WayfindingRestrictiveAdvice:v1",
+        "candidate:orchestration:recipe-return-reason:WayfindingHardStop:v1"
+      ]
+    }
+  ],
+  "membership_matrix": {
+    "positive": 30,
+    "negative": 270
+  },
+  "compatibility_matrix": {
+    "positive": 30,
+    "negative": 870
+  },
+  "application_outcome_vector_count": 196,
+  "application_outcome_vectors": [
+    {
+      "vector_id": "core",
+      "component_shape": [],
+      "outcomes": [],
+      "composition_outcome": "CoreOnly"
+    },
+    {
+      "vector_id": "Primary:conflict-handoff:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "conflict-handoff"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ConflictHandoffNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:conflict-handoff:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "conflict-handoff"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ConflictHandoffRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "RestrictiveAdvice"
+    },
+    {
+      "vector_id": "Primary:conflict-handoff:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "conflict-handoff"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ConflictHandoffHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:design-relay:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "design-relay"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:DesignRelayNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:design-relay:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "design-relay"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:DesignRelayRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "RestrictiveAdvice"
+    },
+    {
+      "vector_id": "Primary:design-relay:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "design-relay"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:DesignRelayHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:fanout:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "fanout"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:FanoutNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:fanout:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "fanout"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:FanoutRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "RestrictiveAdvice"
+    },
+    {
+      "vector_id": "Primary:fanout:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "fanout"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:FanoutHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:intake-triage:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "intake-triage"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:IntakeTriageNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:intake-triage:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "intake-triage"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:IntakeTriageRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "RestrictiveAdvice"
+    },
+    {
+      "vector_id": "Primary:intake-triage:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "intake-triage"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:IntakeTriageHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:learning:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "learning"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:LearningNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:learning:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "learning"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:LearningRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "RestrictiveAdvice"
+    },
+    {
+      "vector_id": "Primary:learning:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "learning"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:LearningHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:setup:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "setup"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SetupNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:setup:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "setup"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SetupRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "RestrictiveAdvice"
+    },
+    {
+      "vector_id": "Primary:setup:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "setup"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SetupHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:ship:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "ship"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ShipNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:ship:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "ship"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ShipRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "RestrictiveAdvice"
+    },
+    {
+      "vector_id": "Primary:ship:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "ship"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ShipHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:synthesize:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "synthesize"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SynthesizeNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:synthesize:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "synthesize"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SynthesizeRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "RestrictiveAdvice"
+    },
+    {
+      "vector_id": "Primary:synthesize:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "synthesize"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SynthesizeHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:wayfinding:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "wayfinding"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:WayfindingNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:wayfinding:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "wayfinding"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:WayfindingRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "RestrictiveAdvice"
+    },
+    {
+      "vector_id": "Primary:wayfinding:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "wayfinding"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:WayfindingHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Continuation:bounded-continuation:attended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Continuation:bounded-continuation:attended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "RestrictiveAdvice"
+    },
+    {
+      "vector_id": "Continuation:bounded-continuation:attended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Continuation:bounded-continuation:unattended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Continuation:bounded-continuation:unattended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "RestrictiveAdvice"
+    },
+    {
+      "vector_id": "Continuation:bounded-continuation:unattended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:conflict-handoff:NotApplicable+Continuation:attended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "conflict-handoff"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ConflictHandoffNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:conflict-handoff:NotApplicable+Continuation:attended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "conflict-handoff"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ConflictHandoffNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:conflict-handoff:NotApplicable+Continuation:attended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "conflict-handoff"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ConflictHandoffNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:conflict-handoff:RestrictiveAdvice+Continuation:attended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "conflict-handoff"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ConflictHandoffRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:conflict-handoff:RestrictiveAdvice+Continuation:attended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "conflict-handoff"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ConflictHandoffRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "RestrictiveAdvice"
+    },
+    {
+      "vector_id": "Primary:conflict-handoff:RestrictiveAdvice+Continuation:attended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "conflict-handoff"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ConflictHandoffRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:conflict-handoff:HardStop+Continuation:attended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "conflict-handoff"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ConflictHandoffHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:conflict-handoff:HardStop+Continuation:attended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "conflict-handoff"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ConflictHandoffHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:conflict-handoff:HardStop+Continuation:attended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "conflict-handoff"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ConflictHandoffHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:conflict-handoff:NotApplicable+Continuation:unattended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "conflict-handoff"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ConflictHandoffNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:conflict-handoff:NotApplicable+Continuation:unattended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "conflict-handoff"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ConflictHandoffNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:conflict-handoff:NotApplicable+Continuation:unattended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "conflict-handoff"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ConflictHandoffNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:conflict-handoff:RestrictiveAdvice+Continuation:unattended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "conflict-handoff"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ConflictHandoffRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:conflict-handoff:RestrictiveAdvice+Continuation:unattended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "conflict-handoff"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ConflictHandoffRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "RestrictiveAdvice"
+    },
+    {
+      "vector_id": "Primary:conflict-handoff:RestrictiveAdvice+Continuation:unattended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "conflict-handoff"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ConflictHandoffRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:conflict-handoff:HardStop+Continuation:unattended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "conflict-handoff"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ConflictHandoffHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:conflict-handoff:HardStop+Continuation:unattended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "conflict-handoff"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ConflictHandoffHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:conflict-handoff:HardStop+Continuation:unattended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "conflict-handoff"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ConflictHandoffHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:design-relay:NotApplicable+Continuation:attended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "design-relay"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:DesignRelayNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:design-relay:NotApplicable+Continuation:attended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "design-relay"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:DesignRelayNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:design-relay:NotApplicable+Continuation:attended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "design-relay"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:DesignRelayNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:design-relay:RestrictiveAdvice+Continuation:attended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "design-relay"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:DesignRelayRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:design-relay:RestrictiveAdvice+Continuation:attended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "design-relay"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:DesignRelayRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "RestrictiveAdvice"
+    },
+    {
+      "vector_id": "Primary:design-relay:RestrictiveAdvice+Continuation:attended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "design-relay"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:DesignRelayRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:design-relay:HardStop+Continuation:attended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "design-relay"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:DesignRelayHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:design-relay:HardStop+Continuation:attended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "design-relay"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:DesignRelayHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:design-relay:HardStop+Continuation:attended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "design-relay"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:DesignRelayHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:design-relay:NotApplicable+Continuation:unattended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "design-relay"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:DesignRelayNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:design-relay:NotApplicable+Continuation:unattended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "design-relay"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:DesignRelayNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:design-relay:NotApplicable+Continuation:unattended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "design-relay"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:DesignRelayNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:design-relay:RestrictiveAdvice+Continuation:unattended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "design-relay"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:DesignRelayRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:design-relay:RestrictiveAdvice+Continuation:unattended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "design-relay"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:DesignRelayRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "RestrictiveAdvice"
+    },
+    {
+      "vector_id": "Primary:design-relay:RestrictiveAdvice+Continuation:unattended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "design-relay"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:DesignRelayRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:design-relay:HardStop+Continuation:unattended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "design-relay"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:DesignRelayHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:design-relay:HardStop+Continuation:unattended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "design-relay"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:DesignRelayHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:design-relay:HardStop+Continuation:unattended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "design-relay"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:DesignRelayHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:fanout:NotApplicable+Continuation:attended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "fanout"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:FanoutNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:fanout:NotApplicable+Continuation:attended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "fanout"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:FanoutNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:fanout:NotApplicable+Continuation:attended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "fanout"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:FanoutNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:fanout:RestrictiveAdvice+Continuation:attended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "fanout"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:FanoutRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:fanout:RestrictiveAdvice+Continuation:attended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "fanout"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:FanoutRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "RestrictiveAdvice"
+    },
+    {
+      "vector_id": "Primary:fanout:RestrictiveAdvice+Continuation:attended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "fanout"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:FanoutRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:fanout:HardStop+Continuation:attended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "fanout"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:FanoutHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:fanout:HardStop+Continuation:attended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "fanout"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:FanoutHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:fanout:HardStop+Continuation:attended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "fanout"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:FanoutHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:fanout:NotApplicable+Continuation:unattended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "fanout"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:FanoutNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:fanout:NotApplicable+Continuation:unattended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "fanout"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:FanoutNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:fanout:NotApplicable+Continuation:unattended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "fanout"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:FanoutNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:fanout:RestrictiveAdvice+Continuation:unattended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "fanout"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:FanoutRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:fanout:RestrictiveAdvice+Continuation:unattended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "fanout"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:FanoutRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "RestrictiveAdvice"
+    },
+    {
+      "vector_id": "Primary:fanout:RestrictiveAdvice+Continuation:unattended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "fanout"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:FanoutRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:fanout:HardStop+Continuation:unattended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "fanout"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:FanoutHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:fanout:HardStop+Continuation:unattended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "fanout"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:FanoutHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:fanout:HardStop+Continuation:unattended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "fanout"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:FanoutHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:intake-triage:NotApplicable+Continuation:attended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "intake-triage"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:IntakeTriageNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:intake-triage:NotApplicable+Continuation:attended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "intake-triage"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:IntakeTriageNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:intake-triage:NotApplicable+Continuation:attended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "intake-triage"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:IntakeTriageNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:intake-triage:RestrictiveAdvice+Continuation:attended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "intake-triage"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:IntakeTriageRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:intake-triage:RestrictiveAdvice+Continuation:attended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "intake-triage"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:IntakeTriageRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "RestrictiveAdvice"
+    },
+    {
+      "vector_id": "Primary:intake-triage:RestrictiveAdvice+Continuation:attended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "intake-triage"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:IntakeTriageRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:intake-triage:HardStop+Continuation:attended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "intake-triage"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:IntakeTriageHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:intake-triage:HardStop+Continuation:attended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "intake-triage"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:IntakeTriageHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:intake-triage:HardStop+Continuation:attended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "intake-triage"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:IntakeTriageHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:intake-triage:NotApplicable+Continuation:unattended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "intake-triage"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:IntakeTriageNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:intake-triage:NotApplicable+Continuation:unattended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "intake-triage"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:IntakeTriageNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:intake-triage:NotApplicable+Continuation:unattended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "intake-triage"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:IntakeTriageNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:intake-triage:RestrictiveAdvice+Continuation:unattended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "intake-triage"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:IntakeTriageRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:intake-triage:RestrictiveAdvice+Continuation:unattended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "intake-triage"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:IntakeTriageRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "RestrictiveAdvice"
+    },
+    {
+      "vector_id": "Primary:intake-triage:RestrictiveAdvice+Continuation:unattended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "intake-triage"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:IntakeTriageRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:intake-triage:HardStop+Continuation:unattended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "intake-triage"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:IntakeTriageHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:intake-triage:HardStop+Continuation:unattended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "intake-triage"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:IntakeTriageHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:intake-triage:HardStop+Continuation:unattended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "intake-triage"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:IntakeTriageHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:learning:NotApplicable+Continuation:attended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "learning"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:LearningNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:learning:NotApplicable+Continuation:attended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "learning"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:LearningNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:learning:NotApplicable+Continuation:attended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "learning"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:LearningNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:learning:RestrictiveAdvice+Continuation:attended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "learning"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:LearningRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:learning:RestrictiveAdvice+Continuation:attended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "learning"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:LearningRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "RestrictiveAdvice"
+    },
+    {
+      "vector_id": "Primary:learning:RestrictiveAdvice+Continuation:attended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "learning"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:LearningRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:learning:HardStop+Continuation:attended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "learning"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:LearningHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:learning:HardStop+Continuation:attended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "learning"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:LearningHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:learning:HardStop+Continuation:attended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "learning"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:LearningHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:learning:NotApplicable+Continuation:unattended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "learning"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:LearningNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:learning:NotApplicable+Continuation:unattended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "learning"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:LearningNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:learning:NotApplicable+Continuation:unattended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "learning"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:LearningNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:learning:RestrictiveAdvice+Continuation:unattended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "learning"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:LearningRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:learning:RestrictiveAdvice+Continuation:unattended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "learning"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:LearningRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "RestrictiveAdvice"
+    },
+    {
+      "vector_id": "Primary:learning:RestrictiveAdvice+Continuation:unattended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "learning"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:LearningRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:learning:HardStop+Continuation:unattended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "learning"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:LearningHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:learning:HardStop+Continuation:unattended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "learning"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:LearningHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:learning:HardStop+Continuation:unattended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "learning"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:LearningHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:setup:NotApplicable+Continuation:attended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "setup"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SetupNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:setup:NotApplicable+Continuation:attended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "setup"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SetupNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:setup:NotApplicable+Continuation:attended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "setup"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SetupNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:setup:RestrictiveAdvice+Continuation:attended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "setup"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SetupRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:setup:RestrictiveAdvice+Continuation:attended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "setup"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SetupRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "RestrictiveAdvice"
+    },
+    {
+      "vector_id": "Primary:setup:RestrictiveAdvice+Continuation:attended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "setup"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SetupRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:setup:HardStop+Continuation:attended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "setup"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SetupHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:setup:HardStop+Continuation:attended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "setup"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SetupHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:setup:HardStop+Continuation:attended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "setup"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SetupHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:setup:NotApplicable+Continuation:unattended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "setup"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SetupNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:setup:NotApplicable+Continuation:unattended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "setup"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SetupNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:setup:NotApplicable+Continuation:unattended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "setup"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SetupNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:setup:RestrictiveAdvice+Continuation:unattended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "setup"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SetupRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:setup:RestrictiveAdvice+Continuation:unattended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "setup"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SetupRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "RestrictiveAdvice"
+    },
+    {
+      "vector_id": "Primary:setup:RestrictiveAdvice+Continuation:unattended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "setup"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SetupRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:setup:HardStop+Continuation:unattended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "setup"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SetupHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:setup:HardStop+Continuation:unattended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "setup"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SetupHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:setup:HardStop+Continuation:unattended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "setup"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SetupHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:ship:NotApplicable+Continuation:attended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "ship"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ShipNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:ship:NotApplicable+Continuation:attended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "ship"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ShipNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:ship:NotApplicable+Continuation:attended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "ship"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ShipNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:ship:RestrictiveAdvice+Continuation:attended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "ship"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ShipRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:ship:RestrictiveAdvice+Continuation:attended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "ship"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ShipRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "RestrictiveAdvice"
+    },
+    {
+      "vector_id": "Primary:ship:RestrictiveAdvice+Continuation:attended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "ship"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ShipRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:ship:HardStop+Continuation:attended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "ship"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ShipHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:ship:HardStop+Continuation:attended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "ship"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ShipHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:ship:HardStop+Continuation:attended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "ship"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ShipHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:ship:NotApplicable+Continuation:unattended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "ship"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ShipNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:ship:NotApplicable+Continuation:unattended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "ship"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ShipNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:ship:NotApplicable+Continuation:unattended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "ship"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ShipNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:ship:RestrictiveAdvice+Continuation:unattended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "ship"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ShipRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:ship:RestrictiveAdvice+Continuation:unattended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "ship"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ShipRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "RestrictiveAdvice"
+    },
+    {
+      "vector_id": "Primary:ship:RestrictiveAdvice+Continuation:unattended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "ship"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ShipRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:ship:HardStop+Continuation:unattended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "ship"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ShipHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:ship:HardStop+Continuation:unattended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "ship"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ShipHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:ship:HardStop+Continuation:unattended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "ship"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:ShipHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:synthesize:NotApplicable+Continuation:attended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "synthesize"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SynthesizeNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:synthesize:NotApplicable+Continuation:attended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "synthesize"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SynthesizeNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:synthesize:NotApplicable+Continuation:attended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "synthesize"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SynthesizeNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:synthesize:RestrictiveAdvice+Continuation:attended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "synthesize"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SynthesizeRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:synthesize:RestrictiveAdvice+Continuation:attended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "synthesize"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SynthesizeRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "RestrictiveAdvice"
+    },
+    {
+      "vector_id": "Primary:synthesize:RestrictiveAdvice+Continuation:attended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "synthesize"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SynthesizeRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:synthesize:HardStop+Continuation:attended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "synthesize"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SynthesizeHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:synthesize:HardStop+Continuation:attended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "synthesize"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SynthesizeHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:synthesize:HardStop+Continuation:attended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "synthesize"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SynthesizeHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:synthesize:NotApplicable+Continuation:unattended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "synthesize"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SynthesizeNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:synthesize:NotApplicable+Continuation:unattended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "synthesize"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SynthesizeNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:synthesize:NotApplicable+Continuation:unattended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "synthesize"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SynthesizeNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:synthesize:RestrictiveAdvice+Continuation:unattended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "synthesize"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SynthesizeRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:synthesize:RestrictiveAdvice+Continuation:unattended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "synthesize"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SynthesizeRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "RestrictiveAdvice"
+    },
+    {
+      "vector_id": "Primary:synthesize:RestrictiveAdvice+Continuation:unattended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "synthesize"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SynthesizeRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:synthesize:HardStop+Continuation:unattended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "synthesize"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SynthesizeHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:synthesize:HardStop+Continuation:unattended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "synthesize"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SynthesizeHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:synthesize:HardStop+Continuation:unattended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "synthesize"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:SynthesizeHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:wayfinding:NotApplicable+Continuation:attended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "wayfinding"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:WayfindingNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:wayfinding:NotApplicable+Continuation:attended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "wayfinding"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:WayfindingNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:wayfinding:NotApplicable+Continuation:attended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "wayfinding"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:WayfindingNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:wayfinding:RestrictiveAdvice+Continuation:attended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "wayfinding"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:WayfindingRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:wayfinding:RestrictiveAdvice+Continuation:attended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "wayfinding"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:WayfindingRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "RestrictiveAdvice"
+    },
+    {
+      "vector_id": "Primary:wayfinding:RestrictiveAdvice+Continuation:attended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "wayfinding"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:WayfindingRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:wayfinding:HardStop+Continuation:attended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "wayfinding"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:WayfindingHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:wayfinding:HardStop+Continuation:attended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "wayfinding"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:WayfindingHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:wayfinding:HardStop+Continuation:attended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "wayfinding"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:attended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:WayfindingHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:wayfinding:NotApplicable+Continuation:unattended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "wayfinding"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:WayfindingNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:wayfinding:NotApplicable+Continuation:unattended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "wayfinding"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:WayfindingNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:wayfinding:NotApplicable+Continuation:unattended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "wayfinding"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:WayfindingNotApplicable:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:wayfinding:RestrictiveAdvice+Continuation:unattended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "wayfinding"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:WayfindingRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "NotApplicable"
+    },
+    {
+      "vector_id": "Primary:wayfinding:RestrictiveAdvice+Continuation:unattended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "wayfinding"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:WayfindingRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "RestrictiveAdvice"
+    },
+    {
+      "vector_id": "Primary:wayfinding:RestrictiveAdvice+Continuation:unattended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "wayfinding"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:WayfindingRestrictiveAdvice:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:wayfinding:HardStop+Continuation:unattended:NotApplicable",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "wayfinding"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:WayfindingHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "NotApplicable",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationNotApplicable:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:wayfinding:HardStop+Continuation:unattended:RestrictiveAdvice",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "wayfinding"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:WayfindingHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "RestrictiveAdvice",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationRestrictiveAdvice:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    },
+    {
+      "vector_id": "Primary:wayfinding:HardStop+Continuation:unattended:HardStop",
+      "component_shape": [
+        {
+          "slot": "Primary",
+          "component": "wayfinding"
+        },
+        {
+          "slot": "Continuation",
+          "component": "bounded-continuation:unattended"
+        }
+      ],
+      "outcomes": [
+        {
+          "slot": "Primary",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:WayfindingHardStop:v1"
+        },
+        {
+          "slot": "Continuation",
+          "outcome": "HardStop",
+          "return_reason_ref": "candidate:orchestration:recipe-return-reason:BoundedContinuationHardStop:v1"
+        }
+      ],
+      "composition_outcome": "HardStop"
+    }
+  ]
+}
