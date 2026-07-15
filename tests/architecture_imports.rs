@@ -2845,6 +2845,61 @@ fn module_reference_scanners_only_match_at_a_module_boundary() {
     assert!(module_symbol_references("run::append_event()", "run::").contains("append_event"));
 }
 
+#[test]
+fn vnext_authority_and_store_keep_one_directional_ownership() {
+    let mut violations = Vec::new();
+
+    for file in rust_files_under(Path::new("src/domain/vnext/persistence")) {
+        let source = source_without_test_modules(&read_source_file(&file));
+        if source.contains("domain::vnext::authority")
+            || source.contains("super::super::authority")
+            || source.contains("super::authority")
+        {
+            violations.push(format!(
+                "{} imports semantic Authority into Persistence",
+                file.display()
+            ));
+        }
+    }
+
+    for file in rust_files_under(Path::new("src/domain/vnext/authority")) {
+        let relative = file.strip_prefix("src/domain/vnext/authority").unwrap();
+        if relative == Path::new("facade_tests.rs") {
+            continue;
+        }
+        let source = source_without_test_modules(&read_source_file(&file));
+        if ![Path::new("facade.rs"), Path::new("publication.rs")].contains(&relative)
+            && source.contains("domain::vnext::persistence")
+        {
+            violations.push(format!(
+                "{} bypasses the sole Authority-to-Store facade edge",
+                file.display()
+            ));
+        }
+        for forbidden in [
+            "rusqlite",
+            "std::fs",
+            "std::net",
+            "std::process",
+            "SystemTime",
+            "crate::interfaces",
+        ] {
+            if source.contains(forbidden) {
+                violations.push(format!(
+                    "{} imports forbidden Authority mechanism {forbidden}",
+                    file.display()
+                ));
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "vNext Authority owns semantics and only its publication facade boundary may call the canonical Store:\n{}",
+        violations.join("\n")
+    );
+}
+
 fn rust_files_under(root: &Path) -> Vec<PathBuf> {
     let mut files = Vec::new();
     collect_rust_files(root, &mut files);

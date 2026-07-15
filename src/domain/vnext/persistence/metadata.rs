@@ -104,6 +104,44 @@ pub(crate) struct MetadataStore {
     database_identity: DatabaseFileIdentity,
 }
 
+pub(crate) enum PublicationMutation<T> {
+    Commit(T),
+    NoChange(T),
+}
+
+pub(crate) enum ConditionalTransactionError<E> {
+    Metadata(MetadataError),
+    Operation(E),
+}
+
+impl<E> From<MetadataError> for ConditionalTransactionError<E> {
+    fn from(error: MetadataError) -> Self {
+        Self::Metadata(error)
+    }
+}
+
+impl<E> From<rusqlite::Error> for ConditionalTransactionError<E> {
+    fn from(error: rusqlite::Error) -> Self {
+        Self::Metadata(MetadataError::Sqlite(error))
+    }
+}
+
+trait PublicationTransactionError: From<MetadataError> + From<rusqlite::Error> {
+    fn publication_may_have_committed(&self) -> bool;
+}
+
+impl PublicationTransactionError for MetadataError {
+    fn publication_may_have_committed(&self) -> bool {
+        self.publication_may_have_committed()
+    }
+}
+
+impl<E> PublicationTransactionError for ConditionalTransactionError<E> {
+    fn publication_may_have_committed(&self) -> bool {
+        matches!(self, Self::Metadata(error) if error.publication_may_have_committed())
+    }
+}
+
 struct MetadataReadBindings {
     database: RegularFileBinding,
     wal: Option<RegularFileBinding>,
@@ -235,7 +273,9 @@ impl MetadataStore {
         root: &SecureRoot,
         operation: impl FnOnce(&Transaction<'_>) -> Result<T, MetadataError>,
     ) -> Result<T, MetadataError> {
-        self.with_publication_transaction_inner(root, None, None, operation)
+        self.with_publication_transaction_inner(root, None, None, |transaction| {
+            operation(transaction).map(PublicationMutation::Commit)
+        })
     }
 
     pub(crate) fn with_publication_transaction<T>(
@@ -244,7 +284,12 @@ impl MetadataStore {
         expected_publication_clock: Option<u64>,
         operation: impl FnOnce(&Transaction<'_>) -> Result<T, MetadataError>,
     ) -> Result<T, MetadataError> {
-        self.with_publication_transaction_inner(root, expected_publication_clock, None, operation)
+        self.with_publication_transaction_inner(
+            root,
+            expected_publication_clock,
+            None,
+            |transaction| operation(transaction).map(PublicationMutation::Commit),
+        )
     }
 
     pub(crate) fn with_restore_transaction<T>(
@@ -257,17 +302,31 @@ impl MetadataStore {
             root,
             Some(0),
             Some(resumed_publication_clock),
-            operation,
+            |transaction| operation(transaction).map(PublicationMutation::Commit),
         )
     }
 
-    fn with_publication_transaction_inner<T>(
+    pub(crate) fn with_prepared_transaction<T, E>(
+        &mut self,
+        root: &SecureRoot,
+        operation: impl FnOnce(
+            &Transaction<'_>,
+        )
+            -> Result<PublicationMutation<T>, ConditionalTransactionError<E>>,
+    ) -> Result<T, ConditionalTransactionError<E>> {
+        self.with_publication_transaction_inner(root, None, None, operation)
+    }
+
+    fn with_publication_transaction_inner<T, E>(
         &mut self,
         root: &SecureRoot,
         expected_publication_clock: Option<u64>,
         resumed_publication_clock: Option<i64>,
-        operation: impl FnOnce(&Transaction<'_>) -> Result<T, MetadataError>,
-    ) -> Result<T, MetadataError> {
+        operation: impl FnOnce(&Transaction<'_>) -> Result<PublicationMutation<T>, E>,
+    ) -> Result<T, E>
+    where
+        E: PublicationTransactionError,
+    {
         let bindings = self.capture_read_bindings(root)?;
         let database_path = self.database_path.clone();
         let database_identity = self.database_identity;
@@ -283,7 +342,7 @@ impl MetadataStore {
             root,
             bindings: &bindings,
         };
-        let result = (|| {
+        let result: Result<(T, bool), E> = (|| -> Result<(T, bool), E> {
             let _authorization = WriteAuthorizationGuard::new(&self.write_authorized)?;
             let transaction = self
                 .connection
@@ -299,11 +358,11 @@ impl MetadataStore {
                 || expected_publication_clock
                     .is_some_and(|expected| u64::try_from(observed_clock).ok() != Some(expected))
             {
-                return Err(MetadataError::FacadeCasMismatch);
+                return Err(MetadataError::FacadeCasMismatch.into());
             }
             if let Some(resumed_clock) = resumed_publication_clock {
                 if resumed_clock <= observed_clock {
-                    return Err(MetadataError::FacadeCasMismatch);
+                    return Err(MetadataError::FacadeCasMismatch.into());
                 }
                 let changed = transaction.execute(
                     "UPDATE store_publication_clock
@@ -312,35 +371,50 @@ impl MetadataStore {
                     params![resumed_clock, observed_clock],
                 )?;
                 if changed != 1 {
-                    return Err(MetadataError::FacadeCasMismatch);
+                    return Err(MetadataError::FacadeCasMismatch.into());
                 }
             }
-            let value = operation(&transaction)?;
-            if resumed_publication_clock.is_none() {
-                let changed = transaction.execute(
-                    "UPDATE store_publication_clock
-                     SET publication_clock = publication_clock + 1
-                     WHERE singleton = 1 AND publication_clock = ?1",
-                    params![observed_clock],
-                )?;
-                if changed != 1 {
-                    return Err(MetadataError::FacadeCasMismatch);
+            match operation(&transaction)? {
+                PublicationMutation::Commit(value) => {
+                    if resumed_publication_clock.is_none() {
+                        let changed = transaction.execute(
+                            "UPDATE store_publication_clock
+                             SET publication_clock = publication_clock + 1
+                             WHERE singleton = 1 AND publication_clock = ?1",
+                            params![observed_clock],
+                        )?;
+                        if changed != 1 {
+                            return Err(MetadataError::FacadeCasMismatch.into());
+                        }
+                    }
+                    validate_admission_bounds(&transaction)?;
+                    run_before_publication_commit_test_hook();
+                    verify_read_bindings(&transaction, &binding_context)?;
+                    transaction
+                        .commit()
+                        .map_err(|source| MetadataError::PublicationCommitUncertain { source })?;
+                    Ok((value, true))
+                }
+                PublicationMutation::NoChange(value) => {
+                    transaction.rollback()?;
+                    Ok((value, false))
                 }
             }
-            validate_admission_bounds(&transaction)?;
-            run_before_publication_commit_test_hook();
-            verify_read_bindings(&transaction, &binding_context)?;
-            transaction
-                .commit()
-                .map_err(|source| MetadataError::PublicationCommitUncertain { source })?;
-            Ok(value)
         })();
         match result {
-            Ok(value) => {
-                run_after_publication_commit_test_hook();
+            Ok((value, committed)) => {
+                if committed {
+                    run_after_publication_commit_test_hook();
+                }
                 self.verify_read_bindings(root, &bindings)
-                    .map_err(|source| MetadataError::PublicationPostCommitBinding {
-                        source: Box::new(source),
+                    .map_err(|source| {
+                        if committed {
+                            MetadataError::PublicationPostCommitBinding {
+                                source: Box::new(source),
+                            }
+                        } else {
+                            source
+                        }
                     })?;
                 Ok(value)
             }
@@ -1610,6 +1684,8 @@ pub(crate) enum MetadataError {
     StoreIdentityMismatch,
     #[error("Store publication expected-old or revision compare-and-swap did not match")]
     FacadeCasMismatch,
+    #[error("Store idempotency key already binds a different request meaning")]
+    IdempotencyMeaningConflict,
     #[error("Store authoritative metadata does not match its exact typed carrier")]
     FacadeIntegrityMismatch,
     #[error("Store snapshot restore failed: {0}")]

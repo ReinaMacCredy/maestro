@@ -1,0 +1,110 @@
+//! Candidate-only Authority and continuity contracts.
+//!
+//! The semantic kernel is pure and deterministic. The public facade is the one
+//! allowed edge to the canonical Store transaction; adapters, system clocks,
+//! filesystems, networks, and alternate currentness are excluded.
+
+mod bootstrap_catalog;
+mod capacity;
+mod closed;
+mod context;
+mod continuity;
+mod evaluator;
+mod facade;
+mod grant;
+mod identity;
+mod mandate;
+mod post_cut;
+mod principal;
+mod publication;
+mod result;
+mod transition;
+
+pub use bootstrap_catalog::{
+    BootstrapMandateTargetV1, BootstrapTargetDispositionV1, bootstrap_mandate_target_catalog,
+};
+pub use capacity::{
+    CapacityError, CapacityUseDispositionV1, CmaEffectWithdrawalSlotFamilyV1,
+    CmaObservationPublicationPurposeV1, CmaWithdrawalCapacityV1, CmaWithdrawalPurposeV1,
+    GovernedCapacityDebitV1, GovernedCapacityKindV1, GovernedCapacityRootV1,
+    GovernedCapacityTransitionV1, InstallationGovernedCapacitySlotKindV1,
+    RepositoryGovernedCapacitySlotKindV1,
+};
+pub use closed::{
+    ActionAuthorityBasisKindV1, AuthorityContextKindV1, AuthorityTagError, TransitionGuardKindV1,
+};
+pub use context::{
+    ActionAuthorityBasisV1, AuthorityContextError, AuthorityContextV1,
+    BootstrapControlG0AuthorityBasisV1, ContinuityMaintenanceAuthorityBasisV1,
+    InstallationAuthorityContextV1, OrdinaryAuthorityBasisV1, RepositoryAuthorityContextV1,
+};
+pub use continuity::{
+    AcceptedAuthorityTimeFloorV1, AdmittedTransitionGuardV1, AuthorityContinuityClassClosureV1,
+    AuthorityContinuityClassDescriptorV1, AuthorityContinuityClosureError,
+    AuthorityContinuityClosureIdV1, AuthorityContinuityClosureInputV1,
+    AuthorityContinuityClosureV1, AuthorityContinuityCoverageDispositionV1,
+    AuthorityContinuityCoverageObligationV1, AuthorityContinuityError,
+    AuthorityContinuityFacetDispositionV1, AuthorityContinuityManifestV1,
+    AuthorityContinuityOwnerContributionV1, AuthorityContinuityPredecessorV1,
+    AuthorityContinuitySemanticCutV1, AuthorityContinuityStateError,
+    AuthorityContinuityTotalityInputV1, AuthorityTransitionGuardAdmissionInputV1,
+    ClassDispositionV1, ClosureFacetDispositionKindV1, ContinuityCarrierProfileStatusV1,
+    ContinuityClassIdV1, ContinuityClosureFacetV1, ContinuityDisclosureV1, ContinuityExactRootV1,
+    ContinuityGraphEdgeV1, ContinuityReferenceError, ContinuityReferenceV1,
+    ContinuitySemanticOwnerV1, CoverageDispositionKindV1, CoverageObligationIdV1,
+    GuardAdmissionKindV1, HTimeAcceptanceErrorV1, HTimeAcceptanceRelationV1, HTimeCarryBasisV1,
+    HTimeContinuationContributionV1, InstallationAuthorityContinuityClassV1, OwnerContributionIdV1,
+    RepositoryAuthorityContinuityClassV1, SuccessVisibleAuthorityContinuityStateV1,
+    TransitionGuardOwnerCensusV1, TransitionGuardTermFactV1,
+    installation_authority_continuity_totality_input,
+    repository_authority_continuity_totality_input,
+};
+pub use evaluator::{
+    AuthorityEvaluationErrorV1, AuthorityEvaluatorV1, AuthorityRevocationSetV1,
+    BootstrapAuthoritySnapshotErrorV1, BootstrapAuthoritySnapshotV1,
+    BootstrapContinuityTransitionProofV1, BootstrapInteractionSubjectV1,
+    BootstrapMandateInteractionObservationJoinV1, BootstrapMandatePresentationObservationV1,
+    BootstrapMandateResponseObservationV1, BootstrapResponseDispositionV1,
+    ConsentSlotEvaluationFactsV1,
+};
+pub use facade::{AuthorityFacadeV1, AuthorityPublicationError};
+pub use grant::{
+    AuthorityUseConstraintV1, AuthorityValidationError, BootstrapG0PathV1, BootstrapGenesisGrantV1,
+    DelegationAncestryV1, DelegationV1, GrantDefinitionV1, GrantScopeV1, GrantV1,
+    HalfOpenValidityV1, ScopeAtomV1, validate_delegation,
+};
+pub use identity::{
+    ActionRequestIdV1, ActionResultIdV1, AuthorityBasisCommitmentIdV1, AuthorityContextIdV1,
+    AuthorityContinuityManifestIdV1, AuthorityIdV1, AuthorityIdentityError,
+    AuthorizationReceiptIdV1, BootstrapMandateIssuanceBindingIdV1, CapacityRootIdV1, CmaBranchIdV1,
+    CmaWithdrawalCapacityIdV1, ConsentProtocolCommitmentIdV1, ConsentSlotCommitmentIdV1,
+    DelegationIdV1, EffectReferenceIdV1, ExecutorAssertionIdV1, GenesisGrantIdV1, GrantIdV1,
+    IdempotencyKeyIdV1, InteractionClosureIdV1, MandateIdV1, ObservationIdV1, PrincipalBindingIdV1,
+    PrincipalIdV1, SessionIdV1, SlotIdV1, StateTokenIdV1, TargetActionCommitmentIdV1,
+};
+pub use mandate::{
+    AuthorityMandateV1, BootstrapMandateEvaluationV1, BootstrapMandateIssuanceBindingV1,
+    BootstrapMandateIssuanceV1, ConsentRequirementMemberV1, ConsentRoleV1,
+    ConsentSlotBindingParameterV1, ConsentSlotDerivationErrorV1, IssueBootstrapMandateError,
+    IssueBootstrapMandateInputV1, IssueBootstrapMandateRequestV1, NaturalMemberSubjectV1,
+    TargetActionEffectKindV1, TargetActionOwnerV1, TargetActionProjectionErrorV1,
+    TargetActionProjectionV1, TargetActionProtocolV1, TargetExpectedHeadsV1,
+    issue_bootstrap_mandate,
+};
+pub use post_cut::{
+    AuthorityContinuityPostCutConsequenceSetV1, AuthorityPostCutErrorV1,
+    LinearizationCoverageWitnessV1, LinearizationFenceCarrierV1,
+};
+pub use principal::{
+    AuthoritySnapshotV1, PrincipalBindingV1, RevocationSetV1, RevocationTargetV1, SessionV1,
+    TrustedTimeV1, validate_ordinary_authority,
+};
+pub use publication::{
+    AuthorityPublicationKindV1, AuthorityPublicationLineageV1, AuthorityPublicationOutcomeV1,
+    AuthorityPublicationPlanError, ISSUE_BOOTSTRAP_MANDATE_IDEMPOTENCY_NAMESPACE_V1,
+    IssueBootstrapMandatePublicationV1,
+};
+pub use result::{
+    ActionOutcomeV1, ActionResultError, ActionResultV1, AuthorizationReceiptV1, ResponseOriginV1,
+};
+pub use transition::{TransitionGuardTermBundleV1, TransitionGuardTermV1};

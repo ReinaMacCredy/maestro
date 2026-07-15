@@ -1,0 +1,144 @@
+{
+  "artifacts": [
+    {
+      "byte_length": 1649,
+      "path": "action-spec-v2.v1.cbor",
+      "sha256": "5e6a44118522b6cb04576f2b45801ea03a4338e772faef2c33bd4d4bd82c073c"
+    },
+    {
+      "byte_length": 3418,
+      "path": "authority-continuity-manifest.v1.cbor",
+      "sha256": "518c2b0f71aa48de75d0cb145936fc1bc8031c7d65ab0230489cb3272a22cb35"
+    },
+    {
+      "byte_length": 4509,
+      "path": "authority-literals.v1.cbor",
+      "sha256": "f862b743108267a6ccd82752814f047101b5d6b3cb805a0402b33aa6600e3057"
+    },
+    {
+      "byte_length": 265,
+      "path": "descriptors/action-authority-basis-v1.cbor",
+      "sha256": "e5dd9020cff772e1bae39ba902a5e9be1be3eb17beeec1520bdcb4c760ce3968"
+    },
+    {
+      "byte_length": 380,
+      "path": "descriptors/action-result-v1.cbor",
+      "sha256": "8fe476764320b5f0ac8056209d0a5b505e7a07b938386949fdf0f2e1dbfea9c0"
+    },
+    {
+      "byte_length": 1038,
+      "path": "descriptors/admitted-transition-guard-v1.cbor",
+      "sha256": "4f3381296a965f3b3e0e031f08db329178c1e02cf474fac1d0f09dbcf6ab5f30"
+    },
+    {
+      "byte_length": 383,
+      "path": "descriptors/authority-context-v1.cbor",
+      "sha256": "0540b8b9d99249952ba7badd68268173bc43f9f4c314e3f980c269a0361cf006"
+    },
+    {
+      "byte_length": 508,
+      "path": "descriptors/authority-continuity-closure-v1.cbor",
+      "sha256": "e2f8f1c49f47594d772c5b9a5439dfe15aece2194f9fd0c22046490c0540508b"
+    },
+    {
+      "byte_length": 352,
+      "path": "descriptors/authority-continuity-manifest-v1.cbor",
+      "sha256": "beaf4519431cd6e7d8487ed061de0c9cb48c76477224f58de837c4ba2da790a4"
+    },
+    {
+      "byte_length": 657,
+      "path": "descriptors/authority-continuity-post-cut-consequence-set-v1.cbor",
+      "sha256": "61884215711d4df2702c7f0e32af88878d037b3267dffa6c26d85550d090b0aa"
+    },
+    {
+      "byte_length": 430,
+      "path": "descriptors/authority-mandate-v1.cbor",
+      "sha256": "3833a1928367215f687b3fd803ebf22928622116fd312714d3ba374e0f2457a5"
+    },
+    {
+      "byte_length": 285,
+      "path": "descriptors/authorization-receipt-v1.cbor",
+      "sha256": "095fdb17e6979aa5aea74e2e269cdd672766da87ad4a17417749e9efda075778"
+    },
+    {
+      "byte_length": 511,
+      "path": "descriptors/bootstrap-authority-snapshot-v1.cbor",
+      "sha256": "fc2c3f2a9bd4e4d19a7c98ac27d2b302709a685aa1fb7fea2515801b71f6b7f0"
+    },
+    {
+      "byte_length": 502,
+      "path": "descriptors/bootstrap-genesis-grant-v1.cbor",
+      "sha256": "ae0e5c562d39b6a792ca330e12dec3539faad4575850af5285a9033c3383d276"
+    },
+    {
+      "byte_length": 474,
+      "path": "descriptors/bootstrap-mandate-interaction-observation-join-v1.cbor",
+      "sha256": "8c82067618da6844f359158a6776463e76bfba229c72ab26b5dda47cce120c63"
+    },
+    {
+      "byte_length": 255,
+      "path": "descriptors/bootstrap-mandate-issuance-binding-v1.cbor",
+      "sha256": "e595bce8592675c612be9f804576f2793ad327acbdab0f8bb258938f15474d56"
+    },
+    {
+      "byte_length": 216,
+      "path": "descriptors/consent-slot-binding-parameter-v1.cbor",
+      "sha256": "30fdb0f64204cbeb3d6178df3801725fffb81c262dd40f81ccd6fe77417f1be1"
+    },
+    {
+      "byte_length": 690,
+      "path": "descriptors/governed-capacity-debit-v1.cbor",
+      "sha256": "00307bd5d7de8e473f3bd06c4153c39b9e3789a9cad5b0bfca004a9ecd368c8a"
+    },
+    {
+      "byte_length": 699,
+      "path": "descriptors/governed-capacity-root-v1.cbor",
+      "sha256": "aad1f227fc516a5429332870548038f691809424e75f1ac26a52ffcc5f762ea2"
+    },
+    {
+      "byte_length": 421,
+      "path": "descriptors/issue-bootstrap-mandate-request-v1.cbor",
+      "sha256": "e6b8a4732963968f90267644cf3abf3407df9365912ce043cd9668a1b78125d4"
+    },
+    {
+      "byte_length": 416,
+      "path": "descriptors/linearization-coverage-witness-v1.cbor",
+      "sha256": "59f519f555002ac0bdea8c5723b476b14bb415a31621b635f6512485297a1c86"
+    },
+    {
+      "byte_length": 269,
+      "path": "descriptors/principal-binding-v1.cbor",
+      "sha256": "70390ac7d4d513974efbe4b7162c2fd75b2b881d1e4054ab4aa333cffd8b98cf"
+    },
+    {
+      "byte_length": 255,
+      "path": "descriptors/revocation-set-v1.cbor",
+      "sha256": "fcb6c1a8319326d68aced3abcecd1c7c8e62a8cd11bc6679ddeaa2924605e2c7"
+    },
+    {
+      "byte_length": 270,
+      "path": "descriptors/session-v1.cbor",
+      "sha256": "3b97103e3d5d22a7780e9948edac58daea885889986a30a1ab30370656fce078"
+    },
+    {
+      "byte_length": 721,
+      "path": "descriptors/success-visible-authority-continuity-state-v1.cbor",
+      "sha256": "655f9852c928ad54d5f0f57b7558db1f09fc9383035253ef787f3fd69571590f"
+    },
+    {
+      "byte_length": 1437,
+      "path": "schema-descriptors.v1.cbor",
+      "sha256": "8889ca455359efccd342ebd81de00c048df3c5dd24a47cfb0d3e4093bbfe5aff"
+    },
+    {
+      "byte_length": 1013,
+      "path": "stage2-authority-manifest.v1.cbor",
+      "sha256": "b3b06f7ca60c09447ae3dac7e1bb3a9de970290dd16c0f96cc0416e0770004a5"
+    }
+  ],
+  "encoder": "python_stdlib_existing_cbor_py",
+  "publication_state": "inactive_candidate",
+  "result": "canonical_cbor_emitted",
+  "root_id": "b3b06f7ca60c09447ae3dac7e1bb3a9de970290dd16c0f96cc0416e0770004a5",
+  "schema_version": "maestro.vnext.stage2.authority.python-encoder-receipt.v1"
+}

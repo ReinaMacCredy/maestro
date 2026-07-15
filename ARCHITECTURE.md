@@ -120,6 +120,51 @@ and requires fresh destination activation. No Store operation creates
 cross-Store authority or a cross-Store transaction, and a failed publication
 never changes the active Head.
 
+Stage 2 adds `domain::vnext::authority`. Its semantic kernel owns the closed
+Repository/Installation context union; ordinary, Bootstrap-G0, and continuity
+maintenance bases; Principals, Bindings, Sessions, Grants, delegation,
+revocation, trusted time, Mandates, primary Authorization Receipts, seven Action
+outcomes, governed capacity, and continuity values. The literal boundary is
+closed at two contexts, three bases, six Repository plus six Installation
+capacity kinds, five CMA withdrawal purposes, 35 Repository plus 30
+Installation continuity classes, and eleven Bootstrap targets split into three
+admitted and eight excluded. Unknown tags, stale Generation/Epoch/subject
+material, unavailable trusted time, scope widening, revoked bearers, refill,
+and supplied Bootstrap Mandates fail closed.
+
+The Stage-0 `IssueBootstrapMandate` descriptor is not reinterpreted. One
+additive `ActionSpecV2` successor binds its exact request, context, basis,
+consent, Mandate, issuance-binding, Receipt, Result, and idempotency schemas.
+The action performs zero external I/O. A newly minted semantic Mandate is
+one-use, nondelegable, half-open, and has exactly one immutable issuance
+binding. A different key with identical semantics performs fresh authorization
+but converges on that Mandate and emits no second binding. A same-key replay
+returns the original Result with no metadata, Head, retention, or publication
+clock write; changed meaning conflicts.
+
+Typed Authority records are immutable schema-identified Store Objects. The
+Generation has one `AuthorityContinuityPostCutConsequenceSetV1` root that binds
+the complete pre-cut continuity closure and its Store-allocated successor token,
+the persisted current-owner Transition Guard, successor continuity state,
+one exact successor-current Authority snapshot carrier, request, primary
+Receipt, Result, semantic mutation, idempotency mapping, linearization witness,
+and prior Authority root. The successor carrier advances only Generation-bound
+currentness while retaining the already verified semantic target, interaction,
+Binding, Session, Grant, revocation, and accepted-time facts; request-specific
+currentness remains in the Receipt, continuity state, and witness rather than
+the convergent Mandate identity. The public facade accepts only an unevaluated
+request plus exact expected lineage. It resolves and exact-compares the one
+current-generation aggregate Authority snapshot and its directly referenced
+facts inside Store serialization before evaluating or writing anything. An
+inactive Store rejects Authority publication. Store
+Generation/Head remains the sole currentness pointer; there is no
+Authority-private SQL state, dynamic registry, alternate idempotency table, or
+second transaction manager. `AuthorityFacadeV1` is the sole semantic-to-Store
+mutation edge. Persistence enforces physical closure, CAS, idempotency, token
+allocation, and durability without importing Authority semantics. Inactive
+restore preserves immutable history and replay facts but activates no bearer or
+Authority currentness.
+
 ---
 
 ## 2. The card model (as-built)

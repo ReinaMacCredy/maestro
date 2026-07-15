@@ -1,0 +1,326 @@
+{
+  "artifacts": [
+    {
+      "byte_length": 1649,
+      "path": "action-spec-v2.v1.cbor",
+      "sha256": "5e6a44118522b6cb04576f2b45801ea03a4338e772faef2c33bd4d4bd82c073c"
+    },
+    {
+      "byte_length": 9734,
+      "path": "action-spec-v2.v1.json",
+      "sha256": "506e8d478c4bf1da04597fb185947d731b741871c8829b8e03a5da45d5b1624c"
+    },
+    {
+      "byte_length": 3418,
+      "path": "authority-continuity-manifest.v1.cbor",
+      "sha256": "518c2b0f71aa48de75d0cb145936fc1bc8031c7d65ab0230489cb3272a22cb35"
+    },
+    {
+      "byte_length": 9583,
+      "path": "authority-continuity-manifest.v1.json",
+      "sha256": "51a0210027ac0c4cd76aae5c57f05f08d723698223a4c56e9a4fa4a99e538805"
+    },
+    {
+      "byte_length": 4509,
+      "path": "authority-literals.v1.cbor",
+      "sha256": "f862b743108267a6ccd82752814f047101b5d6b3cb805a0402b33aa6600e3057"
+    },
+    {
+      "byte_length": 25821,
+      "path": "authority-literals.v1.json",
+      "sha256": "d8a58ef2553e7ac19534da06308abe286edeb6997608a751f2831612e8829e36"
+    },
+    {
+      "byte_length": 265,
+      "path": "descriptors/action-authority-basis-v1.cbor",
+      "sha256": "e5dd9020cff772e1bae39ba902a5e9be1be3eb17beeec1520bdcb4c760ce3968"
+    },
+    {
+      "byte_length": 380,
+      "path": "descriptors/action-result-v1.cbor",
+      "sha256": "8fe476764320b5f0ac8056209d0a5b505e7a07b938386949fdf0f2e1dbfea9c0"
+    },
+    {
+      "byte_length": 1038,
+      "path": "descriptors/admitted-transition-guard-v1.cbor",
+      "sha256": "4f3381296a965f3b3e0e031f08db329178c1e02cf474fac1d0f09dbcf6ab5f30"
+    },
+    {
+      "byte_length": 383,
+      "path": "descriptors/authority-context-v1.cbor",
+      "sha256": "0540b8b9d99249952ba7badd68268173bc43f9f4c314e3f980c269a0361cf006"
+    },
+    {
+      "byte_length": 508,
+      "path": "descriptors/authority-continuity-closure-v1.cbor",
+      "sha256": "e2f8f1c49f47594d772c5b9a5439dfe15aece2194f9fd0c22046490c0540508b"
+    },
+    {
+      "byte_length": 352,
+      "path": "descriptors/authority-continuity-manifest-v1.cbor",
+      "sha256": "beaf4519431cd6e7d8487ed061de0c9cb48c76477224f58de837c4ba2da790a4"
+    },
+    {
+      "byte_length": 657,
+      "path": "descriptors/authority-continuity-post-cut-consequence-set-v1.cbor",
+      "sha256": "61884215711d4df2702c7f0e32af88878d037b3267dffa6c26d85550d090b0aa"
+    },
+    {
+      "byte_length": 430,
+      "path": "descriptors/authority-mandate-v1.cbor",
+      "sha256": "3833a1928367215f687b3fd803ebf22928622116fd312714d3ba374e0f2457a5"
+    },
+    {
+      "byte_length": 285,
+      "path": "descriptors/authorization-receipt-v1.cbor",
+      "sha256": "095fdb17e6979aa5aea74e2e269cdd672766da87ad4a17417749e9efda075778"
+    },
+    {
+      "byte_length": 511,
+      "path": "descriptors/bootstrap-authority-snapshot-v1.cbor",
+      "sha256": "fc2c3f2a9bd4e4d19a7c98ac27d2b302709a685aa1fb7fea2515801b71f6b7f0"
+    },
+    {
+      "byte_length": 502,
+      "path": "descriptors/bootstrap-genesis-grant-v1.cbor",
+      "sha256": "ae0e5c562d39b6a792ca330e12dec3539faad4575850af5285a9033c3383d276"
+    },
+    {
+      "byte_length": 474,
+      "path": "descriptors/bootstrap-mandate-interaction-observation-join-v1.cbor",
+      "sha256": "8c82067618da6844f359158a6776463e76bfba229c72ab26b5dda47cce120c63"
+    },
+    {
+      "byte_length": 255,
+      "path": "descriptors/bootstrap-mandate-issuance-binding-v1.cbor",
+      "sha256": "e595bce8592675c612be9f804576f2793ad327acbdab0f8bb258938f15474d56"
+    },
+    {
+      "byte_length": 216,
+      "path": "descriptors/consent-slot-binding-parameter-v1.cbor",
+      "sha256": "30fdb0f64204cbeb3d6178df3801725fffb81c262dd40f81ccd6fe77417f1be1"
+    },
+    {
+      "byte_length": 690,
+      "path": "descriptors/governed-capacity-debit-v1.cbor",
+      "sha256": "00307bd5d7de8e473f3bd06c4153c39b9e3789a9cad5b0bfca004a9ecd368c8a"
+    },
+    {
+      "byte_length": 699,
+      "path": "descriptors/governed-capacity-root-v1.cbor",
+      "sha256": "aad1f227fc516a5429332870548038f691809424e75f1ac26a52ffcc5f762ea2"
+    },
+    {
+      "byte_length": 421,
+      "path": "descriptors/issue-bootstrap-mandate-request-v1.cbor",
+      "sha256": "e6b8a4732963968f90267644cf3abf3407df9365912ce043cd9668a1b78125d4"
+    },
+    {
+      "byte_length": 416,
+      "path": "descriptors/linearization-coverage-witness-v1.cbor",
+      "sha256": "59f519f555002ac0bdea8c5723b476b14bb415a31621b635f6512485297a1c86"
+    },
+    {
+      "byte_length": 269,
+      "path": "descriptors/principal-binding-v1.cbor",
+      "sha256": "70390ac7d4d513974efbe4b7162c2fd75b2b881d1e4054ab4aa333cffd8b98cf"
+    },
+    {
+      "byte_length": 255,
+      "path": "descriptors/revocation-set-v1.cbor",
+      "sha256": "fcb6c1a8319326d68aced3abcecd1c7c8e62a8cd11bc6679ddeaa2924605e2c7"
+    },
+    {
+      "byte_length": 270,
+      "path": "descriptors/session-v1.cbor",
+      "sha256": "3b97103e3d5d22a7780e9948edac58daea885889986a30a1ab30370656fce078"
+    },
+    {
+      "byte_length": 721,
+      "path": "descriptors/success-visible-authority-continuity-state-v1.cbor",
+      "sha256": "655f9852c928ad54d5f0f57b7558db1f09fc9383035253ef787f3fd69571590f"
+    },
+    {
+      "byte_length": 1437,
+      "path": "schema-descriptors.v1.cbor",
+      "sha256": "8889ca455359efccd342ebd81de00c048df3c5dd24a47cfb0d3e4093bbfe5aff"
+    },
+    {
+      "byte_length": 63064,
+      "path": "schema-descriptors.v1.json",
+      "sha256": "a4f8dab8a87be9f42c42020d03b6ce3a760f90056247175bc7aaff67c545e53c"
+    }
+  ],
+  "byte_length": 1013,
+  "component_ids": {
+    "action_spec_v2": "5e6a44118522b6cb04576f2b45801ea03a4338e772faef2c33bd4d4bd82c073c",
+    "authority_continuity_manifest": "518c2b0f71aa48de75d0cb145936fc1bc8031c7d65ab0230489cb3272a22cb35",
+    "authority_literals": "f862b743108267a6ccd82752814f047101b5d6b3cb805a0402b33aa6600e3057",
+    "schema_suite": "8889ca455359efccd342ebd81de00c048df3c5dd24a47cfb0d3e4093bbfe5aff",
+    "stage2_semantic_consumer_delta": "sha256:b35f2763794b9fe04adce7ae610cf2bbc074cf31cafdca7a770a7d64d448d0f5"
+  },
+  "identity_envelope": [
+    "maestro.vnext.stage2.authority.root.v1",
+    [
+      "088941d6318dd8194bd4767311844e6b0c0ca857a9ed46c0be38ebc271e9f777",
+      [
+        [
+          1,
+          "ObservationKindV1",
+          {
+            "bytes": "9997ffa7f1597c07abd23a3955a634cb321670198e040fb7b5d015b021159688"
+          }
+        ],
+        [
+          2,
+          "EffectOriginV1",
+          {
+            "bytes": "d28f8e573ddb450c427e628df121dbd516d0e5b05c03caf18d2757782dfd259d"
+          }
+        ],
+        [
+          3,
+          "RepositoryGovernedCapacitySlotKindV1",
+          {
+            "bytes": "a1dd1dc6210548029d3e1f2f8697c80a8c1dd9a7c80cf4144f062a95cd54806e"
+          }
+        ],
+        [
+          4,
+          "InstallationGovernedCapacitySlotKindV1",
+          {
+            "bytes": "bcccb791b3b136c9cd328a2677f4fe00826e162cda2e9fb7768c49d919aca2a1"
+          }
+        ],
+        [
+          5,
+          "CeremonySpecV1",
+          {
+            "bytes": "fb9ba972eb2fe8f6861e71cd6c2c6af23a9fdb75986ffbed8c0a2ce319288485"
+          }
+        ],
+        [
+          6,
+          "ActionLeafCensusV1",
+          {
+            "bytes": "b2f538d76795db0338448cc8cb837419157c1bebdc8bcc7d7b42fd961790d454"
+          }
+        ],
+        [
+          7,
+          "RepositoryAuthorityContinuityClassV1",
+          {
+            "bytes": "c67e88788f8d6636277ae15ba87102ec8fa7ede146256ca99ffc36a356267c1e"
+          }
+        ],
+        [
+          8,
+          "InstallationAuthorityContinuityClassV1",
+          {
+            "bytes": "387bf53ada1fc03bbf8004f1eec366267d7881a81f401d9806994df8b9862795"
+          }
+        ],
+        [
+          9,
+          "ActionSpecV1",
+          {
+            "bytes": "7a7a1311690fcdec194c0d9c9afbbe4e28f1332b567ed23451daf06ebca02970"
+          }
+        ]
+      ],
+      [
+        [
+          "schema_suite",
+          {
+            "bytes": "8889ca455359efccd342ebd81de00c048df3c5dd24a47cfb0d3e4093bbfe5aff"
+          }
+        ],
+        [
+          "authority_literals",
+          {
+            "bytes": "f862b743108267a6ccd82752814f047101b5d6b3cb805a0402b33aa6600e3057"
+          }
+        ],
+        [
+          "action_spec_v2",
+          {
+            "bytes": "5e6a44118522b6cb04576f2b45801ea03a4338e772faef2c33bd4d4bd82c073c"
+          }
+        ],
+        [
+          "authority_continuity_manifest",
+          {
+            "bytes": "518c2b0f71aa48de75d0cb145936fc1bc8031c7d65ab0230489cb3272a22cb35"
+          }
+        ],
+        [
+          "stage2_semantic_consumer_delta",
+          "sha256:b35f2763794b9fe04adce7ae610cf2bbc074cf31cafdca7a770a7d64d448d0f5"
+        ]
+      ],
+      "inactive_candidate"
+    ]
+  ],
+  "predecessor_action_spec_descriptor_id": "bf2075863bfa3ec7e5269560464182264e78fbeec6dff8197d5dae7bf278a0b4",
+  "predecessor_catalog_ids": [
+    {
+      "catalog_number": 1,
+      "catalog_type": "ObservationKindV1",
+      "manifest_id": "9997ffa7f1597c07abd23a3955a634cb321670198e040fb7b5d015b021159688"
+    },
+    {
+      "catalog_number": 2,
+      "catalog_type": "EffectOriginV1",
+      "manifest_id": "d28f8e573ddb450c427e628df121dbd516d0e5b05c03caf18d2757782dfd259d"
+    },
+    {
+      "catalog_number": 3,
+      "catalog_type": "RepositoryGovernedCapacitySlotKindV1",
+      "manifest_id": "a1dd1dc6210548029d3e1f2f8697c80a8c1dd9a7c80cf4144f062a95cd54806e"
+    },
+    {
+      "catalog_number": 4,
+      "catalog_type": "InstallationGovernedCapacitySlotKindV1",
+      "manifest_id": "bcccb791b3b136c9cd328a2677f4fe00826e162cda2e9fb7768c49d919aca2a1"
+    },
+    {
+      "catalog_number": 5,
+      "catalog_type": "CeremonySpecV1",
+      "manifest_id": "fb9ba972eb2fe8f6861e71cd6c2c6af23a9fdb75986ffbed8c0a2ce319288485"
+    },
+    {
+      "catalog_number": 6,
+      "catalog_type": "ActionLeafCensusV1",
+      "manifest_id": "b2f538d76795db0338448cc8cb837419157c1bebdc8bcc7d7b42fd961790d454"
+    },
+    {
+      "catalog_number": 7,
+      "catalog_type": "RepositoryAuthorityContinuityClassV1",
+      "manifest_id": "c67e88788f8d6636277ae15ba87102ec8fa7ede146256ca99ffc36a356267c1e"
+    },
+    {
+      "catalog_number": 8,
+      "catalog_type": "InstallationAuthorityContinuityClassV1",
+      "manifest_id": "387bf53ada1fc03bbf8004f1eec366267d7881a81f401d9806994df8b9862795"
+    },
+    {
+      "catalog_number": 9,
+      "catalog_type": "ActionSpecV1",
+      "manifest_id": "7a7a1311690fcdec194c0d9c9afbbe4e28f1332b567ed23451daf06ebca02970"
+    }
+  ],
+  "publication_state": "inactive_candidate",
+  "root_id": "b3b06f7ca60c09447ae3dac7e1bb3a9de970290dd16c0f96cc0416e0770004a5",
+  "schema_version": "maestro.vnext.stage2.authority.root-manifest.v1",
+  "stage": "stage2_authority_candidate",
+  "stage0_tree_sha256": "088941d6318dd8194bd4767311844e6b0c0ca857a9ed46c0be38ebc271e9f777",
+  "stage2_semantic_consumer_delta": {
+    "consumer_count": 14,
+    "consumer_digest": "31f04a03dfb24b91a7f0b2ff1c3657ef18c58e427fdd8e16291ff40ab6fe3451",
+    "identity": "sha256:b35f2763794b9fe04adce7ae610cf2bbc074cf31cafdca7a770a7d64d448d0f5",
+    "predecessor": {
+      "candidate_contract_root_id": "sha256:128bf49c9195ed8d7e395a77e1deaa26376613598e8142679cb2625890d49f59",
+      "consumer_census_id": "sha256:962cb761a55a8cdf1250ac4068f957d9357cd389d5f3ef34e4af501b18fa74df"
+    }
+  }
+}

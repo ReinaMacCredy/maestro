@@ -1,11 +1,10 @@
-mod support;
-
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Arc, Barrier};
 use std::thread;
 
+use crate as maestro;
 use maestro::domain::vnext::identity::{
     ContractRootIdV1, DescriptorIdV1, ManifestIdV1, SchemaIdV1, StoreObjectIdV1,
 };
@@ -17,7 +16,7 @@ use maestro::domain::vnext::persistence::{
 use maestro::foundation::core::deterministic_cbor::CborValue;
 use rusqlite::Connection;
 
-use support::TestTempDir;
+use super::TestTempDir;
 
 const DURABILITY_CHILD_PATH: &str = "MAESTRO_VNEXT_DURABILITY_CHILD_PATH";
 const DURABILITY_CHILD_ROLE: &str = "MAESTRO_VNEXT_DURABILITY_CHILD_ROLE";
@@ -521,11 +520,15 @@ fn subprocess_durability_worker() {
 #[test]
 fn clean_subprocess_exit_is_durable_and_reopens_for_both_roles() {
     let test_binary = std::env::current_exe().expect("current integration test binary");
+    let module = module_path!()
+        .strip_prefix(concat!(env!("CARGO_CRATE_NAME"), "::"))
+        .unwrap_or(module_path!());
+    let worker_test = format!("{module}::subprocess_durability_worker");
     for role in StoreRoleV1::ALL {
         let temp = TestTempDir::new("maestro-vnext-store-subprocess-durability");
         let store_path = canonical_temp(&temp).join(role.as_str());
         let output = Command::new(&test_binary)
-            .args(["--exact", "subprocess_durability_worker", "--nocapture"])
+            .args(["--exact", &worker_test, "--nocapture"])
             .env(DURABILITY_CHILD_PATH, &store_path)
             .env(DURABILITY_CHILD_ROLE, role.as_str())
             .output()

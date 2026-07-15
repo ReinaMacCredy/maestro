@@ -10,19 +10,20 @@ use crate::domain::vnext::identity::{
     IdentityKindV1, ManifestIdentityV1, RestoreCandidateIdV1, RetentionPinIdV1, SchemaIdV1,
     SealedExportIdV1, StoreGenerationIdV1, StoreHeadIdV1, StoreObjectIdV1,
 };
+use crate::foundation::core::deterministic_cbor::{self, CborValue};
 use crate::foundation::core::secure_fs::{CreateIfAbsent, SecureFsError, SecureRoot};
 
 use super::snapshot_blocks::{MAX_SNAPSHOT_BLOCK_CLOSURE_BYTES_V2, StoreSnapshotBlockClosureV2};
 use super::snapshot_rows::MAX_REFERENCED_PRIOR_ROOTS_V1;
 use super::{
-    BackupReceiptV1, CollectionPlanV1, ExportError, GenerationError, LogicalTombstoneV1,
-    ReachabilitySnapshotV1, RestoreCandidateV1, RetentionError, RetentionPinV1,
+    AtomicGenerationPublicationV1, BackupReceiptV1, CollectionPlanV1, ExportError, GenerationError,
+    LogicalTombstoneV1, ReachabilitySnapshotV1, RestoreCandidateV1, RetentionError, RetentionPinV1,
     RetentionRootKindV1, RetentionRootV1, SEALED_BACKUP_FORMAT_V1, SEALED_EXPORT_FORMAT_V2,
     STORE_OBJECT_STORAGE_CODEC_V1, SealedBackupV1, SealedExportEntryV1, SealedExportLineageV1,
     SealedExportV1, SnapshotError, StoreCompatibilityV1, StoreDomainV1, StoreGenerationV1,
-    StoreHeadV1, StoreObjectError, StoreObjectV1, StoreRoleV1, StoreSnapshotRootV1,
-    TombstonedObjectV1,
-    metadata::{MetadataError, MetadataStore},
+    StoreHeadV1, StoreIdempotencyProbeV1, StoreObjectError, StoreObjectV1,
+    StorePublicationOutcomeV1, StoreRoleV1, StoreSnapshotRootV1, TombstonedObjectV1,
+    metadata::{ConditionalTransactionError, MetadataError, MetadataStore, PublicationMutation},
 };
 
 const METADATA_FILE: &str = "store.sqlite3";
@@ -85,6 +86,228 @@ pub struct StoreV1 {
     root: SecureRoot,
     metadata: MetadataStore,
     domain: StoreDomainV1,
+}
+
+pub(crate) struct StorePublicationViewV1<'a> {
+    root: &'a SecureRoot,
+    connection: &'a Connection,
+    domain: &'a StoreDomainV1,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct StoreGenerationIdempotencyV1 {
+    namespace: String,
+    key_digest: [u8; 32],
+    meaning_digest: [u8; 32],
+    result_object_id: StoreObjectIdV1,
+    head_id: StoreHeadIdV1,
+}
+
+impl StoreGenerationIdempotencyV1 {
+    pub(crate) fn namespace(&self) -> &str {
+        &self.namespace
+    }
+
+    pub(crate) const fn key_digest(&self) -> &[u8; 32] {
+        &self.key_digest
+    }
+
+    pub(crate) const fn meaning_digest(&self) -> &[u8; 32] {
+        &self.meaning_digest
+    }
+
+    pub(crate) const fn result_object_id(&self) -> StoreObjectIdV1 {
+        self.result_object_id
+    }
+
+    pub(crate) const fn head_id(&self) -> StoreHeadIdV1 {
+        self.head_id
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct StorePublicationAllocationV1 {
+    token_commitment: [u8; 32],
+    allocation_commitment: [u8; 32],
+    expected_predecessor: Option<[u8; 32]>,
+    store_generation: u64,
+    publication_clock: u64,
+}
+
+impl StorePublicationAllocationV1 {
+    pub(crate) const fn token_commitment(&self) -> [u8; 32] {
+        self.token_commitment
+    }
+
+    pub(crate) const fn allocation_commitment(&self) -> [u8; 32] {
+        self.allocation_commitment
+    }
+
+    pub(crate) const fn expected_predecessor(&self) -> Option<[u8; 32]> {
+        self.expected_predecessor
+    }
+
+    pub(crate) const fn store_generation(&self) -> u64 {
+        self.store_generation
+    }
+
+    pub(crate) const fn publication_clock(&self) -> u64 {
+        self.publication_clock
+    }
+}
+
+impl StorePublicationViewV1<'_> {
+    pub(crate) fn domain(&self) -> &StoreDomainV1 {
+        self.domain
+    }
+
+    pub(crate) fn role(&self) -> StoreRoleV1 {
+        self.domain.role()
+    }
+
+    pub(crate) fn active_head(&self) -> Result<Option<StoreHeadV1>, StoreError> {
+        let Some((head_id, _)) = active_head_row(self.connection)? else {
+            return Ok(None);
+        };
+        load_head(self.connection, head_id, self.domain).map(Some)
+    }
+
+    pub(crate) fn active_generation(&self) -> Result<Option<StoreGenerationV1>, StoreError> {
+        let Some(head) = self.active_head()? else {
+            return Ok(None);
+        };
+        load_generation(self.connection, head.generation_id(), self.domain).map(Some)
+    }
+
+    pub(crate) fn generation(
+        &self,
+        generation_id: StoreGenerationIdV1,
+    ) -> Result<StoreGenerationV1, StoreError> {
+        load_generation(self.connection, generation_id, self.domain)
+    }
+
+    pub(crate) fn generation_idempotency(
+        &self,
+        generation_id: StoreGenerationIdV1,
+    ) -> Result<Vec<StoreGenerationIdempotencyV1>, StoreError> {
+        let mut statement = self.connection.prepare(
+            "SELECT namespace, key_digest, meaning_digest, result_object_id, head_id
+             FROM store_idempotency WHERE generation_id = ?1
+             ORDER BY namespace, key_digest",
+        )?;
+        statement
+            .query_map(params![generation_id.as_bytes()], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, Vec<u8>>(1)?,
+                    row.get::<_, Vec<u8>>(2)?,
+                    row.get::<_, Vec<u8>>(3)?,
+                    row.get::<_, Vec<u8>>(4)?,
+                ))
+            })?
+            .map(|row| {
+                let (namespace, key_digest, meaning_digest, result_object_id, head_id) = row?;
+                Ok(StoreGenerationIdempotencyV1 {
+                    namespace,
+                    key_digest: exact_digest(key_digest)?,
+                    meaning_digest: exact_digest(meaning_digest)?,
+                    result_object_id: identity(result_object_id)?,
+                    head_id: identity(head_id)?,
+                })
+            })
+            .collect()
+    }
+
+    pub(crate) fn active_generation_objects(&self) -> Result<Vec<StoreObjectV1>, StoreError> {
+        let generation = self
+            .active_generation()?
+            .ok_or(StoreError::MissingActiveHead)?;
+        walk_object_closure_with_limit(
+            generation.roots().iter().copied(),
+            MAX_OBJECT_CLOSURE_ENTRIES,
+            |object_id| {
+                Ok(
+                    read_object_with_root(self.root, self.connection, object_id)?
+                        .references()
+                        .to_vec(),
+                )
+            },
+        )?
+        .into_iter()
+        .map(|object_id| read_object_with_root(self.root, self.connection, object_id))
+        .collect()
+    }
+
+    pub(crate) fn allocate_continuity_state_token(
+        &self,
+        store_generation: u64,
+        expected_predecessor: Option<[u8; 32]>,
+        meaning_digest: [u8; 32],
+    ) -> Result<StorePublicationAllocationV1, StoreError> {
+        let active_head = self.active_head()?;
+        let active_generation = active_head
+            .as_ref()
+            .map(|head| load_generation(self.connection, head.generation_id(), self.domain))
+            .transpose()?;
+        let expected_generation = active_generation
+            .as_ref()
+            .map_or(1, |generation| generation.ordinal().saturating_add(1));
+        if store_generation == 0 || store_generation != expected_generation {
+            return Err(StoreError::InvalidPublicationAllocation);
+        }
+        let next_publication_clock = publication_clock(self.connection)?
+            .checked_add(1)
+            .ok_or(StoreError::InvalidPublicationAllocation)?;
+        let allocation_value = CborValue::Array(vec![
+            CborValue::text("maestro.vnext.store-publication-allocation.v1")?,
+            CborValue::Unsigned(self.domain.role().tag()),
+            CborValue::Bytes(self.domain.id().as_bytes().to_vec()),
+            CborValue::optional(
+                active_head
+                    .as_ref()
+                    .map(|head| CborValue::Bytes(head.id().as_bytes().to_vec())),
+            ),
+            CborValue::optional(
+                active_generation
+                    .as_ref()
+                    .map(|generation| CborValue::Bytes(generation.id().as_bytes().to_vec())),
+            ),
+            CborValue::Unsigned(store_generation),
+            CborValue::Unsigned(next_publication_clock),
+            CborValue::optional(expected_predecessor.map(|token| CborValue::Bytes(token.to_vec()))),
+            CborValue::Bytes(meaning_digest.to_vec()),
+        ]);
+        let allocation_commitment: [u8; 32] =
+            Sha256::digest(deterministic_cbor::encode(&allocation_value)?).into();
+        let token_value = CborValue::Array(vec![
+            CborValue::text("maestro.vnext.authority-continuity-state-token.v1")?,
+            CborValue::Bytes(allocation_commitment.to_vec()),
+        ]);
+        let token_commitment: [u8; 32] =
+            Sha256::digest(deterministic_cbor::encode(&token_value)?).into();
+        if expected_predecessor == Some(token_commitment) {
+            return Err(StoreError::InvalidPublicationAllocation);
+        }
+        Ok(StorePublicationAllocationV1 {
+            token_commitment,
+            allocation_commitment,
+            expected_predecessor,
+            store_generation,
+            publication_clock: next_publication_clock,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub(crate) enum PreparedPublicationError<E> {
+    Store(StoreError),
+    Prepare(E),
+}
+
+impl<E> From<StoreError> for PreparedPublicationError<E> {
+    fn from(error: StoreError) -> Self {
+        Self::Store(error)
+    }
 }
 
 impl StoreV1 {
@@ -173,7 +396,18 @@ impl StoreV1 {
         self.verify_generation_closure(head_id).map(Some)
     }
 
-    pub fn put_object(&mut self, object: &StoreObjectV1) -> Result<(), StoreError> {
+    pub(crate) fn publication_generation(
+        &self,
+        head_id: StoreHeadIdV1,
+    ) -> Result<StoreGenerationV1, StoreError> {
+        self.with_verified_read(|connection| {
+            let head = load_head(connection, head_id, &self.domain)?;
+            load_generation(connection, head.generation_id(), &self.domain)
+        })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn put_object(&mut self, object: &StoreObjectV1) -> Result<(), StoreError> {
         self.root.verify_path_binding()?;
         self.persist_objects(std::slice::from_ref(object))
     }
@@ -191,13 +425,7 @@ impl StoreV1 {
         connection: &Connection,
         object_id: StoreObjectIdV1,
     ) -> Result<StoreObjectV1, StoreError> {
-        if object_is_tombstoned(connection, object_id)? {
-            return Err(StoreError::TombstonedObject(object_id));
-        }
-        if collection_occurrence_digest(connection, object_id)?.is_some() {
-            return Err(StoreError::CollectedObject(object_id));
-        }
-        self.read_stored_object_with(connection, object_id)
+        read_object_with_root(&self.root, connection, object_id)
     }
 
     fn read_stored_object_with(
@@ -205,27 +433,7 @@ impl StoreV1 {
         connection: &Connection,
         object_id: StoreObjectIdV1,
     ) -> Result<StoreObjectV1, StoreError> {
-        let metadata =
-            object_metadata(connection, object_id)?.ok_or(StoreError::UnknownObject(object_id))?;
-        if metadata.storage_codec != STORE_OBJECT_STORAGE_CODEC_V1 {
-            return Err(StoreError::UnsupportedStorageCodec(metadata.storage_codec));
-        }
-        let bytes = self.root.read_immutable(object_path(object_id))?;
-        if bytes.len() != metadata.stored_byte_length
-            || bytes.len() != metadata.logical_byte_length
-            || sha256(&bytes) != metadata.stored_bytes_digest
-        {
-            return Err(StoreError::StoredObjectMismatch(object_id));
-        }
-        let object = StoreObjectV1::decode(&bytes)?;
-        if object.id() != object_id || object.schema_id() != metadata.schema_id {
-            return Err(StoreError::StoredObjectMismatch(object_id));
-        }
-        let references = object_references(connection, object_id)?;
-        if references != object.references() {
-            return Err(StoreError::StoredReferenceMismatch(object_id));
-        }
-        Ok(object)
+        read_stored_object_with_root(&self.root, connection, object_id)
     }
 
     fn verify_generation_closure(&self, head_id: StoreHeadIdV1) -> Result<StoreHeadV1, StoreError> {
@@ -253,7 +461,8 @@ impl StoreV1 {
         self.metadata.with_verified_read(&self.root, operation)
     }
 
-    pub fn publish_generation(
+    #[cfg(test)]
+    pub(crate) fn publish_generation(
         &mut self,
         generation: &StoreGenerationV1,
         expected_old: Option<StoreHeadIdV1>,
@@ -361,6 +570,335 @@ impl StoreV1 {
             Ok(())
         })?;
         Ok(head)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn publish_generation_atomically(
+        &mut self,
+        publication: &AtomicGenerationPublicationV1,
+    ) -> Result<StorePublicationOutcomeV1, StoreError> {
+        let probe = StoreIdempotencyProbeV1::new(
+            publication.idempotency().namespace(),
+            *publication.idempotency().key_digest(),
+            *publication.idempotency().meaning_digest(),
+        )
+        .map_err(StoreError::AtomicPublication)?;
+        match self.publish_generation_atomically_with_prepare(&probe, |_| {
+            Ok::<_, std::convert::Infallible>(publication.clone())
+        }) {
+            Ok(outcome) => Ok(outcome),
+            Err(PreparedPublicationError::Store(error)) => Err(error),
+            Err(PreparedPublicationError::Prepare(never)) => match never {},
+        }
+    }
+
+    pub(crate) fn publish_generation_atomically_with_prepare<E>(
+        &mut self,
+        probe: &StoreIdempotencyProbeV1,
+        prepare: impl FnOnce(&StorePublicationViewV1<'_>) -> Result<AtomicGenerationPublicationV1, E>,
+    ) -> Result<StorePublicationOutcomeV1, PreparedPublicationError<E>> {
+        self.root.verify_path_binding().map_err(StoreError::from)?;
+        let root = &self.root;
+        let domain = self.domain.clone();
+        let mut prepare = Some(prepare);
+        let mut staged_files = Vec::new();
+        let transaction_outcome = self.metadata.with_prepared_transaction(
+            root,
+            |transaction| {
+                if let Some(stored) = load_idempotency_metadata(
+                    transaction,
+                    probe.namespace(),
+                    probe.key_digest(),
+                )? {
+                    if stored.meaning_digest != *probe.meaning_digest() {
+                        return Err(MetadataError::IdempotencyMeaningConflict.into());
+                    }
+                    return Ok(PublicationMutation::NoChange(
+                        AtomicMetadataPublication::Replayed(stored),
+                    ));
+                }
+
+                let view = StorePublicationViewV1 {
+                    root,
+                    connection: transaction,
+                    domain: &domain,
+                };
+                let publication = prepare
+                    .take()
+                    .expect("invariant: one prepared Store transaction invokes its callback once")(
+                    &view,
+                )
+                .map_err(|error| {
+                    ConditionalTransactionError::Operation(PreparedPublicationError::Prepare(
+                        error,
+                    ))
+                })?;
+                let idempotency = publication.idempotency();
+                if idempotency.namespace() != probe.namespace()
+                    || idempotency.key_digest() != probe.key_digest()
+                    || idempotency.meaning_digest() != probe.meaning_digest()
+                {
+                    return Err(ConditionalTransactionError::Operation(
+                        PreparedPublicationError::Store(
+                            StoreError::PreparedIdempotencyMismatch,
+                        ),
+                    ));
+                }
+                let generation = publication.generation();
+                if generation.domain() != &domain {
+                    return Err(ConditionalTransactionError::Operation(
+                        PreparedPublicationError::Store(StoreError::DomainMismatch),
+                    ));
+                }
+                if !generation.compatibility().is_stage0_successor() {
+                    return Err(ConditionalTransactionError::Operation(
+                        PreparedPublicationError::Store(StoreError::IncompatibleGeneration),
+                    ));
+                }
+                if StoreGenerationV1::decode(&generation.canonical_bytes().map_err(|error| {
+                    ConditionalTransactionError::Operation(PreparedPublicationError::Store(
+                        StoreError::CanonicalCbor(error),
+                    ))
+                })?)
+                .map_err(|error| {
+                    ConditionalTransactionError::Operation(PreparedPublicationError::Store(
+                        StoreError::Generation(error),
+                    ))
+                })? != *generation
+                {
+                    return Err(ConditionalTransactionError::Operation(
+                        PreparedPublicationError::Store(StoreError::NonCanonicalCarrier),
+                    ));
+                }
+                let objects = publication.objects();
+                let object_map = objects
+                    .iter()
+                    .map(|object| (object.id(), object))
+                    .collect::<BTreeMap<_, _>>();
+                let closure = walk_object_closure_with_limit(
+                    generation.roots().iter().copied(),
+                    MAX_OBJECT_CLOSURE_ENTRIES,
+                    |object_id| {
+                        if let Some(object) = object_map.get(&object_id) {
+                            Ok(object.references().to_vec())
+                        } else {
+                            Ok(read_object_with_root(root, transaction, object_id)?
+                                .references()
+                                .to_vec())
+                        }
+                    },
+                )
+                .map_err(|error| {
+                    ConditionalTransactionError::Operation(PreparedPublicationError::Store(error))
+                })?;
+                if !closure.contains(&idempotency.result_object_id()) {
+                    return Err(ConditionalTransactionError::Operation(
+                        PreparedPublicationError::Store(
+                            StoreError::IdempotencyResultOutsideGeneration,
+                        ),
+                    ));
+                }
+                let observed = active_head_row(transaction).map_err(|error| {
+                    ConditionalTransactionError::Operation(PreparedPublicationError::Store(error))
+                })?;
+                let observed_retention_revision = retention_revision(transaction).map_err(
+                    |error| {
+                        ConditionalTransactionError::Operation(PreparedPublicationError::Store(
+                            error,
+                        ))
+                    },
+                )?;
+                let (expected_revision, previous_head_id) = publication_basis(
+                    observed,
+                    publication.expected_old(),
+                    generation,
+                    &domain,
+                    |head_id| load_head(transaction, head_id, &domain),
+                )
+                .map_err(|error| {
+                    ConditionalTransactionError::Operation(PreparedPublicationError::Store(error))
+                })?;
+                let head = StoreHeadV1::new(
+                    generation,
+                    generation.ordinal(),
+                    previous_head_id,
+                )
+                .map_err(|error| {
+                    ConditionalTransactionError::Operation(PreparedPublicationError::Store(
+                        StoreError::Generation(error),
+                    ))
+                })?;
+                expect_active_head(
+                    transaction,
+                    publication.expected_old(),
+                    expected_revision,
+                )?;
+                expect_retention_revision(transaction, observed_retention_revision)?;
+                stage_object_files(root, objects, &mut staged_files).map_err(|error| {
+                    ConditionalTransactionError::Operation(PreparedPublicationError::Store(error))
+                })?;
+                for object in objects {
+                    insert_object_metadata(transaction, object)?;
+                }
+                for object in objects {
+                    insert_or_verify_references(transaction, object)?;
+                }
+                for object_id in &closure {
+                    let invalid: bool = transaction.query_row(
+                        "SELECT EXISTS(
+                             SELECT 1 FROM store_logical_tombstones WHERE object_id = ?1
+                             UNION ALL
+                             SELECT 1 FROM store_gc_collection_occurrences WHERE object_id = ?1
+                         )",
+                        params![object_id.as_bytes()],
+                        |row| row.get(0),
+                    )?;
+                    if invalid {
+                        return Err(MetadataError::FacadeCasMismatch.into());
+                    }
+                }
+                insert_generation(transaction, generation)?;
+                insert_head(transaction, &head)?;
+                let changed = if expected_revision == 0 {
+                    transaction.execute(
+                        "INSERT INTO store_active_head(singleton, head_id, head_revision)
+                         VALUES (1, ?1, ?2)",
+                        params![head.id().as_bytes(), to_i64(head.revision())?],
+                    )?
+                } else {
+                    transaction.execute(
+                        "UPDATE store_active_head SET head_id = ?1, head_revision = ?2
+                         WHERE singleton = 1 AND head_id = ?3 AND head_revision = ?4",
+                        params![
+                            head.id().as_bytes(),
+                            to_i64(head.revision())?,
+                            publication
+                                .expected_old()
+                                .expect("invariant: non-initial atomic publication has an old Head")
+                                .as_bytes(),
+                            to_i64(expected_revision)?,
+                        ],
+                    )?
+                };
+                if changed != 1 {
+                    return Err(MetadataError::FacadeCasMismatch.into());
+                }
+                advance_retention_revision(transaction, Some(observed_retention_revision))?;
+                transaction.execute(
+                    "INSERT INTO store_idempotency
+                     (namespace, key_digest, meaning_digest, result_object_id, generation_id, head_id)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                    params![
+                        idempotency.namespace(),
+                        idempotency.key_digest().as_slice(),
+                        idempotency.meaning_digest().as_slice(),
+                        idempotency.result_object_id().as_bytes(),
+                        generation.id().as_bytes(),
+                        head.id().as_bytes(),
+                    ],
+                )?;
+                Ok(PublicationMutation::Commit(
+                    AtomicMetadataPublication::Committed {
+                        head,
+                        result_object_id: idempotency.result_object_id(),
+                    },
+                ))
+            },
+        );
+
+        let metadata_outcome = match transaction_outcome {
+            Ok(outcome) => outcome,
+            Err(ConditionalTransactionError::Metadata(error)) => {
+                if !error.publication_may_have_committed() {
+                    self.cleanup_failed_atomic_publication(&staged_files)?;
+                }
+                return Err(PreparedPublicationError::Store(error.into()));
+            }
+            Err(ConditionalTransactionError::Operation(error)) => {
+                self.cleanup_failed_atomic_publication(&staged_files)?;
+                return Err(error);
+            }
+        };
+
+        match metadata_outcome {
+            AtomicMetadataPublication::Committed {
+                head,
+                result_object_id,
+            } => Ok(StorePublicationOutcomeV1::Committed {
+                head,
+                result: self.read_object(result_object_id)?,
+            }),
+            AtomicMetadataPublication::Replayed(stored) => self
+                .resolve_idempotency_replay(stored, probe.meaning_digest())
+                .map_err(PreparedPublicationError::Store),
+        }
+    }
+
+    fn cleanup_failed_atomic_publication(
+        &mut self,
+        staged: &[StagedObjectFile],
+    ) -> Result<(), StoreError> {
+        if staged.is_empty() {
+            return Ok(());
+        }
+        run_before_failed_publication_cleanup_test_hook();
+        let root = &self.root;
+        match self
+            .metadata
+            .with_prepared_transaction(root, |transaction| {
+                cleanup_staged_object_files_if_unreferenced(root, transaction, staged)
+                    .map_err(ConditionalTransactionError::Operation)?;
+                Ok(PublicationMutation::NoChange(()))
+            }) {
+            Ok(()) => Ok(()),
+            Err(ConditionalTransactionError::Metadata(error)) => Err(error.into()),
+            Err(ConditionalTransactionError::Operation(error)) => Err(error),
+        }
+    }
+
+    pub fn replay_idempotency(
+        &self,
+        probe: &StoreIdempotencyProbeV1,
+    ) -> Result<Option<StorePublicationOutcomeV1>, StoreError> {
+        let stored = self.with_verified_read(|connection| {
+            load_idempotency(connection, probe.namespace(), probe.key_digest())
+        })?;
+        stored
+            .map(|stored| self.resolve_idempotency_replay(stored, probe.meaning_digest()))
+            .transpose()
+    }
+
+    fn resolve_idempotency_replay(
+        &self,
+        stored: StoredIdempotencyV1,
+        expected_meaning_digest: &[u8; 32],
+    ) -> Result<StorePublicationOutcomeV1, StoreError> {
+        if &stored.meaning_digest != expected_meaning_digest {
+            return Err(StoreError::IdempotencyMeaningConflict);
+        }
+        let head = self.with_verified_read(|connection| {
+            let head = load_head(connection, stored.head_id, &self.domain)?;
+            if head.generation_id() != stored.generation_id {
+                return Err(StoreError::StoredIdempotencyMismatch);
+            }
+            let generation = load_generation(connection, stored.generation_id, &self.domain)?;
+            let closure = walk_object_closure_with_limit(
+                generation.roots().iter().copied(),
+                MAX_OBJECT_CLOSURE_ENTRIES,
+                |object_id| {
+                    Ok(self
+                        .read_object_with(connection, object_id)?
+                        .references()
+                        .to_vec())
+                },
+            )?;
+            if !closure.contains(&stored.result_object_id) {
+                return Err(StoreError::StoredIdempotencyMismatch);
+            }
+            Ok(head)
+        })?;
+        let result = self.read_object(stored.result_object_id)?;
+        Ok(StorePublicationOutcomeV1::Replayed { head, result })
     }
 
     pub fn add_retention_pin(
@@ -823,11 +1361,11 @@ impl StoreV1 {
                     reason: error.to_string(),
                 });
             }
-            let _ = self
-                .root
-                .remove_file_if_matches(&pending_path, backup.canonical_bytes());
-            return Err(error.into());
+            let receipt_error = error.into();
+            self.cleanup_failed_sealed_export(&backup)?;
+            return Err(receipt_error);
         }
+        run_after_successful_sealed_export_receipt_test_hook();
         if let Err(error) = self.finish_backup_publication(&backup) {
             return Err(StoreError::BackupPublicationRecoveryRequired {
                 export_id: backup.export().id(),
@@ -835,6 +1373,30 @@ impl StoreV1 {
             });
         }
         Ok(backup)
+    }
+
+    fn cleanup_failed_sealed_export(&mut self, backup: &SealedBackupV1) -> Result<(), StoreError> {
+        let export_id = backup.export().id();
+        let pending_path = export_pending_path(export_id);
+        let root = &self.root;
+        match self
+            .metadata
+            .with_prepared_transaction(root, |transaction| {
+                let committed: bool = transaction.query_row(
+                    "SELECT EXISTS(SELECT 1 FROM store_sealed_exports WHERE export_id = ?1)",
+                    params![export_id.as_bytes()],
+                    |row| row.get(0),
+                )?;
+                if !committed {
+                    root.remove_file_if_matches(&pending_path, backup.canonical_bytes())
+                        .map_err(ConditionalTransactionError::Operation)?;
+                }
+                Ok(PublicationMutation::NoChange(()))
+            }) {
+            Ok(()) => Ok(()),
+            Err(ConditionalTransactionError::Metadata(error)) => Err(error.into()),
+            Err(ConditionalTransactionError::Operation(error)) => Err(error.into()),
+        }
     }
 
     fn finish_backup_publication(&self, backup: &SealedBackupV1) -> Result<(), StoreError> {
@@ -1206,6 +1768,7 @@ impl StoreV1 {
         Ok(())
     }
 
+    #[cfg(test)]
     fn persist_objects(&mut self, objects: &[StoreObjectV1]) -> Result<(), StoreError> {
         let mut identities = BTreeSet::new();
         for object in objects {
@@ -1366,6 +1929,158 @@ fn expect_active_head(
     } else {
         Err(MetadataError::FacadeCasMismatch)
     }
+}
+
+fn publication_basis(
+    observed: Option<(StoreHeadIdV1, u64)>,
+    expected_old: Option<StoreHeadIdV1>,
+    generation: &StoreGenerationV1,
+    domain: &StoreDomainV1,
+    load_head_by_id: impl FnOnce(StoreHeadIdV1) -> Result<StoreHeadV1, StoreError>,
+) -> Result<(u64, Option<StoreHeadIdV1>), StoreError> {
+    match observed {
+        None => {
+            if expected_old.is_some()
+                || generation.ordinal() != 1
+                || generation.previous().is_some()
+                || generation.domain() != domain
+            {
+                return Err(StoreError::HeadCasMismatch);
+            }
+            Ok((0, None))
+        }
+        Some((head_id, revision)) => {
+            if expected_old != Some(head_id) || generation.ordinal() != revision + 1 {
+                return Err(StoreError::HeadCasMismatch);
+            }
+            let prior = load_head_by_id(head_id)?;
+            if generation.previous() != Some(prior.generation_id()) {
+                return Err(StoreError::HeadCasMismatch);
+            }
+            Ok((revision, Some(head_id)))
+        }
+    }
+}
+
+fn read_object_with_root(
+    root: &SecureRoot,
+    connection: &Connection,
+    object_id: StoreObjectIdV1,
+) -> Result<StoreObjectV1, StoreError> {
+    if object_is_tombstoned(connection, object_id)? {
+        return Err(StoreError::TombstonedObject(object_id));
+    }
+    if collection_occurrence_digest(connection, object_id)?.is_some() {
+        return Err(StoreError::CollectedObject(object_id));
+    }
+    read_stored_object_with_root(root, connection, object_id)
+}
+
+fn read_stored_object_with_root(
+    root: &SecureRoot,
+    connection: &Connection,
+    object_id: StoreObjectIdV1,
+) -> Result<StoreObjectV1, StoreError> {
+    let metadata =
+        object_metadata(connection, object_id)?.ok_or(StoreError::UnknownObject(object_id))?;
+    if metadata.storage_codec != STORE_OBJECT_STORAGE_CODEC_V1 {
+        return Err(StoreError::UnsupportedStorageCodec(metadata.storage_codec));
+    }
+    let bytes = root.read_immutable(object_path(object_id))?;
+    if bytes.len() != metadata.stored_byte_length
+        || bytes.len() != metadata.logical_byte_length
+        || sha256(&bytes) != metadata.stored_bytes_digest
+    {
+        return Err(StoreError::StoredObjectMismatch(object_id));
+    }
+    let object = StoreObjectV1::decode(&bytes)?;
+    if object.id() != object_id || object.schema_id() != metadata.schema_id {
+        return Err(StoreError::StoredObjectMismatch(object_id));
+    }
+    let references = object_references(connection, object_id)?;
+    if references != object.references() {
+        return Err(StoreError::StoredReferenceMismatch(object_id));
+    }
+    Ok(object)
+}
+
+fn load_idempotency(
+    connection: &Connection,
+    namespace: &str,
+    key_digest: &[u8; 32],
+) -> Result<Option<StoredIdempotencyV1>, StoreError> {
+    let row = connection
+        .query_row(
+            "SELECT meaning_digest, result_object_id, generation_id, head_id
+             FROM store_idempotency WHERE namespace = ?1 AND key_digest = ?2",
+            params![namespace, key_digest.as_slice()],
+            |row| {
+                Ok((
+                    row.get::<_, Vec<u8>>(0)?,
+                    row.get::<_, Vec<u8>>(1)?,
+                    row.get::<_, Vec<u8>>(2)?,
+                    row.get::<_, Vec<u8>>(3)?,
+                ))
+            },
+        )
+        .optional()?;
+    row.map(|(meaning, result, generation, head)| {
+        Ok(StoredIdempotencyV1 {
+            meaning_digest: exact_digest(meaning)?,
+            result_object_id: identity(result)?,
+            generation_id: identity(generation)?,
+            head_id: identity(head)?,
+        })
+    })
+    .transpose()
+}
+
+fn load_idempotency_metadata(
+    connection: &Connection,
+    namespace: &str,
+    key_digest: &[u8; 32],
+) -> Result<Option<StoredIdempotencyV1>, MetadataError> {
+    let row = connection
+        .query_row(
+            "SELECT meaning_digest, result_object_id, generation_id, head_id
+             FROM store_idempotency WHERE namespace = ?1 AND key_digest = ?2",
+            params![namespace, key_digest.as_slice()],
+            |row| {
+                Ok((
+                    row.get::<_, Vec<u8>>(0)?,
+                    row.get::<_, Vec<u8>>(1)?,
+                    row.get::<_, Vec<u8>>(2)?,
+                    row.get::<_, Vec<u8>>(3)?,
+                ))
+            },
+        )
+        .optional()?;
+    row.map(|(meaning, result, generation, head)| {
+        let meaning_digest: [u8; 32] = meaning
+            .try_into()
+            .map_err(|_| MetadataError::FacadeIntegrityMismatch)?;
+        let result_object_id = ManifestIdentityV1::from_digest(
+            result
+                .try_into()
+                .map_err(|_| MetadataError::FacadeIntegrityMismatch)?,
+        );
+        let generation_id = ManifestIdentityV1::from_digest(
+            generation
+                .try_into()
+                .map_err(|_| MetadataError::FacadeIntegrityMismatch)?,
+        );
+        let head_id = ManifestIdentityV1::from_digest(
+            head.try_into()
+                .map_err(|_| MetadataError::FacadeIntegrityMismatch)?,
+        );
+        Ok(StoredIdempotencyV1 {
+            meaning_digest,
+            result_object_id,
+            generation_id,
+            head_id,
+        })
+    })
+    .transpose()
 }
 
 fn retention_revision(connection: &Connection) -> Result<u64, StoreError> {
@@ -2318,6 +3033,130 @@ fn to_u64(value: i64) -> Result<u64, StoreError> {
     u64::try_from(value).map_err(|_| StoreError::InvalidMetadataInteger)
 }
 
+#[derive(Debug)]
+struct StagedObjectFile {
+    object_id: StoreObjectIdV1,
+    path: PathBuf,
+    bytes: Vec<u8>,
+}
+
+fn stage_object_files(
+    root: &SecureRoot,
+    objects: &[StoreObjectV1],
+    staged: &mut Vec<StagedObjectFile>,
+) -> Result<(), StoreError> {
+    let mut identities = BTreeSet::new();
+    for object in objects {
+        if !identities.insert(object.id()) {
+            return Err(StoreError::DuplicateObject(object.id()));
+        }
+        if StoreObjectV1::decode(object.canonical_bytes())? != *object {
+            return Err(StoreError::NonCanonicalCarrier);
+        }
+        let path = object_path(object.id());
+        let parent = path
+            .parent()
+            .expect("invariant: canonical object path has a parent");
+        root.create_dir_all(parent)?;
+        match root.create_file_if_absent(&path, object.canonical_bytes())? {
+            CreateIfAbsent::Created => staged.push(StagedObjectFile {
+                object_id: object.id(),
+                path,
+                bytes: object.canonical_bytes().to_vec(),
+            }),
+            CreateIfAbsent::AlreadyExists => {
+                root.read_exact(&path, object.canonical_bytes())?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn cleanup_staged_object_files_if_unreferenced(
+    root: &SecureRoot,
+    transaction: &Transaction<'_>,
+    staged: &[StagedObjectFile],
+) -> Result<(), StoreError> {
+    for file in staged.iter().rev() {
+        let available: bool = transaction.query_row(
+            "SELECT EXISTS(
+                 SELECT 1 FROM store_objects AS object
+                 WHERE object.object_id = ?1
+                   AND NOT EXISTS (
+                       SELECT 1 FROM store_logical_tombstones AS tombstone
+                       WHERE tombstone.object_id = object.object_id
+                   )
+                   AND NOT EXISTS (
+                       SELECT 1 FROM store_gc_collection_occurrences AS occurrence
+                       WHERE occurrence.object_id = object.object_id
+                   )
+             )",
+            params![file.object_id.as_bytes()],
+            |row| row.get(0),
+        )?;
+        if !available {
+            root.remove_file_if_matches(&file.path, &file.bytes)?;
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+thread_local! {
+    static BEFORE_FAILED_PUBLICATION_CLEANUP_TEST_HOOK:
+        std::cell::RefCell<Option<Box<dyn FnOnce()>>> = std::cell::RefCell::new(None);
+}
+
+#[cfg(test)]
+pub(super) fn install_before_failed_publication_cleanup_test_hook(hook: impl FnOnce() + 'static) {
+    BEFORE_FAILED_PUBLICATION_CLEANUP_TEST_HOOK.with(|slot| {
+        assert!(
+            slot.borrow_mut().replace(Box::new(hook)).is_none(),
+            "failed-publication cleanup hook must be exclusive"
+        );
+    });
+}
+
+#[cfg(test)]
+fn run_before_failed_publication_cleanup_test_hook() {
+    BEFORE_FAILED_PUBLICATION_CLEANUP_TEST_HOOK.with(|hook| {
+        if let Some(hook) = hook.borrow_mut().take() {
+            hook();
+        }
+    });
+}
+
+#[cfg(not(test))]
+fn run_before_failed_publication_cleanup_test_hook() {}
+
+#[cfg(test)]
+thread_local! {
+    static AFTER_SUCCESSFUL_SEALED_EXPORT_RECEIPT_TEST_HOOK:
+        std::cell::RefCell<Option<Box<dyn FnOnce()>>> = std::cell::RefCell::new(None);
+}
+
+#[cfg(test)]
+fn install_after_successful_sealed_export_receipt_test_hook(hook: impl FnOnce() + 'static) {
+    AFTER_SUCCESSFUL_SEALED_EXPORT_RECEIPT_TEST_HOOK.with(|slot| {
+        assert!(
+            slot.borrow_mut().replace(Box::new(hook)).is_none(),
+            "sealed-export receipt hook must be exclusive"
+        );
+    });
+}
+
+#[cfg(test)]
+fn run_after_successful_sealed_export_receipt_test_hook() {
+    AFTER_SUCCESSFUL_SEALED_EXPORT_RECEIPT_TEST_HOOK.with(|hook| {
+        if let Some(hook) = hook.borrow_mut().take() {
+            hook();
+        }
+    });
+}
+
+#[cfg(not(test))]
+fn run_after_successful_sealed_export_receipt_test_hook() {}
+
 fn reject_sqlite_hard_links(path: &Path) -> Result<(), StoreError> {
     reject_hard_link(path)?;
     for suffix in ["-wal", "-shm"] {
@@ -2366,6 +3205,22 @@ struct ObjectMetadata {
     key_envelope: Option<([u8; 32], String)>,
 }
 
+#[derive(Clone, Debug)]
+struct StoredIdempotencyV1 {
+    meaning_digest: [u8; 32],
+    result_object_id: StoreObjectIdV1,
+    generation_id: StoreGenerationIdV1,
+    head_id: StoreHeadIdV1,
+}
+
+enum AtomicMetadataPublication {
+    Committed {
+        head: StoreHeadV1,
+        result_object_id: StoreObjectIdV1,
+    },
+    Replayed(StoredIdempotencyV1),
+}
+
 #[derive(Debug, Error)]
 pub enum StoreError {
     #[error("Store role does not match the requested role-specific operation")]
@@ -2376,6 +3231,18 @@ pub enum StoreError {
     IncompatibleGeneration,
     #[error("Store Head changed since the exact expected-old value was read")]
     HeadCasMismatch,
+    #[error("Store idempotency key already binds a different request meaning")]
+    IdempotencyMeaningConflict,
+    #[error("prepared Store publication does not bind the exact probed idempotency meaning")]
+    PreparedIdempotencyMismatch,
+    #[error("Store continuity token allocation does not bind the exact next publication")]
+    InvalidPublicationAllocation,
+    #[error(transparent)]
+    AtomicPublication(#[from] super::AtomicPublicationError),
+    #[error("Store idempotency result is not reachable from the published Generation")]
+    IdempotencyResultOutsideGeneration,
+    #[error("Store idempotency metadata does not bind one exact result, Generation, and Head")]
+    StoredIdempotencyMismatch,
     #[error("Store retention revision changed since it was read")]
     RetentionCasMismatch,
     #[error("Store snapshot does not bind the active Head and retention revision")]
@@ -2492,7 +3359,9 @@ pub enum StoreError {
 
 impl From<MetadataError> for StoreError {
     fn from(error: MetadataError) -> Self {
-        if error.publication_may_have_committed() {
+        if matches!(error, MetadataError::IdempotencyMeaningConflict) {
+            Self::IdempotencyMeaningConflict
+        } else if error.publication_may_have_committed() {
             Self::PublicationRecoveryRequired {
                 reason: error.to_string(),
             }
@@ -2701,6 +3570,105 @@ mod tests {
         assert!(
             residual_files.is_empty(),
             "a stale seal must leave no public or pending carrier: {residual_files:?}"
+        );
+    }
+
+    #[test]
+    fn failed_sealer_cleanup_cannot_unlink_a_waiting_sealers_committed_carrier() {
+        let path = TestStorePath::new();
+        let domain = StoreDomainV1::derive(StoreRoleV1::Repository, b"seal-cleanup-race")
+            .expect("Store domain");
+        let mut setup = StoreV1::create(&path.0, domain.clone()).expect("create Store");
+        let root = object(70);
+        setup.put_object(&root).expect("persist root");
+        let generation = StoreGenerationV1::new(
+            domain.clone(),
+            1,
+            None,
+            ContractRootIdV1::parse(&rendered(2)).expect("Contract Root identity"),
+            StoreCompatibilityV1::stage0_successor().expect("Stage 0 compatibility"),
+            vec![root.id()],
+        )
+        .expect("Generation");
+        setup
+            .publish_generation(&generation, None)
+            .expect("publish Generation");
+        drop(setup);
+
+        let failed_ready = Arc::new(Barrier::new(2));
+        let receipt_committed = Arc::new(Barrier::new(2));
+        let finish_allowed = Arc::new(Barrier::new(2));
+        let failed_path = path.0.clone();
+        let failed_domain = domain.clone();
+        let failed_ready_thread = Arc::clone(&failed_ready);
+        let receipt_committed_failed = Arc::clone(&receipt_committed);
+        let failed = std::thread::spawn(move || {
+            let mut store = StoreV1::open(failed_path, failed_domain).expect("open failed sealer");
+            store.seal_export_with_before_receipt(|| {
+                failed_ready_thread.wait();
+                receipt_committed_failed.wait();
+            })
+        });
+
+        failed_ready.wait();
+        let waiting_path = path.0.clone();
+        let waiting_domain = domain.clone();
+        let receipt_committed_waiting = Arc::clone(&receipt_committed);
+        let finish_allowed_waiting = Arc::clone(&finish_allowed);
+        let waiting = std::thread::spawn(move || {
+            let mut store =
+                StoreV1::open(waiting_path, waiting_domain).expect("open waiting sealer");
+            install_after_successful_sealed_export_receipt_test_hook(move || {
+                receipt_committed_waiting.wait();
+                finish_allowed_waiting.wait();
+            });
+            store.seal_export()
+        });
+
+        let failed_result = failed.join().expect("failed sealer thread");
+        assert!(
+            failed_result.is_err(),
+            "the stale sealer must not claim the waiting sealer's receipt"
+        );
+        let pending_files = fs::read_dir(path.0.join(EXPORTS_DIRECTORY))
+            .expect("exports directory")
+            .map(|entry| entry.expect("export entry"))
+            .filter(|entry| entry.file_type().expect("export file type").is_file())
+            .filter(|entry| entry.file_name().to_string_lossy().ends_with(".pending"))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            pending_files.len(),
+            1,
+            "failed cleanup must preserve the carrier owned by committed export metadata"
+        );
+
+        finish_allowed.wait();
+        let backup = waiting
+            .join()
+            .expect("waiting sealer thread")
+            .expect("waiting sealer completes publication");
+        assert!(
+            !path
+                .0
+                .join(export_pending_path(backup.export().id()))
+                .exists()
+        );
+        assert_eq!(
+            fs::read(path.0.join(export_path(backup.export().id()))).expect("public sealed backup"),
+            backup.canonical_bytes()
+        );
+        let current_clock: i64 = Connection::open(path.0.join(METADATA_FILE))
+            .expect("metadata")
+            .query_row(
+                "SELECT publication_clock FROM store_publication_clock WHERE singleton = 1",
+                [],
+                |row| row.get(0),
+            )
+            .expect("publication clock");
+        assert_eq!(
+            u64::try_from(current_clock).expect("non-negative publication clock"),
+            backup.receipt().committed_publication_clock(),
+            "guarded cleanup and filesystem finalization must not advance the publication clock"
         );
     }
 }

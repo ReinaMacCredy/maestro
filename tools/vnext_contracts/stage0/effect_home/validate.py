@@ -55,6 +55,44 @@ SEMANTIC_LITERAL_PATTERNS = [
     "RemoteClassification", "EffectWithdrawal", "WithdrawEffectIntent", "RecoverReserved",
     "ControlHead", "ControlRevision", "WriterTerm",
 ]
+STAGE2_SEMANTIC_LITERAL_PATTERNS = [
+    *SEMANTIC_LITERAL_PATTERNS,
+    "PublishBootstrapMandateInteractionOutcome",
+    "TrustedTimeAcquisition",
+    "RecoveryExternalRegistration",
+    "RecoveryExternalStatus",
+    "MaintenanceExecutorCurrentness",
+    "ProspectiveContinuityCarrier",
+    "PlannedTurnoverHighWater",
+    "RepositoryRecoveryAdmission",
+    "InstallationRecoveryAdmission",
+    "RepositoryWorkAuthorityPolicyTransition",
+    "RepositoryFirstWorkPublication",
+    "RepositoryFloorOrTrustRootRotation",
+    "InstallationPolicyBindingReplacement",
+    "InstallationStructuralRootFloorReplacement",
+    "TrustedTimePolicyStackRotation",
+    "ExternalLogicalCarrierProfileRotation",
+    "PlannedEpochTurnoverPreparation",
+]
+STAGE2_SEMANTIC_SOURCE_DECLARATIONS = {
+    "src/domain/vnext/authority/bootstrap_catalog.rs": ("Authority", "candidate_contract_definition", "exact_stage2_bootstrap_target_literal"),
+    "src/domain/vnext/authority/capacity.rs": ("Authority", "candidate_contract_definition", "exact_stage2_capacity_literal"),
+    "src/domain/vnext/authority/closed.rs": ("Authority", "candidate_contract_definition", "exact_stage2_closed_sum_literal"),
+    "src/domain/vnext/authority/continuity/catalog.rs": ("Authority", "candidate_contract_definition", "exact_stage2_continuity_effect_intent_class_literal"),
+    "src/domain/vnext/authority/continuity/totality.rs": ("Authority", "candidate_contract_definition", "exact_stage2_continuity_owner_census_literal"),
+    "src/domain/vnext/authority/mod.rs": ("Authority", "candidate_contract_definition", "exact_stage2_authority_facade_literal"),
+    "src/domain/vnext/authority/transition.rs": ("Authority", "candidate_contract_definition", "exact_stage2_transition_guard_literal"),
+    "tests/vnext_authority_capacity_transition.rs": ("Stage2Proof", "candidate_proof_reader", "exact_stage2_capacity_and_transition_proof"),
+    "tests/vnext_authority_contracts.rs": ("Stage2Proof", "candidate_proof_reader", "exact_stage2_authority_contract_proof"),
+    "tests/vnext_authority_continuity_totality.rs": ("Stage2Proof", "candidate_proof_reader", "exact_stage2_continuity_totality_proof"),
+    "tests/vnext_authority_literals.rs": ("Stage2Proof", "candidate_proof_reader", "exact_stage2_literal_artifact_proof"),
+    "tools/vnext_contracts/stage2/authority/build.py": ("Stage2Authority", "candidate_contract_definition", "exact_stage2_authority_builder_semantics"),
+    "tools/vnext_contracts/stage2/authority/validate.py": ("Stage2Proof", "candidate_proof_reader", "independent_stage2_semantic_reconstruction"),
+    "tools/vnext_contracts/stage2/authority/verify.rb": ("Stage2Proof", "candidate_proof_reader", "independent_stage2_ruby_reconstruction"),
+}
+STAGE2_PREDECESSOR_CONSUMER_CENSUS_ID = "sha256:962cb761a55a8cdf1250ac4068f957d9357cd389d5f3ef34e4af501b18fa74df"
+STAGE2_PREDECESSOR_CANDIDATE_ROOT_ID = "sha256:128bf49c9195ed8d7e395a77e1deaa26376613598e8142679cb2625890d49f59"
 SEMANTIC_LITERAL_SOURCES = {
     "contracts/vnext/catalogs/evidence/e346-nominal-source.json": ("V1AuditMigrationEvidence", "sealed_v1_audit_migration_consumer", "sealed_v1_e346_nominal_source_evidence"),
     "contracts/vnext/catalogs/evidence/e346-semantic-baseline.json": ("V1AuditMigrationEvidence", "sealed_v1_audit_migration_consumer", "sealed_v1_e346_semantic_baseline_evidence"),
@@ -143,6 +181,24 @@ DOWNSTREAM_GENERATED_SEMANTIC_OBLIGATIONS = {
         "ResourceRelease",
         "pending_downstream_generated_binding",
         "resolved_by_current_resource_consumer_census",
+    ),
+    "contracts/vnext/stage2/authority/authority-continuity-manifest.v1.cbor": (
+        ["EffectIntent"], "Stage2Authority", "pending_downstream_generated_binding", "resolved_by_stage2_authority_root_manifest",
+    ),
+    "contracts/vnext/stage2/authority/authority-continuity-manifest.v1.json": (
+        ["EffectIntent"], "Stage2Authority", "pending_downstream_generated_binding", "resolved_by_stage2_authority_root_manifest",
+    ),
+    "contracts/vnext/stage2/authority/authority-literals.v1.cbor": (
+        ["EffectIntent"], "Stage2Authority", "pending_downstream_generated_binding", "resolved_by_stage2_authority_root_manifest",
+    ),
+    "contracts/vnext/stage2/authority/authority-literals.v1.json": (
+        ["EffectIntent"], "Stage2Authority", "pending_downstream_generated_binding", "resolved_by_stage2_authority_root_manifest",
+    ),
+    "contracts/vnext/stage2/authority/stage2-authority-manifest.v1.cbor": (
+        ["EffectOrigin"], "Stage2Authority", "pending_downstream_generated_binding", "resolved_by_stage2_authority_root_manifest",
+    ),
+    "contracts/vnext/stage2/authority/stage2-authority-manifest.v1.json": (
+        ["EffectOrigin"], "Stage2Authority", "pending_downstream_generated_binding", "resolved_by_stage2_authority_root_manifest",
     ),
 }
 LEGACY_SEMANTIC_REMOVAL_SOURCES = {
@@ -426,6 +482,87 @@ def c325_rows() -> list[dict[str, object]]:
     return ledger["rows"]
 
 
+def stage2_semantic_consumer_rows() -> list[list[object]]:
+    rows: list[list[object]] = []
+    for path, (owner, disposition, proof) in sorted(
+        STAGE2_SEMANTIC_SOURCE_DECLARATIONS.items()
+    ):
+        source = ROOT / path
+        if not source.is_file():
+            fail(f"declared Stage 2 semantic consumer is missing: {path}")
+        contents = source.read_text(encoding="utf-8", errors="ignore")
+        matched = [
+            literal for literal in STAGE2_SEMANTIC_LITERAL_PATTERNS if literal in contents
+        ]
+        if not matched:
+            fail(f"declared Stage 2 semantic consumer has no exact literal: {path}")
+        worktree_sha256 = sha(source)
+        rows.append(
+            [
+                path,
+                f"sha256:{worktree_sha256}",
+                worktree_sha256,
+                matched,
+                "stage2_semantic_consumer_delta",
+                owner,
+                disposition,
+                proof,
+            ]
+        )
+    return rows
+
+
+def validate_stage2_semantic_delta(document: dict[str, object]) -> None:
+    rows = stage2_semantic_consumer_rows()
+    canonical_rows = [
+        [row[0], row[1], row[2], row[3], row[5], row[6], row[7]] for row in rows
+    ]
+    rows_digest = sha_bytes(
+        "".join(
+            f"{row[0]}  {row[1]}  {','.join(row[3])}  {row[4]}  {row[5]}  {row[6]}\n"
+            for row in canonical_rows
+        ).encode("ascii")
+    )
+    expected_value = [
+        "Stage2SemanticConsumerDeltaV1",
+        1,
+        STAGE2_PREDECESSOR_CONSUMER_CENSUS_ID,
+        STAGE2_PREDECESSOR_CANDIDATE_ROOT_ID,
+        canonical_rows,
+        [len(canonical_rows), rows_digest, "complete_exact_source_overlay"],
+        "candidate_only_runtime_inactive",
+    ]
+    if document["canonical_value"] != expected_value:
+        fail("Stage 2 semantic consumer delta canonical value drifted")
+    if document.get("schema_version") != "maestro.vnext.stage2.semantic-consumer-delta.v1":
+        fail("Stage 2 semantic consumer delta schema drifted")
+    if document.get("predecessor") != {
+        "consumer_census_id": STAGE2_PREDECESSOR_CONSUMER_CENSUS_ID,
+        "candidate_contract_root_id": STAGE2_PREDECESSOR_CANDIDATE_ROOT_ID,
+    }:
+        fail("Stage 2 semantic consumer delta predecessor binding drifted")
+    expected_body_rows = [
+        {
+            "path": row[0],
+            "resource_identity": row[1],
+            "worktree_sha256": row[2],
+            "matched_literals": row[3],
+            "owner": row[5],
+            "consumer_disposition": row[6],
+            "proof": row[7],
+        }
+        for row in rows
+    ]
+    if document.get("consumer_rows") != expected_body_rows:
+        fail("Stage 2 semantic consumer delta rows drifted")
+    if document.get("consumer_count") != len(rows):
+        fail("Stage 2 semantic consumer delta count drifted")
+    if document.get("consumer_digest") != rows_digest:
+        fail("Stage 2 semantic consumer delta digest drifted")
+    if document.get("closure_status") != "complete_exact_source_overlay":
+        fail("Stage 2 semantic consumer delta closure drifted")
+
+
 def expected_consumer_census() -> tuple[
     list[list[object]],
     list[list[object]],
@@ -458,9 +595,18 @@ def expected_consumer_census() -> tuple[
             if matched:
                 literal_hits[str(path.relative_to(ROOT))] = matched
     for path, (expected_patterns, _, _, _) in DOWNSTREAM_GENERATED_SEMANTIC_OBLIGATIONS.items():
-        observed_patterns = literal_hits.pop(path, None)
+        observed_patterns = literal_hits.pop(path, [])
         if observed_patterns is not None and observed_patterns != expected_patterns:
             fail(f"downstream generated semantic obligation changed: {path}")
+    stage2_rows = stage2_semantic_consumer_rows()
+    for row in stage2_rows:
+        path = str(row[0])
+        observed_patterns = literal_hits.pop(path, [])
+        expected_patterns = [
+            pattern for pattern in row[3] if pattern in SEMANTIC_LITERAL_PATTERNS
+        ]
+        if observed_patterns != expected_patterns:
+            fail(f"Stage 2 semantic overlay does not match the Stage 0 census: {path}")
     if set(literal_hits) != set(SEMANTIC_LITERAL_SOURCES):
         fail("semantic literal source closure changed")
     if set(literal_hits) & set(source_hashes):
@@ -493,6 +639,7 @@ def expected_consumer_census() -> tuple[
             disposition,
             proof,
         ])
+    effect_rows.extend(stage2_rows)
     effect_rows.sort(key=lambda row: str(row[0]))
     if len({row[0] for row in effect_rows}) != len(effect_rows):
         fail("semantic consumer source duplication")
@@ -867,6 +1014,7 @@ def validate_manifest(documents: dict[str, dict[str, object]]) -> None:
         "effect-intent-home-v1",
         "effect-origin-home-compatibility-v1",
         "effect-intent-control-consumer-census-v1",
+        "stage2-semantic-consumer-delta-v1",
         *H2_COMPONENTS,
         "effect-intent-control-cohort-v1",
         "effect-intent-control-writer-epoch-v1",
@@ -986,7 +1134,7 @@ def validate_finalization(
         "path": "tools/vnext_contracts/stage0/effect_home/validate.py",
         "sha256": sha(Path(__file__)),
         "semantic_validation": "pass",
-        "mutant_suite": {"case_count": 26, "result": "all_rejected"},
+        "mutant_suite": {"case_count": 28, "result": "all_rejected"},
     }:
         fail("finalization receipt validator binding drifted")
     if finalization["semantic_consumer_census"] != {
@@ -1010,6 +1158,7 @@ def validate(output: Path) -> None:
         "effect-intent-home-v1",
         "effect-origin-home-compatibility-v1",
         "effect-intent-control-consumer-census-v1",
+        "stage2-semantic-consumer-delta-v1",
         *H2_COMPONENTS,
         "effect-intent-control-cohort-v1",
         "effect-intent-control-writer-epoch-v1",
@@ -1037,6 +1186,7 @@ def validate(output: Path) -> None:
     if home["resolve_result_effects"] != {"creates_attempt": False, "creates_intent": False, "creates_run": False, "performs_io": False}:
         fail("ResolveResult must create no Intent, Attempt, Run, or I/O")
     validate_consumer_census(documents["effect-intent-control-consumer-census-v1"])
+    validate_stage2_semantic_delta(documents["stage2-semantic-consumer-delta-v1"])
     validate_h2_components(documents)
     validate_cohort(documents)
     validate_withdrawal(documents)
@@ -1082,6 +1232,8 @@ def mutants(output: Path) -> int:
         lambda: mutate_json(output, "effect-intent-control-consumer-census-v1", lambda doc: doc["downstream_generated_semantic_consumer_obligations"][0].__setitem__("path", "contracts/vnext/stage0/resource-release/unlisted.json")),
         lambda: mutate_json(output, "effect-intent-control-consumer-census-v1", lambda doc: doc["downstream_generated_semantic_consumer_obligations"][0].__setitem__("status", "resolved_without_downstream_proof")),
         lambda: mutate_json(output, "effect-intent-control-consumer-census-v1", lambda doc: doc["downstream_generated_semantic_consumer_obligations"][0].__setitem__("identity_input", True)),
+        lambda: mutate_json(output, "stage2-semantic-consumer-delta-v1", lambda doc: doc["consumer_rows"].pop()),
+        lambda: mutate_json(output, "stage2-semantic-consumer-delta-v1", lambda doc: doc["consumer_rows"][0].__setitem__("worktree_sha256", "0" * 64)),
         lambda: mutate_json(output, "effect-withdrawal-v1", lambda doc: doc["positive_cells"].__setitem__(1, copy.deepcopy(doc["positive_cells"][0]))),
         lambda: mutate_json(output, "effect-withdrawal-v1", lambda doc: doc["positive_cells"][0].__setitem__("origin_tag", 999)),
         lambda: mutate_json(output, "effect-withdrawal-v1", lambda doc: doc["positive_cells"][0].__setitem__("route_tag", 999)),

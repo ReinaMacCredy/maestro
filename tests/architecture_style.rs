@@ -2,6 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 const PRODUCTION_UNWRAP_ALLOWLIST: &[(&str, usize)] = &[];
+const TEST_ONLY_SOURCE_FILES: &[&str] = &["src/domain/vnext/authority/facade_tests.rs"];
 const CLI_HARNESS_PUBLIC_METHODS: &[&str] = &[
     "arg",
     "args",
@@ -19,6 +20,12 @@ const CLI_HARNESS_PUBLIC_METHODS: &[&str] = &[
 fn production_sources_do_not_call_unwrap() {
     let mut violations = Vec::new();
     for path in rust_files_under(Path::new("src")) {
+        if TEST_ONLY_SOURCE_FILES
+            .iter()
+            .any(|test_path| path == Path::new(test_path))
+        {
+            continue;
+        }
         let source = read_source_file(&path);
         for (line_number, line) in production_lines(&source) {
             if line.contains(".unwrap()") && !is_allowlisted(&path, line_number) {
@@ -32,6 +39,18 @@ fn production_sources_do_not_call_unwrap() {
         "production sources must not call .unwrap(); use Result propagation, \
          an invariant expect, or an infallible rendering pattern instead:\n{}",
         violations.join("\n")
+    );
+}
+
+#[test]
+fn test_only_source_file_exclusions_are_cfg_test_gated() {
+    let facade = read_source_file(Path::new("src/domain/vnext/authority/facade.rs"));
+    assert_eq!(
+        facade
+            .match_indices("#[cfg(test)]\n#[path = \"facade_tests.rs\"]\nmod tests;")
+            .count(),
+        1,
+        "the facade test module must remain behind its exact cfg(test) gate"
     );
 }
 

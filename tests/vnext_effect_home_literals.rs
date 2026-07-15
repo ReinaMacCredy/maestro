@@ -8,6 +8,8 @@ use maestro::domain::vnext::execution::{
     RemoteClassificationV1, WITHDRAWN_LOCALLY_RENDERING_V1, WithdrawalAuthorityPathV1,
     WithdrawalError, WithdrawalRequestV1, bootstrap_target_census, validate_withdrawal,
 };
+use serde_json::Value;
+use std::fs;
 
 fn run(repo: &Path, program: &str, args: &[&str]) -> Output {
     Command::new(program)
@@ -70,6 +72,44 @@ fn stage0_effect_home_artifacts_are_reproducible_and_reject_mutants() {
                 "--mutants",
             ],
         ),
+    );
+}
+
+#[test]
+fn stage0_bootstrap_literal_uses_the_effective_efa0_leaf_and_predecessor_order() {
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let artifact: Value = serde_json::from_slice(
+        &fs::read(
+            repo.join("contracts/vnext/stage0/effect-home/bootstrap-control-withdrawal-v1.json"),
+        )
+        .expect("read Stage 0 Bootstrap withdrawal artifact"),
+    )
+    .expect("parse Stage 0 Bootstrap withdrawal artifact");
+    let rows = artifact["rows"]
+        .as_array()
+        .expect("Bootstrap withdrawal rows");
+    assert_eq!(
+        rows.iter()
+            .map(|row| row["action"].as_str().expect("Bootstrap action"))
+            .collect::<Vec<_>>(),
+        [
+            "EnrollRecoveryCommitmentSelection",
+            "RotateRecoveryCommitmentSelection",
+            "RevokeRecoveryCommitmentSelection",
+            "FirstHumanBindingEnrollment",
+            "ReserveBootstrapMandateInteractionEffect",
+            "PublishBootstrapMandateInteractionOutcome",
+            "PublishBootstrapMandatePresentationObservation",
+            "PublishBootstrapMandateResponseObservation",
+            "ReconcileBootstrapMandateInteractionEffect",
+            "IssueBootstrapMandate",
+            "WithdrawBootstrapMandateInteractionEffect",
+        ]
+    );
+    assert!(
+        !serde_json::to_string(&artifact)
+            .expect("serialize artifact")
+            .contains("PublishBootstrapMandateInteractionEffectOutcome")
     );
 }
 

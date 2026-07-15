@@ -1,8 +1,7 @@
-mod support;
-
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate as maestro;
 use maestro::domain::vnext::identity::{ContractRootIdV1, SchemaIdV1};
 use maestro::domain::vnext::persistence::{
     LogicalTombstoneV1, RetentionPinV1, RetentionRootKindV1, RetentionRootV1, SealedExportV1,
@@ -12,7 +11,7 @@ use maestro::domain::vnext::persistence::{
 use maestro::foundation::core::deterministic_cbor::{self, CborValue};
 use rusqlite::{Connection, params};
 
-use support::TestTempDir;
+use super::TestTempDir;
 
 fn rendered(byte: u8) -> String {
     format!("sha256:{}", format!("{byte:02x}").repeat(32))
