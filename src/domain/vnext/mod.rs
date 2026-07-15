@@ -6,10 +6,15 @@
 pub mod authority;
 pub mod capability;
 pub mod contract;
+pub mod design;
 pub mod distribution;
+pub mod evidence;
 pub mod execution;
 pub mod identity;
 pub mod integration;
 pub mod migration;
 pub mod orchestration;
 pub mod persistence;
+pub mod repository;
+pub mod step;
+pub mod work;

@@ -146,6 +146,21 @@ impl GovernedCapacityRootV1 {
         })
     }
 
+    pub(crate) fn from_persisted_state(
+        id: CapacityRootIdV1,
+        context_kind: AuthorityContextKindV1,
+        context_id: AuthorityContextIdV1,
+        kind: GovernedCapacityKindV1,
+        initial_max: u32,
+        spent: u32,
+    ) -> Result<Self, CapacityError> {
+        let root = Self::new(id, context_kind, context_id, kind, initial_max)?;
+        if spent > initial_max {
+            return Err(CapacityError::ExpectedSpentMismatch);
+        }
+        Ok(Self { spent, ..root })
+    }
+
     pub fn transition(
         self,
         expected_context_id: AuthorityContextIdV1,

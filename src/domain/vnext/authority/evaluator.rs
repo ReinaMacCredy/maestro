@@ -894,6 +894,34 @@ impl BootstrapAuthoritySnapshotV1 {
         )
     }
 
+    pub(crate) fn continue_at_store_generation_with_revoked_grant(
+        &self,
+        store_generation: u64,
+        manifest_id: AuthorityContinuityManifestIdV1,
+        guard_kind: GuardAdmissionKindV1,
+        state_token: StateTokenIdV1,
+        grant_id: super::GrantIdV1,
+    ) -> Result<Self, BootstrapAuthoritySnapshotErrorV1> {
+        let mut successor = self.continue_at_store_generation(
+            store_generation,
+            manifest_id,
+            guard_kind,
+            state_token,
+        )?;
+        let mut targets = successor
+            .revocations
+            .revocations
+            .targets()
+            .collect::<Vec<_>>();
+        targets.push(RevocationTargetV1::Grant(grant_id));
+        successor.revocations = AuthorityRevocationSetV1::new(
+            successor.context.context_id(),
+            RevocationSetV1::new(targets)
+                .map_err(|_| BootstrapAuthoritySnapshotErrorV1::InvalidCanonicalSnapshot)?,
+        );
+        Ok(successor)
+    }
+
     pub fn from_canonical_bytes(bytes: &[u8]) -> Result<Self, BootstrapAuthoritySnapshotErrorV1> {
         let value = deterministic_cbor::decode(bytes)?;
         let fields = exact_array(&value, 15)?;

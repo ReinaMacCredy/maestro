@@ -13,10 +13,14 @@ use crate::domain::vnext::authority::{
     BootstrapContinuityTransitionProofV1, BootstrapG0PathV1, BootstrapInteractionSubjectV1,
     BootstrapMandateInteractionObservationJoinV1, BootstrapMandatePresentationObservationV1,
     BootstrapMandateResponseObservationV1, BootstrapMandateTargetV1,
-    BootstrapResponseDispositionV1, CapacityRootIdV1, ConsentSlotEvaluationFactsV1,
-    GenesisGrantIdV1, GrantDefinitionV1, GrantIdV1, GrantScopeV1, HalfOpenValidityV1,
-    IdempotencyKeyIdV1, IssueBootstrapMandateInputV1, IssueBootstrapMandateRequestV1,
-    PrincipalBindingIdV1, PrincipalBindingV1, PrincipalIdV1, RevocationSetV1, ScopeAtomV1,
+    BootstrapResponseDispositionV1, CapacityRootIdV1, ConsentSlotEvaluationFactsV1, DelegationIdV1,
+    DelegationV1, GenesisGrantIdV1, GovernedCapacityKindV1, GovernedCapacityRootV1,
+    GrantActionIdentityV1, GrantAdministrationAuthorityV1, GrantDefinitionV1, GrantIdV1,
+    GrantScopeV1, HalfOpenValidityV1, IdempotencyKeyIdV1, IssueBootstrapMandateInputV1,
+    IssueBootstrapMandateRequestV1, IssueRootAttachedBoundedGrantPublicationV1,
+    OrdinaryBoundedGrantV1, OrdinaryGrantDelegationV1, PrincipalBindingIdV1, PrincipalBindingV1,
+    PrincipalIdV1, ReissueRootAttachedGrantOneToOnePublicationV1,
+    RepositoryGovernedCapacitySlotKindV1, RevocationSetV1, RevokeGrantPublicationV1, ScopeAtomV1,
     SessionIdV1, SessionV1, TargetActionEffectKindV1, TargetActionOwnerV1,
     TargetActionProjectionV1, TargetActionProtocolV1, TargetExpectedHeadsV1, TransitionGuardKindV1,
     TrustedTimeV1,
@@ -347,16 +351,30 @@ fn authority_fixture(
         AuthorityEvaluatorV1::ISSUE_BOOTSTRAP_MANDATE_PROTOCOL_REVISION,
     )
     .unwrap();
+    let capacity_root_id = CapacityRootIdV1::derive("repository-admin-capacity").unwrap();
+    let issue_grant_scope = ScopeAtomV1::new(
+        "IssueRootAttachedBoundedGrant",
+        &capacity_root_id.render(),
+        9,
+    )
+    .unwrap();
+    let reissue_scope = ScopeAtomV1::new(
+        "ReissueRootAttachedGrantOneToOne",
+        &capacity_root_id.render(),
+        9,
+    )
+    .unwrap();
+    let revoke_scope = ScopeAtomV1::new("RevokeGrant", &capacity_root_id.render(), 9).unwrap();
     let grant = GrantDefinitionV1 {
         id: GrantIdV1::derive("genesis-grant").unwrap(),
         context_id,
         grantee_principal_id: actor_principal,
         parent_grant_id: None,
         delegation_id: None,
-        terminal_scope: GrantScopeV1::new(vec![scope]).unwrap(),
-        delegable_scope: GrantScopeV1::new(vec![]).unwrap(),
+        terminal_scope: GrantScopeV1::new(vec![scope, issue_grant_scope]).unwrap(),
+        delegable_scope: GrantScopeV1::new(vec![reissue_scope, revoke_scope]).unwrap(),
         validity,
-        delegation_depth_remaining: 0,
+        delegation_depth_remaining: 8,
         authority_use_constraint: AuthorityUseConstraintV1::NoLocalBoundedRoot,
     }
     .validate()
@@ -546,6 +564,22 @@ fn seeded_store_with_activation(
         vec![],
     )
     .unwrap();
+    let capacity_root = GovernedCapacityRootV1::new(
+        CapacityRootIdV1::derive("repository-admin-capacity").unwrap(),
+        AuthorityContextKindV1::RepositoryAuthorityContext,
+        facts.context().context_id(),
+        GovernedCapacityKindV1::Repository(
+            RepositoryGovernedCapacitySlotKindV1::RepositoryAuthorityAdministration,
+        ),
+        64,
+    )
+    .unwrap();
+    let capacity_root = authority_object(
+        AuthoritySchemaV1::GovernedCapacityRoot,
+        capacity_root.schema_value().unwrap(),
+        vec![],
+    )
+    .unwrap();
     let references = vec![
         manifest_object.id(),
         closure_two_object.id(),
@@ -560,6 +594,7 @@ fn seeded_store_with_activation(
         revocations.id(),
         interaction.id(),
         consent_slot.id(),
+        capacity_root.id(),
     ];
     let authority_root = authority_object(
         AuthoritySchemaV1::BootstrapAuthoritySnapshot,
@@ -580,6 +615,7 @@ fn seeded_store_with_activation(
         &revocations,
         &interaction,
         &consent_slot,
+        &capacity_root,
         &authority_root,
     ] {
         store.put_object(object).unwrap();
@@ -666,6 +702,93 @@ fn duplicate_request(request: &IssueBootstrapMandateRequestV1) -> IssueBootstrap
         consent_slot: request.consent_slot().clone(),
         supplied_mandates: vec![],
     })
+    .unwrap()
+}
+
+fn admin_grant_issue_plan(
+    seed: &str,
+    contract_root: ContractRootIdV1,
+    head: &crate::domain::vnext::persistence::StoreHeadV1,
+    authority_root: StoreObjectIdV1,
+) -> IssueRootAttachedBoundedGrantPublicationV1 {
+    let context_id = AuthorityContextIdV1::derive("repository-context").unwrap();
+    let capacity_root_id = CapacityRootIdV1::derive("repository-admin-capacity").unwrap();
+    let parent_grant_id = GrantIdV1::derive("genesis-grant").unwrap();
+    let delegation_id = DelegationIdV1::derive(&format!("{seed}-delegation")).unwrap();
+    let child_grant_id = GrantIdV1::derive(&format!("{seed}-grant")).unwrap();
+    let child = GrantDefinitionV1 {
+        id: child_grant_id,
+        context_id,
+        grantee_principal_id: PrincipalIdV1::derive("responder-principal").unwrap(),
+        parent_grant_id: Some(parent_grant_id),
+        delegation_id: Some(delegation_id),
+        terminal_scope: GrantScopeV1::new(vec![
+            ScopeAtomV1::new(
+                "ReissueRootAttachedGrantOneToOne",
+                &capacity_root_id.render(),
+                9,
+            )
+            .unwrap(),
+            ScopeAtomV1::new("RevokeGrant", &capacity_root_id.render(), 9).unwrap(),
+        ])
+        .unwrap(),
+        delegable_scope: GrantScopeV1::new(vec![]).unwrap(),
+        validity: HalfOpenValidityV1::new(110, 190).unwrap(),
+        delegation_depth_remaining: 7,
+        authority_use_constraint: AuthorityUseConstraintV1::BoundedBy(capacity_root_id),
+    }
+    .validate()
+    .unwrap();
+    let child = OrdinaryBoundedGrantV1::new(child).unwrap();
+    let delegation = OrdinaryGrantDelegationV1::new(
+        context_id,
+        capacity_root_id,
+        DelegationV1::new(delegation_id, parent_grant_id, child_grant_id),
+        &child,
+    )
+    .unwrap();
+    IssueRootAttachedBoundedGrantPublicationV1::new(
+        GrantActionIdentityV1::new(
+            ActionRequestIdV1::derive(&format!("{seed}-request")).unwrap(),
+            IdempotencyKeyIdV1::derive(&format!("{seed}-key")).unwrap(),
+        ),
+        super::super::AuthorityPublicationLineageV1::successor(
+            contract_root,
+            head.generation_id(),
+            head.id(),
+            authority_root,
+        ),
+        GenesisGrantIdV1::derive(&parent_grant_id.render()).unwrap(),
+        child,
+        delegation,
+    )
+    .unwrap()
+}
+
+fn ordinary_test_grant(
+    seed: &str,
+    parent_grant_id: GrantIdV1,
+    capacity_root_id: CapacityRootIdV1,
+    terminal_scope: GrantScopeV1,
+    delegable_scope: GrantScopeV1,
+    delegation_depth_remaining: u8,
+) -> OrdinaryBoundedGrantV1 {
+    OrdinaryBoundedGrantV1::new(
+        GrantDefinitionV1 {
+            id: GrantIdV1::derive(&format!("{seed}-grant")).unwrap(),
+            context_id: AuthorityContextIdV1::derive("repository-context").unwrap(),
+            grantee_principal_id: PrincipalIdV1::derive(&format!("{seed}-principal")).unwrap(),
+            parent_grant_id: Some(parent_grant_id),
+            delegation_id: Some(DelegationIdV1::derive(&format!("{seed}-delegation")).unwrap()),
+            terminal_scope,
+            delegable_scope,
+            validity: HalfOpenValidityV1::new(110, 190).unwrap(),
+            delegation_depth_remaining,
+            authority_use_constraint: AuthorityUseConstraintV1::BoundedBy(capacity_root_id),
+        }
+        .validate()
+        .unwrap(),
+    )
     .unwrap()
 }
 
@@ -835,6 +958,601 @@ fn store_loaded_authority_and_complete_post_cut_publish_atomically_and_replay_wi
     assert_eq!(replay.logical_result_id(), first.logical_result_id());
     drop(store);
     fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn g0_issues_root_attached_bounded_grant_atomically_without_capacity_debit() {
+    let (root, _domain, mut store, contract_root, head, authority_root, _request) = seeded_store();
+    let context_id = AuthorityContextIdV1::derive("repository-context").unwrap();
+    let capacity_root_id = CapacityRootIdV1::derive("repository-admin-capacity").unwrap();
+    let parent_grant_id = GrantIdV1::derive("genesis-grant").unwrap();
+    let delegation_id = DelegationIdV1::derive("admin-delegation").unwrap();
+    let child_grant_id = GrantIdV1::derive("admin-grant").unwrap();
+    let child = GrantDefinitionV1 {
+        id: child_grant_id,
+        context_id,
+        grantee_principal_id: PrincipalIdV1::derive("delegate-admin").unwrap(),
+        parent_grant_id: Some(parent_grant_id),
+        delegation_id: Some(delegation_id),
+        terminal_scope: GrantScopeV1::new(vec![
+            ScopeAtomV1::new(
+                "ReissueRootAttachedGrantOneToOne",
+                &capacity_root_id.render(),
+                9,
+            )
+            .unwrap(),
+            ScopeAtomV1::new("RevokeGrant", &capacity_root_id.render(), 9).unwrap(),
+        ])
+        .unwrap(),
+        delegable_scope: GrantScopeV1::new(vec![]).unwrap(),
+        validity: HalfOpenValidityV1::new(110, 190).unwrap(),
+        delegation_depth_remaining: 7,
+        authority_use_constraint: AuthorityUseConstraintV1::BoundedBy(capacity_root_id),
+    }
+    .validate()
+    .unwrap();
+    let child = OrdinaryBoundedGrantV1::new(child).unwrap();
+    let delegation = OrdinaryGrantDelegationV1::new(
+        context_id,
+        capacity_root_id,
+        DelegationV1::new(delegation_id, parent_grant_id, child_grant_id),
+        &child,
+    )
+    .unwrap();
+    let publication = IssueRootAttachedBoundedGrantPublicationV1::new(
+        GrantActionIdentityV1::new(
+            ActionRequestIdV1::derive("issue-admin-grant").unwrap(),
+            IdempotencyKeyIdV1::derive("issue-admin-grant-key").unwrap(),
+        ),
+        super::super::AuthorityPublicationLineageV1::successor(
+            contract_root,
+            head.generation_id(),
+            head.id(),
+            authority_root,
+        ),
+        GenesisGrantIdV1::derive(&parent_grant_id.render()).unwrap(),
+        child,
+        delegation,
+    )
+    .unwrap();
+
+    let mut wrong_root_publication = publication.clone();
+    let wrong_root = CapacityRootIdV1::derive("not-established-capacity").unwrap();
+    let mut wrong_definition = wrong_root_publication.grant.grant().definition();
+    wrong_definition.authority_use_constraint = AuthorityUseConstraintV1::BoundedBy(wrong_root);
+    wrong_root_publication.grant =
+        OrdinaryBoundedGrantV1::new(wrong_definition.validate().unwrap()).unwrap();
+    wrong_root_publication.delegation = OrdinaryGrantDelegationV1::new(
+        context_id,
+        wrong_root,
+        DelegationV1::new(delegation_id, parent_grant_id, child_grant_id),
+        &wrong_root_publication.grant,
+    )
+    .unwrap();
+    assert!(matches!(
+        AuthorityFacadeV1::new(&mut store)
+            .issue_root_attached_bounded_grant(wrong_root_publication),
+        Err(AuthorityPublicationError::InvalidBootstrapGrantAuthority)
+    ));
+    assert_eq!(store.active_head().unwrap().unwrap().id(), head.id());
+
+    let first = AuthorityFacadeV1::new(&mut store)
+        .issue_root_attached_bounded_grant(publication.clone())
+        .unwrap();
+    assert_eq!(first.kind(), AuthorityPublicationKindV1::Committed);
+    assert_eq!(first.head().generation_ordinal(), 3);
+    let objects = active_objects(&store);
+    assert_eq!(
+        schema_objects(&objects, AuthoritySchemaV1::OrdinaryBoundedGrant)
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        schema_objects(&objects, AuthoritySchemaV1::OrdinaryGrantDelegation)
+            .unwrap()
+            .len(),
+        1
+    );
+    assert!(
+        schema_objects(&objects, AuthoritySchemaV1::GovernedCapacityDebit)
+            .unwrap()
+            .is_empty()
+    );
+    let mut meaning_conflict = publication.clone();
+    meaning_conflict.identity = GrantActionIdentityV1::new(
+        ActionRequestIdV1::derive("changed-meaning-request").unwrap(),
+        meaning_conflict.identity.idempotency_key(),
+    );
+    assert!(
+        AuthorityFacadeV1::new(&mut store)
+            .issue_root_attached_bounded_grant(meaning_conflict)
+            .is_err()
+    );
+    assert_eq!(
+        store.active_head().unwrap().unwrap().id(),
+        first.head().id()
+    );
+    let replay = AuthorityFacadeV1::new(&mut store)
+        .issue_root_attached_bounded_grant(publication)
+        .unwrap();
+    assert_eq!(replay.kind(), AuthorityPublicationKindV1::Replayed);
+    assert_eq!(replay.head().id(), first.head().id());
+    drop(store);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn ordinary_admin_refuses_a_non_administration_capacity_kind() {
+    let context_id = AuthorityContextIdV1::derive("wrong-kind-context").unwrap();
+    let root_id = CapacityRootIdV1::derive("wrong-kind-root").unwrap();
+    let root = GovernedCapacityRootV1::new(
+        root_id,
+        AuthorityContextKindV1::RepositoryAuthorityContext,
+        context_id,
+        GovernedCapacityKindV1::Repository(
+            RepositoryGovernedCapacitySlotKindV1::RepositoryOrdinaryMutation,
+        ),
+        4,
+    )
+    .unwrap();
+    let object = authority_object(
+        AuthoritySchemaV1::GovernedCapacityRoot,
+        root.schema_value().unwrap(),
+        vec![],
+    )
+    .unwrap();
+    assert!(matches!(
+        current_repository_admin_capacity_root(&[object], context_id, root_id),
+        Err(AuthorityPublicationError::InvalidGrantAdministrationAuthority)
+    ));
+}
+
+#[test]
+fn ordinary_admin_reissues_and_revokes_with_one_debit_each_and_retirement_closure() {
+    let (root, _domain, mut store, contract_root, head_two, authority_root, _request) =
+        seeded_store();
+    let admin_a = admin_grant_issue_plan("admin-a", contract_root, &head_two, authority_root);
+    AuthorityFacadeV1::new(&mut store)
+        .issue_root_attached_bounded_grant(admin_a)
+        .unwrap();
+    let head_three = store.active_head().unwrap().unwrap();
+    let generation_three = store.publication_generation(head_three.id()).unwrap();
+    let [root_three] = generation_three.roots() else {
+        panic!("Grant issue successor must have one Authority root");
+    };
+    let admin_b = admin_grant_issue_plan("admin-b", contract_root, &head_three, *root_three);
+    AuthorityFacadeV1::new(&mut store)
+        .issue_root_attached_bounded_grant(admin_b)
+        .unwrap();
+    let head_four = store.active_head().unwrap().unwrap();
+    let generation_four = store.publication_generation(head_four.id()).unwrap();
+    let [root_four] = generation_four.roots() else {
+        panic!("Grant issue successor must have one Authority root");
+    };
+
+    let candidate = admin_grant_issue_plan("admin-c", contract_root, &head_four, *root_four);
+    let admin_a_id = GrantIdV1::derive("admin-a-grant").unwrap();
+    let admin_b_id = GrantIdV1::derive("admin-b-grant").unwrap();
+    let admin_c_id = GrantIdV1::derive("admin-c-grant").unwrap();
+    let administrator = GrantAdministrationAuthorityV1::new(
+        PrincipalBindingIdV1::derive("responder-binding").unwrap(),
+        SessionIdV1::derive("responder-session").unwrap(),
+        admin_a_id,
+    );
+    assert_eq!(
+        RevokeGrantPublicationV1::new(
+            GrantActionIdentityV1::new(
+                ActionRequestIdV1::derive("self-revoke-admin-a").unwrap(),
+                IdempotencyKeyIdV1::derive("self-revoke-admin-a-key").unwrap(),
+            ),
+            super::super::AuthorityPublicationLineageV1::successor(
+                contract_root,
+                head_four.generation_id(),
+                head_four.id(),
+                *root_four,
+            ),
+            administrator,
+            admin_a_id,
+        ),
+        Err(super::super::AuthorityPublicationPlanError::SelfAuthorizingGrantMutation)
+    );
+
+    let mut widened_definition = candidate.grant.grant().definition();
+    let mut widened_atoms = widened_definition
+        .terminal_scope
+        .atoms()
+        .cloned()
+        .collect::<Vec<_>>();
+    widened_atoms.push(
+        ScopeAtomV1::new(
+            "UnexpectedAdministrativeAuthority",
+            &CapacityRootIdV1::derive("repository-admin-capacity")
+                .unwrap()
+                .render(),
+            9,
+        )
+        .unwrap(),
+    );
+    widened_definition.terminal_scope = GrantScopeV1::new(widened_atoms).unwrap();
+    let widened_grant =
+        OrdinaryBoundedGrantV1::new(widened_definition.validate().unwrap()).unwrap();
+    let widened_delegation = OrdinaryGrantDelegationV1::new(
+        widened_grant.grant().context_id(),
+        widened_grant.capacity_root_id(),
+        candidate.delegation.delegation(),
+        &widened_grant,
+    )
+    .unwrap();
+    let widening = ReissueRootAttachedGrantOneToOnePublicationV1::new(
+        GrantActionIdentityV1::new(
+            ActionRequestIdV1::derive("widen-admin-b").unwrap(),
+            IdempotencyKeyIdV1::derive("widen-admin-b-key").unwrap(),
+        ),
+        super::super::AuthorityPublicationLineageV1::successor(
+            contract_root,
+            head_four.generation_id(),
+            head_four.id(),
+            *root_four,
+        ),
+        administrator,
+        admin_b_id,
+        widened_grant,
+        widened_delegation,
+    )
+    .unwrap();
+    assert!(matches!(
+        AuthorityFacadeV1::new(&mut store).reissue_root_attached_grant_one_to_one(widening),
+        Err(AuthorityPublicationError::GrantReissueWidening)
+    ));
+    assert_eq!(store.active_head().unwrap().unwrap().id(), head_four.id());
+
+    let reissue = ReissueRootAttachedGrantOneToOnePublicationV1::new(
+        GrantActionIdentityV1::new(
+            ActionRequestIdV1::derive("reissue-admin-b").unwrap(),
+            IdempotencyKeyIdV1::derive("reissue-admin-b-key").unwrap(),
+        ),
+        super::super::AuthorityPublicationLineageV1::successor(
+            contract_root,
+            head_four.generation_id(),
+            head_four.id(),
+            *root_four,
+        ),
+        administrator,
+        admin_b_id,
+        candidate.grant,
+        candidate.delegation,
+    )
+    .unwrap();
+    AuthorityFacadeV1::new(&mut store)
+        .reissue_root_attached_grant_one_to_one(reissue)
+        .unwrap();
+    let objects_after_reissue = active_objects(&store);
+    assert_eq!(
+        schema_objects(
+            &objects_after_reissue,
+            AuthoritySchemaV1::GovernedCapacityDebit
+        )
+        .unwrap()
+        .len(),
+        1
+    );
+    let revocations_after_reissue =
+        one_schema_object(&objects_after_reissue, AuthoritySchemaV1::RevocationSet).unwrap();
+    let revocations_after_reissue = AuthorityRevocationSetV1::from_canonical_bytes(
+        &object_value_bytes(&revocations_after_reissue).unwrap(),
+    )
+    .unwrap();
+    assert!(
+        revocations_after_reissue
+            .revocations()
+            .contains(super::super::RevocationTargetV1::Grant(admin_b_id))
+    );
+    let successor_snapshot = one_schema_object(
+        &objects_after_reissue,
+        AuthoritySchemaV1::BootstrapAuthoritySnapshot,
+    )
+    .unwrap();
+    let successor_facts = BootstrapAuthoritySnapshotV1::from_canonical_bytes(
+        &object_value_bytes(&successor_snapshot).unwrap(),
+    )
+    .unwrap();
+    let admitted_candidate = schema_objects(
+        &objects_after_reissue,
+        AuthoritySchemaV1::OrdinaryBoundedGrant,
+    )
+    .unwrap()
+    .into_iter()
+    .map(|object| {
+        OrdinaryBoundedGrantV1::from_canonical_bytes(&object_value_bytes(&object).unwrap()).unwrap()
+    })
+    .find(|grant| grant.grant().id() == admin_c_id)
+    .unwrap();
+    let admitted_delegation = schema_objects(
+        &objects_after_reissue,
+        AuthoritySchemaV1::OrdinaryGrantDelegation,
+    )
+    .unwrap()
+    .into_iter()
+    .find_map(|object| {
+        OrdinaryGrantDelegationV1::from_canonical_bytes(
+            &object_value_bytes(&object).unwrap(),
+            &admitted_candidate,
+        )
+        .ok()
+    })
+    .unwrap();
+    super::super::admit_repository_authority_candidate(
+        &successor_facts,
+        admitted_candidate.capacity_root_id(),
+        &admitted_candidate,
+        &admitted_delegation,
+    )
+    .unwrap();
+
+    let head_five = store.active_head().unwrap().unwrap();
+    let generation_five = store.publication_generation(head_five.id()).unwrap();
+    let [root_five] = generation_five.roots() else {
+        panic!("Grant reissue successor must have one Authority root");
+    };
+    let revoke = RevokeGrantPublicationV1::new(
+        GrantActionIdentityV1::new(
+            ActionRequestIdV1::derive("revoke-admin-c").unwrap(),
+            IdempotencyKeyIdV1::derive("revoke-admin-c-key").unwrap(),
+        ),
+        super::super::AuthorityPublicationLineageV1::successor(
+            contract_root,
+            head_five.generation_id(),
+            head_five.id(),
+            *root_five,
+        ),
+        administrator,
+        admin_c_id,
+    )
+    .unwrap();
+    let revoked = AuthorityFacadeV1::new(&mut store)
+        .revoke_grant(revoke.clone())
+        .unwrap();
+    assert_eq!(revoked.kind(), AuthorityPublicationKindV1::Committed);
+    let objects_after_revoke = active_objects(&store);
+    assert_eq!(
+        schema_objects(
+            &objects_after_revoke,
+            AuthoritySchemaV1::GovernedCapacityDebit
+        )
+        .unwrap()
+        .len(),
+        1
+    );
+    let capacity_after_revoke = schema_objects(
+        &objects_after_revoke,
+        AuthoritySchemaV1::GovernedCapacityRoot,
+    )
+    .unwrap()
+    .into_iter()
+    .find(|object| {
+        matches!(object.value(), CborValue::Array(fields) if fields[6] == CborValue::Unsigned(2))
+    })
+    .unwrap();
+    let CborValue::Array(capacity_fields) = capacity_after_revoke.value() else {
+        panic!("capacity root must use the canonical array carrier");
+    };
+    assert_eq!(capacity_fields[6], CborValue::Unsigned(2));
+    let revocations_after_revoke =
+        one_schema_object(&objects_after_revoke, AuthoritySchemaV1::RevocationSet).unwrap();
+    let revocations_after_revoke = AuthorityRevocationSetV1::from_canonical_bytes(
+        &object_value_bytes(&revocations_after_revoke).unwrap(),
+    )
+    .unwrap();
+    assert!(
+        revocations_after_revoke
+            .revocations()
+            .contains(super::super::RevocationTargetV1::Grant(admin_b_id))
+    );
+    assert!(
+        revocations_after_revoke
+            .revocations()
+            .contains(super::super::RevocationTargetV1::Grant(admin_c_id))
+    );
+    let replay = AuthorityFacadeV1::new(&mut store)
+        .revoke_grant(revoke)
+        .unwrap();
+    assert_eq!(replay.kind(), AuthorityPublicationKindV1::Replayed);
+    assert_eq!(replay.head().id(), revoked.head().id());
+    drop(store);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn one_to_one_reissue_refuses_an_ordinary_parent_even_on_the_same_capacity_root() {
+    let (root, _domain, mut store, contract_root, head_two, authority_root, _request) =
+        seeded_store();
+    let mut parent =
+        admin_grant_issue_plan("ordinary-parent", contract_root, &head_two, authority_root);
+    let mut parent_definition = parent.grant.grant().definition();
+    parent_definition.delegable_scope = parent_definition.terminal_scope.clone();
+    parent.grant = OrdinaryBoundedGrantV1::new(parent_definition.validate().unwrap()).unwrap();
+    parent.delegation = OrdinaryGrantDelegationV1::new(
+        parent.grant.grant().context_id(),
+        parent.grant.capacity_root_id(),
+        parent.delegation.delegation(),
+        &parent.grant,
+    )
+    .unwrap();
+    AuthorityFacadeV1::new(&mut store)
+        .issue_root_attached_bounded_grant(parent)
+        .unwrap();
+
+    let head_three = store.active_head().unwrap().unwrap();
+    let generation_three = store.publication_generation(head_three.id()).unwrap();
+    let [root_three] = generation_three.roots() else {
+        panic!("Grant issue successor must have one Authority root");
+    };
+    let retired = admin_grant_issue_plan("retired-admin", contract_root, &head_three, *root_three);
+    AuthorityFacadeV1::new(&mut store)
+        .issue_root_attached_bounded_grant(retired)
+        .unwrap();
+
+    let head_four = store.active_head().unwrap().unwrap();
+    let generation_four = store.publication_generation(head_four.id()).unwrap();
+    let [root_four] = generation_four.roots() else {
+        panic!("Grant issue successor must have one Authority root");
+    };
+    let mut candidate =
+        admin_grant_issue_plan("ordinary-child", contract_root, &head_four, *root_four);
+    let parent_grant_id = GrantIdV1::derive("ordinary-parent-grant").unwrap();
+    let mut candidate_definition = candidate.grant.grant().definition();
+    candidate_definition.parent_grant_id = Some(parent_grant_id);
+    candidate_definition.delegation_depth_remaining = 6;
+    candidate.grant =
+        OrdinaryBoundedGrantV1::new(candidate_definition.validate().unwrap()).unwrap();
+    candidate.delegation = OrdinaryGrantDelegationV1::new(
+        candidate.grant.grant().context_id(),
+        candidate.grant.capacity_root_id(),
+        DelegationV1::new(
+            candidate.delegation.delegation().id,
+            parent_grant_id,
+            candidate.grant.grant().id(),
+        ),
+        &candidate.grant,
+    )
+    .unwrap();
+    let reissue = ReissueRootAttachedGrantOneToOnePublicationV1::new(
+        candidate.identity,
+        candidate.lineage,
+        GrantAdministrationAuthorityV1::new(
+            PrincipalBindingIdV1::derive("responder-binding").unwrap(),
+            SessionIdV1::derive("responder-session").unwrap(),
+            parent_grant_id,
+        ),
+        GrantIdV1::derive("retired-admin-grant").unwrap(),
+        candidate.grant,
+        candidate.delegation,
+    )
+    .unwrap();
+
+    assert!(matches!(
+        AuthorityFacadeV1::new(&mut store).reissue_root_attached_grant_one_to_one(reissue),
+        Err(AuthorityPublicationError::GrantReissueWidening)
+    ));
+    assert_eq!(store.active_head().unwrap().unwrap().id(), head_four.id());
+    drop(store);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn g0_to_a_to_b_cannot_use_b_to_revoke_or_reissue_ancestor_a() {
+    let root = CapacityRootIdV1::derive("ancestor-admin-root").unwrap();
+    let g0 = GrantIdV1::derive("ancestor-g0").unwrap();
+    let admin_scope = || {
+        GrantScopeV1::new(vec![
+            ScopeAtomV1::new("ReissueRootAttachedGrantOneToOne", &root.render(), 9).unwrap(),
+            ScopeAtomV1::new("RevokeGrant", &root.render(), 9).unwrap(),
+        ])
+        .unwrap()
+    };
+    let admin_a = ordinary_test_grant("ancestor-a", g0, root, admin_scope(), admin_scope(), 7);
+    let admin_b = ordinary_test_grant(
+        "ancestor-b",
+        admin_a.grant().id(),
+        root,
+        admin_scope(),
+        GrantScopeV1::new(vec![]).unwrap(),
+        6,
+    );
+    let handoff = ordinary_test_grant(
+        "ancestor-handoff",
+        g0,
+        root,
+        admin_scope(),
+        GrantScopeV1::new(vec![]).unwrap(),
+        7,
+    );
+    let grants = vec![admin_a.clone(), admin_b.clone()];
+
+    for action in ["RevokeGrant", "ReissueRootAttachedGrantOneToOne"] {
+        assert!(matches!(
+            reject_administrator_ancestor_mutation(action, &admin_b, admin_a.grant().id(), &grants,),
+            Err(AuthorityPublicationError::InvalidGrantAdministrationAuthority)
+        ));
+    }
+
+    assert!(
+        !has_independently_live_repository_administrator(
+            IndependentRepositoryAdministratorCheckV1 {
+                grants: &grants,
+                candidate: None,
+                target_grant_id: admin_a.grant().id(),
+                current_revocations: &RevocationSetV1::empty(),
+                capacity_root_id: root,
+                action: "RevokeGrant",
+                protocol_revision: 9,
+                trusted_time: TrustedTimeV1::verified(120, 130).unwrap(),
+            },
+        )
+        .unwrap()
+    );
+    assert!(
+        has_independently_live_repository_administrator(
+            IndependentRepositoryAdministratorCheckV1 {
+                grants: &grants,
+                candidate: Some(&handoff),
+                target_grant_id: admin_a.grant().id(),
+                current_revocations: &RevocationSetV1::empty(),
+                capacity_root_id: root,
+                action: "ReissueRootAttachedGrantOneToOne",
+                protocol_revision: 9,
+                trusted_time: TrustedTimeV1::verified(120, 130).unwrap(),
+            },
+        )
+        .unwrap()
+    );
+}
+
+#[test]
+fn same_root_non_admin_does_not_satisfy_the_post_mutation_admin_invariant() {
+    let root = CapacityRootIdV1::derive("non-admin-survivor-root").unwrap();
+    let g0 = GrantIdV1::derive("non-admin-survivor-g0").unwrap();
+    let admin_scope = GrantScopeV1::new(vec![
+        ScopeAtomV1::new("ReissueRootAttachedGrantOneToOne", &root.render(), 9).unwrap(),
+        ScopeAtomV1::new("RevokeGrant", &root.render(), 9).unwrap(),
+    ])
+    .unwrap();
+    let admin = ordinary_test_grant(
+        "only-admin",
+        g0,
+        root,
+        admin_scope,
+        GrantScopeV1::new(vec![]).unwrap(),
+        7,
+    );
+    let non_admin = ordinary_test_grant(
+        "same-root-reader",
+        g0,
+        root,
+        GrantScopeV1::new(vec![
+            ScopeAtomV1::new("ReadRepository", "repository", 9).unwrap(),
+        ])
+        .unwrap(),
+        GrantScopeV1::new(vec![]).unwrap(),
+        7,
+    );
+
+    assert!(
+        !has_independently_live_repository_administrator(
+            IndependentRepositoryAdministratorCheckV1 {
+                grants: &[admin.clone(), non_admin],
+                candidate: None,
+                target_grant_id: admin.grant().id(),
+                current_revocations: &RevocationSetV1::empty(),
+                capacity_root_id: root,
+                action: "RevokeGrant",
+                protocol_revision: 9,
+                trusted_time: TrustedTimeV1::verified(120, 130).unwrap(),
+            },
+        )
+        .unwrap()
+    );
 }
 
 #[test]
@@ -1077,7 +1795,7 @@ fn store_loaded_post_cut_refuses_a_nonexact_action_result_receipt_count() {
         result.references().to_vec(),
     )
     .unwrap();
-    let mutant_post_cut_references = post_cut
+    let mut mutant_post_cut_references = post_cut
         .references()
         .iter()
         .map(|reference| {
@@ -1088,6 +1806,7 @@ fn store_loaded_post_cut_refuses_a_nonexact_action_result_receipt_count() {
             }
         })
         .collect::<Vec<_>>();
+    mutant_post_cut_references.sort_unstable();
     let mutant_post_cut = StoreObjectV1::new(
         post_cut.schema_id(),
         post_cut.value().clone(),

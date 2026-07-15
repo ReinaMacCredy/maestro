@@ -165,6 +165,106 @@ allocation, and durability without importing Authority semantics. Inactive
 restore preserves immutable history and replay facts but activates no bearer or
 Authority currentness.
 
+Stage 3 adds the canonical Repository-domain Work, Step, Design, Decision,
+Evidence Claim, and Contract publication kernels. Work owns its identity,
+lifecycle, requirements, relations, and exact Contract-root association. Step
+owns immutable revisions, the generation-scoped DAG Binding, amendment
+disposition, and lifecycle; a Step Binding never grants execution authority.
+Design and Decision own immutable authoring history and resolution
+provenance, while Contract owns the exact materialization plan, Component
+closure, candidate Root, publication consequence, and generation change.
+Decision materialization remains inert candidate history and has no standalone
+Action leaf. A changed consequence can become current only inside the exact
+Contract amendment publication. Equal-root and receipt-proven, exactly
+equivalent distinct-root materializations are Store-validated read-only no-ops
+before Authority admission; they record no Action identity, Result, Receipt,
+idempotency mapping, Authority debit, object, or generation. Distinct-root
+equivalence is recomputed by the pinned purpose-specific evaluator over the
+exact rooted Decision, base Root, and candidate Root references. Its semantic
+component-graph digest excludes provenance only; a self-authored tuple,
+unrecognized purpose/evaluator, missing proof reference, or actual semantic
+change fails closed.
+
+Evidence owns every immutable Claim and its exact Work- or Step-Submission
+back-reference. The authoritative Submission Claim Set retains the complete
+Claims and subjects while projecting its canonical entries and digest. Stage 3
+does not publish Work or Step Submissions: Step execution and Submission enter
+through the canonical Execution owner in Stage 4, while Observation,
+Assessment, Gate, satisfaction, and Work-completion publication enter through
+their canonical owners in Stage 5. No repository-private carrier, digest tuple,
+or placeholder boolean may stand in for those later records.
+
+`domain::vnext::repository` is the sole Stage-3 mutation edge. Its frozen
+Repository catalog is exactly `CreateDraftWork`, `CancelWork`, `AbsorbWork`,
+`PublishInitialContract`, `AmendContract`, `AppendDesignRevision`, and
+`ResolveDecision`. Six leaves are executable in Stage 3. `AbsorbWork` is
+catalogued but fails closed until Stage 4 can prove the complete durable Effect
+Intent census and publish the successor Work amendment atomically; no partial
+or repository-private absorption path exists. Every admitted leaf is a typed
+member of the frozen ActionSpec
+manifest with exact global tag, owner identity, owner-local tag, descriptor,
+grammar, and protocol revision; invented strings cannot enter Authority
+admission. Initial Contract publication atomically roots the complete candidate
+Step DAG with every binding `Open(Fresh)`. Amendment consumes one total typed
+Step amendment plan and atomically publishes all retain, replace, remove, add,
+lifecycle-history, obligation-conservation, zero-or-more ordered
+materialization audits, Work,
+Contract, Authority, Result, idempotency, and successor-Generation consequences.
+Each materialization binds the exact nonterminal Work, resolved Decision,
+Resolution, base Root, candidate Root, and invalidation receipts; the ordered
+chain must have unique Resolutions, non-overlapping component-kind ownership,
+and end at the publication candidate Root. A zero-row chain is valid only when
+the amendment candidate is otherwise derived from its exact Contract inputs.
+An equal-root Contract amendment is a Store-validated zero-write path only when
+the Work transition and Step amendment plan are both absent, the materialization
+audit chain is empty, the candidate Step graph is byte-equivalent to the current
+graph, and the current Step-state set is an exact one-state-per-Binding
+partition of that graph. Validation reloads the exact current Work, Contract
+Generation, Contract Root, Step graph, and every Step state from the active
+Store basis in one coherent read. It also enumerates every directly rooted Step
+state for that exact Repository, Work, Contract Generation, and Contract Root;
+the rooted set must equal the submitted graph partition, so a hidden extra or
+second lifecycle for one Binding cannot survive either a no-op or a real
+amendment. Historical generations and other Work scopes remain outside that
+currentness partition. A real amendment performs the same partition check again
+over the fully assembled successor root set and the candidate Generation/Root,
+so a pre-rooted future-scope state cannot become current beside the planned
+successor states. Any lifecycle input, Step plan, graph drift, missing,
+duplicate, pre-rooted, or extra current state, or materialization input fails
+closed; the no-op cannot discard a contradictory requested mutation.
+Stage 3 has no satisfaction-carry input or carrier. Every `retain_exact` Step
+is initialized as `Open(Fresh)`; Stage 5 may introduce carry only through a
+successor protocol that reloads canonical Evidence, Gate, and material
+applicability. No raw hash, self-authored context tuple, or Stage-3 scaffold can
+preserve satisfaction.
+The Contract Generation identity is predicted from immutable Contract semantics
+before Authority admission and excludes the runtime Action Request, Receipt,
+Principal, and transition guard; the committed Generation record still binds
+that retrospective authority evidence, and its Store Object identity binds the
+complete bytes. This lets every candidate Step Binding and total amendment plan
+commit the exact successor Generation without a content-identity cycle.
+An amendment preserves `Draft`, `Ready`, or `Active` lifecycle eligibility in
+place. `AwaitingAcceptance` may amend only while naming and invalidating the
+exact current Work Submission, and returns to `Active`; terminal Work rejects
+amendment and Decision materialization before Authority admission. These state
+consequences are part of idempotency meaning, so a changed reason, Resolution,
+invalidation, or successor lifecycle cannot replay an earlier Result.
+The facade reloads the complete Grant/Delegation ancestry to G0, retains every
+validated ordinary Grant and Delegation edge in the successor Authority
+snapshot for the next mutation, and rejects orphaned, cyclic, revoked, stale,
+cross-context, or non-attenuating paths before spending capacity. Contract
+idempotency meaning includes the complete initial Step graph or amended graph,
+plan, current state set, ordered materialization chain, successor Work, and
+policy transition. Decision resolution additionally consumes a one-use
+authenticated-human carrier bound to the exact presented question, option
+mapping, selected alternative, nonce, and trusted-time expiry. Initial and
+amended Contract publication consume one-use authenticated-human carriers bound
+to the exact current/candidate policy-component snapshots; weakening has no
+convenience bypass.
+Same-key replay returns the recorded Result without a write only for that exact
+meaning; changed meaning, stale basis, hostile Authority, or partial amendment
+closure fails with no orphan object or debit.
+
 ---
 
 ## 2. The card model (as-built)

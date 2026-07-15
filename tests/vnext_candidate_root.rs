@@ -5,10 +5,10 @@ use maestro::domain::vnext::contract::assembly::{
 use maestro::domain::vnext::contract::component::CandidateContractComponentV1;
 use maestro::domain::vnext::contract::component_kind::ContractComponentKindV1;
 use maestro::domain::vnext::contract::decision_closure::{
-    DecisionClosureError, DecisionClosureV1, DecisionConsequenceClassificationV1,
-    DecisionMaterializationSourceV1, ExactDecisionRootBindingV1, ExternalDecisionClosureRecordV1,
-    ExternalDesignAuthorityClosureV1, ExternalLineageDispositionV1, RawExternalDecisionRecordV1,
-    RequiredDecisionMaterializationV1, TerminalDecisionStatusV1,
+    DecisionClosureV1, DecisionConsequenceClassificationV1, DecisionMaterializationSourceV1,
+    ExternalDecisionClosureRecordV1, ExternalDesignAuthorityClosureV1,
+    ExternalLineageDispositionV1, RawExternalDecisionRecordV1, RequiredDecisionMaterializationV1,
+    TerminalDecisionStatusV1,
 };
 use maestro::domain::vnext::contract::finalization::{
     DesignBasisV1, DesignFinalizationManifestV1, FinalizationInputKindV1, PinnedFinalizationInputV1,
@@ -20,13 +20,14 @@ use maestro::domain::vnext::contract::materialization::{
 use maestro::domain::vnext::contract::provenance::ComponentProvenanceV1;
 use maestro::domain::vnext::contract::root::{CandidateContractRootV1, ContractRootError};
 use maestro::domain::vnext::identity::{
-    ContractComponentIdV1, ContractRootIdV1, DecisionClosureIdV1, DecisionMaterializationIdV1,
-    DecisionResolutionIdV1, DesignFinalizationManifestIdV1, DesignRevisionIdV1,
-    DesignSourceBindingIdV1, SchemaClosureV1, SchemaIdV1, decision_closure_identity,
-    decision_materialization_identity, design_revision_identity, design_source_binding_identity,
+    ContractComponentIdV1, DecisionClosureIdV1, DecisionMaterializationIdV1,
+    DecisionResolutionIdV1, DesignRevisionIdV1, DesignSourceBindingIdV1, SchemaClosureV1,
+    SchemaIdV1, decision_closure_identity, decision_materialization_identity,
+    design_revision_identity, design_source_binding_identity,
 };
 use maestro::foundation::core::deterministic_cbor::CborValue;
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -187,79 +188,6 @@ fn fixture_finalization(
     .expect("design finalization manifest")
 }
 
-fn rebuild_fixture_root(
-    schemas: &SchemaClosureV1,
-    original: &CandidateContractRootV1,
-    mut normative_components: Vec<CandidateContractComponentV1>,
-) -> CandidateContractRootV1 {
-    let mut normative_ids = normative_components
-        .iter()
-        .map(|component| *component.component_id())
-        .collect::<Vec<_>>();
-    normative_ids.sort_by_key(|identifier| *identifier.as_bytes());
-    for component in original
-        .components()
-        .iter()
-        .filter(|component| component.kind() != ContractComponentKindV1::NormativeInputs)
-    {
-        normative_components.push(
-            CandidateContractComponentV1::new(
-                schemas,
-                component.kind(),
-                *component.schema_id(),
-                component.value().clone(),
-                normative_ids.clone(),
-                component.provenance().clone(),
-            )
-            .expect("rebuilt aggregate component"),
-        );
-    }
-    CandidateContractRootV1::new(schemas, normative_components).expect("rebuilt candidate root")
-}
-
-fn fixture_bindings(
-    root: &CandidateContractRootV1,
-    finalization: &DesignFinalizationManifestV1,
-    decision_closure_id: DecisionClosureIdV1,
-) -> Vec<ExactDecisionRootBindingV1> {
-    let mut bindings = root
-        .components()
-        .iter()
-        .filter(|component| component.kind() == ContractComponentKindV1::NormativeInputs)
-        .map(|component| {
-            let ComponentProvenanceV1::DecisionMaterialization(provenance) = component.provenance()
-            else {
-                panic!("NormativeInputs fixture must use Decision materialization provenance");
-            };
-            ExactDecisionRootBindingV1::new(
-                *provenance.materialization_id(),
-                *component.component_id(),
-                MaterializationBaseV1::initial_external_design_closure(decision_closure_id),
-                *root.root_id(),
-                *finalization.manifest_id(),
-            )
-        })
-        .collect::<Vec<_>>();
-    bindings.sort_by_key(|binding| *binding.materialization_id().as_bytes());
-    bindings
-}
-
-fn normative_component<'a>(
-    root: &'a CandidateContractRootV1,
-    materialization_id: &DecisionMaterializationIdV1,
-) -> &'a CandidateContractComponentV1 {
-    root.components()
-        .iter()
-        .find(|component| {
-            matches!(
-                component.provenance(),
-                ComponentProvenanceV1::DecisionMaterialization(provenance)
-                    if provenance.materialization_id() == materialization_id
-            )
-        })
-        .expect("fixture NormativeInputs component")
-}
-
 #[test]
 fn initial_external_design_closure_never_fabricates_a_prior_root() {
     let decision_closure_id = closure_id(1);
@@ -344,14 +272,15 @@ fn descriptor_backed_stage_zero_assembly_constructs_root_manifest_and_handoff() 
     let normative_schema_id = normative_inputs_schema_id_v1(&schemas).expect("normative schema");
     let fixture_materialization_count = decision_closure.materializations().len() as u64;
     let mut components = Vec::new();
-    for required_materialization in decision_closure.materializations() {
+    for (index, required_materialization) in decision_closure.materializations().iter().enumerate()
+    {
         let materialization_id = *required_materialization.materialization_id();
-        let resolution = DecisionMaterializationResolutionV1::new(
-            decision_closure_id,
-            MaterializationBaseV1::initial_external_design_closure(decision_closure_id),
-            materialization_id,
-        )
-        .expect("decision resolution");
+        let slot_tag = u64::try_from(index + 1).expect("fixture slot tag");
+        let source_binding_id = design_source_binding_identity(&CborValue::Array(vec![
+            CborValue::Unsigned(slot_tag),
+            CborValue::Bytes(materialization_id.as_bytes().to_vec()),
+        ]))
+        .expect("normative source binding");
         let value = CborValue::Array(vec![
             CborValue::Unsigned(1),
             CborValue::Bytes(materialization_id.as_bytes().to_vec()),
@@ -375,10 +304,8 @@ fn descriptor_backed_stage_zero_assembly_constructs_root_manifest_and_handoff() 
                 normative_schema_id,
                 value,
                 vec![],
-                ComponentProvenanceV1::decision_materialization(
-                    *resolution.resolution_id(),
-                    materialization_id,
-                ),
+                ComponentProvenanceV1::design_slot(design_revision_id, slot_tag, source_binding_id)
+                    .expect("normative provenance"),
             )
             .expect("normative component"),
         );
@@ -451,273 +378,6 @@ fn descriptor_backed_stage_zero_assembly_constructs_root_manifest_and_handoff() 
     let root = CandidateContractRootV1::new(&schemas, components).expect("candidate root");
     let finalization =
         fixture_finalization(&schemas, design_revision_id, decision_closure_id, &root);
-    let bindings = fixture_bindings(&root, &finalization, decision_closure_id);
-    decision_closure
-        .root_binding_requirements()
-        .resolve(bindings.clone(), &root, &finalization)
-        .expect("exact Decision-root bindings");
-
-    let mut reordered_bindings = bindings.clone();
-    reordered_bindings.reverse();
-    assert!(matches!(
-        decision_closure.root_binding_requirements().resolve(
-            reordered_bindings,
-            &root,
-            &finalization,
-        ),
-        Err(DecisionClosureError::BindingsNotStrictlySorted)
-    ));
-
-    let first_materialization = &decision_closure.materializations()[0];
-    let second_materialization = &decision_closure.materializations()[1];
-    let first_component = normative_component(&root, first_materialization.materialization_id());
-    let original_normatives = root
-        .components()
-        .iter()
-        .filter(|component| component.kind() == ContractComponentKindV1::NormativeInputs)
-        .cloned()
-        .collect::<Vec<_>>();
-
-    let fabricated_resolution =
-        DecisionResolutionIdV1::parse(&format!("sha256:{}", "22".repeat(32)))
-            .expect("fabricated resolution identity");
-    let wrong_resolution_component = CandidateContractComponentV1::new(
-        &schemas,
-        ContractComponentKindV1::NormativeInputs,
-        *first_component.schema_id(),
-        first_component.value().clone(),
-        first_component.dependencies().to_vec(),
-        ComponentProvenanceV1::decision_materialization(
-            fabricated_resolution,
-            *first_materialization.materialization_id(),
-        ),
-    )
-    .expect("wrong-resolution component");
-    let wrong_resolution_normatives = original_normatives
-        .iter()
-        .map(|component| {
-            if component.component_id() == first_component.component_id() {
-                wrong_resolution_component.clone()
-            } else {
-                component.clone()
-            }
-        })
-        .collect();
-    let wrong_resolution_root = rebuild_fixture_root(&schemas, &root, wrong_resolution_normatives);
-    let wrong_resolution_finalization = fixture_finalization(
-        &schemas,
-        design_revision_id,
-        decision_closure_id,
-        &wrong_resolution_root,
-    );
-    assert!(matches!(
-        decision_closure.root_binding_requirements().resolve(
-            fixture_bindings(
-                &wrong_resolution_root,
-                &wrong_resolution_finalization,
-                decision_closure_id,
-            ),
-            &wrong_resolution_root,
-            &wrong_resolution_finalization,
-        ),
-        Err(DecisionClosureError::NormativeResolutionMismatch)
-    ));
-
-    let first_source = &first_materialization.sources()[0];
-    let stale_value = CborValue::Array(vec![
-        CborValue::Unsigned(1),
-        CborValue::Bytes(
-            first_materialization
-                .materialization_id()
-                .as_bytes()
-                .to_vec(),
-        ),
-        CborValue::Array(vec![CborValue::Array(vec![
-            CborValue::Text(first_source.decision_id().to_owned()),
-            CborValue::Bytes([0xff; 32].to_vec()),
-        ])]),
-    ]);
-    let stale_value_component = CandidateContractComponentV1::new(
-        &schemas,
-        ContractComponentKindV1::NormativeInputs,
-        *first_component.schema_id(),
-        stale_value,
-        first_component.dependencies().to_vec(),
-        first_component.provenance().clone(),
-    )
-    .expect("stale-value component");
-    let stale_value_normatives = original_normatives
-        .iter()
-        .map(|component| {
-            if component.component_id() == first_component.component_id() {
-                stale_value_component.clone()
-            } else {
-                component.clone()
-            }
-        })
-        .collect();
-    let stale_value_root = rebuild_fixture_root(&schemas, &root, stale_value_normatives);
-    let stale_value_finalization = fixture_finalization(
-        &schemas,
-        design_revision_id,
-        decision_closure_id,
-        &stale_value_root,
-    );
-    assert!(matches!(
-        decision_closure.root_binding_requirements().resolve(
-            fixture_bindings(
-                &stale_value_root,
-                &stale_value_finalization,
-                decision_closure_id,
-            ),
-            &stale_value_root,
-            &stale_value_finalization,
-        ),
-        Err(DecisionClosureError::NormativeComponentValueMismatch)
-    ));
-
-    let second_component = normative_component(&root, second_materialization.materialization_id());
-    let duplicate_provenance_component = CandidateContractComponentV1::new(
-        &schemas,
-        ContractComponentKindV1::NormativeInputs,
-        *first_component.schema_id(),
-        first_component.value().clone(),
-        vec![*first_component.component_id()],
-        first_component.provenance().clone(),
-    )
-    .expect("duplicate-provenance component");
-    let duplicate_provenance_normatives = original_normatives
-        .iter()
-        .map(|component| {
-            if component.component_id() == second_component.component_id() {
-                duplicate_provenance_component.clone()
-            } else {
-                component.clone()
-            }
-        })
-        .collect();
-    let duplicate_provenance_root =
-        rebuild_fixture_root(&schemas, &root, duplicate_provenance_normatives);
-    let duplicate_provenance_finalization = fixture_finalization(
-        &schemas,
-        design_revision_id,
-        decision_closure_id,
-        &duplicate_provenance_root,
-    );
-    let mut duplicate_provenance_bindings = decision_closure
-        .materializations()
-        .iter()
-        .map(|materialization| {
-            let component = if materialization.materialization_id()
-                == second_materialization.materialization_id()
-            {
-                duplicate_provenance_root
-                    .components()
-                    .iter()
-                    .find(|component| {
-                        component.kind() == ContractComponentKindV1::NormativeInputs
-                            && !component.dependencies().is_empty()
-                    })
-                    .expect("duplicate-provenance replacement")
-            } else {
-                normative_component(
-                    &duplicate_provenance_root,
-                    materialization.materialization_id(),
-                )
-            };
-            ExactDecisionRootBindingV1::new(
-                *materialization.materialization_id(),
-                *component.component_id(),
-                MaterializationBaseV1::initial_external_design_closure(decision_closure_id),
-                *duplicate_provenance_root.root_id(),
-                *duplicate_provenance_finalization.manifest_id(),
-            )
-        })
-        .collect::<Vec<_>>();
-    duplicate_provenance_bindings.sort_by_key(|binding| *binding.materialization_id().as_bytes());
-    assert!(matches!(
-        decision_closure.root_binding_requirements().resolve(
-            duplicate_provenance_bindings,
-            &duplicate_provenance_root,
-            &duplicate_provenance_finalization,
-        ),
-        Err(DecisionClosureError::DuplicateNormativeMaterialization)
-    ));
-
-    let aggregate_component = root
-        .components()
-        .iter()
-        .find(|component| component.kind() != ContractComponentKindV1::NormativeInputs)
-        .expect("aggregate component");
-    let mut wrong_component = bindings.clone();
-    let first = &bindings[0];
-    wrong_component[0] = ExactDecisionRootBindingV1::new(
-        *first.materialization_id(),
-        *aggregate_component.component_id(),
-        first.materialization_base().clone(),
-        *root.root_id(),
-        *finalization.manifest_id(),
-    );
-    assert!(matches!(
-        decision_closure
-            .root_binding_requirements()
-            .resolve(wrong_component, &root, &finalization,),
-        Err(DecisionClosureError::NormativeComponentSetMismatch)
-    ));
-
-    let mut wrong_base = bindings.clone();
-    wrong_base[0] = ExactDecisionRootBindingV1::new(
-        *first.materialization_id(),
-        *first.component_id(),
-        MaterializationBaseV1::prior_contract_root(*root.root_id()),
-        *root.root_id(),
-        *finalization.manifest_id(),
-    );
-    assert!(matches!(
-        decision_closure
-            .root_binding_requirements()
-            .resolve(wrong_base, &root, &finalization,),
-        Err(DecisionClosureError::BindingMaterializationBaseMismatch)
-    ));
-
-    let wrong_root = ContractRootIdV1::parse(&format!("sha256:{}", "00".repeat(32)))
-        .expect("different root identity");
-    let mut wrong_root_binding = bindings.clone();
-    wrong_root_binding[0] = ExactDecisionRootBindingV1::new(
-        *first.materialization_id(),
-        *first.component_id(),
-        first.materialization_base().clone(),
-        wrong_root,
-        *finalization.manifest_id(),
-    );
-    assert!(matches!(
-        decision_closure.root_binding_requirements().resolve(
-            wrong_root_binding,
-            &root,
-            &finalization,
-        ),
-        Err(DecisionClosureError::BindingFinalizationMismatch)
-    ));
-
-    let wrong_finalization =
-        DesignFinalizationManifestIdV1::parse(&format!("sha256:{}", "11".repeat(32)))
-            .expect("different finalization identity");
-    let mut wrong_finalization_binding = bindings.clone();
-    wrong_finalization_binding[0] = ExactDecisionRootBindingV1::new(
-        *first.materialization_id(),
-        *first.component_id(),
-        first.materialization_base().clone(),
-        *root.root_id(),
-        wrong_finalization,
-    );
-    assert!(matches!(
-        decision_closure.root_binding_requirements().resolve(
-            wrong_finalization_binding,
-            &root,
-            &finalization,
-        ),
-        Err(DecisionClosureError::BindingFinalizationMismatch)
-    ));
     let handoff =
         CanonicalBuildHandoffV1::project(&finalization, &root).expect("canonical handoff");
 
@@ -734,7 +394,7 @@ fn descriptor_backed_stage_zero_assembly_constructs_root_manifest_and_handoff() 
 }
 
 #[test]
-fn emitted_candidate_root_reconstructs_with_rust_contract_types() {
+fn emitted_candidate_root_has_canonical_identities_without_minting_provenance() {
     let output =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("contracts/vnext/stage0/candidate-root");
     assert!(
@@ -760,69 +420,83 @@ fn emitted_candidate_root_reconstructs_with_rust_contract_types() {
         assert_eq!(json_string(row, "schema_id"), expected.render());
     }
 
-    let components = reconstruct_components(&schemas, &root_document);
-    let root = CandidateContractRootV1::new(&schemas, components).expect("reconstruct root");
-    assert_eq!(
-        root.root_id().render(),
-        json_string(&root_document, "identity")
-    );
-    assert_document_bytes(&root, &root_document);
-
+    let component_ids = validate_emitted_components(&schemas, &root_document);
     let rows = json_array(&root_document, "components");
     let expected_component_count =
         json_array(&bindings_document, "bindings").len() + ContractComponentKindV1::ALL.len() - 1;
     assert_eq!(rows.len(), expected_component_count);
     assert_eq!(
-        root.components()
+        component_ids
             .iter()
-            .map(|component| component.component_id().render())
+            .map(ContractComponentIdV1::render)
             .collect::<Vec<_>>(),
         rows.iter()
             .map(|row| json_string(row, "component_id").to_owned())
             .collect::<Vec<_>>(),
     );
+    let root_canonical = cbor_from_json(json_value(&root_document, "canonical_value"));
+    let root_fields = cbor_array(&root_canonical, "candidate root canonical value");
+    assert_eq!(
+        cbor_unsigned(&root_fields[1], "candidate root component count") as usize,
+        expected_component_count
+    );
+    let canonical_rows = cbor_array(&root_fields[2], "candidate root component rows");
+    assert_eq!(canonical_rows.len(), component_ids.len());
+    for (canonical_row, component_id) in canonical_rows.iter().zip(&component_ids) {
+        assert_eq!(
+            cbor_identity(
+                &cbor_array(canonical_row, "candidate root component row")[0],
+                "candidate root component identity",
+            ),
+            *component_id.as_bytes()
+        );
+    }
+    assert_document_identity(&root_document, "maestro.vnext.candidate-contract-root.v1");
 
-    let design_revision_id = DesignRevisionIdV1::parse(json_string(&design_document, "identity"))
+    DesignRevisionIdV1::parse(json_string(&design_document, "identity"))
         .expect("design revision identity");
-    let decision_closure_id =
-        DecisionClosureIdV1::parse(json_string(&finalization_document, "decision_closure_id"))
-            .expect("decision closure identity");
-    let inputs = json_array(&finalization_document, "pinned_inputs")
+    DecisionClosureIdV1::parse(json_string(&finalization_document, "decision_closure_id"))
+        .expect("decision closure identity");
+    let input_ids = json_array(&finalization_document, "pinned_inputs")
         .iter()
         .map(|row| reconstruct_pinned_input(&schemas, row))
         .collect::<Vec<_>>();
-    let finalization = DesignFinalizationManifestV1::new(
-        &schemas,
-        DesignBasisV1::design_revision(design_revision_id),
-        decision_closure_id,
-        &root,
-        inputs,
-    )
-    .expect("reconstruct finalization manifest");
+    assert_eq!(input_ids.len(), FinalizationInputKindV1::ALL.len());
     assert_eq!(
-        finalization.manifest_id().render(),
+        json_string(&finalization_document, "candidate_contract_root_id"),
+        json_string(&root_document, "identity")
+    );
+    assert_document_identity(
+        &finalization_document,
+        "maestro.vnext.design-finalization-manifest.v1",
+    );
+
+    assert_eq!(
+        json_string(&handoff_document, "candidate_contract_root_id"),
+        json_string(&root_document, "identity")
+    );
+    assert_eq!(
+        json_string(&handoff_document, "finalization_manifest_id"),
         json_string(&finalization_document, "identity")
     );
-    assert_document_bytes(&finalization, &finalization_document);
-
-    let handoff =
-        CanonicalBuildHandoffV1::project(&finalization, &root).expect("reconstruct handoff");
     assert_eq!(
-        handoff.handoff_id().render(),
-        json_string(&handoff_document, "identity")
+        json_u64(&handoff_document, "component_count") as usize,
+        expected_component_count
     );
-    assert_document_bytes(&handoff, &handoff_document);
-    assert_eq!(handoff.components().len(), expected_component_count);
     assert_eq!(
-        handoff.pinned_inputs().len(),
+        json_u64(&handoff_document, "pinned_input_count") as usize,
         FinalizationInputKindV1::ALL.len()
+    );
+    assert_document_identity(
+        &handoff_document,
+        "maestro.vnext.build-handoff-projection.v1",
     );
 }
 
-fn reconstruct_components(
+fn validate_emitted_components(
     schemas: &maestro::domain::vnext::identity::SchemaClosureV1,
     document: &Value,
-) -> Vec<CandidateContractComponentV1> {
+) -> Vec<ContractComponentIdV1> {
     json_array(document, "components")
         .iter()
         .map(|row| {
@@ -847,47 +521,71 @@ fn reconstruct_components(
                     .expect("component dependency identity")
                 })
                 .collect::<Vec<_>>();
-            let provenance = reconstruct_provenance(json_value(row, "provenance"));
-            let component = CandidateContractComponentV1::new(
-                schemas,
-                kind,
-                schema_id,
-                fields[3].clone(),
-                dependencies,
-                provenance,
-            )
-            .expect("reconstruct component");
-            assert_eq!(
-                component.component_id().render(),
-                json_string(row, "component_id")
-            );
-            assert_eq!(
-                component.canonical_bytes().expect("component bytes"),
-                deterministic_cbor_bytes(&canonical),
-            );
-            component
+            schemas
+                .validate_value(&schema_id, &fields[3])
+                .expect("component value must match its schema");
+            let expected_id = ContractComponentIdV1::parse(json_string(row, "component_id"))
+                .expect("component identity");
+            match json_string(json_value(row, "provenance"), "kind") {
+                "design_slot" => {
+                    let component = CandidateContractComponentV1::new(
+                        schemas,
+                        kind,
+                        schema_id,
+                        fields[3].clone(),
+                        dependencies,
+                        reconstruct_design_provenance(json_value(row, "provenance")),
+                    )
+                    .expect("reconstruct externally constructible component");
+                    assert_eq!(component.component_id(), &expected_id);
+                    assert_eq!(
+                        component.canonical_bytes().expect("component bytes"),
+                        deterministic_cbor_bytes(&canonical),
+                    );
+                }
+                "decision_materialization" => {
+                    validate_decision_materialization_provenance(
+                        json_value(row, "provenance"),
+                        &fields[5],
+                    );
+                    assert_canonical_identity(
+                        "maestro.vnext.contract-component.v1",
+                        &canonical,
+                        &expected_id.render(),
+                    );
+                }
+                other => panic!("unsupported emitted provenance kind: {other}"),
+            }
+            expected_id
         })
         .collect()
 }
 
-fn reconstruct_provenance(value: &Value) -> ComponentProvenanceV1 {
-    match json_string(value, "kind") {
-        "decision_materialization" => ComponentProvenanceV1::decision_materialization(
-            DecisionResolutionIdV1::parse(json_string(value, "resolution_id"))
-                .expect("decision resolution identity"),
-            DecisionMaterializationIdV1::parse(json_string(value, "materialization_id"))
-                .expect("decision materialization identity"),
-        ),
-        "design_slot" => ComponentProvenanceV1::design_slot(
-            DesignRevisionIdV1::parse(json_string(value, "design_revision_id"))
-                .expect("design revision identity"),
-            json_u64(value, "slot_tag"),
-            DesignSourceBindingIdV1::parse(json_string(value, "source_binding_id"))
-                .expect("design source binding identity"),
-        )
-        .expect("design slot provenance"),
-        other => panic!("unsupported emitted provenance kind: {other}"),
-    }
+fn reconstruct_design_provenance(value: &Value) -> ComponentProvenanceV1 {
+    ComponentProvenanceV1::design_slot(
+        DesignRevisionIdV1::parse(json_string(value, "design_revision_id"))
+            .expect("design revision identity"),
+        json_u64(value, "slot_tag"),
+        DesignSourceBindingIdV1::parse(json_string(value, "source_binding_id"))
+            .expect("design source binding identity"),
+    )
+    .expect("design slot provenance")
+}
+
+fn validate_decision_materialization_provenance(value: &Value, canonical: &CborValue) {
+    let resolution_id = DecisionResolutionIdV1::parse(json_string(value, "resolution_id"))
+        .expect("Decision resolution identity");
+    let materialization_id =
+        DecisionMaterializationIdV1::parse(json_string(value, "materialization_id"))
+            .expect("Decision materialization identity");
+    assert_eq!(
+        canonical,
+        &CborValue::Array(vec![
+            CborValue::Unsigned(3),
+            CborValue::Bytes(resolution_id.as_bytes().to_vec()),
+            CborValue::Bytes(materialization_id.as_bytes().to_vec()),
+        ])
+    );
 }
 
 fn reconstruct_pinned_input(
@@ -1052,31 +750,24 @@ fn rendered_identity(value: [u8; 32]) -> String {
     rendered
 }
 
-trait CanonicalBytesV1 {
-    fn canonical_bytes_for_test(&self) -> Vec<u8>;
-}
-
-impl CanonicalBytesV1 for CandidateContractRootV1 {
-    fn canonical_bytes_for_test(&self) -> Vec<u8> {
-        self.canonical_bytes().expect("candidate root bytes")
-    }
-}
-
-impl CanonicalBytesV1 for DesignFinalizationManifestV1 {
-    fn canonical_bytes_for_test(&self) -> Vec<u8> {
-        self.canonical_bytes().expect("finalization manifest bytes")
-    }
-}
-
-impl CanonicalBytesV1 for CanonicalBuildHandoffV1 {
-    fn canonical_bytes_for_test(&self) -> Vec<u8> {
-        self.canonical_bytes().expect("build handoff bytes")
-    }
-}
-
-fn assert_document_bytes<T: CanonicalBytesV1>(value: &T, document: &Value) {
+fn assert_document_identity(document: &Value, domain: &str) {
+    let canonical = cbor_from_json(json_value(document, "canonical_value"));
     let expected = hexadecimal_bytes(json_string(document, "canonical_cbor_hex"));
-    assert_eq!(value.canonical_bytes_for_test(), expected);
+    assert_eq!(deterministic_cbor_bytes(&canonical), expected);
+    assert_eq!(
+        rendered_identity(Sha256::digest(&expected).into()),
+        format!("sha256:{}", json_string(document, "canonical_cbor_sha256"))
+    );
+    assert_canonical_identity(domain, &canonical, json_string(document, "identity"));
+}
+
+fn assert_canonical_identity(domain: &str, canonical: &CborValue, expected: &str) {
+    let identity_preimage =
+        CborValue::Array(vec![CborValue::Text(domain.to_owned()), canonical.clone()]);
+    assert_eq!(
+        rendered_identity(Sha256::digest(deterministic_cbor_bytes(&identity_preimage)).into()),
+        expected
+    );
 }
 
 fn deterministic_cbor_bytes(value: &CborValue) -> Vec<u8> {

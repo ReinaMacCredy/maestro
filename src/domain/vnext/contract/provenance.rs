@@ -6,6 +6,8 @@ use crate::domain::vnext::identity::{
 };
 use crate::foundation::core::deterministic_cbor::CborValue;
 
+use super::materialization::DecisionMaterializationPreimageCommitmentV1;
+
 pub const MAX_DESIGN_SLOT_TAG: u64 = 65_535;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -13,6 +15,7 @@ pub enum ComponentProvenanceV1 {
     DesignSlot(DesignSlotProvenanceV1),
     AuthorizedNoDesign(AuthorizedNoDesignProvenanceV1),
     DecisionMaterialization(DecisionMaterializationProvenanceV1),
+    DecisionMaterializationPreimage(DecisionMaterializationPreimageProvenanceV1),
 }
 
 impl ComponentProvenanceV1 {
@@ -43,7 +46,7 @@ impl ComponentProvenanceV1 {
         })
     }
 
-    pub fn decision_materialization(
+    pub(crate) fn decision_materialization(
         resolution_id: DecisionResolutionIdV1,
         materialization_id: DecisionMaterializationIdV1,
     ) -> Self {
@@ -53,11 +56,22 @@ impl ComponentProvenanceV1 {
         })
     }
 
+    pub(crate) fn decision_materialization_preimage(
+        resolution_id: DecisionResolutionIdV1,
+        commitment: DecisionMaterializationPreimageCommitmentV1,
+    ) -> Self {
+        Self::DecisionMaterializationPreimage(DecisionMaterializationPreimageProvenanceV1 {
+            resolution_id,
+            commitment,
+        })
+    }
+
     pub const fn variant_tag(&self) -> u64 {
         match self {
             Self::DesignSlot(_) => 1,
             Self::AuthorizedNoDesign(_) => 2,
             Self::DecisionMaterialization(_) => 3,
+            Self::DecisionMaterializationPreimage(_) => 4,
         }
     }
 
@@ -79,6 +93,11 @@ impl ComponentProvenanceV1 {
                 CborValue::Unsigned(3),
                 CborValue::Bytes(value.resolution_id.as_bytes().to_vec()),
                 CborValue::Bytes(value.materialization_id.as_bytes().to_vec()),
+            ]),
+            Self::DecisionMaterializationPreimage(value) => CborValue::Array(vec![
+                CborValue::Unsigned(4),
+                CborValue::Bytes(value.resolution_id.as_bytes().to_vec()),
+                CborValue::Bytes(value.commitment.as_bytes().to_vec()),
             ]),
         }
     }
@@ -132,6 +151,22 @@ pub struct DecisionMaterializationProvenanceV1 {
     materialization_id: DecisionMaterializationIdV1,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DecisionMaterializationPreimageProvenanceV1 {
+    resolution_id: DecisionResolutionIdV1,
+    commitment: DecisionMaterializationPreimageCommitmentV1,
+}
+
+impl DecisionMaterializationPreimageProvenanceV1 {
+    pub fn resolution_id(&self) -> &DecisionResolutionIdV1 {
+        &self.resolution_id
+    }
+
+    pub const fn commitment(&self) -> DecisionMaterializationPreimageCommitmentV1 {
+        self.commitment
+    }
+}
+
 impl DecisionMaterializationProvenanceV1 {
     pub fn resolution_id(&self) -> &DecisionResolutionIdV1 {
         &self.resolution_id
@@ -146,4 +181,75 @@ impl DecisionMaterializationProvenanceV1 {
 pub enum ProvenanceError {
     #[error("Design slot tag must be positive and within the finite v1 bound")]
     InvalidDesignSlotTag,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::vnext::contract::assembly::{
+        candidate_root_schema_closure_v1, facet_schema_id_v1, fixture_facet_value_v1,
+    };
+    use crate::domain::vnext::contract::component::CandidateContractComponentV1;
+    use crate::domain::vnext::contract::component_kind::ContractComponentKindV1;
+    use crate::domain::vnext::identity::{
+        decision_materialization_identity, decision_resolution_identity,
+        design_closure_requirement_identity, design_revision_identity,
+        design_source_binding_identity, no_design_exemption_identity,
+    };
+
+    #[test]
+    fn decision_materialization_tag_three_remains_identity_bearing_but_not_publicly_mintable() {
+        let schemas = candidate_root_schema_closure_v1().expect("candidate root schemas");
+        let kind = ContractComponentKindV1::IntendedOutcome;
+        let schema_id = facet_schema_id_v1(&schemas, kind).expect("facet schema");
+        let value = fixture_facet_value_v1(kind, [7; 32], vec![[8; 32]]);
+        let design_revision_id =
+            design_revision_identity(&CborValue::Unsigned(1)).expect("design revision");
+        let source_binding_id =
+            design_source_binding_identity(&CborValue::Unsigned(2)).expect("source binding");
+        let closure_requirement_id = design_closure_requirement_identity(&CborValue::Unsigned(3))
+            .expect("closure requirement");
+        let exemption_id =
+            no_design_exemption_identity(&CborValue::Unsigned(4)).expect("no-design exemption");
+        let resolution_id =
+            decision_resolution_identity(&CborValue::Unsigned(5)).expect("Decision resolution");
+        let materialization_id = decision_materialization_identity(&CborValue::Unsigned(6))
+            .expect("Decision materialization");
+
+        let provenance = [
+            ComponentProvenanceV1::design_slot(design_revision_id, kind.tag(), source_binding_id)
+                .expect("design provenance"),
+            ComponentProvenanceV1::authorized_no_design(
+                closure_requirement_id,
+                exemption_id,
+                source_binding_id,
+            ),
+            ComponentProvenanceV1::decision_materialization(resolution_id, materialization_id),
+        ];
+        assert_eq!(provenance[2].variant_tag(), 3);
+        assert_eq!(
+            provenance[2].canonical_value(),
+            CborValue::Array(vec![
+                CborValue::Unsigned(3),
+                CborValue::Bytes(resolution_id.as_bytes().to_vec()),
+                CborValue::Bytes(materialization_id.as_bytes().to_vec()),
+            ])
+        );
+
+        let component_ids = provenance.map(|provenance| {
+            *CandidateContractComponentV1::new(
+                &schemas,
+                kind,
+                schema_id,
+                value.clone(),
+                vec![],
+                provenance,
+            )
+            .expect("candidate component")
+            .component_id()
+        });
+        assert_ne!(component_ids[0], component_ids[1]);
+        assert_ne!(component_ids[0], component_ids[2]);
+        assert_ne!(component_ids[1], component_ids[2]);
+    }
 }

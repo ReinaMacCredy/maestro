@@ -10,10 +10,35 @@ use crate::domain::vnext::persistence::{
 };
 use crate::foundation::core::deterministic_cbor::{self, CborError, CborValue};
 
+mod repository_admission;
+mod repository_leaf_authority;
+
+#[cfg(test)]
+pub(crate) use repository_admission::test_support;
+pub(crate) use repository_admission::{
+    RepositoryActionAdmissionInputV1, RepositoryAuthorityAdmissionErrorV1, admit_repository_action,
+    admit_repository_authority_candidate,
+};
+pub use repository_leaf_authority::{
+    AbsorbWorkAuthorityV1, AmendContractAuthorityV1, AppendDesignRevisionAuthorityV1,
+    CancelWorkAuthorityV1, CreateDraftWorkAuthorityV1, PublishInitialContractAuthorityV1,
+    RepositoryAuthenticatedHumanV1, RepositoryAuthoritySelectionV1,
+    RepositoryDecisionAuthorityCarrierV1, RepositoryDecisionOptionMappingV1,
+    RepositoryDecisionPresentationV1, RepositoryLeafAuthorityErrorV1,
+    RepositoryPolicyComponentSetV1, RepositoryPolicySnapshotV1, RepositoryPolicyStrengthV1,
+    RepositoryPolicyTransitionAuthorityV1, RepositoryPolicyTransitionKindV1,
+    RepositoryPolicyTransitionV1, ResolveDecisionAuthorityV1,
+};
+
 use super::continuity::{StoreAllocatedContinuityStateTokenV1, StoreAllocationBindingErrorV1};
 use super::publication::{
     AuthorityPublicationKindV1, AuthorityPublicationOutcomeV1, AuthoritySchemaV1,
-    ISSUE_BOOTSTRAP_MANDATE_IDEMPOTENCY_NAMESPACE_V1, IssueBootstrapMandatePublicationV1,
+    ISSUE_BOOTSTRAP_MANDATE_IDEMPOTENCY_NAMESPACE_V1,
+    ISSUE_ROOT_ATTACHED_BOUNDED_GRANT_IDEMPOTENCY_NAMESPACE_V1, IssueBootstrapMandatePublicationV1,
+    IssueRootAttachedBoundedGrantPublicationV1,
+    REISSUE_ROOT_ATTACHED_GRANT_ONE_TO_ONE_IDEMPOTENCY_NAMESPACE_V1,
+    REVOKE_GRANT_IDEMPOTENCY_NAMESPACE_V1, ReissueRootAttachedGrantOneToOnePublicationV1,
+    RevokeGrantPublicationV1,
 };
 use super::{
     AcceptedAuthorityTimeFloorV1, ActionAuthorityBasisKindV1, ActionOutcomeV1, ActionRequestIdV1,
@@ -25,13 +50,16 @@ use super::{
     AuthorityContinuityPredecessorV1, AuthorityContinuitySemanticCutV1,
     AuthorityContinuityStateError, AuthorityEvaluationErrorV1, AuthorityEvaluatorV1,
     AuthorityPostCutErrorV1, AuthorityTransitionGuardAdmissionInputV1, AuthorizationReceiptV1,
-    BootstrapAuthoritySnapshotErrorV1, BootstrapAuthoritySnapshotV1, ClassDispositionV1,
-    ClosureFacetDispositionKindV1, ContinuityCarrierProfileStatusV1, ContinuityClosureFacetV1,
-    ContinuityDisclosureV1, ContinuityExactRootV1, ContinuityReferenceV1, GuardAdmissionKindV1,
-    HTimeAcceptanceErrorV1, HTimeCarryBasisV1, HTimeContinuationContributionV1,
-    IssueBootstrapMandateError, LinearizationCoverageWitnessV1, LinearizationFenceCarrierV1,
-    StateTokenIdV1, SuccessVisibleAuthorityContinuityStateV1, TransitionGuardOwnerCensusV1,
-    TransitionGuardTermFactV1, issue_bootstrap_mandate,
+    BootstrapAuthoritySnapshotErrorV1, BootstrapAuthoritySnapshotV1, CapacityUseDispositionV1,
+    ClassDispositionV1, ClosureFacetDispositionKindV1, ContinuityCarrierProfileStatusV1,
+    ContinuityClosureFacetV1, ContinuityDisclosureV1, ContinuityExactRootV1, ContinuityReferenceV1,
+    DelegationAncestryV1, GovernedCapacityKindV1, GovernedCapacityRootV1,
+    GrantAdministrationAuthorityV1, GuardAdmissionKindV1, HTimeAcceptanceErrorV1,
+    HTimeCarryBasisV1, HTimeContinuationContributionV1, IssueBootstrapMandateError,
+    LinearizationCoverageWitnessV1, LinearizationFenceCarrierV1,
+    RepositoryGovernedCapacitySlotKindV1, StateTokenIdV1, SuccessVisibleAuthorityContinuityStateV1,
+    TransitionGuardOwnerCensusV1, TransitionGuardTermFactV1, TrustedTimeV1,
+    issue_bootstrap_mandate, validate_delegation, validate_ordinary_authority,
 };
 
 pub struct AuthorityFacadeV1<'store> {
@@ -63,6 +91,70 @@ impl<'store> AuthorityFacadeV1<'store> {
             });
         match outcome {
             Ok(outcome) => publication_outcome(self.store, outcome),
+            Err(PreparedPublicationError::Store(error)) => Err(error.into()),
+            Err(PreparedPublicationError::Prepare(error)) => Err(error),
+        }
+    }
+
+    pub fn issue_root_attached_bounded_grant(
+        &mut self,
+        plan: IssueRootAttachedBoundedGrantPublicationV1,
+    ) -> Result<AuthorityPublicationOutcomeV1, AuthorityPublicationError> {
+        if self.store.state()?.0 != StoreStateV1::Active {
+            return Err(AuthorityPublicationError::InactiveStore);
+        }
+        let meaning_digest = grant_issue_meaning_digest(&plan)?;
+        let probe = StoreIdempotencyProbeV1::new(
+            ISSUE_ROOT_ATTACHED_BOUNDED_GRANT_IDEMPOTENCY_NAMESPACE_V1,
+            *plan.identity.idempotency_key().as_bytes(),
+            meaning_digest,
+        )?;
+        let outcome = self
+            .store
+            .publish_generation_atomically_with_prepare(&probe, |view| {
+                prepare_root_attached_grant_issue(view, plan, meaning_digest)
+            });
+        match outcome {
+            Ok(outcome) => grant_publication_outcome(outcome),
+            Err(PreparedPublicationError::Store(error)) => Err(error.into()),
+            Err(PreparedPublicationError::Prepare(error)) => Err(error),
+        }
+    }
+
+    pub fn reissue_root_attached_grant_one_to_one(
+        &mut self,
+        plan: ReissueRootAttachedGrantOneToOnePublicationV1,
+    ) -> Result<AuthorityPublicationOutcomeV1, AuthorityPublicationError> {
+        self.publish_ordinary_grant_mutation(OrdinaryGrantMutationV1::Reissue(Box::new(plan)))
+    }
+
+    pub fn revoke_grant(
+        &mut self,
+        plan: RevokeGrantPublicationV1,
+    ) -> Result<AuthorityPublicationOutcomeV1, AuthorityPublicationError> {
+        self.publish_ordinary_grant_mutation(OrdinaryGrantMutationV1::Revoke(Box::new(plan)))
+    }
+
+    fn publish_ordinary_grant_mutation(
+        &mut self,
+        mutation: OrdinaryGrantMutationV1,
+    ) -> Result<AuthorityPublicationOutcomeV1, AuthorityPublicationError> {
+        if self.store.state()?.0 != StoreStateV1::Active {
+            return Err(AuthorityPublicationError::InactiveStore);
+        }
+        let meaning_digest = mutation.meaning_digest()?;
+        let probe = StoreIdempotencyProbeV1::new(
+            mutation.idempotency_namespace(),
+            *mutation.idempotency_key().as_bytes(),
+            meaning_digest,
+        )?;
+        let outcome = self
+            .store
+            .publish_generation_atomically_with_prepare(&probe, |view| {
+                prepare_ordinary_grant_mutation(view, mutation, meaning_digest)
+            });
+        match outcome {
+            Ok(outcome) => grant_publication_outcome(outcome),
             Err(PreparedPublicationError::Store(error)) => Err(error.into()),
             Err(PreparedPublicationError::Prepare(error)) => Err(error),
         }
@@ -442,6 +534,975 @@ fn prepare_bootstrap_publication(
     Ok(publication)
 }
 
+enum OrdinaryGrantMutationV1 {
+    Reissue(Box<ReissueRootAttachedGrantOneToOnePublicationV1>),
+    Revoke(Box<RevokeGrantPublicationV1>),
+}
+
+impl OrdinaryGrantMutationV1 {
+    fn idempotency_namespace(&self) -> &'static str {
+        match self {
+            Self::Reissue(_) => REISSUE_ROOT_ATTACHED_GRANT_ONE_TO_ONE_IDEMPOTENCY_NAMESPACE_V1,
+            Self::Revoke(_) => REVOKE_GRANT_IDEMPOTENCY_NAMESPACE_V1,
+        }
+    }
+
+    fn identity(&self) -> super::GrantActionIdentityV1 {
+        match self {
+            Self::Reissue(plan) => plan.identity,
+            Self::Revoke(plan) => plan.identity,
+        }
+    }
+
+    fn idempotency_key(&self) -> super::IdempotencyKeyIdV1 {
+        self.identity().idempotency_key()
+    }
+
+    fn lineage(&self) -> super::AuthorityPublicationLineageV1 {
+        match self {
+            Self::Reissue(plan) => plan.lineage,
+            Self::Revoke(plan) => plan.lineage,
+        }
+    }
+
+    fn authority(&self) -> GrantAdministrationAuthorityV1 {
+        match self {
+            Self::Reissue(plan) => plan.authority,
+            Self::Revoke(plan) => plan.authority,
+        }
+    }
+
+    fn target_grant_id(&self) -> super::GrantIdV1 {
+        match self {
+            Self::Reissue(plan) => plan.retired_grant_id,
+            Self::Revoke(plan) => plan.target_grant_id,
+        }
+    }
+
+    fn action(&self) -> &'static str {
+        match self {
+            Self::Reissue(_) => "ReissueRootAttachedGrantOneToOne",
+            Self::Revoke(_) => "RevokeGrant",
+        }
+    }
+
+    fn meaning_digest(&self) -> Result<[u8; 32], AuthorityPublicationError> {
+        let mut fields = vec![
+            CborValue::text("maestro.vnext.ordinary-grant-mutation-meaning.v1")?,
+            CborValue::text(self.action())?,
+            bytes(self.identity().request_id().as_bytes()),
+            bytes(self.identity().idempotency_key().as_bytes()),
+            bytes(self.lineage().contract_root_id().as_bytes()),
+            bytes(self.target_grant_id().as_bytes()),
+            bytes(self.authority().terminal_grant_id().as_bytes()),
+        ];
+        if let Self::Reissue(plan) = self {
+            fields.push(plan.grant.schema_value()?);
+            fields.push(plan.delegation.schema_value()?);
+        }
+        Ok(Sha256::digest(deterministic_cbor::encode(&CborValue::Array(fields))?).into())
+    }
+}
+
+fn grant_issue_meaning_digest(
+    plan: &IssueRootAttachedBoundedGrantPublicationV1,
+) -> Result<[u8; 32], AuthorityPublicationError> {
+    let value = CborValue::Array(vec![
+        CborValue::text("maestro.vnext.issue-root-attached-bounded-grant-meaning.v1")?,
+        bytes(plan.identity.request_id().as_bytes()),
+        bytes(plan.identity.idempotency_key().as_bytes()),
+        bytes(plan.lineage.contract_root_id().as_bytes()),
+        bytes(
+            plan.lineage
+                .previous_generation_id()
+                .ok_or(AuthorityPublicationError::AuthorityPredecessorMismatch)?
+                .as_bytes(),
+        ),
+        bytes(
+            plan.lineage
+                .expected_old()
+                .ok_or(AuthorityPublicationError::AuthorityPredecessorMismatch)?
+                .as_bytes(),
+        ),
+        bytes(
+            plan.lineage
+                .prior_authority_root()
+                .ok_or(AuthorityPublicationError::AuthorityPredecessorMismatch)?
+                .as_bytes(),
+        ),
+        bytes(plan.parent_genesis_grant_id.as_bytes()),
+        plan.grant.schema_value()?,
+        plan.delegation.schema_value()?,
+    ]);
+    Ok(Sha256::digest(deterministic_cbor::encode(&value)?).into())
+}
+
+fn prepare_root_attached_grant_issue(
+    view: &StorePublicationViewV1<'_>,
+    plan: IssueRootAttachedBoundedGrantPublicationV1,
+    meaning_digest: [u8; 32],
+) -> Result<AtomicGenerationPublicationV1, AuthorityPublicationError> {
+    let current_head = view
+        .active_head()?
+        .ok_or(AuthorityPublicationError::MissingAuthorityPredecessor)?;
+    let current_generation = view
+        .active_generation()?
+        .ok_or(AuthorityPublicationError::MissingAuthorityPredecessor)?;
+    let previous_generation_id = plan
+        .lineage
+        .previous_generation_id()
+        .ok_or(AuthorityPublicationError::AuthorityPredecessorMismatch)?;
+    let expected_old = plan
+        .lineage
+        .expected_old()
+        .ok_or(AuthorityPublicationError::AuthorityPredecessorMismatch)?;
+    let prior_authority_root = plan
+        .lineage
+        .prior_authority_root()
+        .ok_or(AuthorityPublicationError::AuthorityPredecessorMismatch)?;
+    if current_head.id() != expected_old
+        || current_generation.id() != previous_generation_id
+        || current_generation.contract_root_id() != plan.lineage.contract_root_id()
+        || !current_generation.roots().contains(&prior_authority_root)
+    {
+        return Err(AuthorityPublicationError::AuthorityPredecessorMismatch);
+    }
+    let active_objects = view.active_generation_objects()?;
+    let current = load_current_authority(
+        view,
+        &current_head,
+        &current_generation,
+        prior_authority_root,
+        &active_objects,
+    )?;
+    let mut parent_paths = current
+        .facts
+        .g0_candidate_paths()
+        .iter()
+        .filter(|path| {
+            path.genesis_grant_id() == plan.parent_genesis_grant_id
+                && path.grant().id()
+                    == plan.grant.grant().parent_grant_id().unwrap_or_else(|| {
+                        // The ordinary carrier constructor makes this branch unreachable.
+                        path.grant().id()
+                    })
+                && path.store_generation() == current_generation.ordinal()
+                && path.complete()
+        })
+        .collect::<Vec<_>>();
+    if parent_paths.len() != 1 {
+        return Err(AuthorityPublicationError::InvalidBootstrapGrantAuthority);
+    }
+    let parent = parent_paths
+        .pop()
+        .expect("invariant: exact one-element G0 parent check");
+    if parent.grant().context_id() != plan.grant.grant().context_id()
+        || parent.grant().context_id() != current.facts.context().context_id()
+    {
+        return Err(AuthorityPublicationError::InvalidBootstrapGrantAuthority);
+    }
+    let issue_scope = super::ScopeAtomV1::new(
+        "IssueRootAttachedBoundedGrant",
+        &plan.grant.capacity_root_id().render(),
+        current.facts.snapshot().subject_revision,
+    )?;
+    validate_ordinary_authority(
+        current.facts.snapshot(),
+        current.facts.actor_binding(),
+        current.facts.actor_session(),
+        parent.grant(),
+        &issue_scope,
+        current.facts.revocations().revocations(),
+    )
+    .map_err(|_| AuthorityPublicationError::InvalidBootstrapGrantAuthority)?;
+    require_established_capacity_root(
+        &active_objects,
+        current.facts.context().context_id(),
+        plan.grant.capacity_root_id(),
+    )?;
+    let ancestry = DelegationAncestryV1::new(
+        vec![parent.grant().id()],
+        vec![parent.grant().grantee_principal_id()],
+        false,
+    )?;
+    let delegation = plan.delegation.delegation();
+    let mut structural_g0_definition = parent.grant().definition();
+    structural_g0_definition.delegation_depth_remaining = u8::MAX;
+    let structural_g0 = structural_g0_definition.validate()?;
+    validate_delegation(&structural_g0, plan.grant.grant(), &delegation, &ancestry)?;
+
+    let next_generation = current_generation
+        .ordinal()
+        .checked_add(1)
+        .ok_or(AuthorityPublicationError::AuthorityPredecessorMismatch)?;
+    let allocation = view.allocate_continuity_state_token(
+        next_generation,
+        Some(*current.state.state_token().as_bytes()),
+        meaning_digest,
+    )?;
+    let allocation = bind_store_allocation(current.facts.context().context_id(), allocation)?;
+    let continuity = build_successor_continuity(
+        &current,
+        &active_objects,
+        &current_head,
+        &current_generation,
+        &allocation,
+        meaning_digest,
+    )?;
+    let successor_facts = current.facts.continue_at_store_generation(
+        next_generation,
+        current.manifest.id(),
+        continuity.state.guard_kind(),
+        continuity.state.state_token(),
+    )?;
+    let referenced = direct_reference_objects(&current.snapshot_object, &active_objects)?;
+    let successor_context = authority_object(
+        AuthoritySchemaV1::AuthorityContext,
+        successor_facts.context().schema_value()?,
+        vec![],
+    )?;
+    let successor_actor_session = authority_object(
+        AuthoritySchemaV1::Session,
+        successor_facts.actor_session().schema_value()?,
+        vec![],
+    )?;
+    let successor_responder_session = authority_object(
+        AuthoritySchemaV1::Session,
+        successor_facts.responder_session().schema_value()?,
+        vec![],
+    )?;
+    let grant_object = authority_object(
+        AuthoritySchemaV1::OrdinaryBoundedGrant,
+        plan.grant.schema_value()?,
+        vec![],
+    )?;
+    let delegation_object = authority_object(
+        AuthoritySchemaV1::OrdinaryGrantDelegation,
+        plan.delegation.schema_value()?,
+        vec![grant_object.id()],
+    )?;
+    let basis_commitment: [u8; 32] =
+        Sha256::digest(deterministic_cbor::encode(&CborValue::Array(vec![
+            CborValue::text("maestro.vnext.issue-root-attached-bounded-grant-basis.v1")?,
+            bytes(current.facts.context().context_id().as_bytes()),
+            bytes(parent.genesis_grant_id().as_bytes()),
+            bytes(grant_object.id().as_bytes()),
+            bytes(delegation_object.id().as_bytes()),
+            bytes(continuity.state.state_token().as_bytes()),
+        ]))?)
+        .into();
+    let basis_object = authority_object(
+        AuthoritySchemaV1::ActionAuthorityBasis,
+        CborValue::Array(vec![
+            CborValue::Unsigned(ActionAuthorityBasisKindV1::BootstrapControlG0 as u64),
+            bytes(current.facts.context().context_id().as_bytes()),
+            bytes(&basis_commitment),
+        ]),
+        vec![grant_object.id(), delegation_object.id()],
+    )?;
+    let receipt = AuthorizationReceiptV1::new(
+        plan.identity.request_id(),
+        current.facts.context().context_id(),
+        ActionAuthorityBasisKindV1::BootstrapControlG0,
+        current.state.state_token(),
+        continuity.state.state_token(),
+    )?;
+    let logical_result = ActionResultV1::new(
+        plan.identity.request_id(),
+        ActionOutcomeV1::Committed,
+        Some(receipt.clone()),
+        None,
+    )?;
+    let receipt_object = authority_object(
+        AuthoritySchemaV1::AuthorizationReceipt,
+        CborValue::Array(vec![
+            bytes(receipt.id().as_bytes()),
+            bytes(receipt.context_id().as_bytes()),
+            bytes(receipt.request_id().as_bytes()),
+            bytes(basis_object.id().as_bytes()),
+            CborValue::Unsigned(1),
+            CborValue::Bool(true),
+            bytes(logical_result.id().as_bytes()),
+        ]),
+        vec![basis_object.id()],
+    )?;
+    let result_object = authority_object(
+        AuthoritySchemaV1::ActionResult,
+        CborValue::Array(vec![
+            bytes(logical_result.id().as_bytes()),
+            bytes(logical_result.request_id().as_bytes()),
+            CborValue::Unsigned(logical_result.outcome() as u64),
+            CborValue::Unsigned(1),
+            CborValue::Array(vec![bytes(current.state.state_token().as_bytes())]),
+            CborValue::Array(vec![bytes(continuity.state.state_token().as_bytes())]),
+            CborValue::Array(vec![bytes(receipt.id().as_bytes())]),
+            CborValue::Array(vec![
+                bytes(plan.grant.grant().id().as_bytes()),
+                bytes(plan.delegation.delegation().id.as_bytes()),
+            ]),
+            CborValue::Array(Vec::new()),
+            CborValue::optional(None),
+            CborValue::optional(None),
+        ]),
+        vec![
+            grant_object.id(),
+            delegation_object.id(),
+            basis_object.id(),
+            receipt_object.id(),
+        ],
+    )?;
+    let mut snapshot_references = retained_snapshot_references(&referenced)?;
+    snapshot_references.extend([
+        continuity.closure_object.id(),
+        continuity.guard_object.id(),
+        continuity.state_object.id(),
+        successor_context.id(),
+        successor_actor_session.id(),
+        successor_responder_session.id(),
+        grant_object.id(),
+        delegation_object.id(),
+        basis_object.id(),
+        receipt_object.id(),
+        result_object.id(),
+    ]);
+    let successor_snapshot = authority_object(
+        AuthoritySchemaV1::BootstrapAuthoritySnapshot,
+        successor_facts.schema_value()?,
+        snapshot_references,
+    )?;
+    let generation = StoreGenerationV1::new(
+        view.domain().clone(),
+        next_generation,
+        Some(previous_generation_id),
+        plan.lineage.contract_root_id(),
+        StoreCompatibilityV1::stage0_successor()?,
+        vec![successor_snapshot.id()],
+    )?;
+    let idempotency = StoreIdempotencyV1::new(
+        ISSUE_ROOT_ATTACHED_BOUNDED_GRANT_IDEMPOTENCY_NAMESPACE_V1,
+        *plan.identity.idempotency_key().as_bytes(),
+        meaning_digest,
+        result_object.id(),
+    )?;
+    AtomicGenerationPublicationV1::new(
+        generation,
+        Some(expected_old),
+        vec![
+            successor_context,
+            successor_actor_session,
+            successor_responder_session,
+            continuity.closure_object,
+            continuity.guard_object,
+            continuity.state_object,
+            grant_object,
+            delegation_object,
+            basis_object,
+            receipt_object,
+            result_object,
+            successor_snapshot,
+        ],
+        idempotency,
+    )
+    .map_err(Into::into)
+}
+
+fn prepare_ordinary_grant_mutation(
+    view: &StorePublicationViewV1<'_>,
+    mutation: OrdinaryGrantMutationV1,
+    meaning_digest: [u8; 32],
+) -> Result<AtomicGenerationPublicationV1, AuthorityPublicationError> {
+    let current_head = view
+        .active_head()?
+        .ok_or(AuthorityPublicationError::MissingAuthorityPredecessor)?;
+    let current_generation = view
+        .active_generation()?
+        .ok_or(AuthorityPublicationError::MissingAuthorityPredecessor)?;
+    let lineage = mutation.lineage();
+    let previous_generation_id = lineage
+        .previous_generation_id()
+        .ok_or(AuthorityPublicationError::AuthorityPredecessorMismatch)?;
+    let expected_old = lineage
+        .expected_old()
+        .ok_or(AuthorityPublicationError::AuthorityPredecessorMismatch)?;
+    let prior_authority_root = lineage
+        .prior_authority_root()
+        .ok_or(AuthorityPublicationError::AuthorityPredecessorMismatch)?;
+    if current_head.id() != expected_old
+        || current_generation.id() != previous_generation_id
+        || current_generation.contract_root_id() != lineage.contract_root_id()
+        || !current_generation.roots().contains(&prior_authority_root)
+    {
+        return Err(AuthorityPublicationError::AuthorityPredecessorMismatch);
+    }
+    let active_objects = view.active_generation_objects()?;
+    let current = load_current_authority(
+        view,
+        &current_head,
+        &current_generation,
+        prior_authority_root,
+        &active_objects,
+    )?;
+    let referenced = direct_reference_objects(&current.snapshot_object, &active_objects)?;
+    let grants = load_ordinary_grants(&referenced)?;
+    let target = one_grant(&grants, mutation.target_grant_id())?;
+    let authority = mutation.authority();
+    let administrator = one_grant(&grants, authority.terminal_grant_id())?;
+    if super::grant_is_revoked_by_closure(
+        administrator,
+        &grants,
+        current.facts.revocations().revocations(),
+    )? {
+        return Err(AuthorityPublicationError::InvalidGrantAdministrationAuthority);
+    }
+    let (binding, session) = if current.facts.actor_binding().id() == authority.actor_binding_id()
+        && current.facts.actor_session().id() == authority.actor_session_id()
+    {
+        (current.facts.actor_binding(), current.facts.actor_session())
+    } else if current.facts.responder_binding().id() == authority.actor_binding_id()
+        && current.facts.responder_session().id() == authority.actor_session_id()
+    {
+        (
+            current.facts.responder_binding(),
+            current.facts.responder_session(),
+        )
+    } else {
+        return Err(AuthorityPublicationError::InvalidGrantAdministrationAuthority);
+    };
+    let (capacity_root_object, capacity_root) = current_repository_admin_capacity_root(
+        &referenced,
+        current.facts.context().context_id(),
+        administrator.capacity_root_id(),
+    )?;
+    let required_scope = super::ScopeAtomV1::new(
+        mutation.action(),
+        &target.capacity_root_id().render(),
+        current.facts.snapshot().subject_revision,
+    )?;
+    validate_ordinary_authority(
+        current.facts.snapshot(),
+        binding,
+        session,
+        administrator.grant(),
+        &required_scope,
+        current.facts.revocations().revocations(),
+    )?;
+    let transition = capacity_root.transition(
+        current.facts.context().context_id(),
+        GovernedCapacityKindV1::Repository(
+            RepositoryGovernedCapacitySlotKindV1::RepositoryAuthorityAdministration,
+        ),
+        capacity_root.spent(),
+        CapacityUseDispositionV1::FreshCommit,
+    )?;
+    let successor_capacity_root = authority_object(
+        AuthoritySchemaV1::GovernedCapacityRoot,
+        transition.root().schema_value()?,
+        vec![capacity_root_object.id()],
+    )?;
+    let debit = authority_object(
+        AuthoritySchemaV1::GovernedCapacityDebit,
+        transition
+            .debit()
+            .ok_or(AuthorityPublicationError::InvalidGrantAdministrationAuthority)?
+            .schema_value()?,
+        vec![capacity_root_object.id(), successor_capacity_root.id()],
+    )?;
+
+    let candidate = match &mutation {
+        OrdinaryGrantMutationV1::Reissue(plan) => {
+            if plan.grant.capacity_root_id() != target.capacity_root_id()
+                || !plan
+                    .grant
+                    .grant()
+                    .terminal_scope()
+                    .is_subset(target.grant().terminal_scope())
+                || !plan
+                    .grant
+                    .grant()
+                    .delegable_scope()
+                    .is_subset(target.grant().delegable_scope())
+                || !target
+                    .grant()
+                    .validity()
+                    .contains_interval(plan.grant.grant().validity())
+                || plan.grant.grant().delegation_depth_remaining()
+                    > target.grant().delegation_depth_remaining()
+            {
+                return Err(AuthorityPublicationError::GrantReissueWidening);
+            }
+            super::admit_repository_authority_candidate(
+                &current.facts,
+                target.capacity_root_id(),
+                &plan.grant,
+                &plan.delegation,
+            )
+            .map_err(|_| AuthorityPublicationError::GrantReissueWidening)?;
+            Some((&plan.grant, &plan.delegation))
+        }
+        OrdinaryGrantMutationV1::Revoke(_) => None,
+    };
+    reject_administrator_ancestor_mutation(
+        mutation.action(),
+        administrator,
+        target.grant().id(),
+        &grants,
+    )?;
+    if !has_independently_live_repository_administrator(
+        IndependentRepositoryAdministratorCheckV1 {
+            grants: &grants,
+            candidate: candidate.map(|(grant, _)| grant),
+            target_grant_id: target.grant().id(),
+            current_revocations: current.facts.revocations().revocations(),
+            capacity_root_id: administrator.capacity_root_id(),
+            action: mutation.action(),
+            protocol_revision: current.facts.snapshot().subject_revision,
+            trusted_time: current.facts.snapshot().trusted_time,
+        },
+    )? {
+        return Err(AuthorityPublicationError::LastAdministrator);
+    }
+
+    let next_generation = current_generation
+        .ordinal()
+        .checked_add(1)
+        .ok_or(AuthorityPublicationError::AuthorityPredecessorMismatch)?;
+    let allocation = view.allocate_continuity_state_token(
+        next_generation,
+        Some(*current.state.state_token().as_bytes()),
+        meaning_digest,
+    )?;
+    let allocation = bind_store_allocation(current.facts.context().context_id(), allocation)?;
+    let continuity = build_successor_continuity(
+        &current,
+        &active_objects,
+        &current_head,
+        &current_generation,
+        &allocation,
+        meaning_digest,
+    )?;
+    let successor_facts = current
+        .facts
+        .continue_at_store_generation_with_revoked_grant(
+            next_generation,
+            current.manifest.id(),
+            continuity.state.guard_kind(),
+            continuity.state.state_token(),
+            mutation.target_grant_id(),
+        )?;
+    let successor_context = authority_object(
+        AuthoritySchemaV1::AuthorityContext,
+        successor_facts.context().schema_value()?,
+        vec![],
+    )?;
+    let successor_actor_session = authority_object(
+        AuthoritySchemaV1::Session,
+        successor_facts.actor_session().schema_value()?,
+        vec![],
+    )?;
+    let successor_responder_session = authority_object(
+        AuthoritySchemaV1::Session,
+        successor_facts.responder_session().schema_value()?,
+        vec![],
+    )?;
+    let revocations = authority_object(
+        AuthoritySchemaV1::RevocationSet,
+        successor_facts.revocations().schema_value()?,
+        vec![],
+    )?;
+    let candidate_objects = candidate
+        .map(|(grant, delegation)| {
+            let grant_object = authority_object(
+                AuthoritySchemaV1::OrdinaryBoundedGrant,
+                grant.schema_value()?,
+                vec![],
+            )?;
+            let delegation_object = authority_object(
+                AuthoritySchemaV1::OrdinaryGrantDelegation,
+                delegation.schema_value()?,
+                vec![grant_object.id()],
+            )?;
+            Ok::<_, AuthorityPublicationError>((grant_object, delegation_object))
+        })
+        .transpose()?;
+    let basis_commitment: [u8; 32] =
+        Sha256::digest(deterministic_cbor::encode(&CborValue::Array(vec![
+            CborValue::text("maestro.vnext.ordinary-grant-administration-basis.v1")?,
+            CborValue::text(mutation.action())?,
+            bytes(administrator.grant().id().as_bytes()),
+            bytes(mutation.target_grant_id().as_bytes()),
+            bytes(debit.id().as_bytes()),
+            bytes(continuity.state.state_token().as_bytes()),
+        ]))?)
+        .into();
+    let basis = authority_object(
+        AuthoritySchemaV1::ActionAuthorityBasis,
+        CborValue::Array(vec![
+            CborValue::Unsigned(ActionAuthorityBasisKindV1::OrdinaryLiveRuntime as u64),
+            bytes(current.facts.context().context_id().as_bytes()),
+            bytes(&basis_commitment),
+        ]),
+        vec![capacity_root_object.id(), debit.id()],
+    )?;
+    let receipt = AuthorizationReceiptV1::new(
+        mutation.identity().request_id(),
+        current.facts.context().context_id(),
+        ActionAuthorityBasisKindV1::OrdinaryLiveRuntime,
+        current.state.state_token(),
+        continuity.state.state_token(),
+    )?;
+    let logical_result = ActionResultV1::new(
+        mutation.identity().request_id(),
+        ActionOutcomeV1::Committed,
+        Some(receipt.clone()),
+        None,
+    )?;
+    let receipt_object = authority_object(
+        AuthoritySchemaV1::AuthorizationReceipt,
+        CborValue::Array(vec![
+            bytes(receipt.id().as_bytes()),
+            bytes(receipt.context_id().as_bytes()),
+            bytes(receipt.request_id().as_bytes()),
+            bytes(basis.id().as_bytes()),
+            CborValue::Unsigned(1),
+            CborValue::Bool(true),
+            bytes(logical_result.id().as_bytes()),
+        ]),
+        vec![basis.id()],
+    )?;
+    let mut produced = vec![
+        bytes(revocations.id().as_bytes()),
+        bytes(debit.id().as_bytes()),
+    ];
+    if let Some((grant, delegation)) = candidate_objects.as_ref() {
+        produced.extend([
+            bytes(grant.id().as_bytes()),
+            bytes(delegation.id().as_bytes()),
+        ]);
+    }
+    let mut result_references = vec![
+        basis.id(),
+        receipt_object.id(),
+        revocations.id(),
+        successor_capacity_root.id(),
+        debit.id(),
+    ];
+    if let Some((grant, delegation)) = candidate_objects.as_ref() {
+        result_references.extend([grant.id(), delegation.id()]);
+    }
+    let result = authority_object(
+        AuthoritySchemaV1::ActionResult,
+        CborValue::Array(vec![
+            bytes(logical_result.id().as_bytes()),
+            bytes(logical_result.request_id().as_bytes()),
+            CborValue::Unsigned(logical_result.outcome() as u64),
+            CborValue::Unsigned(1),
+            CborValue::Array(vec![bytes(current.state.state_token().as_bytes())]),
+            CborValue::Array(vec![bytes(continuity.state.state_token().as_bytes())]),
+            CborValue::Array(vec![bytes(receipt.id().as_bytes())]),
+            CborValue::Array(produced),
+            CborValue::Array(Vec::new()),
+            CborValue::optional(None),
+            CborValue::optional(None),
+        ]),
+        result_references,
+    )?;
+    let mut snapshot_references = retained_snapshot_references(&referenced)?;
+    let replaced_revocation_id = AuthoritySchemaV1::RevocationSet.id()?;
+    let replaced_capacity_id = AuthoritySchemaV1::GovernedCapacityRoot.id()?;
+    snapshot_references.retain(|id| {
+        referenced
+            .iter()
+            .find(|object| object.id() == *id)
+            .is_none_or(|object| {
+                object.schema_id() != replaced_revocation_id
+                    && !(object.schema_id() == replaced_capacity_id
+                        && object.id() == capacity_root_object.id())
+            })
+    });
+    snapshot_references.extend([
+        continuity.closure_object.id(),
+        continuity.guard_object.id(),
+        continuity.state_object.id(),
+        successor_context.id(),
+        successor_actor_session.id(),
+        successor_responder_session.id(),
+        revocations.id(),
+        successor_capacity_root.id(),
+        debit.id(),
+        basis.id(),
+        receipt_object.id(),
+        result.id(),
+    ]);
+    if let Some((grant, delegation)) = candidate_objects.as_ref() {
+        snapshot_references.extend([grant.id(), delegation.id()]);
+    }
+    let successor_snapshot = authority_object(
+        AuthoritySchemaV1::BootstrapAuthoritySnapshot,
+        successor_facts.schema_value()?,
+        snapshot_references,
+    )?;
+    let generation = StoreGenerationV1::new(
+        view.domain().clone(),
+        next_generation,
+        Some(previous_generation_id),
+        lineage.contract_root_id(),
+        StoreCompatibilityV1::stage0_successor()?,
+        vec![successor_snapshot.id()],
+    )?;
+    let idempotency = StoreIdempotencyV1::new(
+        mutation.idempotency_namespace(),
+        *mutation.idempotency_key().as_bytes(),
+        meaning_digest,
+        result.id(),
+    )?;
+    let mut objects = vec![
+        successor_context,
+        successor_actor_session,
+        successor_responder_session,
+        revocations,
+        successor_capacity_root,
+        debit,
+        basis,
+        receipt_object,
+        result,
+        continuity.closure_object,
+        continuity.guard_object,
+        continuity.state_object,
+        successor_snapshot,
+    ];
+    if let Some((grant, delegation)) = candidate_objects {
+        objects.extend([grant, delegation]);
+    }
+    AtomicGenerationPublicationV1::new(generation, Some(expected_old), objects, idempotency)
+        .map_err(Into::into)
+}
+
+fn reject_administrator_ancestor_mutation(
+    action: &str,
+    administrator: &super::OrdinaryBoundedGrantV1,
+    target_grant_id: super::GrantIdV1,
+    grants: &[super::OrdinaryBoundedGrantV1],
+) -> Result<(), AuthorityPublicationError> {
+    if !matches!(action, "ReissueRootAttachedGrantOneToOne" | "RevokeGrant") {
+        return Err(AuthorityPublicationError::InvalidGrantAdministrationAuthority);
+    }
+    let target_revocation =
+        super::RevocationSetV1::new(vec![super::RevocationTargetV1::Grant(target_grant_id)])?;
+    if super::grant_is_revoked_by_closure(administrator, grants, &target_revocation)? {
+        return Err(AuthorityPublicationError::InvalidGrantAdministrationAuthority);
+    }
+    Ok(())
+}
+
+struct IndependentRepositoryAdministratorCheckV1<'a> {
+    grants: &'a [super::OrdinaryBoundedGrantV1],
+    candidate: Option<&'a super::OrdinaryBoundedGrantV1>,
+    target_grant_id: super::GrantIdV1,
+    current_revocations: &'a super::RevocationSetV1,
+    capacity_root_id: super::CapacityRootIdV1,
+    action: &'a str,
+    protocol_revision: u64,
+    trusted_time: TrustedTimeV1,
+}
+
+fn has_independently_live_repository_administrator(
+    check: IndependentRepositoryAdministratorCheckV1<'_>,
+) -> Result<bool, AuthorityPublicationError> {
+    let mut targets = check.current_revocations.targets().collect::<Vec<_>>();
+    targets.push(super::RevocationTargetV1::Grant(check.target_grant_id));
+    let post_mutation_revocations = super::RevocationSetV1::new(targets)?;
+    if !matches!(
+        check.action,
+        "ReissueRootAttachedGrantOneToOne" | "RevokeGrant"
+    ) {
+        return Err(AuthorityPublicationError::InvalidGrantAdministrationAuthority);
+    }
+    let required_scope = super::ScopeAtomV1::new(
+        check.action,
+        &check.capacity_root_id.render(),
+        check.protocol_revision,
+    )?;
+    let post_mutation_grants = check
+        .grants
+        .iter()
+        .chain(check.candidate)
+        .cloned()
+        .collect::<Vec<_>>();
+    for grant in &post_mutation_grants {
+        if grant.capacity_root_id() != check.capacity_root_id
+            || !grant.grant().terminal_scope().contains(&required_scope)
+            || !check.trusted_time.is_within(grant.grant().validity())?
+        {
+            continue;
+        }
+        if !super::grant_is_revoked_by_closure(
+            grant,
+            &post_mutation_grants,
+            &post_mutation_revocations,
+        )? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn load_ordinary_grants(
+    referenced: &[StoreObjectV1],
+) -> Result<Vec<super::OrdinaryBoundedGrantV1>, AuthorityPublicationError> {
+    schema_objects(referenced, AuthoritySchemaV1::OrdinaryBoundedGrant)?
+        .into_iter()
+        .map(|object| {
+            super::OrdinaryBoundedGrantV1::from_canonical_bytes(&object_value_bytes(&object)?)
+                .map_err(Into::into)
+        })
+        .collect()
+}
+
+fn one_grant(
+    grants: &[super::OrdinaryBoundedGrantV1],
+    id: super::GrantIdV1,
+) -> Result<&super::OrdinaryBoundedGrantV1, AuthorityPublicationError> {
+    let mut matches = grants
+        .iter()
+        .filter(|grant| grant.grant().id() == id)
+        .collect::<Vec<_>>();
+    if matches.len() != 1 {
+        return Err(AuthorityPublicationError::InvalidGrantAdministrationAuthority);
+    }
+    Ok(matches
+        .pop()
+        .expect("invariant: exact one-element Grant check"))
+}
+
+fn current_repository_admin_capacity_root(
+    referenced: &[StoreObjectV1],
+    context_id: AuthorityContextIdV1,
+    root_id: super::CapacityRootIdV1,
+) -> Result<(StoreObjectV1, GovernedCapacityRootV1), AuthorityPublicationError> {
+    let mut matches = schema_objects(referenced, AuthoritySchemaV1::GovernedCapacityRoot)?
+        .into_iter()
+        .filter_map(|object| {
+            let CborValue::Array(fields) = object.value() else {
+                return None;
+            };
+            if fields.len() != 7
+                || exact_digest(&fields[1]).ok()? != *root_id.as_bytes()
+                || exact_digest(&fields[3]).ok()? != *context_id.as_bytes()
+                || fields[2]
+                    != CborValue::Unsigned(
+                        AuthorityContextKindV1::RepositoryAuthorityContext as u64,
+                    )
+                || fields[4]
+                    != CborValue::Unsigned(
+                        RepositoryGovernedCapacitySlotKindV1::RepositoryAuthorityAdministration
+                            as u64,
+                    )
+            {
+                return None;
+            }
+            let (CborValue::Unsigned(initial), CborValue::Unsigned(spent)) =
+                (&fields[5], &fields[6])
+            else {
+                return None;
+            };
+            Some(
+                GovernedCapacityRootV1::from_persisted_state(
+                    root_id,
+                    AuthorityContextKindV1::RepositoryAuthorityContext,
+                    context_id,
+                    GovernedCapacityKindV1::Repository(
+                        RepositoryGovernedCapacitySlotKindV1::RepositoryAuthorityAdministration,
+                    ),
+                    u32::try_from(*initial).ok()?,
+                    u32::try_from(*spent).ok()?,
+                )
+                .ok()
+                .map(|root| (object, root)),
+            )
+            .flatten()
+        })
+        .collect::<Vec<_>>();
+    if matches.len() != 1 {
+        return Err(AuthorityPublicationError::InvalidGrantAdministrationAuthority);
+    }
+    Ok(matches
+        .pop()
+        .expect("invariant: exact one-element admin capacity root check"))
+}
+
+fn require_established_capacity_root(
+    active_objects: &[StoreObjectV1],
+    context_id: AuthorityContextIdV1,
+    root_id: super::CapacityRootIdV1,
+) -> Result<(), AuthorityPublicationError> {
+    let matches = schema_objects(active_objects, AuthoritySchemaV1::GovernedCapacityRoot)?
+        .into_iter()
+        .filter(|object| {
+            let CborValue::Array(fields) = object.value() else {
+                return false;
+            };
+            fields.len() == 7
+                && exact_digest(&fields[1]).is_ok_and(|id| id == *root_id.as_bytes())
+                && exact_digest(&fields[3]).is_ok_and(|id| id == *context_id.as_bytes())
+                && matches!((&fields[5], &fields[6]), (CborValue::Unsigned(maximum), CborValue::Unsigned(spent)) if *maximum > 0 && spent <= maximum)
+        })
+        .collect::<Vec<_>>();
+    if matches.len() != 1 {
+        return Err(AuthorityPublicationError::UnestablishedCapacityRoot);
+    }
+    Ok(())
+}
+
+fn retained_snapshot_references(
+    referenced: &[StoreObjectV1],
+) -> Result<Vec<StoreObjectIdV1>, AuthorityPublicationError> {
+    let retained = [
+        AuthoritySchemaV1::AuthorityContinuityManifest.id()?,
+        AuthoritySchemaV1::PrincipalBinding.id()?,
+        AuthoritySchemaV1::BootstrapGenesisGrant.id()?,
+        AuthoritySchemaV1::BootstrapMandateInteractionObservationJoin.id()?,
+        AuthoritySchemaV1::ConsentSlotBindingParameter.id()?,
+        AuthoritySchemaV1::RevocationSet.id()?,
+        AuthoritySchemaV1::GovernedCapacityRoot.id()?,
+        AuthoritySchemaV1::OrdinaryBoundedGrant.id()?,
+        AuthoritySchemaV1::OrdinaryGrantDelegation.id()?,
+    ];
+    Ok(referenced
+        .iter()
+        .filter(|object| retained.contains(&object.schema_id()))
+        .map(StoreObjectV1::id)
+        .collect())
+}
+
+fn grant_publication_outcome(
+    outcome: StorePublicationOutcomeV1,
+) -> Result<AuthorityPublicationOutcomeV1, AuthorityPublicationError> {
+    let (kind, head, result) = match outcome {
+        StorePublicationOutcomeV1::Committed { head, result } => {
+            (AuthorityPublicationKindV1::Committed, head, result)
+        }
+        StorePublicationOutcomeV1::Replayed { head, result } => {
+            (AuthorityPublicationKindV1::Replayed, head, result)
+        }
+    };
+    if result.schema_id() != AuthoritySchemaV1::ActionResult.id()? {
+        return Err(AuthorityPublicationError::InvalidPublishedResult);
+    }
+    let CborValue::Array(fields) = result.value() else {
+        return Err(AuthorityPublicationError::InvalidPublishedResult);
+    };
+    let logical_result_id = fields
+        .first()
+        .ok_or(AuthorityPublicationError::InvalidPublishedResult)
+        .and_then(exact_digest)?;
+    Ok(AuthorityPublicationOutcomeV1 {
+        kind,
+        head,
+        result,
+        logical_result_id: ActionResultIdV1::from_digest(logical_result_id),
+    })
+}
+
 struct PreparedBootstrapRequestV1 {
     meaning_digest: [u8; 32],
 }
@@ -464,6 +1525,7 @@ impl PreparedBootstrapRequestV1 {
 
 struct CurrentAuthorityV1 {
     facts: BootstrapAuthoritySnapshotV1,
+    snapshot_object: StoreObjectV1,
     manifest: AuthorityContinuityManifestV1,
     closure: AuthorityContinuityClosureV1,
     state: SuccessVisibleAuthorityContinuityStateV1,
@@ -698,6 +1760,7 @@ fn load_current_authority(
 
     Ok(CurrentAuthorityV1 {
         facts,
+        snapshot_object,
         manifest,
         closure,
         state,
@@ -1737,6 +2800,18 @@ pub enum AuthorityPublicationError {
     InvalidCurrentAuthoritySnapshot,
     #[error("the current Authority continuity guard is not established")]
     UnestablishedContinuityGuard,
+    #[error("root-attached Grant issuance requires one exact current complete G0 parent")]
+    InvalidBootstrapGrantAuthority,
+    #[error("the Grant BoundedBy root is not one exact already-established capacity root")]
+    UnestablishedCapacityRoot,
+    #[error(
+        "ordinary Grant administration requires a separate current RepositoryAuthorityAdministration Grant"
+    )]
+    InvalidGrantAdministrationAuthority,
+    #[error("one-to-one Grant reissue must preserve its root and cannot widen authority")]
+    GrantReissueWidening,
+    #[error("the last live Repository Authority administrator requires a surviving handoff")]
+    LastAdministrator,
     #[error("the Authority continuity counter overflowed")]
     ContinuityOverflow,
     #[error("the frozen continuity class closure has no canonical-record owner")]
@@ -1757,6 +2832,10 @@ pub enum AuthorityPublicationError {
     Evaluator(#[from] AuthorityEvaluationErrorV1),
     #[error(transparent)]
     BootstrapSnapshot(#[from] BootstrapAuthoritySnapshotErrorV1),
+    #[error(transparent)]
+    AuthorityValidation(#[from] super::AuthorityValidationError),
+    #[error(transparent)]
+    Capacity(#[from] super::CapacityError),
     #[error(transparent)]
     ContinuityManifest(#[from] AuthorityContinuityError),
     #[error(transparent)]

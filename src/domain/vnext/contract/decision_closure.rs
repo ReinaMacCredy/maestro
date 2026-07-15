@@ -661,7 +661,8 @@ impl DecisionRootBindingRequirementsV1 {
             let provenance = match component.provenance() {
                 ComponentProvenanceV1::DecisionMaterialization(provenance) => provenance,
                 ComponentProvenanceV1::DesignSlot(_)
-                | ComponentProvenanceV1::AuthorizedNoDesign(_) => {
+                | ComponentProvenanceV1::AuthorizedNoDesign(_)
+                | ComponentProvenanceV1::DecisionMaterializationPreimage(_) => {
                     return Err(DecisionClosureError::NormativeComponentProvenanceMismatch);
                 }
             };
@@ -1293,4 +1294,614 @@ fn text_array(values: &[String]) -> Result<CborValue, DecisionClosureError> {
 
 fn sha256(bytes: &[u8]) -> [u8; 32] {
     Sha256::digest(bytes).into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::vnext::contract::assembly::{
+        candidate_root_schema_closure_v1, facet_schema_id_v1, finalization_facet_kinds_v1,
+        fixture_facet_value_v1, normative_inputs_schema_id_v1,
+    };
+    use crate::domain::vnext::contract::component::CandidateContractComponentV1;
+    use crate::domain::vnext::contract::finalization::{
+        DesignBasisV1, FinalizationInputKindV1, PinnedFinalizationInputV1,
+    };
+    use crate::domain::vnext::identity::{
+        DesignRevisionIdV1, SchemaClosureV1, decision_resolution_identity,
+        design_revision_identity, design_source_binding_identity,
+    };
+
+    struct RootBindingFixture {
+        schemas: SchemaClosureV1,
+        decision_closure: DecisionClosureV1,
+        design_revision_id: DesignRevisionIdV1,
+        root: CandidateContractRootV1,
+        finalization: DesignFinalizationManifestV1,
+    }
+
+    impl RootBindingFixture {
+        fn new() -> Self {
+            let schemas = candidate_root_schema_closure_v1().expect("candidate root schemas");
+            let decision_closure = fixture_decision_closure(2);
+            let closure_id = *decision_closure.closure_id();
+            let design_revision_id = design_revision_identity(&CborValue::Array(vec![
+                CborValue::Unsigned(1),
+                CborValue::Bytes(closure_id.as_bytes().to_vec()),
+            ]))
+            .expect("design revision");
+            let normative_schema_id =
+                normative_inputs_schema_id_v1(&schemas).expect("NormativeInputs schema");
+            let mut components = decision_closure
+                .materializations()
+                .iter()
+                .map(|materialization| {
+                    let resolution = DecisionMaterializationResolutionV1::new(
+                        closure_id,
+                        MaterializationBaseV1::initial_external_design_closure(closure_id),
+                        *materialization.materialization_id(),
+                    )
+                    .expect("Decision materialization resolution");
+                    CandidateContractComponentV1::new(
+                        &schemas,
+                        ContractComponentKindV1::NormativeInputs,
+                        normative_schema_id,
+                        normative_inputs_value(materialization).expect("NormativeInputs value"),
+                        vec![],
+                        ComponentProvenanceV1::decision_materialization(
+                            *resolution.resolution_id(),
+                            *materialization.materialization_id(),
+                        ),
+                    )
+                    .expect("NormativeInputs component")
+                })
+                .collect::<Vec<_>>();
+            let mut normative_ids = components
+                .iter()
+                .map(|component| *component.component_id())
+                .collect::<Vec<_>>();
+            normative_ids.sort_by_key(|identifier| *identifier.as_bytes());
+            for kind in ContractComponentKindV1::ALL {
+                if kind == ContractComponentKindV1::NormativeInputs {
+                    continue;
+                }
+                let source_binding_id = design_source_binding_identity(&CborValue::Array(vec![
+                    CborValue::Unsigned(kind.tag()),
+                    CborValue::Bytes(closure_id.as_bytes().to_vec()),
+                ]))
+                .expect("source binding");
+                components.push(
+                    CandidateContractComponentV1::new(
+                        &schemas,
+                        kind,
+                        facet_schema_id_v1(&schemas, kind).expect("facet schema"),
+                        fixture_facet_value_v1(kind, [kind.tag() as u8; 32], vec![[3; 32]]),
+                        normative_ids.clone(),
+                        ComponentProvenanceV1::design_slot(
+                            design_revision_id,
+                            kind.tag(),
+                            source_binding_id,
+                        )
+                        .expect("facet provenance"),
+                    )
+                    .expect("aggregate facet"),
+                );
+            }
+            let root = CandidateContractRootV1::new(&schemas, components).expect("candidate root");
+            let finalization =
+                fixture_finalization(&schemas, design_revision_id, closure_id, &root);
+            Self {
+                schemas,
+                decision_closure,
+                design_revision_id,
+                root,
+                finalization,
+            }
+        }
+
+        fn rebuilt_root(
+            &self,
+            mut normative_components: Vec<CandidateContractComponentV1>,
+        ) -> CandidateContractRootV1 {
+            let mut normative_ids = normative_components
+                .iter()
+                .map(|component| *component.component_id())
+                .collect::<Vec<_>>();
+            normative_ids.sort_by_key(|identifier| *identifier.as_bytes());
+            for component in
+                self.root.components().iter().filter(|component| {
+                    component.kind() != ContractComponentKindV1::NormativeInputs
+                })
+            {
+                normative_components.push(
+                    CandidateContractComponentV1::new(
+                        &self.schemas,
+                        component.kind(),
+                        *component.schema_id(),
+                        component.value().clone(),
+                        normative_ids.clone(),
+                        component.provenance().clone(),
+                    )
+                    .expect("rebuilt aggregate component"),
+                );
+            }
+            CandidateContractRootV1::new(&self.schemas, normative_components)
+                .expect("rebuilt candidate root")
+        }
+
+        fn finalization_for(&self, root: &CandidateContractRootV1) -> DesignFinalizationManifestV1 {
+            fixture_finalization(
+                &self.schemas,
+                self.design_revision_id,
+                *self.decision_closure.closure_id(),
+                root,
+            )
+        }
+
+        fn bindings_for(
+            &self,
+            root: &CandidateContractRootV1,
+            finalization: &DesignFinalizationManifestV1,
+        ) -> Vec<ExactDecisionRootBindingV1> {
+            fixture_bindings(root, finalization, *self.decision_closure.closure_id())
+        }
+    }
+
+    #[test]
+    fn exact_decision_root_binding_rejects_every_stale_or_fabricated_join() {
+        let fixture = RootBindingFixture::new();
+        let bindings = fixture.bindings_for(&fixture.root, &fixture.finalization);
+        fixture
+            .decision_closure
+            .root_binding_requirements()
+            .resolve(bindings.clone(), &fixture.root, &fixture.finalization)
+            .expect("valid exact Decision-root bindings");
+
+        let mut unordered = bindings.clone();
+        unordered.reverse();
+        assert!(matches!(
+            fixture
+                .decision_closure
+                .root_binding_requirements()
+                .resolve(unordered, &fixture.root, &fixture.finalization,),
+            Err(DecisionClosureError::BindingsNotStrictlySorted)
+        ));
+
+        let first_materialization = &fixture.decision_closure.materializations()[0];
+        let second_materialization = &fixture.decision_closure.materializations()[1];
+        let first_component =
+            normative_component(&fixture.root, first_materialization.materialization_id());
+        let second_component =
+            normative_component(&fixture.root, second_materialization.materialization_id());
+        let original_normatives = fixture
+            .root
+            .components()
+            .iter()
+            .filter(|component| component.kind() == ContractComponentKindV1::NormativeInputs)
+            .cloned()
+            .collect::<Vec<_>>();
+
+        let fabricated_resolution = decision_resolution_identity(&CborValue::Unsigned(9_001))
+            .expect("fabricated resolution identity");
+        let wrong_resolution_component = CandidateContractComponentV1::new(
+            &fixture.schemas,
+            ContractComponentKindV1::NormativeInputs,
+            *first_component.schema_id(),
+            first_component.value().clone(),
+            first_component.dependencies().to_vec(),
+            ComponentProvenanceV1::decision_materialization(
+                fabricated_resolution,
+                *first_materialization.materialization_id(),
+            ),
+        )
+        .expect("wrong-resolution component");
+        let wrong_resolution_root = fixture.rebuilt_root(replace_component(
+            &original_normatives,
+            first_component,
+            wrong_resolution_component,
+        ));
+        let wrong_resolution_finalization = fixture.finalization_for(&wrong_resolution_root);
+        assert!(matches!(
+            fixture
+                .decision_closure
+                .root_binding_requirements()
+                .resolve(
+                    fixture.bindings_for(&wrong_resolution_root, &wrong_resolution_finalization,),
+                    &wrong_resolution_root,
+                    &wrong_resolution_finalization,
+                ),
+            Err(DecisionClosureError::NormativeResolutionMismatch)
+        ));
+
+        let first_source = &first_materialization.sources()[0];
+        let stale_value_component = CandidateContractComponentV1::new(
+            &fixture.schemas,
+            ContractComponentKindV1::NormativeInputs,
+            *first_component.schema_id(),
+            CborValue::Array(vec![
+                CborValue::Unsigned(1),
+                CborValue::Bytes(
+                    first_materialization
+                        .materialization_id()
+                        .as_bytes()
+                        .to_vec(),
+                ),
+                CborValue::Array(vec![CborValue::Array(vec![
+                    CborValue::Text(first_source.decision_id().to_owned()),
+                    CborValue::Bytes([0xff; 32].to_vec()),
+                ])]),
+            ]),
+            first_component.dependencies().to_vec(),
+            first_component.provenance().clone(),
+        )
+        .expect("stale-value component");
+        let stale_value_root = fixture.rebuilt_root(replace_component(
+            &original_normatives,
+            first_component,
+            stale_value_component,
+        ));
+        let stale_value_finalization = fixture.finalization_for(&stale_value_root);
+        assert!(matches!(
+            fixture
+                .decision_closure
+                .root_binding_requirements()
+                .resolve(
+                    fixture.bindings_for(&stale_value_root, &stale_value_finalization),
+                    &stale_value_root,
+                    &stale_value_finalization,
+                ),
+            Err(DecisionClosureError::NormativeComponentValueMismatch)
+        ));
+
+        let duplicate_provenance_component = CandidateContractComponentV1::new(
+            &fixture.schemas,
+            ContractComponentKindV1::NormativeInputs,
+            *first_component.schema_id(),
+            first_component.value().clone(),
+            vec![*first_component.component_id()],
+            first_component.provenance().clone(),
+        )
+        .expect("duplicate-provenance component");
+        let duplicate_provenance_root = fixture.rebuilt_root(replace_component(
+            &original_normatives,
+            second_component,
+            duplicate_provenance_component,
+        ));
+        let duplicate_provenance_finalization =
+            fixture.finalization_for(&duplicate_provenance_root);
+        let duplicate_replacement = duplicate_provenance_root
+            .components()
+            .iter()
+            .find(|component| {
+                component.kind() == ContractComponentKindV1::NormativeInputs
+                    && !component.dependencies().is_empty()
+            })
+            .expect("duplicate-provenance replacement");
+        let mut duplicate_provenance_bindings = vec![
+            ExactDecisionRootBindingV1::new(
+                *first_materialization.materialization_id(),
+                *normative_component(
+                    &duplicate_provenance_root,
+                    first_materialization.materialization_id(),
+                )
+                .component_id(),
+                MaterializationBaseV1::initial_external_design_closure(
+                    *fixture.decision_closure.closure_id(),
+                ),
+                *duplicate_provenance_root.root_id(),
+                *duplicate_provenance_finalization.manifest_id(),
+            ),
+            ExactDecisionRootBindingV1::new(
+                *second_materialization.materialization_id(),
+                *duplicate_replacement.component_id(),
+                MaterializationBaseV1::initial_external_design_closure(
+                    *fixture.decision_closure.closure_id(),
+                ),
+                *duplicate_provenance_root.root_id(),
+                *duplicate_provenance_finalization.manifest_id(),
+            ),
+        ];
+        duplicate_provenance_bindings
+            .sort_by_key(|binding| *binding.materialization_id().as_bytes());
+        assert!(matches!(
+            fixture
+                .decision_closure
+                .root_binding_requirements()
+                .resolve(
+                    duplicate_provenance_bindings,
+                    &duplicate_provenance_root,
+                    &duplicate_provenance_finalization,
+                ),
+            Err(DecisionClosureError::DuplicateNormativeMaterialization)
+        ));
+
+        let aggregate_component = fixture
+            .root
+            .components()
+            .iter()
+            .find(|component| component.kind() != ContractComponentKindV1::NormativeInputs)
+            .expect("aggregate component");
+        let first_binding = bindings[0].clone();
+        let mut wrong_component = bindings.clone();
+        wrong_component[0] = ExactDecisionRootBindingV1::new(
+            *first_binding.materialization_id(),
+            *aggregate_component.component_id(),
+            first_binding.materialization_base().clone(),
+            *fixture.root.root_id(),
+            *fixture.finalization.manifest_id(),
+        );
+        assert!(matches!(
+            fixture
+                .decision_closure
+                .root_binding_requirements()
+                .resolve(wrong_component, &fixture.root, &fixture.finalization,),
+            Err(DecisionClosureError::NormativeComponentSetMismatch)
+        ));
+
+        let mut wrong_base = bindings.clone();
+        wrong_base[0] = ExactDecisionRootBindingV1::new(
+            *first_binding.materialization_id(),
+            *first_binding.component_id(),
+            MaterializationBaseV1::prior_contract_root(*fixture.root.root_id()),
+            *fixture.root.root_id(),
+            *fixture.finalization.manifest_id(),
+        );
+        assert!(matches!(
+            fixture
+                .decision_closure
+                .root_binding_requirements()
+                .resolve(wrong_base, &fixture.root, &fixture.finalization,),
+            Err(DecisionClosureError::BindingMaterializationBaseMismatch)
+        ));
+
+        let wrong_root = ContractRootIdV1::parse(&format!("sha256:{}", "00".repeat(32)))
+            .expect("different root identity");
+        let mut wrong_root_binding = bindings.clone();
+        wrong_root_binding[0] = ExactDecisionRootBindingV1::new(
+            *first_binding.materialization_id(),
+            *first_binding.component_id(),
+            first_binding.materialization_base().clone(),
+            wrong_root,
+            *fixture.finalization.manifest_id(),
+        );
+        assert!(matches!(
+            fixture
+                .decision_closure
+                .root_binding_requirements()
+                .resolve(wrong_root_binding, &fixture.root, &fixture.finalization,),
+            Err(DecisionClosureError::BindingFinalizationMismatch)
+        ));
+
+        let wrong_finalization =
+            DesignFinalizationManifestIdV1::parse(&format!("sha256:{}", "11".repeat(32)))
+                .expect("different finalization identity");
+        let mut wrong_finalization_binding = bindings;
+        wrong_finalization_binding[0] = ExactDecisionRootBindingV1::new(
+            *first_binding.materialization_id(),
+            *first_binding.component_id(),
+            first_binding.materialization_base().clone(),
+            *fixture.root.root_id(),
+            wrong_finalization,
+        );
+        assert!(matches!(
+            fixture
+                .decision_closure
+                .root_binding_requirements()
+                .resolve(
+                    wrong_finalization_binding,
+                    &fixture.root,
+                    &fixture.finalization,
+                ),
+            Err(DecisionClosureError::BindingFinalizationMismatch)
+        ));
+    }
+
+    fn fixture_decision_closure(materialization_count: usize) -> DecisionClosureV1 {
+        let records = (0..materialization_count)
+            .map(|index| {
+                let identifier = format!("decision-{index:04}");
+                let raw = RawExternalDecisionRecordV1::new(
+                    &identifier,
+                    TerminalDecisionStatusV1::Locked,
+                    format!("raw:{identifier}").into_bytes(),
+                    format!("body:{identifier}").into_bytes(),
+                    vec![],
+                    vec![],
+                )
+                .expect("raw fixture Decision");
+                ExternalDecisionClosureRecordV1::new(
+                    raw,
+                    ExternalLineageDispositionV1::None,
+                    DecisionConsequenceClassificationV1::Material,
+                )
+                .expect("fixture Decision")
+            })
+            .collect::<Vec<_>>();
+        let materializations = records
+            .iter()
+            .enumerate()
+            .map(|(index, record)| {
+                RequiredDecisionMaterializationV1::new(
+                    format!("maestro.vnext.candidate-contract.normative-inputs.v1/{index:04}"),
+                    ContractComponentKindV1::NormativeInputs,
+                    vec![
+                        DecisionMaterializationSourceV1::new(
+                            record.raw().id(),
+                            *record.raw().raw_body_hash(),
+                        )
+                        .expect("fixture materialization source"),
+                    ],
+                )
+                .expect("fixture materialization")
+            })
+            .collect::<Vec<_>>();
+        let expected_ids = records
+            .iter()
+            .map(|record| record.raw().id().to_owned())
+            .collect::<Vec<_>>();
+        let external = ExternalDesignAuthorityClosureV1::new(
+            records,
+            materializations,
+            &expected_ids,
+            vec![],
+            vec![],
+        )
+        .expect("fixture external closure");
+        DecisionClosureV1::from_external(&external).expect("fixture Decision closure")
+    }
+
+    fn fixture_finalization(
+        schemas: &SchemaClosureV1,
+        design_revision_id: DesignRevisionIdV1,
+        decision_closure_id: DecisionClosureIdV1,
+        root: &CandidateContractRootV1,
+    ) -> DesignFinalizationManifestV1 {
+        let stage_proof_binding_fields = root
+            .components()
+            .iter()
+            .find(|component| component.kind() == ContractComponentKindV1::StageProofMatrix)
+            .map(|component| match component.value() {
+                CborValue::Array(fields) => fields[1..].to_vec(),
+                _ => panic!("StageProofMatrix facet value must be an array"),
+            })
+            .expect("StageProofMatrix facet component");
+        let inputs = FinalizationInputKindV1::ALL
+            .into_iter()
+            .map(|kind| {
+                let owner_facet_ids = finalization_facet_kinds_v1(kind)
+                    .iter()
+                    .map(|facet_kind| {
+                        *root
+                            .components()
+                            .iter()
+                            .find(|component| component.kind() == *facet_kind)
+                            .expect("owner facet component")
+                            .component_id()
+                    })
+                    .collect::<Vec<_>>();
+                let mut fields = vec![
+                    CborValue::Unsigned(1),
+                    CborValue::Unsigned(kind.tag()),
+                    CborValue::Bytes(design_revision_id.as_bytes().to_vec()),
+                    CborValue::Bytes(decision_closure_id.as_bytes().to_vec()),
+                    CborValue::Bytes(root.root_id().as_bytes().to_vec()),
+                    CborValue::Array(
+                        owner_facet_ids
+                            .iter()
+                            .map(|identifier| CborValue::Bytes(identifier.as_bytes().to_vec()))
+                            .collect(),
+                    ),
+                ];
+                if kind == FinalizationInputKindV1::StageProofMatrix {
+                    fields.extend(stage_proof_binding_fields.clone());
+                }
+                let value = CborValue::Array(fields);
+                match kind {
+                    FinalizationInputKindV1::ClosureRequirement => {
+                        PinnedFinalizationInputV1::closure_requirement(schemas, value)
+                    }
+                    FinalizationInputKindV1::DeterministicSynthesis => {
+                        PinnedFinalizationInputV1::deterministic_synthesis(schemas, value)
+                    }
+                    FinalizationInputKindV1::ScopeAndExclusions => {
+                        PinnedFinalizationInputV1::scope_and_exclusions(schemas, value)
+                    }
+                    FinalizationInputKindV1::CapabilityCensusAndJourneys => {
+                        PinnedFinalizationInputV1::capability_census_and_journeys(schemas, value)
+                    }
+                    FinalizationInputKindV1::MigrationRollbackRemoval => {
+                        PinnedFinalizationInputV1::migration_rollback_removal(schemas, value)
+                    }
+                    FinalizationInputKindV1::StageProofMatrix => {
+                        PinnedFinalizationInputV1::stage_proof_matrix(schemas, value)
+                    }
+                    FinalizationInputKindV1::ReviewEvidence => {
+                        PinnedFinalizationInputV1::review_evidence(schemas, value)
+                    }
+                    FinalizationInputKindV1::EdgeSweepEvidence => {
+                        PinnedFinalizationInputV1::edge_sweep_evidence(schemas, value)
+                    }
+                    FinalizationInputKindV1::RiskRecovery => {
+                        PinnedFinalizationInputV1::risk_recovery(schemas, value)
+                    }
+                    FinalizationInputKindV1::FreshnessReferences => {
+                        PinnedFinalizationInputV1::freshness_references(schemas, value)
+                    }
+                    FinalizationInputKindV1::CanonicalizationPolicy => {
+                        PinnedFinalizationInputV1::canonicalization_policy(schemas, value)
+                    }
+                }
+                .expect("pinned finalization input")
+            })
+            .collect();
+        DesignFinalizationManifestV1::new(
+            schemas,
+            DesignBasisV1::design_revision(design_revision_id),
+            decision_closure_id,
+            root,
+            inputs,
+        )
+        .expect("design finalization manifest")
+    }
+
+    fn fixture_bindings(
+        root: &CandidateContractRootV1,
+        finalization: &DesignFinalizationManifestV1,
+        decision_closure_id: DecisionClosureIdV1,
+    ) -> Vec<ExactDecisionRootBindingV1> {
+        let mut bindings = root
+            .components()
+            .iter()
+            .filter(|component| component.kind() == ContractComponentKindV1::NormativeInputs)
+            .map(|component| {
+                let ComponentProvenanceV1::DecisionMaterialization(provenance) =
+                    component.provenance()
+                else {
+                    panic!("NormativeInputs fixture must use Decision materialization provenance");
+                };
+                ExactDecisionRootBindingV1::new(
+                    *provenance.materialization_id(),
+                    *component.component_id(),
+                    MaterializationBaseV1::initial_external_design_closure(decision_closure_id),
+                    *root.root_id(),
+                    *finalization.manifest_id(),
+                )
+            })
+            .collect::<Vec<_>>();
+        bindings.sort_by_key(|binding| *binding.materialization_id().as_bytes());
+        bindings
+    }
+
+    fn normative_component<'a>(
+        root: &'a CandidateContractRootV1,
+        materialization_id: &DecisionMaterializationIdV1,
+    ) -> &'a CandidateContractComponentV1 {
+        root.components()
+            .iter()
+            .find(|component| {
+                matches!(
+                    component.provenance(),
+                    ComponentProvenanceV1::DecisionMaterialization(provenance)
+                        if provenance.materialization_id() == materialization_id
+                )
+            })
+            .expect("fixture NormativeInputs component")
+    }
+
+    fn replace_component(
+        components: &[CandidateContractComponentV1],
+        replaced: &CandidateContractComponentV1,
+        replacement: CandidateContractComponentV1,
+    ) -> Vec<CandidateContractComponentV1> {
+        components
+            .iter()
+            .map(|component| {
+                if component.component_id() == replaced.component_id() {
+                    replacement.clone()
+                } else {
+                    component.clone()
+                }
+            })
+            .collect()
+    }
 }

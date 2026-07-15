@@ -406,6 +406,33 @@ impl StoreV1 {
         })
     }
 
+    pub(crate) fn coherent_publication_snapshot(
+        &self,
+    ) -> Result<
+        (
+            StoreStateV1,
+            StoreHeadV1,
+            StoreGenerationV1,
+            Vec<StoreObjectV1>,
+        ),
+        StoreError,
+    > {
+        self.with_verified_read(|connection| {
+            let (store_state, _) = state(connection)?;
+            let view = StorePublicationViewV1 {
+                root: &self.root,
+                connection,
+                domain: &self.domain,
+            };
+            let head = view.active_head()?.ok_or(StoreError::MissingActiveHead)?;
+            let generation = view
+                .active_generation()?
+                .ok_or(StoreError::MissingActiveHead)?;
+            let objects = view.active_generation_objects()?;
+            Ok((store_state, head, generation, objects))
+        })
+    }
+
     #[cfg(test)]
     pub(crate) fn put_object(&mut self, object: &StoreObjectV1) -> Result<(), StoreError> {
         self.root.verify_path_binding()?;

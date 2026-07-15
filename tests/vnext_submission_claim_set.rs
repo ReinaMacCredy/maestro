@@ -11,7 +11,8 @@ fn hash(byte: u8) -> [u8; 32] {
 }
 
 fn entry(id: &str, proposition: u8, record: u8) -> ClaimEntryV1 {
-    ClaimEntryV1::new(id.as_bytes().to_vec(), hash(proposition), hash(record))
+    ClaimEntryV1::from_stage0_carrier(id.as_bytes().to_vec(), hash(proposition), hash(record))
+        .unwrap()
 }
 
 fn hex_encode(bytes: &[u8]) -> String {
@@ -20,15 +21,18 @@ fn hex_encode(bytes: &[u8]) -> String {
 
 #[test]
 fn freezes_one_and_many_claim_vectors() {
-    let one = SubmissionClaimSetV1::new(b"submission-1".to_vec(), vec![entry("claim-a", 1, 11)])
-        .expect("one Claim is valid");
+    let one = SubmissionClaimSetV1::from_stage0_carrier(
+        b"submission-1".to_vec(),
+        vec![entry("claim-a", 1, 11)],
+    )
+    .expect("one Claim is valid");
     assert_eq!(one.claim_count(), 1);
     assert_eq!(
         hex_encode(one.digest()),
         "eab9b89f7a770711a12e4c64ecc6ec2d700ce7adda2b4bfd6ca80d9a6acd0580"
     );
 
-    let many = SubmissionClaimSetV1::new(
+    let many = SubmissionClaimSetV1::from_stage0_carrier(
         b"submission-2".to_vec(),
         vec![
             entry("claim-z", 1, 12),
@@ -52,11 +56,11 @@ fn freezes_one_and_many_claim_vectors() {
 #[test]
 fn rejects_every_malformed_set_product() {
     assert_eq!(
-        SubmissionClaimSetV1::new(b"submission".to_vec(), vec![]).unwrap_err(),
+        SubmissionClaimSetV1::from_stage0_carrier(b"submission".to_vec(), vec![]).unwrap_err(),
         SubmissionClaimSetError::Empty
     );
     assert_eq!(
-        SubmissionClaimSetV1::new(
+        SubmissionClaimSetV1::from_stage0_carrier(
             b"submission".to_vec(),
             vec![entry("claim-b", 2, 11), entry("claim-a", 1, 12)],
         )
@@ -64,7 +68,7 @@ fn rejects_every_malformed_set_product() {
         SubmissionClaimSetError::NonCanonicalOrder
     );
     assert_eq!(
-        SubmissionClaimSetV1::new(
+        SubmissionClaimSetV1::from_stage0_carrier(
             b"submission".to_vec(),
             vec![entry("claim-a", 1, 11), entry("claim-a", 2, 12)],
         )
@@ -72,7 +76,7 @@ fn rejects_every_malformed_set_product() {
         SubmissionClaimSetError::DuplicateClaimId
     );
     assert_eq!(
-        SubmissionClaimSetV1::new(
+        SubmissionClaimSetV1::from_stage0_carrier(
             b"submission".to_vec(),
             vec![entry("claim-a", 1, 11), entry("claim-b", 1, 12)],
         )
@@ -80,7 +84,7 @@ fn rejects_every_malformed_set_product() {
         SubmissionClaimSetError::DuplicateNormalizedProposition
     );
     assert_eq!(
-        SubmissionClaimSetV1::new(
+        SubmissionClaimSetV1::from_stage0_carrier(
             b"submission".to_vec(),
             vec![entry("claim-a", 1, 11), entry("claim-b", 2, 11)],
         )
@@ -88,25 +92,48 @@ fn rejects_every_malformed_set_product() {
         SubmissionClaimSetError::DuplicateClaimRecord
     );
     assert_eq!(
-        SubmissionClaimSetV1::new(vec![0xff], vec![entry("claim-a", 1, 11)]).unwrap_err(),
+        SubmissionClaimSetV1::from_stage0_carrier(vec![0xff], vec![entry("claim-a", 1, 11)])
+            .unwrap_err(),
         SubmissionClaimSetError::NonAsciiIdentifier
     );
     assert_eq!(
-        SubmissionClaimSetV1::new(
-            b"submission".to_vec(),
-            vec![ClaimEntryV1::new(vec![0xff], hash(1), hash(11))],
-        )
-        .unwrap_err(),
+        ClaimEntryV1::from_stage0_carrier(vec![0xff], hash(1), hash(11)).unwrap_err(),
         SubmissionClaimSetError::NonAsciiIdentifier
     );
+    assert_eq!(
+        SubmissionClaimSetV1::from_stage0_carrier(vec![], vec![entry("claim-a", 1, 11)],)
+            .unwrap_err(),
+        SubmissionClaimSetError::EmptySubmissionId
+    );
+    assert_eq!(
+        SubmissionClaimSetV1::from_stage0_carrier(vec![b's'; 257], vec![entry("claim-a", 1, 11)],)
+            .unwrap_err(),
+        SubmissionClaimSetError::SubmissionIdTooLong
+    );
+    assert_eq!(
+        ClaimEntryV1::from_stage0_carrier(vec![], hash(1), hash(11)).unwrap_err(),
+        SubmissionClaimSetError::EmptyClaimId
+    );
+    assert_eq!(
+        ClaimEntryV1::from_stage0_carrier(vec![b'c'; 257], hash(1), hash(11)).unwrap_err(),
+        SubmissionClaimSetError::ClaimIdTooLong
+    );
+    assert_eq!(
+        ClaimEntryV1::from_stage0_carrier(b"claim".to_vec(), [0; 32], hash(11)).unwrap_err(),
+        SubmissionClaimSetError::ZeroNormalizedProposition
+    );
+    assert_eq!(
+        ClaimEntryV1::from_stage0_carrier(b"claim".to_vec(), hash(1), [0; 32]).unwrap_err(),
+        SubmissionClaimSetError::ZeroClaimRecord
+    );
 
-    let valid = SubmissionClaimSetV1::new(
+    let valid = SubmissionClaimSetV1::from_stage0_carrier(
         b"submission".to_vec(),
         vec![entry("claim-a", 1, 11), entry("claim-b", 2, 12)],
     )
     .unwrap();
     assert_eq!(
-        SubmissionClaimSetV1::from_record(
+        SubmissionClaimSetV1::decode_stage0_record(
             valid.submission_id().to_vec(),
             3,
             valid.entries().to_vec(),
@@ -118,7 +145,7 @@ fn rejects_every_malformed_set_product() {
     let mut wrong_digest = *valid.digest();
     wrong_digest[0] ^= 1;
     assert_eq!(
-        SubmissionClaimSetV1::from_record(
+        SubmissionClaimSetV1::decode_stage0_record(
             valid.submission_id().to_vec(),
             valid.claim_count(),
             valid.entries().to_vec(),
@@ -132,7 +159,9 @@ fn rejects_every_malformed_set_product() {
 #[test]
 fn reference_encoder_matches_the_rust_encoder() {
     let entries = vec![entry("claim-a", 1, 11), entry("claim-b", 2, 12)];
-    let claim_set = SubmissionClaimSetV1::new(b"submission".to_vec(), entries.clone()).unwrap();
+    let claim_set =
+        SubmissionClaimSetV1::from_stage0_carrier(b"submission".to_vec(), entries.clone()).unwrap();
+    assert!(!claim_set.is_authoritative());
 
     let mut reference = Vec::from(SUBMISSION_CLAIM_SET_DOMAIN_V1);
     reference.extend_from_slice(&(b"submission".len() as u64).to_be_bytes());
@@ -163,8 +192,11 @@ fn freezes_the_schema_identity_and_rejects_shape_mutants() {
         "sha256:f70420ba6a0b35be60cc720536671ac92b98097ed4bc3d37ddcca50ec28cf9a4"
     );
 
-    let claim_set =
-        SubmissionClaimSetV1::new(b"submission".to_vec(), vec![entry("claim-a", 1, 11)]).unwrap();
+    let claim_set = SubmissionClaimSetV1::from_stage0_carrier(
+        b"submission".to_vec(),
+        vec![entry("claim-a", 1, 11)],
+    )
+    .unwrap();
     let value = claim_set.schema_value().unwrap();
     closure
         .validate_value(schema_id, &value)

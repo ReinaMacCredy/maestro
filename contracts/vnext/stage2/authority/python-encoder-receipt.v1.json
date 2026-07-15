@@ -133,12 +133,12 @@
     {
       "byte_length": 1013,
       "path": "stage2-authority-manifest.v1.cbor",
-      "sha256": "b3b06f7ca60c09447ae3dac7e1bb3a9de970290dd16c0f96cc0416e0770004a5"
+      "sha256": "c7c0a6de143314fddf2475d27eeeb5f5610ebfac94e59fedd4643d06d00c15b7"
     }
   ],
   "encoder": "python_stdlib_existing_cbor_py",
   "publication_state": "inactive_candidate",
   "result": "canonical_cbor_emitted",
-  "root_id": "b3b06f7ca60c09447ae3dac7e1bb3a9de970290dd16c0f96cc0416e0770004a5",
+  "root_id": "c7c0a6de143314fddf2475d27eeeb5f5610ebfac94e59fedd4643d06d00c15b7",
   "schema_version": "maestro.vnext.stage2.authority.python-encoder-receipt.v1"
 }

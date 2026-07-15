@@ -2,10 +2,14 @@ use std::collections::BTreeSet;
 
 use thiserror::Error;
 
+use crate::domain::vnext::identity::SchemaIdV1;
+use crate::foundation::core::deterministic_cbor::{self, CborError, CborValue};
+
 use super::identity::{
     AuthorityContextIdV1, CapacityRootIdV1, DelegationIdV1, GenesisGrantIdV1, GrantIdV1,
     PrincipalIdV1,
 };
+use super::principal::{RevocationSetV1, RevocationTargetV1};
 
 const MAX_SCOPE_ATOMS: usize = 64;
 const MAX_DELEGATION_ANCESTRY: usize = 64;
@@ -150,10 +154,74 @@ impl GrantDefinitionV1 {
         if self.parent_grant_id.is_some() != self.delegation_id.is_some() {
             return Err(AuthorityValidationError::ParentDelegationMismatch);
         }
+        if matches!(
+            self.authority_use_constraint,
+            AuthorityUseConstraintV1::BoundedBy(_)
+        ) && self.parent_grant_id.is_none()
+        {
+            return Err(AuthorityValidationError::ParentlessBoundedGrant);
+        }
         if self.parent_grant_id == Some(self.id) {
             return Err(AuthorityValidationError::GrantCycle);
         }
         Ok(GrantV1(self))
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OrdinaryBoundedGrantV1(GrantV1);
+
+impl OrdinaryBoundedGrantV1 {
+    pub const SCHEMA_DOMAIN: &'static str = "maestro.vnext.ordinary-bounded-grant.v1";
+    pub const STORE_SCHEMA_ID: &'static str =
+        "sha256:93a4227d4bd0e1d4204a87dc92fb688838b649c1bffe6b1fd87cfdc5287d50c7";
+
+    pub fn new(grant: GrantV1) -> Result<Self, AuthorityValidationError> {
+        if grant.parent_grant_id().is_none()
+            || grant.delegation_id().is_none()
+            || !matches!(
+                grant.authority_use_constraint(),
+                AuthorityUseConstraintV1::BoundedBy(_)
+            )
+        {
+            return Err(AuthorityValidationError::InvalidOrdinaryBoundedGrant);
+        }
+        Ok(Self(grant))
+    }
+
+    pub fn store_schema_id() -> Result<SchemaIdV1, crate::domain::vnext::identity::IdentityError> {
+        SchemaIdV1::parse(Self::STORE_SCHEMA_ID)
+    }
+
+    pub const fn grant(&self) -> &GrantV1 {
+        &self.0
+    }
+
+    pub fn capacity_root_id(&self) -> CapacityRootIdV1 {
+        match self.0.authority_use_constraint() {
+            AuthorityUseConstraintV1::BoundedBy(root_id) => root_id,
+            AuthorityUseConstraintV1::NoLocalBoundedRoot => {
+                unreachable!("invariant: ordinary bounded Grant constructor enforces BoundedBy")
+            }
+        }
+    }
+
+    pub fn schema_value(&self) -> Result<CborValue, CborError> {
+        grant_schema_value(Self::SCHEMA_DOMAIN, &self.0)
+    }
+
+    pub fn canonical_bytes(&self) -> Result<Vec<u8>, CborError> {
+        deterministic_cbor::encode(&self.schema_value()?)
+    }
+
+    pub fn from_canonical_bytes(bytes: &[u8]) -> Result<Self, AuthorityValidationError> {
+        let value = deterministic_cbor::decode(bytes)?;
+        let grant = parse_grant_schema_value(&value, Self::SCHEMA_DOMAIN)?;
+        let ordinary = Self::new(grant)?;
+        if ordinary.canonical_bytes()? != bytes {
+            return Err(AuthorityValidationError::InvalidCanonicalGrantCarrier);
+        }
+        Ok(ordinary)
     }
 }
 
@@ -378,6 +446,94 @@ impl DelegationV1 {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OrdinaryGrantDelegationV1 {
+    context_id: AuthorityContextIdV1,
+    capacity_root_id: CapacityRootIdV1,
+    delegation: DelegationV1,
+}
+
+impl OrdinaryGrantDelegationV1 {
+    pub const SCHEMA_DOMAIN: &'static str = "maestro.vnext.ordinary-grant-delegation.v1";
+    pub const STORE_SCHEMA_ID: &'static str =
+        "sha256:5f22c4aabdb6b8bf0a4f3f25c2dac5d693be43f8becb243f7cb73e9a028a29ac";
+
+    pub fn new(
+        context_id: AuthorityContextIdV1,
+        capacity_root_id: CapacityRootIdV1,
+        delegation: DelegationV1,
+        child: &OrdinaryBoundedGrantV1,
+    ) -> Result<Self, AuthorityValidationError> {
+        if child.grant().context_id() != context_id
+            || child.capacity_root_id() != capacity_root_id
+            || child.grant().parent_grant_id() != Some(delegation.parent_grant_id)
+            || child.grant().delegation_id() != Some(delegation.id)
+            || child.grant().id() != delegation.child_grant_id
+        {
+            return Err(AuthorityValidationError::DelegationBindingMismatch);
+        }
+        Ok(Self {
+            context_id,
+            capacity_root_id,
+            delegation,
+        })
+    }
+
+    pub fn store_schema_id() -> Result<SchemaIdV1, crate::domain::vnext::identity::IdentityError> {
+        SchemaIdV1::parse(Self::STORE_SCHEMA_ID)
+    }
+
+    pub const fn context_id(&self) -> AuthorityContextIdV1 {
+        self.context_id
+    }
+
+    pub const fn capacity_root_id(&self) -> CapacityRootIdV1 {
+        self.capacity_root_id
+    }
+
+    pub const fn delegation(&self) -> DelegationV1 {
+        self.delegation
+    }
+
+    pub fn schema_value(&self) -> Result<CborValue, CborError> {
+        Ok(CborValue::Array(vec![
+            CborValue::text(Self::SCHEMA_DOMAIN)?,
+            bytes(self.delegation.id.as_bytes()),
+            bytes(self.context_id.as_bytes()),
+            bytes(self.delegation.parent_grant_id.as_bytes()),
+            bytes(self.delegation.child_grant_id.as_bytes()),
+            bytes(self.capacity_root_id.as_bytes()),
+        ]))
+    }
+
+    pub fn canonical_bytes(&self) -> Result<Vec<u8>, CborError> {
+        deterministic_cbor::encode(&self.schema_value()?)
+    }
+
+    pub fn from_canonical_bytes(
+        bytes: &[u8],
+        child: &OrdinaryBoundedGrantV1,
+    ) -> Result<Self, AuthorityValidationError> {
+        let value = deterministic_cbor::decode(bytes)?;
+        let fields = exact_array(&value, 6)?;
+        require_domain(&fields[0], Self::SCHEMA_DOMAIN)?;
+        let carrier = Self::new(
+            authority_id(&fields[2])?,
+            authority_id(&fields[5])?,
+            DelegationV1::new(
+                authority_id(&fields[1])?,
+                authority_id(&fields[3])?,
+                authority_id(&fields[4])?,
+            ),
+            child,
+        )?;
+        if carrier.canonical_bytes()? != bytes {
+            return Err(AuthorityValidationError::InvalidCanonicalGrantCarrier);
+        }
+        Ok(carrier)
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DelegationAncestryV1 {
     grant_ids: BTreeSet<GrantIdV1>,
     principal_ids: BTreeSet<PrincipalIdV1>,
@@ -446,8 +602,35 @@ pub fn validate_delegation(
     Ok(())
 }
 
+pub fn grant_is_revoked_by_closure(
+    grant: &OrdinaryBoundedGrantV1,
+    grants: &[OrdinaryBoundedGrantV1],
+    revocations: &RevocationSetV1,
+) -> Result<bool, AuthorityValidationError> {
+    let mut current = Some(grant.grant().id());
+    let mut visited = BTreeSet::new();
+    while let Some(grant_id) = current {
+        if !visited.insert(grant_id) {
+            return Err(AuthorityValidationError::GrantCycle);
+        }
+        if revocations.contains(RevocationTargetV1::Grant(grant_id)) {
+            return Ok(true);
+        }
+        current = grants
+            .iter()
+            .find(|candidate| candidate.grant().id() == grant_id)
+            .and_then(|candidate| candidate.grant().parent_grant_id());
+        if visited.len() > MAX_DELEGATION_ANCESTRY {
+            return Err(AuthorityValidationError::AncestryBoundExceeded);
+        }
+    }
+    Ok(false)
+}
+
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
 pub enum AuthorityValidationError {
+    #[error(transparent)]
+    CanonicalCbor(#[from] CborError),
     #[error("validity must be a nonempty half-open interval")]
     InvalidValidityInterval,
     #[error("scope text must contain between 1 and 256 ASCII bytes")]
@@ -458,6 +641,12 @@ pub enum AuthorityValidationError {
     ScopeBoundExceeded,
     #[error("Grant parent and Delegation must both be absent or both be present")]
     ParentDelegationMismatch,
+    #[error("a BoundedBy Grant must have exactly one parent and Delegation")]
+    ParentlessBoundedGrant,
+    #[error("ordinary Grant carrier must be parented, delegated, and BoundedBy one root")]
+    InvalidOrdinaryBoundedGrant,
+    #[error("ordinary Grant or Delegation carrier is not canonical")]
+    InvalidCanonicalGrantCarrier,
     #[error("Grant ancestry is cyclic")]
     GrantCycle,
     #[error("delegation ancestry exceeds its finite bound")]
@@ -504,6 +693,238 @@ pub enum AuthorityValidationError {
     InvalidBootstrapGenesisGrant,
 }
 
+fn grant_schema_value(domain: &str, grant: &GrantV1) -> Result<CborValue, CborError> {
+    let definition = grant.definition();
+    Ok(CborValue::Array(vec![
+        CborValue::text(domain)?,
+        bytes(definition.id.as_bytes()),
+        bytes(definition.context_id.as_bytes()),
+        bytes(definition.grantee_principal_id.as_bytes()),
+        CborValue::optional(definition.parent_grant_id.map(|id| bytes(id.as_bytes()))),
+        CborValue::optional(definition.delegation_id.map(|id| bytes(id.as_bytes()))),
+        scope_value(&definition.terminal_scope)?,
+        scope_value(&definition.delegable_scope)?,
+        CborValue::Array(vec![
+            CborValue::Unsigned(definition.validity.not_before()),
+            CborValue::Unsigned(definition.validity.expires_at()),
+        ]),
+        CborValue::Unsigned(u64::from(definition.delegation_depth_remaining)),
+        match definition.authority_use_constraint {
+            AuthorityUseConstraintV1::NoLocalBoundedRoot => {
+                CborValue::Array(vec![CborValue::Unsigned(1)])
+            }
+            AuthorityUseConstraintV1::BoundedBy(root_id) => {
+                CborValue::Array(vec![CborValue::Unsigned(2), bytes(root_id.as_bytes())])
+            }
+        },
+    ]))
+}
+
+fn parse_grant_schema_value(
+    value: &CborValue,
+    domain: &str,
+) -> Result<GrantV1, AuthorityValidationError> {
+    let fields = exact_array(value, 11)?;
+    require_domain(&fields[0], domain)?;
+    let validity = exact_array(&fields[8], 2)?;
+    let constraint = match exact_array_any(&fields[10])? {
+        [CborValue::Unsigned(1)] => AuthorityUseConstraintV1::NoLocalBoundedRoot,
+        [CborValue::Unsigned(2), root] => AuthorityUseConstraintV1::BoundedBy(authority_id(root)?),
+        _ => return Err(AuthorityValidationError::InvalidCanonicalGrantCarrier),
+    };
+    GrantDefinitionV1 {
+        id: authority_id(&fields[1])?,
+        context_id: authority_id(&fields[2])?,
+        grantee_principal_id: authority_id(&fields[3])?,
+        parent_grant_id: optional_authority_id(&fields[4])?,
+        delegation_id: optional_authority_id(&fields[5])?,
+        terminal_scope: parse_scope(&fields[6])?,
+        delegable_scope: parse_scope(&fields[7])?,
+        validity: HalfOpenValidityV1::new(unsigned(&validity[0])?, unsigned(&validity[1])?)?,
+        delegation_depth_remaining: u8::try_from(unsigned(&fields[9])?)
+            .map_err(|_| AuthorityValidationError::InvalidCanonicalGrantCarrier)?,
+        authority_use_constraint: constraint,
+    }
+    .validate()
+}
+
+fn scope_value(scope: &GrantScopeV1) -> Result<CborValue, CborError> {
+    Ok(CborValue::Array(
+        scope
+            .atoms()
+            .map(|atom| {
+                Ok(CborValue::Array(vec![
+                    CborValue::text(atom.action())?,
+                    CborValue::text(atom.subject())?,
+                    CborValue::Unsigned(atom.protocol_revision()),
+                ]))
+            })
+            .collect::<Result<Vec<_>, CborError>>()?,
+    ))
+}
+
+fn parse_scope(value: &CborValue) -> Result<GrantScopeV1, AuthorityValidationError> {
+    let CborValue::Array(atoms) = value else {
+        return Err(AuthorityValidationError::InvalidCanonicalGrantCarrier);
+    };
+    GrantScopeV1::new(
+        atoms
+            .iter()
+            .map(|value| {
+                let fields = exact_array(value, 3)?;
+                ScopeAtomV1::new(text(&fields[0])?, text(&fields[1])?, unsigned(&fields[2])?)
+            })
+            .collect::<Result<Vec<_>, AuthorityValidationError>>()?,
+    )
+}
+
+fn exact_array(
+    value: &CborValue,
+    expected: usize,
+) -> Result<&[CborValue], AuthorityValidationError> {
+    let fields = exact_array_any(value)?;
+    if fields.len() != expected {
+        return Err(AuthorityValidationError::InvalidCanonicalGrantCarrier);
+    }
+    Ok(fields)
+}
+
+fn exact_array_any(value: &CborValue) -> Result<&[CborValue], AuthorityValidationError> {
+    let CborValue::Array(fields) = value else {
+        return Err(AuthorityValidationError::InvalidCanonicalGrantCarrier);
+    };
+    Ok(fields)
+}
+
+fn require_domain(value: &CborValue, expected: &str) -> Result<(), AuthorityValidationError> {
+    if matches!(value, CborValue::Text(actual) if actual == expected) {
+        Ok(())
+    } else {
+        Err(AuthorityValidationError::InvalidCanonicalGrantCarrier)
+    }
+}
+
+fn authority_id<K: super::identity::AuthorityIdentityKindV1>(
+    value: &CborValue,
+) -> Result<super::identity::AuthorityIdV1<K>, AuthorityValidationError> {
+    let CborValue::Bytes(bytes) = value else {
+        return Err(AuthorityValidationError::InvalidCanonicalGrantCarrier);
+    };
+    let digest: [u8; 32] = bytes
+        .as_slice()
+        .try_into()
+        .map_err(|_| AuthorityValidationError::InvalidCanonicalGrantCarrier)?;
+    Ok(super::identity::AuthorityIdV1::from_digest(digest))
+}
+
+fn optional_authority_id<K: super::identity::AuthorityIdentityKindV1>(
+    value: &CborValue,
+) -> Result<Option<super::identity::AuthorityIdV1<K>>, AuthorityValidationError> {
+    match exact_array_any(value)? {
+        [CborValue::Unsigned(0)] => Ok(None),
+        [CborValue::Unsigned(1), value] => Ok(Some(authority_id(value)?)),
+        _ => Err(AuthorityValidationError::InvalidCanonicalGrantCarrier),
+    }
+}
+
+fn unsigned(value: &CborValue) -> Result<u64, AuthorityValidationError> {
+    match value {
+        CborValue::Unsigned(value) => Ok(*value),
+        _ => Err(AuthorityValidationError::InvalidCanonicalGrantCarrier),
+    }
+}
+
+fn text(value: &CborValue) -> Result<&str, AuthorityValidationError> {
+    match value {
+        CborValue::Text(value) => Ok(value),
+        _ => Err(AuthorityValidationError::InvalidCanonicalGrantCarrier),
+    }
+}
+
+fn bytes(value: &[u8]) -> CborValue {
+    CborValue::Bytes(value.to_vec())
+}
+
 fn valid_scope_text(value: &str) -> bool {
     !value.is_empty() && value.len() <= MAX_SCOPE_TEXT_BYTES && value.is_ascii()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ordinary_grant(
+        seed: &str,
+        parent: GrantIdV1,
+        root: CapacityRootIdV1,
+    ) -> (OrdinaryBoundedGrantV1, OrdinaryGrantDelegationV1) {
+        let id = GrantIdV1::derive(&format!("{seed}-grant")).unwrap();
+        let delegation_id = DelegationIdV1::derive(&format!("{seed}-delegation")).unwrap();
+        let grant = GrantDefinitionV1 {
+            id,
+            context_id: AuthorityContextIdV1::derive("context").unwrap(),
+            grantee_principal_id: PrincipalIdV1::derive(&format!("{seed}-principal")).unwrap(),
+            parent_grant_id: Some(parent),
+            delegation_id: Some(delegation_id),
+            terminal_scope: GrantScopeV1::new(vec![
+                ScopeAtomV1::new("RevokeGrant", &root.render(), 1).unwrap(),
+            ])
+            .unwrap(),
+            delegable_scope: GrantScopeV1::new(vec![]).unwrap(),
+            validity: HalfOpenValidityV1::new(1, 10).unwrap(),
+            delegation_depth_remaining: 2,
+            authority_use_constraint: AuthorityUseConstraintV1::BoundedBy(root),
+        }
+        .validate()
+        .unwrap();
+        let grant = OrdinaryBoundedGrantV1::new(grant).unwrap();
+        let delegation = OrdinaryGrantDelegationV1::new(
+            grant.grant().context_id(),
+            root,
+            DelegationV1::new(delegation_id, parent, id),
+            &grant,
+        )
+        .unwrap();
+        (grant, delegation)
+    }
+
+    #[test]
+    fn ordinary_carriers_round_trip_and_parentless_bounded_grant_is_refused() {
+        let parent = GrantIdV1::derive("parent").unwrap();
+        let root = CapacityRootIdV1::derive("root").unwrap();
+        let (grant, delegation) = ordinary_grant("child", parent, root);
+        let grant_bytes = grant.canonical_bytes().unwrap();
+        let decoded = OrdinaryBoundedGrantV1::from_canonical_bytes(&grant_bytes).unwrap();
+        assert_eq!(decoded, grant);
+        let delegation_bytes = delegation.canonical_bytes().unwrap();
+        assert_eq!(
+            OrdinaryGrantDelegationV1::from_canonical_bytes(&delegation_bytes, &decoded).unwrap(),
+            delegation
+        );
+        assert_eq!(
+            OrdinaryBoundedGrantV1::store_schema_id().unwrap().render(),
+            OrdinaryBoundedGrantV1::STORE_SCHEMA_ID
+        );
+
+        let mut invalid = grant.grant().definition();
+        invalid.parent_grant_id = None;
+        invalid.delegation_id = None;
+        assert_eq!(
+            invalid.validate(),
+            Err(AuthorityValidationError::ParentlessBoundedGrant)
+        );
+    }
+
+    #[test]
+    fn ancestor_revocation_invalidates_descendant_grant_closure() {
+        let root = CapacityRootIdV1::derive("root").unwrap();
+        let parent_id = GrantIdV1::derive("g0").unwrap();
+        let (parent, _) = ordinary_grant("parent", parent_id, root);
+        let (child, _) = ordinary_grant("child", parent.grant().id(), root);
+        let revocations =
+            RevocationSetV1::new(vec![RevocationTargetV1::Grant(parent.grant().id())]).unwrap();
+        assert!(
+            grant_is_revoked_by_closure(&child, &[parent, child.clone()], &revocations).unwrap()
+        );
+    }
 }

@@ -10,4 +10,7 @@ pub mod materialization;
 pub mod proof;
 pub mod provenance;
 pub mod root;
+pub mod runtime;
 pub mod submission_claim;
+
+pub use runtime::InitialContractStepPublicationV1;

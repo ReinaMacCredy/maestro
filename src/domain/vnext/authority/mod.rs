@@ -4,6 +4,7 @@
 //! allowed edge to the canonical Store transaction; adapters, system clocks,
 //! filesystems, networks, and alternate currentness are excluded.
 
+mod action_basis;
 mod bootstrap_catalog;
 mod capacity;
 mod closed;
@@ -20,6 +21,10 @@ mod publication;
 mod result;
 mod transition;
 
+pub use action_basis::{
+    AuthorityActionBasisErrorV1, AuthorityActionLeafV1, RepositoryActionLeafV1,
+    exact_authority_basis_for_action,
+};
 pub use bootstrap_catalog::{
     BootstrapMandateTargetV1, BootstrapTargetDispositionV1, bootstrap_mandate_target_catalog,
 };
@@ -67,11 +72,25 @@ pub use evaluator::{
     BootstrapMandateResponseObservationV1, BootstrapResponseDispositionV1,
     ConsentSlotEvaluationFactsV1,
 };
-pub use facade::{AuthorityFacadeV1, AuthorityPublicationError};
+pub use facade::{
+    AbsorbWorkAuthorityV1, AmendContractAuthorityV1, AppendDesignRevisionAuthorityV1,
+    AuthorityFacadeV1, AuthorityPublicationError, CancelWorkAuthorityV1,
+    CreateDraftWorkAuthorityV1, PublishInitialContractAuthorityV1, RepositoryAuthenticatedHumanV1,
+    RepositoryAuthoritySelectionV1, RepositoryDecisionAuthorityCarrierV1,
+    RepositoryDecisionOptionMappingV1, RepositoryDecisionPresentationV1,
+    RepositoryLeafAuthorityErrorV1, RepositoryPolicyComponentSetV1, RepositoryPolicySnapshotV1,
+    RepositoryPolicyStrengthV1, RepositoryPolicyTransitionAuthorityV1,
+    RepositoryPolicyTransitionKindV1, RepositoryPolicyTransitionV1, ResolveDecisionAuthorityV1,
+};
+pub(crate) use facade::{
+    RepositoryActionAdmissionInputV1, RepositoryAuthorityAdmissionErrorV1, admit_repository_action,
+    admit_repository_authority_candidate,
+};
 pub use grant::{
     AuthorityUseConstraintV1, AuthorityValidationError, BootstrapG0PathV1, BootstrapGenesisGrantV1,
     DelegationAncestryV1, DelegationV1, GrantDefinitionV1, GrantScopeV1, GrantV1,
-    HalfOpenValidityV1, ScopeAtomV1, validate_delegation,
+    HalfOpenValidityV1, OrdinaryBoundedGrantV1, OrdinaryGrantDelegationV1, ScopeAtomV1,
+    grant_is_revoked_by_closure, validate_delegation,
 };
 pub use identity::{
     ActionRequestIdV1, ActionResultIdV1, AuthorityBasisCommitmentIdV1, AuthorityContextIdV1,
@@ -101,10 +120,18 @@ pub use principal::{
 };
 pub use publication::{
     AuthorityPublicationKindV1, AuthorityPublicationLineageV1, AuthorityPublicationOutcomeV1,
-    AuthorityPublicationPlanError, ISSUE_BOOTSTRAP_MANDATE_IDEMPOTENCY_NAMESPACE_V1,
-    IssueBootstrapMandatePublicationV1,
+    AuthorityPublicationPlanError, GrantActionIdentityV1, GrantAdministrationAuthorityV1,
+    ISSUE_BOOTSTRAP_MANDATE_IDEMPOTENCY_NAMESPACE_V1,
+    ISSUE_ROOT_ATTACHED_BOUNDED_GRANT_IDEMPOTENCY_NAMESPACE_V1, IssueBootstrapMandatePublicationV1,
+    IssueRootAttachedBoundedGrantPublicationV1,
+    REISSUE_ROOT_ATTACHED_GRANT_ONE_TO_ONE_IDEMPOTENCY_NAMESPACE_V1,
+    REVOKE_GRANT_IDEMPOTENCY_NAMESPACE_V1, ReissueRootAttachedGrantOneToOnePublicationV1,
+    RevokeGrantPublicationV1,
 };
 pub use result::{
     ActionOutcomeV1, ActionResultError, ActionResultV1, AuthorizationReceiptV1, ResponseOriginV1,
 };
 pub use transition::{TransitionGuardTermBundleV1, TransitionGuardTermV1};
+
+#[cfg(test)]
+pub(crate) use facade::test_support;

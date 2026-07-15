@@ -2868,7 +2868,13 @@ fn vnext_authority_and_store_keep_one_directional_ownership() {
             continue;
         }
         let source = source_without_test_modules(&read_source_file(&file));
-        if ![Path::new("facade.rs"), Path::new("publication.rs")].contains(&relative)
+        if ![
+            Path::new("facade.rs"),
+            Path::new("facade/repository_admission.rs"),
+            Path::new("facade/repository_leaf_authority.rs"),
+            Path::new("publication.rs"),
+        ]
+        .contains(&relative)
             && source.contains("domain::vnext::persistence")
         {
             violations.push(format!(

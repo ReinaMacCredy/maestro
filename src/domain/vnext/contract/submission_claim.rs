@@ -3,12 +3,15 @@ use std::collections::BTreeSet;
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
+use crate::domain::vnext::evidence::{ClaimSubjectV1, ClaimV1, SubmissionRefV1};
 use crate::domain::vnext::identity::{
     ConstraintExprV1, FieldDescriptorV1, SchemaDescriptorV1, SchemaError, TypeExprV1,
 };
 use crate::foundation::core::deterministic_cbor::CborValue;
 
 pub const SUBMISSION_CLAIM_SET_DOMAIN_V1: &[u8] = b"maestro.submission-claim-set.v1";
+const MAX_SUBMISSION_IDENTIFIER_BYTES_V1: usize = 256;
+const MAX_CLAIM_IDENTIFIER_BYTES_V1: usize = 256;
 
 pub fn submission_claim_set_schema_v1() -> Result<SchemaDescriptorV1, SchemaError> {
     SchemaDescriptorV1::new(
@@ -62,16 +65,26 @@ pub struct ClaimEntryV1 {
 }
 
 impl ClaimEntryV1 {
-    pub fn new(
+    pub fn from_claim(claim: &ClaimV1) -> Self {
+        Self {
+            claim_id: claim.claim_id().render().into_bytes(),
+            normalized_proposition_hash: *claim.normalized_proposition_hash(),
+            claim_record_hash: *claim.record_hash(),
+        }
+    }
+
+    pub fn from_stage0_carrier(
         claim_id: Vec<u8>,
         normalized_proposition_hash: [u8; 32],
         claim_record_hash: [u8; 32],
-    ) -> Self {
-        Self {
+    ) -> Result<Self, SubmissionClaimSetError> {
+        let entry = Self {
             claim_id,
             normalized_proposition_hash,
             claim_record_hash,
-        }
+        };
+        validate_entry(&entry)?;
+        Ok(entry)
     }
 
     pub fn claim_id(&self) -> &[u8] {
@@ -92,12 +105,53 @@ pub struct SubmissionClaimSetV1 {
     submission_id: Vec<u8>,
     entries: Vec<ClaimEntryV1>,
     digest: [u8; 32],
+    submission_ref: Option<SubmissionRefV1>,
+    claim_subjects: Option<Vec<ClaimSubjectV1>>,
 }
 
 impl SubmissionClaimSetV1 {
-    pub fn new(
+    pub fn from_claims(
+        submission_ref: SubmissionRefV1,
+        claims: &[ClaimV1],
+    ) -> Result<Self, SubmissionClaimSetError> {
+        if claims.is_empty() {
+            return Err(SubmissionClaimSetError::Empty);
+        }
+        if claims
+            .iter()
+            .any(|claim| claim.submission() != submission_ref)
+        {
+            return Err(SubmissionClaimSetError::CrossSubmissionClaim);
+        }
+        let mut projected: Vec<_> = claims
+            .iter()
+            .map(|claim| (ClaimEntryV1::from_claim(claim), claim.subject().clone()))
+            .collect();
+        projected.sort_by(|(left, _), (right, _)| {
+            (left.normalized_proposition_hash, left.claim_id.as_slice())
+                .cmp(&(right.normalized_proposition_hash, right.claim_id.as_slice()))
+        });
+        let (entries, claim_subjects) = projected.into_iter().unzip();
+        Self::build(
+            submission_ref.render().into_bytes(),
+            entries,
+            Some(submission_ref),
+            Some(claim_subjects),
+        )
+    }
+
+    pub fn from_stage0_carrier(
         submission_id: Vec<u8>,
         entries: Vec<ClaimEntryV1>,
+    ) -> Result<Self, SubmissionClaimSetError> {
+        Self::build(submission_id, entries, None, None)
+    }
+
+    fn build(
+        submission_id: Vec<u8>,
+        entries: Vec<ClaimEntryV1>,
+        submission_ref: Option<SubmissionRefV1>,
+        claim_subjects: Option<Vec<ClaimSubjectV1>>,
     ) -> Result<Self, SubmissionClaimSetError> {
         if entries.is_empty() {
             return Err(SubmissionClaimSetError::Empty);
@@ -112,10 +166,12 @@ impl SubmissionClaimSetV1 {
             submission_id,
             entries,
             digest,
+            submission_ref,
+            claim_subjects,
         })
     }
 
-    pub fn from_record(
+    pub fn decode_stage0_record(
         submission_id: Vec<u8>,
         claim_count: u64,
         entries: Vec<ClaimEntryV1>,
@@ -137,11 +193,25 @@ impl SubmissionClaimSetV1 {
             submission_id,
             entries,
             digest,
+            submission_ref: None,
+            claim_subjects: None,
         })
     }
 
     pub fn submission_id(&self) -> &[u8] {
         &self.submission_id
+    }
+
+    pub fn submission_ref(&self) -> Option<SubmissionRefV1> {
+        self.submission_ref
+    }
+
+    pub fn is_authoritative(&self) -> bool {
+        self.submission_ref.is_some() && self.claim_subjects.is_some()
+    }
+
+    pub fn claim_subjects(&self) -> Option<&[ClaimSubjectV1]> {
+        self.claim_subjects.as_deref()
     }
 
     pub fn claim_count(&self) -> u64 {
@@ -195,6 +265,8 @@ impl SubmissionClaimSetV1 {
 pub enum SubmissionClaimSetError {
     #[error("SubmissionClaimSetV1 must contain at least one Claim")]
     Empty,
+    #[error("SubmissionClaimSetV1 contains a Claim bound to another Submission")]
+    CrossSubmissionClaim,
     #[error("SubmissionClaimSetV1 claim_count does not match its entries")]
     CountMismatch,
     #[error("SubmissionClaimSetV1 entries are not in canonical proposition-hash/claim-id order")]
@@ -211,6 +283,22 @@ pub enum SubmissionClaimSetError {
     LengthOverflow,
     #[error("SubmissionClaimSetV1 identifiers must use canonical ASCII bytes")]
     NonAsciiIdentifier,
+    #[error("SubmissionClaimSetV1 submission_id must be non-empty")]
+    EmptySubmissionId,
+    #[error(
+        "SubmissionClaimSetV1 submission_id exceeds the finite v1 limit of {MAX_SUBMISSION_IDENTIFIER_BYTES_V1} bytes"
+    )]
+    SubmissionIdTooLong,
+    #[error("SubmissionClaimSetV1 Claim id must be non-empty")]
+    EmptyClaimId,
+    #[error(
+        "SubmissionClaimSetV1 Claim id exceeds the finite v1 limit of {MAX_CLAIM_IDENTIFIER_BYTES_V1} bytes"
+    )]
+    ClaimIdTooLong,
+    #[error("SubmissionClaimSetV1 contains an all-zero normalized proposition hash")]
+    ZeroNormalizedProposition,
+    #[error("SubmissionClaimSetV1 contains an all-zero Claim record hash")]
+    ZeroClaimRecord,
 }
 
 fn validate_entries(entries: &[ClaimEntryV1]) -> Result<(), SubmissionClaimSetError> {
@@ -219,6 +307,7 @@ fn validate_entries(entries: &[ClaimEntryV1]) -> Result<(), SubmissionClaimSetEr
     let mut record_hashes = BTreeSet::new();
 
     for entry in entries {
+        validate_entry(entry)?;
         if !claim_ids.insert(entry.claim_id.as_slice()) {
             return Err(SubmissionClaimSetError::DuplicateClaimId);
         }
@@ -250,6 +339,31 @@ fn validate_identifiers(
 ) -> Result<(), SubmissionClaimSetError> {
     if !submission_id.is_ascii() || entries.iter().any(|entry| !entry.claim_id.is_ascii()) {
         return Err(SubmissionClaimSetError::NonAsciiIdentifier);
+    }
+    if submission_id.is_empty() {
+        return Err(SubmissionClaimSetError::EmptySubmissionId);
+    }
+    if submission_id.len() > MAX_SUBMISSION_IDENTIFIER_BYTES_V1 {
+        return Err(SubmissionClaimSetError::SubmissionIdTooLong);
+    }
+    Ok(())
+}
+
+fn validate_entry(entry: &ClaimEntryV1) -> Result<(), SubmissionClaimSetError> {
+    if !entry.claim_id.is_ascii() {
+        return Err(SubmissionClaimSetError::NonAsciiIdentifier);
+    }
+    if entry.claim_id.is_empty() {
+        return Err(SubmissionClaimSetError::EmptyClaimId);
+    }
+    if entry.claim_id.len() > MAX_CLAIM_IDENTIFIER_BYTES_V1 {
+        return Err(SubmissionClaimSetError::ClaimIdTooLong);
+    }
+    if entry.normalized_proposition_hash == [0; 32] {
+        return Err(SubmissionClaimSetError::ZeroNormalizedProposition);
+    }
+    if entry.claim_record_hash == [0; 32] {
+        return Err(SubmissionClaimSetError::ZeroClaimRecord);
     }
     Ok(())
 }

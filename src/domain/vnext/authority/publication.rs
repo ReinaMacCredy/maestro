@@ -6,10 +6,19 @@ use crate::domain::vnext::identity::{
 use crate::domain::vnext::persistence::{StoreHeadV1, StoreObjectV1};
 use crate::foundation::core::deterministic_cbor::CborValue;
 
-use super::{ActionResultIdV1, IssueBootstrapMandateRequestV1, ResponseOriginV1};
+use super::{
+    ActionRequestIdV1, ActionResultIdV1, GenesisGrantIdV1, GrantIdV1, IdempotencyKeyIdV1,
+    IssueBootstrapMandateRequestV1, OrdinaryBoundedGrantV1, OrdinaryGrantDelegationV1,
+    PrincipalBindingIdV1, ResponseOriginV1, SessionIdV1,
+};
 
 pub const ISSUE_BOOTSTRAP_MANDATE_IDEMPOTENCY_NAMESPACE_V1: &str =
     "authority.issue-bootstrap-mandate.v1";
+pub const ISSUE_ROOT_ATTACHED_BOUNDED_GRANT_IDEMPOTENCY_NAMESPACE_V1: &str =
+    "authority.issue-root-attached-bounded-grant.v1";
+pub const REISSUE_ROOT_ATTACHED_GRANT_ONE_TO_ONE_IDEMPOTENCY_NAMESPACE_V1: &str =
+    "authority.reissue-root-attached-grant-one-to-one.v1";
+pub const REVOKE_GRANT_IDEMPOTENCY_NAMESPACE_V1: &str = "authority.revoke-grant.v1";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct AuthorityPublicationLineageV1 {
@@ -41,6 +50,22 @@ impl AuthorityPublicationLineageV1 {
             expected_old: Some(expected_old),
             prior_authority_root: Some(prior_authority_root),
         }
+    }
+
+    pub const fn contract_root_id(self) -> ContractRootIdV1 {
+        self.contract_root_id
+    }
+
+    pub const fn previous_generation_id(self) -> Option<StoreGenerationIdV1> {
+        self.previous_generation_id
+    }
+
+    pub const fn expected_old(self) -> Option<StoreHeadIdV1> {
+        self.expected_old
+    }
+
+    pub const fn prior_authority_root(self) -> Option<StoreObjectIdV1> {
+        self.prior_authority_root
     }
 }
 
@@ -83,6 +108,167 @@ impl IssueBootstrapMandatePublicationV1 {
     pub fn request(&self) -> &IssueBootstrapMandateRequestV1 {
         &self.request
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct GrantActionIdentityV1 {
+    request_id: ActionRequestIdV1,
+    idempotency_key: IdempotencyKeyIdV1,
+}
+
+impl GrantActionIdentityV1 {
+    pub const fn new(request_id: ActionRequestIdV1, idempotency_key: IdempotencyKeyIdV1) -> Self {
+        Self {
+            request_id,
+            idempotency_key,
+        }
+    }
+
+    pub const fn request_id(self) -> ActionRequestIdV1 {
+        self.request_id
+    }
+
+    pub const fn idempotency_key(self) -> IdempotencyKeyIdV1 {
+        self.idempotency_key
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct GrantAdministrationAuthorityV1 {
+    actor_binding_id: PrincipalBindingIdV1,
+    actor_session_id: SessionIdV1,
+    terminal_grant_id: GrantIdV1,
+}
+
+impl GrantAdministrationAuthorityV1 {
+    pub const fn new(
+        actor_binding_id: PrincipalBindingIdV1,
+        actor_session_id: SessionIdV1,
+        terminal_grant_id: GrantIdV1,
+    ) -> Self {
+        Self {
+            actor_binding_id,
+            actor_session_id,
+            terminal_grant_id,
+        }
+    }
+
+    pub const fn actor_binding_id(self) -> PrincipalBindingIdV1 {
+        self.actor_binding_id
+    }
+
+    pub const fn actor_session_id(self) -> SessionIdV1 {
+        self.actor_session_id
+    }
+
+    pub const fn terminal_grant_id(self) -> GrantIdV1 {
+        self.terminal_grant_id
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct IssueRootAttachedBoundedGrantPublicationV1 {
+    pub(super) identity: GrantActionIdentityV1,
+    pub(super) lineage: AuthorityPublicationLineageV1,
+    pub(super) parent_genesis_grant_id: GenesisGrantIdV1,
+    pub(super) grant: OrdinaryBoundedGrantV1,
+    pub(super) delegation: OrdinaryGrantDelegationV1,
+}
+
+impl IssueRootAttachedBoundedGrantPublicationV1 {
+    pub fn new(
+        identity: GrantActionIdentityV1,
+        lineage: AuthorityPublicationLineageV1,
+        parent_genesis_grant_id: GenesisGrantIdV1,
+        grant: OrdinaryBoundedGrantV1,
+        delegation: OrdinaryGrantDelegationV1,
+    ) -> Result<Self, AuthorityPublicationPlanError> {
+        require_successor_lineage(lineage)?;
+        Ok(Self {
+            identity,
+            lineage,
+            parent_genesis_grant_id,
+            grant,
+            delegation,
+        })
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ReissueRootAttachedGrantOneToOnePublicationV1 {
+    pub(super) identity: GrantActionIdentityV1,
+    pub(super) lineage: AuthorityPublicationLineageV1,
+    pub(super) authority: GrantAdministrationAuthorityV1,
+    pub(super) retired_grant_id: GrantIdV1,
+    pub(super) grant: OrdinaryBoundedGrantV1,
+    pub(super) delegation: OrdinaryGrantDelegationV1,
+}
+
+impl ReissueRootAttachedGrantOneToOnePublicationV1 {
+    pub fn new(
+        identity: GrantActionIdentityV1,
+        lineage: AuthorityPublicationLineageV1,
+        authority: GrantAdministrationAuthorityV1,
+        retired_grant_id: GrantIdV1,
+        grant: OrdinaryBoundedGrantV1,
+        delegation: OrdinaryGrantDelegationV1,
+    ) -> Result<Self, AuthorityPublicationPlanError> {
+        require_successor_lineage(lineage)?;
+        if retired_grant_id == grant.grant().id()
+            || authority.terminal_grant_id() == retired_grant_id
+            || authority.terminal_grant_id() == grant.grant().id()
+        {
+            return Err(AuthorityPublicationPlanError::SelfAuthorizingGrantMutation);
+        }
+        Ok(Self {
+            identity,
+            lineage,
+            authority,
+            retired_grant_id,
+            grant,
+            delegation,
+        })
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RevokeGrantPublicationV1 {
+    pub(super) identity: GrantActionIdentityV1,
+    pub(super) lineage: AuthorityPublicationLineageV1,
+    pub(super) authority: GrantAdministrationAuthorityV1,
+    pub(super) target_grant_id: GrantIdV1,
+}
+
+impl RevokeGrantPublicationV1 {
+    pub fn new(
+        identity: GrantActionIdentityV1,
+        lineage: AuthorityPublicationLineageV1,
+        authority: GrantAdministrationAuthorityV1,
+        target_grant_id: GrantIdV1,
+    ) -> Result<Self, AuthorityPublicationPlanError> {
+        require_successor_lineage(lineage)?;
+        if authority.terminal_grant_id() == target_grant_id {
+            return Err(AuthorityPublicationPlanError::SelfAuthorizingGrantMutation);
+        }
+        Ok(Self {
+            identity,
+            lineage,
+            authority,
+            target_grant_id,
+        })
+    }
+}
+
+fn require_successor_lineage(
+    lineage: AuthorityPublicationLineageV1,
+) -> Result<(), AuthorityPublicationPlanError> {
+    if lineage.previous_generation_id.is_none()
+        || lineage.expected_old.is_none()
+        || lineage.prior_authority_root.is_none()
+    {
+        return Err(AuthorityPublicationPlanError::InvalidGenerationLineage);
+    }
+    Ok(())
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -150,10 +336,12 @@ pub(super) enum AuthoritySchemaV1 {
     AdmittedTransitionGuard,
     LinearizationCoverageWitness,
     AuthorityContinuityPostCutConsequenceSet,
+    OrdinaryBoundedGrant,
+    OrdinaryGrantDelegation,
 }
 
 impl AuthoritySchemaV1 {
-    pub(super) const ALL: [Self; 22] = [
+    pub(super) const ALL: [Self; 24] = [
         Self::AuthorityMandate,
         Self::BootstrapMandateIssuanceBinding,
         Self::AuthorizationReceipt,
@@ -176,6 +364,8 @@ impl AuthoritySchemaV1 {
         Self::LinearizationCoverageWitness,
         Self::AuthorityContinuityPostCutConsequenceSet,
         Self::AuthorityContinuityClosure,
+        Self::OrdinaryBoundedGrant,
+        Self::OrdinaryGrantDelegation,
     ];
 
     pub(super) fn id(self) -> Result<SchemaIdV1, crate::domain::vnext::identity::IdentityError> {
@@ -246,6 +436,8 @@ impl AuthoritySchemaV1 {
             Self::AuthorityContinuityPostCutConsequenceSet => {
                 "sha256:61884215711d4df2702c7f0e32af88878d037b3267dffa6c26d85550d090b0aa"
             }
+            Self::OrdinaryBoundedGrant => OrdinaryBoundedGrantV1::STORE_SCHEMA_ID,
+            Self::OrdinaryGrantDelegation => OrdinaryGrantDelegationV1::STORE_SCHEMA_ID,
         })
     }
 
@@ -276,6 +468,8 @@ impl AuthoritySchemaV1 {
             Self::AdmittedTransitionGuard => fields.len() == 26,
             Self::LinearizationCoverageWitness => fields.len() == 8,
             Self::AuthorityContinuityPostCutConsequenceSet => fields.len() == 13,
+            Self::OrdinaryBoundedGrant => fields.len() == 11,
+            Self::OrdinaryGrantDelegation => fields.len() == 6,
         };
         if !valid_length {
             return false;
@@ -330,6 +524,8 @@ impl AuthoritySchemaV1 {
             Self::AuthorityContinuityPostCutConsequenceSet => {
                 Some("maestro.vnext.authority-continuity-post-cut-consequence-set.v1")
             }
+            Self::OrdinaryBoundedGrant => Some("maestro.vnext.ordinary-bounded-grant.v1"),
+            Self::OrdinaryGrantDelegation => Some("maestro.vnext.ordinary-grant-delegation.v1"),
         }
     }
 
@@ -364,6 +560,8 @@ impl AuthoritySchemaV1 {
             Self::AuthorityContinuityPostCutConsequenceSet => {
                 "AuthorityContinuityPostCutConsequenceSetV1"
             }
+            Self::OrdinaryBoundedGrant => "OrdinaryBoundedGrantV1",
+            Self::OrdinaryGrantDelegation => "OrdinaryGrantDelegationV1",
         }
     }
 
@@ -392,6 +590,8 @@ impl AuthoritySchemaV1 {
             Self::AdmittedTransitionGuard => 25,
             Self::LinearizationCoverageWitness => 7,
             Self::AuthorityContinuityPostCutConsequenceSet => 12,
+            Self::OrdinaryBoundedGrant => 10,
+            Self::OrdinaryGrantDelegation => 5,
         }
     }
 }
@@ -406,13 +606,13 @@ mod tests {
     use super::AuthoritySchemaV1;
 
     #[test]
-    fn runtime_schema_registry_equals_generated_stage_two_descriptors() {
+    fn runtime_schema_registry_preserves_the_exact_frozen_stage_two_prefix() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("contracts/vnext/stage2/authority/schema-descriptors.v1.json");
         let document: Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
         let descriptors = document["descriptors"].as_array().unwrap();
-        assert_eq!(descriptors.len(), AuthoritySchemaV1::ALL.len());
-        for (runtime, descriptor) in AuthoritySchemaV1::ALL.into_iter().zip(descriptors) {
+        assert_eq!(descriptors.len(), 22);
+        for (runtime, descriptor) in AuthoritySchemaV1::ALL[..22].iter().zip(descriptors) {
             assert_eq!(descriptor["schema_name"], runtime.schema_name());
             assert_eq!(
                 descriptor["fields"].as_array().unwrap().len(),
@@ -425,6 +625,26 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn runtime_schema_registry_appends_stage_three_tags_twenty_three_and_twenty_four() {
+        let additions = [
+            (23, AuthoritySchemaV1::OrdinaryBoundedGrant),
+            (24, AuthoritySchemaV1::OrdinaryGrantDelegation),
+        ];
+        assert_eq!(AuthoritySchemaV1::ALL.len(), 24);
+        for (tag, expected) in additions {
+            assert_eq!(AuthoritySchemaV1::ALL[tag - 1], expected);
+        }
+        assert_eq!(
+            AuthoritySchemaV1::ALL[22].schema_name(),
+            "OrdinaryBoundedGrantV1"
+        );
+        assert_eq!(
+            AuthoritySchemaV1::ALL[23].schema_name(),
+            "OrdinaryGrantDelegationV1"
+        );
+    }
 }
 
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
@@ -433,4 +653,6 @@ pub enum AuthorityPublicationPlanError {
     InvalidGenerationLineage,
     #[error("Authority publication commitments must be nonzero")]
     ZeroCommitment,
+    #[error("the target or candidate Grant cannot authorize its own mutation")]
+    SelfAuthorizingGrantMutation,
 }

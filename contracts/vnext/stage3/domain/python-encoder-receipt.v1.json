@@ -1,0 +1,57 @@
+{
+  "artifacts": [
+    [
+      "domain-kernel.v1.cbor",
+      22313,
+      "5082e9f25f830a30ab6b95b1fb2c4bcc2ae4a6c71c86c01cf7a59288d581fe96"
+    ],
+    [
+      "domain-kernel.v1.json",
+      34138,
+      "27b33d2b7072d5dbb274d4631a7e01dd0b32c93f7d9a4272cd77bcd2d1055a64"
+    ]
+  ],
+  "encoder": "python-stdlib-plus-frozen-cbor-subset",
+  "identity": "sha256:5082e9f25f830a30ab6b95b1fb2c4bcc2ae4a6c71c86c01cf7a59288d581fe96",
+  "predecessor_chain": {
+    "mode": "full_chain",
+    "stage0": {
+      "proof_receipts": [
+        {
+          "byte_length": 370471,
+          "path": "contracts/vnext/stage0/effect-home/encoder-receipt.json",
+          "sha256": "dc1845d9fe10ebc6c192935af87bb9d97babf0cab50ad03810e5395f97d584f9"
+        },
+        {
+          "byte_length": 2568,
+          "path": "contracts/vnext/stage0/effect-home/finalization-receipt.v1.json",
+          "sha256": "e257dd55dd5bb876f50e12b1cc943233bb3056a3e9b5f01f5a4660dcd0f4c89c"
+        }
+      ],
+      "semantic_root": "sha256:7faee76062a8e9b2f4628468610f6066624a697faf6241ab82218c6682e7d183",
+      "source_tree_root": "sha256:6e963fc20ee2a1ac18f306b156d3d6ebedd0a2b2bb632b5ad1346dde569e7b5a"
+    },
+    "stage2": {
+      "proof_receipts": [
+        {
+          "byte_length": 5249,
+          "path": "contracts/vnext/stage2/authority/python-encoder-receipt.v1.json",
+          "sha256": "6daff9fed366ef15d173708d3a1491537395b72e8f1a1a1c8190b38552ec78b0"
+        },
+        {
+          "byte_length": 1965,
+          "path": "contracts/vnext/stage2/authority/semantic-validation-receipt.v1.json",
+          "sha256": "d422499d8bbe5cf8e93a33e47e492ed74779cc8ae02b2109e6797ae6347ba3d3"
+        },
+        {
+          "byte_length": 1791,
+          "path": "contracts/vnext/stage2/authority/ruby-verification-receipt.v1.json",
+          "sha256": "88261a14e274455922426f837f46d774d227988e99e9267396190c5525acc926"
+        }
+      ],
+      "semantic_root": "sha256:c7c0a6de143314fddf2475d27eeeb5f5610ebfac94e59fedd4643d06d00c15b7"
+    }
+  },
+  "schema_version": "maestro.vnext.stage3.domain-kernel.encoder-receipt.v1",
+  "validation_mode": "full_chain"
+}

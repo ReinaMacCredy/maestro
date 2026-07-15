@@ -16,9 +16,9 @@ use maestro::domain::vnext::identity::{
     DesignFinalizationManifestIdV1, EnumVariantV1, FieldDescriptorV1, FieldPathV1,
     ManifestDomainV1, ManifestHeaderV1, ManifestIdentityError, ManifestRowV1, ManifestValueV1,
     PathStepV1, SchemaClosureV1, SchemaDescriptorV1, SchemaError, SchemaIdV1, SchemaReferenceV1,
-    TypeExprV1, decision_closure_identity, decision_materialization_identity,
-    decision_resolution_identity, design_closure_requirement_identity, design_revision_identity,
-    design_source_binding_identity, no_design_exemption_identity, optional_value_v1,
+    TypeExprV1, decision_closure_identity, decision_resolution_identity,
+    design_closure_requirement_identity, design_revision_identity, design_source_binding_identity,
+    no_design_exemption_identity, optional_value_v1,
 };
 use maestro::foundation::core::deterministic_cbor::{CborError, CborValue, encode, validate};
 use sha2::{Digest, Sha256};
@@ -394,6 +394,11 @@ fn reference_provenance_value(provenance: &ComponentProvenanceV1) -> CborValue {
             CborValue::Unsigned(3),
             CborValue::Bytes(value.resolution_id().as_bytes().to_vec()),
             CborValue::Bytes(value.materialization_id().as_bytes().to_vec()),
+        ]),
+        ComponentProvenanceV1::DecisionMaterializationPreimage(value) => CborValue::Array(vec![
+            CborValue::Unsigned(4),
+            CborValue::Bytes(value.resolution_id().as_bytes().to_vec()),
+            CborValue::Bytes(value.commitment().as_bytes().to_vec()),
         ]),
     }
 }
@@ -1222,7 +1227,7 @@ fn component_and_root_construction_reject_schema_label_substitution() {
 }
 
 #[test]
-fn component_provenance_is_total_and_variant_typed() {
+fn externally_constructible_component_provenance_is_variant_typed() {
     let schema_closure = stage0_schema_closure();
     let design_revision = design_revision_identity(&CborValue::Unsigned(1)).unwrap();
     let source_binding = design_source_binding_identity(&CborValue::Unsigned(2)).unwrap();
@@ -1233,17 +1238,12 @@ fn component_provenance_is_total_and_variant_typed() {
     let no_design =
         ComponentProvenanceV1::authorized_no_design(closure_requirement, exemption, source_binding);
 
-    let resolution = decision_resolution_identity(&CborValue::Unsigned(5)).unwrap();
-    let materialization = decision_materialization_identity(&CborValue::Unsigned(6)).unwrap();
-    let decision = ComponentProvenanceV1::decision_materialization(resolution, materialization);
-
     assert_eq!(design.variant_tag(), 1);
     assert_eq!(no_design.variant_tag(), 2);
-    assert_eq!(decision.variant_tag(), 3);
 
     let schema_id = component_schema_id(&schema_closure);
     let value = CborValue::Array(vec![CborValue::Unsigned(1), CborValue::Unsigned(1)]);
-    let ids = [design, no_design, decision].map(|provenance| {
+    let ids = [design, no_design].map(|provenance| {
         *CandidateContractComponentV1::new(
             &schema_closure,
             ContractComponentKindV1::IntendedOutcome,
@@ -1256,8 +1256,6 @@ fn component_provenance_is_total_and_variant_typed() {
         .component_id()
     });
     assert_ne!(ids[0], ids[1]);
-    assert_ne!(ids[1], ids[2]);
-    assert_ne!(ids[0], ids[2]);
     assert_eq!(
         ComponentProvenanceV1::design_slot(design_revision, 0, source_binding),
         Err(ProvenanceError::InvalidDesignSlotTag)
