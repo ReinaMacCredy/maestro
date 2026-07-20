@@ -35,10 +35,25 @@ pub enum RepositoryActionLeafV1 {
     AppendDesignRevision,
     ResolveDecision,
     AcquireStepExecution,
+    RenewStepLeaseTerm,
+    AbandonStepAttempt,
+    OriginateEffectIntent,
+    OriginateCoordinationDelivery,
+    RecordDispatchOutcome,
+    ReconcileEffectIntent,
+    ReserveBootstrapMandateInteractionEffect,
+    PublishBootstrapMandateInteractionOutcome,
+    ReconcileBootstrapMandateInteractionEffect,
+    ReserveContinuityMaintenanceEffect,
+    PublishContinuityMaintenanceEffectOutcome,
+    ReconcileContinuityMaintenanceEffect,
+    WithdrawEffectIntent,
+    WithdrawBootstrapMandateInteractionEffect,
+    WithdrawContinuityMaintenanceEffect,
 }
 
 impl RepositoryActionLeafV1 {
-    pub const ALL: [Self; 16] = [
+    pub const ALL: [Self; 31] = [
         Self::CreateDraftWork,
         Self::CancelWork,
         Self::CompleteWork,
@@ -55,6 +70,21 @@ impl RepositoryActionLeafV1 {
         Self::AppendDesignRevision,
         Self::ResolveDecision,
         Self::AcquireStepExecution,
+        Self::RenewStepLeaseTerm,
+        Self::AbandonStepAttempt,
+        Self::OriginateEffectIntent,
+        Self::OriginateCoordinationDelivery,
+        Self::RecordDispatchOutcome,
+        Self::ReconcileEffectIntent,
+        Self::ReserveBootstrapMandateInteractionEffect,
+        Self::PublishBootstrapMandateInteractionOutcome,
+        Self::ReconcileBootstrapMandateInteractionEffect,
+        Self::ReserveContinuityMaintenanceEffect,
+        Self::PublishContinuityMaintenanceEffectOutcome,
+        Self::ReconcileContinuityMaintenanceEffect,
+        Self::WithdrawEffectIntent,
+        Self::WithdrawBootstrapMandateInteractionEffect,
+        Self::WithdrawContinuityMaintenanceEffect,
     ];
 
     pub const fn literal(self) -> &'static str {
@@ -75,6 +105,31 @@ impl RepositoryActionLeafV1 {
             Self::AppendDesignRevision => "AppendDesignRevision",
             Self::ResolveDecision => "ResolveDecision",
             Self::AcquireStepExecution => "AcquireStepExecution",
+            Self::RenewStepLeaseTerm => "RenewStepLeaseTerm",
+            Self::AbandonStepAttempt => "AbandonStepAttempt",
+            Self::OriginateEffectIntent => "OriginateEffectIntent",
+            Self::OriginateCoordinationDelivery => "OriginateCoordinationDelivery",
+            Self::RecordDispatchOutcome => "RecordDispatchOutcome",
+            Self::ReconcileEffectIntent => "ReconcileEffectIntent",
+            Self::ReserveBootstrapMandateInteractionEffect => {
+                "ReserveBootstrapMandateInteractionEffect"
+            }
+            Self::PublishBootstrapMandateInteractionOutcome => {
+                "PublishBootstrapMandateInteractionOutcome"
+            }
+            Self::ReconcileBootstrapMandateInteractionEffect => {
+                "ReconcileBootstrapMandateInteractionEffect"
+            }
+            Self::ReserveContinuityMaintenanceEffect => "ReserveContinuityMaintenanceEffect",
+            Self::PublishContinuityMaintenanceEffectOutcome => {
+                "PublishContinuityMaintenanceEffectOutcome"
+            }
+            Self::ReconcileContinuityMaintenanceEffect => "ReconcileContinuityMaintenanceEffect",
+            Self::WithdrawEffectIntent => "WithdrawEffectIntent",
+            Self::WithdrawBootstrapMandateInteractionEffect => {
+                "WithdrawBootstrapMandateInteractionEffect"
+            }
+            Self::WithdrawContinuityMaintenanceEffect => "WithdrawContinuityMaintenanceEffect",
         }
     }
 
@@ -96,6 +151,21 @@ impl RepositoryActionLeafV1 {
             Self::AppendDesignRevision => 15,
             Self::ResolveDecision => 20,
             Self::AcquireStepExecution => 23,
+            Self::RenewStepLeaseTerm => 24,
+            Self::AbandonStepAttempt => 25,
+            Self::OriginateEffectIntent => 26,
+            Self::OriginateCoordinationDelivery => 27,
+            Self::RecordDispatchOutcome => 28,
+            Self::ReconcileEffectIntent => 29,
+            Self::ReserveBootstrapMandateInteractionEffect => 30,
+            Self::PublishBootstrapMandateInteractionOutcome => 31,
+            Self::ReconcileBootstrapMandateInteractionEffect => 32,
+            Self::ReserveContinuityMaintenanceEffect => 33,
+            Self::PublishContinuityMaintenanceEffectOutcome => 34,
+            Self::ReconcileContinuityMaintenanceEffect => 35,
+            Self::WithdrawEffectIntent => 36,
+            Self::WithdrawBootstrapMandateInteractionEffect => 37,
+            Self::WithdrawContinuityMaintenanceEffect => 38,
         }
     }
 
@@ -115,7 +185,22 @@ impl RepositoryActionLeafV1 {
             Self::PublishInitialContract | Self::AmendContract => 3,
             Self::AppendDesignRevision => 4,
             Self::ResolveDecision => 5,
-            Self::AcquireStepExecution => 6,
+            Self::AcquireStepExecution
+            | Self::RenewStepLeaseTerm
+            | Self::AbandonStepAttempt
+            | Self::OriginateEffectIntent
+            | Self::OriginateCoordinationDelivery
+            | Self::RecordDispatchOutcome
+            | Self::ReconcileEffectIntent
+            | Self::ReserveBootstrapMandateInteractionEffect
+            | Self::PublishBootstrapMandateInteractionOutcome
+            | Self::ReconcileBootstrapMandateInteractionEffect
+            | Self::ReserveContinuityMaintenanceEffect
+            | Self::PublishContinuityMaintenanceEffectOutcome
+            | Self::ReconcileContinuityMaintenanceEffect
+            | Self::WithdrawEffectIntent
+            | Self::WithdrawBootstrapMandateInteractionEffect
+            | Self::WithdrawContinuityMaintenanceEffect => 6,
         }
     }
 
@@ -132,6 +217,21 @@ impl RepositoryActionLeafV1 {
             Self::RejectWorkCompletion => 6,
             Self::ReturnWorkForRepair => 7,
             Self::AcquireStepExecution => 1,
+            Self::RenewStepLeaseTerm => 2,
+            Self::AbandonStepAttempt => 3,
+            Self::OriginateEffectIntent => 4,
+            Self::OriginateCoordinationDelivery => 5,
+            Self::RecordDispatchOutcome => 6,
+            Self::ReconcileEffectIntent => 7,
+            Self::ReserveBootstrapMandateInteractionEffect => 8,
+            Self::PublishBootstrapMandateInteractionOutcome => 9,
+            Self::ReconcileBootstrapMandateInteractionEffect => 10,
+            Self::ReserveContinuityMaintenanceEffect => 11,
+            Self::PublishContinuityMaintenanceEffectOutcome => 12,
+            Self::ReconcileContinuityMaintenanceEffect => 13,
+            Self::WithdrawEffectIntent => 14,
+            Self::WithdrawBootstrapMandateInteractionEffect => 15,
+            Self::WithdrawContinuityMaintenanceEffect => 16,
         }
     }
 
@@ -161,7 +261,22 @@ impl RepositoryActionLeafV1 {
             Self::ResolveDecision => {
                 "a3d6c9c0dcd9b5e3447cf4dc45edf5d1b338c99dfc27a61df23966b7514ae9dc"
             }
-            Self::AcquireStepExecution => {
+            Self::AcquireStepExecution
+            | Self::RenewStepLeaseTerm
+            | Self::AbandonStepAttempt
+            | Self::OriginateEffectIntent
+            | Self::OriginateCoordinationDelivery
+            | Self::RecordDispatchOutcome
+            | Self::ReconcileEffectIntent
+            | Self::ReserveBootstrapMandateInteractionEffect
+            | Self::PublishBootstrapMandateInteractionOutcome
+            | Self::ReconcileBootstrapMandateInteractionEffect
+            | Self::ReserveContinuityMaintenanceEffect
+            | Self::PublishContinuityMaintenanceEffectOutcome
+            | Self::ReconcileContinuityMaintenanceEffect
+            | Self::WithdrawEffectIntent
+            | Self::WithdrawBootstrapMandateInteractionEffect
+            | Self::WithdrawContinuityMaintenanceEffect => {
                 "82d922e944dc4fe27d3101bc725e0caea82093e8dabe79ed5732ee5c8da91292"
             }
         }
@@ -209,7 +324,121 @@ impl RepositoryActionLeafV1 {
             Self::AcquireStepExecution => {
                 "8fe0e1c9141feb86e36badb1a861d49a94ea2224a8c1d0b7a859cd53b7f7a9a2"
             }
+            Self::RenewStepLeaseTerm => {
+                "24abfd7630a5d743f5793319ade1ad3b6017a1a31cca632be4ba2a68fb4edf0b"
+            }
+            Self::AbandonStepAttempt => {
+                "4ef55b490996ea62eedd4ef62a58db9f17a62d2b040ea4243a4b331eb04953da"
+            }
+            Self::OriginateEffectIntent => {
+                "a2cf705f5d7ba987ae47efd9a8f9a8033e794b9858aa33f3812e4433c1350e26"
+            }
+            Self::OriginateCoordinationDelivery => {
+                "f4d4592e5de4084bcbb1b28487919011aae9a7f3f5f60e2bb3751900d3c26700"
+            }
+            Self::RecordDispatchOutcome => {
+                "568be4ebcfcf121a7d0c7b6aa956dbd281bd17a20c414bf07656923d30cc69d3"
+            }
+            Self::ReconcileEffectIntent => {
+                "5d0b53b85e408badf53e310ca7c619ae0c3a0e3113be26d94dfafe5bf6d2a745"
+            }
+            Self::ReserveBootstrapMandateInteractionEffect => {
+                "b4af8370f69b1aa4c8d93964b34e5e952c4a1e2a764d5f944680527c0430d782"
+            }
+            Self::PublishBootstrapMandateInteractionOutcome => {
+                "946ecf3e7c06a8fd5104f23776a8e19cfd3ad6b3325a76abf949c4a08e0ab0d0"
+            }
+            Self::ReconcileBootstrapMandateInteractionEffect => {
+                "7e885d84c662dbbf928c74d8607975719c4e2851ca475f26855fb4e91ea15d36"
+            }
+            Self::ReserveContinuityMaintenanceEffect => {
+                "4d67ac86d16c81fc135effaa27662f74b373054aee804e9b3b6ae8ba26323bb2"
+            }
+            Self::PublishContinuityMaintenanceEffectOutcome => {
+                "e9197d302312aaf18f576aed38358c5e39854e12a297dac37fcab3e1f53c8460"
+            }
+            Self::ReconcileContinuityMaintenanceEffect => {
+                "2dc583f57f23f12026cef748bb61c0db72150d3ed31f4e6e31be77f8f63e1fa1"
+            }
+            Self::WithdrawEffectIntent => {
+                "6df3b90a4963ffef04865a9e70b57f2040b2b2159b35cfb58347866ed6afe2f9"
+            }
+            Self::WithdrawBootstrapMandateInteractionEffect => {
+                "00ae32e979c74e12f6ebc2f31da11890043495cb8042708edd3f5063c72f2a29"
+            }
+            Self::WithdrawContinuityMaintenanceEffect => {
+                "d5ed8273857101d805748d83023ad067c909427223ae81ba4f9a77f770227d47"
+            }
         }
+    }
+
+    pub const fn is_execution_action(self) -> bool {
+        matches!(
+            self,
+            Self::AcquireStepExecution
+                | Self::RenewStepLeaseTerm
+                | Self::AbandonStepAttempt
+                | Self::OriginateEffectIntent
+                | Self::OriginateCoordinationDelivery
+                | Self::RecordDispatchOutcome
+                | Self::ReconcileEffectIntent
+                | Self::ReserveBootstrapMandateInteractionEffect
+                | Self::PublishBootstrapMandateInteractionOutcome
+                | Self::ReconcileBootstrapMandateInteractionEffect
+                | Self::ReserveContinuityMaintenanceEffect
+                | Self::PublishContinuityMaintenanceEffectOutcome
+                | Self::ReconcileContinuityMaintenanceEffect
+                | Self::WithdrawEffectIntent
+                | Self::WithdrawBootstrapMandateInteractionEffect
+                | Self::WithdrawContinuityMaintenanceEffect
+        )
+    }
+
+    pub const fn execution_authority_basis(self) -> Option<ActionAuthorityBasisKindV1> {
+        if !self.is_execution_action() {
+            return None;
+        }
+        Some(match self {
+            Self::ReserveBootstrapMandateInteractionEffect
+            | Self::PublishBootstrapMandateInteractionOutcome
+            | Self::ReconcileBootstrapMandateInteractionEffect
+            | Self::WithdrawBootstrapMandateInteractionEffect => {
+                ActionAuthorityBasisKindV1::BootstrapControlG0
+            }
+            Self::ReserveContinuityMaintenanceEffect
+            | Self::PublishContinuityMaintenanceEffectOutcome
+            | Self::ReconcileContinuityMaintenanceEffect
+            | Self::WithdrawContinuityMaintenanceEffect => {
+                ActionAuthorityBasisKindV1::ContinuityMaintenance
+            }
+            _ => ActionAuthorityBasisKindV1::OrdinaryLiveRuntime,
+        })
+    }
+
+    pub const fn is_ordinary_execution_action(self) -> bool {
+        matches!(
+            self.execution_authority_basis(),
+            Some(ActionAuthorityBasisKindV1::OrdinaryLiveRuntime)
+        )
+    }
+
+    pub const fn is_external_effect_action(self) -> bool {
+        matches!(
+            self,
+            Self::OriginateEffectIntent
+                | Self::OriginateCoordinationDelivery
+                | Self::RecordDispatchOutcome
+                | Self::ReconcileEffectIntent
+                | Self::ReserveBootstrapMandateInteractionEffect
+                | Self::PublishBootstrapMandateInteractionOutcome
+                | Self::ReconcileBootstrapMandateInteractionEffect
+                | Self::ReserveContinuityMaintenanceEffect
+                | Self::PublishContinuityMaintenanceEffectOutcome
+                | Self::ReconcileContinuityMaintenanceEffect
+                | Self::WithdrawEffectIntent
+                | Self::WithdrawBootstrapMandateInteractionEffect
+                | Self::WithdrawContinuityMaintenanceEffect
+        )
     }
 
     pub const fn protocol_revision(self) -> u64 {
@@ -326,7 +555,7 @@ mod tests {
                 leaf.grammar_id(),
             )
         });
-        assert_eq!(rows.len(), 16);
+        assert_eq!(rows.len(), 31);
         assert_eq!(rows[1].0, 2);
         assert_eq!(rows[1].1, "CancelWork");
         assert_eq!(
@@ -335,5 +564,137 @@ mod tests {
         );
         assert_eq!(rows[14].0, 20);
         assert!(rows.windows(2).all(|pair| pair[0].0 < pair[1].0));
+    }
+
+    #[test]
+    fn repository_execution_leaves_match_the_exact_frozen_catalog() {
+        let execution = RepositoryActionLeafV1::ALL
+            .into_iter()
+            .filter(|leaf| leaf.is_execution_action())
+            .collect::<Vec<_>>();
+        assert_eq!(execution.len(), 16);
+        assert_eq!(
+            execution
+                .iter()
+                .map(|leaf| leaf.global_tag())
+                .collect::<Vec<_>>(),
+            (23..=38).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            execution
+                .iter()
+                .map(|leaf| leaf.local_tag())
+                .collect::<Vec<_>>(),
+            (1..=16).collect::<Vec<_>>()
+        );
+        assert!(execution.iter().all(|leaf| leaf.owner_tag() == 6));
+        assert!(execution.iter().all(|leaf| {
+            leaf.owner_descriptor_id()
+                == "82d922e944dc4fe27d3101bc725e0caea82093e8dabe79ed5732ee5c8da91292"
+        }));
+        assert_eq!(
+            execution
+                .iter()
+                .map(|leaf| (leaf.literal(), leaf.descriptor_id()))
+                .collect::<Vec<_>>(),
+            vec![
+                (
+                    "AcquireStepExecution",
+                    "8fe0e1c9141feb86e36badb1a861d49a94ea2224a8c1d0b7a859cd53b7f7a9a2",
+                ),
+                (
+                    "RenewStepLeaseTerm",
+                    "24abfd7630a5d743f5793319ade1ad3b6017a1a31cca632be4ba2a68fb4edf0b",
+                ),
+                (
+                    "AbandonStepAttempt",
+                    "4ef55b490996ea62eedd4ef62a58db9f17a62d2b040ea4243a4b331eb04953da",
+                ),
+                (
+                    "OriginateEffectIntent",
+                    "a2cf705f5d7ba987ae47efd9a8f9a8033e794b9858aa33f3812e4433c1350e26",
+                ),
+                (
+                    "OriginateCoordinationDelivery",
+                    "f4d4592e5de4084bcbb1b28487919011aae9a7f3f5f60e2bb3751900d3c26700",
+                ),
+                (
+                    "RecordDispatchOutcome",
+                    "568be4ebcfcf121a7d0c7b6aa956dbd281bd17a20c414bf07656923d30cc69d3",
+                ),
+                (
+                    "ReconcileEffectIntent",
+                    "5d0b53b85e408badf53e310ca7c619ae0c3a0e3113be26d94dfafe5bf6d2a745",
+                ),
+                (
+                    "ReserveBootstrapMandateInteractionEffect",
+                    "b4af8370f69b1aa4c8d93964b34e5e952c4a1e2a764d5f944680527c0430d782",
+                ),
+                (
+                    "PublishBootstrapMandateInteractionOutcome",
+                    "946ecf3e7c06a8fd5104f23776a8e19cfd3ad6b3325a76abf949c4a08e0ab0d0",
+                ),
+                (
+                    "ReconcileBootstrapMandateInteractionEffect",
+                    "7e885d84c662dbbf928c74d8607975719c4e2851ca475f26855fb4e91ea15d36",
+                ),
+                (
+                    "ReserveContinuityMaintenanceEffect",
+                    "4d67ac86d16c81fc135effaa27662f74b373054aee804e9b3b6ae8ba26323bb2",
+                ),
+                (
+                    "PublishContinuityMaintenanceEffectOutcome",
+                    "e9197d302312aaf18f576aed38358c5e39854e12a297dac37fcab3e1f53c8460",
+                ),
+                (
+                    "ReconcileContinuityMaintenanceEffect",
+                    "2dc583f57f23f12026cef748bb61c0db72150d3ed31f4e6e31be77f8f63e1fa1",
+                ),
+                (
+                    "WithdrawEffectIntent",
+                    "6df3b90a4963ffef04865a9e70b57f2040b2b2159b35cfb58347866ed6afe2f9",
+                ),
+                (
+                    "WithdrawBootstrapMandateInteractionEffect",
+                    "00ae32e979c74e12f6ebc2f31da11890043495cb8042708edd3f5063c72f2a29",
+                ),
+                (
+                    "WithdrawContinuityMaintenanceEffect",
+                    "d5ed8273857101d805748d83023ad067c909427223ae81ba4f9a77f770227d47",
+                ),
+            ]
+        );
+        assert!(
+            RepositoryActionLeafV1::ALL[..15]
+                .iter()
+                .all(|leaf| !leaf.is_execution_action())
+        );
+        assert_eq!(
+            execution
+                .iter()
+                .filter(|leaf| leaf.is_ordinary_execution_action())
+                .count(),
+            8
+        );
+        assert_eq!(
+            execution
+                .iter()
+                .filter(|leaf| {
+                    leaf.execution_authority_basis()
+                        == Some(ActionAuthorityBasisKindV1::BootstrapControlG0)
+                })
+                .count(),
+            4
+        );
+        assert_eq!(
+            execution
+                .iter()
+                .filter(|leaf| {
+                    leaf.execution_authority_basis()
+                        == Some(ActionAuthorityBasisKindV1::ContinuityMaintenance)
+                })
+                .count(),
+            4
+        );
     }
 }

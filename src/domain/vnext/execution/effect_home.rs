@@ -1,8 +1,16 @@
+use std::fmt;
+
 use thiserror::Error;
 
 /// An opaque immutable reference used by the Stage-0 literal schema.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct HomeTokenV1([u8; 32]);
+
+impl fmt::Debug for HomeTokenV1 {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("HomeTokenV1(<redacted>)")
+    }
+}
 
 impl HomeTokenV1 {
     pub const fn new(bytes: [u8; 32]) -> Self {

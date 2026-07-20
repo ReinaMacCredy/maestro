@@ -2,8 +2,11 @@ use std::collections::BTreeSet;
 
 use thiserror::Error;
 
-use crate::domain::vnext::identity::ContractRootIdV1;
-use crate::domain::vnext::step::{StepBindingV1, StepSubmissionIdV1};
+use crate::domain::vnext::contract::runtime::ContractGenerationIdV1;
+use crate::domain::vnext::identity::{ContractRootIdV1, StoreDomainIdV1};
+use crate::domain::vnext::step::{
+    StepBindingV1, StepIdV1, StepRevisionIdV1, StepScopeV1, StepSubmissionIdV1,
+};
 use crate::domain::vnext::work::{WorkIdV1, WorkSubmissionIdV1};
 use crate::foundation::core::deterministic_cbor::{self, CborError, CborValue};
 
@@ -11,6 +14,7 @@ use super::identity::{
     ClaimIdV1, EvidenceIdentityError, ObservationRecordIdV1, derive_claim_id, domain_hash,
     require_nonzero,
 };
+use super::submission_claim::{SubmissionClaimSetError, SubmissionClaimSetV1};
 
 pub const CLAIM_RECORD_VERSION_V1: u64 = 1;
 pub const CLAIM_RECORD_DOMAIN_V1: &str = "maestro.vnext.evidence.claim-record.v1";
@@ -263,6 +267,85 @@ impl ClaimV1 {
     pub fn canonical_bytes(&self) -> Result<Vec<u8>, ClaimError> {
         Ok(deterministic_cbor::encode(&self.canonical_value())?)
     }
+
+    pub(crate) fn from_canonical_value(value: &CborValue) -> Result<Self, ClaimError> {
+        let CborValue::Array(fields) = value else {
+            return Err(ClaimError::InvalidStoredClaim);
+        };
+        let [
+            CborValue::Unsigned(version),
+            claim_id,
+            submission,
+            subject,
+            normalized_proposition_hash,
+            CborValue::Array(observation_refs),
+        ] = fields.as_slice()
+        else {
+            return Err(ClaimError::InvalidStoredClaim);
+        };
+        if *version != CLAIM_RECORD_VERSION_V1 {
+            return Err(ClaimError::InvalidStoredClaim);
+        }
+        let claim_id = ClaimIdV1::from_bytes(exact_claim_digest(claim_id)?)
+            .map_err(|_| ClaimError::InvalidStoredClaim)?;
+        let submission = parse_submission_ref(submission)?;
+        let subject = parse_claim_subject(subject)?;
+        let normalized_proposition_hash = exact_claim_digest(normalized_proposition_hash)?;
+        let observation_refs = observation_refs
+            .iter()
+            .map(|reference| {
+                ObservationRecordIdV1::from_bytes(exact_claim_digest(reference)?)
+                    .map_err(|_| ClaimError::InvalidStoredClaim)
+            })
+            .collect::<Result<Vec<_>, ClaimError>>()?;
+        let rebuilt = Self::new(
+            submission,
+            subject,
+            normalized_proposition_hash,
+            observation_refs,
+        )?;
+        if rebuilt.claim_id != claim_id || rebuilt.canonical_value() != *value {
+            return Err(ClaimError::InvalidStoredClaim);
+        }
+        Ok(rebuilt)
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EvidenceClaimPublicationV1 {
+    claims: Vec<ClaimV1>,
+    claim_set: SubmissionClaimSetV1,
+}
+
+impl EvidenceClaimPublicationV1 {
+    pub fn new(submission: SubmissionRefV1, mut claims: Vec<ClaimV1>) -> Result<Self, ClaimError> {
+        claims.sort_by(|left, right| {
+            (left.normalized_proposition_hash(), left.claim_id())
+                .cmp(&(right.normalized_proposition_hash(), right.claim_id()))
+        });
+        let claim_set = SubmissionClaimSetV1::from_claims(submission, &claims)?;
+        Ok(Self { claims, claim_set })
+    }
+
+    pub fn claims(&self) -> &[ClaimV1] {
+        &self.claims
+    }
+
+    pub const fn claim_set(&self) -> &SubmissionClaimSetV1 {
+        &self.claim_set
+    }
+
+    pub fn claim_set_value(&self) -> Result<CborValue, ClaimError> {
+        Ok(self.claim_set.schema_value()?)
+    }
+
+    pub fn canonical_value(&self) -> Result<CborValue, ClaimError> {
+        Ok(CborValue::Array(vec![
+            CborValue::text("maestro.vnext.evidence.claim-publication.v1")?,
+            self.claim_set_value()?,
+            CborValue::Array(self.claims.iter().map(ClaimV1::canonical_value).collect()),
+        ]))
+    }
 }
 
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
@@ -271,6 +354,8 @@ pub enum ClaimError {
     Identity(#[from] EvidenceIdentityError),
     #[error(transparent)]
     CanonicalCbor(#[from] CborError),
+    #[error(transparent)]
+    SubmissionClaimSet(#[from] SubmissionClaimSetError),
     #[error("Claim Submission kind does not match its immutable subject binding")]
     SubmissionSubjectMismatch,
     #[error("Step Claim Lease fence must be positive")]
@@ -289,6 +374,116 @@ pub enum ClaimError {
     TooManyStepSubmissionReferences,
     #[error("Work Claim contains a duplicate current Step Submission reference")]
     DuplicateStepSubmissionReference,
+    #[error("stored Claim carrier is malformed or non-canonical")]
+    InvalidStoredClaim,
+}
+
+fn parse_submission_ref(value: &CborValue) -> Result<SubmissionRefV1, ClaimError> {
+    let CborValue::Array(fields) = value else {
+        return Err(ClaimError::InvalidStoredClaim);
+    };
+    let [CborValue::Unsigned(kind), identity] = fields.as_slice() else {
+        return Err(ClaimError::InvalidStoredClaim);
+    };
+    let identity = exact_claim_digest(identity)?;
+    match *kind {
+        1 => WorkSubmissionIdV1::parse(&render_claim_digest(identity))
+            .map(SubmissionRefV1::Work)
+            .map_err(|_| ClaimError::InvalidStoredClaim),
+        2 => StepSubmissionIdV1::from_bytes(identity)
+            .map(SubmissionRefV1::Step)
+            .map_err(|_| ClaimError::InvalidStoredClaim),
+        _ => Err(ClaimError::InvalidStoredClaim),
+    }
+}
+
+fn parse_claim_subject(value: &CborValue) -> Result<ClaimSubjectV1, ClaimError> {
+    let CborValue::Array(fields) = value else {
+        return Err(ClaimError::InvalidStoredClaim);
+    };
+    match fields.as_slice() {
+        [
+            CborValue::Unsigned(1),
+            work_id,
+            contract_root_id,
+            CborValue::Array(current_step_submissions),
+        ] => {
+            let work_id = WorkIdV1::parse(&render_claim_digest(exact_claim_digest(work_id)?))
+                .map_err(|_| ClaimError::InvalidStoredClaim)?;
+            let contract_root_id = ContractRootIdV1::parse(&render_claim_digest(
+                exact_claim_digest(contract_root_id)?,
+            ))
+            .map_err(|_| ClaimError::InvalidStoredClaim)?;
+            let current_step_submissions = current_step_submissions
+                .iter()
+                .map(|submission| {
+                    StepSubmissionIdV1::from_bytes(exact_claim_digest(submission)?)
+                        .map_err(|_| ClaimError::InvalidStoredClaim)
+                })
+                .collect::<Result<Vec<_>, ClaimError>>()?;
+            ClaimSubjectV1::for_work(work_id, contract_root_id, current_step_submissions)
+        }
+        [
+            CborValue::Unsigned(2),
+            repository_id,
+            work_id,
+            contract_generation_id,
+            contract_root_id,
+            step_id,
+            revision_id,
+            CborValue::Unsigned(lease_fence),
+        ] => {
+            let repository_id =
+                StoreDomainIdV1::parse(&render_claim_digest(exact_claim_digest(repository_id)?))
+                    .map_err(|_| ClaimError::InvalidStoredClaim)?;
+            let work_id = WorkIdV1::parse(&render_claim_digest(exact_claim_digest(work_id)?))
+                .map_err(|_| ClaimError::InvalidStoredClaim)?;
+            let scope = StepScopeV1::new(repository_id, work_id);
+            let contract_generation_id = ContractGenerationIdV1::parse(&render_claim_digest(
+                exact_claim_digest(contract_generation_id)?,
+            ))
+            .map_err(|_| ClaimError::InvalidStoredClaim)?;
+            let contract_root_id = ContractRootIdV1::parse(&render_claim_digest(
+                exact_claim_digest(contract_root_id)?,
+            ))
+            .map_err(|_| ClaimError::InvalidStoredClaim)?;
+            let step_id = StepIdV1::from_bytes(scope, exact_claim_digest(step_id)?)
+                .map_err(|_| ClaimError::InvalidStoredClaim)?;
+            let revision_id = StepRevisionIdV1::from_bytes(exact_claim_digest(revision_id)?)
+                .map_err(|_| ClaimError::InvalidStoredClaim)?;
+            let binding = StepBindingV1::new(
+                scope,
+                contract_generation_id,
+                contract_root_id,
+                step_id,
+                revision_id,
+            )
+            .map_err(|_| ClaimError::InvalidStoredClaim)?;
+            ClaimSubjectV1::for_step(binding, *lease_fence)
+        }
+        _ => Err(ClaimError::InvalidStoredClaim),
+    }
+}
+
+fn exact_claim_digest(value: &CborValue) -> Result<[u8; 32], ClaimError> {
+    let CborValue::Bytes(bytes) = value else {
+        return Err(ClaimError::InvalidStoredClaim);
+    };
+    bytes
+        .as_slice()
+        .try_into()
+        .map_err(|_| ClaimError::InvalidStoredClaim)
+}
+
+fn render_claim_digest(bytes: [u8; 32]) -> String {
+    let mut rendered = String::with_capacity(71);
+    rendered.push_str("sha256:");
+    for byte in bytes {
+        use std::fmt::Write;
+        write!(&mut rendered, "{byte:02x}")
+            .expect("invariant: writing hexadecimal into String cannot fail");
+    }
+    rendered
 }
 
 fn claim_identity_value(

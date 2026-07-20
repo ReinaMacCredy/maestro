@@ -98,6 +98,38 @@ impl DispatchBindingV1 {
         self.attempt_id
     }
 
+    pub const fn application_envelope_id(&self) -> DispatchCommitmentV1 {
+        self.application_envelope_id
+    }
+
+    pub const fn provider_operation_contract_id(&self) -> DispatchCommitmentV1 {
+        self.provider_operation_contract_id
+    }
+
+    pub const fn provider_scope_id(&self) -> DispatchCommitmentV1 {
+        self.provider_scope_id
+    }
+
+    pub const fn provider_key_id(&self) -> DispatchCommitmentV1 {
+        self.provider_key_id
+    }
+
+    pub const fn credential_id(&self) -> DispatchCommitmentV1 {
+        self.credential_id
+    }
+
+    pub const fn material_stamp_id(&self) -> DispatchCommitmentV1 {
+        self.material_stamp_id
+    }
+
+    pub const fn run_set_revision_id(&self) -> DispatchCommitmentV1 {
+        self.run_set_revision_id
+    }
+
+    pub const fn accounting_basis_id(&self) -> DispatchCommitmentV1 {
+        self.accounting_basis_id
+    }
+
     pub fn canonical_value(&self) -> CborValue {
         CborValue::Array(vec![
             CborValue::Unsigned(1),
@@ -116,6 +148,48 @@ impl DispatchBindingV1 {
             self.run_set_revision_id.canonical_value(),
             self.accounting_basis_id.canonical_value(),
         ])
+    }
+
+    pub(crate) fn from_canonical_value(value: &CborValue) -> Result<Self, DispatchStateError> {
+        let CborValue::Array(fields) = value else {
+            return Err(DispatchStateError::InvalidCanonicalState);
+        };
+        let [
+            CborValue::Unsigned(1),
+            attempt_id,
+            CborValue::Unsigned(attempt_revision),
+            home,
+            use_fence,
+            envelope,
+            operation,
+            scope,
+            provider_key,
+            credential,
+            authority_basis,
+            dispatch_fence,
+            material_stamp,
+            run_set_revision,
+            accounting_basis,
+        ] = fields.as_slice()
+        else {
+            return Err(DispatchStateError::InvalidCanonicalState);
+        };
+        Self::new(DispatchBindingPartsV1 {
+            attempt_id: parse_commitment(attempt_id)?,
+            attempt_revision: *attempt_revision,
+            effect_intent_home_id: parse_commitment(home)?,
+            effect_intent_use_fence_id: parse_commitment(use_fence)?,
+            application_envelope_id: parse_commitment(envelope)?,
+            provider_operation_contract_id: parse_commitment(operation)?,
+            provider_scope_id: parse_commitment(scope)?,
+            provider_key_id: parse_commitment(provider_key)?,
+            credential_id: parse_commitment(credential)?,
+            authority_basis_id: parse_commitment(authority_basis)?,
+            dispatch_fence_id: parse_commitment(dispatch_fence)?,
+            material_stamp_id: parse_commitment(material_stamp)?,
+            run_set_revision_id: parse_commitment(run_set_revision)?,
+            accounting_basis_id: parse_commitment(accounting_basis)?,
+        })
     }
 }
 
@@ -144,6 +218,19 @@ impl DispatchCrossingSealV1 {
             self.seal_id.canonical_value(),
             self.binding.canonical_value(),
         ])
+    }
+
+    fn from_canonical_value(value: &CborValue) -> Result<Self, DispatchStateError> {
+        let CborValue::Array(fields) = value else {
+            return Err(DispatchStateError::InvalidCanonicalState);
+        };
+        let [CborValue::Unsigned(1), seal, binding] = fields.as_slice() else {
+            return Err(DispatchStateError::InvalidCanonicalState);
+        };
+        Ok(Self::new(
+            parse_commitment(seal)?,
+            DispatchBindingV1::from_canonical_value(binding)?,
+        ))
     }
 }
 
@@ -245,6 +332,10 @@ impl PreSealLocallyRejectedV1 {
     pub const fn binding(&self) -> &DispatchBindingV1 {
         &self.binding
     }
+
+    pub const fn rejection_evidence_id(&self) -> DispatchCommitmentV1 {
+        self.rejection_evidence_id
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -281,6 +372,10 @@ impl SealedDispatchTerminalV1 {
 
     pub const fn outcome(&self) -> SealedDispatchOutcomeV1 {
         self.outcome
+    }
+
+    pub const fn terminal_evidence_id(&self) -> DispatchCommitmentV1 {
+        self.terminal_evidence_id
     }
 }
 
@@ -444,6 +539,67 @@ impl DispatchAttemptStateV1 {
             ]),
         }
     }
+
+    pub(crate) fn from_canonical_value(value: &CborValue) -> Result<Self, DispatchStateError> {
+        let CborValue::Array(fields) = value else {
+            return Err(DispatchStateError::InvalidCanonicalState);
+        };
+        let [
+            CborValue::Unsigned(1),
+            CborValue::Unsigned(tag),
+            remainder @ ..,
+        ] = fields.as_slice()
+        else {
+            return Err(DispatchStateError::InvalidCanonicalState);
+        };
+        let state = match (*tag, remainder) {
+            (1, [binding]) => Self::ReservedUnsealed(Box::new(ReservedUnsealedV1::new(
+                DispatchBindingV1::from_canonical_value(binding)?,
+            ))),
+            (2, [binding, seal]) => {
+                let binding = DispatchBindingV1::from_canonical_value(binding)?;
+                let seal = DispatchCrossingSealV1::from_canonical_value(seal)?;
+                Self::SealedInFlight(Box::new(SealedInFlightV1::new(binding, seal)?))
+            }
+            (3, [terminal]) => {
+                let CborValue::Array(terminal) = terminal else {
+                    return Err(DispatchStateError::InvalidCanonicalState);
+                };
+                let terminal = match terminal.as_slice() {
+                    [CborValue::Unsigned(1), binding, evidence, outcome]
+                        if parse_outcome(outcome)? == DispatchAttemptOutcomeV1::LocallyRejected =>
+                    {
+                        DispatchAttemptTerminalV1::PreSealLocallyRejected(Box::new(
+                            PreSealLocallyRejectedV1::new(
+                                DispatchBindingV1::from_canonical_value(binding)?,
+                                parse_commitment(evidence)?,
+                            ),
+                        ))
+                    }
+                    [CborValue::Unsigned(2), binding, seal, outcome, evidence] => {
+                        let outcome = SealedDispatchOutcomeV1::from_dispatch_outcome(
+                            parse_outcome(outcome)?,
+                        )?;
+                        DispatchAttemptTerminalV1::SealedDispatchTerminal(Box::new(
+                            SealedDispatchTerminalV1::new(
+                                DispatchBindingV1::from_canonical_value(binding)?,
+                                DispatchCrossingSealV1::from_canonical_value(seal)?,
+                                outcome,
+                                parse_commitment(evidence)?,
+                            )?,
+                        ))
+                    }
+                    _ => return Err(DispatchStateError::InvalidCanonicalState),
+                };
+                Self::Terminal(terminal)
+            }
+            _ => return Err(DispatchStateError::InvalidCanonicalState),
+        };
+        if state.canonical_value() != *value {
+            return Err(DispatchStateError::InvalidCanonicalState);
+        }
+        Ok(state)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -512,8 +668,31 @@ pub enum DispatchStateError {
     TerminalEscape,
     #[error("illegal DispatchAttempt state transition")]
     IllegalTransition,
+    #[error("stored DispatchAttempt state is not the exact canonical carrier")]
+    InvalidCanonicalState,
     #[error(transparent)]
     CanonicalCbor(#[from] CborError),
+}
+
+fn parse_commitment(value: &CborValue) -> Result<DispatchCommitmentV1, DispatchStateError> {
+    let CborValue::Bytes(bytes) = value else {
+        return Err(DispatchStateError::InvalidCanonicalState);
+    };
+    let bytes = bytes
+        .as_slice()
+        .try_into()
+        .map_err(|_| DispatchStateError::InvalidCanonicalState)?;
+    DispatchCommitmentV1::new(bytes)
+}
+
+fn parse_outcome(value: &CborValue) -> Result<DispatchAttemptOutcomeV1, DispatchStateError> {
+    let CborValue::Array(fields) = value else {
+        return Err(DispatchStateError::InvalidCanonicalState);
+    };
+    let [CborValue::Unsigned(tag)] = fields.as_slice() else {
+        return Err(DispatchStateError::InvalidCanonicalState);
+    };
+    DispatchAttemptOutcomeV1::from_numeric_tag(*tag)
 }
 
 fn ensure_identical_binding(

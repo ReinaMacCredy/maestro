@@ -153,12 +153,15 @@ STAGE2_SEMANTIC_LITERAL_PATTERNS = list(dict.fromkeys([
     *CMA_EFFECT_WITHDRAWAL_SLOT_FAMILIES, *TRANSITION_GUARD_KINDS,
 ]))
 STAGE2_SEMANTIC_SOURCE_DECLARATIONS = {
+    "src/domain/vnext/authority/action_basis.rs": ("Authority", "candidate_contract_definition", "exact_stage4_execution_basis_partition"),
     "src/domain/vnext/authority/bootstrap_catalog.rs": ("Authority", "candidate_contract_definition", "exact_stage2_bootstrap_target_literal"),
     "src/domain/vnext/authority/capacity.rs": ("Authority", "candidate_contract_definition", "exact_stage2_capacity_literal"),
     "src/domain/vnext/authority/closed.rs": ("Authority", "candidate_contract_definition", "exact_stage2_closed_sum_literal"),
     "src/domain/vnext/authority/continuity/catalog.rs": ("Authority", "candidate_contract_definition", "exact_stage2_continuity_effect_intent_class_literal"),
     "src/domain/vnext/authority/continuity/totality.rs": ("Authority", "candidate_contract_definition", "exact_stage2_continuity_owner_census_literal"),
     "src/domain/vnext/authority/mod.rs": ("Authority", "candidate_contract_definition", "exact_stage2_authority_facade_literal"),
+    "src/domain/vnext/authority/facade/repository_admission.rs": ("Authority", "candidate_contract_definition", "exact_stage4_execution_authority_admission"),
+    "src/domain/vnext/authority/facade/repository_leaf_authority.rs": ("Authority", "candidate_contract_definition", "exact_stage4_execution_authority_closed_union"),
     "src/domain/vnext/authority/transition.rs": ("Authority", "candidate_contract_definition", "exact_stage2_transition_guard_literal"),
     "tests/vnext_authority_capacity_transition.rs": ("Stage2Proof", "candidate_proof_reader", "exact_stage2_capacity_and_transition_proof"),
     "tests/vnext_authority_contracts.rs": ("Stage2Proof", "candidate_proof_reader", "exact_stage2_authority_contract_proof"),

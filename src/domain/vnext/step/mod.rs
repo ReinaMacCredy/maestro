@@ -5,6 +5,7 @@ mod graph;
 mod identity;
 mod lifecycle;
 mod revision;
+mod submission;
 
 pub use amendment::{
     AddDispositionV1, AppliedStepAmendmentV1, RemoveDispositionV1, ReplaceDispositionV1,
@@ -25,4 +26,7 @@ pub use lifecycle::{
 };
 pub use revision::{
     NamedMaterialConstraintV1, StepRevisionError, StepRevisionMaterialV1, StepRevisionV1,
+};
+pub use submission::{
+    CanonicalStepSubmissionActionRequestV1, StepSubmissionErrorV1, StepSubmissionV1,
 };

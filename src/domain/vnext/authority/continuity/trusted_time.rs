@@ -153,3 +153,80 @@ pub enum HTimeAcceptanceErrorV1 {
     #[error("ExactNoLineageChange cannot change lineage, coordinate, or selected Stack")]
     FalseNoLineageChange,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn carry_plus_fresh_lower_uses_only_max_base_and_lower_and_rejects_invalid_upper() {
+        let lineage = reference("lineage");
+        let coordinate = reference("coordinate");
+        let stack = reference("stack");
+        let prior = AcceptedAuthorityTimeFloorV1::context_genesis(
+            lineage,
+            coordinate,
+            stack,
+            reference("origin"),
+            120,
+            130,
+        )
+        .unwrap();
+        let same = AcceptedAuthorityTimeFloorV1::continue_from(
+            &prior,
+            lineage,
+            coordinate,
+            stack,
+            HTimeCarryBasisV1::ExactNoLineageChange,
+            HTimeContinuationContributionV1::CarryPlusFreshLower {
+                lower_bound: 110,
+                upper_bound: 999,
+            },
+        )
+        .unwrap();
+        assert_eq!(same.lower_bound(), 120);
+        assert_eq!(same.relation(), HTimeAcceptanceRelationV1::Same);
+
+        let advanced = AcceptedAuthorityTimeFloorV1::continue_from(
+            &prior,
+            lineage,
+            coordinate,
+            stack,
+            HTimeCarryBasisV1::ExactNoLineageChange,
+            HTimeContinuationContributionV1::CarryPlusFreshLower {
+                lower_bound: 125,
+                upper_bound: 140,
+            },
+        )
+        .unwrap();
+        assert_eq!(advanced.lower_bound(), 125);
+        assert_eq!(advanced.relation(), HTimeAcceptanceRelationV1::Advance);
+
+        for contribution in [
+            HTimeContinuationContributionV1::CarryPlusFreshLower {
+                lower_bound: 110,
+                upper_bound: 119,
+            },
+            HTimeContinuationContributionV1::CarryPlusFreshLower {
+                lower_bound: 140,
+                upper_bound: 130,
+            },
+        ] {
+            assert_eq!(
+                AcceptedAuthorityTimeFloorV1::continue_from(
+                    &prior,
+                    lineage,
+                    coordinate,
+                    stack,
+                    HTimeCarryBasisV1::ExactNoLineageChange,
+                    contribution,
+                ),
+                Err(HTimeAcceptanceErrorV1::InvalidFreshBounds)
+            );
+        }
+    }
+
+    fn reference(seed: &str) -> ContinuityReferenceV1 {
+        ContinuityReferenceV1::derive(seed).unwrap()
+    }
+}

@@ -31,7 +31,7 @@
   "encoder": "independent_ruby_stdlib_semantic_reconstruction",
   "publication_state": "inactive_candidate",
   "result": "all_semantics_cbor_and_identities_equal",
-  "root_id": "c7c0a6de143314fddf2475d27eeeb5f5610ebfac94e59fedd4643d06d00c15b7",
+  "root_id": "b5e2f26333706871183a581ce929babafccb7f0db417f904c205074c7f75a7ce",
   "schema_version": "maestro.vnext.stage2.authority.ruby-verification-receipt.v1",
   "verifier": "tools/vnext_contracts/stage2/authority/verify.rb"
 }

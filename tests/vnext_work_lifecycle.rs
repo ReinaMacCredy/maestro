@@ -1,4 +1,4 @@
-use maestro::domain::vnext::contract::submission_claim::{
+use maestro::domain::vnext::evidence::{
     ClaimEntryV1, SubmissionClaimSetError, SubmissionClaimSetV1,
 };
 use maestro::domain::vnext::evidence::{

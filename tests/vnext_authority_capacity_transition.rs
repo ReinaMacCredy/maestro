@@ -147,6 +147,10 @@ fn cma_observation_purposes_and_h3_withdrawal_families_are_distinct_closed_sets(
         ]
     );
     assert_eq!(
+        Observation::ALL.map(Observation::effect_withdrawal_slot_family),
+        Withdrawal::ALL
+    );
+    assert_eq!(
         Observation::try_from(1),
         Ok(Observation::TrustedTimeAcquisition)
     );

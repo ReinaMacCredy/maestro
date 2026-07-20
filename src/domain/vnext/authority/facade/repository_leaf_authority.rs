@@ -8,7 +8,10 @@ use crate::domain::vnext::persistence::StoreObjectV1;
 use crate::foundation::core::deterministic_cbor::{self, CborError, CborValue};
 
 use super::super::{
-    ActionRequestIdV1, GrantIdV1, PrincipalBindingIdV1, RepositoryActionLeafV1, SessionIdV1,
+    ActionAuthorityBasisKindV1, ActionRequestIdV1, BootstrapControlG0AuthorityBasisV1,
+    CmaEffectWithdrawalSlotFamilyV1, CmaObservationPublicationPurposeV1,
+    ContinuityMaintenanceAuthorityBasisV1, GrantIdV1, PrincipalBindingIdV1, PrincipalIdV1,
+    RepositoryActionLeafV1, SessionIdV1, StateTokenIdV1,
 };
 
 const REPOSITORY_LEAF_AUTHORITY_CARRIER_DOMAIN_V1: &str =
@@ -803,6 +806,410 @@ ordinary_leaf_authority!(AbsorbWorkAuthorityV1);
 ordinary_leaf_authority!(AppendDesignRevisionAuthorityV1);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SubmitStepAuthorityV1 {
+    selection: RepositoryAuthoritySelectionV1,
+    subject_commitment: [u8; 32],
+    subject_basis_commitment: [u8; 32],
+    exact_payload_commitment: [u8; 32],
+    executor_principal_id: PrincipalIdV1,
+}
+
+impl SubmitStepAuthorityV1 {
+    pub fn new(
+        selection: RepositoryAuthoritySelectionV1,
+        subject_commitment: [u8; 32],
+        subject_basis_commitment: [u8; 32],
+        exact_payload_commitment: [u8; 32],
+        executor_principal_id: PrincipalIdV1,
+    ) -> Result<Self, RepositoryLeafAuthorityErrorV1> {
+        require_nonzero(subject_commitment)?;
+        require_nonzero(subject_basis_commitment)?;
+        require_nonzero(exact_payload_commitment)?;
+        Ok(Self {
+            selection,
+            subject_commitment,
+            subject_basis_commitment,
+            exact_payload_commitment,
+            executor_principal_id,
+        })
+    }
+
+    pub const fn selection(&self) -> RepositoryAuthoritySelectionV1 {
+        self.selection
+    }
+
+    pub const fn subject_commitment(&self) -> [u8; 32] {
+        self.subject_commitment
+    }
+
+    pub const fn subject_basis_commitment(&self) -> [u8; 32] {
+        self.subject_basis_commitment
+    }
+
+    pub const fn exact_payload_commitment(&self) -> [u8; 32] {
+        self.exact_payload_commitment
+    }
+
+    pub const fn executor_principal_id(&self) -> PrincipalIdV1 {
+        self.executor_principal_id
+    }
+
+    pub const fn is_bearer_authority(&self) -> bool {
+        false
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GenericExecutionAuthorityV1 {
+    selection: RepositoryAuthoritySelectionV1,
+    action: RepositoryActionLeafV1,
+    subject_commitment: [u8; 32],
+    subject_basis_commitment: [u8; 32],
+    exact_payload_commitment: [u8; 32],
+    executor_principal_id: PrincipalIdV1,
+}
+
+impl GenericExecutionAuthorityV1 {
+    pub fn new(
+        selection: RepositoryAuthoritySelectionV1,
+        action: RepositoryActionLeafV1,
+        subject_commitment: [u8; 32],
+        subject_basis_commitment: [u8; 32],
+        exact_payload_commitment: [u8; 32],
+        executor_principal_id: PrincipalIdV1,
+    ) -> Result<Self, RepositoryLeafAuthorityErrorV1> {
+        if !action.is_ordinary_execution_action() {
+            return Err(RepositoryLeafAuthorityErrorV1::NonExecutionAction);
+        }
+        require_nonzero(subject_commitment)?;
+        require_nonzero(subject_basis_commitment)?;
+        require_nonzero(exact_payload_commitment)?;
+        Ok(Self {
+            selection,
+            action,
+            subject_commitment,
+            subject_basis_commitment,
+            exact_payload_commitment,
+            executor_principal_id,
+        })
+    }
+
+    pub const fn selection(&self) -> RepositoryAuthoritySelectionV1 {
+        self.selection
+    }
+
+    pub const fn action(&self) -> RepositoryActionLeafV1 {
+        self.action
+    }
+
+    pub const fn subject_commitment(&self) -> [u8; 32] {
+        self.subject_commitment
+    }
+
+    pub const fn subject_basis_commitment(&self) -> [u8; 32] {
+        self.subject_basis_commitment
+    }
+
+    pub const fn current_state_commitment(&self) -> [u8; 32] {
+        self.subject_basis_commitment
+    }
+
+    pub const fn exact_payload_commitment(&self) -> [u8; 32] {
+        self.exact_payload_commitment
+    }
+
+    pub const fn executor_principal_id(&self) -> PrincipalIdV1 {
+        self.executor_principal_id
+    }
+
+    pub const fn executor_principal_binding_id(&self) -> PrincipalBindingIdV1 {
+        self.selection.actor_binding_id()
+    }
+
+    pub const fn executor_session_id(&self) -> SessionIdV1 {
+        self.selection.actor_session_id()
+    }
+
+    pub const fn executor_terminal_grant_id(&self) -> GrantIdV1 {
+        self.selection.terminal_grant_id()
+    }
+
+    pub const fn is_bearer_authority(&self) -> bool {
+        false
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct BootstrapExecutionAuthorityV1 {
+    basis: BootstrapControlG0AuthorityBasisV1,
+    action: RepositoryActionLeafV1,
+    subject_commitment: [u8; 32],
+    subject_basis_commitment: [u8; 32],
+    exact_payload_commitment: [u8; 32],
+    executor_principal_id: PrincipalIdV1,
+}
+
+impl BootstrapExecutionAuthorityV1 {
+    pub fn new(
+        basis: BootstrapControlG0AuthorityBasisV1,
+        action: RepositoryActionLeafV1,
+        subject_commitment: [u8; 32],
+        subject_basis_commitment: [u8; 32],
+        exact_payload_commitment: [u8; 32],
+        executor_principal_id: PrincipalIdV1,
+    ) -> Result<Self, RepositoryLeafAuthorityErrorV1> {
+        if action.execution_authority_basis()
+            != Some(ActionAuthorityBasisKindV1::BootstrapControlG0)
+        {
+            return Err(RepositoryLeafAuthorityErrorV1::ExecutionAuthorityBasisMismatch);
+        }
+        require_nonzero(subject_commitment)?;
+        require_nonzero(subject_basis_commitment)?;
+        require_nonzero(exact_payload_commitment)?;
+        Ok(Self {
+            basis,
+            action,
+            subject_commitment,
+            subject_basis_commitment,
+            exact_payload_commitment,
+            executor_principal_id,
+        })
+    }
+
+    pub const fn basis(self) -> BootstrapControlG0AuthorityBasisV1 {
+        self.basis
+    }
+
+    pub const fn action(self) -> RepositoryActionLeafV1 {
+        self.action
+    }
+
+    pub const fn subject_commitment(self) -> [u8; 32] {
+        self.subject_commitment
+    }
+
+    pub const fn current_state_commitment(self) -> [u8; 32] {
+        self.subject_basis_commitment
+    }
+
+    pub const fn exact_payload_commitment(self) -> [u8; 32] {
+        self.exact_payload_commitment
+    }
+
+    pub const fn executor_principal_id(self) -> PrincipalIdV1 {
+        self.executor_principal_id
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ContinuityMaintenanceExecutionAuthorityV1 {
+    basis: ContinuityMaintenanceAuthorityBasisV1,
+    withdrawal_slot_family: Option<CmaEffectWithdrawalSlotFamilyV1>,
+    purpose: CmaObservationPublicationPurposeV1,
+    action: RepositoryActionLeafV1,
+    subject_commitment: [u8; 32],
+    subject_basis_commitment: [u8; 32],
+    exact_payload_commitment: [u8; 32],
+    executor_principal_id: PrincipalIdV1,
+    continuity_state_token: StateTokenIdV1,
+    continuity_state_object_id: StoreObjectIdV1,
+    guard_object_id: StoreObjectIdV1,
+    authority_epoch: u64,
+    job_applicability_commitment: [u8; 32],
+}
+
+impl ContinuityMaintenanceExecutionAuthorityV1 {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the owner-issued CMA permit binds the exact request and current applicability cut"
+    )]
+    pub(crate) fn new(
+        basis: ContinuityMaintenanceAuthorityBasisV1,
+        withdrawal_slot_family: Option<CmaEffectWithdrawalSlotFamilyV1>,
+        purpose: CmaObservationPublicationPurposeV1,
+        action: RepositoryActionLeafV1,
+        subject_commitment: [u8; 32],
+        subject_basis_commitment: [u8; 32],
+        exact_payload_commitment: [u8; 32],
+        executor_principal_id: PrincipalIdV1,
+        continuity_state_token: StateTokenIdV1,
+        continuity_state_object_id: StoreObjectIdV1,
+        guard_object_id: StoreObjectIdV1,
+        authority_epoch: u64,
+        job_applicability_commitment: [u8; 32],
+    ) -> Result<Self, RepositoryLeafAuthorityErrorV1> {
+        let expected_withdrawal_slot_family = (action
+            == RepositoryActionLeafV1::WithdrawContinuityMaintenanceEffect)
+            .then_some(purpose.effect_withdrawal_slot_family());
+        if action.execution_authority_basis()
+            != Some(ActionAuthorityBasisKindV1::ContinuityMaintenance)
+            || withdrawal_slot_family != expected_withdrawal_slot_family
+        {
+            return Err(RepositoryLeafAuthorityErrorV1::ExecutionAuthorityBasisMismatch);
+        }
+        require_nonzero(subject_commitment)?;
+        require_nonzero(subject_basis_commitment)?;
+        require_nonzero(exact_payload_commitment)?;
+        require_nonzero(*continuity_state_token.as_bytes())?;
+        require_nonzero(*continuity_state_object_id.as_bytes())?;
+        require_nonzero(*guard_object_id.as_bytes())?;
+        require_nonzero(job_applicability_commitment)?;
+        if authority_epoch == 0 {
+            return Err(RepositoryLeafAuthorityErrorV1::ExecutionAuthorityBasisMismatch);
+        }
+        Ok(Self {
+            basis,
+            withdrawal_slot_family,
+            purpose,
+            action,
+            subject_commitment,
+            subject_basis_commitment,
+            exact_payload_commitment,
+            executor_principal_id,
+            continuity_state_token,
+            continuity_state_object_id,
+            guard_object_id,
+            authority_epoch,
+            job_applicability_commitment,
+        })
+    }
+
+    pub const fn basis(self) -> ContinuityMaintenanceAuthorityBasisV1 {
+        self.basis
+    }
+
+    pub const fn withdrawal_slot_family(self) -> Option<CmaEffectWithdrawalSlotFamilyV1> {
+        self.withdrawal_slot_family
+    }
+
+    pub const fn purpose(self) -> CmaObservationPublicationPurposeV1 {
+        self.purpose
+    }
+
+    pub const fn action(self) -> RepositoryActionLeafV1 {
+        self.action
+    }
+
+    pub const fn subject_commitment(self) -> [u8; 32] {
+        self.subject_commitment
+    }
+
+    pub const fn current_state_commitment(self) -> [u8; 32] {
+        self.subject_basis_commitment
+    }
+
+    pub const fn exact_payload_commitment(self) -> [u8; 32] {
+        self.exact_payload_commitment
+    }
+
+    pub const fn executor_principal_id(self) -> PrincipalIdV1 {
+        self.executor_principal_id
+    }
+
+    pub const fn continuity_state_token(self) -> StateTokenIdV1 {
+        self.continuity_state_token
+    }
+
+    pub const fn continuity_state_object_id(self) -> StoreObjectIdV1 {
+        self.continuity_state_object_id
+    }
+
+    pub const fn guard_object_id(self) -> StoreObjectIdV1 {
+        self.guard_object_id
+    }
+
+    pub const fn authority_epoch(self) -> u64 {
+        self.authority_epoch
+    }
+
+    pub const fn job_applicability_commitment(self) -> [u8; 32] {
+        self.job_applicability_commitment
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ExecutionAuthorityV1 {
+    Ordinary(GenericExecutionAuthorityV1),
+    BootstrapG0(BootstrapExecutionAuthorityV1),
+    ContinuityMaintenance(ContinuityMaintenanceExecutionAuthorityV1),
+}
+
+impl From<GenericExecutionAuthorityV1> for ExecutionAuthorityV1 {
+    fn from(value: GenericExecutionAuthorityV1) -> Self {
+        Self::Ordinary(value)
+    }
+}
+
+impl From<BootstrapExecutionAuthorityV1> for ExecutionAuthorityV1 {
+    fn from(value: BootstrapExecutionAuthorityV1) -> Self {
+        Self::BootstrapG0(value)
+    }
+}
+
+impl From<ContinuityMaintenanceExecutionAuthorityV1> for ExecutionAuthorityV1 {
+    fn from(value: ContinuityMaintenanceExecutionAuthorityV1) -> Self {
+        Self::ContinuityMaintenance(value)
+    }
+}
+
+impl ExecutionAuthorityV1 {
+    pub const fn action(&self) -> RepositoryActionLeafV1 {
+        match self {
+            Self::Ordinary(value) => value.action,
+            Self::BootstrapG0(value) => value.action,
+            Self::ContinuityMaintenance(value) => value.action,
+        }
+    }
+
+    pub const fn subject_commitment(&self) -> [u8; 32] {
+        match self {
+            Self::Ordinary(value) => value.subject_commitment,
+            Self::BootstrapG0(value) => value.subject_commitment,
+            Self::ContinuityMaintenance(value) => value.subject_commitment,
+        }
+    }
+
+    pub const fn current_state_commitment(&self) -> [u8; 32] {
+        match self {
+            Self::Ordinary(value) => value.subject_basis_commitment,
+            Self::BootstrapG0(value) => value.subject_basis_commitment,
+            Self::ContinuityMaintenance(value) => value.subject_basis_commitment,
+        }
+    }
+
+    pub const fn exact_payload_commitment(&self) -> [u8; 32] {
+        match self {
+            Self::Ordinary(value) => value.exact_payload_commitment,
+            Self::BootstrapG0(value) => value.exact_payload_commitment,
+            Self::ContinuityMaintenance(value) => value.exact_payload_commitment,
+        }
+    }
+
+    pub const fn executor_principal_id(&self) -> PrincipalIdV1 {
+        match self {
+            Self::Ordinary(value) => value.executor_principal_id,
+            Self::BootstrapG0(value) => value.executor_principal_id,
+            Self::ContinuityMaintenance(value) => value.executor_principal_id,
+        }
+    }
+
+    pub const fn basis_kind(&self) -> ActionAuthorityBasisKindV1 {
+        match self {
+            Self::Ordinary(_) => ActionAuthorityBasisKindV1::OrdinaryLiveRuntime,
+            Self::BootstrapG0(_) => ActionAuthorityBasisKindV1::BootstrapControlG0,
+            Self::ContinuityMaintenance(_) => ActionAuthorityBasisKindV1::ContinuityMaintenance,
+        }
+    }
+
+    pub const fn ordinary(&self) -> Option<&GenericExecutionAuthorityV1> {
+        match self {
+            Self::Ordinary(value) => Some(value),
+            Self::BootstrapG0(_) | Self::ContinuityMaintenance(_) => None,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ResolveDecisionAuthorityV1 {
     selection: RepositoryAuthoritySelectionV1,
     subject_commitment: [u8; 32],
@@ -1005,6 +1412,8 @@ pub(crate) enum RepositoryLeafAuthorityInputV1 {
     AmendContract(AmendContractAuthorityV1),
     AppendDesignRevision(AppendDesignRevisionAuthorityV1),
     ResolveDecision(ResolveDecisionAuthorityV1),
+    SubmitStep(SubmitStepAuthorityV1),
+    Execution(ExecutionAuthorityV1),
 }
 
 macro_rules! leaf_input_from {
@@ -1024,6 +1433,30 @@ leaf_input_from!(PublishInitialContractAuthorityV1, PublishInitialContract);
 leaf_input_from!(AmendContractAuthorityV1, AmendContract);
 leaf_input_from!(AppendDesignRevisionAuthorityV1, AppendDesignRevision);
 leaf_input_from!(ResolveDecisionAuthorityV1, ResolveDecision);
+leaf_input_from!(SubmitStepAuthorityV1, SubmitStep);
+impl From<GenericExecutionAuthorityV1> for RepositoryLeafAuthorityInputV1 {
+    fn from(value: GenericExecutionAuthorityV1) -> Self {
+        Self::Execution(value.into())
+    }
+}
+
+impl From<BootstrapExecutionAuthorityV1> for RepositoryLeafAuthorityInputV1 {
+    fn from(value: BootstrapExecutionAuthorityV1) -> Self {
+        Self::Execution(value.into())
+    }
+}
+
+impl From<ContinuityMaintenanceExecutionAuthorityV1> for RepositoryLeafAuthorityInputV1 {
+    fn from(value: ContinuityMaintenanceExecutionAuthorityV1) -> Self {
+        Self::Execution(value.into())
+    }
+}
+
+impl From<ExecutionAuthorityV1> for RepositoryLeafAuthorityInputV1 {
+    fn from(value: ExecutionAuthorityV1) -> Self {
+        Self::Execution(value)
+    }
+}
 
 impl RepositoryLeafAuthorityInputV1 {
     pub(crate) const fn action(&self) -> RepositoryActionLeafV1 {
@@ -1035,18 +1468,26 @@ impl RepositoryLeafAuthorityInputV1 {
             Self::AmendContract(_) => RepositoryActionLeafV1::AmendContract,
             Self::AppendDesignRevision(_) => RepositoryActionLeafV1::AppendDesignRevision,
             Self::ResolveDecision(_) => RepositoryActionLeafV1::ResolveDecision,
+            Self::SubmitStep(_) => RepositoryActionLeafV1::SubmitStep,
+            Self::Execution(authority) => authority.action(),
         }
     }
 
-    pub(crate) const fn selection(&self) -> RepositoryAuthoritySelectionV1 {
+    pub(crate) const fn selection(&self) -> Option<RepositoryAuthoritySelectionV1> {
         match self {
-            Self::CreateDraftWork(authority) => authority.0.selection,
-            Self::CancelWork(authority) => authority.0.selection,
-            Self::AbsorbWork(authority) => authority.0.selection,
-            Self::PublishInitialContract(authority) => authority.selection,
-            Self::AmendContract(authority) => authority.selection,
-            Self::AppendDesignRevision(authority) => authority.0.selection,
-            Self::ResolveDecision(authority) => authority.selection,
+            Self::CreateDraftWork(authority) => Some(authority.0.selection),
+            Self::CancelWork(authority) => Some(authority.0.selection),
+            Self::AbsorbWork(authority) => Some(authority.0.selection),
+            Self::PublishInitialContract(authority) => Some(authority.selection),
+            Self::AmendContract(authority) => Some(authority.selection),
+            Self::AppendDesignRevision(authority) => Some(authority.0.selection),
+            Self::ResolveDecision(authority) => Some(authority.selection),
+            Self::SubmitStep(authority) => Some(authority.selection),
+            Self::Execution(ExecutionAuthorityV1::Ordinary(authority)) => Some(authority.selection),
+            Self::Execution(
+                ExecutionAuthorityV1::BootstrapG0(_)
+                | ExecutionAuthorityV1::ContinuityMaintenance(_),
+            ) => None,
         }
     }
 
@@ -1059,6 +1500,8 @@ impl RepositoryLeafAuthorityInputV1 {
             Self::AmendContract(authority) => authority.subject_commitment,
             Self::AppendDesignRevision(authority) => authority.0.subject_commitment,
             Self::ResolveDecision(authority) => authority.subject_commitment,
+            Self::SubmitStep(authority) => authority.subject_commitment,
+            Self::Execution(authority) => authority.subject_commitment(),
         }
     }
 
@@ -1071,6 +1514,36 @@ impl RepositoryLeafAuthorityInputV1 {
             Self::AmendContract(authority) => authority.subject_basis_commitment,
             Self::AppendDesignRevision(authority) => authority.0.subject_basis_commitment,
             Self::ResolveDecision(authority) => authority.subject_basis_commitment,
+            Self::SubmitStep(authority) => authority.subject_basis_commitment,
+            Self::Execution(authority) => authority.current_state_commitment(),
+        }
+    }
+
+    pub(crate) const fn exact_payload_commitment(&self) -> Option<[u8; 32]> {
+        match self {
+            Self::Execution(authority) => Some(authority.exact_payload_commitment()),
+            Self::SubmitStep(authority) => Some(authority.exact_payload_commitment),
+            Self::CreateDraftWork(_)
+            | Self::CancelWork(_)
+            | Self::AbsorbWork(_)
+            | Self::PublishInitialContract(_)
+            | Self::AmendContract(_)
+            | Self::AppendDesignRevision(_)
+            | Self::ResolveDecision(_) => None,
+        }
+    }
+
+    pub(crate) const fn executor_principal_id(&self) -> Option<PrincipalIdV1> {
+        match self {
+            Self::Execution(authority) => Some(authority.executor_principal_id()),
+            Self::SubmitStep(authority) => Some(authority.executor_principal_id),
+            Self::CreateDraftWork(_)
+            | Self::CancelWork(_)
+            | Self::AbsorbWork(_)
+            | Self::PublishInitialContract(_)
+            | Self::AmendContract(_)
+            | Self::AppendDesignRevision(_)
+            | Self::ResolveDecision(_) => None,
         }
     }
 
@@ -1079,6 +1552,8 @@ impl RepositoryLeafAuthorityInputV1 {
             Self::PublishInitialContract(authority) => Some(&authority.transition_authority.0),
             Self::AmendContract(authority) => Some(&authority.transition_authority.0),
             Self::ResolveDecision(authority) => Some(&authority.carrier.0),
+            Self::Execution(_) => None,
+            Self::SubmitStep(_) => None,
             Self::CreateDraftWork(_)
             | Self::CancelWork(_)
             | Self::AbsorbWork(_)
@@ -1330,6 +1805,10 @@ fn bytes(value: &[u8]) -> CborValue {
 pub enum RepositoryLeafAuthorityErrorV1 {
     #[error("Repository leaf Authority commitments must be nonzero")]
     ZeroCommitment,
+    #[error("ordinary Execution Authority requires one exact ordinary Execution action")]
+    NonExecutionAction,
+    #[error("Execution Authority basis does not match the exact frozen Action leaf")]
+    ExecutionAuthorityBasisMismatch,
     #[error("the authenticated human carrier must not be empty")]
     InvalidAuthenticatedCarrier,
     #[error("the Decision presentation is empty, ambiguous, or outside the finite v1 bounds")]
@@ -1476,6 +1955,122 @@ mod tests {
             trusted_time_lower: Some(120),
             trusted_time_upper: Some(130),
             prior_consumptions: vec![],
+        }
+    }
+
+    #[test]
+    fn generic_execution_authority_binds_ordinary_leaves_and_rejects_specialized_leaves() {
+        let subject = digest("execution-subject");
+        let current_state = digest("execution-current-state");
+        let payload = digest("execution-exact-payload");
+        let expected_selection = selection();
+        let executor = PrincipalIdV1::derive("execution-principal").unwrap();
+        let actions = RepositoryActionLeafV1::ALL
+            .into_iter()
+            .filter(|action| action.is_ordinary_execution_action())
+            .collect::<Vec<_>>();
+        assert_eq!(actions.len(), 8);
+
+        for action in actions {
+            let authority = GenericExecutionAuthorityV1::new(
+                expected_selection,
+                action,
+                subject,
+                current_state,
+                payload,
+                executor,
+            )
+            .unwrap();
+            assert_eq!(authority.selection(), expected_selection);
+            assert_eq!(authority.action(), action);
+            assert_eq!(authority.subject_commitment(), subject);
+            assert_eq!(authority.subject_basis_commitment(), current_state);
+            assert_eq!(authority.current_state_commitment(), current_state);
+            assert_eq!(authority.exact_payload_commitment(), payload);
+            assert_eq!(authority.executor_principal_id(), executor);
+            assert_eq!(
+                authority.executor_principal_binding_id(),
+                expected_selection.actor_binding_id()
+            );
+            assert_eq!(
+                authority.executor_session_id(),
+                expected_selection.actor_session_id()
+            );
+            assert_eq!(
+                authority.executor_terminal_grant_id(),
+                expected_selection.terminal_grant_id()
+            );
+            assert!(!authority.is_bearer_authority());
+
+            let input = RepositoryLeafAuthorityInputV1::from(authority);
+            assert_eq!(input.action(), action);
+            assert_eq!(input.selection(), Some(expected_selection));
+            assert_eq!(input.subject_commitment(), subject);
+            assert_eq!(input.subject_basis_commitment(), current_state);
+            assert_eq!(input.exact_payload_commitment(), Some(payload));
+            assert_eq!(input.executor_principal_id(), Some(executor));
+            assert!(
+                input
+                    .evaluate_specialized(&evaluation_context())
+                    .unwrap()
+                    .is_none()
+            );
+        }
+
+        let specialized = RepositoryActionLeafV1::ALL
+            .into_iter()
+            .filter(|action| action.is_execution_action() && !action.is_ordinary_execution_action())
+            .collect::<Vec<_>>();
+        assert_eq!(specialized.len(), 8);
+        for action in specialized {
+            assert_eq!(
+                GenericExecutionAuthorityV1::new(
+                    expected_selection,
+                    action,
+                    subject,
+                    current_state,
+                    payload,
+                    executor,
+                ),
+                Err(RepositoryLeafAuthorityErrorV1::NonExecutionAction)
+            );
+        }
+    }
+
+    #[test]
+    fn generic_execution_authority_rejects_non_execution_and_missing_commitments() {
+        let valid = (
+            digest("execution-subject"),
+            digest("execution-current-state"),
+            digest("execution-exact-payload"),
+        );
+        assert_eq!(
+            GenericExecutionAuthorityV1::new(
+                selection(),
+                RepositoryActionLeafV1::CreateDraftWork,
+                valid.0,
+                valid.1,
+                valid.2,
+                PrincipalIdV1::derive("execution-principal").unwrap(),
+            ),
+            Err(RepositoryLeafAuthorityErrorV1::NonExecutionAction)
+        );
+        for commitments in [
+            ([0; 32], valid.1, valid.2),
+            (valid.0, [0; 32], valid.2),
+            (valid.0, valid.1, [0; 32]),
+        ] {
+            assert_eq!(
+                GenericExecutionAuthorityV1::new(
+                    selection(),
+                    RepositoryActionLeafV1::AcquireStepExecution,
+                    commitments.0,
+                    commitments.1,
+                    commitments.2,
+                    PrincipalIdV1::derive("execution-principal").unwrap(),
+                ),
+                Err(RepositoryLeafAuthorityErrorV1::ZeroCommitment)
+            );
         }
     }
 

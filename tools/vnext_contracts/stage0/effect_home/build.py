@@ -22,9 +22,10 @@ ROOT = Path(__file__).resolve().parents[4]
 DEFAULT_OUTPUT = ROOT / "contracts/vnext/stage0/effect-home"
 CATALOGS = ROOT / "contracts/vnext/catalogs/generated"
 EVIDENCE = ROOT / "contracts/vnext/catalogs/evidence/predecessors.json"
-SOURCE_CARDS = Path("/Users/reinamaccredy/Code/maestro/.maestro/cards/maestro-whole-flow-architecture-refoundation")
+SOURCE_BINDINGS = ROOT / "contracts/vnext/stage0/input-bindings.json"
 C325 = ROOT / "contracts/vnext/public/direct_consumers.c325.v1.json"
 DOMAIN = "maestro.vnext.stage0.effect-home.v1"
+EXPECTED_SOURCE_BINDINGS_SHA256 = "d0cc2563dd84458ed9122ee91eb1f640e137a7fdb6ad74ecb2123744243482c5"
 EXPECTED_INPUTS = {
     "design": "85787cfb4fb32eefe078adbf9ede66114b12c6304af10857bd676a1cd9875d18",
     "decisions": "1f97e67b156d5a17d13b94ff955ad17efeb3bb71a4b74b1aec14e20dac1100dd",
@@ -151,12 +152,15 @@ STAGE2_SEMANTIC_LITERAL_PATTERNS = [
     "PlannedEpochTurnoverPreparation",
 ]
 STAGE2_SEMANTIC_SOURCE_DECLARATIONS = {
+    "src/domain/vnext/authority/action_basis.rs": ("Authority", "candidate_contract_definition", "exact_stage4_execution_basis_partition"),
     "src/domain/vnext/authority/bootstrap_catalog.rs": ("Authority", "candidate_contract_definition", "exact_stage2_bootstrap_target_literal"),
     "src/domain/vnext/authority/capacity.rs": ("Authority", "candidate_contract_definition", "exact_stage2_capacity_literal"),
     "src/domain/vnext/authority/closed.rs": ("Authority", "candidate_contract_definition", "exact_stage2_closed_sum_literal"),
     "src/domain/vnext/authority/continuity/catalog.rs": ("Authority", "candidate_contract_definition", "exact_stage2_continuity_effect_intent_class_literal"),
     "src/domain/vnext/authority/continuity/totality.rs": ("Authority", "candidate_contract_definition", "exact_stage2_continuity_owner_census_literal"),
     "src/domain/vnext/authority/mod.rs": ("Authority", "candidate_contract_definition", "exact_stage2_authority_facade_literal"),
+    "src/domain/vnext/authority/facade/repository_admission.rs": ("Authority", "candidate_contract_definition", "exact_stage4_execution_authority_admission"),
+    "src/domain/vnext/authority/facade/repository_leaf_authority.rs": ("Authority", "candidate_contract_definition", "exact_stage4_execution_authority_closed_union"),
     "src/domain/vnext/authority/transition.rs": ("Authority", "candidate_contract_definition", "exact_stage2_transition_guard_literal"),
     "tests/vnext_authority_capacity_transition.rs": ("Stage2Proof", "candidate_proof_reader", "exact_stage2_capacity_and_transition_proof"),
     "tests/vnext_authority_contracts.rs": ("Stage2Proof", "candidate_proof_reader", "exact_stage2_authority_contract_proof"),
@@ -192,15 +196,20 @@ SEMANTIC_LITERAL_SOURCES = {
     "contracts/vnext/stage0/resource-release/predecessor-resource-contract-suite-v1.json": ("ResourceRelease", "candidate_contract_definition", "direct_resource_release_predecessor_literal"),
     "contracts/vnext/public/setup_operation_compatibility.v1.json": ("PublicContracts", "candidate_contract_definition", "direct_public_literal"),
     "src/domain/vnext/execution/control_head.rs": ("Execution", "candidate_contract_definition", "direct_execution_literal"),
+    "src/domain/vnext/execution/ceremony.rs": ("Execution", "candidate_contract_definition", "direct_stage4_protected_ceremony_literal"),
     "src/domain/vnext/execution/dispatch_state.rs": ("Execution", "candidate_contract_definition", "direct_execution_literal"),
     "src/domain/vnext/execution/effect_home.rs": ("Execution", "candidate_contract_definition", "direct_execution_literal"),
     "src/domain/vnext/execution/effect_routes.rs": ("Execution", "candidate_contract_definition", "direct_execution_literal"),
+    "src/domain/vnext/execution/effects.rs": ("Execution", "candidate_contract_definition", "direct_stage4_effect_runtime_literal"),
     "src/domain/vnext/execution/mod.rs": ("Execution", "candidate_contract_definition", "direct_execution_literal"),
+    "src/domain/vnext/execution/runtime.rs": ("Execution", "candidate_contract_definition", "direct_stage4_execution_runtime_literal"),
+    "src/domain/vnext/execution/store.rs": ("Execution", "candidate_contract_definition", "direct_stage4_atomic_store_literal"),
     "src/domain/vnext/execution/withdrawal.rs": ("Execution", "candidate_contract_definition", "direct_execution_literal"),
     "src/domain/vnext/identity/manifest.rs": ("Identity", "candidate_contract_definition", "direct_identity_literal"),
     "src/domain/vnext/integration/public_literals.rs": ("PublicContracts", "candidate_contract_definition", "direct_public_contract_literal"),
     "tests/vnext_dispatch_cutover_literals.rs": ("Stage0Proof", "candidate_proof_reader", "direct_stage0_literal_test"),
     "tests/vnext_effect_home_literals.rs": ("Stage0Proof", "candidate_proof_reader", "direct_stage0_literal_test"),
+    "tests/vnext_stage4_contracts.rs": ("Stage4Proof", "candidate_proof_reader", "direct_stage4_execution_contract_proof"),
     "tests/vnext_manifest_identity.rs": ("Stage0Proof", "candidate_proof_reader", "direct_stage0_literal_test"),
     "tools/vnext_contracts/catalogs/build.py": ("Catalogs", "candidate_contract_definition", "direct_catalog_builder_literal"),
     "tools/vnext_contracts/catalogs/predecessor_e346/vnext_catalog_profile_grammar_build.py": ("Stage0Proof", "candidate_proof_reader", "predecessor_grammar_reproduction_builder"),
@@ -212,6 +221,9 @@ SEMANTIC_LITERAL_SOURCES = {
     "tools/vnext_contracts/stage0/effect_home/build.py": ("Stage0EffectHome", "candidate_contract_definition", "direct_effect_home_builder_literal"),
     "tools/vnext_contracts/stage0/effect_home/validate.py": ("Stage0Proof", "candidate_proof_reader", "direct_effect_home_validator_literal"),
     "tools/vnext_contracts/stage0/proof_matrix/build.py": ("Stage0Proof", "candidate_proof_reader", "stage0_proof_manifest_effect_home_reader"),
+    "tools/vnext_contracts/stage4/execution/build.py": ("Stage4Execution", "candidate_contract_definition", "direct_stage4_execution_builder_literal"),
+    "tools/vnext_contracts/stage4/execution/validate.py": ("Stage4Proof", "candidate_proof_reader", "independent_stage4_execution_reconstruction"),
+    "tools/vnext_contracts/stage4/execution/verify.rb": ("Stage4Proof", "candidate_proof_reader", "independent_stage4_execution_ruby_reconstruction"),
 }
 SEMANTIC_ROLE_SOURCES = {
     "tools/vnext_contracts/stage0/effect_home/encode.rb": (
@@ -249,6 +261,18 @@ SEMANTIC_ROLE_SOURCE_SHA256 = {
     "tools/vnext_contracts/stage0/resource_release/validate.py": "1ef7b22757e35bcb97db6b3bfdb0fc7f0d0f2fc2486901835d877616562ea667",
 }
 DOWNSTREAM_GENERATED_SEMANTIC_OBLIGATIONS = {
+    "contracts/vnext/stage4/execution/execution-effects.v1.cbor": (
+        ["EffectIntent", "DispatchAttempt", "ReconciliationAttempt", "RecoverReserved", "ControlHead"],
+        "Stage4Execution",
+        "pending_downstream_generated_binding",
+        "resolved_by_stage4_execution_manifest",
+    ),
+    "contracts/vnext/stage4/execution/execution-effects.v1.json": (
+        ["EffectIntent", "DispatchAttempt", "ReconciliationAttempt", "RecoverReserved", "ControlHead"],
+        "Stage4Execution",
+        "pending_downstream_generated_binding",
+        "resolved_by_stage4_execution_manifest",
+    ),
     "contracts/vnext/stage0/resource-release/expected-delta-successor.v1.cbor": (
         ["EffectOrigin"],
         "ResourceRelease",
@@ -401,6 +425,31 @@ def require_sha(path: Path, expected: str) -> str:
     if actual != expected:
         raise ValueError(f"frozen input drifted: {path}: expected {expected}, got {actual}")
     return actual
+
+
+def frozen_source_hashes() -> dict[str, str]:
+    require_sha(SOURCE_BINDINGS, EXPECTED_SOURCE_BINDINGS_SHA256)
+    bindings = read_json(SOURCE_BINDINGS)
+    if bindings.get("schema") != "maestro.vnext.stage0-input-bindings.v1":
+        raise ValueError("Stage-0 source bindings use an unexpected schema")
+    if bindings.get("feature_id") != "maestro-whole-flow-architecture-refoundation":
+        raise ValueError("Stage-0 source bindings name an unexpected feature")
+    recorded = bindings.get("canonical_source_inputs")
+    expected_recorded = {
+        "design_sha256": EXPECTED_INPUTS["design"],
+        "decisions_sha256": EXPECTED_INPUTS["decisions"],
+        "card_sha256": EXPECTED_INPUTS["card"],
+    }
+    if recorded != expected_recorded:
+        raise ValueError(
+            "Stage-0 source bindings do not match the approved canonical source inputs"
+        )
+    return {
+        "design": expected_recorded["design_sha256"],
+        "decisions": expected_recorded["decisions_sha256"],
+        "card": expected_recorded["card_sha256"],
+        "c325": require_sha(C325, EXPECTED_INPUTS["c325"]),
+    }
 
 
 def write_json(path: Path, value: object) -> str:
@@ -1410,13 +1459,7 @@ def ruby_receipts(input_path: Path) -> dict[str, object]:
 
 
 def materialize(output: Path) -> dict[str, object]:
-    source_paths = {
-        "design": SOURCE_CARDS / "design.md",
-        "decisions": SOURCE_CARDS / "decisions.yaml",
-        "card": SOURCE_CARDS / "card.yaml",
-        "c325": C325,
-    }
-    source_hashes = {name: require_sha(source_paths[name], expected) for name, expected in EXPECTED_INPUTS.items()}
+    source_hashes = frozen_source_hashes()
     documents, input_hashes = catalog_inputs()
     records = artifacts(documents, input_hashes)
     output.mkdir(parents=True, exist_ok=True)

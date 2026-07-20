@@ -2,6 +2,7 @@ use thiserror::Error;
 
 use super::graph::StepBindingV1;
 use super::identity::{StepIdentityError, StepSubmissionIdV1, require_nonzero};
+use super::submission::StepSubmissionV1;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum StepLifecycleKindV1 {
@@ -101,12 +102,41 @@ impl StepStateV1 {
         }
     }
 
+    pub(crate) const fn from_lifecycle(binding: StepBindingV1, lifecycle: StepLifecycleV1) -> Self {
+        Self { binding, lifecycle }
+    }
+
     pub fn binding(&self) -> StepBindingV1 {
         self.binding
     }
 
     pub fn lifecycle(&self) -> StepLifecycleV1 {
         self.lifecycle
+    }
+
+    pub fn submit(&self, submission: &StepSubmissionV1) -> Result<Self, StepLifecycleError> {
+        if submission.binding() != self.binding {
+            return Err(StepLifecycleError::SubmissionBindingMismatch);
+        }
+        if !matches!(self.lifecycle, StepLifecycleV1::Open { .. }) {
+            return Err(StepLifecycleError::SubmitRequiresOpen);
+        }
+        if matches!(
+            self.lifecycle,
+            StepLifecycleV1::Open {
+                basis: StepOpenBasisV1::RejectedSubmission { submission_id, .. }
+                    | StepOpenBasisV1::RecoveredSubmission { submission_id, .. },
+            } if submission_id == submission.id()
+        ) {
+            return Err(StepLifecycleError::ReusedSubmission);
+        }
+        Ok(Self {
+            binding: self.binding,
+            lifecycle: StepLifecycleV1::Submitted {
+                submission_id: submission.id(),
+                submission_record_hash: submission.record_hash(),
+            },
+        })
     }
 
     pub fn cancel(&self, amendment_receipt_hash: [u8; 32]) -> Result<Self, StepLifecycleError> {

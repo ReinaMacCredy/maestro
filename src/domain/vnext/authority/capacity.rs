@@ -359,6 +359,26 @@ impl CmaObservationPublicationPurposeV1 {
         Self::MaintenanceExecutorCurrentness,
         Self::ProspectiveContinuityCarrier,
     ];
+
+    pub const fn effect_withdrawal_slot_family(self) -> CmaEffectWithdrawalSlotFamilyV1 {
+        match self {
+            Self::TrustedTimeAcquisition => {
+                CmaEffectWithdrawalSlotFamilyV1::MaintenanceExecutorCurrentness
+            }
+            Self::RecoveryExternalRegistration => {
+                CmaEffectWithdrawalSlotFamilyV1::ProspectiveContinuityCarrier
+            }
+            Self::RecoveryExternalStatus => {
+                CmaEffectWithdrawalSlotFamilyV1::PlannedTurnoverHighWater
+            }
+            Self::MaintenanceExecutorCurrentness => {
+                CmaEffectWithdrawalSlotFamilyV1::RepositoryRecoveryAdmission
+            }
+            Self::ProspectiveContinuityCarrier => {
+                CmaEffectWithdrawalSlotFamilyV1::InstallationRecoveryAdmission
+            }
+        }
+    }
 }
 
 impl TryFrom<u8> for CmaObservationPublicationPurposeV1 {

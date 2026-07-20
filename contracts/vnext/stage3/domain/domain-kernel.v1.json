@@ -534,7 +534,7 @@
       [
         "contracts/vnext/stage2/authority/stage2-authority-manifest.v1.json",
         11269,
-        "f55bc67b4c978a719bbb17c0d59397cac5541f532e33e3fc61211d54a2d1d1bf"
+        "5c66aeefdf4f6e875050e93f4b50c068caf3928ceec40d1e1ca8c14365be1819"
       ],
       [
         "src/lib.rs",
@@ -548,8 +548,8 @@
       ],
       [
         "src/domain/vnext/authority/action_basis.rs",
-        12566,
-        "0417743a2b83b1923f34b076829c3d520708bb30062ba9a8e172368e2c633fa6"
+        28715,
+        "69be46ec16a27e6f8d033320d7b7d14777193a788b8489bcbc68bcfa3cf88ad7"
       ],
       [
         "src/domain/vnext/authority/bootstrap_catalog.rs",
@@ -558,8 +558,8 @@
       ],
       [
         "src/domain/vnext/authority/capacity.rs",
-        15457,
-        "4092ba53ecc79e3c7cc5818345a4b006a1e9ad1848a09140dc0ead262606e12e"
+        16293,
+        "8cb2a2f10367ab8d482d0e878369f9999a572932adf7c5c7b055e41735011b6a"
       ],
       [
         "src/domain/vnext/authority/closed.rs",
@@ -603,8 +603,8 @@
       ],
       [
         "src/domain/vnext/authority/continuity/trusted_time.rs",
-        4856,
-        "c276db54e050642ea6e0647b3a850c66161b4bd15e9acb4e7176cd7b3a3b4118"
+        7240,
+        "2f9f03936820112fc082a2141db38b72aa07338b472b555f1f29baabac7068dc"
       ],
       [
         "src/domain/vnext/authority/evaluator.rs",
@@ -613,18 +613,18 @@
       ],
       [
         "src/domain/vnext/authority/facade.rs",
-        112868,
-        "c50c4cdec63f9008f83e663f902ab3c5906f7ec7472b8a6e93221d399a02e594"
+        113236,
+        "324c01e17d820eba0310ffc18d20c226770715c2688f3e66ab3a3bdf4917afd1"
       ],
       [
         "src/domain/vnext/authority/facade/repository_admission.rs",
-        82412,
-        "627aefee21f28034c5b8c53e270680d6dbbd298a148bcd5430e421a6d92a8ae1"
+        148049,
+        "82692e35371e005a0484d61c971311a3830aacbdf0ef7cce97ad965d4080a6bd"
       ],
       [
         "src/domain/vnext/authority/facade/repository_leaf_authority.rs",
-        61221,
-        "4f61462bf3cca3347b09f179f72a87bd91059cb8d09f8624e5d0532dbdfa1937"
+        82218,
+        "d8237029c54af80baedaeeec5344dccdce268fead0c79032385243e38323599b"
       ],
       [
         "src/domain/vnext/authority/facade_tests.rs",
@@ -648,8 +648,8 @@
       ],
       [
         "src/domain/vnext/authority/mod.rs",
-        7106,
-        "d26a55dfaee09d663e422cbf69d605d6271b58b30e16a67a33bf01c74b51fbbc"
+        7474,
+        "61308a82506ce097ad23e39b21613fc2e56500bd73c2626840cfbabdd39cf7d6"
       ],
       [
         "src/domain/vnext/authority/post_cut.rs",
@@ -713,8 +713,8 @@
       ],
       [
         "src/domain/vnext/contract/mod.rs",
-        375,
-        "a436e806ea1691217e1db870279167c1a0045ce94e9c4c68e72938e03cba8b66"
+        348,
+        "ed9ec8ae59aae63283b948da93b69dbe6c158be5cc5d3011b30c87948dd42c7c"
       ],
       [
         "src/domain/vnext/contract/proof.rs",
@@ -737,9 +737,9 @@
         "7b91c41c98854de2848d773c26975eb5a83a2a5390fefd3ddb849ff3248130b8"
       ],
       [
-        "src/domain/vnext/contract/submission_claim.rs",
-        13761,
-        "e7ef3d0df793476d2b10ec8655df5cf4f7f851cb3289fdcc033d48ef233ab6d2"
+        "src/domain/vnext/evidence/submission_claim.rs",
+        13736,
+        "61f179904a5a80e2d2e5f4506d3a091d9db74b0faebf3c9afccadaf10183c3b9"
       ],
       [
         "src/domain/vnext/design/batch.rs",
@@ -778,8 +778,8 @@
       ],
       [
         "src/domain/vnext/evidence/claim.rs",
-        11239,
-        "7402200b6c32afe890cda79969cd8225268600ef9902958e4c19dc86c633894d"
+        18905,
+        "896cf74689d2486299cd8930ef114a5645b3d54c75999e039d3f9ae91f765483"
       ],
       [
         "src/domain/vnext/evidence/identity.rs",
@@ -788,8 +788,8 @@
       ],
       [
         "src/domain/vnext/evidence/mod.rs",
-        354,
-        "11028e70f77bbf865e39c2541652d9ad68c87c3a71eee0f7dcfcf79c384a8932"
+        572,
+        "5a134f8374e0faf56f1cd0180f0a36f25425103c6bb933df608585b4298a7e33"
       ],
       [
         "src/domain/vnext/identity/digest.rs",
@@ -878,8 +878,8 @@
       ],
       [
         "src/domain/vnext/persistence/store.rs",
-        144765,
-        "942a6cfbedfc3eb09e732061eeefd62a96ed1d1adb0044f26f86c6aa9ec4f9fe"
+        146252,
+        "0f5e597443711318906c12964ea13e83cb616d18d82612fae5405194f1ca1ced"
       ],
       [
         "src/domain/vnext/persistence/tests/atomic_publication.rs",
@@ -938,18 +938,23 @@
       ],
       [
         "src/domain/vnext/step/lifecycle.rs",
-        5445,
-        "96101b6ba2067c0fab7d0b01accf1987385d973ba83a08ce7abfb5687e702149"
+        6632,
+        "f71bd8d8c5c25593d8b41d731e73a789d3b2f633e9e04408cb40cd041a83db14"
       ],
       [
         "src/domain/vnext/step/mod.rs",
-        1064,
-        "ac07336b8e912e4904712fbcad10c5466cf883c4b0af61a10967c4ee366cf2c8"
+        1190,
+        "e69d26cb7701222872d31d10122e33facade9e59679aefa37088efdb0a5d3672"
       ],
       [
         "src/domain/vnext/step/revision.rs",
         7605,
         "8c323a703befe15c2d00c5a02af05612db8b99b00ff987374805884b6b4a89a0"
+      ],
+      [
+        "src/domain/vnext/step/submission.rs",
+        14715,
+        "18f562c618bca06bdcc6bda6b0c4b94ce937e0468bb66704e4d0e6ee618b7d91"
       ],
       [
         "src/domain/vnext/work/identity.rs",
@@ -973,8 +978,8 @@
       ],
       [
         "src/domain/vnext/work/submission.rs",
-        9521,
-        "038264f0b005f2b70581341ccdf4e86c45cc8dc8d64c52b617305c48096bd2d5"
+        9496,
+        "178e36066117f4886b7b1026dee2f9487029cabee6f436f03cc9a4ebf2960114"
       ],
       [
         "src/foundation/mod.rs",
@@ -1003,8 +1008,8 @@
       ],
       [
         "tests/vnext_work_lifecycle.rs",
-        20321,
-        "dade2e0d51b8568d27a0de489ed88aafd51987aca3b4ff69fb706b74469640b3"
+        20303,
+        "5c6001c69ebc1dcdc6f3086de82c11b7ad1dd35f37b7871aa67ea5a7cffe2245"
       ],
       [
         "tests/vnext_work_relations.rs",
@@ -1053,18 +1058,18 @@
       ],
       [
         "tests/vnext_evidence_claims.rs",
-        5904,
-        "8e937600a67f03e84af24d9797c1ea5aad462e2cbf9fb9367e89d19c671aefbb"
+        5879,
+        "c8e785840068c85420219efaa2d71933eea0341e4a37779f0d2a086a8e94a30a"
       ],
       [
         "tests/vnext_submission_claim_set.rs",
-        7698,
-        "09b1ff227587a78639566830c91edf1c2380025f44b0462319a8d7ca85e45968"
+        7680,
+        "9a85e85b91a4639288f9ae436664a6a2845a177cea4cea736e0d7ba427ae9556"
       ],
       [
         "tests/vnext_stage3_contracts.rs",
-        44979,
-        "b66943aa95ff5f07b2556080fdfe9641eaa62e6c251c3806bcabb7c1e11ed45d"
+        45022,
+        "aba48d6e03451ce0bd9c45612abc3ab8ae754be918cfd5c1664c96c16302a010"
       ],
       [
         "tools/vnext_contracts/public/build_public_literals.py",
@@ -1083,28 +1088,28 @@
       ],
       [
         "tools/vnext_contracts/stage2/authority/validate.py",
-        40200,
-        "d77518c453292abca93113515d81dc92cdd96c36ad11614d35410da55eaea672"
+        40666,
+        "c07f3b30330e15baee3cc977816a329fd5677dd3e874f435303c0d6cb5b1500b"
       ],
       [
         "tools/vnext_contracts/stage2/authority/verify.rb",
-        32700,
-        "6916ad99ed809acaba4501ce30a26bb8bb8d9c43b34939684a1f2ffe061bcc29"
+        33166,
+        "d7b7b5a4692895fc83c0ef6c8bf67bfa8dbfa22e6e36b2c43d9f9b2f190926f1"
       ],
       [
         "tools/vnext_contracts/stage3/domain/build.py",
-        31626,
-        "880b662413b9a9c75aa2ad103e4b7434e82616ddcee00184f190a00468887bad"
+        31669,
+        "cdd1299b7003474f5f6042c70bc50094d68047587d584912a65ee495b2a3aca6"
       ],
       [
         "tools/vnext_contracts/stage3/domain/validate.py",
-        29991,
-        "40df803de1b9e1763318c0f27dde026f45c4456e1b78d3f87898576adb1870dd"
+        30034,
+        "98021fee11376bd45394024d419d0a09d859a28fbac36d3d64849e0c8469617c"
       ],
       [
         "tools/vnext_contracts/stage3/domain/verify.rb",
-        27888,
-        "9d4ab631e7436f10325ecf65397b8aa98725f32cae553050e94d460efbb0a260"
+        27926,
+        "b9e9df89d5a170058a98574e6f6c518faa6862aaf3f4078ea6989a93a90d4dd0"
       ]
     ],
     [
@@ -1164,7 +1169,7 @@
       ]
     ]
   ],
-  "identity": "sha256:5082e9f25f830a30ab6b95b1fb2c4bcc2ae4a6c71c86c01cf7a59288d581fe96",
+  "identity": "sha256:03a6a327d9f4d10991d1951d37ec6c8abcb9068820f3cf6caad169d1dbb291d9",
   "publication_state": "inactive_candidate",
   "schema_version": "maestro.vnext.stage3.domain-kernel.v1"
 }

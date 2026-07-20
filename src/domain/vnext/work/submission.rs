@@ -1,10 +1,8 @@
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
-use crate::domain::vnext::contract::submission_claim::{
-    SubmissionClaimSetError, SubmissionClaimSetV1,
-};
 use crate::domain::vnext::evidence::{ClaimError, ClaimSubjectV1, ClaimV1, SubmissionRefV1};
+use crate::domain::vnext::evidence::{SubmissionClaimSetError, SubmissionClaimSetV1};
 use crate::domain::vnext::identity::ContractRootIdV1;
 use crate::domain::vnext::step::StepSubmissionIdV1;
 use crate::foundation::core::deterministic_cbor::{self, CborError, CborValue};

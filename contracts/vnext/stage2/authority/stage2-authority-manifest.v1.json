@@ -157,12 +157,12 @@
     "authority_continuity_manifest": "518c2b0f71aa48de75d0cb145936fc1bc8031c7d65ab0230489cb3272a22cb35",
     "authority_literals": "f862b743108267a6ccd82752814f047101b5d6b3cb805a0402b33aa6600e3057",
     "schema_suite": "8889ca455359efccd342ebd81de00c048df3c5dd24a47cfb0d3e4093bbfe5aff",
-    "stage2_semantic_consumer_delta": "sha256:737bff7cb1dd38817f8fac36200bba8e529e2f32abc25a607b03146461dd7b7b"
+    "stage2_semantic_consumer_delta": "sha256:cd8e78b8b1639e9a415e1e111891aec88a73b86c1f136810a9123a0f166a5d7a"
   },
   "identity_envelope": [
     "maestro.vnext.stage2.authority.root.v1",
     [
-      "6e963fc20ee2a1ac18f306b156d3d6ebedd0a2b2bb632b5ad1346dde569e7b5a",
+      "ff5b8b9be04ca7b5863acfe89de5c193798c56af6f472781f37266d6ff77a4e5",
       [
         [
           1,
@@ -255,7 +255,7 @@
         ],
         [
           "stage2_semantic_consumer_delta",
-          "sha256:737bff7cb1dd38817f8fac36200bba8e529e2f32abc25a607b03146461dd7b7b"
+          "sha256:cd8e78b8b1639e9a415e1e111891aec88a73b86c1f136810a9123a0f166a5d7a"
         ]
       ],
       "inactive_candidate"
@@ -310,14 +310,14 @@
     }
   ],
   "publication_state": "inactive_candidate",
-  "root_id": "c7c0a6de143314fddf2475d27eeeb5f5610ebfac94e59fedd4643d06d00c15b7",
+  "root_id": "b5e2f26333706871183a581ce929babafccb7f0db417f904c205074c7f75a7ce",
   "schema_version": "maestro.vnext.stage2.authority.root-manifest.v1",
   "stage": "stage2_authority_candidate",
-  "stage0_tree_sha256": "6e963fc20ee2a1ac18f306b156d3d6ebedd0a2b2bb632b5ad1346dde569e7b5a",
+  "stage0_tree_sha256": "ff5b8b9be04ca7b5863acfe89de5c193798c56af6f472781f37266d6ff77a4e5",
   "stage2_semantic_consumer_delta": {
-    "consumer_count": 14,
-    "consumer_digest": "ec0a8150ee6df94524f67db00ec4431f7f58b2f7e6d9bd12d3e83414ff14236e",
-    "identity": "sha256:737bff7cb1dd38817f8fac36200bba8e529e2f32abc25a607b03146461dd7b7b",
+    "consumer_count": 17,
+    "consumer_digest": "7605abdc6251b9ff030084cee4047b8e1cc79ab002ced4eeab294b1785321ed1",
+    "identity": "sha256:cd8e78b8b1639e9a415e1e111891aec88a73b86c1f136810a9123a0f166a5d7a",
     "predecessor": {
       "candidate_contract_root_id": "sha256:128bf49c9195ed8d7e395a77e1deaa26376613598e8142679cb2625890d49f59",
       "consumer_census_id": "sha256:962cb761a55a8cdf1250ac4068f957d9357cd389d5f3ef34e4af501b18fa74df"

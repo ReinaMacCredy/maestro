@@ -8,6 +8,8 @@ import ast
 import copy
 import hashlib
 import json
+import shutil
+import tempfile
 from pathlib import Path
 
 
@@ -76,12 +78,15 @@ STAGE2_SEMANTIC_LITERAL_PATTERNS = [
     "PlannedEpochTurnoverPreparation",
 ]
 STAGE2_SEMANTIC_SOURCE_DECLARATIONS = {
+    "src/domain/vnext/authority/action_basis.rs": ("Authority", "candidate_contract_definition", "exact_stage4_execution_basis_partition"),
     "src/domain/vnext/authority/bootstrap_catalog.rs": ("Authority", "candidate_contract_definition", "exact_stage2_bootstrap_target_literal"),
     "src/domain/vnext/authority/capacity.rs": ("Authority", "candidate_contract_definition", "exact_stage2_capacity_literal"),
     "src/domain/vnext/authority/closed.rs": ("Authority", "candidate_contract_definition", "exact_stage2_closed_sum_literal"),
     "src/domain/vnext/authority/continuity/catalog.rs": ("Authority", "candidate_contract_definition", "exact_stage2_continuity_effect_intent_class_literal"),
     "src/domain/vnext/authority/continuity/totality.rs": ("Authority", "candidate_contract_definition", "exact_stage2_continuity_owner_census_literal"),
     "src/domain/vnext/authority/mod.rs": ("Authority", "candidate_contract_definition", "exact_stage2_authority_facade_literal"),
+    "src/domain/vnext/authority/facade/repository_admission.rs": ("Authority", "candidate_contract_definition", "exact_stage4_execution_authority_admission"),
+    "src/domain/vnext/authority/facade/repository_leaf_authority.rs": ("Authority", "candidate_contract_definition", "exact_stage4_execution_authority_closed_union"),
     "src/domain/vnext/authority/transition.rs": ("Authority", "candidate_contract_definition", "exact_stage2_transition_guard_literal"),
     "tests/vnext_authority_capacity_transition.rs": ("Stage2Proof", "candidate_proof_reader", "exact_stage2_capacity_and_transition_proof"),
     "tests/vnext_authority_contracts.rs": ("Stage2Proof", "candidate_proof_reader", "exact_stage2_authority_contract_proof"),
@@ -109,15 +114,20 @@ SEMANTIC_LITERAL_SOURCES = {
     "contracts/vnext/stage0/resource-release/predecessor-resource-contract-suite-v1.json": ("ResourceRelease", "candidate_contract_definition", "direct_resource_release_predecessor_literal"),
     "contracts/vnext/public/setup_operation_compatibility.v1.json": ("PublicContracts", "candidate_contract_definition", "direct_public_literal"),
     "src/domain/vnext/execution/control_head.rs": ("Execution", "candidate_contract_definition", "direct_execution_literal"),
+    "src/domain/vnext/execution/ceremony.rs": ("Execution", "candidate_contract_definition", "direct_stage4_protected_ceremony_literal"),
     "src/domain/vnext/execution/dispatch_state.rs": ("Execution", "candidate_contract_definition", "direct_execution_literal"),
     "src/domain/vnext/execution/effect_home.rs": ("Execution", "candidate_contract_definition", "direct_execution_literal"),
     "src/domain/vnext/execution/effect_routes.rs": ("Execution", "candidate_contract_definition", "direct_execution_literal"),
+    "src/domain/vnext/execution/effects.rs": ("Execution", "candidate_contract_definition", "direct_stage4_effect_runtime_literal"),
     "src/domain/vnext/execution/mod.rs": ("Execution", "candidate_contract_definition", "direct_execution_literal"),
+    "src/domain/vnext/execution/runtime.rs": ("Execution", "candidate_contract_definition", "direct_stage4_execution_runtime_literal"),
+    "src/domain/vnext/execution/store.rs": ("Execution", "candidate_contract_definition", "direct_stage4_atomic_store_literal"),
     "src/domain/vnext/execution/withdrawal.rs": ("Execution", "candidate_contract_definition", "direct_execution_literal"),
     "src/domain/vnext/identity/manifest.rs": ("Identity", "candidate_contract_definition", "direct_identity_literal"),
     "src/domain/vnext/integration/public_literals.rs": ("PublicContracts", "candidate_contract_definition", "direct_public_contract_literal"),
     "tests/vnext_dispatch_cutover_literals.rs": ("Stage0Proof", "candidate_proof_reader", "direct_stage0_literal_test"),
     "tests/vnext_effect_home_literals.rs": ("Stage0Proof", "candidate_proof_reader", "direct_stage0_literal_test"),
+    "tests/vnext_stage4_contracts.rs": ("Stage4Proof", "candidate_proof_reader", "direct_stage4_execution_contract_proof"),
     "tests/vnext_manifest_identity.rs": ("Stage0Proof", "candidate_proof_reader", "direct_stage0_literal_test"),
     "tools/vnext_contracts/catalogs/build.py": ("Catalogs", "candidate_contract_definition", "direct_catalog_builder_literal"),
     "tools/vnext_contracts/catalogs/predecessor_e346/vnext_catalog_profile_grammar_build.py": ("Stage0Proof", "candidate_proof_reader", "predecessor_grammar_reproduction_builder"),
@@ -129,6 +139,9 @@ SEMANTIC_LITERAL_SOURCES = {
     "tools/vnext_contracts/stage0/effect_home/build.py": ("Stage0EffectHome", "candidate_contract_definition", "direct_effect_home_builder_literal"),
     "tools/vnext_contracts/stage0/effect_home/validate.py": ("Stage0Proof", "candidate_proof_reader", "direct_effect_home_validator_literal"),
     "tools/vnext_contracts/stage0/proof_matrix/build.py": ("Stage0Proof", "candidate_proof_reader", "stage0_proof_manifest_effect_home_reader"),
+    "tools/vnext_contracts/stage4/execution/build.py": ("Stage4Execution", "candidate_contract_definition", "direct_stage4_execution_builder_literal"),
+    "tools/vnext_contracts/stage4/execution/validate.py": ("Stage4Proof", "candidate_proof_reader", "independent_stage4_execution_reconstruction"),
+    "tools/vnext_contracts/stage4/execution/verify.rb": ("Stage4Proof", "candidate_proof_reader", "independent_stage4_execution_ruby_reconstruction"),
 }
 SEMANTIC_ROLE_SOURCES = {
     "tools/vnext_contracts/stage0/effect_home/encode.rb": (
@@ -164,6 +177,14 @@ SEMANTIC_ROLE_SOURCE_SHA256 = {
     "tools/vnext_contracts/stage0/resource_release/validate.py": "1ef7b22757e35bcb97db6b3bfdb0fc7f0d0f2fc2486901835d877616562ea667",
 }
 DOWNSTREAM_GENERATED_SEMANTIC_OBLIGATIONS = {
+    "contracts/vnext/stage4/execution/execution-effects.v1.cbor": (
+        ["EffectIntent", "DispatchAttempt", "ReconciliationAttempt", "RecoverReserved", "ControlHead"],
+        "Stage4Execution", "pending_downstream_generated_binding", "resolved_by_stage4_execution_manifest",
+    ),
+    "contracts/vnext/stage4/execution/execution-effects.v1.json": (
+        ["EffectIntent", "DispatchAttempt", "ReconciliationAttempt", "RecoverReserved", "ControlHead"],
+        "Stage4Execution", "pending_downstream_generated_binding", "resolved_by_stage4_execution_manifest",
+    ),
     "contracts/vnext/stage0/resource-release/expected-delta-successor.v1.cbor": (
         ["EffectOrigin"],
         "ResourceRelease",
@@ -1223,26 +1244,29 @@ def must_fail(output: Path, mutate) -> None:
 
 
 def mutants(output: Path) -> int:
-    cases = [
-        lambda: mutate_json(output, "effect-intent-home-v1", lambda doc: doc.__setitem__("writer_cohort", ["metadata_only"])),
-        lambda: mutate_json(output, "effect-intent-control-cohort-v1", lambda doc: doc["transition_contenders"].pop(8)),
-        lambda: mutate_json(output, "effect-intent-control-consumer-census-v1", lambda doc: doc["semantic_consumer_rows"][0].update({"path": "adapter", "consumer_category": "adapter"})),
-        lambda: mutate_json(output, "effect-intent-control-consumer-census-v1", lambda doc: doc.__setitem__("unresolved_actual_semantic_consumer_count", 1)),
-        lambda: mutate_json(output, "effect-intent-control-consumer-census-v1", lambda doc: doc["legacy_semantic_removal_consumer_rows"][0].__setitem__("legacy_surface", "wildcard")),
-        lambda: mutate_json(output, "effect-intent-control-consumer-census-v1", lambda doc: doc["downstream_generated_semantic_consumer_obligations"][0].__setitem__("path", "contracts/vnext/stage0/resource-release/unlisted.json")),
-        lambda: mutate_json(output, "effect-intent-control-consumer-census-v1", lambda doc: doc["downstream_generated_semantic_consumer_obligations"][0].__setitem__("status", "resolved_without_downstream_proof")),
-        lambda: mutate_json(output, "effect-intent-control-consumer-census-v1", lambda doc: doc["downstream_generated_semantic_consumer_obligations"][0].__setitem__("identity_input", True)),
-        lambda: mutate_json(output, "stage2-semantic-consumer-delta-v1", lambda doc: doc["consumer_rows"].pop()),
-        lambda: mutate_json(output, "stage2-semantic-consumer-delta-v1", lambda doc: doc["consumer_rows"][0].__setitem__("worktree_sha256", "0" * 64)),
-        lambda: mutate_json(output, "effect-withdrawal-v1", lambda doc: doc["positive_cells"].__setitem__(1, copy.deepcopy(doc["positive_cells"][0]))),
-        lambda: mutate_json(output, "effect-withdrawal-v1", lambda doc: doc["positive_cells"][0].__setitem__("origin_tag", 999)),
-        lambda: mutate_json(output, "effect-withdrawal-v1", lambda doc: doc["positive_cells"][0].__setitem__("route_tag", 999)),
-        lambda: mutate_json(output, "effect-intent-control-h2-contract-manifest-v1", lambda doc: doc["canonical_value"].__setitem__(1, 2)),
-        lambda: mutate_json(output, "expected-delta-manifest", lambda doc: doc.__setitem__("runtime", "active")),
-        lambda: mutate_json(output, "encoder-receipt", lambda doc: doc.__setitem__("equality", "length_only")),
-    ]
-    for case in cases:
-        must_fail(output, case)
+    with tempfile.TemporaryDirectory(prefix="maestro-effect-home-mutants-") as temporary:
+        isolated = Path(temporary) / "effect-home"
+        shutil.copytree(output, isolated)
+        cases = [
+            lambda: mutate_json(isolated, "effect-intent-home-v1", lambda doc: doc.__setitem__("writer_cohort", ["metadata_only"])),
+            lambda: mutate_json(isolated, "effect-intent-control-cohort-v1", lambda doc: doc["transition_contenders"].pop(8)),
+            lambda: mutate_json(isolated, "effect-intent-control-consumer-census-v1", lambda doc: doc["semantic_consumer_rows"][0].update({"path": "adapter", "consumer_category": "adapter"})),
+            lambda: mutate_json(isolated, "effect-intent-control-consumer-census-v1", lambda doc: doc.__setitem__("unresolved_actual_semantic_consumer_count", 1)),
+            lambda: mutate_json(isolated, "effect-intent-control-consumer-census-v1", lambda doc: doc["legacy_semantic_removal_consumer_rows"][0].__setitem__("legacy_surface", "wildcard")),
+            lambda: mutate_json(isolated, "effect-intent-control-consumer-census-v1", lambda doc: doc["downstream_generated_semantic_consumer_obligations"][0].__setitem__("path", "contracts/vnext/stage0/resource-release/unlisted.json")),
+            lambda: mutate_json(isolated, "effect-intent-control-consumer-census-v1", lambda doc: doc["downstream_generated_semantic_consumer_obligations"][0].__setitem__("status", "resolved_without_downstream_proof")),
+            lambda: mutate_json(isolated, "effect-intent-control-consumer-census-v1", lambda doc: doc["downstream_generated_semantic_consumer_obligations"][0].__setitem__("identity_input", True)),
+            lambda: mutate_json(isolated, "stage2-semantic-consumer-delta-v1", lambda doc: doc["consumer_rows"].pop()),
+            lambda: mutate_json(isolated, "stage2-semantic-consumer-delta-v1", lambda doc: doc["consumer_rows"][0].__setitem__("worktree_sha256", "0" * 64)),
+            lambda: mutate_json(isolated, "effect-withdrawal-v1", lambda doc: doc["positive_cells"].__setitem__(1, copy.deepcopy(doc["positive_cells"][0]))),
+            lambda: mutate_json(isolated, "effect-withdrawal-v1", lambda doc: doc["positive_cells"][0].__setitem__("origin_tag", 999)),
+            lambda: mutate_json(isolated, "effect-withdrawal-v1", lambda doc: doc["positive_cells"][0].__setitem__("route_tag", 999)),
+            lambda: mutate_json(isolated, "effect-intent-control-h2-contract-manifest-v1", lambda doc: doc["canonical_value"].__setitem__(1, 2)),
+            lambda: mutate_json(isolated, "expected-delta-manifest", lambda doc: doc.__setitem__("runtime", "active")),
+            lambda: mutate_json(isolated, "encoder-receipt", lambda doc: doc.__setitem__("equality", "length_only")),
+        ]
+        for case in cases:
+            must_fail(isolated, case)
     return len(cases) + semantic_source_mutants()
 
 

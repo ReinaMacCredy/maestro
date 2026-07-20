@@ -38,7 +38,8 @@ contracts remain inert: importing them does not publish a Contract Root,
 activate runtime behavior, migrate state, or grant authority. `identity/` owns
 the one domain-separated `ManifestIdentityV1` protocol; `contract/` owns exact
 Components, Decision materialization/closure, candidate Root, finalization,
-Handoff, Submission Claim, and proof contracts. The remaining Stage 0 children
+Handoff, and proof contracts. `evidence/` owns Claim and SubmissionClaimSet
+semantics. The remaining Stage 0 children
 hold frozen literal contracts for later stages and contain no adapter-private
 state or write path.
 

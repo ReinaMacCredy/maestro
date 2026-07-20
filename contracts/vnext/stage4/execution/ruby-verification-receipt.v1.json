@@ -1,0 +1,540 @@
+{
+  "identity": "sha256:462d821152e1f621073276d8403ad0ea89d9ec66227cd8b3067cf956bdfaa077",
+  "predecessor_chain": {
+    "command_receipts": [
+      {
+        "command": [
+          "python3",
+          "tools/vnext_contracts/stage0/effect_home/build.py",
+          "--check"
+        ],
+        "executable": {
+          "invocation_path": "/opt/homebrew/bin/python3",
+          "resolved_path": "/opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/bin/python3.14",
+          "sha256": "e40d13e49745371ee4d6b5e677f171ec13b84a6ff5edb011c616b1f4c6917b9b",
+          "byte_length": 34448
+        },
+        "exit_code": 0,
+        "result": "pass",
+        "stdout_sha256": "2d53bbb64c1d1f548edfffba8a809b5dc447ad10d1a748494e9eda77b484adf0",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "command": [
+          "python3",
+          "tools/vnext_contracts/stage0/effect_home/validate.py",
+          "--mutants"
+        ],
+        "executable": {
+          "invocation_path": "/opt/homebrew/bin/python3",
+          "resolved_path": "/opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/bin/python3.14",
+          "sha256": "e40d13e49745371ee4d6b5e677f171ec13b84a6ff5edb011c616b1f4c6917b9b",
+          "byte_length": 34448
+        },
+        "exit_code": 0,
+        "result": "pass",
+        "stdout_sha256": "cb43c56fb22671244761a7d7c9f7748906479f5b541a07764de3719d65facc2f",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "command": [
+          "python3",
+          "tools/vnext_contracts/stage0/dispatch_cutover/build.py",
+          "--check"
+        ],
+        "executable": {
+          "invocation_path": "/opt/homebrew/bin/python3",
+          "resolved_path": "/opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/bin/python3.14",
+          "sha256": "e40d13e49745371ee4d6b5e677f171ec13b84a6ff5edb011c616b1f4c6917b9b",
+          "byte_length": 34448
+        },
+        "exit_code": 0,
+        "result": "pass",
+        "stdout_sha256": "f1733342165423b661ef95766d4de5bb5988398569735109d1817773068e6eb9",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "command": [
+          "python3",
+          "tools/vnext_contracts/stage0/dispatch_cutover/validate.py",
+          "--mutant-suite",
+          "--no-write"
+        ],
+        "executable": {
+          "invocation_path": "/opt/homebrew/bin/python3",
+          "resolved_path": "/opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/bin/python3.14",
+          "sha256": "e40d13e49745371ee4d6b5e677f171ec13b84a6ff5edb011c616b1f4c6917b9b",
+          "byte_length": 34448
+        },
+        "exit_code": 0,
+        "result": "pass",
+        "stdout_sha256": "1561feb7932153d6e5de7f7c1e9763501dfbac49be2702dcc70c68d4edcaf69f",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "command": [
+          "python3",
+          "tools/vnext_contracts/stage2/authority/build.py",
+          "--check"
+        ],
+        "executable": {
+          "invocation_path": "/opt/homebrew/bin/python3",
+          "resolved_path": "/opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/bin/python3.14",
+          "sha256": "e40d13e49745371ee4d6b5e677f171ec13b84a6ff5edb011c616b1f4c6917b9b",
+          "byte_length": 34448
+        },
+        "exit_code": 0,
+        "result": "pass",
+        "stdout_sha256": "e5771ef511edd24ce9cb68892cc4b9b6eb064a26be23f91643cf4f097e714bd6",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "command": [
+          "python3",
+          "tools/vnext_contracts/stage3/domain/build.py",
+          "--check"
+        ],
+        "executable": {
+          "invocation_path": "/opt/homebrew/bin/python3",
+          "resolved_path": "/opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/bin/python3.14",
+          "sha256": "e40d13e49745371ee4d6b5e677f171ec13b84a6ff5edb011c616b1f4c6917b9b",
+          "byte_length": 34448
+        },
+        "exit_code": 0,
+        "result": "pass",
+        "stdout_sha256": "ce95c9572826b47e98ecf123b7cc1fa61a622a0675b560c8e9f6c6f7ffe461c9",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    ],
+    "mode": "full_chain",
+    "roots": {
+      "stage0_effect_home": "sha256:22f58983311b9088a53a40341dd2d79a3be17d4fb08d73742934fba6c22db802",
+      "stage0_dispatch_cutover": "sha256:1561feb7932153d6e5de7f7c1e9763501dfbac49be2702dcc70c68d4edcaf69f",
+      "stage2_authority": "sha256:b5e2f26333706871183a581ce929babafccb7f0db417f904c205074c7f75a7ce",
+      "stage3_domain": "sha256:03a6a327d9f4d10991d1951d37ec6c8abcb9068820f3cf6caad169d1dbb291d9"
+    },
+    "proof_receipts": {
+      "stage0_effect_home": [
+        {
+          "byte_length": 393839,
+          "path": "contracts/vnext/stage0/effect-home/encoder-receipt.json",
+          "sha256": "79ba10484f84816acaac881024ba2bab9508214bf21ec6785e0e5e9af1b565c7"
+        },
+        {
+          "byte_length": 2570,
+          "path": "contracts/vnext/stage0/effect-home/finalization-receipt.v1.json",
+          "sha256": "6026229515ed622e64c9e4012575043223dbf245d500bfdf9271d29f19c7bba0"
+        }
+      ],
+      "stage0_dispatch_cutover": [
+        {
+          "byte_length": 749,
+          "path": "contracts/vnext/stage0/dispatch-cutover/build-receipt.v1.json",
+          "sha256": "e911c1c1af419d0eb1aed0ed2a55271e8d64ab2a81c53469fe1f07bfc9a92ae0"
+        },
+        {
+          "byte_length": 1459,
+          "path": "contracts/vnext/stage0/dispatch-cutover/validation-receipt.v1.json",
+          "sha256": "1561feb7932153d6e5de7f7c1e9763501dfbac49be2702dcc70c68d4edcaf69f"
+        }
+      ],
+      "stage2_authority": [
+        {
+          "byte_length": 5249,
+          "path": "contracts/vnext/stage2/authority/python-encoder-receipt.v1.json",
+          "sha256": "4b39f06bba5befa0506246cc40af239a66bf93ada52d9dfb08c17cfdb12b5bf8"
+        },
+        {
+          "byte_length": 1965,
+          "path": "contracts/vnext/stage2/authority/semantic-validation-receipt.v1.json",
+          "sha256": "fa703e2f46f1065780205540bd9c2312618812b13b13596039e15f985c958c37"
+        },
+        {
+          "byte_length": 1791,
+          "path": "contracts/vnext/stage2/authority/ruby-verification-receipt.v1.json",
+          "sha256": "80c9ffcc259896e7ca58f7ff8509dfc02195e2cde26523753962bb9045b90074"
+        }
+      ],
+      "stage3_domain": [
+        {
+          "byte_length": 2125,
+          "path": "contracts/vnext/stage3/domain/python-encoder-receipt.v1.json",
+          "sha256": "5008877303e5e363d0effd44247efac1508676344bf356b9b8dccaadf11fb42a"
+        },
+        {
+          "byte_length": 1854,
+          "path": "contracts/vnext/stage3/domain/semantic-validation-receipt.v1.json",
+          "sha256": "eb566f4f2aa7342413031049082d3576f532e50653f946b6d003ccb66d77d4ba"
+        },
+        {
+          "byte_length": 1850,
+          "path": "contracts/vnext/stage3/domain/ruby-verification-receipt.v1.json",
+          "sha256": "66c8c38aa091c61d24a78f620f9e39d66b00506400cb4f3471161439a8da2b6b"
+        }
+      ]
+    }
+  },
+  "schema_version": "maestro.vnext.stage4.execution-effects.v1.ruby-verification-receipt.v1",
+  "validation_mode": "full_chain",
+  "validator": "independent-ruby-reconstruction",
+  "behavioral_reexecution": {
+    "command_receipts": [
+      {
+        "command": [
+          "cargo",
+          "test",
+          "--lib",
+          "domain::vnext::execution::",
+          "--",
+          "--nocapture"
+        ],
+        "ignored": 0,
+        "passed": 70,
+        "test_binary": {
+          "byte_length": 67064120,
+          "path": "target/debug/deps/maestro-a87a94f6ecb23659",
+          "sha256": "ce899ca4bb8d7cdf3e3bcbf39998f5d76f829d43d59f09aaa653cbcf45a12740"
+        },
+        "test_names": [
+          "domain::vnext::execution::ceremony::tests::abandoned_initialization_leaf_does_not_publish_or_poison_final_incarnation",
+          "domain::vnext::execution::ceremony::tests::all_eleven_ceremonies_have_exactly_four_owner_issued_legal_durable_modes",
+          "domain::vnext::execution::ceremony::tests::ceremony_anchor_rejects_leaf_replacement_and_recovers_published_incarnation",
+          "domain::vnext::execution::ceremony::tests::ceremony_readers_share_one_snapshot_with_concurrent_writer_history_validation",
+          "domain::vnext::execution::ceremony::tests::ceremony_refuses_virgin_resolve_post_terminal_mutation_and_symlink_root",
+          "domain::vnext::execution::ceremony::tests::protected_ceremony_debug_redacts_every_bearer_token",
+          "domain::vnext::execution::ceremony::tests::protected_ceremony_has_one_winner_durable_full_history_replay_and_owner_refusal",
+          "domain::vnext::execution::ceremony::tests::protected_ceremony_journal_creation_rejects_hardlink_substitution_at_open",
+          "domain::vnext::execution::ceremony::tests::protected_ceremony_rejects_corrupted_transition_history",
+          "domain::vnext::execution::ceremony::tests::protected_ceremony_rejects_unsafe_owner_writable_modes_and_journal_aliases",
+          "domain::vnext::execution::ceremony::tests::protected_ceremony_reopens_from_durable_anchor_and_rejects_inode_replacement",
+          "domain::vnext::execution::control_head::tests::control_pair_product_is_exactly_ten",
+          "domain::vnext::execution::control_head::tests::same_home_restore_is_bound_to_a_durable_fencing_receipt",
+          "domain::vnext::execution::control_head::tests::unhealthy_control_products_fail_closed_until_exact_recovery",
+          "domain::vnext::execution::effects::tests::dispatch_control_carries_fresh_fence_and_preserves_crossing_uncertainty",
+          "domain::vnext::execution::effects::tests::effect_origin_catalog_is_exact_and_closed",
+          "domain::vnext::execution::effects::tests::persisted_dispatch_carrier_rejects_phase_owner_and_runset_mutants",
+          "domain::vnext::execution::effects::tests::persisted_reconciliation_carrier_rejects_fence_owner_and_refinement_mutants",
+          "domain::vnext::execution::effects::tests::reconciliation_is_one_bounded_effect_free_read_with_fresh_requests",
+          "domain::vnext::execution::runtime::tests::execution_action_catalog_is_dense_and_exact",
+          "domain::vnext::execution::runtime::tests::execution_cannot_close_pair_as_submitted",
+          "domain::vnext::execution::runtime::tests::lease_attempt_pair_is_one_to_one_and_terms_are_contiguous",
+          "domain::vnext::execution::runtime::tests::non_step_attempts_cannot_receive_lease_terms_or_step_power",
+          "domain::vnext::execution::runtime::tests::ordinary_reservation_cannot_bypass_the_retry_chain",
+          "domain::vnext::execution::runtime::tests::retry_requires_conclusive_no_start",
+          "domain::vnext::execution::runtime::tests::run_fixed_envelope_and_deadline_are_enforced",
+          "domain::vnext::execution::runtime::tests::run_graph_is_exact_and_terminal_never_reopens",
+          "domain::vnext::execution::runtime::tests::stored_carrier_rejects_cross_invariant_mutants",
+          "domain::vnext::execution::runtime::tests::terminal_pair_closes_open_runs_atomically",
+          "domain::vnext::execution::store::tests::bootstrap_g0_effect_route_is_exact_authorized_reconcilable_and_withdrawable",
+          "domain::vnext::execution::store::tests::competing_step_submissions_have_one_atomic_winner",
+          "domain::vnext::execution::store::tests::continuity_maintenance_effect_route_is_slot_authorized_reconcilable_and_withdrawable",
+          "domain::vnext::execution::store::tests::current_step_effect_origin_is_authorized_and_committed",
+          "domain::vnext::execution::store::tests::effect_dispatch_control_cross_invariants_reject_individually_valid_mismatches",
+          "domain::vnext::execution::store::tests::effect_health_and_writer_handoff_race_has_one_expected_old_winner",
+          "domain::vnext::execution::store::tests::effect_health_fail_closed_and_integrity_blocked_cannot_handoff",
+          "domain::vnext::execution::store::tests::effect_origination_reserves_dispatch_atomically_replays_and_restarts",
+          "domain::vnext::execution::store::tests::effect_origination_stale_contenders_spend_capacity_once",
+          "domain::vnext::execution::store::tests::effect_publication_binds_authority_and_replay_meaning",
+          "domain::vnext::execution::store::tests::effect_reconciliation_is_fresh_authorized_bounded_atomic_and_restart_decodable",
+          "domain::vnext::execution::store::tests::effect_reconciliation_phase_contenders_have_one_winner_and_one_debit",
+          "domain::vnext::execution::store::tests::effect_recover_reserved_can_commit_exact_local_rejection_without_release",
+          "domain::vnext::execution::store::tests::effect_recover_reserved_has_one_seal_winner_zero_io_replay_and_restart",
+          "domain::vnext::execution::store::tests::effect_recover_sealed_health_is_durable_and_writer_handoff_restores_atomically",
+          "domain::vnext::execution::store::tests::effect_redispatch_requires_conclusive_not_applied_and_persists_higher_fence",
+          "domain::vnext::execution::store::tests::effect_restart_replay_never_reconstructs_provider_release",
+          "domain::vnext::execution::store::tests::effect_seal_and_terminal_contenders_commit_once",
+          "domain::vnext::execution::store::tests::effect_withdrawal_is_authorized_atomic_zero_io_replayable_and_restart_decodable",
+          "domain::vnext::execution::store::tests::effect_writer_handoff_fences_the_old_writer_atomically_and_restarts",
+          "domain::vnext::execution::store::tests::external_io_releases_reject_deadline_equality_before_calling_adapters",
+          "domain::vnext::execution::store::tests::historical_open_step_with_same_contract_root_cannot_acquire_execution",
+          "domain::vnext::execution::store::tests::installation_effect_operation_matrix_replays_restarts_and_fences_races",
+          "domain::vnext::execution::store::tests::installation_effect_uses_installation_authority_capacity_and_restarts",
+          "domain::vnext::execution::store::tests::provider_gateway_loads_current_authority_time_at_the_io_boundary",
+          "domain::vnext::execution::store::tests::provider_gateway_serializes_writer_handoff_across_external_io",
+          "domain::vnext::execution::store::tests::reconciliation_continues_after_interleaved_unrelated_authorized_publication",
+          "domain::vnext::execution::store::tests::recovered_sealed_dispatch_restarts_into_fresh_authorized_reconciliation",
+          "domain::vnext::execution::store::tests::renewed_step_term_rejects_stale_effect_origin_without_write_or_debit",
+          "domain::vnext::execution::store::tests::specialized_effect_authority_rejects_cross_basis_and_substituted_carriers_without_debit",
+          "domain::vnext::execution::store::tests::stale_step_submission_fence_writes_nothing_and_spends_no_authority",
+          "domain::vnext::execution::store::tests::step_execution_store_is_single_selector_atomic_and_restart_decodable",
+          "domain::vnext::execution::store::tests::step_submission_and_renewal_race_has_one_atomic_winner",
+          "domain::vnext::execution::store::tests::step_submission_and_takeover_boundary_proves_both_atomic_linearizations",
+          "domain::vnext::execution::store::tests::step_submission_one_and_many_claims_are_atomic_restart_decodable_and_idempotent",
+          "domain::vnext::execution::store::tests::step_submission_rejects_empty_and_wrong_fence_claim_sets_before_publication",
+          "domain::vnext::execution::store::tests::step_timeout_is_refused_before_expiry_and_restart_closes_at_exact_expiry",
+          "domain::vnext::execution::store::tests::takeover_submission_expiry_and_supersession_reject_stale_step_effect_origin",
+          "domain::vnext::execution::store::tests::writer_handoff_and_withdrawal_head_writer_races_have_one_winner_and_one_debit",
+          "domain::vnext::execution::withdrawal::tests::withdrawal_denied_product_catalog_is_exact_and_validation_fails_closed",
+          "domain::vnext::execution::withdrawal::tests::withdrawal_totality_is_sixty_unique_exact_catalog_cells"
+        ],
+        "executable": {
+          "invocation_path": "/opt/homebrew/bin/cargo",
+          "resolved_path": "/opt/homebrew/Cellar/rust/1.96.0/bin/cargo",
+          "sha256": "cbbc684a4d3632fea7fcb061c1a25ff031b9f01ca85fd2b6bed1fa6a35951eea",
+          "byte_length": 31323728
+        },
+        "exit_code": 0,
+        "normalized_output_sha256": "07b25addda0661d77d24f2b3000489a5652aa50930bb7498effa7a708ac1659b",
+        "result": "pass"
+      },
+      {
+        "command": [
+          "cargo",
+          "test",
+          "--lib",
+          "domain::vnext::authority::facade::repository_admission::ancestry_tests",
+          "--",
+          "--nocapture"
+        ],
+        "ignored": 0,
+        "passed": 5,
+        "test_binary": {
+          "byte_length": 67064120,
+          "path": "target/debug/deps/maestro-a87a94f6ecb23659",
+          "sha256": "ce899ca4bb8d7cdf3e3bcbf39998f5d76f829d43d59f09aaa653cbcf45a12740"
+        },
+        "test_names": [
+          "domain::vnext::authority::facade::repository_admission::ancestry_tests::store_loaded_chain_accepts_g0_through_two_ordinary_grants",
+          "domain::vnext::authority::facade::repository_admission::ancestry_tests::store_loaded_chain_rejects_a_missing_ordinary_ancestor_or_delegation_edge",
+          "domain::vnext::authority::facade::repository_admission::ancestry_tests::store_loaded_chain_rejects_cycle_orphan_cross_root_non_attenuation_staleness_and_revocation",
+          "domain::vnext::authority::facade::repository_admission::ancestry_tests::store_loaded_chain_rejects_duplicate_grant_and_delegation_carriers",
+          "domain::vnext::authority::facade::repository_admission::ancestry_tests::successor_snapshot_preserves_multi_hop_ancestry_for_a_second_repository_admission"
+        ],
+        "executable": {
+          "invocation_path": "/opt/homebrew/bin/cargo",
+          "resolved_path": "/opt/homebrew/Cellar/rust/1.96.0/bin/cargo",
+          "sha256": "cbbc684a4d3632fea7fcb061c1a25ff031b9f01ca85fd2b6bed1fa6a35951eea",
+          "byte_length": 31323728
+        },
+        "exit_code": 0,
+        "normalized_output_sha256": "d0b7455e41e634e791e10c273c86ebd012783719cb9b70bea3d1d2bce50e9468",
+        "result": "pass"
+      },
+      {
+        "command": [
+          "cargo",
+          "test",
+          "--lib",
+          "domain::vnext::authority::continuity::trusted_time::tests",
+          "--",
+          "--nocapture"
+        ],
+        "ignored": 0,
+        "passed": 1,
+        "test_binary": {
+          "byte_length": 67064120,
+          "path": "target/debug/deps/maestro-a87a94f6ecb23659",
+          "sha256": "ce899ca4bb8d7cdf3e3bcbf39998f5d76f829d43d59f09aaa653cbcf45a12740"
+        },
+        "test_names": [
+          "domain::vnext::authority::continuity::trusted_time::tests::carry_plus_fresh_lower_uses_only_max_base_and_lower_and_rejects_invalid_upper"
+        ],
+        "executable": {
+          "invocation_path": "/opt/homebrew/bin/cargo",
+          "resolved_path": "/opt/homebrew/Cellar/rust/1.96.0/bin/cargo",
+          "sha256": "cbbc684a4d3632fea7fcb061c1a25ff031b9f01ca85fd2b6bed1fa6a35951eea",
+          "byte_length": 31323728
+        },
+        "exit_code": 0,
+        "normalized_output_sha256": "c91225ac5226d64d8288cd9a9ed81e906f32836c1800945f83aa7562e72e3fcd",
+        "result": "pass"
+      },
+      {
+        "command": [
+          "cargo",
+          "test",
+          "--test",
+          "vnext_stage4_contracts",
+          "stage4_public_effect_facade_exports_are_complete",
+          "--",
+          "--nocapture"
+        ],
+        "ignored": 0,
+        "passed": 1,
+        "test_binary": {
+          "byte_length": 5046824,
+          "path": "target/debug/deps/vnext_stage4_contracts-12f4790700102e4b",
+          "sha256": "0ed46227eed6d7b8e75ae645f8b5c63541a21e79b553a36971320721ac98023b"
+        },
+        "test_names": [
+          "stage4_public_effect_facade_exports_are_complete"
+        ],
+        "executable": {
+          "invocation_path": "/opt/homebrew/bin/cargo",
+          "resolved_path": "/opt/homebrew/Cellar/rust/1.96.0/bin/cargo",
+          "sha256": "cbbc684a4d3632fea7fcb061c1a25ff031b9f01ca85fd2b6bed1fa6a35951eea",
+          "byte_length": 31323728
+        },
+        "exit_code": 0,
+        "normalized_output_sha256": "d82057459366b7d15251e0a5310cb5999a3dfae4add59d5686a6224dd9117215",
+        "result": "pass"
+      },
+      {
+        "command": [
+          "cargo",
+          "test",
+          "--test",
+          "vnext_stage4_contracts",
+          "runtime_withdrawal_catalog_matches_all_sixty_frozen_rows_and_twenty_one_denials",
+          "--",
+          "--nocapture"
+        ],
+        "ignored": 0,
+        "passed": 1,
+        "test_binary": {
+          "byte_length": 5046824,
+          "path": "target/debug/deps/vnext_stage4_contracts-12f4790700102e4b",
+          "sha256": "0ed46227eed6d7b8e75ae645f8b5c63541a21e79b553a36971320721ac98023b"
+        },
+        "test_names": [
+          "runtime_withdrawal_catalog_matches_all_sixty_frozen_rows_and_twenty_one_denials"
+        ],
+        "executable": {
+          "invocation_path": "/opt/homebrew/bin/cargo",
+          "resolved_path": "/opt/homebrew/Cellar/rust/1.96.0/bin/cargo",
+          "sha256": "cbbc684a4d3632fea7fcb061c1a25ff031b9f01ca85fd2b6bed1fa6a35951eea",
+          "byte_length": 31323728
+        },
+        "exit_code": 0,
+        "normalized_output_sha256": "9565986f1291dc5e3fbc73de9be38e5be404de93e0edbaeac70546bb9d222232",
+        "result": "pass"
+      },
+      {
+        "command": [
+          "cargo",
+          "test",
+          "--test",
+          "vnext_effect_home_literals",
+          "stage0_effect_home_artifacts_are_reproducible_and_reject_mutants",
+          "--",
+          "--nocapture"
+        ],
+        "ignored": 0,
+        "passed": 1,
+        "test_binary": {
+          "byte_length": 1707560,
+          "path": "target/debug/deps/vnext_effect_home_literals-452e06338a453af5",
+          "sha256": "e4db77150fba2db2906a6fd4b1b6f5c40f49a6c1553d2a4f8e209e6d98358452"
+        },
+        "test_names": [
+          "stage0_effect_home_artifacts_are_reproducible_and_reject_mutants"
+        ],
+        "executable": {
+          "invocation_path": "/opt/homebrew/bin/cargo",
+          "resolved_path": "/opt/homebrew/Cellar/rust/1.96.0/bin/cargo",
+          "sha256": "cbbc684a4d3632fea7fcb061c1a25ff031b9f01ca85fd2b6bed1fa6a35951eea",
+          "byte_length": 31323728
+        },
+        "exit_code": 0,
+        "normalized_output_sha256": "66c61665359d1cac0ead566a82c2ef261ee2c8c1cfdcd46ecd2e61fb76a95e3f",
+        "result": "pass"
+      }
+    ],
+    "mutant_command_receipts": [
+      {
+        "command": [
+          "cargo",
+          "test",
+          "--test",
+          "vnext_stage4_contracts",
+          "stage4_regenerated_",
+          "--",
+          "--nocapture"
+        ],
+        "ignored": 0,
+        "passed": 10,
+        "test_binary": {
+          "byte_length": 5046824,
+          "path": "target/debug/deps/vnext_stage4_contracts-12f4790700102e4b",
+          "sha256": "0ed46227eed6d7b8e75ae645f8b5c63541a21e79b553a36971320721ac98023b"
+        },
+        "test_names": [
+          "stage4_regenerated_basis_donation_mutant_fails_compiled_contract",
+          "stage4_regenerated_ceremony_descriptor_binding_mutant_fails_compiled_contract",
+          "stage4_regenerated_ceremony_replay_mutant_fails_compiled_contract",
+          "stage4_regenerated_claim_set_digest_mutant_fails_compiled_contract",
+          "stage4_regenerated_evidence_claim_set_owner_mutant_fails_compiled_contract",
+          "stage4_regenerated_non_atomic_claim_set_participant_mutant_fails_compiled_contract",
+          "stage4_regenerated_public_facade_mutant_fails_compiled_contract",
+          "stage4_regenerated_same_name_behavior_mutant_fails_compiled_contract",
+          "stage4_regenerated_split_step_submission_generation_mutant_fails_compiled_contract",
+          "stage4_regenerated_writer_health_mutant_fails_compiled_contract"
+        ],
+        "executable": {
+          "invocation_path": "/opt/homebrew/bin/cargo",
+          "resolved_path": "/opt/homebrew/Cellar/rust/1.96.0/bin/cargo",
+          "sha256": "cbbc684a4d3632fea7fcb061c1a25ff031b9f01ca85fd2b6bed1fa6a35951eea",
+          "byte_length": 31323728
+        },
+        "exit_code": 0,
+        "normalized_output_sha256": "ed55a9c026c1d69f48a1ea9fc3273dd962fb755855147a7419e105f3eb80365b",
+        "result": "pass"
+      },
+      {
+        "command": [
+          "cargo",
+          "test",
+          "--test",
+          "vnext_stage4_contracts",
+          "stage4_proof_rejects_",
+          "--",
+          "--nocapture"
+        ],
+        "ignored": 0,
+        "passed": 6,
+        "test_binary": {
+          "byte_length": 5046824,
+          "path": "target/debug/deps/vnext_stage4_contracts-12f4790700102e4b",
+          "sha256": "0ed46227eed6d7b8e75ae645f8b5c63541a21e79b553a36971320721ac98023b"
+        },
+        "test_names": [
+          "stage4_proof_rejects_execution_store_disconnection",
+          "stage4_proof_rejects_independent_reexecution_divergence",
+          "stage4_proof_rejects_missing_atomic_store_publication",
+          "stage4_proof_rejects_missing_runtime_owner_types",
+          "stage4_proof_rejects_stored_test_census_drift",
+          "stage4_proof_rejects_substituted_test_binary_receipt"
+        ],
+        "executable": {
+          "invocation_path": "/opt/homebrew/bin/cargo",
+          "resolved_path": "/opt/homebrew/Cellar/rust/1.96.0/bin/cargo",
+          "sha256": "cbbc684a4d3632fea7fcb061c1a25ff031b9f01ca85fd2b6bed1fa6a35951eea",
+          "byte_length": 31323728
+        },
+        "exit_code": 0,
+        "normalized_output_sha256": "dcd32e07525a9310bba68f81f73bbb5a7fe43297562c6932ea892c89ccf75e23",
+        "result": "pass"
+      },
+      {
+        "command": [
+          "cargo",
+          "test",
+          "--test",
+          "vnext_stage4_contracts",
+          "independent_execution_artifact_rejects_semantic_and_shape_mutants",
+          "--",
+          "--nocapture"
+        ],
+        "ignored": 0,
+        "passed": 1,
+        "test_binary": {
+          "byte_length": 5046824,
+          "path": "target/debug/deps/vnext_stage4_contracts-12f4790700102e4b",
+          "sha256": "0ed46227eed6d7b8e75ae645f8b5c63541a21e79b553a36971320721ac98023b"
+        },
+        "test_names": [
+          "independent_execution_artifact_rejects_semantic_and_shape_mutants"
+        ],
+        "executable": {
+          "invocation_path": "/opt/homebrew/bin/cargo",
+          "resolved_path": "/opt/homebrew/Cellar/rust/1.96.0/bin/cargo",
+          "sha256": "cbbc684a4d3632fea7fcb061c1a25ff031b9f01ca85fd2b6bed1fa6a35951eea",
+          "byte_length": 31323728
+        },
+        "exit_code": 0,
+        "normalized_output_sha256": "97057ba0a3e18619cdf05303c6c413e7364a3a2fd4f3c34dbbea9b93d665be63",
+        "result": "pass"
+      }
+    ]
+  }
+}

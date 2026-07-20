@@ -74,17 +74,21 @@ pub use evaluator::{
 };
 pub use facade::{
     AbsorbWorkAuthorityV1, AmendContractAuthorityV1, AppendDesignRevisionAuthorityV1,
-    AuthorityFacadeV1, AuthorityPublicationError, CancelWorkAuthorityV1,
-    CreateDraftWorkAuthorityV1, PublishInitialContractAuthorityV1, RepositoryAuthenticatedHumanV1,
-    RepositoryAuthoritySelectionV1, RepositoryDecisionAuthorityCarrierV1,
-    RepositoryDecisionOptionMappingV1, RepositoryDecisionPresentationV1,
-    RepositoryLeafAuthorityErrorV1, RepositoryPolicyComponentSetV1, RepositoryPolicySnapshotV1,
-    RepositoryPolicyStrengthV1, RepositoryPolicyTransitionAuthorityV1,
-    RepositoryPolicyTransitionKindV1, RepositoryPolicyTransitionV1, ResolveDecisionAuthorityV1,
+    AuthorityFacadeV1, AuthorityPublicationError, BootstrapExecutionAuthorityV1,
+    CancelWorkAuthorityV1, ContinuityMaintenanceExecutionAuthorityV1, CreateDraftWorkAuthorityV1,
+    ExecutionAuthorityV1, GenericExecutionAuthorityV1, PublishInitialContractAuthorityV1,
+    RepositoryAuthenticatedHumanV1, RepositoryAuthoritySelectionV1,
+    RepositoryDecisionAuthorityCarrierV1, RepositoryDecisionOptionMappingV1,
+    RepositoryDecisionPresentationV1, RepositoryLeafAuthorityErrorV1,
+    RepositoryPolicyComponentSetV1, RepositoryPolicySnapshotV1, RepositoryPolicyStrengthV1,
+    RepositoryPolicyTransitionAuthorityV1, RepositoryPolicyTransitionKindV1,
+    RepositoryPolicyTransitionV1, ResolveDecisionAuthorityV1, SubmitStepAuthorityV1,
 };
 pub(crate) use facade::{
-    RepositoryActionAdmissionInputV1, RepositoryAuthorityAdmissionErrorV1, admit_repository_action,
-    admit_repository_authority_candidate,
+    AdmittedRepositoryActionV1, ContinuedRepositoryActionV1, RepositoryActionAdmissionInputV1,
+    RepositoryAuthorityAdmissionErrorV1, RepositoryAuthorityArtifactsV1, admit_repository_action,
+    admit_repository_authority_candidate, continue_repository_action_attempt,
+    current_repository_authority_time, validate_persisted_repository_action_basis,
 };
 pub use grant::{
     AuthorityUseConstraintV1, AuthorityValidationError, BootstrapG0PathV1, BootstrapGenesisGrantV1,

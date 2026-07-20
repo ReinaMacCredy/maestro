@@ -195,7 +195,7 @@ SOURCE_PATHS = %w[
   src/domain/vnext/contract/provenance.rs
   src/domain/vnext/contract/root.rs
   src/domain/vnext/contract/runtime.rs
-  src/domain/vnext/contract/submission_claim.rs
+  src/domain/vnext/evidence/submission_claim.rs
   src/domain/vnext/design/batch.rs
   src/domain/vnext/design/closure.rs
   src/domain/vnext/design/common.rs
@@ -238,6 +238,7 @@ SOURCE_PATHS = %w[
   src/domain/vnext/step/lifecycle.rs
   src/domain/vnext/step/mod.rs
   src/domain/vnext/step/revision.rs
+  src/domain/vnext/step/submission.rs
   src/domain/vnext/work/identity.rs
   src/domain/vnext/work/lifecycle.rs
   src/domain/vnext/work/mod.rs

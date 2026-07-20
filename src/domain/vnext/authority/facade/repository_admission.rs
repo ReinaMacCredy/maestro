@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
-use crate::domain::vnext::identity::StoreObjectIdV1;
+use crate::domain::vnext::identity::{SchemaIdV1, StoreObjectIdV1, derive_identity};
 use crate::domain::vnext::persistence::{
     StoreGenerationV1, StoreObjectError, StoreObjectV1, StorePublicationViewV1, StoreRoleV1,
 };
@@ -14,19 +14,218 @@ use super::super::{
     ActionAuthorityBasisKindV1, ActionOutcomeV1, ActionRequestIdV1, ActionResultError,
     ActionResultV1, AuthorityContextIdV1, AuthorityContextKindV1, AuthorityContinuityManifestV1,
     AuthorityValidationError, AuthorizationReceiptV1, BootstrapAuthoritySnapshotErrorV1,
-    BootstrapAuthoritySnapshotV1, CapacityRootIdV1, CapacityUseDispositionV1, DelegationAncestryV1,
-    GovernedCapacityKindV1, GovernedCapacityRootV1, GrantIdV1, OrdinaryBoundedGrantV1,
-    OrdinaryGrantDelegationV1, RepositoryGovernedCapacitySlotKindV1, RevocationTargetV1,
-    ScopeAtomV1, StateTokenIdV1, SuccessVisibleAuthorityContinuityStateV1, TrustedTimeV1,
-    grant_is_revoked_by_closure, validate_delegation, validate_ordinary_authority,
+    BootstrapAuthoritySnapshotV1, CapacityRootIdV1, CapacityUseDispositionV1, CmaBranchIdV1,
+    CmaEffectWithdrawalSlotFamilyV1, CmaObservationPublicationPurposeV1, DelegationAncestryV1,
+    ExecutorAssertionIdV1, GovernedCapacityKindV1, GovernedCapacityRootV1, GrantIdV1,
+    InstallationGovernedCapacitySlotKindV1, OrdinaryBoundedGrantV1, OrdinaryGrantDelegationV1,
+    PrincipalIdV1, RepositoryActionLeafV1, RepositoryGovernedCapacitySlotKindV1,
+    RevocationTargetV1, ScopeAtomV1, SlotIdV1, StateTokenIdV1,
+    SuccessVisibleAuthorityContinuityStateV1, TrustedTimeV1, grant_is_revoked_by_closure,
+    validate_delegation, validate_ordinary_authority,
 };
 use super::repository_leaf_authority::{
-    RepositoryLeafAuthorityEvaluationContextV1, RepositoryLeafAuthorityEvaluationErrorV1,
-    RepositoryLeafAuthorityInputV1, authenticated_human_carrier_commitment,
-    repository_leaf_authority_consumptions,
+    BootstrapExecutionAuthorityV1, ContinuityMaintenanceExecutionAuthorityV1, ExecutionAuthorityV1,
+    RepositoryAuthoritySelectionV1, RepositoryLeafAuthorityEvaluationContextV1,
+    RepositoryLeafAuthorityEvaluationErrorV1, RepositoryLeafAuthorityInputV1,
+    authenticated_human_carrier_commitment, repository_leaf_authority_consumptions,
 };
 
 const ORDINARY_REPOSITORY_ACTION_PROTOCOL_VERSION_V1: u64 = 1;
+const CMA_EXECUTION_SLOT_SCHEMA_DOMAIN_V1: &str =
+    "maestro.vnext.continuity-maintenance-execution-slot-schema.v1";
+const CMA_EXECUTION_SLOT_VALUE_DOMAIN_V1: &str =
+    "maestro.vnext.continuity-maintenance-execution-slot.v1";
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct ContinuityMaintenanceExecutionSlotV1 {
+    context_id: AuthorityContextIdV1,
+    cma_branch_id: CmaBranchIdV1,
+    slot_id: SlotIdV1,
+    executor_assertion_id: ExecutorAssertionIdV1,
+    executor_principal_id: PrincipalIdV1,
+    purpose: CmaObservationPublicationPurposeV1,
+    action: RepositoryActionLeafV1,
+    withdrawal_slot_family: Option<CmaEffectWithdrawalSlotFamilyV1>,
+    subject_commitment: [u8; 32],
+    request_scope_commitment: [u8; 32],
+    continuity_state_token: StateTokenIdV1,
+    continuity_state_object_id: StoreObjectIdV1,
+    guard_object_id: StoreObjectIdV1,
+    authority_epoch: u64,
+    job_applicability_commitment: [u8; 32],
+    capacity_root_id: CapacityRootIdV1,
+}
+
+impl ContinuityMaintenanceExecutionSlotV1 {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the preallocated CMA slot binds every non-donatable authority dimension"
+    )]
+    pub(crate) fn new(
+        context_id: AuthorityContextIdV1,
+        cma_branch_id: CmaBranchIdV1,
+        slot_id: SlotIdV1,
+        executor_assertion_id: ExecutorAssertionIdV1,
+        executor_principal_id: PrincipalIdV1,
+        purpose: CmaObservationPublicationPurposeV1,
+        action: RepositoryActionLeafV1,
+        withdrawal_slot_family: Option<CmaEffectWithdrawalSlotFamilyV1>,
+        subject_commitment: [u8; 32],
+        continuity_state_token: StateTokenIdV1,
+        continuity_state_object_id: StoreObjectIdV1,
+        guard_object_id: StoreObjectIdV1,
+        authority_epoch: u64,
+        capacity_root_id: CapacityRootIdV1,
+    ) -> Result<Self, RepositoryAuthorityAdmissionErrorV1> {
+        let expected_withdrawal_slot_family = (action
+            == RepositoryActionLeafV1::WithdrawContinuityMaintenanceEffect)
+            .then_some(purpose.effect_withdrawal_slot_family());
+        if action.execution_authority_basis()
+            != Some(ActionAuthorityBasisKindV1::ContinuityMaintenance)
+            || withdrawal_slot_family != expected_withdrawal_slot_family
+            || context_id.as_bytes() == &[0; 32]
+            || cma_branch_id.as_bytes() == &[0; 32]
+            || slot_id.as_bytes() == &[0; 32]
+            || executor_assertion_id.as_bytes() == &[0; 32]
+            || executor_principal_id.as_bytes() == &[0; 32]
+            || subject_commitment == [0; 32]
+            || continuity_state_token.as_bytes() == &[0; 32]
+            || continuity_state_object_id.as_bytes() == &[0; 32]
+            || guard_object_id.as_bytes() == &[0; 32]
+            || authority_epoch == 0
+            || capacity_root_id.as_bytes() == &[0; 32]
+        {
+            return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+        }
+        let request_scope_commitment = cma_request_scope_commitment(
+            purpose,
+            action,
+            withdrawal_slot_family,
+            subject_commitment,
+        )?;
+        let job_applicability_commitment = cma_job_applicability_commitment(
+            context_id,
+            cma_branch_id,
+            purpose,
+            action,
+            continuity_state_token,
+            continuity_state_object_id,
+            guard_object_id,
+            authority_epoch,
+        )?;
+        Ok(Self {
+            context_id,
+            cma_branch_id,
+            slot_id,
+            executor_assertion_id,
+            executor_principal_id,
+            purpose,
+            action,
+            withdrawal_slot_family,
+            subject_commitment,
+            request_scope_commitment,
+            continuity_state_token,
+            continuity_state_object_id,
+            guard_object_id,
+            authority_epoch,
+            job_applicability_commitment,
+            capacity_root_id,
+        })
+    }
+
+    fn schema_id() -> Result<SchemaIdV1, crate::domain::vnext::identity::IdentityError> {
+        derive_identity(&CborValue::Text(
+            CMA_EXECUTION_SLOT_SCHEMA_DOMAIN_V1.to_owned(),
+        ))
+    }
+
+    fn schema_value(self) -> Result<CborValue, CborError> {
+        Ok(CborValue::Array(vec![
+            CborValue::text(CMA_EXECUTION_SLOT_VALUE_DOMAIN_V1)?,
+            bytes(self.context_id.as_bytes()),
+            bytes(self.cma_branch_id.as_bytes()),
+            bytes(self.slot_id.as_bytes()),
+            bytes(self.executor_assertion_id.as_bytes()),
+            bytes(self.executor_principal_id.as_bytes()),
+            CborValue::Unsigned(self.purpose as u64),
+            CborValue::text(self.action.literal())?,
+            CborValue::optional(
+                self.withdrawal_slot_family
+                    .map(|family| CborValue::Unsigned(family as u64)),
+            ),
+            bytes(&self.subject_commitment),
+            bytes(&self.request_scope_commitment),
+            bytes(self.continuity_state_token.as_bytes()),
+            bytes(self.continuity_state_object_id.as_bytes()),
+            bytes(self.guard_object_id.as_bytes()),
+            CborValue::Unsigned(self.authority_epoch),
+            bytes(&self.job_applicability_commitment),
+            bytes(self.capacity_root_id.as_bytes()),
+        ]))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn store_object(
+        self,
+        references: Vec<StoreObjectIdV1>,
+    ) -> Result<StoreObjectV1, RepositoryAuthorityAdmissionErrorV1> {
+        Ok(StoreObjectV1::new(
+            Self::schema_id()?,
+            self.schema_value()?,
+            references,
+        )?)
+    }
+}
+
+fn cma_request_scope_commitment(
+    purpose: CmaObservationPublicationPurposeV1,
+    action: RepositoryActionLeafV1,
+    withdrawal_slot_family: Option<CmaEffectWithdrawalSlotFamilyV1>,
+    subject_commitment: [u8; 32],
+) -> Result<[u8; 32], RepositoryAuthorityAdmissionErrorV1> {
+    Ok(
+        Sha256::digest(deterministic_cbor::encode(&CborValue::Array(vec![
+            CborValue::text("maestro.vnext.cma-execution-request-scope.v1")?,
+            CborValue::Unsigned(purpose as u64),
+            CborValue::text(action.literal())?,
+            CborValue::optional(
+                withdrawal_slot_family.map(|family| CborValue::Unsigned(family as u64)),
+            ),
+            bytes(&subject_commitment),
+        ]))?)
+        .into(),
+    )
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "CMA applicability is exact across branch, purpose, state, guard, and Authority epoch"
+)]
+fn cma_job_applicability_commitment(
+    context_id: AuthorityContextIdV1,
+    cma_branch_id: CmaBranchIdV1,
+    purpose: CmaObservationPublicationPurposeV1,
+    action: RepositoryActionLeafV1,
+    continuity_state_token: StateTokenIdV1,
+    continuity_state_object_id: StoreObjectIdV1,
+    guard_object_id: StoreObjectIdV1,
+    authority_epoch: u64,
+) -> Result<[u8; 32], RepositoryAuthorityAdmissionErrorV1> {
+    Ok(
+        Sha256::digest(deterministic_cbor::encode(&CborValue::Array(vec![
+            CborValue::text("maestro.vnext.cma-job-applicability.v1")?,
+            bytes(context_id.as_bytes()),
+            bytes(cma_branch_id.as_bytes()),
+            CborValue::Unsigned(purpose as u64),
+            CborValue::text(action.literal())?,
+            bytes(continuity_state_token.as_bytes()),
+            bytes(continuity_state_object_id.as_bytes()),
+            bytes(guard_object_id.as_bytes()),
+            CborValue::Unsigned(authority_epoch),
+        ]))?)
+        .into(),
+    )
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct RepositoryActionAdmissionInputV1 {
@@ -49,6 +248,8 @@ impl RepositoryActionAdmissionInputV1 {
 pub(crate) struct AdmittedRepositoryActionV1 {
     request_id: ActionRequestIdV1,
     receipt: AuthorizationReceiptV1,
+    authority_epoch: u64,
+    accepted_h_time: u64,
     basis_object: StoreObjectV1,
     current_snapshot_id: StoreObjectIdV1,
     successor_snapshot: StoreObjectV1,
@@ -62,9 +263,36 @@ pub(crate) struct AdmittedRepositoryActionV1 {
     state_token: StateTokenIdV1,
 }
 
+pub(crate) struct ContinuedRepositoryActionV1 {
+    current_snapshot_id: StoreObjectIdV1,
+    successor_snapshot: StoreObjectV1,
+}
+
+impl ContinuedRepositoryActionV1 {
+    pub(crate) const fn current_snapshot_id(&self) -> StoreObjectIdV1 {
+        self.current_snapshot_id
+    }
+
+    pub(crate) const fn successor_snapshot(&self) -> &StoreObjectV1 {
+        &self.successor_snapshot
+    }
+}
+
 impl AdmittedRepositoryActionV1 {
     pub(crate) const fn request_id(&self) -> ActionRequestIdV1 {
         self.request_id
+    }
+
+    pub(crate) const fn authorization_receipt(&self) -> &AuthorizationReceiptV1 {
+        &self.receipt
+    }
+
+    pub(crate) const fn authority_epoch(&self) -> u64 {
+        self.authority_epoch
+    }
+
+    pub(crate) const fn accepted_h_time(&self) -> u64 {
+        self.accepted_h_time
     }
 
     pub(crate) fn basis_object(&self) -> &StoreObjectV1 {
@@ -184,6 +412,22 @@ pub(crate) struct RepositoryAuthorityArtifactsV1 {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct ValidatedRepositoryActionBasisV1 {
+    authority_epoch: u64,
+    receipt: AuthorizationReceiptV1,
+}
+
+impl ValidatedRepositoryActionBasisV1 {
+    pub(crate) const fn authority_epoch(&self) -> u64 {
+        self.authority_epoch
+    }
+
+    pub(crate) const fn authorization_receipt(&self) -> &AuthorizationReceiptV1 {
+        &self.receipt
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 struct ResolvedRepositoryAuthorityChainV1 {
     terminal_grant_object_id: StoreObjectIdV1,
     terminal_grant: OrdinaryBoundedGrantV1,
@@ -214,17 +458,14 @@ impl RepositoryAuthorityArtifactsV1 {
     }
 }
 
-pub(crate) fn admit_repository_action(
+pub(crate) fn current_repository_authority_time(
     view: &StorePublicationViewV1<'_>,
     current_generation: &StoreGenerationV1,
-    input: RepositoryActionAdmissionInputV1,
-) -> Result<AdmittedRepositoryActionV1, RepositoryAuthorityAdmissionErrorV1> {
-    if view.role() != StoreRoleV1::Repository
-        || current_generation.domain() != view.domain()
-        || current_generation.ordinal() == u64::MAX
-    {
+) -> Result<(u64, [u8; 32]), RepositoryAuthorityAdmissionErrorV1> {
+    if current_generation.domain() != view.domain() {
         return Err(RepositoryAuthorityAdmissionErrorV1::Unavailable);
     }
+    let expected_context_kind = authority_context_kind_for_role(view.role());
     let active_objects = view.active_generation_objects()?;
     let snapshot_schema = AuthoritySchemaV1::BootstrapAuthoritySnapshot.id()?;
     let mut snapshots = active_objects
@@ -234,7 +475,73 @@ pub(crate) fn admit_repository_action(
             BootstrapAuthoritySnapshotV1::from_canonical_bytes(&object_value_bytes(object).ok()?)
                 .ok()
                 .filter(|facts| {
-                    facts.context().kind() == AuthorityContextKindV1::RepositoryAuthorityContext
+                    facts.context().kind() == expected_context_kind
+                        && facts.context().store_generation() == current_generation.ordinal()
+                        && facts.snapshot().store_generation == current_generation.ordinal()
+                })
+                .map(|facts| (object, facts))
+        })
+        .collect::<Vec<_>>();
+    if snapshots.len() != 1 {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidCurrentAuthority);
+    }
+    let (snapshot_object, facts) = snapshots
+        .pop()
+        .expect("invariant: exact one-element current Authority snapshot");
+    if !current_generation.roots().contains(&snapshot_object.id()) {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidCurrentAuthority);
+    }
+    let manifest = authority_manifest_for_role(view.role())?;
+    let referenced = direct_references(snapshot_object, &active_objects)?;
+    let state_object = one_schema_object(
+        &referenced,
+        AuthoritySchemaV1::SuccessVisibleAuthorityContinuityState,
+    )?;
+    let guard_object = one_schema_object(&referenced, AuthoritySchemaV1::AdmittedTransitionGuard)?;
+    let current = validate_current_guard(
+        current_generation,
+        &facts,
+        &manifest,
+        &state_object,
+        &guard_object,
+    )?;
+    let accepted_h_time = current.accepted_time().lower_bound();
+    if accepted_h_time == 0 {
+        return Err(RepositoryAuthorityAdmissionErrorV1::Unavailable);
+    }
+    let acceptance_value = CborValue::Array(vec![
+        CborValue::text("maestro.vnext.current-repository-authority-time.v1")?,
+        bytes(current_generation.id().as_bytes()),
+        bytes(snapshot_object.id().as_bytes()),
+        bytes(state_object.id().as_bytes()),
+        bytes(guard_object.id().as_bytes()),
+        bytes(current.state_token().as_bytes()),
+        CborValue::Unsigned(accepted_h_time),
+    ]);
+    let acceptance_commitment: [u8; 32] =
+        Sha256::digest(deterministic_cbor::encode(&acceptance_value)?).into();
+    Ok((accepted_h_time, acceptance_commitment))
+}
+
+pub(crate) fn admit_repository_action(
+    view: &StorePublicationViewV1<'_>,
+    current_generation: &StoreGenerationV1,
+    input: RepositoryActionAdmissionInputV1,
+) -> Result<AdmittedRepositoryActionV1, RepositoryAuthorityAdmissionErrorV1> {
+    if current_generation.domain() != view.domain() || current_generation.ordinal() == u64::MAX {
+        return Err(RepositoryAuthorityAdmissionErrorV1::Unavailable);
+    }
+    let expected_context_kind = authority_context_kind_for_role(view.role());
+    let active_objects = view.active_generation_objects()?;
+    let snapshot_schema = AuthoritySchemaV1::BootstrapAuthoritySnapshot.id()?;
+    let mut snapshots = active_objects
+        .iter()
+        .filter(|object| object.schema_id() == snapshot_schema)
+        .filter_map(|object| {
+            BootstrapAuthoritySnapshotV1::from_canonical_bytes(&object_value_bytes(object).ok()?)
+                .ok()
+                .filter(|facts| {
+                    facts.context().kind() == expected_context_kind
                         && facts.context().store_generation() == current_generation.ordinal()
                         && facts.snapshot().store_generation == current_generation.ordinal()
                 })
@@ -251,14 +558,14 @@ pub(crate) fn admit_repository_action(
         return Err(RepositoryAuthorityAdmissionErrorV1::InvalidCurrentAuthority);
     }
 
-    let manifest = AuthorityContinuityManifestV1::repository()?;
+    let manifest = authority_manifest_for_role(view.role())?;
     let referenced = direct_references(snapshot_object, &active_objects)?;
     let state_object = one_schema_object(
         &referenced,
         AuthoritySchemaV1::SuccessVisibleAuthorityContinuityState,
     )?;
     let guard_object = one_schema_object(&referenced, AuthoritySchemaV1::AdmittedTransitionGuard)?;
-    validate_current_guard(
+    let current_continuity_state = validate_current_guard(
         current_generation,
         &facts,
         &manifest,
@@ -266,12 +573,40 @@ pub(crate) fn admit_repository_action(
         &guard_object,
     )?;
 
+    let specialized_execution_authority = match &input.authority {
+        RepositoryLeafAuthorityInputV1::Execution(
+            authority @ (ExecutionAuthorityV1::BootstrapG0(_)
+            | ExecutionAuthorityV1::ContinuityMaintenance(_)),
+        ) => Some(authority.clone()),
+        _ => None,
+    };
+    if let Some(authority) = specialized_execution_authority {
+        return admit_specialized_repository_execution_action(
+            input.request_id,
+            authority,
+            current_generation,
+            &active_objects,
+            snapshot_object,
+            &facts,
+            &state_object,
+            &guard_object,
+            &current_continuity_state,
+        );
+    }
+
     let action = input.authority.action();
     let subject_commitment = input.authority.subject_commitment();
     let subject_basis_commitment = input.authority.subject_basis_commitment();
-    let selection = input.authority.selection();
+    let exact_payload_commitment = input.authority.exact_payload_commitment();
+    let executor_principal_id = input.authority.executor_principal_id();
+    let selection = input
+        .authority
+        .selection()
+        .ok_or(RepositoryAuthorityAdmissionErrorV1::UnsupportedExecutionAuthority)?;
     if facts.actor_binding().id() != selection.actor_binding_id()
         || facts.actor_session().id() != selection.actor_session_id()
+        || executor_principal_id
+            .is_some_and(|principal_id| principal_id != facts.actor_binding().principal_id())
     {
         return Err(RepositoryAuthorityAdmissionErrorV1::AuthoritySelectionMismatch);
     }
@@ -291,8 +626,10 @@ pub(crate) fn admit_repository_action(
         TrustedTimeV1::Verified {
             lower_bound,
             upper_bound,
-        } => (Some(lower_bound), Some(upper_bound)),
-        TrustedTimeV1::Unavailable => (None, None),
+        } => (lower_bound, upper_bound),
+        TrustedTimeV1::Unavailable => {
+            return Err(RepositoryAuthorityAdmissionErrorV1::Unavailable);
+        }
     };
     let leaf_evaluation_context = RepositoryLeafAuthorityEvaluationContextV1 {
         human_binding_id: facts.responder_binding().id(),
@@ -325,8 +662,8 @@ pub(crate) fn admit_repository_action(
             .validity()
             .expires_at()
             .min(facts.responder_session().validity().expires_at()),
-        trusted_time_lower,
-        trusted_time_upper,
+        trusted_time_lower: Some(trusted_time_lower),
+        trusted_time_upper: Some(trusted_time_upper),
         prior_consumptions: repository_leaf_authority_consumptions(&active_objects)?,
     };
     let specialized_authority = input
@@ -342,18 +679,19 @@ pub(crate) fn admit_repository_action(
     let validated_ordinary_ancestry_object_ids =
         resolved.validated_ordinary_ancestry_object_ids.clone();
     let capacity_root_id = selected_grant.capacity_root_id();
+    let expected_capacity_kind =
+        governed_capacity_kind_for(view.role(), action.is_external_effect_action());
     let (current_capacity_root_object, current_capacity_root) = current_capacity_root(
         &active_objects,
         current_generation,
         snapshot_object,
         facts.context().context_id(),
         capacity_root_id,
+        expected_capacity_kind,
     )?;
     let capacity_transition = current_capacity_root.transition(
         facts.context().context_id(),
-        GovernedCapacityKindV1::Repository(
-            RepositoryGovernedCapacitySlotKindV1::RepositoryOrdinaryMutation,
-        ),
+        expected_capacity_kind,
         current_capacity_root.spent(),
         CapacityUseDispositionV1::FreshCommit,
     )?;
@@ -396,35 +734,21 @@ pub(crate) fn admit_repository_action(
 
     let guard_digest: [u8; 32] =
         Sha256::digest(deterministic_cbor::encode(guard_object.value())?).into();
-    let basis_commitment = hash(&CborValue::Array(vec![
-        CborValue::text("maestro.vnext.repository-action-authority-basis.v1")?,
-        bytes(input.request_id.as_bytes()),
-        CborValue::text(action.literal())?,
-        CborValue::Unsigned(action.global_tag()),
-        CborValue::Unsigned(action.owner_tag()),
-        CborValue::Unsigned(action.local_tag()),
-        CborValue::text(action.owner_descriptor_id())?,
-        CborValue::text(action.descriptor_id())?,
-        CborValue::Unsigned(action.protocol_revision()),
-        CborValue::text(action.manifest_id())?,
-        CborValue::text(action.grammar_id())?,
-        bytes(&subject_commitment),
-        bytes(&subject_basis_commitment),
-        bytes(current_generation.id().as_bytes()),
-        bytes(current_generation.contract_root_id().as_bytes()),
-        bytes(facts.context().context_id().as_bytes()),
-        CborValue::Unsigned(facts.snapshot().authority_epoch),
-        bytes(selection.actor_binding_id().as_bytes()),
-        bytes(selection.actor_session_id().as_bytes()),
-        bytes(selection.terminal_grant_id().as_bytes()),
-        CborValue::optional(
-            specialized_authority
-                .as_ref()
-                .map(|authority| bytes(&authority.leaf_commitment())),
-        ),
-        bytes(&guard_digest),
-        bytes(facts.continuity().state_token().as_bytes()),
-    ]))?;
+    let basis_commitment = repository_action_basis_commitment(
+        input.request_id,
+        action,
+        subject_commitment,
+        subject_basis_commitment,
+        exact_payload_commitment,
+        executor_principal_id,
+        current_generation,
+        &facts,
+        selection,
+        specialized_authority
+            .as_ref()
+            .map(|authority| authority.leaf_commitment()),
+        guard_digest,
+    )?;
     let mut basis_references = vec![
         snapshot_object.id(),
         guard_object.id(),
@@ -475,6 +799,7 @@ pub(crate) fn admit_repository_action(
         snapshot_object.id(),
         guard_object.id(),
         state_object.id(),
+        basis_object.id(),
         selected_grant_object_id,
         delegation_object_id,
         successor_capacity_root.id(),
@@ -491,6 +816,8 @@ pub(crate) fn admit_repository_action(
     Ok(AdmittedRepositoryActionV1 {
         request_id: input.request_id,
         receipt,
+        authority_epoch: facts.snapshot().authority_epoch,
+        accepted_h_time: current_continuity_state.accepted_time().lower_bound(),
         basis_object,
         current_snapshot_id: snapshot_object.id(),
         successor_snapshot,
@@ -503,6 +830,1044 @@ pub(crate) fn admit_repository_action(
         state_object_id: state_object.id(),
         state_token: facts.continuity().state_token(),
     })
+}
+
+pub(crate) fn continue_repository_action_attempt(
+    view: &StorePublicationViewV1<'_>,
+    current_generation: &StoreGenerationV1,
+    basis_object_id: StoreObjectIdV1,
+    authority: &ExecutionAuthorityV1,
+    expected_authority_epoch_commitment: [u8; 32],
+) -> Result<ContinuedRepositoryActionV1, RepositoryAuthorityAdmissionErrorV1> {
+    if current_generation.domain() != view.domain() || current_generation.ordinal() == u64::MAX {
+        return Err(RepositoryAuthorityAdmissionErrorV1::Unavailable);
+    }
+    let expected_context_kind = authority_context_kind_for_role(view.role());
+    let active_objects = view.active_generation_objects()?;
+    let snapshot_schema = AuthoritySchemaV1::BootstrapAuthoritySnapshot.id()?;
+    let mut snapshots = active_objects
+        .iter()
+        .filter(|object| object.schema_id() == snapshot_schema)
+        .filter_map(|object| {
+            BootstrapAuthoritySnapshotV1::from_canonical_bytes(&object_value_bytes(object).ok()?)
+                .ok()
+                .filter(|facts| {
+                    facts.context().kind() == expected_context_kind
+                        && facts.context().store_generation() == current_generation.ordinal()
+                        && facts.snapshot().store_generation == current_generation.ordinal()
+                        && current_generation.roots().contains(&object.id())
+                })
+                .map(|facts| (object, facts))
+        })
+        .collect::<Vec<_>>();
+    if snapshots.len() != 1 {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidCurrentAuthority);
+    }
+    let (snapshot_object, facts) = snapshots
+        .pop()
+        .expect("invariant: exact one-element current Authority snapshot");
+    let referenced = direct_references(snapshot_object, &active_objects)?;
+    let state_object = one_schema_object(
+        &referenced,
+        AuthoritySchemaV1::SuccessVisibleAuthorityContinuityState,
+    )?;
+    let guard_object = one_schema_object(&referenced, AuthoritySchemaV1::AdmittedTransitionGuard)?;
+    let manifest = authority_manifest_for_role(view.role())?;
+    validate_current_guard(
+        current_generation,
+        &facts,
+        &manifest,
+        &state_object,
+        &guard_object,
+    )?;
+    if !facts
+        .snapshot()
+        .trusted_time
+        .is_within(facts.continuity().validity())?
+    {
+        return Err(RepositoryAuthorityAdmissionErrorV1::Unavailable);
+    }
+    let basis_schema = AuthoritySchemaV1::ActionAuthorityBasis.id()?;
+    let basis_object = active_objects
+        .iter()
+        .find(|object| object.id() == basis_object_id)
+        .filter(|object| object.schema_id() == basis_schema)
+        .ok_or(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier)?;
+    let CborValue::Array(basis_fields) = basis_object.value() else {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+    };
+    let [CborValue::Unsigned(kind), context, commitment] = basis_fields.as_slice() else {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+    };
+    if *kind != authority.basis_kind() as u64
+        || exact_digest(context)? != *facts.context().context_id().as_bytes()
+        || exact_digest(commitment)? == [0; 32]
+        || !reference_closure_contains(snapshot_object, basis_object_id, &active_objects)?
+        || hash(&CborValue::Unsigned(facts.snapshot().authority_epoch))?
+            != expected_authority_epoch_commitment
+    {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+    }
+    validate_continuing_execution_authority_currentness(
+        authority,
+        current_generation,
+        &active_objects,
+        snapshot_object,
+        &facts,
+        basis_object,
+        &state_object,
+        &guard_object,
+    )?;
+    let successor_facts = facts.continue_at_store_generation(
+        current_generation
+            .ordinal()
+            .checked_add(1)
+            .ok_or(RepositoryAuthorityAdmissionErrorV1::Unavailable)?,
+        facts.continuity().manifest_id(),
+        facts.continuity().guard_kind(),
+        facts.continuity().state_token(),
+    )?;
+    let mut successor_references = snapshot_object.references().to_vec();
+    successor_references.extend([
+        snapshot_object.id(),
+        guard_object.id(),
+        state_object.id(),
+        basis_object.id(),
+    ]);
+    let successor_snapshot = authority_object(
+        AuthoritySchemaV1::BootstrapAuthoritySnapshot,
+        successor_facts.schema_value()?,
+        successor_references,
+    )?;
+    Ok(ContinuedRepositoryActionV1 {
+        current_snapshot_id: snapshot_object.id(),
+        successor_snapshot,
+    })
+}
+
+fn reference_closure_contains(
+    root: &StoreObjectV1,
+    target: StoreObjectIdV1,
+    objects: &[StoreObjectV1],
+) -> Result<bool, RepositoryAuthorityAdmissionErrorV1> {
+    let mut pending = root.references().to_vec();
+    let mut visited = BTreeSet::new();
+    while let Some(candidate) = pending.pop() {
+        if candidate == target {
+            return Ok(true);
+        }
+        if !visited.insert(candidate) {
+            continue;
+        }
+        let mut matches = objects.iter().filter(|object| object.id() == candidate);
+        let object = matches
+            .next()
+            .ok_or(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier)?;
+        if matches.next().is_some() || visited.len() > objects.len() {
+            return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+        }
+        pending.extend(object.references());
+    }
+    Ok(false)
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "continuing authority validation compares the exact current generation, snapshot, basis, continuity state, and guard carriers without an ambiguous aggregate"
+)]
+fn validate_continuing_execution_authority_currentness(
+    authority: &ExecutionAuthorityV1,
+    current_generation: &StoreGenerationV1,
+    active_objects: &[StoreObjectV1],
+    snapshot_object: &StoreObjectV1,
+    facts: &BootstrapAuthoritySnapshotV1,
+    basis_object: &StoreObjectV1,
+    state_object: &StoreObjectV1,
+    guard_object: &StoreObjectV1,
+) -> Result<(), RepositoryAuthorityAdmissionErrorV1> {
+    match authority {
+        ExecutionAuthorityV1::Ordinary(authority) => {
+            let selection = authority.selection();
+            if facts.actor_binding().id() != selection.actor_binding_id()
+                || facts.actor_session().id() != selection.actor_session_id()
+                || facts.actor_binding().principal_id() != authority.executor_principal_id()
+            {
+                return Err(RepositoryAuthorityAdmissionErrorV1::AuthoritySelectionMismatch);
+            }
+            let authority_objects = active_objects
+                .iter()
+                .filter(|object| {
+                    current_generation.roots().contains(&object.id())
+                        || snapshot_object.references().contains(&object.id())
+                })
+                .collect::<Vec<_>>();
+            let resolved = resolve_repository_authority_chain(
+                facts,
+                selection.terminal_grant_id(),
+                &authority_objects,
+            )?;
+            let required_scope = ScopeAtomV1::new(
+                authority.action().literal(),
+                &render_digest(authority.subject_commitment()),
+                facts.snapshot().subject_revision,
+            )?;
+            validate_ordinary_authority(
+                facts.snapshot(),
+                facts.actor_binding(),
+                facts.actor_session(),
+                resolved.terminal_grant.grant(),
+                &required_scope,
+                facts.revocations().revocations(),
+            )?;
+        }
+        ExecutionAuthorityV1::BootstrapG0(authority) => {
+            validate_bootstrap_execution_authority(
+                authority,
+                authority.action(),
+                current_generation,
+                active_objects,
+                snapshot_object,
+                facts,
+            )?;
+        }
+        ExecutionAuthorityV1::ContinuityMaintenance(authority) => {
+            let cma_slot_schema = ContinuityMaintenanceExecutionSlotV1::schema_id()?;
+            let slots = basis_object
+                .references()
+                .iter()
+                .filter_map(|reference| {
+                    active_objects
+                        .iter()
+                        .find(|object| object.id() == *reference)
+                        .filter(|object| object.schema_id() == cma_slot_schema)
+                })
+                .collect::<Vec<_>>();
+            let [slot_object] = slots.as_slice() else {
+                return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+            };
+            let slot = parse_cma_execution_slot(slot_object)?;
+            if !cma_slot_matches_authority(slot, authority, facts, state_object, guard_object)? {
+                return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+            }
+        }
+    }
+    Ok(())
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "specialized admission binds the complete current Authority and Store cut"
+)]
+fn admit_specialized_repository_execution_action(
+    request_id: ActionRequestIdV1,
+    authority: ExecutionAuthorityV1,
+    current_generation: &StoreGenerationV1,
+    active_objects: &[StoreObjectV1],
+    snapshot_object: &StoreObjectV1,
+    facts: &BootstrapAuthoritySnapshotV1,
+    state_object: &StoreObjectV1,
+    guard_object: &StoreObjectV1,
+    current_continuity_state: &SuccessVisibleAuthorityContinuityStateV1,
+) -> Result<AdmittedRepositoryActionV1, RepositoryAuthorityAdmissionErrorV1> {
+    if !facts
+        .snapshot()
+        .trusted_time
+        .is_within(facts.continuity().validity())?
+    {
+        return Err(RepositoryAuthorityAdmissionErrorV1::Unavailable);
+    }
+    let action = authority.action();
+    let expected_capacity_kind =
+        governed_capacity_kind_for(current_generation.domain().role(), true);
+    let (capacity_root_id, authority_carrier) = match &authority {
+        ExecutionAuthorityV1::BootstrapG0(value) => validate_bootstrap_execution_authority(
+            value,
+            action,
+            current_generation,
+            active_objects,
+            snapshot_object,
+            facts,
+        )?,
+        ExecutionAuthorityV1::ContinuityMaintenance(value) => validate_cma_execution_authority(
+            value,
+            active_objects,
+            snapshot_object,
+            facts,
+            state_object,
+            guard_object,
+        )?,
+        ExecutionAuthorityV1::Ordinary(_) => {
+            return Err(RepositoryAuthorityAdmissionErrorV1::UnsupportedExecutionAuthority);
+        }
+    };
+    let (current_capacity_root_object, current_capacity_root) = current_capacity_root(
+        active_objects,
+        current_generation,
+        snapshot_object,
+        facts.context().context_id(),
+        capacity_root_id,
+        expected_capacity_kind,
+    )?;
+    let capacity_transition = current_capacity_root.transition(
+        facts.context().context_id(),
+        expected_capacity_kind,
+        current_capacity_root.spent(),
+        CapacityUseDispositionV1::FreshCommit,
+    )?;
+    let successor_capacity_root = authority_object(
+        AuthoritySchemaV1::GovernedCapacityRoot,
+        capacity_transition.root().schema_value()?,
+        vec![current_capacity_root_object.id()],
+    )?;
+    let capacity_debit = authority_object(
+        AuthoritySchemaV1::GovernedCapacityDebit,
+        capacity_transition
+            .debit()
+            .ok_or(RepositoryAuthorityAdmissionErrorV1::CapacityUnavailable)?
+            .schema_value()?,
+        vec![
+            current_capacity_root_object.id(),
+            successor_capacity_root.id(),
+        ],
+    )?;
+    let guard_digest: [u8; 32] =
+        Sha256::digest(deterministic_cbor::encode(guard_object.value())?).into();
+    let basis_commitment = specialized_repository_action_basis_commitment(
+        request_id,
+        &authority,
+        current_generation,
+        facts,
+        authority_carrier.id(),
+        current_capacity_root_object.id(),
+        guard_digest,
+    )?;
+    let basis_object = authority_object(
+        AuthoritySchemaV1::ActionAuthorityBasis,
+        CborValue::Array(vec![
+            CborValue::Unsigned(authority.basis_kind() as u64),
+            bytes(facts.context().context_id().as_bytes()),
+            bytes(&basis_commitment),
+        ]),
+        vec![
+            snapshot_object.id(),
+            guard_object.id(),
+            state_object.id(),
+            authority_carrier.id(),
+            current_capacity_root_object.id(),
+        ],
+    )?;
+    let receipt = AuthorizationReceiptV1::new(
+        request_id,
+        facts.context().context_id(),
+        authority.basis_kind(),
+        facts.continuity().state_token(),
+        facts.continuity().state_token(),
+    )?;
+    let next_generation = current_generation
+        .ordinal()
+        .checked_add(1)
+        .ok_or(RepositoryAuthorityAdmissionErrorV1::Unavailable)?;
+    let successor_facts = facts.continue_at_store_generation(
+        next_generation,
+        facts.continuity().manifest_id(),
+        facts.continuity().guard_kind(),
+        facts.continuity().state_token(),
+    )?;
+    let bootstrap_grant_schema = AuthoritySchemaV1::BootstrapGenesisGrant.id()?;
+    let cma_slot_schema = ContinuityMaintenanceExecutionSlotV1::schema_id()?;
+    let consumed_cma_slot = matches!(&authority, ExecutionAuthorityV1::ContinuityMaintenance(_))
+        .then_some(authority_carrier.id());
+    let mut successor_references = vec![
+        snapshot_object.id(),
+        guard_object.id(),
+        state_object.id(),
+        basis_object.id(),
+        successor_capacity_root.id(),
+        capacity_debit.id(),
+    ];
+    successor_references.extend(active_objects.iter().filter_map(|object| {
+        (snapshot_object.references().contains(&object.id())
+            && (object.schema_id() == bootstrap_grant_schema
+                || object.schema_id() == cma_slot_schema)
+            && consumed_cma_slot != Some(object.id()))
+        .then_some(object.id())
+    }));
+    let successor_snapshot = authority_object(
+        AuthoritySchemaV1::BootstrapAuthoritySnapshot,
+        successor_facts.schema_value()?,
+        successor_references,
+    )?;
+    Ok(AdmittedRepositoryActionV1 {
+        request_id,
+        receipt,
+        authority_epoch: facts.snapshot().authority_epoch,
+        accepted_h_time: current_continuity_state.accepted_time().lower_bound(),
+        basis_object,
+        current_snapshot_id: snapshot_object.id(),
+        successor_snapshot,
+        current_capacity_root_id: current_capacity_root_object.id(),
+        successor_capacity_root,
+        capacity_debit,
+        leaf_authority_carrier: Some(authority_carrier),
+        leaf_authority_consumption: None,
+        guard_object_id: guard_object.id(),
+        state_object_id: state_object.id(),
+        state_token: facts.continuity().state_token(),
+    })
+}
+
+fn validate_bootstrap_execution_authority(
+    authority: &BootstrapExecutionAuthorityV1,
+    action: RepositoryActionLeafV1,
+    current_generation: &StoreGenerationV1,
+    active_objects: &[StoreObjectV1],
+    snapshot_object: &StoreObjectV1,
+    facts: &BootstrapAuthoritySnapshotV1,
+) -> Result<(CapacityRootIdV1, StoreObjectV1), RepositoryAuthorityAdmissionErrorV1> {
+    let basis = (*authority).basis();
+    let required_scope = ScopeAtomV1::new(
+        action.literal(),
+        &render_digest(authority.subject_commitment()),
+        facts.snapshot().subject_revision,
+    )?;
+    let mut paths = facts
+        .g0_candidate_paths()
+        .iter()
+        .filter(|path| path.genesis_grant_id() == basis.genesis_grant_id)
+        .collect::<Vec<_>>();
+    if paths.len() != 1 {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+    }
+    let path = paths
+        .pop()
+        .expect("invariant: exact one-element Bootstrap G0 path");
+    let [capacity_root_id] = path.root_contributions() else {
+        return Err(RepositoryAuthorityAdmissionErrorV1::CapacityUnavailable);
+    };
+    if basis.binding_id != facts.actor_binding().id()
+        || basis.session_id != facts.actor_session().id()
+        || authority.executor_principal_id() != facts.actor_binding().principal_id()
+        || path.store_generation() != current_generation.ordinal()
+        || path.store_generation() != facts.snapshot().store_generation
+        || path.authority_epoch() != facts.snapshot().authority_epoch
+        || path.trust_root_revision() != facts.snapshot().trust_root_revision
+        || !path.complete()
+        || path.grant().context_id() != facts.context().context_id()
+        || path.grant().grantee_principal_id() != facts.actor_binding().principal_id()
+        || path.grant().parent_grant_id().is_some()
+        || path.grant().delegation_id().is_some()
+        || !path.grant().terminal_scope().contains(&required_scope)
+        || facts
+            .revocations()
+            .revocations()
+            .contains(RevocationTargetV1::Grant(path.grant().id()))
+        || !facts
+            .snapshot()
+            .trusted_time
+            .is_within(path.grant().validity())?
+    {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+    }
+    let schema_id = AuthoritySchemaV1::BootstrapGenesisGrant.id()?;
+    let expected_genesis_value = path.genesis_grant().schema_value()?;
+    let mut carriers = active_objects
+        .iter()
+        .filter(|object| object.schema_id() == schema_id)
+        .filter(|object| snapshot_object.references().contains(&object.id()))
+        .filter(|object| object.value() == &expected_genesis_value)
+        .cloned()
+        .collect::<Vec<_>>();
+    if carriers.len() != 1 {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+    }
+    Ok((
+        *capacity_root_id,
+        carriers
+            .pop()
+            .expect("invariant: exact one-element Bootstrap Grant carrier"),
+    ))
+}
+
+fn validate_cma_execution_authority(
+    authority: &ContinuityMaintenanceExecutionAuthorityV1,
+    active_objects: &[StoreObjectV1],
+    snapshot_object: &StoreObjectV1,
+    facts: &BootstrapAuthoritySnapshotV1,
+    state_object: &StoreObjectV1,
+    guard_object: &StoreObjectV1,
+) -> Result<(CapacityRootIdV1, StoreObjectV1), RepositoryAuthorityAdmissionErrorV1> {
+    let schema_id = ContinuityMaintenanceExecutionSlotV1::schema_id()?;
+    let mut carriers = active_objects
+        .iter()
+        .filter(|object| object.schema_id() == schema_id)
+        .filter(|object| snapshot_object.references().contains(&object.id()))
+        .filter_map(|object| {
+            parse_cma_execution_slot(object)
+                .ok()
+                .filter(|slot| {
+                    cma_slot_matches_authority(*slot, authority, facts, state_object, guard_object)
+                        .unwrap_or(false)
+                })
+                .map(|slot| (object.clone(), slot))
+        })
+        .collect::<Vec<_>>();
+    if carriers.len() != 1 {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+    }
+    let (carrier, slot) = carriers
+        .pop()
+        .expect("invariant: exact one-element CMA execution slot");
+    Ok((slot.capacity_root_id, carrier))
+}
+
+fn cma_slot_matches_authority(
+    slot: ContinuityMaintenanceExecutionSlotV1,
+    authority: &ContinuityMaintenanceExecutionAuthorityV1,
+    facts: &BootstrapAuthoritySnapshotV1,
+    state_object: &StoreObjectV1,
+    guard_object: &StoreObjectV1,
+) -> Result<bool, RepositoryAuthorityAdmissionErrorV1> {
+    let basis = (*authority).basis();
+    let request_scope_commitment = cma_request_scope_commitment(
+        authority.purpose(),
+        authority.action(),
+        (*authority).withdrawal_slot_family(),
+        authority.subject_commitment(),
+    )?;
+    let job_applicability_commitment = cma_job_applicability_commitment(
+        facts.context().context_id(),
+        basis.cma_branch_id,
+        authority.purpose(),
+        authority.action(),
+        facts.continuity().state_token(),
+        state_object.id(),
+        guard_object.id(),
+        facts.snapshot().authority_epoch,
+    )?;
+    Ok(slot.context_id == facts.context().context_id()
+        && slot.cma_branch_id == basis.cma_branch_id
+        && slot.slot_id == basis.slot_id
+        && slot.executor_assertion_id == basis.executor_assertion_id
+        && slot.executor_principal_id == authority.executor_principal_id()
+        && slot.purpose == authority.purpose()
+        && slot.action == authority.action()
+        && slot.withdrawal_slot_family == (*authority).withdrawal_slot_family()
+        && slot.subject_commitment == authority.subject_commitment()
+        && slot.request_scope_commitment == request_scope_commitment
+        && slot.continuity_state_token == facts.continuity().state_token()
+        && slot.continuity_state_token == authority.continuity_state_token()
+        && slot.continuity_state_object_id == state_object.id()
+        && slot.continuity_state_object_id == authority.continuity_state_object_id()
+        && slot.guard_object_id == guard_object.id()
+        && slot.guard_object_id == authority.guard_object_id()
+        && slot.authority_epoch == facts.snapshot().authority_epoch
+        && slot.authority_epoch == authority.authority_epoch()
+        && slot.job_applicability_commitment == job_applicability_commitment
+        && slot.job_applicability_commitment == authority.job_applicability_commitment())
+}
+
+fn parse_cma_execution_slot(
+    object: &StoreObjectV1,
+) -> Result<ContinuityMaintenanceExecutionSlotV1, RepositoryAuthorityAdmissionErrorV1> {
+    if object.schema_id() != ContinuityMaintenanceExecutionSlotV1::schema_id()? {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+    }
+    let CborValue::Array(fields) = object.value() else {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+    };
+    let [
+        CborValue::Text(domain),
+        context,
+        branch,
+        slot,
+        assertion,
+        executor,
+        CborValue::Unsigned(purpose),
+        CborValue::Text(action),
+        withdrawal_family,
+        subject_commitment,
+        request_scope_commitment,
+        continuity_state_token,
+        continuity_state_object_id,
+        guard_object_id,
+        CborValue::Unsigned(authority_epoch),
+        job_applicability_commitment,
+        capacity_root,
+    ] = fields.as_slice()
+    else {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+    };
+    if domain != CMA_EXECUTION_SLOT_VALUE_DOMAIN_V1 {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+    }
+    let action = RepositoryActionLeafV1::ALL
+        .into_iter()
+        .find(|candidate| candidate.literal() == action)
+        .ok_or(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier)?;
+    let withdrawal_slot_family = match withdrawal_family {
+        CborValue::Array(values) if values.as_slice() == [CborValue::Unsigned(0)] => None,
+        CborValue::Array(values) if values.len() == 2 => {
+            let [CborValue::Unsigned(1), CborValue::Unsigned(tag)] = values.as_slice() else {
+                return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+            };
+            let tag = u8::try_from(*tag)
+                .map_err(|_| RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier)?;
+            Some(
+                CmaEffectWithdrawalSlotFamilyV1::try_from(tag)
+                    .map_err(|_| RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier)?,
+            )
+        }
+        _ => return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier),
+    };
+    let slot = ContinuityMaintenanceExecutionSlotV1::new(
+        AuthorityContextIdV1::from_digest(exact_digest(context)?),
+        CmaBranchIdV1::from_digest(exact_digest(branch)?),
+        SlotIdV1::from_digest(exact_digest(slot)?),
+        ExecutorAssertionIdV1::from_digest(exact_digest(assertion)?),
+        PrincipalIdV1::from_digest(exact_digest(executor)?),
+        CmaObservationPublicationPurposeV1::try_from(
+            u8::try_from(*purpose)
+                .map_err(|_| RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier)?,
+        )
+        .map_err(|_| RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier)?,
+        action,
+        withdrawal_slot_family,
+        exact_digest(subject_commitment)?,
+        StateTokenIdV1::from_digest(exact_digest(continuity_state_token)?),
+        StoreObjectIdV1::from_digest(exact_digest(continuity_state_object_id)?),
+        StoreObjectIdV1::from_digest(exact_digest(guard_object_id)?),
+        *authority_epoch,
+        CapacityRootIdV1::from_digest(exact_digest(capacity_root)?),
+    )?;
+    if slot.request_scope_commitment != exact_digest(request_scope_commitment)?
+        || slot.job_applicability_commitment != exact_digest(job_applicability_commitment)?
+        || slot.schema_value()? != *object.value()
+    {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+    }
+    Ok(slot)
+}
+
+fn specialized_repository_action_basis_commitment(
+    request_id: ActionRequestIdV1,
+    authority: &ExecutionAuthorityV1,
+    generation: &StoreGenerationV1,
+    facts: &BootstrapAuthoritySnapshotV1,
+    authority_carrier_id: StoreObjectIdV1,
+    capacity_root_object_id: StoreObjectIdV1,
+    guard_digest: [u8; 32],
+) -> Result<[u8; 32], CborError> {
+    let specialized_basis = match authority {
+        ExecutionAuthorityV1::BootstrapG0(value) => {
+            let basis = (*value).basis();
+            CborValue::Array(vec![
+                bytes(basis.binding_id.as_bytes()),
+                bytes(basis.session_id.as_bytes()),
+                bytes(basis.genesis_grant_id.as_bytes()),
+            ])
+        }
+        ExecutionAuthorityV1::ContinuityMaintenance(value) => {
+            let basis = (*value).basis();
+            CborValue::Array(vec![
+                bytes(basis.cma_branch_id.as_bytes()),
+                bytes(basis.slot_id.as_bytes()),
+                bytes(basis.executor_assertion_id.as_bytes()),
+                CborValue::optional(
+                    (*value)
+                        .withdrawal_slot_family()
+                        .map(|family| CborValue::Unsigned(family as u64)),
+                ),
+            ])
+        }
+        ExecutionAuthorityV1::Ordinary(_) => CborValue::Array(Vec::new()),
+    };
+    hash(&CborValue::Array(vec![
+        CborValue::text("maestro.vnext.specialized-repository-action-authority-basis.v1")?,
+        bytes(request_id.as_bytes()),
+        CborValue::Unsigned(authority.basis_kind() as u64),
+        CborValue::text(authority.action().literal())?,
+        bytes(&authority.subject_commitment()),
+        bytes(&authority.current_state_commitment()),
+        bytes(&authority.exact_payload_commitment()),
+        bytes(authority.executor_principal_id().as_bytes()),
+        specialized_basis,
+        bytes(generation.id().as_bytes()),
+        bytes(generation.contract_root_id().as_bytes()),
+        bytes(facts.context().context_id().as_bytes()),
+        CborValue::Unsigned(facts.snapshot().authority_epoch),
+        bytes(authority_carrier_id.as_bytes()),
+        bytes(capacity_root_object_id.as_bytes()),
+        bytes(&guard_digest),
+        bytes(facts.continuity().state_token().as_bytes()),
+    ]))
+}
+
+pub(crate) fn validate_persisted_repository_action_basis(
+    generation: &StoreGenerationV1,
+    request_id: ActionRequestIdV1,
+    request_object_id: StoreObjectIdV1,
+    authority: &ExecutionAuthorityV1,
+    basis_object: &StoreObjectV1,
+    active_objects: &[StoreObjectV1],
+) -> Result<ValidatedRepositoryActionBasisV1, RepositoryAuthorityAdmissionErrorV1> {
+    if basis_object.schema_id() != AuthoritySchemaV1::ActionAuthorityBasis.id()? {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+    }
+    let expected_context_kind = authority_context_kind_for_role(generation.domain().role());
+    let referenced = direct_references(basis_object, active_objects)?;
+    let snapshot_object =
+        one_schema_object(&referenced, AuthoritySchemaV1::BootstrapAuthoritySnapshot)?;
+    let guard_object = one_schema_object(&referenced, AuthoritySchemaV1::AdmittedTransitionGuard)?;
+    let state_object = one_schema_object(
+        &referenced,
+        AuthoritySchemaV1::SuccessVisibleAuthorityContinuityState,
+    )?;
+    let facts =
+        BootstrapAuthoritySnapshotV1::from_canonical_bytes(&object_value_bytes(&snapshot_object)?)?;
+    if !generation.roots().contains(&snapshot_object.id())
+        || facts.context().kind() != expected_context_kind
+        || facts.context().store_generation() != generation.ordinal()
+        || facts.snapshot().store_generation != generation.ordinal()
+    {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidCurrentAuthority);
+    }
+    let manifest = authority_manifest_for_role(generation.domain().role())?;
+    let continuity_state =
+        validate_current_guard(generation, &facts, &manifest, &state_object, &guard_object)?;
+    if !matches!(authority, ExecutionAuthorityV1::Ordinary(_)) {
+        return validate_persisted_specialized_repository_action_basis(
+            generation,
+            request_id,
+            request_object_id,
+            authority,
+            basis_object,
+            active_objects,
+            &snapshot_object,
+            &guard_object,
+            &state_object,
+            &facts,
+            &continuity_state,
+        );
+    }
+    let authority = authority
+        .ordinary()
+        .expect("invariant: ordinary branch was selected above");
+    let selection = authority.selection();
+    if facts.actor_binding().id() != selection.actor_binding_id()
+        || facts.actor_session().id() != selection.actor_session_id()
+        || facts.actor_binding().principal_id() != authority.executor_principal_id()
+    {
+        return Err(RepositoryAuthorityAdmissionErrorV1::AuthoritySelectionMismatch);
+    }
+    let authority_objects = active_objects
+        .iter()
+        .filter(|object| {
+            generation.roots().contains(&object.id())
+                || snapshot_object.references().contains(&object.id())
+        })
+        .collect::<Vec<_>>();
+    let resolved = resolve_repository_authority_chain(
+        &facts,
+        selection.terminal_grant_id(),
+        &authority_objects,
+    )?;
+    let selected_grant = &resolved.terminal_grant;
+    let expected_capacity_kind = governed_capacity_kind_for(
+        generation.domain().role(),
+        authority.action().is_external_effect_action(),
+    );
+    let (capacity_root_object, capacity_root) = current_capacity_root(
+        active_objects,
+        generation,
+        &snapshot_object,
+        facts.context().context_id(),
+        selected_grant.capacity_root_id(),
+        expected_capacity_kind,
+    )?;
+    if capacity_root.kind() != expected_capacity_kind {
+        return Err(RepositoryAuthorityAdmissionErrorV1::CapacityUnavailable);
+    }
+    let required_scope = ScopeAtomV1::new(
+        authority.action().literal(),
+        &render_digest(authority.subject_commitment()),
+        facts.snapshot().subject_revision,
+    )?;
+    validate_ordinary_authority(
+        facts.snapshot(),
+        facts.actor_binding(),
+        facts.actor_session(),
+        selected_grant.grant(),
+        &required_scope,
+        facts.revocations().revocations(),
+    )?;
+    if !facts
+        .snapshot()
+        .trusted_time
+        .is_within(facts.continuity().validity())?
+    {
+        return Err(RepositoryAuthorityAdmissionErrorV1::Unavailable);
+    }
+    let guard_digest: [u8; 32] =
+        Sha256::digest(deterministic_cbor::encode(guard_object.value())?).into();
+    let expected_commitment = repository_action_basis_commitment(
+        request_id,
+        authority.action(),
+        authority.subject_commitment(),
+        authority.subject_basis_commitment(),
+        Some(authority.exact_payload_commitment()),
+        Some(authority.executor_principal_id()),
+        generation,
+        &facts,
+        selection,
+        None,
+        guard_digest,
+    )?;
+    let expected_basis_value = CborValue::Array(vec![
+        CborValue::Unsigned(ActionAuthorityBasisKindV1::OrdinaryLiveRuntime as u64),
+        bytes(facts.context().context_id().as_bytes()),
+        bytes(&expected_commitment),
+    ]);
+    let mut expected_references = vec![
+        snapshot_object.id(),
+        guard_object.id(),
+        state_object.id(),
+        resolved.terminal_grant_object_id,
+        capacity_root_object.id(),
+    ];
+    expected_references.sort_unstable();
+    expected_references.dedup();
+    if basis_object.value() != &expected_basis_value
+        || basis_object.references() != expected_references.as_slice()
+    {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+    }
+    let expected_receipt = AuthorizationReceiptV1::new(
+        request_id,
+        facts.context().context_id(),
+        ActionAuthorityBasisKindV1::OrdinaryLiveRuntime,
+        facts.continuity().state_token(),
+        facts.continuity().state_token(),
+    )?;
+    let receipt_schema = AuthoritySchemaV1::AuthorizationReceipt.id()?;
+    let matching_receipts = active_objects
+        .iter()
+        .filter(|object| object.schema_id() == receipt_schema)
+        .filter(|object| {
+            let CborValue::Array(fields) = object.value() else {
+                return false;
+            };
+            let [
+                receipt,
+                context,
+                request,
+                basis,
+                CborValue::Unsigned(protocol),
+                CborValue::Bool(committed),
+                result,
+            ] = fields.as_slice()
+            else {
+                return false;
+            };
+            exact_digest(receipt).ok() == Some(*expected_receipt.id().as_bytes())
+                && exact_digest(context).ok() == Some(*facts.context().context_id().as_bytes())
+                && exact_digest(request).ok() == Some(*request_id.as_bytes())
+                && exact_digest(basis).ok() == Some(*basis_object.id().as_bytes())
+                && *protocol == ORDINARY_REPOSITORY_ACTION_PROTOCOL_VERSION_V1
+                && *committed
+                && exact_digest(result).is_ok_and(|value| value != [0; 32])
+                && object.references().contains(&request_object_id)
+                && object.references().contains(&basis_object.id())
+        })
+        .collect::<Vec<_>>();
+    if matching_receipts.len() != 1 || continuity_state.accepted_time().lower_bound() == 0 {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+    }
+    Ok(ValidatedRepositoryActionBasisV1 {
+        authority_epoch: facts.snapshot().authority_epoch,
+        receipt: expected_receipt,
+    })
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "persisted specialized validation replays the complete exact-basis publication cut"
+)]
+fn validate_persisted_specialized_repository_action_basis(
+    generation: &StoreGenerationV1,
+    request_id: ActionRequestIdV1,
+    request_object_id: StoreObjectIdV1,
+    authority: &ExecutionAuthorityV1,
+    basis_object: &StoreObjectV1,
+    active_objects: &[StoreObjectV1],
+    snapshot_object: &StoreObjectV1,
+    guard_object: &StoreObjectV1,
+    state_object: &StoreObjectV1,
+    facts: &BootstrapAuthoritySnapshotV1,
+    continuity_state: &SuccessVisibleAuthorityContinuityStateV1,
+) -> Result<ValidatedRepositoryActionBasisV1, RepositoryAuthorityAdmissionErrorV1> {
+    if !facts
+        .snapshot()
+        .trusted_time
+        .is_within(facts.continuity().validity())?
+    {
+        return Err(RepositoryAuthorityAdmissionErrorV1::Unavailable);
+    }
+    let (capacity_root_id, authority_carrier) = match authority {
+        ExecutionAuthorityV1::BootstrapG0(value) => validate_bootstrap_execution_authority(
+            value,
+            authority.action(),
+            generation,
+            active_objects,
+            snapshot_object,
+            facts,
+        )?,
+        ExecutionAuthorityV1::ContinuityMaintenance(value) => validate_cma_execution_authority(
+            value,
+            active_objects,
+            snapshot_object,
+            facts,
+            state_object,
+            guard_object,
+        )?,
+        ExecutionAuthorityV1::Ordinary(_) => {
+            return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+        }
+    };
+    let expected_capacity_kind = governed_capacity_kind_for(generation.domain().role(), true);
+    let (capacity_root_object, capacity_root) = current_capacity_root(
+        active_objects,
+        generation,
+        snapshot_object,
+        facts.context().context_id(),
+        capacity_root_id,
+        expected_capacity_kind,
+    )?;
+    if capacity_root.kind() != expected_capacity_kind {
+        return Err(RepositoryAuthorityAdmissionErrorV1::CapacityUnavailable);
+    }
+    let guard_digest: [u8; 32] =
+        Sha256::digest(deterministic_cbor::encode(guard_object.value())?).into();
+    let expected_commitment = specialized_repository_action_basis_commitment(
+        request_id,
+        authority,
+        generation,
+        facts,
+        authority_carrier.id(),
+        capacity_root_object.id(),
+        guard_digest,
+    )?;
+    let expected_basis_value = CborValue::Array(vec![
+        CborValue::Unsigned(authority.basis_kind() as u64),
+        bytes(facts.context().context_id().as_bytes()),
+        bytes(&expected_commitment),
+    ]);
+    let mut expected_references = vec![
+        snapshot_object.id(),
+        guard_object.id(),
+        state_object.id(),
+        authority_carrier.id(),
+        capacity_root_object.id(),
+    ];
+    expected_references.sort_unstable();
+    expected_references.dedup();
+    if basis_object.value() != &expected_basis_value
+        || basis_object.references() != expected_references.as_slice()
+    {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+    }
+    let expected_receipt = AuthorizationReceiptV1::new(
+        request_id,
+        facts.context().context_id(),
+        authority.basis_kind(),
+        facts.continuity().state_token(),
+        facts.continuity().state_token(),
+    )?;
+    let receipt_schema = AuthoritySchemaV1::AuthorizationReceipt.id()?;
+    let matching_receipts = active_objects
+        .iter()
+        .filter(|object| object.schema_id() == receipt_schema)
+        .filter(|object| {
+            let CborValue::Array(fields) = object.value() else {
+                return false;
+            };
+            let [
+                receipt,
+                context,
+                request,
+                basis,
+                CborValue::Unsigned(protocol),
+                CborValue::Bool(committed),
+                result,
+            ] = fields.as_slice()
+            else {
+                return false;
+            };
+            exact_digest(receipt).ok() == Some(*expected_receipt.id().as_bytes())
+                && exact_digest(context).ok() == Some(*facts.context().context_id().as_bytes())
+                && exact_digest(request).ok() == Some(*request_id.as_bytes())
+                && exact_digest(basis).ok() == Some(*basis_object.id().as_bytes())
+                && *protocol == ORDINARY_REPOSITORY_ACTION_PROTOCOL_VERSION_V1
+                && *committed
+                && exact_digest(result).is_ok_and(|value| value != [0; 32])
+                && object.references().contains(&request_object_id)
+                && object.references().contains(&basis_object.id())
+        })
+        .count();
+    if matching_receipts != 1 || continuity_state.accepted_time().lower_bound() == 0 {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+    }
+    Ok(ValidatedRepositoryActionBasisV1 {
+        authority_epoch: facts.snapshot().authority_epoch,
+        receipt: expected_receipt,
+    })
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the canonical basis hash binds every ordinary action authority dimension"
+)]
+fn repository_action_basis_commitment(
+    request_id: ActionRequestIdV1,
+    action: RepositoryActionLeafV1,
+    subject_commitment: [u8; 32],
+    subject_basis_commitment: [u8; 32],
+    exact_payload_commitment: Option<[u8; 32]>,
+    executor_principal_id: Option<PrincipalIdV1>,
+    generation: &StoreGenerationV1,
+    facts: &BootstrapAuthoritySnapshotV1,
+    selection: RepositoryAuthoritySelectionV1,
+    specialized_leaf_commitment: Option<[u8; 32]>,
+    guard_digest: [u8; 32],
+) -> Result<[u8; 32], CborError> {
+    hash(&CborValue::Array(vec![
+        CborValue::text("maestro.vnext.repository-action-authority-basis.v1")?,
+        bytes(request_id.as_bytes()),
+        CborValue::text(action.literal())?,
+        CborValue::Unsigned(action.global_tag()),
+        CborValue::Unsigned(action.owner_tag()),
+        CborValue::Unsigned(action.local_tag()),
+        CborValue::text(action.owner_descriptor_id())?,
+        CborValue::text(action.descriptor_id())?,
+        CborValue::Unsigned(action.protocol_revision()),
+        CborValue::text(action.manifest_id())?,
+        CborValue::text(action.grammar_id())?,
+        bytes(&subject_commitment),
+        bytes(&subject_basis_commitment),
+        CborValue::optional(exact_payload_commitment.map(|commitment| bytes(&commitment))),
+        CborValue::optional(
+            executor_principal_id.map(|principal_id| bytes(principal_id.as_bytes())),
+        ),
+        bytes(generation.id().as_bytes()),
+        bytes(generation.contract_root_id().as_bytes()),
+        bytes(facts.context().context_id().as_bytes()),
+        CborValue::Unsigned(facts.snapshot().authority_epoch),
+        bytes(selection.actor_binding_id().as_bytes()),
+        bytes(selection.actor_session_id().as_bytes()),
+        bytes(selection.terminal_grant_id().as_bytes()),
+        CborValue::optional(specialized_leaf_commitment.map(|commitment| bytes(&commitment))),
+        bytes(&guard_digest),
+        bytes(facts.continuity().state_token().as_bytes()),
+    ]))
 }
 
 fn resolve_repository_authority_chain(
@@ -739,7 +2104,7 @@ fn validate_current_guard(
     manifest: &AuthorityContinuityManifestV1,
     state_object: &StoreObjectV1,
     guard_object: &StoreObjectV1,
-) -> Result<(), RepositoryAuthorityAdmissionErrorV1> {
+) -> Result<SuccessVisibleAuthorityContinuityStateV1, RepositoryAuthorityAdmissionErrorV1> {
     let state = SuccessVisibleAuthorityContinuityStateV1::decode(
         &object_value_bytes(state_object)?,
         manifest,
@@ -752,18 +2117,18 @@ fn validate_current_guard(
     };
     let guard_digest: [u8; 32] =
         Sha256::digest(deterministic_cbor::encode(guard_object.value())?).into();
+    let expected_context_kind = facts.context().kind();
     if guard_fields.len() != 26
         || state_fields.len() != 26
         || !matches!(&guard_fields[0], CborValue::Text(domain) if domain == "maestro.vnext.authority-transition-guard-evaluation.v1")
-        || guard_fields[3]
-            != CborValue::Unsigned(AuthorityContextKindV1::RepositoryAuthorityContext as u64)
+        || guard_fields[3] != CborValue::Unsigned(expected_context_kind as u64)
         || exact_digest(&guard_fields[4])? != *facts.context().context_id().as_bytes()
         || !matches!(guard_fields[5], CborValue::Unsigned(value) if value > 0 && value <= current_generation.ordinal())
         || guard_fields[6] != CborValue::Unsigned(facts.snapshot().authority_epoch)
         || exact_digest(&guard_fields[7])? != *facts.continuity().manifest_id().as_bytes()
         || exact_digest(&guard_fields[8])? != *state.closure_id().as_bytes()
         || exact_digest(&state_fields[25])? != guard_digest
-        || state.context_kind() != AuthorityContextKindV1::RepositoryAuthorityContext
+        || state.context_kind() != expected_context_kind
         || state.context_id() != facts.context().context_id()
         || state.store_generation() > current_generation.ordinal()
         || state.authority_epoch() != facts.snapshot().authority_epoch
@@ -773,7 +2138,7 @@ fn validate_current_guard(
     {
         return Err(RepositoryAuthorityAdmissionErrorV1::InvalidCurrentGuard);
     }
-    Ok(())
+    Ok(state)
 }
 
 fn current_capacity_root(
@@ -782,6 +2147,7 @@ fn current_capacity_root(
     snapshot_object: &StoreObjectV1,
     context_id: AuthorityContextIdV1,
     expected_id: CapacityRootIdV1,
+    expected_kind: GovernedCapacityKindV1,
 ) -> Result<(StoreObjectV1, GovernedCapacityRootV1), RepositoryAuthorityAdmissionErrorV1> {
     let schema_id = AuthoritySchemaV1::GovernedCapacityRoot.id()?;
     let mut roots = active_objects
@@ -804,12 +2170,9 @@ fn current_capacity_root(
     let (object, root) = roots
         .pop()
         .expect("invariant: exact one-element governed-capacity root");
-    if root.context_kind() != AuthorityContextKindV1::RepositoryAuthorityContext
+    if root.context_kind() != expected_kind.context_kind()
         || root.context_id() != context_id
-        || root.kind()
-            != GovernedCapacityKindV1::Repository(
-                RepositoryGovernedCapacitySlotKindV1::RepositoryOrdinaryMutation,
-            )
+        || root.kind() != expected_kind
     {
         return Err(RepositoryAuthorityAdmissionErrorV1::CapacityUnavailable);
     }
@@ -824,29 +2187,73 @@ fn parse_capacity_root(
     };
     if fields.len() != 7
         || !matches!(&fields[0], CborValue::Text(domain) if domain == GovernedCapacityRootV1::SCHEMA_DOMAIN)
-        || fields[2]
-            != CborValue::Unsigned(AuthorityContextKindV1::RepositoryAuthorityContext as u64)
-        || fields[4]
-            != CborValue::Unsigned(
-                RepositoryGovernedCapacitySlotKindV1::RepositoryOrdinaryMutation as u64,
-            )
     {
         return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
     }
+    let context_kind = AuthorityContextKindV1::try_from(
+        u8::try_from(exact_unsigned(&fields[2])?)
+            .map_err(|_| RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier)?,
+    )
+    .map_err(|_| RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier)?;
+    let capacity_kind_tag = u8::try_from(exact_unsigned(&fields[4])?)
+        .map_err(|_| RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier)?;
+    let capacity_kind = match context_kind {
+        AuthorityContextKindV1::RepositoryAuthorityContext => GovernedCapacityKindV1::Repository(
+            RepositoryGovernedCapacitySlotKindV1::try_from(capacity_kind_tag)
+                .map_err(|_| RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier)?,
+        ),
+        AuthorityContextKindV1::InstallationAuthorityContext => {
+            GovernedCapacityKindV1::Installation(
+                InstallationGovernedCapacitySlotKindV1::try_from(capacity_kind_tag)
+                    .map_err(|_| RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier)?,
+            )
+        }
+    };
     let initial_max = u32::try_from(exact_unsigned(&fields[5])?)
         .map_err(|_| RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier)?;
     let spent = u32::try_from(exact_unsigned(&fields[6])?)
         .map_err(|_| RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier)?;
     Ok(GovernedCapacityRootV1::from_persisted_state(
         CapacityRootIdV1::from_digest(exact_digest(&fields[1])?),
-        AuthorityContextKindV1::RepositoryAuthorityContext,
+        context_kind,
         AuthorityContextIdV1::from_digest(exact_digest(&fields[3])?),
-        GovernedCapacityKindV1::Repository(
-            RepositoryGovernedCapacitySlotKindV1::RepositoryOrdinaryMutation,
-        ),
+        capacity_kind,
         initial_max,
         spent,
     )?)
+}
+
+fn authority_context_kind_for_role(role: StoreRoleV1) -> AuthorityContextKindV1 {
+    match role {
+        StoreRoleV1::Repository => AuthorityContextKindV1::RepositoryAuthorityContext,
+        StoreRoleV1::Installation => AuthorityContextKindV1::InstallationAuthorityContext,
+    }
+}
+
+fn authority_manifest_for_role(
+    role: StoreRoleV1,
+) -> Result<AuthorityContinuityManifestV1, super::super::AuthorityContinuityError> {
+    match role {
+        StoreRoleV1::Repository => AuthorityContinuityManifestV1::repository(),
+        StoreRoleV1::Installation => AuthorityContinuityManifestV1::installation(),
+    }
+}
+
+fn governed_capacity_kind_for(role: StoreRoleV1, external_effect: bool) -> GovernedCapacityKindV1 {
+    match (role, external_effect) {
+        (StoreRoleV1::Repository, false) => GovernedCapacityKindV1::Repository(
+            RepositoryGovernedCapacitySlotKindV1::RepositoryOrdinaryMutation,
+        ),
+        (StoreRoleV1::Repository, true) => GovernedCapacityKindV1::Repository(
+            RepositoryGovernedCapacitySlotKindV1::RepositoryExternalEffect,
+        ),
+        (StoreRoleV1::Installation, false) => GovernedCapacityKindV1::Installation(
+            InstallationGovernedCapacitySlotKindV1::InstallationDistributionMutation,
+        ),
+        (StoreRoleV1::Installation, true) => GovernedCapacityKindV1::Installation(
+            InstallationGovernedCapacitySlotKindV1::InstallationExternalEffect,
+        ),
+    }
 }
 
 fn exact_unsigned(value: &CborValue) -> Result<u64, RepositoryAuthorityAdmissionErrorV1> {
@@ -951,6 +2358,8 @@ pub(crate) enum RepositoryAuthorityAdmissionErrorV1 {
     AuthoritySelectionMismatch,
     #[error("the selected Repository action capacity basis is unavailable")]
     CapacityUnavailable,
+    #[error("the selected Execution action requires its exact non-ordinary Authority basis")]
+    UnsupportedExecutionAuthority,
     #[error("the Authority carrier has an invalid canonical schema shape")]
     InvalidAuthorityCarrier,
     #[error("a committed Repository action must produce at least one owner object")]
@@ -1001,10 +2410,25 @@ pub(crate) mod test_support {
         SubstitutedGuard,
     }
 
+    pub(crate) type CmaFixtureBasisV1 = (
+        RepositoryActionLeafV1,
+        ContinuityMaintenanceAuthorityBasisV1,
+        Option<CmaEffectWithdrawalSlotFamilyV1>,
+        CmaObservationPublicationPurposeV1,
+        [u8; 32],
+    );
+
     pub(crate) struct RepositoryAuthorityFixtureV1 {
         pub(crate) objects: Vec<StoreObjectV1>,
         pub(crate) authority_root_id: StoreObjectIdV1,
         pub(crate) selection: RepositoryAuthoritySelectionV1,
+        pub(crate) actor_principal: PrincipalIdV1,
+        pub(crate) bootstrap_basis: BootstrapControlG0AuthorityBasisV1,
+        pub(crate) cma_bases: Vec<CmaFixtureBasisV1>,
+        pub(crate) continuity_state_token: StateTokenIdV1,
+        pub(crate) continuity_state_object_id: StoreObjectIdV1,
+        pub(crate) guard_object_id: StoreObjectIdV1,
+        pub(crate) authority_epoch: u64,
         pub(crate) authenticated_human: RepositoryAuthenticatedHumanV1,
         pub(crate) leaf_authority_expires_at: u64,
     }
@@ -1013,6 +2437,44 @@ pub(crate) mod test_support {
         scopes: Vec<(&'static str, [u8; 32])>,
         mode: AuthorityFixtureModeV1,
     ) -> RepositoryAuthorityFixtureV1 {
+        repository_authority_fixture_at(scopes, mode, 120, 130)
+    }
+
+    pub(crate) fn repository_authority_fixture_at(
+        scopes: Vec<(&'static str, [u8; 32])>,
+        mode: AuthorityFixtureModeV1,
+        trusted_time_lower: u64,
+        trusted_time_upper: u64,
+    ) -> RepositoryAuthorityFixtureV1 {
+        authority_fixture(
+            scopes,
+            mode,
+            StoreRoleV1::Repository,
+            trusted_time_lower,
+            trusted_time_upper,
+        )
+    }
+
+    pub(crate) fn installation_authority_fixture(
+        scopes: Vec<(&'static str, [u8; 32])>,
+        mode: AuthorityFixtureModeV1,
+    ) -> RepositoryAuthorityFixtureV1 {
+        authority_fixture(scopes, mode, StoreRoleV1::Installation, 120, 130)
+    }
+
+    fn authority_fixture(
+        scopes: Vec<(&'static str, [u8; 32])>,
+        mode: AuthorityFixtureModeV1,
+        role: StoreRoleV1,
+        trusted_time_lower: u64,
+        trusted_time_upper: u64,
+    ) -> RepositoryAuthorityFixtureV1 {
+        let external_effect_only = scopes.iter().all(|(literal, _)| {
+            RepositoryActionLeafV1::ALL
+                .into_iter()
+                .find(|leaf| leaf.literal() == *literal)
+                .is_some_and(RepositoryActionLeafV1::is_external_effect_action)
+        });
         let multi_hop = matches!(
             mode,
             AuthorityFixtureModeV1::MultiHop
@@ -1023,9 +2485,21 @@ pub(crate) mod test_support {
                 | AuthorityFixtureModeV1::MultiHopRevokedAncestor
                 | AuthorityFixtureModeV1::MultiHopStaleRoot
         );
-        let manifest = AuthorityContinuityManifestV1::repository().unwrap();
-        let context_id = AuthorityContextIdV1::derive("stage3-repository-context").unwrap();
-        let (closure, guard, state) = continuity_generation(&manifest, context_id);
+        let manifest = match role {
+            StoreRoleV1::Repository => AuthorityContinuityManifestV1::repository().unwrap(),
+            StoreRoleV1::Installation => AuthorityContinuityManifestV1::installation().unwrap(),
+        };
+        let context_id = AuthorityContextIdV1::derive(match role {
+            StoreRoleV1::Repository => "stage3-repository-context",
+            StoreRoleV1::Installation => "stage4-installation-context",
+        })
+        .unwrap();
+        let (closure, guard, state) = continuity_generation(
+            &manifest,
+            context_id,
+            trusted_time_lower,
+            trusted_time_upper,
+        );
         let manifest_object = authority_object(
             AuthoritySchemaV1::AuthorityContinuityManifest,
             manifest.schema_value().unwrap(),
@@ -1066,9 +2540,26 @@ pub(crate) mod test_support {
         };
 
         let validity = HalfOpenValidityV1::new(100, 200).unwrap();
-        let context =
-            AuthorityContextV1::repository(context_id, "stage3-repository-installation", 1, 7, 11)
-                .unwrap();
+        let context = match role {
+            StoreRoleV1::Repository => AuthorityContextV1::repository(
+                context_id,
+                "stage3-repository-installation",
+                1,
+                7,
+                11,
+            )
+            .unwrap(),
+            StoreRoleV1::Installation => AuthorityContextV1::installation(
+                context_id,
+                "stage4-installation",
+                "stage4-global-user-agent-realm",
+                1,
+                7,
+                11,
+                1,
+            )
+            .unwrap(),
+        };
         let actor_principal = PrincipalIdV1::derive("stage3-actor-principal").unwrap();
         let actor_binding = PrincipalBindingV1::new(
             PrincipalBindingIdV1::derive("stage3-actor-binding").unwrap(),
@@ -1159,19 +2650,57 @@ pub(crate) mod test_support {
         )
         .unwrap();
 
-        let ordinary_scope = scopes
+        let scope_entries = scopes
             .into_iter()
-            .map(|(action, subject)| ScopeAtomV1::new(action, &render_digest(subject), 1).unwrap())
+            .map(|(action, subject)| {
+                let leaf = RepositoryActionLeafV1::ALL
+                    .into_iter()
+                    .find(|leaf| leaf.literal() == action)
+                    .unwrap();
+                (
+                    leaf,
+                    ScopeAtomV1::new(action, &render_digest(subject), 1).unwrap(),
+                    subject,
+                )
+            })
             .collect::<Vec<_>>();
-        let bootstrap_scope =
-            ScopeAtomV1::new("IssueBootstrapMandate", &request_commitment, 1).unwrap();
+        let ordinary_scope = scope_entries
+            .iter()
+            .filter(|(leaf, _, _)| {
+                !matches!(
+                    leaf.execution_authority_basis(),
+                    Some(ActionAuthorityBasisKindV1::BootstrapControlG0)
+                        | Some(ActionAuthorityBasisKindV1::ContinuityMaintenance)
+                )
+            })
+            .map(|(_, scope, _)| scope.clone())
+            .collect::<Vec<_>>();
+        let mut bootstrap_terminal_scope =
+            vec![ScopeAtomV1::new("IssueBootstrapMandate", &request_commitment, 1).unwrap()];
+        bootstrap_terminal_scope.extend(
+            scope_entries
+                .iter()
+                .filter(|(leaf, _, _)| {
+                    leaf.execution_authority_basis()
+                        == Some(ActionAuthorityBasisKindV1::BootstrapControlG0)
+                })
+                .map(|(_, scope, _)| scope.clone()),
+        );
+        let bootstrap_execution_enabled = scope_entries.iter().any(|(leaf, _, _)| {
+            leaf.execution_authority_basis() == Some(ActionAuthorityBasisKindV1::BootstrapControlG0)
+        });
+        let capacity_root_id = CapacityRootIdV1::derive("stage3-ordinary-capacity").unwrap();
         let bootstrap_grant = GrantDefinitionV1 {
             id: GrantIdV1::derive("stage3-bootstrap-only-grant").unwrap(),
             context_id,
-            grantee_principal_id: PrincipalIdV1::derive("stage3-g0-principal").unwrap(),
+            grantee_principal_id: if bootstrap_execution_enabled {
+                actor_principal
+            } else {
+                PrincipalIdV1::derive("stage3-g0-principal").unwrap()
+            },
             parent_grant_id: None,
             delegation_id: None,
-            terminal_scope: GrantScopeV1::new(vec![bootstrap_scope]).unwrap(),
+            terminal_scope: GrantScopeV1::new(bootstrap_terminal_scope).unwrap(),
             delegable_scope: GrantScopeV1::new(ordinary_scope.clone()).unwrap(),
             validity,
             delegation_depth_remaining: 1,
@@ -1180,8 +2709,10 @@ pub(crate) mod test_support {
         .validate()
         .unwrap();
         let bootstrap_grant_id = bootstrap_grant.id();
+        let bootstrap_genesis_grant_id =
+            GenesisGrantIdV1::derive(&bootstrap_grant_id.render()).unwrap();
         let bootstrap_path = BootstrapG0PathV1::new(
-            GenesisGrantIdV1::derive(&bootstrap_grant.id().render()).unwrap(),
+            bootstrap_genesis_grant_id,
             bootstrap_grant,
             if mode == AuthorityFixtureModeV1::MultiHopStaleRoot {
                 0
@@ -1191,11 +2722,10 @@ pub(crate) mod test_support {
             7,
             11,
             true,
-            vec![],
+            vec![capacity_root_id],
         )
         .unwrap();
 
-        let capacity_root_id = CapacityRootIdV1::derive("stage3-ordinary-capacity").unwrap();
         let ordinary_parent_grant_id = GrantIdV1::derive("stage3-ordinary-parent-grant").unwrap();
         let ordinary_parent_delegation_id =
             DelegationIdV1::derive("stage3-ordinary-parent-delegation").unwrap();
@@ -1322,7 +2852,7 @@ pub(crate) mod test_support {
                 7,
                 11,
                 1,
-                TrustedTimeV1::verified(120, 130).unwrap(),
+                TrustedTimeV1::verified(trusted_time_lower, trusted_time_upper).unwrap(),
             ),
             actor_binding,
             actor_session,
@@ -1445,13 +2975,12 @@ pub(crate) mod test_support {
             ],
         )
         .unwrap();
+        let capacity_kind = governed_capacity_kind_for(role, external_effect_only);
         let capacity_root = GovernedCapacityRootV1::new(
             capacity_root_id,
-            AuthorityContextKindV1::RepositoryAuthorityContext,
+            capacity_kind.context_kind(),
             context_id,
-            GovernedCapacityKindV1::Repository(
-                RepositoryGovernedCapacitySlotKindV1::RepositoryOrdinaryMutation,
-            ),
+            capacity_kind,
             32,
         )
         .unwrap();
@@ -1461,6 +2990,74 @@ pub(crate) mod test_support {
             vec![],
         )
         .unwrap();
+        let cma_branch_id = CmaBranchIdV1::derive(&format!(
+            "stage4-cma-current-branch-{}",
+            render_digest(*context_id.as_bytes())
+        ))
+        .unwrap();
+        let continuity_state_token = state.state_token();
+        let continuity_state_object_id = state_object.id();
+        let guard_object_id = selected_guard.id();
+        let authority_epoch = facts.snapshot().authority_epoch;
+        let cma_carriers = scope_entries
+            .iter()
+            .enumerate()
+            .filter(|(_, (leaf, _, _))| {
+                leaf.execution_authority_basis()
+                    == Some(ActionAuthorityBasisKindV1::ContinuityMaintenance)
+            })
+            .map(|(phase_ordinal, (action, _, subject_commitment))| {
+                let seed = action.literal();
+                let basis = ContinuityMaintenanceAuthorityBasisV1::new(
+                    cma_branch_id,
+                    SlotIdV1::derive(&format!("stage4-cma-slot-{seed}-{phase_ordinal}")).unwrap(),
+                    ExecutorAssertionIdV1::derive(&format!(
+                        "stage4-cma-executor-{seed}-{phase_ordinal}"
+                    ))
+                    .unwrap(),
+                );
+                let purpose = CmaObservationPublicationPurposeV1::MaintenanceExecutorCurrentness;
+                let withdrawal_slot_family = (*action
+                    == RepositoryActionLeafV1::WithdrawContinuityMaintenanceEffect)
+                    .then_some(purpose.effect_withdrawal_slot_family());
+                let carrier = ContinuityMaintenanceExecutionSlotV1::new(
+                    context_id,
+                    basis.cma_branch_id,
+                    basis.slot_id,
+                    basis.executor_assertion_id,
+                    actor_principal,
+                    purpose,
+                    *action,
+                    withdrawal_slot_family,
+                    *subject_commitment,
+                    continuity_state_token,
+                    continuity_state_object_id,
+                    guard_object_id,
+                    authority_epoch,
+                    capacity_root_id,
+                )
+                .unwrap()
+                .store_object({
+                    let mut references = vec![
+                        capacity_root_object.id(),
+                        state_object.id(),
+                        selected_guard.id(),
+                    ];
+                    references.sort_unstable();
+                    references
+                })
+                .unwrap();
+                let slot = parse_cma_execution_slot(&carrier).unwrap();
+                (
+                    *action,
+                    basis,
+                    withdrawal_slot_family,
+                    purpose,
+                    slot.job_applicability_commitment,
+                    carrier,
+                )
+            })
+            .collect::<Vec<_>>();
         let mut authority_root_references = vec![
             manifest_object.id(),
             closure_object.id(),
@@ -1484,6 +3081,11 @@ pub(crate) mod test_support {
                 .iter()
                 .chain(ordinary_parent_delegation_object.iter())
                 .map(StoreObjectV1::id),
+        );
+        authority_root_references.extend(
+            cma_carriers
+                .iter()
+                .map(|(_, _, _, _, _, object)| object.id()),
         );
         let authority_root = authority_object(
             AuthoritySchemaV1::BootstrapAuthoritySnapshot,
@@ -1513,6 +3115,11 @@ pub(crate) mod test_support {
         ];
         objects.extend(ordinary_parent_grant_object);
         objects.extend(ordinary_parent_delegation_object);
+        objects.extend(
+            cma_carriers
+                .iter()
+                .map(|(_, _, _, _, _, object)| object.clone()),
+        );
         objects.sort_by_key(StoreObjectV1::id);
         objects.dedup_by_key(|object| object.id());
         RepositoryAuthorityFixtureV1 {
@@ -1523,6 +3130,37 @@ pub(crate) mod test_support {
                 facts.actor_session().id(),
                 ordinary_grant_id,
             ),
+            actor_principal,
+            bootstrap_basis: BootstrapControlG0AuthorityBasisV1::new(
+                facts.actor_binding().id(),
+                facts.actor_session().id(),
+                bootstrap_genesis_grant_id,
+            ),
+            cma_bases: cma_carriers
+                .into_iter()
+                .map(
+                    |(
+                        action,
+                        basis,
+                        withdrawal_slot_family,
+                        purpose,
+                        job_applicability_commitment,
+                        _,
+                    )| {
+                        (
+                            action,
+                            basis,
+                            withdrawal_slot_family,
+                            purpose,
+                            job_applicability_commitment,
+                        )
+                    },
+                )
+                .collect(),
+            continuity_state_token,
+            continuity_state_object_id,
+            guard_object_id,
+            authority_epoch,
             authenticated_human: RepositoryAuthenticatedHumanV1::new(
                 facts.responder_binding().id(),
                 facts.responder_session().id(),
@@ -1536,6 +3174,8 @@ pub(crate) mod test_support {
     fn continuity_generation(
         manifest: &AuthorityContinuityManifestV1,
         context_id: AuthorityContextIdV1,
+        trusted_time_lower: u64,
+        trusted_time_upper: u64,
     ) -> (
         AuthorityContinuityClosureV1,
         AdmittedTransitionGuardV1,
@@ -1546,8 +3186,8 @@ pub(crate) mod test_support {
             reference("stage3-trusted-time-coordinate"),
             reference("stage3-trusted-time-stack"),
             reference("stage3-trusted-time-origin"),
-            120,
-            130,
+            trusted_time_lower,
+            trusted_time_upper,
         )
         .unwrap();
         let allocation = StoreAllocatedContinuityStateTokenV1::from_store_commitments(

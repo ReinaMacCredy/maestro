@@ -361,6 +361,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, default=DEFAULT_CONTRACT)
     parser.add_argument("--mutant-suite", action="store_true")
+    parser.add_argument("--no-write", action="store_true")
     args = parser.parse_args()
     contract = args.root.resolve()
     try:
@@ -392,7 +393,8 @@ def main() -> int:
         },
     }
     output = json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n"
-    (contract / "validation-receipt.v1.json").write_text(output, encoding="ascii")
+    if not args.no_write:
+        (contract / "validation-receipt.v1.json").write_text(output, encoding="ascii")
     print(output, end="")
     return 0
 

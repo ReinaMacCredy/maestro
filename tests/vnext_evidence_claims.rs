@@ -1,10 +1,8 @@
-use maestro::domain::vnext::contract::submission_claim::{
-    SubmissionClaimSetError, SubmissionClaimSetV1,
-};
 use maestro::domain::vnext::evidence::{
     ClaimError, ClaimSubjectV1, ClaimV1, EvidenceIdentityError, ObservationRecordIdV1,
     SubmissionRefV1,
 };
+use maestro::domain::vnext::evidence::{SubmissionClaimSetError, SubmissionClaimSetV1};
 use maestro::domain::vnext::identity::ContractRootIdV1;
 use maestro::domain::vnext::work::{WorkIdV1, WorkSubmissionIdV1};
 

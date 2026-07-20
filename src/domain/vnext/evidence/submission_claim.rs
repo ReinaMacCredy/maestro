@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
-use crate::domain::vnext::evidence::{ClaimSubjectV1, ClaimV1, SubmissionRefV1};
+use super::{ClaimSubjectV1, ClaimV1, SubmissionRefV1};
 use crate::domain::vnext::identity::{
     ConstraintExprV1, FieldDescriptorV1, SchemaDescriptorV1, SchemaError, TypeExprV1,
 };

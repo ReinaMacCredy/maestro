@@ -406,6 +406,15 @@ impl StoreV1 {
         })
     }
 
+    pub(crate) fn generation(
+        &self,
+        generation_id: StoreGenerationIdV1,
+    ) -> Result<StoreGenerationV1, StoreError> {
+        self.with_verified_read(|connection| {
+            load_generation(connection, generation_id, &self.domain)
+        })
+    }
+
     pub(crate) fn coherent_publication_snapshot(
         &self,
     ) -> Result<
@@ -859,6 +868,36 @@ impl StoreV1 {
                 .resolve_idempotency_replay(stored, probe.meaning_digest())
                 .map_err(PreparedPublicationError::Store),
         }
+    }
+
+    pub(crate) fn with_serialized_active_view<T, E>(
+        &mut self,
+        operation: impl FnOnce(&StorePublicationViewV1<'_>) -> Result<T, E>,
+    ) -> Result<T, PreparedPublicationError<E>> {
+        self.root.verify_path_binding().map_err(StoreError::from)?;
+        let root = &self.root;
+        let domain = self.domain.clone();
+        self.metadata
+            .with_prepared_transaction(root, |transaction| {
+                let view = StorePublicationViewV1 {
+                    root,
+                    connection: transaction,
+                    domain: &domain,
+                };
+                operation(&view)
+                    .map(PublicationMutation::NoChange)
+                    .map_err(|error| {
+                        ConditionalTransactionError::Operation(PreparedPublicationError::Prepare(
+                            error,
+                        ))
+                    })
+            })
+            .map_err(|error| match error {
+                ConditionalTransactionError::Metadata(error) => {
+                    PreparedPublicationError::Store(error.into())
+                }
+                ConditionalTransactionError::Operation(error) => error,
+            })
     }
 
     fn cleanup_failed_atomic_publication(
