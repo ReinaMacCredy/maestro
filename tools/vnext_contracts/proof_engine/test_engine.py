@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+from typing import Sequence
 
 from tools.vnext_contracts.proof_engine import (
     CacheCorruptionError,
@@ -13,6 +14,7 @@ from tools.vnext_contracts.proof_engine import (
     EngineError,
     InputBinding,
     InputMutationError,
+    PhaseResult,
     PhaseSpec,
     PlanError,
     ProofEngine,
@@ -311,6 +313,52 @@ class ProofEngineTests(unittest.TestCase):
         with self.assertRaises(CacheCorruptionError):
             self.execute(plan, "second")
 
+    def test_substituted_checkpoint_binding_fails_closed(self) -> None:
+        plan = self.plan()
+        first = self.execute(plan, "first")
+        checkpoint_path = (
+            self.cache
+            / "objects"
+            / first.phases[0].identity.removeprefix("sha256:")
+            / "checkpoint.json"
+        )
+        checkpoint = json.loads(checkpoint_path.read_text(encoding="ascii"))
+        checkpoint["phase_spec_identity"] = "sha256:" + "0" * 64
+        unsigned = {key: value for key, value in checkpoint.items() if key != "integrity"}
+        canonical = (
+            json.dumps(unsigned, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+            + "\n"
+        ).encode("ascii")
+        import hashlib
+
+        checkpoint["integrity"] = f"sha256:{hashlib.sha256(canonical).hexdigest()}"
+        checkpoint_path.write_text(
+            json.dumps(checkpoint, sort_keys=True, separators=(",", ":")) + "\n",
+            encoding="ascii",
+        )
+
+        with self.assertRaises(CacheCorruptionError):
+            self.execute(plan, "second")
+
+    def test_command_cannot_reference_an_input_omitted_from_phase_identity(self) -> None:
+        plan = self.plan()
+        phase = plan.phases[0]
+        unbound = ProofPlan(
+            inputs=plan.inputs,
+            tools=plan.tools,
+            phases=(
+                PhaseSpec(
+                    name=phase.name,
+                    commands=phase.commands,
+                    inputs=("script", "fact"),
+                    cache_mode=phase.cache_mode,
+                ),
+            ),
+        )
+
+        with self.assertRaises(PlanError):
+            self.execute(unbound, "unbound-input")
+
     def test_concurrent_same_identity_different_results_fail_closed(self) -> None:
         racer = self.inputs / "nondeterministic-race.py"
         racer.write_text(NONDETERMINISTIC_RACE_SCRIPT + "\n", encoding="utf-8")
@@ -475,6 +523,37 @@ class ProofEngineTests(unittest.TestCase):
 
         with self.assertRaises(EngineError):
             self.execute(self.plan(script=failing, publication=publication), "failure")
+        self.assertEqual(pointer.read_bytes(), original)
+
+    def test_publication_rejects_output_changed_after_phase_completion(self) -> None:
+        class MutatingPublicationEngine(ProofEngine):
+            def _publish(
+                self,
+                publication: PublicationSpec,
+                plan_identity: str,
+                phases: Sequence[PhaseResult],
+            ) -> str:
+                (phases[0].output_root / "result.txt").write_text(
+                    "changed-after-phase", encoding="utf-8"
+                )
+                return super()._publish(publication, plan_identity, phases)
+
+        pointer = self.root / "active-proof.json"
+        original = b'{"release_identity":"old"}\n'
+        pointer.write_bytes(original)
+        publication = PublicationSpec(
+            release_root=self.root / "releases",
+            pointer_path=pointer,
+            outputs=(PublishedOutput("builder", "result.txt", "proof/result.txt"),),
+        )
+        engine = MutatingPublicationEngine()
+
+        with self.assertRaises(InputMutationError):
+            engine.execute(
+                self.plan(publication=publication),
+                run_root=self.root / "runs/publication-mutation",
+                cache_root=self.cache,
+            )
         self.assertEqual(pointer.read_bytes(), original)
 
     def test_overlapping_publication_destinations_are_rejected(self) -> None:

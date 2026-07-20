@@ -379,12 +379,14 @@ class ProofEngine:
         performance_log: Path | None,
     ) -> None:
         input_names: set[str] = set()
+        input_kinds: dict[str, str] = {}
         input_paths: list[Path] = []
         for binding in plan.inputs:
             _require_name(binding.name, "input name")
             if binding.name in input_names:
                 raise PlanError(f"duplicate input name: {binding.name}")
             input_names.add(binding.name)
+            input_kinds[binding.name] = binding.kind
             if binding.kind not in {"file", "tree", "literal"}:
                 raise PlanError(f"unsupported input kind: {binding.kind}")
             if binding.path_identity not in {"resolved", "content", "none"}:
@@ -428,6 +430,12 @@ class ProofEngine:
                     raise PlanError(
                         f"phase {phase.name} command replaces an engine-reserved environment key"
                     )
+                for template in [
+                    *command.args,
+                    command.cwd,
+                    *(value for _, value in command.environment),
+                ]:
+                    self._validate_template_bindings(template, phase, input_kinds)
         for phase in plan.phases:
             if phase.name in phase.dependencies or not set(phase.dependencies) <= phase_names:
                 raise PlanError(f"phase {phase.name} has an invalid dependency")
@@ -468,6 +476,35 @@ class ProofEngine:
                 raise PlanError("phase dependencies contain a cycle")
             completed |= ready
             remaining -= ready
+
+    @staticmethod
+    def _validate_template_bindings(
+        template: str, phase: PhaseSpec, input_kinds: Mapping[str, str]
+    ) -> None:
+        for match in _PLACEHOLDER.finditer(template):
+            key = match.group(0)[1:-1]
+            if key.startswith("input:"):
+                name = key.removeprefix("input:")
+                if name not in phase.inputs:
+                    raise PlanError(
+                        f"phase {phase.name} command references undeclared input {name}"
+                    )
+                if input_kinds[name] == "literal":
+                    raise PlanError(
+                        f"phase {phase.name} command cannot render literal input {name} as a path"
+                    )
+            elif key.startswith("dependency:"):
+                name = key.removeprefix("dependency:")
+                if name not in phase.dependencies:
+                    raise PlanError(
+                        f"phase {phase.name} command references undeclared dependency {name}"
+                    )
+        residual = _PLACEHOLDER.sub("", template)
+        if any(
+            prefix in residual
+            for prefix in ("{input:", "{dependency:", "{phase_root}", "{run_root}")
+        ):
+            raise PlanError(f"phase {phase.name} command has an invalid proof placeholder")
 
     @staticmethod
     def _validate_publication(publication: PublicationSpec, phase_names: set[str]) -> None:
@@ -645,6 +682,14 @@ class ProofEngine:
         if phase.cache_mode != "disabled":
             checkpoint = self._load_checkpoint(cache_root, phase_identity)
         if checkpoint is not None:
+            self._require_checkpoint_binding(
+                checkpoint,
+                phase,
+                phase_spec_identity,
+                identity_value["dependencies"],
+                identity_value["inputs"],
+                identity_value["tools"],
+            )
             _copy_tree(self._checkpoint_root(cache_root, phase_identity) / "payload", phase_root)
             elapsed = (time.monotonic_ns() - started) // 1_000_000
             recorder.emit(
@@ -666,8 +711,8 @@ class ProofEngine:
         dependency_roots = {name: dependencies[name].output_root for name in phase.dependencies}
         input_paths = {
             name: binding.path.resolve(strict=True)
-            for name, binding in inputs.items()
-            if binding.path is not None
+            for name in phase.inputs
+            if (binding := inputs[name]).path is not None
         }
         for index, command in enumerate(phase.commands):
             command_receipts.append(
@@ -880,6 +925,28 @@ class ProofEngine:
                 shutil.rmtree(temporary)
 
     @staticmethod
+    def _require_checkpoint_binding(
+        checkpoint: Mapping[str, Any],
+        phase: PhaseSpec,
+        phase_spec_identity: str,
+        dependency_outputs: Mapping[str, str],
+        input_identities: Mapping[str, str],
+        tool_identities: Mapping[str, str],
+    ) -> None:
+        expected = {
+            "dependency_outputs": dict(dependency_outputs),
+            "input_identities": dict(input_identities),
+            "phase": phase.name,
+            "phase_spec_identity": phase_spec_identity,
+            "tool_identities": dict(tool_identities),
+        }
+        actual = {key: checkpoint.get(key) for key in expected}
+        if actual != expected:
+            raise CacheCorruptionError(
+                f"checkpoint binding differs for proof phase {phase.name}"
+            )
+
+    @staticmethod
     def _require_matching_checkpoint(
         existing: Mapping[str, Any], expected_unsigned: Mapping[str, Any], root: Path
     ) -> None:
@@ -925,6 +992,11 @@ class ProofEngine:
                     shutil.copy2(source_path, destination_path)
                 else:
                     raise PublicationError(f"publication source is unsupported: {output.source}")
+            for phase in phases:
+                if _output_manifest(phase.output_root)["identity"] != phase.output_identity:
+                    raise InputMutationError(
+                        f"a completed proof output changed during publication: {phase.name}"
+                    )
             payload_manifest = _output_manifest(payload)
             value = {
                 "outputs": [
