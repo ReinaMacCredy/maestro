@@ -303,21 +303,21 @@ fn published_stage5_three_engine_receipts_bind_one_inactive_artifact() {
         consensus["behavior_manifest_identity"],
         "sha256:a45a1774976a2ad7d3e9cf9702ea78bb5bbae33a9deca7a06d5127c451477f12"
     );
-    assert_eq!(consensus["proof_harness_passed"], 48);
-    assert_eq!(harness["passed"], 48);
+    assert_eq!(consensus["proof_harness_passed"], 52);
+    assert_eq!(harness["passed"], 52);
     let harness_tests = harness["tests"].as_array().unwrap();
-    assert_eq!(harness_tests.len(), 48);
+    assert_eq!(harness_tests.len(), 52);
     assert_eq!(
         harness_tests
             .iter()
             .map(|test| test.as_str().unwrap())
             .collect::<BTreeSet<_>>()
             .len(),
-        48
+        52
     );
     assert_eq!(
         harness["manifest_identity"],
-        "sha256:7c27a5a189368d197e1ac0ded46c6012de9c9052fc11df430d46decd8859ed11"
+        "sha256:9ae018efed7338dd75829e97c1e2281446e7623f166f863aec96259fe1c212c0"
     );
     assert_eq!(
         harness["manifest_identity"],

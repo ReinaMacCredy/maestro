@@ -63,6 +63,33 @@ while len(list(barrier.glob("*.ready"))) < 2:
 (own / "done").write_text("done", encoding="utf-8")
 """.strip()
 
+RESOURCE_LIMIT_SCRIPT = """
+from pathlib import Path
+import sys
+import time
+
+output = Path(sys.argv[1])
+barrier = Path(sys.argv[2])
+name = sys.argv[3]
+resource_class = sys.argv[4]
+ready = barrier / f"{name}.ready"
+ready.write_text(resource_class, encoding="utf-8")
+deadline = time.monotonic() + 3
+
+if name in {"compile-a", "compile-b"}:
+    while not (barrier / "light.ready").is_file() or len(list(barrier.glob("compile-*.ready"))) < 2:
+        if time.monotonic() >= deadline:
+            raise SystemExit("light work was starved behind compile work")
+        time.sleep(0.01)
+elif name == "compile-c" and not any(
+    (barrier / f"compile-{suffix}.done").is_file() for suffix in ("a", "b")
+):
+    raise SystemExit("compile resource limit was exceeded")
+
+(barrier / f"{name}.done").write_text("done", encoding="utf-8")
+(output / "done").write_text("done", encoding="utf-8")
+""".strip()
+
 PINNED_INPUT_SCRIPT = """
 from pathlib import Path
 import sys
@@ -205,6 +232,7 @@ class ProofEngineTests(unittest.TestCase):
         *,
         run_token: str | None = None,
         max_workers: int = 1,
+        resource_limits: Mapping[str, int] | None = None,
         performance: bool = False,
     ) -> ProofRunResult:
         run_root = self.root / "runs" / name
@@ -214,6 +242,7 @@ class ProofEngineTests(unittest.TestCase):
             cache_root=self.cache,
             run_token=run_token,
             max_workers=max_workers,
+            resource_limits=resource_limits,
             performance_log=self.root / "performance" / f"{name}.v1.jsonl"
             if performance
             else None,
@@ -243,6 +272,17 @@ class ProofEngineTests(unittest.TestCase):
         ]
         self.assertEqual(events[-1]["cache_status"], "hit")
         self.assertIn("duration_ms", events[-1])
+        first_events = [
+            json.loads(line)
+            for line in (self.root / "performance/first.v1.jsonl")
+            .read_text(encoding="ascii")
+            .splitlines()
+        ]
+        scheduler = next(event for event in first_events if event["kind"] == "scheduler")
+        command = next(event for event in first_events if event["kind"] == "command")
+        self.assertEqual(scheduler["plan_identity"], first.plan_identity)
+        self.assertEqual(command["resource_class"], "light")
+        self.assertRegex(command["command_identity"], r"^sha256:[0-9a-f]{64}$")
 
     def test_completed_run_token_cannot_replay_but_new_seal_reexecutes(self) -> None:
         plan = self.plan(cache_mode="run")
@@ -815,6 +855,91 @@ class ProofEngineTests(unittest.TestCase):
 
         self.assertEqual([phase.name for phase in result.phases], ["python", "ruby"])
         self.assertTrue(all((phase.output_root / "done").is_file() for phase in result.phases))
+
+    def test_resource_limits_cap_compile_work_without_starving_light_phases(self) -> None:
+        script = self.inputs / "resource-limit.py"
+        script.write_text(RESOURCE_LIMIT_SCRIPT + "\n", encoding="utf-8")
+        barrier = self.root / "resource-limit-barrier"
+        barrier.mkdir()
+        phases = tuple(
+            PhaseSpec(
+                name=name,
+                commands=(
+                    CommandSpec(
+                        tool="python",
+                        args=(
+                            "{input:script}",
+                            "{phase_root}",
+                            str(barrier),
+                            name,
+                            resource_class,
+                        ),
+                    ),
+                ),
+                inputs=("script",),
+                cache_mode="disabled",
+                resource_class=resource_class,
+            )
+            for name, resource_class in (
+                ("compile-a", "compile"),
+                ("compile-b", "compile"),
+                ("compile-c", "compile"),
+                ("light", "light"),
+            )
+        )
+        plan = ProofPlan(
+            inputs=(InputBinding.file("script", script),),
+            tools=(ToolSpec("python", Path(sys.executable)),),
+            phases=phases,
+        )
+
+        result = self.execute(
+            plan,
+            "resource-limits",
+            max_workers=3,
+            resource_limits={"compile": 2, "light": 3},
+        )
+
+        self.assertEqual([phase.name for phase in result.phases], [phase.name for phase in phases])
+        self.assertTrue(all((phase.output_root / "done").is_file() for phase in result.phases))
+
+    def test_resource_limits_reject_invalid_capacity(self) -> None:
+        with self.assertRaisesRegex(PlanError, "resource limit"):
+            self.execute(
+                self.plan(),
+                "invalid-resource-limit",
+                max_workers=2,
+                resource_limits={"compile": 0},
+            )
+
+    def test_resource_class_is_noncanonical_execution_policy(self) -> None:
+        baseline = self.plan()
+        phase = baseline.phases[0]
+        reclassified = ProofPlan(
+            inputs=baseline.inputs,
+            tools=baseline.tools,
+            phases=(
+                PhaseSpec(
+                    name=phase.name,
+                    commands=phase.commands,
+                    inputs=phase.inputs,
+                    dependencies=phase.dependencies,
+                    cache_mode=phase.cache_mode,
+                    resource_class="compile",
+                ),
+            ),
+        )
+
+        first = self.execute(baseline, "resource-class-light")
+        second = self.execute(
+            reclassified,
+            "resource-class-compile",
+            max_workers=2,
+            resource_limits={"compile": 1},
+        )
+
+        self.assertEqual(first.plan_identity, second.plan_identity)
+        self.assertEqual(second.phases[0].cache_status, "hit")
 
     def test_run_root_placeholder_is_rejected_to_preserve_phase_isolation(self) -> None:
         phase = self.plan().phases[0]

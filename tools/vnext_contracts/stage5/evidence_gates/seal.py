@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import hashlib
 import json
 import os
@@ -39,6 +40,7 @@ DEFAULT_SNAPSHOT_PATHS = (
 )
 SNAPSHOT_PATHS = DEFAULT_SNAPSHOT_PATHS
 SNAPSHOT_SCHEMA = "maestro.vnext.stage5.immutable-workspace-snapshot.v1"
+SNAPSHOT_SOURCE_INDEX_SCHEMA = "maestro.vnext.stage5.snapshot-source-index.v1"
 STAGE4_SOURCE_COMMIT = "9f3cc73b2199c5b2be78dcea8852cbdcafaaafc2"
 STAGE4_SOURCE_TREE = "2f832a04c7109e17b4b298e40b4827c1ced2d527"
 STAGE4_SOURCE_ARCHIVE = "predecessors/stage4-source.tar.gz"
@@ -46,6 +48,8 @@ STAGE4_SOURCE_ARCHIVE_LENGTH = 16_486_231
 STAGE4_SOURCE_ARCHIVE_SHA256 = (
     "347eaf928f81d9ce6e07e3767f0cdaf2cde23cd98d13bad41b745d5fbc359910"
 )
+MAX_LOGICAL_WORKERS = 6
+MAX_COMPILE_WORKERS = 2
 
 
 def canonical_json(value: object) -> bytes:
@@ -215,6 +219,20 @@ def freeze_tree(root: Path) -> None:
     root.chmod(0o555)
 
 
+def fsync_directory(path: Path) -> None:
+    descriptor = os.open(
+        path,
+        os.O_RDONLY
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_NOFOLLOW", 0),
+    )
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
 def copy_snapshot_sources(destination: Path, source_rows: list[list[object]]) -> None:
     for name_value, length_value, digest_value, executable_value in source_rows:
         name = str(name_value)
@@ -238,18 +256,111 @@ def copy_snapshot_sources(destination: Path, source_rows: list[list[object]]) ->
         target.chmod(0o755 if executable else 0o644)
 
 
-def build_snapshot(cargo: Path, snapshot_cache: Path) -> Path:
-    if snapshot_cache.is_symlink() or (snapshot_cache.exists() and not snapshot_cache.is_dir()):
-        raise RuntimeError(f"Stage 5 snapshot cache root is unsafe: {snapshot_cache}")
-    snapshot_cache.mkdir(parents=True, exist_ok=True)
-    if snapshot_cache.is_symlink():
-        raise RuntimeError(f"Stage 5 snapshot cache root is unsafe: {snapshot_cache}")
-    bound_source_rows = source_rows()
-    source_identity = f"sha256:{sha256(canonical_json(bound_source_rows))}"
-    objects = snapshot_cache / "objects"
-    objects.mkdir(parents=True, exist_ok=True)
-    if objects.is_symlink() or not objects.is_dir():
-        raise RuntimeError("immutable Stage 5 snapshot object root is unsafe")
+def cached_snapshot(
+    snapshot_cache: Path,
+    source_identity: str,
+    bound_source_rows: list[list[object]],
+) -> Path | None:
+    source_digest = source_identity.removeprefix("sha256:")
+    if re.fullmatch(r"[0-9a-f]{64}", source_digest) is None:
+        raise RuntimeError("Stage 5 snapshot source identity is malformed")
+    pointer = snapshot_cache / "by-source" / f"{source_digest}.json"
+    if not pointer.exists() and not pointer.is_symlink():
+        return None
+    if pointer.is_symlink() or not pointer.is_file() or pointer.stat().st_mode & 0o222:
+        return None
+    try:
+        value = json.loads(read_regular_file(pointer)[0].decode("ascii"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise RuntimeError("immutable Stage 5 snapshot source index is unreadable") from error
+    if not isinstance(value, dict) or set(value) != {
+        "schema_version",
+        "snapshot_identity",
+        "source_identity",
+    }:
+        raise RuntimeError("immutable Stage 5 snapshot source index is malformed")
+    snapshot_identity = value.get("snapshot_identity")
+    if (
+        value.get("schema_version") != SNAPSHOT_SOURCE_INDEX_SCHEMA
+        or value.get("source_identity") != source_identity
+        or not isinstance(snapshot_identity, str)
+        or re.fullmatch(r"sha256:[0-9a-f]{64}", snapshot_identity) is None
+    ):
+        raise RuntimeError("immutable Stage 5 snapshot source index differs")
+    target = snapshot_cache / "objects" / snapshot_identity.removeprefix("sha256:")
+    require_frozen_snapshot(target)
+    try:
+        manifest = json.loads(
+            read_regular_file(target / "snapshot-manifest.v1.json")[0].decode("ascii")
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise RuntimeError("cached immutable Stage 5 snapshot manifest is unreadable") from error
+    rows = snapshot_tree_rows(target)
+    actual_identity = f"sha256:{sha256(canonical_json(rows))}"
+    expected_manifest = {
+        "schema_version": SNAPSHOT_SCHEMA,
+        "snapshot_identity": snapshot_identity,
+        "source_identity": source_identity,
+        "source_rows": bound_source_rows,
+    }
+    if actual_identity != snapshot_identity or manifest != expected_manifest:
+        raise RuntimeError("cached immutable Stage 5 snapshot differs from its source binding")
+    return target
+
+
+def write_snapshot_source_index(
+    snapshot_cache: Path, source_identity: str, snapshot_identity: str
+) -> None:
+    source_digest = source_identity.removeprefix("sha256:")
+    directory = snapshot_cache / "by-source"
+    if directory.is_symlink() or (directory.exists() and not directory.is_dir()):
+        raise RuntimeError("Stage 5 snapshot source index root is unsafe")
+    directory.mkdir(parents=True, exist_ok=True)
+    if directory.is_symlink() or not directory.is_dir():
+        raise RuntimeError("Stage 5 snapshot source index root is unsafe")
+    path = directory / f"{source_digest}.json"
+    if path.exists() or path.is_symlink():
+        return
+    data = canonical_json(
+        {
+            "schema_version": SNAPSHOT_SOURCE_INDEX_SCHEMA,
+            "snapshot_identity": snapshot_identity,
+            "source_identity": source_identity,
+        }
+    )
+    descriptor = os.open(
+        path,
+        os.O_CREAT
+        | os.O_EXCL
+        | os.O_WRONLY
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_NOFOLLOW", 0),
+        0o600,
+    )
+    try:
+        written = 0
+        while written < len(data):
+            count = os.write(descriptor, data[written:])
+            if count <= 0:
+                raise RuntimeError("Stage 5 snapshot source index write made no progress")
+            written += count
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    path.chmod(0o444)
+    fsync_directory(directory)
+
+
+def build_snapshot_locked(
+    cargo: Path,
+    snapshot_cache: Path,
+    objects: Path,
+    bound_source_rows: list[list[object]],
+    source_identity: str,
+) -> Path:
+    cached = cached_snapshot(snapshot_cache, source_identity, bound_source_rows)
+    if cached is not None:
+        return cached
     temporary = Path(tempfile.mkdtemp(prefix=".stage5-snapshot-", dir=objects))
     try:
         copy_snapshot_sources(temporary, bound_source_rows)
@@ -286,29 +397,67 @@ def build_snapshot(cargo: Path, snapshot_cache: Path) -> Path:
         target = objects / snapshot_identity.removeprefix("sha256:")
         if target.exists():
             manifest_bytes, _ = read_regular_file(target / "snapshot-manifest.v1.json")
-            manifest = json.loads(manifest_bytes.decode("ascii"))
+            actual_manifest = json.loads(manifest_bytes.decode("ascii"))
             actual_rows = snapshot_tree_rows(target)
             actual_identity = f"sha256:{sha256(canonical_json(actual_rows))}"
             if (
                 actual_rows != snapshot_rows
                 or actual_identity != snapshot_identity
-                or manifest
-                != {
-                    "schema_version": SNAPSHOT_SCHEMA,
-                    "snapshot_identity": snapshot_identity,
-                    "source_identity": source_identity,
-                    "source_rows": bound_source_rows,
-                }
+                or actual_manifest != manifest
             ):
                 raise RuntimeError("same immutable snapshot identity has different bytes")
             require_frozen_snapshot(target)
         else:
             freeze_tree(temporary)
             os.rename(temporary, target)
+            fsync_directory(objects)
+        write_snapshot_source_index(snapshot_cache, source_identity, snapshot_identity)
         return target
     finally:
         if temporary.exists():
             shutil.rmtree(temporary, ignore_errors=True)
+
+
+def build_snapshot(cargo: Path, snapshot_cache: Path) -> Path:
+    if snapshot_cache.is_symlink() or (snapshot_cache.exists() and not snapshot_cache.is_dir()):
+        raise RuntimeError(f"Stage 5 snapshot cache root is unsafe: {snapshot_cache}")
+    snapshot_cache.mkdir(parents=True, exist_ok=True)
+    if snapshot_cache.is_symlink():
+        raise RuntimeError(f"Stage 5 snapshot cache root is unsafe: {snapshot_cache}")
+    bound_source_rows = source_rows()
+    source_identity = f"sha256:{sha256(canonical_json(bound_source_rows))}"
+    objects = snapshot_cache / "objects"
+    objects.mkdir(parents=True, exist_ok=True)
+    if objects.is_symlink() or not objects.is_dir():
+        raise RuntimeError("immutable Stage 5 snapshot object root is unsafe")
+    locks = snapshot_cache / "locks"
+    if locks.is_symlink() or (locks.exists() and not locks.is_dir()):
+        raise RuntimeError("Stage 5 snapshot lock root is unsafe")
+    locks.mkdir(parents=True, exist_ok=True)
+    if locks.is_symlink() or not locks.is_dir():
+        raise RuntimeError("Stage 5 snapshot lock root is unsafe")
+    descriptor = os.open(
+        locks / f"source-{source_identity.removeprefix('sha256:')}.lock",
+        os.O_CREAT
+        | os.O_RDWR
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_NOFOLLOW", 0),
+        0o600,
+    )
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        if source_rows() != bound_source_rows:
+            raise RuntimeError("Stage 5 snapshot source tree changed before cache admission")
+        return build_snapshot_locked(
+            cargo,
+            snapshot_cache,
+            objects,
+            bound_source_rows,
+            source_identity,
+        )
+    finally:
+        fcntl.flock(descriptor, fcntl.LOCK_UN)
+        os.close(descriptor)
 
 
 def macos_sdk_root() -> Path:
@@ -447,11 +596,26 @@ def main() -> int:
     parser.add_argument("--snapshot-cache", type=Path)
     parser.add_argument("--performance-log", type=Path)
     parser.add_argument("--resume-token")
+    parser.add_argument("--max-workers", type=int, default=MAX_LOGICAL_WORKERS)
+    parser.add_argument("--compile-workers", type=int)
     parser.add_argument("--prepare-snapshot-only", action="store_true")
     parser.add_argument("--immutable-snapshot", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--sdk-root", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--publication-workspace", type=Path, help=argparse.SUPPRESS)
     args = parser.parse_args()
+    if not 1 <= args.max_workers <= MAX_LOGICAL_WORKERS:
+        raise RuntimeError(
+            f"Stage 5 max workers must be between 1 and {MAX_LOGICAL_WORKERS}"
+        )
+    compile_workers = (
+        min(MAX_COMPILE_WORKERS, args.max_workers)
+        if args.compile_workers is None
+        else args.compile_workers
+    )
+    if not 1 <= compile_workers <= min(MAX_COMPILE_WORKERS, args.max_workers):
+        raise RuntimeError(
+            "Stage 5 compile workers must be between 1 and both the logical and compile caps"
+        )
 
     python = Path(sys.executable).resolve(strict=True)
     cargo = toolchain_binary("cargo")
@@ -478,6 +642,10 @@ def main() -> int:
             str(WORKSPACE),
             "--snapshot-cache",
             str(snapshot_cache),
+            "--max-workers",
+            str(args.max_workers),
+            "--compile-workers",
+            str(compile_workers),
         ]
         for name, value in [
             ("--run-root", args.run_root),
@@ -554,6 +722,22 @@ def main() -> int:
         raise RuntimeError("Rust compiler target library closure is absent or unsafe")
     bindings = (
         InputBinding.tree("workspace-snapshot", workspace_snapshot, path_identity="content"),
+        InputBinding.file(
+            "predecessor-script",
+            workspace_snapshot
+            / "tools/vnext_contracts/stage5/evidence_gates/predecessor.py",
+            path_identity="content",
+        ),
+        InputBinding.file(
+            "stage4-source",
+            workspace_snapshot / STAGE4_SOURCE_ARCHIVE,
+            path_identity="content",
+        ),
+        InputBinding.tree(
+            "stage4-proof",
+            workspace_snapshot / "contracts/vnext/stage4/execution",
+            path_identity="content",
+        ),
         InputBinding.symlink_tree("sdk-root", sdk_root, path_identity="content"),
         InputBinding.file("python-bin", python),
         InputBinding.file("ruby-bin", ruby),
@@ -650,6 +834,7 @@ def main() -> int:
                     "target-triple",
                 ),
                 cache_mode="content",
+                resource_class="light",
             ),
             PhaseSpec(
                 name="predecessor",
@@ -657,20 +842,21 @@ def main() -> int:
                     CommandSpec(
                         tool="python",
                         args=(
-                            "{input:workspace-snapshot}/tools/vnext_contracts/stage5/evidence_gates/predecessor.py",
+                            "{input:predecessor-script}",
                             "--output-root",
                             "{phase_root}/out",
                             "--stage4-source",
-                            "{input:workspace-snapshot}/predecessors/stage4-source.tar.gz",
+                            "{input:stage4-source}",
+                            "--stage4-root",
+                            "{input:stage4-proof}",
                         ),
-                        cwd="{input:workspace-snapshot}",
-                        environment=cargo_environment,
+                        cwd="{phase_root}",
                         label="sealed-predecessor-closure",
                     ),
                 ),
-                inputs=all_inputs,
-                dependencies=("toolchain",),
-                cache_mode="run",
+                inputs=("predecessor-script", "stage4-source", "stage4-proof"),
+                cache_mode="content",
+                resource_class="light",
             ),
             PhaseSpec(
                 name="harness",
@@ -687,8 +873,8 @@ def main() -> int:
                     ),
                 ),
                 inputs=all_inputs,
-                dependencies=("predecessor",),
                 cache_mode="run",
+                resource_class="light",
             ),
             PhaseSpec(
                 name="builder",
@@ -712,6 +898,7 @@ def main() -> int:
                 inputs=all_inputs,
                 dependencies=("predecessor", "harness", "toolchain"),
                 cache_mode="run",
+                resource_class="compile",
             ),
             PhaseSpec(
                 name="validator",
@@ -738,6 +925,7 @@ def main() -> int:
                 inputs=all_inputs,
                 dependencies=("builder", "toolchain"),
                 cache_mode="run",
+                resource_class="compile",
             ),
             PhaseSpec(
                 name="ruby",
@@ -764,6 +952,7 @@ def main() -> int:
                 inputs=all_inputs,
                 dependencies=("builder", "toolchain"),
                 cache_mode="run",
+                resource_class="compile",
             ),
             PhaseSpec(
                 name="consensus",
@@ -808,6 +997,7 @@ def main() -> int:
                     "ruby",
                 ),
                 cache_mode="run",
+                resource_class="light",
             ),
         ),
         environment=proof_environment,
@@ -870,7 +1060,8 @@ def main() -> int:
         run_root=run_root,
         cache_root=cache_root,
         run_token=token,
-        max_workers=1,
+        max_workers=args.max_workers,
+        resource_limits={"compile": compile_workers},
         performance_log=performance_log,
     )
     print(
@@ -880,7 +1071,9 @@ def main() -> int:
                 "phase_cache": {phase.name: phase.cache_status for phase in result.phases},
                 "plan_identity": result.plan_identity,
                 "publication_identity": result.publication_identity,
+                "resource_limits": {"compile": compile_workers},
                 "run_token": result.run_token,
+                "max_workers": args.max_workers,
                 "workspace_snapshot": str(workspace_snapshot),
             },
             sort_keys=True,

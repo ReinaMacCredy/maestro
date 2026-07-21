@@ -37,6 +37,9 @@ EXPECTED_TESTS = (
     "tools.vnext_contracts.proof_engine.test_engine.ProofEngineTests.test_post_pointer_crash_resumes_without_republishing",
     "tools.vnext_contracts.proof_engine.test_engine.ProofEngineTests.test_publication_rejects_output_changed_after_phase_completion",
     "tools.vnext_contracts.proof_engine.test_engine.ProofEngineTests.test_resealed_checkpoint_payload_is_rejected",
+    "tools.vnext_contracts.proof_engine.test_engine.ProofEngineTests.test_resource_class_is_noncanonical_execution_policy",
+    "tools.vnext_contracts.proof_engine.test_engine.ProofEngineTests.test_resource_limits_cap_compile_work_without_starving_light_phases",
+    "tools.vnext_contracts.proof_engine.test_engine.ProofEngineTests.test_resource_limits_reject_invalid_capacity",
     "tools.vnext_contracts.proof_engine.test_engine.ProofEngineTests.test_run_root_placeholder_is_rejected_to_preserve_phase_isolation",
     "tools.vnext_contracts.proof_engine.test_engine.ProofEngineTests.test_same_plan_and_run_token_execute_exactly_once",
     "tools.vnext_contracts.proof_engine.test_engine.ProofEngineTests.test_source_command_and_literal_changes_each_invalidate_cache",
@@ -58,6 +61,7 @@ EXPECTED_TESTS = (
     "tools.vnext_contracts.stage5.evidence_gates.test_seal.Stage5SnapshotTests.test_seven_phase_adapter_resumes_exact_topology_after_interruption",
     "tools.vnext_contracts.stage5.evidence_gates.test_seal.Stage5SnapshotTests.test_snapshot_bootstrap_executes_the_immutable_seal_copy",
     "tools.vnext_contracts.stage5.evidence_gates.test_seal.Stage5SnapshotTests.test_snapshot_cache_ignores_substituted_source_pointer_and_reconstructs_closure",
+    "tools.vnext_contracts.stage5.evidence_gates.test_seal.Stage5SnapshotTests.test_snapshot_cache_reuses_a_frozen_content_bound_snapshot_without_revendoring",
     "tools.vnext_contracts.stage5.evidence_gates.test_seal.Stage5SnapshotTests.test_snapshot_copy_rejects_source_change",
     "tools.vnext_contracts.stage5.evidence_gates.test_seal.Stage5SnapshotTests.test_snapshot_source_rejects_symlinked_directory",
     "tools.vnext_contracts.stage5.evidence_gates.test_toolchain.Stage5ToolchainClosureTests.test_exact_macos_developer_tools_freeze_and_execute_after_relocation",
@@ -67,7 +71,7 @@ EXPECTED_TESTS = (
     "tools.vnext_contracts.stage5.evidence_gates.test_toolchain.Stage5ToolchainClosureTests.test_rejects_symlinked_target_library_entry",
 )
 EXPECTED_TEST_MANIFEST_IDENTITY = (
-    "sha256:7c27a5a189368d197e1ac0ded46c6012de9c9052fc11df430d46decd8859ed11"
+    "sha256:9ae018efed7338dd75829e97c1e2281446e7623f166f863aec96259fe1c212c0"
 )
 
 

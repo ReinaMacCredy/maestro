@@ -83,6 +83,23 @@ class Stage5SnapshotTests(unittest.TestCase):
         self.assertNotEqual(result, substituted)
         self.assertEqual((result / "source.txt").read_bytes(), b"bound-source\n")
 
+    def test_snapshot_cache_reuses_a_frozen_content_bound_snapshot_without_revendoring(
+        self,
+    ) -> None:
+        temporary, workspace, cache = self.fixture()
+        self.addCleanup(temporary.cleanup)
+        vendored = mock.Mock(return_value=mock.Mock(returncode=0, stdout=b"", stderr=b""))
+        with (
+            mock.patch.object(seal, "WORKSPACE", workspace),
+            mock.patch.object(seal, "SNAPSHOT_PATHS", ("source.txt",)),
+            mock.patch.object(subprocess, "run", vendored),
+        ):
+            first = seal.build_snapshot(Path("/bin/false"), cache)
+            second = seal.build_snapshot(Path("/bin/false"), cache)
+
+        self.assertEqual(first, second)
+        self.assertEqual(vendored.call_count, 1)
+
     def test_snapshot_bootstrap_executes_the_immutable_seal_copy(self) -> None:
         temporary, workspace, cache = self.fixture()
         self.addCleanup(temporary.cleanup)
@@ -106,6 +123,8 @@ class Stage5SnapshotTests(unittest.TestCase):
         self.assertEqual(arguments[1], str(snapshot_script))
         self.assertIn("--immutable-snapshot", arguments)
         self.assertEqual(arguments[arguments.index("--sdk-root") + 1], str(sdk_root))
+        self.assertEqual(arguments[arguments.index("--max-workers") + 1], "6")
+        self.assertEqual(arguments[arguments.index("--compile-workers") + 1], "2")
         self.assertEqual(environment["PYTHONDONTWRITEBYTECODE"], "1")
         self.assertNotIn("PYTHONPATH", environment)
 
@@ -179,19 +198,30 @@ class Stage5SnapshotTests(unittest.TestCase):
             keyword = next((item for item in call.keywords if item.arg == key), None)
             return default if keyword is None else ast.literal_eval(keyword.value)
 
-        topology: list[tuple[str, tuple[str, ...], str]] = [
+        topology: list[tuple[str, tuple[str, ...], str, str]] = [
             (
                 str(literal(call, "name", "")),
                 cast(tuple[str, ...], literal(call, "dependencies", ())),
                 str(literal(call, "cache_mode", "run")),
+                str(literal(call, "resource_class", "light")),
             )
             for call in calls
         ]
         self.assertEqual(
-            [name for name, _, _ in topology],
+            [name for name, _, _, _ in topology],
             ["toolchain", "predecessor", "harness", "builder", "validator", "ruby", "consensus"],
         )
-        self.assertEqual([mode for _, _, mode in topology], ["content", *(["run"] * 6)])
+        self.assertEqual(
+            [mode for _, _, mode, _ in topology],
+            ["content", "content", *(["run"] * 5)],
+        )
+        self.assertEqual(
+            [resource_class for _, _, _, resource_class in topology],
+            ["light", "light", "light", "compile", "compile", "compile", "light"],
+        )
+        dependencies = {name: deps for name, deps, _, _ in topology}
+        self.assertEqual(dependencies["predecessor"], ())
+        self.assertEqual(dependencies["harness"], ())
 
         script = root / "adapter-phase.py"
         script.write_text(ADAPTER_PHASE_SCRIPT + "\n", encoding="utf-8")
@@ -219,12 +249,13 @@ class Stage5SnapshotTests(unittest.TestCase):
                             label=f"stage5-adapter-{name}",
                         ),
                     ),
-                    inputs=("script",),
-                    dependencies=dependencies,
-                    cache_mode=mode,
-                )
-                for name, dependencies, mode in topology
-            ),
+                      inputs=("script",),
+                      dependencies=dependencies,
+                      cache_mode=mode,
+                      resource_class=resource_class,
+                  )
+                    for name, dependencies, mode, resource_class in topology
+                ),
             publication=PublicationSpec(
                 release_root=publication,
                 pointer_path=pointer,

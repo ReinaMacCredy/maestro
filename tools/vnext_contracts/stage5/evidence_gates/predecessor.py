@@ -99,12 +99,22 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output-root", type=Path, required=True)
     parser.add_argument("--stage4-source", type=Path, required=True)
+    parser.add_argument("--stage4-root", type=Path)
     args = parser.parse_args()
 
     archive_bytes, archived = read_archive(args.stage4_source)
+    stage4_root = args.stage4_root
+    if stage4_root is not None and (
+        stage4_root.is_symlink() or not stage4_root.is_dir()
+    ):
+        raise RuntimeError("exact Stage 4 proof root is absent or unsafe")
     files: list[list[object]] = []
     for relative in PATHS:
-        workspace_path = WORKSPACE / relative
+        workspace_path = (
+            stage4_root / Path(relative).name
+            if stage4_root is not None
+            else WORKSPACE / relative
+        )
         if workspace_path.is_symlink() or not workspace_path.is_file():
             raise RuntimeError(f"exact Stage 4 predecessor file is absent or unsafe: {relative}")
         current = workspace_path.read_bytes()

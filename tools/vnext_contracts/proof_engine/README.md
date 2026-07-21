@@ -34,7 +34,14 @@ proof means. It removes avoidable reruns around those validators.
   sandbox against a hostile executable. Each phase also receives an isolated
   non-canonical temporary root, which is removed before the output manifest and
   checkpoint are sealed. Dependency edges remain sequential.
-- `duration_ms` and cache status are written only to the performance JSONL log.
+- The scheduler advances the DAG whenever one dependency finishes instead of
+  waiting for an entire ready wave. `PhaseSpec.resource_class` and per-run
+  resource limits are non-canonical execution policy: they cap expensive work
+  without changing plan, phase, checkpoint, artifact, or publication identity.
+  Stage adapters may use up to six logical workers while capping compile-heavy
+  phases at two and broad integration or publication phases at one.
+- `duration_ms`, cache status, exact command identity, phase identity, resource
+  class and scheduler limits are written only to the performance JSONL log.
   They never enter plan, phase, artifact, checkpoint, or publication identity.
 - Publication first seals one immutable content-addressed release and then
   atomically replaces one pointer file. A failed proof phase cannot move the
@@ -51,6 +58,11 @@ proof means. It removes avoidable reruns around those validators.
 - A stage may place its exact proof-engine and snapshot adversarial tests in a
   run-scoped preflight phase and bind that deterministic receipt into consensus
   before expensive validators execute.
+- Content-addressed snapshot indexes are advisory until their pointer is
+  immutable and their complete frozen target tree rehashes to the bound source
+  closure. A valid index skips repeated source copying and `cargo vendor`;
+  mutable or substituted indexes are ignored, while corruption beneath an
+  admitted immutable index fails closed.
 - Tool identity binds exact executable bytes and an exact probe under the proof
   environment. Stage adapters must additionally bind any runtime closure that
   they relocate or claim to make hermetic. Stage 5 materializes and binds its
@@ -62,22 +74,25 @@ proof means. It removes avoidable reruns around those validators.
 `content` path identity mode is allowed only after the caller proves that the
 command cannot observe or emit the physical input location.
 
-## Stage 4 adoption boundary
+## Stage 5 adapter
 
-Keep the current Stage 4 builder, Python validator, and Ruby verifier as the
-parity oracle until Stage 4 has reached its committed boundary. The first
-adapter should use:
+Stage 5 keeps the committed Stage 4 receipts as its immutable predecessor and
+uses:
 
-1. one run-scoped builder phase;
-2. one run-scoped Python reexecution phase;
-3. one run-scoped Ruby reexecution phase;
-4. separate Cargo target and temporary roots for Python and Ruby only after
-   binary-receipt parity has been proven;
-5. content caching only for immutable predecessor chains whose complete sealed
-   input closure is in the key.
+1. one content-cached toolchain phase;
+2. one content-cached predecessor phase bound only to its script, exact Stage 4
+   archive, and six frozen Stage 4 proof files;
+3. one run-scoped adversarial harness phase;
+4. one run-scoped builder phase;
+5. run-scoped Python and Ruby reexecution phases with disjoint temporary and
+   Cargo target roots, scheduled concurrently under the two-compile cap;
+6. one run-scoped consensus and atomic publication phase.
 
 A stage that claims fresh predecessor reexecution cannot use that exception;
 its predecessor phase must remain run-scoped and execute once for every new seal.
+Future mutant phases should put the exact mutant identity in the phase name or
+command label so the non-canonical performance log records duration and cache
+status per mutant without adding timing data to canonical proof bytes.
 
 The existing engine can be removed only after A/B output parity, all compiled
 mutant rejections, cache invalidation, interrupted-run resume, corrupt-cache
@@ -92,4 +107,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \
 PYTHONDONTWRITEBYTECODE=1 mypy --strict --explicit-package-bases \
   tools/vnext_contracts/proof_engine
 PYTHONDONTWRITEBYTECODE=1 pyright tools/vnext_contracts/proof_engine
+PYTHONDONTWRITEBYTECODE=1 python3 \
+  tools/vnext_contracts/stage5/evidence_gates/harness.py \
+  --output-root /private/tmp/maestro-stage5-proof-harness
 ```

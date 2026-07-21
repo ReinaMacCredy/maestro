@@ -12,7 +12,7 @@ import tempfile
 import threading
 import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterable, Mapping, Sequence, cast
@@ -125,6 +125,7 @@ class PhaseSpec:
     inputs: tuple[str, ...] = ()
     dependencies: tuple[str, ...] = ()
     cache_mode: str = "run"
+    resource_class: str = "light"
 
 
 @dataclass(frozen=True)
@@ -429,10 +430,18 @@ class ProofEngine:
         cache_root: Path,
         run_token: str | None = None,
         max_workers: int = 1,
+        resource_limits: Mapping[str, int] | None = None,
         performance_log: Path | None = None,
     ) -> ProofRunResult:
         if max_workers < 1:
             raise PlanError("max_workers must be at least one")
+        normalized_resource_limits = dict(resource_limits or {})
+        for resource_class, limit in normalized_resource_limits.items():
+            _require_name(resource_class, "resource class")
+            if isinstance(limit, bool) or limit < 1 or limit > max_workers:
+                raise PlanError(
+                    f"resource limit for {resource_class} must be between one and max_workers"
+                )
         run_token = run_token or uuid.uuid4().hex
         if not run_token.strip() or len(run_token.encode("utf-8")) > 256:
             raise PlanError("run_token must contain between 1 and 256 UTF-8 bytes")
@@ -464,6 +473,7 @@ class ProofEngine:
                 cache_root,
                 run_token,
                 max_workers,
+                normalized_resource_limits,
                 performance_log,
             )
         finally:
@@ -485,6 +495,7 @@ class ProofEngine:
         cache_root: Path,
         run_token: str,
         max_workers: int,
+        resource_limits: Mapping[str, int],
         performance_log: Path | None,
     ) -> ProofRunResult:
         if {
@@ -509,45 +520,82 @@ class ProofEngine:
             environment,
         )
         recorder = _PerformanceRecorder(performance_log)
+        recorder.emit(
+            kind="scheduler",
+            max_workers=max_workers,
+            plan_identity=plan_identity,
+            resource_limits=dict(sorted(resource_limits.items())),
+            run_token=run_token,
+        )
         results: dict[str, PhaseResult] = {}
         pending = set(phases)
+        phase_order = {phase.name: index for index, phase in enumerate(plan.phases)}
+        running: dict[Future[PhaseResult], str] = {}
+        running_by_resource: dict[str, int] = {}
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            while pending:
+            while pending or running:
                 ready = sorted(
-                    name for name in pending if set(phases[name].dependencies) <= set(results)
+                    (
+                        name
+                        for name in pending
+                        if set(phases[name].dependencies) <= set(results)
+                    ),
+                    key=phase_order.__getitem__,
                 )
-                if not ready:
-                    raise PlanError("phase dependencies contain a cycle")
-                futures = {
-                    executor.submit(
+                for name in ready:
+                    if len(running) >= max_workers:
+                        break
+                    phase = phases[name]
+                    resource_class = phase.resource_class
+                    resource_limit = resource_limits.get(resource_class, max_workers)
+                    if running_by_resource.get(resource_class, 0) >= resource_limit:
+                        continue
+                    dependencies = {
+                        dependency: results[dependency]
+                        for dependency in phase.dependencies
+                    }
+                    future = executor.submit(
                         self._execute_phase,
-                        phases[name],
+                        phase,
                         pinned_inputs,
                         pinned_tools,
                         environment,
                         input_identities,
                         tool_identities,
-                        results,
+                        dependencies,
                         run_root,
                         cache_root,
                         run_token,
                         recorder,
-                    ): name
-                    for name in ready
-                }
-                failures: list[BaseException] = []
-                completed: dict[str, PhaseResult] = {}
-                for future in as_completed(futures):
-                    name = futures[future]
-                    try:
-                        completed[name] = future.result()
-                    except BaseException as error:
-                        failures.append(error)
-                if failures:
-                    raise failures[0]
-                for name in ready:
-                    results[name] = completed[name]
+                    )
+                    running[future] = name
+                    running_by_resource[resource_class] = (
+                        running_by_resource.get(resource_class, 0) + 1
+                    )
                     pending.remove(name)
+                if not running:
+                    if ready:
+                        raise PlanError("resource limits prevent every ready proof phase")
+                    raise PlanError("phase dependencies contain a cycle")
+                completed_futures, _ = wait(
+                    tuple(running), return_when=FIRST_COMPLETED
+                )
+                failures: list[tuple[int, BaseException]] = []
+                completed: list[tuple[int, str, PhaseResult]] = []
+                for future in completed_futures:
+                    name = running.pop(future)
+                    resource_class = phases[name].resource_class
+                    running_by_resource[resource_class] -= 1
+                    try:
+                        completed.append((phase_order[name], name, future.result()))
+                    except BaseException as error:
+                        failures.append((phase_order[name], error))
+                if failures:
+                    for future in running:
+                        future.cancel()
+                    raise min(failures, key=lambda row: row[0])[1]
+                for _, name, result in sorted(completed):
+                    results[name] = result
         if {
             name: self._input_identity(binding) for name, binding in inputs.items()
         } != input_identities:
@@ -564,10 +612,13 @@ class ProofEngine:
             environment,
         )
         ordered = tuple(results[phase.name] for phase in plan.phases)
-        for phase in ordered:
-            if _output_manifest(phase.output_root)["identity"] != phase.output_identity:
+        for phase_result in ordered:
+            if (
+                _output_manifest(phase_result.output_root)["identity"]
+                != phase_result.output_identity
+            ):
                 raise InputMutationError(
-                    f"a proof command changed completed phase output {phase.name}"
+                    f"a proof command changed completed phase output {phase_result.name}"
                 )
         publication_identity = (
             self._publish(
@@ -787,6 +838,7 @@ class ProofEngine:
         phase_names: set[str] = set()
         for phase in plan.phases:
             _require_name(phase.name, "phase name")
+            _require_name(phase.resource_class, "resource class")
             if phase.name in phase_names:
                 raise PlanError(f"duplicate phase name: {phase.name}")
             phase_names.add(phase.name)
@@ -1171,6 +1223,8 @@ class ProofEngine:
                 duration_ms=elapsed,
                 kind="phase",
                 phase=phase.name,
+                phase_identity=phase_identity,
+                resource_class=phase.resource_class,
             )
             return PhaseResult(
                 name=phase.name,
@@ -1247,6 +1301,8 @@ class ProofEngine:
             duration_ms=elapsed,
             kind="phase",
             phase=phase.name,
+            phase_identity=phase_identity,
+            resource_class=phase.resource_class,
         )
         return PhaseResult(
             name=phase.name,
@@ -1305,11 +1361,13 @@ class ProofEngine:
         succeeded = result.returncode == command.expected_exit_code
         recorder.emit(
             cache_status="executed",
+            command_identity=_digest(_canonical_bytes(self._command_value(command))),
             command_index=index,
             command_label=command.label,
             duration_ms=elapsed,
             kind="command",
             phase=phase.name,
+            resource_class=phase.resource_class,
             result="pass" if succeeded else "fail",
         )
         if not succeeded:
