@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest import mock
 
@@ -33,6 +35,9 @@ class Stage5ToolchainClosureTests(unittest.TestCase):
             (closure / "developer-toolchain-manifest.v1.json").read_text(encoding="ascii")
         )
         source_names = {str(row[0]) for row in manifest["source_rows"]}
+        tree_names = {str(row[0]) for row in manifest["tree_rows"]}
+        self.assertTrue(set(seal.DEVELOPER_LINKER_PATHS) <= source_names)
+        self.assertTrue(set(seal.DEVELOPER_LINKER_PATHS) <= tree_names)
         self.assertIn((resource_relative / "include/arm_neon.h").as_posix(), source_names)
         self.assertTrue(
             any(name.startswith((resource_relative / "lib/darwin").as_posix()) for name in source_names)
@@ -122,6 +127,46 @@ class Stage5ToolchainClosureTests(unittest.TestCase):
                     resource, relative, expected
                 )
 
+    def test_rejects_linker_mutation_during_copy(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            linker = root / "ld"
+            linker.write_bytes(b"linker-before")
+            linker.chmod(0o755)
+            destination = root / "closure"
+            original = seal.read_regular_file
+            first = True
+
+            def mutate_after_binding(path: Path) -> tuple[bytes, bool]:
+                nonlocal first
+                result = original(path)
+                if path == linker and first:
+                    first = False
+                    linker.write_bytes(b"linker-substituted")
+                return result
+
+            with (
+                mock.patch.object(seal, "read_regular_file", side_effect=mutate_after_binding),
+                self.assertRaisesRegex(RuntimeError, "changed before it was copied"),
+            ):
+                seal.copy_developer_toolchain_sources({"usr/bin/ld": linker}, destination)
+
+    def test_rejects_linker_outside_exact_clang_toolchain(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            clang = root / "toolchain/usr/bin/clang"
+            linker = root / "substituted/usr/bin/ld"
+            clang.parent.mkdir(parents=True)
+            linker.parent.mkdir(parents=True)
+            clang.write_bytes(b"clang")
+            linker.write_bytes(b"linker")
+            linker.chmod(0o755)
+            with (
+                mock.patch.object(seal, "xcrun_tool", return_value=linker),
+                self.assertRaisesRegex(RuntimeError, "outside the exact clang toolchain"),
+            ):
+                seal.developer_linker_sources(clang)
+
     @unittest.skipUnless(sys.platform == "darwin", "macOS developer-tool integration")
     def test_rejects_mutated_cached_clang_resource(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -135,6 +180,31 @@ class Stage5ToolchainClosureTests(unittest.TestCase):
                 RuntimeError, "same developer toolchain identity has different bytes"
             ):
                 seal.build_developer_toolchain_closure(cache_root)
+
+    @unittest.skipUnless(sys.platform == "darwin", "macOS developer-tool integration")
+    def test_relocated_clang_links_concurrently_with_empty_path(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            closure = seal.build_developer_toolchain_closure(Path(directory) / "cache")
+            sdk_root = seal.macos_sdk_root()
+            environment = {
+                "LANG": "C",
+                "LC_ALL": "C",
+                "PATH": "",
+                "PYTHONDONTWRITEBYTECODE": "1",
+                "TZ": "UTC",
+            }
+            with (
+                mock.patch.dict(os.environ, environment, clear=True),
+                ThreadPoolExecutor(max_workers=2) as executor,
+            ):
+                futures = [
+                    executor.submit(
+                        seal.verify_developer_toolchain_execution, closure, sdk_root
+                    )
+                    for _ in range(2)
+                ]
+                for future in futures:
+                    future.result()
 
     def fixture(
         self,

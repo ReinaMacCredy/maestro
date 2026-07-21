@@ -50,6 +50,20 @@ STAGE4_SOURCE_ARCHIVE_SHA256 = (
 )
 MAX_LOGICAL_WORKERS = 6
 MAX_COMPILE_WORKERS = 2
+DEVELOPER_TOOLCHAIN_ENVIRONMENT = {
+    "LANG": "C",
+    "LC_ALL": "C",
+    "PATH": "",
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "TZ": "UTC",
+}
+DEVELOPER_LINKER_PATHS = (
+    "usr/bin/ld",
+    "usr/lib/libcodedirectory.dylib",
+    "usr/lib/libLTO.dylib",
+    "usr/lib/libswiftDemangle.dylib",
+    "usr/lib/libtapi.dylib",
+)
 
 
 def canonical_json(value: object) -> bytes:
@@ -483,7 +497,11 @@ def xcrun_tool(name: str) -> Path:
 def clang_resource_directory(clang: Path) -> tuple[Path, Path]:
     before = read_regular_file(clang)
     completed = subprocess.run(
-        [str(clang), "-print-resource-dir"], capture_output=True, check=False, text=True
+        [str(clang), "-print-resource-dir"],
+        capture_output=True,
+        check=False,
+        env=DEVELOPER_TOOLCHAIN_ENVIRONMENT,
+        text=True,
     )
     after = read_regular_file(clang)
     if before != after:
@@ -549,6 +567,22 @@ def require_unchanged_developer_resource_sources(
         raise RuntimeError("developer resource tree changed while it was copied")
 
 
+def developer_linker_sources(clang: Path) -> dict[str, Path]:
+    linker = xcrun_tool("ld")
+    if linker.name != "ld" or linker.parent != clang.parent:
+        raise RuntimeError("exact developer linker is outside the exact clang toolchain")
+    toolchain = clang.parent.parent
+    sources = {
+        relative: toolchain / Path(relative).relative_to("usr")
+        for relative in DEVELOPER_LINKER_PATHS
+    }
+    for relative, source in sources.items():
+        _, executable = read_regular_file(source)
+        if relative == "usr/bin/ld" and not executable:
+            raise RuntimeError("exact developer linker is not executable")
+    return sources
+
+
 def copy_developer_toolchain_sources(
     sources: dict[str, Path], destination_root: Path
 ) -> list[list[object]]:
@@ -590,6 +624,7 @@ def developer_toolchain_rows(root: Path) -> list[list[object]]:
 
 def verify_developer_toolchain_execution(root: Path, sdk_root: Path | None = None) -> None:
     clang = root / "usr/bin/clang"
+    linker = root / "usr/bin/ld"
     ar = root / "usr/bin/ar"
     ranlib = root / "usr/bin/ranlib"
     resource, _ = clang_resource_directory(clang)
@@ -605,11 +640,37 @@ def verify_developer_toolchain_execution(root: Path, sdk_root: Path | None = Non
         [str(clang), "-print-target-triple"],
         capture_output=True,
         check=False,
+        env=DEVELOPER_TOOLCHAIN_ENVIRONMENT,
         text=True,
     )
     target = target_probe.stdout.strip()
     if target_probe.returncode != 0 or re.fullmatch(r"arm64-apple-darwin[0-9.]+", target) is None:
         raise RuntimeError("relocated developer toolchain target is not the exact native target")
+    linker_probe = subprocess.run(
+        [str(clang), "-print-prog-name=ld"],
+        capture_output=True,
+        check=False,
+        env=DEVELOPER_TOOLCHAIN_ENVIRONMENT,
+        text=True,
+    )
+    linker_lines = linker_probe.stdout.splitlines()
+    reported_linker = Path(linker_lines[0]) if len(linker_lines) == 1 else None
+    resolved_linker = (
+        reported_linker.resolve(strict=True)
+        if reported_linker is not None and reported_linker.is_absolute()
+        else None
+    )
+    if (
+        linker_probe.returncode != 0
+        or len(linker_lines) != 1
+        or reported_linker is None
+        or not reported_linker.is_absolute()
+        or resolved_linker != linker.resolve(strict=True)
+    ):
+        raise RuntimeError("relocated clang does not resolve its exact bound linker")
+    _, linker_executable = read_regular_file(linker)
+    if not linker_executable:
+        raise RuntimeError("relocated developer linker is not executable")
     with tempfile.TemporaryDirectory(prefix="maestro-stage5-clt-probe-") as directory:
         probe_root = Path(directory)
         source = probe_root / "probe.c"
@@ -639,7 +700,12 @@ def verify_developer_toolchain_execution(root: Path, sdk_root: Path | None = Non
             [str(executable)],
         )
         for command in commands:
-            completed = subprocess.run(command, capture_output=True, check=False)
+            completed = subprocess.run(
+                command,
+                capture_output=True,
+                check=False,
+                env=DEVELOPER_TOOLCHAIN_ENVIRONMENT,
+            )
             if completed.returncode != 0:
                 raise RuntimeError(
                     "relocated developer toolchain is not executable: "
@@ -654,8 +720,10 @@ def build_developer_toolchain_closure(cache_root: Path) -> Path:
         "usr/bin/ar": xcrun_tool("ar"),
         "usr/bin/ranlib": xcrun_tool("ranlib"),
     }
-    ranlib_root = sources["usr/bin/ranlib"].parent.parent
-    sources["usr/lib/libLTO.dylib"] = (ranlib_root / "lib/libLTO.dylib").resolve(strict=True)
+    linker_sources = developer_linker_sources(clang)
+    if set(sources).intersection(linker_sources):
+        raise RuntimeError("developer linker destination collides with a tool")
+    sources.update(linker_sources)
     resource, resource_relative = clang_resource_directory(clang)
     resource_sources = developer_resource_sources(resource, resource_relative)
     if set(sources).intersection(resource_sources):
