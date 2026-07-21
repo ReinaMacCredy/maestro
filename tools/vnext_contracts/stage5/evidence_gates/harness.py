@@ -68,13 +68,18 @@ EXPECTED_TESTS = (
     "tools.vnext_contracts.stage5.evidence_gates.test_toolchain.Stage5ToolchainClosureTests.test_exact_macos_developer_tools_freeze_and_execute_after_relocation",
     "tools.vnext_contracts.stage5.evidence_gates.test_toolchain.Stage5ToolchainClosureTests.test_materialized_macos_developer_tools_execute_after_relocation",
     "tools.vnext_contracts.stage5.evidence_gates.test_toolchain.Stage5ToolchainClosureTests.test_materializes_exact_minimal_compiler_closure",
+    "tools.vnext_contracts.stage5.evidence_gates.test_toolchain.Stage5ToolchainClosureTests.test_rejects_clang_resource_mutation_during_copy",
+    "tools.vnext_contracts.stage5.evidence_gates.test_toolchain.Stage5ToolchainClosureTests.test_rejects_clang_resource_tree_growth_during_copy",
     "tools.vnext_contracts.stage5.evidence_gates.test_toolchain.Stage5ToolchainClosureTests.test_rejects_driver_substitution_during_materialization",
     "tools.vnext_contracts.stage5.evidence_gates.test_toolchain.Stage5ToolchainClosureTests.test_rejects_invalid_driver_basename",
+    "tools.vnext_contracts.stage5.evidence_gates.test_toolchain.Stage5ToolchainClosureTests.test_rejects_mutated_cached_clang_resource",
     "tools.vnext_contracts.stage5.evidence_gates.test_toolchain.Stage5ToolchainClosureTests.test_rejects_nested_tool_aba_during_materialization",
+    "tools.vnext_contracts.stage5.evidence_gates.test_toolchain.Stage5ToolchainClosureTests.test_rejects_substituted_clang_resource_directory",
+    "tools.vnext_contracts.stage5.evidence_gates.test_toolchain.Stage5ToolchainClosureTests.test_rejects_symlinked_clang_resource_entry",
     "tools.vnext_contracts.stage5.evidence_gates.test_toolchain.Stage5ToolchainClosureTests.test_rejects_symlinked_target_library_entry",
 )
 EXPECTED_TEST_MANIFEST_IDENTITY = (
-    "sha256:b16ab816a6d3f4dc73ee83f8fe5fc87e9e447fbca5bc0421727c63f0c101f1be"
+    "sha256:99817ec0615d50f6619c15ac11ad86592b16bc3b69dc54e1ca502598fc4454e5"
 )
 
 

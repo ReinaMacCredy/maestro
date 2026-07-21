@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -20,6 +21,22 @@ class Stage5ToolchainClosureTests(unittest.TestCase):
         )
         seal.require_frozen_snapshot(closure)
         seal.verify_developer_toolchain_execution(closure)
+        resource_root, resource_relative = seal.clang_resource_directory(
+            closure / "usr/bin/clang"
+        )
+        self.assertEqual(resource_root, closure / resource_relative)
+        self.assertTrue((resource_root / "include/arm_neon.h").is_file())
+        self.assertTrue((resource_root / "lib/darwin").is_dir())
+        self.assertFalse((resource_root / "lib/macho_embedded").exists())
+        self.assertFalse((resource_root / "share").exists())
+        manifest = json.loads(
+            (closure / "developer-toolchain-manifest.v1.json").read_text(encoding="ascii")
+        )
+        source_names = {str(row[0]) for row in manifest["source_rows"]}
+        self.assertIn((resource_relative / "include/arm_neon.h").as_posix(), source_names)
+        self.assertTrue(
+            any(name.startswith((resource_relative / "lib/darwin").as_posix()) for name in source_names)
+        )
         with tempfile.TemporaryDirectory() as directory:
             cache_root = Path(directory) / "cache"
             cache_root.mkdir()
@@ -29,6 +46,95 @@ class Stage5ToolchainClosureTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "object root is unsafe"):
                 seal.build_developer_toolchain_closure(cache_root)
             self.assertEqual(list(escaped.iterdir()), [])
+
+    def test_rejects_symlinked_clang_resource_entry(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "resource"
+            include = root / "include"
+            darwin = root / "lib/darwin"
+            include.mkdir(parents=True)
+            darwin.mkdir(parents=True)
+            (include / "real.h").write_bytes(b"header")
+            (include / "arm_neon.h").symlink_to(include / "real.h")
+            with self.assertRaisesRegex(RuntimeError, "resource tree contains an unsafe entry"):
+                seal.developer_resource_sources(root, Path("usr/lib/clang/21"))
+
+    def test_rejects_substituted_clang_resource_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            clang = root / "toolchain/usr/bin/clang"
+            clang.parent.mkdir(parents=True)
+            clang.write_bytes(b"clang-fixture")
+            clang.chmod(0o755)
+            substituted = root / "substituted/lib/clang/21"
+            substituted.mkdir(parents=True)
+            probe = subprocess.CompletedProcess(
+                [str(clang), "-print-resource-dir"],
+                0,
+                stdout=f"{substituted}\n",
+                stderr="",
+            )
+            with (
+                mock.patch.object(subprocess, "run", return_value=probe),
+                self.assertRaisesRegex(RuntimeError, "outside its exact toolchain root"),
+            ):
+                seal.clang_resource_directory(clang)
+
+    def test_rejects_clang_resource_mutation_during_copy(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            resource = root / "arm_neon.h"
+            resource.write_bytes(b"header-before")
+            destination = root / "closure"
+            original = seal.read_regular_file
+            first = True
+
+            def mutate_after_binding(path: Path) -> tuple[bytes, bool]:
+                nonlocal first
+                result = original(path)
+                if path == resource and first:
+                    first = False
+                    resource.write_bytes(b"header-substituted")
+                return result
+
+            with (
+                mock.patch.object(seal, "read_regular_file", side_effect=mutate_after_binding),
+                self.assertRaisesRegex(RuntimeError, "changed before it was copied"),
+            ):
+                seal.copy_developer_toolchain_sources(
+                    {"usr/lib/clang/21/include/arm_neon.h": resource}, destination
+                )
+
+    def test_rejects_clang_resource_tree_growth_during_copy(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            resource = Path(directory) / "resource"
+            include = resource / "include"
+            darwin = resource / "lib/darwin"
+            include.mkdir(parents=True)
+            darwin.mkdir(parents=True)
+            (include / "arm_neon.h").write_bytes(b"header")
+            (darwin / "libclang_rt.osx.a").write_bytes(b"runtime")
+            relative = Path("usr/lib/clang/21")
+            expected = seal.developer_resource_sources(resource, relative)
+            (include / "substituted.h").write_bytes(b"late addition")
+            with self.assertRaisesRegex(RuntimeError, "resource tree changed while it was copied"):
+                seal.require_unchanged_developer_resource_sources(
+                    resource, relative, expected
+                )
+
+    @unittest.skipUnless(sys.platform == "darwin", "macOS developer-tool integration")
+    def test_rejects_mutated_cached_clang_resource(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            cache_root = Path(directory) / "cache"
+            closure = seal.build_developer_toolchain_closure(cache_root)
+            header = closure / "usr/lib/clang/21/include/arm_neon.h"
+            data = header.read_bytes()
+            header.chmod(0o644)
+            header.write_bytes(data + b"\n")
+            with self.assertRaisesRegex(
+                RuntimeError, "same developer toolchain identity has different bytes"
+            ):
+                seal.build_developer_toolchain_closure(cache_root)
 
     def fixture(
         self,
