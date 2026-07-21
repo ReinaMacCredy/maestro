@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import tempfile
 import unittest
 from pathlib import Path
@@ -13,8 +14,8 @@ class Stage5ConsensusTests(unittest.TestCase):
     def test_engine_local_binary_hashes_are_validated_before_semantic_consensus(self) -> None:
         runs = self.behavior_runs("a" * 64)
         self.assertEqual(
-            consensus.semantic_behavior_runs(runs),
-            consensus.semantic_behavior_runs(self.behavior_runs("b" * 64)),
+            self.semantic_runs(runs),
+            self.semantic_runs(self.behavior_runs("b" * 64)),
         )
         for label, mutation in (
             ("uppercase", "A" * 64),
@@ -22,13 +23,13 @@ class Stage5ConsensusTests(unittest.TestCase):
             ("non-hex", "g" * 64),
         ):
             with self.subTest(label=label), self.assertRaises(RuntimeError):
-                consensus.semantic_behavior_runs(self.behavior_runs(mutation))
+                self.semantic_runs(self.behavior_runs(mutation))
         runs[-1]["binary_sha256"] = "b" * 64
         with self.assertRaises(RuntimeError):
-            consensus.semantic_behavior_runs(runs)
+            self.semantic_runs(runs)
 
     def test_semantic_consensus_excludes_only_engine_local_binary_hashes(self) -> None:
-        expected = consensus.semantic_behavior_runs(self.behavior_runs("a" * 64))
+        expected = self.semantic_runs(self.behavior_runs("a" * 64))
         for field, value in (
             ("command", ["maestro", "other", "--exact", "--nocapture"]),
             ("name", "other"),
@@ -36,14 +37,36 @@ class Stage5ConsensusTests(unittest.TestCase):
         ):
             runs = self.behavior_runs("b" * 64)
             runs[0]["tests"][0][field] = value
-            with self.subTest(field=field):
-                self.assertNotEqual(consensus.semantic_behavior_runs(runs), expected)
-        for field, run_value in (("passed", 0), ("label", "other")):
+            with self.subTest(field=field), self.assertRaises(RuntimeError):
+                self.semantic_runs(runs)
+        runs = self.behavior_runs("b" * 64)
+        runs[0]["label"] = "other"
+        self.assertNotEqual(self.semantic_runs(runs), expected)
+        for field, run_value in (
+            ("passed", 0),
+            ("label", ""),
+            ("label", "Invalid Label"),
+        ):
             runs = self.behavior_runs("b" * 64)
             runs[0][field] = run_value
-            with self.subTest(field=field):
-                self.assertNotEqual(consensus.semantic_behavior_runs(runs), expected)
+            with self.subTest(field=field, value=run_value), self.assertRaises(
+                RuntimeError
+            ):
+                self.semantic_runs(runs)
+        runs = self.behavior_runs("b" * 64)
+        runs[0]["tests"] = []
+        with self.assertRaises(RuntimeError):
+            self.semantic_runs(runs)
+        runs = self.behavior_runs("b" * 64)
+        runs.insert(1, copy.deepcopy(runs[0]))
+        runs[1]["tests"][0]["name"] = "other_exact"
+        runs[1]["tests"][0]["command"][1] = "other_exact"
+        with self.assertRaises(RuntimeError):
+            self.semantic_runs(runs, expected_passes=2)
+        with self.assertRaises(RuntimeError):
+            self.semantic_runs(self.behavior_runs("b" * 64), expected_passes=2)
         for field, mutant_value in (
+            ("label", "other"),
             ("command", ["maestro", "other", "--exact", "--nocapture"]),
             ("passed", 1),
             ("rejected", False),
@@ -52,8 +75,17 @@ class Stage5ConsensusTests(unittest.TestCase):
         ):
             runs = self.behavior_runs("b" * 64)
             runs[-1][field] = mutant_value
-            with self.subTest(field=field):
-                self.assertNotEqual(consensus.semantic_behavior_runs(runs), expected)
+            with self.subTest(field=field), self.assertRaises(RuntimeError):
+                self.semantic_runs(runs)
+
+    @staticmethod
+    def semantic_runs(
+        runs: list[dict[str, Any]], *, expected_passes: int = 1
+    ) -> list[dict[str, Any]]:
+        with mock.patch.object(
+            consensus, "EXPECTED_BEHAVIOR_TESTS", expected_passes
+        ):
+            return consensus.semantic_behavior_runs(runs)
 
     @staticmethod
     def behavior_runs(binary_sha256: str) -> list[dict[str, Any]]:
@@ -74,7 +106,7 @@ class Stage5ConsensusTests(unittest.TestCase):
                 "binary_sha256": binary_sha256,
                 "command": [
                     "maestro",
-                    "substitution",
+                    "exact_same_count_substitution_mutant",
                     "--exact",
                     "--nocapture",
                 ],

@@ -556,34 +556,90 @@ fn read_json(path: PathBuf) -> Value {
 
 fn semantic_behavior_runs(runs: &Value) -> Value {
     let mut projected = runs.as_array().unwrap().clone();
-    let mut binary_by_target = BTreeMap::new();
-    for run in &mut projected {
-        let binary_sha256 = run["binary_sha256"].as_str().unwrap();
-        assert_eq!(binary_sha256.len(), 64);
-        assert!(
-            binary_sha256
-                .bytes()
-                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-        );
-        let target = if let Some(tests) = run.get("tests").and_then(Value::as_array) {
-            let targets = tests
-                .iter()
-                .map(|test| test["command"][0].as_str().unwrap())
-                .collect::<BTreeSet<_>>();
-            assert_eq!(targets.len(), 1);
-            (*targets.first().unwrap()).to_owned()
-        } else {
-            run["command"][0].as_str().unwrap().to_owned()
-        };
-        if let Some(previous) = binary_by_target.insert(target, binary_sha256.to_owned()) {
-            assert_eq!(previous, binary_sha256);
+    assert!(projected.len() >= 2);
+    let normal_count = projected.len() - 1;
+    let mut binary_by_target = BTreeMap::<String, String>::new();
+    let mut labels = BTreeSet::new();
+    let mut total_passed = 0_u64;
+    let mut first_exact = None;
+    for run in &mut projected[..normal_count] {
+        let label = run["label"].as_str().unwrap();
+        assert!(valid_behavior_label(label));
+        assert_ne!(label, "same-count-substitution-mutant");
+        assert!(labels.insert(label.to_owned()));
+        let tests = run["tests"].as_array().unwrap();
+        assert!(!tests.is_empty());
+        let passed = run["passed"].as_u64().unwrap();
+        assert_eq!(passed, tests.len() as u64);
+        total_passed += passed;
+        let mut targets = BTreeSet::new();
+        for test in tests {
+            let name = test["name"].as_str().unwrap();
+            let command = test["command"].as_array().unwrap();
+            assert_eq!(command.len(), 4);
+            let target = command[0].as_str().unwrap();
+            assert_eq!(command[1], name);
+            assert_eq!(command[2], "--exact");
+            assert_eq!(command[3], "--nocapture");
+            assert_eq!(test["result"], "pass");
+            targets.insert(target);
+            first_exact.get_or_insert_with(|| (target.to_owned(), name.to_owned()));
         }
+        assert_eq!(targets.len(), 1);
+        bind_engine_binary(run, targets.first().unwrap(), &mut binary_by_target);
         run.as_object_mut()
             .unwrap()
             .remove("binary_sha256")
             .unwrap();
     }
+    assert_eq!(total_passed, 55);
+
+    let (first_target, first_exact_name) = first_exact.unwrap();
+    let mutant = &mut projected[normal_count];
+    assert_eq!(mutant["label"], "same-count-substitution-mutant");
+    assert_eq!(mutant["passed"].as_u64(), Some(0));
+    assert_eq!(mutant["rejected"], true);
+    assert_eq!(mutant["result"], "rejected");
+    assert_eq!(mutant["substituted_for"], first_exact_name);
+    assert_eq!(
+        mutant["command"],
+        serde_json::json!([
+            first_target,
+            format!("{first_exact_name}_same_count_substitution_mutant"),
+            "--exact",
+            "--nocapture",
+        ])
+    );
+    bind_engine_binary(mutant, &first_target, &mut binary_by_target);
+    mutant
+        .as_object_mut()
+        .unwrap()
+        .remove("binary_sha256")
+        .unwrap();
     Value::Array(projected)
+}
+
+fn valid_behavior_label(label: &str) -> bool {
+    !label.is_empty()
+        && label.split('-').all(|segment| {
+            !segment.is_empty()
+                && segment
+                    .bytes()
+                    .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
+        })
+}
+
+fn bind_engine_binary(run: &Value, target: &str, binary_by_target: &mut BTreeMap<String, String>) {
+    let binary_sha256 = run["binary_sha256"].as_str().unwrap();
+    assert_eq!(binary_sha256.len(), 64);
+    assert!(
+        binary_sha256
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    );
+    if let Some(previous) = binary_by_target.insert(target.to_owned(), binary_sha256.to_owned()) {
+        assert_eq!(previous, binary_sha256);
+    }
 }
 
 fn canonical_json(value: &Value) -> Vec<u8> {

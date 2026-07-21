@@ -330,53 +330,79 @@ def behavior_manifest_rows(runs: object) -> list[list[str]]:
 
 
 def semantic_behavior_runs(runs: object) -> list[dict[str, Any]]:
-    if not isinstance(runs, list) or not runs:
+    manifest_rows = behavior_manifest_rows(runs)
+    if not isinstance(runs, list) or len(runs) < 2:
         raise RuntimeError("Stage 5 behavior runs are malformed")
     binary_by_target: dict[str, str] = {}
     semantic_runs: list[dict[str, Any]] = []
-    for run in runs:
-        if not isinstance(run, dict):
-            raise RuntimeError("Stage 5 behavior run is malformed")
+    labels: set[str] = set()
+    total_passed = 0
+
+    def bind_binary(run: dict[str, Any], target: str) -> None:
         binary_sha256 = run.get("binary_sha256")
         if not isinstance(binary_sha256, str) or re.fullmatch(
             r"[0-9a-f]{64}", binary_sha256
         ) is None:
             raise RuntimeError("Stage 5 engine-local binary identity is malformed")
-        tests = run.get("tests")
-        if isinstance(tests, list) and tests:
-            targets = {
-                command[0]
-                for test in tests
-                if isinstance(test, dict)
-                and isinstance((command := test.get("command")), list)
-                and command
-                and isinstance(command[0], str)
-            }
-            if len(targets) != 1 or len(tests) != sum(
-                1
-                for test in tests
-                if isinstance(test, dict)
-                and isinstance(test.get("command"), list)
-                and test["command"]
-                and isinstance(test["command"][0], str)
-            ):
-                raise RuntimeError("Stage 5 behavior run target is malformed or ambiguous")
-            target = next(iter(targets))
-        else:
-            command = run.get("command")
-            if (
-                not isinstance(command, list)
-                or not command
-                or not isinstance(command[0], str)
-            ):
-                raise RuntimeError("Stage 5 behavior run target is malformed or absent")
-            target = command[0]
         previous = binary_by_target.setdefault(target, binary_sha256)
         if previous != binary_sha256:
             raise RuntimeError("Stage 5 engine-local binary identity is inconsistent")
+
+    for run in runs[:-1]:
+        if not isinstance(run, dict):
+            raise RuntimeError("Stage 5 behavior run is malformed")
+        label = run.get("label")
+        tests = run.get("tests")
+        passed = run.get("passed")
+        if (
+            not isinstance(label, str)
+            or re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", label) is None
+            or label == "same-count-substitution-mutant"
+            or label in labels
+            or not isinstance(tests, list)
+            or not tests
+            or type(passed) is not int
+            or passed != len(tests)
+        ):
+            raise RuntimeError("Stage 5 normal behavior run is malformed")
+        labels.add(label)
+        total_passed += passed
+        targets = {test["command"][0] for test in tests}
+        if len(targets) != 1:
+            raise RuntimeError("Stage 5 behavior run target is malformed or ambiguous")
+        target = next(iter(targets))
+        bind_binary(run, target)
         semantic_runs.append(
             {key: value for key, value in run.items() if key != "binary_sha256"}
         )
+
+    if total_passed != EXPECTED_BEHAVIOR_TESTS:
+        raise RuntimeError("Stage 5 declared behavior pass total differs")
+
+    mutant = runs[-1]
+    if not isinstance(mutant, dict):
+        raise RuntimeError("Stage 5 behavior mutant is malformed")
+    first_target, first_exact_name = manifest_rows[0]
+    if (
+        mutant.get("label") != "same-count-substitution-mutant"
+        or type(mutant.get("passed")) is not int
+        or mutant.get("passed") != 0
+        or mutant.get("rejected") is not True
+        or mutant.get("result") != "rejected"
+        or mutant.get("substituted_for") != first_exact_name
+        or mutant.get("command")
+        != [
+            first_target,
+            f"{first_exact_name}_same_count_substitution_mutant",
+            "--exact",
+            "--nocapture",
+        ]
+    ):
+        raise RuntimeError("Stage 5 same-count substitution mutant is malformed")
+    bind_binary(mutant, first_target)
+    semantic_runs.append(
+        {key: value for key, value in mutant.items() if key != "binary_sha256"}
+    )
     return semantic_runs
 
 
