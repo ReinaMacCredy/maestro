@@ -457,15 +457,46 @@ fn published_stage5_three_engine_receipts_bind_one_inactive_artifact() {
 }
 
 #[test]
-fn stage5_seal_keeps_three_engines_serial_and_validates_predecessors_read_only() {
+fn stage5_seal_parallelizes_independent_engines_and_validates_predecessors_read_only() {
     let seal =
         fs::read_to_string(workspace().join("tools/vnext_contracts/stage5/evidence_gates/seal.py"))
+            .unwrap();
+    let proof_engine =
+        fs::read_to_string(workspace().join("tools/vnext_contracts/proof_engine/engine.py"))
             .unwrap();
     let behavior = fs::read_to_string(
         workspace().join("tools/vnext_contracts/stage5/evidence_gates/behavior.py"),
     )
     .unwrap();
-    assert!(seal.contains("max_workers=1"));
+    assert!(seal.contains("MAX_LOGICAL_WORKERS = 6"));
+    assert!(seal.contains("MAX_COMPILE_WORKERS = 2"));
+    assert!(seal.contains("default=MAX_LOGICAL_WORKERS"));
+    assert!(seal.contains("max_workers=args.max_workers"));
+    assert!(seal.contains("resource_limits={\"compile\": compile_workers}"));
+    let builder_index = seal.find("name=\"builder\"").unwrap();
+    let validator_index = seal.find("name=\"validator\"").unwrap();
+    let ruby_index = seal.find("name=\"ruby\"").unwrap();
+    let consensus_index = seal.find("name=\"consensus\"").unwrap();
+    assert!(builder_index < validator_index);
+    assert!(validator_index < ruby_index);
+    assert!(ruby_index < consensus_index);
+    let validator_phase = &seal[validator_index..ruby_index];
+    let ruby_phase = &seal[ruby_index..consensus_index];
+    for phase in [validator_phase, ruby_phase] {
+        assert!(phase.contains("dependencies=(\"builder\", \"toolchain\")"));
+        assert!(phase.contains("resource_class=\"compile\""));
+        assert!(phase.contains("\"{phase_root}/out\""));
+    }
+    assert_eq!(
+        seal.matches("dependencies=(\"builder\", \"toolchain\")")
+            .count(),
+        2
+    );
+    assert_eq!(seal.matches("resource_class=\"compile\"").count(), 3);
+    assert!(!seal.contains("max_workers=1"));
+    assert!(proof_engine.contains("phase_root = run_root / \"phases\" / phase.name / \"output\""));
+    assert!(proof_engine.contains("phase_temp = phase_parent / \"tmp\""));
+    assert!(seal.contains("(\"CARGO_TARGET_DIR\", \"{phase_temp}/cargo-target\")"));
     assert!(seal.contains("name=\"builder\""));
     assert!(seal.contains("name=\"validator\""));
     assert!(seal.contains("name=\"ruby\""));
@@ -474,10 +505,11 @@ fn stage5_seal_keeps_three_engines_serial_and_validates_predecessors_read_only()
     assert!(seal.contains("name=\"harness\""));
     assert!(seal.contains("name=\"toolchain\""));
     assert!(seal.contains("three-engine-consensus-before-publication"));
-    assert_eq!(seal.matches("cache_mode=\"content\"").count(), 1);
-    assert_eq!(seal.matches("cache_mode=\"run\"").count(), 6);
+    assert_eq!(seal.matches("cache_mode=\"content\"").count(), 2);
+    assert_eq!(seal.matches("cache_mode=\"run\"").count(), 5);
     assert!(seal.contains("{dependency:toolchain}/out/toolchain/bin:/usr/bin:/bin"));
-    assert!(seal.contains("{dependency:toolchain}/out/toolchain/bin/git"));
+    assert!(seal.contains("InputBinding.file(\"git-bin\", git)"));
+    assert!(seal.contains("\"{input:git-bin}\""));
     assert!(seal.contains("predecessors/stage4-source.tar.gz"));
     assert!(seal.contains("out/stage4-source.tar.gz"));
     assert!(!seal.contains("fresh_full_chain_ancestor_behavior_and_compiled_mutant_reexecution"));
