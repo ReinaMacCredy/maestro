@@ -1406,6 +1406,21 @@ impl StepSubmissionExecutionFenceV1 {
         }
         Ok(decoded)
     }
+
+    #[cfg(test)]
+    pub(crate) fn test_fixture(binding: StepBindingV1, seed: &str) -> Self {
+        Self {
+            binding_commitment: step_binding_commitment(binding).expect("test fixture"),
+            lease_id: StepLeaseIdV1::derive(&format!("{seed}-lease")).expect("test fixture"),
+            attempt_id: StepAttemptIdV1::derive(&format!("{seed}-attempt")).expect("test fixture"),
+            fence: 1,
+            term_id: LeaseTermIdV1::derive(&format!("{seed}-term")).expect("test fixture"),
+            term_ordinal: 1,
+            run_set_revision: 0,
+            authority_epoch: 1,
+            store_generation_id: StoreGenerationIdV1::from_digest([71; 32]),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

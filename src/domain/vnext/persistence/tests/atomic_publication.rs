@@ -194,6 +194,77 @@ fn atomic_publication_commits_objects_head_result_and_idempotency_once() {
 }
 
 #[test]
+fn historical_idempotency_result_is_a_durable_replay_horizon_after_head_advance() {
+    let temp = TestTempDir::new("maestro-vnext-idempotency-replay-retention");
+    let path = fs::canonicalize(temp.path())
+        .expect("canonical temp")
+        .join("store");
+    let domain = StoreDomainV1::derive(StoreRoleV1::Repository, b"idempotency-replay-retention")
+        .expect("Store domain");
+    let mut store = StoreV1::create(&path, domain.clone()).expect("Store");
+    let first_result = object(101, vec![]);
+    let first_result_id = first_result.id();
+    let first_root = object(102, vec![first_result_id]);
+    let first = store
+        .publish_generation_atomically(&publication(
+            domain.clone(),
+            first_result.clone(),
+            first_root,
+            101,
+        ))
+        .expect("first publication");
+    let first_head = first.head().clone();
+
+    let second_result = object(103, vec![]);
+    let second_root = object(104, vec![second_result.id()]);
+    store
+        .publish_generation_atomically(&publication_with_lineage(
+            domain.clone(),
+            second_result,
+            second_root,
+            TestPublicationLineage {
+                key: [103; 32],
+                meaning: 103,
+                ordinal: 2,
+                previous: Some(first_head.generation_id()),
+                expected_old: Some(first_head.id()),
+            },
+        ))
+        .expect("advance active Head");
+
+    let snapshot = store
+        .snapshot_reachability()
+        .expect("replay-aware snapshot");
+    assert!(snapshot.roots().iter().any(|root| {
+        root.kind() == maestro::domain::vnext::persistence::RetentionRootKindV1::ReplayHorizon
+            && root.object_id() == first_result_id
+    }));
+    let tombstone =
+        LogicalTombstoneV1::new(snapshot.head_id(), first_result_id, [105; 32], [106; 32])
+            .expect("historical result tombstone");
+    assert!(matches!(
+        store.tombstone(&tombstone, snapshot.retention_revision()),
+        Err(maestro::domain::vnext::persistence::StoreError::ObjectStillReachable(id))
+            if id == first_result_id
+    ));
+    drop(store);
+
+    let reopened = StoreV1::open(&path, domain).expect("reopen Store");
+    let probe =
+        StoreIdempotencyProbeV1::new("authority.issue-bootstrap-mandate", [7; 32], [101; 32])
+            .expect("historical replay probe");
+    let replayed = reopened
+        .replay_idempotency(&probe)
+        .expect("replay read")
+        .expect("historical replay");
+    assert!(matches!(
+        replayed,
+        StorePublicationOutcomeV1::Replayed { .. }
+    ));
+    assert_eq!(replayed.result(), &first_result);
+}
+
+#[test]
 fn same_key_changed_meaning_conflicts_without_writes() {
     let temp = TestTempDir::new("maestro-vnext-atomic-meaning-conflict");
     let path = fs::canonicalize(temp.path())

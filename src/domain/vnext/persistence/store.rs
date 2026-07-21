@@ -11,7 +11,9 @@ use crate::domain::vnext::identity::{
     SealedExportIdV1, StoreGenerationIdV1, StoreHeadIdV1, StoreObjectIdV1,
 };
 use crate::foundation::core::deterministic_cbor::{self, CborValue};
-use crate::foundation::core::secure_fs::{CreateIfAbsent, SecureFsError, SecureRoot};
+use crate::foundation::core::secure_fs::{
+    CreateIfAbsent, SecureDirectoryEntryKind, SecureFsError, SecureRoot,
+};
 
 use super::snapshot_blocks::{MAX_SNAPSHOT_BLOCK_CLOSURE_BYTES_V2, StoreSnapshotBlockClosureV2};
 use super::snapshot_rows::MAX_REFERENCED_PRIOR_ROOTS_V1;
@@ -23,7 +25,10 @@ use super::{
     SealedExportV1, SnapshotError, StoreCompatibilityV1, StoreDomainV1, StoreGenerationV1,
     StoreHeadV1, StoreIdempotencyProbeV1, StoreObjectError, StoreObjectV1,
     StorePublicationOutcomeV1, StoreRoleV1, StoreSnapshotRootV1, TombstonedObjectV1,
-    metadata::{ConditionalTransactionError, MetadataError, MetadataStore, PublicationMutation},
+    metadata::{
+        ConditionalTransactionError, MetadataError, MetadataStore, PublicationMutation,
+        revoke_sealed_exports_for_security_erasure,
+    },
 };
 
 const METADATA_FILE: &str = "store.sqlite3";
@@ -31,6 +36,7 @@ const OBJECTS_DIRECTORY: &str = "objects";
 const EXPORTS_DIRECTORY: &str = "exports";
 const SNAPSHOT_CLOSURES_DIRECTORY: &str = "exports/snapshot-closures";
 const RECOVERY_DIRECTORY: &str = "recovery";
+const CONTROLLED_COPY_ERASURE_BARRIERS_DIRECTORY: &str = "recovery/security-erasure-barriers";
 const CACHE_DIRECTORY: &str = "cache";
 const MAX_OBJECT_CLOSURE_ENTRIES: usize = 65_536;
 
@@ -38,6 +44,250 @@ const MAX_OBJECT_CLOSURE_ENTRIES: usize = 65_536;
 pub enum StoreStateV1 {
     Inactive,
     Active,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct VerifiedCollectionAbsenceV1 {
+    tombstone_id: crate::domain::vnext::identity::LogicalTombstoneIdV1,
+    collection_plan_id: crate::domain::vnext::identity::CollectionPlanIdV1,
+    destroyed_object_hash: [u8; 32],
+    receipt_hash: [u8; 32],
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct ControlledCopyErasureObligationV1 {
+    export_id: SealedExportIdV1,
+    export_byte_length: u64,
+    export_bytes_digest: [u8; 32],
+    snapshot_root_id: [u8; 32],
+    snapshot_closure: Option<(u64, [u8; 32])>,
+    public_carrier_present: bool,
+    pending_carrier_present: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct ControlledCopyErasurePlanV1 {
+    object_id: StoreObjectIdV1,
+    barrier_identity: [u8; 32],
+    basis_publication_clock: u64,
+    basis_retention_revision: u64,
+    obligations: Vec<ControlledCopyErasureObligationV1>,
+    plan_id: [u8; 32],
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct VerifiedControlledCopyAbsenceV1 {
+    plan_id: [u8; 32],
+    receipt_hash: [u8; 32],
+}
+
+impl ControlledCopyErasureObligationV1 {
+    fn canonical_value(&self) -> CborValue {
+        CborValue::Array(vec![
+            CborValue::Bytes(self.export_id.as_bytes().to_vec()),
+            CborValue::Unsigned(self.export_byte_length),
+            CborValue::Bytes(self.export_bytes_digest.to_vec()),
+            CborValue::Bytes(self.snapshot_root_id.to_vec()),
+            CborValue::optional(self.snapshot_closure.map(|(length, digest)| {
+                CborValue::Array(vec![
+                    CborValue::Unsigned(length),
+                    CborValue::Bytes(digest.to_vec()),
+                ])
+            })),
+            CborValue::Unsigned(u64::from(self.public_carrier_present)),
+            CborValue::Unsigned(u64::from(self.pending_carrier_present)),
+        ])
+    }
+
+    fn from_canonical_value(value: &CborValue) -> Result<Self, StoreError> {
+        let CborValue::Array(fields) = value else {
+            return Err(StoreError::InvalidControlledCopyErasurePlan);
+        };
+        let [
+            CborValue::Bytes(export_id),
+            CborValue::Unsigned(export_byte_length),
+            CborValue::Bytes(export_bytes_digest),
+            CborValue::Bytes(snapshot_root_id),
+            snapshot_closure,
+            CborValue::Unsigned(public_carrier_present),
+            CborValue::Unsigned(pending_carrier_present),
+        ] = fields.as_slice()
+        else {
+            return Err(StoreError::InvalidControlledCopyErasurePlan);
+        };
+        let snapshot_closure = match snapshot_closure {
+            CborValue::Array(values) if values.as_slice() == [CborValue::Unsigned(0)] => None,
+            CborValue::Array(values)
+                if values.len() == 2 && values[0] == CborValue::Unsigned(1) =>
+            {
+                let CborValue::Array(parts) = &values[1] else {
+                    return Err(StoreError::InvalidControlledCopyErasurePlan);
+                };
+                let [CborValue::Unsigned(length), CborValue::Bytes(digest)] = parts.as_slice()
+                else {
+                    return Err(StoreError::InvalidControlledCopyErasurePlan);
+                };
+                Some((*length, exact_digest(digest.clone())?))
+            }
+            _ => return Err(StoreError::InvalidControlledCopyErasurePlan),
+        };
+        if *export_byte_length == 0
+            || !matches!(public_carrier_present, 0 | 1)
+            || !matches!(pending_carrier_present, 0 | 1)
+            || snapshot_closure.is_some_and(|(length, _)| length == 0)
+        {
+            return Err(StoreError::InvalidControlledCopyErasurePlan);
+        }
+        Ok(Self {
+            export_id: SealedExportIdV1::from_digest(exact_digest(export_id.clone())?),
+            export_byte_length: *export_byte_length,
+            export_bytes_digest: exact_digest(export_bytes_digest.clone())?,
+            snapshot_root_id: exact_digest(snapshot_root_id.clone())?,
+            snapshot_closure,
+            public_carrier_present: *public_carrier_present == 1,
+            pending_carrier_present: *pending_carrier_present == 1,
+        })
+    }
+}
+
+impl ControlledCopyErasurePlanV1 {
+    fn new(
+        object_id: StoreObjectIdV1,
+        barrier_identity: [u8; 32],
+        basis_publication_clock: u64,
+        basis_retention_revision: u64,
+        obligations: Vec<ControlledCopyErasureObligationV1>,
+    ) -> Result<Self, StoreError> {
+        if barrier_identity == [0; 32]
+            || basis_retention_revision == 0
+            || obligations
+                .windows(2)
+                .any(|pair| pair[0].export_id >= pair[1].export_id)
+        {
+            return Err(StoreError::InvalidControlledCopyErasurePlan);
+        }
+        let mut plan = Self {
+            object_id,
+            barrier_identity,
+            basis_publication_clock,
+            basis_retention_revision,
+            obligations,
+            plan_id: [0; 32],
+        };
+        plan.plan_id = sha256(&deterministic_cbor::encode(&plan.identity_value())?);
+        if plan.plan_id == [0; 32] {
+            return Err(StoreError::InvalidControlledCopyErasurePlan);
+        }
+        Ok(plan)
+    }
+
+    pub(crate) fn from_canonical_value(value: &CborValue) -> Result<Self, StoreError> {
+        let CborValue::Array(fields) = value else {
+            return Err(StoreError::InvalidControlledCopyErasurePlan);
+        };
+        let [
+            CborValue::Bytes(object_id),
+            CborValue::Bytes(barrier_identity),
+            CborValue::Unsigned(basis_publication_clock),
+            CborValue::Unsigned(basis_retention_revision),
+            CborValue::Array(obligations),
+            CborValue::Bytes(plan_id),
+        ] = fields.as_slice()
+        else {
+            return Err(StoreError::InvalidControlledCopyErasurePlan);
+        };
+        let plan = Self::new(
+            StoreObjectIdV1::from_digest(exact_digest(object_id.clone())?),
+            exact_digest(barrier_identity.clone())?,
+            *basis_publication_clock,
+            *basis_retention_revision,
+            obligations
+                .iter()
+                .map(ControlledCopyErasureObligationV1::from_canonical_value)
+                .collect::<Result<Vec<_>, _>>()?,
+        )?;
+        if plan.plan_id != exact_digest(plan_id.clone())? || plan.canonical_value() != *value {
+            return Err(StoreError::InvalidControlledCopyErasurePlan);
+        }
+        Ok(plan)
+    }
+
+    fn identity_value(&self) -> CborValue {
+        CborValue::Array(vec![
+            CborValue::text("maestro.vnext.store.controlled-copy-erasure-plan.v1")
+                .expect("invariant: static CBOR domain text"),
+            CborValue::Bytes(self.object_id.as_bytes().to_vec()),
+            CborValue::Bytes(self.barrier_identity.to_vec()),
+            CborValue::Unsigned(self.basis_publication_clock),
+            CborValue::Unsigned(self.basis_retention_revision),
+            CborValue::Array(
+                self.obligations
+                    .iter()
+                    .map(ControlledCopyErasureObligationV1::canonical_value)
+                    .collect(),
+            ),
+        ])
+    }
+
+    pub(crate) fn canonical_value(&self) -> CborValue {
+        let CborValue::Array(mut fields) = self.identity_value() else {
+            unreachable!("invariant: controlled-copy plan identity is an array")
+        };
+        fields.remove(0);
+        fields.push(CborValue::Bytes(self.plan_id.to_vec()));
+        CborValue::Array(fields)
+    }
+
+    pub(crate) const fn object_id(&self) -> StoreObjectIdV1 {
+        self.object_id
+    }
+
+    pub(crate) const fn barrier_identity(&self) -> [u8; 32] {
+        self.barrier_identity
+    }
+
+    pub(crate) const fn plan_id(&self) -> [u8; 32] {
+        self.plan_id
+    }
+
+    pub(crate) fn obligations(&self) -> &[ControlledCopyErasureObligationV1] {
+        &self.obligations
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_only(object_id: StoreObjectIdV1) -> Self {
+        Self::new(object_id, [0x5a; 32], 1, 1, Vec::new()).expect("test-only controlled-copy plan")
+    }
+}
+
+impl VerifiedControlledCopyAbsenceV1 {
+    pub(crate) const fn plan_id(self) -> [u8; 32] {
+        self.plan_id
+    }
+
+    pub(crate) const fn receipt_hash(self) -> [u8; 32] {
+        self.receipt_hash
+    }
+}
+
+impl VerifiedCollectionAbsenceV1 {
+    pub(crate) const fn tombstone_id(self) -> crate::domain::vnext::identity::LogicalTombstoneIdV1 {
+        self.tombstone_id
+    }
+
+    pub(crate) const fn collection_plan_id(
+        self,
+    ) -> crate::domain::vnext::identity::CollectionPlanIdV1 {
+        self.collection_plan_id
+    }
+
+    pub(crate) const fn destroyed_object_hash(self) -> [u8; 32] {
+        self.destroyed_object_hash
+    }
+
+    pub(crate) const fn receipt_hash(self) -> [u8; 32] {
+        self.receipt_hash
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -222,20 +472,17 @@ impl StorePublicationViewV1<'_> {
         let generation = self
             .active_generation()?
             .ok_or(StoreError::MissingActiveHead)?;
-        walk_object_closure_with_limit(
-            generation.roots().iter().copied(),
-            MAX_OBJECT_CLOSURE_ENTRIES,
-            |object_id| {
-                Ok(
-                    read_object_with_root(self.root, self.connection, object_id)?
-                        .references()
-                        .to_vec(),
-                )
-            },
-        )?
-        .into_iter()
-        .map(|object_id| read_object_with_root(self.root, self.connection, object_id))
-        .collect()
+        generation_objects(self.root, self.connection, &generation)
+    }
+
+    pub(crate) fn coherent_generation_snapshot(
+        &self,
+        generation_id: StoreGenerationIdV1,
+    ) -> Result<(StoreHeadV1, StoreGenerationV1, Vec<StoreObjectV1>), StoreError> {
+        let generation = load_generation(self.connection, generation_id, self.domain)?;
+        let head = load_unique_head_for_generation(self.connection, generation_id, self.domain)?;
+        let objects = historical_generation_objects(self.root, self.connection, &generation)?;
+        Ok((head, generation, objects))
     }
 
     pub(crate) fn allocate_continuity_state_token(
@@ -439,6 +686,18 @@ impl StoreV1 {
                 .ok_or(StoreError::MissingActiveHead)?;
             let objects = view.active_generation_objects()?;
             Ok((store_state, head, generation, objects))
+        })
+    }
+
+    pub(crate) fn coherent_generation_snapshot(
+        &self,
+        generation_id: StoreGenerationIdV1,
+    ) -> Result<(StoreHeadV1, StoreGenerationV1, Vec<StoreObjectV1>), StoreError> {
+        self.with_verified_read(|connection| {
+            let generation = load_generation(connection, generation_id, &self.domain)?;
+            let head = load_unique_head_for_generation(connection, generation_id, &self.domain)?;
+            let objects = historical_generation_objects(&self.root, connection, &generation)?;
+            Ok((head, generation, objects))
         })
     }
 
@@ -734,6 +993,19 @@ impl StoreV1 {
                         ),
                     ));
                 }
+                if object_map.keys().any(|object_id| !closure.contains(object_id)) {
+                    return Err(ConditionalTransactionError::Operation(
+                        PreparedPublicationError::Store(
+                            StoreError::PublicationObjectOutsideGeneration,
+                        ),
+                    ));
+                }
+                ensure_no_controlled_copy_erasure_barriers(root, closure.iter().copied())
+                    .map_err(|error| {
+                        ConditionalTransactionError::Operation(PreparedPublicationError::Store(
+                            error,
+                        ))
+                    })?;
                 let observed = active_head_row(transaction).map_err(|error| {
                     ConditionalTransactionError::Operation(PreparedPublicationError::Store(error))
                 })?;
@@ -770,6 +1042,20 @@ impl StoreV1 {
                     expected_revision,
                 )?;
                 expect_retention_revision(transaction, observed_retention_revision)?;
+                for object in objects {
+                    let invalid: bool = transaction.query_row(
+                        "SELECT EXISTS(
+                             SELECT 1 FROM store_logical_tombstones WHERE object_id = ?1
+                             UNION ALL
+                             SELECT 1 FROM store_gc_collection_occurrences WHERE object_id = ?1
+                         )",
+                        params![object.id().as_bytes()],
+                        |row| row.get(0),
+                    )?;
+                    if invalid {
+                        return Err(MetadataError::FacadeCasMismatch.into());
+                    }
+                }
                 stage_object_files(root, objects, &mut staged_files).map_err(|error| {
                     ConditionalTransactionError::Operation(PreparedPublicationError::Store(error))
                 })?;
@@ -778,20 +1064,6 @@ impl StoreV1 {
                 }
                 for object in objects {
                     insert_or_verify_references(transaction, object)?;
-                }
-                for object_id in &closure {
-                    let invalid: bool = transaction.query_row(
-                        "SELECT EXISTS(
-                             SELECT 1 FROM store_logical_tombstones WHERE object_id = ?1
-                             UNION ALL
-                             SELECT 1 FROM store_gc_collection_occurrences WHERE object_id = ?1
-                         )",
-                        params![object_id.as_bytes()],
-                        |row| row.get(0),
-                    )?;
-                    if invalid {
-                        return Err(MetadataError::FacadeCasMismatch.into());
-                    }
                 }
                 insert_generation(transaction, generation)?;
                 insert_head(transaction, &head)?;
@@ -900,6 +1172,136 @@ impl StoreV1 {
             })
     }
 
+    pub(crate) fn prepare_controlled_copy_erasure_plan<E>(
+        &mut self,
+        object_id: StoreObjectIdV1,
+        barrier_identity: [u8; 32],
+        validate: impl FnOnce(&StorePublicationViewV1<'_>) -> Result<(), E>,
+    ) -> Result<ControlledCopyErasurePlanV1, PreparedPublicationError<E>> {
+        self.root.verify_path_binding().map_err(StoreError::from)?;
+        let root = &self.root;
+        let domain = self.domain.clone();
+        let mut validate = Some(validate);
+        self.metadata
+            .with_prepared_transaction(root, |transaction| {
+                let view = StorePublicationViewV1 {
+                    root,
+                    connection: transaction,
+                    domain: &domain,
+                };
+                validate
+                    .take()
+                    .expect("invariant: one copy-plan transaction validates once")(
+                    &view
+                )
+                .map_err(|error| {
+                    ConditionalTransactionError::Operation(PreparedPublicationError::Prepare(error))
+                })?;
+                let known: bool = transaction.query_row(
+                    "SELECT EXISTS(SELECT 1 FROM store_objects WHERE object_id = ?1)",
+                    params![object_id.as_bytes()],
+                    |row| row.get(0),
+                )?;
+                if !known || barrier_identity == [0; 32] {
+                    return Err(ConditionalTransactionError::Operation(
+                        PreparedPublicationError::Store(
+                            StoreError::InvalidControlledCopyErasurePlan,
+                        ),
+                    ));
+                }
+                let marker = controlled_copy_erasure_barrier_bytes(object_id, barrier_identity)
+                    .map_err(|error| {
+                        ConditionalTransactionError::Operation(PreparedPublicationError::Store(
+                            error,
+                        ))
+                    })?;
+                let marker_path = controlled_copy_erasure_barrier_path(object_id);
+                root.create_dir_all(Path::new(CONTROLLED_COPY_ERASURE_BARRIERS_DIRECTORY))
+                    .map_err(|error| {
+                        ConditionalTransactionError::Operation(PreparedPublicationError::Store(
+                            error.into(),
+                        ))
+                    })?;
+                match root
+                    .create_file_if_absent(&marker_path, &marker)
+                    .map_err(|error| {
+                        ConditionalTransactionError::Operation(PreparedPublicationError::Store(
+                            error.into(),
+                        ))
+                    })? {
+                    CreateIfAbsent::Created => {}
+                    CreateIfAbsent::AlreadyExists => {
+                        root.read_exact(&marker_path, &marker).map_err(|error| {
+                            ConditionalTransactionError::Operation(PreparedPublicationError::Store(
+                                error.into(),
+                            ))
+                        })?;
+                    }
+                }
+                let obligations = controlled_copy_obligations(root, transaction, object_id)
+                    .map_err(|error| {
+                        ConditionalTransactionError::Operation(PreparedPublicationError::Store(
+                            error,
+                        ))
+                    })?;
+                let plan = ControlledCopyErasurePlanV1::new(
+                    object_id,
+                    barrier_identity,
+                    publication_clock(transaction).map_err(|error| {
+                        ConditionalTransactionError::Operation(PreparedPublicationError::Store(
+                            error,
+                        ))
+                    })?,
+                    retention_revision(transaction).map_err(|error| {
+                        ConditionalTransactionError::Operation(PreparedPublicationError::Store(
+                            error,
+                        ))
+                    })?,
+                    obligations,
+                )
+                .map_err(|error| {
+                    ConditionalTransactionError::Operation(PreparedPublicationError::Store(error))
+                })?;
+                Ok(PublicationMutation::NoChange(plan))
+            })
+            .map_err(|error| match error {
+                ConditionalTransactionError::Metadata(error) => {
+                    PreparedPublicationError::Store(error.into())
+                }
+                ConditionalTransactionError::Operation(error) => error,
+            })
+    }
+
+    pub(crate) fn abort_controlled_copy_erasure_plan(
+        &mut self,
+        plan: &ControlledCopyErasurePlanV1,
+    ) -> Result<(), StoreError> {
+        let marker =
+            controlled_copy_erasure_barrier_bytes(plan.object_id(), plan.barrier_identity())?;
+        let root = &self.root;
+        match self
+            .metadata
+            .with_prepared_transaction(root, |transaction| {
+                let current = controlled_copy_obligations(root, transaction, plan.object_id())
+                    .map_err(ConditionalTransactionError::Operation)?;
+                if current != plan.obligations {
+                    return Err(ConditionalTransactionError::Operation(
+                        StoreError::ControlledCopyErasureCensusChanged,
+                    ));
+                }
+                root.remove_file_if_matches(
+                    controlled_copy_erasure_barrier_path(plan.object_id()),
+                    &marker,
+                )
+                .map_err(|error| ConditionalTransactionError::Operation(error.into()))?;
+                Ok(PublicationMutation::NoChange(()))
+            }) {
+            Ok(()) => Ok(()),
+            Err(ConditionalTransactionError::Metadata(error)) => Err(error.into()),
+            Err(ConditionalTransactionError::Operation(error)) => Err(error),
+        }
+    }
+
     fn cleanup_failed_atomic_publication(
         &mut self,
         staged: &[StagedObjectFile],
@@ -942,28 +1344,15 @@ impl StoreV1 {
         if &stored.meaning_digest != expected_meaning_digest {
             return Err(StoreError::IdempotencyMeaningConflict);
         }
-        let head = self.with_verified_read(|connection| {
+        let (head, result) = self.with_verified_read(|connection| {
             let head = load_head(connection, stored.head_id, &self.domain)?;
             if head.generation_id() != stored.generation_id {
                 return Err(StoreError::StoredIdempotencyMismatch);
             }
-            let generation = load_generation(connection, stored.generation_id, &self.domain)?;
-            let closure = walk_object_closure_with_limit(
-                generation.roots().iter().copied(),
-                MAX_OBJECT_CLOSURE_ENTRIES,
-                |object_id| {
-                    Ok(self
-                        .read_object_with(connection, object_id)?
-                        .references()
-                        .to_vec())
-                },
-            )?;
-            if !closure.contains(&stored.result_object_id) {
-                return Err(StoreError::StoredIdempotencyMismatch);
-            }
-            Ok(head)
+            load_generation(connection, stored.generation_id, &self.domain)?;
+            let result = self.read_object_with(connection, stored.result_object_id)?;
+            Ok((head, result))
         })?;
-        let result = self.read_object(stored.result_object_id)?;
         Ok(StorePublicationOutcomeV1::Replayed { head, result })
     }
 
@@ -1084,6 +1473,81 @@ impl StoreV1 {
             .map_err(StoreError::from)
     }
 
+    pub(crate) fn ensure_tombstone(
+        &mut self,
+        tombstone: &LogicalTombstoneV1,
+    ) -> Result<u64, StoreError> {
+        self.root.verify_path_binding()?;
+        let current_revision =
+            self.with_verified_read(|connection| retention_revision(connection))?;
+        let stored = self.with_verified_read(|connection| {
+            connection
+                .query_row(
+                    "SELECT basis_head_id, tombstone_id, reason_digest, invalidation_digest
+                     FROM store_logical_tombstones WHERE object_id = ?1",
+                    params![tombstone.object_id().as_bytes()],
+                    |row| {
+                        Ok((
+                            row.get::<_, Vec<u8>>(0)?,
+                            row.get::<_, Vec<u8>>(1)?,
+                            row.get::<_, Vec<u8>>(2)?,
+                            row.get::<_, Vec<u8>>(3)?,
+                        ))
+                    },
+                )
+                .optional()
+                .map_err(StoreError::from)
+        })?;
+        if let Some((basis, id, reason, invalidation)) = stored {
+            if basis.as_slice() != tombstone.basis_head_id().as_bytes()
+                || id.as_slice() != tombstone.id().as_bytes()
+                || reason.as_slice() != tombstone.reason_digest()
+                || invalidation.as_slice() != tombstone.invalidation_digest()
+            {
+                return Err(StoreError::StoredTombstoneMismatch);
+            }
+            return Ok(current_revision);
+        }
+        self.tombstone(tombstone, current_revision)
+    }
+
+    pub(crate) fn load_tombstone(
+        &self,
+        object_id: StoreObjectIdV1,
+    ) -> Result<Option<LogicalTombstoneV1>, StoreError> {
+        self.root.verify_path_binding()?;
+        self.with_verified_read(|connection| {
+            let row = connection
+                .query_row(
+                    "SELECT tombstone_id, basis_head_id, reason_digest, invalidation_digest
+                     FROM store_logical_tombstones WHERE object_id = ?1",
+                    params![object_id.as_bytes()],
+                    |row| {
+                        Ok((
+                            row.get::<_, Vec<u8>>(0)?,
+                            row.get::<_, Vec<u8>>(1)?,
+                            row.get::<_, Vec<u8>>(2)?,
+                            row.get::<_, Vec<u8>>(3)?,
+                        ))
+                    },
+                )
+                .optional()?;
+            let Some((stored_id, basis, reason, invalidation)) = row else {
+                return Ok(None);
+            };
+            let tombstone = LogicalTombstoneV1::new(
+                StoreHeadIdV1::from_digest(exact_digest(basis)?),
+                object_id,
+                exact_digest(reason)?,
+                exact_digest(invalidation)?,
+            )?;
+            if tombstone.id().as_bytes() != stored_id.as_slice() {
+                return Err(StoreError::StoredTombstoneMismatch);
+            }
+            Ok(Some(tombstone))
+        })
+    }
+
     pub fn snapshot_reachability(&mut self) -> Result<ReachabilitySnapshotV1, StoreError> {
         self.root.verify_path_binding()?;
         let (head_id, head_revision) = self
@@ -1172,6 +1636,227 @@ impl StoreV1 {
         Ok(plan)
     }
 
+    pub(crate) fn plan_exact_collection(
+        &mut self,
+        snapshot: &ReachabilitySnapshotV1,
+        candidate: StoreObjectIdV1,
+    ) -> Result<CollectionPlanV1, StoreError> {
+        self.root.verify_path_binding()?;
+        let sealed_export_holds =
+            self.with_verified_read(|transaction| available_sealed_export_objects(transaction))?;
+        if sealed_export_holds.contains(&candidate) {
+            return Err(StoreError::ObjectStillReachable(candidate));
+        }
+        let plan = CollectionPlanV1::new(snapshot, vec![candidate])?;
+        let active = self
+            .with_verified_read(|transaction| active_head_row(transaction))?
+            .ok_or(StoreError::MissingActiveHead)?;
+        if active.0 != snapshot.head_id()
+            || self.with_verified_read(|transaction| retention_revision(transaction))?
+                != snapshot.retention_revision()
+        {
+            return Err(StoreError::SnapshotBasisMismatch);
+        }
+        self.metadata
+            .with_immediate_transaction(&self.root, |transaction| {
+                expect_active_head(transaction, Some(active.0), active.1)?;
+                expect_retention_revision(transaction, snapshot.retention_revision())?;
+                let snapshot_exists: bool = transaction.query_row(
+                    "SELECT EXISTS(SELECT 1 FROM store_reachability_snapshots WHERE snapshot_id = ?1)",
+                    params![snapshot.id().as_bytes()],
+                    |row| row.get(0),
+                )?;
+                if !snapshot_exists {
+                    return Err(MetadataError::FacadeCasMismatch);
+                }
+                transaction.execute(
+                    "INSERT OR IGNORE INTO store_gc_plans(plan_id, snapshot_id, head_id, retention_revision)
+                     VALUES (?1, ?2, ?3, ?4)",
+                    params![
+                        plan.id().as_bytes(),
+                        plan.snapshot_id().as_bytes(),
+                        plan.head_id().as_bytes(),
+                        to_i64(plan.retention_revision())?,
+                    ],
+                )?;
+                transaction.execute(
+                    "INSERT OR IGNORE INTO store_gc_plan_objects(plan_id, object_id) VALUES (?1, ?2)",
+                    params![plan.id().as_bytes(), candidate.as_bytes()],
+                )?;
+                verify_plan(transaction, &plan)
+            })?;
+        Ok(plan)
+    }
+
+    pub(crate) fn erase_controlled_copies(
+        &mut self,
+        plan: &ControlledCopyErasurePlanV1,
+    ) -> Result<VerifiedControlledCopyAbsenceV1, StoreError> {
+        self.root.verify_path_binding()?;
+        let marker =
+            controlled_copy_erasure_barrier_bytes(plan.object_id(), plan.barrier_identity())?;
+        self.root.read_exact(
+            controlled_copy_erasure_barrier_path(plan.object_id()),
+            &marker,
+        )?;
+        let root = &self.root;
+        let revocation = self
+            .metadata
+            .with_prepared_transaction(root, |transaction| {
+                let current = controlled_copy_obligations(root, transaction, plan.object_id())
+                    .map_err(ConditionalTransactionError::Operation)?;
+                ensure_monotonic_controlled_copy_erasure_census(plan.obligations(), &current)
+                    .map_err(ConditionalTransactionError::Operation)?;
+                let export_ids = plan
+                    .obligations()
+                    .iter()
+                    .map(|obligation| {
+                        let registered = transaction.query_row(
+                            "SELECT EXISTS(SELECT 1 FROM store_sealed_exports WHERE export_id = ?1)",
+                            params![obligation.export_id.as_bytes()],
+                            |row| row.get::<_, bool>(0),
+                        )?;
+                        Ok(registered.then_some(*obligation.export_id.as_bytes()))
+                    })
+                    .collect::<Result<Vec<_>, rusqlite::Error>>()?
+                    .into_iter()
+                    .flatten()
+                    .collect::<Vec<_>>();
+                if !export_ids.is_empty() {
+                    let expected_retention_revision = retention_revision(transaction)
+                        .map_err(ConditionalTransactionError::Operation)?;
+                    revoke_sealed_exports_for_security_erasure(
+                        transaction,
+                        plan.object_id().as_bytes(),
+                        &export_ids,
+                    )?;
+                    advance_retention_revision(transaction, Some(expected_retention_revision))
+                        .map_err(ConditionalTransactionError::Metadata)?;
+                    Ok(PublicationMutation::Commit(()))
+                } else {
+                    Ok(PublicationMutation::NoChange(()))
+                }
+            });
+        match revocation {
+            Ok(()) => {}
+            Err(ConditionalTransactionError::Metadata(error)) => return Err(error.into()),
+            Err(ConditionalTransactionError::Operation(error)) => return Err(error),
+        }
+
+        let mut first_failure = None;
+        let mut remaining = 0_usize;
+        let mut removed_snapshot_roots = BTreeSet::new();
+        for obligation in plan.obligations() {
+            for path in [
+                export_path(obligation.export_id),
+                export_pending_path(obligation.export_id),
+            ] {
+                if let Err(error) = erase_secure_file_with_digest(
+                    &self.root,
+                    &path,
+                    &obligation.export_bytes_digest,
+                ) {
+                    remaining += 1;
+                    if first_failure.is_none() {
+                        first_failure = Some(error);
+                    }
+                }
+            }
+            if let Some((_, digest)) = obligation.snapshot_closure
+                && removed_snapshot_roots.insert(obligation.snapshot_root_id)
+                && let Err(error) = erase_secure_file_with_digest(
+                    &self.root,
+                    snapshot_closure_path(&obligation.snapshot_root_id),
+                    &digest,
+                )
+            {
+                remaining += 1;
+                if first_failure.is_none() {
+                    first_failure = Some(error);
+                }
+            }
+        }
+        if let Some(source) = first_failure {
+            return Err(StoreError::ControlledCopyErasureSweepDebt { remaining, source });
+        }
+        self.verify_controlled_copy_erasure_absence(plan)
+    }
+
+    pub(crate) fn verify_controlled_copy_erasure_absence(
+        &self,
+        plan: &ControlledCopyErasurePlanV1,
+    ) -> Result<VerifiedControlledCopyAbsenceV1, StoreError> {
+        self.root.verify_path_binding()?;
+        for obligation in plan.obligations() {
+            for path in [
+                export_path(obligation.export_id),
+                export_pending_path(obligation.export_id),
+            ] {
+                self.root
+                    .verify_file_removal_resolved(&path, &obligation.export_bytes_digest)?;
+            }
+            if let Some((_, digest)) = obligation.snapshot_closure {
+                self.root.verify_file_removal_resolved(
+                    snapshot_closure_path(&obligation.snapshot_root_id),
+                    &digest,
+                )?;
+            }
+        }
+        let remaining = self.with_verified_read(|connection| {
+            controlled_copy_obligations(&self.root, connection, plan.object_id())
+        })?;
+        if !remaining.is_empty() {
+            return Err(StoreError::ControlledCopyErasureCensusChanged);
+        }
+        for obligation in plan.obligations() {
+            for path in [
+                export_path(obligation.export_id),
+                export_pending_path(obligation.export_id),
+            ] {
+                verify_secure_path_absent(&self.root, &path)?;
+            }
+            if obligation.snapshot_closure.is_some() {
+                verify_secure_path_absent(
+                    &self.root,
+                    &snapshot_closure_path(&obligation.snapshot_root_id),
+                )?;
+            }
+        }
+        let receipt_hash = sha256(&deterministic_cbor::encode(&CborValue::Array(vec![
+            CborValue::text("maestro.vnext.store.controlled-copy-erasure-absence.v1")?,
+            CborValue::Bytes(plan.plan_id().to_vec()),
+            CborValue::Bytes(plan.object_id().as_bytes().to_vec()),
+            CborValue::Array(
+                plan.obligations()
+                    .iter()
+                    .map(ControlledCopyErasureObligationV1::canonical_value)
+                    .collect(),
+            ),
+        ]))?);
+        Ok(VerifiedControlledCopyAbsenceV1 {
+            plan_id: plan.plan_id(),
+            receipt_hash,
+        })
+    }
+
+    pub(crate) fn finish_controlled_copy_erasure(
+        &self,
+        plan: &ControlledCopyErasurePlanV1,
+        expected_receipt_hash: [u8; 32],
+    ) -> Result<(), StoreError> {
+        let verified = self.verify_controlled_copy_erasure_absence(plan)?;
+        if verified.receipt_hash() != expected_receipt_hash {
+            return Err(StoreError::ControlledCopyErasureReceiptMismatch);
+        }
+        let marker =
+            controlled_copy_erasure_barrier_bytes(plan.object_id(), plan.barrier_identity())?;
+        self.root.remove_file_if_matches(
+            controlled_copy_erasure_barrier_path(plan.object_id()),
+            &marker,
+        )?;
+        Ok(())
+    }
+
     pub fn collect(&mut self, plan: &CollectionPlanV1) -> Result<usize, StoreError> {
         self.root.verify_path_binding()?;
         let active = self
@@ -1247,7 +1932,12 @@ impl StoreV1 {
                 None => self
                     .root
                     .finish_file_removal_if_digest_matches(object_path(*object_id), digest),
-            };
+            }
+            .and_then(|_| {
+                self.root
+                    .remove_crash_residual_temps_by_digest(Path::new(OBJECTS_DIRECTORY), digest)
+                    .map(|_| ())
+            });
             if let Err(error) = removal {
                 remaining += 1;
                 if first_failure.is_none() {
@@ -1263,6 +1953,135 @@ impl StoreV1 {
             });
         }
         Ok(expected.len())
+    }
+
+    pub(crate) fn verify_collected_object_absence(
+        &self,
+        tombstone: &LogicalTombstoneV1,
+        plan: &CollectionPlanV1,
+    ) -> Result<VerifiedCollectionAbsenceV1, StoreError> {
+        self.root.verify_path_binding()?;
+        if !plan.candidates().contains(&tombstone.object_id()) {
+            return Err(StoreError::MissingCollectionOccurrence(
+                tombstone.object_id(),
+            ));
+        }
+        let destroyed_object_hash = self.with_verified_read(|connection| {
+            let tombstone_matches: bool = connection.query_row(
+                "SELECT EXISTS(
+                    SELECT 1 FROM store_logical_tombstones
+                    WHERE tombstone_id = ?1 AND basis_head_id = ?2 AND object_id = ?3
+                      AND reason_digest = ?4 AND invalidation_digest = ?5
+                )",
+                params![
+                    tombstone.id().as_bytes(),
+                    tombstone.basis_head_id().as_bytes(),
+                    tombstone.object_id().as_bytes(),
+                    tombstone.reason_digest().as_slice(),
+                    tombstone.invalidation_digest().as_slice(),
+                ],
+                |row| row.get(0),
+            )?;
+            if !tombstone_matches {
+                return Err(StoreError::StoredTombstoneMismatch);
+            }
+            let digest = connection
+                .query_row(
+                    "SELECT stored_bytes_digest FROM store_gc_collection_occurrences
+                     WHERE plan_id = ?1 AND object_id = ?2",
+                    params![plan.id().as_bytes(), tombstone.object_id().as_bytes()],
+                    |row| row.get::<_, Vec<u8>>(0),
+                )
+                .optional()?
+                .ok_or(StoreError::MissingCollectionOccurrence(
+                    tombstone.object_id(),
+                ))?;
+            exact_digest(digest)
+        })?;
+        self.root.verify_file_removal_resolved(
+            object_path(tombstone.object_id()),
+            &destroyed_object_hash,
+        )?;
+        match self.root.read_immutable(object_path(tombstone.object_id())) {
+            Err(SecureFsError::Io { source, .. })
+                if source.kind() == std::io::ErrorKind::NotFound => {}
+            Ok(_) => {
+                return Err(StoreError::CollectedObjectStillPresent(
+                    tombstone.object_id(),
+                ));
+            }
+            Err(error) => return Err(StoreError::SecureFs(error)),
+        }
+        let receipt_hash = sha256(&deterministic_cbor::encode(&CborValue::Array(vec![
+            CborValue::Text("maestro.vnext.store-collection-physical-absence.v1".to_owned()),
+            CborValue::Bytes(tombstone.id().as_bytes().to_vec()),
+            CborValue::Bytes(plan.id().as_bytes().to_vec()),
+            CborValue::Bytes(tombstone.object_id().as_bytes().to_vec()),
+            CborValue::Bytes(destroyed_object_hash.to_vec()),
+        ]))?);
+        Ok(VerifiedCollectionAbsenceV1 {
+            tombstone_id: tombstone.id(),
+            collection_plan_id: plan.id(),
+            destroyed_object_hash,
+            receipt_hash,
+        })
+    }
+
+    pub(crate) fn verify_recorded_collection_absence(
+        &self,
+        object_id: StoreObjectIdV1,
+        tombstone_id: crate::domain::vnext::identity::LogicalTombstoneIdV1,
+        collection_plan_id: crate::domain::vnext::identity::CollectionPlanIdV1,
+        expected_destroyed_hash: [u8; 32],
+        expected_receipt_hash: [u8; 32],
+    ) -> Result<(), StoreError> {
+        self.root.verify_path_binding()?;
+        let destroyed_hash = self.with_verified_read(|connection| {
+            let tombstone_matches: bool = connection.query_row(
+                "SELECT EXISTS(
+                    SELECT 1 FROM store_logical_tombstones
+                    WHERE tombstone_id = ?1 AND object_id = ?2
+                )",
+                params![tombstone_id.as_bytes(), object_id.as_bytes()],
+                |row| row.get(0),
+            )?;
+            if !tombstone_matches {
+                return Err(StoreError::StoredTombstoneMismatch);
+            }
+            connection
+                .query_row(
+                    "SELECT stored_bytes_digest FROM store_gc_collection_occurrences
+                     WHERE plan_id = ?1 AND object_id = ?2",
+                    params![collection_plan_id.as_bytes(), object_id.as_bytes()],
+                    |row| row.get::<_, Vec<u8>>(0),
+                )
+                .optional()?
+                .map(exact_digest)
+                .transpose()?
+                .ok_or(StoreError::MissingCollectionOccurrence(object_id))
+        })?;
+        if destroyed_hash != expected_destroyed_hash {
+            return Err(StoreError::StoredObjectMismatch(object_id));
+        }
+        self.root
+            .verify_file_removal_resolved(object_path(object_id), &destroyed_hash)?;
+        match self.root.read_immutable(object_path(object_id)) {
+            Err(SecureFsError::Io { source, .. })
+                if source.kind() == std::io::ErrorKind::NotFound => {}
+            Ok(_) => return Err(StoreError::CollectedObjectStillPresent(object_id)),
+            Err(error) => return Err(StoreError::SecureFs(error)),
+        }
+        let receipt_hash = sha256(&deterministic_cbor::encode(&CborValue::Array(vec![
+            CborValue::Text("maestro.vnext.store-collection-physical-absence.v1".to_owned()),
+            CborValue::Bytes(tombstone_id.as_bytes().to_vec()),
+            CborValue::Bytes(collection_plan_id.as_bytes().to_vec()),
+            CborValue::Bytes(object_id.as_bytes().to_vec()),
+            CborValue::Bytes(destroyed_hash.to_vec()),
+        ]))?);
+        if receipt_hash != expected_receipt_hash {
+            return Err(StoreError::StoredObjectMismatch(object_id));
+        }
+        Ok(())
     }
 
     pub fn seal_export(&mut self) -> Result<SealedBackupV1, StoreError> {
@@ -1287,6 +2106,7 @@ impl StoreV1 {
                 let pins = active_pins(connection)?;
                 let tombstones = tombstones_by_object(connection)?;
                 let object_ids = authoritative_object_ids(connection)?;
+                ensure_no_controlled_copy_erasure_barriers(&self.root, object_ids.iter().copied())?;
                 let mut object_rows = Vec::with_capacity(object_ids.len());
                 for object_id in object_ids {
                     object_rows.push(ExportObjectRow {
@@ -1345,16 +2165,6 @@ impl StoreV1 {
         let receipt = BackupReceiptV1::for_committed_export(&export, committed_publication_clock)?;
         let backup = SealedBackupV1::new(export, receipt)?;
         let pending_path = export_pending_path(backup.export().id());
-        match self
-            .root
-            .create_file_if_absent(&pending_path, backup.canonical_bytes())?
-        {
-            CreateIfAbsent::Created => {}
-            CreateIfAbsent::AlreadyExists => {
-                self.root
-                    .read_exact(&pending_path, backup.canonical_bytes())?;
-            }
-        }
         before_receipt();
         let receipt_result = self.metadata.with_publication_transaction(
             &self.root,
@@ -1371,6 +2181,22 @@ impl StoreV1 {
                     export.reachability().retention_revision(),
                 )?;
                 verify_export_source_basis(transaction, export)?;
+                ensure_no_controlled_copy_erasure_barriers(
+                    &self.root,
+                    export.entries().iter().map(SealedExportEntryV1::object_id),
+                )
+                .map_err(|_| MetadataError::FacadeCasMismatch)?;
+                match self
+                    .root
+                    .create_file_if_absent(&pending_path, backup.canonical_bytes())?
+                {
+                    CreateIfAbsent::Created => {}
+                    CreateIfAbsent::AlreadyExists => {
+                        self.root
+                            .read_exact(&pending_path, backup.canonical_bytes())?;
+                    }
+                }
+                run_after_pending_sealed_export_test_hook();
                 transaction.execute(
                     "INSERT OR IGNORE INTO store_sealed_exports
                    (export_id, head_id, generation_id, snapshot_id, schema_manifest_id,
@@ -1465,45 +2291,78 @@ impl StoreV1 {
         }
     }
 
-    fn finish_backup_publication(&self, backup: &SealedBackupV1) -> Result<(), StoreError> {
+    fn finish_backup_publication(&mut self, backup: &SealedBackupV1) -> Result<(), StoreError> {
         let pending_path = export_pending_path(backup.export().id());
         let public_path = export_path(backup.export().id());
-        self.persist_snapshot_closure(
-            backup
-                .export()
-                .snapshot_blocks()
-                .ok_or(StoreError::LegacyPartialExport)?,
-        )?;
+        let closure = backup
+            .export()
+            .snapshot_blocks()
+            .ok_or(StoreError::LegacyPartialExport)?;
+        let root = &self.root;
         match self
-            .root
-            .rename_file_no_replace(&pending_path, &public_path)
-        {
-            Ok(CreateIfAbsent::Created) => {}
-            Ok(CreateIfAbsent::AlreadyExists) => {
-                self.root
-                    .read_exact(&public_path, backup.canonical_bytes())?;
-                self.root
-                    .remove_file_if_matches(&pending_path, backup.canonical_bytes())?;
-            }
-            Err(error) if secure_fs_error_is_not_found(&error) => {
-                self.root
-                    .read_exact(&public_path, backup.canonical_bytes())?;
-            }
-            Err(error) => return Err(error.into()),
+            .metadata
+            .with_prepared_transaction(root, |transaction| {
+                let committed: bool = transaction.query_row(
+                    "SELECT EXISTS(SELECT 1 FROM store_sealed_exports WHERE export_id = ?1)",
+                    params![backup.export().id().as_bytes()],
+                    |row| row.get(0),
+                )?;
+                if !committed {
+                    return Err(ConditionalTransactionError::Operation(
+                        StoreError::StoredControlledCopyMismatch,
+                    ));
+                }
+                ensure_no_controlled_copy_erasure_barriers(
+                    root,
+                    backup
+                        .export()
+                        .entries()
+                        .iter()
+                        .map(SealedExportEntryV1::object_id),
+                )
+                .map_err(ConditionalTransactionError::Operation)?;
+                persist_snapshot_closure_with_root(root, closure)
+                    .map_err(ConditionalTransactionError::Operation)?;
+                match root.rename_file_no_replace(&pending_path, &public_path) {
+                    Ok(CreateIfAbsent::Created) => {}
+                    Ok(CreateIfAbsent::AlreadyExists) => {
+                        root.read_exact(&public_path, backup.canonical_bytes())
+                            .map_err(|error| {
+                                ConditionalTransactionError::Operation(error.into())
+                            })?;
+                        root.remove_file_if_matches(&pending_path, backup.canonical_bytes())
+                            .map_err(|error| {
+                                ConditionalTransactionError::Operation(error.into())
+                            })?;
+                    }
+                    Err(error) if secure_fs_error_is_not_found(&error) => {
+                        root.read_exact(&public_path, backup.canonical_bytes())
+                            .map_err(|error| {
+                                ConditionalTransactionError::Operation(error.into())
+                            })?;
+                    }
+                    Err(error) => {
+                        return Err(ConditionalTransactionError::Operation(error.into()));
+                    }
+                }
+                Ok(PublicationMutation::NoChange(()))
+            }) {
+            Ok(()) => Ok(()),
+            Err(ConditionalTransactionError::Metadata(error)) => Err(error.into()),
+            Err(ConditionalTransactionError::Operation(error)) => Err(error),
         }
-        Ok(())
     }
 
     pub fn recover_sealed_export_publication(
-        &self,
+        &mut self,
         export_id: SealedExportIdV1,
     ) -> Result<SealedBackupV1, StoreError> {
         let pending_path = export_pending_path(export_id);
         let public_path = export_path(export_id);
-        let (bytes, already_public) = match self.root.read_immutable(&pending_path) {
-            Ok(bytes) => (bytes, false),
+        let bytes = match self.root.read_immutable(&pending_path) {
+            Ok(bytes) => bytes,
             Err(error) if secure_fs_error_is_not_found(&error) => {
-                (self.root.read_immutable(&public_path)?, true)
+                self.root.read_immutable(&public_path)?
             }
             Err(error) => return Err(error.into()),
         };
@@ -1515,18 +2374,7 @@ impl StoreV1 {
             verify_export_metadata(connection, &backup)?;
             Ok(())
         })?;
-        if already_public {
-            self.persist_snapshot_closure(
-                backup
-                    .export()
-                    .snapshot_blocks()
-                    .ok_or(StoreError::LegacyPartialExport)?,
-            )?;
-            self.root
-                .read_exact(&public_path, backup.canonical_bytes())?;
-        } else {
-            self.finish_backup_publication(&backup)?;
-        }
+        self.finish_backup_publication(&backup)?;
         Ok(backup)
     }
 
@@ -1794,17 +2642,7 @@ impl StoreV1 {
         &self,
         closure: &StoreSnapshotBlockClosureV2,
     ) -> Result<(), StoreError> {
-        let path = snapshot_closure_path(closure.current_root_id());
-        match self
-            .root
-            .create_file_if_absent(&path, closure.canonical_bytes())?
-        {
-            CreateIfAbsent::Created => Ok(()),
-            CreateIfAbsent::AlreadyExists => {
-                self.root.read_exact(&path, closure.canonical_bytes())?;
-                Ok(())
-            }
-        }
+        persist_snapshot_closure_with_root(&self.root, closure)
     }
 
     fn persist_export_files(&mut self, objects: &[StoreObjectV1]) -> Result<(), StoreError> {
@@ -1899,6 +2737,7 @@ impl StoreV1 {
                     .into_iter()
                     .map(|pin| pin.root().clone()),
             );
+            roots.extend(idempotency_replay_roots(connection)?);
             roots.sort();
             roots.dedup();
 
@@ -2518,6 +3357,72 @@ fn load_generation(
     Ok(generation)
 }
 
+fn load_unique_head_for_generation(
+    connection: &Connection,
+    generation_id: StoreGenerationIdV1,
+    domain: &StoreDomainV1,
+) -> Result<StoreHeadV1, StoreError> {
+    let mut statement = connection
+        .prepare("SELECT head_id FROM store_heads WHERE generation_id = ?1 ORDER BY head_id")?;
+    let head_ids = statement
+        .query_map(params![generation_id.as_bytes()], |row| {
+            row.get::<_, Vec<u8>>(0)
+        })?
+        .map(|row| identity(row?))
+        .collect::<Result<Vec<StoreHeadIdV1>, StoreError>>()?;
+    let [head_id] = head_ids.as_slice() else {
+        return Err(StoreError::StoredHeadMismatch);
+    };
+    load_head(connection, *head_id, domain)
+}
+
+fn generation_objects(
+    root: &SecureRoot,
+    connection: &Connection,
+    generation: &StoreGenerationV1,
+) -> Result<Vec<StoreObjectV1>, StoreError> {
+    walk_object_closure_with_limit(
+        generation.roots().iter().copied(),
+        MAX_OBJECT_CLOSURE_ENTRIES,
+        |object_id| {
+            Ok(read_object_with_root(root, connection, object_id)?
+                .references()
+                .to_vec())
+        },
+    )?
+    .into_iter()
+    .map(|object_id| read_object_with_root(root, connection, object_id))
+    .collect()
+}
+
+fn historical_generation_objects(
+    root: &SecureRoot,
+    connection: &Connection,
+    generation: &StoreGenerationV1,
+) -> Result<Vec<StoreObjectV1>, StoreError> {
+    let object_ids = walk_object_closure_with_limit(
+        generation.roots().iter().copied(),
+        MAX_OBJECT_CLOSURE_ENTRIES,
+        |object_id| match read_object_with_root(root, connection, object_id) {
+            Ok(object) => Ok(object.references().to_vec()),
+            Err(StoreError::TombstonedObject(_)) | Err(StoreError::CollectedObject(_)) => {
+                object_references(connection, object_id)
+            }
+            Err(error) => Err(error),
+        },
+    )?;
+    object_ids
+        .into_iter()
+        .filter_map(
+            |object_id| match read_object_with_root(root, connection, object_id) {
+                Ok(object) => Some(Ok(object)),
+                Err(StoreError::TombstonedObject(_)) | Err(StoreError::CollectedObject(_)) => None,
+                Err(error) => Some(Err(error)),
+            },
+        )
+        .collect()
+}
+
 fn load_head(
     connection: &Connection,
     head_id: StoreHeadIdV1,
@@ -2657,6 +3562,21 @@ fn active_pins(connection: &Connection) -> Result<Vec<RetentionPinV1>, StoreErro
                 exact_digest(reason)?,
             )
             .map_err(StoreError::from)
+        })
+        .collect()
+}
+
+fn idempotency_replay_roots(connection: &Connection) -> Result<Vec<RetentionRootV1>, StoreError> {
+    let mut statement = connection.prepare(
+        "SELECT DISTINCT result_object_id FROM store_idempotency ORDER BY result_object_id",
+    )?;
+    statement
+        .query_map([], |row| row.get::<_, Vec<u8>>(0))?
+        .map(|row| {
+            Ok(RetentionRootV1::new(
+                RetentionRootKindV1::ReplayHorizon,
+                identity(row?)?,
+            ))
         })
         .collect()
 }
@@ -3049,12 +3969,359 @@ fn export_pending_path(export_id: SealedExportIdV1) -> PathBuf {
     Path::new(EXPORTS_DIRECTORY).join(format!(".maestro-export-{hex}.pending"))
 }
 
+fn controlled_copy_erasure_barrier_path(object_id: StoreObjectIdV1) -> PathBuf {
+    let rendered = object_id.render();
+    let hex = rendered
+        .strip_prefix("sha256:")
+        .expect("invariant: identity rendering");
+    Path::new(CONTROLLED_COPY_ERASURE_BARRIERS_DIRECTORY).join(format!("{hex}.cbor"))
+}
+
+fn controlled_copy_erasure_barrier_bytes(
+    object_id: StoreObjectIdV1,
+    barrier_identity: [u8; 32],
+) -> Result<Vec<u8>, StoreError> {
+    if barrier_identity == [0; 32] {
+        return Err(StoreError::InvalidControlledCopyErasurePlan);
+    }
+    Ok(deterministic_cbor::encode(&CborValue::Array(vec![
+        CborValue::text("maestro.vnext.store.controlled-copy-erasure-barrier.v1")?,
+        CborValue::Bytes(object_id.as_bytes().to_vec()),
+        CborValue::Bytes(barrier_identity.to_vec()),
+    ]))?)
+}
+
+fn controlled_copy_obligations(
+    root: &SecureRoot,
+    connection: &Connection,
+    object_id: StoreObjectIdV1,
+) -> Result<Vec<ControlledCopyErasureObligationV1>, StoreError> {
+    let mut statement = connection.prepare(
+        "SELECT export.export_id, export.export_byte_length, export.export_bytes_digest,
+                export.snapshot_root_id
+         FROM store_sealed_exports AS export
+         JOIN store_sealed_export_objects AS object ON object.export_id = export.export_id
+         WHERE object.object_id = ?1 AND object.entry_kind = 'available'
+         ORDER BY export.export_id",
+    )?;
+    let rows = statement
+        .query_map(params![object_id.as_bytes()], |row| {
+            Ok((
+                row.get::<_, Vec<u8>>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, Vec<u8>>(2)?,
+                row.get::<_, Vec<u8>>(3)?,
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut obligations = rows
+        .into_iter()
+        .map(
+            |(export_id, export_byte_length, export_bytes_digest, snapshot_root_id)| {
+                let export_id = SealedExportIdV1::from_digest(exact_digest(export_id)?);
+                let export_byte_length = to_u64(export_byte_length)?;
+                let export_bytes_digest = exact_digest(export_bytes_digest)?;
+                if export_byte_length == 0 {
+                    return Err(StoreError::InvalidControlledCopyErasurePlan);
+                }
+                let snapshot_root_id = exact_digest(snapshot_root_id)?;
+                let public = secure_backup_binding(
+                    root,
+                    &export_path(export_id),
+                    export_id,
+                    export_byte_length,
+                    export_bytes_digest,
+                    snapshot_root_id,
+                )?;
+                let pending = secure_backup_binding(
+                    root,
+                    &export_pending_path(export_id),
+                    export_id,
+                    export_byte_length,
+                    export_bytes_digest,
+                    snapshot_root_id,
+                )?;
+                if public.is_some() && pending.is_some() && public != pending {
+                    return Err(StoreError::StoredControlledCopyMismatch);
+                }
+                let (carrier_byte_length, carrier_bytes_digest) = public
+                    .or(pending)
+                    .ok_or(StoreError::StoredControlledCopyMismatch)?;
+                let snapshot_closure =
+                    secure_file_binding(root, &snapshot_closure_path(&snapshot_root_id))?;
+                Ok(ControlledCopyErasureObligationV1 {
+                    export_id,
+                    export_byte_length: carrier_byte_length,
+                    export_bytes_digest: carrier_bytes_digest,
+                    snapshot_root_id,
+                    snapshot_closure,
+                    public_carrier_present: public.is_some(),
+                    pending_carrier_present: pending.is_some(),
+                })
+            },
+        )
+        .collect::<Result<Vec<_>, _>>()?;
+    let registered = obligations
+        .iter()
+        .map(|obligation| obligation.export_id)
+        .collect::<BTreeSet<_>>();
+    obligations.extend(orphan_controlled_copy_obligations(
+        root,
+        object_id,
+        &registered,
+    )?);
+    obligations.sort_by_key(|obligation| obligation.export_id);
+    if obligations
+        .windows(2)
+        .any(|pair| pair[0].export_id == pair[1].export_id)
+    {
+        return Err(StoreError::StoredControlledCopyMismatch);
+    }
+    Ok(obligations)
+}
+
+fn ensure_monotonic_controlled_copy_erasure_census(
+    planned: &[ControlledCopyErasureObligationV1],
+    current: &[ControlledCopyErasureObligationV1],
+) -> Result<(), StoreError> {
+    if current.len() > planned.len() {
+        return Err(StoreError::ControlledCopyErasureCensusChanged);
+    }
+    for observed in current {
+        let Some(expected) = planned
+            .iter()
+            .find(|candidate| candidate.export_id == observed.export_id)
+        else {
+            return Err(StoreError::ControlledCopyErasureCensusChanged);
+        };
+        if observed.export_byte_length != expected.export_byte_length
+            || observed.export_bytes_digest != expected.export_bytes_digest
+            || observed.snapshot_root_id != expected.snapshot_root_id
+            || observed
+                .snapshot_closure
+                .is_some_and(|binding| expected.snapshot_closure != Some(binding))
+            || (observed.public_carrier_present && !expected.public_carrier_present)
+            || (observed.pending_carrier_present && !expected.pending_carrier_present)
+        {
+            return Err(StoreError::ControlledCopyErasureCensusChanged);
+        }
+    }
+    Ok(())
+}
+
+fn orphan_controlled_copy_obligations(
+    root: &SecureRoot,
+    object_id: StoreObjectIdV1,
+    registered: &BTreeSet<SealedExportIdV1>,
+) -> Result<Vec<ControlledCopyErasureObligationV1>, StoreError> {
+    let exports = root.open_dir(Path::new(EXPORTS_DIRECTORY))?;
+    let mut carriers = BTreeMap::<SealedExportIdV1, (SealedBackupV1, bool, bool, [u8; 32])>::new();
+    for entry in exports.read_dir_entries()? {
+        let name = entry
+            .name()
+            .as_os_str()
+            .to_str()
+            .ok_or(StoreError::StoredControlledCopyMismatch)?
+            .to_owned();
+        if name == "snapshot-closures" {
+            if entry.kind() != SecureDirectoryEntryKind::Directory {
+                return Err(StoreError::StoredControlledCopyMismatch);
+            }
+            continue;
+        }
+        if entry.kind() != SecureDirectoryEntryKind::RegularFile {
+            return Err(StoreError::StoredControlledCopyMismatch);
+        }
+        let (hex, public, pending) = if let Some(hex) = name.strip_suffix(".cbor") {
+            (hex, true, false)
+        } else if let Some(hex) = name
+            .strip_prefix(".maestro-export-")
+            .and_then(|value| value.strip_suffix(".pending"))
+        {
+            (hex, false, true)
+        } else {
+            return Err(StoreError::StoredControlledCopyMismatch);
+        };
+        if hex.len() != 64 || !hex.as_bytes().iter().all(u8::is_ascii_hexdigit) {
+            return Err(StoreError::StoredControlledCopyMismatch);
+        }
+        let rendered = format!("sha256:{hex}");
+        let export_id = SealedExportIdV1::parse(&rendered)
+            .map_err(|_| StoreError::StoredControlledCopyMismatch)?;
+        if registered.contains(&export_id) {
+            continue;
+        }
+        let bytes = exports.read_immutable(Path::new(&name))?;
+        let backup = SealedBackupV1::decode(&bytes)?;
+        if backup.export().id() != export_id || backup.canonical_bytes() != bytes {
+            return Err(StoreError::StoredControlledCopyMismatch);
+        }
+        let digest = sha256(&bytes);
+        match carriers.entry(export_id) {
+            std::collections::btree_map::Entry::Vacant(entry) => {
+                entry.insert((backup, public, pending, digest));
+            }
+            std::collections::btree_map::Entry::Occupied(mut entry) => {
+                let (stored, stored_public, stored_pending, stored_digest) = entry.get_mut();
+                if stored.canonical_bytes() != backup.canonical_bytes() || *stored_digest != digest
+                {
+                    return Err(StoreError::StoredControlledCopyMismatch);
+                }
+                *stored_public |= public;
+                *stored_pending |= pending;
+            }
+        }
+    }
+    carriers
+        .into_iter()
+        .filter_map(|(export_id, (backup, public, pending, digest))| {
+            backup
+                .export()
+                .entries()
+                .iter()
+                .any(|entry| {
+                    matches!(entry, SealedExportEntryV1::Available(object)
+                            if object.id() == object_id)
+                })
+                .then_some((export_id, backup, public, pending, digest))
+        })
+        .map(|(export_id, backup, public, pending, digest)| {
+            let snapshot_root = backup
+                .export()
+                .snapshot_root()
+                .ok_or(StoreError::StoredControlledCopyMismatch)?;
+            Ok(ControlledCopyErasureObligationV1 {
+                export_id,
+                export_byte_length: u64::try_from(backup.canonical_bytes().len())
+                    .map_err(|_| StoreError::InvalidMetadataInteger)?,
+                export_bytes_digest: digest,
+                snapshot_root_id: *snapshot_root.id().as_bytes(),
+                snapshot_closure: secure_file_binding(
+                    root,
+                    &snapshot_closure_path(snapshot_root.id().as_bytes()),
+                )?,
+                public_carrier_present: public,
+                pending_carrier_present: pending,
+            })
+        })
+        .collect()
+}
+
+fn secure_backup_binding(
+    root: &SecureRoot,
+    path: &Path,
+    export_id: SealedExportIdV1,
+    export_byte_length: u64,
+    export_bytes_digest: [u8; 32],
+    snapshot_root_id: [u8; 32],
+) -> Result<Option<(u64, [u8; 32])>, StoreError> {
+    let bytes = match root.read_immutable(path) {
+        Ok(bytes) => bytes,
+        Err(error) if secure_fs_error_is_not_found(&error) => return Ok(None),
+        Err(error) => return Err(error.into()),
+    };
+    let backup = SealedBackupV1::decode(&bytes)?;
+    let snapshot_root = backup
+        .export()
+        .snapshot_root()
+        .ok_or(StoreError::StoredControlledCopyMismatch)?;
+    if backup.export().id() != export_id
+        || backup.export().canonical_bytes().len() as u64 != export_byte_length
+        || sha256(backup.export().canonical_bytes()) != export_bytes_digest
+        || snapshot_root.id().as_bytes() != &snapshot_root_id
+    {
+        return Err(StoreError::StoredControlledCopyMismatch);
+    }
+    Ok(Some((
+        u64::try_from(bytes.len()).map_err(|_| StoreError::InvalidMetadataInteger)?,
+        sha256(&bytes),
+    )))
+}
+
+fn secure_file_binding(
+    root: &SecureRoot,
+    path: &Path,
+) -> Result<Option<(u64, [u8; 32])>, StoreError> {
+    match root.read_immutable(path) {
+        Ok(bytes) => Ok(Some((
+            u64::try_from(bytes.len()).map_err(|_| StoreError::InvalidMetadataInteger)?,
+            sha256(&bytes),
+        ))),
+        Err(error) if secure_fs_error_is_not_found(&error) => Ok(None),
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn verify_secure_path_absent(root: &SecureRoot, path: &Path) -> Result<(), StoreError> {
+    match root.read_immutable(path) {
+        Err(error) if secure_fs_error_is_not_found(&error) => Ok(()),
+        Ok(_) => Err(StoreError::ControlledCopyStillPresent(path.to_path_buf())),
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn erase_secure_file_with_digest(
+    root: &SecureRoot,
+    path: impl AsRef<Path>,
+    expected_digest: &[u8; 32],
+) -> Result<bool, SecureFsError> {
+    let path = path.as_ref();
+    let removed = match root.read_immutable(path) {
+        Ok(bytes) => {
+            if &sha256(&bytes) != expected_digest {
+                return Err(SecureFsError::ContentMismatch {
+                    path: path.to_path_buf(),
+                });
+            }
+            root.remove_file_if_matches(path, &bytes)
+        }
+        Err(error) if secure_fs_error_is_not_found(&error) => {
+            root.finish_file_removal_if_digest_matches(path, expected_digest)
+        }
+        Err(error) => Err(error),
+    }?;
+    root.remove_crash_residual_temps_by_digest(
+        path.parent()
+            .expect("invariant: secure Store file path has a parent"),
+        expected_digest,
+    )?;
+    Ok(removed)
+}
+
+fn ensure_no_controlled_copy_erasure_barriers(
+    root: &SecureRoot,
+    object_ids: impl IntoIterator<Item = StoreObjectIdV1>,
+) -> Result<(), StoreError> {
+    for object_id in object_ids {
+        match root.read_immutable(controlled_copy_erasure_barrier_path(object_id)) {
+            Err(error) if secure_fs_error_is_not_found(&error) => {}
+            Ok(_) => return Err(StoreError::ControlledCopyErasureInProgress(object_id)),
+            Err(error) => return Err(error.into()),
+        }
+    }
+    Ok(())
+}
+
 fn snapshot_closure_path(root_id: &[u8; 32]) -> PathBuf {
     let hex = root_id
         .iter()
         .map(|byte| format!("{byte:02x}"))
         .collect::<String>();
     Path::new(SNAPSHOT_CLOSURES_DIRECTORY).join(format!("{hex}.cbor"))
+}
+
+fn persist_snapshot_closure_with_root(
+    root: &SecureRoot,
+    closure: &StoreSnapshotBlockClosureV2,
+) -> Result<(), StoreError> {
+    let path = snapshot_closure_path(closure.current_root_id());
+    match root.create_file_if_absent(&path, closure.canonical_bytes())? {
+        CreateIfAbsent::Created => Ok(()),
+        CreateIfAbsent::AlreadyExists => {
+            root.read_exact(&path, closure.canonical_bytes())?;
+            Ok(())
+        }
+    }
 }
 
 fn sha256(bytes: &[u8]) -> [u8; 32] {
@@ -3223,6 +4490,34 @@ fn run_after_successful_sealed_export_receipt_test_hook() {
 #[cfg(not(test))]
 fn run_after_successful_sealed_export_receipt_test_hook() {}
 
+#[cfg(test)]
+thread_local! {
+    static AFTER_PENDING_SEALED_EXPORT_TEST_HOOK:
+        std::cell::RefCell<Option<Box<dyn FnOnce()>>> = std::cell::RefCell::new(None);
+}
+
+#[cfg(test)]
+fn install_after_pending_sealed_export_test_hook(hook: impl FnOnce() + 'static) {
+    AFTER_PENDING_SEALED_EXPORT_TEST_HOOK.with(|slot| {
+        assert!(
+            slot.borrow_mut().replace(Box::new(hook)).is_none(),
+            "sealed-export pending-carrier hook must be exclusive"
+        );
+    });
+}
+
+#[cfg(test)]
+fn run_after_pending_sealed_export_test_hook() {
+    AFTER_PENDING_SEALED_EXPORT_TEST_HOOK.with(|hook| {
+        if let Some(hook) = hook.borrow_mut().take() {
+            hook();
+        }
+    });
+}
+
+#[cfg(not(test))]
+fn run_after_pending_sealed_export_test_hook() {}
+
 fn reject_sqlite_hard_links(path: &Path) -> Result<(), StoreError> {
     reject_hard_link(path)?;
     for suffix in ["-wal", "-shm"] {
@@ -3307,6 +4602,8 @@ pub enum StoreError {
     AtomicPublication(#[from] super::AtomicPublicationError),
     #[error("Store idempotency result is not reachable from the published Generation")]
     IdempotencyResultOutsideGeneration,
+    #[error("prepared Store publication supplied an Object outside the exact Generation closure")]
+    PublicationObjectOutsideGeneration,
     #[error("Store idempotency metadata does not bind one exact result, Generation, and Head")]
     StoredIdempotencyMismatch,
     #[error("Store retention revision changed since it was read")]
@@ -3357,12 +4654,34 @@ pub enum StoreError {
     StoredHeadMismatch,
     #[error("Store tombstone identity does not match authoritative metadata")]
     StoredTombstoneMismatch,
+    #[error("Store has no committed collection occurrence for object {0}")]
+    MissingCollectionOccurrence(StoreObjectIdV1),
+    #[error("collected Store Object bytes remain physically present: {0}")]
+    CollectedObjectStillPresent(StoreObjectIdV1),
     #[error("Restore Candidate identity does not match authoritative metadata")]
     StoredRestoreCandidateMismatch,
     #[error("unknown Restore Candidate {0}")]
     UnknownRestoreCandidate(RestoreCandidateIdV1),
     #[error("Store Object remains reachable and cannot be tombstoned or collected: {0}")]
     ObjectStillReachable(StoreObjectIdV1),
+    #[error("controlled-copy erasure plan is malformed or does not bind one exact census")]
+    InvalidControlledCopyErasurePlan,
+    #[error("controlled-copy erasure is already in progress for Store Object {0}")]
+    ControlledCopyErasureInProgress(StoreObjectIdV1),
+    #[error("controlled-copy erasure census changed after its durable barrier")]
+    ControlledCopyErasureCensusChanged,
+    #[error("controlled Store copy does not match its committed metadata")]
+    StoredControlledCopyMismatch,
+    #[error("controlled Store copy remains present at {0}")]
+    ControlledCopyStillPresent(PathBuf),
+    #[error("failed to inspect controlled-copy directory {path}")]
+    InspectControlledCopyDirectory {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("controlled-copy physical-absence receipt does not match the exact erasure plan")]
+    ControlledCopyErasureReceiptMismatch,
     #[error("Store is missing a logical tombstone for exported object {0}")]
     MissingTombstone(StoreObjectIdV1),
     #[error("unknown retention root kind tag {0}")]
@@ -3382,6 +4701,14 @@ pub enum StoreError {
     )]
     CollectionSweepDebt {
         committed: usize,
+        remaining: usize,
+        #[source]
+        source: SecureFsError,
+    },
+    #[error(
+        "controlled-copy erasure committed its metadata revocation, but {remaining} file sweep(s) remain as cleanup debt"
+    )]
+    ControlledCopyErasureSweepDebt {
         remaining: usize,
         #[source]
         source: SecureFsError,
@@ -3637,6 +4964,195 @@ mod tests {
             residual_files.is_empty(),
             "a stale seal must leave no public or pending carrier: {residual_files:?}"
         );
+    }
+
+    #[test]
+    fn controlled_copy_census_includes_an_orphan_pre_receipt_export() {
+        let path = TestStorePath::new();
+        let domain = StoreDomainV1::derive(StoreRoleV1::Repository, b"orphan-export-erasure")
+            .expect("Store domain");
+        let mut store = StoreV1::create(&path.0, domain.clone()).expect("create Store");
+        let root = object(91);
+        store.put_object(&root).expect("persist root");
+        let generation = StoreGenerationV1::new(
+            domain,
+            1,
+            None,
+            ContractRootIdV1::parse(&rendered(92)).expect("Contract Root identity"),
+            StoreCompatibilityV1::stage0_successor().expect("Stage 0 compatibility"),
+            vec![root.id()],
+        )
+        .expect("Generation");
+        store
+            .publish_generation(&generation, None)
+            .expect("publish Generation");
+
+        install_after_pending_sealed_export_test_hook(|| {
+            panic!("simulated crash after pending carrier publication")
+        });
+        let crash = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _ = store.seal_export();
+        }));
+        assert!(crash.is_err());
+        let committed: i64 = store
+            .metadata
+            .connection()
+            .expect("bound metadata")
+            .query_row("SELECT COUNT(*) FROM store_sealed_exports", [], |row| {
+                row.get(0)
+            })
+            .expect("sealed export count");
+        assert_eq!(committed, 0);
+
+        let plan = store
+            .prepare_controlled_copy_erasure_plan(root.id(), [93; 32], |_| Ok::<(), ()>(()))
+            .expect("prepare copy-total erasure plan");
+        assert_eq!(plan.obligations().len(), 1);
+        assert!(plan.obligations()[0].pending_carrier_present);
+        assert!(!plan.obligations()[0].public_carrier_present);
+        let absence = store
+            .erase_controlled_copies(&plan)
+            .expect("erase orphan pending carrier");
+        store
+            .finish_controlled_copy_erasure(&plan, absence.receipt_hash())
+            .expect("remove durable barrier after verified absence");
+    }
+
+    #[test]
+    fn controlled_copy_census_fails_closed_on_a_renamed_export_carrier() {
+        let path = TestStorePath::new();
+        let domain = StoreDomainV1::derive(StoreRoleV1::Repository, b"renamed-export-erasure")
+            .expect("Store domain");
+        let mut store = StoreV1::create(&path.0, domain.clone()).expect("create Store");
+        let root = object(94);
+        store.put_object(&root).expect("persist root");
+        let generation = StoreGenerationV1::new(
+            domain,
+            1,
+            None,
+            ContractRootIdV1::parse(&rendered(95)).expect("Contract Root identity"),
+            StoreCompatibilityV1::stage0_successor().expect("Stage 0 compatibility"),
+            vec![root.id()],
+        )
+        .expect("Generation");
+        store
+            .publish_generation(&generation, None)
+            .expect("publish Generation");
+        let backup = store.seal_export().expect("seal export");
+        fs::write(
+            path.0
+                .join(EXPORTS_DIRECTORY)
+                .join("renamed-valid-export.copy"),
+            backup.canonical_bytes(),
+        )
+        .expect("copy valid carrier under an unowned name");
+
+        let result =
+            store.prepare_controlled_copy_erasure_plan(root.id(), [96; 32], |_| Ok::<(), ()>(()));
+        assert!(matches!(
+            result,
+            Err(PreparedPublicationError::Store(
+                StoreError::StoredControlledCopyMismatch
+            ))
+        ));
+    }
+
+    #[test]
+    fn controlled_copy_erasure_recovery_accepts_only_monotonic_disappearance() {
+        let path = TestStorePath::new();
+        let domain = StoreDomainV1::derive(StoreRoleV1::Repository, b"partial-export-erasure")
+            .expect("Store domain");
+        let mut store = StoreV1::create(&path.0, domain.clone()).expect("create Store");
+        let root = object(97);
+        store.put_object(&root).expect("persist root");
+        let generation = StoreGenerationV1::new(
+            domain,
+            1,
+            None,
+            ContractRootIdV1::parse(&rendered(98)).expect("Contract Root identity"),
+            StoreCompatibilityV1::stage0_successor().expect("Stage 0 compatibility"),
+            vec![root.id()],
+        )
+        .expect("Generation");
+        store
+            .publish_generation(&generation, None)
+            .expect("publish Generation");
+        let backup = store.seal_export().expect("seal export");
+        let export_id = backup.export().id();
+        fs::write(
+            path.0.join(export_pending_path(export_id)),
+            backup.canonical_bytes(),
+        )
+        .expect("recreate matching recoverable pending carrier");
+        let plan = store
+            .prepare_controlled_copy_erasure_plan(root.id(), [99; 32], |_| Ok::<(), ()>(()))
+            .expect("prepare exact two-carrier erasure plan");
+        assert!(plan.obligations()[0].public_carrier_present);
+        assert!(plan.obligations()[0].pending_carrier_present);
+
+        fs::remove_file(path.0.join(export_path(export_id)))
+            .expect("simulate a completed first sweep before restart");
+        let absence = store
+            .erase_controlled_copies(&plan)
+            .expect("resume from a strict subset of the original census");
+        store
+            .finish_controlled_copy_erasure(&plan, absence.receipt_hash())
+            .expect("finish after exact absence verification");
+    }
+
+    #[test]
+    fn hard_link_race_blocks_controlled_copy_absence_receipt_after_restart() {
+        let path = TestStorePath::new();
+        let domain = StoreDomainV1::derive(StoreRoleV1::Repository, b"copy-erasure-link-race")
+            .expect("Store domain");
+        let mut store = StoreV1::create(&path.0, domain.clone()).expect("create Store");
+        let root = object(100);
+        store.put_object(&root).expect("persist root");
+        let generation = StoreGenerationV1::new(
+            domain.clone(),
+            1,
+            None,
+            ContractRootIdV1::parse(&rendered(101)).expect("Contract Root identity"),
+            StoreCompatibilityV1::stage0_successor().expect("Stage 0 compatibility"),
+            vec![root.id()],
+        )
+        .expect("Generation");
+        store
+            .publish_generation(&generation, None)
+            .expect("publish Generation");
+        store.seal_export().expect("seal controlled copy");
+        let plan = store
+            .prepare_controlled_copy_erasure_plan(root.id(), [102; 32], |_| Ok::<(), ()>(()))
+            .expect("prepare copy-total erasure plan");
+        let escaped_alias = path.0.join("escaped-controlled-copy-alias");
+        let alias_for_hook = escaped_alias.clone();
+        SecureRoot::install_before_removal_unlink_test_hook(move |quarantine| {
+            fs::hard_link(quarantine, &alias_for_hook)
+                .expect("create racing controlled-copy hard-link alias");
+        });
+
+        assert!(matches!(
+            store.erase_controlled_copies(&plan),
+            Err(StoreError::ControlledCopyErasureSweepDebt {
+                source: SecureFsError::UnsafeObject {
+                    reason: "removed file still has a hard-link alias",
+                    ..
+                },
+                ..
+            })
+        ));
+        assert!(escaped_alias.is_file());
+        drop(store);
+
+        let reopened =
+            StoreV1::open(&path.0, domain).expect("reopen Store after interrupted sweep");
+        assert!(matches!(
+            reopened.verify_controlled_copy_erasure_absence(&plan),
+            Err(StoreError::SecureFs(SecureFsError::UnsafeObject {
+                reason: "file removal has unresolved hard-link or crash debt",
+                ..
+            }))
+        ));
     }
 
     #[test]

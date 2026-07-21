@@ -13,9 +13,10 @@ use super::super::publication::AuthoritySchemaV1;
 use super::super::{
     ActionAuthorityBasisKindV1, ActionOutcomeV1, ActionRequestIdV1, ActionResultError,
     ActionResultV1, AuthorityContextIdV1, AuthorityContextKindV1, AuthorityContinuityManifestV1,
-    AuthorityValidationError, AuthorizationReceiptV1, BootstrapAuthoritySnapshotErrorV1,
-    BootstrapAuthoritySnapshotV1, CapacityRootIdV1, CapacityUseDispositionV1, CmaBranchIdV1,
-    CmaEffectWithdrawalSlotFamilyV1, CmaObservationPublicationPurposeV1, DelegationAncestryV1,
+    AuthorityValidationError, AuthorizationReceiptIdV1, AuthorizationReceiptV1,
+    BootstrapAuthoritySnapshotErrorV1, BootstrapAuthoritySnapshotV1, CapacityRootIdV1,
+    CapacityUseDispositionV1, CmaBranchIdV1, CmaEffectWithdrawalSlotFamilyV1,
+    CmaObservationPublicationPurposeV1, DelegationAncestryV1, EffectReferenceIdV1,
     ExecutorAssertionIdV1, GovernedCapacityKindV1, GovernedCapacityRootV1, GrantIdV1,
     InstallationGovernedCapacitySlotKindV1, OrdinaryBoundedGrantV1, OrdinaryGrantDelegationV1,
     PrincipalIdV1, RepositoryActionLeafV1, RepositoryGovernedCapacitySlotKindV1,
@@ -247,6 +248,7 @@ impl RepositoryActionAdmissionInputV1 {
 
 pub(crate) struct AdmittedRepositoryActionV1 {
     request_id: ActionRequestIdV1,
+    action: RepositoryActionLeafV1,
     receipt: AuthorizationReceiptV1,
     authority_epoch: u64,
     accepted_h_time: u64,
@@ -283,12 +285,22 @@ impl AdmittedRepositoryActionV1 {
         self.request_id
     }
 
+    pub(crate) const fn action(&self) -> RepositoryActionLeafV1 {
+        self.action
+    }
+
     pub(crate) const fn authorization_receipt(&self) -> &AuthorizationReceiptV1 {
         &self.receipt
     }
 
     pub(crate) const fn authority_epoch(&self) -> u64 {
         self.authority_epoch
+    }
+
+    pub(crate) fn authority_epoch_commitment(
+        &self,
+    ) -> Result<[u8; 32], RepositoryAuthorityAdmissionErrorV1> {
+        Ok(hash(&CborValue::Unsigned(self.authority_epoch))?)
     }
 
     pub(crate) const fn accepted_h_time(&self) -> u64 {
@@ -324,14 +336,73 @@ impl AdmittedRepositoryActionV1 {
         request_object: &StoreObjectV1,
         produced_objects: &[StoreObjectV1],
     ) -> Result<RepositoryAuthorityArtifactsV1, RepositoryAuthorityAdmissionErrorV1> {
-        if produced_objects.is_empty() {
+        self.issue_artifacts(
+            request_object,
+            produced_objects,
+            produced_objects,
+            ActionOutcomeV1::Committed,
+            None,
+        )
+    }
+
+    pub(crate) fn issue_committed_evidence_artifacts(
+        &self,
+        request_object: &StoreObjectV1,
+        produced_objects: &[StoreObjectV1],
+        durable_result_references: &[StoreObjectV1],
+    ) -> Result<RepositoryAuthorityArtifactsV1, RepositoryAuthorityAdmissionErrorV1> {
+        self.issue_artifacts(
+            request_object,
+            produced_objects,
+            durable_result_references,
+            ActionOutcomeV1::Committed,
+            None,
+        )
+    }
+
+    pub(crate) fn issue_in_doubt_evidence_artifacts(
+        &self,
+        request_object: &StoreObjectV1,
+        produced_objects: &[StoreObjectV1],
+        durable_result_references: &[StoreObjectV1],
+        effect_reference: EffectReferenceIdV1,
+    ) -> Result<RepositoryAuthorityArtifactsV1, RepositoryAuthorityAdmissionErrorV1> {
+        self.issue_artifacts(
+            request_object,
+            produced_objects,
+            durable_result_references,
+            ActionOutcomeV1::InDoubt,
+            Some(effect_reference),
+        )
+    }
+
+    fn issue_artifacts(
+        &self,
+        request_object: &StoreObjectV1,
+        produced_objects: &[StoreObjectV1],
+        durable_result_references: &[StoreObjectV1],
+        outcome: ActionOutcomeV1,
+        effect_reference: Option<EffectReferenceIdV1>,
+    ) -> Result<RepositoryAuthorityArtifactsV1, RepositoryAuthorityAdmissionErrorV1> {
+        if produced_objects.is_empty()
+            || durable_result_references.is_empty()
+            || durable_result_references
+                .iter()
+                .any(|reference| !produced_objects.iter().any(|object| object == reference))
+            || durable_result_references
+                .iter()
+                .map(StoreObjectV1::id)
+                .collect::<std::collections::BTreeSet<_>>()
+                .len()
+                != durable_result_references.len()
+        {
             return Err(RepositoryAuthorityAdmissionErrorV1::InvalidProducedObjects);
         }
         let result = ActionResultV1::new(
             self.request_id,
-            ActionOutcomeV1::Committed,
+            outcome,
             Some(self.receipt.clone()),
-            None,
+            effect_reference,
         )?;
         let leaf_authority_objects = self
             .leaf_authority_carrier
@@ -376,7 +447,7 @@ impl AdmittedRepositoryActionV1 {
             self.successor_capacity_root.id(),
             self.capacity_debit.id(),
         ];
-        result_references.extend(produced_objects.iter().map(StoreObjectV1::id));
+        result_references.extend(durable_result_references.iter().map(StoreObjectV1::id));
         result_references.extend(leaf_authority_objects.iter().map(StoreObjectV1::id));
         let result_object = authority_object(
             AuthoritySchemaV1::ActionResult,
@@ -521,6 +592,317 @@ pub(crate) fn current_repository_authority_time(
     let acceptance_commitment: [u8; 32] =
         Sha256::digest(deterministic_cbor::encode(&acceptance_value)?).into();
     Ok((accepted_h_time, acceptance_commitment))
+}
+
+pub(crate) fn current_authorization_receipt_is_persisted(
+    active_objects: &[StoreObjectV1],
+    receipt: &AuthorizationReceiptV1,
+) -> Result<bool, RepositoryAuthorityAdmissionErrorV1> {
+    let receipt_schema = AuthoritySchemaV1::AuthorizationReceipt.id()?;
+    let basis_schema = AuthoritySchemaV1::ActionAuthorityBasis.id()?;
+    let result_schema = AuthoritySchemaV1::ActionResult.id()?;
+    let matching = active_objects
+        .iter()
+        .filter(|object| object.schema_id() == receipt_schema)
+        .filter_map(|receipt_object| {
+            let CborValue::Array(fields) = receipt_object.value() else {
+                return None;
+            };
+            let [
+                receipt_id,
+                context_id,
+                request_id,
+                basis_object_id,
+                CborValue::Unsigned(1),
+                CborValue::Bool(true),
+                result_id,
+            ] = fields.as_slice()
+            else {
+                return None;
+            };
+            let basis_object_id = StoreObjectIdV1::from_digest(exact_digest(basis_object_id).ok()?);
+            let result_id = exact_digest(result_id).ok()?;
+            if exact_digest(receipt_id).ok()? != *receipt.id().as_bytes()
+                || exact_digest(context_id).ok()? != *receipt.context_id().as_bytes()
+                || exact_digest(request_id).ok()? != *receipt.request_id().as_bytes()
+                || !receipt_object.references().contains(&basis_object_id)
+            {
+                return None;
+            }
+            let basis_object = active_objects.iter().find(|object| {
+                object.id() == basis_object_id && object.schema_id() == basis_schema
+            })?;
+            let CborValue::Array(basis_fields) = basis_object.value() else {
+                return None;
+            };
+            let [
+                CborValue::Unsigned(basis_kind),
+                basis_context_id,
+                basis_commitment,
+            ] = basis_fields.as_slice()
+            else {
+                return None;
+            };
+            if *basis_kind != receipt.basis_kind() as u64
+                || exact_digest(basis_context_id).ok()? != *receipt.context_id().as_bytes()
+                || exact_digest(basis_commitment).ok()? == [0; 32]
+            {
+                return None;
+            }
+            let result_objects = active_objects
+                .iter()
+                .filter(|object| object.schema_id() == result_schema)
+                .filter(|object| {
+                    let CborValue::Array(result_fields) = object.value() else {
+                        return false;
+                    };
+                    let [
+                        logical_result_id,
+                        result_request_id,
+                        CborValue::Unsigned(_),
+                        CborValue::Unsigned(1),
+                        CborValue::Array(prior_tokens),
+                        CborValue::Array(resulting_tokens),
+                        CborValue::Array(receipt_ids),
+                        CborValue::Array(_),
+                        CborValue::Array(_),
+                        _,
+                        _,
+                    ] = result_fields.as_slice()
+                    else {
+                        return false;
+                    };
+                    exact_digest(logical_result_id).ok() == Some(result_id)
+                        && exact_digest(result_request_id).ok()
+                            == Some(*receipt.request_id().as_bytes())
+                        && prior_tokens.len() == 1
+                        && exact_digest(&prior_tokens[0]).ok()
+                            == Some(*receipt.prior_state_token().as_bytes())
+                        && resulting_tokens.len() == 1
+                        && exact_digest(&resulting_tokens[0]).ok()
+                            == Some(*receipt.resulting_state_token().as_bytes())
+                        && receipt_ids.len() == 1
+                        && exact_digest(&receipt_ids[0]).ok() == Some(*receipt.id().as_bytes())
+                        && object.references().contains(&receipt_object.id())
+                })
+                .count();
+            (result_objects == 1).then_some(receipt_object.id())
+        })
+        .collect::<std::collections::BTreeSet<_>>();
+    Ok(matching.len() == 1)
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct PersistedEvidenceMutationAuthorityExpectationV1 {
+    receipt_id: AuthorizationReceiptIdV1,
+    request_id: ActionRequestIdV1,
+    accepted_h_time: u64,
+    produced_object_id: StoreObjectIdV1,
+    effect: Option<(EffectReferenceIdV1, StoreObjectIdV1)>,
+}
+
+impl PersistedEvidenceMutationAuthorityExpectationV1 {
+    pub(crate) fn new(
+        receipt_id: AuthorizationReceiptIdV1,
+        request_id: ActionRequestIdV1,
+        accepted_h_time: u64,
+        produced_object_id: StoreObjectIdV1,
+        effect: Option<(EffectReferenceIdV1, StoreObjectIdV1)>,
+    ) -> Self {
+        Self {
+            receipt_id,
+            request_id,
+            accepted_h_time,
+            produced_object_id,
+            effect,
+        }
+    }
+}
+
+pub(crate) fn validate_persisted_evidence_mutation_authority(
+    generation: &StoreGenerationV1,
+    active_objects: &[StoreObjectV1],
+    request_object: &StoreObjectV1,
+    expected: PersistedEvidenceMutationAuthorityExpectationV1,
+) -> Result<AuthorizationReceiptV1, RepositoryAuthorityAdmissionErrorV1> {
+    if expected.accepted_h_time == 0 {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+    }
+    let expected_effect_reference = expected.effect.map(|(reference, _)| reference);
+    let expected_effect_object_id = expected.effect.map(|(_, object_id)| object_id);
+    let receipt_schema = AuthoritySchemaV1::AuthorizationReceipt.id()?;
+    let receipt_objects = active_objects
+        .iter()
+        .filter(|object| object.schema_id() == receipt_schema)
+        .filter(|object| object.references().contains(&request_object.id()))
+        .filter(|object| {
+            matches!(object.value(), CborValue::Array(fields)
+                if fields.len() == 7
+                    && fields.first().and_then(|value| exact_digest(value).ok())
+                        == Some(*expected.receipt_id.as_bytes())
+                    && fields.get(2).and_then(|value| exact_digest(value).ok())
+                        == Some(*expected.request_id.as_bytes()))
+        })
+        .collect::<Vec<_>>();
+    let [receipt_object] = receipt_objects.as_slice() else {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+    };
+    let CborValue::Array(receipt_fields) = receipt_object.value() else {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+    };
+    let [
+        receipt_id,
+        context_id,
+        request_id,
+        basis_object_id,
+        CborValue::Unsigned(ORDINARY_REPOSITORY_ACTION_PROTOCOL_VERSION_V1),
+        CborValue::Bool(true),
+        logical_result_id,
+    ] = receipt_fields.as_slice()
+    else {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+    };
+    let context_id = AuthorityContextIdV1::from_digest(exact_digest(context_id)?);
+    let basis_object_id = StoreObjectIdV1::from_digest(exact_digest(basis_object_id)?);
+    let logical_result_id = exact_digest(logical_result_id)?;
+    if exact_digest(receipt_id)? != *expected.receipt_id.as_bytes()
+        || exact_digest(request_id)? != *expected.request_id.as_bytes()
+    {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+    }
+    let basis_schema = AuthoritySchemaV1::ActionAuthorityBasis.id()?;
+    let basis_object = active_objects
+        .iter()
+        .find(|object| object.id() == basis_object_id && object.schema_id() == basis_schema)
+        .ok_or(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier)?;
+    let CborValue::Array(basis_fields) = basis_object.value() else {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+    };
+    let [
+        CborValue::Unsigned(basis_kind),
+        basis_context_id,
+        basis_commitment,
+    ] = basis_fields.as_slice()
+    else {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+    };
+    let basis_kind = ActionAuthorityBasisKindV1::try_from(
+        u8::try_from(*basis_kind)
+            .map_err(|_| RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier)?,
+    )
+    .map_err(|_| RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier)?;
+    if exact_digest(basis_context_id)? != *context_id.as_bytes()
+        || exact_digest(basis_commitment)? == [0; 32]
+        || !receipt_object.references().contains(&basis_object.id())
+    {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+    }
+    let result_schema = AuthoritySchemaV1::ActionResult.id()?;
+    let result_objects = active_objects
+        .iter()
+        .filter(|object| object.schema_id() == result_schema)
+        .filter(|object| object.references().contains(&receipt_object.id()))
+        .filter(|object| {
+            matches!(object.value(), CborValue::Array(fields)
+                if fields.first().and_then(|value| exact_digest(value).ok()) == Some(logical_result_id))
+        })
+        .collect::<Vec<_>>();
+    let [result_object] = result_objects.as_slice() else {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+    };
+    let CborValue::Array(result_fields) = result_object.value() else {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+    };
+    let [
+        result_id,
+        result_request_id,
+        CborValue::Unsigned(outcome),
+        CborValue::Unsigned(ORDINARY_REPOSITORY_ACTION_PROTOCOL_VERSION_V1),
+        CborValue::Array(prior_tokens),
+        CborValue::Array(resulting_tokens),
+        CborValue::Array(receipt_ids),
+        CborValue::Array(produced_ids),
+        CborValue::Array(invalidated_ids),
+        _,
+        _,
+    ] = result_fields.as_slice()
+    else {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+    };
+    let ([prior_token], [resulting_token], [result_receipt_id]) = (
+        prior_tokens.as_slice(),
+        resulting_tokens.as_slice(),
+        receipt_ids.as_slice(),
+    ) else {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+    };
+    if exact_digest(result_request_id)? != *expected.request_id.as_bytes()
+        || exact_digest(result_receipt_id)? != *expected.receipt_id.as_bytes()
+        || !invalidated_ids.is_empty()
+        || produced_ids
+            .iter()
+            .filter(|id| exact_digest(id).ok() == Some(*expected.produced_object_id.as_bytes()))
+            .count()
+            != 1
+        || !result_object
+            .references()
+            .contains(&expected.produced_object_id)
+        || expected_effect_object_id
+            .is_some_and(|object_id| !result_object.references().contains(&object_id))
+    {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+    }
+    let prior_state_token = StateTokenIdV1::from_digest(exact_digest(prior_token)?);
+    let resulting_state_token = StateTokenIdV1::from_digest(exact_digest(resulting_token)?);
+    let receipt = AuthorizationReceiptV1::new(
+        expected.request_id,
+        context_id,
+        basis_kind,
+        prior_state_token,
+        resulting_state_token,
+    )?;
+    let expected_outcome = if expected_effect_reference.is_some() {
+        ActionOutcomeV1::InDoubt
+    } else {
+        ActionOutcomeV1::Committed
+    };
+    let logical_result = ActionResultV1::new(
+        expected.request_id,
+        expected_outcome,
+        Some(receipt.clone()),
+        expected_effect_reference,
+    )?;
+    if receipt.id() != expected.receipt_id
+        || exact_digest(result_id)? != logical_result_id
+        || logical_result.id().as_bytes() != &logical_result_id
+        || *outcome != expected_outcome as u64
+        || !current_authorization_receipt_is_persisted(active_objects, &receipt)?
+    {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+    }
+    let state_schema = AuthoritySchemaV1::SuccessVisibleAuthorityContinuityState.id()?;
+    let state_objects = receipt_object
+        .references()
+        .iter()
+        .filter_map(|id| active_objects.iter().find(|object| object.id() == *id))
+        .filter(|object| object.schema_id() == state_schema)
+        .collect::<Vec<_>>();
+    let [state_object] = state_objects.as_slice() else {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+    };
+    let manifest = authority_manifest_for_role(generation.domain().role())?;
+    let state = SuccessVisibleAuthorityContinuityStateV1::decode(
+        &object_value_bytes(state_object)?,
+        &manifest,
+    )?;
+    if state.context_id() != context_id
+        || state.state_token() != prior_state_token
+        || prior_state_token != resulting_state_token
+        || state.accepted_time().lower_bound() != expected.accepted_h_time
+    {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+    }
+    Ok(receipt)
 }
 
 pub(crate) fn admit_repository_action(
@@ -815,6 +1197,7 @@ pub(crate) fn admit_repository_action(
     )?;
     Ok(AdmittedRepositoryActionV1 {
         request_id: input.request_id,
+        action,
         receipt,
         authority_epoch: facts.snapshot().authority_epoch,
         accepted_h_time: current_continuity_state.accepted_time().lower_bound(),
@@ -934,6 +1317,225 @@ pub(crate) fn continue_repository_action_attempt(
         state_object.id(),
         basis_object.id(),
     ]);
+    let successor_snapshot = authority_object(
+        AuthoritySchemaV1::BootstrapAuthoritySnapshot,
+        successor_facts.schema_value()?,
+        successor_references,
+    )?;
+    Ok(ContinuedRepositoryActionV1 {
+        current_snapshot_id: snapshot_object.id(),
+        successor_snapshot,
+    })
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "durable recovery binds the exact admitted request, basis, Receipt, in-doubt Result, effect carrier, and original Authority epoch"
+)]
+pub(crate) fn continue_durably_admitted_repository_action_attempt(
+    view: &StorePublicationViewV1<'_>,
+    current_generation: &StoreGenerationV1,
+    request_object_id: StoreObjectIdV1,
+    basis_object_id: StoreObjectIdV1,
+    receipt: &AuthorizationReceiptV1,
+    effect_reference: EffectReferenceIdV1,
+    effect_object_id: StoreObjectIdV1,
+    admitted_authority_epoch: u64,
+    expected_authority_epoch_commitment: [u8; 32],
+) -> Result<ContinuedRepositoryActionV1, RepositoryAuthorityAdmissionErrorV1> {
+    if current_generation.domain() != view.domain()
+        || current_generation.ordinal() == u64::MAX
+        || admitted_authority_epoch == 0
+        || hash(&CborValue::Unsigned(admitted_authority_epoch))?
+            != expected_authority_epoch_commitment
+    {
+        return Err(RepositoryAuthorityAdmissionErrorV1::Unavailable);
+    }
+    let active_objects = view.active_generation_objects()?;
+    let expected_context_kind = authority_context_kind_for_role(view.role());
+    let snapshot_schema = AuthoritySchemaV1::BootstrapAuthoritySnapshot.id()?;
+    let mut snapshots = active_objects
+        .iter()
+        .filter(|object| object.schema_id() == snapshot_schema)
+        .filter_map(|object| {
+            BootstrapAuthoritySnapshotV1::from_canonical_bytes(&object_value_bytes(object).ok()?)
+                .ok()
+                .filter(|facts| {
+                    facts.context().kind() == expected_context_kind
+                        && facts.context().store_generation() == current_generation.ordinal()
+                        && facts.snapshot().store_generation == current_generation.ordinal()
+                        && current_generation.roots().contains(&object.id())
+                })
+                .map(|facts| (object, facts))
+        })
+        .collect::<Vec<_>>();
+    if snapshots.len() != 1 {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidCurrentAuthority);
+    }
+    let (snapshot_object, facts) = snapshots
+        .pop()
+        .expect("invariant: exact one-element current Authority snapshot");
+    let referenced = direct_references(snapshot_object, &active_objects)?;
+    let state_object = one_schema_object(
+        &referenced,
+        AuthoritySchemaV1::SuccessVisibleAuthorityContinuityState,
+    )?;
+    let guard_object = one_schema_object(&referenced, AuthoritySchemaV1::AdmittedTransitionGuard)?;
+    let manifest = authority_manifest_for_role(view.role())?;
+    validate_current_guard(
+        current_generation,
+        &facts,
+        &manifest,
+        &state_object,
+        &guard_object,
+    )?;
+
+    let basis_schema = AuthoritySchemaV1::ActionAuthorityBasis.id()?;
+    let basis_object = active_objects
+        .iter()
+        .find(|object| object.id() == basis_object_id && object.schema_id() == basis_schema)
+        .ok_or(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier)?;
+    let CborValue::Array(basis_fields) = basis_object.value() else {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+    };
+    let [
+        CborValue::Unsigned(basis_kind),
+        basis_context,
+        basis_commitment,
+    ] = basis_fields.as_slice()
+    else {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+    };
+    if *basis_kind != receipt.basis_kind() as u64
+        || exact_digest(basis_context)? != *receipt.context_id().as_bytes()
+        || exact_digest(basis_commitment)? == [0; 32]
+        || !reference_closure_contains(snapshot_object, basis_object_id, &active_objects)?
+        || !current_authorization_receipt_is_persisted(&active_objects, receipt)?
+    {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+    }
+    let request_object = active_objects
+        .iter()
+        .find(|object| object.id() == request_object_id)
+        .ok_or(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier)?;
+    let effect_object = active_objects
+        .iter()
+        .find(|object| object.id() == effect_object_id)
+        .ok_or(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier)?;
+    let logical_result = ActionResultV1::new(
+        receipt.request_id(),
+        ActionOutcomeV1::InDoubt,
+        Some(receipt.clone()),
+        Some(effect_reference),
+    )?;
+    let receipt_schema = AuthoritySchemaV1::AuthorizationReceipt.id()?;
+    let mut receipt_objects = active_objects
+        .iter()
+        .filter(|object| object.schema_id() == receipt_schema)
+        .filter(|object| {
+            let CborValue::Array(fields) = object.value() else {
+                return false;
+            };
+            let [
+                receipt_id,
+                context_id,
+                request_id,
+                stored_basis_id,
+                CborValue::Unsigned(ORDINARY_REPOSITORY_ACTION_PROTOCOL_VERSION_V1),
+                CborValue::Bool(true),
+                result_id,
+            ] = fields.as_slice()
+            else {
+                return false;
+            };
+            exact_digest(receipt_id).ok() == Some(*receipt.id().as_bytes())
+                && exact_digest(context_id).ok() == Some(*receipt.context_id().as_bytes())
+                && exact_digest(request_id).ok() == Some(*receipt.request_id().as_bytes())
+                && exact_digest(stored_basis_id).ok() == Some(*basis_object_id.as_bytes())
+                && exact_digest(result_id).ok() == Some(*logical_result.id().as_bytes())
+                && object.references().contains(&request_object_id)
+                && object.references().contains(&basis_object_id)
+        })
+        .collect::<Vec<_>>();
+    if receipt_objects.len() != 1 {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+    }
+    let receipt_object = receipt_objects
+        .pop()
+        .expect("invariant: exact one durable Authorization Receipt carrier");
+    let result_schema = AuthoritySchemaV1::ActionResult.id()?;
+    let mut result_objects = active_objects
+        .iter()
+        .filter(|object| object.schema_id() == result_schema)
+        .filter(|object| {
+            let CborValue::Array(fields) = object.value() else {
+                return false;
+            };
+            let [
+                logical_result_id,
+                request_id,
+                CborValue::Unsigned(outcome),
+                CborValue::Unsigned(ORDINARY_REPOSITORY_ACTION_PROTOCOL_VERSION_V1),
+                CborValue::Array(prior_tokens),
+                CborValue::Array(resulting_tokens),
+                CborValue::Array(receipt_ids),
+                CborValue::Array(produced_ids),
+                CborValue::Array(invalidated_ids),
+                CborValue::Array(first_optional),
+                CborValue::Array(second_optional),
+            ] = fields.as_slice()
+            else {
+                return false;
+            };
+            exact_digest(logical_result_id).ok() == Some(*logical_result.id().as_bytes())
+                && exact_digest(request_id).ok() == Some(*receipt.request_id().as_bytes())
+                && *outcome == ActionOutcomeV1::InDoubt as u64
+                && prior_tokens.as_slice() == [bytes(receipt.prior_state_token().as_bytes())]
+                && resulting_tokens.as_slice()
+                    == [bytes(receipt.resulting_state_token().as_bytes())]
+                && receipt_ids.as_slice() == [bytes(receipt.id().as_bytes())]
+                && produced_ids
+                    .iter()
+                    .any(|id| exact_digest(id).ok() == Some(*effect_object_id.as_bytes()))
+                && invalidated_ids.is_empty()
+                && first_optional.as_slice() == [CborValue::Unsigned(0)]
+                && second_optional.as_slice() == [CborValue::Unsigned(0)]
+                && current_generation.roots().contains(&object.id())
+                && object.references().contains(&request_object_id)
+                && object.references().contains(&basis_object_id)
+                && object.references().contains(&receipt_object.id())
+                && object.references().contains(&effect_object_id)
+        })
+        .collect::<Vec<_>>();
+    if result_objects.len() != 1 {
+        return Err(RepositoryAuthorityAdmissionErrorV1::InvalidAuthorityCarrier);
+    }
+    let result_object = result_objects
+        .pop()
+        .expect("invariant: exact one durable in-doubt Action Result carrier");
+
+    let successor_facts = facts.continue_at_store_generation(
+        current_generation
+            .ordinal()
+            .checked_add(1)
+            .ok_or(RepositoryAuthorityAdmissionErrorV1::Unavailable)?,
+        facts.continuity().manifest_id(),
+        facts.continuity().guard_kind(),
+        facts.continuity().state_token(),
+    )?;
+    let mut successor_references = snapshot_object.references().to_vec();
+    successor_references.extend([
+        snapshot_object.id(),
+        guard_object.id(),
+        state_object.id(),
+        basis_object.id(),
+        request_object.id(),
+        receipt_object.id(),
+        result_object.id(),
+        effect_object.id(),
+    ]);
+    successor_references.sort_unstable();
+    successor_references.dedup();
     let successor_snapshot = authority_object(
         AuthoritySchemaV1::BootstrapAuthoritySnapshot,
         successor_facts.schema_value()?,
@@ -1199,6 +1801,7 @@ fn admit_specialized_repository_execution_action(
     )?;
     Ok(AdmittedRepositoryActionV1 {
         request_id,
+        action,
         receipt,
         authority_epoch: facts.snapshot().authority_epoch,
         accepted_h_time: current_continuity_state.accepted_time().lower_bound(),

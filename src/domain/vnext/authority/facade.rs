@@ -16,22 +16,26 @@ mod repository_leaf_authority;
 #[cfg(test)]
 pub(crate) use repository_admission::test_support;
 pub(crate) use repository_admission::{
-    AdmittedRepositoryActionV1, ContinuedRepositoryActionV1, RepositoryActionAdmissionInputV1,
+    AdmittedRepositoryActionV1, ContinuedRepositoryActionV1,
+    PersistedEvidenceMutationAuthorityExpectationV1, RepositoryActionAdmissionInputV1,
     RepositoryAuthorityAdmissionErrorV1, RepositoryAuthorityArtifactsV1, admit_repository_action,
-    admit_repository_authority_candidate, continue_repository_action_attempt,
-    current_repository_authority_time, validate_persisted_repository_action_basis,
+    admit_repository_authority_candidate, continue_durably_admitted_repository_action_attempt,
+    continue_repository_action_attempt, current_authorization_receipt_is_persisted,
+    current_repository_authority_time, validate_persisted_evidence_mutation_authority,
+    validate_persisted_repository_action_basis,
 };
 pub use repository_leaf_authority::{
     AbsorbWorkAuthorityV1, AmendContractAuthorityV1, AppendDesignRevisionAuthorityV1,
     BootstrapExecutionAuthorityV1, CancelWorkAuthorityV1,
     ContinuityMaintenanceExecutionAuthorityV1, CreateDraftWorkAuthorityV1, ExecutionAuthorityV1,
-    GenericExecutionAuthorityV1, PublishInitialContractAuthorityV1, RepositoryAuthenticatedHumanV1,
-    RepositoryAuthoritySelectionV1, RepositoryDecisionAuthorityCarrierV1,
-    RepositoryDecisionOptionMappingV1, RepositoryDecisionPresentationV1,
-    RepositoryLeafAuthorityErrorV1, RepositoryPolicyComponentSetV1, RepositoryPolicySnapshotV1,
-    RepositoryPolicyStrengthV1, RepositoryPolicyTransitionAuthorityV1,
-    RepositoryPolicyTransitionKindV1, RepositoryPolicyTransitionV1, ResolveDecisionAuthorityV1,
-    SubmitStepAuthorityV1,
+    ExecutionProducerV1, GenericExecutionAuthorityV1, PublishInitialContractAuthorityV1,
+    RepositoryAuthenticatedHumanV1, RepositoryAuthoritySelectionV1,
+    RepositoryDecisionAuthorityCarrierV1, RepositoryDecisionOptionMappingV1,
+    RepositoryDecisionPresentationV1, RepositoryLeafAuthorityErrorV1,
+    RepositoryPolicyComponentSetV1, RepositoryPolicySnapshotV1, RepositoryPolicyStrengthV1,
+    RepositoryPolicyTransitionAuthorityV1, RepositoryPolicyTransitionKindV1,
+    RepositoryPolicyTransitionV1, ResolveDecisionAuthorityV1, SubmitStepAuthorityV1,
+    SubmitWorkCompletionAuthorityV1,
 };
 
 use super::continuity::{StoreAllocatedContinuityStateTokenV1, StoreAllocationBindingErrorV1};
@@ -529,7 +533,7 @@ fn prepare_bootstrap_publication(
     )?;
     objects.sort_by_key(StoreObjectV1::id);
     objects.dedup_by_key(|object| object.id());
-    let publication = AtomicGenerationPublicationV1::new(
+    let publication = AtomicGenerationPublicationV1::new_from_object_superset(
         generation,
         Some(plan.expected_old),
         objects,
@@ -888,7 +892,7 @@ fn prepare_root_attached_grant_issue(
         meaning_digest,
         result_object.id(),
     )?;
-    AtomicGenerationPublicationV1::new(
+    AtomicGenerationPublicationV1::new_from_object_superset(
         generation,
         Some(expected_old),
         vec![
@@ -1277,8 +1281,13 @@ fn prepare_ordinary_grant_mutation(
     if let Some((grant, delegation)) = candidate_objects {
         objects.extend([grant, delegation]);
     }
-    AtomicGenerationPublicationV1::new(generation, Some(expected_old), objects, idempotency)
-        .map_err(Into::into)
+    AtomicGenerationPublicationV1::new_from_object_superset(
+        generation,
+        Some(expected_old),
+        objects,
+        idempotency,
+    )
+    .map_err(Into::into)
 }
 
 fn reject_administrator_ancestor_mutation(

@@ -25,9 +25,9 @@ EVIDENCE = ROOT / "contracts/vnext/catalogs/evidence/predecessors.json"
 SOURCE_BINDINGS = ROOT / "contracts/vnext/stage0/input-bindings.json"
 C325 = ROOT / "contracts/vnext/public/direct_consumers.c325.v1.json"
 DOMAIN = "maestro.vnext.stage0.effect-home.v1"
-EXPECTED_SOURCE_BINDINGS_SHA256 = "d0cc2563dd84458ed9122ee91eb1f640e137a7fdb6ad74ecb2123744243482c5"
+EXPECTED_SOURCE_BINDINGS_SHA256 = "298e5ef0f129c09398126574d73bafb516a0dfc63a04242cd280583bbc5d49ea"
 EXPECTED_INPUTS = {
-    "design": "85787cfb4fb32eefe078adbf9ede66114b12c6304af10857bd676a1cd9875d18",
+    "design": "16a2f079f6ebf3dd3a2fb1a171cd0c6811203fe5f84dda73a7e2e91f67d6f9f7",
     "decisions": "1f97e67b156d5a17d13b94ff955ad17efeb3bb71a4b74b1aec14e20dac1100dd",
     "card": "2cdf1f74843a6eca926ff3bc48e060654350e6a03b65342f8d7be48d111379b4",
     "c325": "ccd22243030aa3bbbd02fefd4ab17371b9bfb2c9842311c5acddbee5bd220c29",
@@ -205,6 +205,8 @@ SEMANTIC_LITERAL_SOURCES = {
     "src/domain/vnext/execution/runtime.rs": ("Execution", "candidate_contract_definition", "direct_stage4_execution_runtime_literal"),
     "src/domain/vnext/execution/store.rs": ("Execution", "candidate_contract_definition", "direct_stage4_atomic_store_literal"),
     "src/domain/vnext/execution/withdrawal.rs": ("Execution", "candidate_contract_definition", "direct_execution_literal"),
+    "src/domain/vnext/evidence/observation.rs": ("Evidence", "candidate_contract_definition", "direct_stage5_observation_literal"),
+    "src/domain/vnext/evidence/store.rs": ("Evidence", "candidate_contract_definition", "direct_stage5_evidence_store_literal"),
     "src/domain/vnext/identity/manifest.rs": ("Identity", "candidate_contract_definition", "direct_identity_literal"),
     "src/domain/vnext/integration/public_literals.rs": ("PublicContracts", "candidate_contract_definition", "direct_public_contract_literal"),
     "tests/vnext_dispatch_cutover_literals.rs": ("Stage0Proof", "candidate_proof_reader", "direct_stage0_literal_test"),
@@ -434,7 +436,7 @@ def frozen_source_hashes() -> dict[str, str]:
         raise ValueError("Stage-0 source bindings use an unexpected schema")
     if bindings.get("feature_id") != "maestro-whole-flow-architecture-refoundation":
         raise ValueError("Stage-0 source bindings name an unexpected feature")
-    recorded = bindings.get("canonical_source_inputs")
+    recorded = bindings.get("current_source_inputs")
     expected_recorded = {
         "design_sha256": EXPECTED_INPUTS["design"],
         "decisions_sha256": EXPECTED_INPUTS["decisions"],

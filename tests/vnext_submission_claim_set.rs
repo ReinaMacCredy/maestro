@@ -4,7 +4,9 @@ use maestro::domain::vnext::evidence::{
 };
 use maestro::domain::vnext::identity::{SchemaClosureV1, SchemaError};
 use maestro::foundation::core::deterministic_cbor::CborValue;
+use serde_json::Value;
 use sha2::{Digest, Sha256};
+use std::{fs, path::Path};
 
 fn hash(byte: u8) -> [u8; 32] {
     [byte; 32]
@@ -191,6 +193,23 @@ fn freezes_the_schema_identity_and_rejects_shape_mutants() {
         schema_id.to_string(),
         "sha256:f70420ba6a0b35be60cc720536671ac92b98097ed4bc3d37ddcca50ec28cf9a4"
     );
+    let artifact: Value = serde_json::from_slice(
+        &fs::read(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("contracts/vnext/stage0/submission-claim/submission-claim-set.v1.json"),
+        )
+        .expect("read frozen Stage 0 SubmissionClaimSetV1 artifact"),
+    )
+    .expect("decode frozen Stage 0 SubmissionClaimSetV1 artifact");
+    assert_eq!(artifact["schema_id"], schema_id.to_string());
+    let artifact_fields = artifact["schema_descriptor"][2]
+        .as_array()
+        .expect("frozen Stage 0 field descriptors");
+    assert_eq!(artifact_fields.len(), 4);
+    assert_eq!(artifact_fields[3][0], 4);
+    assert_eq!(artifact_fields[3][1], "digest");
+    assert_eq!(artifact_fields[3][2][0], 4);
+    assert_eq!(artifact_fields[3][2][1], 32);
 
     let claim_set = SubmissionClaimSetV1::from_stage0_carrier(
         b"submission".to_vec(),

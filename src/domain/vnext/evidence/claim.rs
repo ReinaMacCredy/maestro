@@ -14,6 +14,7 @@ use super::identity::{
     ClaimIdV1, EvidenceIdentityError, ObservationRecordIdV1, derive_claim_id, domain_hash,
     require_nonzero,
 };
+use super::observation::{ObservationSubjectKindV1, ObservationSubjectV1, ObservationV1};
 use super::submission_claim::{SubmissionClaimSetError, SubmissionClaimSetV1};
 
 pub const CLAIM_RECORD_VERSION_V1: u64 = 1;
@@ -86,7 +87,7 @@ impl SubmissionRefV1 {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum ClaimSubjectV1 {
     Work {
         work_id: WorkIdV1,
@@ -268,6 +269,15 @@ impl ClaimV1 {
         Ok(deterministic_cbor::encode(&self.canonical_value())?)
     }
 
+    pub fn from_canonical_bytes(value: &[u8]) -> Result<Self, ClaimError> {
+        let decoded = deterministic_cbor::decode(value)?;
+        let claim = Self::from_canonical_value(&decoded)?;
+        if claim.canonical_bytes()? != value {
+            return Err(ClaimError::InvalidStoredClaim);
+        }
+        Ok(claim)
+    }
+
     pub(crate) fn from_canonical_value(value: &CborValue) -> Result<Self, ClaimError> {
         let CborValue::Array(fields) = value else {
             return Err(ClaimError::InvalidStoredClaim);
@@ -314,17 +324,67 @@ impl ClaimV1 {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EvidenceClaimPublicationV1 {
     claims: Vec<ClaimV1>,
+    observations: Vec<ObservationV1>,
     claim_set: SubmissionClaimSetV1,
 }
 
 impl EvidenceClaimPublicationV1 {
-    pub fn new(submission: SubmissionRefV1, mut claims: Vec<ClaimV1>) -> Result<Self, ClaimError> {
+    pub fn new(
+        submission: SubmissionRefV1,
+        mut claims: Vec<ClaimV1>,
+        mut observations: Vec<ObservationV1>,
+    ) -> Result<Self, ClaimError> {
         claims.sort_by(|left, right| {
             (left.normalized_proposition_hash(), left.claim_id())
                 .cmp(&(right.normalized_proposition_hash(), right.claim_id()))
         });
+        observations.sort_unstable_by_key(ObservationV1::id);
+        if observations
+            .windows(2)
+            .any(|pair| pair[0].id() == pair[1].id())
+        {
+            return Err(ClaimError::DuplicateObservationRecord);
+        }
+        let resolved = observations
+            .iter()
+            .map(ObservationV1::id)
+            .collect::<BTreeSet<_>>();
+        let referenced = claims
+            .iter()
+            .flat_map(|claim| claim.observation_refs().iter().copied())
+            .collect::<BTreeSet<_>>();
+        if referenced.iter().any(|id| !resolved.contains(id)) {
+            return Err(ClaimError::UnresolvedObservationReference);
+        }
+        if resolved.iter().any(|id| !referenced.contains(id)) {
+            return Err(ClaimError::UnreferencedObservationRecord);
+        }
+        let observations_by_id = observations
+            .iter()
+            .map(|observation| (observation.id(), observation))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        for claim in &claims {
+            for observation_id in claim.observation_refs() {
+                validate_claim_observation_subjects(
+                    claim.submission(),
+                    claim.subject(),
+                    observations_by_id
+                        .get(observation_id)
+                        .expect("invariant: all Claim Observation references were resolved")
+                        .store_domain_id(),
+                    observations_by_id
+                        .get(observation_id)
+                        .expect("invariant: all Claim Observation references were resolved")
+                        .subjects(),
+                )?;
+            }
+        }
         let claim_set = SubmissionClaimSetV1::from_claims(submission, &claims)?;
-        Ok(Self { claims, claim_set })
+        Ok(Self {
+            claims,
+            observations,
+            claim_set,
+        })
     }
 
     pub fn claims(&self) -> &[ClaimV1] {
@@ -333,6 +393,10 @@ impl EvidenceClaimPublicationV1 {
 
     pub const fn claim_set(&self) -> &SubmissionClaimSetV1 {
         &self.claim_set
+    }
+
+    pub fn observations(&self) -> &[ObservationV1] {
+        &self.observations
     }
 
     pub fn claim_set_value(&self) -> Result<CborValue, ClaimError> {
@@ -344,8 +408,121 @@ impl EvidenceClaimPublicationV1 {
             CborValue::text("maestro.vnext.evidence.claim-publication.v1")?,
             self.claim_set_value()?,
             CborValue::Array(self.claims.iter().map(ClaimV1::canonical_value).collect()),
+            CborValue::Array(
+                self.observations
+                    .iter()
+                    .map(ObservationV1::canonical_value)
+                    .collect::<Result<Vec<_>, _>>()?,
+            ),
         ]))
     }
+}
+
+pub(super) fn validate_claim_observation_subjects(
+    submission: SubmissionRefV1,
+    claim_subject: &ClaimSubjectV1,
+    observation_store_domain_id: StoreDomainIdV1,
+    observation_subjects: &[ObservationSubjectV1],
+) -> Result<(), ClaimError> {
+    let subject_kind_count = |kind: ObservationSubjectKindV1| {
+        observation_subjects
+            .iter()
+            .filter(|subject| subject.kind() == kind)
+            .count()
+    };
+    let exact_subject_count =
+        |kind: ObservationSubjectKindV1, subject_id: &[u8; 32], revision_id: &[u8; 32]| {
+            observation_subjects
+                .iter()
+                .filter(|subject| subject.kind() == kind)
+                .filter(|subject| {
+                    subject.subject_id() == subject_id && subject.revision_id() == revision_id
+                })
+                .count()
+        };
+    match claim_subject {
+        ClaimSubjectV1::Work {
+            work_id,
+            contract_root_id,
+            ..
+        } => {
+            let work_subjects = observation_subjects
+                .iter()
+                .filter(|subject| subject.kind() == ObservationSubjectKindV1::Work)
+                .filter(|subject| {
+                    subject.subject_id() == work_id.as_bytes()
+                        && subject.revision_id() == contract_root_id.as_bytes()
+                })
+                .collect::<Vec<_>>();
+            let Some(work_subject) = work_subjects.first() else {
+                return Err(ClaimError::ObservationSubjectMismatch);
+            };
+            let Some(contract_generation_id) = work_subject.contract_generation_id() else {
+                return Err(ClaimError::ObservationSubjectMismatch);
+            };
+            if work_subjects.len() != 1
+                || subject_kind_count(ObservationSubjectKindV1::Work) != 1
+                || exact_subject_count(
+                    ObservationSubjectKindV1::Repository,
+                    observation_store_domain_id.as_bytes(),
+                    contract_generation_id.as_bytes(),
+                ) != 1
+                || subject_kind_count(ObservationSubjectKindV1::Repository) != 1
+                || observation_subjects.iter().any(|subject| {
+                    matches!(
+                        subject.kind(),
+                        ObservationSubjectKindV1::Step
+                            | ObservationSubjectKindV1::Submission
+                            | ObservationSubjectKindV1::Run
+                    )
+                })
+            {
+                return Err(ClaimError::ObservationSubjectMismatch);
+            }
+        }
+        ClaimSubjectV1::Step { binding, .. } => {
+            if observation_store_domain_id != binding.scope().repository_id()
+                || exact_subject_count(
+                    ObservationSubjectKindV1::Repository,
+                    binding.scope().repository_id().as_bytes(),
+                    binding.contract_generation_id().as_bytes(),
+                ) != 1
+                || observation_subjects
+                    .iter()
+                    .filter(|subject| subject.kind() == ObservationSubjectKindV1::Work)
+                    .filter(|subject| {
+                        subject.subject_id() == binding.scope().work_id().as_bytes()
+                            && subject.contract_generation_id()
+                                == Some(binding.contract_generation_id())
+                            && subject.revision_id() == binding.contract_root_id().as_bytes()
+                    })
+                    .count()
+                    != 1
+                || exact_subject_count(
+                    ObservationSubjectKindV1::Step,
+                    binding.step_id().as_bytes(),
+                    binding.revision_id().as_bytes(),
+                ) != 1
+                || exact_subject_count(
+                    ObservationSubjectKindV1::Submission,
+                    submission.as_bytes(),
+                    binding.contract_generation_id().as_bytes(),
+                ) != 1
+                || subject_kind_count(ObservationSubjectKindV1::Work) != 1
+                || subject_kind_count(ObservationSubjectKindV1::Step) != 1
+                || subject_kind_count(ObservationSubjectKindV1::Submission) != 1
+                || subject_kind_count(ObservationSubjectKindV1::Repository) != 1
+                || observation_subjects.iter().any(|subject| {
+                    subject.kind() == ObservationSubjectKindV1::Run
+                        || (subject.kind() == ObservationSubjectKindV1::Repository
+                            && subject.subject_id() != binding.scope().repository_id().as_bytes())
+                })
+            {
+                return Err(ClaimError::ObservationSubjectMismatch);
+            }
+        }
+    }
+    Ok(())
 }
 
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
@@ -376,9 +553,19 @@ pub enum ClaimError {
     DuplicateStepSubmissionReference,
     #[error("stored Claim carrier is malformed or non-canonical")]
     InvalidStoredClaim,
+    #[error("Claim publication repeats an Observation record")]
+    DuplicateObservationRecord,
+    #[error("Claim publication contains an unresolved Observation reference")]
+    UnresolvedObservationReference,
+    #[error("Claim publication contains an Observation not cited by any Claim")]
+    UnreferencedObservationRecord,
+    #[error("Claim Observation subjects do not exactly match the Work/Step/Submission scope")]
+    ObservationSubjectMismatch,
+    #[error(transparent)]
+    Observation(#[from] super::observation::ObservationError),
 }
 
-fn parse_submission_ref(value: &CborValue) -> Result<SubmissionRefV1, ClaimError> {
+pub(super) fn parse_submission_ref(value: &CborValue) -> Result<SubmissionRefV1, ClaimError> {
     let CborValue::Array(fields) = value else {
         return Err(ClaimError::InvalidStoredClaim);
     };
@@ -397,7 +584,7 @@ fn parse_submission_ref(value: &CborValue) -> Result<SubmissionRefV1, ClaimError
     }
 }
 
-fn parse_claim_subject(value: &CborValue) -> Result<ClaimSubjectV1, ClaimError> {
+pub(super) fn parse_claim_subject(value: &CborValue) -> Result<ClaimSubjectV1, ClaimError> {
     let CborValue::Array(fields) = value else {
         return Err(ClaimError::InvalidStoredClaim);
     };

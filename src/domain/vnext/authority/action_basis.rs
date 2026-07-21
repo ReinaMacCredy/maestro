@@ -50,10 +50,17 @@ pub enum RepositoryActionLeafV1 {
     WithdrawEffectIntent,
     WithdrawBootstrapMandateInteractionEffect,
     WithdrawContinuityMaintenanceEffect,
+    PublishObservation,
+    PublishAssessment,
+    InvalidateAssessment,
+    SecurityEraseEvidencePayload,
+    PublishBootstrapMandatePresentationObservation,
+    PublishBootstrapMandateResponseObservation,
+    PublishContinuityMaintenanceObservation,
 }
 
 impl RepositoryActionLeafV1 {
-    pub const ALL: [Self; 31] = [
+    pub const ALL: [Self; 38] = [
         Self::CreateDraftWork,
         Self::CancelWork,
         Self::CompleteWork,
@@ -85,6 +92,13 @@ impl RepositoryActionLeafV1 {
         Self::WithdrawEffectIntent,
         Self::WithdrawBootstrapMandateInteractionEffect,
         Self::WithdrawContinuityMaintenanceEffect,
+        Self::PublishObservation,
+        Self::PublishAssessment,
+        Self::InvalidateAssessment,
+        Self::SecurityEraseEvidencePayload,
+        Self::PublishBootstrapMandatePresentationObservation,
+        Self::PublishBootstrapMandateResponseObservation,
+        Self::PublishContinuityMaintenanceObservation,
     ];
 
     pub const fn literal(self) -> &'static str {
@@ -130,6 +144,19 @@ impl RepositoryActionLeafV1 {
                 "WithdrawBootstrapMandateInteractionEffect"
             }
             Self::WithdrawContinuityMaintenanceEffect => "WithdrawContinuityMaintenanceEffect",
+            Self::PublishObservation => "PublishObservation",
+            Self::PublishAssessment => "PublishAssessment",
+            Self::InvalidateAssessment => "InvalidateAssessment",
+            Self::SecurityEraseEvidencePayload => "SecurityEraseEvidencePayload",
+            Self::PublishBootstrapMandatePresentationObservation => {
+                "PublishBootstrapMandatePresentationObservation"
+            }
+            Self::PublishBootstrapMandateResponseObservation => {
+                "PublishBootstrapMandateResponseObservation"
+            }
+            Self::PublishContinuityMaintenanceObservation => {
+                "PublishContinuityMaintenanceObservation"
+            }
         }
     }
 
@@ -166,6 +193,13 @@ impl RepositoryActionLeafV1 {
             Self::WithdrawEffectIntent => 36,
             Self::WithdrawBootstrapMandateInteractionEffect => 37,
             Self::WithdrawContinuityMaintenanceEffect => 38,
+            Self::PublishObservation => 39,
+            Self::PublishAssessment => 40,
+            Self::InvalidateAssessment => 41,
+            Self::SecurityEraseEvidencePayload => 42,
+            Self::PublishBootstrapMandatePresentationObservation => 43,
+            Self::PublishBootstrapMandateResponseObservation => 44,
+            Self::PublishContinuityMaintenanceObservation => 45,
         }
     }
 
@@ -201,6 +235,13 @@ impl RepositoryActionLeafV1 {
             | Self::WithdrawEffectIntent
             | Self::WithdrawBootstrapMandateInteractionEffect
             | Self::WithdrawContinuityMaintenanceEffect => 6,
+            Self::PublishObservation
+            | Self::PublishAssessment
+            | Self::InvalidateAssessment
+            | Self::SecurityEraseEvidencePayload
+            | Self::PublishBootstrapMandatePresentationObservation
+            | Self::PublishBootstrapMandateResponseObservation
+            | Self::PublishContinuityMaintenanceObservation => 7,
         }
     }
 
@@ -232,6 +273,13 @@ impl RepositoryActionLeafV1 {
             Self::WithdrawEffectIntent => 14,
             Self::WithdrawBootstrapMandateInteractionEffect => 15,
             Self::WithdrawContinuityMaintenanceEffect => 16,
+            Self::PublishObservation => 1,
+            Self::PublishAssessment => 2,
+            Self::InvalidateAssessment => 3,
+            Self::SecurityEraseEvidencePayload => 4,
+            Self::PublishBootstrapMandatePresentationObservation => 5,
+            Self::PublishBootstrapMandateResponseObservation => 6,
+            Self::PublishContinuityMaintenanceObservation => 7,
         }
     }
 
@@ -278,6 +326,15 @@ impl RepositoryActionLeafV1 {
             | Self::WithdrawBootstrapMandateInteractionEffect
             | Self::WithdrawContinuityMaintenanceEffect => {
                 "82d922e944dc4fe27d3101bc725e0caea82093e8dabe79ed5732ee5c8da91292"
+            }
+            Self::PublishObservation
+            | Self::PublishAssessment
+            | Self::InvalidateAssessment
+            | Self::SecurityEraseEvidencePayload
+            | Self::PublishBootstrapMandatePresentationObservation
+            | Self::PublishBootstrapMandateResponseObservation
+            | Self::PublishContinuityMaintenanceObservation => {
+                "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
             }
         }
     }
@@ -369,7 +426,41 @@ impl RepositoryActionLeafV1 {
             Self::WithdrawContinuityMaintenanceEffect => {
                 "d5ed8273857101d805748d83023ad067c909427223ae81ba4f9a77f770227d47"
             }
+            Self::PublishObservation => {
+                "f0432a48ae75c4c05a4e3c591ad3ac4fa754b495ec8707fb9aa5520681ebd3db"
+            }
+            Self::PublishAssessment => {
+                "7310e5de3920e05dea886bc591814788d700a068502638344af0ab3c56143c39"
+            }
+            Self::InvalidateAssessment => {
+                "bcdc52fecd8eda30931c04beb0b9cdd4ac57897f6e93bd3a49f16458bedb9fc3"
+            }
+            Self::SecurityEraseEvidencePayload => {
+                "b9badfa33a6cb6501f24840beff07689de844938c02b0c8e2707ab399273be1f"
+            }
+            Self::PublishBootstrapMandatePresentationObservation => {
+                "2e8cf3c7590acd29384c5590598f2d2906eaee0aa1ce061999703e6931a5996a"
+            }
+            Self::PublishBootstrapMandateResponseObservation => {
+                "54043608c99a0277883bb095831e2f45d29a898e284987e94891c59281a94b6d"
+            }
+            Self::PublishContinuityMaintenanceObservation => {
+                "46ec801444dabb9aabb291ea2960434c1542954db1d3dc70beec2734177c8892"
+            }
         }
+    }
+
+    pub const fn is_evidence_action(self) -> bool {
+        matches!(
+            self,
+            Self::PublishObservation
+                | Self::PublishAssessment
+                | Self::InvalidateAssessment
+                | Self::SecurityEraseEvidencePayload
+                | Self::PublishBootstrapMandatePresentationObservation
+                | Self::PublishBootstrapMandateResponseObservation
+                | Self::PublishContinuityMaintenanceObservation
+        )
     }
 
     pub const fn is_execution_action(self) -> bool {
@@ -395,9 +486,6 @@ impl RepositoryActionLeafV1 {
     }
 
     pub const fn execution_authority_basis(self) -> Option<ActionAuthorityBasisKindV1> {
-        if !self.is_execution_action() {
-            return None;
-        }
         Some(match self {
             Self::ReserveBootstrapMandateInteractionEffect
             | Self::PublishBootstrapMandateInteractionOutcome
@@ -408,10 +496,18 @@ impl RepositoryActionLeafV1 {
             Self::ReserveContinuityMaintenanceEffect
             | Self::PublishContinuityMaintenanceEffectOutcome
             | Self::ReconcileContinuityMaintenanceEffect
-            | Self::WithdrawContinuityMaintenanceEffect => {
+            | Self::WithdrawContinuityMaintenanceEffect
+            | Self::PublishContinuityMaintenanceObservation => {
                 ActionAuthorityBasisKindV1::ContinuityMaintenance
             }
-            _ => ActionAuthorityBasisKindV1::OrdinaryLiveRuntime,
+            Self::PublishBootstrapMandatePresentationObservation
+            | Self::PublishBootstrapMandateResponseObservation => {
+                ActionAuthorityBasisKindV1::BootstrapControlG0
+            }
+            _ if self.is_execution_action() || self.is_evidence_action() => {
+                ActionAuthorityBasisKindV1::OrdinaryLiveRuntime
+            }
+            _ => return None,
         })
     }
 
@@ -555,7 +651,7 @@ mod tests {
                 leaf.grammar_id(),
             )
         });
-        assert_eq!(rows.len(), 31);
+        assert_eq!(rows.len(), 38);
         assert_eq!(rows[1].0, 2);
         assert_eq!(rows[1].1, "CancelWork");
         assert_eq!(
@@ -563,6 +659,14 @@ mod tests {
             "65020299f9f323f4a098c2ff240cbbc984bfc5f6f761712c995e38486d2046f4"
         );
         assert_eq!(rows[14].0, 20);
+        assert_eq!(rows[31].0, 39);
+        assert_eq!(rows[31].1, "PublishObservation");
+        assert_eq!(rows[32].1, "PublishAssessment");
+        assert_eq!(rows[33].1, "InvalidateAssessment");
+        assert_eq!(rows[34].1, "SecurityEraseEvidencePayload");
+        assert_eq!(rows[35].0, 43);
+        assert_eq!(rows[36].0, 44);
+        assert_eq!(rows[37].0, 45);
         assert!(rows.windows(2).all(|pair| pair[0].0 < pair[1].0));
     }
 

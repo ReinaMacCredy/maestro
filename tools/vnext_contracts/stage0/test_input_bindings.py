@@ -41,10 +41,16 @@ def verify(document: dict[str, object]) -> subprocess.CompletedProcess[str]:
 def mutate(document: dict[str, object], path: tuple[str, ...], value: object) -> None:
     cursor: object = document
     for name in path[:-1]:
-        assert isinstance(cursor, dict)
-        cursor = cursor[name]
-    assert isinstance(cursor, dict)
-    cursor[path[-1]] = value
+        if isinstance(cursor, dict):
+            cursor = cursor[name]
+        else:
+            assert isinstance(cursor, list)
+            cursor = cursor[int(name)]
+    if isinstance(cursor, dict):
+        cursor[path[-1]] = value
+    else:
+        assert isinstance(cursor, list)
+        cursor[int(path[-1])] = value
 
 
 def main() -> None:
@@ -118,6 +124,76 @@ def main() -> None:
             "exact instruction",
             ("external_approval_event", "exact_instruction"),
             "APPROVE A DIFFERENT PACKET",
+        ),
+        (
+            "current design head",
+            ("current_source_inputs", "design_sha256"),
+            "6" * 64,
+        ),
+        (
+            "current source control identity",
+            (
+                "current_external_control_bindings",
+                "source_git_control",
+                "identity_sha256",
+            ),
+            "7" * 64,
+        ),
+        (
+            "current destination identity",
+            (
+                "current_external_control_bindings",
+                "destination_ancestors",
+                "identity_sha256",
+            ),
+            "8" * 64,
+        ),
+        (
+            "post-approval design record",
+            (
+                "post_approval_execution_plan_revisions",
+                "design_revisions",
+                "0",
+                "record_sha256",
+            ),
+            "9" * 64,
+        ),
+        (
+            "post-approval design classification",
+            (
+                "post_approval_execution_plan_revisions",
+                "design_revisions",
+                "1",
+                "classification",
+            ),
+            "product_contract_change",
+        ),
+        (
+            "Stage-5 handoff record",
+            (
+                "post_approval_execution_plan_revisions",
+                "stage5_handoff",
+                "record_sha256",
+            ),
+            "a" * 64,
+        ),
+        (
+            "Stage-5 execution amendment record",
+            (
+                "post_approval_execution_plan_revisions",
+                "stage5_execution_amendment",
+                "record_sha256",
+            ),
+            "b" * 64,
+        ),
+        (
+            "Stage-5 execution amendment classification",
+            (
+                "post_approval_execution_plan_revisions",
+                "stage5_execution_amendment",
+                "classification",
+            ),
+            "proof_reduction",
         ),
     ]
     rejected: list[str] = []

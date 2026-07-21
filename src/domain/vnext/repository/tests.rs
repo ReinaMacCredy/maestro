@@ -6,7 +6,10 @@ use rusqlite::Connection;
 
 use super::*;
 use crate::domain::vnext::authority::test_support::{
-    AuthorityFixtureModeV1, repository_authority_fixture,
+    AuthorityFixtureModeV1, RepositoryAuthorityFixtureV1, repository_authority_fixture,
+};
+use crate::domain::vnext::authority::{
+    ExecutionProducerV1, GenericExecutionAuthorityV1, PrincipalIdV1, SessionIdV1, TrustedTimeV1,
 };
 use crate::domain::vnext::contract::assembly::{
     candidate_root_schema_closure_v1, facet_schema_id_v1, fixture_facet_value_v1,
@@ -23,19 +26,39 @@ use crate::domain::vnext::design::{
     AlternativeConsequenceV1, AlternativeRejectionV1, AlternativeV1, DecisionIdV1,
     DecisionRevisionV1, ExactRecordRefV1,
 };
+use crate::domain::vnext::evidence::{
+    AssessmentApplicabilityV1, AssessmentBasisV1, AssessmentInputRefV1, AssessmentScopeV1,
+    AssessmentTimeBasisV1, AssessmentV1, AuthorizedAssessmentPublicationV1,
+    AuthorizedObservationPublicationV1, ClaimSubjectV1, ClaimV1, ClosedLeafGateEvaluatorV1,
+    EvidenceClaimPublicationV1, EvidencePayloadManifestV1, EvidenceRedactionPolicyV1,
+    EvidenceRetentionClassV1, EvidenceRetentionPolicyV1, EvidenceSecretScanReceiptV1,
+    EvidenceStoreFacadeV1, ObservationAcquisitionV1, ObservationAssessmentInputV1,
+    ObservationDraftV1, ObservationKindV1, ObservationPayloadCommonV1, ObservationPayloadDetailV1,
+    ObservationPayloadV1, ObservationPublicationRouteV1, ObservationRecordIdV1,
+    ObservationSubjectKindV1, ObservationSubjectV1, ObservationV1, SubmissionClaimSetV1,
+    SubmissionRefV1, resolve_gate_assessments,
+};
+use crate::domain::vnext::execution::StepSubmissionExecutionFenceV1;
+use crate::domain::vnext::gate::{
+    GateEvaluationResultV1, GateEvaluatorContractV1, GateInputClassV1, GateLeafRuleV1, GateNodeV1,
+    GateOperatorV1, GateScopeV1, GateSnapshotV1,
+};
 use crate::domain::vnext::identity::{DesignRevisionIdV1, DesignSourceBindingIdV1};
 use crate::domain::vnext::persistence::StoreDomainV1;
 use crate::domain::vnext::step::{
-    StepBindingV1, StepGraphNodeV1, StepIdV1, StepRevisionIdV1, StepScopeV1,
+    StepBindingV1, StepGraphNodeV1, StepIdV1, StepLifecycleV1, StepRevisionIdV1, StepScopeV1,
+    StepSubmissionIdV1,
 };
+use crate::domain::vnext::work::WorkSubmissionIdV1;
 
 #[test]
-fn repository_action_closure_is_exactly_the_seven_stage3_leaves() {
-    assert_eq!(RepositoryActionKindV1::ALL.len(), 7);
+fn repository_action_closure_adds_only_stage5_work_completion_to_stage3_leaves() {
+    assert_eq!(RepositoryActionKindV1::ALL.len(), 8);
     assert_eq!(
         RepositoryActionKindV1::ALL.map(RepositoryActionKindV1::authority_leaf),
         [
             RepositoryActionLeafV1::CreateDraftWork,
+            RepositoryActionLeafV1::SubmitWorkCompletion,
             RepositoryActionLeafV1::CancelWork,
             RepositoryActionLeafV1::AbsorbWork,
             RepositoryActionLeafV1::PublishInitialContract,
@@ -46,7 +69,7 @@ fn repository_action_closure_is_exactly_the_seven_stage3_leaves() {
     );
     assert_eq!(
         RepositoryActionKindV1::ALL.map(RepositoryActionKindV1::tag),
-        [1, 2, 4, 12, 13, 15, 20]
+        [1, 5, 2, 4, 12, 13, 15, 20]
     );
 }
 
@@ -109,6 +132,867 @@ fn create_draft_work_roots_the_new_record_in_one_authorized_commit() {
             &WorkRecordV1::create_draft(WorkRecordWriterV1::Work, work_id).expect("test fixture")
         )
         .expect("test fixture")
+    );
+}
+
+#[test]
+fn work_completion_requires_and_commits_the_exact_current_satisfied_step_submission_closure() {
+    let domain =
+        StoreDomainV1::derive(StoreRoleV1::Repository, b"complete-work").expect("test fixture");
+    let work_id = WorkIdV1::derive("complete-work-record").expect("test fixture");
+    let current_work = WorkRecordV1::create_draft(WorkRecordWriterV1::Work, work_id)
+        .expect("test fixture")
+        .apply(
+            WorkRecordWriterV1::Work,
+            crate::domain::vnext::work::WorkRevisionV1::new(1).expect("test fixture"),
+            WorkTransitionV1::PublishInitialContract,
+        )
+        .expect("test fixture")
+        .apply(
+            WorkRecordWriterV1::Work,
+            crate::domain::vnext::work::WorkRevisionV1::new(2).expect("test fixture"),
+            WorkTransitionV1::AcquireFirstStepExecution,
+        )
+        .expect("test fixture");
+    let (_, root) = materialization_schema_and_root(61);
+    let generation = ContractGenerationV1::test_fixture(work_id, *root.root_id(), 62);
+    let scope = StepScopeV1::new(domain.id(), work_id);
+    let binding = StepBindingV1::new(
+        scope,
+        generation.id(),
+        generation.root_id(),
+        StepIdV1::new(scope, "only-step").expect("test fixture"),
+        StepRevisionIdV1::from_bytes([63; 32]).expect("test fixture"),
+    )
+    .expect("test fixture");
+    let graph = StepGraphSnapshotV1::new(
+        scope,
+        generation.id(),
+        generation.root_id(),
+        vec![StepGraphNodeV1::new(binding, true).expect("test fixture")],
+        vec![],
+    )
+    .expect("test fixture");
+    let step_submission_id = StepSubmissionIdV1::from_bytes([64; 32]).expect("test fixture");
+    let fence = StepSubmissionExecutionFenceV1::test_fixture(binding, "complete-work");
+    let step_submission_ref = SubmissionRefV1::for_step(step_submission_id).expect("test fixture");
+    let step_claim = ClaimV1::new(
+        step_submission_ref,
+        ClaimSubjectV1::for_step(binding, fence.fence()).expect("test fixture"),
+        [65; 32],
+        vec![ObservationRecordIdV1::from_bytes([66; 32]).expect("test fixture")],
+    )
+    .expect("test fixture");
+    let step_claim_set = SubmissionClaimSetV1::from_claims(step_submission_ref, &[step_claim])
+        .expect("test fixture");
+    let step_submission = StepSubmissionV1::new(
+        step_submission_id,
+        binding,
+        fence,
+        [67; 32],
+        &step_claim_set,
+    )
+    .expect("test fixture");
+    let satisfied = StepStateV1::from_lifecycle(
+        binding,
+        StepLifecycleV1::Satisfied {
+            submission_record_hash: step_submission.record_hash(),
+            satisfaction_basis_hash: [68; 32],
+        },
+    );
+    let work_submission_id =
+        WorkSubmissionIdV1::derive("complete-work-submission").expect("test fixture");
+    let work_submission_ref = SubmissionRefV1::for_work(work_submission_id).expect("test fixture");
+    let work_claim = ClaimV1::new(
+        work_submission_ref,
+        ClaimSubjectV1::for_work(work_id, generation.root_id(), vec![step_submission.id()])
+            .expect("test fixture"),
+        [69; 32],
+        vec![ObservationRecordIdV1::from_bytes([70; 32]).expect("test fixture")],
+    )
+    .expect("test fixture");
+    let work_submission = WorkSubmissionV1::publish_from_claims(
+        WorkRecordWriterV1::Work,
+        work_submission_id,
+        work_id,
+        generation.root_id(),
+        current_work.revision().get(),
+        &[work_claim],
+    )
+    .expect("test fixture");
+    let fixture = repository_authority_fixture(
+        vec![(
+            "SubmitWorkCompletion",
+            work_subject_commitment(work_id).expect("test fixture"),
+        )],
+        AuthorityFixtureModeV1::Valid,
+    );
+    let work_object = work_record_object(&current_work).expect("test fixture");
+    let generation_object = contract_generation_object(&generation).expect("test fixture");
+    let root_object = contract_root_object(&root).expect("test fixture");
+    let graph_object = step_graph_object(&graph).expect("test fixture");
+    let state_object = step_state_object(&satisfied).expect("test fixture");
+    let step_submission_object = StoreObjectV1::new(
+        derive_identity(&CborValue::Text(
+            EXECUTION_STEP_SUBMISSION_SCHEMA_V1.to_owned(),
+        ))
+        .expect("test fixture"),
+        step_submission.canonical_value().expect("test fixture"),
+        vec![],
+    )
+    .expect("test fixture");
+    let roots = vec![
+        work_object.id(),
+        generation_object.id(),
+        root_object.id(),
+        graph_object.id(),
+        state_object.id(),
+        step_submission_object.id(),
+        fixture.authority_root_id,
+    ];
+    let mut objects = fixture.objects;
+    objects.extend([
+        work_object,
+        generation_object,
+        root_object,
+        graph_object,
+        state_object,
+        step_submission_object,
+    ]);
+    let (_store, head, store_generation) =
+        active_store_with_roots(domain, generation.root_id(), objects, roots);
+    let current_basis = basis(&head, &store_generation);
+    assert!(!validate_current_work_completion_basis(
+        current_basis,
+        &current_work,
+        &generation,
+        &root,
+        &graph,
+        std::slice::from_ref(&satisfied),
+        &[],
+        &work_submission,
+    ));
+    assert!(!validate_current_work_completion_basis(
+        current_basis,
+        &current_work,
+        &generation,
+        &root,
+        &graph,
+        &[StepStateV1::new_open(binding)],
+        std::slice::from_ref(&step_submission),
+        &work_submission,
+    ));
+    assert!(validate_current_work_completion_basis(
+        current_basis,
+        &current_work,
+        &generation,
+        &root,
+        &graph,
+        &[satisfied],
+        &[step_submission],
+        &work_submission,
+    ));
+}
+
+fn evidence_authority_for(
+    fixture: &RepositoryAuthorityFixtureV1,
+    request: &crate::domain::vnext::evidence::CanonicalEvidenceActionRequestV1,
+) -> GenericExecutionAuthorityV1 {
+    GenericExecutionAuthorityV1::new(
+        fixture.selection,
+        request.action(),
+        request.subject_commitment(),
+        request.expected_state_commitment(),
+        request.payload_commitment(),
+        fixture.actor_principal,
+    )
+    .expect("test fixture")
+}
+
+fn test_digest(seed: u8) -> [u8; 32] {
+    Sha256::digest([seed]).into()
+}
+
+fn work_observation(
+    domain: &StoreDomainV1,
+    work_id: WorkIdV1,
+    contract_generation_id: ContractGenerationIdV1,
+    contract_root_id: ContractRootIdV1,
+    producer: ExecutionProducerV1,
+    seed: u8,
+) -> (ObservationV1, StoreObjectV1) {
+    let kind = ObservationKindV1::DeterministicProcedure;
+    let subjects = vec![
+        ObservationSubjectV1::for_work(
+            *work_id.as_bytes(),
+            contract_generation_id,
+            *contract_root_id.as_bytes(),
+        )
+        .expect("test fixture"),
+        ObservationSubjectV1::new(
+            ObservationSubjectKindV1::Repository,
+            *domain.id().as_bytes(),
+            *contract_generation_id.as_bytes(),
+        )
+        .expect("test fixture"),
+    ];
+    let payload = ObservationPayloadV1::new(
+        kind,
+        ObservationPayloadCommonV1::new(
+            &subjects,
+            test_digest(seed),
+            test_digest(seed.wrapping_add(1)),
+            test_digest(seed.wrapping_add(2)),
+            119,
+            120,
+            test_digest(seed.wrapping_add(3)),
+        )
+        .expect("test fixture"),
+        ObservationPayloadDetailV1::Deterministic {
+            executable_bytes_hash: test_digest(seed.wrapping_add(4)),
+            executable_version_hash: test_digest(seed.wrapping_add(5)),
+            arguments_hash: test_digest(seed.wrapping_add(6)),
+            working_directory_hash: test_digest(seed.wrapping_add(7)),
+            relevant_environment_hash: test_digest(seed.wrapping_add(8)),
+            subject_revision_hash: test_digest(seed.wrapping_add(9)),
+            dirty_state_hash: test_digest(seed.wrapping_add(10)),
+            exit_status_hash: test_digest(seed.wrapping_add(11)),
+            stdout_hash: test_digest(seed.wrapping_add(12)),
+            stderr_hash: test_digest(seed.wrapping_add(13)),
+        },
+    )
+    .expect("test fixture");
+    let payload_object = StoreObjectV1::new(
+        kind.contract().expect("test fixture").payload_schema_id(),
+        CborValue::Bytes(payload.canonical_bytes().expect("test fixture")),
+        vec![],
+    )
+    .expect("test fixture");
+    let redaction =
+        EvidenceRedactionPolicyV1::prohibit_secrets_v1(1_048_576).expect("test fixture");
+    let scan =
+        EvidenceSecretScanReceiptV1::scan(payload_object.id(), &payload, redaction, producer, 120)
+            .expect("test fixture");
+    let observation = ObservationV1::new(ObservationDraftV1 {
+        kind,
+        store_domain_id: domain.id(),
+        subjects,
+        producer,
+        procedure_hash: test_digest(seed),
+        environment_hash: test_digest(seed.wrapping_add(1)),
+        toolchain_hash: test_digest(seed.wrapping_add(2)),
+        observed_at: 119,
+        recorded_at: 120,
+        clock_basis_hash: test_digest(seed.wrapping_add(3)),
+        lineage: vec![],
+        payload: EvidencePayloadManifestV1::new(
+            kind,
+            payload_object.id(),
+            &payload,
+            "application/cbor",
+            redaction,
+            scan,
+            EvidenceRetentionPolicyV1::new(
+                EvidenceRetentionClassV1::ExplicitSecurityErasureEligible,
+                1_120,
+            )
+            .expect("test fixture"),
+        )
+        .expect("test fixture"),
+        acquisition: ObservationAcquisitionV1::effect_free(
+            test_digest(seed.wrapping_add(14)),
+            test_digest(seed.wrapping_add(15)),
+        )
+        .expect("test fixture"),
+        publication_route: ObservationPublicationRouteV1::new(kind, 39, None, None)
+            .expect("test fixture"),
+    })
+    .expect("test fixture");
+    (observation, payload_object)
+}
+
+fn publish_observation(
+    store: &mut StoreV1,
+    fixture: &RepositoryAuthorityFixtureV1,
+    observation: ObservationV1,
+    payload: StoreObjectV1,
+    key: &str,
+) {
+    let state = EvidenceStoreFacadeV1::new(store)
+        .current_state_binding()
+        .expect("test fixture");
+    let request = EvidenceStoreFacadeV1::new(store)
+        .canonical_observation_request(
+            state,
+            &observation,
+            &payload,
+            IdempotencyKeyIdV1::derive(key).expect("test fixture"),
+        )
+        .expect("test fixture");
+    let authority = evidence_authority_for(fixture, &request);
+    EvidenceStoreFacadeV1::new(store)
+        .publish_observation(
+            AuthorizedObservationPublicationV1::new(
+                state,
+                request,
+                authority,
+                observation,
+                payload,
+            )
+            .expect("test fixture"),
+        )
+        .expect("test fixture");
+}
+
+#[test]
+fn work_completion_atomically_persists_claim_gate_and_submission_proof() {
+    let domain = StoreDomainV1::derive(
+        StoreRoleV1::Repository,
+        b"complete-work-with-evidence-and-gates",
+    )
+    .expect("test fixture");
+    let work_id = WorkIdV1::derive("complete-work-with-evidence").expect("test fixture");
+    let current_work = WorkRecordV1::create_draft(WorkRecordWriterV1::Work, work_id)
+        .expect("test fixture")
+        .apply(
+            WorkRecordWriterV1::Work,
+            crate::domain::vnext::work::WorkRevisionV1::new(1).expect("test fixture"),
+            WorkTransitionV1::PublishInitialContract,
+        )
+        .expect("test fixture")
+        .apply(
+            WorkRecordWriterV1::Work,
+            crate::domain::vnext::work::WorkRevisionV1::new(2).expect("test fixture"),
+            WorkTransitionV1::AcquireFirstStepExecution,
+        )
+        .expect("test fixture");
+    let (_, root) = materialization_schema_and_root(71);
+    let contract_generation = ContractGenerationV1::test_fixture(work_id, *root.root_id(), 72);
+    let scope = StepScopeV1::new(domain.id(), work_id);
+    let binding = StepBindingV1::new(
+        scope,
+        contract_generation.id(),
+        contract_generation.root_id(),
+        StepIdV1::new(scope, "only-step").expect("test fixture"),
+        StepRevisionIdV1::from_bytes([73; 32]).expect("test fixture"),
+    )
+    .expect("test fixture");
+    let graph = StepGraphSnapshotV1::new(
+        scope,
+        contract_generation.id(),
+        contract_generation.root_id(),
+        vec![StepGraphNodeV1::new(binding, true).expect("test fixture")],
+        vec![],
+    )
+    .expect("test fixture");
+    let step_submission_id = StepSubmissionIdV1::from_bytes([74; 32]).expect("test fixture");
+    let step_fence = StepSubmissionExecutionFenceV1::test_fixture(binding, "evidence-completion");
+    let step_submission_ref = SubmissionRefV1::for_step(step_submission_id).expect("test fixture");
+    let step_claim = ClaimV1::new(
+        step_submission_ref,
+        ClaimSubjectV1::for_step(binding, step_fence.fence()).expect("test fixture"),
+        [75; 32],
+        vec![ObservationRecordIdV1::from_bytes([76; 32]).expect("test fixture")],
+    )
+    .expect("test fixture");
+    let step_claim_set = SubmissionClaimSetV1::from_claims(step_submission_ref, &[step_claim])
+        .expect("test fixture");
+    let step_submission = StepSubmissionV1::new(
+        step_submission_id,
+        binding,
+        step_fence,
+        [77; 32],
+        &step_claim_set,
+    )
+    .expect("test fixture");
+    let satisfied = StepStateV1::from_lifecycle(
+        binding,
+        StepLifecycleV1::Satisfied {
+            submission_record_hash: step_submission.record_hash(),
+            satisfaction_basis_hash: [78; 32],
+        },
+    );
+    let producer = ExecutionProducerV1::SessionBound {
+        principal_id: PrincipalIdV1::derive("stage3-actor-principal").expect("test fixture"),
+        session_id: SessionIdV1::derive("stage3-actor-session").expect("test fixture"),
+    };
+    let (observation, payload) = work_observation(
+        &domain,
+        work_id,
+        contract_generation.id(),
+        contract_generation.root_id(),
+        producer,
+        80,
+    );
+    let input = AssessmentInputRefV1::Observation(
+        ObservationAssessmentInputV1::from_observation(&observation).expect("test fixture"),
+    );
+    let rule = GateLeafRuleV1::EvidenceSemanticMatch;
+    let parameters =
+        ClosedLeafGateEvaluatorV1::semantic_parameters_hash(rule, std::slice::from_ref(&input))
+            .expect("test fixture");
+    let gate = GateNodeV1::new(
+        GateScopeV1::Work,
+        GateInputClassV1::Evidence,
+        GateOperatorV1::Leaf,
+        GateEvaluatorContractV1::leaf(rule, [81; 32]).expect("test fixture"),
+        parameters,
+        None,
+        vec![],
+    )
+    .expect("test fixture");
+    let gate_component_id = root
+        .components()
+        .iter()
+        .find(|component| component.kind() == ContractComponentKindV1::GateSnapshot)
+        .map(CandidateContractComponentV1::component_id)
+        .copied()
+        .expect("test fixture");
+    let gate_snapshot = GateSnapshotV1::new(
+        work_id,
+        contract_generation.id(),
+        contract_generation.root_id(),
+        gate_component_id,
+        [82; 32],
+        [83; 32],
+        vec![gate.id()],
+        vec![gate.clone()],
+    )
+    .expect("test fixture");
+    let observation_subject_commitment = hash(&CborValue::Array(vec![
+        CborValue::text("maestro.vnext.evidence-observation-subject.v1").expect("test fixture"),
+        CborValue::Unsigned(observation.kind().tag()),
+        bytes(observation.id().as_bytes()),
+        CborValue::Array(
+            observation
+                .subjects()
+                .iter()
+                .map(|subject| subject.canonical_value())
+                .collect(),
+        ),
+    ]))
+    .expect("test fixture");
+    let assessment_subject_commitment = hash(&CborValue::Array(vec![
+        CborValue::text("maestro.vnext.evidence-assessment-subject.v1").expect("test fixture"),
+        bytes(domain.id().as_bytes()),
+        bytes(gate_snapshot.id().as_bytes()),
+        bytes(gate.id().as_bytes()),
+        bytes(work_id.as_bytes()),
+        bytes(contract_generation.id().as_bytes()),
+        CborValue::Array(vec![CborValue::Unsigned(1)]),
+    ]))
+    .expect("test fixture");
+    let fixture = repository_authority_fixture(
+        vec![
+            ("PublishObservation", observation_subject_commitment),
+            ("PublishAssessment", assessment_subject_commitment),
+            (
+                "SubmitWorkCompletion",
+                work_subject_commitment(work_id).expect("test fixture"),
+            ),
+        ],
+        AuthorityFixtureModeV1::Valid,
+    );
+    assert_eq!(fixture.actor_principal, producer.principal_id());
+    assert_eq!(
+        Some(fixture.selection.actor_session_id()),
+        producer.session_id()
+    );
+    let work_object = work_record_object(&current_work).expect("test fixture");
+    let generation_object = contract_generation_object(&contract_generation).expect("test fixture");
+    let root_object = contract_root_object(&root).expect("test fixture");
+    let graph_object = step_graph_object(&graph).expect("test fixture");
+    let state_object = step_state_object(&satisfied).expect("test fixture");
+    let step_submission_object = StoreObjectV1::new(
+        derive_identity(&CborValue::Text(
+            EXECUTION_STEP_SUBMISSION_SCHEMA_V1.to_owned(),
+        ))
+        .expect("test fixture"),
+        step_submission.canonical_value().expect("test fixture"),
+        vec![],
+    )
+    .expect("test fixture");
+    let roots = vec![
+        work_object.id(),
+        generation_object.id(),
+        root_object.id(),
+        graph_object.id(),
+        state_object.id(),
+        step_submission_object.id(),
+        fixture.authority_root_id,
+    ];
+    let mut objects = fixture.objects.clone();
+    objects.extend([
+        work_object,
+        generation_object,
+        root_object,
+        graph_object,
+        state_object,
+        step_submission_object,
+    ]);
+    let (mut store, _, _) = active_store_with_roots(
+        domain.clone(),
+        contract_generation.root_id(),
+        objects,
+        roots,
+    );
+    publish_observation(
+        &mut store,
+        &fixture,
+        observation.clone(),
+        payload,
+        "complete-work-evidence-observation",
+    );
+    let assessment_cut = EvidenceStoreFacadeV1::new(&mut store)
+        .current_evidence_cut()
+        .expect("test fixture");
+    let assessment_time = AssessmentTimeBasisV1::from_evidence_cut(
+        &assessment_cut,
+        TrustedTimeV1::Verified {
+            lower_bound: 120,
+            upper_bound: 120,
+        },
+        [84; 32],
+    )
+    .expect("test fixture");
+    let assessment = AssessmentV1::evaluate_leaf(
+        &gate_snapshot,
+        gate.id(),
+        AssessmentBasisV1 {
+            store_domain_id: domain.id(),
+            scope: AssessmentScopeV1::Work,
+            inputs: vec![input],
+            time: assessment_time,
+        },
+        &ClosedLeafGateEvaluatorV1::new(gate.evaluator().clone()).expect("test fixture"),
+    )
+    .expect("test fixture");
+    assert_eq!(assessment.result(), GateEvaluationResultV1::Pass);
+    let evidence_state = EvidenceStoreFacadeV1::new(&mut store)
+        .current_state_binding()
+        .expect("test fixture");
+    let assessment_request = EvidenceStoreFacadeV1::new(&mut store)
+        .canonical_assessment_request(
+            evidence_state,
+            &assessment,
+            IdempotencyKeyIdV1::derive("complete-work-pass-assessment").expect("test fixture"),
+        )
+        .expect("test fixture");
+    let assessment_authority = evidence_authority_for(&fixture, &assessment_request);
+    EvidenceStoreFacadeV1::new(&mut store)
+        .publish_assessment(
+            AuthorizedAssessmentPublicationV1::new(
+                evidence_state,
+                assessment_request,
+                assessment_authority,
+                gate_snapshot.clone(),
+                assessment.clone(),
+            )
+            .expect("test fixture"),
+        )
+        .expect("test fixture");
+    let completion_cut = EvidenceStoreFacadeV1::new(&mut store)
+        .current_evidence_cut()
+        .expect("test fixture");
+    let applicability = AssessmentApplicabilityV1::new(
+        domain.id(),
+        completion_cut.store_generation_id(),
+        &gate_snapshot,
+        AssessmentScopeV1::Work,
+        TrustedTimeV1::Verified {
+            lower_bound: 120,
+            upper_bound: 120,
+        },
+        assessment.time_basis(),
+    )
+    .expect("test fixture");
+    let resolution =
+        resolve_gate_assessments(gate.id(), &applicability, &completion_cut).expect("test fixture");
+    assert_eq!(resolution.result(), GateEvaluationResultV1::Pass);
+    let work_submission_id =
+        WorkSubmissionIdV1::derive("complete-work-evidence-submission").expect("test fixture");
+    let work_submission_ref = SubmissionRefV1::for_work(work_submission_id).expect("test fixture");
+    let work_claim = ClaimV1::new(
+        work_submission_ref,
+        ClaimSubjectV1::for_work(
+            work_id,
+            contract_generation.root_id(),
+            vec![step_submission.id()],
+        )
+        .expect("test fixture"),
+        [85; 32],
+        vec![observation.id()],
+    )
+    .expect("test fixture");
+    let evidence = EvidenceClaimPublicationV1::new(
+        work_submission_ref,
+        vec![work_claim.clone()],
+        vec![observation],
+    )
+    .expect("test fixture");
+    let work_submission = WorkSubmissionV1::publish_from_claims(
+        WorkRecordWriterV1::Work,
+        work_submission_id,
+        work_id,
+        contract_generation.root_id(),
+        current_work.revision().get(),
+        std::slice::from_ref(&work_claim),
+    )
+    .expect("test fixture");
+    let head = store
+        .active_head()
+        .expect("test fixture")
+        .expect("test fixture");
+    let store_generation = store
+        .generation(head.generation_id())
+        .expect("test fixture");
+    let wrong_gate_snapshot = GateSnapshotV1::new(
+        work_id,
+        contract_generation.id(),
+        contract_generation.root_id(),
+        crate::domain::vnext::identity::ContractComponentIdV1::from_digest([254; 32]),
+        [82; 32],
+        [83; 32],
+        vec![gate.id()],
+        vec![gate.clone()],
+    )
+    .expect("test fixture");
+    assert!(matches!(
+        SubmitWorkCompletionPublicationV1::new(
+            RepositoryActionIdentityV1::new(
+                ActionRequestIdV1::derive("complete-work-wrong-gate-component-request")
+                    .expect("test fixture"),
+                IdempotencyKeyIdV1::derive("complete-work-wrong-gate-component-key")
+                    .expect("test fixture"),
+            ),
+            basis(&head, &store_generation),
+            fixture.selection,
+            current_work.clone(),
+            contract_generation.clone(),
+            root.clone(),
+            graph.clone(),
+            vec![satisfied],
+            vec![step_submission.clone()],
+            work_submission.clone(),
+            evidence.clone(),
+            wrong_gate_snapshot,
+            vec![resolution.clone()],
+            120,
+        ),
+        Err(RepositoryPublicationErrorV1::WorkCompletionBasisMismatch)
+    ));
+    assert!(matches!(
+        SubmitWorkCompletionPublicationV1::new(
+            RepositoryActionIdentityV1::new(
+                ActionRequestIdV1::derive("complete-work-missing-gate-request")
+                    .expect("test fixture"),
+                IdempotencyKeyIdV1::derive("complete-work-missing-gate-key").expect("test fixture"),
+            ),
+            basis(&head, &store_generation),
+            fixture.selection,
+            current_work.clone(),
+            contract_generation.clone(),
+            root.clone(),
+            graph.clone(),
+            vec![satisfied],
+            vec![step_submission.clone()],
+            work_submission.clone(),
+            evidence.clone(),
+            gate_snapshot.clone(),
+            vec![],
+            120,
+        ),
+        Err(RepositoryPublicationErrorV1::WorkCompletionBasisMismatch)
+    ));
+
+    let (unpersisted_observation, _) = work_observation(
+        &domain,
+        work_id,
+        contract_generation.id(),
+        contract_generation.root_id(),
+        producer,
+        96,
+    );
+    let unpersisted_submission_id =
+        WorkSubmissionIdV1::derive("complete-work-unpersisted-evidence-submission")
+            .expect("test fixture");
+    let unpersisted_submission_ref =
+        SubmissionRefV1::for_work(unpersisted_submission_id).expect("test fixture");
+    let unpersisted_claim = ClaimV1::new(
+        unpersisted_submission_ref,
+        ClaimSubjectV1::for_work(
+            work_id,
+            contract_generation.root_id(),
+            vec![step_submission.id()],
+        )
+        .expect("test fixture"),
+        [97; 32],
+        vec![unpersisted_observation.id()],
+    )
+    .expect("test fixture");
+    let unpersisted_evidence = EvidenceClaimPublicationV1::new(
+        unpersisted_submission_ref,
+        vec![unpersisted_claim.clone()],
+        vec![unpersisted_observation],
+    )
+    .expect("test fixture");
+    let unpersisted_submission = WorkSubmissionV1::publish_from_claims(
+        WorkRecordWriterV1::Work,
+        unpersisted_submission_id,
+        work_id,
+        contract_generation.root_id(),
+        current_work.revision().get(),
+        &[unpersisted_claim],
+    )
+    .expect("test fixture");
+    let stale_head = head.clone();
+    let unpersisted_publication = SubmitWorkCompletionPublicationV1::new(
+        RepositoryActionIdentityV1::new(
+            ActionRequestIdV1::derive("complete-work-unpersisted-evidence-request")
+                .expect("test fixture"),
+            IdempotencyKeyIdV1::derive("complete-work-unpersisted-evidence-key")
+                .expect("test fixture"),
+        ),
+        basis(&head, &store_generation),
+        fixture.selection,
+        current_work.clone(),
+        contract_generation.clone(),
+        root.clone(),
+        graph.clone(),
+        vec![satisfied],
+        vec![step_submission.clone()],
+        unpersisted_submission,
+        unpersisted_evidence,
+        gate_snapshot.clone(),
+        vec![resolution.clone()],
+        120,
+    )
+    .expect("test fixture");
+    assert!(matches!(
+        RepositoryStoreV1::new(&mut store).submit_work_completion(unpersisted_publication),
+        Err(RepositoryPublicationErrorV1::Evidence(
+            EvidenceStoreErrorV1::ObservationNotCurrent
+        ))
+    ));
+    assert_eq!(store.active_head().expect("test fixture"), Some(stale_head));
+    let late_applicability = AssessmentApplicabilityV1::new(
+        domain.id(),
+        completion_cut.store_generation_id(),
+        &gate_snapshot,
+        AssessmentScopeV1::Work,
+        TrustedTimeV1::Verified {
+            lower_bound: 121,
+            upper_bound: 121,
+        },
+        assessment.time_basis(),
+    )
+    .expect("test fixture");
+    let late_resolution = resolve_gate_assessments(gate.id(), &late_applicability, &completion_cut)
+        .expect("test fixture");
+    assert_eq!(late_resolution.result(), GateEvaluationResultV1::Pass);
+    let untrusted_time_publication = SubmitWorkCompletionPublicationV1::new(
+        RepositoryActionIdentityV1::new(
+            ActionRequestIdV1::derive("complete-work-untrusted-time-request")
+                .expect("test fixture"),
+            IdempotencyKeyIdV1::derive("complete-work-untrusted-time-key").expect("test fixture"),
+        ),
+        basis(&head, &store_generation),
+        fixture.selection,
+        current_work.clone(),
+        contract_generation.clone(),
+        root.clone(),
+        graph.clone(),
+        vec![satisfied],
+        vec![step_submission.clone()],
+        work_submission.clone(),
+        evidence.clone(),
+        gate_snapshot.clone(),
+        vec![late_resolution],
+        121,
+    )
+    .expect("test fixture");
+    assert!(matches!(
+        RepositoryStoreV1::new(&mut store).submit_work_completion(untrusted_time_publication),
+        Err(RepositoryPublicationErrorV1::WorkCompletionBasisMismatch)
+    ));
+    assert_eq!(
+        store.active_head().expect("test fixture"),
+        Some(head.clone())
+    );
+    let publication = SubmitWorkCompletionPublicationV1::new(
+        RepositoryActionIdentityV1::new(
+            ActionRequestIdV1::derive("complete-work-evidence-request").expect("test fixture"),
+            IdempotencyKeyIdV1::derive("complete-work-evidence-key").expect("test fixture"),
+        ),
+        basis(&head, &store_generation),
+        fixture.selection,
+        current_work,
+        contract_generation,
+        root,
+        graph,
+        vec![satisfied],
+        vec![step_submission],
+        work_submission.clone(),
+        evidence,
+        gate_snapshot,
+        vec![resolution],
+        120,
+    )
+    .expect("test fixture");
+    let successor_id = work_record_object(publication.successor())
+        .expect("test fixture")
+        .id();
+    let outcome = RepositoryStoreV1::new(&mut store)
+        .submit_work_completion(publication)
+        .expect("test fixture");
+    let committed = store
+        .publication_generation(outcome.head().id())
+        .expect("test fixture");
+    assert!(committed.roots().contains(&successor_id));
+    let active_objects = store
+        .with_serialized_active_view(|view| {
+            view.active_generation_objects()
+                .map_err(RepositoryPublicationErrorV1::Store)
+        })
+        .expect("test fixture");
+    for schema in [
+        EVIDENCE_CLAIM_SCHEMA_V1,
+        WORK_SUBMISSION_CLAIM_SET_SCHEMA_V1,
+        WORK_SUBMISSION_SCHEMA_V1,
+        WORK_COMPLETION_EVIDENCE_BASIS_SCHEMA_V1,
+    ] {
+        let schema_id = derive_identity(&CborValue::Text(schema.to_owned())).expect("test fixture");
+        assert_eq!(
+            active_objects
+                .iter()
+                .filter(|object| object.schema_id() == schema_id)
+                .count(),
+            1,
+            "completion must retain one exact {schema} object"
+        );
+    }
+    assert!(
+        active_objects
+            .iter()
+            .any(|object| object.id() == successor_id)
+    );
+    let work_submission_schema =
+        derive_identity(&CborValue::Text(WORK_SUBMISSION_SCHEMA_V1.to_owned()))
+            .expect("test fixture");
+    let persisted_submission = active_objects
+        .iter()
+        .find(|object| {
+            object.schema_id() == work_submission_schema
+                && object.value() == &work_submission.canonical_value().expect("test fixture")
+        })
+        .expect("test fixture");
+    assert_eq!(
+        WorkSubmissionV1::from_canonical_bytes(
+            &deterministic_cbor::encode(persisted_submission.value()).expect("test fixture"),
+            &[work_claim],
+        )
+        .expect("test fixture"),
+        work_submission
     );
 }
 

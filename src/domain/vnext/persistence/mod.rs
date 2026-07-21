@@ -40,10 +40,11 @@ pub use retention::{
     RetentionRootKindV1, RetentionRootV1,
 };
 pub use snapshot::{SnapshotError, StoreSnapshotRootV1};
+pub(crate) use store::{
+    ControlledCopyErasurePlanV1, PreparedPublicationError, StorePublicationAllocationV1,
+    StorePublicationViewV1, VerifiedCollectionAbsenceV1, VerifiedControlledCopyAbsenceV1,
+};
 pub use store::{
     InstallationActivationIntentV1, RepositoryActivationIntentV1, StoreError, StoreStateV1, StoreV1,
-};
-pub(crate) use store::{
-    PreparedPublicationError, StorePublicationAllocationV1, StorePublicationViewV1,
 };
 pub use types::{StoreDomainError, StoreDomainV1, StoreRoleV1};

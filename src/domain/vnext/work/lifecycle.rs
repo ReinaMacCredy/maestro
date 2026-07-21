@@ -314,6 +314,32 @@ impl WorkRecordV1 {
         expected_revision: WorkRevisionV1,
         transition: WorkTransitionV1,
     ) -> Result<Self, WorkLifecycleError> {
+        self.apply_inner(writer, expected_revision, transition, false)
+    }
+
+    pub(crate) fn apply_verified_completion(
+        &self,
+        writer: WorkRecordWriterV1,
+        expected_revision: WorkRevisionV1,
+        submission: WorkSubmissionV1,
+    ) -> Result<Self, WorkLifecycleError> {
+        self.apply_inner(
+            writer,
+            expected_revision,
+            WorkTransitionV1::SubmitWorkCompletion {
+                submission: Box::new(submission),
+            },
+            true,
+        )
+    }
+
+    fn apply_inner(
+        &self,
+        writer: WorkRecordWriterV1,
+        expected_revision: WorkRevisionV1,
+        transition: WorkTransitionV1,
+        completion_basis_verified: bool,
+    ) -> Result<Self, WorkLifecycleError> {
         validate_work_writer(writer)?;
         if expected_revision != self.revision {
             return Err(WorkLifecycleError::StaleRevision {
@@ -326,7 +352,8 @@ impl WorkRecordV1 {
         }
 
         let prior_state = self.state.clone();
-        let (state, submission, submission_id, reason) = self.evaluate(&transition)?;
+        let (state, submission, submission_id, reason) =
+            self.evaluate(&transition, completion_basis_verified)?;
         let next_revision = WorkRevisionV1::new(
             self.revision
                 .get()
@@ -370,6 +397,7 @@ impl WorkRecordV1 {
     fn evaluate(
         &self,
         transition: &WorkTransitionV1,
+        completion_basis_verified: bool,
     ) -> Result<TransitionEvaluation, WorkLifecycleError> {
         let result = match (&self.state, transition) {
             (WorkLifecycleStateV1::Draft, WorkTransitionV1::PublishInitialContract) => {
@@ -382,6 +410,9 @@ impl WorkRecordV1 {
                 WorkLifecycleStateV1::Active,
                 WorkTransitionV1::SubmitWorkCompletion { submission },
             ) => {
+                if !completion_basis_verified {
+                    return Err(WorkLifecycleError::UnverifiedCompletionBasis);
+                }
                 if submission.work_id() != self.id {
                     return Err(WorkLifecycleError::SubmissionWorkMismatch);
                 }
@@ -533,6 +564,10 @@ pub enum WorkLifecycleError {
     SubmissionWorkMismatch,
     #[error("Work Submission does not bind the exact expected Work revision")]
     SubmissionRevisionMismatch,
+    #[error(
+        "Work completion requires the Repository facade's exact current Contract and Step basis"
+    )]
+    UnverifiedCompletionBasis,
     #[error("Work Submission is not the current awaiting-acceptance Submission")]
     SubmissionIsNotCurrent,
     #[error("Work Submission identity already exists in immutable history")]

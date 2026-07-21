@@ -195,6 +195,69 @@ impl WorkSubmissionV1 {
     pub fn canonical_bytes(&self) -> Result<Vec<u8>, WorkSubmissionError> {
         Ok(deterministic_cbor::encode(&self.canonical_value()?)?)
     }
+
+    pub fn from_canonical_bytes(
+        value: &[u8],
+        claims: &[ClaimV1],
+    ) -> Result<Self, WorkSubmissionError> {
+        let decoded = deterministic_cbor::decode(value)?;
+        let CborValue::Array(fields) = &decoded else {
+            return Err(WorkSubmissionError::InvalidStoredWorkSubmission);
+        };
+        let [
+            CborValue::Unsigned(version),
+            id,
+            subject,
+            CborValue::Unsigned(expected_work_revision),
+            claim_set,
+        ] = fields.as_slice()
+        else {
+            return Err(WorkSubmissionError::InvalidStoredWorkSubmission);
+        };
+        if *version != WORK_SUBMISSION_VERSION_V1 {
+            return Err(WorkSubmissionError::InvalidStoredWorkSubmission);
+        }
+        let id = WorkSubmissionIdV1::parse(&render_digest(exact_digest(id)?))
+            .map_err(|_| WorkSubmissionError::InvalidStoredWorkSubmission)?;
+        let CborValue::Array(subject_fields) = subject else {
+            return Err(WorkSubmissionError::InvalidStoredWorkSubmission);
+        };
+        let [
+            CborValue::Unsigned(1),
+            work_id,
+            contract_root,
+            CborValue::Array(current_step_submissions),
+        ] = subject_fields.as_slice()
+        else {
+            return Err(WorkSubmissionError::InvalidStoredWorkSubmission);
+        };
+        let work_id = WorkIdV1::parse(&render_digest(exact_digest(work_id)?))
+            .map_err(|_| WorkSubmissionError::InvalidStoredWorkSubmission)?;
+        let contract_root = ContractRootIdV1::parse(&render_digest(exact_digest(contract_root)?))
+            .map_err(|_| WorkSubmissionError::InvalidStoredWorkSubmission)?;
+        let current_step_submissions = current_step_submissions
+            .iter()
+            .map(|id| {
+                StepSubmissionIdV1::from_bytes(exact_digest(id)?)
+                    .map_err(|_| WorkSubmissionError::InvalidStoredWorkSubmission)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let rebuilt = Self::publish_from_claims(
+            WorkRecordWriterV1::Work,
+            id,
+            work_id,
+            contract_root,
+            *expected_work_revision,
+            claims,
+        )?;
+        if rebuilt.current_step_submissions() != current_step_submissions
+            || rebuilt.claim_set().schema_value()? != *claim_set
+            || rebuilt.canonical_bytes()? != value
+        {
+            return Err(WorkSubmissionError::InvalidStoredWorkSubmission);
+        }
+        Ok(rebuilt)
+    }
 }
 
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
@@ -223,6 +286,29 @@ pub enum WorkSubmissionError {
         "every Work Submission Claim must bind one exact Work, Contract Root, and current Step Submission closure"
     )]
     ClaimSubjectMismatch,
+    #[error("stored Work Submission V1 is malformed, substituted, or non-canonical")]
+    InvalidStoredWorkSubmission,
+}
+
+fn exact_digest(value: &CborValue) -> Result<[u8; 32], WorkSubmissionError> {
+    let CborValue::Bytes(value) = value else {
+        return Err(WorkSubmissionError::InvalidStoredWorkSubmission);
+    };
+    value
+        .as_slice()
+        .try_into()
+        .map_err(|_| WorkSubmissionError::InvalidStoredWorkSubmission)
+}
+
+fn render_digest(value: [u8; 32]) -> String {
+    let mut rendered = String::with_capacity(71);
+    rendered.push_str("sha256:");
+    for byte in value {
+        use std::fmt::Write;
+        write!(&mut rendered, "{byte:02x}")
+            .expect("invariant: writing hexadecimal into String cannot fail");
+    }
+    rendered
 }
 
 fn validate_work_claim_subjects<'a>(

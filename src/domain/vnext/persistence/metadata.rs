@@ -78,6 +78,14 @@ const IMMUTABLE_TABLES: &[&str] = &[
     "store_idempotency",
 ];
 
+const SECURITY_ERASURE_REVOCABLE_EXPORT_TABLES: &[&str] = &[
+    "store_restore_candidate_roots",
+    "store_restore_candidates",
+    "store_sealed_export_pins",
+    "store_sealed_export_objects",
+    "store_sealed_exports",
+];
+
 const REQUIRED_MUTABLE_TRIGGERS: &[&str] = &[
     "store_state_monotonic_update",
     "store_state_reject_delete",
@@ -955,18 +963,106 @@ fn initialize_schema(
 
 fn install_immutability_triggers(transaction: &Transaction<'_>) -> Result<(), MetadataError> {
     for table in IMMUTABLE_TABLES {
-        let update_trigger = format!(
-            "CREATE TRIGGER IF NOT EXISTS {table}_reject_update
-             BEFORE UPDATE ON {table}
-             BEGIN SELECT RAISE(ABORT, '{table} is insert-only'); END"
-        );
-        let delete_trigger = format!(
-            "CREATE TRIGGER IF NOT EXISTS {table}_reject_delete
-             BEFORE DELETE ON {table}
-             BEGIN SELECT RAISE(ABORT, '{table} is insert-only'); END"
-        );
-        transaction.execute_batch(&update_trigger)?;
-        transaction.execute_batch(&delete_trigger)?;
+        transaction.execute_batch(&immutability_update_trigger_sql(table))?;
+        transaction.execute_batch(&immutability_delete_trigger_sql(table))?;
+    }
+    Ok(())
+}
+
+fn immutability_update_trigger_sql(table: &str) -> String {
+    format!(
+        "CREATE TRIGGER IF NOT EXISTS {table}_reject_update
+         BEFORE UPDATE ON {table}
+         BEGIN SELECT RAISE(ABORT, '{table} is insert-only'); END"
+    )
+}
+
+fn immutability_delete_trigger_sql(table: &str) -> String {
+    format!(
+        "CREATE TRIGGER IF NOT EXISTS {table}_reject_delete
+         BEFORE DELETE ON {table}
+         BEGIN SELECT RAISE(ABORT, '{table} is insert-only'); END"
+    )
+}
+
+pub(crate) fn revoke_sealed_exports_for_security_erasure(
+    transaction: &Transaction<'_>,
+    object_id: &[u8; 32],
+    export_ids: &[[u8; 32]],
+) -> Result<(), MetadataError> {
+    if export_ids.is_empty()
+        || export_ids.windows(2).any(|pair| pair[0] >= pair[1])
+        || object_id == &[0; 32]
+    {
+        return Err(MetadataError::SecurityErasureRevocationMismatch);
+    }
+    let observed = {
+        let mut statement = transaction.prepare(
+            "SELECT export_id FROM store_sealed_export_objects
+             WHERE object_id = ?1 AND entry_kind = 'available'
+             ORDER BY export_id",
+        )?;
+        statement
+            .query_map(params![object_id], |row| row.get::<_, Vec<u8>>(0))?
+            .collect::<Result<Vec<_>, _>>()?
+    };
+    if observed.len() != export_ids.len()
+        || observed
+            .iter()
+            .zip(export_ids)
+            .any(|(actual, expected)| actual.as_slice() != expected)
+    {
+        return Err(MetadataError::SecurityErasureRevocationMismatch);
+    }
+
+    for table in SECURITY_ERASURE_REVOCABLE_EXPORT_TABLES {
+        transaction.execute_batch(&format!("DROP TRIGGER {table}_reject_delete"))?;
+    }
+    for export_id in export_ids {
+        transaction.execute(
+            "DELETE FROM store_restore_candidate_roots
+             WHERE candidate_id IN (
+               SELECT candidate_id FROM store_restore_candidates
+               WHERE source_export_id = ?1
+             )",
+            params![export_id],
+        )?;
+        transaction.execute(
+            "DELETE FROM store_restore_candidates WHERE source_export_id = ?1",
+            params![export_id],
+        )?;
+        transaction.execute(
+            "DELETE FROM store_sealed_export_pins WHERE export_id = ?1",
+            params![export_id],
+        )?;
+        transaction.execute(
+            "DELETE FROM store_sealed_export_objects WHERE export_id = ?1",
+            params![export_id],
+        )?;
+        if transaction.execute(
+            "DELETE FROM store_sealed_exports WHERE export_id = ?1",
+            params![export_id],
+        )? != 1
+        {
+            return Err(MetadataError::SecurityErasureRevocationMismatch);
+        }
+    }
+    for table in SECURITY_ERASURE_REVOCABLE_EXPORT_TABLES {
+        transaction.execute_batch(&immutability_delete_trigger_sql(table))?;
+    }
+    if schema_digest(transaction)? != expected_schema_digest()? {
+        return Err(MetadataError::SchemaDefinitionMismatch);
+    }
+    let remaining: bool = transaction.query_row(
+        "SELECT EXISTS(
+           SELECT 1 FROM store_sealed_export_objects
+           WHERE object_id = ?1 AND entry_kind = 'available'
+         )",
+        params![object_id],
+        |row| row.get(0),
+    )?;
+    if remaining {
+        return Err(MetadataError::SecurityErasureRevocationMismatch);
     }
     Ok(())
 }
@@ -1688,6 +1784,8 @@ pub(crate) enum MetadataError {
     IdempotencyMeaningConflict,
     #[error("Store authoritative metadata does not match its exact typed carrier")]
     FacadeIntegrityMismatch,
+    #[error("security erasure does not bind the exact retained sealed-export census")]
+    SecurityErasureRevocationMismatch,
     #[error("Store snapshot restore failed: {0}")]
     SnapshotRestore(String),
     #[error("Store snapshot admission failed: {0}")]

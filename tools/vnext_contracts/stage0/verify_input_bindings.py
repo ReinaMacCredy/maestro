@@ -59,7 +59,9 @@ def path_metadata(path: Path) -> dict[str, str]:
 
 
 def verify_external_control_bindings(bindings: dict[str, object], source: Path) -> None:
-    controls = bindings["external_control_bindings"]
+    controls = bindings.get(
+        "current_external_control_bindings", bindings["external_control_bindings"]
+    )
     assert isinstance(controls, dict)
     source_control = controls["source_git_control"]
     destination = controls["destination_ancestors"]
@@ -171,6 +173,322 @@ def verify_external_control_bindings(bindings: dict[str, object], source: Path) 
     )
 
 
+def verify_current_control_rebind(bindings: dict[str, object]) -> None:
+    approved = bindings["external_control_bindings"]
+    current = bindings["current_external_control_bindings"]
+    assert isinstance(approved, dict)
+    assert isinstance(current, dict)
+
+    approved_source = approved["source_git_control"]
+    current_source = current["source_git_control"]
+    assert isinstance(approved_source, dict)
+    assert isinstance(current_source, dict)
+    require_equal("current source-control keys", set(current_source), set(approved_source))
+    source_device_keys = {
+        "identity_sha256",
+        "git_common_dir_device",
+        "object_directory_device",
+    }
+    for key in sorted(set(approved_source) - source_device_keys):
+        require_equal(
+            f"current source-control stable field {key}",
+            current_source[key],
+            approved_source[key],
+        )
+    approved_device = str(approved_source["git_common_dir_device"])
+    current_device = str(current_source["git_common_dir_device"])
+    if approved_device == current_device:
+        raise SystemExit("current source-control rebind did not change the device")
+    require_equal(
+        "current object-directory device",
+        current_source["object_directory_device"],
+        current_device,
+    )
+    require_equal(
+        "approved object-directory device",
+        approved_source["object_directory_device"],
+        approved_device,
+    )
+
+    approved_destination = approved["destination_ancestors"]
+    current_destination = current["destination_ancestors"]
+    assert isinstance(approved_destination, dict)
+    assert isinstance(current_destination, dict)
+    approved_ancestors = approved_destination["ancestors"]
+    current_ancestors = current_destination["ancestors"]
+    assert isinstance(approved_ancestors, list)
+    assert isinstance(current_ancestors, list)
+    require_equal(
+        "current destination ancestor count",
+        len(current_ancestors),
+        len(approved_ancestors),
+    )
+    for index, (old_entry, new_entry) in enumerate(
+        zip(approved_ancestors, current_ancestors, strict=True)
+    ):
+        assert isinstance(old_entry, dict)
+        assert isinstance(new_entry, dict)
+        require_equal(
+            f"current destination ancestor {index} keys",
+            set(new_entry),
+            set(old_entry),
+        )
+        for key in sorted(set(old_entry) - {"device"}):
+            require_equal(
+                f"current destination ancestor {index} stable field {key}",
+                new_entry[key],
+                old_entry[key],
+            )
+        require_equal(
+            f"current destination ancestor {index} device",
+            new_entry["device"],
+            current_device,
+        )
+        require_equal(
+            f"approved destination ancestor {index} device",
+            old_entry["device"],
+            approved_device,
+        )
+    require_equal(
+        "current checkout sandbox profile",
+        current["checkout_sandbox_profile"],
+        approved["checkout_sandbox_profile"],
+    )
+
+
+def verify_post_approval_execution_plan_revisions(
+    bindings: dict[str, object],
+) -> None:
+    revision_set = bindings["post_approval_execution_plan_revisions"]
+    canonical_inputs = bindings["canonical_source_inputs"]
+    current_inputs = bindings["current_source_inputs"]
+    assert isinstance(revision_set, dict)
+    assert isinstance(canonical_inputs, dict)
+    assert isinstance(current_inputs, dict)
+    require_equal(
+        "execution-plan revision schema",
+        revision_set["schema"],
+        "maestro.external-execution-plan-revisions.v1",
+    )
+    require_equal(
+        "execution-plan revision attestation source",
+        revision_set["attestation_source"],
+        "pinned_local_codex_session_records_v1",
+    )
+    require_equal(
+        "execution-plan revision provenance assurance",
+        revision_set["provenance_assurance"],
+        "unsigned_local_platform_log_bound_by_sha256",
+    )
+    require_equal(
+        "current source input keys",
+        set(current_inputs),
+        {"card_sha256", "design_sha256", "decisions_sha256"},
+    )
+    for key in ("card_sha256", "decisions_sha256"):
+        require_equal(
+            f"post-approval stable {key}", current_inputs[key], canonical_inputs[key]
+        )
+
+    design_revisions = revision_set["design_revisions"]
+    handoff = revision_set["stage5_handoff"]
+    amendment = revision_set["stage5_execution_amendment"]
+    assert isinstance(design_revisions, list)
+    assert isinstance(handoff, dict)
+    assert isinstance(amendment, dict)
+    require_equal("post-approval design revision count", len(design_revisions), 2)
+    records = [*design_revisions, handoff, amendment]
+    wanted: dict[str, dict[str, object]] = {}
+    for entry in records:
+        assert isinstance(entry, dict)
+        digest = str(entry["record_sha256"])
+        if digest in wanted:
+            raise SystemExit("post-approval revision record digest is duplicated")
+        wanted[digest] = entry
+
+    log_path = Path(str(revision_set["log_realpath"]))
+    if not log_path.is_file() or log_path.is_symlink():
+        raise SystemExit(f"execution-plan revision log is not a regular file: {log_path}")
+    require_equal(
+        "execution-plan revision log realpath",
+        str(log_path.resolve(strict=True)),
+        str(log_path),
+    )
+    captured: dict[str, dict[str, object]] = {}
+    with log_path.open(encoding="utf-8") as handle:
+        for raw_line in handle:
+            digest = hashlib.sha256(raw_line.encode()).hexdigest()
+            if digest not in wanted:
+                continue
+            if digest in captured:
+                raise SystemExit(
+                    f"post-approval revision record occurs more than once: {digest}"
+                )
+            record = json.loads(raw_line)
+            if not isinstance(record, dict):
+                raise SystemExit("post-approval revision record is not an object")
+            captured[digest] = record
+    require_equal(
+        "post-approval revision record closure", set(captured), set(wanted)
+    )
+
+    expected_previous = str(canonical_inputs["design_sha256"])
+    last_timestamp: str | None = None
+    for index, entry in enumerate(design_revisions):
+        assert isinstance(entry, dict)
+        require_equal(
+            f"design revision {index} previous hash",
+            entry["previous_design_sha256"],
+            expected_previous,
+        )
+        record = captured[str(entry["record_sha256"])]
+        timestamp = str(record["timestamp"])
+        if last_timestamp is not None and timestamp <= last_timestamp:
+            raise SystemExit("post-approval design revisions are not in causal order")
+        last_timestamp = timestamp
+        payload = record["payload"]
+        assert isinstance(payload, dict)
+        require_equal(f"design revision {index} record type", record["type"], "response_item")
+        require_equal(f"design revision {index} payload type", payload["type"], "message")
+        require_equal(f"design revision {index} actor", payload["role"], "user")
+        require_equal(f"design revision {index} message id", payload["id"], entry["message_id"])
+        metadata = payload["internal_chat_message_metadata_passthrough"]
+        assert isinstance(metadata, dict)
+        require_equal(f"design revision {index} turn", metadata["turn_id"], entry["turn_id"])
+        content = payload["content"]
+        if not isinstance(content, list) or len(content) != 1 or not isinstance(content[0], dict):
+            raise SystemExit(f"design revision {index} is not one exact text item")
+        require_equal(f"design revision {index} content type", content[0]["type"], "input_text")
+        text = str(content[0]["text"])
+        required = (
+            f"<source_thread_id>{entry['source_thread_id']}</source_thread_id>",
+            str(entry["current_design_sha256"]),
+        )
+        if not all(fragment in text for fragment in required):
+            raise SystemExit(f"design revision {index} does not bind its source and hash")
+        classification = entry["classification"]
+        if classification == "stage12_acceptance_clarification_only":
+            fragments = (
+                "post-approval Phase-12 acceptance clarification",
+                "should not alter the active Stage 4 runtime slice",
+                "preservation of all *V1/content-addressed contract, proof, Receipt, and migration identities",
+            )
+        elif classification == "implementation_order_only":
+            fragments = (
+                "The product contracts, Stage deliverables, and canonical integration/certification order remain unchanged.",
+                "Existing proof artifacts with design provenance must be rebound/regenerated at the next safe boundary.",
+                "Do not create or launch the Orchestrator yet.",
+            )
+        else:
+            raise SystemExit(f"unknown post-approval design classification: {classification}")
+        if not all(fragment in text for fragment in fragments):
+            raise SystemExit(f"design revision {index} exceeds its declared classification")
+        expected_previous = str(entry["current_design_sha256"])
+    handoff_record = captured[str(handoff["record_sha256"])]
+    handoff_timestamp = str(handoff_record["timestamp"])
+    if last_timestamp is not None and handoff_timestamp <= last_timestamp:
+        raise SystemExit("Stage-5 handoff is not causally after the design revisions")
+    handoff_payload = handoff_record["payload"]
+    assert isinstance(handoff_payload, dict)
+    require_equal("Stage-5 handoff record type", handoff_record["type"], "response_item")
+    require_equal("Stage-5 handoff payload type", handoff_payload["type"], "message")
+    require_equal("Stage-5 handoff actor", handoff_payload["role"], "user")
+    require_equal("Stage-5 handoff message id", handoff_payload["id"], handoff["message_id"])
+    handoff_metadata = handoff_payload["internal_chat_message_metadata_passthrough"]
+    assert isinstance(handoff_metadata, dict)
+    require_equal("Stage-5 handoff turn", handoff_metadata["turn_id"], handoff["turn_id"])
+    handoff_content = handoff_payload["content"]
+    if not isinstance(handoff_content, list) or len(handoff_content) != 1 or not isinstance(handoff_content[0], dict):
+        raise SystemExit("Stage-5 handoff is not one exact text item")
+    require_equal("Stage-5 handoff content type", handoff_content[0]["type"], "input_text")
+    handoff_text = str(handoff_content[0]["text"])
+    require_equal("Stage-5 handoff design", handoff["design_sha256"], expected_previous)
+    require_equal(
+        "Stage-5 handoff boundary",
+        handoff["boundary"],
+        "finish_and_commit_stage5_do_not_begin_stage6",
+    )
+    handoff_fragments = (
+        f"<source_thread_id>{handoff['source_thread_id']}</source_thread_id>",
+        str(handoff["design_sha256"]),
+        "Commit the complete Stage-5-owned source, tests and proof artifacts atomically",
+        "Do not begin Stage 6.",
+        "Do not create worker threads or an Orchestrator thread yet.",
+    )
+    if not all(fragment in handoff_text for fragment in handoff_fragments):
+        raise SystemExit("Stage-5 handoff does not bind its exact continuation boundary")
+
+    amendment_record = captured[str(amendment["record_sha256"])]
+    amendment_timestamp = str(amendment_record["timestamp"])
+    if amendment_timestamp <= handoff_timestamp:
+        raise SystemExit("Stage-5 execution amendment is not causally after the handoff")
+    amendment_payload = amendment_record["payload"]
+    assert isinstance(amendment_payload, dict)
+    require_equal(
+        "Stage-5 execution amendment record type", amendment_record["type"], "response_item"
+    )
+    require_equal(
+        "Stage-5 execution amendment payload type", amendment_payload["type"], "message"
+    )
+    require_equal("Stage-5 execution amendment actor", amendment_payload["role"], "user")
+    require_equal(
+        "Stage-5 execution amendment message id",
+        amendment_payload["id"],
+        amendment["message_id"],
+    )
+    amendment_metadata = amendment_payload["internal_chat_message_metadata_passthrough"]
+    assert isinstance(amendment_metadata, dict)
+    require_equal(
+        "Stage-5 execution amendment turn",
+        amendment_metadata["turn_id"],
+        amendment["turn_id"],
+    )
+    amendment_content = amendment_payload["content"]
+    if (
+        not isinstance(amendment_content, list)
+        or len(amendment_content) != 1
+        or not isinstance(amendment_content[0], dict)
+    ):
+        raise SystemExit("Stage-5 execution amendment is not one exact text item")
+    require_equal(
+        "Stage-5 execution amendment content type",
+        amendment_content[0]["type"],
+        "input_text",
+    )
+    require_equal(
+        "Stage-5 execution amendment previous design",
+        amendment["previous_design_sha256"],
+        expected_previous,
+    )
+    require_equal(
+        "Stage-5 execution amendment current design",
+        amendment["current_design_sha256"],
+        current_inputs["design_sha256"],
+    )
+    require_equal(
+        "Stage-5 execution amendment classification",
+        amendment["classification"],
+        "full_seal_scheduling_only",
+    )
+    require_equal(
+        "Stage-5 execution amendment boundary",
+        amendment["boundary"],
+        "checkpoint_then_one_current_stage5_full_seal_then_stop_before_stage6",
+    )
+    amendment_text = str(amendment_content[0]["text"])
+    amendment_fragments = (
+        f"<source_thread_id>{amendment['source_thread_id']}</source_thread_id>",
+        str(amendment["previous_design_sha256"]),
+        str(amendment["current_design_sha256"]),
+        "Preserve prior committed Stage receipts as immutable history.",
+        "Main runs exactly one full independent multi-engine seal for the current Stage 5.",
+        "checkpoint commit / primary ff-only preservation sequence remains in force",
+        "Do not open an Orchestrator or workers.",
+    )
+    if not all(fragment in amendment_text for fragment in amendment_fragments):
+        raise SystemExit("Stage-5 execution amendment exceeds its scheduling-only boundary")
+
+
 def external_candidate_commitment(
     bindings: dict[str, object],
     *,
@@ -252,7 +570,10 @@ def verify_baseline_objects(bindings: dict[str, object], source: Path) -> None:
         if not ref_path.is_file() or ref_path.is_symlink():
             raise SystemExit("implementation workspace branch ref is not a regular file")
         head_value = ref_path.read_text().strip()
-    require_equal("implementation workspace HEAD", head_value, commit_id)
+    current_base = bindings.get("current_implementation_base", baseline)
+    assert isinstance(current_base, dict)
+    current_commit_id = str(current_base["commit"])
+    current_tree_id = str(current_base["tree"])
     require_equal("linked worktree common-dir pointer", (administrative_dir / "commondir").read_text().strip(), "../..")
 
     object_dir = Path(str(source_control["object_directory_realpath"]))
@@ -273,6 +594,57 @@ def verify_baseline_objects(bindings: dict[str, object], source: Path) -> None:
     first_line = commit.splitlines()[0].decode("ascii")
     require_equal("baseline commit tree", first_line, f"tree {tree_id}")
     loose_object(tree_id, "tree")
+    current_commit = loose_object(current_commit_id, "commit")
+    current_first_line = current_commit.splitlines()[0].decode("ascii")
+    require_equal(
+        "current implementation commit tree",
+        current_first_line,
+        f"tree {current_tree_id}",
+    )
+    loose_object(current_tree_id, "tree")
+
+    head_commit = loose_object(head_value, "commit")
+    head_first_line = head_commit.splitlines()[0].decode("ascii")
+    if not head_first_line.startswith("tree "):
+        raise SystemExit("implementation workspace HEAD commit lacks a tree")
+    loose_object(head_first_line.removeprefix("tree "), "tree")
+
+    pending = [head_value]
+    visited: set[str] = set()
+    while pending:
+        candidate = pending.pop()
+        if candidate in visited:
+            continue
+        visited.add(candidate)
+        if candidate == current_commit_id:
+            break
+        body = loose_object(candidate, "commit")
+        pending.extend(
+            line.removeprefix(b"parent ").decode("ascii")
+            for line in body.splitlines()
+            if line.startswith(b"parent ")
+        )
+    else:
+        raise SystemExit("implementation workspace HEAD does not descend from the bound base")
+
+    pending = [current_commit_id]
+    visited = set()
+    while pending:
+        candidate = pending.pop()
+        if candidate in visited:
+            continue
+        visited.add(candidate)
+        if candidate == commit_id:
+            break
+        body = loose_object(candidate, "commit")
+        parents = [
+            line.removeprefix(b"parent ").decode("ascii")
+            for line in body.splitlines()
+            if line.startswith(b"parent ")
+        ]
+        pending.extend(parents)
+    else:
+        raise SystemExit("current implementation HEAD does not descend from the approved baseline")
 
 
 def external_build_plan_handoff(
@@ -295,8 +667,10 @@ def external_build_plan_handoff(
 
 def verify_external_build_plan(bindings: dict[str, object], source: Path) -> None:
     plan = bindings["external_build_plan"]
+    current_plan = bindings.get("current_external_build_plan", plan)
     approval = bindings["external_approval"]
     assert isinstance(plan, dict)
+    assert isinstance(current_plan, dict)
     assert isinstance(approval, dict)
 
     design = source / ".maestro/cards/maestro-whole-flow-architecture-refoundation/design.md"
@@ -327,12 +701,17 @@ def verify_external_build_plan(bindings: dict[str, object], source: Path) -> Non
     require_equal(
         "external stage-plan digest",
         hashlib.sha256(("\n".join(stage_lines) + "\n").encode()).hexdigest(),
-        plan["stage_plan_sha256"],
+        current_plan["stage_plan_sha256"],
     )
     require_equal(
         "external proof-gate digest",
         hashlib.sha256(("\n".join(proof_lines) + "\n").encode()).hexdigest(),
-        plan["proof_gate_sha256"],
+        current_plan["proof_gate_sha256"],
+    )
+    require_equal(
+        "current external build-plan classification",
+        current_plan.get("classification"),
+        "post_approval_stage12_clarification_execution_order_and_full_seal_scheduling_only",
     )
     for label, key in (
         ("risk-recovery", "risk_recovery_canonical_lines"),
@@ -781,8 +1160,10 @@ def verify_external_approval_event(bindings: dict[str, object]) -> None:
 
 def verify_source_inputs(bindings: dict[str, object], source: Path) -> None:
     canonical_inputs = bindings["canonical_source_inputs"]
+    current_inputs = bindings["current_source_inputs"]
     provenance = bindings["provenance_evidence_inputs"]
     assert isinstance(canonical_inputs, dict)
+    assert isinstance(current_inputs, dict)
     assert isinstance(provenance, dict)
     require_equal(
         "canonical source input keys",
@@ -822,7 +1203,7 @@ def verify_source_inputs(bindings: dict[str, object], source: Path) -> None:
     for key, path in canonical_paths.items():
         if not path.is_file():
             raise SystemExit(f"{key}: missing regular file {path}")
-        require_equal(key, sha256(path), canonical_inputs[key])
+        require_equal(key, sha256(path), current_inputs[key])
     for key, path in evidence_paths.items():
         if not path.is_file():
             raise SystemExit(f"{key}: missing regular file {path}")
@@ -894,11 +1275,13 @@ def main() -> None:
     )
     verify_nonpromotion(bindings)
     verify_external_control_bindings(bindings, source)
+    verify_current_control_rebind(bindings)
     verify_external_candidate_commitment(bindings)
     verify_baseline_objects(bindings, source)
     verify_external_build_plan(bindings, source)
     verify_external_packet(bindings)
     verify_external_approval_event(bindings)
+    verify_post_approval_execution_plan_revisions(bindings)
     verify_source_inputs(bindings, source)
     verify_decision_inventory(bindings, source)
     print(

@@ -54,6 +54,10 @@ macro_rules! evidence_identity {
 
 evidence_identity!(ClaimIdV1);
 evidence_identity!(ObservationRecordIdV1);
+evidence_identity!(AssessmentIdV1);
+evidence_identity!(AssessmentInvalidationIdV1);
+evidence_identity!(SecurityErasureIntentIdV1);
+evidence_identity!(SecurityErasureReceiptIdV1);
 
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
 pub enum EvidenceIdentityError {

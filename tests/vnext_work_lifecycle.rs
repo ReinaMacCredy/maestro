@@ -77,7 +77,7 @@ fn ready(work: &WorkRecordV1) -> WorkRecordV1 {
 }
 
 #[test]
-fn lifecycle_appends_immutable_revision_facts_and_preserves_prior_submissions() {
+fn pure_lifecycle_appends_revision_facts_and_refuses_unverified_completion() {
     let id = WorkIdV1::derive("lifecycle-work").unwrap();
     let draft = WorkRecordV1::create_draft(WorkRecordWriterV1::Work, id).unwrap();
     let ready = ready(&draft);
@@ -88,68 +88,47 @@ fn lifecycle_appends_immutable_revision_facts_and_preserves_prior_submissions() 
             WorkTransitionV1::AcquireFirstStepExecution,
         )
         .unwrap();
-    let first = submission(id, active.revision().get(), "submission-one", 1);
-    let first_id = first.id();
-    let awaiting = active
+    let candidate = submission(id, active.revision().get(), "unverified-submission", 1);
+    assert_eq!(
+        active
+            .apply(
+                WorkRecordWriterV1::Work,
+                active.revision(),
+                WorkTransitionV1::SubmitWorkCompletion {
+                    submission: Box::new(candidate),
+                },
+            )
+            .unwrap_err(),
+        WorkLifecycleError::UnverifiedCompletionBasis
+    );
+    let cancelled = active
         .apply(
             WorkRecordWriterV1::Work,
             active.revision(),
-            WorkTransitionV1::SubmitWorkCompletion {
-                submission: Box::new(first),
-            },
-        )
-        .unwrap();
-    let repaired = awaiting
-        .apply(
-            WorkRecordWriterV1::Work,
-            awaiting.revision(),
-            WorkTransitionV1::ReturnWorkForRepair {
-                submission_id: first_id,
-                reason: WorkTransitionReasonV1::new("repair requested").unwrap(),
-            },
-        )
-        .unwrap();
-    let second = submission(id, repaired.revision().get(), "submission-two", 2);
-    let second_id = second.id();
-    let awaiting_again = repaired
-        .apply(
-            WorkRecordWriterV1::Work,
-            repaired.revision(),
-            WorkTransitionV1::SubmitWorkCompletion {
-                submission: Box::new(second),
-            },
-        )
-        .unwrap();
-    let completed = awaiting_again
-        .apply(
-            WorkRecordWriterV1::Work,
-            awaiting_again.revision(),
-            WorkTransitionV1::CompleteWork {
-                submission_id: second_id,
+            WorkTransitionV1::CancelWork {
+                reason: WorkTransitionReasonV1::new("cancel requested").unwrap(),
             },
         )
         .unwrap();
 
     assert_eq!(draft.revision().get(), 1);
     assert_eq!(draft.history().len(), 1);
-    assert_eq!(completed.revision().get(), 7);
-    assert_eq!(completed.history().len(), 7);
-    assert_eq!(completed.state(), &WorkLifecycleStateV1::Completed);
-    assert_eq!(completed.submissions().len(), 2);
-    assert_eq!(completed.submissions()[0].id(), first_id);
-    assert_eq!(completed.submissions()[1].id(), second_id);
-    assert_eq!(completed.current_submission().unwrap().id(), second_id);
+    assert_eq!(cancelled.revision().get(), 4);
+    assert_eq!(cancelled.history().len(), 4);
+    assert_eq!(cancelled.state(), &WorkLifecycleStateV1::Cancelled);
+    assert!(cancelled.submissions().is_empty());
+    assert!(cancelled.current_submission().is_none());
     assert_eq!(
-        completed.history()[4].transition(),
-        WorkTransitionKindV1::ReturnWorkForRepair
+        cancelled.history()[3].transition(),
+        WorkTransitionKindV1::CancelWork
     );
     assert_eq!(
-        completed.history()[4].reason().unwrap().as_str(),
-        "repair requested"
+        cancelled.history()[3].reason().unwrap().as_str(),
+        "cancel requested"
     );
     assert_eq!(
-        completed.history()[4].canonical_bytes().unwrap(),
-        completed.history()[4].canonical_bytes().unwrap()
+        cancelled.history()[3].canonical_bytes().unwrap(),
+        cancelled.history()[3].canonical_bytes().unwrap()
     );
 }
 
@@ -165,28 +144,7 @@ fn every_lifecycle_state_accepts_exactly_the_closed_transition_set() {
             WorkTransitionV1::AcquireFirstStepExecution,
         )
         .unwrap();
-    let awaiting = {
-        let item = submission(id, active.revision().get(), "matrix-submission", 1);
-        active
-            .apply(
-                WorkRecordWriterV1::Work,
-                active.revision(),
-                WorkTransitionV1::SubmitWorkCompletion {
-                    submission: Box::new(item),
-                },
-            )
-            .unwrap()
-    };
-    let current_submission_id = awaiting.current_submission().unwrap().id();
-    let completed = awaiting
-        .apply(
-            WorkRecordWriterV1::Work,
-            awaiting.revision(),
-            WorkTransitionV1::CompleteWork {
-                submission_id: current_submission_id,
-            },
-        )
-        .unwrap();
+    let current_submission_id = WorkSubmissionIdV1::derive("matrix-submission-id").unwrap();
     let cancelled = active
         .apply(
             WorkRecordWriterV1::Work,
@@ -196,7 +154,7 @@ fn every_lifecycle_state_accepts_exactly_the_closed_transition_set() {
             },
         )
         .unwrap();
-    for record in [&draft, &ready, &active, &awaiting, &completed, &cancelled] {
+    for record in [&draft, &ready, &active, &cancelled] {
         let current = record
             .current_submission()
             .map_or(current_submission_id, WorkSubmissionV1::id);
@@ -250,9 +208,7 @@ fn every_lifecycle_state_accepts_exactly_the_closed_transition_set() {
                 ),
                 WorkLifecycleStateV1::Active => matches!(
                     kind,
-                    WorkTransitionKindV1::SubmitWorkCompletion
-                        | WorkTransitionKindV1::AmendContract
-                        | WorkTransitionKindV1::CancelWork
+                    WorkTransitionKindV1::AmendContract | WorkTransitionKindV1::CancelWork
                 ),
                 WorkLifecycleStateV1::AwaitingAcceptance => matches!(
                     kind,
@@ -279,7 +235,7 @@ fn every_lifecycle_state_accepts_exactly_the_closed_transition_set() {
 }
 
 #[test]
-fn amendment_preserves_ready_and_active_but_invalidates_awaiting_submission() {
+fn amendment_preserves_ready_and_active_while_completion_requires_repository_admission() {
     let id = WorkIdV1::derive("amendment-state-matrix").unwrap();
     let draft = WorkRecordV1::create_draft(WorkRecordWriterV1::Work, id).unwrap();
     let ready = ready(&draft);
@@ -320,29 +276,18 @@ fn amendment_preserves_ready_and_active_but_invalidates_awaiting_submission() {
         "amendment-awaiting-submission",
         1,
     );
-    let submission_id = completion.id();
-    let awaiting = amended_active
-        .apply(
-            WorkRecordWriterV1::Work,
-            amended_active.revision(),
-            WorkTransitionV1::SubmitWorkCompletion {
-                submission: Box::new(completion),
-            },
-        )
-        .unwrap();
-    let amended_awaiting = awaiting
-        .apply(
-            WorkRecordWriterV1::Work,
-            awaiting.revision(),
-            WorkTransitionV1::AmendContract {
-                invalidated_submission_id: Some(submission_id),
-                reason: WorkTransitionReasonV1::new("awaiting amendment").unwrap(),
-            },
-        )
-        .unwrap();
-    assert_eq!(amended_awaiting.state(), &WorkLifecycleStateV1::Active);
-    assert!(amended_awaiting.current_submission().is_none());
-    assert_eq!(amended_awaiting.submissions().len(), 1);
+    assert_eq!(
+        amended_active
+            .apply(
+                WorkRecordWriterV1::Work,
+                amended_active.revision(),
+                WorkTransitionV1::SubmitWorkCompletion {
+                    submission: Box::new(completion),
+                },
+            )
+            .unwrap_err(),
+        WorkLifecycleError::UnverifiedCompletionBasis
+    );
 
     assert!(
         ready
@@ -350,7 +295,9 @@ fn amendment_preserves_ready_and_active_but_invalidates_awaiting_submission() {
                 WorkRecordWriterV1::Work,
                 ready.revision(),
                 WorkTransitionV1::AmendContract {
-                    invalidated_submission_id: Some(submission_id),
+                    invalidated_submission_id: Some(
+                        WorkSubmissionIdV1::derive("wrong-ready-submission").unwrap(),
+                    ),
                     reason: WorkTransitionReasonV1::new("wrong ready invalidation").unwrap(),
                 },
             )
@@ -416,7 +363,7 @@ fn submission_binds_exactly_one_existing_nonempty_one_or_many_claim_set() {
 }
 
 #[test]
-fn work_submission_refuses_wrong_or_mixed_work_and_contract_root_claim_subjects() {
+fn work_submission_refuses_wrong_or_mixed_work_and_root_subjects() {
     let work_id = WorkIdV1::derive("subject-work").unwrap();
     let other_work_id = WorkIdV1::derive("other-subject-work").unwrap();
     let id = WorkSubmissionIdV1::derive("subject-submission").unwrap();
@@ -424,7 +371,6 @@ fn work_submission_refuses_wrong_or_mixed_work_and_contract_root_claim_subjects(
     let correct = claim_for_root(submission_ref, work_id, contract_root(42), 1);
     let wrong_work = claim_for_root(submission_ref, other_work_id, contract_root(42), 2);
     let wrong_root = claim_for_root(submission_ref, work_id, contract_root(43), 3);
-
     for claims in [
         vec![wrong_work.clone()],
         vec![wrong_root.clone()],

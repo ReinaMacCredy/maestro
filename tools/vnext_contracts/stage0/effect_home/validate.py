@@ -123,6 +123,8 @@ SEMANTIC_LITERAL_SOURCES = {
     "src/domain/vnext/execution/runtime.rs": ("Execution", "candidate_contract_definition", "direct_stage4_execution_runtime_literal"),
     "src/domain/vnext/execution/store.rs": ("Execution", "candidate_contract_definition", "direct_stage4_atomic_store_literal"),
     "src/domain/vnext/execution/withdrawal.rs": ("Execution", "candidate_contract_definition", "direct_execution_literal"),
+    "src/domain/vnext/evidence/observation.rs": ("Evidence", "candidate_contract_definition", "direct_stage5_observation_literal"),
+    "src/domain/vnext/evidence/store.rs": ("Evidence", "candidate_contract_definition", "direct_stage5_evidence_store_literal"),
     "src/domain/vnext/identity/manifest.rs": ("Identity", "candidate_contract_definition", "direct_identity_literal"),
     "src/domain/vnext/integration/public_literals.rs": ("PublicContracts", "candidate_contract_definition", "direct_public_contract_literal"),
     "tests/vnext_dispatch_cutover_literals.rs": ("Stage0Proof", "candidate_proof_reader", "direct_stage0_literal_test"),

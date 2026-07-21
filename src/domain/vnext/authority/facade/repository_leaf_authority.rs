@@ -801,6 +801,7 @@ macro_rules! ordinary_leaf_authority {
 }
 
 ordinary_leaf_authority!(CreateDraftWorkAuthorityV1);
+ordinary_leaf_authority!(SubmitWorkCompletionAuthorityV1);
 ordinary_leaf_authority!(CancelWorkAuthorityV1);
 ordinary_leaf_authority!(AbsorbWorkAuthorityV1);
 ordinary_leaf_authority!(AppendDesignRevisionAuthorityV1);
@@ -926,7 +927,7 @@ impl GenericExecutionAuthorityV1 {
         self.selection.actor_binding_id()
     }
 
-    pub const fn executor_session_id(&self) -> SessionIdV1 {
+    pub fn executor_session_id(&self) -> SessionIdV1 {
         self.selection.actor_session_id()
     }
 
@@ -1152,6 +1153,66 @@ impl From<ContinuityMaintenanceExecutionAuthorityV1> for ExecutionAuthorityV1 {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ExecutionProducerV1 {
+    SessionBound {
+        principal_id: PrincipalIdV1,
+        session_id: SessionIdV1,
+    },
+    ContinuityMaintenance {
+        principal_id: PrincipalIdV1,
+        basis: ContinuityMaintenanceAuthorityBasisV1,
+        purpose: CmaObservationPublicationPurposeV1,
+        continuity_state_token: StateTokenIdV1,
+        authority_epoch: u64,
+    },
+}
+
+impl ExecutionProducerV1 {
+    pub const fn principal_id(self) -> PrincipalIdV1 {
+        match self {
+            Self::SessionBound { principal_id, .. }
+            | Self::ContinuityMaintenance { principal_id, .. } => principal_id,
+        }
+    }
+
+    pub const fn session_id(self) -> Option<SessionIdV1> {
+        match self {
+            Self::SessionBound { session_id, .. } => Some(session_id),
+            Self::ContinuityMaintenance { .. } => None,
+        }
+    }
+
+    pub(crate) fn canonical_value(self) -> CborValue {
+        match self {
+            Self::SessionBound {
+                principal_id,
+                session_id,
+            } => CborValue::Array(vec![
+                CborValue::Unsigned(1),
+                bytes(principal_id.as_bytes()),
+                bytes(session_id.as_bytes()),
+            ]),
+            Self::ContinuityMaintenance {
+                principal_id,
+                basis,
+                purpose,
+                continuity_state_token,
+                authority_epoch,
+            } => CborValue::Array(vec![
+                CborValue::Unsigned(2),
+                bytes(principal_id.as_bytes()),
+                bytes(basis.cma_branch_id.as_bytes()),
+                bytes(basis.slot_id.as_bytes()),
+                bytes(basis.executor_assertion_id.as_bytes()),
+                CborValue::Unsigned(purpose as u64),
+                bytes(continuity_state_token.as_bytes()),
+                CborValue::Unsigned(authority_epoch),
+            ]),
+        }
+    }
+}
+
 impl ExecutionAuthorityV1 {
     pub const fn action(&self) -> RepositoryActionLeafV1 {
         match self {
@@ -1191,6 +1252,30 @@ impl ExecutionAuthorityV1 {
             Self::BootstrapG0(value) => value.executor_principal_id,
             Self::ContinuityMaintenance(value) => value.executor_principal_id,
         }
+    }
+
+    pub const fn producer(&self) -> ExecutionProducerV1 {
+        match self {
+            Self::Ordinary(value) => ExecutionProducerV1::SessionBound {
+                principal_id: value.executor_principal_id,
+                session_id: value.selection.actor_session_id(),
+            },
+            Self::BootstrapG0(value) => ExecutionProducerV1::SessionBound {
+                principal_id: value.executor_principal_id,
+                session_id: value.basis.session_id,
+            },
+            Self::ContinuityMaintenance(value) => ExecutionProducerV1::ContinuityMaintenance {
+                principal_id: value.executor_principal_id,
+                basis: value.basis,
+                purpose: value.purpose,
+                continuity_state_token: value.continuity_state_token,
+                authority_epoch: value.authority_epoch,
+            },
+        }
+    }
+
+    pub const fn executor_session_id(&self) -> Option<SessionIdV1> {
+        self.producer().session_id()
     }
 
     pub const fn basis_kind(&self) -> ActionAuthorityBasisKindV1 {
@@ -1406,6 +1491,7 @@ fn carrier_matches_transition(
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum RepositoryLeafAuthorityInputV1 {
     CreateDraftWork(CreateDraftWorkAuthorityV1),
+    SubmitWorkCompletion(SubmitWorkCompletionAuthorityV1),
     CancelWork(CancelWorkAuthorityV1),
     AbsorbWork(AbsorbWorkAuthorityV1),
     PublishInitialContract(PublishInitialContractAuthorityV1),
@@ -1427,6 +1513,7 @@ macro_rules! leaf_input_from {
 }
 
 leaf_input_from!(CreateDraftWorkAuthorityV1, CreateDraftWork);
+leaf_input_from!(SubmitWorkCompletionAuthorityV1, SubmitWorkCompletion);
 leaf_input_from!(CancelWorkAuthorityV1, CancelWork);
 leaf_input_from!(AbsorbWorkAuthorityV1, AbsorbWork);
 leaf_input_from!(PublishInitialContractAuthorityV1, PublishInitialContract);
@@ -1462,6 +1549,7 @@ impl RepositoryLeafAuthorityInputV1 {
     pub(crate) const fn action(&self) -> RepositoryActionLeafV1 {
         match self {
             Self::CreateDraftWork(_) => RepositoryActionLeafV1::CreateDraftWork,
+            Self::SubmitWorkCompletion(_) => RepositoryActionLeafV1::SubmitWorkCompletion,
             Self::CancelWork(_) => RepositoryActionLeafV1::CancelWork,
             Self::AbsorbWork(_) => RepositoryActionLeafV1::AbsorbWork,
             Self::PublishInitialContract(_) => RepositoryActionLeafV1::PublishInitialContract,
@@ -1476,6 +1564,7 @@ impl RepositoryLeafAuthorityInputV1 {
     pub(crate) const fn selection(&self) -> Option<RepositoryAuthoritySelectionV1> {
         match self {
             Self::CreateDraftWork(authority) => Some(authority.0.selection),
+            Self::SubmitWorkCompletion(authority) => Some(authority.0.selection),
             Self::CancelWork(authority) => Some(authority.0.selection),
             Self::AbsorbWork(authority) => Some(authority.0.selection),
             Self::PublishInitialContract(authority) => Some(authority.selection),
@@ -1494,6 +1583,7 @@ impl RepositoryLeafAuthorityInputV1 {
     pub(crate) const fn subject_commitment(&self) -> [u8; 32] {
         match self {
             Self::CreateDraftWork(authority) => authority.0.subject_commitment,
+            Self::SubmitWorkCompletion(authority) => authority.0.subject_commitment,
             Self::CancelWork(authority) => authority.0.subject_commitment,
             Self::AbsorbWork(authority) => authority.0.subject_commitment,
             Self::PublishInitialContract(authority) => authority.subject_commitment,
@@ -1508,6 +1598,7 @@ impl RepositoryLeafAuthorityInputV1 {
     pub(crate) const fn subject_basis_commitment(&self) -> [u8; 32] {
         match self {
             Self::CreateDraftWork(authority) => authority.0.subject_basis_commitment,
+            Self::SubmitWorkCompletion(authority) => authority.0.subject_basis_commitment,
             Self::CancelWork(authority) => authority.0.subject_basis_commitment,
             Self::AbsorbWork(authority) => authority.0.subject_basis_commitment,
             Self::PublishInitialContract(authority) => authority.subject_basis_commitment,
@@ -1524,6 +1615,7 @@ impl RepositoryLeafAuthorityInputV1 {
             Self::Execution(authority) => Some(authority.exact_payload_commitment()),
             Self::SubmitStep(authority) => Some(authority.exact_payload_commitment),
             Self::CreateDraftWork(_)
+            | Self::SubmitWorkCompletion(_)
             | Self::CancelWork(_)
             | Self::AbsorbWork(_)
             | Self::PublishInitialContract(_)
@@ -1538,6 +1630,7 @@ impl RepositoryLeafAuthorityInputV1 {
             Self::Execution(authority) => Some(authority.executor_principal_id()),
             Self::SubmitStep(authority) => Some(authority.executor_principal_id),
             Self::CreateDraftWork(_)
+            | Self::SubmitWorkCompletion(_)
             | Self::CancelWork(_)
             | Self::AbsorbWork(_)
             | Self::PublishInitialContract(_)
@@ -1555,6 +1648,7 @@ impl RepositoryLeafAuthorityInputV1 {
             Self::Execution(_) => None,
             Self::SubmitStep(_) => None,
             Self::CreateDraftWork(_)
+            | Self::SubmitWorkCompletion(_)
             | Self::CancelWork(_)
             | Self::AbsorbWork(_)
             | Self::AppendDesignRevision(_) => None,

@@ -577,6 +577,31 @@ impl ContractGenerationV1 {
             },
         )?)?)
     }
+
+    #[cfg(test)]
+    pub(crate) fn test_fixture(work_id: WorkIdV1, root_id: ContractRootIdV1, seed: u8) -> Self {
+        let rendered = |value: u8| format!("sha256:{}", format!("{value:02x}").repeat(32));
+        Self {
+            id: ContractGenerationIdV1::parse(&rendered(seed)).expect("test fixture"),
+            work_id,
+            ordinal: 1,
+            previous_generation_id: None,
+            revision_id: ContractRevisionIdV1::parse(&rendered(seed.saturating_add(1)))
+                .expect("test fixture"),
+            root_id,
+            finalization_manifest_id: DesignFinalizationManifestIdV1::parse(&rendered(
+                seed.saturating_add(2),
+            ))
+            .expect("test fixture"),
+            publication_request_id: ActionRequestIdV1::derive("contract-generation-test-fixture")
+                .expect("test fixture"),
+            authorization_receipt_id: AuthorizationReceiptIdV1::parse(&rendered(
+                seed.saturating_add(3),
+            ))
+            .expect("test fixture"),
+            transition_guard_digest: [seed.saturating_add(4); 32],
+        }
+    }
 }
 
 #[derive(Clone, Debug, Error, Eq, PartialEq)]

@@ -6,16 +6,16 @@ use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 use crate::domain::vnext::authority::{
-    ActionRequestIdV1, ActionResultIdV1, AmendContractAuthorityV1, AppendDesignRevisionAuthorityV1,
-    CancelWorkAuthorityV1, CreateDraftWorkAuthorityV1, IdempotencyKeyIdV1,
-    PublishInitialContractAuthorityV1, RepositoryActionAdmissionInputV1, RepositoryActionLeafV1,
-    RepositoryAuthenticatedHumanV1, RepositoryAuthorityAdmissionErrorV1,
+    ActionRequestIdV1, ActionResultIdV1, AdmittedRepositoryActionV1, AmendContractAuthorityV1,
+    AppendDesignRevisionAuthorityV1, CancelWorkAuthorityV1, CreateDraftWorkAuthorityV1,
+    IdempotencyKeyIdV1, PublishInitialContractAuthorityV1, RepositoryActionAdmissionInputV1,
+    RepositoryActionLeafV1, RepositoryAuthenticatedHumanV1, RepositoryAuthorityAdmissionErrorV1,
     RepositoryAuthoritySelectionV1, RepositoryDecisionAuthorityCarrierV1,
     RepositoryDecisionOptionMappingV1, RepositoryDecisionPresentationV1,
     RepositoryLeafAuthorityErrorV1, RepositoryPolicyComponentSetV1, RepositoryPolicySnapshotV1,
     RepositoryPolicyStrengthV1, RepositoryPolicyTransitionAuthorityV1,
     RepositoryPolicyTransitionV1, ResolveDecisionAuthorityV1, ResponseOriginV1,
-    admit_repository_action,
+    SubmitWorkCompletionAuthorityV1, admit_repository_action,
 };
 use crate::domain::vnext::contract::{
     component_kind::ContractComponentKindV1,
@@ -34,9 +34,14 @@ use crate::domain::vnext::design::{
     DesignAppendEligibilityV1, DesignRevisionV1, DesignStreamV1, DesignV1Error,
     MaterializationV1Error, WorkDecisionEligibilityV1,
 };
+use crate::domain::vnext::evidence::{
+    ClaimError, EvidenceClaimPublicationV1, EvidenceStoreErrorV1, GateAssessmentResolutionV1,
+    ValidatedWorkCompletionEvidenceV1, validate_work_completion_evidence,
+};
+use crate::domain::vnext::gate::{GateError, GateSnapshotV1};
 use crate::domain::vnext::identity::{
     ContractComponentIdV1, ContractRootIdV1, SchemaClosureV1, SchemaIdV1, StoreGenerationIdV1,
-    StoreHeadIdV1, StoreObjectIdV1,
+    StoreHeadIdV1, StoreObjectIdV1, derive_identity,
 };
 use crate::domain::vnext::persistence::{
     AtomicGenerationPublicationV1, AtomicPublicationError, GenerationError,
@@ -47,10 +52,11 @@ use crate::domain::vnext::persistence::{
 use crate::domain::vnext::step::{
     AppliedStepAmendmentV1, StepAmendmentError, StepAmendmentPlanV1, StepBindingV1, StepGraphError,
     StepGraphSnapshotV1, StepLifecycleError, StepLifecycleV1, StepOpenBasisV1, StepStateV1,
+    StepSubmissionErrorV1, StepSubmissionV1,
 };
 use crate::domain::vnext::work::{
     WorkIdV1, WorkLifecycleError, WorkLifecycleStateV1, WorkRecordV1, WorkRecordWriterV1,
-    WorkTransitionReasonV1, WorkTransitionV1,
+    WorkSubmissionError, WorkSubmissionV1, WorkTransitionReasonV1, WorkTransitionV1,
 };
 use crate::foundation::core::deterministic_cbor::{self, CborError, CborValue};
 
@@ -79,6 +85,13 @@ const REPOSITORY_EXACT_EQUIVALENCE_EVALUATOR_DOMAIN_V1: &str =
 const REPOSITORY_EXACT_EQUIVALENCE_PURPOSE_V1: &str = "decision-materialization-already-satisfied";
 const REPOSITORY_COMPONENT_INVALIDATION_RECEIPT_DOMAIN_V1: &str =
     "maestro.vnext.repository-component-invalidation-receipt.v1";
+const EXECUTION_STEP_SUBMISSION_SCHEMA_V1: &str = "maestro.vnext.step-submission-schema.v1";
+const EVIDENCE_CLAIM_SCHEMA_V1: &str = "maestro.vnext.evidence-claim-schema.v1";
+const WORK_SUBMISSION_CLAIM_SET_SCHEMA_V1: &str =
+    "maestro.vnext.work-submission-claim-set-schema.v1";
+const WORK_SUBMISSION_SCHEMA_V1: &str = "maestro.vnext.work-submission-schema.v1";
+const WORK_COMPLETION_EVIDENCE_BASIS_SCHEMA_V1: &str =
+    "maestro.vnext.work-completion-evidence-basis-schema.v1";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RepositoryStoreSchemaV1 {
@@ -147,6 +160,7 @@ impl RepositoryStoreSchemaV1 {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RepositoryActionKindV1 {
     CreateDraftWork,
+    SubmitWorkCompletion,
     CancelWork,
     AbsorbWork,
     PublishInitialContract,
@@ -156,8 +170,9 @@ pub enum RepositoryActionKindV1 {
 }
 
 impl RepositoryActionKindV1 {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
         Self::CreateDraftWork,
+        Self::SubmitWorkCompletion,
         Self::CancelWork,
         Self::AbsorbWork,
         Self::PublishInitialContract,
@@ -169,6 +184,7 @@ impl RepositoryActionKindV1 {
     pub const fn authority_leaf(self) -> RepositoryActionLeafV1 {
         match self {
             Self::CreateDraftWork => RepositoryActionLeafV1::CreateDraftWork,
+            Self::SubmitWorkCompletion => RepositoryActionLeafV1::SubmitWorkCompletion,
             Self::CancelWork => RepositoryActionLeafV1::CancelWork,
             Self::AbsorbWork => RepositoryActionLeafV1::AbsorbWork,
             Self::PublishInitialContract => RepositoryActionLeafV1::PublishInitialContract,
@@ -342,6 +358,191 @@ impl CancelWorkPublicationV1 {
 
     pub fn successor(&self) -> &WorkRecordV1 {
         &self.plan.successor
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SubmitWorkCompletionPublicationV1 {
+    identity: RepositoryActionIdentityV1,
+    store_basis: RepositoryStoreBasisV1,
+    authority: RepositoryAuthoritySelectionV1,
+    current_work: WorkRecordV1,
+    successor_work: WorkRecordV1,
+    current_generation: ContractGenerationV1,
+    current_root: CandidateContractRootV1,
+    current_step_graph: StepGraphSnapshotV1,
+    current_step_states: Vec<StepStateV1>,
+    current_step_submissions: Vec<StepSubmissionV1>,
+    submission: WorkSubmissionV1,
+    evidence: EvidenceClaimPublicationV1,
+    gate_snapshot: GateSnapshotV1,
+    gate_resolutions: Vec<GateAssessmentResolutionV1>,
+    as_of: u64,
+    evidence_basis_value: CborValue,
+    current_work_object: StoreObjectV1,
+    successor_work_object: StoreObjectV1,
+    current_generation_object: StoreObjectV1,
+    current_root_object: StoreObjectV1,
+    current_step_graph_object: StoreObjectV1,
+    current_step_state_objects: Vec<StoreObjectV1>,
+    request_object: StoreObjectV1,
+    subject_commitment: [u8; 32],
+    subject_basis_commitment: [u8; 32],
+    meaning_digest: [u8; 32],
+}
+
+impl SubmitWorkCompletionPublicationV1 {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Work completion closes over the exact Work, Contract Generation/root, Step graph/state partition, Step Submissions, and authority basis"
+    )]
+    pub fn new(
+        identity: RepositoryActionIdentityV1,
+        store_basis: RepositoryStoreBasisV1,
+        authority: RepositoryAuthoritySelectionV1,
+        current_work: WorkRecordV1,
+        current_generation: ContractGenerationV1,
+        current_root: CandidateContractRootV1,
+        current_step_graph: StepGraphSnapshotV1,
+        current_step_states: Vec<StepStateV1>,
+        mut current_step_submissions: Vec<StepSubmissionV1>,
+        submission: WorkSubmissionV1,
+        evidence: EvidenceClaimPublicationV1,
+        gate_snapshot: GateSnapshotV1,
+        mut gate_resolutions: Vec<GateAssessmentResolutionV1>,
+        as_of: u64,
+    ) -> Result<Self, RepositoryPublicationErrorV1> {
+        current_step_submissions.sort_by_key(|item| item.binding());
+        gate_resolutions.sort_unstable_by_key(GateAssessmentResolutionV1::gate_id);
+        let current_gate_component_id = current_root
+            .components()
+            .iter()
+            .find(|component| component.kind() == ContractComponentKindV1::GateSnapshot)
+            .map(|component| component.component_id())
+            .copied()
+            .ok_or(RepositoryPublicationErrorV1::WorkCompletionBasisMismatch)?;
+        if !validate_current_work_completion_basis(
+            store_basis,
+            &current_work,
+            &current_generation,
+            &current_root,
+            &current_step_graph,
+            &current_step_states,
+            &current_step_submissions,
+            &submission,
+        ) || evidence.claim_set().submission_ref()
+            != Some(crate::domain::vnext::evidence::SubmissionRefV1::Work(
+                submission.id(),
+            ))
+            || evidence.claim_set().digest() != submission.claim_set().digest()
+            || gate_snapshot.work_id() != current_work.id()
+            || gate_snapshot.contract_generation_id() != current_generation.id()
+            || gate_snapshot.contract_root_id() != current_generation.root_id()
+            || gate_snapshot.contract_component_id() != current_gate_component_id
+            || as_of == 0
+            || gate_resolutions.is_empty()
+            || gate_resolutions
+                .windows(2)
+                .any(|pair| pair[0].gate_id() == pair[1].gate_id())
+            || gate_resolutions.iter().any(|resolution| {
+                resolution.snapshot_id() != gate_snapshot.id() || resolution.as_of() != as_of
+            })
+        {
+            return Err(RepositoryPublicationErrorV1::WorkCompletionBasisMismatch);
+        }
+        let successor_work = current_work.apply_verified_completion(
+            WorkRecordWriterV1::Work,
+            current_work.revision(),
+            submission.clone(),
+        )?;
+        let current_work_object = work_record_object(&current_work)?;
+        let successor_work_object = work_record_object(&successor_work)?;
+        let current_generation_object = contract_generation_object(&current_generation)?;
+        let current_root_object = contract_root_object(&current_root)?;
+        let current_step_graph_object = step_graph_object(&current_step_graph)?;
+        let current_step_state_objects = current_step_states
+            .iter()
+            .map(step_state_object)
+            .collect::<Result<Vec<_>, _>>()?;
+        let evidence_basis_value = work_completion_evidence_basis_value(
+            &gate_snapshot,
+            &gate_resolutions,
+            &evidence,
+            as_of,
+        )?;
+        let evidence_basis_commitment = hash(&evidence_basis_value)?;
+        let subject_commitment = work_subject_commitment(current_work.id())?;
+        let subject_basis_commitment = hash(&CborValue::Array(vec![
+            CborValue::text("maestro.vnext.repository-work-completion-basis.v1")?,
+            bytes(current_work_object.id().as_bytes()),
+            bytes(current_generation_object.id().as_bytes()),
+            bytes(current_root_object.id().as_bytes()),
+            bytes(current_step_graph_object.id().as_bytes()),
+            CborValue::Array(
+                current_step_state_objects
+                    .iter()
+                    .map(|object| bytes(object.id().as_bytes()))
+                    .collect(),
+            ),
+            CborValue::Array(
+                current_step_submissions
+                    .iter()
+                    .map(|item| bytes(item.record_hash().as_slice()))
+                    .collect(),
+            ),
+            bytes(submission.digest()),
+            bytes(&evidence_basis_commitment),
+        ]))?;
+        let request_object = action_request_object(
+            RepositoryActionKindV1::SubmitWorkCompletion,
+            identity,
+            store_basis,
+            authority,
+            subject_commitment,
+            subject_basis_commitment,
+            CborValue::Array(vec![
+                bytes(current_work_object.id().as_bytes()),
+                bytes(successor_work_object.id().as_bytes()),
+                bytes(current_generation.id().as_bytes()),
+                bytes(current_generation.root_id().as_bytes()),
+                bytes(submission.digest()),
+                bytes(&evidence_basis_commitment),
+                CborValue::Unsigned(as_of),
+            ]),
+        )?;
+        let meaning_digest = Sha256::digest(request_object.canonical_bytes()).into();
+        Ok(Self {
+            identity,
+            store_basis,
+            authority,
+            current_work,
+            successor_work,
+            current_generation,
+            current_root,
+            current_step_graph,
+            current_step_states,
+            current_step_submissions,
+            submission,
+            evidence,
+            gate_snapshot,
+            gate_resolutions,
+            as_of,
+            evidence_basis_value,
+            current_work_object,
+            successor_work_object,
+            current_generation_object,
+            current_root_object,
+            current_step_graph_object,
+            current_step_state_objects,
+            request_object,
+            subject_commitment,
+            subject_basis_commitment,
+            meaning_digest,
+        })
+    }
+
+    pub fn successor(&self) -> &WorkRecordV1 {
+        &self.successor_work
     }
 }
 
@@ -1163,6 +1364,179 @@ fn validate_current_step_state_set(graph: &StepGraphSnapshotV1, states: &[StepSt
             .all(|node| bindings.contains(&node.binding()))
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the Work completion admission compares every authoritative current basis"
+)]
+fn validate_current_work_completion_basis(
+    store_basis: RepositoryStoreBasisV1,
+    current_work: &WorkRecordV1,
+    current_generation: &ContractGenerationV1,
+    current_root: &CandidateContractRootV1,
+    current_step_graph: &StepGraphSnapshotV1,
+    current_step_states: &[StepStateV1],
+    current_step_submissions: &[StepSubmissionV1],
+    submission: &WorkSubmissionV1,
+) -> bool {
+    if current_work.state() != &WorkLifecycleStateV1::Active
+        || current_generation.work_id() != current_work.id()
+        || current_generation.root_id() != *current_root.root_id()
+        || store_basis.expected_contract_root_id != current_generation.root_id()
+        || current_step_graph.scope().work_id() != current_work.id()
+        || current_step_graph.contract_generation_id() != current_generation.id()
+        || current_step_graph.contract_root_id() != current_generation.root_id()
+        || !validate_current_step_state_set(current_step_graph, current_step_states)
+        || current_step_submissions.len() != current_step_states.len()
+        || current_step_submissions
+            .windows(2)
+            .any(|pair| pair[0].binding() == pair[1].binding())
+        || submission.work_id() != current_work.id()
+        || submission.contract_root() != current_generation.root_id()
+        || submission.expected_work_revision() != current_work.revision().get()
+    {
+        return false;
+    }
+    for state in current_step_states {
+        let StepLifecycleV1::Satisfied {
+            submission_record_hash,
+            ..
+        } = state.lifecycle()
+        else {
+            return false;
+        };
+        let matching = current_step_submissions
+            .iter()
+            .filter(|candidate| candidate.binding() == state.binding())
+            .collect::<Vec<_>>();
+        let [matching] = matching.as_slice() else {
+            return false;
+        };
+        if matching.record_hash() != submission_record_hash {
+            return false;
+        }
+    }
+    let mut expected_submission_ids = current_step_submissions
+        .iter()
+        .map(StepSubmissionV1::id)
+        .collect::<Vec<_>>();
+    expected_submission_ids.sort_unstable();
+    submission.current_step_submissions() == expected_submission_ids
+}
+
+fn work_completion_evidence_basis_value(
+    gate_snapshot: &GateSnapshotV1,
+    resolutions: &[GateAssessmentResolutionV1],
+    evidence: &EvidenceClaimPublicationV1,
+    as_of: u64,
+) -> Result<CborValue, RepositoryPublicationErrorV1> {
+    Ok(CborValue::Array(vec![
+        CborValue::text("maestro.vnext.work-completion-evidence-basis.v1")?,
+        bytes(gate_snapshot.id().as_bytes()),
+        CborValue::Bytes(gate_snapshot.canonical_bytes()?),
+        CborValue::Unsigned(as_of),
+        evidence.claim_set_value()?,
+        CborValue::Array(
+            evidence
+                .claims()
+                .iter()
+                .map(|claim| bytes(claim.claim_id().as_bytes()))
+                .collect(),
+        ),
+        CborValue::Array(
+            evidence
+                .observations()
+                .iter()
+                .map(|observation| bytes(observation.id().as_bytes()))
+                .collect(),
+        ),
+        CborValue::Array(
+            resolutions
+                .iter()
+                .map(GateAssessmentResolutionV1::canonical_value)
+                .collect(),
+        ),
+    ]))
+}
+
+fn work_completion_claim_objects(
+    evidence: &EvidenceClaimPublicationV1,
+) -> Result<Vec<StoreObjectV1>, RepositoryPublicationErrorV1> {
+    let schema = derive_identity(&CborValue::Text(EVIDENCE_CLAIM_SCHEMA_V1.to_owned()))?;
+    evidence
+        .claims()
+        .iter()
+        .map(|claim| Ok(StoreObjectV1::new(schema, claim.canonical_value(), vec![])?))
+        .collect()
+}
+
+fn work_submission_claim_set_object(
+    evidence: &EvidenceClaimPublicationV1,
+    claims: &[StoreObjectV1],
+    observations: &[StoreObjectV1],
+) -> Result<StoreObjectV1, RepositoryPublicationErrorV1> {
+    let mut references = claims
+        .iter()
+        .chain(observations)
+        .map(StoreObjectV1::id)
+        .collect::<Vec<_>>();
+    references.sort_unstable();
+    references.dedup();
+    Ok(StoreObjectV1::new(
+        derive_identity(&CborValue::Text(
+            WORK_SUBMISSION_CLAIM_SET_SCHEMA_V1.to_owned(),
+        ))?,
+        CborValue::Array(vec![
+            CborValue::text("maestro.vnext.work-submission-claim-set.v1")?,
+            evidence.claim_set_value()?,
+        ]),
+        references,
+    )?)
+}
+
+fn work_completion_evidence_basis_object(
+    value: CborValue,
+    validated: &ValidatedWorkCompletionEvidenceV1,
+) -> Result<StoreObjectV1, RepositoryPublicationErrorV1> {
+    let mut references = vec![
+        validated.gate_snapshot_object().id(),
+        validated.evidence_index_object().id(),
+    ];
+    references.extend(
+        validated
+            .observation_objects()
+            .iter()
+            .map(StoreObjectV1::id),
+    );
+    references.extend(validated.assessment_objects().iter().map(StoreObjectV1::id));
+    references.sort_unstable();
+    references.dedup();
+    let CborValue::Array(mut fields) = value else {
+        return Err(RepositoryPublicationErrorV1::WorkCompletionBasisMismatch);
+    };
+    fields.push(bytes(validated.complete_cut_hash()));
+    Ok(StoreObjectV1::new(
+        derive_identity(&CborValue::Text(
+            WORK_COMPLETION_EVIDENCE_BASIS_SCHEMA_V1.to_owned(),
+        ))?,
+        CborValue::Array(fields),
+        references,
+    )?)
+}
+
+fn work_submission_object(
+    submission: &WorkSubmissionV1,
+    claim_set: &StoreObjectV1,
+    evidence_basis: &StoreObjectV1,
+) -> Result<StoreObjectV1, RepositoryPublicationErrorV1> {
+    let mut references = vec![claim_set.id(), evidence_basis.id()];
+    references.sort_unstable();
+    Ok(StoreObjectV1::new(
+        derive_identity(&CborValue::Text(WORK_SUBMISSION_SCHEMA_V1.to_owned()))?,
+        submission.canonical_value()?,
+        references,
+    )?)
+}
+
 fn validate_materialization_chain(
     store_basis: RepositoryStoreBasisV1,
     current_work: &WorkRecordV1,
@@ -1355,6 +1729,13 @@ impl<'store> RepositoryStoreV1<'store> {
         publication: CancelWorkPublicationV1,
     ) -> Result<RepositoryPublicationOutcomeV1, RepositoryPublicationErrorV1> {
         self.publish(publication.plan)
+    }
+
+    pub fn submit_work_completion(
+        &mut self,
+        publication: SubmitWorkCompletionPublicationV1,
+    ) -> Result<RepositoryPublicationOutcomeV1, RepositoryPublicationErrorV1> {
+        self.publish(publication)
     }
 
     pub fn publish_initial_contract(
@@ -1625,10 +2006,17 @@ trait SealedRepositoryActionPlanV1: private::Sealed {
     fn meaning_digest(&self) -> [u8; 32];
     fn additional_store_effects(
         &self,
+        _view: &StorePublicationViewV1<'_>,
         _generation: &StoreGenerationV1,
         _active_objects: &[StoreObjectV1],
     ) -> Result<RepositoryStoreEffectsV1, RepositoryPublicationErrorV1> {
         Ok(RepositoryStoreEffectsV1::default())
+    }
+    fn validate_admission(
+        &self,
+        _admission: &AdmittedRepositoryActionV1,
+    ) -> Result<(), RepositoryPublicationErrorV1> {
+        Ok(())
     }
     fn validate_current_subject(
         &self,
@@ -1770,6 +2158,163 @@ impl SealedRepositoryActionPlanV1 for WorkMutationPublicationV1 {
             || self.current.revision().get().checked_add(1) != Some(self.successor.revision().get())
         {
             return Err(RepositoryPublicationErrorV1::SubjectBasisMismatch);
+        }
+        Ok(())
+    }
+}
+
+impl private::Sealed for SubmitWorkCompletionPublicationV1 {}
+
+impl SealedRepositoryActionPlanV1 for SubmitWorkCompletionPublicationV1 {
+    fn kind(&self) -> RepositoryActionKindV1 {
+        RepositoryActionKindV1::SubmitWorkCompletion
+    }
+
+    fn identity(&self) -> RepositoryActionIdentityV1 {
+        self.identity
+    }
+
+    fn store_basis(&self) -> RepositoryStoreBasisV1 {
+        self.store_basis
+    }
+
+    fn authority(&self) -> RepositoryAuthoritySelectionV1 {
+        self.authority
+    }
+
+    fn produced_objects(&self) -> Vec<StoreObjectV1> {
+        vec![self.successor_work_object.clone()]
+    }
+
+    fn additional_store_effects(
+        &self,
+        view: &StorePublicationViewV1<'_>,
+        generation: &StoreGenerationV1,
+        active_objects: &[StoreObjectV1],
+    ) -> Result<RepositoryStoreEffectsV1, RepositoryPublicationErrorV1> {
+        let head = view
+            .active_head()?
+            .ok_or(RepositoryPublicationErrorV1::StaleStoreBasis)?;
+        let validated = validate_work_completion_evidence(
+            view,
+            &head,
+            generation,
+            active_objects,
+            self.current_work.id(),
+            self.current_generation.id(),
+            self.current_generation.root_id(),
+            &self.gate_snapshot,
+            &self.gate_resolutions,
+            &self.evidence,
+            self.as_of,
+        )?;
+        let claim_objects = work_completion_claim_objects(&self.evidence)?;
+        let claim_set_object = work_submission_claim_set_object(
+            &self.evidence,
+            &claim_objects,
+            validated.observation_objects(),
+        )?;
+        let evidence_basis_object =
+            work_completion_evidence_basis_object(self.evidence_basis_value.clone(), &validated)?;
+        let submission_object =
+            work_submission_object(&self.submission, &claim_set_object, &evidence_basis_object)?;
+        let mut produced_objects = claim_objects;
+        produced_objects.extend([claim_set_object, evidence_basis_object, submission_object]);
+        Ok(RepositoryStoreEffectsV1 {
+            produced_objects,
+            root_replacements: Vec::new(),
+        })
+    }
+
+    fn validate_admission(
+        &self,
+        admission: &AdmittedRepositoryActionV1,
+    ) -> Result<(), RepositoryPublicationErrorV1> {
+        if admission.accepted_h_time() != self.as_of {
+            return Err(RepositoryPublicationErrorV1::WorkCompletionBasisMismatch);
+        }
+        Ok(())
+    }
+
+    fn root_replacements(&self) -> Vec<(StoreObjectIdV1, StoreObjectIdV1)> {
+        vec![(
+            self.current_work_object.id(),
+            self.successor_work_object.id(),
+        )]
+    }
+
+    fn request_object(&self) -> &StoreObjectV1 {
+        &self.request_object
+    }
+
+    fn subject_commitment(&self) -> [u8; 32] {
+        self.subject_commitment
+    }
+
+    fn subject_basis_commitment(&self) -> [u8; 32] {
+        self.subject_basis_commitment
+    }
+
+    fn meaning_digest(&self) -> [u8; 32] {
+        self.meaning_digest
+    }
+
+    fn validate_current_subject(
+        &self,
+        generation: &StoreGenerationV1,
+        active_objects: &[StoreObjectV1],
+    ) -> Result<(), RepositoryPublicationErrorV1> {
+        if generation.domain().id() != self.current_step_graph.scope().repository_id()
+            || generation.contract_root_id() != self.current_generation.root_id()
+            || !validate_current_work_completion_basis(
+                self.store_basis,
+                &self.current_work,
+                &self.current_generation,
+                &self.current_root,
+                &self.current_step_graph,
+                &self.current_step_states,
+                &self.current_step_submissions,
+                self.successor_work
+                    .current_submission()
+                    .ok_or(RepositoryPublicationErrorV1::WorkCompletionBasisMismatch)?,
+            )
+        {
+            return Err(RepositoryPublicationErrorV1::WorkCompletionBasisMismatch);
+        }
+        let exact_rooted = [
+            &self.current_work_object,
+            &self.current_generation_object,
+            &self.current_root_object,
+            &self.current_step_graph_object,
+        ]
+        .into_iter()
+        .chain(self.current_step_state_objects.iter())
+        .all(|expected| {
+            generation.roots().contains(&expected.id())
+                && active_objects
+                    .iter()
+                    .filter(|object| **object == *expected)
+                    .count()
+                    == 1
+        });
+        if !exact_rooted {
+            return Err(RepositoryPublicationErrorV1::WorkCompletionBasisMismatch);
+        }
+        let submission_schema = derive_identity(&CborValue::Text(
+            EXECUTION_STEP_SUBMISSION_SCHEMA_V1.to_owned(),
+        ))?;
+        for expected in &self.current_step_submissions {
+            let expected_value = expected.canonical_value()?;
+            if active_objects
+                .iter()
+                .filter(|object| {
+                    object.schema_id() == submission_schema && object.value() == &expected_value
+                })
+                .count()
+                != 1
+            {
+                return Err(RepositoryPublicationErrorV1::WorkCompletionBasisMismatch);
+            }
         }
         Ok(())
     }
@@ -1964,7 +2509,7 @@ fn prepare_initial_contract_publication(
     produced_objects.extend(artifacts.leaf_authority_objects().iter().cloned());
     produced_objects.sort_by_key(StoreObjectV1::id);
     produced_objects.dedup_by_key(|object| object.id());
-    Ok(AtomicGenerationPublicationV1::new(
+    Ok(AtomicGenerationPublicationV1::new_from_object_superset(
         generation,
         Some(current_head.id()),
         produced_objects,
@@ -2075,7 +2620,7 @@ fn prepare_decision_resolution(
     objects.extend(artifacts.leaf_authority_objects().iter().cloned());
     objects.sort_by_key(StoreObjectV1::id);
     objects.dedup_by_key(|object| object.id());
-    Ok(AtomicGenerationPublicationV1::new(
+    Ok(AtomicGenerationPublicationV1::new_from_object_superset(
         generation,
         Some(current_head.id()),
         objects,
@@ -2379,7 +2924,7 @@ fn prepare_contract_amendment_publication(
         &publication.candidate_step_graph,
         &next_state_objects,
     )?;
-    Ok(AtomicGenerationPublicationV1::new(
+    Ok(AtomicGenerationPublicationV1::new_from_object_superset(
         generation,
         Some(current_head.id()),
         produced_objects,
@@ -2601,7 +3146,7 @@ fn prepare_publication<P: SealedRepositoryActionPlanV1>(
     publication.validate_current_subject(&current_generation, &active_objects)?;
 
     let additional_effects =
-        publication.additional_store_effects(&current_generation, &active_objects)?;
+        publication.additional_store_effects(view, &current_generation, &active_objects)?;
     let admission_input = match publication.authority_leaf() {
         RepositoryActionLeafV1::CreateDraftWork => RepositoryActionAdmissionInputV1::new(
             publication.identity().request_id,
@@ -2614,6 +3159,14 @@ fn prepare_publication<P: SealedRepositoryActionPlanV1>(
         RepositoryActionLeafV1::CancelWork => RepositoryActionAdmissionInputV1::new(
             publication.identity().request_id,
             CancelWorkAuthorityV1::new(
+                publication.authority(),
+                publication.subject_commitment(),
+                publication.subject_basis_commitment(),
+            )?,
+        ),
+        RepositoryActionLeafV1::SubmitWorkCompletion => RepositoryActionAdmissionInputV1::new(
+            publication.identity().request_id,
+            SubmitWorkCompletionAuthorityV1::new(
                 publication.authority(),
                 publication.subject_commitment(),
                 publication.subject_basis_commitment(),
@@ -2635,6 +3188,7 @@ fn prepare_publication<P: SealedRepositoryActionPlanV1>(
     if admission.request_id() != publication.identity().request_id {
         return Err(RepositoryPublicationErrorV1::AuthorityRequestMismatch);
     }
+    publication.validate_admission(&admission)?;
     let mut produced_objects = publication.produced_objects();
     produced_objects.extend(additional_effects.produced_objects);
     let artifacts =
@@ -2678,7 +3232,8 @@ fn prepare_publication<P: SealedRepositoryActionPlanV1>(
         publication.meaning_digest(),
         artifacts.result_object().id(),
     )?;
-    let mut objects = produced_objects;
+    let mut objects = active_objects;
+    objects.extend(produced_objects);
     objects.extend([
         publication.request_object().clone(),
         admission.basis_object().clone(),
@@ -2694,7 +3249,7 @@ fn prepare_publication<P: SealedRepositoryActionPlanV1>(
     if artifacts.logical_result().request_id() != publication.identity().request_id {
         return Err(RepositoryPublicationErrorV1::AuthorityRequestMismatch);
     }
-    Ok(AtomicGenerationPublicationV1::new(
+    Ok(AtomicGenerationPublicationV1::new_from_object_superset(
         generation,
         Some(current_head.id()),
         objects,
@@ -3368,6 +3923,10 @@ pub enum RepositoryPublicationErrorV1 {
     #[error("the Repository subject already exists")]
     SubjectAlreadyExists,
     #[error(
+        "Work completion does not bind the exact current Work, Contract Generation/root, and satisfied Step Submission closure"
+    )]
+    WorkCompletionBasisMismatch,
+    #[error(
         "Contract publication does not bind the exact Work, Generation, Revision, manifest, and root"
     )]
     ContractPublicationBasisMismatch,
@@ -3401,6 +3960,16 @@ pub enum RepositoryPublicationErrorV1 {
     AtomicPublication(#[from] AtomicPublicationError),
     #[error(transparent)]
     Work(#[from] WorkLifecycleError),
+    #[error(transparent)]
+    WorkSubmission(#[from] WorkSubmissionError),
+    #[error(transparent)]
+    Evidence(#[from] EvidenceStoreErrorV1),
+    #[error(transparent)]
+    Claim(#[from] ClaimError),
+    #[error(transparent)]
+    Gate(#[from] GateError),
+    #[error(transparent)]
+    StepSubmission(#[from] StepSubmissionErrorV1),
     #[error(transparent)]
     StepLifecycle(#[from] StepLifecycleError),
     #[error(transparent)]

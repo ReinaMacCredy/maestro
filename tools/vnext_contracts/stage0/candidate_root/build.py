@@ -733,10 +733,11 @@ def input_sources() -> dict[str, Any]:
         scan_forbidden(source, forbidden)
     verify_closed_sources()
     source_inputs = bindings["canonical_source_inputs"]
+    current_source_inputs = bindings["current_source_inputs"]
     source_card = Path(bindings["source_repository_realpath"]) / ".maestro/cards" / bindings["feature_id"]
     for filename, expected_key in (("design.md", "design_sha256"), ("card.yaml", "card_sha256")):
-        if artifact_hash(source_card / filename) != source_inputs[expected_key]:
-            raise ValueError(f"approved {filename} content drifted from the Stage-0 source commitment")
+        if artifact_hash(source_card / filename) != current_source_inputs[expected_key]:
+            raise ValueError(f"current {filename} content drifted from its attested source commitment")
     return {
         "decision": decision,
         "decision_id": decision_id,

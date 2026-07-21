@@ -10,6 +10,7 @@ pub mod design;
 pub mod distribution;
 pub mod evidence;
 pub mod execution;
+pub mod gate;
 pub mod identity;
 pub mod integration;
 pub mod migration;

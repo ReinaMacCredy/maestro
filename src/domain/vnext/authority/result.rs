@@ -128,6 +128,47 @@ impl AuthorizationReceiptV1 {
     pub fn canonical_bytes(&self) -> Result<Vec<u8>, CborError> {
         deterministic_cbor::encode(&self.schema_value()?)
     }
+
+    pub(crate) fn from_canonical_bytes(bytes: &[u8]) -> Result<Self, ActionResultError> {
+        let value = deterministic_cbor::decode(bytes)?;
+        let CborValue::Array(fields) = &value else {
+            return Err(ActionResultError::InvalidAuthorizationReceipt);
+        };
+        let [
+            CborValue::Text(domain),
+            CborValue::Bytes(request_id),
+            CborValue::Bytes(context_id),
+            CborValue::Unsigned(basis_kind),
+            CborValue::Bytes(prior_state_token),
+            CborValue::Bytes(resulting_state_token),
+        ] = fields.as_slice()
+        else {
+            return Err(ActionResultError::InvalidAuthorizationReceipt);
+        };
+        if domain != Self::SCHEMA_DOMAIN {
+            return Err(ActionResultError::InvalidAuthorizationReceipt);
+        }
+        let receipt = Self::new(
+            ActionRequestIdV1::from_digest(exact_digest(request_id)?),
+            AuthorityContextIdV1::from_digest(exact_digest(context_id)?),
+            ActionAuthorityBasisKindV1::try_from(
+                u8::try_from(*basis_kind)
+                    .map_err(|_| ActionResultError::InvalidAuthorizationReceipt)?,
+            )?,
+            StateTokenIdV1::from_digest(exact_digest(prior_state_token)?),
+            StateTokenIdV1::from_digest(exact_digest(resulting_state_token)?),
+        )?;
+        if receipt.canonical_bytes()? != bytes {
+            return Err(ActionResultError::InvalidAuthorizationReceipt);
+        }
+        Ok(receipt)
+    }
+}
+
+fn exact_digest(value: &[u8]) -> Result<[u8; 32], ActionResultError> {
+    value
+        .try_into()
+        .map_err(|_| ActionResultError::InvalidAuthorizationReceipt)
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -249,6 +290,8 @@ fn hash(value: &CborValue) -> Result<[u8; 32], CborError> {
 
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
 pub enum ActionResultError {
+    #[error("stored Authorization Receipt is malformed or non-canonical")]
+    InvalidAuthorizationReceipt,
     #[error("committed Action Result requires an Authorization Receipt")]
     CommittedRequiresAuthorizationReceipt,
     #[error("Action Result and Authorization Receipt must bind the same request")]
@@ -259,4 +302,6 @@ pub enum ActionResultError {
     UnexpectedEffectReference,
     #[error(transparent)]
     CanonicalCbor(#[from] CborError),
+    #[error(transparent)]
+    AuthorityTag(#[from] AuthorityTagError),
 }

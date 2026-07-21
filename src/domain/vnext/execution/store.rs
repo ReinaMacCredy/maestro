@@ -42,7 +42,8 @@ use crate::domain::vnext::authority::{
     validate_persisted_repository_action_basis,
 };
 use crate::domain::vnext::evidence::{
-    ClaimError, ClaimV1, EvidenceClaimPublicationV1, SubmissionRefV1,
+    ClaimError, ClaimV1, EvidenceClaimPublicationV1, EvidenceStoreErrorV1,
+    ObservationSubjectKindV1, SubmissionRefV1, resolve_current_observation_objects,
 };
 use crate::domain::vnext::identity::{
     IdentityError, SchemaIdV1, StoreGenerationIdV1, StoreHeadIdV1, StoreObjectIdV1, derive_identity,
@@ -98,6 +99,7 @@ const STEP_SUBMISSION_SCHEMA_V1: &str = "maestro.vnext.step-submission-schema.v1
 const STEP_SUBMISSION_CLAIM_SET_SCHEMA_V1: &str =
     "maestro.vnext.step-submission-claim-set-schema.v1";
 const STEP_SUBMISSION_CLAIM_SCHEMA_V1: &str = "maestro.vnext.evidence-claim-schema.v1";
+const STEP_SUBMISSION_OBSERVATION_SCHEMA_V1: &str = "maestro.vnext.evidence-observation-schema.v1";
 const STEP_SUBMISSION_ACTION_REQUEST_SCHEMA_V1: &str =
     "maestro.vnext.step-submit-action-request-schema.v1";
 
@@ -4503,8 +4505,21 @@ impl<'store> ExecutionStoreFacadeV1<'store> {
                     .close_for_submission(expected_submission.execution_fence(), expected_as_of)?;
                 let carrier_object = step_execution_carrier_object(&submitted_carrier)?;
                 let claim_objects = step_submission_claim_objects(&expected_evidence)?;
-                let claim_set_object =
-                    step_submission_claim_set_object(&expected_evidence, &claim_objects)?;
+                validate_step_submission_observations(
+                    &expected_evidence,
+                    expected_snapshot.binding,
+                    current_carrier,
+                    expected_as_of,
+                )?;
+                let observation_objects = resolve_current_observation_objects(
+                    &active_objects,
+                    expected_evidence.observations(),
+                )?;
+                let claim_set_object = step_submission_claim_set_object(
+                    &expected_evidence,
+                    &claim_objects,
+                    &observation_objects,
+                )?;
                 let submission_object = step_submission_object(
                     &expected_submission,
                     &carrier_object,
@@ -4589,6 +4604,56 @@ struct StepExecutionIndexEntryV1 {
 struct ActiveStepExecutionIndexV1 {
     object: StoreObjectV1,
     entries: Vec<StepExecutionIndexEntryV1>,
+}
+
+pub(crate) fn current_run_binding_is_persisted(
+    store: &StoreV1,
+    run_id: RunIdV1,
+    owner: super::runtime::ExecutionAttemptOwnerV1,
+) -> Result<bool, ExecutionStoreErrorV1> {
+    let (state, head, generation, objects) = store.coherent_publication_snapshot()?;
+    if state != StoreStateV1::Active {
+        return Err(ExecutionStoreErrorV1::InactiveStore);
+    }
+    let mut matches = 0_usize;
+    if let Some(index) = load_optional_step_execution_index(&objects)? {
+        for entry in &index.entries {
+            let carrier = load_step_execution_carrier(&objects, entry)?;
+            matches += carrier
+                .run_set()
+                .runs()
+                .iter()
+                .filter(|run| run.id() == run_id && run.owner() == owner)
+                .count();
+        }
+    }
+    if let Some(index) = load_optional_control_index(&objects)? {
+        for entry in &index.entries {
+            let snapshot = load_active_effect_snapshot(
+                &head,
+                &generation,
+                &objects,
+                entry.intent,
+                |generation_id| Ok(store.generation(generation_id)?),
+            )?;
+            matches += snapshot
+                .dispatch()
+                .run_set()
+                .runs()
+                .iter()
+                .filter(|run| run.id() == run_id && run.owner() == owner)
+                .count();
+            if let Some(reconciliation) = snapshot.reconciliation() {
+                matches += reconciliation
+                    .run_set()
+                    .runs()
+                    .iter()
+                    .filter(|run| run.id() == run_id && run.owner() == owner)
+                    .count();
+            }
+        }
+    }
+    Ok(matches == 1)
 }
 
 fn load_optional_step_execution_index(
@@ -4791,12 +4856,31 @@ fn step_submission_claim_objects(
         .collect()
 }
 
+fn step_submission_observation_objects(
+    evidence: &EvidenceClaimPublicationV1,
+) -> Result<Vec<StoreObjectV1>, ExecutionStoreErrorV1> {
+    evidence
+        .observations()
+        .iter()
+        .map(|observation| {
+            StoreObjectV1::new(
+                execution_schema_id(STEP_SUBMISSION_OBSERVATION_SCHEMA_V1)?,
+                CborValue::Bytes(observation.canonical_bytes().map_err(ClaimError::from)?),
+                vec![],
+            )
+            .map_err(ExecutionStoreErrorV1::from)
+        })
+        .collect()
+}
+
 fn step_submission_claim_set_object(
     evidence: &EvidenceClaimPublicationV1,
     claim_objects: &[StoreObjectV1],
+    observation_objects: &[StoreObjectV1],
 ) -> Result<StoreObjectV1, ExecutionStoreErrorV1> {
     let mut references = claim_objects
         .iter()
+        .chain(observation_objects)
         .map(StoreObjectV1::id)
         .collect::<Vec<_>>();
     references.sort_unstable();
@@ -4809,6 +4893,40 @@ fn step_submission_claim_set_object(
         ]),
         references,
     )?)
+}
+
+fn validate_step_submission_observations(
+    evidence: &EvidenceClaimPublicationV1,
+    binding: StepBindingV1,
+    carrier: &StepExecutionCarrierV1,
+    as_of: u64,
+) -> Result<(), ExecutionStoreErrorV1> {
+    let expected_attempt = carrier.tenure().attempt().id();
+    for observation in evidence.observations() {
+        let exact_step_subject = observation.subjects().iter().any(|subject| {
+            subject.kind() == ObservationSubjectKindV1::Step
+                && subject.subject_id() == binding.step_id().as_bytes()
+                && subject.revision_id() == binding.revision_id().as_bytes()
+        });
+        if observation.store_domain_id() != binding.scope().repository_id()
+            || !exact_step_subject
+            || observation.observed_at() > as_of
+            || observation.recorded_at() > as_of
+        {
+            return Err(ExecutionStoreErrorV1::ObservationNotApplicableToStep);
+        }
+        if let Some((run_id, owner)) = observation.acquisition().run_binding()
+            && (owner != super::runtime::ExecutionAttemptOwnerV1::Step(expected_attempt)
+                || !carrier.run_set().runs().iter().any(|run| {
+                    run.id() == run_id
+                        && run.owner()
+                            == super::runtime::ExecutionAttemptOwnerV1::Step(expected_attempt)
+                }))
+        {
+            return Err(ExecutionStoreErrorV1::ObservationNotApplicableToStep);
+        }
+    }
+    Ok(())
 }
 
 fn step_submission_object(
@@ -4912,8 +5030,12 @@ fn decode_step_submission_outcome(
     let submission = StepSubmissionV1::from_canonical_value(submission_object.value())?;
     let carrier = StepExecutionCarrierV1::from_canonical_value(carrier_object.value())?;
     let expected_claim_objects = step_submission_claim_objects(expected_evidence)?;
-    let expected_claim_set =
-        step_submission_claim_set_object(expected_evidence, &expected_claim_objects)?;
+    let expected_observation_objects = step_submission_observation_objects(expected_evidence)?;
+    let expected_claim_set = step_submission_claim_set_object(
+        expected_evidence,
+        &expected_claim_objects,
+        &expected_observation_objects,
+    )?;
     let expected_submission_object =
         step_submission_object(&submission, carrier_object, &expected_claim_set)?;
     let expected_step_state = submitted_step_state_object(
@@ -4925,8 +5047,11 @@ fn decode_step_submission_outcome(
         .iter()
         .map(|object| ClaimV1::from_canonical_value(object.value()))
         .collect::<Result<Vec<_>, _>>()?;
-    let decoded_evidence =
-        EvidenceClaimPublicationV1::new(SubmissionRefV1::Step(submission.id()), decoded_claims)?;
+    let decoded_evidence = EvidenceClaimPublicationV1::new(
+        SubmissionRefV1::Step(submission.id()),
+        decoded_claims,
+        expected_evidence.observations().to_vec(),
+    )?;
     let mut expected_claim_ids = expected_claim_objects
         .iter()
         .map(StoreObjectV1::id)
@@ -5563,7 +5688,7 @@ fn build_step_execution_authorized_publication(
     objects.extend(artifacts.leaf_authority_objects().iter().cloned());
     objects.sort_by_key(StoreObjectV1::id);
     objects.dedup_by_key(|object| object.id());
-    Ok(AtomicGenerationPublicationV1::new(
+    Ok(AtomicGenerationPublicationV1::new_from_object_superset(
         generation,
         Some(current_head.id()),
         objects,
@@ -5665,7 +5790,7 @@ fn build_step_submission_authorized_publication(
     objects.extend(artifacts.leaf_authority_objects().iter().cloned());
     objects.sort_by_key(StoreObjectV1::id);
     objects.dedup_by_key(|object| object.id());
-    Ok(AtomicGenerationPublicationV1::new(
+    Ok(AtomicGenerationPublicationV1::new_from_object_superset(
         generation,
         Some(current_head.id()),
         objects,
@@ -6015,7 +6140,7 @@ fn build_effect_origination_publication(
     objects.extend(artifacts.leaf_authority_objects().iter().cloned());
     objects.sort_by_key(StoreObjectV1::id);
     objects.dedup_by_key(|object| object.id());
-    Ok(AtomicGenerationPublicationV1::new(
+    Ok(AtomicGenerationPublicationV1::new_from_object_superset(
         generation,
         Some(current_head.id()),
         objects,
@@ -6264,7 +6389,7 @@ fn build_effect_seal_publication(
     objects.extend(artifacts.leaf_authority_objects().iter().cloned());
     objects.sort_by_key(StoreObjectV1::id);
     objects.dedup_by_key(|object| object.id());
-    Ok(AtomicGenerationPublicationV1::new(
+    Ok(AtomicGenerationPublicationV1::new_from_object_superset(
         generation,
         Some(current_head.id()),
         objects,
@@ -6855,7 +6980,7 @@ fn build_effect_terminal_publication(
     objects.extend(artifacts.leaf_authority_objects().iter().cloned());
     objects.sort_by_key(StoreObjectV1::id);
     objects.dedup_by_key(|object| object.id());
-    Ok(AtomicGenerationPublicationV1::new(
+    Ok(AtomicGenerationPublicationV1::new_from_object_superset(
         generation,
         Some(current_head.id()),
         objects,
@@ -7422,7 +7547,7 @@ fn build_effect_reconciliation_publication(
     }
     objects.sort_by_key(StoreObjectV1::id);
     objects.dedup_by_key(|object| object.id());
-    Ok(AtomicGenerationPublicationV1::new(
+    Ok(AtomicGenerationPublicationV1::new_from_object_superset(
         generation,
         Some(current_head.id()),
         objects,
@@ -7847,7 +7972,7 @@ fn build_effect_health_publication(
     objects.extend(artifacts.leaf_authority_objects().iter().cloned());
     objects.sort_by_key(StoreObjectV1::id);
     objects.dedup_by_key(|object| object.id());
-    Ok(AtomicGenerationPublicationV1::new(
+    Ok(AtomicGenerationPublicationV1::new_from_object_superset(
         generation,
         Some(current_head.id()),
         objects,
@@ -8115,7 +8240,7 @@ fn build_effect_withdrawal_publication(
     objects.extend(artifacts.leaf_authority_objects().iter().cloned());
     objects.sort_by_key(StoreObjectV1::id);
     objects.dedup_by_key(|object| object.id());
-    Ok(AtomicGenerationPublicationV1::new(
+    Ok(AtomicGenerationPublicationV1::new_from_object_superset(
         generation,
         Some(current_head.id()),
         objects,
@@ -8363,7 +8488,7 @@ fn build_effect_redispatch_publication(
     objects.extend(artifacts.leaf_authority_objects().iter().cloned());
     objects.sort_by_key(StoreObjectV1::id);
     objects.dedup_by_key(|object| object.id());
-    Ok(AtomicGenerationPublicationV1::new(
+    Ok(AtomicGenerationPublicationV1::new_from_object_superset(
         generation,
         Some(current_head.id()),
         objects,
@@ -8671,7 +8796,7 @@ fn build_effect_writer_handoff_publication(
     objects.extend(artifacts.leaf_authority_objects().iter().cloned());
     objects.sort_by_key(StoreObjectV1::id);
     objects.dedup_by_key(|object| object.id());
-    Ok(AtomicGenerationPublicationV1::new(
+    Ok(AtomicGenerationPublicationV1::new_from_object_superset(
         generation,
         Some(current_head.id()),
         objects,
@@ -11778,6 +11903,10 @@ pub enum ExecutionStoreErrorV1 {
     InvalidEffectSnapshot,
     #[error("Execution Store Generation ordinal overflowed")]
     GenerationOverflow,
+    #[error("Observation acquisition identity is already bound to another Observation")]
+    DuplicateObservationAcquisition,
+    #[error("Observation is not bound to the exact current Step revision and Run/Lease fence")]
+    ObservationNotApplicableToStep,
     #[error(transparent)]
     Store(#[from] StoreError),
     #[error(transparent)]
@@ -11798,6 +11927,8 @@ pub enum ExecutionStoreErrorV1 {
     StepLifecycle(#[from] StepLifecycleError),
     #[error(transparent)]
     EvidenceClaim(#[from] ClaimError),
+    #[error(transparent)]
+    EvidenceStore(#[from] EvidenceStoreErrorV1),
     #[error(transparent)]
     Effect(#[from] EffectRuntimeErrorV1),
     #[error("Execution Action failed current Repository Authority admission")]
@@ -11832,7 +11963,13 @@ mod tests {
     };
     use crate::domain::vnext::contract::runtime::ContractGenerationIdV1;
     use crate::domain::vnext::evidence::{
-        ClaimSubjectV1, ClaimV1, EvidenceClaimPublicationV1, ObservationRecordIdV1, SubmissionRefV1,
+        AuthorizedObservationPublicationV1, ClaimSubjectV1, ClaimV1, EvidenceClaimPublicationV1,
+        EvidencePayloadManifestV1, EvidenceRedactionPolicyV1, EvidenceRetentionClassV1,
+        EvidenceRetentionPolicyV1, EvidenceSecretScanReceiptV1, EvidenceStoreFacadeV1,
+        ObservationAcquisitionV1, ObservationDraftV1, ObservationKindV1,
+        ObservationPayloadCommonV1, ObservationPayloadDetailV1, ObservationPayloadV1,
+        ObservationPublicationRouteV1, ObservationSubjectKindV1, ObservationSubjectV1,
+        ObservationV1, SubmissionRefV1,
     };
     use crate::domain::vnext::execution::effects::{
         EffectOriginKindV1, EffectReconciliationReadPlanPartsV1,
@@ -11844,6 +11981,220 @@ mod tests {
     use crate::domain::vnext::persistence::{StoreCompatibilityV1, StoreDomainV1, StoreRoleV1};
     use crate::domain::vnext::step::{StepIdV1, StepRevisionIdV1, StepScopeV1};
     use crate::domain::vnext::work::WorkIdV1;
+
+    fn step_observation(
+        binding: StepBindingV1,
+        submission_id: StepSubmissionIdV1,
+        seed: u8,
+    ) -> ObservationV1 {
+        step_observation_at(
+            binding,
+            submission_id,
+            seed,
+            [seed.wrapping_add(8); 32],
+            120,
+        )
+    }
+
+    fn step_observation_at(
+        binding: StepBindingV1,
+        submission_id: StepSubmissionIdV1,
+        seed: u8,
+        acquisition_id: [u8; 32],
+        recorded_at: u64,
+    ) -> ObservationV1 {
+        step_observation_at_with_payload(binding, submission_id, seed, acquisition_id, recorded_at)
+            .0
+    }
+
+    fn step_observation_at_with_payload(
+        binding: StepBindingV1,
+        submission_id: StepSubmissionIdV1,
+        seed: u8,
+        acquisition_id: [u8; 32],
+        recorded_at: u64,
+    ) -> (ObservationV1, StoreObjectV1) {
+        let token = |offset: u8| -> [u8; 32] { Sha256::digest([seed.wrapping_add(offset)]).into() };
+        let kind = ObservationKindV1::DeterministicProcedure;
+        let subjects = vec![
+            ObservationSubjectV1::for_work(
+                *binding.scope().work_id().as_bytes(),
+                binding.contract_generation_id(),
+                *binding.contract_root_id().as_bytes(),
+            )
+            .unwrap(),
+            ObservationSubjectV1::new(
+                ObservationSubjectKindV1::Step,
+                *binding.step_id().as_bytes(),
+                *binding.revision_id().as_bytes(),
+            )
+            .unwrap(),
+            ObservationSubjectV1::new(
+                ObservationSubjectKindV1::Submission,
+                *submission_id.as_bytes(),
+                *binding.contract_generation_id().as_bytes(),
+            )
+            .unwrap(),
+            ObservationSubjectV1::new(
+                ObservationSubjectKindV1::Repository,
+                *binding.scope().repository_id().as_bytes(),
+                *binding.contract_generation_id().as_bytes(),
+            )
+            .unwrap(),
+        ];
+        let procedure_hash = token(0);
+        let environment_hash = token(1);
+        let toolchain_hash = token(2);
+        let clock_basis_hash = token(3);
+        let typed_payload = ObservationPayloadV1::new(
+            kind,
+            ObservationPayloadCommonV1::new(
+                &subjects,
+                procedure_hash,
+                environment_hash,
+                toolchain_hash,
+                recorded_at - 1,
+                recorded_at,
+                clock_basis_hash,
+            )
+            .unwrap(),
+            ObservationPayloadDetailV1::Deterministic {
+                executable_bytes_hash: token(10),
+                executable_version_hash: token(11),
+                arguments_hash: token(12),
+                working_directory_hash: token(13),
+                relevant_environment_hash: token(14),
+                subject_revision_hash: token(15),
+                dirty_state_hash: token(16),
+                exit_status_hash: token(17),
+                stdout_hash: token(18),
+                stderr_hash: token(19),
+            },
+        )
+        .unwrap();
+        let payload = StoreObjectV1::new(
+            kind.contract().unwrap().payload_schema_id(),
+            CborValue::Bytes(typed_payload.canonical_bytes().unwrap()),
+            vec![],
+        )
+        .unwrap();
+        let producer = crate::domain::vnext::authority::ExecutionProducerV1::SessionBound {
+            principal_id: PrincipalIdV1::derive("stage3-actor-principal").unwrap(),
+            session_id: SessionIdV1::derive("stage3-actor-session").unwrap(),
+        };
+        let redaction = EvidenceRedactionPolicyV1::prohibit_secrets_v1(1_048_576).unwrap();
+        let scan = EvidenceSecretScanReceiptV1::scan(
+            payload.id(),
+            &typed_payload,
+            redaction,
+            producer,
+            recorded_at,
+        )
+        .unwrap();
+        let retention = EvidenceRetentionPolicyV1::new(
+            EvidenceRetentionClassV1::ExplicitSecurityErasureEligible,
+            recorded_at + 1_000,
+        )
+        .unwrap();
+        let observation = ObservationV1::new(ObservationDraftV1 {
+            kind,
+            store_domain_id: binding.scope().repository_id(),
+            subjects,
+            producer,
+            procedure_hash,
+            environment_hash,
+            toolchain_hash,
+            observed_at: recorded_at - 1,
+            recorded_at,
+            clock_basis_hash,
+            lineage: vec![],
+            payload: EvidencePayloadManifestV1::new(
+                kind,
+                payload.id(),
+                &typed_payload,
+                "application/cbor",
+                redaction,
+                scan,
+                retention,
+            )
+            .unwrap(),
+            acquisition: ObservationAcquisitionV1::effect_free(
+                acquisition_id,
+                [seed.wrapping_add(9); 32],
+            )
+            .unwrap(),
+            publication_route: ObservationPublicationRouteV1::new(kind, 39, None, None).unwrap(),
+        })
+        .unwrap();
+        (observation, payload)
+    }
+
+    fn publish_step_observation_for_claim(
+        store: &mut StoreV1,
+        binding: StepBindingV1,
+        submission_id: StepSubmissionIdV1,
+        claim_byte: u8,
+        recorded_at: u64,
+        fixture: &RepositoryAuthorityFixtureV1,
+    ) -> ObservationV1 {
+        let seed = claim_byte.wrapping_add(1);
+        let (observation, payload) = step_observation_at_with_payload(
+            binding,
+            submission_id,
+            seed,
+            [seed.wrapping_add(8); 32],
+            recorded_at,
+        );
+        let state = EvidenceStoreFacadeV1::new(store)
+            .current_state_binding()
+            .unwrap();
+        let request = EvidenceStoreFacadeV1::new(store)
+            .canonical_observation_request(
+                state,
+                &observation,
+                &payload,
+                IdempotencyKeyIdV1::derive(&format!("stage5-step-observation-{seed}")).unwrap(),
+            )
+            .unwrap();
+        let authority = GenericExecutionAuthorityV1::new(
+            fixture.selection,
+            RepositoryActionLeafV1::PublishObservation,
+            request.subject_commitment(),
+            request.expected_state_commitment(),
+            request.payload_commitment(),
+            fixture.actor_principal,
+        )
+        .unwrap();
+        EvidenceStoreFacadeV1::new(store)
+            .publish_observation(
+                AuthorizedObservationPublicationV1::new(
+                    state,
+                    request,
+                    authority,
+                    observation.clone(),
+                    payload,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        observation
+    }
+
+    fn step_observation_subject_commitment(observation: &ObservationV1) -> [u8; 32] {
+        hash(&CborValue::Array(vec![
+            CborValue::text("maestro.vnext.evidence-observation-subject.v1").unwrap(),
+            CborValue::Unsigned(observation.kind().tag()),
+            bytes(observation.id().as_bytes()),
+            CborValue::Array(
+                observation
+                    .subjects()
+                    .iter()
+                    .map(|subject| subject.canonical_value())
+                    .collect(),
+            ),
+        ]))
+        .unwrap()
+    }
 
     struct TestPinnedProviderExecutorV1 {
         operation: ProviderOperationBindingV1,
@@ -13040,8 +13391,18 @@ mod tests {
             } else {
                 b"stage4-step-submission-many"
             };
+            let submission_id =
+                StepSubmissionIdV1::derive(&format!("stage4-step-submission-{claim_count}"))
+                    .unwrap();
+            let observation_specs = (0..claim_count)
+                .map(|index| (u8::try_from(72 + index * 2).unwrap(), 120, submission_id))
+                .collect::<Vec<_>>();
             let (store_root, domain, mut store, binding, fixture, executor) =
-                step_store_fixture(domain_seed, &["AcquireStepExecution", "SubmitStep"]);
+                step_store_fixture_with_observations(
+                    domain_seed,
+                    &["AcquireStepExecution", "SubmitStep"],
+                    &observation_specs,
+                );
             publish_initial_step_acquisition(
                 &mut store,
                 binding,
@@ -13049,6 +13410,19 @@ mod tests {
                 executor,
                 &format!("stage4-submit-acquire-{claim_count}"),
             );
+            let observations = (0..claim_count)
+                .map(|index| {
+                    let observation_byte = u8::try_from(72 + index * 2).unwrap();
+                    publish_step_observation_for_claim(
+                        &mut store,
+                        binding,
+                        submission_id,
+                        observation_byte.wrapping_sub(1),
+                        120,
+                        &fixture,
+                    )
+                })
+                .collect::<Vec<_>>();
             let snapshot = ExecutionStoreFacadeV1::new(&mut store)
                 .current_step_execution(binding)
                 .unwrap();
@@ -13058,18 +13432,16 @@ mod tests {
                 .unwrap()
                 .submission_fence(term_id, 120)
                 .unwrap();
-            let submission_id =
-                StepSubmissionIdV1::derive(&format!("stage4-step-submission-{claim_count}"))
-                    .unwrap();
-            let claims = (0..claim_count)
-                .map(|index| {
+            let claims = observations
+                .iter()
+                .enumerate()
+                .map(|(index, observation)| {
                     let claim_byte = u8::try_from(71 + index * 2).unwrap();
-                    let observation_byte = claim_byte + 1;
                     ClaimV1::new(
                         SubmissionRefV1::for_step(submission_id).unwrap(),
                         ClaimSubjectV1::for_step(binding, fence.fence()).unwrap(),
                         [claim_byte; 32],
-                        vec![ObservationRecordIdV1::from_bytes([observation_byte; 32]).unwrap()],
+                        vec![observation.id()],
                     )
                     .unwrap()
                 })
@@ -13077,6 +13449,7 @@ mod tests {
             let evidence = EvidenceClaimPublicationV1::new(
                 SubmissionRefV1::for_step(submission_id).unwrap(),
                 claims,
+                observations,
             )
             .unwrap();
             let submission = ExecutionStoreFacadeV1::new(&mut store)
@@ -13124,7 +13497,10 @@ mod tests {
                 committed.carrier().tenure().lease().state(),
                 StepAttemptStateV1::Terminal(StepAttemptTerminalV1::Submitted)
             );
-            assert_eq!(maximum_capacity_spent(&store), 2);
+            assert_eq!(
+                maximum_capacity_spent(&store),
+                u64::try_from(claim_count).unwrap() + 2
+            );
             let (_, _, committed_generation, committed_objects) =
                 store.coherent_publication_snapshot().unwrap();
             assert_eq!(
@@ -13159,7 +13535,10 @@ mod tests {
             assert_eq!(replay.store_head(), committed.store_head());
             assert_eq!(replay.submission(), committed.submission());
             assert_eq!(replay.carrier(), committed.carrier());
-            assert_eq!(maximum_capacity_spent(&store), 2);
+            assert_eq!(
+                maximum_capacity_spent(&store),
+                u64::try_from(claim_count).unwrap() + 2
+            );
 
             drop(store);
             let mut reopened = StoreV1::open(&store_root, domain).unwrap();
@@ -13225,16 +13604,18 @@ mod tests {
             .submission_fence(term_id, 120)
             .unwrap();
         let submission_id = StepSubmissionIdV1::derive("stage4-stale-submission-id").unwrap();
+        let observation = step_observation(binding, submission_id, 74);
         let claim = ClaimV1::new(
             SubmissionRefV1::for_step(submission_id).unwrap(),
             ClaimSubjectV1::for_step(binding, fence.fence()).unwrap(),
             [73; 32],
-            vec![ObservationRecordIdV1::from_bytes([74; 32]).unwrap()],
+            vec![observation.id()],
         )
         .unwrap();
         let evidence = EvidenceClaimPublicationV1::new(
             SubmissionRefV1::for_step(submission_id).unwrap(),
             vec![claim],
+            vec![observation],
         )
         .unwrap();
         let submission = ExecutionStoreFacadeV1::new(&mut store)
@@ -13345,6 +13726,7 @@ mod tests {
             EvidenceClaimPublicationV1::new(
                 SubmissionRefV1::for_step(submission_id).unwrap(),
                 vec![],
+                vec![],
             ),
             Err(
                 crate::domain::vnext::evidence::ClaimError::SubmissionClaimSet(
@@ -13352,16 +13734,18 @@ mod tests {
                 )
             )
         ));
+        let wrong_observation = step_observation(binding, submission_id, 76);
         let wrong_fence_claim = ClaimV1::new(
             SubmissionRefV1::for_step(submission_id).unwrap(),
             ClaimSubjectV1::for_step(binding, fence.fence() + 1).unwrap(),
             [75; 32],
-            vec![ObservationRecordIdV1::from_bytes([76; 32]).unwrap()],
+            vec![wrong_observation.id()],
         )
         .unwrap();
         let wrong_evidence = EvidenceClaimPublicationV1::new(
             SubmissionRefV1::for_step(submission_id).unwrap(),
             vec![wrong_fence_claim],
+            vec![wrong_observation],
         )
         .unwrap();
         assert!(matches!(
@@ -13381,16 +13765,27 @@ mod tests {
 
     #[test]
     fn step_submission_and_renewal_race_has_one_atomic_winner() {
-        let (store_root, domain, mut store, binding, fixture, executor) = step_store_fixture(
-            b"stage4-submit-renew-race",
-            &["AcquireStepExecution", "RenewStepLeaseTerm", "SubmitStep"],
-        );
+        let submission_id = StepSubmissionIdV1::derive("stage4-race-submission-id").unwrap();
+        let (store_root, domain, mut store, binding, fixture, executor) =
+            step_store_fixture_with_observations(
+                b"stage4-submit-renew-race",
+                &["AcquireStepExecution", "RenewStepLeaseTerm", "SubmitStep"],
+                &[(78, 120, submission_id)],
+            );
         publish_initial_step_acquisition(
             &mut store,
             binding,
             fixture.selection,
             executor,
             "stage4-race-acquire",
+        );
+        let observation = publish_step_observation_for_claim(
+            &mut store,
+            binding,
+            submission_id,
+            77,
+            120,
+            &fixture,
         );
         let snapshot = ExecutionStoreFacadeV1::new(&mut store)
             .current_step_execution(binding)
@@ -13401,17 +13796,17 @@ mod tests {
             .unwrap()
             .submission_fence(term_id, 120)
             .unwrap();
-        let submission_id = StepSubmissionIdV1::derive("stage4-race-submission-id").unwrap();
         let claim = ClaimV1::new(
             SubmissionRefV1::for_step(submission_id).unwrap(),
             ClaimSubjectV1::for_step(binding, fence.fence()).unwrap(),
             [77; 32],
-            vec![ObservationRecordIdV1::from_bytes([78; 32]).unwrap()],
+            vec![observation.id()],
         )
         .unwrap();
         let evidence = EvidenceClaimPublicationV1::new(
             SubmissionRefV1::for_step(submission_id).unwrap(),
             vec![claim],
+            vec![observation],
         )
         .unwrap();
         let submission = ExecutionStoreFacadeV1::new(&mut store)
@@ -13498,7 +13893,11 @@ mod tests {
         };
         barrier.wait();
         let results = [submit_worker.join().unwrap(), renew_worker.join().unwrap()];
-        assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
+        assert_eq!(
+            results.iter().filter(|result| result.is_ok()).count(),
+            1,
+            "{results:?}"
+        );
         assert_eq!(
             results
                 .iter()
@@ -13512,7 +13911,7 @@ mod tests {
         );
         let submission_won = matches!(results[0], Ok(true));
         let mut reopened = StoreV1::open(&store_root, domain).unwrap();
-        assert_eq!(maximum_capacity_spent(&reopened), 2);
+        assert_eq!(maximum_capacity_spent(&reopened), 3);
         let selected = ExecutionStoreFacadeV1::new(&mut reopened)
             .current_step_execution(binding)
             .unwrap();
@@ -13544,10 +13943,14 @@ mod tests {
 
     #[test]
     fn competing_step_submissions_have_one_atomic_winner() {
-        let (store_root, domain, mut store, binding, fixture, executor) = step_store_fixture(
-            b"stage4-submit-submit-race",
-            &["AcquireStepExecution", "SubmitStep"],
-        );
+        let submission_a = StepSubmissionIdV1::derive("stage4-submit-submit-a-submission").unwrap();
+        let submission_b = StepSubmissionIdV1::derive("stage4-submit-submit-b-submission").unwrap();
+        let (store_root, domain, mut store, binding, fixture, executor) =
+            step_store_fixture_with_observations(
+                b"stage4-submit-submit-race",
+                &["AcquireStepExecution", "SubmitStep"],
+                &[(102, 120, submission_a), (104, 120, submission_b)],
+            );
         publish_initial_step_acquisition(
             &mut store,
             binding,
@@ -13555,22 +13958,40 @@ mod tests {
             executor,
             "stage4-submit-submit-acquire",
         );
+        let observation_a = publish_step_observation_for_claim(
+            &mut store,
+            binding,
+            submission_a,
+            101,
+            120,
+            &fixture,
+        );
+        let observation_b = publish_step_observation_for_claim(
+            &mut store,
+            binding,
+            submission_b,
+            103,
+            120,
+            &fixture,
+        );
         let snapshot = ExecutionStoreFacadeV1::new(&mut store)
             .current_step_execution(binding)
             .unwrap();
         let contender_a = step_submission_plan_for_claim(
             &mut store,
             &snapshot,
-            fixture.selection,
-            executor,
+            observation_a,
+            submission_a,
+            &fixture,
             "stage4-submit-submit-a",
             101,
         );
         let contender_b = step_submission_plan_for_claim(
             &mut store,
             &snapshot,
-            fixture.selection,
-            executor,
+            observation_b,
+            submission_b,
+            &fixture,
             "stage4-submit-submit-b",
             103,
         );
@@ -13595,7 +14016,11 @@ mod tests {
             .into_iter()
             .map(|worker| worker.join().unwrap())
             .collect::<Vec<_>>();
-        assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
+        assert_eq!(
+            results.iter().filter(|result| result.is_ok()).count(),
+            1,
+            "{results:?}"
+        );
         assert_eq!(
             results
                 .iter()
@@ -13609,7 +14034,7 @@ mod tests {
         );
 
         let mut reopened = StoreV1::open(&store_root, domain).unwrap();
-        assert_eq!(maximum_capacity_spent(&reopened), 2);
+        assert_eq!(maximum_capacity_spent(&reopened), 4);
         let selected = ExecutionStoreFacadeV1::new(&mut reopened)
             .current_step_execution(binding)
             .unwrap();
@@ -13641,10 +14066,14 @@ mod tests {
 
     #[test]
     fn step_submission_and_takeover_boundary_proves_both_atomic_linearizations() {
-        let (_store_root, _domain, mut store, binding, fixture, executor) = step_store_fixture(
-            b"stage4-submit-takeover-race",
-            &["AcquireStepExecution", "SubmitStep"],
-        );
+        let submit_submission =
+            StepSubmissionIdV1::derive("stage4-submit-takeover-submit-submission").unwrap();
+        let (_store_root, _domain, mut store, binding, fixture, executor) =
+            step_store_fixture_with_observations(
+                b"stage4-submit-takeover-race",
+                &["AcquireStepExecution", "SubmitStep"],
+                &[(106, 120, submit_submission)],
+            );
         publish_initial_step_acquisition(
             &mut store,
             binding,
@@ -13652,14 +14081,23 @@ mod tests {
             executor,
             "stage4-submit-takeover-acquire",
         );
+        let observation = publish_step_observation_for_claim(
+            &mut store,
+            binding,
+            submit_submission,
+            105,
+            120,
+            &fixture,
+        );
         let snapshot = ExecutionStoreFacadeV1::new(&mut store)
             .current_step_execution(binding)
             .unwrap();
         let submit_plan = step_submission_plan_for_claim(
             &mut store,
             &snapshot,
-            fixture.selection,
-            executor,
+            observation,
+            submit_submission,
+            &fixture,
             "stage4-submit-takeover-submit",
             105,
         );
@@ -13710,7 +14148,7 @@ mod tests {
             ExecutionStoreFacadeV1::new(&mut store).publish_step_execution(takeover_plan),
             Err(ExecutionStoreErrorV1::StaleExpectedStoreState)
         ));
-        assert_eq!(maximum_capacity_spent(&store), 2);
+        assert_eq!(maximum_capacity_spent(&store), 3);
         let selected = ExecutionStoreFacadeV1::new(&mut store)
             .current_step_execution(binding)
             .unwrap();
@@ -13738,21 +14176,33 @@ mod tests {
             );
         }
 
+        let stale_submission =
+            StepSubmissionIdV1::derive("stage4-takeover-submit-stale-submit-submission").unwrap();
         let (_root, _domain, mut store, binding, fixture, executor) =
-            step_store_fixture_with_seeded_carrier(
+            step_store_fixture_with_seeded_carrier_and_observations(
                 b"stage4-takeover-submit-race",
                 &["AcquireStepExecution", "SubmitStep"],
                 150,
                 150,
+                &[(110, 150, stale_submission)],
             );
+        let observation = publish_step_observation_for_claim(
+            &mut store,
+            binding,
+            stale_submission,
+            109,
+            150,
+            &fixture,
+        );
         let snapshot = ExecutionStoreFacadeV1::new(&mut store)
             .current_step_execution(binding)
             .unwrap();
         let stale_submit_plan = step_submission_plan_for_claim(
             &mut store,
             &snapshot,
-            fixture.selection,
-            executor,
+            observation,
+            stale_submission,
+            &fixture,
             "stage4-takeover-submit-stale-submit",
             109,
         );
@@ -13790,7 +14240,7 @@ mod tests {
             ExecutionStoreFacadeV1::new(&mut store).publish_step_submission(stale_submit_plan),
             Err(ExecutionStoreErrorV1::StaleExpectedStoreState)
         ));
-        assert_eq!(maximum_capacity_spent(&store), 1);
+        assert_eq!(maximum_capacity_spent(&store), 2);
         let selected = ExecutionStoreFacadeV1::new(&mut store)
             .current_step_execution(binding)
             .unwrap();
@@ -17459,6 +17909,21 @@ mod tests {
         RepositoryAuthorityFixtureV1,
         PrincipalIdV1,
     ) {
+        step_store_fixture_with_observations(domain_seed, action_literals, &[])
+    }
+
+    fn step_store_fixture_with_observations(
+        domain_seed: &[u8],
+        action_literals: &[&'static str],
+        observations: &[(u8, u64, StepSubmissionIdV1)],
+    ) -> (
+        std::path::PathBuf,
+        StoreDomainV1,
+        StoreV1,
+        StepBindingV1,
+        RepositoryAuthorityFixtureV1,
+        PrincipalIdV1,
+    ) {
         let domain = StoreDomainV1::derive(StoreRoleV1::Repository, domain_seed).unwrap();
         let root = ContractRootIdV1::parse(&render_digest([141; 32])).unwrap();
         let scope = StepScopeV1::new(domain.id(), WorkIdV1::derive("stage4-submit-work").unwrap());
@@ -17471,13 +17936,28 @@ mod tests {
         )
         .unwrap();
         let subject_commitment = hash(&step_binding_store_value(binding)).unwrap();
-        let fixture = repository_authority_fixture(
-            action_literals
+        let mut authority_scopes = action_literals
+            .iter()
+            .map(|literal| (*literal, subject_commitment))
+            .collect::<Vec<_>>();
+        authority_scopes.extend(
+            observations
                 .iter()
-                .map(|literal| (*literal, subject_commitment))
-                .collect(),
-            AuthorityFixtureModeV1::Valid,
+                .map(|(seed, recorded_at, submission_id)| {
+                    let observation = step_observation_at(
+                        binding,
+                        *submission_id,
+                        *seed,
+                        [seed.wrapping_add(8); 32],
+                        *recorded_at,
+                    );
+                    (
+                        RepositoryActionLeafV1::PublishObservation.literal(),
+                        step_observation_subject_commitment(&observation),
+                    )
+                }),
         );
+        let fixture = repository_authority_fixture(authority_scopes, AuthorityFixtureModeV1::Valid);
         let step_state = open_step_state_object(binding);
         let step_graph = current_step_graph_object(binding);
         let mut objects = fixture.objects.clone();
@@ -17515,6 +17995,29 @@ mod tests {
         RepositoryAuthorityFixtureV1,
         PrincipalIdV1,
     ) {
+        step_store_fixture_with_seeded_carrier_and_observations(
+            domain_seed,
+            action_literals,
+            accepted_h_time,
+            carrier_expires_at,
+            &[],
+        )
+    }
+
+    fn step_store_fixture_with_seeded_carrier_and_observations(
+        domain_seed: &[u8],
+        action_literals: &[&'static str],
+        accepted_h_time: u64,
+        carrier_expires_at: u64,
+        observations: &[(u8, u64, StepSubmissionIdV1)],
+    ) -> (
+        std::path::PathBuf,
+        StoreDomainV1,
+        StoreV1,
+        StepBindingV1,
+        RepositoryAuthorityFixtureV1,
+        PrincipalIdV1,
+    ) {
         let domain = StoreDomainV1::derive(StoreRoleV1::Repository, domain_seed).unwrap();
         let root = ContractRootIdV1::parse(&render_digest([141; 32])).unwrap();
         let scope = StepScopeV1::new(
@@ -17530,11 +18033,29 @@ mod tests {
         )
         .unwrap();
         let subject_commitment = hash(&step_binding_store_value(binding)).unwrap();
-        let fixture = repository_authority_fixture_at(
-            action_literals
+        let mut authority_scopes = action_literals
+            .iter()
+            .map(|literal| (*literal, subject_commitment))
+            .collect::<Vec<_>>();
+        authority_scopes.extend(
+            observations
                 .iter()
-                .map(|literal| (*literal, subject_commitment))
-                .collect(),
+                .map(|(seed, recorded_at, submission_id)| {
+                    let observation = step_observation_at(
+                        binding,
+                        *submission_id,
+                        *seed,
+                        [seed.wrapping_add(8); 32],
+                        *recorded_at,
+                    );
+                    (
+                        RepositoryActionLeafV1::PublishObservation.literal(),
+                        step_observation_subject_commitment(&observation),
+                    )
+                }),
+        );
+        let fixture = repository_authority_fixture_at(
+            authority_scopes,
             AuthorityFixtureModeV1::Valid,
             accepted_h_time,
             accepted_h_time + 10,
@@ -17790,8 +18311,9 @@ mod tests {
     fn step_submission_plan_for_claim(
         store: &mut StoreV1,
         snapshot: &StepExecutionSnapshotV1,
-        selection: RepositoryAuthoritySelectionV1,
-        executor: PrincipalIdV1,
+        observation: ObservationV1,
+        submission_id: StepSubmissionIdV1,
+        fixture: &RepositoryAuthorityFixtureV1,
         seed: &str,
         claim_byte: u8,
     ) -> StepSubmissionPublicationV1 {
@@ -17802,7 +18324,6 @@ mod tests {
             .unwrap()
             .submission_fence(term_id, 120)
             .unwrap();
-        let submission_id = StepSubmissionIdV1::derive(&format!("{seed}-submission")).unwrap();
         let evidence = EvidenceClaimPublicationV1::new(
             SubmissionRefV1::for_step(submission_id).unwrap(),
             vec![
@@ -17810,10 +18331,11 @@ mod tests {
                     SubmissionRefV1::for_step(submission_id).unwrap(),
                     ClaimSubjectV1::for_step(binding, fence.fence()).unwrap(),
                     [claim_byte; 32],
-                    vec![ObservationRecordIdV1::from_bytes([claim_byte + 1; 32]).unwrap()],
+                    vec![observation.id()],
                 )
                 .unwrap(),
             ],
+            vec![observation],
         )
         .unwrap();
         let submission = ExecutionStoreFacadeV1::new(store)
@@ -17828,11 +18350,11 @@ mod tests {
             )
             .unwrap();
         let authority = SubmitStepAuthorityV1::new(
-            selection,
+            fixture.selection,
             request.subject_commitment(),
             request.expected_state_commitment(),
             request.payload_commitment(),
-            executor,
+            fixture.actor_principal,
         )
         .unwrap();
         StepSubmissionPublicationV1::new(

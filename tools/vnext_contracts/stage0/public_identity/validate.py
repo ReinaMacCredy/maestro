@@ -15,7 +15,7 @@ REPO = Path(__file__).resolve().parents[4]
 DEFAULT_ARTIFACT_ROOT = REPO / "contracts/vnext/stage0/public-identity"
 AUTHORITATIVE_ENV = "MAESTRO_AUTHORITATIVE_SOURCE"
 EXPECTED_AUTHORITATIVE_HASHES = {
-    ".maestro/cards/maestro-whole-flow-architecture-refoundation/design.md": "85787cfb4fb32eefe078adbf9ede66114b12c6304af10857bd676a1cd9875d18",
+    ".maestro/cards/maestro-whole-flow-architecture-refoundation/design.md": "16a2f079f6ebf3dd3a2fb1a171cd0c6811203fe5f84dda73a7e2e91f67d6f9f7",
     ".maestro/cards/maestro-whole-flow-architecture-refoundation/decisions.yaml": "1f97e67b156d5a17d13b94ff955ad17efeb3bb71a4b74b1aec14e20dac1100dd",
     ".maestro/cards/maestro-whole-flow-architecture-refoundation/card.yaml": "2cdf1f74843a6eca926ff3bc48e060654350e6a03b65342f8d7be48d111379b4",
 }
