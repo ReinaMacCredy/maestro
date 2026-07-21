@@ -11,6 +11,8 @@ from tools.vnext_contracts.stage5.evidence_gates import consensus, seal, toolcha
 
 
 class Stage5ToolchainClosureTests(unittest.TestCase):
+    DRIVER_NAME = "librustc_driver-0123456789abcdef.dylib"
+
     @unittest.skipUnless(sys.platform == "darwin", "macOS developer-tool integration")
     def test_exact_macos_developer_tools_freeze_and_execute_after_relocation(self) -> None:
         closure = seal.build_developer_toolchain_closure(
@@ -34,7 +36,7 @@ class Stage5ToolchainClosureTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         root = Path(temporary.name)
         rustc = root / "rustc"
-        driver = root / "librustc_driver-fixture.dylib"
+        driver = root / "file"
         target_lib = root / "target-lib"
         output = root / "output"
         rustc.write_bytes(b"rustc-fixture")
@@ -89,6 +91,8 @@ class Stage5ToolchainClosureTests(unittest.TestCase):
             *self.tool_arguments(tools),
             "--driver",
             str(driver),
+            "--driver-name",
+            self.DRIVER_NAME,
             "--target-lib",
             str(target_lib),
             "--target",
@@ -120,6 +124,9 @@ class Stage5ToolchainClosureTests(unittest.TestCase):
         self.assertEqual((output / "toolchain/bin/python3").read_bytes(), b"python-fixture")
         self.assertEqual((output / "toolchain/bin/ruby").read_bytes(), b"ruby-fixture")
         self.assertEqual((output / "toolchain/lib/libLTO.dylib").read_bytes(), b"lib-lto-fixture")
+        self.assertEqual(
+            (output / "toolchain/lib" / self.DRIVER_NAME).read_bytes(), b"driver-fixture"
+        )
 
     @unittest.skipUnless(sys.platform == "darwin", "macOS developer-tool integration")
     def test_materialized_macos_developer_tools_execute_after_relocation(self) -> None:
@@ -154,6 +161,8 @@ class Stage5ToolchainClosureTests(unittest.TestCase):
             *self.tool_arguments(exact_tools),
             "--driver",
             str(driver),
+            "--driver-name",
+            self.DRIVER_NAME,
             "--target-lib",
             str(target_lib),
             "--target",
@@ -188,6 +197,69 @@ class Stage5ToolchainClosureTests(unittest.TestCase):
             *self.tool_arguments(tools),
             "--driver",
             str(driver),
+            "--driver-name",
+            self.DRIVER_NAME,
+            "--target-lib",
+            str(target_lib),
+            "--target",
+            "aarch64-apple-darwin",
+            "--output-root",
+            str(output),
+        ]
+        with (
+            mock.patch("sys.argv", arguments),
+            mock.patch.object(toolchain, "read_regular", side_effect=mutate_after_binding),
+            self.assertRaisesRegex(RuntimeError, "changed while it was copied"),
+        ):
+            toolchain.main()
+
+    def test_rejects_invalid_driver_basename(self) -> None:
+        temporary, rustc, driver, target_lib, output, tools = self.fixture()
+        self.addCleanup(temporary.cleanup)
+        arguments = [
+            "toolchain.py",
+            "--rustc",
+            str(rustc),
+            *self.tool_arguments(tools),
+            "--driver",
+            str(driver),
+            "--driver-name",
+            "../librustc_driver-0123456789abcdef.dylib",
+            "--target-lib",
+            str(target_lib),
+            "--target",
+            "aarch64-apple-darwin",
+            "--output-root",
+            str(output),
+        ]
+        with mock.patch("sys.argv", arguments), self.assertRaisesRegex(
+            RuntimeError, "driver identity is invalid"
+        ):
+            toolchain.main()
+
+    def test_rejects_driver_substitution_during_materialization(self) -> None:
+        temporary, rustc, driver, target_lib, output, tools = self.fixture()
+        self.addCleanup(temporary.cleanup)
+        original = toolchain.read_regular
+        first = True
+
+        def mutate_after_binding(path: Path) -> tuple[bytes, bool]:
+            nonlocal first
+            result = original(path)
+            if path == driver and first:
+                first = False
+                driver.write_bytes(b"driver-substituted")
+            return result
+
+        arguments = [
+            "toolchain.py",
+            "--rustc",
+            str(rustc),
+            *self.tool_arguments(tools),
+            "--driver",
+            str(driver),
+            "--driver-name",
+            self.DRIVER_NAME,
             "--target-lib",
             str(target_lib),
             "--target",
@@ -213,6 +285,8 @@ class Stage5ToolchainClosureTests(unittest.TestCase):
             *self.tool_arguments(tools),
             "--driver",
             str(driver),
+            "--driver-name",
+            self.DRIVER_NAME,
             "--target-lib",
             str(target_lib),
             "--target",

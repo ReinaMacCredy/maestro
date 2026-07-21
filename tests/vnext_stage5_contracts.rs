@@ -510,6 +510,9 @@ fn stage5_seal_parallelizes_independent_engines_and_validates_predecessors_read_
     assert!(seal.contains("{dependency:toolchain}/out/toolchain/bin:/usr/bin:/bin"));
     assert!(seal.contains("InputBinding.file(\"git-bin\", git)"));
     assert!(seal.contains("\"{input:git-bin}\""));
+    assert!(seal.contains("InputBinding.literal(\"rustc-driver-name\", rustc_driver.name)"));
+    assert!(seal.contains("\"--driver-name\""));
+    assert!(seal.contains("\"{input:rustc-driver-name}\""));
     assert!(seal.contains("predecessors/stage4-source.tar.gz"));
     assert!(seal.contains("out/stage4-source.tar.gz"));
     assert!(!seal.contains("fresh_full_chain_ancestor_behavior_and_compiled_mutant_reexecution"));

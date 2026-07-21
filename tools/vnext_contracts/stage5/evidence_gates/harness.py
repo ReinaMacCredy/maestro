@@ -67,11 +67,13 @@ EXPECTED_TESTS = (
     "tools.vnext_contracts.stage5.evidence_gates.test_toolchain.Stage5ToolchainClosureTests.test_exact_macos_developer_tools_freeze_and_execute_after_relocation",
     "tools.vnext_contracts.stage5.evidence_gates.test_toolchain.Stage5ToolchainClosureTests.test_materialized_macos_developer_tools_execute_after_relocation",
     "tools.vnext_contracts.stage5.evidence_gates.test_toolchain.Stage5ToolchainClosureTests.test_materializes_exact_minimal_compiler_closure",
+    "tools.vnext_contracts.stage5.evidence_gates.test_toolchain.Stage5ToolchainClosureTests.test_rejects_driver_substitution_during_materialization",
+    "tools.vnext_contracts.stage5.evidence_gates.test_toolchain.Stage5ToolchainClosureTests.test_rejects_invalid_driver_basename",
     "tools.vnext_contracts.stage5.evidence_gates.test_toolchain.Stage5ToolchainClosureTests.test_rejects_nested_tool_aba_during_materialization",
     "tools.vnext_contracts.stage5.evidence_gates.test_toolchain.Stage5ToolchainClosureTests.test_rejects_symlinked_target_library_entry",
 )
 EXPECTED_TEST_MANIFEST_IDENTITY = (
-    "sha256:9ae018efed7338dd75829e97c1e2281446e7623f166f863aec96259fe1c212c0"
+    "sha256:37292bbee3b812cfa73e6c734e9378cc012a30fcdd48aa8e74a76c965e924e20"
 )
 
 
