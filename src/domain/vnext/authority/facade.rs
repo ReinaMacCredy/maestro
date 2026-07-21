@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
@@ -12,6 +14,8 @@ use crate::foundation::core::deterministic_cbor::{self, CborError, CborValue};
 
 mod repository_admission;
 mod repository_leaf_authority;
+
+use repository_leaf_authority::authenticated_human_carrier_commitment;
 
 #[cfg(test)]
 pub(crate) use repository_admission::test_support;
@@ -28,14 +32,14 @@ pub use repository_leaf_authority::{
     AbsorbWorkAuthorityV1, AmendContractAuthorityV1, AppendDesignRevisionAuthorityV1,
     BootstrapExecutionAuthorityV1, CancelWorkAuthorityV1,
     ContinuityMaintenanceExecutionAuthorityV1, CreateDraftWorkAuthorityV1, ExecutionAuthorityV1,
-    ExecutionProducerV1, GenericExecutionAuthorityV1, PublishInitialContractAuthorityV1,
-    RepositoryAuthenticatedHumanV1, RepositoryAuthoritySelectionV1,
-    RepositoryDecisionAuthorityCarrierV1, RepositoryDecisionOptionMappingV1,
-    RepositoryDecisionPresentationV1, RepositoryLeafAuthorityErrorV1,
-    RepositoryPolicyComponentSetV1, RepositoryPolicySnapshotV1, RepositoryPolicyStrengthV1,
-    RepositoryPolicyTransitionAuthorityV1, RepositoryPolicyTransitionKindV1,
-    RepositoryPolicyTransitionV1, ResolveDecisionAuthorityV1, SubmitStepAuthorityV1,
-    SubmitWorkCompletionAuthorityV1,
+    ExecutionProducerV1, GenericExecutionAuthorityV1, GenericRepositoryActionAuthorityV1,
+    PublishInitialContractAuthorityV1, RepositoryAuthenticatedHumanV1,
+    RepositoryAuthoritySelectionV1, RepositoryDecisionAuthorityCarrierV1,
+    RepositoryDecisionOptionMappingV1, RepositoryDecisionPresentationV1,
+    RepositoryLeafAuthorityErrorV1, RepositoryPolicyComponentSetV1, RepositoryPolicySnapshotV1,
+    RepositoryPolicyStrengthV1, RepositoryPolicyTransitionAuthorityV1,
+    RepositoryPolicyTransitionKindV1, RepositoryPolicyTransitionV1, ResolveDecisionAuthorityV1,
+    SubmitStepAuthorityV1, SubmitWorkCompletionAuthorityV1,
 };
 
 use super::continuity::{StoreAllocatedContinuityStateTokenV1, StoreAllocationBindingErrorV1};
@@ -65,9 +69,10 @@ use super::{
     GrantAdministrationAuthorityV1, GuardAdmissionKindV1, HTimeAcceptanceErrorV1,
     HTimeCarryBasisV1, HTimeContinuationContributionV1, IssueBootstrapMandateError,
     LinearizationCoverageWitnessV1, LinearizationFenceCarrierV1,
-    RepositoryGovernedCapacitySlotKindV1, StateTokenIdV1, SuccessVisibleAuthorityContinuityStateV1,
-    TransitionGuardOwnerCensusV1, TransitionGuardTermFactV1, TrustedTimeV1,
-    issue_bootstrap_mandate, validate_delegation, validate_ordinary_authority,
+    RepositoryGovernedCapacitySlotKindV1, RevocationTargetV1, StateTokenIdV1,
+    SuccessVisibleAuthorityContinuityStateV1, TransitionGuardOwnerCensusV1,
+    TransitionGuardTermFactV1, TrustedTimeV1, issue_bootstrap_mandate, validate_delegation,
+    validate_ordinary_authority,
 };
 
 pub struct AuthorityFacadeV1<'store> {
@@ -77,6 +82,34 @@ pub struct AuthorityFacadeV1<'store> {
 impl<'store> AuthorityFacadeV1<'store> {
     pub fn new(store: &'store mut StoreV1) -> Self {
         Self { store }
+    }
+
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "Stage 5 owns the guard seam; the first production diagnostic consumer belongs to Stage 8"
+        )
+    )]
+    pub(crate) fn with_protected_continuity_diagnostic_read<T>(
+        &mut self,
+        authenticated_human: RepositoryAuthenticatedHumanV1,
+        requested_subject: ContinuityReferenceV1,
+        operation: impl for<'view> FnOnce(&ProtectedContinuityDiagnosticReadGuardV1<'view>) -> T,
+    ) -> Result<T, AuthorityPublicationError> {
+        let outcome = self.store.with_serialized_active_view(|view| {
+            let guard = derive_protected_continuity_diagnostic_read_guard(
+                view,
+                authenticated_human,
+                requested_subject,
+            )?;
+            Ok(operation(&guard))
+        });
+        match outcome {
+            Ok(value) => Ok(value),
+            Err(PreparedPublicationError::Store(error)) => Err(error.into()),
+            Err(PreparedPublicationError::Prepare(error)) => Err(error),
+        }
     }
 
     pub fn issue_bootstrap_mandate(
@@ -1544,6 +1577,33 @@ struct CurrentAuthorityV1 {
     state: SuccessVisibleAuthorityContinuityStateV1,
 }
 
+pub(crate) struct ProtectedContinuityDiagnosticReadGuardV1<'view> {
+    requested_subject: ContinuityReferenceV1,
+    witness: LinearizationCoverageWitnessV1,
+    _view: PhantomData<&'view ()>,
+}
+
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "Stage 5 owns the guard seam; the first production diagnostic consumer belongs to Stage 8"
+    )
+)]
+impl ProtectedContinuityDiagnosticReadGuardV1<'_> {
+    pub(crate) const fn requested_subject(&self) -> ContinuityReferenceV1 {
+        self.requested_subject
+    }
+
+    pub(crate) const fn witness(&self) -> &LinearizationCoverageWitnessV1 {
+        &self.witness
+    }
+
+    pub(crate) const fn is_bearer_authority(&self) -> bool {
+        false
+    }
+}
+
 struct SuccessorContinuityV1 {
     closure: AuthorityContinuityClosureV1,
     state: SuccessVisibleAuthorityContinuityStateV1,
@@ -1777,6 +1837,147 @@ fn load_current_authority(
         manifest,
         closure,
         state,
+    })
+}
+
+fn derive_protected_continuity_diagnostic_read_guard<'view>(
+    view: &'view StorePublicationViewV1<'_>,
+    authenticated_human: RepositoryAuthenticatedHumanV1,
+    requested_subject: ContinuityReferenceV1,
+) -> Result<ProtectedContinuityDiagnosticReadGuardV1<'view>, AuthorityPublicationError> {
+    if view.role() != StoreRoleV1::Repository || requested_subject.as_bytes() == &[0; 32] {
+        return Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot);
+    }
+    let current_head = view
+        .active_head()?
+        .ok_or(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)?;
+    let current_generation = view
+        .active_generation()?
+        .ok_or(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)?;
+    let [current_root] = current_generation.roots() else {
+        return Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot);
+    };
+    if current_head.generation_id() != current_generation.id()
+        || current_generation.domain() != view.domain()
+    {
+        return Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot);
+    }
+    let active_objects = view.active_generation_objects()?;
+    let current = load_current_authority(
+        view,
+        &current_head,
+        &current_generation,
+        *current_root,
+        &active_objects,
+    )?;
+    let facts = &current.facts;
+    let binding = facts.responder_binding();
+    let session = facts.responder_session();
+    let snapshot = facts.snapshot();
+    let revocations = facts.revocations().revocations();
+    let expected_authenticated_carrier_commitment =
+        authenticated_human_carrier_commitment(session.request_commitment().as_bytes())?;
+    if authenticated_human.binding_id() != binding.id()
+        || authenticated_human.session_id() != session.id()
+        || authenticated_human.carrier_commitment() != expected_authenticated_carrier_commitment
+        || !binding.human_capable()
+        || binding.context_id() != facts.context().context_id()
+        || session.binding_id() != binding.id()
+        || session.context_id() != facts.context().context_id()
+        || binding.trust_root_revision() != snapshot.trust_root_revision
+        || session.store_generation() != current_generation.ordinal()
+        || session.authority_epoch() != snapshot.authority_epoch
+        || facts.continuity().context_id() != facts.context().context_id()
+        || facts.continuity().store_generation() != current_generation.ordinal()
+        || facts.continuity().authority_epoch() != snapshot.authority_epoch
+        || facts.continuity().trust_root_revision() != snapshot.trust_root_revision
+        || facts.continuity().state_token() != current.state.state_token()
+        || revocations.contains(RevocationTargetV1::TrustRoot(snapshot.trust_root_revision))
+        || revocations.contains(RevocationTargetV1::PrincipalBinding(binding.id()))
+        || revocations.contains(RevocationTargetV1::Session(session.id()))
+    {
+        return Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot);
+    }
+    let TrustedTimeV1::Verified {
+        lower_bound,
+        upper_bound,
+    } = snapshot.trusted_time
+    else {
+        return Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot);
+    };
+    if lower_bound > upper_bound
+        || !snapshot.trusted_time.is_within(binding.validity())?
+        || !snapshot.trusted_time.is_within(session.validity())?
+        || !snapshot
+            .trusted_time
+            .is_within(facts.continuity().validity())?
+    {
+        return Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot);
+    }
+
+    let referenced = direct_reference_objects(&current.snapshot_object, &active_objects)?;
+    let binding_object = find_exact_object(
+        &referenced,
+        AuthoritySchemaV1::PrincipalBinding,
+        &binding.canonical_bytes()?,
+    )?;
+    let session_object = find_exact_object(
+        &referenced,
+        AuthoritySchemaV1::Session,
+        &session.canonical_bytes()?,
+    )?;
+    require_exact_object_references(&session_object, &[binding_object.id()])?;
+    let state_object = one_schema_object(
+        &referenced,
+        AuthoritySchemaV1::SuccessVisibleAuthorityContinuityState,
+    )?;
+    let guard_object = one_schema_object(&referenced, AuthoritySchemaV1::AdmittedTransitionGuard)?;
+
+    let authentication_carrier_ref = hash_reference(&CborValue::Array(vec![
+        CborValue::text("maestro.vnext.protected-diagnostic-authentication-carrier.v1")?,
+        bytes(binding.principal_id().as_bytes()),
+        bytes(binding_object.id().as_bytes()),
+        bytes(session_object.id().as_bytes()),
+        bytes(&authenticated_human.identity()),
+        bytes(&authenticated_human.carrier_commitment()),
+        bytes(facts.context().context_id().as_bytes()),
+        CborValue::Unsigned(snapshot.trust_root_revision),
+        CborValue::Unsigned(current_generation.ordinal()),
+        CborValue::Unsigned(snapshot.authority_epoch),
+        CborValue::text(session.request_commitment())?,
+    ]))?;
+    let currentness_and_fence_ref = hash_reference(&CborValue::Array(vec![
+        CborValue::text("maestro.vnext.protected-diagnostic-currentness-and-fence.v1")?,
+        bytes(current_head.id().as_bytes()),
+        bytes(current_generation.id().as_bytes()),
+        bytes(current_root.as_bytes()),
+        bytes(current.snapshot_object.id().as_bytes()),
+        bytes(state_object.id().as_bytes()),
+        bytes(guard_object.id().as_bytes()),
+        bytes(current.state.state_token().as_bytes()),
+        bytes(current.closure.id().as_bytes()),
+    ]))?;
+    let carrier_revision_ref = hash_reference(&CborValue::Array(vec![
+        CborValue::text("maestro.vnext.protected-diagnostic-carrier-revision.v1")?,
+        bytes(current_generation.id().as_bytes()),
+        bytes(current_generation.contract_root_id().as_bytes()),
+        CborValue::Unsigned(snapshot.subject_revision),
+        bytes(current.manifest.id().as_bytes()),
+    ]))?;
+    let witness = LinearizationCoverageWitnessV1::new(
+        requested_subject,
+        LinearizationFenceCarrierV1::ProtectedSnapshot,
+        ContinuityReferenceV1::from_digest(*state_object.id().as_bytes()),
+        authentication_carrier_ref,
+        ContinuityReferenceV1::from_digest(*current.state.state_token().as_bytes()),
+        ContinuityReferenceV1::from_digest(*current.snapshot_object.id().as_bytes()),
+        currentness_and_fence_ref,
+        carrier_revision_ref,
+    )?;
+    Ok(ProtectedContinuityDiagnosticReadGuardV1 {
+        requested_subject,
+        witness,
+        _view: PhantomData,
     })
 }
 

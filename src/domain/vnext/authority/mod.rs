@@ -10,6 +10,7 @@ mod capacity;
 mod closed;
 mod context;
 mod continuity;
+mod downstream_action_basis;
 mod evaluator;
 mod facade;
 mod grant;
@@ -64,6 +65,9 @@ pub use continuity::{
     installation_authority_continuity_totality_input,
     repository_authority_continuity_totality_input,
 };
+pub use downstream_action_basis::{
+    RepositoryDownstreamActionErrorV1, RepositoryDownstreamActionLeafV1,
+};
 pub use evaluator::{
     AuthorityEvaluationErrorV1, AuthorityEvaluatorV1, AuthorityRevocationSetV1,
     BootstrapAuthoritySnapshotErrorV1, BootstrapAuthoritySnapshotV1,
@@ -77,13 +81,14 @@ pub use facade::{
     AuthorityFacadeV1, AuthorityPublicationError, BootstrapExecutionAuthorityV1,
     CancelWorkAuthorityV1, ContinuityMaintenanceExecutionAuthorityV1, CreateDraftWorkAuthorityV1,
     ExecutionAuthorityV1, ExecutionProducerV1, GenericExecutionAuthorityV1,
-    PublishInitialContractAuthorityV1, RepositoryAuthenticatedHumanV1,
-    RepositoryAuthoritySelectionV1, RepositoryDecisionAuthorityCarrierV1,
-    RepositoryDecisionOptionMappingV1, RepositoryDecisionPresentationV1,
-    RepositoryLeafAuthorityErrorV1, RepositoryPolicyComponentSetV1, RepositoryPolicySnapshotV1,
-    RepositoryPolicyStrengthV1, RepositoryPolicyTransitionAuthorityV1,
-    RepositoryPolicyTransitionKindV1, RepositoryPolicyTransitionV1, ResolveDecisionAuthorityV1,
-    SubmitStepAuthorityV1, SubmitWorkCompletionAuthorityV1,
+    GenericRepositoryActionAuthorityV1, PublishInitialContractAuthorityV1,
+    RepositoryAuthenticatedHumanV1, RepositoryAuthoritySelectionV1,
+    RepositoryDecisionAuthorityCarrierV1, RepositoryDecisionOptionMappingV1,
+    RepositoryDecisionPresentationV1, RepositoryLeafAuthorityErrorV1,
+    RepositoryPolicyComponentSetV1, RepositoryPolicySnapshotV1, RepositoryPolicyStrengthV1,
+    RepositoryPolicyTransitionAuthorityV1, RepositoryPolicyTransitionKindV1,
+    RepositoryPolicyTransitionV1, ResolveDecisionAuthorityV1, SubmitStepAuthorityV1,
+    SubmitWorkCompletionAuthorityV1,
 };
 pub(crate) use facade::{
     AdmittedRepositoryActionV1, ContinuedRepositoryActionV1,

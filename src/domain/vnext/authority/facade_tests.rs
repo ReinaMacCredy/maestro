@@ -20,10 +20,10 @@ use crate::domain::vnext::authority::{
     IssueBootstrapMandateRequestV1, IssueRootAttachedBoundedGrantPublicationV1,
     OrdinaryBoundedGrantV1, OrdinaryGrantDelegationV1, PrincipalBindingIdV1, PrincipalBindingV1,
     PrincipalIdV1, ReissueRootAttachedGrantOneToOnePublicationV1,
-    RepositoryGovernedCapacitySlotKindV1, RevocationSetV1, RevokeGrantPublicationV1, ScopeAtomV1,
-    SessionIdV1, SessionV1, TargetActionEffectKindV1, TargetActionOwnerV1,
-    TargetActionProjectionV1, TargetActionProtocolV1, TargetExpectedHeadsV1, TransitionGuardKindV1,
-    TrustedTimeV1,
+    RepositoryGovernedCapacitySlotKindV1, RevocationSetV1, RevocationTargetV1,
+    RevokeGrantPublicationV1, ScopeAtomV1, SessionIdV1, SessionV1, TargetActionEffectKindV1,
+    TargetActionOwnerV1, TargetActionProjectionV1, TargetActionProtocolV1, TargetExpectedHeadsV1,
+    TransitionGuardKindV1, TrustedTimeV1,
 };
 use crate::domain::vnext::identity::ContractRootIdV1;
 use crate::domain::vnext::persistence::{StoreDomainV1, StoreRoleV1};
@@ -435,6 +435,149 @@ fn seeded_store_with_activation(
     crate::domain::vnext::persistence::StoreHeadV1,
     StoreObjectIdV1,
     IssueBootstrapMandateRequestV1,
+    RepositoryAuthenticatedHumanV1,
+    String,
+) {
+    seeded_store_with_diagnostic_mode(active, ProtectedDiagnosticFixtureModeV1::Valid)
+}
+
+#[derive(Clone, Copy)]
+enum ProtectedDiagnosticFixtureModeV1 {
+    Valid,
+    NonHuman,
+    RevokedBinding,
+    RevokedSession,
+    RevokedTrustRoot,
+    WrongBindingContext,
+    WrongSessionContext,
+    WrongSessionBinding,
+    WrongTrustRoot,
+    StaleSession,
+    WrongSessionEpoch,
+    UnavailableTime,
+    InvertedTime,
+    ExpiredBinding,
+    PrematureBinding,
+}
+
+fn diagnostic_facts(
+    facts: BootstrapAuthoritySnapshotV1,
+    mode: ProtectedDiagnosticFixtureModeV1,
+) -> BootstrapAuthoritySnapshotV1 {
+    if matches!(mode, ProtectedDiagnosticFixtureModeV1::Valid) {
+        return facts;
+    }
+    let mut snapshot = *facts.snapshot();
+    if matches!(mode, ProtectedDiagnosticFixtureModeV1::UnavailableTime) {
+        snapshot.trusted_time = TrustedTimeV1::Unavailable;
+    } else if matches!(mode, ProtectedDiagnosticFixtureModeV1::InvertedTime) {
+        snapshot.trusted_time = TrustedTimeV1::Verified {
+            lower_bound: 200,
+            upper_bound: 100,
+        };
+    }
+    let responder_binding = PrincipalBindingV1::new(
+        facts.responder_binding().id(),
+        facts.responder_binding().principal_id(),
+        if matches!(mode, ProtectedDiagnosticFixtureModeV1::WrongBindingContext) {
+            AuthorityContextIdV1::derive("foreign-diagnostic-binding-context").unwrap()
+        } else {
+            facts.responder_binding().context_id()
+        },
+        if matches!(mode, ProtectedDiagnosticFixtureModeV1::WrongTrustRoot) {
+            facts.responder_binding().trust_root_revision() + 1
+        } else {
+            facts.responder_binding().trust_root_revision()
+        },
+        facts.responder_binding().assurance_revision(),
+        match mode {
+            ProtectedDiagnosticFixtureModeV1::ExpiredBinding => {
+                HalfOpenValidityV1::new(1, 100).unwrap()
+            }
+            ProtectedDiagnosticFixtureModeV1::PrematureBinding => {
+                HalfOpenValidityV1::new(201, 300).unwrap()
+            }
+            _ => facts.responder_binding().validity(),
+        },
+        !matches!(mode, ProtectedDiagnosticFixtureModeV1::NonHuman),
+    )
+    .unwrap();
+    let responder_session = SessionV1::new(
+        facts.responder_session().id(),
+        if matches!(mode, ProtectedDiagnosticFixtureModeV1::WrongSessionBinding) {
+            PrincipalBindingIdV1::derive("foreign-diagnostic-session-binding").unwrap()
+        } else {
+            facts.responder_session().binding_id()
+        },
+        if matches!(mode, ProtectedDiagnosticFixtureModeV1::WrongSessionContext) {
+            AuthorityContextIdV1::derive("foreign-diagnostic-session-context").unwrap()
+        } else {
+            facts.responder_session().context_id()
+        },
+        if matches!(mode, ProtectedDiagnosticFixtureModeV1::StaleSession) {
+            facts.responder_session().store_generation() - 1
+        } else {
+            facts.responder_session().store_generation()
+        },
+        if matches!(mode, ProtectedDiagnosticFixtureModeV1::WrongSessionEpoch) {
+            facts.responder_session().authority_epoch() + 1
+        } else {
+            facts.responder_session().authority_epoch()
+        },
+        facts.responder_session().request_commitment(),
+        facts.responder_session().validity(),
+    )
+    .unwrap();
+    let revocations = match mode {
+        ProtectedDiagnosticFixtureModeV1::RevokedBinding => {
+            RevocationSetV1::new(vec![RevocationTargetV1::PrincipalBinding(
+                responder_binding.id(),
+            )])
+            .unwrap()
+        }
+        ProtectedDiagnosticFixtureModeV1::RevokedSession => {
+            RevocationSetV1::new(vec![RevocationTargetV1::Session(responder_session.id())]).unwrap()
+        }
+        ProtectedDiagnosticFixtureModeV1::RevokedTrustRoot => {
+            RevocationSetV1::new(vec![RevocationTargetV1::TrustRoot(
+                snapshot.trust_root_revision,
+            )])
+            .unwrap()
+        }
+        _ => facts.revocations().revocations().clone(),
+    };
+    BootstrapAuthoritySnapshotV1::new(
+        facts.context().clone(),
+        snapshot,
+        facts.actor_binding().clone(),
+        facts.actor_session().clone(),
+        responder_binding,
+        responder_session,
+        facts.g0_candidate_paths().to_vec(),
+        AuthorityRevocationSetV1::new(facts.context().context_id(), revocations),
+        facts.interaction_join().cloned(),
+        facts.current_carrier_procedure_ref(),
+        facts.target().clone(),
+        facts.current_target_head(),
+        facts.consent_slot().clone(),
+        facts.continuity().clone(),
+    )
+    .unwrap()
+}
+
+fn seeded_store_with_diagnostic_mode(
+    active: bool,
+    diagnostic_mode: ProtectedDiagnosticFixtureModeV1,
+) -> (
+    std::path::PathBuf,
+    StoreDomainV1,
+    StoreV1,
+    ContractRootIdV1,
+    crate::domain::vnext::persistence::StoreHeadV1,
+    StoreObjectIdV1,
+    IssueBootstrapMandateRequestV1,
+    RepositoryAuthenticatedHumanV1,
+    String,
 ) {
     let root = test_root();
     let domain = StoreDomainV1::derive(StoreRoleV1::Repository, b"authority-facade").unwrap();
@@ -489,6 +632,14 @@ fn seeded_store_with_activation(
     let (closure_two, guard_two, state_two) =
         continuity_generation(&manifest, context_id, 2, Some((&closure_one, &state_one)));
     let (facts, request) = authority_fixture(&state_two, &manifest);
+    let facts = diagnostic_facts(facts, diagnostic_mode);
+    let authenticated_carrier = facts.responder_session().request_commitment().to_owned();
+    let authenticated_human = RepositoryAuthenticatedHumanV1::new(
+        facts.responder_binding().id(),
+        facts.responder_session().id(),
+        authenticated_carrier.as_bytes(),
+    )
+    .unwrap();
     let closure_two_object = authority_object(
         AuthoritySchemaV1::AuthorityContinuityClosure,
         closure_two.schema_value().unwrap(),
@@ -652,6 +803,8 @@ fn seeded_store_with_activation(
         head_two,
         authority_root.id(),
         request,
+        authenticated_human,
+        authenticated_carrier,
     )
 }
 
@@ -663,6 +816,8 @@ fn seeded_store() -> (
     crate::domain::vnext::persistence::StoreHeadV1,
     StoreObjectIdV1,
     IssueBootstrapMandateRequestV1,
+    RepositoryAuthenticatedHumanV1,
+    String,
 ) {
     seeded_store_with_activation(true)
 }
@@ -944,7 +1099,8 @@ fn clone_store_through_mutant_generation_three(
 
 #[test]
 fn store_loaded_authority_and_complete_post_cut_publish_atomically_and_replay_without_writes() {
-    let (root, _domain, mut store, contract_root, head, authority_root, request) = seeded_store();
+    let (root, _domain, mut store, contract_root, head, authority_root, request, _, _) =
+        seeded_store();
     let publication = plan(request, contract_root, &head, authority_root);
     let first = AuthorityFacadeV1::new(&mut store)
         .issue_bootstrap_mandate(publication.clone())
@@ -962,7 +1118,8 @@ fn store_loaded_authority_and_complete_post_cut_publish_atomically_and_replay_wi
 
 #[test]
 fn g0_issues_root_attached_bounded_grant_atomically_without_capacity_debit() {
-    let (root, _domain, mut store, contract_root, head, authority_root, _request) = seeded_store();
+    let (root, _domain, mut store, contract_root, head, authority_root, _request, _, _) =
+        seeded_store();
     let context_id = AuthorityContextIdV1::derive("repository-context").unwrap();
     let capacity_root_id = CapacityRootIdV1::derive("repository-admin-capacity").unwrap();
     let parent_grant_id = GrantIdV1::derive("genesis-grant").unwrap();
@@ -1110,7 +1267,7 @@ fn ordinary_admin_refuses_a_non_administration_capacity_kind() {
 
 #[test]
 fn ordinary_admin_reissues_and_revokes_with_one_debit_each_and_retirement_closure() {
-    let (root, _domain, mut store, contract_root, head_two, authority_root, _request) =
+    let (root, _domain, mut store, contract_root, head_two, authority_root, _request, _, _) =
         seeded_store();
     let admin_a = admin_grant_issue_plan("admin-a", contract_root, &head_two, authority_root);
     AuthorityFacadeV1::new(&mut store)
@@ -1365,7 +1522,7 @@ fn ordinary_admin_reissues_and_revokes_with_one_debit_each_and_retirement_closur
 
 #[test]
 fn one_to_one_reissue_refuses_an_ordinary_parent_even_on_the_same_capacity_root() {
-    let (root, _domain, mut store, contract_root, head_two, authority_root, _request) =
+    let (root, _domain, mut store, contract_root, head_two, authority_root, _request, _, _) =
         seeded_store();
     let mut parent =
         admin_grant_issue_plan("ordinary-parent", contract_root, &head_two, authority_root);
@@ -1531,7 +1688,7 @@ fn same_root_non_admin_does_not_satisfy_the_post_mutation_admin_invariant() {
         g0,
         root,
         GrantScopeV1::new(vec![
-            ScopeAtomV1::new("ReadRepository", "repository", 9).unwrap(),
+            ScopeAtomV1::new("CreateDraftWork", "repository", 9).unwrap(),
         ])
         .unwrap(),
         GrantScopeV1::new(vec![]).unwrap(),
@@ -1557,7 +1714,7 @@ fn same_root_non_admin_does_not_satisfy_the_post_mutation_admin_invariant() {
 
 #[test]
 fn inactive_store_cannot_publish_authority() {
-    let (root, _domain, mut store, contract_root, head, authority_root, request) =
+    let (root, _domain, mut store, contract_root, head, authority_root, request, _, _) =
         seeded_store_with_activation(false);
     let publication = plan(request, contract_root, &head, authority_root);
     assert!(matches!(
@@ -1569,8 +1726,188 @@ fn inactive_store_cannot_publish_authority() {
 }
 
 #[test]
+fn protected_continuity_diagnostic_guard_is_subject_bound_and_zero_write() {
+    let (
+        root,
+        _domain,
+        mut store,
+        _contract_root,
+        head,
+        _authority_root,
+        _request,
+        authenticated_human,
+        authenticated_carrier,
+    ) = seeded_store();
+    let subject = reference("protected-continuity-subject");
+    let before_head = store.active_head().unwrap().unwrap();
+
+    AuthorityFacadeV1::new(&mut store)
+        .with_protected_continuity_diagnostic_read(authenticated_human, subject, |guard| {
+            assert_eq!(guard.requested_subject(), subject);
+            assert!(!guard.is_bearer_authority());
+            let witness = guard.witness();
+            assert_eq!(witness.fence_subject_ref(), subject);
+            assert_eq!(
+                witness.fence_carrier(),
+                LinearizationFenceCarrierV1::ProtectedSnapshot
+            );
+            assert_ne!(witness.fence_carrier_ref().as_bytes(), &[0; 32]);
+            assert_ne!(witness.attempt_ref().as_bytes(), &[0; 32]);
+            assert_ne!(witness.semantic_point_ref().as_bytes(), &[0; 32]);
+            assert_ne!(witness.covered_closure_ref().as_bytes(), &[0; 32]);
+            assert_ne!(
+                witness.conservative_point_envelope_ref().as_bytes(),
+                &[0; 32]
+            );
+            assert_ne!(witness.carrier_revision_ref().as_bytes(), &[0; 32]);
+        })
+        .unwrap();
+
+    let substituted = [
+        RepositoryAuthenticatedHumanV1::new(
+            PrincipalBindingIdV1::derive("fabricated-diagnostic-binding").unwrap(),
+            authenticated_human.session_id(),
+            authenticated_carrier.as_bytes(),
+        )
+        .unwrap(),
+        RepositoryAuthenticatedHumanV1::new(
+            authenticated_human.binding_id(),
+            SessionIdV1::derive("fabricated-diagnostic-session").unwrap(),
+            authenticated_carrier.as_bytes(),
+        )
+        .unwrap(),
+        RepositoryAuthenticatedHumanV1::new(
+            authenticated_human.binding_id(),
+            authenticated_human.session_id(),
+            b"fabricated-diagnostic-authentication-carrier",
+        )
+        .unwrap(),
+    ];
+    for candidate in substituted {
+        assert!(matches!(
+            AuthorityFacadeV1::new(&mut store).with_protected_continuity_diagnostic_read(
+                candidate,
+                subject,
+                |_| (),
+            ),
+            Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)
+        ));
+    }
+
+    assert_eq!(store.active_head().unwrap().unwrap(), before_head);
+    assert_eq!(before_head, head);
+    drop(store);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn protected_continuity_diagnostic_guard_is_non_oracular_across_subjects() {
+    let (
+        root,
+        _domain,
+        mut store,
+        _contract_root,
+        _head,
+        _authority_root,
+        _request,
+        authenticated_human,
+        _,
+    ) = seeded_store();
+    let existing_shape = AuthorityFacadeV1::new(&mut store)
+        .with_protected_continuity_diagnostic_read(
+            authenticated_human,
+            reference("protected-existing-shape"),
+            |guard| {
+                let witness = guard.witness();
+                (
+                    witness.fence_carrier(),
+                    witness.fence_carrier_ref(),
+                    witness.attempt_ref(),
+                    witness.semantic_point_ref(),
+                    witness.covered_closure_ref(),
+                    witness.conservative_point_envelope_ref(),
+                    witness.carrier_revision_ref(),
+                )
+            },
+        )
+        .unwrap();
+    let nonexistent_shape = AuthorityFacadeV1::new(&mut store)
+        .with_protected_continuity_diagnostic_read(
+            authenticated_human,
+            reference("protected-nonexistent-shape"),
+            |guard| {
+                let witness = guard.witness();
+                (
+                    witness.fence_carrier(),
+                    witness.fence_carrier_ref(),
+                    witness.attempt_ref(),
+                    witness.semantic_point_ref(),
+                    witness.covered_closure_ref(),
+                    witness.conservative_point_envelope_ref(),
+                    witness.carrier_revision_ref(),
+                )
+            },
+        )
+        .unwrap();
+    assert_eq!(existing_shape, nonexistent_shape);
+    assert!(matches!(
+        AuthorityFacadeV1::new(&mut store).with_protected_continuity_diagnostic_read(
+            authenticated_human,
+            ContinuityReferenceV1::from_digest([0; 32]),
+            |_| (),
+        ),
+        Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)
+    ));
+    drop(store);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn protected_continuity_diagnostic_guard_refuses_noncurrent_human_facts() {
+    for mode in [
+        ProtectedDiagnosticFixtureModeV1::NonHuman,
+        ProtectedDiagnosticFixtureModeV1::RevokedBinding,
+        ProtectedDiagnosticFixtureModeV1::RevokedSession,
+        ProtectedDiagnosticFixtureModeV1::RevokedTrustRoot,
+        ProtectedDiagnosticFixtureModeV1::WrongBindingContext,
+        ProtectedDiagnosticFixtureModeV1::WrongSessionContext,
+        ProtectedDiagnosticFixtureModeV1::WrongSessionBinding,
+        ProtectedDiagnosticFixtureModeV1::WrongTrustRoot,
+        ProtectedDiagnosticFixtureModeV1::StaleSession,
+        ProtectedDiagnosticFixtureModeV1::WrongSessionEpoch,
+        ProtectedDiagnosticFixtureModeV1::UnavailableTime,
+        ProtectedDiagnosticFixtureModeV1::InvertedTime,
+        ProtectedDiagnosticFixtureModeV1::ExpiredBinding,
+        ProtectedDiagnosticFixtureModeV1::PrematureBinding,
+    ] {
+        let (
+            root,
+            _domain,
+            mut store,
+            _contract_root,
+            before_head,
+            _authority_root,
+            _request,
+            authenticated_human,
+            _,
+        ) = seeded_store_with_diagnostic_mode(true, mode);
+        assert!(matches!(
+            AuthorityFacadeV1::new(&mut store).with_protected_continuity_diagnostic_read(
+                authenticated_human,
+                reference("protected-refusal-subject"),
+                |_| (),
+            ),
+            Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)
+        ));
+        assert_eq!(store.active_head().unwrap().unwrap(), before_head);
+        drop(store);
+        fs::remove_dir_all(root).unwrap();
+    }
+}
+
+#[test]
 fn concurrent_same_key_has_one_commit_and_one_zero_write_replay() {
-    let (root, domain, store, contract_root, head, authority_root, request) = seeded_store();
+    let (root, domain, store, contract_root, head, authority_root, request, _, _) = seeded_store();
     let publication = plan(request, contract_root, &head, authority_root);
     drop(store);
     let barrier = Arc::new(Barrier::new(3));
@@ -1614,7 +1951,8 @@ fn concurrent_same_key_has_one_commit_and_one_zero_write_replay() {
 
 #[test]
 fn reopened_store_reauthorizes_different_key_and_converges_without_second_binding() {
-    let (root, domain, mut store, contract_root, head, authority_root, request) = seeded_store();
+    let (root, domain, mut store, contract_root, head, authority_root, request, _, _) =
+        seeded_store();
     let first = AuthorityFacadeV1::new(&mut store)
         .issue_bootstrap_mandate(plan(request.clone(), contract_root, &head, authority_root))
         .unwrap();
@@ -1665,7 +2003,8 @@ fn reopened_store_reauthorizes_different_key_and_converges_without_second_bindin
 
 #[test]
 fn mandate_convergence_refuses_missing_or_multiple_issuance_bindings() {
-    let (root, _domain, mut store, contract_root, head, authority_root, request) = seeded_store();
+    let (root, _domain, mut store, contract_root, head, authority_root, request, _, _) =
+        seeded_store();
     AuthorityFacadeV1::new(&mut store)
         .issue_bootstrap_mandate(plan(request, contract_root, &head, authority_root))
         .unwrap();
@@ -1704,7 +2043,7 @@ fn mandate_convergence_refuses_missing_or_multiple_issuance_bindings() {
 
 #[test]
 fn store_loaded_post_cut_refuses_a_mismatched_coupled_commitment() {
-    let (root, domain, mut store, contract_root, head_two, authority_root, request) =
+    let (root, domain, mut store, contract_root, head_two, authority_root, request, _, _) =
         seeded_store();
     let first = AuthorityFacadeV1::new(&mut store)
         .issue_bootstrap_mandate(plan(
@@ -1767,7 +2106,7 @@ fn store_loaded_post_cut_refuses_a_mismatched_coupled_commitment() {
 
 #[test]
 fn store_loaded_post_cut_refuses_a_nonexact_action_result_receipt_count() {
-    let (root, domain, mut store, contract_root, head_two, authority_root, request) =
+    let (root, domain, mut store, contract_root, head_two, authority_root, request, _, _) =
         seeded_store();
     let first = AuthorityFacadeV1::new(&mut store)
         .issue_bootstrap_mandate(plan(

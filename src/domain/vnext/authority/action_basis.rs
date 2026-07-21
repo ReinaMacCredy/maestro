@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use super::ActionAuthorityBasisKindV1;
+use super::{ActionAuthorityBasisKindV1, RepositoryDownstreamActionLeafV1};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AuthorityActionLeafV1 {
@@ -57,6 +57,7 @@ pub enum RepositoryActionLeafV1 {
     PublishBootstrapMandatePresentationObservation,
     PublishBootstrapMandateResponseObservation,
     PublishContinuityMaintenanceObservation,
+    Downstream(RepositoryDownstreamActionLeafV1),
 }
 
 impl RepositoryActionLeafV1 {
@@ -157,6 +158,7 @@ impl RepositoryActionLeafV1 {
             Self::PublishContinuityMaintenanceObservation => {
                 "PublishContinuityMaintenanceObservation"
             }
+            Self::Downstream(action) => action.literal(),
         }
     }
 
@@ -200,6 +202,7 @@ impl RepositoryActionLeafV1 {
             Self::PublishBootstrapMandatePresentationObservation => 43,
             Self::PublishBootstrapMandateResponseObservation => 44,
             Self::PublishContinuityMaintenanceObservation => 45,
+            Self::Downstream(action) => action.global_tag(),
         }
     }
 
@@ -242,6 +245,7 @@ impl RepositoryActionLeafV1 {
             | Self::PublishBootstrapMandatePresentationObservation
             | Self::PublishBootstrapMandateResponseObservation
             | Self::PublishContinuityMaintenanceObservation => 7,
+            Self::Downstream(action) => action.owner_tag(),
         }
     }
 
@@ -280,6 +284,7 @@ impl RepositoryActionLeafV1 {
             Self::PublishBootstrapMandatePresentationObservation => 5,
             Self::PublishBootstrapMandateResponseObservation => 6,
             Self::PublishContinuityMaintenanceObservation => 7,
+            Self::Downstream(action) => action.local_tag(),
         }
     }
 
@@ -336,6 +341,7 @@ impl RepositoryActionLeafV1 {
             | Self::PublishContinuityMaintenanceObservation => {
                 "56d3f71ffc62ecc71973ac2a51a076ae62f5686806737fdba9e6fa6051999bc9"
             }
+            Self::Downstream(action) => action.owner_descriptor_id(),
         }
     }
 
@@ -447,6 +453,7 @@ impl RepositoryActionLeafV1 {
             Self::PublishContinuityMaintenanceObservation => {
                 "46ec801444dabb9aabb291ea2960434c1542954db1d3dc70beec2734177c8892"
             }
+            Self::Downstream(action) => action.descriptor_id(),
         }
     }
 
@@ -487,6 +494,7 @@ impl RepositoryActionLeafV1 {
 
     pub const fn execution_authority_basis(self) -> Option<ActionAuthorityBasisKindV1> {
         Some(match self {
+            Self::Downstream(_) => ActionAuthorityBasisKindV1::OrdinaryLiveRuntime,
             Self::ReserveBootstrapMandateInteractionEffect
             | Self::PublishBootstrapMandateInteractionOutcome
             | Self::ReconcileBootstrapMandateInteractionEffect
@@ -512,10 +520,11 @@ impl RepositoryActionLeafV1 {
     }
 
     pub const fn is_ordinary_execution_action(self) -> bool {
-        matches!(
-            self.execution_authority_basis(),
-            Some(ActionAuthorityBasisKindV1::OrdinaryLiveRuntime)
-        )
+        self.is_execution_action()
+            && matches!(
+                self.execution_authority_basis(),
+                Some(ActionAuthorityBasisKindV1::OrdinaryLiveRuntime)
+            )
     }
 
     pub const fn is_external_effect_action(self) -> bool {
@@ -668,6 +677,31 @@ mod tests {
         assert_eq!(rows[36].0, 44);
         assert_eq!(rows[37].0, 45);
         assert!(rows.windows(2).all(|pair| pair[0].0 < pair[1].0));
+    }
+
+    #[test]
+    fn downstream_leaves_preserve_ordinary_basis_without_becoming_execution_actions() {
+        for action in RepositoryDownstreamActionLeafV1::all() {
+            let repository_action = RepositoryActionLeafV1::Downstream(action);
+            assert_eq!(
+                repository_action.execution_authority_basis(),
+                Some(ActionAuthorityBasisKindV1::OrdinaryLiveRuntime)
+            );
+            assert!(!repository_action.is_execution_action());
+            assert!(!repository_action.is_ordinary_execution_action());
+            assert!(!repository_action.is_evidence_action());
+            assert!(!repository_action.is_external_effect_action());
+        }
+    }
+
+    #[test]
+    fn protected_diagnostic_read_is_not_an_action_leaf() {
+        assert!(RepositoryDownstreamActionLeafV1::parse_exact("ReadRepository").is_err());
+        assert!(
+            RepositoryDownstreamActionLeafV1::parse_exact("ProtectedContinuityDiagnosticRead")
+                .is_err()
+        );
+        assert!(AuthorityActionLeafV1::parse_exact("ReadRepository").is_err());
     }
 
     #[test]
