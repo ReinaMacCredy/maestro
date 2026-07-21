@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import stat
 from pathlib import Path
 from typing import Any
@@ -20,7 +21,7 @@ EXPECTED_STAGE4_SOURCE_ARCHIVE_SHA256 = (
     "347eaf928f81d9ce6e07e3767f0cdaf2cde23cd98d13bad41b745d5fbc359910"
 )
 EXPECTED_BEHAVIOR_TESTS = 55
-EXPECTED_PROOF_HARNESS_TESTS = 64
+EXPECTED_PROOF_HARNESS_TESTS = 66
 EXPECTED_BEHAVIOR_MANIFEST_IDENTITY = (
     "sha256:a45a1774976a2ad7d3e9cf9702ea78bb5bbae33a9deca7a06d5127c451477f12"
 )
@@ -28,7 +29,7 @@ EXPECTED_OBSERVATION_CONTRACT_TABLE_IDENTITY = (
     "sha256:a5f0e9137c091972802cb7084d86070a930091f0570cefcc7df445074478a676"
 )
 EXPECTED_PROOF_HARNESS_MANIFEST_IDENTITY = (
-    "sha256:953795f20001a5a7c81b4ad57fccce9adfb8d681a5a6ca852193990779481375"
+    "sha256:c5d8562805f5b655447d32f1262d4fc06e91c7a80ce9ccdeab4eb0c77e1188a1"
 )
 ENGINE_RECEIPT_CONTRACTS = {
     "builder": (
@@ -328,6 +329,57 @@ def behavior_manifest_rows(runs: object) -> list[list[str]]:
     return rows
 
 
+def semantic_behavior_runs(runs: object) -> list[dict[str, Any]]:
+    if not isinstance(runs, list) or not runs:
+        raise RuntimeError("Stage 5 behavior runs are malformed")
+    binary_by_target: dict[str, str] = {}
+    semantic_runs: list[dict[str, Any]] = []
+    for run in runs:
+        if not isinstance(run, dict):
+            raise RuntimeError("Stage 5 behavior run is malformed")
+        binary_sha256 = run.get("binary_sha256")
+        if not isinstance(binary_sha256, str) or re.fullmatch(
+            r"[0-9a-f]{64}", binary_sha256
+        ) is None:
+            raise RuntimeError("Stage 5 engine-local binary identity is malformed")
+        tests = run.get("tests")
+        if isinstance(tests, list) and tests:
+            targets = {
+                command[0]
+                for test in tests
+                if isinstance(test, dict)
+                and isinstance((command := test.get("command")), list)
+                and command
+                and isinstance(command[0], str)
+            }
+            if len(targets) != 1 or len(tests) != sum(
+                1
+                for test in tests
+                if isinstance(test, dict)
+                and isinstance(test.get("command"), list)
+                and test["command"]
+                and isinstance(test["command"][0], str)
+            ):
+                raise RuntimeError("Stage 5 behavior run target is malformed or ambiguous")
+            target = next(iter(targets))
+        else:
+            command = run.get("command")
+            if (
+                not isinstance(command, list)
+                or not command
+                or not isinstance(command[0], str)
+            ):
+                raise RuntimeError("Stage 5 behavior run target is malformed or absent")
+            target = command[0]
+        previous = binary_by_target.setdefault(target, binary_sha256)
+        if previous != binary_sha256:
+            raise RuntimeError("Stage 5 engine-local binary identity is inconsistent")
+        semantic_runs.append(
+            {key: value for key, value in run.items() if key != "binary_sha256"}
+        )
+    return semantic_runs
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--artifact", type=Path, required=True)
@@ -410,9 +462,10 @@ def main() -> int:
             != EXPECTED_BEHAVIOR_MANIFEST_IDENTITY
         ):
             raise RuntimeError(f"{name} Stage 5 behavior manifest differs")
+        semantic_runs = semantic_behavior_runs(runs)
         if behavior_runs is None:
-            behavior_runs = runs
-        elif runs != behavior_runs:
+            behavior_runs = semantic_runs
+        elif semantic_runs != behavior_runs:
             raise RuntimeError("Stage 5 engines disagree on exact behavioral receipts")
         input_rows.append([name, len(receipt_bytes), sha256(receipt_bytes)])
     input_rows.extend(

@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -63,9 +63,13 @@ fn published_stage5_three_engine_receipts_bind_one_inactive_artifact() {
 
     let artifact = read_json(release_root.join("evidence-gates.v1.json"));
     let artifact_cbor = fs::read(release_root.join("evidence-gates.v1.cbor")).unwrap();
-    let builder = read_json(release_root.join("python-builder-receipt.v1.json"));
-    let validator = read_json(release_root.join("semantic-validation-receipt.v1.json"));
-    let ruby = read_json(release_root.join("ruby-verification-receipt.v1.json"));
+    let builder_bytes = fs::read(release_root.join("python-builder-receipt.v1.json")).unwrap();
+    let validator_bytes =
+        fs::read(release_root.join("semantic-validation-receipt.v1.json")).unwrap();
+    let ruby_bytes = fs::read(release_root.join("ruby-verification-receipt.v1.json")).unwrap();
+    let builder: Value = serde_json::from_slice(&builder_bytes).unwrap();
+    let validator: Value = serde_json::from_slice(&validator_bytes).unwrap();
+    let ruby: Value = serde_json::from_slice(&ruby_bytes).unwrap();
     let consensus = read_json(release_root.join("three-engine-consensus-receipt.v1.json"));
     let harness = read_json(release_root.join("proof-harness-receipt.v1.json"));
     let predecessor = read_json(release_root.join("predecessor-closure.v1.json"));
@@ -250,14 +254,21 @@ fn published_stage5_three_engine_receipts_bind_one_inactive_artifact() {
         ),
         "sha256:a45a1774976a2ad7d3e9cf9702ea78bb5bbae33a9deca7a06d5127c451477f12"
     );
-    for index in 0..8 {
-        assert_eq!(
-            builder["behavior_runs"][index]["binary_sha256"],
-            validator["behavior_runs"][index]["binary_sha256"]
-        );
-        assert_eq!(
-            builder["behavior_runs"][index]["binary_sha256"],
-            ruby["behavior_runs"][index]["binary_sha256"]
+    let builder_semantics = semantic_behavior_runs(&builder["behavior_runs"]);
+    let validator_semantics = semantic_behavior_runs(&validator["behavior_runs"]);
+    let ruby_semantics = semantic_behavior_runs(&ruby["behavior_runs"]);
+    assert_eq!(builder_semantics, validator_semantics);
+    assert_eq!(builder_semantics, ruby_semantics);
+    for (name, bytes) in [
+        ("builder", &builder_bytes),
+        ("validator", &validator_bytes),
+        ("ruby", &ruby_bytes),
+    ] {
+        assert!(
+            consensus["inputs"]
+                .as_array()
+                .unwrap()
+                .contains(&serde_json::json!([name, bytes.len(), sha256(bytes)]))
         );
     }
     assert_eq!(consensus["artifact_id"], identity);
@@ -296,28 +307,28 @@ fn published_stage5_three_engine_receipts_bind_one_inactive_artifact() {
     );
     assert_eq!(
         consensus["exact_behavior_receipt_sha256"],
-        sha256(&canonical_json(&builder["behavior_runs"]))
+        sha256(&canonical_json(&builder_semantics))
     );
     assert_eq!(consensus["behavior_passed"], 55);
     assert_eq!(
         consensus["behavior_manifest_identity"],
         "sha256:a45a1774976a2ad7d3e9cf9702ea78bb5bbae33a9deca7a06d5127c451477f12"
     );
-    assert_eq!(consensus["proof_harness_passed"], 52);
-    assert_eq!(harness["passed"], 52);
+    assert_eq!(consensus["proof_harness_passed"], 66);
+    assert_eq!(harness["passed"], 66);
     let harness_tests = harness["tests"].as_array().unwrap();
-    assert_eq!(harness_tests.len(), 52);
+    assert_eq!(harness_tests.len(), 66);
     assert_eq!(
         harness_tests
             .iter()
             .map(|test| test.as_str().unwrap())
             .collect::<BTreeSet<_>>()
             .len(),
-        52
+        66
     );
     assert_eq!(
         harness["manifest_identity"],
-        "sha256:9ae018efed7338dd75829e97c1e2281446e7623f166f863aec96259fe1c212c0"
+        "sha256:c5d8562805f5b655447d32f1262d4fc06e91c7a80ce9ccdeab4eb0c77e1188a1"
     );
     assert_eq!(
         harness["manifest_identity"],
@@ -541,6 +552,38 @@ fn read_json(path: PathBuf) -> Value {
             .is_symlink()
     );
     serde_json::from_slice(&fs::read(path).unwrap()).unwrap()
+}
+
+fn semantic_behavior_runs(runs: &Value) -> Value {
+    let mut projected = runs.as_array().unwrap().clone();
+    let mut binary_by_target = BTreeMap::new();
+    for run in &mut projected {
+        let binary_sha256 = run["binary_sha256"].as_str().unwrap();
+        assert_eq!(binary_sha256.len(), 64);
+        assert!(
+            binary_sha256
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        );
+        let target = if let Some(tests) = run.get("tests").and_then(Value::as_array) {
+            let targets = tests
+                .iter()
+                .map(|test| test["command"][0].as_str().unwrap())
+                .collect::<BTreeSet<_>>();
+            assert_eq!(targets.len(), 1);
+            (*targets.first().unwrap()).to_owned()
+        } else {
+            run["command"][0].as_str().unwrap().to_owned()
+        };
+        if let Some(previous) = binary_by_target.insert(target, binary_sha256.to_owned()) {
+            assert_eq!(previous, binary_sha256);
+        }
+        run.as_object_mut()
+            .unwrap()
+            .remove("binary_sha256")
+            .unwrap();
+    }
+    Value::Array(projected)
 }
 
 fn canonical_json(value: &Value) -> Vec<u8> {

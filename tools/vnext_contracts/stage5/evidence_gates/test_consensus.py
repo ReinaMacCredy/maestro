@@ -10,6 +10,82 @@ from tools.vnext_contracts.stage5.evidence_gates import behavior, consensus
 
 
 class Stage5ConsensusTests(unittest.TestCase):
+    def test_engine_local_binary_hashes_are_validated_before_semantic_consensus(self) -> None:
+        runs = self.behavior_runs("a" * 64)
+        self.assertEqual(
+            consensus.semantic_behavior_runs(runs),
+            consensus.semantic_behavior_runs(self.behavior_runs("b" * 64)),
+        )
+        for label, mutation in (
+            ("uppercase", "A" * 64),
+            ("short", "a" * 63),
+            ("non-hex", "g" * 64),
+        ):
+            with self.subTest(label=label), self.assertRaises(RuntimeError):
+                consensus.semantic_behavior_runs(self.behavior_runs(mutation))
+        runs[-1]["binary_sha256"] = "b" * 64
+        with self.assertRaises(RuntimeError):
+            consensus.semantic_behavior_runs(runs)
+
+    def test_semantic_consensus_excludes_only_engine_local_binary_hashes(self) -> None:
+        expected = consensus.semantic_behavior_runs(self.behavior_runs("a" * 64))
+        for field, value in (
+            ("command", ["maestro", "other", "--exact", "--nocapture"]),
+            ("name", "other"),
+            ("result", "fail"),
+        ):
+            runs = self.behavior_runs("b" * 64)
+            runs[0]["tests"][0][field] = value
+            with self.subTest(field=field):
+                self.assertNotEqual(consensus.semantic_behavior_runs(runs), expected)
+        for field, run_value in (("passed", 0), ("label", "other")):
+            runs = self.behavior_runs("b" * 64)
+            runs[0][field] = run_value
+            with self.subTest(field=field):
+                self.assertNotEqual(consensus.semantic_behavior_runs(runs), expected)
+        for field, mutant_value in (
+            ("command", ["maestro", "other", "--exact", "--nocapture"]),
+            ("passed", 1),
+            ("rejected", False),
+            ("result", "pass"),
+            ("substituted_for", "other"),
+        ):
+            runs = self.behavior_runs("b" * 64)
+            runs[-1][field] = mutant_value
+            with self.subTest(field=field):
+                self.assertNotEqual(consensus.semantic_behavior_runs(runs), expected)
+
+    @staticmethod
+    def behavior_runs(binary_sha256: str) -> list[dict[str, Any]]:
+        return [
+            {
+                "binary_sha256": binary_sha256,
+                "label": "behavior",
+                "passed": 1,
+                "tests": [
+                    {
+                        "command": ["maestro", "exact", "--exact", "--nocapture"],
+                        "name": "exact",
+                        "result": "pass",
+                    }
+                ],
+            },
+            {
+                "binary_sha256": binary_sha256,
+                "command": [
+                    "maestro",
+                    "substitution",
+                    "--exact",
+                    "--nocapture",
+                ],
+                "label": "same-count-substitution-mutant",
+                "passed": 0,
+                "rejected": True,
+                "result": "rejected",
+                "substituted_for": "exact",
+            },
+        ]
+
     def test_receipt_identity_rejects_a_self_consistent_payload_mutation(self) -> None:
         sources = [
             [
