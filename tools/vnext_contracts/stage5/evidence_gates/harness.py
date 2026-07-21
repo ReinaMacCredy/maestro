@@ -56,6 +56,7 @@ EXPECTED_TESTS = (
     "tools.vnext_contracts.stage5.evidence_gates.test_consensus.Stage5ConsensusTests.test_snapshot_identity_is_recomputed_from_exact_tree_bytes",
     "tools.vnext_contracts.stage5.evidence_gates.test_consensus.Stage5ConsensusTests.test_toolchain_identity_rejects_extra_file_and_duplicate_row",
     "tools.vnext_contracts.stage5.evidence_gates.test_consensus.Stage5ConsensusTests.test_toolchain_identity_rejects_file_mutation",
+    "tools.vnext_contracts.stage5.evidence_gates.test_seal.Stage5SnapshotTests.test_driver_name_literal_is_identity_only_while_static_argument_executes",
     "tools.vnext_contracts.stage5.evidence_gates.test_seal.Stage5SnapshotTests.test_reconstruction_does_not_readmit_a_mutable_snapshot_object",
     "tools.vnext_contracts.stage5.evidence_gates.test_seal.Stage5SnapshotTests.test_ruby_verifier_executes_its_exact_test_output_parser",
     "tools.vnext_contracts.stage5.evidence_gates.test_seal.Stage5SnapshotTests.test_seven_phase_adapter_resumes_exact_topology_after_interruption",
@@ -73,7 +74,7 @@ EXPECTED_TESTS = (
     "tools.vnext_contracts.stage5.evidence_gates.test_toolchain.Stage5ToolchainClosureTests.test_rejects_symlinked_target_library_entry",
 )
 EXPECTED_TEST_MANIFEST_IDENTITY = (
-    "sha256:37292bbee3b812cfa73e6c734e9378cc012a30fcdd48aa8e74a76c965e924e20"
+    "sha256:b16ab816a6d3f4dc73ee83f8fe5fc87e9e447fbca5bc0421727c63f0c101f1be"
 )
 
 

@@ -812,7 +812,7 @@ def main() -> int:
                             "--driver",
                             "{input:rustc-driver}",
                             "--driver-name",
-                            "{input:rustc-driver-name}",
+                            rustc_driver.name,
                             "--target-lib",
                             "{input:rust-target-lib}",
                             "--target",

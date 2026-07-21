@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import cast
 from unittest import mock
 
-from tools.vnext_contracts.stage5.evidence_gates import seal
+from tools.vnext_contracts.stage5.evidence_gates import seal, toolchain
 from tools.vnext_contracts.proof_engine import (
     CommandSpec,
     EngineError,
@@ -176,6 +176,60 @@ class Stage5SnapshotTests(unittest.TestCase):
                 "behavior_manifest_identity": "sha256:a45a1774976a2ad7d3e9cf9702ea78bb5bbae33a9deca7a06d5127c451477f12",
                 "exact_test_output_parser": "pass",
             },
+        )
+
+    def test_driver_name_literal_is_identity_only_while_static_argument_executes(self) -> None:
+        temporary, _, cache = self.fixture()
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        script = root / "record-driver.py"
+        script.write_text(
+            "from pathlib import Path\n"
+            "import sys\n"
+            "source = Path(sys.argv[1])\n"
+            "destination = Path(sys.argv[3])\n"
+            "destination.write_text(f'{source.name}:{sys.argv[2]}', encoding='ascii')\n",
+            encoding="ascii",
+        )
+        driver = root / "file"
+        driver.write_bytes(b"driver-fixture")
+        driver_name = "librustc_driver-0123456789abcdef.dylib"
+        self.assertIsNotNone(toolchain.DRIVER_NAME.fullmatch(driver_name))
+        plan = ProofPlan(
+            inputs=(
+                InputBinding.file("script", script),
+                InputBinding.file("rustc-driver", driver),
+                InputBinding.literal("rustc-driver-name", driver_name),
+            ),
+            tools=(ToolSpec("python", Path(sys.executable), ("--version",)),),
+            phases=(
+                PhaseSpec(
+                    name="toolchain",
+                    commands=(
+                        CommandSpec(
+                            tool="python",
+                            args=(
+                                "{input:script}",
+                                "{input:rustc-driver}",
+                                driver_name,
+                                "{phase_root}/driver-name.txt",
+                            ),
+                            label="static-driver-name",
+                        ),
+                    ),
+                    inputs=("script", "rustc-driver", "rustc-driver-name"),
+                ),
+            ),
+        )
+        result = ProofEngine().execute(
+            plan,
+            run_root=root / "run",
+            cache_root=cache,
+            run_token="stage5-driver-name-static-argument",
+        )
+        self.assertEqual(
+            (result.phases[0].output_root / "driver-name.txt").read_text(encoding="ascii"),
+            f"file:{driver_name}",
         )
 
     def test_seven_phase_adapter_resumes_exact_topology_after_interruption(self) -> None:
