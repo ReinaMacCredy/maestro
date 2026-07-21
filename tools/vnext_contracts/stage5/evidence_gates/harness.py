@@ -56,6 +56,7 @@ EXPECTED_TESTS = (
     "tools.vnext_contracts.stage5.evidence_gates.test_consensus.Stage5ConsensusTests.test_snapshot_identity_is_recomputed_from_exact_tree_bytes",
     "tools.vnext_contracts.stage5.evidence_gates.test_consensus.Stage5ConsensusTests.test_toolchain_identity_rejects_extra_file_and_duplicate_row",
     "tools.vnext_contracts.stage5.evidence_gates.test_consensus.Stage5ConsensusTests.test_toolchain_identity_rejects_file_mutation",
+    "tools.vnext_contracts.stage5.evidence_gates.test_consensus_harness_contract.Stage5ConsensusHarnessContractTests.test_consensus_pins_the_exact_frozen_harness_manifest",
     "tools.vnext_contracts.stage5.evidence_gates.test_seal.Stage5SnapshotTests.test_driver_name_literal_is_identity_only_while_static_argument_executes",
     "tools.vnext_contracts.stage5.evidence_gates.test_seal.Stage5SnapshotTests.test_reconstruction_does_not_readmit_a_mutable_snapshot_object",
     "tools.vnext_contracts.stage5.evidence_gates.test_seal.Stage5SnapshotTests.test_ruby_verifier_executes_its_exact_test_output_parser",
@@ -82,7 +83,7 @@ EXPECTED_TESTS = (
     "tools.vnext_contracts.stage5.evidence_gates.test_toolchain.Stage5ToolchainClosureTests.test_relocated_clang_links_concurrently_with_empty_path",
 )
 EXPECTED_TEST_MANIFEST_IDENTITY = (
-    "sha256:0264ac4154824568e121ceb41ea6d9b7b6e23b69ae576251d382a9d751b5117c"
+    "sha256:953795f20001a5a7c81b4ad57fccce9adfb8d681a5a6ca852193990779481375"
 )
 
 
@@ -109,6 +110,7 @@ def main() -> int:
         [
             "tools.vnext_contracts.proof_engine.test_engine",
             "tools.vnext_contracts.stage5.evidence_gates.test_consensus",
+            "tools.vnext_contracts.stage5.evidence_gates.test_consensus_harness_contract",
             "tools.vnext_contracts.stage5.evidence_gates.test_seal",
             "tools.vnext_contracts.stage5.evidence_gates.test_toolchain",
         ]

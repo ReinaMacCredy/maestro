@@ -9,9 +9,9 @@ from tools.vnext_contracts.stage5.evidence_gates import consensus, harness
 
 class Stage5ConsensusHarnessContractTests(unittest.TestCase):
     def test_consensus_pins_the_exact_frozen_harness_manifest(self) -> None:
-        expected_count = 63
+        expected_count = 64
         expected_identity = (
-            "sha256:0264ac4154824568e121ceb41ea6d9b7b6e23b69ae576251d382a9d751b5117c"
+            "sha256:953795f20001a5a7c81b4ad57fccce9adfb8d681a5a6ca852193990779481375"
         )
         canonical_tests = (
             json.dumps(
