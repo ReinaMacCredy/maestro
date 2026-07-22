@@ -881,7 +881,9 @@ impl GenericExecutionAuthorityV1 {
         exact_payload_commitment: [u8; 32],
         executor_principal_id: PrincipalIdV1,
     ) -> Result<Self, RepositoryLeafAuthorityErrorV1> {
-        if !action.is_ordinary_execution_action() {
+        if action.execution_authority_basis()
+            != Some(ActionAuthorityBasisKindV1::OrdinaryLiveRuntime)
+        {
             return Err(RepositoryLeafAuthorityErrorV1::NonExecutionAction);
         }
         require_nonzero(subject_commitment)?;
@@ -2055,7 +2057,8 @@ mod tests {
     }
 
     #[test]
-    fn generic_execution_authority_binds_ordinary_leaves_and_rejects_specialized_leaves() {
+    fn generic_execution_authority_binds_every_ordinary_basis_leaf_and_rejects_specialized_leaves()
+    {
         let subject = digest("execution-subject");
         let current_state = digest("execution-current-state");
         let payload = digest("execution-exact-payload");
@@ -2063,9 +2066,13 @@ mod tests {
         let executor = PrincipalIdV1::derive("execution-principal").unwrap();
         let actions = RepositoryActionLeafV1::ALL
             .into_iter()
-            .filter(|action| action.is_ordinary_execution_action())
+            .filter(|action| {
+                action.execution_authority_basis()
+                    == Some(ActionAuthorityBasisKindV1::OrdinaryLiveRuntime)
+            })
             .collect::<Vec<_>>();
-        assert_eq!(actions.len(), 8);
+        assert_eq!(actions.len(), 12);
+        assert!(actions.contains(&RepositoryActionLeafV1::PublishObservation));
 
         for action in actions {
             let authority = GenericExecutionAuthorityV1::new(
@@ -2115,9 +2122,15 @@ mod tests {
 
         let specialized = RepositoryActionLeafV1::ALL
             .into_iter()
-            .filter(|action| action.is_execution_action() && !action.is_ordinary_execution_action())
+            .filter(|action| {
+                matches!(
+                    action.execution_authority_basis(),
+                    Some(ActionAuthorityBasisKindV1::BootstrapControlG0)
+                        | Some(ActionAuthorityBasisKindV1::ContinuityMaintenance)
+                )
+            })
             .collect::<Vec<_>>();
-        assert_eq!(specialized.len(), 8);
+        assert_eq!(specialized.len(), 11);
         for action in specialized {
             assert_eq!(
                 GenericExecutionAuthorityV1::new(
