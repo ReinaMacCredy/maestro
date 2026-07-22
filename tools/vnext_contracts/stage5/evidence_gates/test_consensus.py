@@ -1,13 +1,21 @@
 from __future__ import annotations
 
 import copy
+import json
 import tempfile
 import unittest
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 from unittest import mock
 
-from tools.vnext_contracts.stage5.evidence_gates import behavior, consensus, validate
+from tools.vnext_contracts.stage5.evidence_gates import (
+    behavior,
+    build as stage5_build,
+    consensus,
+    harness,
+    validate,
+)
 
 
 class Stage5ConsensusTests(unittest.TestCase):
@@ -29,7 +37,7 @@ class Stage5ConsensusTests(unittest.TestCase):
             self.semantic_runs(runs)
 
     def test_semantic_consensus_excludes_only_engine_local_binary_hashes(self) -> None:
-        expected = self.semantic_runs(self.behavior_runs("a" * 64))
+        self.semantic_runs(self.behavior_runs("a" * 64))
         for field, value in (
             ("command", ["maestro", "other", "--exact", "--nocapture"]),
             ("name", "other"),
@@ -41,7 +49,8 @@ class Stage5ConsensusTests(unittest.TestCase):
                 self.semantic_runs(runs)
         runs = self.behavior_runs("b" * 64)
         runs[0]["label"] = "other"
-        self.assertNotEqual(self.semantic_runs(runs), expected)
+        with self.assertRaises(RuntimeError):
+            self.semantic_runs(runs)
         for field, run_value in (
             ("passed", 0),
             ("label", ""),
@@ -84,6 +93,8 @@ class Stage5ConsensusTests(unittest.TestCase):
     ) -> list[dict[str, Any]]:
         with mock.patch.object(
             consensus, "EXPECTED_BEHAVIOR_TESTS", expected_passes
+        ), mock.patch.object(
+            consensus, "EXPECTED_NORMAL_RUNS", (("behavior", "maestro", 1),)
         ):
             return consensus.semantic_behavior_runs(runs)
 
@@ -119,135 +130,175 @@ class Stage5ConsensusTests(unittest.TestCase):
         ]
 
     def test_receipt_identity_rejects_a_self_consistent_payload_mutation(self) -> None:
-        sources = [
-            [
-                "tools/vnext_contracts/stage5/evidence_gates/build.py",
-                1,
-                "a" * 64,
-            ]
-        ]
-        artifact: dict[str, Any] = {
-            "diagnostic_proof_claim": consensus.DIAGNOSTIC_PROOF_CLAIM,
-            "source_closure": sources,
-        }
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary)
+            stage5_build.build(output, Path("/bin/true"), Path("/bin/true"), False)
+            artifact: dict[str, Any] = json.loads(
+                (output / "evidence-gates.v1.json").read_text(encoding="ascii")
+            )
+        catalog = json.loads(
+            (
+                stage5_build.WORKSPACE
+                / "contracts/vnext/catalogs/generated/catalog-01-observation.json"
+            ).read_text(encoding="ascii")
+        )
+        observations = validate.observation_rows(catalog)
+        sources = [validate.row(path) for path in sorted(validate.SOURCE_PATHS)]
+        predecessors = [validate.row(path) for path in validate.PREDECESSOR_PATHS]
+        encoded = bytes.fromhex(artifact["cbor_hex"])
+
+        def validator_accepts(value: object) -> bool:
+            return validate.exact_artifact_grammar(
+                value,
+                catalog_manifest_id=catalog["manifest_id"],
+                observations=observations,
+                sources=sources,
+                predecessors=predecessors,
+                encoded=encoded,
+            )
+        self.assertTrue(stage5_build.exact_behavior(artifact["behavior"]))
+        self.assertTrue(validator_accepts(artifact))
+        self.assertTrue(consensus.validate_artifact_grammar(artifact, require_full=False))
+        for mutant in self.recursive_shape_mutants(artifact["behavior"]):
+            preflight_mutant = copy.deepcopy(artifact)
+            preflight_mutant["behavior"] = mutant
+            self.assertFalse(stage5_build.exact_behavior(mutant))
+            self.assertFalse(validate.exact_behavior(mutant))
+            self.assertFalse(validator_accepts(preflight_mutant))
+            self.assertFalse(
+                consensus.validate_artifact_grammar(preflight_mutant, require_full=False)
+            )
+
+        runs = self.full_behavior_runs()
+        artifact["behavior"] = {"passed": behavior.EXPECTED_TESTS, "runs": runs}
+        self.assertTrue(stage5_build.exact_behavior(artifact["behavior"]))
+        self.assertTrue(validator_accepts(artifact))
+        self.assertTrue(consensus.validate_artifact_grammar(artifact, require_full=True))
+        for mutant in self.recursive_shape_mutants(artifact["behavior"]):
+            self.assertFalse(stage5_build.exact_behavior(mutant))
+            self.assertFalse(validate.exact_behavior(mutant))
+        for mutant in self.recursive_shape_mutants(artifact):
+            self.assertFalse(validator_accepts(mutant))
+            self.assertFalse(consensus.validate_artifact_grammar(mutant, require_full=True))
+
         value = {
-            "artifact_id": "artifact",
-            "artifact_sha256": "b" * 64,
+            "artifact_id": artifact["artifact_id"],
+            "artifact_sha256": consensus.sha256(consensus.pretty_json(artifact)),
             "behavior_manifest_identity": consensus.EXPECTED_BEHAVIOR_MANIFEST_IDENTITY,
             "behavior_passed": 73,
-            "behavior_runs": [],
-            "builder_sha256": "a" * 64,
+            "behavior_runs": runs,
+            "builder_sha256": dict(
+                (row[0], row[2]) for row in artifact["source_closure"]
+            )["tools/vnext_contracts/stage5/evidence_gates/build.py"],
             "diagnostic_proof_claim": consensus.DIAGNOSTIC_PROOF_CLAIM,
             "publication_state": "inactive_candidate",
             "schema_version": "maestro.vnext.stage5.python-builder-receipt.v1",
-            "source_closure_sha256": consensus.sha256(consensus.canonical_json(sources)),
+            "source_closure_sha256": consensus.sha256(
+                consensus.canonical_json(artifact["source_closure"])
+            ),
         }
         receipt: dict[str, Any] = {
             **value,
             "receipt_identity": f"sha256:{consensus.sha256(consensus.canonical_json(value))}",
         }
         self.assertTrue(consensus.validate_engine_receipt("builder", receipt, artifact))
-        for invalid_claim in (None, False, "production_authenticity", "production_restore_currentness"):
-            invalid_receipt = copy.deepcopy(receipt)
-            if invalid_claim is None:
-                invalid_receipt.pop("diagnostic_proof_claim")
-            else:
-                invalid_receipt["diagnostic_proof_claim"] = invalid_claim
-            invalid_receipt["receipt_identity"] = f"sha256:{consensus.sha256(consensus.canonical_json({key: item for key, item in invalid_receipt.items() if key != 'receipt_identity'}))}"
-            self.assertFalse(
-                consensus.validate_engine_receipt("builder", invalid_receipt, artifact)
-            )
-            invalid_artifact = copy.deepcopy(artifact)
-            if invalid_claim is None:
-                invalid_artifact.pop("diagnostic_proof_claim")
-            else:
-                invalid_artifact["diagnostic_proof_claim"] = invalid_claim
-            self.assertFalse(
-                consensus.validate_engine_receipt("builder", receipt, invalid_artifact)
-            )
-        for forbidden_key in (
-            "production_authenticity",
-            "production_host_authenticity",
-            "production_restore_currentness",
-            "Production-Host-Authenticity",
-        ):
-            invalid_artifact = copy.deepcopy(artifact)
-            invalid_artifact[forbidden_key] = True
-            self.assertFalse(
-                consensus.validate_engine_receipt("builder", receipt, invalid_artifact)
-            )
-            invalid_receipt = copy.deepcopy(receipt)
-            invalid_receipt[forbidden_key] = True
-            invalid_receipt["receipt_identity"] = f"sha256:{consensus.sha256(consensus.canonical_json({key: item for key, item in invalid_receipt.items() if key != 'receipt_identity'}))}"
-            self.assertFalse(
-                consensus.validate_engine_receipt("builder", invalid_receipt, artifact)
-            )
-        for nested_claim in (
-            {"production": {"authenticity": True}},
-            {"production": {"host": {"authenticity": True}}},
-            {"production": {"restore": {"currentness": True}}},
-            {"proof": {"claim": "production-authenticity"}},
-            {"proof": {"claim": "production_host_authenticity"}},
-            {"proof": {"claim": "production restore currentness"}},
-        ):
-            invalid_artifact = copy.deepcopy(artifact)
-            invalid_artifact["behavior"] = nested_claim
-            self.assertFalse(consensus.has_exact_diagnostic_proof_claim(invalid_artifact))
-            self.assertTrue(validate.contains_forbidden_production_claim(invalid_artifact))
-        renamed_artifact = copy.deepcopy(artifact)
-        renamed_artifact["diagnostic-proof-claim"] = renamed_artifact.pop(
-            "diagnostic_proof_claim"
-        )
-        self.assertFalse(consensus.has_exact_diagnostic_proof_claim(renamed_artifact))
-        exact_validator_artifact = {key: None for key in validate.ARTIFACT_KEYS}
-        exact_validator_artifact["diagnostic_proof_claim"] = (
-            validate.DIAGNOSTIC_PROOF_CLAIM
-        )
-        self.assertTrue(validate.has_exact_artifact_proof_claim(exact_validator_artifact))
-        for additive in (
-            {"production_authenticity": True},
-            {"production_host_authenticity": True},
-            {"production_restore_currentness": True},
-            {"behavior": {"production": {"host": {"authenticity": True}}}},
-        ):
-            invalid_validator_artifact = copy.deepcopy(exact_validator_artifact)
-            invalid_validator_artifact.update(additive)
-            self.assertFalse(
-                validate.has_exact_artifact_proof_claim(invalid_validator_artifact)
-            )
-        harness: dict[str, Any] = {
+        for mutant in self.recursive_shape_mutants(receipt):
+            if isinstance(mutant, dict) and "receipt_identity" in mutant:
+                identity_value = {
+                    key: item for key, item in mutant.items() if key != "receipt_identity"
+                }
+                mutant["receipt_identity"] = (
+                    f"sha256:{consensus.sha256(consensus.canonical_json(identity_value))}"
+                )
+            if mutant == receipt:
+                continue
+            self.assertFalse(consensus.validate_engine_receipt("builder", mutant, artifact))
+
+        harness_receipt: dict[str, Any] = {
             "diagnostic_proof_claim": consensus.DIAGNOSTIC_PROOF_CLAIM,
-            "manifest_identity": "sha256:" + "c" * 64,
-            "passed": 2,
+            "manifest_identity": harness.EXPECTED_TEST_MANIFEST_IDENTITY,
+            "passed": len(harness.EXPECTED_TESTS),
             "schema_version": "maestro.vnext.stage5.proof-harness-receipt.v1",
-            "tests": ["first", "second"],
+            "tests": list(harness.EXPECTED_TESTS),
         }
-        with mock.patch.object(consensus, "EXPECTED_PROOF_HARNESS_TESTS", 2):
-            self.assertTrue(consensus.validate_harness_receipt(harness))
-            for invalid_claim in (
-                None,
-                False,
-                "production_authenticity",
-                "production_restore_currentness",
-            ):
-                invalid_harness = copy.deepcopy(harness)
-                if invalid_claim is None:
-                    invalid_harness.pop("diagnostic_proof_claim")
-                else:
-                    invalid_harness["diagnostic_proof_claim"] = invalid_claim
-                self.assertFalse(consensus.validate_harness_receipt(invalid_harness))
-            for forbidden_key in (
-                "production_authenticity",
-                "production_host_authenticity",
-                "production_restore_currentness",
-            ):
-                invalid_harness = copy.deepcopy(harness)
-                invalid_harness[forbidden_key] = True
-                self.assertFalse(consensus.validate_harness_receipt(invalid_harness))
-        receipt["unbound_extension"] = "self-consistent-substitution"
-        receipt["receipt_identity"] = f"sha256:{consensus.sha256(consensus.canonical_json({key: item for key, item in receipt.items() if key != 'receipt_identity'}))}"
-        self.assertTrue(consensus.validate_receipt_identity(receipt))
-        self.assertFalse(consensus.validate_engine_receipt("builder", receipt, artifact))
+        self.assertTrue(consensus.validate_harness_receipt(harness_receipt))
+        for mutant in self.recursive_shape_mutants(harness_receipt):
+            self.assertFalse(consensus.validate_harness_receipt(mutant))
+
+    @staticmethod
+    def full_behavior_runs() -> list[dict[str, Any]]:
+        runs = [
+            {
+                "binary_sha256": "a" * 64,
+                "label": label,
+                "passed": len(tests),
+                "tests": [
+                    {
+                        "command": [target, test, "--exact", "--nocapture"],
+                        "name": test,
+                        "result": "pass",
+                    }
+                    for test in tests
+                ],
+            }
+            for label, target, tests in behavior.EXPECTED_RUNS
+        ]
+        first_target = behavior.EXPECTED_RUNS[0][1]
+        first_test = behavior.EXPECTED_RUNS[0][2][0]
+        runs.append(
+            {
+                "binary_sha256": "a" * 64,
+                "command": [
+                    first_target,
+                    f"{first_test}_same_count_substitution_mutant",
+                    "--exact",
+                    "--nocapture",
+                ],
+                "label": "same-count-substitution-mutant",
+                "passed": 0,
+                "rejected": True,
+                "result": "rejected",
+                "substituted_for": first_test,
+            }
+        )
+        return runs
+
+    @classmethod
+    def recursive_shape_mutants(cls, value: Any) -> Iterator[Any]:
+        if isinstance(value, dict):
+            yield {**copy.deepcopy(value), "__unexpected_claim__": "prod-host-verified"}
+            for key, child in value.items():
+                dict_missing = copy.deepcopy(value)
+                del dict_missing[key]
+                yield dict_missing
+                renamed = copy.deepcopy(value)
+                renamed[f"__renamed_{key}"] = renamed.pop(key)
+                yield renamed
+                for mutated_child in cls.recursive_shape_mutants(child):
+                    mutant: Any = copy.deepcopy(value)
+                    mutant[key] = mutated_child
+                    yield mutant
+            yield [copy.deepcopy(value)]
+        elif isinstance(value, list):
+            yield [*copy.deepcopy(value), {"proof": {"claim": "live-host-certified"}}]
+            for index, child in enumerate(value):
+                list_missing = list(copy.deepcopy(value))
+                del list_missing[index]
+                yield list_missing
+                for mutated_child in cls.recursive_shape_mutants(child):
+                    mutant = list(copy.deepcopy(value))
+                    mutant[index] = mutated_child
+                    yield mutant
+            yield {"substituted": copy.deepcopy(value)}
+        elif isinstance(value, str):
+            yield f"{value}-restore-freshness-guaranteed"
+            yield {"proof": {"claim": value}}
+        elif type(value) is int:
+            yield value + 1
+            yield {"substituted": value}
+        elif isinstance(value, bool):
+            yield not value
+            yield {"substituted": value}
 
     def test_semantic_behavior_receipt_excludes_duration_only_diagnostics(self) -> None:
         first = behavior.semantic_test_receipt(

@@ -2942,7 +2942,17 @@ fn stage5_protected_diagnostic_ports_are_sealed_test_only_and_non_bearer() {
     );
     assert!(!integration.contains("operator_mapping_commitment"));
     assert!(!integration.contains("request_commitment"));
-    assert!(integration.contains("pub(crate) fn matches_operator"));
+    assert!(!integration.contains("fn matches_operator"));
+    assert!(!integration.contains("challenge.protected_subject_commitment() == [0; 32]"));
+    assert!(!integration.contains("challenge.anchor_commitment() !="));
+    assert!(!integration.contains("challenge.authority_commitment() == [0; 32]"));
+    assert!(!integration.contains("identity.principal_identity =="));
+    assert!(!integration.contains("identity.binding_identity =="));
+    assert!(!integration.contains("identity.session_identity =="));
+    assert!(!integration.contains("identity.domain_role =="));
+    assert!(!integration.contains("operator_identity =="));
+    assert!(!integration.contains("pub(crate) fn binds"));
+    assert!(integration.contains("pub(crate) fn present_once"));
     assert!(
         integration
             .contains("#[cfg(test)]\npub(crate) struct TrustedHostDiagnosticTestConnectionV1")
@@ -3038,10 +3048,40 @@ fn stage5_protected_diagnostic_ports_are_sealed_test_only_and_non_bearer() {
     let issuance = diagnostic_kernel
         .find("protected_diagnostic_invocation_nonce(")
         .expect("Authority must mint the invocation identity in the current view");
+    let challenge = diagnostic_kernel
+        .find("TrustedHostDiagnosticChallengeV1::from_authority_issuance(")
+        .expect("Authority must construct the same-view challenge");
     let attestation = diagnostic_kernel
         .find(".attest_in_current_view(")
         .expect("Integration must answer the Authority-issued invocation in the same view");
-    assert!(active_anchor < issuance && issuance < attestation);
+    assert!(active_anchor < issuance && issuance < challenge && challenge < attestation);
+    assert!(
+        facade
+            .contains("_current_view_anchor: &'view ProtectedDiagnosticCurrentViewAnchorV1<'view>")
+    );
+    assert!(!facade.contains("PhantomData<&'view ()>"));
+    assert!(!integration.contains("struct TrustedHostDiagnosticChallengeV1"));
+    assert!(!integration.contains("from_authority_issuance"));
+
+    let mut challenge_constructors = Vec::new();
+    let mut presentation_consumers = Vec::new();
+    for file in rust_files_under(Path::new("src")) {
+        let source = read_source_file(&file);
+        if source.contains("TrustedHostDiagnosticChallengeV1::from_authority_issuance(") {
+            challenge_constructors.push(file.clone());
+        }
+        if source.contains(".present_once(") {
+            presentation_consumers.push(file);
+        }
+    }
+    assert_eq!(
+        challenge_constructors,
+        [PathBuf::from("src/domain/vnext/authority/facade.rs")]
+    );
+    assert_eq!(
+        presentation_consumers,
+        [PathBuf::from("src/domain/vnext/authority/facade.rs")]
+    );
 }
 
 fn rust_files_under(root: &Path) -> Vec<PathBuf> {

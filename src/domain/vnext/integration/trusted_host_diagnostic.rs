@@ -7,62 +7,12 @@
 )]
 
 #[cfg(test)]
+use crate::domain::vnext::authority::TrustedHostDiagnosticChallengeV1;
+#[cfg(test)]
 use crate::domain::vnext::persistence::ProtectedDiagnosticCurrentViewAnchorV1;
 use sha2::{Digest, Sha256};
 
-const CHALLENGE_DOMAIN_V1: &[u8] = b"maestro.vnext.trusted-host-diagnostic-challenge.v1";
 const ATTESTATION_DOMAIN_V1: &[u8] = b"maestro.vnext.trusted-host-diagnostic-attestation.v1";
-
-pub(crate) struct TrustedHostDiagnosticChallengeV1<'view> {
-    #[cfg(test)]
-    current_view_anchor: &'view ProtectedDiagnosticCurrentViewAnchorV1<'view>,
-    #[cfg(not(test))]
-    current_view_anchor: &'view (),
-    anchor_commitment: [u8; 32],
-    authority_commitment: [u8; 32],
-    protected_subject_commitment: [u8; 32],
-    invocation_nonce: [u8; 32],
-    commitment: [u8; 32],
-}
-
-impl<'view> TrustedHostDiagnosticChallengeV1<'view> {
-    #[cfg(test)]
-    fn from_authority_issuance(
-        current_view_anchor: &'view ProtectedDiagnosticCurrentViewAnchorV1<'view>,
-        authority_commitment: [u8; 32],
-        protected_subject_commitment: [u8; 32],
-        invocation_nonce: [u8; 32],
-    ) -> Option<Self> {
-        let anchor_commitment = current_view_anchor.commitment();
-        if [
-            anchor_commitment,
-            authority_commitment,
-            protected_subject_commitment,
-            invocation_nonce,
-        ]
-        .contains(&[0; 32])
-        {
-            return None;
-        }
-        let commitment = tuple_commitment(
-            CHALLENGE_DOMAIN_V1,
-            &[
-                &anchor_commitment,
-                &authority_commitment,
-                &protected_subject_commitment,
-                &invocation_nonce,
-            ],
-        );
-        Some(Self {
-            current_view_anchor,
-            anchor_commitment,
-            authority_commitment,
-            protected_subject_commitment,
-            invocation_nonce,
-            commitment,
-        })
-    }
-}
 
 #[cfg(test)]
 struct TrustedHostDiagnosticTestStateV1 {
@@ -163,6 +113,26 @@ impl TrustedHostDiagnosticTestOperatorIdentityV1 {
             && self.store_generation != 0
             && self.authority_epoch != 0
             && self.domain_role != 0
+    }
+
+    fn bind_to_attestation(&self) -> Self {
+        Self {
+            principal_identity: self.principal_identity,
+            binding_identity: self.binding_identity,
+            session_identity: self.session_identity,
+            context_identity: self.context_identity,
+            trust_root_revision: self.trust_root_revision,
+            assurance_revision: self.assurance_revision,
+            human_capable: self.human_capable,
+            binding_not_before: self.binding_not_before,
+            binding_expires_at: self.binding_expires_at,
+            session_not_before: self.session_not_before,
+            session_expires_at: self.session_expires_at,
+            store_generation: self.store_generation,
+            authority_epoch: self.authority_epoch,
+            domain_identity: self.domain_identity,
+            domain_role: self.domain_role,
+        }
     }
 
     fn substitute_dimension(&mut self, dimension: usize) {
@@ -312,43 +282,21 @@ impl TrustedHostDiagnosticTestConnectionV1 {
 
     pub(crate) fn attest_in_current_view<'connection, 'view>(
         &'connection mut self,
-        current_view_anchor: &'view ProtectedDiagnosticCurrentViewAnchorV1<'view>,
-        authority_commitment: [u8; 32],
-        protected_subject_commitment: [u8; 32],
-        invocation_nonce: [u8; 32],
+        challenge: TrustedHostDiagnosticChallengeV1<'view>,
     ) -> Option<TrustedHostDiagnosticAttestationV1<'connection, 'view>> {
-        let challenge = match TrustedHostDiagnosticChallengeV1::from_authority_issuance(
-            current_view_anchor,
-            authority_commitment,
-            protected_subject_commitment,
-            invocation_nonce,
-        ) {
-            Some(challenge) => challenge,
-            None => {
-                let mut state = self.state.borrow_mut();
-                state.authentication_event_consumed = true;
-                state.issued_invocation_nonce = None;
-                return None;
-            }
-        };
-        let current_view_anchor_commitment = challenge.current_view_anchor.commitment();
         let mut state = self.state.borrow_mut();
         if !state.connected
             || state.authentication_event_consumed
             || state.issued_invocation_nonce.is_some()
-            || challenge.protected_subject_commitment == [0; 32]
-            || current_view_anchor_commitment == [0; 32]
-            || challenge.authority_commitment == [0; 32]
-            || challenge.anchor_commitment != current_view_anchor_commitment
         {
             state.authentication_event_consumed = true;
             state.issued_invocation_nonce = None;
             return None;
         }
-        state.issued_invocation_nonce = Some(challenge.invocation_nonce);
+        state.issued_invocation_nonce = Some(challenge.invocation_nonce());
         if !state.connected
             || state.authentication_event_consumed
-            || state.issued_invocation_nonce != Some(challenge.invocation_nonce)
+            || state.issued_invocation_nonce != Some(challenge.invocation_nonce())
         {
             state.authentication_event_consumed = true;
             state.issued_invocation_nonce = None;
@@ -359,9 +307,10 @@ impl TrustedHostDiagnosticTestConnectionV1 {
         let host_currentness_revision = state.host_currentness_revision;
         let revocation_revision = state.revocation_revision;
         let incarnation_revision = state.incarnation_revision;
+        let operator_identity = state.claims.operator_identity.bind_to_attestation();
         let claims_commitment = claims_commitment(
             &state.claims,
-            challenge.commitment,
+            challenge.commitment(),
             host_currentness_revision,
             revocation_revision,
             incarnation_revision,
@@ -369,13 +318,15 @@ impl TrustedHostDiagnosticTestConnectionV1 {
         drop(state);
         Some(TrustedHostDiagnosticAttestationV1 {
             connection: self,
-            _current_view_anchor: challenge.current_view_anchor,
-            anchor_commitment: challenge.anchor_commitment,
-            authority_commitment: challenge.authority_commitment,
-            protected_subject_commitment: challenge.protected_subject_commitment,
-            invocation_nonce: challenge.invocation_nonce,
-            challenge_commitment: challenge.commitment,
+            _current_view_anchor: challenge.current_view_anchor(),
+            anchor_commitment: challenge.anchor_commitment(),
+            authority_commitment: challenge.authority_commitment(),
+            protected_subject_commitment: challenge.protected_subject_commitment(),
+            invocation_nonce: challenge.invocation_nonce(),
+            challenge_commitment: challenge.commitment(),
             claims_commitment,
+            operator_identity,
+            operator_presented: false,
             host_currentness_revision,
             revocation_revision,
             incarnation_revision,
@@ -399,10 +350,107 @@ pub(crate) struct TrustedHostDiagnosticAttestationV1<'connection, 'view> {
     invocation_nonce: [u8; 32],
     challenge_commitment: [u8; 32],
     claims_commitment: [u8; 32],
+    #[cfg(test)]
+    operator_identity: TrustedHostDiagnosticTestOperatorIdentityV1,
+    #[cfg(not(test))]
+    operator_identity: (),
+    operator_presented: bool,
     host_currentness_revision: u64,
     revocation_revision: u64,
     incarnation_revision: u64,
     consumed: bool,
+}
+
+#[cfg(test)]
+pub(crate) struct TrustedHostDiagnosticPresentationV1<'presentation, 'connection, 'view> {
+    attestation: &'presentation TrustedHostDiagnosticAttestationV1<'connection, 'view>,
+}
+
+#[cfg(test)]
+impl TrustedHostDiagnosticPresentationV1<'_, '_, '_> {
+    pub(crate) const fn anchor_commitment(&self) -> [u8; 32] {
+        self.attestation.anchor_commitment
+    }
+
+    pub(crate) const fn authority_commitment(&self) -> [u8; 32] {
+        self.attestation.authority_commitment
+    }
+
+    pub(crate) const fn protected_subject_commitment(&self) -> [u8; 32] {
+        self.attestation.protected_subject_commitment
+    }
+
+    pub(crate) const fn invocation_nonce(&self) -> [u8; 32] {
+        self.attestation.invocation_nonce
+    }
+
+    pub(crate) const fn challenge_commitment(&self) -> [u8; 32] {
+        self.attestation.challenge_commitment
+    }
+
+    pub(crate) const fn claims_commitment(&self) -> [u8; 32] {
+        self.attestation.claims_commitment
+    }
+
+    pub(crate) const fn principal_identity(&self) -> [u8; 32] {
+        self.attestation.operator_identity.principal_identity
+    }
+
+    pub(crate) const fn binding_identity(&self) -> [u8; 32] {
+        self.attestation.operator_identity.binding_identity
+    }
+
+    pub(crate) const fn session_identity(&self) -> [u8; 32] {
+        self.attestation.operator_identity.session_identity
+    }
+
+    pub(crate) const fn context_identity(&self) -> [u8; 32] {
+        self.attestation.operator_identity.context_identity
+    }
+
+    pub(crate) const fn trust_root_revision(&self) -> u64 {
+        self.attestation.operator_identity.trust_root_revision
+    }
+
+    pub(crate) const fn assurance_revision(&self) -> u64 {
+        self.attestation.operator_identity.assurance_revision
+    }
+
+    pub(crate) const fn human_capable(&self) -> bool {
+        self.attestation.operator_identity.human_capable
+    }
+
+    pub(crate) const fn binding_not_before(&self) -> u64 {
+        self.attestation.operator_identity.binding_not_before
+    }
+
+    pub(crate) const fn binding_expires_at(&self) -> u64 {
+        self.attestation.operator_identity.binding_expires_at
+    }
+
+    pub(crate) const fn session_not_before(&self) -> u64 {
+        self.attestation.operator_identity.session_not_before
+    }
+
+    pub(crate) const fn session_expires_at(&self) -> u64 {
+        self.attestation.operator_identity.session_expires_at
+    }
+
+    pub(crate) const fn store_generation(&self) -> u64 {
+        self.attestation.operator_identity.store_generation
+    }
+
+    pub(crate) const fn authority_epoch(&self) -> u64 {
+        self.attestation.operator_identity.authority_epoch
+    }
+
+    pub(crate) const fn domain_identity(&self) -> [u8; 32] {
+        self.attestation.operator_identity.domain_identity
+    }
+
+    pub(crate) const fn domain_role(&self) -> u64 {
+        self.attestation.operator_identity.domain_role
+    }
 }
 
 impl TrustedHostDiagnosticAttestationV1<'_, '_> {
@@ -411,67 +459,14 @@ impl TrustedHostDiagnosticAttestationV1<'_, '_> {
     }
 
     #[cfg(test)]
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "Authority must equality-join every independent host identity dimension"
-    )]
-    pub(crate) fn matches_operator(
-        &self,
-        principal_identity: [u8; 32],
-        binding_identity: [u8; 32],
-        session_identity: [u8; 32],
-        context_identity: [u8; 32],
-        trust_root_revision: u64,
-        assurance_revision: u64,
-        human_capable: bool,
-        binding_not_before: u64,
-        binding_expires_at: u64,
-        session_not_before: u64,
-        session_expires_at: u64,
-        store_generation: u64,
-        authority_epoch: u64,
-        domain_identity: [u8; 32],
-        domain_role: u64,
-    ) -> bool {
-        let state = self.connection.state.borrow();
-        let identity = &state.claims.operator_identity;
-        identity.principal_identity == principal_identity
-            && identity.binding_identity == binding_identity
-            && identity.session_identity == session_identity
-            && identity.context_identity == context_identity
-            && identity.trust_root_revision == trust_root_revision
-            && identity.assurance_revision == assurance_revision
-            && identity.human_capable == human_capable
-            && identity.binding_not_before == binding_not_before
-            && identity.binding_expires_at == binding_expires_at
-            && identity.session_not_before == session_not_before
-            && identity.session_expires_at == session_expires_at
-            && identity.store_generation == store_generation
-            && identity.authority_epoch == authority_epoch
-            && identity.domain_identity == domain_identity
-            && identity.domain_role == domain_role
-    }
-
-    pub(crate) fn binds(
-        &self,
-        anchor_commitment: [u8; 32],
-        authority_commitment: [u8; 32],
-        protected_subject_commitment: [u8; 32],
-    ) -> bool {
-        self.anchor_commitment == anchor_commitment
-            && self.authority_commitment == authority_commitment
-            && self.protected_subject_commitment == protected_subject_commitment
-            && self.challenge_commitment
-                == tuple_commitment(
-                    CHALLENGE_DOMAIN_V1,
-                    &[
-                        &anchor_commitment,
-                        &authority_commitment,
-                        &protected_subject_commitment,
-                        &self.invocation_nonce,
-                    ],
-                )
-            && self.claims_commitment != [0; 32]
+    pub(crate) fn present_once(
+        &mut self,
+    ) -> Option<TrustedHostDiagnosticPresentationV1<'_, '_, '_>> {
+        if self.consumed || self.operator_presented {
+            return None;
+        }
+        self.operator_presented = true;
+        Some(TrustedHostDiagnosticPresentationV1 { attestation: self })
     }
 
     #[cfg(test)]

@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,7 @@ sys.path.insert(0, str(TOOLS))
 import cbor_py  # type: ignore[import-not-found]  # noqa: E402
 from behavior import (  # type: ignore[import-not-found]  # noqa: E402
     EXPECTED_BEHAVIOR_MANIFEST_IDENTITY,
+    EXPECTED_RUNS,
     EXPECTED_TESTS,
     compiled_behavior,
 )
@@ -122,6 +124,7 @@ SOURCE_PATHS = (
     "tools/vnext_contracts/stage5/evidence_gates/verify.rb",
     "tools/vnext_contracts/stage5/evidence_gates/seal.py",
     "tools/vnext_contracts/stage5/evidence_gates/test_consensus.py",
+    "tools/vnext_contracts/stage5/evidence_gates/test_consensus_harness_contract.py",
     "tools/vnext_contracts/stage5/evidence_gates/test_seal.py",
     "tools/vnext_contracts/stage5/evidence_gates/test_toolchain.py",
     "tools/vnext_contracts/stage5/evidence_gates/toolchain.py",
@@ -325,6 +328,69 @@ def run_behavior(cargo: Path, rustc: Path) -> dict[str, object]:
     }
 
 
+def exact_behavior_runs(runs: object) -> bool:
+    if not isinstance(runs, list) or len(runs) != len(EXPECTED_RUNS) + 1:
+        return False
+    binary_by_target: dict[str, str] = {}
+    for run, (label, target, tests) in zip(runs[:-1], EXPECTED_RUNS, strict=True):
+        if not isinstance(run, dict) or set(run) != {
+            "binary_sha256",
+            "label",
+            "passed",
+            "tests",
+        }:
+            return False
+        binary = run.get("binary_sha256")
+        actual_tests = run.get("tests")
+        if (
+            run.get("label") != label
+            or type(run.get("passed")) is not int
+            or run.get("passed") != len(tests)
+            or not isinstance(binary, str)
+            or re.fullmatch(r"[0-9a-f]{64}", binary) is None
+            or not isinstance(actual_tests, list)
+            or len(actual_tests) != len(tests)
+        ):
+            return False
+        if binary_by_target.setdefault(target, binary) != binary:
+            return False
+        for actual, test in zip(actual_tests, tests, strict=True):
+            if actual != {
+                "command": [target, test, "--exact", "--nocapture"],
+                "name": test,
+                "result": "pass",
+            }:
+                return False
+    first_target = EXPECTED_RUNS[0][1]
+    first_test = EXPECTED_RUNS[0][2][0]
+    mutant = runs[-1]
+    return isinstance(mutant, dict) and mutant == {
+        "binary_sha256": binary_by_target[first_target],
+        "command": [
+            first_target,
+            f"{first_test}_same_count_substitution_mutant",
+            "--exact",
+            "--nocapture",
+        ],
+        "label": "same-count-substitution-mutant",
+        "passed": 0,
+        "rejected": True,
+        "result": "rejected",
+        "substituted_for": first_test,
+    }
+
+
+def exact_behavior(behavior: object) -> bool:
+    if behavior == {"mode": "preflight", "passed": 0}:
+        return True
+    return (
+        isinstance(behavior, dict)
+        and set(behavior) == {"passed", "runs"}
+        and behavior.get("passed") == EXPECTED_TESTS
+        and exact_behavior_runs(behavior.get("runs"))
+    )
+
+
 def build(output_root: Path, cargo: Path, rustc: Path, execute_behavior: bool) -> None:
     catalog_path = WORKSPACE / OBSERVATION_CATALOG
     catalog = json.loads(catalog_path.read_text(encoding="ascii"))
@@ -378,7 +444,37 @@ def build(output_root: Path, cargo: Path, rustc: Path, execute_behavior: bool) -
         "source_closure": sources,
         "stage": 5,
     }
-    if set(artifact) != ARTIFACT_KEYS or artifact["diagnostic_proof_claim"] != DIAGNOSTIC_PROOF_CLAIM:
+    if (
+        set(artifact) != ARTIFACT_KEYS
+        or artifact["diagnostic_proof_claim"] != DIAGNOSTIC_PROOF_CLAIM
+        or not exact_behavior(artifact["behavior"])
+        or artifact
+        != {
+            "artifact_id": artifact_id,
+            "behavior": behavior,
+            "behavior_manifest_identity": EXPECTED_BEHAVIOR_MANIFEST_IDENTITY,
+            "byte_length": len(encoded),
+            "cbor_hex": encoded.hex(),
+            "domain": DOMAIN,
+            "diagnostic_proof_claim": DIAGNOSTIC_PROOF_CLAIM,
+            "invalidation_reasons": [list(row) for row in INVALIDATION_REASONS],
+            "invariants": list(INVARIANTS),
+            "observation_catalog_manifest_id": catalog["manifest_id"],
+            "observation_contract_table_identity": OBSERVATION_CONTRACT_TABLE_IDENTITY,
+            "observation_kinds": observation,
+            "predecessors": predecessors,
+            "protocol": {
+                "acquisition_modes": [list(row) for row in ACQUISITION_MODES],
+                "gate_input_classes": [list(row) for row in INPUT_CLASSES],
+                "gate_operators": [list(row) for row in OPERATORS],
+                "gate_results": [list(row) for row in RESULTS],
+            },
+            "publication_state": PUBLICATION_STATE,
+            "schema_version": DOMAIN,
+            "source_closure": sources,
+            "stage": 5,
+        }
+    ):
         raise RuntimeError("Stage 5 artifact proof claim schema differs")
     artifact_bytes = pretty_json(artifact)
     receipt_value = {
@@ -397,7 +493,12 @@ def build(output_root: Path, cargo: Path, rustc: Path, execute_behavior: bool) -
         **receipt_value,
         "receipt_identity": f"sha256:{sha256(canonical_json(receipt_value))}",
     }
-    if set(receipt) != BUILDER_RECEIPT_KEYS or receipt["diagnostic_proof_claim"] != DIAGNOSTIC_PROOF_CLAIM:
+    if (
+        set(receipt) != BUILDER_RECEIPT_KEYS
+        or receipt["diagnostic_proof_claim"] != DIAGNOSTIC_PROOF_CLAIM
+        or receipt["behavior_runs"] != behavior.get("runs", [])
+        or (receipt["behavior_runs"] != [] and not exact_behavior_runs(receipt["behavior_runs"]))
+    ):
         raise RuntimeError("Stage 5 builder receipt proof claim schema differs")
     output_root.mkdir(parents=True, exist_ok=True)
     (output_root / "evidence-gates.v1.json").write_bytes(artifact_bytes)

@@ -21,27 +21,6 @@ RUBY_RECEIPT_KEYS = %w[
   diagnostic_proof_claim publication_state receipt_identity schema_version
   source_closure_sha256 verifier_sha256
 ].sort.freeze
-FORBIDDEN_PRODUCTION_CLAIMS = %w[
-  productionauthenticity productionhostauthenticity productionrestorecurrentness
-].freeze
-
-def forbidden_production_claim?(value, path = [])
-  case value
-  when Hash
-    value.any? do |key, child|
-      child_path = path + [key.to_s.downcase.gsub(/[^a-z0-9]/, "")]
-      FORBIDDEN_PRODUCTION_CLAIMS.any? { |claim| child_path.join.include?(claim) } ||
-        forbidden_production_claim?(child, child_path)
-    end
-  when Array
-    value.any? { |child| forbidden_production_claim?(child, path) }
-  when String
-    normalized = value.downcase.gsub(/[^a-z0-9]/, "")
-    FORBIDDEN_PRODUCTION_CLAIMS.any? { |claim| (path + [normalized]).join.include?(claim) }
-  else
-    false
-  end
-end
 SOURCE_PATHS = %w[
   Cargo.toml Cargo.lock build.rs src/lib.rs src/domain/mod.rs src/domain/vnext/mod.rs
   contracts/vnext/catalogs/generated/catalog-01-observation.json
@@ -87,6 +66,7 @@ SOURCE_PATHS = %w[
   tools/vnext_contracts/stage5/evidence_gates/verify.rb
   tools/vnext_contracts/stage5/evidence_gates/seal.py
   tools/vnext_contracts/stage5/evidence_gates/test_consensus.py
+  tools/vnext_contracts/stage5/evidence_gates/test_consensus_harness_contract.py
   tools/vnext_contracts/stage5/evidence_gates/test_seal.py
   tools/vnext_contracts/stage5/evidence_gates/test_toolchain.py
   tools/vnext_contracts/stage5/evidence_gates/toolchain.py
@@ -314,6 +294,94 @@ def behavior_manifest_identity
   "sha256:#{Digest::SHA256.hexdigest(canonical_json(rows))}"
 end
 
+def exact_behavior_runs?(runs)
+  return false unless runs.is_a?(Array) && runs.length == EXPECTED_RUNS.length + 1
+
+  binary_by_target = {}
+  EXPECTED_RUNS.zip(runs[0...-1]).each do |(label, target, tests), run|
+    return false unless run.is_a?(Hash) && run.keys.sort == %w[binary_sha256 label passed tests]
+    return false unless run.fetch("label", nil) == label && run.fetch("passed", nil) == tests.length
+    binary = run.fetch("binary_sha256", nil)
+    actual_tests = run.fetch("tests", nil)
+    return false unless binary.is_a?(String) && binary.match?(/\A[0-9a-f]{64}\z/)
+    return false unless actual_tests.is_a?(Array) && actual_tests.length == tests.length
+    return false if binary_by_target.fetch(target, binary) != binary
+
+    binary_by_target[target] = binary
+    tests.zip(actual_tests).each do |test, actual|
+      expected = {
+        "command" => [target, test, "--exact", "--nocapture"],
+        "name" => test,
+        "result" => "pass"
+      }
+      return false unless actual == expected
+    end
+  end
+  target = EXPECTED_RUNS.fetch(0).fetch(1)
+  test = EXPECTED_RUNS.fetch(0).fetch(2).fetch(0)
+  runs.fetch(-1) == {
+    "binary_sha256" => binary_by_target.fetch(target),
+    "command" => [target, "#{test}_same_count_substitution_mutant", "--exact", "--nocapture"],
+    "label" => "same-count-substitution-mutant",
+    "passed" => 0,
+    "rejected" => true,
+    "result" => "rejected",
+    "substituted_for" => test
+  }
+end
+
+def exact_behavior?(behavior)
+  return true if behavior == { "mode" => "preflight", "passed" => 0 }
+
+  behavior.is_a?(Hash) && behavior.keys.sort == %w[passed runs] &&
+    behavior.fetch("passed", nil) == EXPECTED_TESTS && exact_behavior_runs?(behavior.fetch("runs", nil))
+end
+
+def recursive_shape_mutants(value)
+  mutants = []
+  case value
+  when Hash
+    mutants << value.merge("__unexpected_claim__" => "prod-host-verified")
+    value.each do |key, child|
+      missing = Marshal.load(Marshal.dump(value))
+      missing.delete(key)
+      mutants << missing
+      renamed = Marshal.load(Marshal.dump(value))
+      renamed["__renamed_#{key}"] = renamed.delete(key)
+      mutants << renamed
+      recursive_shape_mutants(child).each do |mutated_child|
+        mutant = Marshal.load(Marshal.dump(value))
+        mutant[key] = mutated_child
+        mutants << mutant
+      end
+    end
+    mutants << [value]
+  when Array
+    mutants << (value + [{ "proof" => { "claim" => "live-host-certified" } }])
+    value.each_with_index do |child, index|
+      missing = Marshal.load(Marshal.dump(value))
+      missing.delete_at(index)
+      mutants << missing
+      recursive_shape_mutants(child).each do |mutated_child|
+        mutant = Marshal.load(Marshal.dump(value))
+        mutant[index] = mutated_child
+        mutants << mutant
+      end
+    end
+    mutants << { "substituted" => value }
+  when String
+    mutants << "#{value}-restore-freshness-guaranteed"
+    mutants << { "proof" => { "claim" => value } }
+  when Integer
+    mutants << (value + 1)
+    mutants << { "substituted" => value }
+  when TrueClass, FalseClass
+    mutants << !value
+    mutants << { "substituted" => value }
+  end
+  mutants
+end
+
 def observation_rows(catalog)
   unless catalog.fetch("schema_version") == "maestro.vnext.catalog.literal.v1" &&
          catalog.fetch("publication_state") == "inactive_candidate" &&
@@ -520,15 +588,36 @@ if options[:self_test_output_parser]
     "test result: FAILED. 1 passed; 1 failed"
   ) == -1
   raise "independent Ruby behavior manifest identity differs" unless behavior_manifest_identity == EXPECTED_BEHAVIOR_MANIFEST_IDENTITY
-  raise "Ruby verifier missed an additive production claim" unless forbidden_production_claim?(
-    {"behavior" => {"production" => {"host" => {"authenticity" => true}}}}
-  )
-  raise "Ruby verifier rejected the exact test-only claim" if forbidden_production_claim?(
-    {"diagnostic_proof_claim" => DIAGNOSTIC_PROOF_CLAIM}
-  )
-  raise "Ruby verifier missed a nested production claim alias" unless forbidden_production_claim?(
-    {"proof" => {"claim" => "production-host-authenticity"}}
-  )
+  sample_runs = EXPECTED_RUNS.map do |label, target, tests|
+    {
+      "binary_sha256" => "a" * 64,
+      "label" => label,
+      "passed" => tests.length,
+      "tests" => tests.map do |test|
+        { "command" => [target, test, "--exact", "--nocapture"], "name" => test, "result" => "pass" }
+      end
+    }
+  end
+  first_target = EXPECTED_RUNS.fetch(0).fetch(1)
+  first_test = EXPECTED_RUNS.fetch(0).fetch(2).fetch(0)
+  sample_runs << {
+    "binary_sha256" => "a" * 64,
+    "command" => [first_target, "#{first_test}_same_count_substitution_mutant", "--exact", "--nocapture"],
+    "label" => "same-count-substitution-mutant",
+    "passed" => 0,
+    "rejected" => true,
+    "result" => "rejected",
+    "substituted_for" => first_test
+  }
+  raise "Ruby verifier rejected the exact behavior grammar" unless exact_behavior_runs?(sample_runs)
+  recursive_shape_mutants(sample_runs).each do |mutant|
+    raise "Ruby verifier admitted a recursive behavior shape mutant" if exact_behavior_runs?(mutant)
+  end
+  preflight = { "mode" => "preflight", "passed" => 0 }
+  raise "Ruby verifier rejected the exact preflight grammar" unless exact_behavior?(preflight)
+  recursive_shape_mutants(preflight).each do |mutant|
+    raise "Ruby verifier admitted a recursive preflight shape mutant" if exact_behavior?(mutant)
+  end
   puts({
     "behavior_manifest_identity" => EXPECTED_BEHAVIOR_MANIFEST_IDENTITY,
     "exact_test_output_parser" => "pass"
@@ -543,7 +632,9 @@ raise "Stage 5 artifact key set differs" unless artifact.keys.sort == ARTIFACT_K
 raise "Stage 5 domain differs" unless artifact.fetch("schema_version") == DOMAIN
 raise "Stage 5 publication state differs" unless artifact.fetch("publication_state") == "inactive_candidate"
 raise "Stage 5 diagnostic proof claim differs" unless artifact.fetch("diagnostic_proof_claim") == DIAGNOSTIC_PROOF_CLAIM
-raise "Stage 5 artifact asserts a forbidden production proof claim" if forbidden_production_claim?(artifact)
+raise "Stage 5 domain alias differs" unless artifact.fetch("domain") == DOMAIN
+raise "Stage 5 number differs" unless artifact.fetch("stage") == 5
+raise "Stage 5 behavior grammar differs" unless exact_behavior?(artifact.fetch("behavior"))
 
 catalog = JSON.parse(
   File.read(File.join(WORKSPACE, "contracts/vnext/catalogs/generated/catalog-01-observation.json"), encoding: Encoding::US_ASCII)
@@ -555,14 +646,18 @@ predecessors = PREDECESSOR_PATHS.map { |path| file_row(path) }
 raise "source closure differs" unless artifact.fetch("source_closure") == sources
 raise "predecessor closure differs" unless artifact.fetch("predecessors") == predecessors
 raise "Observation closure differs" unless artifact.fetch("observation_kinds") == observations
+raise "Observation manifest differs" unless artifact.fetch("observation_catalog_manifest_id") == catalog.fetch("manifest_id")
 unless artifact.fetch("observation_contract_table_identity") == OBSERVATION_CONTRACT_TABLE_IDENTITY
   raise "Observation runtime contract table differs"
 end
 raise "Stage 5 behavior manifest identity differs" unless artifact.fetch("behavior_manifest_identity") == EXPECTED_BEHAVIOR_MANIFEST_IDENTITY
-raise "Gate result closure differs" unless artifact.dig("protocol", "gate_results") == RESULTS
-raise "Gate input closure differs" unless artifact.dig("protocol", "gate_input_classes") == INPUT_CLASSES
-raise "Gate operator closure differs" unless artifact.dig("protocol", "gate_operators") == OPERATORS
-raise "acquisition closure differs" unless artifact.dig("protocol", "acquisition_modes") == ACQUISITION_MODES
+expected_protocol = {
+  "acquisition_modes" => ACQUISITION_MODES,
+  "gate_input_classes" => INPUT_CLASSES,
+  "gate_operators" => OPERATORS,
+  "gate_results" => RESULTS
+}
+raise "Gate and acquisition protocol closure differs" unless artifact.fetch("protocol") == expected_protocol
 raise "invalidation closure differs" unless artifact.fetch("invalidation_reasons") == INVALIDATION_REASONS
 raise "invariant closure differs" unless artifact.fetch("invariants") == INVARIANTS
 
@@ -598,7 +693,7 @@ receipt = receipt_value.merge(
 )
 raise "Stage 5 Ruby receipt key set differs" unless receipt.keys.sort == RUBY_RECEIPT_KEYS
 raise "Stage 5 Ruby receipt proof claim differs" unless receipt.fetch("diagnostic_proof_claim") == DIAGNOSTIC_PROOF_CLAIM
-raise "Stage 5 Ruby receipt asserts a forbidden production proof claim" if forbidden_production_claim?(receipt)
+raise "Stage 5 Ruby receipt behavior grammar differs" unless exact_behavior_runs?(receipt.fetch("behavior_runs"))
 FileUtils.mkdir_p(options.fetch(:output_root))
 File.write(
   File.join(options.fetch(:output_root), "ruby-verification-receipt.v1.json"),

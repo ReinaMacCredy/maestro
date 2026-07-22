@@ -76,6 +76,8 @@ pub use evaluator::{
     BootstrapMandateResponseObservationV1, BootstrapResponseDispositionV1,
     ConsentSlotEvaluationFactsV1,
 };
+#[cfg(test)]
+pub(crate) use facade::TrustedHostDiagnosticChallengeV1;
 pub use facade::{
     AbsorbWorkAuthorityV1, AmendContractAuthorityV1, AppendDesignRevisionAuthorityV1,
     AuthorityFacadeV1, AuthorityPublicationError, BootstrapExecutionAuthorityV1,

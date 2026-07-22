@@ -49,6 +49,7 @@ ENGINE_RECEIPT_CONTRACTS = {
     ),
 }
 DIAGNOSTIC_PROOF_CLAIM = "test_adapter_only"
+DOMAIN = "maestro.vnext.stage5.evidence-gates.v1"
 ARTIFACT_KEYS = {
     "artifact_id",
     "behavior",
@@ -69,11 +70,93 @@ ARTIFACT_KEYS = {
     "source_closure",
     "stage",
 }
-FORBIDDEN_PRODUCTION_CLAIMS = {
-    "productionauthenticity",
-    "productionhostauthenticity",
-    "productionrestorecurrentness",
-}
+EXPECTED_NORMAL_RUNS = (
+    ("assessment-kernel", "maestro", 15),
+    ("submission-evidence-join", "maestro", 5),
+    ("authorized-evidence-store", "maestro", 34),
+    ("work-completion-boundary", "vnext_work_lifecycle", 1),
+    ("claim-contracts", "vnext_evidence_claims", 5),
+    ("submission-claim-carrier", "vnext_submission_claim_set", 4),
+    ("evidence-gate-contracts", "vnext_stage5_evidence_gates", 8),
+    ("diagnostic-architecture", "architecture_imports", 1),
+)
+RESULTS = [[1, "Pass"], [2, "Fail"], [3, "Indeterminate"], [4, "Error"]]
+INPUT_CLASSES = [[1, "Evidence"], [2, "Authority"], [3, "Mixed"], [4, "Composite"]]
+OPERATORS = [
+    [1, "Leaf"],
+    [2, "All"],
+    [3, "Any"],
+    [4, "Quorum"],
+    [5, "Veto"],
+    [6, "DenyOverrides"],
+]
+ACQUISITION_MODES = [
+    [1, "EffectFree", "zero_run"],
+    [2, "RunMediated", "exact_execution_attempt_owner"],
+    [3, "DeclaredDerivation", "source_observation_closure"],
+]
+INVALIDATION_REASONS = [
+    [1, "WorkGenerationAdvanced"],
+    [2, "StepRevisionAdvanced"],
+    [3, "GateSnapshotChanged"],
+    [4, "EvaluatorChanged"],
+    [5, "InputTombstoned"],
+    [6, "InputCorrected"],
+    [7, "FreshnessExpired"],
+    [8, "IntegrityFailure"],
+    [9, "AuthorizationReceiptRevoked"],
+]
+INVARIANTS = [
+    "observation_kind_exact_43_dense_closed",
+    "observation_catalog_binds_producer_action_routes_and_cma",
+    "observation_payload_schemas_are_exact_typed_and_kind_specific",
+    "observation_scope_binds_exact_work_step_submission_and_generation",
+    "observation_secret_scan_redaction_and_retention_are_typed_and_authenticated",
+    "secret_scan_is_deterministically_recomputed_from_exact_payload_bytes",
+    "observation_is_immutable_non_bearer",
+    "observation_publication_requires_typed_action_authority_and_atomic_store_index",
+    "stored_evidence_records_require_canonical_identity_consistent_decoding",
+    "payload_identity_distinct_from_observation_identity",
+    "effect_free_acquisition_has_zero_run",
+    "effecting_acquisition_binds_exact_run_and_attempt_owner",
+    "acquisition_identity_is_unique_per_store",
+    "declared_derivation_equals_lineage",
+    "claim_binds_exactly_one_submission",
+    "claim_publication_resolves_exact_observation_records",
+    "submission_claim_set_has_exact_three_field_carrier",
+    "assessment_evaluates_exactly_one_gate_node",
+    "assessment_scope_store_generation_and_evidence_cut_are_exact",
+    "assessment_support_binds_pairwise_independent_contributors_and_sources",
+    "assessment_uses_trusted_time_freshness_and_pinned_trust_root",
+    "empirical_authority_and_composite_inputs_are_nominally_distinct",
+    "gate_snapshot_is_complete_content_addressed_and_acyclic",
+    "gate_snapshot_has_no_detached_nodes",
+    "gate_leaf_cannot_accept_a_proposed_result",
+    "gate_composite_evaluation_is_pure_and_pinned",
+    "closed_semantic_leaf_evaluators_produce_pass_or_fail_from_exact_inputs",
+    "only_pass_derives_satisfaction",
+    "fail_indeterminate_and_error_block",
+    "equally_applicable_conflict_is_indeterminate",
+    "applicability_has_no_newest_selector",
+    "invalidation_requires_typed_authority_and_exact_evidence_cut",
+    "assessment_and_invalidation_publication_require_complete_store_derived_cut",
+    "security_erasure_derives_complete_narrow_invalidation_closure",
+    "security_erasure_transitively_invalidates_composite_dependents",
+    "security_erasure_publishes_in_doubt_intent_before_physical_absence",
+    "security_erasure_receipt_requires_verified_physical_absence_and_exact_resume",
+    "security_erasure_revokes_every_secret_bearing_sealed_export_under_one_durable_barrier",
+    "security_erasure_restores_exact_insert_only_schema_before_publication_commit",
+    "security_erasure_finalization_survives_authority_head_advance",
+    "physical_erasure_never_resolves_while_hard_link_or_crash_debt_remains",
+    "atomic_publication_builders_reduce_supersets_to_the_exact_generation_closure",
+    "raw_atomic_publication_rejects_every_object_outside_the_exact_generation_closure",
+    "idempotency_results_remain_durable_replay_horizons",
+    "work_completion_atomically_commits_current_claim_gate_and_submission_evidence",
+    "work_completion_requires_repository_derived_current_satisfied_submission_closure",
+    "persisted_invalidation_rejoins_exact_authorized_action_and_effect_intent",
+    "stage3_claim_and_work_submission_v1_bytes_remain_exact",
+    "scheduling_and_admission_assessments_are_outside_evidence",
+]
 WORKSPACE = Path(__file__).resolve().parents[4]
 PREDECESSOR_PATHS = (
     "contracts/vnext/stage4/execution/execution-effects.v1.json",
@@ -82,6 +165,73 @@ PREDECESSOR_PATHS = (
     "contracts/vnext/stage4/execution/python-encoder-receipt.v1.json",
     "contracts/vnext/stage4/execution/semantic-validation-receipt.v1.json",
     "contracts/vnext/stage4/execution/ruby-verification-receipt.v1.json",
+)
+ARTIFACT_SOURCE_PATHS = (
+    "Cargo.toml",
+    "Cargo.lock",
+    "build.rs",
+    "contracts/vnext/catalogs/generated/catalog-01-observation.json",
+    "src/lib.rs",
+    "src/domain/mod.rs",
+    "src/domain/vnext/mod.rs",
+    "src/domain/vnext/authority/action_basis.rs",
+    "src/domain/vnext/authority/downstream_action_basis.rs",
+    "src/domain/vnext/authority/facade.rs",
+    "src/domain/vnext/authority/facade_tests.rs",
+    "src/domain/vnext/authority/facade/repository_admission.rs",
+    "src/domain/vnext/authority/facade/repository_leaf_authority.rs",
+    "src/domain/vnext/authority/mod.rs",
+    "src/domain/vnext/authority/result.rs",
+    "src/domain/vnext/contract/runtime.rs",
+    "src/domain/vnext/evidence/assessment.rs",
+    "src/domain/vnext/evidence/claim.rs",
+    "src/domain/vnext/evidence/erasure.rs",
+    "src/domain/vnext/evidence/identity.rs",
+    "src/domain/vnext/evidence/mod.rs",
+    "src/domain/vnext/evidence/observation.rs",
+    "src/domain/vnext/evidence/submission_claim.rs",
+    "src/domain/vnext/evidence/store.rs",
+    "src/domain/vnext/execution/store.rs",
+    "src/domain/vnext/execution/runtime.rs",
+    "src/domain/vnext/gate/mod.rs",
+    "src/domain/vnext/integration/mod.rs",
+    "src/domain/vnext/integration/trusted_host_diagnostic.rs",
+    "src/domain/vnext/persistence/mod.rs",
+    "src/domain/vnext/persistence/idempotency.rs",
+    "src/domain/vnext/persistence/metadata.rs",
+    "src/domain/vnext/persistence/store.rs",
+    "src/domain/vnext/persistence/protected_diagnostic.rs",
+    "src/domain/vnext/persistence/tests/atomic_publication.rs",
+    "src/domain/vnext/repository/mod.rs",
+    "src/domain/vnext/repository/tests.rs",
+    "src/domain/vnext/work/lifecycle.rs",
+    "src/domain/vnext/work/mod.rs",
+    "src/domain/vnext/work/submission.rs",
+    "src/foundation/core/secure_fs.rs",
+    "tests/vnext_evidence_claims.rs",
+    "tests/vnext_submission_claim_set.rs",
+    "tests/vnext_stage5_contracts.rs",
+    "tests/vnext_stage5_evidence_gates.rs",
+    "tests/architecture_imports.rs",
+    "tests/vnext_work_lifecycle.rs",
+    "tools/vnext_contracts/catalogs/cbor_py.py",
+    "tools/vnext_contracts/proof_engine/__init__.py",
+    "tools/vnext_contracts/proof_engine/README.md",
+    "tools/vnext_contracts/proof_engine/engine.py",
+    "tools/vnext_contracts/proof_engine/test_engine.py",
+    "tools/vnext_contracts/stage5/evidence_gates/behavior.py",
+    "tools/vnext_contracts/stage5/evidence_gates/build.py",
+    "tools/vnext_contracts/stage5/evidence_gates/consensus.py",
+    "tools/vnext_contracts/stage5/evidence_gates/harness.py",
+    "tools/vnext_contracts/stage5/evidence_gates/predecessor.py",
+    "tools/vnext_contracts/stage5/evidence_gates/validate.py",
+    "tools/vnext_contracts/stage5/evidence_gates/verify.rb",
+    "tools/vnext_contracts/stage5/evidence_gates/seal.py",
+    "tools/vnext_contracts/stage5/evidence_gates/test_consensus.py",
+    "tools/vnext_contracts/stage5/evidence_gates/test_consensus_harness_contract.py",
+    "tools/vnext_contracts/stage5/evidence_gates/test_seal.py",
+    "tools/vnext_contracts/stage5/evidence_gates/test_toolchain.py",
+    "tools/vnext_contracts/stage5/evidence_gates/toolchain.py",
 )
 EXPECTED_PREDECESSOR_SHA256 = {
     "contracts/vnext/stage4/execution/execution-effects.v1.json": "18b215280ea9aeab3a7bb6edf15214950d35343e6d15be89fef54031c9a51e3b",
@@ -290,42 +440,84 @@ def validate_receipt_identity(receipt: dict[str, Any]) -> bool:
     return receipt.get("receipt_identity") == f"sha256:{sha256(canonical_json(value))}"
 
 
-def contains_forbidden_production_claim(
-    value: object, path: tuple[str, ...] = ()
-) -> bool:
-    if isinstance(value, dict):
-        for key, child in value.items():
-            normalized = re.sub(r"[^a-z0-9]", "", str(key).lower())
-            child_path = (*path, normalized)
-            joined = "".join(child_path)
-            if any(claim in joined for claim in FORBIDDEN_PRODUCTION_CLAIMS):
-                return True
-            if contains_forbidden_production_claim(child, child_path):
-                return True
-    elif isinstance(value, list):
-        return any(contains_forbidden_production_claim(child, path) for child in value)
-    elif isinstance(value, str):
-        normalized = re.sub(r"[^a-z0-9]", "", value.lower())
-        joined = "".join((*path, normalized))
-        return any(claim in joined for claim in FORBIDDEN_PRODUCTION_CLAIMS)
-    return False
-
-
 def has_exact_diagnostic_proof_claim(value: dict[str, Any]) -> bool:
+    return value.get("diagnostic_proof_claim") == DIAGNOSTIC_PROOF_CLAIM
+
+
+def artifact_file_rows(paths: tuple[str, ...]) -> list[list[object]]:
+    rows = []
+    for relative in paths:
+        data, _ = read_regular(WORKSPACE / relative)
+        rows.append([relative, len(data), sha256(data)])
+    return rows
+
+
+def validate_artifact_grammar(artifact: object, *, require_full: bool) -> bool:
+    if not isinstance(artifact, dict):
+        return False
+    try:
+        encoded = bytes.fromhex(artifact.get("cbor_hex", ""))
+        catalog_bytes, _ = read_regular(
+            WORKSPACE / "contracts/vnext/catalogs/generated/catalog-01-observation.json"
+        )
+        catalog = json.loads(catalog_bytes)
+        behavior = artifact.get("behavior")
+        if require_full:
+            if (
+                not isinstance(behavior, dict)
+                or set(behavior) != {"passed", "runs"}
+                or behavior.get("passed") != EXPECTED_BEHAVIOR_TESTS
+            ):
+                return False
+            semantic_behavior_runs(behavior.get("runs"))
+        elif behavior != {"mode": "preflight", "passed": 0}:
+            return False
+    except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError):
+        return False
+    expected_protocol = {
+        "acquisition_modes": ACQUISITION_MODES,
+        "gate_input_classes": INPUT_CLASSES,
+        "gate_operators": OPERATORS,
+        "gate_results": RESULTS,
+    }
     return (
-        value.get("diagnostic_proof_claim") == DIAGNOSTIC_PROOF_CLAIM
-        and not contains_forbidden_production_claim(value)
+        set(artifact) == ARTIFACT_KEYS
+        and artifact.get("schema_version") == DOMAIN
+        and artifact.get("domain") == DOMAIN
+        and artifact.get("publication_state") == "inactive_candidate"
+        and artifact.get("diagnostic_proof_claim") == DIAGNOSTIC_PROOF_CLAIM
+        and artifact.get("stage") == 5
+        and artifact.get("behavior_manifest_identity")
+        == EXPECTED_BEHAVIOR_MANIFEST_IDENTITY
+        and artifact.get("observation_contract_table_identity")
+        == EXPECTED_OBSERVATION_CONTRACT_TABLE_IDENTITY
+        and artifact.get("observation_catalog_manifest_id") == catalog.get("manifest_id")
+        and artifact.get("observation_kinds") == catalog.get("manifest_rows")
+        and artifact.get("source_closure")
+        == artifact_file_rows(tuple(sorted(ARTIFACT_SOURCE_PATHS)))
+        and artifact.get("predecessors") == artifact_file_rows(PREDECESSOR_PATHS)
+        and artifact.get("protocol") == expected_protocol
+        and artifact.get("invalidation_reasons") == INVALIDATION_REASONS
+        and artifact.get("invariants") == INVARIANTS
+        and type(artifact.get("byte_length")) is int
+        and artifact.get("byte_length") == len(encoded)
+        and isinstance(artifact.get("artifact_id"), str)
+        and artifact.get("artifact_id") == sha256(encoded)
     )
 
 
 def validate_engine_receipt(
-    name: str, receipt: dict[str, Any], artifact: dict[str, Any]
+    name: str, receipt: object, artifact: dict[str, Any]
 ) -> bool:
     contract = ENGINE_RECEIPT_CONTRACTS.get(name)
     sources = artifact.get("source_closure")
-    if contract is None or not isinstance(sources, list):
+    if contract is None or not isinstance(receipt, dict) or not isinstance(sources, list):
         return False
     schema_version, engine_hash_key, engine_path = contract
+    try:
+        semantic_behavior_runs(receipt.get("behavior_runs"))
+    except RuntimeError:
+        return False
     expected_keys = {
         "artifact_id",
         "artifact_sha256",
@@ -349,8 +541,15 @@ def validate_engine_receipt(
     }
     return (
         set(receipt) == expected_keys
+        and set(artifact) == ARTIFACT_KEYS
         and has_exact_diagnostic_proof_claim(artifact)
         and has_exact_diagnostic_proof_claim(receipt)
+        and receipt.get("artifact_id") == artifact.get("artifact_id")
+        and receipt.get("artifact_sha256") == sha256(pretty_json(artifact))
+        and receipt.get("behavior_manifest_identity")
+        == EXPECTED_BEHAVIOR_MANIFEST_IDENTITY
+        and receipt.get("behavior_passed") == EXPECTED_BEHAVIOR_TESTS
+        and receipt.get("publication_state") == "inactive_candidate"
         and receipt.get("schema_version") == schema_version
         and receipt.get(engine_hash_key) == source_hashes.get(engine_path)
         and receipt.get("source_closure_sha256")
@@ -359,7 +558,9 @@ def validate_engine_receipt(
     )
 
 
-def validate_harness_receipt(harness: dict[str, Any]) -> bool:
+def validate_harness_receipt(harness: object) -> bool:
+    if not isinstance(harness, dict):
+        return False
     tests = harness.get("tests")
     return (
         harness.get("schema_version")
@@ -374,9 +575,13 @@ def validate_harness_receipt(harness: dict[str, Any]) -> bool:
             "tests",
         }
         and has_exact_diagnostic_proof_claim(harness)
+        and harness.get("manifest_identity") == EXPECTED_PROOF_HARNESS_MANIFEST_IDENTITY
         and isinstance(tests, list)
+        and all(isinstance(test, str) for test in tests)
         and len(tests) == EXPECTED_PROOF_HARNESS_TESTS
         and len(set(tests)) == EXPECTED_PROOF_HARNESS_TESTS
+        and harness.get("manifest_identity")
+        == f"sha256:{sha256(canonical_json(tests))}"
     )
 
 
@@ -393,6 +598,8 @@ def behavior_manifest_rows(runs: object) -> list[list[str]]:
             command = test.get("command")
             name = test.get("name")
             if (
+                set(test) != {"command", "name", "result"}
+                or
                 not isinstance(command, list)
                 or len(command) != 4
                 or not isinstance(command[0], str)
@@ -426,7 +633,11 @@ def semantic_behavior_runs(runs: object) -> list[dict[str, Any]]:
         if previous != binary_sha256:
             raise RuntimeError("Stage 5 engine-local binary identity is inconsistent")
 
-    for run in runs[:-1]:
+    if len(runs) != len(EXPECTED_NORMAL_RUNS) + 1:
+        raise RuntimeError("Stage 5 behavior run count differs")
+    for run, (expected_label, expected_target, expected_count) in zip(
+        runs[:-1], EXPECTED_NORMAL_RUNS, strict=True
+    ):
         if not isinstance(run, dict):
             raise RuntimeError("Stage 5 behavior run is malformed")
         label = run.get("label")
@@ -435,12 +646,14 @@ def semantic_behavior_runs(runs: object) -> list[dict[str, Any]]:
         if (
             not isinstance(label, str)
             or re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", label) is None
-            or label == "same-count-substitution-mutant"
+            or label != expected_label
             or label in labels
             or not isinstance(tests, list)
             or not tests
             or type(passed) is not int
+            or passed != expected_count
             or passed != len(tests)
+            or set(run) != {"binary_sha256", "label", "passed", "tests"}
         ):
             raise RuntimeError("Stage 5 normal behavior run is malformed")
         labels.add(label)
@@ -449,6 +662,8 @@ def semantic_behavior_runs(runs: object) -> list[dict[str, Any]]:
         if len(targets) != 1:
             raise RuntimeError("Stage 5 behavior run target is malformed or ambiguous")
         target = next(iter(targets))
+        if target != expected_target:
+            raise RuntimeError("Stage 5 behavior run target differs")
         bind_binary(run, target)
         semantic_runs.append(
             {key: value for key, value in run.items() if key != "binary_sha256"}
@@ -462,6 +677,17 @@ def semantic_behavior_runs(runs: object) -> list[dict[str, Any]]:
         raise RuntimeError("Stage 5 behavior mutant is malformed")
     first_target, first_exact_name = manifest_rows[0]
     if (
+        set(mutant)
+        != {
+            "binary_sha256",
+            "command",
+            "label",
+            "passed",
+            "rejected",
+            "result",
+            "substituted_for",
+        }
+        or
         mutant.get("label") != "same-count-substitution-mutant"
         or type(mutant.get("passed")) is not int
         or mutant.get("passed") != 0
@@ -514,13 +740,7 @@ def main() -> int:
     artifact_sha256 = sha256(artifact_bytes)
     if (
         not isinstance(artifact_id, str)
-        or set(artifact) != ARTIFACT_KEYS
-        or artifact.get("publication_state") != "inactive_candidate"
-        or not has_exact_diagnostic_proof_claim(artifact)
-        or artifact.get("observation_contract_table_identity")
-        != EXPECTED_OBSERVATION_CONTRACT_TABLE_IDENTITY
-        or artifact.get("behavior_manifest_identity")
-        != EXPECTED_BEHAVIOR_MANIFEST_IDENTITY
+        or not validate_artifact_grammar(artifact, require_full=True)
         or not validate_predecessor(predecessor, predecessor_source_bytes)
         or not validate_harness_receipt(harness)
         or harness.get("manifest_identity")

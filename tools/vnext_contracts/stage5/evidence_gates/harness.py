@@ -134,13 +134,14 @@ def main() -> int:
         "schema_version": "maestro.vnext.stage5.proof-harness-receipt.v1",
         "tests": list(EXPECTED_TESTS),
     }
-    if set(receipt) != {
-        "diagnostic_proof_claim",
-        "manifest_identity",
-        "passed",
-        "schema_version",
-        "tests",
-    } or receipt["diagnostic_proof_claim"] != "test_adapter_only":
+    expected_receipt = {
+        "diagnostic_proof_claim": "test_adapter_only",
+        "manifest_identity": EXPECTED_TEST_MANIFEST_IDENTITY,
+        "passed": len(EXPECTED_TESTS),
+        "schema_version": "maestro.vnext.stage5.proof-harness-receipt.v1",
+        "tests": list(EXPECTED_TESTS),
+    }
+    if receipt != expected_receipt:
         raise RuntimeError("Stage 5 harness proof claim schema differs")
     args.output_root.mkdir(parents=True, exist_ok=True)
     (args.output_root / "proof-harness-receipt.v1.json").write_bytes(canonical_json(receipt))

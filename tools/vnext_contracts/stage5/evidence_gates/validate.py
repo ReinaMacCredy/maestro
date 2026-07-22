@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -20,6 +19,7 @@ sys.path.insert(0, str(TOOLS))
 import cbor_py  # type: ignore[import-not-found]  # noqa: E402
 from behavior import (  # type: ignore[import-not-found]  # noqa: E402
     EXPECTED_BEHAVIOR_MANIFEST_IDENTITY,
+    EXPECTED_RUNS,
     EXPECTED_TESTS,
     compiled_behavior,
 )
@@ -39,38 +39,6 @@ VALIDATOR_RECEIPT_KEYS = {
     "behavior_runs", "diagnostic_proof_claim", "publication_state", "receipt_identity",
     "schema_version", "source_closure_sha256", "validator_sha256",
 }
-FORBIDDEN_PRODUCTION_CLAIMS = {
-    "productionauthenticity",
-    "productionhostauthenticity",
-    "productionrestorecurrentness",
-}
-
-
-def contains_forbidden_production_claim(value: object, path: tuple[str, ...] = ()) -> bool:
-    if isinstance(value, dict):
-        for key, child in value.items():
-            normalized = re.sub(r"[^a-z0-9]", "", str(key).lower())
-            child_path = (*path, normalized)
-            joined = "".join(child_path)
-            if any(claim in joined for claim in FORBIDDEN_PRODUCTION_CLAIMS):
-                return True
-            if contains_forbidden_production_claim(child, child_path):
-                return True
-    elif isinstance(value, list):
-        return any(contains_forbidden_production_claim(child, path) for child in value)
-    elif isinstance(value, str):
-        normalized = re.sub(r"[^a-z0-9]", "", value.lower())
-        joined = "".join((*path, normalized))
-        return any(claim in joined for claim in FORBIDDEN_PRODUCTION_CLAIMS)
-    return False
-
-
-def has_exact_artifact_proof_claim(artifact: dict[str, Any]) -> bool:
-    return (
-        set(artifact) == ARTIFACT_KEYS
-        and artifact.get("diagnostic_proof_claim") == DIAGNOSTIC_PROOF_CLAIM
-        and not contains_forbidden_production_claim(artifact)
-    )
 SOURCE_PATHS = (
     "Cargo.toml", "Cargo.lock", "build.rs",
     "contracts/vnext/catalogs/generated/catalog-01-observation.json",
@@ -121,6 +89,7 @@ SOURCE_PATHS = (
     "tools/vnext_contracts/stage5/evidence_gates/verify.rb",
     "tools/vnext_contracts/stage5/evidence_gates/seal.py",
     "tools/vnext_contracts/stage5/evidence_gates/test_consensus.py",
+    "tools/vnext_contracts/stage5/evidence_gates/test_consensus_harness_contract.py",
     "tools/vnext_contracts/stage5/evidence_gates/test_seal.py",
     "tools/vnext_contracts/stage5/evidence_gates/test_toolchain.py",
     "tools/vnext_contracts/stage5/evidence_gates/toolchain.py",
@@ -212,6 +181,108 @@ def canonical_json(value: object) -> bytes:
 
 def pretty_json(value: object) -> bytes:
     return (json.dumps(value, sort_keys=True, indent=2) + "\n").encode("ascii")
+
+
+def exact_behavior_runs(runs: object) -> bool:
+    if not isinstance(runs, list) or len(runs) != len(EXPECTED_RUNS) + 1:
+        return False
+    binary_by_target: dict[str, str] = {}
+    for run, (label, target, tests) in zip(runs[:-1], EXPECTED_RUNS, strict=True):
+        if not isinstance(run, dict) or set(run) != {
+            "binary_sha256",
+            "label",
+            "passed",
+            "tests",
+        }:
+            return False
+        binary = run.get("binary_sha256")
+        actual_tests = run.get("tests")
+        if (
+            run.get("label") != label
+            or type(run.get("passed")) is not int
+            or run.get("passed") != len(tests)
+            or not isinstance(binary, str)
+            or len(binary) != 64
+            or any(character not in "0123456789abcdef" for character in binary)
+            or not isinstance(actual_tests, list)
+            or len(actual_tests) != len(tests)
+        ):
+            return False
+        if binary_by_target.setdefault(target, binary) != binary:
+            return False
+        for actual, test in zip(actual_tests, tests, strict=True):
+            if actual != {
+                "command": [target, test, "--exact", "--nocapture"],
+                "name": test,
+                "result": "pass",
+            }:
+                return False
+    first_target = EXPECTED_RUNS[0][1]
+    first_test = EXPECTED_RUNS[0][2][0]
+    return bool(runs[-1] == {
+        "binary_sha256": binary_by_target[first_target],
+        "command": [
+            first_target,
+            f"{first_test}_same_count_substitution_mutant",
+            "--exact",
+            "--nocapture",
+        ],
+        "label": "same-count-substitution-mutant",
+        "passed": 0,
+        "rejected": True,
+        "result": "rejected",
+        "substituted_for": first_test,
+    })
+
+
+def exact_behavior(behavior: object) -> bool:
+    if behavior == {"mode": "preflight", "passed": 0}:
+        return True
+    return (
+        isinstance(behavior, dict)
+        and set(behavior) == {"passed", "runs"}
+        and behavior.get("passed") == EXPECTED_TESTS
+        and exact_behavior_runs(behavior.get("runs"))
+    )
+
+
+def exact_artifact_grammar(
+    artifact: object,
+    *,
+    catalog_manifest_id: str,
+    observations: list[list[object]],
+    sources: list[list[object]],
+    predecessors: list[list[object]],
+    encoded: bytes,
+) -> bool:
+    if not isinstance(artifact, dict):
+        return False
+    artifact_id = sha256(encoded)
+    return artifact == {
+        "artifact_id": artifact_id,
+        "behavior": artifact.get("behavior"),
+        "behavior_manifest_identity": EXPECTED_BEHAVIOR_MANIFEST_IDENTITY,
+        "byte_length": len(encoded),
+        "cbor_hex": encoded.hex(),
+        "domain": DOMAIN,
+        "diagnostic_proof_claim": DIAGNOSTIC_PROOF_CLAIM,
+        "invalidation_reasons": INVALIDATION_REASONS,
+        "invariants": INVARIANTS,
+        "observation_catalog_manifest_id": catalog_manifest_id,
+        "observation_contract_table_identity": OBSERVATION_CONTRACT_TABLE_IDENTITY,
+        "observation_kinds": observations,
+        "predecessors": predecessors,
+        "protocol": {
+            "acquisition_modes": ACQUISITION_MODES,
+            "gate_input_classes": INPUT_CLASSES,
+            "gate_operators": OPERATORS,
+            "gate_results": RESULTS,
+        },
+        "publication_state": "inactive_candidate",
+        "schema_version": DOMAIN,
+        "source_closure": sources,
+        "stage": 5,
+    } and exact_behavior(artifact.get("behavior"))
 
 
 def observation_rows(catalog: dict[str, Any]) -> list[list[object]]:
@@ -308,7 +379,9 @@ def validate(
     artifact_bytes = artifact_path.read_bytes()
     artifact: dict[str, Any] = json.loads(artifact_bytes)
     if (
-        not has_exact_artifact_proof_claim(artifact)
+        set(artifact) != ARTIFACT_KEYS
+        or artifact.get("diagnostic_proof_claim") != DIAGNOSTIC_PROOF_CLAIM
+        or not exact_behavior(artifact.get("behavior"))
         or artifact["schema_version"] != DOMAIN
         or artifact["publication_state"] != "inactive_candidate"
     ):
@@ -352,7 +425,14 @@ def validate(
     ):
         raise RuntimeError("Stage 5 canonical CBOR differs")
     artifact_id = sha256(encoded)
-    if artifact["artifact_id"] != artifact_id:
+    if not exact_artifact_grammar(
+        artifact,
+        catalog_manifest_id=catalog["manifest_id"],
+        observations=observations,
+        sources=sources,
+        predecessors=predecessors,
+        encoded=encoded,
+    ):
         raise RuntimeError("Stage 5 artifact identity differs")
     behavior_runs = compiled_behavior(cargo, rustc, WORKSPACE)
     passed = sum(int(run["passed"]) for run in behavior_runs)
@@ -374,9 +454,8 @@ def validate(
     }
     if (
         set(receipt) != VALIDATOR_RECEIPT_KEYS
-        or not has_exact_artifact_proof_claim(artifact)
         or receipt["diagnostic_proof_claim"] != DIAGNOSTIC_PROOF_CLAIM
-        or contains_forbidden_production_claim(receipt)
+        or not exact_behavior_runs(receipt["behavior_runs"])
     ):
         raise RuntimeError("Stage 5 validator receipt proof claim schema differs")
     output_root.mkdir(parents=True, exist_ok=True)

@@ -33,6 +33,43 @@ fn workspace() -> &'static Path {
 }
 
 #[test]
+fn stage5_behavior_manifest_rejects_missing_or_reordered_normal_runs() {
+    let mut runs = [
+        "assessment-kernel",
+        "submission-evidence-join",
+        "authorized-evidence-store",
+        "work-completion-boundary",
+        "claim-contracts",
+        "submission-claim-carrier",
+        "evidence-gate-contracts",
+        "diagnostic-architecture",
+    ]
+    .into_iter()
+    .enumerate()
+    .map(|(index, label)| {
+        let name = format!("fixture-{index}");
+        serde_json::json!({
+            "label": label,
+            "tests": [{
+                "command": ["maestro", name, "--exact", "--nocapture"],
+                "name": name,
+                "result": "pass"
+            }]
+        })
+    })
+    .collect::<Vec<_>>();
+    runs.push(serde_json::json!({"label": "same-count-substitution-mutant"}));
+    assert_eq!(exact_behavior_manifest_rows(&runs).unwrap().len(), 8);
+
+    let mut missing_run = runs.clone();
+    missing_run.remove(0);
+    assert!(exact_behavior_manifest_rows(&missing_run).is_none());
+    let mut reordered_runs = runs.clone();
+    reordered_runs.swap(0, 1);
+    assert!(exact_behavior_manifest_rows(&reordered_runs).is_none());
+}
+
+#[test]
 fn published_stage5_three_engine_receipts_bind_one_inactive_artifact() {
     let pointer_path = workspace().join("contracts/vnext/stage5/evidence-gates/current-proof.json");
     assert!(
@@ -252,14 +289,9 @@ fn published_stage5_three_engine_receipts_bind_one_inactive_artifact() {
                     && test.get("stderr_sha256").is_none())
         );
     }
-    let behavior_rows = builder["behavior_runs"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .take(7)
-        .flat_map(|run| run["tests"].as_array().unwrap())
-        .map(|test| Value::Array(vec![test["command"][0].clone(), test["name"].clone()]))
-        .collect::<Vec<_>>();
+    let builder_runs = builder["behavior_runs"].as_array().unwrap();
+    let behavior_rows = exact_behavior_manifest_rows(builder_runs)
+        .expect("the eight normal runs and terminal mutant must be exact");
     assert_eq!(behavior_rows.len(), 73);
     assert_eq!(
         behavior_rows
@@ -577,6 +609,47 @@ fn read_json(path: PathBuf) -> Value {
             .is_symlink()
     );
     serde_json::from_slice(&fs::read(path).unwrap()).unwrap()
+}
+
+fn exact_behavior_manifest_rows(runs: &[Value]) -> Option<Vec<Value>> {
+    const NORMAL_LABELS: [&str; 8] = [
+        "assessment-kernel",
+        "submission-evidence-join",
+        "authorized-evidence-store",
+        "work-completion-boundary",
+        "claim-contracts",
+        "submission-claim-carrier",
+        "evidence-gate-contracts",
+        "diagnostic-architecture",
+    ];
+    let (mutant, normal_runs) = runs.split_last()?;
+    if normal_runs.len() != NORMAL_LABELS.len()
+        || mutant.get("label")?.as_str()? != "same-count-substitution-mutant"
+    {
+        return None;
+    }
+    let mut rows = Vec::new();
+    for (run, expected_label) in normal_runs.iter().zip(NORMAL_LABELS) {
+        if run.get("label")?.as_str()? != expected_label {
+            return None;
+        }
+        for test in run.get("tests")?.as_array()? {
+            let command = test.get("command")?.as_array()?;
+            if command.len() != 4
+                || command[1] != *test.get("name")?
+                || command[2] != "--exact"
+                || command[3] != "--nocapture"
+                || test.get("result")? != "pass"
+            {
+                return None;
+            }
+            rows.push(Value::Array(vec![
+                command[0].clone(),
+                test.get("name")?.clone(),
+            ]));
+        }
+    }
+    Some(rows)
 }
 
 fn semantic_behavior_runs(runs: &Value) -> Value {
