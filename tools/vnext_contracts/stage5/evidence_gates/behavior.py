@@ -48,7 +48,20 @@ EXPECTED_RUNS = (
         "authorized-evidence-store",
         "maestro",
         (
+            "domain::vnext::authority::action_basis::tests::downstream_leaves_are_materialized_but_have_no_stage_five_admission_basis",
+            "domain::vnext::authority::action_basis::tests::stage_five_owner_dispatch_is_total_and_never_admits_a_later_owner",
+            "domain::vnext::authority::facade::repository_leaf_authority::tests::inert_downstream_leaves_cannot_enter_the_stage_five_authority_carrier",
+            "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_guard_is_non_oracular_across_subjects",
+            "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_guard_is_subject_bound_and_zero_write",
+            "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_guard_refuses_noncurrent_human_facts",
+            "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_refuses_every_substituted_store_anchor_dimension",
+            "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_refuses_missing_duplicate_and_stale_authority_roots",
+            "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_selects_one_authority_root_in_a_heterogeneous_generation",
             "domain::vnext::evidence::store::tests::authorized_store_cut_and_security_erasure_are_restart_safe",
+            "domain::vnext::integration::trusted_host_diagnostic::tests::challenge_refuses_zero_dimensions",
+            "domain::vnext::integration::trusted_host_diagnostic::tests::dropped_or_failed_invocation_consumes_the_authentication_event",
+            "domain::vnext::integration::trusted_host_diagnostic::tests::final_recheck_refuses_revocation_and_currentness_turnover",
+            "domain::vnext::integration::trusted_host_diagnostic::tests::test_adapter_is_one_shot_and_final_recheck_rejects_turnover",
             "domain::vnext::persistence::store::tests::controlled_copy_census_fails_closed_on_a_renamed_export_carrier",
             "domain::vnext::persistence::store::tests::controlled_copy_census_includes_an_orphan_pre_receipt_export",
             "domain::vnext::persistence::store::tests::controlled_copy_erasure_recovery_accepts_only_monotonic_disappearance",
@@ -107,10 +120,15 @@ EXPECTED_RUNS = (
             "pure_composite_evaluator_refuses_leaf_self_attestation",
         ),
     ),
+    (
+        "diagnostic-architecture",
+        "architecture_imports",
+        ("stage5_protected_diagnostic_ports_are_sealed_test_only_and_non_bearer",),
+    ),
 )
 EXPECTED_TESTS = sum(len(row[2]) for row in EXPECTED_RUNS)
 EXPECTED_BEHAVIOR_MANIFEST_IDENTITY = (
-    "sha256:a45a1774976a2ad7d3e9cf9702ea78bb5bbae33a9deca7a06d5127c451477f12"
+    "sha256:ef6887c611bf807ca8942c0bd640762d50b877b093ad594f0b504a9272078689"
 )
 
 
@@ -204,6 +222,8 @@ def compiled_behavior(cargo: Path, rustc: Path, workspace: Path) -> list[dict[st
         "vnext_work_lifecycle",
         "--test",
         "vnext_stage5_evidence_gates",
+        "--test",
+        "architecture_imports",
     )
     compiled = subprocess.run(
         compile_command,

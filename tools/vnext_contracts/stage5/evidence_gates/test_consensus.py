@@ -126,23 +126,66 @@ class Stage5ConsensusTests(unittest.TestCase):
                 "a" * 64,
             ]
         ]
-        artifact = {"source_closure": sources}
+        artifact: dict[str, Any] = {
+            "diagnostic_proof_claim": consensus.DIAGNOSTIC_PROOF_CLAIM,
+            "source_closure": sources,
+        }
         value = {
             "artifact_id": "artifact",
             "artifact_sha256": "b" * 64,
             "behavior_manifest_identity": consensus.EXPECTED_BEHAVIOR_MANIFEST_IDENTITY,
-            "behavior_passed": 55,
+            "behavior_passed": 69,
             "behavior_runs": [],
             "builder_sha256": "a" * 64,
+            "diagnostic_proof_claim": consensus.DIAGNOSTIC_PROOF_CLAIM,
             "publication_state": "inactive_candidate",
             "schema_version": "maestro.vnext.stage5.python-builder-receipt.v1",
             "source_closure_sha256": consensus.sha256(consensus.canonical_json(sources)),
         }
-        receipt = {
+        receipt: dict[str, Any] = {
             **value,
             "receipt_identity": f"sha256:{consensus.sha256(consensus.canonical_json(value))}",
         }
         self.assertTrue(consensus.validate_engine_receipt("builder", receipt, artifact))
+        for invalid_claim in (None, False, "production_authenticity", "production_restore_currentness"):
+            invalid_receipt = copy.deepcopy(receipt)
+            if invalid_claim is None:
+                invalid_receipt.pop("diagnostic_proof_claim")
+            else:
+                invalid_receipt["diagnostic_proof_claim"] = invalid_claim
+            invalid_receipt["receipt_identity"] = f"sha256:{consensus.sha256(consensus.canonical_json({key: item for key, item in invalid_receipt.items() if key != 'receipt_identity'}))}"
+            self.assertFalse(
+                consensus.validate_engine_receipt("builder", invalid_receipt, artifact)
+            )
+            invalid_artifact = copy.deepcopy(artifact)
+            if invalid_claim is None:
+                invalid_artifact.pop("diagnostic_proof_claim")
+            else:
+                invalid_artifact["diagnostic_proof_claim"] = invalid_claim
+            self.assertFalse(
+                consensus.validate_engine_receipt("builder", receipt, invalid_artifact)
+            )
+        harness: dict[str, Any] = {
+            "diagnostic_proof_claim": consensus.DIAGNOSTIC_PROOF_CLAIM,
+            "manifest_identity": "sha256:" + "c" * 64,
+            "passed": 2,
+            "schema_version": "maestro.vnext.stage5.proof-harness-receipt.v1",
+            "tests": ["first", "second"],
+        }
+        with mock.patch.object(consensus, "EXPECTED_PROOF_HARNESS_TESTS", 2):
+            self.assertTrue(consensus.validate_harness_receipt(harness))
+            for invalid_claim in (
+                None,
+                False,
+                "production_authenticity",
+                "production_restore_currentness",
+            ):
+                invalid_harness = copy.deepcopy(harness)
+                if invalid_claim is None:
+                    invalid_harness.pop("diagnostic_proof_claim")
+                else:
+                    invalid_harness["diagnostic_proof_claim"] = invalid_claim
+                self.assertFalse(consensus.validate_harness_receipt(invalid_harness))
         receipt["unbound_extension"] = "self-consistent-substitution"
         receipt["receipt_identity"] = f"sha256:{consensus.sha256(consensus.canonical_json({key: item for key, item in receipt.items() if key != 'receipt_identity'}))}"
         self.assertTrue(consensus.validate_receipt_identity(receipt))

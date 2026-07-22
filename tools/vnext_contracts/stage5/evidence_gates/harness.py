@@ -128,6 +128,7 @@ def main() -> int:
         sys.stderr.write(stream.getvalue())
         return 1
     receipt = {
+        "diagnostic_proof_claim": "test_adapter_only",
         "manifest_identity": EXPECTED_TEST_MANIFEST_IDENTITY,
         "passed": result.testsRun,
         "schema_version": "maestro.vnext.stage5.proof-harness-receipt.v1",

@@ -20,10 +20,10 @@ EXPECTED_STAGE4_SOURCE_ARCHIVE_LENGTH = 16_486_231
 EXPECTED_STAGE4_SOURCE_ARCHIVE_SHA256 = (
     "347eaf928f81d9ce6e07e3767f0cdaf2cde23cd98d13bad41b745d5fbc359910"
 )
-EXPECTED_BEHAVIOR_TESTS = 55
+EXPECTED_BEHAVIOR_TESTS = 69
 EXPECTED_PROOF_HARNESS_TESTS = 66
 EXPECTED_BEHAVIOR_MANIFEST_IDENTITY = (
-    "sha256:a45a1774976a2ad7d3e9cf9702ea78bb5bbae33a9deca7a06d5127c451477f12"
+    "sha256:ef6887c611bf807ca8942c0bd640762d50b877b093ad594f0b504a9272078689"
 )
 EXPECTED_OBSERVATION_CONTRACT_TABLE_IDENTITY = (
     "sha256:a5f0e9137c091972802cb7084d86070a930091f0570cefcc7df445074478a676"
@@ -48,6 +48,7 @@ ENGINE_RECEIPT_CONTRACTS = {
         "tools/vnext_contracts/stage5/evidence_gates/verify.rb",
     ),
 }
+DIAGNOSTIC_PROOF_CLAIM = "test_adapter_only"
 WORKSPACE = Path(__file__).resolve().parents[4]
 PREDECESSOR_PATHS = (
     "contracts/vnext/stage4/execution/execution-effects.v1.json",
@@ -278,6 +279,7 @@ def validate_engine_receipt(
         "behavior_manifest_identity",
         "behavior_passed",
         "behavior_runs",
+        "diagnostic_proof_claim",
         engine_hash_key,
         "publication_state",
         "receipt_identity",
@@ -294,11 +296,34 @@ def validate_engine_receipt(
     }
     return (
         set(receipt) == expected_keys
+        and artifact.get("diagnostic_proof_claim") == DIAGNOSTIC_PROOF_CLAIM
+        and receipt.get("diagnostic_proof_claim") == DIAGNOSTIC_PROOF_CLAIM
         and receipt.get("schema_version") == schema_version
         and receipt.get(engine_hash_key) == source_hashes.get(engine_path)
         and receipt.get("source_closure_sha256")
         == sha256(canonical_json(sources))
         and validate_receipt_identity(receipt)
+    )
+
+
+def validate_harness_receipt(harness: dict[str, Any]) -> bool:
+    tests = harness.get("tests")
+    return (
+        harness.get("schema_version")
+        == "maestro.vnext.stage5.proof-harness-receipt.v1"
+        and harness.get("passed") == EXPECTED_PROOF_HARNESS_TESTS
+        and set(harness)
+        == {
+            "diagnostic_proof_claim",
+            "manifest_identity",
+            "passed",
+            "schema_version",
+            "tests",
+        }
+        and harness.get("diagnostic_proof_claim") == DIAGNOSTIC_PROOF_CLAIM
+        and isinstance(tests, list)
+        and len(tests) == EXPECTED_PROOF_HARNESS_TESTS
+        and len(set(tests)) == EXPECTED_PROOF_HARNESS_TESTS
     )
 
 
@@ -437,18 +462,13 @@ def main() -> int:
     if (
         not isinstance(artifact_id, str)
         or artifact.get("publication_state") != "inactive_candidate"
+        or artifact.get("diagnostic_proof_claim") != DIAGNOSTIC_PROOF_CLAIM
         or artifact.get("observation_contract_table_identity")
         != EXPECTED_OBSERVATION_CONTRACT_TABLE_IDENTITY
         or artifact.get("behavior_manifest_identity")
         != EXPECTED_BEHAVIOR_MANIFEST_IDENTITY
         or not validate_predecessor(predecessor, predecessor_source_bytes)
-        or harness.get("schema_version")
-        != "maestro.vnext.stage5.proof-harness-receipt.v1"
-        or harness.get("passed") != EXPECTED_PROOF_HARNESS_TESTS
-        or set(harness) != {"manifest_identity", "passed", "schema_version", "tests"}
-        or not isinstance(harness.get("tests"), list)
-        or len(harness["tests"]) != EXPECTED_PROOF_HARNESS_TESTS
-        or len(set(harness["tests"])) != EXPECTED_PROOF_HARNESS_TESTS
+        or not validate_harness_receipt(harness)
         or harness.get("manifest_identity")
         != EXPECTED_PROOF_HARNESS_MANIFEST_IDENTITY
         or harness.get("manifest_identity")
@@ -469,6 +489,7 @@ def main() -> int:
             != EXPECTED_BEHAVIOR_MANIFEST_IDENTITY
             or receipt.get("behavior_passed") != EXPECTED_BEHAVIOR_TESTS
             or receipt.get("publication_state") != "inactive_candidate"
+            or receipt.get("diagnostic_proof_claim") != DIAGNOSTIC_PROOF_CLAIM
             or not validate_engine_receipt(name, receipt, artifact)
             or not isinstance(runs, list)
             or not runs
@@ -513,6 +534,7 @@ def main() -> int:
         "artifact_id": artifact_id,
         "behavior_passed": EXPECTED_BEHAVIOR_TESTS,
         "behavior_manifest_identity": EXPECTED_BEHAVIOR_MANIFEST_IDENTITY,
+        "diagnostic_proof_claim": DIAGNOSTIC_PROOF_CLAIM,
         "exact_behavior_receipt_sha256": sha256(canonical_json(behavior_runs)),
         "inputs": input_rows,
         "predecessor_identity": EXPECTED_STAGE4_IDENTITY,

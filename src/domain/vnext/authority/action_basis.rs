@@ -60,8 +60,30 @@ pub enum RepositoryActionLeafV1 {
     Downstream(RepositoryDownstreamActionLeafV1),
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RepositoryActionOwnerDispatchV1 {
+    Stage5Admitted(RepositoryActionLeafV1),
+    OwnerUnavailable(RepositoryActionLeafV1),
+}
+
+impl RepositoryActionOwnerDispatchV1 {
+    pub const fn action(self) -> RepositoryActionLeafV1 {
+        match self {
+            Self::Stage5Admitted(action) | Self::OwnerUnavailable(action) => action,
+        }
+    }
+
+    pub const fn owner_tag(self) -> u64 {
+        self.action().owner_tag()
+    }
+
+    pub const fn is_stage5_admitted(self) -> bool {
+        matches!(self, Self::Stage5Admitted(_))
+    }
+}
+
 impl RepositoryActionLeafV1 {
-    pub const ALL: [Self; 38] = [
+    pub const ADMITTED_STAGE5: [Self; 38] = [
         Self::CreateDraftWork,
         Self::CancelWork,
         Self::CompleteWork,
@@ -101,6 +123,33 @@ impl RepositoryActionLeafV1 {
         Self::PublishBootstrapMandateResponseObservation,
         Self::PublishContinuityMaintenanceObservation,
     ];
+
+    pub const ALL: [Self; 90] = Self::all_actions();
+
+    const fn all_actions() -> [Self; 90] {
+        let mut actions = [Self::CreateDraftWork; 90];
+        let mut index = 0;
+        while index < Self::ADMITTED_STAGE5.len() {
+            actions[index] = Self::ADMITTED_STAGE5[index];
+            index += 1;
+        }
+        while index < actions.len() {
+            actions[index] =
+                Self::Downstream(RepositoryDownstreamActionLeafV1::from_catalog_index(
+                    (index - Self::ADMITTED_STAGE5.len()) as u8,
+                ));
+            index += 1;
+        }
+        actions
+    }
+
+    pub const fn stage5_owner_dispatch(self) -> RepositoryActionOwnerDispatchV1 {
+        if self.global_tag() <= 45 {
+            RepositoryActionOwnerDispatchV1::Stage5Admitted(self)
+        } else {
+            RepositoryActionOwnerDispatchV1::OwnerUnavailable(self)
+        }
+    }
 
     pub const fn literal(self) -> &'static str {
         match self {
@@ -246,6 +295,13 @@ impl RepositoryActionLeafV1 {
             | Self::PublishBootstrapMandateResponseObservation
             | Self::PublishContinuityMaintenanceObservation => 7,
             Self::Downstream(action) => action.owner_tag(),
+        }
+    }
+
+    pub const fn family_tag(self) -> u64 {
+        match self {
+            Self::Downstream(action) => action.family_tag(),
+            _ => self.owner_tag(),
         }
     }
 
@@ -494,7 +550,6 @@ impl RepositoryActionLeafV1 {
 
     pub const fn execution_authority_basis(self) -> Option<ActionAuthorityBasisKindV1> {
         Some(match self {
-            Self::Downstream(_) => ActionAuthorityBasisKindV1::OrdinaryLiveRuntime,
             Self::ReserveBootstrapMandateInteractionEffect
             | Self::PublishBootstrapMandateInteractionOutcome
             | Self::ReconcileBootstrapMandateInteractionEffect
@@ -647,7 +702,7 @@ mod tests {
 
     #[test]
     fn repository_stage_three_leaves_are_exact_frozen_catalog_members() {
-        let rows = RepositoryActionLeafV1::ALL.map(|leaf| {
+        let rows = RepositoryActionLeafV1::ADMITTED_STAGE5.map(|leaf| {
             (
                 leaf.global_tag(),
                 leaf.literal(),
@@ -680,18 +735,57 @@ mod tests {
     }
 
     #[test]
-    fn downstream_leaves_preserve_ordinary_basis_without_becoming_execution_actions() {
+    fn downstream_leaves_are_materialized_but_have_no_stage_five_admission_basis() {
         for action in RepositoryDownstreamActionLeafV1::all() {
             let repository_action = RepositoryActionLeafV1::Downstream(action);
             assert_eq!(
-                repository_action.execution_authority_basis(),
-                Some(ActionAuthorityBasisKindV1::OrdinaryLiveRuntime)
+                repository_action.stage5_owner_dispatch(),
+                RepositoryActionOwnerDispatchV1::OwnerUnavailable(repository_action)
             );
+            assert_eq!(repository_action.execution_authority_basis(), None);
             assert!(!repository_action.is_execution_action());
             assert!(!repository_action.is_ordinary_execution_action());
             assert!(!repository_action.is_evidence_action());
             assert!(!repository_action.is_external_effect_action());
         }
+    }
+
+    #[test]
+    fn stage_five_owner_dispatch_is_total_and_never_admits_a_later_owner() {
+        for action in RepositoryActionLeafV1::ALL {
+            let dispatch = action.stage5_owner_dispatch();
+            assert_eq!(dispatch.action(), action);
+            assert_eq!(dispatch.owner_tag(), action.owner_tag());
+            assert_eq!(dispatch.is_stage5_admitted(), action.global_tag() <= 45);
+        }
+    }
+
+    #[test]
+    fn repository_action_enumeration_is_total_unique_and_unknown_refusing() {
+        let all = RepositoryActionLeafV1::ALL;
+        assert_eq!(all.len(), 90);
+        assert_eq!(RepositoryActionLeafV1::ADMITTED_STAGE5.len(), 38);
+        assert!(
+            all.windows(2)
+                .all(|pair| pair[0].global_tag() < pair[1].global_tag())
+        );
+        assert_eq!(
+            all.iter()
+                .map(|action| action.global_tag())
+                .collect::<std::collections::BTreeSet<_>>()
+                .len(),
+            all.len()
+        );
+        assert_eq!(
+            all.iter()
+                .map(|action| action.literal())
+                .collect::<std::collections::BTreeSet<_>>()
+                .len(),
+            all.len()
+        );
+        assert!(RepositoryDownstreamActionLeafV1::from_global_tag(93).is_err());
+        assert!(RepositoryDownstreamActionLeafV1::from_global_tag(146).is_err());
+        assert!(RepositoryDownstreamActionLeafV1::parse_exact("UnknownAction").is_err());
     }
 
     #[test]

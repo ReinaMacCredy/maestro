@@ -2906,6 +2906,127 @@ fn vnext_authority_and_store_keep_one_directional_ownership() {
     );
 }
 
+#[test]
+fn stage5_protected_diagnostic_ports_are_sealed_test_only_and_non_bearer() {
+    let integration = read_source_file(Path::new(
+        "src/domain/vnext/integration/trusted_host_diagnostic.rs",
+    ));
+    let persistence = read_source_file(Path::new(
+        "src/domain/vnext/persistence/protected_diagnostic.rs",
+    ));
+    let integration_module = read_source_file(Path::new("src/domain/vnext/integration/mod.rs"));
+    let persistence_module = read_source_file(Path::new("src/domain/vnext/persistence/mod.rs"));
+    let facade = read_source_file(Path::new("src/domain/vnext/authority/facade.rs"));
+    let diagnostic_entry = facade
+        .split("pub(crate) fn protected_continuity_diagnostic_reference_envelope")
+        .nth(1)
+        .and_then(|tail| tail.split("pub fn issue_bootstrap_mandate").next())
+        .expect("Stage 5 diagnostic entry must remain a bounded test-only facade seam");
+    let diagnostic_kernel = facade
+        .split("fn build_protected_continuity_diagnostic_reference_envelope")
+        .nth(1)
+        .and_then(|tail| tail.split("fn validate_post_cut_current_authority").next())
+        .expect("Stage 5 diagnostic kernel must remain locally reviewable");
+
+    assert!(
+        integration.contains("pub(crate) struct TrustedHostDiagnosticAttestationV1<'connection>")
+    );
+    assert!(
+        integration
+            .contains("pub(crate) struct TrustedHostDiagnosticTestInvocationV1<'connection>")
+    );
+    assert!(integration.contains("impl Drop for TrustedHostDiagnosticTestInvocationV1<'_>"));
+    assert!(!integration.contains("pub(crate) fn issue_invocation_nonce"));
+    assert!(
+        integration
+            .contains("#[cfg(test)]\npub(crate) struct TrustedHostDiagnosticTestConnectionV1")
+    );
+    assert!(
+        persistence
+            .contains("pub(crate) trait ProtectedDiagnosticCurrentViewProviderV1: sealed::Sealed")
+    );
+    assert!(
+        persistence.contains(
+            "#[cfg(test)]\npub(crate) struct ProtectedDiagnosticTestCurrentViewProviderV1"
+        )
+    );
+    assert!(facade.contains(
+        "#[cfg(test)]\n    pub(crate) fn protected_continuity_diagnostic_reference_envelope"
+    ));
+
+    for forbidden in [
+        "RepositoryAuthenticatedHumanV1",
+        "request_commitment",
+        "authenticated_host_connection_context_ref",
+        "ScopeAtomV1",
+        "ActionRequestIdV1",
+        "AuthorizationReceiptV1",
+        "FnOnce",
+        "println!",
+        "eprintln!",
+        "panic!",
+        "tracing::",
+        "log::",
+    ] {
+        assert!(
+            !diagnostic_entry.contains(forbidden) && !diagnostic_kernel.contains(forbidden),
+            "protected diagnostic entry must not derive authority from {forbidden}"
+        );
+    }
+    for forbidden in [
+        "Assessment",
+        "Gate",
+        "Evidence",
+        "Audit",
+        "ScopeAtom",
+        "ActionRequest",
+        "AuthorizationReceipt",
+        "ActionResult",
+        "Idempotency",
+    ] {
+        assert!(
+            !diagnostic_kernel.contains(forbidden),
+            "protected diagnostic kernel must not introduce {forbidden} authority or effects"
+        );
+    }
+    let attestation_definition = integration
+        .split("pub(crate) struct TrustedHostDiagnosticAttestationV1")
+        .nth(1)
+        .expect("attestation port must exist");
+    let prefix = integration
+        .split("pub(crate) struct TrustedHostDiagnosticAttestationV1")
+        .next()
+        .unwrap();
+    let nearby_prefix = &prefix[prefix.len().saturating_sub(160)..];
+    assert!(!nearby_prefix.contains("derive("));
+    for forbidden in [
+        "Serialize",
+        "Default",
+        "canonical_bytes",
+        "pub fn new",
+        "pub(crate) fn new",
+        "impl From",
+        "impl TryFrom",
+    ] {
+        assert!(
+            !attestation_definition
+                .lines()
+                .take(80)
+                .any(|line| line.contains(forbidden)),
+            "attestation must not expose {forbidden}"
+        );
+    }
+    assert!(!integration.contains("pub mod trusted_host_diagnostic"));
+    assert!(!persistence.contains("pub mod protected_diagnostic"));
+    assert!(integration_module.contains("#[cfg(test)]\npub(crate) use trusted_host_diagnostic"));
+    assert!(persistence_module.contains("#[cfg(test)]\npub(crate) use protected_diagnostic"));
+    assert!(!integration_module.contains("pub use trusted_host_diagnostic"));
+    assert!(!integration_module.contains("TrustedHostDiagnosticChallengeV1"));
+    assert!(!persistence_module.contains("pub use protected_diagnostic"));
+    assert!(!diagnostic_entry.contains("pub(crate) const fn witness"));
+    assert!(!diagnostic_entry.contains("ProtectedContinuityDiagnosticReadGuardV1<'view>"));
+}
+
 fn rust_files_under(root: &Path) -> Vec<PathBuf> {
     let mut files = Vec::new();
     collect_rust_files(root, &mut files);

@@ -26,7 +26,14 @@ use crate::domain::vnext::authority::{
     TransitionGuardKindV1, TrustedTimeV1,
 };
 use crate::domain::vnext::identity::ContractRootIdV1;
+use crate::domain::vnext::integration::{
+    TrustedHostDiagnosticTestClaimsV1, TrustedHostDiagnosticTestConnectionV1,
+};
+use crate::domain::vnext::persistence::{
+    ProtectedDiagnosticTestAnchorMutationV1, ProtectedDiagnosticTestCurrentViewProviderV1,
+};
 use crate::domain::vnext::persistence::{StoreDomainV1, StoreRoleV1};
+use crate::domain::vnext::repository::RepositoryStoreSchemaV1;
 
 fn reference(seed: &str) -> ContinuityReferenceV1 {
     ContinuityReferenceV1::derive(seed).unwrap()
@@ -435,15 +442,20 @@ fn seeded_store_with_activation(
     crate::domain::vnext::persistence::StoreHeadV1,
     StoreObjectIdV1,
     IssueBootstrapMandateRequestV1,
-    RepositoryAuthenticatedHumanV1,
-    String,
+    ProtectedDiagnosticInvocationFactsV1,
+    Vec<u8>,
 ) {
     seeded_store_with_diagnostic_mode(active, ProtectedDiagnosticFixtureModeV1::Valid)
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum ProtectedDiagnosticFixtureModeV1 {
     Valid,
+    HeterogeneousRoot,
+    MissingAuthorityRoot,
+    DuplicateAuthorityRoot,
+    ForeignAuthorityRoot,
+    StaleAuthorityRoot,
     NonHuman,
     RevokedBinding,
     RevokedSession,
@@ -460,15 +472,63 @@ enum ProtectedDiagnosticFixtureModeV1 {
     PrematureBinding,
 }
 
+struct ProtectedDiagnosticInvocationFactsV1 {
+    operator_mapping_commitment: [u8; 32],
+    protected_subject: ContinuityReferenceV1,
+}
+
+impl ProtectedDiagnosticInvocationFactsV1 {
+    fn test_ports(
+        &self,
+        root: &std::path::Path,
+        domain: &StoreDomainV1,
+        store: &StoreV1,
+        head: &crate::domain::vnext::persistence::StoreHeadV1,
+        seed: &[u8],
+    ) -> (
+        ProtectedDiagnosticTestCurrentViewProviderV1,
+        TrustedHostDiagnosticTestConnectionV1,
+    ) {
+        let generation = store.publication_generation(head.id()).unwrap();
+        let state_revision = store.state().unwrap().1;
+        let publication_clock = store.publication_clock_for_test().unwrap();
+        let provider = ProtectedDiagnosticTestCurrentViewProviderV1::bound_to(
+            root,
+            domain,
+            head,
+            &generation,
+            state_revision,
+            publication_clock,
+            seed,
+        )
+        .unwrap();
+        let claims =
+            TrustedHostDiagnosticTestClaimsV1::from_seed(seed, self.operator_mapping_commitment)
+                .unwrap();
+        (
+            provider,
+            TrustedHostDiagnosticTestConnectionV1::authenticated(claims),
+        )
+    }
+}
+
 fn diagnostic_facts(
     facts: BootstrapAuthoritySnapshotV1,
     mode: ProtectedDiagnosticFixtureModeV1,
 ) -> BootstrapAuthoritySnapshotV1 {
-    if matches!(mode, ProtectedDiagnosticFixtureModeV1::Valid) {
+    if matches!(
+        mode,
+        ProtectedDiagnosticFixtureModeV1::Valid
+            | ProtectedDiagnosticFixtureModeV1::HeterogeneousRoot
+            | ProtectedDiagnosticFixtureModeV1::MissingAuthorityRoot
+            | ProtectedDiagnosticFixtureModeV1::DuplicateAuthorityRoot
+    ) {
         return facts;
     }
     let mut snapshot = *facts.snapshot();
-    if matches!(mode, ProtectedDiagnosticFixtureModeV1::UnavailableTime) {
+    if matches!(mode, ProtectedDiagnosticFixtureModeV1::StaleAuthorityRoot) {
+        snapshot.store_generation -= 1;
+    } else if matches!(mode, ProtectedDiagnosticFixtureModeV1::UnavailableTime) {
         snapshot.trusted_time = TrustedTimeV1::Unavailable;
     } else if matches!(mode, ProtectedDiagnosticFixtureModeV1::InvertedTime) {
         snapshot.trusted_time = TrustedTimeV1::Verified {
@@ -547,7 +607,20 @@ fn diagnostic_facts(
         _ => facts.revocations().revocations().clone(),
     };
     BootstrapAuthoritySnapshotV1::new(
-        facts.context().clone(),
+        if matches!(mode, ProtectedDiagnosticFixtureModeV1::ForeignAuthorityRoot) {
+            super::super::AuthorityContextV1::installation(
+                facts.context().context_id(),
+                "foreign-installation",
+                "foreign-realm",
+                facts.context().store_generation(),
+                facts.context().authority_epoch(),
+                facts.context().trust_root_revision(),
+                1,
+            )
+            .unwrap()
+        } else {
+            facts.context().clone()
+        },
         snapshot,
         facts.actor_binding().clone(),
         facts.actor_session().clone(),
@@ -576,8 +649,8 @@ fn seeded_store_with_diagnostic_mode(
     crate::domain::vnext::persistence::StoreHeadV1,
     StoreObjectIdV1,
     IssueBootstrapMandateRequestV1,
-    RepositoryAuthenticatedHumanV1,
-    String,
+    ProtectedDiagnosticInvocationFactsV1,
+    Vec<u8>,
 ) {
     let root = test_root();
     let domain = StoreDomainV1::derive(StoreRoleV1::Repository, b"authority-facade").unwrap();
@@ -633,13 +706,7 @@ fn seeded_store_with_diagnostic_mode(
         continuity_generation(&manifest, context_id, 2, Some((&closure_one, &state_one)));
     let (facts, request) = authority_fixture(&state_two, &manifest);
     let facts = diagnostic_facts(facts, diagnostic_mode);
-    let authenticated_carrier = facts.responder_session().request_commitment().to_owned();
-    let authenticated_human = RepositoryAuthenticatedHumanV1::new(
-        facts.responder_binding().id(),
-        facts.responder_session().id(),
-        authenticated_carrier.as_bytes(),
-    )
-    .unwrap();
+    let authenticated_carrier = b"fixture-only-nonpersisted-authentication-carrier".to_vec();
     let closure_two_object = authority_object(
         AuthoritySchemaV1::AuthorityContinuityClosure,
         closure_two.schema_value().unwrap(),
@@ -750,7 +817,21 @@ fn seeded_store_with_diagnostic_mode(
     let authority_root = authority_object(
         AuthoritySchemaV1::BootstrapAuthoritySnapshot,
         facts.schema_value().unwrap(),
-        references,
+        references.clone(),
+    )
+    .unwrap();
+    let heterogeneous_root = StoreObjectV1::new(
+        RepositoryStoreSchemaV1::WorkRecord.schema_id().unwrap(),
+        CborValue::text("unrelated-repository-root").unwrap(),
+        vec![],
+    )
+    .unwrap();
+    let mut duplicate_references = references;
+    duplicate_references.push(heterogeneous_root.id());
+    let duplicate_authority_root = authority_object(
+        AuthoritySchemaV1::BootstrapAuthoritySnapshot,
+        facts.schema_value().unwrap(),
+        duplicate_references,
     )
     .unwrap();
     for object in [
@@ -768,21 +849,69 @@ fn seeded_store_with_diagnostic_mode(
         &consent_slot,
         &capacity_root,
         &authority_root,
+        &heterogeneous_root,
+        &duplicate_authority_root,
     ] {
         store.put_object(object).unwrap();
     }
+    let mut generation_roots = match diagnostic_mode {
+        ProtectedDiagnosticFixtureModeV1::HeterogeneousRoot => {
+            vec![authority_root.id(), heterogeneous_root.id()]
+        }
+        ProtectedDiagnosticFixtureModeV1::MissingAuthorityRoot => {
+            vec![heterogeneous_root.id()]
+        }
+        ProtectedDiagnosticFixtureModeV1::DuplicateAuthorityRoot => {
+            vec![authority_root.id(), duplicate_authority_root.id()]
+        }
+        _ => vec![authority_root.id()],
+    };
+    generation_roots.sort_unstable();
     let generation_two = StoreGenerationV1::new(
         domain.clone(),
         2,
         Some(generation_one.id()),
         contract_root,
         StoreCompatibilityV1::stage0_successor().unwrap(),
-        vec![authority_root.id()],
+        generation_roots,
     )
     .unwrap();
     let head_two = store
         .publish_generation(&generation_two, Some(head_one.id()))
         .unwrap();
+    let responder_session_without_request_authority = SessionV1::new(
+        facts.responder_session().id(),
+        facts.responder_session().binding_id(),
+        facts.responder_session().context_id(),
+        facts.responder_session().store_generation(),
+        facts.responder_session().authority_epoch(),
+        "diagnostic-request-commitment-is-not-authority",
+        facts.responder_session().validity(),
+    )
+    .unwrap();
+    let operator_mapping_commitment = protected_diagnostic_operator_mapping_commitment_from_facts(
+        domain.id(),
+        &facts,
+        facts.responder_binding(),
+        facts.responder_session(),
+        &generation_two,
+    )
+    .unwrap();
+    assert_eq!(
+        operator_mapping_commitment,
+        protected_diagnostic_operator_mapping_commitment_from_facts(
+            domain.id(),
+            &facts,
+            facts.responder_binding(),
+            &responder_session_without_request_authority,
+            &generation_two,
+        )
+        .unwrap()
+    );
+    let invocation_facts = ProtectedDiagnosticInvocationFactsV1 {
+        operator_mapping_commitment,
+        protected_subject: ContinuityReferenceV1::from_digest(*authority_root.id().as_bytes()),
+    };
     if active {
         let connection = Connection::open(root.join("store.sqlite3")).unwrap();
         assert_eq!(
@@ -803,7 +932,7 @@ fn seeded_store_with_diagnostic_mode(
         head_two,
         authority_root.id(),
         request,
-        authenticated_human,
+        invocation_facts,
         authenticated_carrier,
     )
 }
@@ -816,8 +945,8 @@ fn seeded_store() -> (
     crate::domain::vnext::persistence::StoreHeadV1,
     StoreObjectIdV1,
     IssueBootstrapMandateRequestV1,
-    RepositoryAuthenticatedHumanV1,
-    String,
+    ProtectedDiagnosticInvocationFactsV1,
+    Vec<u8>,
 ) {
     seeded_store_with_activation(true)
 }
@@ -1727,72 +1856,38 @@ fn inactive_store_cannot_publish_authority() {
 
 #[test]
 fn protected_continuity_diagnostic_guard_is_subject_bound_and_zero_write() {
-    let (
-        root,
-        _domain,
-        mut store,
-        _contract_root,
-        head,
-        _authority_root,
-        _request,
-        authenticated_human,
-        authenticated_carrier,
-    ) = seeded_store();
-    let subject = reference("protected-continuity-subject");
+    let (root, _domain, mut store, _contract_root, head, _authority_root, _request, diagnostic, _) =
+        seeded_store();
     let before_head = store.active_head().unwrap().unwrap();
-
-    AuthorityFacadeV1::new(&mut store)
-        .with_protected_continuity_diagnostic_read(authenticated_human, subject, |guard| {
-            assert_eq!(guard.requested_subject(), subject);
-            assert!(!guard.is_bearer_authority());
-            let witness = guard.witness();
-            assert_eq!(witness.fence_subject_ref(), subject);
-            assert_eq!(
-                witness.fence_carrier(),
-                LinearizationFenceCarrierV1::ProtectedSnapshot
-            );
-            assert_ne!(witness.fence_carrier_ref().as_bytes(), &[0; 32]);
-            assert_ne!(witness.attempt_ref().as_bytes(), &[0; 32]);
-            assert_ne!(witness.semantic_point_ref().as_bytes(), &[0; 32]);
-            assert_ne!(witness.covered_closure_ref().as_bytes(), &[0; 32]);
-            assert_ne!(
-                witness.conservative_point_envelope_ref().as_bytes(),
-                &[0; 32]
-            );
-            assert_ne!(witness.carrier_revision_ref().as_bytes(), &[0; 32]);
-        })
+    let (mut provider, mut connection) = diagnostic.test_ports(
+        &root,
+        store.domain(),
+        &store,
+        &head,
+        b"successful-diagnostic",
+    );
+    let envelope = AuthorityFacadeV1::new(&mut store)
+        .protected_continuity_diagnostic_reference_envelope(
+            &mut connection,
+            &mut provider,
+            diagnostic.protected_subject,
+        )
         .unwrap();
+    assert_eq!(
+        envelope.disposition(),
+        ProtectedContinuityDiagnosticDispositionV1::CurrentProtectedSnapshot
+    );
 
-    let substituted = [
-        RepositoryAuthenticatedHumanV1::new(
-            PrincipalBindingIdV1::derive("fabricated-diagnostic-binding").unwrap(),
-            authenticated_human.session_id(),
-            authenticated_carrier.as_bytes(),
-        )
-        .unwrap(),
-        RepositoryAuthenticatedHumanV1::new(
-            authenticated_human.binding_id(),
-            SessionIdV1::derive("fabricated-diagnostic-session").unwrap(),
-            authenticated_carrier.as_bytes(),
-        )
-        .unwrap(),
-        RepositoryAuthenticatedHumanV1::new(
-            authenticated_human.binding_id(),
-            authenticated_human.session_id(),
-            b"fabricated-diagnostic-authentication-carrier",
-        )
-        .unwrap(),
-    ];
-    for candidate in substituted {
-        assert!(matches!(
-            AuthorityFacadeV1::new(&mut store).with_protected_continuity_diagnostic_read(
-                candidate,
-                subject,
-                |_| (),
-            ),
-            Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)
-        ));
-    }
+    let (mut replay_provider, _) =
+        diagnostic.test_ports(&root, store.domain(), &store, &head, b"replay-diagnostic");
+    assert!(matches!(
+        AuthorityFacadeV1::new(&mut store).protected_continuity_diagnostic_reference_envelope(
+            &mut connection,
+            &mut replay_provider,
+            diagnostic.protected_subject,
+        ),
+        Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)
+    ));
 
     assert_eq!(store.active_head().unwrap().unwrap(), before_head);
     assert_eq!(before_head, head);
@@ -1802,62 +1897,37 @@ fn protected_continuity_diagnostic_guard_is_subject_bound_and_zero_write() {
 
 #[test]
 fn protected_continuity_diagnostic_guard_is_non_oracular_across_subjects() {
-    let (
-        root,
-        _domain,
-        mut store,
-        _contract_root,
-        _head,
-        _authority_root,
-        _request,
-        authenticated_human,
-        _,
-    ) = seeded_store();
-    let existing_shape = AuthorityFacadeV1::new(&mut store)
-        .with_protected_continuity_diagnostic_read(
-            authenticated_human,
-            reference("protected-existing-shape"),
-            |guard| {
-                let witness = guard.witness();
-                (
-                    witness.fence_carrier(),
-                    witness.fence_carrier_ref(),
-                    witness.attempt_ref(),
-                    witness.semantic_point_ref(),
-                    witness.covered_closure_ref(),
-                    witness.conservative_point_envelope_ref(),
-                    witness.carrier_revision_ref(),
-                )
-            },
+    let (root, _domain, mut store, _contract_root, _head, _authority_root, _request, diagnostic, _) =
+        seeded_store();
+    let unknown_subject = reference("protected-nonexistent-subject");
+    let (mut unknown_provider, mut unknown_connection) =
+        diagnostic.test_ports(&root, store.domain(), &store, &_head, b"unknown-subject");
+    let unknown_error = AuthorityFacadeV1::new(&mut store)
+        .protected_continuity_diagnostic_reference_envelope(
+            &mut unknown_connection,
+            &mut unknown_provider,
+            unknown_subject,
         )
-        .unwrap();
-    let nonexistent_shape = AuthorityFacadeV1::new(&mut store)
-        .with_protected_continuity_diagnostic_read(
-            authenticated_human,
-            reference("protected-nonexistent-shape"),
-            |guard| {
-                let witness = guard.witness();
-                (
-                    witness.fence_carrier(),
-                    witness.fence_carrier_ref(),
-                    witness.attempt_ref(),
-                    witness.semantic_point_ref(),
-                    witness.covered_closure_ref(),
-                    witness.conservative_point_envelope_ref(),
-                    witness.carrier_revision_ref(),
-                )
-            },
+        .unwrap_err();
+
+    let mut wrong_claims = TrustedHostDiagnosticTestClaimsV1::from_seed(
+        b"wrong-operator",
+        diagnostic.operator_mapping_commitment,
+    )
+    .unwrap();
+    wrong_claims.replace_operator_mapping_commitment([0x91; 32]);
+    let mut wrong_connection = TrustedHostDiagnosticTestConnectionV1::authenticated(wrong_claims);
+    let (mut wrong_provider, _) =
+        diagnostic.test_ports(&root, store.domain(), &store, &_head, b"wrong-operator");
+    let wrong_error = AuthorityFacadeV1::new(&mut store)
+        .protected_continuity_diagnostic_reference_envelope(
+            &mut wrong_connection,
+            &mut wrong_provider,
+            diagnostic.protected_subject,
         )
-        .unwrap();
-    assert_eq!(existing_shape, nonexistent_shape);
-    assert!(matches!(
-        AuthorityFacadeV1::new(&mut store).with_protected_continuity_diagnostic_read(
-            authenticated_human,
-            ContinuityReferenceV1::from_digest([0; 32]),
-            |_| (),
-        ),
-        Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)
-    ));
+        .unwrap_err();
+    assert_eq!(unknown_error.to_string(), wrong_error.to_string());
+    assert!(!unknown_error.to_string().contains("protected-nonexistent"));
     drop(store);
     fs::remove_dir_all(root).unwrap();
 }
@@ -1888,18 +1958,116 @@ fn protected_continuity_diagnostic_guard_refuses_noncurrent_human_facts() {
             before_head,
             _authority_root,
             _request,
-            authenticated_human,
+            diagnostic,
             _,
         ) = seeded_store_with_diagnostic_mode(true, mode);
-        assert!(matches!(
-            AuthorityFacadeV1::new(&mut store).with_protected_continuity_diagnostic_read(
-                authenticated_human,
-                reference("protected-refusal-subject"),
-                |_| (),
+        let (mut provider, mut connection) = diagnostic.test_ports(
+            &root,
+            store.domain(),
+            &store,
+            &before_head,
+            b"noncurrent-diagnostic",
+        );
+        let outcome = AuthorityFacadeV1::new(&mut store)
+            .protected_continuity_diagnostic_reference_envelope(
+                &mut connection,
+                &mut provider,
+                diagnostic.protected_subject,
+            );
+        assert!(
+            matches!(
+                outcome,
+                Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)
             ),
-            Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)
-        ));
+            "mode {mode:?} unexpectedly produced {outcome:?}"
+        );
         assert_eq!(store.active_head().unwrap().unwrap(), before_head);
+        drop(store);
+        fs::remove_dir_all(root).unwrap();
+    }
+}
+
+#[test]
+fn protected_continuity_diagnostic_selects_one_authority_root_in_a_heterogeneous_generation() {
+    let (root, _domain, mut store, _, head, _, _, diagnostic, _) =
+        seeded_store_with_diagnostic_mode(
+            true,
+            ProtectedDiagnosticFixtureModeV1::HeterogeneousRoot,
+        );
+    let (mut provider, mut connection) =
+        diagnostic.test_ports(&root, store.domain(), &store, &head, b"heterogeneous-root");
+    assert!(
+        AuthorityFacadeV1::new(&mut store)
+            .protected_continuity_diagnostic_reference_envelope(
+                &mut connection,
+                &mut provider,
+                diagnostic.protected_subject,
+            )
+            .is_ok()
+    );
+    drop(store);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn protected_continuity_diagnostic_refuses_missing_duplicate_and_stale_authority_roots() {
+    for mode in [
+        ProtectedDiagnosticFixtureModeV1::MissingAuthorityRoot,
+        ProtectedDiagnosticFixtureModeV1::DuplicateAuthorityRoot,
+        ProtectedDiagnosticFixtureModeV1::StaleAuthorityRoot,
+        ProtectedDiagnosticFixtureModeV1::ForeignAuthorityRoot,
+    ] {
+        let (root, _domain, mut store, _, head, _, _, diagnostic, _) =
+            seeded_store_with_diagnostic_mode(true, mode);
+        let (mut provider, mut connection) = diagnostic.test_ports(
+            &root,
+            store.domain(),
+            &store,
+            &head,
+            b"invalid-authority-root",
+        );
+        let outcome = AuthorityFacadeV1::new(&mut store)
+            .protected_continuity_diagnostic_reference_envelope(
+                &mut connection,
+                &mut provider,
+                diagnostic.protected_subject,
+            );
+        assert!(
+            matches!(
+                outcome,
+                Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)
+            ),
+            "mode {mode:?} unexpectedly produced {outcome:?}"
+        );
+        drop(store);
+        fs::remove_dir_all(root).unwrap();
+    }
+}
+
+#[test]
+fn protected_continuity_diagnostic_refuses_every_substituted_store_anchor_dimension() {
+    for mutation in ProtectedDiagnosticTestAnchorMutationV1::ALL {
+        let (root, _domain, mut store, _, head, _, _, diagnostic, _) = seeded_store();
+        let (mut provider, mut connection) = diagnostic.test_ports(
+            &root,
+            store.domain(),
+            &store,
+            &head,
+            format!("anchor-{mutation:?}").as_bytes(),
+        );
+        provider.substitute_anchor_dimension(mutation);
+        assert!(
+            matches!(
+                AuthorityFacadeV1::new(&mut store)
+                    .protected_continuity_diagnostic_reference_envelope(
+                        &mut connection,
+                        &mut provider,
+                        diagnostic.protected_subject,
+                    ),
+                Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)
+            ),
+            "mutation {mutation:?} unexpectedly passed"
+        );
         drop(store);
         fs::remove_dir_all(root).unwrap();
     }

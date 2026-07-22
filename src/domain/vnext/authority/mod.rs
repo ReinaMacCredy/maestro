@@ -24,7 +24,7 @@ mod transition;
 
 pub use action_basis::{
     AuthorityActionBasisErrorV1, AuthorityActionLeafV1, RepositoryActionLeafV1,
-    exact_authority_basis_for_action,
+    RepositoryActionOwnerDispatchV1, exact_authority_basis_for_action,
 };
 pub use bootstrap_catalog::{
     BootstrapMandateTargetV1, BootstrapTargetDispositionV1, bootstrap_mandate_target_catalog,
@@ -81,14 +81,13 @@ pub use facade::{
     AuthorityFacadeV1, AuthorityPublicationError, BootstrapExecutionAuthorityV1,
     CancelWorkAuthorityV1, ContinuityMaintenanceExecutionAuthorityV1, CreateDraftWorkAuthorityV1,
     ExecutionAuthorityV1, ExecutionProducerV1, GenericExecutionAuthorityV1,
-    GenericRepositoryActionAuthorityV1, PublishInitialContractAuthorityV1,
-    RepositoryAuthenticatedHumanV1, RepositoryAuthoritySelectionV1,
-    RepositoryDecisionAuthorityCarrierV1, RepositoryDecisionOptionMappingV1,
-    RepositoryDecisionPresentationV1, RepositoryLeafAuthorityErrorV1,
-    RepositoryPolicyComponentSetV1, RepositoryPolicySnapshotV1, RepositoryPolicyStrengthV1,
-    RepositoryPolicyTransitionAuthorityV1, RepositoryPolicyTransitionKindV1,
-    RepositoryPolicyTransitionV1, ResolveDecisionAuthorityV1, SubmitStepAuthorityV1,
-    SubmitWorkCompletionAuthorityV1,
+    PublishInitialContractAuthorityV1, RepositoryAuthenticatedHumanV1,
+    RepositoryAuthoritySelectionV1, RepositoryDecisionAuthorityCarrierV1,
+    RepositoryDecisionOptionMappingV1, RepositoryDecisionPresentationV1,
+    RepositoryLeafAuthorityErrorV1, RepositoryPolicyComponentSetV1, RepositoryPolicySnapshotV1,
+    RepositoryPolicyStrengthV1, RepositoryPolicyTransitionAuthorityV1,
+    RepositoryPolicyTransitionKindV1, RepositoryPolicyTransitionV1, ResolveDecisionAuthorityV1,
+    SubmitStepAuthorityV1, SubmitWorkCompletionAuthorityV1,
 };
 pub(crate) use facade::{
     AdmittedRepositoryActionV1, ContinuedRepositoryActionV1,

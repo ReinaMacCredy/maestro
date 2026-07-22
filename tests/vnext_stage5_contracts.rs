@@ -118,9 +118,29 @@ fn published_stage5_three_engine_receipts_bind_one_inactive_artifact() {
     );
 
     assert_eq!(artifact["publication_state"], "inactive_candidate");
+    assert_eq!(artifact["diagnostic_proof_claim"], "test_adapter_only");
+    let source_paths = artifact["source_closure"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|row| row[0].as_str().unwrap())
+        .collect::<BTreeSet<_>>();
+    for required in [
+        "src/domain/vnext/authority/downstream_action_basis.rs",
+        "src/domain/vnext/authority/facade_tests.rs",
+        "src/domain/vnext/integration/mod.rs",
+        "src/domain/vnext/integration/trusted_host_diagnostic.rs",
+        "src/domain/vnext/persistence/protected_diagnostic.rs",
+        "tests/architecture_imports.rs",
+    ] {
+        assert!(
+            source_paths.contains(required),
+            "missing Stage 5 source {required}"
+        );
+    }
     assert_eq!(
         artifact["behavior_manifest_identity"],
-        "sha256:a45a1774976a2ad7d3e9cf9702ea78bb5bbae33a9deca7a06d5127c451477f12"
+        "sha256:ef6887c611bf807ca8942c0bd640762d50b877b093ad594f0b504a9272078689"
     );
     assert_eq!(artifact["observation_kinds"].as_array().unwrap().len(), 43);
     assert_eq!(
@@ -173,6 +193,7 @@ fn published_stage5_three_engine_receipts_bind_one_inactive_artifact() {
             "behavior_manifest_identity",
             "behavior_passed",
             "behavior_runs",
+            "diagnostic_proof_claim",
             engine_hash_key,
             "publication_state",
             "receipt_identity",
@@ -194,17 +215,18 @@ fn published_stage5_three_engine_receipts_bind_one_inactive_artifact() {
         assert_eq!(receipt["source_closure_sha256"], source_closure_sha256);
         assert_eq!(
             receipt["behavior_manifest_identity"],
-            "sha256:a45a1774976a2ad7d3e9cf9702ea78bb5bbae33a9deca7a06d5127c451477f12"
+            "sha256:ef6887c611bf807ca8942c0bd640762d50b877b093ad594f0b504a9272078689"
         );
         assert_eq!(receipt["artifact_id"], identity);
-        assert_eq!(receipt["behavior_passed"], 55);
-        assert_eq!(receipt["behavior_runs"].as_array().unwrap().len(), 8);
+        assert_eq!(receipt["behavior_passed"], 69);
+        assert_eq!(receipt["behavior_runs"].as_array().unwrap().len(), 9);
         assert_eq!(
-            receipt["behavior_runs"][7]["label"],
+            receipt["behavior_runs"][8]["label"],
             "same-count-substitution-mutant"
         );
-        assert_eq!(receipt["behavior_runs"][7]["rejected"], true);
+        assert_eq!(receipt["behavior_runs"][8]["rejected"], true);
         assert_eq!(receipt["publication_state"], "inactive_candidate");
+        assert_eq!(receipt["diagnostic_proof_claim"], "test_adapter_only");
         let mut identity_value = receipt.clone();
         let receipt_identity = identity_value
             .as_object_mut()
@@ -238,21 +260,21 @@ fn published_stage5_three_engine_receipts_bind_one_inactive_artifact() {
         .flat_map(|run| run["tests"].as_array().unwrap())
         .map(|test| Value::Array(vec![test["command"][0].clone(), test["name"].clone()]))
         .collect::<Vec<_>>();
-    assert_eq!(behavior_rows.len(), 55);
+    assert_eq!(behavior_rows.len(), 69);
     assert_eq!(
         behavior_rows
             .iter()
             .map(|row| serde_json::to_string(row).unwrap())
             .collect::<BTreeSet<_>>()
             .len(),
-        55
+        69
     );
     assert_eq!(
         format!(
             "sha256:{}",
             sha256(&canonical_json(&Value::Array(behavior_rows)))
         ),
-        "sha256:a45a1774976a2ad7d3e9cf9702ea78bb5bbae33a9deca7a06d5127c451477f12"
+        "sha256:ef6887c611bf807ca8942c0bd640762d50b877b093ad594f0b504a9272078689"
     );
     let builder_semantics = semantic_behavior_runs(&builder["behavior_runs"]);
     let validator_semantics = semantic_behavior_runs(&validator["behavior_runs"]);
@@ -277,6 +299,7 @@ fn published_stage5_three_engine_receipts_bind_one_inactive_artifact() {
         "behavior_manifest_identity",
         "behavior_passed",
         "consensus_identity",
+        "diagnostic_proof_claim",
         "exact_behavior_receipt_sha256",
         "inputs",
         "predecessor_identity",
@@ -309,13 +332,15 @@ fn published_stage5_three_engine_receipts_bind_one_inactive_artifact() {
         consensus["exact_behavior_receipt_sha256"],
         sha256(&canonical_json(&builder_semantics))
     );
-    assert_eq!(consensus["behavior_passed"], 55);
+    assert_eq!(consensus["behavior_passed"], 69);
     assert_eq!(
         consensus["behavior_manifest_identity"],
-        "sha256:a45a1774976a2ad7d3e9cf9702ea78bb5bbae33a9deca7a06d5127c451477f12"
+        "sha256:ef6887c611bf807ca8942c0bd640762d50b877b093ad594f0b504a9272078689"
     );
     assert_eq!(consensus["proof_harness_passed"], 66);
+    assert_eq!(consensus["diagnostic_proof_claim"], "test_adapter_only");
     assert_eq!(harness["passed"], 66);
+    assert_eq!(harness["diagnostic_proof_claim"], "test_adapter_only");
     let harness_tests = harness["tests"].as_array().unwrap();
     assert_eq!(harness_tests.len(), 66);
     assert_eq!(
@@ -592,7 +617,7 @@ fn semantic_behavior_runs(runs: &Value) -> Value {
             .remove("binary_sha256")
             .unwrap();
     }
-    assert_eq!(total_passed, 55);
+    assert_eq!(total_passed, 69);
 
     let (first_target, first_exact_name) = first_exact.unwrap();
     let mutant = &mut projected[normal_count];

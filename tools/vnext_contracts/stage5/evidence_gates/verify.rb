@@ -9,10 +9,13 @@ require "optparse"
 
 WORKSPACE = File.expand_path("../../../..", __dir__)
 DOMAIN = "maestro.vnext.stage5.evidence-gates.v1"
+DIAGNOSTIC_PROOF_CLAIM = "test_adapter_only"
 SOURCE_PATHS = %w[
   Cargo.toml Cargo.lock build.rs src/lib.rs src/domain/mod.rs src/domain/vnext/mod.rs
   contracts/vnext/catalogs/generated/catalog-01-observation.json
   src/domain/vnext/authority/action_basis.rs src/domain/vnext/authority/facade.rs
+  src/domain/vnext/authority/downstream_action_basis.rs
+  src/domain/vnext/authority/facade_tests.rs
   src/domain/vnext/authority/facade/repository_admission.rs
   src/domain/vnext/authority/facade/repository_leaf_authority.rs src/domain/vnext/authority/mod.rs
   src/domain/vnext/authority/result.rs
@@ -23,9 +26,12 @@ SOURCE_PATHS = %w[
   src/domain/vnext/evidence/submission_claim.rs src/domain/vnext/execution/store.rs
   src/domain/vnext/execution/runtime.rs
   src/domain/vnext/evidence/store.rs src/domain/vnext/gate/mod.rs
+  src/domain/vnext/integration/mod.rs
+  src/domain/vnext/integration/trusted_host_diagnostic.rs
   src/domain/vnext/persistence/mod.rs src/domain/vnext/persistence/idempotency.rs
   src/domain/vnext/persistence/metadata.rs
   src/domain/vnext/persistence/store.rs
+  src/domain/vnext/persistence/protected_diagnostic.rs
   src/domain/vnext/persistence/tests/atomic_publication.rs
   src/domain/vnext/repository/mod.rs
   src/domain/vnext/repository/tests.rs
@@ -33,6 +39,7 @@ SOURCE_PATHS = %w[
   src/domain/vnext/work/submission.rs src/foundation/core/secure_fs.rs
   tests/vnext_evidence_claims.rs tests/vnext_submission_claim_set.rs
   tests/vnext_stage5_contracts.rs tests/vnext_stage5_evidence_gates.rs
+  tests/architecture_imports.rs
   tests/vnext_work_lifecycle.rs
   tools/vnext_contracts/catalogs/cbor_py.py
   tools/vnext_contracts/proof_engine/__init__.py
@@ -143,7 +150,20 @@ EXPECTED_RUNS = [
     domain::vnext::execution::store::tests::step_submission_rejects_empty_and_wrong_fence_claim_sets_before_publication
   ]],
   ["authorized-evidence-store", "maestro", %w[
+    domain::vnext::authority::action_basis::tests::downstream_leaves_are_materialized_but_have_no_stage_five_admission_basis
+    domain::vnext::authority::action_basis::tests::stage_five_owner_dispatch_is_total_and_never_admits_a_later_owner
+    domain::vnext::authority::facade::repository_leaf_authority::tests::inert_downstream_leaves_cannot_enter_the_stage_five_authority_carrier
+    domain::vnext::authority::facade::tests::protected_continuity_diagnostic_guard_is_non_oracular_across_subjects
+    domain::vnext::authority::facade::tests::protected_continuity_diagnostic_guard_is_subject_bound_and_zero_write
+    domain::vnext::authority::facade::tests::protected_continuity_diagnostic_guard_refuses_noncurrent_human_facts
+    domain::vnext::authority::facade::tests::protected_continuity_diagnostic_refuses_every_substituted_store_anchor_dimension
+    domain::vnext::authority::facade::tests::protected_continuity_diagnostic_refuses_missing_duplicate_and_stale_authority_roots
+    domain::vnext::authority::facade::tests::protected_continuity_diagnostic_selects_one_authority_root_in_a_heterogeneous_generation
     domain::vnext::evidence::store::tests::authorized_store_cut_and_security_erasure_are_restart_safe
+    domain::vnext::integration::trusted_host_diagnostic::tests::challenge_refuses_zero_dimensions
+    domain::vnext::integration::trusted_host_diagnostic::tests::dropped_or_failed_invocation_consumes_the_authentication_event
+    domain::vnext::integration::trusted_host_diagnostic::tests::final_recheck_refuses_revocation_and_currentness_turnover
+    domain::vnext::integration::trusted_host_diagnostic::tests::test_adapter_is_one_shot_and_final_recheck_rejects_turnover
     domain::vnext::persistence::store::tests::controlled_copy_census_fails_closed_on_a_renamed_export_carrier
     domain::vnext::persistence::store::tests::controlled_copy_census_includes_an_orphan_pre_receipt_export
     domain::vnext::persistence::store::tests::controlled_copy_erasure_recovery_accepts_only_monotonic_disappearance
@@ -186,10 +206,13 @@ EXPECTED_RUNS = [
     observation_publication_route_rejects_wrong_action_route_and_profile
     observations_bind_effect_free_and_exact_derivation_provenance
     pure_composite_evaluator_refuses_leaf_self_attestation
+  ]],
+  ["diagnostic-architecture", "architecture_imports", %w[
+    stage5_protected_diagnostic_ports_are_sealed_test_only_and_non_bearer
   ]]
 ].freeze
 EXPECTED_TESTS = EXPECTED_RUNS.sum { |row| row.fetch(2).length }
-EXPECTED_BEHAVIOR_MANIFEST_IDENTITY = "sha256:a45a1774976a2ad7d3e9cf9702ea78bb5bbae33a9deca7a06d5127c451477f12"
+EXPECTED_BEHAVIOR_MANIFEST_IDENTITY = "sha256:ef6887c611bf807ca8942c0bd640762d50b877b093ad594f0b504a9272078689"
 
 def head(major, value)
   raise "CBOR unsigned value exceeds u64" unless value.between?(0, 0xffffffffffffffff)
@@ -367,6 +390,7 @@ def run_behavior(cargo, rustc)
     test --frozen --offline --no-run --message-format=json --lib
     --test vnext_evidence_claims --test vnext_submission_claim_set
     --test vnext_stage5_evidence_gates --test vnext_work_lifecycle
+    --test architecture_imports
   ]
   stdout, stderr, status = Open3.capture3(
     environment, cargo, *compile_command, chdir: WORKSPACE
@@ -472,6 +496,7 @@ artifact_bytes = File.binread(File.realpath(options.fetch(:artifact)))
 artifact = JSON.parse(artifact_bytes)
 raise "Stage 5 domain differs" unless artifact.fetch("schema_version") == DOMAIN
 raise "Stage 5 publication state differs" unless artifact.fetch("publication_state") == "inactive_candidate"
+raise "Stage 5 diagnostic proof claim differs" unless artifact.fetch("diagnostic_proof_claim") == DIAGNOSTIC_PROOF_CLAIM
 
 catalog = JSON.parse(
   File.read(File.join(WORKSPACE, "contracts/vnext/catalogs/generated/catalog-01-observation.json"), encoding: Encoding::US_ASCII)
@@ -495,7 +520,7 @@ raise "invalidation closure differs" unless artifact.fetch("invalidation_reasons
 raise "invariant closure differs" unless artifact.fetch("invariants") == INVARIANTS
 
 semantic_value = [
-  DOMAIN, "inactive_candidate", 5, catalog.fetch("manifest_id"),
+  DOMAIN, "inactive_candidate", DIAGNOSTIC_PROOF_CLAIM, 5, catalog.fetch("manifest_id"),
   OBSERVATION_CONTRACT_TABLE_IDENTITY, observations, RESULTS,
   INPUT_CLASSES, OPERATORS, ACQUISITION_MODES, INVALIDATION_REASONS, INVARIANTS,
   sources, predecessors, EXPECTED_TESTS, EXPECTED_BEHAVIOR_MANIFEST_IDENTITY
@@ -515,6 +540,7 @@ receipt_value = {
   "behavior_manifest_identity" => EXPECTED_BEHAVIOR_MANIFEST_IDENTITY,
   "behavior_passed" => passed,
   "behavior_runs" => behavior_runs,
+  "diagnostic_proof_claim" => DIAGNOSTIC_PROOF_CLAIM,
   "publication_state" => "inactive_candidate",
   "schema_version" => "maestro.vnext.stage5.ruby-verification-receipt.v1",
   "source_closure_sha256" => Digest::SHA256.hexdigest(canonical_json(sources)),

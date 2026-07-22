@@ -30,6 +30,11 @@ use super::{
         revoke_sealed_exports_for_security_erasure,
     },
 };
+#[cfg(test)]
+use super::{
+    ProtectedDiagnosticCurrentViewAnchorV1, ProtectedDiagnosticCurrentViewProviderV1,
+    protected_diagnostic::ProtectedDiagnosticObservedCurrentViewV1,
+};
 
 const METADATA_FILE: &str = "store.sqlite3";
 const OBJECTS_DIRECTORY: &str = "objects";
@@ -475,6 +480,40 @@ impl StorePublicationViewV1<'_> {
         generation_objects(self.root, self.connection, &generation)
     }
 
+    #[cfg(test)]
+    pub(crate) fn protected_diagnostic_current_view_anchor(
+        &self,
+        provider: &mut dyn ProtectedDiagnosticCurrentViewProviderV1,
+    ) -> Result<ProtectedDiagnosticCurrentViewAnchorV1, StoreError> {
+        let (store_state, state_revision) = state(self.connection)?;
+        if store_state != StoreStateV1::Active {
+            return Err(StoreError::ProtectedDiagnosticCurrentnessRefused);
+        }
+        let (head_id, head_revision) = active_head_row(self.connection)?
+            .ok_or(StoreError::ProtectedDiagnosticCurrentnessRefused)?;
+        let head = load_head(self.connection, head_id, self.domain)?;
+        let generation = load_generation(self.connection, head.generation_id(), self.domain)?;
+        if head.revision() != head_revision
+            || head.generation_id() != generation.id()
+            || generation.domain() != self.domain
+        {
+            return Err(StoreError::ProtectedDiagnosticCurrentnessRefused);
+        }
+        let observed = ProtectedDiagnosticObservedCurrentViewV1 {
+            root: self.root.path(),
+            state_revision,
+            domain: self.domain,
+            role: self.role(),
+            head: &head,
+            head_revision,
+            generation: &generation,
+            publication_clock: publication_clock(self.connection)?,
+        };
+        provider
+            .bind_current_view(&observed)
+            .ok_or(StoreError::ProtectedDiagnosticCurrentnessRefused)
+    }
+
     pub(crate) fn coherent_generation_snapshot(
         &self,
         generation_id: StoreGenerationIdV1,
@@ -629,6 +668,11 @@ impl StoreV1 {
 
     pub fn state(&self) -> Result<(StoreStateV1, u64), StoreError> {
         self.with_verified_read(|transaction| state(transaction))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn publication_clock_for_test(&self) -> Result<u64, StoreError> {
+        self.with_verified_read(|transaction| publication_clock(transaction))
     }
 
     pub fn active_head(&self) -> Result<Option<StoreHeadV1>, StoreError> {
@@ -4612,6 +4656,8 @@ pub enum StoreError {
     SnapshotBasisMismatch,
     #[error("Store has no active Head")]
     MissingActiveHead,
+    #[error("protected diagnostic currentness could not be established")]
+    ProtectedDiagnosticCurrentnessRefused,
     #[error("Store is already active")]
     StoreAlreadyActive,
     #[error("activation commitment must bind a nonzero external authority locator")]

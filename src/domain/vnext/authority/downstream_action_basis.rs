@@ -20,7 +20,12 @@ pub struct RepositoryDownstreamActionLeafV1(u8);
 
 impl RepositoryDownstreamActionLeafV1 {
     pub fn all() -> [Self; DOWNSTREAM_ACTION_COUNT_V1] {
-        std::array::from_fn(|index| Self(index as u8))
+        std::array::from_fn(|index| Self::from_catalog_index(index as u8))
+    }
+
+    pub(super) const fn from_catalog_index(index: u8) -> Self {
+        assert!((index as usize) < DOWNSTREAM_ACTION_COUNT_V1);
+        Self(index)
     }
 
     pub fn from_global_tag(global_tag: u64) -> Result<Self, RepositoryDownstreamActionErrorV1> {
@@ -54,6 +59,20 @@ impl RepositoryDownstreamActionLeafV1 {
 
     pub const fn owner_tag(self) -> u64 {
         self.metadata().owner_tag
+    }
+
+    pub const fn family_tag(self) -> u64 {
+        match self.global_tag() {
+            94..=102 => 9,
+            103..=106 => 10,
+            107..=116 => 11,
+            117..=129 => 12,
+            130..=131 => 13,
+            132..=138 => 14,
+            139..=141 => 15,
+            142..=145 => 16,
+            _ => unreachable!(),
+        }
     }
 
     pub const fn local_tag(self) -> u64 {
@@ -569,6 +588,7 @@ mod tests {
                 fields[2][1]["bytes"].as_str(),
                 Some(action.owner_descriptor_id())
             );
+            assert_eq!(fields[3].as_u64(), Some(action.family_tag()));
             assert_eq!(fields[4].as_u64(), Some(action.local_tag()));
             assert_eq!(
                 descriptor["descriptor_id"].as_str(),

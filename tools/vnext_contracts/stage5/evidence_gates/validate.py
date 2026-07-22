@@ -25,12 +25,15 @@ from behavior import (  # type: ignore[import-not-found]  # noqa: E402
 
 
 DOMAIN = "maestro.vnext.stage5.evidence-gates.v1"
+DIAGNOSTIC_PROOF_CLAIM = "test_adapter_only"
 SOURCE_PATHS = (
     "Cargo.toml", "Cargo.lock", "build.rs",
     "contracts/vnext/catalogs/generated/catalog-01-observation.json",
     "src/lib.rs", "src/domain/mod.rs",
     "src/domain/vnext/mod.rs", "src/domain/vnext/evidence/assessment.rs",
     "src/domain/vnext/authority/action_basis.rs", "src/domain/vnext/authority/facade.rs",
+    "src/domain/vnext/authority/downstream_action_basis.rs",
+    "src/domain/vnext/authority/facade_tests.rs",
     "src/domain/vnext/authority/facade/repository_admission.rs",
     "src/domain/vnext/authority/facade/repository_leaf_authority.rs",
     "src/domain/vnext/authority/mod.rs", "src/domain/vnext/authority/result.rs",
@@ -41,9 +44,12 @@ SOURCE_PATHS = (
     "src/domain/vnext/evidence/submission_claim.rs", "src/domain/vnext/execution/store.rs",
     "src/domain/vnext/execution/runtime.rs",
     "src/domain/vnext/evidence/store.rs", "src/domain/vnext/gate/mod.rs",
+    "src/domain/vnext/integration/mod.rs",
+    "src/domain/vnext/integration/trusted_host_diagnostic.rs",
     "src/domain/vnext/persistence/mod.rs", "src/domain/vnext/persistence/idempotency.rs",
     "src/domain/vnext/persistence/metadata.rs",
     "src/domain/vnext/persistence/store.rs",
+    "src/domain/vnext/persistence/protected_diagnostic.rs",
     "src/domain/vnext/persistence/tests/atomic_publication.rs",
     "src/domain/vnext/repository/mod.rs",
     "src/domain/vnext/repository/tests.rs",
@@ -54,6 +60,7 @@ SOURCE_PATHS = (
     "tests/vnext_evidence_claims.rs", "tests/vnext_submission_claim_set.rs",
     "tests/vnext_stage5_contracts.rs",
     "tests/vnext_stage5_evidence_gates.rs",
+    "tests/architecture_imports.rs",
     "tests/vnext_work_lifecycle.rs",
     "tools/vnext_contracts/catalogs/cbor_py.py",
     "tools/vnext_contracts/proof_engine/__init__.py",
@@ -255,7 +262,11 @@ def validate(
 ) -> None:
     artifact_bytes = artifact_path.read_bytes()
     artifact: dict[str, Any] = json.loads(artifact_bytes)
-    if artifact["schema_version"] != DOMAIN or artifact["publication_state"] != "inactive_candidate":
+    if (
+        artifact["schema_version"] != DOMAIN
+        or artifact["publication_state"] != "inactive_candidate"
+        or artifact.get("diagnostic_proof_claim") != DIAGNOSTIC_PROOF_CLAIM
+    ):
         raise RuntimeError("Stage 5 artifact domain or publication state differs")
     catalog = json.loads(
         (WORKSPACE / "contracts/vnext/catalogs/generated/catalog-01-observation.json").read_text(encoding="ascii")
@@ -282,7 +293,7 @@ def validate(
     if artifact["invalidation_reasons"] != INVALIDATION_REASONS or artifact["invariants"] != INVARIANTS:
         raise RuntimeError("Stage 5 invalidation or invariant closure differs")
     semantic_value: list[object] = [
-        DOMAIN, "inactive_candidate", 5, catalog["manifest_id"],
+        DOMAIN, "inactive_candidate", DIAGNOSTIC_PROOF_CLAIM, 5, catalog["manifest_id"],
         OBSERVATION_CONTRACT_TABLE_IDENTITY, observations, RESULTS,
         INPUT_CLASSES, OPERATORS, ACQUISITION_MODES, INVALIDATION_REASONS, INVARIANTS,
         sources, predecessors, EXPECTED_TESTS,
@@ -306,6 +317,7 @@ def validate(
         "behavior_manifest_identity": EXPECTED_BEHAVIOR_MANIFEST_IDENTITY,
         "behavior_passed": passed,
         "behavior_runs": behavior_runs,
+        "diagnostic_proof_claim": DIAGNOSTIC_PROOF_CLAIM,
         "publication_state": "inactive_candidate",
         "schema_version": "maestro.vnext.stage5.semantic-validation-receipt.v1",
         "source_closure_sha256": sha256(canonical_json(sources)),

@@ -2448,6 +2448,7 @@ fn repository_action_basis_commitment(
         CborValue::text(action.literal())?,
         CborValue::Unsigned(action.global_tag()),
         CborValue::Unsigned(action.owner_tag()),
+        CborValue::Unsigned(action.family_tag()),
         CborValue::Unsigned(action.local_tag()),
         CborValue::text(action.owner_descriptor_id())?,
         CborValue::text(action.descriptor_id())?,
@@ -3260,6 +3261,10 @@ pub(crate) mod test_support {
                     .into_iter()
                     .find(|leaf| leaf.literal() == action)
                     .unwrap();
+                assert!(
+                    leaf.stage5_owner_dispatch().is_stage5_admitted(),
+                    "Stage 5 fixture cannot mint a scope for owner-unavailable Action {action}"
+                );
                 (
                     leaf,
                     ScopeAtomV1::new(action, &render_digest(subject), 1).unwrap(),

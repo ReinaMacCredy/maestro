@@ -9,6 +9,7 @@ mod generation;
 mod idempotency;
 mod metadata;
 mod object;
+mod protected_diagnostic;
 mod retention;
 mod snapshot;
 mod snapshot_blocks;
@@ -35,6 +36,11 @@ pub use idempotency::{
     StoreIdempotencyV1, StorePublicationOutcomeV1,
 };
 pub use object::{StoreObjectError, StoreObjectV1};
+#[cfg(test)]
+pub(crate) use protected_diagnostic::{
+    ProtectedDiagnosticCurrentViewAnchorV1, ProtectedDiagnosticCurrentViewProviderV1,
+    ProtectedDiagnosticTestAnchorMutationV1, ProtectedDiagnosticTestCurrentViewProviderV1,
+};
 pub use retention::{
     CollectionPlanV1, LogicalTombstoneV1, ReachabilitySnapshotV1, RetentionError, RetentionPinV1,
     RetentionRootKindV1, RetentionRootV1,

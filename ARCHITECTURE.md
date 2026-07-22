@@ -166,6 +166,32 @@ allocation, and durability without importing Authority semantics. Inactive
 restore preserves immutable history and replay facts but activates no bearer or
 Authority currentness.
 
+Stage 5 also freezes a non-Action protected-continuity diagnostic seam without
+making a production authentication claim. Integration owns a sealed
+`TrustedHostDiagnosticAttestationV1` port whose only current producer is a
+`cfg(test)` authenticated-host reference adapter; Persistence owns a sealed
+current-view anchor port whose only current provider is likewise `cfg(test)`.
+The Authority facade keeps one serialized active Store view open while it
+joins exactly one current human Principal/Binding/Session mapping, the Store
+anchor, the opaque live-host attestation, the protected subject, and the
+complete Authority continuity snapshot. Challenge, attestation, witness, and
+guard are move-only, invocation-bound, and non-escaping; only one bounded
+reference envelope may be returned after a final host-currentness recheck.
+Every refusal is coarse and zero-write. `RepositoryAuthenticatedHumanV1`,
+`SessionV1::request_commitment`, and the public host-context reference are not
+authentication inputs. Production entry remains unreachable until Stages 8,
+9, and 10 supply their separately owned envelope, Store-currentness, and host
+adapters. Replacement Stage-5 proof therefore claims exactly
+`test_adapter_only`, never production host authenticity or restore currentness.
+
+The Repository Action boundary is total without pre-authorizing future owners.
+The historical 38 Stage-5-admitted leaves retain their specialized carriers;
+the exact tags 94–145 retain their frozen descriptor and owner metadata but
+dispatch as typed `OwnerUnavailable` with no basis, capacity mapping, debit,
+write, or mutation path. Later owner stages may add only their specialized
+carriers behind that closed owner-local boundary; they cannot change the frozen
+public Action schemas.
+
 Stage 3 adds the canonical Repository-domain Work, Step, Design, Decision,
 Evidence Claim, and Contract publication kernels. Work owns its identity,
 lifecycle, requirements, relations, and exact Contract-root association. Step
