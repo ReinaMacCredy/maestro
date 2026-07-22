@@ -28,6 +28,7 @@ use crate::domain::vnext::authority::{
 use crate::domain::vnext::identity::ContractRootIdV1;
 use crate::domain::vnext::integration::{
     TrustedHostDiagnosticTestClaimsV1, TrustedHostDiagnosticTestConnectionV1,
+    TrustedHostDiagnosticTestOperatorIdentityV1,
 };
 use crate::domain::vnext::persistence::{
     ProtectedDiagnosticTestAnchorMutationV1, ProtectedDiagnosticTestCurrentViewProviderV1,
@@ -454,6 +455,8 @@ enum ProtectedDiagnosticFixtureModeV1 {
     HeterogeneousRoot,
     MissingAuthorityRoot,
     DuplicateAuthorityRoot,
+    DuplicateOperatorMapping,
+    ChangedRequestCommitment,
     ForeignAuthorityRoot,
     StaleAuthorityRoot,
     NonHuman,
@@ -473,7 +476,6 @@ enum ProtectedDiagnosticFixtureModeV1 {
 }
 
 struct ProtectedDiagnosticInvocationFactsV1 {
-    operator_mapping_commitment: [u8; 32],
     protected_subject: ContinuityReferenceV1,
 }
 
@@ -502,9 +504,29 @@ impl ProtectedDiagnosticInvocationFactsV1 {
             seed,
         )
         .unwrap();
-        let claims =
-            TrustedHostDiagnosticTestClaimsV1::from_seed(seed, self.operator_mapping_commitment)
-                .unwrap();
+        let operator_identity = TrustedHostDiagnosticTestOperatorIdentityV1::authenticated_human(
+            *PrincipalIdV1::derive("responder-principal")
+                .unwrap()
+                .as_bytes(),
+            *PrincipalBindingIdV1::derive("responder-binding")
+                .unwrap()
+                .as_bytes(),
+            *SessionIdV1::derive("responder-session").unwrap().as_bytes(),
+            *AuthorityContextIdV1::derive("repository-context")
+                .unwrap()
+                .as_bytes(),
+            11,
+            9,
+            100,
+            200,
+            100,
+            200,
+            2,
+            7,
+            *domain.id().as_bytes(),
+            domain.role().tag(),
+        );
+        let claims = TrustedHostDiagnosticTestClaimsV1::from_seed(seed, operator_identity).unwrap();
         (
             provider,
             TrustedHostDiagnosticTestConnectionV1::authenticated(claims),
@@ -584,7 +606,14 @@ fn diagnostic_facts(
         } else {
             facts.responder_session().authority_epoch()
         },
-        facts.responder_session().request_commitment(),
+        if matches!(
+            mode,
+            ProtectedDiagnosticFixtureModeV1::ChangedRequestCommitment
+        ) {
+            "diagnostic-request-commitment-is-snapshot-only"
+        } else {
+            facts.responder_session().request_commitment()
+        },
         facts.responder_session().validity(),
     )
     .unwrap();
@@ -622,8 +651,22 @@ fn diagnostic_facts(
             facts.context().clone()
         },
         snapshot,
-        facts.actor_binding().clone(),
-        facts.actor_session().clone(),
+        if matches!(
+            mode,
+            ProtectedDiagnosticFixtureModeV1::DuplicateOperatorMapping
+        ) {
+            responder_binding.clone()
+        } else {
+            facts.actor_binding().clone()
+        },
+        if matches!(
+            mode,
+            ProtectedDiagnosticFixtureModeV1::DuplicateOperatorMapping
+        ) {
+            responder_session.clone()
+        } else {
+            facts.actor_session().clone()
+        },
         responder_binding,
         responder_session,
         facts.g0_candidate_paths().to_vec(),
@@ -879,37 +922,7 @@ fn seeded_store_with_diagnostic_mode(
     let head_two = store
         .publish_generation(&generation_two, Some(head_one.id()))
         .unwrap();
-    let responder_session_without_request_authority = SessionV1::new(
-        facts.responder_session().id(),
-        facts.responder_session().binding_id(),
-        facts.responder_session().context_id(),
-        facts.responder_session().store_generation(),
-        facts.responder_session().authority_epoch(),
-        "diagnostic-request-commitment-is-not-authority",
-        facts.responder_session().validity(),
-    )
-    .unwrap();
-    let operator_mapping_commitment = protected_diagnostic_operator_mapping_commitment_from_facts(
-        domain.id(),
-        &facts,
-        facts.responder_binding(),
-        facts.responder_session(),
-        &generation_two,
-    )
-    .unwrap();
-    assert_eq!(
-        operator_mapping_commitment,
-        protected_diagnostic_operator_mapping_commitment_from_facts(
-            domain.id(),
-            &facts,
-            facts.responder_binding(),
-            &responder_session_without_request_authority,
-            &generation_two,
-        )
-        .unwrap()
-    );
     let invocation_facts = ProtectedDiagnosticInvocationFactsV1 {
-        operator_mapping_commitment,
         protected_subject: ContinuityReferenceV1::from_digest(*authority_root.id().as_bytes()),
     };
     if active {
@@ -1855,6 +1868,55 @@ fn inactive_store_cannot_publish_authority() {
 }
 
 #[test]
+fn inactive_store_refusal_mints_no_diagnostic_invocation() {
+    let (root, _domain, mut store, _contract_root, _head, _authority_root, _request, diagnostic, _) =
+        seeded_store_with_activation(false);
+    let (
+        active_root,
+        _active_domain,
+        mut active_store,
+        _active_contract_root,
+        active_head,
+        _active_authority_root,
+        _active_request,
+        active_diagnostic,
+        _,
+    ) = seeded_store_with_activation(true);
+    let (mut provider, mut connection) = active_diagnostic.test_ports(
+        &active_root,
+        active_store.domain(),
+        &active_store,
+        &active_head,
+        b"inactive-diagnostic",
+    );
+    let control = connection.control();
+    assert!(matches!(
+        AuthorityFacadeV1::new(&mut store).protected_continuity_diagnostic_reference_envelope(
+            &mut connection,
+            &mut provider,
+            diagnostic.protected_subject,
+        ),
+        Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)
+    ));
+    assert!(!control.invocation_is_pending());
+    assert_eq!(
+        AuthorityFacadeV1::new(&mut active_store)
+            .protected_continuity_diagnostic_reference_envelope(
+                &mut connection,
+                &mut provider,
+                active_diagnostic.protected_subject,
+            )
+            .unwrap()
+            .disposition(),
+        ProtectedContinuityDiagnosticDispositionV1::CurrentProtectedSnapshot
+    );
+    drop(active_store);
+    drop(store);
+    fs::remove_dir_all(active_root).unwrap();
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn protected_continuity_diagnostic_guard_is_subject_bound_and_zero_write() {
     let (root, _domain, mut store, _contract_root, head, _authority_root, _request, diagnostic, _) =
         seeded_store();
@@ -1910,15 +1972,11 @@ fn protected_continuity_diagnostic_guard_is_non_oracular_across_subjects() {
         )
         .unwrap_err();
 
-    let mut wrong_claims = TrustedHostDiagnosticTestClaimsV1::from_seed(
-        b"wrong-operator",
-        diagnostic.operator_mapping_commitment,
-    )
-    .unwrap();
-    wrong_claims.replace_operator_mapping_commitment([0x91; 32]);
-    let mut wrong_connection = TrustedHostDiagnosticTestConnectionV1::authenticated(wrong_claims);
-    let (mut wrong_provider, _) =
+    let (mut wrong_provider, mut wrong_connection) =
         diagnostic.test_ports(&root, store.domain(), &store, &_head, b"wrong-operator");
+    wrong_connection
+        .control()
+        .substitute_operator_identity_dimension(0);
     let wrong_error = AuthorityFacadeV1::new(&mut store)
         .protected_continuity_diagnostic_reference_envelope(
             &mut wrong_connection,
@@ -1928,6 +1986,274 @@ fn protected_continuity_diagnostic_guard_is_non_oracular_across_subjects() {
         .unwrap_err();
     assert_eq!(unknown_error.to_string(), wrong_error.to_string());
     assert!(!unknown_error.to_string().contains("protected-nonexistent"));
+    drop(store);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn protected_continuity_diagnostic_joins_every_independent_host_identity_dimension() {
+    for dimension in 0..15 {
+        let (
+            root,
+            _domain,
+            mut store,
+            _contract_root,
+            head,
+            _authority_root,
+            _request,
+            diagnostic,
+            _,
+        ) = seeded_store();
+        let (mut provider, mut connection) = diagnostic.test_ports(
+            &root,
+            store.domain(),
+            &store,
+            &head,
+            format!("wrong-host-dimension-{dimension}").as_bytes(),
+        );
+        connection
+            .control()
+            .substitute_operator_identity_dimension(dimension);
+        assert!(matches!(
+            AuthorityFacadeV1::new(&mut store).protected_continuity_diagnostic_reference_envelope(
+                &mut connection,
+                &mut provider,
+                diagnostic.protected_subject,
+            ),
+            Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)
+        ));
+        drop(store);
+        fs::remove_dir_all(root).unwrap();
+    }
+}
+
+#[test]
+fn protected_continuity_diagnostic_final_recheck_rejects_host_fence_turnover() {
+    for schedule in [
+        crate::domain::vnext::integration::TrustedHostDiagnosticTestControlV1::disconnect_on_final_recheck,
+        crate::domain::vnext::integration::TrustedHostDiagnosticTestControlV1::revoke_on_final_recheck,
+        crate::domain::vnext::integration::TrustedHostDiagnosticTestControlV1::advance_currentness_on_final_recheck,
+        crate::domain::vnext::integration::TrustedHostDiagnosticTestControlV1::replace_incarnation_on_final_recheck,
+    ] {
+        let (
+            root,
+            _domain,
+            mut store,
+            _contract_root,
+            head,
+            _authority_root,
+            _request,
+            diagnostic,
+            _,
+        ) = seeded_store();
+        let (mut provider, mut connection) = diagnostic.test_ports(
+            &root,
+            store.domain(),
+            &store,
+            &head,
+            b"host-fence-turnover",
+        );
+        schedule(&connection.control());
+        assert!(matches!(
+            AuthorityFacadeV1::new(&mut store).protected_continuity_diagnostic_reference_envelope(
+                &mut connection,
+                &mut provider,
+                diagnostic.protected_subject,
+            ),
+            Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)
+        ));
+        drop(store);
+        fs::remove_dir_all(root).unwrap();
+    }
+}
+
+#[test]
+fn protected_continuity_diagnostic_final_recheck_rejects_host_claim_turnover() {
+    for dimension in 0..12 {
+        let (
+            root,
+            _domain,
+            mut store,
+            _contract_root,
+            head,
+            _authority_root,
+            _request,
+            diagnostic,
+            _,
+        ) = seeded_store();
+        let (mut provider, mut connection) = diagnostic.test_ports(
+            &root,
+            store.domain(),
+            &store,
+            &head,
+            format!("host-claim-turnover-{dimension}").as_bytes(),
+        );
+        connection
+            .control()
+            .substitute_claim_dimension_on_final_recheck(dimension);
+        assert!(matches!(
+            AuthorityFacadeV1::new(&mut store).protected_continuity_diagnostic_reference_envelope(
+                &mut connection,
+                &mut provider,
+                diagnostic.protected_subject,
+            ),
+            Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)
+        ));
+        drop(store);
+        fs::remove_dir_all(root).unwrap();
+    }
+    for dimension in 0..15 {
+        let (
+            root,
+            _domain,
+            mut store,
+            _contract_root,
+            head,
+            _authority_root,
+            _request,
+            diagnostic,
+            _,
+        ) = seeded_store();
+        let (mut provider, mut connection) = diagnostic.test_ports(
+            &root,
+            store.domain(),
+            &store,
+            &head,
+            format!("operator-identity-turnover-{dimension}").as_bytes(),
+        );
+        connection
+            .control()
+            .substitute_operator_identity_dimension_on_final_recheck(dimension);
+        assert!(matches!(
+            AuthorityFacadeV1::new(&mut store).protected_continuity_diagnostic_reference_envelope(
+                &mut connection,
+                &mut provider,
+                diagnostic.protected_subject,
+            ),
+            Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)
+        ));
+        drop(store);
+        fs::remove_dir_all(root).unwrap();
+    }
+}
+
+#[test]
+fn protected_continuity_diagnostic_failed_subject_consumes_host_authentication_event() {
+    let (root, _domain, mut store, _contract_root, head, _authority_root, _request, diagnostic, _) =
+        seeded_store();
+    let (mut first_provider, mut connection) = diagnostic.test_ports(
+        &root,
+        store.domain(),
+        &store,
+        &head,
+        b"failed-subject-consumes-auth-event",
+    );
+    assert!(matches!(
+        AuthorityFacadeV1::new(&mut store).protected_continuity_diagnostic_reference_envelope(
+            &mut connection,
+            &mut first_provider,
+            reference("unknown-protected-subject"),
+        ),
+        Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)
+    ));
+    let (mut replay_provider, _) = diagnostic.test_ports(
+        &root,
+        store.domain(),
+        &store,
+        &head,
+        b"failed-subject-replay",
+    );
+    assert!(matches!(
+        AuthorityFacadeV1::new(&mut store).protected_continuity_diagnostic_reference_envelope(
+            &mut connection,
+            &mut replay_provider,
+            diagnostic.protected_subject,
+        ),
+        Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)
+    ));
+    drop(store);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn protected_continuity_diagnostic_zero_subject_consumes_host_authentication_event() {
+    let (root, _domain, mut store, _contract_root, head, _authority_root, _request, diagnostic, _) =
+        seeded_store();
+    let (mut first_provider, mut connection) = diagnostic.test_ports(
+        &root,
+        store.domain(),
+        &store,
+        &head,
+        b"zero-subject-consumes-auth-event",
+    );
+    assert!(matches!(
+        AuthorityFacadeV1::new(&mut store).protected_continuity_diagnostic_reference_envelope(
+            &mut connection,
+            &mut first_provider,
+            ContinuityReferenceV1::from_digest([0; 32]),
+        ),
+        Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)
+    ));
+    let (mut replay_provider, _) =
+        diagnostic.test_ports(&root, store.domain(), &store, &head, b"zero-subject-replay");
+    assert!(matches!(
+        AuthorityFacadeV1::new(&mut store).protected_continuity_diagnostic_reference_envelope(
+            &mut connection,
+            &mut replay_provider,
+            diagnostic.protected_subject,
+        ),
+        Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)
+    ));
+    drop(store);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn protected_continuity_diagnostic_refuses_ambiguous_operator_mapping() {
+    let (root, _domain, mut store, _contract_root, head, _authority_root, _request, diagnostic, _) =
+        seeded_store_with_diagnostic_mode(
+            true,
+            ProtectedDiagnosticFixtureModeV1::DuplicateOperatorMapping,
+        );
+    let (mut provider, mut connection) =
+        diagnostic.test_ports(&root, store.domain(), &store, &head, b"ambiguous-operator");
+    assert!(matches!(
+        AuthorityFacadeV1::new(&mut store).protected_continuity_diagnostic_reference_envelope(
+            &mut connection,
+            &mut provider,
+            diagnostic.protected_subject,
+        ),
+        Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)
+    ));
+    drop(store);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn session_request_commitment_is_snapshot_identity_not_host_authority() {
+    let (root, _domain, mut store, _contract_root, head, _authority_root, _request, diagnostic, _) =
+        seeded_store_with_diagnostic_mode(
+            true,
+            ProtectedDiagnosticFixtureModeV1::ChangedRequestCommitment,
+        );
+    let (mut provider, mut connection) = diagnostic.test_ports(
+        &root,
+        store.domain(),
+        &store,
+        &head,
+        b"request-commitment-is-not-host-auth",
+    );
+    assert_eq!(
+        AuthorityFacadeV1::new(&mut store)
+            .protected_continuity_diagnostic_reference_envelope(
+                &mut connection,
+                &mut provider,
+                diagnostic.protected_subject,
+            )
+            .unwrap()
+            .disposition(),
+        ProtectedContinuityDiagnosticDispositionV1::CurrentProtectedSnapshot
+    );
     drop(store);
     fs::remove_dir_all(root).unwrap();
 }

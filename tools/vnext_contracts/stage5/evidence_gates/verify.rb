@@ -10,6 +10,38 @@ require "optparse"
 WORKSPACE = File.expand_path("../../../..", __dir__)
 DOMAIN = "maestro.vnext.stage5.evidence-gates.v1"
 DIAGNOSTIC_PROOF_CLAIM = "test_adapter_only"
+ARTIFACT_KEYS = %w[
+  artifact_id behavior behavior_manifest_identity byte_length cbor_hex domain
+  diagnostic_proof_claim invalidation_reasons invariants observation_catalog_manifest_id
+  observation_contract_table_identity observation_kinds predecessors protocol
+  publication_state schema_version source_closure stage
+].sort.freeze
+RUBY_RECEIPT_KEYS = %w[
+  artifact_id artifact_sha256 behavior_manifest_identity behavior_passed behavior_runs
+  diagnostic_proof_claim publication_state receipt_identity schema_version
+  source_closure_sha256 verifier_sha256
+].sort.freeze
+FORBIDDEN_PRODUCTION_CLAIMS = %w[
+  productionauthenticity productionhostauthenticity productionrestorecurrentness
+].freeze
+
+def forbidden_production_claim?(value, path = [])
+  case value
+  when Hash
+    value.any? do |key, child|
+      child_path = path + [key.to_s.downcase.gsub(/[^a-z0-9]/, "")]
+      FORBIDDEN_PRODUCTION_CLAIMS.any? { |claim| child_path.join.include?(claim) } ||
+        forbidden_production_claim?(child, child_path)
+    end
+  when Array
+    value.any? { |child| forbidden_production_claim?(child, path) }
+  when String
+    normalized = value.downcase.gsub(/[^a-z0-9]/, "")
+    FORBIDDEN_PRODUCTION_CLAIMS.any? { |claim| (path + [normalized]).join.include?(claim) }
+  else
+    false
+  end
+end
 SOURCE_PATHS = %w[
   Cargo.toml Cargo.lock build.rs src/lib.rs src/domain/mod.rs src/domain/vnext/mod.rs
   contracts/vnext/catalogs/generated/catalog-01-observation.json
@@ -156,14 +188,18 @@ EXPECTED_RUNS = [
     domain::vnext::authority::facade::tests::protected_continuity_diagnostic_guard_is_non_oracular_across_subjects
     domain::vnext::authority::facade::tests::protected_continuity_diagnostic_guard_is_subject_bound_and_zero_write
     domain::vnext::authority::facade::tests::protected_continuity_diagnostic_guard_refuses_noncurrent_human_facts
+    domain::vnext::authority::facade::tests::inactive_store_refusal_mints_no_diagnostic_invocation
+    domain::vnext::authority::facade::tests::protected_continuity_diagnostic_failed_subject_consumes_host_authentication_event
+    domain::vnext::authority::facade::tests::protected_continuity_diagnostic_zero_subject_consumes_host_authentication_event
+    domain::vnext::authority::facade::tests::protected_continuity_diagnostic_final_recheck_rejects_host_claim_turnover
+    domain::vnext::authority::facade::tests::protected_continuity_diagnostic_final_recheck_rejects_host_fence_turnover
+    domain::vnext::authority::facade::tests::protected_continuity_diagnostic_joins_every_independent_host_identity_dimension
+    domain::vnext::authority::facade::tests::protected_continuity_diagnostic_refuses_ambiguous_operator_mapping
     domain::vnext::authority::facade::tests::protected_continuity_diagnostic_refuses_every_substituted_store_anchor_dimension
     domain::vnext::authority::facade::tests::protected_continuity_diagnostic_refuses_missing_duplicate_and_stale_authority_roots
     domain::vnext::authority::facade::tests::protected_continuity_diagnostic_selects_one_authority_root_in_a_heterogeneous_generation
+    domain::vnext::authority::facade::tests::session_request_commitment_is_snapshot_identity_not_host_authority
     domain::vnext::evidence::store::tests::authorized_store_cut_and_security_erasure_are_restart_safe
-    domain::vnext::integration::trusted_host_diagnostic::tests::challenge_refuses_zero_dimensions
-    domain::vnext::integration::trusted_host_diagnostic::tests::dropped_or_failed_invocation_consumes_the_authentication_event
-    domain::vnext::integration::trusted_host_diagnostic::tests::final_recheck_refuses_revocation_and_currentness_turnover
-    domain::vnext::integration::trusted_host_diagnostic::tests::test_adapter_is_one_shot_and_final_recheck_rejects_turnover
     domain::vnext::persistence::store::tests::controlled_copy_census_fails_closed_on_a_renamed_export_carrier
     domain::vnext::persistence::store::tests::controlled_copy_census_includes_an_orphan_pre_receipt_export
     domain::vnext::persistence::store::tests::controlled_copy_erasure_recovery_accepts_only_monotonic_disappearance
@@ -212,7 +248,7 @@ EXPECTED_RUNS = [
   ]]
 ].freeze
 EXPECTED_TESTS = EXPECTED_RUNS.sum { |row| row.fetch(2).length }
-EXPECTED_BEHAVIOR_MANIFEST_IDENTITY = "sha256:ef6887c611bf807ca8942c0bd640762d50b877b093ad594f0b504a9272078689"
+EXPECTED_BEHAVIOR_MANIFEST_IDENTITY = "sha256:7647ace03d25f7d57fecc4cfcb93e5c2eaa5982a91fdb94778a3cb752e8e711e"
 
 def head(major, value)
   raise "CBOR unsigned value exceeds u64" unless value.between?(0, 0xffffffffffffffff)
@@ -484,6 +520,15 @@ if options[:self_test_output_parser]
     "test result: FAILED. 1 passed; 1 failed"
   ) == -1
   raise "independent Ruby behavior manifest identity differs" unless behavior_manifest_identity == EXPECTED_BEHAVIOR_MANIFEST_IDENTITY
+  raise "Ruby verifier missed an additive production claim" unless forbidden_production_claim?(
+    {"behavior" => {"production" => {"host" => {"authenticity" => true}}}}
+  )
+  raise "Ruby verifier rejected the exact test-only claim" if forbidden_production_claim?(
+    {"diagnostic_proof_claim" => DIAGNOSTIC_PROOF_CLAIM}
+  )
+  raise "Ruby verifier missed a nested production claim alias" unless forbidden_production_claim?(
+    {"proof" => {"claim" => "production-host-authenticity"}}
+  )
   puts({
     "behavior_manifest_identity" => EXPECTED_BEHAVIOR_MANIFEST_IDENTITY,
     "exact_test_output_parser" => "pass"
@@ -494,9 +539,11 @@ end
 
 artifact_bytes = File.binread(File.realpath(options.fetch(:artifact)))
 artifact = JSON.parse(artifact_bytes)
+raise "Stage 5 artifact key set differs" unless artifact.keys.sort == ARTIFACT_KEYS
 raise "Stage 5 domain differs" unless artifact.fetch("schema_version") == DOMAIN
 raise "Stage 5 publication state differs" unless artifact.fetch("publication_state") == "inactive_candidate"
 raise "Stage 5 diagnostic proof claim differs" unless artifact.fetch("diagnostic_proof_claim") == DIAGNOSTIC_PROOF_CLAIM
+raise "Stage 5 artifact asserts a forbidden production proof claim" if forbidden_production_claim?(artifact)
 
 catalog = JSON.parse(
   File.read(File.join(WORKSPACE, "contracts/vnext/catalogs/generated/catalog-01-observation.json"), encoding: Encoding::US_ASCII)
@@ -549,6 +596,9 @@ receipt_value = {
 receipt = receipt_value.merge(
   "receipt_identity" => "sha256:#{Digest::SHA256.hexdigest(canonical_json(receipt_value))}"
 )
+raise "Stage 5 Ruby receipt key set differs" unless receipt.keys.sort == RUBY_RECEIPT_KEYS
+raise "Stage 5 Ruby receipt proof claim differs" unless receipt.fetch("diagnostic_proof_claim") == DIAGNOSTIC_PROOF_CLAIM
+raise "Stage 5 Ruby receipt asserts a forbidden production proof claim" if forbidden_production_claim?(receipt)
 FileUtils.mkdir_p(options.fetch(:output_root))
 File.write(
   File.join(options.fetch(:output_root), "ruby-verification-receipt.v1.json"),

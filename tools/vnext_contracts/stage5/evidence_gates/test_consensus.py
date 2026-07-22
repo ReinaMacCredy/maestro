@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 from unittest import mock
 
-from tools.vnext_contracts.stage5.evidence_gates import behavior, consensus
+from tools.vnext_contracts.stage5.evidence_gates import behavior, consensus, validate
 
 
 class Stage5ConsensusTests(unittest.TestCase):
@@ -134,7 +134,7 @@ class Stage5ConsensusTests(unittest.TestCase):
             "artifact_id": "artifact",
             "artifact_sha256": "b" * 64,
             "behavior_manifest_identity": consensus.EXPECTED_BEHAVIOR_MANIFEST_IDENTITY,
-            "behavior_passed": 69,
+            "behavior_passed": 73,
             "behavior_runs": [],
             "builder_sha256": "a" * 64,
             "diagnostic_proof_claim": consensus.DIAGNOSTIC_PROOF_CLAIM,
@@ -165,6 +165,56 @@ class Stage5ConsensusTests(unittest.TestCase):
             self.assertFalse(
                 consensus.validate_engine_receipt("builder", receipt, invalid_artifact)
             )
+        for forbidden_key in (
+            "production_authenticity",
+            "production_host_authenticity",
+            "production_restore_currentness",
+            "Production-Host-Authenticity",
+        ):
+            invalid_artifact = copy.deepcopy(artifact)
+            invalid_artifact[forbidden_key] = True
+            self.assertFalse(
+                consensus.validate_engine_receipt("builder", receipt, invalid_artifact)
+            )
+            invalid_receipt = copy.deepcopy(receipt)
+            invalid_receipt[forbidden_key] = True
+            invalid_receipt["receipt_identity"] = f"sha256:{consensus.sha256(consensus.canonical_json({key: item for key, item in invalid_receipt.items() if key != 'receipt_identity'}))}"
+            self.assertFalse(
+                consensus.validate_engine_receipt("builder", invalid_receipt, artifact)
+            )
+        for nested_claim in (
+            {"production": {"authenticity": True}},
+            {"production": {"host": {"authenticity": True}}},
+            {"production": {"restore": {"currentness": True}}},
+            {"proof": {"claim": "production-authenticity"}},
+            {"proof": {"claim": "production_host_authenticity"}},
+            {"proof": {"claim": "production restore currentness"}},
+        ):
+            invalid_artifact = copy.deepcopy(artifact)
+            invalid_artifact["behavior"] = nested_claim
+            self.assertFalse(consensus.has_exact_diagnostic_proof_claim(invalid_artifact))
+            self.assertTrue(validate.contains_forbidden_production_claim(invalid_artifact))
+        renamed_artifact = copy.deepcopy(artifact)
+        renamed_artifact["diagnostic-proof-claim"] = renamed_artifact.pop(
+            "diagnostic_proof_claim"
+        )
+        self.assertFalse(consensus.has_exact_diagnostic_proof_claim(renamed_artifact))
+        exact_validator_artifact = {key: None for key in validate.ARTIFACT_KEYS}
+        exact_validator_artifact["diagnostic_proof_claim"] = (
+            validate.DIAGNOSTIC_PROOF_CLAIM
+        )
+        self.assertTrue(validate.has_exact_artifact_proof_claim(exact_validator_artifact))
+        for additive in (
+            {"production_authenticity": True},
+            {"production_host_authenticity": True},
+            {"production_restore_currentness": True},
+            {"behavior": {"production": {"host": {"authenticity": True}}}},
+        ):
+            invalid_validator_artifact = copy.deepcopy(exact_validator_artifact)
+            invalid_validator_artifact.update(additive)
+            self.assertFalse(
+                validate.has_exact_artifact_proof_claim(invalid_validator_artifact)
+            )
         harness: dict[str, Any] = {
             "diagnostic_proof_claim": consensus.DIAGNOSTIC_PROOF_CLAIM,
             "manifest_identity": "sha256:" + "c" * 64,
@@ -185,6 +235,14 @@ class Stage5ConsensusTests(unittest.TestCase):
                     invalid_harness.pop("diagnostic_proof_claim")
                 else:
                     invalid_harness["diagnostic_proof_claim"] = invalid_claim
+                self.assertFalse(consensus.validate_harness_receipt(invalid_harness))
+            for forbidden_key in (
+                "production_authenticity",
+                "production_host_authenticity",
+                "production_restore_currentness",
+            ):
+                invalid_harness = copy.deepcopy(harness)
+                invalid_harness[forbidden_key] = True
                 self.assertFalse(consensus.validate_harness_receipt(invalid_harness))
         receipt["unbound_extension"] = "self-consistent-substitution"
         receipt["receipt_identity"] = f"sha256:{consensus.sha256(consensus.canonical_json({key: item for key, item in receipt.items() if key != 'receipt_identity'}))}"

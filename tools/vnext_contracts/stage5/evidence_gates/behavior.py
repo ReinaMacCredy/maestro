@@ -54,14 +54,18 @@ EXPECTED_RUNS = (
             "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_guard_is_non_oracular_across_subjects",
             "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_guard_is_subject_bound_and_zero_write",
             "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_guard_refuses_noncurrent_human_facts",
+            "domain::vnext::authority::facade::tests::inactive_store_refusal_mints_no_diagnostic_invocation",
+            "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_failed_subject_consumes_host_authentication_event",
+            "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_zero_subject_consumes_host_authentication_event",
+            "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_final_recheck_rejects_host_claim_turnover",
+            "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_final_recheck_rejects_host_fence_turnover",
+            "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_joins_every_independent_host_identity_dimension",
+            "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_refuses_ambiguous_operator_mapping",
             "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_refuses_every_substituted_store_anchor_dimension",
             "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_refuses_missing_duplicate_and_stale_authority_roots",
             "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_selects_one_authority_root_in_a_heterogeneous_generation",
+            "domain::vnext::authority::facade::tests::session_request_commitment_is_snapshot_identity_not_host_authority",
             "domain::vnext::evidence::store::tests::authorized_store_cut_and_security_erasure_are_restart_safe",
-            "domain::vnext::integration::trusted_host_diagnostic::tests::challenge_refuses_zero_dimensions",
-            "domain::vnext::integration::trusted_host_diagnostic::tests::dropped_or_failed_invocation_consumes_the_authentication_event",
-            "domain::vnext::integration::trusted_host_diagnostic::tests::final_recheck_refuses_revocation_and_currentness_turnover",
-            "domain::vnext::integration::trusted_host_diagnostic::tests::test_adapter_is_one_shot_and_final_recheck_rejects_turnover",
             "domain::vnext::persistence::store::tests::controlled_copy_census_fails_closed_on_a_renamed_export_carrier",
             "domain::vnext::persistence::store::tests::controlled_copy_census_includes_an_orphan_pre_receipt_export",
             "domain::vnext::persistence::store::tests::controlled_copy_erasure_recovery_accepts_only_monotonic_disappearance",
@@ -128,7 +132,7 @@ EXPECTED_RUNS = (
 )
 EXPECTED_TESTS = sum(len(row[2]) for row in EXPECTED_RUNS)
 EXPECTED_BEHAVIOR_MANIFEST_IDENTITY = (
-    "sha256:ef6887c611bf807ca8942c0bd640762d50b877b093ad594f0b504a9272078689"
+    "sha256:7647ace03d25f7d57fecc4cfcb93e5c2eaa5982a91fdb94778a3cb752e8e711e"
 )
 
 

@@ -2929,14 +2929,20 @@ fn stage5_protected_diagnostic_ports_are_sealed_test_only_and_non_bearer() {
         .expect("Stage 5 diagnostic kernel must remain locally reviewable");
 
     assert!(
-        integration.contains("pub(crate) struct TrustedHostDiagnosticAttestationV1<'connection>")
+        integration
+            .contains("pub(crate) struct TrustedHostDiagnosticAttestationV1<'connection, 'view>")
     );
+    assert!(!integration.contains("TrustedHostDiagnosticTestInvocationV1"));
+    assert!(!integration.contains("begin_invocation"));
+    assert!(integration.contains("pub(crate) fn attest_in_current_view"));
+    assert!(!integration.contains("AtomicU64"));
     assert!(
         integration
-            .contains("pub(crate) struct TrustedHostDiagnosticTestInvocationV1<'connection>")
+            .contains("current_view_anchor: &'view ProtectedDiagnosticCurrentViewAnchorV1<'view>")
     );
-    assert!(integration.contains("impl Drop for TrustedHostDiagnosticTestInvocationV1<'_>"));
-    assert!(!integration.contains("pub(crate) fn issue_invocation_nonce"));
+    assert!(!integration.contains("operator_mapping_commitment"));
+    assert!(!integration.contains("request_commitment"));
+    assert!(integration.contains("pub(crate) fn matches_operator"));
     assert!(
         integration
             .contains("#[cfg(test)]\npub(crate) struct TrustedHostDiagnosticTestConnectionV1")
@@ -3025,6 +3031,17 @@ fn stage5_protected_diagnostic_ports_are_sealed_test_only_and_non_bearer() {
     assert!(!persistence_module.contains("pub use protected_diagnostic"));
     assert!(!diagnostic_entry.contains("pub(crate) const fn witness"));
     assert!(!diagnostic_entry.contains("ProtectedContinuityDiagnosticReadGuardV1<'view>"));
+    assert!(!diagnostic_kernel.contains("operator_mapping_commitment"));
+    let active_anchor = diagnostic_kernel
+        .find("protected_diagnostic_current_view_anchor")
+        .expect("Active current-view anchor must be established");
+    let issuance = diagnostic_kernel
+        .find("protected_diagnostic_invocation_nonce(")
+        .expect("Authority must mint the invocation identity in the current view");
+    let attestation = diagnostic_kernel
+        .find(".attest_in_current_view(")
+        .expect("Integration must answer the Authority-issued invocation in the same view");
+    assert!(active_anchor < issuance && issuance < attestation);
 }
 
 fn rust_files_under(root: &Path) -> Vec<PathBuf> {

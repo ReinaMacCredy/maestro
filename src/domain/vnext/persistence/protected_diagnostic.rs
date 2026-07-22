@@ -6,6 +6,7 @@
     )
 )]
 
+use std::marker::PhantomData;
 use std::path::Path;
 
 use sha2::{Digest, Sha256};
@@ -19,11 +20,19 @@ use super::{StoreDomainV1, StoreGenerationV1, StoreHeadV1, StoreRoleV1};
 
 const ANCHOR_DOMAIN_V1: &[u8] = b"maestro.vnext.protected-diagnostic-current-view-anchor.v1";
 
-pub(crate) struct ProtectedDiagnosticCurrentViewAnchorV1 {
+pub(crate) struct ProtectedDiagnosticCurrentViewAnchorV1<'view> {
     commitment: [u8; 32],
+    _view: PhantomData<&'view ()>,
 }
 
-impl ProtectedDiagnosticCurrentViewAnchorV1 {
+impl<'view> ProtectedDiagnosticCurrentViewAnchorV1<'view> {
+    pub(super) const fn from_commitment(commitment: [u8; 32]) -> Self {
+        Self {
+            commitment,
+            _view: PhantomData,
+        }
+    }
+
     pub(crate) const fn commitment(&self) -> [u8; 32] {
         self.commitment
     }
@@ -48,7 +57,7 @@ pub(crate) trait ProtectedDiagnosticCurrentViewProviderV1: sealed::Sealed {
     fn bind_current_view(
         &mut self,
         observed: &ProtectedDiagnosticObservedCurrentViewV1<'_>,
-    ) -> Option<ProtectedDiagnosticCurrentViewAnchorV1>;
+    ) -> Option<[u8; 32]>;
 }
 
 #[cfg(test)]
@@ -243,7 +252,7 @@ impl ProtectedDiagnosticCurrentViewProviderV1 for ProtectedDiagnosticTestCurrent
     fn bind_current_view(
         &mut self,
         observed: &ProtectedDiagnosticObservedCurrentViewV1<'_>,
-    ) -> Option<ProtectedDiagnosticCurrentViewAnchorV1> {
+    ) -> Option<[u8; 32]> {
         if self.consumed
             || self.expected_root_commitment != path_commitment(observed.root)
             || self.expected_domain_id != observed.domain.id()
@@ -308,7 +317,7 @@ impl ProtectedDiagnosticCurrentViewProviderV1 for ProtectedDiagnosticTestCurrent
                 &self.activation_restore_incarnation,
             ],
         );
-        Some(ProtectedDiagnosticCurrentViewAnchorV1 { commitment })
+        Some(commitment)
     }
 }
 

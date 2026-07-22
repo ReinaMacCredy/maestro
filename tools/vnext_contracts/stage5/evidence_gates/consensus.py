@@ -20,10 +20,10 @@ EXPECTED_STAGE4_SOURCE_ARCHIVE_LENGTH = 16_486_231
 EXPECTED_STAGE4_SOURCE_ARCHIVE_SHA256 = (
     "347eaf928f81d9ce6e07e3767f0cdaf2cde23cd98d13bad41b745d5fbc359910"
 )
-EXPECTED_BEHAVIOR_TESTS = 69
+EXPECTED_BEHAVIOR_TESTS = 73
 EXPECTED_PROOF_HARNESS_TESTS = 66
 EXPECTED_BEHAVIOR_MANIFEST_IDENTITY = (
-    "sha256:ef6887c611bf807ca8942c0bd640762d50b877b093ad594f0b504a9272078689"
+    "sha256:7647ace03d25f7d57fecc4cfcb93e5c2eaa5982a91fdb94778a3cb752e8e711e"
 )
 EXPECTED_OBSERVATION_CONTRACT_TABLE_IDENTITY = (
     "sha256:a5f0e9137c091972802cb7084d86070a930091f0570cefcc7df445074478a676"
@@ -49,6 +49,31 @@ ENGINE_RECEIPT_CONTRACTS = {
     ),
 }
 DIAGNOSTIC_PROOF_CLAIM = "test_adapter_only"
+ARTIFACT_KEYS = {
+    "artifact_id",
+    "behavior",
+    "behavior_manifest_identity",
+    "byte_length",
+    "cbor_hex",
+    "domain",
+    "diagnostic_proof_claim",
+    "invalidation_reasons",
+    "invariants",
+    "observation_catalog_manifest_id",
+    "observation_contract_table_identity",
+    "observation_kinds",
+    "predecessors",
+    "protocol",
+    "publication_state",
+    "schema_version",
+    "source_closure",
+    "stage",
+}
+FORBIDDEN_PRODUCTION_CLAIMS = {
+    "productionauthenticity",
+    "productionhostauthenticity",
+    "productionrestorecurrentness",
+}
 WORKSPACE = Path(__file__).resolve().parents[4]
 PREDECESSOR_PATHS = (
     "contracts/vnext/stage4/execution/execution-effects.v1.json",
@@ -265,6 +290,34 @@ def validate_receipt_identity(receipt: dict[str, Any]) -> bool:
     return receipt.get("receipt_identity") == f"sha256:{sha256(canonical_json(value))}"
 
 
+def contains_forbidden_production_claim(
+    value: object, path: tuple[str, ...] = ()
+) -> bool:
+    if isinstance(value, dict):
+        for key, child in value.items():
+            normalized = re.sub(r"[^a-z0-9]", "", str(key).lower())
+            child_path = (*path, normalized)
+            joined = "".join(child_path)
+            if any(claim in joined for claim in FORBIDDEN_PRODUCTION_CLAIMS):
+                return True
+            if contains_forbidden_production_claim(child, child_path):
+                return True
+    elif isinstance(value, list):
+        return any(contains_forbidden_production_claim(child, path) for child in value)
+    elif isinstance(value, str):
+        normalized = re.sub(r"[^a-z0-9]", "", value.lower())
+        joined = "".join((*path, normalized))
+        return any(claim in joined for claim in FORBIDDEN_PRODUCTION_CLAIMS)
+    return False
+
+
+def has_exact_diagnostic_proof_claim(value: dict[str, Any]) -> bool:
+    return (
+        value.get("diagnostic_proof_claim") == DIAGNOSTIC_PROOF_CLAIM
+        and not contains_forbidden_production_claim(value)
+    )
+
+
 def validate_engine_receipt(
     name: str, receipt: dict[str, Any], artifact: dict[str, Any]
 ) -> bool:
@@ -296,8 +349,8 @@ def validate_engine_receipt(
     }
     return (
         set(receipt) == expected_keys
-        and artifact.get("diagnostic_proof_claim") == DIAGNOSTIC_PROOF_CLAIM
-        and receipt.get("diagnostic_proof_claim") == DIAGNOSTIC_PROOF_CLAIM
+        and has_exact_diagnostic_proof_claim(artifact)
+        and has_exact_diagnostic_proof_claim(receipt)
         and receipt.get("schema_version") == schema_version
         and receipt.get(engine_hash_key) == source_hashes.get(engine_path)
         and receipt.get("source_closure_sha256")
@@ -320,7 +373,7 @@ def validate_harness_receipt(harness: dict[str, Any]) -> bool:
             "schema_version",
             "tests",
         }
-        and harness.get("diagnostic_proof_claim") == DIAGNOSTIC_PROOF_CLAIM
+        and has_exact_diagnostic_proof_claim(harness)
         and isinstance(tests, list)
         and len(tests) == EXPECTED_PROOF_HARNESS_TESTS
         and len(set(tests)) == EXPECTED_PROOF_HARNESS_TESTS
@@ -461,8 +514,9 @@ def main() -> int:
     artifact_sha256 = sha256(artifact_bytes)
     if (
         not isinstance(artifact_id, str)
+        or set(artifact) != ARTIFACT_KEYS
         or artifact.get("publication_state") != "inactive_candidate"
-        or artifact.get("diagnostic_proof_claim") != DIAGNOSTIC_PROOF_CLAIM
+        or not has_exact_diagnostic_proof_claim(artifact)
         or artifact.get("observation_contract_table_identity")
         != EXPECTED_OBSERVATION_CONTRACT_TABLE_IDENTITY
         or artifact.get("behavior_manifest_identity")
@@ -489,7 +543,7 @@ def main() -> int:
             != EXPECTED_BEHAVIOR_MANIFEST_IDENTITY
             or receipt.get("behavior_passed") != EXPECTED_BEHAVIOR_TESTS
             or receipt.get("publication_state") != "inactive_candidate"
-            or receipt.get("diagnostic_proof_claim") != DIAGNOSTIC_PROOF_CLAIM
+            or not has_exact_diagnostic_proof_claim(receipt)
             or not validate_engine_receipt(name, receipt, artifact)
             or not isinstance(runs, list)
             or not runs

@@ -171,18 +171,20 @@ making a production authentication claim. Integration owns a sealed
 `TrustedHostDiagnosticAttestationV1` port whose only current producer is a
 `cfg(test)` authenticated-host reference adapter; Persistence owns a sealed
 current-view anchor port whose only current provider is likewise `cfg(test)`.
-The Authority facade keeps one serialized active Store view open while it
-joins exactly one current human Principal/Binding/Session mapping, the Store
-anchor, the opaque live-host attestation, the protected subject, and the
-complete Authority continuity snapshot. Challenge, attestation, witness, and
-guard are move-only, invocation-bound, and non-escaping; only one bounded
+The Authority facade first establishes one lifetime-bound active Store-view
+anchor, then mints and consumes the challenge and invocation inside that
+unchanged view. It field-by-field joins exactly one independently attested host
+identity, role, assurance, Binding, and Session to canonical Authority facts;
+no caller-supplied composite commitment participates. Challenge, attestation,
+witness, and guard are move-only, view-bound, and non-escaping; only one bounded
 reference envelope may be returned after a final host-currentness recheck.
 Every refusal is coarse and zero-write. `RepositoryAuthenticatedHumanV1`,
 `SessionV1::request_commitment`, and the public host-context reference are not
 authentication inputs. Production entry remains unreachable until Stages 8,
 9, and 10 supply their separately owned envelope, Store-currentness, and host
-adapters. Replacement Stage-5 proof therefore claims exactly
-`test_adapter_only`, never production host authenticity or restore currentness.
+adapters. Replacement Stage-5 proof therefore has the exact closed claim
+`test_adapter_only`; additive or nested production-host-authenticity and
+production-restore-currentness claims are rejected.
 
 The Repository Action boundary is total without pre-authorizing future owners.
 The historical 38 Stage-5-admitted leaves retain their specialized carriers;

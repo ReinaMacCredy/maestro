@@ -140,7 +140,7 @@ fn published_stage5_three_engine_receipts_bind_one_inactive_artifact() {
     }
     assert_eq!(
         artifact["behavior_manifest_identity"],
-        "sha256:ef6887c611bf807ca8942c0bd640762d50b877b093ad594f0b504a9272078689"
+        "sha256:7647ace03d25f7d57fecc4cfcb93e5c2eaa5982a91fdb94778a3cb752e8e711e"
     );
     assert_eq!(artifact["observation_kinds"].as_array().unwrap().len(), 43);
     assert_eq!(
@@ -215,10 +215,10 @@ fn published_stage5_three_engine_receipts_bind_one_inactive_artifact() {
         assert_eq!(receipt["source_closure_sha256"], source_closure_sha256);
         assert_eq!(
             receipt["behavior_manifest_identity"],
-            "sha256:ef6887c611bf807ca8942c0bd640762d50b877b093ad594f0b504a9272078689"
+            "sha256:7647ace03d25f7d57fecc4cfcb93e5c2eaa5982a91fdb94778a3cb752e8e711e"
         );
         assert_eq!(receipt["artifact_id"], identity);
-        assert_eq!(receipt["behavior_passed"], 69);
+        assert_eq!(receipt["behavior_passed"], 73);
         assert_eq!(receipt["behavior_runs"].as_array().unwrap().len(), 9);
         assert_eq!(
             receipt["behavior_runs"][8]["label"],
@@ -260,21 +260,21 @@ fn published_stage5_three_engine_receipts_bind_one_inactive_artifact() {
         .flat_map(|run| run["tests"].as_array().unwrap())
         .map(|test| Value::Array(vec![test["command"][0].clone(), test["name"].clone()]))
         .collect::<Vec<_>>();
-    assert_eq!(behavior_rows.len(), 69);
+    assert_eq!(behavior_rows.len(), 73);
     assert_eq!(
         behavior_rows
             .iter()
             .map(|row| serde_json::to_string(row).unwrap())
             .collect::<BTreeSet<_>>()
             .len(),
-        69
+        73
     );
     assert_eq!(
         format!(
             "sha256:{}",
             sha256(&canonical_json(&Value::Array(behavior_rows)))
         ),
-        "sha256:ef6887c611bf807ca8942c0bd640762d50b877b093ad594f0b504a9272078689"
+        "sha256:7647ace03d25f7d57fecc4cfcb93e5c2eaa5982a91fdb94778a3cb752e8e711e"
     );
     let builder_semantics = semantic_behavior_runs(&builder["behavior_runs"]);
     let validator_semantics = semantic_behavior_runs(&validator["behavior_runs"]);
@@ -332,10 +332,10 @@ fn published_stage5_three_engine_receipts_bind_one_inactive_artifact() {
         consensus["exact_behavior_receipt_sha256"],
         sha256(&canonical_json(&builder_semantics))
     );
-    assert_eq!(consensus["behavior_passed"], 69);
+    assert_eq!(consensus["behavior_passed"], 73);
     assert_eq!(
         consensus["behavior_manifest_identity"],
-        "sha256:ef6887c611bf807ca8942c0bd640762d50b877b093ad594f0b504a9272078689"
+        "sha256:7647ace03d25f7d57fecc4cfcb93e5c2eaa5982a91fdb94778a3cb752e8e711e"
     );
     assert_eq!(consensus["proof_harness_passed"], 66);
     assert_eq!(consensus["diagnostic_proof_claim"], "test_adapter_only");
@@ -617,7 +617,7 @@ fn semantic_behavior_runs(runs: &Value) -> Value {
             .remove("binary_sha256")
             .unwrap();
     }
-    assert_eq!(total_passed, 69);
+    assert_eq!(total_passed, 73);
 
     let (first_target, first_exact_name) = first_exact.unwrap();
     let mutant = &mut projected[normal_count];

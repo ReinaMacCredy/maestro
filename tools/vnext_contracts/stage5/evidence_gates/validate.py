@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -26,6 +27,50 @@ from behavior import (  # type: ignore[import-not-found]  # noqa: E402
 
 DOMAIN = "maestro.vnext.stage5.evidence-gates.v1"
 DIAGNOSTIC_PROOF_CLAIM = "test_adapter_only"
+ARTIFACT_KEYS = {
+    "artifact_id", "behavior", "behavior_manifest_identity", "byte_length", "cbor_hex",
+    "domain", "diagnostic_proof_claim", "invalidation_reasons", "invariants",
+    "observation_catalog_manifest_id", "observation_contract_table_identity",
+    "observation_kinds", "predecessors", "protocol", "publication_state",
+    "schema_version", "source_closure", "stage",
+}
+VALIDATOR_RECEIPT_KEYS = {
+    "artifact_id", "artifact_sha256", "behavior_manifest_identity", "behavior_passed",
+    "behavior_runs", "diagnostic_proof_claim", "publication_state", "receipt_identity",
+    "schema_version", "source_closure_sha256", "validator_sha256",
+}
+FORBIDDEN_PRODUCTION_CLAIMS = {
+    "productionauthenticity",
+    "productionhostauthenticity",
+    "productionrestorecurrentness",
+}
+
+
+def contains_forbidden_production_claim(value: object, path: tuple[str, ...] = ()) -> bool:
+    if isinstance(value, dict):
+        for key, child in value.items():
+            normalized = re.sub(r"[^a-z0-9]", "", str(key).lower())
+            child_path = (*path, normalized)
+            joined = "".join(child_path)
+            if any(claim in joined for claim in FORBIDDEN_PRODUCTION_CLAIMS):
+                return True
+            if contains_forbidden_production_claim(child, child_path):
+                return True
+    elif isinstance(value, list):
+        return any(contains_forbidden_production_claim(child, path) for child in value)
+    elif isinstance(value, str):
+        normalized = re.sub(r"[^a-z0-9]", "", value.lower())
+        joined = "".join((*path, normalized))
+        return any(claim in joined for claim in FORBIDDEN_PRODUCTION_CLAIMS)
+    return False
+
+
+def has_exact_artifact_proof_claim(artifact: dict[str, Any]) -> bool:
+    return (
+        set(artifact) == ARTIFACT_KEYS
+        and artifact.get("diagnostic_proof_claim") == DIAGNOSTIC_PROOF_CLAIM
+        and not contains_forbidden_production_claim(artifact)
+    )
 SOURCE_PATHS = (
     "Cargo.toml", "Cargo.lock", "build.rs",
     "contracts/vnext/catalogs/generated/catalog-01-observation.json",
@@ -263,9 +308,9 @@ def validate(
     artifact_bytes = artifact_path.read_bytes()
     artifact: dict[str, Any] = json.loads(artifact_bytes)
     if (
-        artifact["schema_version"] != DOMAIN
+        not has_exact_artifact_proof_claim(artifact)
+        or artifact["schema_version"] != DOMAIN
         or artifact["publication_state"] != "inactive_candidate"
-        or artifact.get("diagnostic_proof_claim") != DIAGNOSTIC_PROOF_CLAIM
     ):
         raise RuntimeError("Stage 5 artifact domain or publication state differs")
     catalog = json.loads(
@@ -327,6 +372,13 @@ def validate(
         **receipt_value,
         "receipt_identity": f"sha256:{sha256(canonical_json(receipt_value))}",
     }
+    if (
+        set(receipt) != VALIDATOR_RECEIPT_KEYS
+        or not has_exact_artifact_proof_claim(artifact)
+        or receipt["diagnostic_proof_claim"] != DIAGNOSTIC_PROOF_CLAIM
+        or contains_forbidden_production_claim(receipt)
+    ):
+        raise RuntimeError("Stage 5 validator receipt proof claim schema differs")
     output_root.mkdir(parents=True, exist_ok=True)
     (output_root / "semantic-validation-receipt.v1.json").write_bytes(pretty_json(receipt))
 

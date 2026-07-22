@@ -481,10 +481,10 @@ impl StorePublicationViewV1<'_> {
     }
 
     #[cfg(test)]
-    pub(crate) fn protected_diagnostic_current_view_anchor(
-        &self,
+    pub(crate) fn protected_diagnostic_current_view_anchor<'view>(
+        &'view self,
         provider: &mut dyn ProtectedDiagnosticCurrentViewProviderV1,
-    ) -> Result<ProtectedDiagnosticCurrentViewAnchorV1, StoreError> {
+    ) -> Result<ProtectedDiagnosticCurrentViewAnchorV1<'view>, StoreError> {
         let (store_state, state_revision) = state(self.connection)?;
         if store_state != StoreStateV1::Active {
             return Err(StoreError::ProtectedDiagnosticCurrentnessRefused);
@@ -509,9 +509,12 @@ impl StorePublicationViewV1<'_> {
             generation: &generation,
             publication_clock: publication_clock(self.connection)?,
         };
-        provider
+        let commitment = provider
             .bind_current_view(&observed)
-            .ok_or(StoreError::ProtectedDiagnosticCurrentnessRefused)
+            .ok_or(StoreError::ProtectedDiagnosticCurrentnessRefused)?;
+        Ok(ProtectedDiagnosticCurrentViewAnchorV1::from_commitment(
+            commitment,
+        ))
     }
 
     pub(crate) fn coherent_generation_snapshot(

@@ -27,6 +27,39 @@ from behavior import (  # type: ignore[import-not-found]  # noqa: E402
 DOMAIN = "maestro.vnext.stage5.evidence-gates.v1"
 PUBLICATION_STATE = "inactive_candidate"
 DIAGNOSTIC_PROOF_CLAIM = "test_adapter_only"
+ARTIFACT_KEYS = {
+    "artifact_id",
+    "behavior",
+    "behavior_manifest_identity",
+    "byte_length",
+    "cbor_hex",
+    "domain",
+    "diagnostic_proof_claim",
+    "invalidation_reasons",
+    "invariants",
+    "observation_catalog_manifest_id",
+    "observation_contract_table_identity",
+    "observation_kinds",
+    "predecessors",
+    "protocol",
+    "publication_state",
+    "schema_version",
+    "source_closure",
+    "stage",
+}
+BUILDER_RECEIPT_KEYS = {
+    "artifact_id",
+    "artifact_sha256",
+    "behavior_manifest_identity",
+    "behavior_passed",
+    "behavior_runs",
+    "builder_sha256",
+    "diagnostic_proof_claim",
+    "publication_state",
+    "receipt_identity",
+    "schema_version",
+    "source_closure_sha256",
+}
 SOURCE_PATHS = (
     "Cargo.toml",
     "Cargo.lock",
@@ -345,6 +378,8 @@ def build(output_root: Path, cargo: Path, rustc: Path, execute_behavior: bool) -
         "source_closure": sources,
         "stage": 5,
     }
+    if set(artifact) != ARTIFACT_KEYS or artifact["diagnostic_proof_claim"] != DIAGNOSTIC_PROOF_CLAIM:
+        raise RuntimeError("Stage 5 artifact proof claim schema differs")
     artifact_bytes = pretty_json(artifact)
     receipt_value = {
         "artifact_id": artifact_id,
@@ -362,6 +397,8 @@ def build(output_root: Path, cargo: Path, rustc: Path, execute_behavior: bool) -
         **receipt_value,
         "receipt_identity": f"sha256:{sha256(canonical_json(receipt_value))}",
     }
+    if set(receipt) != BUILDER_RECEIPT_KEYS or receipt["diagnostic_proof_claim"] != DIAGNOSTIC_PROOF_CLAIM:
+        raise RuntimeError("Stage 5 builder receipt proof claim schema differs")
     output_root.mkdir(parents=True, exist_ok=True)
     (output_root / "evidence-gates.v1.json").write_bytes(artifact_bytes)
     (output_root / "evidence-gates.v1.cbor").write_bytes(encoded)

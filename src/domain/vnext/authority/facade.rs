@@ -1,16 +1,15 @@
 #[cfg(test)]
 use std::marker::PhantomData;
+#[cfg(test)]
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
-#[cfg(test)]
-use crate::domain::vnext::identity::StoreDomainIdV1;
 use crate::domain::vnext::identity::StoreObjectIdV1;
 #[cfg(test)]
 use crate::domain::vnext::integration::{
     TrustedHostDiagnosticAttestationV1, TrustedHostDiagnosticTestConnectionV1,
-    TrustedHostDiagnosticTestInvocationV1,
 };
 #[cfg(test)]
 use crate::domain::vnext::persistence::ProtectedDiagnosticTestCurrentViewProviderV1;
@@ -98,13 +97,10 @@ impl<'store> AuthorityFacadeV1<'store> {
         current_view_provider: &mut ProtectedDiagnosticTestCurrentViewProviderV1,
         requested_subject: ContinuityReferenceV1,
     ) -> Result<ProtectedContinuityDiagnosticReferenceEnvelopeV1, AuthorityPublicationError> {
-        let invocation = connection
-            .begin_invocation(*requested_subject.as_bytes())
-            .ok_or(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)?;
         let outcome = self.store.with_serialized_active_view(move |view| {
             build_protected_continuity_diagnostic_reference_envelope(
                 view,
-                invocation,
+                connection,
                 current_view_provider,
                 requested_subject,
             )
@@ -1860,11 +1856,11 @@ fn select_current_authority_root(
 #[cfg(test)]
 fn build_protected_continuity_diagnostic_reference_envelope(
     view: &StorePublicationViewV1<'_>,
-    invocation: TrustedHostDiagnosticTestInvocationV1<'_>,
+    connection: &mut TrustedHostDiagnosticTestConnectionV1,
     current_view_provider: &mut ProtectedDiagnosticTestCurrentViewProviderV1,
     requested_subject: ContinuityReferenceV1,
 ) -> Result<ProtectedContinuityDiagnosticReferenceEnvelopeV1, AuthorityPublicationError> {
-    if view.role() != StoreRoleV1::Repository || requested_subject.as_bytes() == &[0; 32] {
+    if view.role() != StoreRoleV1::Repository {
         return Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot);
     }
     let current_view_anchor = view
@@ -1930,8 +1926,18 @@ fn build_protected_continuity_diagnostic_reference_envelope(
         state_object.id(),
         guard_object.id(),
     )?;
-    let attestation: TrustedHostDiagnosticAttestationV1<'_> = invocation
-        .attest(current_view_anchor.commitment(), authority_commitment)
+    let invocation_nonce = protected_diagnostic_invocation_nonce(
+        current_view_anchor.commitment(),
+        authority_commitment,
+        *requested_subject.as_bytes(),
+    )?;
+    let attestation: TrustedHostDiagnosticAttestationV1<'_, '_> = connection
+        .attest_in_current_view(
+            &current_view_anchor,
+            authority_commitment,
+            *requested_subject.as_bytes(),
+            invocation_nonce,
+        )
         .ok_or(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)?;
     if !attestation.binds(
         current_view_anchor.commitment(),
@@ -1947,13 +1953,23 @@ fn build_protected_continuity_diagnostic_reference_envelope(
         (facts.responder_binding(), facts.responder_session()),
     ] {
         if protected_diagnostic_operator_is_current(facts, binding, session, &current_generation)?
-            && protected_diagnostic_operator_mapping_commitment(
-                view,
-                facts,
-                binding,
-                session,
-                &current_generation,
-            )? == attestation.operator_mapping_commitment()
+            && attestation.matches_operator(
+                *binding.principal_id().as_bytes(),
+                *binding.id().as_bytes(),
+                *session.id().as_bytes(),
+                *binding.context_id().as_bytes(),
+                binding.trust_root_revision(),
+                binding.assurance_revision(),
+                binding.human_capable(),
+                binding.validity().not_before(),
+                binding.validity().expires_at(),
+                session.validity().not_before(),
+                session.validity().expires_at(),
+                session.store_generation(),
+                session.authority_epoch(),
+                *view.domain().id().as_bytes(),
+                view.role().tag(),
+            )
         {
             let binding_object = find_exact_object(
                 &referenced,
@@ -2021,6 +2037,32 @@ fn build_protected_continuity_diagnostic_reference_envelope(
 }
 
 #[cfg(test)]
+fn protected_diagnostic_invocation_nonce(
+    anchor_commitment: [u8; 32],
+    authority_commitment: [u8; 32],
+    protected_subject_commitment: [u8; 32],
+) -> Result<[u8; 32], AuthorityPublicationError> {
+    static SEQUENCE: AtomicU64 = AtomicU64::new(1);
+    let sequence = SEQUENCE
+        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+            value.checked_add(1)
+        })
+        .map_err(|_| AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)?;
+    let nonce: [u8; 32] = Sha256::digest(deterministic_cbor::encode(&CborValue::Array(vec![
+        CborValue::text("maestro.vnext.protected-diagnostic-invocation-nonce.v1")?,
+        bytes(&anchor_commitment),
+        bytes(&authority_commitment),
+        bytes(&protected_subject_commitment),
+        CborValue::Unsigned(sequence),
+    ]))?)
+    .into();
+    if nonce == [0; 32] {
+        return Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot);
+    }
+    Ok(nonce)
+}
+
+#[cfg(test)]
 fn protected_diagnostic_reference_envelope(
     _guard: &ProtectedContinuityDiagnosticReadGuardV1<'_>,
 ) -> ProtectedContinuityDiagnosticReferenceEnvelopeV1 {
@@ -2052,71 +2094,6 @@ fn protected_diagnostic_operator_is_current(
         && !revocations.contains(super::RevocationTargetV1::Session(session.id()))
         && snapshot.trusted_time.is_within(binding.validity())?
         && snapshot.trusted_time.is_within(session.validity())?)
-}
-
-#[cfg(test)]
-fn protected_diagnostic_operator_mapping_commitment(
-    view: &StorePublicationViewV1<'_>,
-    facts: &BootstrapAuthoritySnapshotV1,
-    binding: &super::PrincipalBindingV1,
-    session: &super::SessionV1,
-    current_generation: &StoreGenerationV1,
-) -> Result<[u8; 32], AuthorityPublicationError> {
-    protected_diagnostic_operator_mapping_commitment_from_facts(
-        view.domain().id(),
-        facts,
-        binding,
-        session,
-        current_generation,
-    )
-}
-
-#[cfg(test)]
-fn protected_diagnostic_operator_mapping_commitment_from_facts(
-    domain_id: StoreDomainIdV1,
-    facts: &BootstrapAuthoritySnapshotV1,
-    binding: &super::PrincipalBindingV1,
-    session: &super::SessionV1,
-    current_generation: &StoreGenerationV1,
-) -> Result<[u8; 32], AuthorityPublicationError> {
-    let trusted_time = match facts.snapshot().trusted_time {
-        TrustedTimeV1::Verified {
-            lower_bound,
-            upper_bound,
-        } => CborValue::Array(vec![
-            CborValue::Unsigned(1),
-            CborValue::Unsigned(lower_bound),
-            CborValue::Unsigned(upper_bound),
-        ]),
-        TrustedTimeV1::Unavailable => CborValue::Array(vec![CborValue::Unsigned(0)]),
-    };
-    Ok(
-        Sha256::digest(deterministic_cbor::encode(&CborValue::Array(vec![
-            CborValue::text("maestro.vnext.protected-diagnostic-operator-mapping.v1")?,
-            bytes(binding.principal_id().as_bytes()),
-            bytes(binding.id().as_bytes()),
-            bytes(binding.context_id().as_bytes()),
-            CborValue::Unsigned(binding.trust_root_revision()),
-            CborValue::Unsigned(binding.assurance_revision()),
-            CborValue::Unsigned(binding.validity().not_before()),
-            CborValue::Unsigned(binding.validity().expires_at()),
-            CborValue::Bool(binding.human_capable()),
-            bytes(session.id().as_bytes()),
-            bytes(session.binding_id().as_bytes()),
-            bytes(session.context_id().as_bytes()),
-            CborValue::Unsigned(session.store_generation()),
-            CborValue::Unsigned(session.authority_epoch()),
-            CborValue::Unsigned(session.validity().not_before()),
-            CborValue::Unsigned(session.validity().expires_at()),
-            bytes(facts.context().context_id().as_bytes()),
-            bytes(domain_id.as_bytes()),
-            CborValue::Unsigned(facts.snapshot().trust_root_revision),
-            CborValue::Unsigned(current_generation.ordinal()),
-            CborValue::Unsigned(facts.snapshot().authority_epoch),
-            trusted_time,
-        ]))?)
-        .into(),
-    )
 }
 
 #[cfg(test)]
