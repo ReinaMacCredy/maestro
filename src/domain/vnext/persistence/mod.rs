@@ -36,9 +36,17 @@ pub use idempotency::{
     StoreIdempotencyV1, StorePublicationOutcomeV1,
 };
 pub use object::{StoreObjectError, StoreObjectV1};
+#[allow(
+    unused_imports,
+    reason = "Stage 5 freezes the provider seal before the Stage 9 implementation"
+)]
+pub(crate) use protected_diagnostic::{
+    ProtectedDiagnosticCurrentViewAnchorV1, ProtectedDiagnosticCurrentViewProviderSealedV1,
+    ProtectedDiagnosticCurrentViewProviderV1, ProtectedDiagnosticObservedCurrentViewV1,
+    ProtectedDiagnosticProviderCurrentnessV1,
+};
 #[cfg(test)]
 pub(crate) use protected_diagnostic::{
-    ProtectedDiagnosticCurrentViewAnchorV1, ProtectedDiagnosticCurrentViewProviderV1,
     ProtectedDiagnosticTestAnchorMutationV1, ProtectedDiagnosticTestCurrentViewProviderV1,
 };
 pub use retention::{

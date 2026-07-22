@@ -658,7 +658,6 @@ fn update_operation_owns_implementation() {
             }
         }
     }
-
     assert!(
         violations.is_empty(),
         "production code should use operations::update instead of the legacy shim:\n{}",
@@ -2919,12 +2918,15 @@ fn stage5_protected_diagnostic_ports_are_sealed_test_only_and_non_bearer() {
     let store = read_source_file(Path::new("src/domain/vnext/persistence/store.rs"));
     let facade = read_source_file(Path::new("src/domain/vnext/authority/facade.rs"));
     let diagnostic_entry = facade
-        .split("pub(crate) fn protected_continuity_diagnostic_reference_envelope")
+        .split("pub(crate) fn protected_continuity_diagnostic_with_ports")
         .nth(1)
-        .and_then(|tail| tail.split("pub fn issue_bootstrap_mandate").next())
-        .expect("Stage 5 diagnostic entry must remain a bounded test-only facade seam");
+        .and_then(|tail| {
+            tail.split("pub(crate) fn protected_continuity_diagnostic_reference_envelope")
+                .next()
+        })
+        .expect("Stage 5 diagnostic entry must remain a bounded production-neutral facade seam");
     let diagnostic_kernel = facade
-        .split("fn build_protected_continuity_diagnostic_reference_envelope")
+        .split("fn build_protected_continuity_diagnostic")
         .nth(1)
         .and_then(|tail| tail.split("fn validate_post_cut_current_authority").next())
         .expect("Stage 5 diagnostic kernel must remain locally reviewable");
@@ -2941,12 +2943,15 @@ fn stage5_protected_diagnostic_ports_are_sealed_test_only_and_non_bearer() {
     assert!(issuer_before_view < serialized_view);
     assert!(!diagnostic_operation.contains("RandomState::new()"));
 
+    assert!(integration.contains("pub(crate) trait TrustedHostDiagnosticConnectionPortV1"));
+    assert!(integration.contains("pub(crate) trait TrustedHostDiagnosticAttestationPortV1"));
+    assert!(integration.contains("pub(crate) trait TrustedHostDiagnosticPresentationPortV1"));
     assert!(integration.contains(
-        "pub(crate) struct TrustedHostDiagnosticAttestationV1<'connection, 'anchor, 'view>"
+        "#[cfg(test)]\npub(crate) struct TrustedHostDiagnosticAttestationV1<'connection, 'anchor, 'view>"
     ));
     assert!(!integration.contains("TrustedHostDiagnosticTestInvocationV1"));
     assert!(!integration.contains("begin_invocation"));
-    assert!(integration.contains("pub(crate) fn attest_in_current_view"));
+    assert!(integration.contains("fn attest_in_current_view<'scope, 'view>"));
     assert!(!integration.contains("AtomicU64"));
     assert!(
         integration.contains(
@@ -3002,6 +3007,46 @@ fn stage5_protected_diagnostic_ports_are_sealed_test_only_and_non_bearer() {
     assert!(facade.contains(
         "#[cfg(test)]\n    pub(crate) fn protected_continuity_diagnostic_reference_envelope"
     ));
+    assert!(
+        !facade
+            .contains("#[cfg(test)]\n    pub(crate) fn protected_continuity_diagnostic_with_ports")
+    );
+    assert!(
+        diagnostic_entry.contains("connection: &mut dyn TrustedHostDiagnosticConnectionPortV1")
+    );
+    assert!(
+        diagnostic_entry
+            .contains("current_view_provider: &mut dyn ProtectedDiagnosticCurrentViewProviderV1")
+    );
+    assert!(
+        diagnostic_entry
+            .contains("envelope_builder: &mut dyn ProtectedContinuityDiagnosticEnvelopeBuilderV1")
+    );
+    assert!(facade.contains("ProtectedContinuityDiagnosticEnvelopeBuilderV1:"));
+    assert!(facade.contains("ProtectedContinuityDiagnosticEnvelopeBuilderSealedV1"));
+    assert!(facade.contains("ProtectedContinuityDiagnosticPreparedEnvelopeSealedV1"));
+    assert!(facade.contains("pub(crate) struct ProtectedContinuityDiagnosticReleasedEnvelopeV1"));
+    assert!(facade.contains("struct ProtectedContinuityDiagnosticPreparedCarrierV1"));
+    assert!(facade.contains("MAX_PROTECTED_CONTINUITY_DIAGNOSTIC_ENVELOPE_BYTES_V1"));
+    assert!(facade.contains("let commitment = prepared.commitment()"));
+    assert!(facade.contains("let bytes = prepared.into_bytes()"));
+    assert!(facade.contains("Sha256::digest(&bytes)"));
+    assert!(facade.contains("ProtectedContinuityDiagnosticEnvelopeInputV1"));
+    for getter in [
+        "fence_subject_ref",
+        "fence_carrier_ref",
+        "attempt_ref",
+        "semantic_point_ref",
+        "covered_closure_ref",
+        "conservative_point_envelope_ref",
+        "carrier_revision_ref",
+    ] {
+        assert!(facade.contains(&format!("pub(crate) const fn {getter}")));
+    }
+    assert!(facade.contains("ProtectedContinuityDiagnosticEnvelopeInputV1::from_guard(&guard)"));
+    assert!(diagnostic_kernel.contains("let prepared = envelope_builder"));
+    assert!(!diagnostic_kernel.contains("release_prepared"));
+    assert!(!diagnostic_kernel.contains("discard_prepared"));
 
     for forbidden in [
         "RepositoryAuthenticatedHumanV1",
@@ -3067,8 +3112,14 @@ fn stage5_protected_diagnostic_ports_are_sealed_test_only_and_non_bearer() {
     }
     assert!(!integration.contains("pub mod trusted_host_diagnostic"));
     assert!(!persistence.contains("pub mod protected_diagnostic"));
-    assert!(integration_module.contains("#[cfg(test)]\npub(crate) use trusted_host_diagnostic"));
-    assert!(persistence_module.contains("#[cfg(test)]\npub(crate) use protected_diagnostic"));
+    assert!(integration_module.contains("TrustedHostDiagnosticConnectionPortV1"));
+    assert!(integration_module.contains(
+        "#[cfg(test)]\npub(crate) use trusted_host_diagnostic::{\n    TrustedHostDiagnosticTestClaimsV1"
+    ));
+    assert!(persistence_module.contains("ProtectedDiagnosticCurrentViewProviderV1"));
+    assert!(persistence_module.contains(
+        "#[cfg(test)]\npub(crate) use protected_diagnostic::{\n    ProtectedDiagnosticTestAnchorMutationV1"
+    ));
     assert!(!integration_module.contains("pub use trusted_host_diagnostic"));
     assert!(!integration_module.contains("TrustedHostDiagnosticChallengeV1"));
     assert!(!persistence_module.contains("pub use protected_diagnostic"));
@@ -3088,18 +3139,33 @@ fn stage5_protected_diagnostic_ports_are_sealed_test_only_and_non_bearer() {
         .find(".attest_in_current_view(")
         .expect("Integration must answer the Authority-issued invocation in the same view");
     assert!(active_anchor < issuance && issuance < challenge && challenge < attestation);
+    let prepared_freeze = diagnostic_kernel
+        .find("ProtectedContinuityDiagnosticPreparedCarrierV1::freeze(prepared)")
+        .expect("Authority must freeze a bounded immutable carrier before final rechecks");
     let host_final_recheck = diagnostic_kernel
         .find("attestation.final_recheck()")
         .expect("host currentness must be rechecked before diagnostic return");
     let store_final_recheck = diagnostic_kernel
         .find("consume_protected_diagnostic_current_view_anchor(current_view_anchor)")
         .expect("Persistence currentness lease must be consumed before diagnostic return");
-    assert!(attestation < host_final_recheck && host_final_recheck < store_final_recheck);
-    assert!(!facade.contains("AtomicU64"));
+    assert!(
+        attestation < prepared_freeze
+            && prepared_freeze < host_final_recheck
+            && host_final_recheck < store_final_recheck
+    );
+    let authority_release = diagnostic_kernel
+        .find("Ok(ProtectedContinuityDiagnosticReleasedEnvelopeV1 { prepared })")
+        .expect("only Authority may release the prepared envelope");
+    assert!(store_final_recheck < authority_release);
+    assert!(facade.contains("AtomicU64"));
+    assert!(facade.contains("invocation_entropy"));
+    assert!(facade.contains("process_incarnation"));
+    assert!(facade.contains("sequence.checked_add(1)"));
+    assert!(!facade.contains("ISSUED_INVOCATIONS"));
     assert!(facade.contains("ProtectedDiagnosticInvocationIssuerV1"));
     assert!(facade.contains("RandomState::new()"));
     assert!(facade.contains("protected_diagnostic_process_incarnation"));
-    assert!(facade.contains("register_protected_diagnostic_invocation"));
+    assert!(facade.contains("protected_diagnostic_invocation_sequence"));
     assert!(
         facade.contains(
             "_current_view_anchor: &'anchor ProtectedDiagnosticCurrentViewAnchorV1<'view>"
@@ -3109,17 +3175,70 @@ fn stage5_protected_diagnostic_ports_are_sealed_test_only_and_non_bearer() {
     assert!(!integration.contains("struct TrustedHostDiagnosticChallengeV1"));
     assert!(!integration.contains("from_authority_issuance"));
 
+    let connection_port_prefix = integration
+        .split("pub(crate) trait TrustedHostDiagnosticConnectionPortV1")
+        .next()
+        .expect("trusted-host port prefix must exist");
+    assert!(!connection_port_prefix.ends_with("#[cfg(test)]\n"));
+    let provider_port_prefix = persistence
+        .split("pub(crate) trait ProtectedDiagnosticCurrentViewProviderV1")
+        .next()
+        .expect("current-view provider prefix must exist");
+    assert!(!provider_port_prefix.ends_with("#[cfg(test)]\n"));
+    assert!(
+        !store.contains("#[cfg(test)]\n    pub(crate) fn protected_diagnostic_current_view_anchor")
+    );
+    assert!(!store.contains(
+        "#[cfg(test)]\n    pub(crate) fn consume_protected_diagnostic_current_view_anchor"
+    ));
+    assert!(integration.contains("pub(super) mod sealed"));
+    assert!(integration_module.contains("TrustedHostDiagnosticConnectionPortSealedV1"));
+    assert!(integration_module.contains("TrustedHostDiagnosticAttestationPortSealedV1"));
+    assert!(integration_module.contains("TrustedHostDiagnosticPresentationPortSealedV1"));
+    assert!(persistence.contains(
+        "pub(crate) use sealed::Sealed as ProtectedDiagnosticCurrentViewProviderSealedV1"
+    ));
+    assert!(persistence_module.contains("ProtectedDiagnosticObservedCurrentViewV1"));
+    assert!(persistence_module.contains("ProtectedDiagnosticProviderCurrentnessV1"));
+    assert!(persistence.contains("pub(crate) fn from_live_provider"));
+    assert!(!persistence.contains("provider_currentness_commitment: [u8; 32]"));
+
     let mut challenge_constructors = Vec::new();
     let mut presentation_consumers = Vec::new();
+    let mut connection_port_implementors = Vec::new();
+    let mut current_view_provider_implementors = Vec::new();
+    let mut envelope_builder_implementors = Vec::new();
+    let mut prepared_envelope_implementors = Vec::new();
+    let mut released_envelope_constructors = Vec::new();
     for file in rust_files_under(Path::new("src")) {
         let source = read_source_file(&file);
         if source.contains("TrustedHostDiagnosticChallengeV1::from_authority_issuance(") {
             challenge_constructors.push(file.clone());
         }
         if source.contains(".present_once(") {
-            presentation_consumers.push(file);
+            presentation_consumers.push(file.clone());
+        }
+        if source.contains("impl TrustedHostDiagnosticConnectionPortV1 for") {
+            connection_port_implementors.push(file.clone());
+        }
+        if source.contains("impl ProtectedDiagnosticCurrentViewProviderV1 for") {
+            current_view_provider_implementors.push(file.clone());
+        }
+        if source.contains("impl ProtectedContinuityDiagnosticEnvelopeBuilderV1") {
+            envelope_builder_implementors.push(file.clone());
+        }
+        if source.contains("impl ProtectedContinuityDiagnosticPreparedEnvelopeV1") {
+            prepared_envelope_implementors.push(file.clone());
+        }
+        if source.contains("ProtectedContinuityDiagnosticReleasedEnvelopeV1 { prepared }") {
+            released_envelope_constructors.push(file);
         }
     }
+    connection_port_implementors.sort();
+    current_view_provider_implementors.sort();
+    envelope_builder_implementors.sort();
+    prepared_envelope_implementors.sort();
+    released_envelope_constructors.sort();
     assert_eq!(
         challenge_constructors,
         [PathBuf::from("src/domain/vnext/authority/facade.rs")]
@@ -3127,6 +3246,54 @@ fn stage5_protected_diagnostic_ports_are_sealed_test_only_and_non_bearer() {
     assert_eq!(
         presentation_consumers,
         [PathBuf::from("src/domain/vnext/authority/facade.rs")]
+    );
+    assert_eq!(
+        connection_port_implementors,
+        [
+            PathBuf::from("src/domain/vnext/integration/trusted_host_diagnostic.rs"),
+            PathBuf::from("src/domain/vnext/mod.rs")
+        ]
+    );
+    assert_eq!(
+        current_view_provider_implementors,
+        [
+            PathBuf::from("src/domain/vnext/mod.rs"),
+            PathBuf::from("src/domain/vnext/persistence/protected_diagnostic.rs")
+        ]
+    );
+    assert_eq!(
+        envelope_builder_implementors,
+        [
+            PathBuf::from("src/domain/vnext/authority/facade.rs"),
+            PathBuf::from("src/domain/vnext/authority/facade_tests.rs"),
+            PathBuf::from("src/domain/vnext/mod.rs")
+        ]
+    );
+    assert_eq!(
+        prepared_envelope_implementors,
+        [
+            PathBuf::from("src/domain/vnext/authority/facade.rs"),
+            PathBuf::from("src/domain/vnext/authority/facade_tests.rs"),
+            PathBuf::from("src/domain/vnext/mod.rs")
+        ]
+    );
+    assert_eq!(
+        released_envelope_constructors,
+        [PathBuf::from("src/domain/vnext/authority/facade.rs")]
+    );
+    assert!(integration.contains(
+        "#[cfg(test)]\nimpl TrustedHostDiagnosticConnectionPortV1 for TrustedHostDiagnosticTestConnectionV1"
+    ));
+    assert!(persistence.contains(
+        "#[cfg(test)]\nimpl ProtectedDiagnosticCurrentViewProviderV1 for ProtectedDiagnosticTestCurrentViewProviderV1"
+    ));
+    assert!(facade.contains("#[cfg(test)]\nimpl ProtectedContinuityDiagnosticEnvelopeBuilderV1"));
+    let vnext_module = read_source_file(Path::new("src/domain/vnext/mod.rs"));
+    assert!(
+        vnext_module.contains("#[cfg(test)]\nmod protected_diagnostic_sibling_port_compile_probe")
+    );
+    assert!(
+        vnext_module.contains("fn later_sibling_roots_can_implement_every_frozen_diagnostic_port")
     );
 }
 

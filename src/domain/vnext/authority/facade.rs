@@ -1,27 +1,27 @@
-#[cfg(test)]
-use std::collections::{BTreeSet, hash_map::RandomState};
-#[cfg(test)]
+use std::collections::hash_map::RandomState;
 use std::hash::{BuildHasher, Hasher};
-#[cfg(test)]
-use std::sync::{Mutex, OnceLock};
+use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 use crate::domain::vnext::identity::StoreObjectIdV1;
 #[cfg(test)]
+use crate::domain::vnext::integration::TrustedHostDiagnosticTestConnectionV1;
 use crate::domain::vnext::integration::{
-    TrustedHostDiagnosticAttestationV1, TrustedHostDiagnosticTestConnectionV1,
+    TrustedHostDiagnosticConnectionPortV1, TrustedHostDiagnosticPresentationPortV1,
 };
+#[cfg(test)]
+use crate::domain::vnext::persistence::ProtectedDiagnosticTestCurrentViewProviderV1;
 use crate::domain::vnext::persistence::{
     AtomicGenerationPublicationV1, AtomicPublicationError, GenerationError,
     PreparedPublicationError, StoreCompatibilityV1, StoreGenerationV1, StoreIdempotencyProbeV1,
     StoreIdempotencyV1, StoreObjectError, StoreObjectV1, StorePublicationAllocationV1,
     StorePublicationOutcomeV1, StorePublicationViewV1, StoreRoleV1, StoreStateV1, StoreV1,
 };
-#[cfg(test)]
 use crate::domain::vnext::persistence::{
-    ProtectedDiagnosticCurrentViewAnchorV1, ProtectedDiagnosticTestCurrentViewProviderV1,
+    ProtectedDiagnosticCurrentViewAnchorV1, ProtectedDiagnosticCurrentViewProviderV1,
 };
 use crate::foundation::core::deterministic_cbor::{self, CborError, CborValue};
 
@@ -94,19 +94,27 @@ impl<'store> AuthorityFacadeV1<'store> {
         Self { store }
     }
 
-    #[cfg(test)]
-    pub(crate) fn protected_continuity_diagnostic_reference_envelope(
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "Stage 5 freezes the Authority entry before Stage 8 supplies its builder"
+        )
+    )]
+    pub(crate) fn protected_continuity_diagnostic_with_ports(
         &mut self,
-        connection: &mut TrustedHostDiagnosticTestConnectionV1,
-        current_view_provider: &mut ProtectedDiagnosticTestCurrentViewProviderV1,
+        connection: &mut dyn TrustedHostDiagnosticConnectionPortV1,
+        current_view_provider: &mut dyn ProtectedDiagnosticCurrentViewProviderV1,
+        envelope_builder: &mut dyn ProtectedContinuityDiagnosticEnvelopeBuilderV1,
         requested_subject: ContinuityReferenceV1,
-    ) -> Result<ProtectedContinuityDiagnosticReferenceEnvelopeV1, AuthorityPublicationError> {
+    ) -> Result<ProtectedContinuityDiagnosticReleasedEnvelopeV1, AuthorityPublicationError> {
         let invocation_issuer = ProtectedDiagnosticInvocationIssuerV1::fresh()?;
         let outcome = self.store.with_serialized_active_view(move |view| {
-            build_protected_continuity_diagnostic_reference_envelope(
+            build_protected_continuity_diagnostic(
                 view,
                 connection,
                 current_view_provider,
+                envelope_builder,
                 requested_subject,
                 &invocation_issuer,
             )
@@ -117,6 +125,30 @@ impl<'store> AuthorityFacadeV1<'store> {
                 Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)
             }
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn protected_continuity_diagnostic_reference_envelope(
+        &mut self,
+        connection: &mut TrustedHostDiagnosticTestConnectionV1,
+        current_view_provider: &mut ProtectedDiagnosticTestCurrentViewProviderV1,
+        requested_subject: ContinuityReferenceV1,
+    ) -> Result<ProtectedContinuityDiagnosticReferenceEnvelopeV1, AuthorityPublicationError> {
+        let mut builder = ProtectedContinuityDiagnosticReferenceEnvelopeBuilderV1;
+        let released = self.protected_continuity_diagnostic_with_ports(
+            connection,
+            current_view_provider,
+            &mut builder,
+            requested_subject,
+        )?;
+        if released.into_bytes()
+            != vec![ProtectedContinuityDiagnosticDispositionV1::CurrentProtectedSnapshot as u8]
+        {
+            return Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot);
+        }
+        Ok(ProtectedContinuityDiagnosticReferenceEnvelopeV1 {
+            disposition: ProtectedContinuityDiagnosticDispositionV1::CurrentProtectedSnapshot,
+        })
     }
 
     pub fn issue_bootstrap_mandate(
@@ -1603,11 +1635,16 @@ impl ProtectedContinuityDiagnosticReferenceEnvelopeV1 {
     }
 }
 
-#[cfg(test)]
 const PROTECTED_DIAGNOSTIC_CHALLENGE_DOMAIN_V1: &[u8] =
     b"maestro.vnext.trusted-host-diagnostic-challenge.v1";
 
-#[cfg(test)]
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "Stage 5 freezes challenge accessors before the Stage 10 producer"
+    )
+)]
 pub(crate) struct TrustedHostDiagnosticChallengeV1<'anchor, 'view> {
     current_view_anchor: &'anchor ProtectedDiagnosticCurrentViewAnchorV1<'view>,
     anchor_commitment: [u8; 32],
@@ -1617,7 +1654,13 @@ pub(crate) struct TrustedHostDiagnosticChallengeV1<'anchor, 'view> {
     commitment: [u8; 32],
 }
 
-#[cfg(test)]
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "Stage 5 freezes challenge accessors before the Stage 10 producer"
+    )
+)]
 impl<'anchor, 'view> TrustedHostDiagnosticChallengeV1<'anchor, 'view> {
     fn from_authority_issuance(
         current_view_anchor: &'anchor ProtectedDiagnosticCurrentViewAnchorV1<'view>,
@@ -1675,19 +1718,192 @@ impl<'anchor, 'view> TrustedHostDiagnosticChallengeV1<'anchor, 'view> {
     }
 }
 
-#[cfg(test)]
 struct ProtectedContinuityDiagnosticReadGuardV1<'anchor, 'view> {
     _witness: LinearizationCoverageWitnessV1,
     _current_view_anchor: &'anchor ProtectedDiagnosticCurrentViewAnchorV1<'view>,
 }
 
-#[cfg(test)]
-struct ProtectedDiagnosticInvocationIssuerV1 {
-    process_incarnation: [u8; 32],
-    invocation_entropy: [u8; 32],
+trait ProtectedContinuityDiagnosticReadGuardMarkerV1 {}
+
+impl ProtectedContinuityDiagnosticReadGuardMarkerV1
+    for ProtectedContinuityDiagnosticReadGuardV1<'_, '_>
+{
+}
+
+pub(crate) struct ProtectedContinuityDiagnosticEnvelopeInputV1<'guard> {
+    _guard: &'guard dyn ProtectedContinuityDiagnosticReadGuardMarkerV1,
+    fence_subject_ref: ContinuityReferenceV1,
+    fence_carrier_ref: ContinuityReferenceV1,
+    attempt_ref: ContinuityReferenceV1,
+    semantic_point_ref: ContinuityReferenceV1,
+    covered_closure_ref: ContinuityReferenceV1,
+    conservative_point_envelope_ref: ContinuityReferenceV1,
+    carrier_revision_ref: ContinuityReferenceV1,
+}
+
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "Stage 5 freezes the envelope input before the Stage 8 builder exists"
+    )
+)]
+impl<'guard> ProtectedContinuityDiagnosticEnvelopeInputV1<'guard> {
+    fn from_guard(guard: &'guard ProtectedContinuityDiagnosticReadGuardV1<'_, '_>) -> Self {
+        Self {
+            _guard: guard,
+            fence_subject_ref: guard._witness.fence_subject_ref(),
+            fence_carrier_ref: guard._witness.fence_carrier_ref(),
+            attempt_ref: guard._witness.attempt_ref(),
+            semantic_point_ref: guard._witness.semantic_point_ref(),
+            covered_closure_ref: guard._witness.covered_closure_ref(),
+            conservative_point_envelope_ref: guard._witness.conservative_point_envelope_ref(),
+            carrier_revision_ref: guard._witness.carrier_revision_ref(),
+        }
+    }
+
+    pub(crate) const fn fence_subject_ref(&self) -> ContinuityReferenceV1 {
+        self.fence_subject_ref
+    }
+
+    pub(crate) const fn fence_carrier_ref(&self) -> ContinuityReferenceV1 {
+        self.fence_carrier_ref
+    }
+
+    pub(crate) const fn attempt_ref(&self) -> ContinuityReferenceV1 {
+        self.attempt_ref
+    }
+
+    pub(crate) const fn semantic_point_ref(&self) -> ContinuityReferenceV1 {
+        self.semantic_point_ref
+    }
+
+    pub(crate) const fn covered_closure_ref(&self) -> ContinuityReferenceV1 {
+        self.covered_closure_ref
+    }
+
+    pub(crate) const fn conservative_point_envelope_ref(&self) -> ContinuityReferenceV1 {
+        self.conservative_point_envelope_ref
+    }
+
+    pub(crate) const fn carrier_revision_ref(&self) -> ContinuityReferenceV1 {
+        self.carrier_revision_ref
+    }
+}
+
+pub(crate) trait ProtectedContinuityDiagnosticEnvelopeBuilderSealedV1 {}
+
+pub(crate) trait ProtectedContinuityDiagnosticPreparedEnvelopeSealedV1 {}
+
+pub(crate) trait ProtectedContinuityDiagnosticPreparedEnvelopeV1:
+    ProtectedContinuityDiagnosticPreparedEnvelopeSealedV1
+{
+    fn commitment(&self) -> [u8; 32];
+
+    fn into_bytes(self: Box<Self>) -> Vec<u8>;
+}
+
+const MAX_PROTECTED_CONTINUITY_DIAGNOSTIC_ENVELOPE_BYTES_V1: usize = 16 * 1024;
+
+struct ProtectedContinuityDiagnosticPreparedCarrierV1 {
+    bytes: Box<[u8]>,
+}
+
+impl ProtectedContinuityDiagnosticPreparedCarrierV1 {
+    fn freeze(prepared: Box<dyn ProtectedContinuityDiagnosticPreparedEnvelopeV1>) -> Option<Self> {
+        let commitment = prepared.commitment();
+        let bytes = prepared.into_bytes();
+        if commitment == [0; 32]
+            || bytes.is_empty()
+            || bytes.len() > MAX_PROTECTED_CONTINUITY_DIAGNOSTIC_ENVELOPE_BYTES_V1
+            || <[u8; 32]>::from(Sha256::digest(&bytes)) != commitment
+        {
+            return None;
+        }
+        Some(Self {
+            bytes: bytes.into_boxed_slice(),
+        })
+    }
+}
+
+pub(crate) struct ProtectedContinuityDiagnosticReleasedEnvelopeV1 {
+    prepared: ProtectedContinuityDiagnosticPreparedCarrierV1,
+}
+
+impl ProtectedContinuityDiagnosticReleasedEnvelopeV1 {
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "Stage 5 freezes the released envelope before Stage 8 consumes it"
+        )
+    )]
+    pub(crate) fn into_bytes(self) -> Vec<u8> {
+        self.prepared.bytes.into_vec()
+    }
+}
+
+pub(crate) trait ProtectedContinuityDiagnosticEnvelopeBuilderV1:
+    ProtectedContinuityDiagnosticEnvelopeBuilderSealedV1
+{
+    fn prepare_current_protected_snapshot(
+        &mut self,
+        input: ProtectedContinuityDiagnosticEnvelopeInputV1<'_>,
+    ) -> Option<Box<dyn ProtectedContinuityDiagnosticPreparedEnvelopeV1>>;
 }
 
 #[cfg(test)]
+struct ProtectedContinuityDiagnosticReferenceEnvelopeBuilderV1;
+
+#[cfg(test)]
+struct ProtectedContinuityDiagnosticReferencePreparedEnvelopeV1;
+
+#[cfg(test)]
+impl ProtectedContinuityDiagnosticEnvelopeBuilderSealedV1
+    for ProtectedContinuityDiagnosticReferenceEnvelopeBuilderV1
+{
+}
+
+#[cfg(test)]
+impl ProtectedContinuityDiagnosticPreparedEnvelopeSealedV1
+    for ProtectedContinuityDiagnosticReferencePreparedEnvelopeV1
+{
+}
+
+#[cfg(test)]
+impl ProtectedContinuityDiagnosticPreparedEnvelopeV1
+    for ProtectedContinuityDiagnosticReferencePreparedEnvelopeV1
+{
+    fn commitment(&self) -> [u8; 32] {
+        Sha256::digest([ProtectedContinuityDiagnosticDispositionV1::CurrentProtectedSnapshot as u8])
+            .into()
+    }
+
+    fn into_bytes(self: Box<Self>) -> Vec<u8> {
+        vec![ProtectedContinuityDiagnosticDispositionV1::CurrentProtectedSnapshot as u8]
+    }
+}
+
+#[cfg(test)]
+impl ProtectedContinuityDiagnosticEnvelopeBuilderV1
+    for ProtectedContinuityDiagnosticReferenceEnvelopeBuilderV1
+{
+    fn prepare_current_protected_snapshot(
+        &mut self,
+        _input: ProtectedContinuityDiagnosticEnvelopeInputV1<'_>,
+    ) -> Option<Box<dyn ProtectedContinuityDiagnosticPreparedEnvelopeV1>> {
+        Some(Box::new(
+            ProtectedContinuityDiagnosticReferencePreparedEnvelopeV1,
+        ))
+    }
+}
+
+struct ProtectedDiagnosticInvocationIssuerV1 {
+    process_incarnation: [u8; 32],
+    invocation_entropy: [u8; 32],
+    sequence: u64,
+}
+
 impl ProtectedDiagnosticInvocationIssuerV1 {
     fn fresh() -> Result<Self, AuthorityPublicationError> {
         let process_incarnation = protected_diagnostic_process_incarnation()?;
@@ -1697,9 +1913,11 @@ impl ProtectedDiagnosticInvocationIssuerV1 {
         if invocation_entropy == [0; 32] {
             return Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot);
         }
+        let sequence = protected_diagnostic_invocation_sequence()?;
         Ok(Self {
             process_incarnation,
             invocation_entropy,
+            sequence,
         })
     }
 }
@@ -1931,7 +2149,6 @@ fn load_current_authority(
     })
 }
 
-#[cfg(test)]
 fn select_current_authority_root(
     current_generation: &StoreGenerationV1,
     active_objects: &[StoreObjectV1],
@@ -1954,14 +2171,14 @@ fn select_current_authority_root(
     Ok(*authority_root)
 }
 
-#[cfg(test)]
-fn build_protected_continuity_diagnostic_reference_envelope(
+fn build_protected_continuity_diagnostic(
     view: &StorePublicationViewV1<'_>,
-    connection: &mut TrustedHostDiagnosticTestConnectionV1,
-    current_view_provider: &mut ProtectedDiagnosticTestCurrentViewProviderV1,
+    connection: &mut dyn TrustedHostDiagnosticConnectionPortV1,
+    current_view_provider: &mut dyn ProtectedDiagnosticCurrentViewProviderV1,
+    envelope_builder: &mut dyn ProtectedContinuityDiagnosticEnvelopeBuilderV1,
     requested_subject: ContinuityReferenceV1,
     invocation_issuer: &ProtectedDiagnosticInvocationIssuerV1,
-) -> Result<ProtectedContinuityDiagnosticReferenceEnvelopeV1, AuthorityPublicationError> {
+) -> Result<ProtectedContinuityDiagnosticReleasedEnvelopeV1, AuthorityPublicationError> {
     if view.role() != StoreRoleV1::Repository {
         return Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot);
     }
@@ -2041,66 +2258,74 @@ fn build_protected_continuity_diagnostic_reference_envelope(
         invocation_nonce,
     )?;
     let challenge_commitment = challenge.commitment();
-    let mut attestation: TrustedHostDiagnosticAttestationV1<'_, '_, '_> = connection
+    let mut attestation = connection
         .attest_in_current_view(challenge)
         .ok_or(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)?;
 
-    let live_operator_matches = {
-        let presentation = attestation
-            .present_once()
-            .ok_or(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)?;
-        if presentation.anchor_commitment() != current_view_anchor.commitment()
-            || presentation.authority_commitment() != authority_commitment
-            || presentation.protected_subject_commitment() != *requested_subject.as_bytes()
-            || presentation.protected_subject_commitment() == [0; 32]
-            || presentation.invocation_nonce() != invocation_nonce
-            || presentation.challenge_commitment() != challenge_commitment
-            || presentation.claims_commitment() == [0; 32]
-        {
-            return Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot);
-        }
-        let mut matches = 0usize;
-        for (binding, session) in [
-            (facts.actor_binding(), facts.actor_session()),
-            (facts.responder_binding(), facts.responder_session()),
-        ] {
-            if protected_diagnostic_operator_is_current(
-                facts,
-                binding,
-                session,
-                &current_generation,
-            )? && presentation.principal_identity() == *binding.principal_id().as_bytes()
-                && presentation.binding_identity() == *binding.id().as_bytes()
-                && presentation.session_identity() == *session.id().as_bytes()
-                && presentation.context_identity() == *binding.context_id().as_bytes()
-                && presentation.trust_root_revision() == binding.trust_root_revision()
-                && presentation.assurance_revision() == binding.assurance_revision()
-                && presentation.human_capable() == binding.human_capable()
-                && presentation.binding_not_before() == binding.validity().not_before()
-                && presentation.binding_expires_at() == binding.validity().expires_at()
-                && presentation.session_not_before() == session.validity().not_before()
-                && presentation.session_expires_at() == session.validity().expires_at()
-                && presentation.store_generation() == session.store_generation()
-                && presentation.authority_epoch() == session.authority_epoch()
-                && presentation.domain_identity() == *view.domain().id().as_bytes()
-                && presentation.domain_role() == view.role().tag()
-            {
-                let binding_object = find_exact_object(
-                    &referenced,
-                    AuthoritySchemaV1::PrincipalBinding,
-                    &binding.canonical_bytes()?,
-                )?;
-                let session_object = find_exact_object(
-                    &referenced,
-                    AuthoritySchemaV1::Session,
-                    &session.canonical_bytes()?,
-                )?;
-                require_exact_object_references(&session_object, &[binding_object.id()])?;
-                matches += 1;
-            }
-        }
-        matches
-    };
+    let mut presented_operator_matches =
+        Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot);
+    let presented = attestation.present_once(
+        &mut |presentation: &dyn TrustedHostDiagnosticPresentationPortV1| {
+            presented_operator_matches = (|| {
+                if presentation.anchor_commitment() != current_view_anchor.commitment()
+                    || presentation.authority_commitment() != authority_commitment
+                    || presentation.protected_subject_commitment() != *requested_subject.as_bytes()
+                    || presentation.protected_subject_commitment() == [0; 32]
+                    || presentation.invocation_nonce() != invocation_nonce
+                    || presentation.challenge_commitment() != challenge_commitment
+                    || presentation.claims_commitment() == [0; 32]
+                {
+                    return Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot);
+                }
+                let mut matches = 0usize;
+                for (binding, session) in [
+                    (facts.actor_binding(), facts.actor_session()),
+                    (facts.responder_binding(), facts.responder_session()),
+                ] {
+                    if protected_diagnostic_operator_is_current(
+                        facts,
+                        binding,
+                        session,
+                        &current_generation,
+                    )? && presentation.principal_identity() == *binding.principal_id().as_bytes()
+                        && presentation.binding_identity() == *binding.id().as_bytes()
+                        && presentation.session_identity() == *session.id().as_bytes()
+                        && presentation.context_identity() == *binding.context_id().as_bytes()
+                        && presentation.trust_root_revision() == binding.trust_root_revision()
+                        && presentation.assurance_revision() == binding.assurance_revision()
+                        && presentation.human_capable() == binding.human_capable()
+                        && presentation.binding_not_before() == binding.validity().not_before()
+                        && presentation.binding_expires_at() == binding.validity().expires_at()
+                        && presentation.session_not_before() == session.validity().not_before()
+                        && presentation.session_expires_at() == session.validity().expires_at()
+                        && presentation.store_generation() == session.store_generation()
+                        && presentation.authority_epoch() == session.authority_epoch()
+                        && presentation.domain_identity() == *view.domain().id().as_bytes()
+                        && presentation.domain_role() == view.role().tag()
+                    {
+                        let binding_object = find_exact_object(
+                            &referenced,
+                            AuthoritySchemaV1::PrincipalBinding,
+                            &binding.canonical_bytes()?,
+                        )?;
+                        let session_object = find_exact_object(
+                            &referenced,
+                            AuthoritySchemaV1::Session,
+                            &session.canonical_bytes()?,
+                        )?;
+                        require_exact_object_references(&session_object, &[binding_object.id()])?;
+                        matches += 1;
+                    }
+                }
+                Ok(matches)
+            })();
+            presented_operator_matches.is_ok()
+        },
+    );
+    if !presented {
+        return Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot);
+    }
+    let live_operator_matches = presented_operator_matches?;
     if live_operator_matches != 1 {
         return Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot);
     }
@@ -2145,16 +2370,25 @@ fn build_protected_continuity_diagnostic_reference_envelope(
         _witness: witness,
         _current_view_anchor: &current_view_anchor,
     };
-    let envelope = protected_diagnostic_reference_envelope(&guard);
+    let prepared = envelope_builder
+        .prepare_current_protected_snapshot(
+            ProtectedContinuityDiagnosticEnvelopeInputV1::from_guard(&guard),
+        )
+        .ok_or(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)?;
+    let prepared = ProtectedContinuityDiagnosticPreparedCarrierV1::freeze(prepared)
+        .ok_or(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)?;
     if !attestation.final_recheck() {
         return Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot);
     }
-    view.consume_protected_diagnostic_current_view_anchor(current_view_anchor)
-        .map_err(|_| AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)?;
-    Ok(envelope)
+    if view
+        .consume_protected_diagnostic_current_view_anchor(current_view_anchor)
+        .is_err()
+    {
+        return Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot);
+    }
+    Ok(ProtectedContinuityDiagnosticReleasedEnvelopeV1 { prepared })
 }
 
-#[cfg(test)]
 fn protected_diagnostic_invocation_nonce(
     issuer: &ProtectedDiagnosticInvocationIssuerV1,
     anchor_commitment: [u8; 32],
@@ -2164,20 +2398,21 @@ fn protected_diagnostic_invocation_nonce(
     let nonce = protected_diagnostic_nonce_derivation(
         issuer.process_incarnation,
         issuer.invocation_entropy,
+        issuer.sequence,
         anchor_commitment,
         authority_commitment,
         protected_subject_commitment,
     )?;
-    if nonce == [0; 32] || !register_protected_diagnostic_invocation(nonce)? {
+    if nonce == [0; 32] {
         return Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot);
     }
     Ok(nonce)
 }
 
-#[cfg(test)]
 fn protected_diagnostic_nonce_derivation(
     process_incarnation: [u8; 32],
     invocation_entropy: [u8; 32],
+    sequence: u64,
     anchor_commitment: [u8; 32],
     authority_commitment: [u8; 32],
     protected_subject_commitment: [u8; 32],
@@ -2187,6 +2422,7 @@ fn protected_diagnostic_nonce_derivation(
             CborValue::text("maestro.vnext.protected-diagnostic-invocation-nonce.v1")?,
             bytes(&process_incarnation),
             bytes(&invocation_entropy),
+            CborValue::Unsigned(sequence),
             bytes(&anchor_commitment),
             bytes(&authority_commitment),
             bytes(&protected_subject_commitment),
@@ -2195,7 +2431,6 @@ fn protected_diagnostic_nonce_derivation(
     )
 }
 
-#[cfg(test)]
 fn protected_diagnostic_process_incarnation() -> Result<[u8; 32], AuthorityPublicationError> {
     static PROCESS_INCARNATION: OnceLock<[u8; 32]> = OnceLock::new();
     let candidate = protected_diagnostic_random_entropy(
@@ -2208,7 +2443,6 @@ fn protected_diagnostic_process_incarnation() -> Result<[u8; 32], AuthorityPubli
     Ok(incarnation)
 }
 
-#[cfg(test)]
 fn protected_diagnostic_random_entropy(domain: &[u8]) -> [u8; 32] {
     let state = RandomState::new();
     let mut entropy = [0u8; 32];
@@ -2222,19 +2456,15 @@ fn protected_diagnostic_random_entropy(domain: &[u8]) -> [u8; 32] {
     entropy
 }
 
-#[cfg(test)]
-fn register_protected_diagnostic_invocation(
-    invocation_nonce: [u8; 32],
-) -> Result<bool, AuthorityPublicationError> {
-    static ISSUED_INVOCATIONS: OnceLock<Mutex<BTreeSet<[u8; 32]>>> = OnceLock::new();
-    ISSUED_INVOCATIONS
-        .get_or_init(|| Mutex::new(BTreeSet::new()))
-        .lock()
+fn protected_diagnostic_invocation_sequence() -> Result<u64, AuthorityPublicationError> {
+    static NEXT_INVOCATION_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+    NEXT_INVOCATION_SEQUENCE
+        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |sequence| {
+            sequence.checked_add(1)
+        })
         .map_err(|_| AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)
-        .map(|mut issued| issued.insert(invocation_nonce))
 }
 
-#[cfg(test)]
 fn protected_diagnostic_tuple_commitment(domain: &[u8], fields: &[&[u8]]) -> [u8; 32] {
     let mut digest = Sha256::new();
     digest.update((domain.len() as u64).to_be_bytes());
@@ -2246,16 +2476,6 @@ fn protected_diagnostic_tuple_commitment(domain: &[u8], fields: &[&[u8]]) -> [u8
     digest.finalize().into()
 }
 
-#[cfg(test)]
-fn protected_diagnostic_reference_envelope(
-    _guard: &ProtectedContinuityDiagnosticReadGuardV1<'_, '_>,
-) -> ProtectedContinuityDiagnosticReferenceEnvelopeV1 {
-    ProtectedContinuityDiagnosticReferenceEnvelopeV1 {
-        disposition: ProtectedContinuityDiagnosticDispositionV1::CurrentProtectedSnapshot,
-    }
-}
-
-#[cfg(test)]
 fn protected_diagnostic_operator_is_current(
     facts: &BootstrapAuthoritySnapshotV1,
     binding: &super::PrincipalBindingV1,
@@ -2280,7 +2500,6 @@ fn protected_diagnostic_operator_is_current(
         && snapshot.trusted_time.is_within(session.validity())?)
 }
 
-#[cfg(test)]
 fn protected_diagnostic_authority_commitment(
     view: &StorePublicationViewV1<'_>,
     current_head: &crate::domain::vnext::persistence::StoreHeadV1,

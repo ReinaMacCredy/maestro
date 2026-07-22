@@ -33,7 +33,14 @@ impl<'view> ProtectedDiagnosticCurrentViewAnchorV1<'view> {
         observed: &ProtectedDiagnosticObservedCurrentViewV1<'_>,
         view_root: &'view Path,
     ) -> Option<Self> {
-        let provider_binding = provider.bind_current_view(observed)?;
+        let provider_currentness = provider.bind_current_view(observed)?;
+        let Some(provider_binding) = ProtectedDiagnosticProviderBindingV1::from_bound_provider(
+            observed,
+            provider_currentness,
+        ) else {
+            provider.abandon_current_view();
+            return None;
+        };
         Some(Self {
             commitment: provider_binding.anchor_commitment,
             initial_view: ProtectedDiagnosticOwnedCurrentViewV1::from_observed(observed),
@@ -62,7 +69,7 @@ impl<'view> ProtectedDiagnosticCurrentViewAnchorV1<'view> {
             return false;
         };
         let valid = if unchanged_view {
-            provider.final_recheck_current_view(&binding, observed)
+            provider.final_recheck_current_view(&binding.provider_currentness, observed)
         } else {
             provider.abandon_current_view();
             false
@@ -140,22 +147,120 @@ impl ProtectedDiagnosticOwnedCurrentViewV1 {
 
 pub(crate) struct ProtectedDiagnosticProviderBindingV1 {
     anchor_commitment: [u8; 32],
-    provider_currentness_commitment: [u8; 32],
+    provider_currentness: ProtectedDiagnosticProviderCurrentnessV1,
+}
+
+impl ProtectedDiagnosticProviderBindingV1 {
+    fn from_bound_provider(
+        observed: &ProtectedDiagnosticObservedCurrentViewV1<'_>,
+        provider_currentness: ProtectedDiagnosticProviderCurrentnessV1,
+    ) -> Option<Self> {
+        let anchor_commitment =
+            protected_diagnostic_anchor_commitment(observed, &provider_currentness);
+        if anchor_commitment == [0; 32] || provider_currentness.commitment() == [0; 32] {
+            return None;
+        }
+        Some(Self {
+            anchor_commitment,
+            provider_currentness,
+        })
+    }
+}
+
+pub(crate) struct ProtectedDiagnosticProviderCurrentnessV1 {
+    store_instance_binding: [u8; 32],
+    activation_carrier_identity: [u8; 32],
+    activation_carrier_token: [u8; 32],
+    activation_carrier_revision: u64,
+    activation_attempt_identity: [u8; 32],
+    activation_destination_seal: [u8; 32],
+    activation_restore_incarnation: [u8; 32],
+    provider_currentness_revision: u64,
+}
+
+impl ProtectedDiagnosticProviderCurrentnessV1 {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the currentness port binds every locked activation and restore dimension"
+    )]
+    pub(crate) fn from_live_provider(
+        store_instance_binding: [u8; 32],
+        activation_carrier_identity: [u8; 32],
+        activation_carrier_token: [u8; 32],
+        activation_carrier_revision: u64,
+        activation_attempt_identity: [u8; 32],
+        activation_destination_seal: [u8; 32],
+        activation_restore_incarnation: [u8; 32],
+        provider_currentness_revision: u64,
+    ) -> Option<Self> {
+        if [
+            store_instance_binding,
+            activation_carrier_identity,
+            activation_carrier_token,
+            activation_attempt_identity,
+            activation_destination_seal,
+            activation_restore_incarnation,
+        ]
+        .contains(&[0; 32])
+            || activation_carrier_revision == 0
+            || provider_currentness_revision == 0
+        {
+            return None;
+        }
+        Some(Self {
+            store_instance_binding,
+            activation_carrier_identity,
+            activation_carrier_token,
+            activation_carrier_revision,
+            activation_attempt_identity,
+            activation_destination_seal,
+            activation_restore_incarnation,
+            provider_currentness_revision,
+        })
+    }
+
+    fn commitment(&self) -> [u8; 32] {
+        provider_currentness_commitment(
+            &[
+                self.store_instance_binding,
+                self.activation_carrier_identity,
+                self.activation_carrier_token,
+                self.activation_attempt_identity,
+                self.activation_destination_seal,
+                self.activation_restore_incarnation,
+            ],
+            self.activation_carrier_revision,
+            self.provider_currentness_revision,
+        )
+    }
+
+    fn matches(&self, other: &Self) -> bool {
+        self.store_instance_binding == other.store_instance_binding
+            && self.activation_carrier_identity == other.activation_carrier_identity
+            && self.activation_carrier_token == other.activation_carrier_token
+            && self.activation_carrier_revision == other.activation_carrier_revision
+            && self.activation_attempt_identity == other.activation_attempt_identity
+            && self.activation_destination_seal == other.activation_destination_seal
+            && self.activation_restore_incarnation == other.activation_restore_incarnation
+            && self.provider_currentness_revision == other.provider_currentness_revision
+    }
 }
 
 mod sealed {
-    pub trait Sealed {}
+    pub(crate) trait Sealed {}
 }
+
+pub(crate) use sealed::Sealed as ProtectedDiagnosticCurrentViewProviderSealedV1;
 
 pub(crate) trait ProtectedDiagnosticCurrentViewProviderV1: sealed::Sealed {
     fn bind_current_view(
         &mut self,
         observed: &ProtectedDiagnosticObservedCurrentViewV1<'_>,
-    ) -> Option<ProtectedDiagnosticProviderBindingV1>;
+    ) -> Option<ProtectedDiagnosticProviderCurrentnessV1>;
 
     fn final_recheck_current_view(
         &mut self,
-        binding: &ProtectedDiagnosticProviderBindingV1,
+        initial_currentness: &ProtectedDiagnosticProviderCurrentnessV1,
         observed: &ProtectedDiagnosticObservedCurrentViewV1<'_>,
     ) -> bool;
 
@@ -408,16 +513,19 @@ impl ProtectedDiagnosticTestCurrentViewProviderV1 {
     }
 
     fn current_provider_commitment(&self) -> [u8; 32] {
-        provider_currentness_commitment(
-            &[
-                self.store_instance_binding,
-                self.activation_carrier_identity,
-                self.activation_carrier_token,
-                self.activation_attempt_identity,
-                self.activation_destination_seal,
-                self.activation_restore_incarnation,
-            ],
+        self.current_provider_currentness()
+            .map_or([0; 32], |currentness| currentness.commitment())
+    }
+
+    fn current_provider_currentness(&self) -> Option<ProtectedDiagnosticProviderCurrentnessV1> {
+        ProtectedDiagnosticProviderCurrentnessV1::from_live_provider(
+            self.store_instance_binding,
+            self.activation_carrier_identity,
+            self.activation_carrier_token,
             self.activation_carrier_revision,
+            self.activation_attempt_identity,
+            self.activation_destination_seal,
+            self.activation_restore_incarnation,
             self.provider_currentness_revision,
         )
     }
@@ -479,7 +587,7 @@ impl ProtectedDiagnosticCurrentViewProviderV1 for ProtectedDiagnosticTestCurrent
     fn bind_current_view(
         &mut self,
         observed: &ProtectedDiagnosticObservedCurrentViewV1<'_>,
-    ) -> Option<ProtectedDiagnosticProviderBindingV1> {
+    ) -> Option<ProtectedDiagnosticProviderCurrentnessV1> {
         if self.bound
             || self.consumed
             || !self.matches_observed(observed)
@@ -500,45 +608,12 @@ impl ProtectedDiagnosticCurrentViewProviderV1 for ProtectedDiagnosticTestCurrent
             return None;
         }
         self.bound = true;
-        let state_revision = observed.state_revision.to_be_bytes();
-        let role = observed.role.tag().to_be_bytes();
-        let head_revision = observed.head_revision.to_be_bytes();
-        let generation_ordinal = observed.generation.ordinal().to_be_bytes();
-        let publication_clock = observed.publication_clock.to_be_bytes();
-        let activation_revision = self.activation_carrier_revision.to_be_bytes();
-        let currentness_revision = self.provider_currentness_revision.to_be_bytes();
-        let commitment = tuple_commitment(
-            ANCHOR_DOMAIN_V1,
-            &[
-                &self.expected_root_commitment,
-                &self.store_instance_binding,
-                &state_revision,
-                &role,
-                observed.domain.id().as_bytes(),
-                observed.head.id().as_bytes(),
-                &head_revision,
-                observed.generation.id().as_bytes(),
-                &generation_ordinal,
-                observed.generation.contract_root_id().as_bytes(),
-                &publication_clock,
-                &self.activation_carrier_identity,
-                &self.activation_carrier_token,
-                &activation_revision,
-                &self.activation_attempt_identity,
-                &self.activation_destination_seal,
-                &self.activation_restore_incarnation,
-                &currentness_revision,
-            ],
-        );
-        Some(ProtectedDiagnosticProviderBindingV1 {
-            anchor_commitment: commitment,
-            provider_currentness_commitment: self.sealed_provider_commitment,
-        })
+        self.current_provider_currentness()
     }
 
     fn final_recheck_current_view(
         &mut self,
-        binding: &ProtectedDiagnosticProviderBindingV1,
+        initial_currentness: &ProtectedDiagnosticProviderCurrentnessV1,
         observed: &ProtectedDiagnosticObservedCurrentViewV1<'_>,
     ) -> bool {
         if !self.bound || self.consumed {
@@ -561,8 +636,11 @@ impl ProtectedDiagnosticCurrentViewProviderV1 for ProtectedDiagnosticTestCurrent
             }
             None => {}
         }
+        let current_currentness = self.current_provider_currentness();
         let valid = self.matches_observed(observed)
-            && binding.provider_currentness_commitment == self.current_provider_commitment()
+            && current_currentness
+                .as_ref()
+                .is_some_and(|currentness| initial_currentness.matches(currentness))
             && self.sealed_provider_commitment == self.current_provider_commitment();
         self.bound = false;
         self.consumed = true;
@@ -573,6 +651,43 @@ impl ProtectedDiagnosticCurrentViewProviderV1 for ProtectedDiagnosticTestCurrent
         self.bound = false;
         self.consumed = true;
     }
+}
+
+fn protected_diagnostic_anchor_commitment(
+    observed: &ProtectedDiagnosticObservedCurrentViewV1<'_>,
+    provider: &ProtectedDiagnosticProviderCurrentnessV1,
+) -> [u8; 32] {
+    let root_commitment = path_commitment(observed.root);
+    let state_revision = observed.state_revision.to_be_bytes();
+    let role = observed.role.tag().to_be_bytes();
+    let head_revision = observed.head_revision.to_be_bytes();
+    let generation_ordinal = observed.generation.ordinal().to_be_bytes();
+    let publication_clock = observed.publication_clock.to_be_bytes();
+    let activation_revision = provider.activation_carrier_revision.to_be_bytes();
+    let currentness_revision = provider.provider_currentness_revision.to_be_bytes();
+    tuple_commitment(
+        ANCHOR_DOMAIN_V1,
+        &[
+            &root_commitment,
+            &provider.store_instance_binding,
+            &state_revision,
+            &role,
+            observed.domain.id().as_bytes(),
+            observed.head.id().as_bytes(),
+            &head_revision,
+            observed.generation.id().as_bytes(),
+            &generation_ordinal,
+            observed.generation.contract_root_id().as_bytes(),
+            &publication_clock,
+            &provider.activation_carrier_identity,
+            &provider.activation_carrier_token,
+            &activation_revision,
+            &provider.activation_attempt_identity,
+            &provider.activation_destination_seal,
+            &provider.activation_restore_incarnation,
+            &currentness_revision,
+        ],
+    )
 }
 
 fn path_commitment(path: &Path) -> [u8; 32] {
@@ -587,7 +702,6 @@ fn mutate_digest(value: &mut [u8; 32]) {
     value[0] ^= 0xff;
 }
 
-#[cfg(test)]
 fn provider_currentness_commitment(
     identities: &[[u8; 32]; 6],
     activation_carrier_revision: u64,

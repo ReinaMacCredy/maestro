@@ -167,22 +167,30 @@ restore preserves immutable history and replay facts but activates no bearer or
 Authority currentness.
 
 Stage 5 also freezes a non-Action protected-continuity diagnostic seam without
-making a production authentication claim. Integration owns a sealed
-`TrustedHostDiagnosticAttestationV1` port whose only current producer is a
-`cfg(test)` authenticated-host reference adapter; Persistence owns a sealed
-current-view anchor port whose only current provider is likewise `cfg(test)`.
+making a production authentication claim. Integration exposes production-neutral,
+crate-sealed connection, attestation, and presentation ports; Persistence exposes
+a production-neutral sealed current-view provider and lifetime-bound anchor; and
+Authority exposes the sole fixed diagnostic entry plus a sealed Stage-8 envelope
+builder port. The builder sees only the lifetime-bound seven-reference envelope
+allowlist. Authority immediately materializes it into a private, bounded,
+commitment-checked immutable carrier; both final currentness rechecks must then
+pass before Authority constructs the released envelope. Their concrete Stage-5
+producers, providers, and builder remain `cfg(test)` fixtures.
 The Authority facade first establishes one lifetime-bound active Store-view
 anchor, then mints and consumes the challenge and invocation inside that
 unchanged view. It field-by-field joins exactly one independently attested host
 identity, role, assurance, Binding, and Session to canonical Authority facts;
 no caller-supplied composite commitment participates. Challenge, attestation,
-witness, and guard are move-only, view-bound, and non-escaping; only one bounded
-reference envelope may be returned after a final host-currentness recheck.
-Every refusal is coarse and zero-write. `RepositoryAuthenticatedHumanV1`,
+witness, guard, and prepared envelope are move-only, view-bound, and non-escaping;
+only one bounded reference envelope may be returned after final host and
+Persistence currentness rechecks.
+Every refusal is coarse and zero-write. No later adapter can bypass Authority or
+replace the stable Store-view interval with a detached digest. `RepositoryAuthenticatedHumanV1`,
 `SessionV1::request_commitment`, and the public host-context reference are not
 authentication inputs. Production entry remains unreachable until Stages 8,
 9, and 10 supply their separately owned envelope, Store-currentness, and host
-adapters. Replacement Stage-5 proof therefore has the exact closed claim
+adapters behind these nominal ports. Replacement Stage-5 proof therefore has
+the exact closed claim
 `test_adapter_only`; additive or nested production-host-authenticity and
 production-restore-currentness claims are rejected.
 

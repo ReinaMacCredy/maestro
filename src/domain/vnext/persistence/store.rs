@@ -30,7 +30,6 @@ use super::{
         revoke_sealed_exports_for_security_erasure,
     },
 };
-#[cfg(test)]
 use super::{
     ProtectedDiagnosticCurrentViewAnchorV1, ProtectedDiagnosticCurrentViewProviderV1,
     protected_diagnostic::ProtectedDiagnosticObservedCurrentViewV1,
@@ -480,7 +479,6 @@ impl StorePublicationViewV1<'_> {
         generation_objects(self.root, self.connection, &generation)
     }
 
-    #[cfg(test)]
     pub(crate) fn protected_diagnostic_current_view_anchor<'view>(
         &'view self,
         provider: &'view mut dyn ProtectedDiagnosticCurrentViewProviderV1,
@@ -513,7 +511,6 @@ impl StorePublicationViewV1<'_> {
             .ok_or(StoreError::ProtectedDiagnosticCurrentnessRefused)
     }
 
-    #[cfg(test)]
     pub(crate) fn consume_protected_diagnostic_current_view_anchor<'view>(
         &'view self,
         anchor: ProtectedDiagnosticCurrentViewAnchorV1<'view>,

@@ -6,13 +6,68 @@
     )
 )]
 
-#[cfg(test)]
 use crate::domain::vnext::authority::TrustedHostDiagnosticChallengeV1;
 #[cfg(test)]
 use crate::domain::vnext::persistence::ProtectedDiagnosticCurrentViewAnchorV1;
 use sha2::{Digest, Sha256};
 
 const ATTESTATION_DOMAIN_V1: &[u8] = b"maestro.vnext.trusted-host-diagnostic-attestation.v1";
+
+pub(super) mod sealed {
+    pub(crate) trait Connection {}
+    pub(crate) trait Attestation {}
+    pub(crate) trait Presentation {}
+}
+
+pub(crate) use sealed::{
+    Attestation as TrustedHostDiagnosticAttestationPortSealedV1,
+    Connection as TrustedHostDiagnosticConnectionPortSealedV1,
+    Presentation as TrustedHostDiagnosticPresentationPortSealedV1,
+};
+
+pub(crate) trait TrustedHostDiagnosticConnectionPortV1: sealed::Connection {
+    fn attest_in_current_view<'scope, 'view>(
+        &'scope mut self,
+        challenge: TrustedHostDiagnosticChallengeV1<'scope, 'view>,
+    ) -> Option<Box<dyn TrustedHostDiagnosticAttestationPortV1 + 'scope>>
+    where
+        'view: 'scope;
+}
+
+pub(crate) trait TrustedHostDiagnosticAttestationPortV1: sealed::Attestation {
+    fn witness_carrier_commitment(&self) -> [u8; 32];
+
+    fn present_once(
+        &mut self,
+        inspect: &mut dyn FnMut(&dyn TrustedHostDiagnosticPresentationPortV1) -> bool,
+    ) -> bool;
+
+    fn final_recheck(self: Box<Self>) -> bool;
+}
+
+pub(crate) trait TrustedHostDiagnosticPresentationPortV1: sealed::Presentation {
+    fn anchor_commitment(&self) -> [u8; 32];
+    fn authority_commitment(&self) -> [u8; 32];
+    fn protected_subject_commitment(&self) -> [u8; 32];
+    fn invocation_nonce(&self) -> [u8; 32];
+    fn challenge_commitment(&self) -> [u8; 32];
+    fn claims_commitment(&self) -> [u8; 32];
+    fn principal_identity(&self) -> [u8; 32];
+    fn binding_identity(&self) -> [u8; 32];
+    fn session_identity(&self) -> [u8; 32];
+    fn context_identity(&self) -> [u8; 32];
+    fn trust_root_revision(&self) -> u64;
+    fn assurance_revision(&self) -> u64;
+    fn human_capable(&self) -> bool;
+    fn binding_not_before(&self) -> u64;
+    fn binding_expires_at(&self) -> u64;
+    fn session_not_before(&self) -> u64;
+    fn session_expires_at(&self) -> u64;
+    fn store_generation(&self) -> u64;
+    fn authority_epoch(&self) -> u64;
+    fn domain_identity(&self) -> [u8; 32];
+    fn domain_role(&self) -> u64;
+}
 
 #[cfg(test)]
 struct TrustedHostDiagnosticTestStateV1 {
@@ -335,25 +390,34 @@ impl TrustedHostDiagnosticTestConnectionV1 {
     }
 }
 
+#[cfg(test)]
+impl sealed::Connection for TrustedHostDiagnosticTestConnectionV1 {}
+
+#[cfg(test)]
+impl TrustedHostDiagnosticConnectionPortV1 for TrustedHostDiagnosticTestConnectionV1 {
+    fn attest_in_current_view<'scope, 'view>(
+        &'scope mut self,
+        challenge: TrustedHostDiagnosticChallengeV1<'scope, 'view>,
+    ) -> Option<Box<dyn TrustedHostDiagnosticAttestationPortV1 + 'scope>>
+    where
+        'view: 'scope,
+    {
+        TrustedHostDiagnosticTestConnectionV1::attest_in_current_view(self, challenge)
+            .map(|attestation| Box::new(attestation) as Box<_>)
+    }
+}
+
+#[cfg(test)]
 pub(crate) struct TrustedHostDiagnosticAttestationV1<'connection, 'anchor, 'view> {
-    #[cfg(test)]
     connection: &'connection mut TrustedHostDiagnosticTestConnectionV1,
-    #[cfg(not(test))]
-    connection: &'connection mut (),
-    #[cfg(test)]
     _current_view_anchor: &'anchor ProtectedDiagnosticCurrentViewAnchorV1<'view>,
-    #[cfg(not(test))]
-    _current_view_anchor: &'anchor &'view (),
     anchor_commitment: [u8; 32],
     authority_commitment: [u8; 32],
     protected_subject_commitment: [u8; 32],
     invocation_nonce: [u8; 32],
     challenge_commitment: [u8; 32],
     claims_commitment: [u8; 32],
-    #[cfg(test)]
     operator_identity: TrustedHostDiagnosticTestOperatorIdentityV1,
-    #[cfg(not(test))]
-    operator_identity: (),
     operator_presented: bool,
     host_currentness_revision: u64,
     revocation_revision: u64,
@@ -453,12 +517,104 @@ impl TrustedHostDiagnosticPresentationV1<'_, '_, '_, '_> {
     }
 }
 
+#[cfg(test)]
+impl sealed::Presentation for TrustedHostDiagnosticPresentationV1<'_, '_, '_, '_> {}
+
+#[cfg(test)]
+impl TrustedHostDiagnosticPresentationPortV1
+    for TrustedHostDiagnosticPresentationV1<'_, '_, '_, '_>
+{
+    fn anchor_commitment(&self) -> [u8; 32] {
+        self.anchor_commitment()
+    }
+
+    fn authority_commitment(&self) -> [u8; 32] {
+        self.authority_commitment()
+    }
+
+    fn protected_subject_commitment(&self) -> [u8; 32] {
+        self.protected_subject_commitment()
+    }
+
+    fn invocation_nonce(&self) -> [u8; 32] {
+        self.invocation_nonce()
+    }
+
+    fn challenge_commitment(&self) -> [u8; 32] {
+        self.challenge_commitment()
+    }
+
+    fn claims_commitment(&self) -> [u8; 32] {
+        self.claims_commitment()
+    }
+
+    fn principal_identity(&self) -> [u8; 32] {
+        self.principal_identity()
+    }
+
+    fn binding_identity(&self) -> [u8; 32] {
+        self.binding_identity()
+    }
+
+    fn session_identity(&self) -> [u8; 32] {
+        self.session_identity()
+    }
+
+    fn context_identity(&self) -> [u8; 32] {
+        self.context_identity()
+    }
+
+    fn trust_root_revision(&self) -> u64 {
+        self.trust_root_revision()
+    }
+
+    fn assurance_revision(&self) -> u64 {
+        self.assurance_revision()
+    }
+
+    fn human_capable(&self) -> bool {
+        self.human_capable()
+    }
+
+    fn binding_not_before(&self) -> u64 {
+        self.binding_not_before()
+    }
+
+    fn binding_expires_at(&self) -> u64 {
+        self.binding_expires_at()
+    }
+
+    fn session_not_before(&self) -> u64 {
+        self.session_not_before()
+    }
+
+    fn session_expires_at(&self) -> u64 {
+        self.session_expires_at()
+    }
+
+    fn store_generation(&self) -> u64 {
+        self.store_generation()
+    }
+
+    fn authority_epoch(&self) -> u64 {
+        self.authority_epoch()
+    }
+
+    fn domain_identity(&self) -> [u8; 32] {
+        self.domain_identity()
+    }
+
+    fn domain_role(&self) -> u64 {
+        self.domain_role()
+    }
+}
+
+#[cfg(test)]
 impl<'connection, 'anchor, 'view> TrustedHostDiagnosticAttestationV1<'connection, 'anchor, 'view> {
     pub(crate) const fn witness_carrier_commitment(&self) -> [u8; 32] {
         self.claims_commitment
     }
 
-    #[cfg(test)]
     pub(crate) fn present_once<'presentation>(
         &'presentation mut self,
     ) -> Option<TrustedHostDiagnosticPresentationV1<'presentation, 'connection, 'anchor, 'view>>
@@ -470,7 +626,6 @@ impl<'connection, 'anchor, 'view> TrustedHostDiagnosticAttestationV1<'connection
         Some(TrustedHostDiagnosticPresentationV1 { attestation: self })
     }
 
-    #[cfg(test)]
     pub(crate) fn final_recheck(mut self) -> bool {
         let mut state = self.connection.state.borrow_mut();
         match state.final_recheck_mutation.take() {
@@ -530,6 +685,29 @@ impl<'connection, 'anchor, 'view> TrustedHostDiagnosticAttestationV1<'connection
     }
 }
 
+#[cfg(test)]
+impl sealed::Attestation for TrustedHostDiagnosticAttestationV1<'_, '_, '_> {}
+
+#[cfg(test)]
+impl TrustedHostDiagnosticAttestationPortV1 for TrustedHostDiagnosticAttestationV1<'_, '_, '_> {
+    fn witness_carrier_commitment(&self) -> [u8; 32] {
+        self.witness_carrier_commitment()
+    }
+
+    fn present_once(
+        &mut self,
+        inspect: &mut dyn FnMut(&dyn TrustedHostDiagnosticPresentationPortV1) -> bool,
+    ) -> bool {
+        TrustedHostDiagnosticAttestationV1::present_once(self)
+            .is_some_and(|presentation| inspect(&presentation))
+    }
+
+    fn final_recheck(self: Box<Self>) -> bool {
+        TrustedHostDiagnosticAttestationV1::final_recheck(*self)
+    }
+}
+
+#[cfg(test)]
 impl Drop for TrustedHostDiagnosticAttestationV1<'_, '_, '_> {
     fn drop(&mut self) {
         self.consumed = true;

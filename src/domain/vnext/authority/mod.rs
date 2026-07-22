@@ -76,8 +76,6 @@ pub use evaluator::{
     BootstrapMandateResponseObservationV1, BootstrapResponseDispositionV1,
     ConsentSlotEvaluationFactsV1,
 };
-#[cfg(test)]
-pub(crate) use facade::TrustedHostDiagnosticChallengeV1;
 pub use facade::{
     AbsorbWorkAuthorityV1, AmendContractAuthorityV1, AppendDesignRevisionAuthorityV1,
     AuthorityFacadeV1, AuthorityPublicationError, BootstrapExecutionAuthorityV1,
@@ -99,6 +97,17 @@ pub(crate) use facade::{
     continue_repository_action_attempt, current_authorization_receipt_is_persisted,
     current_repository_authority_time, validate_persisted_evidence_mutation_authority,
     validate_persisted_repository_action_basis,
+};
+#[allow(
+    unused_imports,
+    reason = "Stage 5 freezes nominal Stage 8 diagnostic builder contracts before their producer"
+)]
+pub(crate) use facade::{
+    ProtectedContinuityDiagnosticEnvelopeBuilderSealedV1,
+    ProtectedContinuityDiagnosticEnvelopeBuilderV1, ProtectedContinuityDiagnosticEnvelopeInputV1,
+    ProtectedContinuityDiagnosticPreparedEnvelopeSealedV1,
+    ProtectedContinuityDiagnosticPreparedEnvelopeV1,
+    ProtectedContinuityDiagnosticReleasedEnvelopeV1, TrustedHostDiagnosticChallengeV1,
 };
 pub use grant::{
     AuthorityUseConstraintV1, AuthorityValidationError, BootstrapG0PathV1, BootstrapGenesisGrantV1,
