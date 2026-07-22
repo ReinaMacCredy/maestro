@@ -163,6 +163,7 @@ fn published_stage5_three_engine_receipts_bind_one_inactive_artifact() {
         .map(|row| row[0].as_str().unwrap())
         .collect::<BTreeSet<_>>();
     for required in [
+        "contracts/vnext/catalogs/generated/catalog-09-action-spec.json",
         "src/domain/vnext/authority/downstream_action_basis.rs",
         "src/domain/vnext/authority/facade_tests.rs",
         "src/domain/vnext/integration/mod.rs",

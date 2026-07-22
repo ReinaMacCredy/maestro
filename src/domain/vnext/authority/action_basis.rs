@@ -736,8 +736,22 @@ mod tests {
 
     #[test]
     fn downstream_leaves_are_materialized_but_have_no_stage_five_admission_basis() {
-        for action in RepositoryDownstreamActionLeafV1::all() {
+        let document: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../contracts/vnext/catalogs/generated/catalog-09-action-spec.json"
+        ))
+        .unwrap();
+        let descriptors = document["descriptors"].as_array().unwrap();
+        assert_eq!(descriptors.len(), 145);
+        for (action, descriptor) in RepositoryDownstreamActionLeafV1::all()
+            .into_iter()
+            .zip(&descriptors[93..145])
+        {
             let repository_action = RepositoryActionLeafV1::Downstream(action);
+            assert!(
+                super::super::downstream_action_basis::matches_frozen_action_spec_descriptor(
+                    action, descriptor
+                )
+            );
             assert_eq!(
                 repository_action.stage5_owner_dispatch(),
                 RepositoryActionOwnerDispatchV1::OwnerUnavailable(repository_action)
@@ -747,6 +761,56 @@ mod tests {
             assert!(!repository_action.is_ordinary_execution_action());
             assert!(!repository_action.is_evidence_action());
             assert!(!repository_action.is_external_effect_action());
+
+            let mut descriptor_id_mutant = descriptor.clone();
+            descriptor_id_mutant["descriptor_id"] = serde_json::json!("00");
+            assert!(
+                !super::super::downstream_action_basis::matches_frozen_action_spec_descriptor(
+                    action,
+                    &descriptor_id_mutant,
+                )
+            );
+            for field_index in 0..13 {
+                let mut field_mutant = descriptor.clone();
+                field_mutant["value"][field_index] = serde_json::Value::Null;
+                assert!(
+                    !super::super::downstream_action_basis::matches_frozen_action_spec_descriptor(
+                        action,
+                        &field_mutant,
+                    )
+                );
+                assert_eq!(
+                    repository_action.stage5_owner_dispatch(),
+                    RepositoryActionOwnerDispatchV1::OwnerUnavailable(repository_action)
+                );
+                assert_eq!(repository_action.execution_authority_basis(), None);
+            }
+            let mut identity_envelope_mutant = descriptor.clone();
+            identity_envelope_mutant["identity_envelope"][2] = serde_json::Value::Null;
+            assert!(
+                !super::super::downstream_action_basis::matches_frozen_action_spec_descriptor(
+                    action,
+                    &identity_envelope_mutant,
+                )
+            );
+            for metadata_key in ["byte_length", "cbor_hex"] {
+                let mut metadata_mutant = descriptor.clone();
+                metadata_mutant[metadata_key] = serde_json::Value::Null;
+                assert!(
+                    !super::super::downstream_action_basis::matches_frozen_action_spec_descriptor(
+                        action,
+                        &metadata_mutant,
+                    )
+                );
+            }
+            let mut schema_mutant = descriptor.clone();
+            schema_mutant["identity_envelope"][1]["bytes"] = serde_json::Value::Null;
+            assert!(
+                !super::super::downstream_action_basis::matches_frozen_action_spec_descriptor(
+                    action,
+                    &schema_mutant,
+                )
+            );
         }
     }
 

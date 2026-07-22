@@ -1,5 +1,9 @@
 #[cfg(test)]
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::collections::{BTreeSet, hash_map::RandomState};
+#[cfg(test)]
+use std::hash::{BuildHasher, Hasher};
+#[cfg(test)]
+use std::sync::{Mutex, OnceLock};
 
 use sha2::{Digest, Sha256};
 use thiserror::Error;
@@ -97,12 +101,14 @@ impl<'store> AuthorityFacadeV1<'store> {
         current_view_provider: &mut ProtectedDiagnosticTestCurrentViewProviderV1,
         requested_subject: ContinuityReferenceV1,
     ) -> Result<ProtectedContinuityDiagnosticReferenceEnvelopeV1, AuthorityPublicationError> {
+        let invocation_issuer = ProtectedDiagnosticInvocationIssuerV1::fresh()?;
         let outcome = self.store.with_serialized_active_view(move |view| {
             build_protected_continuity_diagnostic_reference_envelope(
                 view,
                 connection,
                 current_view_provider,
                 requested_subject,
+                &invocation_issuer,
             )
         });
         match outcome {
@@ -1602,8 +1608,8 @@ const PROTECTED_DIAGNOSTIC_CHALLENGE_DOMAIN_V1: &[u8] =
     b"maestro.vnext.trusted-host-diagnostic-challenge.v1";
 
 #[cfg(test)]
-pub(crate) struct TrustedHostDiagnosticChallengeV1<'view> {
-    current_view_anchor: &'view ProtectedDiagnosticCurrentViewAnchorV1<'view>,
+pub(crate) struct TrustedHostDiagnosticChallengeV1<'anchor, 'view> {
+    current_view_anchor: &'anchor ProtectedDiagnosticCurrentViewAnchorV1<'view>,
     anchor_commitment: [u8; 32],
     authority_commitment: [u8; 32],
     protected_subject_commitment: [u8; 32],
@@ -1612,9 +1618,9 @@ pub(crate) struct TrustedHostDiagnosticChallengeV1<'view> {
 }
 
 #[cfg(test)]
-impl<'view> TrustedHostDiagnosticChallengeV1<'view> {
+impl<'anchor, 'view> TrustedHostDiagnosticChallengeV1<'anchor, 'view> {
     fn from_authority_issuance(
-        current_view_anchor: &'view ProtectedDiagnosticCurrentViewAnchorV1<'view>,
+        current_view_anchor: &'anchor ProtectedDiagnosticCurrentViewAnchorV1<'view>,
         authority_commitment: [u8; 32],
         protected_subject_commitment: [u8; 32],
         invocation_nonce: [u8; 32],
@@ -1644,7 +1650,7 @@ impl<'view> TrustedHostDiagnosticChallengeV1<'view> {
 
     pub(crate) const fn current_view_anchor(
         &self,
-    ) -> &'view ProtectedDiagnosticCurrentViewAnchorV1<'view> {
+    ) -> &'anchor ProtectedDiagnosticCurrentViewAnchorV1<'view> {
         self.current_view_anchor
     }
 
@@ -1670,9 +1676,32 @@ impl<'view> TrustedHostDiagnosticChallengeV1<'view> {
 }
 
 #[cfg(test)]
-struct ProtectedContinuityDiagnosticReadGuardV1<'view> {
+struct ProtectedContinuityDiagnosticReadGuardV1<'anchor, 'view> {
     _witness: LinearizationCoverageWitnessV1,
-    _current_view_anchor: &'view ProtectedDiagnosticCurrentViewAnchorV1<'view>,
+    _current_view_anchor: &'anchor ProtectedDiagnosticCurrentViewAnchorV1<'view>,
+}
+
+#[cfg(test)]
+struct ProtectedDiagnosticInvocationIssuerV1 {
+    process_incarnation: [u8; 32],
+    invocation_entropy: [u8; 32],
+}
+
+#[cfg(test)]
+impl ProtectedDiagnosticInvocationIssuerV1 {
+    fn fresh() -> Result<Self, AuthorityPublicationError> {
+        let process_incarnation = protected_diagnostic_process_incarnation()?;
+        let invocation_entropy = protected_diagnostic_random_entropy(
+            b"maestro.vnext.protected-diagnostic-invocation-entropy.v1",
+        );
+        if invocation_entropy == [0; 32] {
+            return Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot);
+        }
+        Ok(Self {
+            process_incarnation,
+            invocation_entropy,
+        })
+    }
 }
 
 struct SuccessorContinuityV1 {
@@ -1931,6 +1960,7 @@ fn build_protected_continuity_diagnostic_reference_envelope(
     connection: &mut TrustedHostDiagnosticTestConnectionV1,
     current_view_provider: &mut ProtectedDiagnosticTestCurrentViewProviderV1,
     requested_subject: ContinuityReferenceV1,
+    invocation_issuer: &ProtectedDiagnosticInvocationIssuerV1,
 ) -> Result<ProtectedContinuityDiagnosticReferenceEnvelopeV1, AuthorityPublicationError> {
     if view.role() != StoreRoleV1::Repository {
         return Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot);
@@ -1999,6 +2029,7 @@ fn build_protected_continuity_diagnostic_reference_envelope(
         guard_object.id(),
     )?;
     let invocation_nonce = protected_diagnostic_invocation_nonce(
+        invocation_issuer,
         current_view_anchor.commitment(),
         authority_commitment,
         *requested_subject.as_bytes(),
@@ -2010,7 +2041,7 @@ fn build_protected_continuity_diagnostic_reference_envelope(
         invocation_nonce,
     )?;
     let challenge_commitment = challenge.commitment();
-    let mut attestation: TrustedHostDiagnosticAttestationV1<'_, '_> = connection
+    let mut attestation: TrustedHostDiagnosticAttestationV1<'_, '_, '_> = connection
         .attest_in_current_view(challenge)
         .ok_or(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)?;
 
@@ -2118,33 +2149,89 @@ fn build_protected_continuity_diagnostic_reference_envelope(
     if !attestation.final_recheck() {
         return Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot);
     }
+    view.consume_protected_diagnostic_current_view_anchor(current_view_anchor)
+        .map_err(|_| AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)?;
     Ok(envelope)
 }
 
 #[cfg(test)]
 fn protected_diagnostic_invocation_nonce(
+    issuer: &ProtectedDiagnosticInvocationIssuerV1,
     anchor_commitment: [u8; 32],
     authority_commitment: [u8; 32],
     protected_subject_commitment: [u8; 32],
 ) -> Result<[u8; 32], AuthorityPublicationError> {
-    static SEQUENCE: AtomicU64 = AtomicU64::new(1);
-    let sequence = SEQUENCE
-        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
-            value.checked_add(1)
-        })
-        .map_err(|_| AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)?;
-    let nonce: [u8; 32] = Sha256::digest(deterministic_cbor::encode(&CborValue::Array(vec![
-        CborValue::text("maestro.vnext.protected-diagnostic-invocation-nonce.v1")?,
-        bytes(&anchor_commitment),
-        bytes(&authority_commitment),
-        bytes(&protected_subject_commitment),
-        CborValue::Unsigned(sequence),
-    ]))?)
-    .into();
-    if nonce == [0; 32] {
+    let nonce = protected_diagnostic_nonce_derivation(
+        issuer.process_incarnation,
+        issuer.invocation_entropy,
+        anchor_commitment,
+        authority_commitment,
+        protected_subject_commitment,
+    )?;
+    if nonce == [0; 32] || !register_protected_diagnostic_invocation(nonce)? {
         return Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot);
     }
     Ok(nonce)
+}
+
+#[cfg(test)]
+fn protected_diagnostic_nonce_derivation(
+    process_incarnation: [u8; 32],
+    invocation_entropy: [u8; 32],
+    anchor_commitment: [u8; 32],
+    authority_commitment: [u8; 32],
+    protected_subject_commitment: [u8; 32],
+) -> Result<[u8; 32], AuthorityPublicationError> {
+    Ok(
+        Sha256::digest(deterministic_cbor::encode(&CborValue::Array(vec![
+            CborValue::text("maestro.vnext.protected-diagnostic-invocation-nonce.v1")?,
+            bytes(&process_incarnation),
+            bytes(&invocation_entropy),
+            bytes(&anchor_commitment),
+            bytes(&authority_commitment),
+            bytes(&protected_subject_commitment),
+        ]))?)
+        .into(),
+    )
+}
+
+#[cfg(test)]
+fn protected_diagnostic_process_incarnation() -> Result<[u8; 32], AuthorityPublicationError> {
+    static PROCESS_INCARNATION: OnceLock<[u8; 32]> = OnceLock::new();
+    let candidate = protected_diagnostic_random_entropy(
+        b"maestro.vnext.protected-diagnostic-process-incarnation.v1",
+    );
+    let incarnation = *PROCESS_INCARNATION.get_or_init(|| candidate);
+    if incarnation == [0; 32] {
+        return Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot);
+    }
+    Ok(incarnation)
+}
+
+#[cfg(test)]
+fn protected_diagnostic_random_entropy(domain: &[u8]) -> [u8; 32] {
+    let state = RandomState::new();
+    let mut entropy = [0u8; 32];
+    for lane in 0..4u64 {
+        let mut hasher = state.build_hasher();
+        hasher.write(domain);
+        hasher.write_u64(lane);
+        entropy[(lane as usize) * 8..(lane as usize + 1) * 8]
+            .copy_from_slice(&hasher.finish().to_be_bytes());
+    }
+    entropy
+}
+
+#[cfg(test)]
+fn register_protected_diagnostic_invocation(
+    invocation_nonce: [u8; 32],
+) -> Result<bool, AuthorityPublicationError> {
+    static ISSUED_INVOCATIONS: OnceLock<Mutex<BTreeSet<[u8; 32]>>> = OnceLock::new();
+    ISSUED_INVOCATIONS
+        .get_or_init(|| Mutex::new(BTreeSet::new()))
+        .lock()
+        .map_err(|_| AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)
+        .map(|mut issued| issued.insert(invocation_nonce))
 }
 
 #[cfg(test)]
@@ -2161,7 +2248,7 @@ fn protected_diagnostic_tuple_commitment(domain: &[u8], fields: &[&[u8]]) -> [u8
 
 #[cfg(test)]
 fn protected_diagnostic_reference_envelope(
-    _guard: &ProtectedContinuityDiagnosticReadGuardV1<'_>,
+    _guard: &ProtectedContinuityDiagnosticReadGuardV1<'_, '_>,
 ) -> ProtectedContinuityDiagnosticReferenceEnvelopeV1 {
     ProtectedContinuityDiagnosticReferenceEnvelopeV1 {
         disposition: ProtectedContinuityDiagnosticDispositionV1::CurrentProtectedSnapshot,

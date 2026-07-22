@@ -1,5 +1,13 @@
 use thiserror::Error;
 
+#[cfg(test)]
+use sha2::{Digest, Sha256};
+#[cfg(test)]
+use std::fmt::Write;
+
+#[cfg(test)]
+use crate::foundation::core::deterministic_cbor::{self, CborValue};
+
 const DOWNSTREAM_ACTION_FIRST_GLOBAL_TAG_V1: u64 = 94;
 const DOWNSTREAM_ACTION_LAST_GLOBAL_TAG_V1: u64 = 145;
 const DOWNSTREAM_ACTION_COUNT_V1: usize =
@@ -98,6 +106,139 @@ impl TryFrom<u64> for RepositoryDownstreamActionLeafV1 {
     fn try_from(value: u64) -> Result<Self, Self::Error> {
         Self::from_global_tag(value)
     }
+}
+
+#[cfg(test)]
+pub(super) fn matches_frozen_action_spec_descriptor(
+    action: RepositoryDownstreamActionLeafV1,
+    descriptor: &serde_json::Value,
+) -> bool {
+    let expected_value = serde_json::json!([
+        action.global_tag(),
+        action.literal(),
+        [
+            action.owner_tag(),
+            { "bytes": action.owner_descriptor_id() }
+        ],
+        action.family_tag(),
+        action.local_tag(),
+        [0],
+        1,
+        [],
+        [0],
+        [action.owner_tag()],
+        ["ActionResultV1"],
+        [
+            [1, "committed"],
+            [2, "no_op"],
+            [3, "rejected"],
+            [4, "stale"],
+            [5, "conflict"],
+            [6, "unavailable"],
+            [7, "in_doubt"]
+        ],
+        [
+            "expected_owner_revision",
+            "fresh_nominal_authority",
+            "same_key_same_meaning_replay"
+        ]
+    ]);
+    let expected_cbor_value = CborValue::Array(vec![
+        CborValue::Text("maestro.vnext.action-spec.descriptor.v1".to_owned()),
+        CborValue::Bytes(
+            decode_lower_hex("691489a7f3c25fe2abfe8ee6c3814925e8b3e6980ba6dd0899005fbcc704a796")
+                .expect("invariant: frozen Action descriptor schema id is lowercase hexadecimal"),
+        ),
+        CborValue::Array(vec![
+            CborValue::Unsigned(action.global_tag()),
+            CborValue::Text(action.literal().to_owned()),
+            CborValue::Array(vec![
+                CborValue::Unsigned(action.owner_tag()),
+                CborValue::Bytes(
+                    decode_lower_hex(action.owner_descriptor_id())
+                        .expect("invariant: frozen owner descriptor id is lowercase hexadecimal"),
+                ),
+            ]),
+            CborValue::Unsigned(action.family_tag()),
+            CborValue::Unsigned(action.local_tag()),
+            CborValue::Array(vec![CborValue::Unsigned(0)]),
+            CborValue::Unsigned(1),
+            CborValue::Array(vec![]),
+            CborValue::Array(vec![CborValue::Unsigned(0)]),
+            CborValue::Array(vec![CborValue::Unsigned(action.owner_tag())]),
+            CborValue::Array(vec![CborValue::Text("ActionResultV1".to_owned())]),
+            CborValue::Array(
+                [
+                    (1, "committed"),
+                    (2, "no_op"),
+                    (3, "rejected"),
+                    (4, "stale"),
+                    (5, "conflict"),
+                    (6, "unavailable"),
+                    (7, "in_doubt"),
+                ]
+                .into_iter()
+                .map(|(tag, literal)| {
+                    CborValue::Array(vec![
+                        CborValue::Unsigned(tag),
+                        CborValue::Text(literal.to_owned()),
+                    ])
+                })
+                .collect(),
+            ),
+            CborValue::Array(
+                [
+                    "expected_owner_revision",
+                    "fresh_nominal_authority",
+                    "same_key_same_meaning_replay",
+                ]
+                .into_iter()
+                .map(|literal| CborValue::Text(literal.to_owned()))
+                .collect(),
+            ),
+        ]),
+    ]);
+    let encoded = deterministic_cbor::encode(&expected_cbor_value)
+        .expect("invariant: frozen Action descriptor is valid deterministic CBOR");
+    let descriptor_id = lower_hex(&Sha256::digest(&encoded));
+    let expected_descriptor = serde_json::json!({
+        "byte_length": encoded.len(),
+        "cbor_hex": lower_hex(&encoded),
+        "descriptor_id": descriptor_id,
+        "identity_envelope": [
+            "maestro.vnext.action-spec.descriptor.v1",
+            { "bytes": "691489a7f3c25fe2abfe8ee6c3814925e8b3e6980ba6dd0899005fbcc704a796" },
+            expected_value.clone()
+        ],
+        "value": expected_value
+    });
+    descriptor_id == action.descriptor_id() && descriptor == &expected_descriptor
+}
+
+#[cfg(test)]
+fn decode_lower_hex(value: &str) -> Option<Vec<u8>> {
+    if !value.len().is_multiple_of(2) || !value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return None;
+    }
+    value
+        .as_bytes()
+        .chunks_exact(2)
+        .map(|pair| {
+            let high = (pair[0] as char).to_digit(16)?;
+            let low = (pair[1] as char).to_digit(16)?;
+            u8::try_from((high << 4) | low).ok()
+        })
+        .collect()
+}
+
+#[cfg(test)]
+fn lower_hex(bytes: &[u8]) -> String {
+    let mut value = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        write!(&mut value, "{byte:02x}")
+            .expect("invariant: writing hexadecimal into String cannot fail");
+    }
+    value
 }
 
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
@@ -580,23 +721,7 @@ mod tests {
             .into_iter()
             .zip(&descriptors[93..145])
         {
-            let fields = descriptor["value"].as_array().unwrap();
-            assert_eq!(fields[0].as_u64(), Some(action.global_tag()));
-            assert_eq!(fields[1].as_str(), Some(action.literal()));
-            assert_eq!(fields[2][0].as_u64(), Some(action.owner_tag()));
-            assert_eq!(
-                fields[2][1]["bytes"].as_str(),
-                Some(action.owner_descriptor_id())
-            );
-            assert_eq!(fields[3].as_u64(), Some(action.family_tag()));
-            assert_eq!(fields[4].as_u64(), Some(action.local_tag()));
-            assert_eq!(
-                descriptor["descriptor_id"].as_str(),
-                Some(action.descriptor_id())
-            );
-            assert_eq!(fields[5], serde_json::json!([0]));
-            assert_eq!(fields[6].as_u64(), Some(1));
-            assert_eq!(fields[7], serde_json::json!([]));
+            assert!(matches_frozen_action_spec_descriptor(action, descriptor));
         }
     }
 }

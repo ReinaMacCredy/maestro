@@ -483,7 +483,7 @@ impl StorePublicationViewV1<'_> {
     #[cfg(test)]
     pub(crate) fn protected_diagnostic_current_view_anchor<'view>(
         &'view self,
-        provider: &mut dyn ProtectedDiagnosticCurrentViewProviderV1,
+        provider: &'view mut dyn ProtectedDiagnosticCurrentViewProviderV1,
     ) -> Result<ProtectedDiagnosticCurrentViewAnchorV1<'view>, StoreError> {
         let (store_state, state_revision) = state(self.connection)?;
         if store_state != StoreStateV1::Active {
@@ -509,12 +509,43 @@ impl StorePublicationViewV1<'_> {
             generation: &generation,
             publication_clock: publication_clock(self.connection)?,
         };
-        let commitment = provider
-            .bind_current_view(&observed)
+        ProtectedDiagnosticCurrentViewAnchorV1::bind(provider, &observed, self.root.path())
+            .ok_or(StoreError::ProtectedDiagnosticCurrentnessRefused)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn consume_protected_diagnostic_current_view_anchor<'view>(
+        &'view self,
+        anchor: ProtectedDiagnosticCurrentViewAnchorV1<'view>,
+    ) -> Result<(), StoreError> {
+        let (store_state, state_revision) = state(self.connection)?;
+        if store_state != StoreStateV1::Active {
+            return Err(StoreError::ProtectedDiagnosticCurrentnessRefused);
+        }
+        let (head_id, head_revision) = active_head_row(self.connection)?
             .ok_or(StoreError::ProtectedDiagnosticCurrentnessRefused)?;
-        Ok(ProtectedDiagnosticCurrentViewAnchorV1::from_commitment(
-            commitment,
-        ))
+        let head = load_head(self.connection, head_id, self.domain)?;
+        let generation = load_generation(self.connection, head.generation_id(), self.domain)?;
+        if head.revision() != head_revision
+            || head.generation_id() != generation.id()
+            || generation.domain() != self.domain
+        {
+            return Err(StoreError::ProtectedDiagnosticCurrentnessRefused);
+        }
+        let observed = ProtectedDiagnosticObservedCurrentViewV1 {
+            root: self.root.path(),
+            state_revision,
+            domain: self.domain,
+            role: self.role(),
+            head: &head,
+            head_revision,
+            generation: &generation,
+            publication_clock: publication_clock(self.connection)?,
+        };
+        if !anchor.consume_final_recheck(&observed) {
+            return Err(StoreError::ProtectedDiagnosticCurrentnessRefused);
+        }
+        Ok(())
     }
 
     pub(crate) fn coherent_generation_snapshot(

@@ -42,6 +42,7 @@ VALIDATOR_RECEIPT_KEYS = {
 SOURCE_PATHS = (
     "Cargo.toml", "Cargo.lock", "build.rs",
     "contracts/vnext/catalogs/generated/catalog-01-observation.json",
+    "contracts/vnext/catalogs/generated/catalog-09-action-spec.json",
     "src/lib.rs", "src/domain/mod.rs",
     "src/domain/vnext/mod.rs", "src/domain/vnext/evidence/assessment.rs",
     "src/domain/vnext/authority/action_basis.rs", "src/domain/vnext/authority/facade.rs",

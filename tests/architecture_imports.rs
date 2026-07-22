@@ -2916,6 +2916,7 @@ fn stage5_protected_diagnostic_ports_are_sealed_test_only_and_non_bearer() {
     ));
     let integration_module = read_source_file(Path::new("src/domain/vnext/integration/mod.rs"));
     let persistence_module = read_source_file(Path::new("src/domain/vnext/persistence/mod.rs"));
+    let store = read_source_file(Path::new("src/domain/vnext/persistence/store.rs"));
     let facade = read_source_file(Path::new("src/domain/vnext/authority/facade.rs"));
     let diagnostic_entry = facade
         .split("pub(crate) fn protected_continuity_diagnostic_reference_envelope")
@@ -2927,18 +2928,30 @@ fn stage5_protected_diagnostic_ports_are_sealed_test_only_and_non_bearer() {
         .nth(1)
         .and_then(|tail| tail.split("fn validate_post_cut_current_authority").next())
         .expect("Stage 5 diagnostic kernel must remain locally reviewable");
+    let diagnostic_operation = diagnostic_kernel
+        .split("fn protected_diagnostic_invocation_nonce")
+        .next()
+        .expect("diagnostic operation must precede its private nonce helpers");
+    let issuer_before_view = diagnostic_entry
+        .find("ProtectedDiagnosticInvocationIssuerV1::fresh()")
+        .expect("process and invocation entropy must be acquired before the Store view");
+    let serialized_view = diagnostic_entry
+        .find("with_serialized_active_view")
+        .expect("diagnostic must execute inside one serialized Store view");
+    assert!(issuer_before_view < serialized_view);
+    assert!(!diagnostic_operation.contains("RandomState::new()"));
 
-    assert!(
-        integration
-            .contains("pub(crate) struct TrustedHostDiagnosticAttestationV1<'connection, 'view>")
-    );
+    assert!(integration.contains(
+        "pub(crate) struct TrustedHostDiagnosticAttestationV1<'connection, 'anchor, 'view>"
+    ));
     assert!(!integration.contains("TrustedHostDiagnosticTestInvocationV1"));
     assert!(!integration.contains("begin_invocation"));
     assert!(integration.contains("pub(crate) fn attest_in_current_view"));
     assert!(!integration.contains("AtomicU64"));
     assert!(
-        integration
-            .contains("current_view_anchor: &'view ProtectedDiagnosticCurrentViewAnchorV1<'view>")
+        integration.contains(
+            "current_view_anchor: &'anchor ProtectedDiagnosticCurrentViewAnchorV1<'view>"
+        )
     );
     assert!(!integration.contains("operator_mapping_commitment"));
     assert!(!integration.contains("request_commitment"));
@@ -2961,6 +2974,26 @@ fn stage5_protected_diagnostic_ports_are_sealed_test_only_and_non_bearer() {
         persistence
             .contains("pub(crate) trait ProtectedDiagnosticCurrentViewProviderV1: sealed::Sealed")
     );
+    assert!(
+        persistence
+            .contains("provider: Option<&'view mut dyn ProtectedDiagnosticCurrentViewProviderV1>")
+    );
+    assert!(persistence.contains("provider_binding: Option<ProtectedDiagnosticProviderBindingV1>"));
+    assert!(persistence.contains("fn final_recheck_current_view("));
+    assert!(persistence.contains("fn abandon_current_view(&mut self)"));
+    assert!(persistence.contains("provider_currentness_revision"));
+    assert!(!persistence.contains("PhantomData"));
+    let provider_trait = persistence
+        .split("pub(crate) trait ProtectedDiagnosticCurrentViewProviderV1")
+        .nth(1)
+        .and_then(|tail| tail.split("#[cfg(test)]").next())
+        .expect("sealed current-view provider trait must remain locally reviewable");
+    assert!(!provider_trait.contains("Option<[u8; 32]>"));
+    assert!(store.contains(
+        "ProtectedDiagnosticCurrentViewAnchorV1::bind(provider, &observed, self.root.path())"
+    ));
+    assert!(store.contains("consume_protected_diagnostic_current_view_anchor"));
+    assert!(store.contains("anchor.consume_final_recheck(&observed)"));
     assert!(
         persistence.contains(
             "#[cfg(test)]\npub(crate) struct ProtectedDiagnosticTestCurrentViewProviderV1"
@@ -3055,9 +3088,22 @@ fn stage5_protected_diagnostic_ports_are_sealed_test_only_and_non_bearer() {
         .find(".attest_in_current_view(")
         .expect("Integration must answer the Authority-issued invocation in the same view");
     assert!(active_anchor < issuance && issuance < challenge && challenge < attestation);
+    let host_final_recheck = diagnostic_kernel
+        .find("attestation.final_recheck()")
+        .expect("host currentness must be rechecked before diagnostic return");
+    let store_final_recheck = diagnostic_kernel
+        .find("consume_protected_diagnostic_current_view_anchor(current_view_anchor)")
+        .expect("Persistence currentness lease must be consumed before diagnostic return");
+    assert!(attestation < host_final_recheck && host_final_recheck < store_final_recheck);
+    assert!(!facade.contains("AtomicU64"));
+    assert!(facade.contains("ProtectedDiagnosticInvocationIssuerV1"));
+    assert!(facade.contains("RandomState::new()"));
+    assert!(facade.contains("protected_diagnostic_process_incarnation"));
+    assert!(facade.contains("register_protected_diagnostic_invocation"));
     assert!(
-        facade
-            .contains("_current_view_anchor: &'view ProtectedDiagnosticCurrentViewAnchorV1<'view>")
+        facade.contains(
+            "_current_view_anchor: &'anchor ProtectedDiagnosticCurrentViewAnchorV1<'view>"
+        )
     );
     assert!(!facade.contains("PhantomData<&'view ()>"));
     assert!(!integration.contains("struct TrustedHostDiagnosticChallengeV1"));

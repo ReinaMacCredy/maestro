@@ -280,10 +280,10 @@ impl TrustedHostDiagnosticTestConnectionV1 {
         TrustedHostDiagnosticTestControlV1(std::rc::Rc::clone(&self.state))
     }
 
-    pub(crate) fn attest_in_current_view<'connection, 'view>(
+    pub(crate) fn attest_in_current_view<'connection, 'anchor, 'view>(
         &'connection mut self,
-        challenge: TrustedHostDiagnosticChallengeV1<'view>,
-    ) -> Option<TrustedHostDiagnosticAttestationV1<'connection, 'view>> {
+        challenge: TrustedHostDiagnosticChallengeV1<'anchor, 'view>,
+    ) -> Option<TrustedHostDiagnosticAttestationV1<'connection, 'anchor, 'view>> {
         let mut state = self.state.borrow_mut();
         if !state.connected
             || state.authentication_event_consumed
@@ -335,15 +335,15 @@ impl TrustedHostDiagnosticTestConnectionV1 {
     }
 }
 
-pub(crate) struct TrustedHostDiagnosticAttestationV1<'connection, 'view> {
+pub(crate) struct TrustedHostDiagnosticAttestationV1<'connection, 'anchor, 'view> {
     #[cfg(test)]
     connection: &'connection mut TrustedHostDiagnosticTestConnectionV1,
     #[cfg(not(test))]
     connection: &'connection mut (),
     #[cfg(test)]
-    _current_view_anchor: &'view ProtectedDiagnosticCurrentViewAnchorV1<'view>,
+    _current_view_anchor: &'anchor ProtectedDiagnosticCurrentViewAnchorV1<'view>,
     #[cfg(not(test))]
-    _current_view_anchor: &'view (),
+    _current_view_anchor: &'anchor &'view (),
     anchor_commitment: [u8; 32],
     authority_commitment: [u8; 32],
     protected_subject_commitment: [u8; 32],
@@ -362,12 +362,12 @@ pub(crate) struct TrustedHostDiagnosticAttestationV1<'connection, 'view> {
 }
 
 #[cfg(test)]
-pub(crate) struct TrustedHostDiagnosticPresentationV1<'presentation, 'connection, 'view> {
-    attestation: &'presentation TrustedHostDiagnosticAttestationV1<'connection, 'view>,
+pub(crate) struct TrustedHostDiagnosticPresentationV1<'presentation, 'connection, 'anchor, 'view> {
+    attestation: &'presentation TrustedHostDiagnosticAttestationV1<'connection, 'anchor, 'view>,
 }
 
 #[cfg(test)]
-impl TrustedHostDiagnosticPresentationV1<'_, '_, '_> {
+impl TrustedHostDiagnosticPresentationV1<'_, '_, '_, '_> {
     pub(crate) const fn anchor_commitment(&self) -> [u8; 32] {
         self.attestation.anchor_commitment
     }
@@ -453,15 +453,16 @@ impl TrustedHostDiagnosticPresentationV1<'_, '_, '_> {
     }
 }
 
-impl TrustedHostDiagnosticAttestationV1<'_, '_> {
+impl<'connection, 'anchor, 'view> TrustedHostDiagnosticAttestationV1<'connection, 'anchor, 'view> {
     pub(crate) const fn witness_carrier_commitment(&self) -> [u8; 32] {
         self.claims_commitment
     }
 
     #[cfg(test)]
-    pub(crate) fn present_once(
-        &mut self,
-    ) -> Option<TrustedHostDiagnosticPresentationV1<'_, '_, '_>> {
+    pub(crate) fn present_once<'presentation>(
+        &'presentation mut self,
+    ) -> Option<TrustedHostDiagnosticPresentationV1<'presentation, 'connection, 'anchor, 'view>>
+    {
         if self.consumed || self.operator_presented {
             return None;
         }
@@ -529,7 +530,7 @@ impl TrustedHostDiagnosticAttestationV1<'_, '_> {
     }
 }
 
-impl Drop for TrustedHostDiagnosticAttestationV1<'_, '_> {
+impl Drop for TrustedHostDiagnosticAttestationV1<'_, '_, '_> {
     fn drop(&mut self) {
         self.consumed = true;
     }

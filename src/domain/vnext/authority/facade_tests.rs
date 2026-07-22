@@ -1939,6 +1939,40 @@ fn protected_continuity_diagnostic_guard_is_subject_bound_and_zero_write() {
         envelope.disposition(),
         ProtectedContinuityDiagnosticDispositionV1::CurrentProtectedSnapshot
     );
+    assert!(provider.was_consumed());
+
+    let first_issuer = ProtectedDiagnosticInvocationIssuerV1::fresh().unwrap();
+    let second_issuer = ProtectedDiagnosticInvocationIssuerV1::fresh().unwrap();
+    assert_eq!(
+        first_issuer.process_incarnation,
+        second_issuer.process_incarnation
+    );
+    assert_ne!(
+        first_issuer.invocation_entropy,
+        second_issuer.invocation_entropy
+    );
+
+    let base_nonce = protected_diagnostic_nonce_derivation(
+        [0x11; 32], [0x22; 32], [0x33; 32], [0x44; 32], [0x55; 32],
+    )
+    .unwrap();
+    assert_ne!(base_nonce, [0; 32]);
+    assert_ne!(
+        base_nonce,
+        protected_diagnostic_nonce_derivation(
+            [0x12; 32], [0x22; 32], [0x33; 32], [0x44; 32], [0x55; 32],
+        )
+        .unwrap()
+    );
+    assert_ne!(
+        base_nonce,
+        protected_diagnostic_nonce_derivation(
+            [0x11; 32], [0x23; 32], [0x33; 32], [0x44; 32], [0x55; 32],
+        )
+        .unwrap()
+    );
+    assert!(register_protected_diagnostic_invocation(base_nonce).unwrap());
+    assert!(!register_protected_diagnostic_invocation(base_nonce).unwrap());
 
     let (mut replay_provider, _) =
         diagnostic.test_ports(&root, store.domain(), &store, &head, b"replay-diagnostic");
@@ -1950,6 +1984,7 @@ fn protected_continuity_diagnostic_guard_is_subject_bound_and_zero_write() {
         ),
         Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)
     ));
+    assert!(replay_provider.was_consumed());
 
     assert_eq!(store.active_head().unwrap().unwrap(), before_head);
     assert_eq!(before_head, head);
@@ -2156,6 +2191,7 @@ fn protected_continuity_diagnostic_failed_subject_consumes_host_authentication_e
         ),
         Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)
     ));
+    assert!(first_provider.was_consumed());
     let (mut replay_provider, _) = diagnostic.test_ports(
         &root,
         store.domain(),
@@ -2394,9 +2430,87 @@ fn protected_continuity_diagnostic_refuses_every_substituted_store_anchor_dimens
             ),
             "mutation {mutation:?} unexpectedly passed"
         );
+        assert!(provider.was_consumed());
         drop(store);
         fs::remove_dir_all(root).unwrap();
     }
+
+    let provider_dimensions = [
+        ProtectedDiagnosticTestAnchorMutationV1::StoreInstance,
+        ProtectedDiagnosticTestAnchorMutationV1::ActivationCarrierIdentity,
+        ProtectedDiagnosticTestAnchorMutationV1::ActivationCarrierToken,
+        ProtectedDiagnosticTestAnchorMutationV1::ActivationCarrierRevision,
+        ProtectedDiagnosticTestAnchorMutationV1::ActivationAttempt,
+        ProtectedDiagnosticTestAnchorMutationV1::ActivationDestinationSeal,
+        ProtectedDiagnosticTestAnchorMutationV1::ActivationRestoreIncarnation,
+        ProtectedDiagnosticTestAnchorMutationV1::ProviderCurrentnessRevision,
+    ];
+    for mutation in provider_dimensions {
+        let (root, _domain, mut store, _, head, _, _, diagnostic, _) = seeded_store();
+        let (mut provider, mut connection) = diagnostic.test_ports(
+            &root,
+            store.domain(),
+            &store,
+            &head,
+            format!("post-bind-{mutation:?}").as_bytes(),
+        );
+        provider.substitute_on_final_recheck(mutation);
+        assert!(matches!(
+            AuthorityFacadeV1::new(&mut store).protected_continuity_diagnostic_reference_envelope(
+                &mut connection,
+                &mut provider,
+                diagnostic.protected_subject,
+            ),
+            Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)
+        ));
+        assert!(provider.was_consumed());
+        drop(store);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    for mutation in provider_dimensions {
+        let (root, _domain, mut store, _, head, _, _, diagnostic, _) = seeded_store();
+        let (mut provider, mut connection) = diagnostic.test_ports(
+            &root,
+            store.domain(),
+            &store,
+            &head,
+            format!("post-bind-aba-{mutation:?}").as_bytes(),
+        );
+        provider.aba_on_final_recheck(mutation);
+        assert!(matches!(
+            AuthorityFacadeV1::new(&mut store).protected_continuity_diagnostic_reference_envelope(
+                &mut connection,
+                &mut provider,
+                diagnostic.protected_subject,
+            ),
+            Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)
+        ));
+        assert!(provider.was_consumed());
+        drop(store);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    let (root, _domain, mut store, _, head, _, _, diagnostic, _) = seeded_store();
+    let (mut provider, mut connection) = diagnostic.test_ports(
+        &root,
+        store.domain(),
+        &store,
+        &head,
+        b"post-bind-provider-unavailable",
+    );
+    provider.unavailable_on_final_recheck();
+    assert!(matches!(
+        AuthorityFacadeV1::new(&mut store).protected_continuity_diagnostic_reference_envelope(
+            &mut connection,
+            &mut provider,
+            diagnostic.protected_subject,
+        ),
+        Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)
+    ));
+    assert!(provider.was_consumed());
+    drop(store);
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
