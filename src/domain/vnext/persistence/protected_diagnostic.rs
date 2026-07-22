@@ -183,7 +183,7 @@ impl ProtectedDiagnosticProviderCurrentnessV1 {
         clippy::too_many_arguments,
         reason = "the currentness port binds every locked activation and restore dimension"
     )]
-    pub(crate) fn from_live_provider(
+    pub(in crate::domain::vnext::persistence) fn from_live_provider(
         store_instance_binding: [u8; 32],
         activation_carrier_identity: [u8; 32],
         activation_carrier_token: [u8; 32],
@@ -234,7 +234,7 @@ impl ProtectedDiagnosticProviderCurrentnessV1 {
         )
     }
 
-    fn matches(&self, other: &Self) -> bool {
+    pub(in crate::domain::vnext::persistence) fn matches(&self, other: &Self) -> bool {
         self.store_instance_binding == other.store_instance_binding
             && self.activation_carrier_identity == other.activation_carrier_identity
             && self.activation_carrier_token == other.activation_carrier_token
@@ -246,12 +246,14 @@ impl ProtectedDiagnosticProviderCurrentnessV1 {
     }
 }
 
-mod sealed {
-    pub(crate) trait Sealed {}
+pub(in crate::domain::vnext::persistence) mod sealed {
+    pub(in crate::domain::vnext::persistence) trait Sealed {}
 }
 
-pub(crate) use sealed::Sealed as ProtectedDiagnosticCurrentViewProviderSealedV1;
-
+#[expect(
+    private_bounds,
+    reason = "only Persistence-owned descendants may implement the crate-visible currentness port"
+)]
 pub(crate) trait ProtectedDiagnosticCurrentViewProviderV1: sealed::Sealed {
     fn bind_current_view(
         &mut self,

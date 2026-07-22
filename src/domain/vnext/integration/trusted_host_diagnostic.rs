@@ -13,18 +13,16 @@ use sha2::{Digest, Sha256};
 
 const ATTESTATION_DOMAIN_V1: &[u8] = b"maestro.vnext.trusted-host-diagnostic-attestation.v1";
 
-pub(super) mod sealed {
-    pub(crate) trait Connection {}
-    pub(crate) trait Attestation {}
-    pub(crate) trait Presentation {}
+pub(in crate::domain::vnext::integration) mod sealed {
+    pub(in crate::domain::vnext::integration) trait Connection {}
+    pub(in crate::domain::vnext::integration) trait Attestation {}
+    pub(in crate::domain::vnext::integration) trait Presentation {}
 }
 
-pub(crate) use sealed::{
-    Attestation as TrustedHostDiagnosticAttestationPortSealedV1,
-    Connection as TrustedHostDiagnosticConnectionPortSealedV1,
-    Presentation as TrustedHostDiagnosticPresentationPortSealedV1,
-};
-
+#[expect(
+    private_bounds,
+    reason = "only Integration-owned descendants may implement the crate-visible connection port"
+)]
 pub(crate) trait TrustedHostDiagnosticConnectionPortV1: sealed::Connection {
     fn attest_in_current_view<'scope, 'view>(
         &'scope mut self,
@@ -34,24 +32,44 @@ pub(crate) trait TrustedHostDiagnosticConnectionPortV1: sealed::Connection {
         'view: 'scope;
 }
 
+#[expect(
+    private_bounds,
+    reason = "only Integration-owned descendants may implement the crate-visible attestation port"
+)]
 pub(crate) trait TrustedHostDiagnosticAttestationPortV1: sealed::Attestation {
-    fn witness_carrier_commitment(&self) -> [u8; 32];
-
     fn present_once(
         &mut self,
         inspect: &mut dyn FnMut(&dyn TrustedHostDiagnosticPresentationPortV1) -> bool,
     ) -> bool;
 
-    fn final_recheck(self: Box<Self>) -> bool;
+    fn final_recheck(self: Box<Self>) -> Option<[u8; 32]>;
 }
 
+#[expect(
+    private_bounds,
+    reason = "only Integration-owned descendants may implement the crate-visible presentation port"
+)]
 pub(crate) trait TrustedHostDiagnosticPresentationPortV1: sealed::Presentation {
     fn anchor_commitment(&self) -> [u8; 32];
     fn authority_commitment(&self) -> [u8; 32];
     fn protected_subject_commitment(&self) -> [u8; 32];
     fn invocation_nonce(&self) -> [u8; 32];
     fn challenge_commitment(&self) -> [u8; 32];
-    fn claims_commitment(&self) -> [u8; 32];
+    fn attestation_commitment(&self) -> [u8; 32];
+    fn provider_identity(&self) -> [u8; 32];
+    fn profile_identity(&self) -> [u8; 32];
+    fn profile_revision(&self) -> u64;
+    fn process_incarnation(&self) -> [u8; 32];
+    fn connection_incarnation(&self) -> [u8; 32];
+    fn channel_incarnation(&self) -> [u8; 32];
+    fn issuer_identity(&self) -> [u8; 32];
+    fn realm_identity(&self) -> [u8; 32];
+    fn audience_identity(&self) -> [u8; 32];
+    fn authentication_event_identity(&self) -> [u8; 32];
+    fn host_currentness_revision(&self) -> u64;
+    fn revocation_revision(&self) -> u64;
+    fn freshness_identity(&self) -> [u8; 32];
+    fn carrier_commitment(&self) -> [u8; 32];
     fn principal_identity(&self) -> [u8; 32];
     fn binding_identity(&self) -> [u8; 32];
     fn session_identity(&self) -> [u8; 32];
@@ -67,6 +85,7 @@ pub(crate) trait TrustedHostDiagnosticPresentationPortV1: sealed::Presentation {
     fn authority_epoch(&self) -> u64;
     fn domain_identity(&self) -> [u8; 32];
     fn domain_role(&self) -> u64;
+    fn incarnation_revision(&self) -> u64;
 }
 
 #[cfg(test)]
@@ -78,6 +97,7 @@ struct TrustedHostDiagnosticTestStateV1 {
     host_currentness_revision: u64,
     revocation_revision: u64,
     incarnation_revision: u64,
+    substitute_presented_attestation_commitment: bool,
     final_recheck_mutation: Option<TrustedHostDiagnosticTestFinalRecheckMutationV1>,
 }
 
@@ -259,6 +279,12 @@ impl TrustedHostDiagnosticTestControlV1 {
             .substitute_dimension(dimension);
     }
 
+    pub(crate) fn substitute_presented_attestation_commitment(&self) {
+        self.0
+            .borrow_mut()
+            .substitute_presented_attestation_commitment = true;
+    }
+
     pub(crate) fn invocation_is_pending(&self) -> bool {
         self.0.borrow().issued_invocation_nonce.is_some()
     }
@@ -307,6 +333,24 @@ impl TrustedHostDiagnosticTestClaimsV1 {
             operator_identity,
         })
     }
+
+    fn bind_to_attestation(&self) -> Self {
+        Self {
+            provider_identity: self.provider_identity,
+            profile_identity: self.profile_identity,
+            profile_revision: self.profile_revision,
+            process_incarnation: self.process_incarnation,
+            connection_incarnation: self.connection_incarnation,
+            channel_incarnation: self.channel_incarnation,
+            issuer_identity: self.issuer_identity,
+            realm_identity: self.realm_identity,
+            audience_identity: self.audience_identity,
+            authentication_event_identity: self.authentication_event_identity,
+            freshness_identity: self.freshness_identity,
+            carrier_commitment: self.carrier_commitment,
+            operator_identity: self.operator_identity.bind_to_attestation(),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -326,6 +370,7 @@ impl TrustedHostDiagnosticTestConnectionV1 {
                 host_currentness_revision: 1,
                 revocation_revision: 1,
                 incarnation_revision: 1,
+                substitute_presented_attestation_commitment: false,
                 final_recheck_mutation: None,
             })),
         }
@@ -362,8 +407,8 @@ impl TrustedHostDiagnosticTestConnectionV1 {
         let host_currentness_revision = state.host_currentness_revision;
         let revocation_revision = state.revocation_revision;
         let incarnation_revision = state.incarnation_revision;
-        let operator_identity = state.claims.operator_identity.bind_to_attestation();
-        let claims_commitment = claims_commitment(
+        let claims = state.claims.bind_to_attestation();
+        let attestation_commitment = attestation_commitment(
             &state.claims,
             challenge.commitment(),
             host_currentness_revision,
@@ -379,8 +424,8 @@ impl TrustedHostDiagnosticTestConnectionV1 {
             protected_subject_commitment: challenge.protected_subject_commitment(),
             invocation_nonce: challenge.invocation_nonce(),
             challenge_commitment: challenge.commitment(),
-            claims_commitment,
-            operator_identity,
+            attestation_commitment,
+            claims,
             operator_presented: false,
             host_currentness_revision,
             revocation_revision,
@@ -416,8 +461,8 @@ pub(crate) struct TrustedHostDiagnosticAttestationV1<'connection, 'anchor, 'view
     protected_subject_commitment: [u8; 32],
     invocation_nonce: [u8; 32],
     challenge_commitment: [u8; 32],
-    claims_commitment: [u8; 32],
-    operator_identity: TrustedHostDiagnosticTestOperatorIdentityV1,
+    attestation_commitment: [u8; 32],
+    claims: TrustedHostDiagnosticTestClaimsV1,
     operator_presented: bool,
     host_currentness_revision: u64,
     revocation_revision: u64,
@@ -452,68 +497,158 @@ impl TrustedHostDiagnosticPresentationV1<'_, '_, '_, '_> {
         self.attestation.challenge_commitment
     }
 
-    pub(crate) const fn claims_commitment(&self) -> [u8; 32] {
-        self.attestation.claims_commitment
+    pub(crate) fn attestation_commitment(&self) -> [u8; 32] {
+        if self
+            .attestation
+            .connection
+            .state
+            .borrow()
+            .substitute_presented_attestation_commitment
+        {
+            let mut claims = self.attestation.claims.bind_to_attestation();
+            mutate_digest(&mut claims.provider_identity);
+            return attestation_commitment(
+                &claims,
+                self.attestation.challenge_commitment,
+                self.attestation.host_currentness_revision,
+                self.attestation.revocation_revision,
+                self.attestation.incarnation_revision,
+            );
+        }
+        self.attestation.attestation_commitment
+    }
+
+    pub(crate) fn provider_identity(&self) -> [u8; 32] {
+        let mut provider_identity = self.attestation.claims.provider_identity;
+        if self
+            .attestation
+            .connection
+            .state
+            .borrow()
+            .substitute_presented_attestation_commitment
+        {
+            mutate_digest(&mut provider_identity);
+        }
+        provider_identity
+    }
+
+    pub(crate) const fn profile_identity(&self) -> [u8; 32] {
+        self.attestation.claims.profile_identity
+    }
+
+    pub(crate) const fn profile_revision(&self) -> u64 {
+        self.attestation.claims.profile_revision
+    }
+
+    pub(crate) const fn process_incarnation(&self) -> [u8; 32] {
+        self.attestation.claims.process_incarnation
+    }
+
+    pub(crate) const fn connection_incarnation(&self) -> [u8; 32] {
+        self.attestation.claims.connection_incarnation
+    }
+
+    pub(crate) const fn channel_incarnation(&self) -> [u8; 32] {
+        self.attestation.claims.channel_incarnation
+    }
+
+    pub(crate) const fn issuer_identity(&self) -> [u8; 32] {
+        self.attestation.claims.issuer_identity
+    }
+
+    pub(crate) const fn realm_identity(&self) -> [u8; 32] {
+        self.attestation.claims.realm_identity
+    }
+
+    pub(crate) const fn audience_identity(&self) -> [u8; 32] {
+        self.attestation.claims.audience_identity
+    }
+
+    pub(crate) const fn authentication_event_identity(&self) -> [u8; 32] {
+        self.attestation.claims.authentication_event_identity
+    }
+
+    pub(crate) const fn host_currentness_revision(&self) -> u64 {
+        self.attestation.host_currentness_revision
+    }
+
+    pub(crate) const fn revocation_revision(&self) -> u64 {
+        self.attestation.revocation_revision
+    }
+
+    pub(crate) const fn freshness_identity(&self) -> [u8; 32] {
+        self.attestation.claims.freshness_identity
+    }
+
+    pub(crate) const fn carrier_commitment(&self) -> [u8; 32] {
+        self.attestation.claims.carrier_commitment
     }
 
     pub(crate) const fn principal_identity(&self) -> [u8; 32] {
-        self.attestation.operator_identity.principal_identity
+        self.attestation.claims.operator_identity.principal_identity
     }
 
     pub(crate) const fn binding_identity(&self) -> [u8; 32] {
-        self.attestation.operator_identity.binding_identity
+        self.attestation.claims.operator_identity.binding_identity
     }
 
     pub(crate) const fn session_identity(&self) -> [u8; 32] {
-        self.attestation.operator_identity.session_identity
+        self.attestation.claims.operator_identity.session_identity
     }
 
     pub(crate) const fn context_identity(&self) -> [u8; 32] {
-        self.attestation.operator_identity.context_identity
+        self.attestation.claims.operator_identity.context_identity
     }
 
     pub(crate) const fn trust_root_revision(&self) -> u64 {
-        self.attestation.operator_identity.trust_root_revision
+        self.attestation
+            .claims
+            .operator_identity
+            .trust_root_revision
     }
 
     pub(crate) const fn assurance_revision(&self) -> u64 {
-        self.attestation.operator_identity.assurance_revision
+        self.attestation.claims.operator_identity.assurance_revision
     }
 
     pub(crate) const fn human_capable(&self) -> bool {
-        self.attestation.operator_identity.human_capable
+        self.attestation.claims.operator_identity.human_capable
     }
 
     pub(crate) const fn binding_not_before(&self) -> u64 {
-        self.attestation.operator_identity.binding_not_before
+        self.attestation.claims.operator_identity.binding_not_before
     }
 
     pub(crate) const fn binding_expires_at(&self) -> u64 {
-        self.attestation.operator_identity.binding_expires_at
+        self.attestation.claims.operator_identity.binding_expires_at
     }
 
     pub(crate) const fn session_not_before(&self) -> u64 {
-        self.attestation.operator_identity.session_not_before
+        self.attestation.claims.operator_identity.session_not_before
     }
 
     pub(crate) const fn session_expires_at(&self) -> u64 {
-        self.attestation.operator_identity.session_expires_at
+        self.attestation.claims.operator_identity.session_expires_at
     }
 
     pub(crate) const fn store_generation(&self) -> u64 {
-        self.attestation.operator_identity.store_generation
+        self.attestation.claims.operator_identity.store_generation
     }
 
     pub(crate) const fn authority_epoch(&self) -> u64 {
-        self.attestation.operator_identity.authority_epoch
+        self.attestation.claims.operator_identity.authority_epoch
     }
 
     pub(crate) const fn domain_identity(&self) -> [u8; 32] {
-        self.attestation.operator_identity.domain_identity
+        self.attestation.claims.operator_identity.domain_identity
     }
 
     pub(crate) const fn domain_role(&self) -> u64 {
-        self.attestation.operator_identity.domain_role
+        self.attestation.claims.operator_identity.domain_role
+    }
+
+    pub(crate) const fn incarnation_revision(&self) -> u64 {
+        self.attestation.incarnation_revision
     }
 }
 
@@ -544,8 +679,64 @@ impl TrustedHostDiagnosticPresentationPortV1
         self.challenge_commitment()
     }
 
-    fn claims_commitment(&self) -> [u8; 32] {
-        self.claims_commitment()
+    fn attestation_commitment(&self) -> [u8; 32] {
+        self.attestation_commitment()
+    }
+
+    fn provider_identity(&self) -> [u8; 32] {
+        self.provider_identity()
+    }
+
+    fn profile_identity(&self) -> [u8; 32] {
+        self.profile_identity()
+    }
+
+    fn profile_revision(&self) -> u64 {
+        self.profile_revision()
+    }
+
+    fn process_incarnation(&self) -> [u8; 32] {
+        self.process_incarnation()
+    }
+
+    fn connection_incarnation(&self) -> [u8; 32] {
+        self.connection_incarnation()
+    }
+
+    fn channel_incarnation(&self) -> [u8; 32] {
+        self.channel_incarnation()
+    }
+
+    fn issuer_identity(&self) -> [u8; 32] {
+        self.issuer_identity()
+    }
+
+    fn realm_identity(&self) -> [u8; 32] {
+        self.realm_identity()
+    }
+
+    fn audience_identity(&self) -> [u8; 32] {
+        self.audience_identity()
+    }
+
+    fn authentication_event_identity(&self) -> [u8; 32] {
+        self.authentication_event_identity()
+    }
+
+    fn host_currentness_revision(&self) -> u64 {
+        self.host_currentness_revision()
+    }
+
+    fn revocation_revision(&self) -> u64 {
+        self.revocation_revision()
+    }
+
+    fn freshness_identity(&self) -> [u8; 32] {
+        self.freshness_identity()
+    }
+
+    fn carrier_commitment(&self) -> [u8; 32] {
+        self.carrier_commitment()
     }
 
     fn principal_identity(&self) -> [u8; 32] {
@@ -607,14 +798,14 @@ impl TrustedHostDiagnosticPresentationPortV1
     fn domain_role(&self) -> u64 {
         self.domain_role()
     }
+
+    fn incarnation_revision(&self) -> u64 {
+        self.incarnation_revision()
+    }
 }
 
 #[cfg(test)]
 impl<'connection, 'anchor, 'view> TrustedHostDiagnosticAttestationV1<'connection, 'anchor, 'view> {
-    pub(crate) const fn witness_carrier_commitment(&self) -> [u8; 32] {
-        self.claims_commitment
-    }
-
     pub(crate) fn present_once<'presentation>(
         &'presentation mut self,
     ) -> Option<TrustedHostDiagnosticPresentationV1<'presentation, 'connection, 'anchor, 'view>>
@@ -626,7 +817,7 @@ impl<'connection, 'anchor, 'view> TrustedHostDiagnosticAttestationV1<'connection
         Some(TrustedHostDiagnosticPresentationV1 { attestation: self })
     }
 
-    pub(crate) fn final_recheck(mut self) -> bool {
+    pub(crate) fn final_recheck(mut self) -> Option<[u8; 32]> {
         let mut state = self.connection.state.borrow_mut();
         match state.final_recheck_mutation.take() {
             Some(TrustedHostDiagnosticTestFinalRecheckMutationV1::Disconnect) => {
@@ -672,16 +863,16 @@ impl<'connection, 'anchor, 'view> TrustedHostDiagnosticAttestationV1<'connection
             && state.host_currentness_revision == self.host_currentness_revision
             && state.revocation_revision == self.revocation_revision
             && state.incarnation_revision == self.incarnation_revision
-            && claims_commitment(
+            && attestation_commitment(
                 &state.claims,
                 self.challenge_commitment,
                 self.host_currentness_revision,
                 self.revocation_revision,
                 self.incarnation_revision,
-            ) == self.claims_commitment;
+            ) == self.attestation_commitment;
         drop(state);
         self.consumed = true;
-        valid
+        valid.then_some(self.attestation_commitment)
     }
 }
 
@@ -690,10 +881,6 @@ impl sealed::Attestation for TrustedHostDiagnosticAttestationV1<'_, '_, '_> {}
 
 #[cfg(test)]
 impl TrustedHostDiagnosticAttestationPortV1 for TrustedHostDiagnosticAttestationV1<'_, '_, '_> {
-    fn witness_carrier_commitment(&self) -> [u8; 32] {
-        self.witness_carrier_commitment()
-    }
-
     fn present_once(
         &mut self,
         inspect: &mut dyn FnMut(&dyn TrustedHostDiagnosticPresentationPortV1) -> bool,
@@ -702,7 +889,7 @@ impl TrustedHostDiagnosticAttestationPortV1 for TrustedHostDiagnosticAttestation
             .is_some_and(|presentation| inspect(&presentation))
     }
 
-    fn final_recheck(self: Box<Self>) -> bool {
+    fn final_recheck(self: Box<Self>) -> Option<[u8; 32]> {
         TrustedHostDiagnosticAttestationV1::final_recheck(*self)
     }
 }
@@ -720,7 +907,7 @@ fn mutate_digest(value: &mut [u8; 32]) {
 }
 
 #[cfg(test)]
-fn claims_commitment(
+fn attestation_commitment(
     claims: &TrustedHostDiagnosticTestClaimsV1,
     challenge_commitment: [u8; 32],
     host_currentness_revision: u64,

@@ -10,6 +10,8 @@ mod idempotency;
 mod metadata;
 mod object;
 mod protected_diagnostic;
+#[cfg(test)]
+mod protected_diagnostic_stage9_seed;
 mod retention;
 mod snapshot;
 mod snapshot_blocks;
@@ -41,9 +43,8 @@ pub use object::{StoreObjectError, StoreObjectV1};
     reason = "Stage 5 freezes the provider seal before the Stage 9 implementation"
 )]
 pub(crate) use protected_diagnostic::{
-    ProtectedDiagnosticCurrentViewAnchorV1, ProtectedDiagnosticCurrentViewProviderSealedV1,
-    ProtectedDiagnosticCurrentViewProviderV1, ProtectedDiagnosticObservedCurrentViewV1,
-    ProtectedDiagnosticProviderCurrentnessV1,
+    ProtectedDiagnosticCurrentViewAnchorV1, ProtectedDiagnosticCurrentViewProviderV1,
+    ProtectedDiagnosticObservedCurrentViewV1, ProtectedDiagnosticProviderCurrentnessV1,
 };
 #[cfg(test)]
 pub(crate) use protected_diagnostic::{

@@ -2066,69 +2066,30 @@ fn protected_continuity_diagnostic_joins_every_independent_host_identity_dimensi
         drop(store);
         fs::remove_dir_all(root).unwrap();
     }
-}
 
-struct DropTrackedDiagnosticBuilderV1 {
-    dropped: Arc<AtomicU64>,
-    materialized: Arc<AtomicU64>,
-    commitment: [u8; 32],
-}
-
-struct DropTrackedPreparedDiagnosticEnvelopeV1 {
-    dropped: Arc<AtomicU64>,
-    materialized: Arc<AtomicU64>,
-    commitment: [u8; 32],
-}
-
-impl ProtectedContinuityDiagnosticEnvelopeBuilderSealedV1 for DropTrackedDiagnosticBuilderV1 {}
-impl ProtectedContinuityDiagnosticPreparedEnvelopeSealedV1
-    for DropTrackedPreparedDiagnosticEnvelopeV1
-{
-}
-
-impl ProtectedContinuityDiagnosticEnvelopeBuilderV1 for DropTrackedDiagnosticBuilderV1 {
-    fn prepare_current_protected_snapshot(
-        &mut self,
-        input: ProtectedContinuityDiagnosticEnvelopeInputV1<'_>,
-    ) -> Option<Box<dyn ProtectedContinuityDiagnosticPreparedEnvelopeV1>> {
-        let allowlisted = [
-            input.fence_subject_ref(),
-            input.fence_carrier_ref(),
-            input.attempt_ref(),
-            input.semantic_point_ref(),
-            input.covered_closure_ref(),
-            input.conservative_point_envelope_ref(),
-            input.carrier_revision_ref(),
-        ];
-        if allowlisted
-            .iter()
-            .any(|reference| *reference.as_bytes() == [0; 32])
-        {
-            return None;
-        }
-        Some(Box::new(DropTrackedPreparedDiagnosticEnvelopeV1 {
-            dropped: Arc::clone(&self.dropped),
-            materialized: Arc::clone(&self.materialized),
-            commitment: self.commitment,
-        }))
-    }
-}
-
-impl ProtectedContinuityDiagnosticPreparedEnvelopeV1 for DropTrackedPreparedDiagnosticEnvelopeV1 {
-    fn commitment(&self) -> [u8; 32] {
-        self.commitment
-    }
-
-    fn into_bytes(self: Box<Self>) -> Vec<u8> {
-        self.materialized.fetch_add(1, Ordering::SeqCst);
-        vec![1]
-    }
-}
-
-impl Drop for DropTrackedPreparedDiagnosticEnvelopeV1 {
-    fn drop(&mut self) {
-        self.dropped.fetch_add(1, Ordering::SeqCst);
-    }
+    let (root, _domain, mut store, _contract_root, head, _, _, diagnostic, _) = seeded_store();
+    let before_head = store.active_head().unwrap().unwrap();
+    let (mut provider, mut connection) = diagnostic.test_ports(
+        &root,
+        store.domain(),
+        &store,
+        &head,
+        b"presentation-witness-commitment-mismatch",
+    );
+    connection
+        .control()
+        .substitute_presented_attestation_commitment();
+    assert!(matches!(
+        AuthorityFacadeV1::new(&mut store).protected_continuity_diagnostic_reference_envelope(
+            &mut connection,
+            &mut provider,
+            diagnostic.protected_subject,
+        ),
+        Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)
+    ));
+    assert_eq!(store.active_head().unwrap().unwrap(), before_head);
+    drop(store);
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -2158,56 +2119,47 @@ fn protected_continuity_diagnostic_final_recheck_rejects_host_fence_turnover() {
             b"host-fence-turnover",
         );
         schedule(&connection.control());
-        let dropped = Arc::new(AtomicU64::new(0));
-        let materialized = Arc::new(AtomicU64::new(0));
-        let mut builder = DropTrackedDiagnosticBuilderV1 {
-            dropped: Arc::clone(&dropped),
-            materialized: Arc::clone(&materialized),
-            commitment: Sha256::digest([1]).into(),
-        };
+        reset_protected_diagnostic_envelope_test_observation();
         assert!(matches!(
-            AuthorityFacadeV1::new(&mut store).protected_continuity_diagnostic_with_ports(
+            AuthorityFacadeV1::new(&mut store).protected_continuity_diagnostic_reference_envelope(
                 &mut connection,
                 &mut provider,
-                &mut builder,
                 diagnostic.protected_subject,
             ),
             Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)
         ));
-        assert_eq!(dropped.load(Ordering::SeqCst), 1);
-        assert_eq!(materialized.load(Ordering::SeqCst), 1);
+        assert_eq!(protected_diagnostic_envelope_test_observation(), (1, 1, 0));
         drop(store);
         fs::remove_dir_all(root).unwrap();
     }
 
-    let (root, _domain, mut store, _contract_root, head, _, _, diagnostic, _) = seeded_store();
-    let (mut provider, mut connection) = diagnostic.test_ports(
-        &root,
-        store.domain(),
-        &store,
-        &head,
-        b"prepared-envelope-substitution",
-    );
-    let dropped = Arc::new(AtomicU64::new(0));
-    let materialized = Arc::new(AtomicU64::new(0));
-    let mut builder = DropTrackedDiagnosticBuilderV1 {
-        dropped: Arc::clone(&dropped),
-        materialized: Arc::clone(&materialized),
-        commitment: [9; 32],
-    };
-    assert!(matches!(
-        AuthorityFacadeV1::new(&mut store).protected_continuity_diagnostic_with_ports(
-            &mut connection,
-            &mut provider,
-            &mut builder,
-            diagnostic.protected_subject,
-        ),
-        Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)
-    ));
-    assert_eq!(materialized.load(Ordering::SeqCst), 1);
-    assert_eq!(dropped.load(Ordering::SeqCst), 1);
-    drop(store);
-    fs::remove_dir_all(root).unwrap();
+    for mutation in [
+        ProtectedContinuityDiagnosticAssemblerModeV1::SubstituteAdmission,
+        ProtectedContinuityDiagnosticAssemblerModeV1::IgnoreInput,
+    ] {
+        let (root, _domain, mut store, _contract_root, head, _, _, diagnostic, _) = seeded_store();
+        let (mut provider, mut connection) = diagnostic.test_ports(
+            &root,
+            store.domain(),
+            &store,
+            &head,
+            b"prepared-envelope-substitution",
+        );
+        reset_protected_diagnostic_envelope_test_observation();
+        assert!(matches!(
+            AuthorityFacadeV1::new(&mut store)
+                .protected_continuity_diagnostic_reference_envelope_with_assembler_mutation(
+                    &mut connection,
+                    &mut provider,
+                    diagnostic.protected_subject,
+                    mutation,
+                ),
+            Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)
+        ));
+        assert_eq!(protected_diagnostic_envelope_test_observation(), (1, 0, 0));
+        drop(store);
+        fs::remove_dir_all(root).unwrap();
+    }
 }
 
 #[test]

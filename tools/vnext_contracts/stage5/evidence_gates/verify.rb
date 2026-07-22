@@ -30,6 +30,8 @@ SOURCE_PATHS = %w[
   src/domain/vnext/authority/facade_tests.rs
   src/domain/vnext/authority/facade/repository_admission.rs
   src/domain/vnext/authority/facade/repository_leaf_authority.rs src/domain/vnext/authority/mod.rs
+  src/domain/vnext/authority/protected_diagnostic_envelope.rs
+  src/domain/vnext/authority/protected_diagnostic_envelope_stage8_seed.rs
   src/domain/vnext/authority/result.rs
   src/domain/vnext/contract/runtime.rs
   src/domain/vnext/evidence/assessment.rs src/domain/vnext/evidence/claim.rs
@@ -40,10 +42,12 @@ SOURCE_PATHS = %w[
   src/domain/vnext/evidence/store.rs src/domain/vnext/gate/mod.rs
   src/domain/vnext/integration/mod.rs
   src/domain/vnext/integration/trusted_host_diagnostic.rs
+  src/domain/vnext/integration/trusted_host_diagnostic_stage10_seed.rs
   src/domain/vnext/persistence/mod.rs src/domain/vnext/persistence/idempotency.rs
   src/domain/vnext/persistence/metadata.rs
   src/domain/vnext/persistence/store.rs
   src/domain/vnext/persistence/protected_diagnostic.rs
+  src/domain/vnext/persistence/protected_diagnostic_stage9_seed.rs
   src/domain/vnext/persistence/tests/atomic_publication.rs
   src/domain/vnext/repository/mod.rs
   src/domain/vnext/repository/tests.rs

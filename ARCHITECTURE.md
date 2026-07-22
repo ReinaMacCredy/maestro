@@ -168,20 +168,28 @@ Authority currentness.
 
 Stage 5 also freezes a non-Action protected-continuity diagnostic seam without
 making a production authentication claim. Integration exposes production-neutral,
-crate-sealed connection, attestation, and presentation ports; Persistence exposes
-a production-neutral sealed current-view provider and lifetime-bound anchor; and
-Authority exposes the sole fixed diagnostic entry plus a sealed Stage-8 envelope
-builder port. The builder sees only the lifetime-bound seven-reference envelope
-allowlist. Authority immediately materializes it into a private, bounded,
-commitment-checked immutable carrier; both final currentness rechecks must then
-pass before Authority constructs the released envelope. Their concrete Stage-5
-producers, providers, and builder remain `cfg(test)` fixtures.
+owner-subtree-sealed connection, attestation, and presentation ports;
+Persistence exposes a production-neutral owner-subtree-sealed current-view
+provider and lifetime-bound anchor; and Authority exposes the sole fixed
+diagnostic entry. Authority passes its closed typed admission, attempt,
+generation, reason, carrier-state, freshness, remediation, witness, Store-view,
+Authority-snapshot, and attestation references to one concrete owner-local
+Stage-8 assembler seed. Authority independently re-encodes and exact-validates
+the result into a private fixed-capacity carrier; there is no generic builder,
+unbounded adapter byte return, or adapter-selected digest. Both final currentness
+rechecks must pass before Authority releases the carrier. Concrete Stage-5 host,
+Store-currentness, and assembler implementations remain `cfg(test)` fixtures;
+the owner-local Stage-8, Stage-9, and Stage-10 seed modules are the only nominal
+later implementation routes.
 The Authority facade first establishes one lifetime-bound active Store-view
 anchor, then mints and consumes the challenge and invocation inside that
 unchanged view. It field-by-field joins exactly one independently attested host
 identity, role, assurance, Binding, and Session to canonical Authority facts;
-no caller-supplied composite commitment participates. Challenge, attestation,
-witness, guard, and prepared envelope are move-only, view-bound, and non-escaping;
+Authority recomputes one versioned attestation commitment from every presented
+dimension, uses that exact commitment as the witness carrier, and requires the
+live connection to return the same commitment at final recheck. No caller-supplied
+composite commitment participates. Challenge, attestation, witness, guard, and
+prepared envelope are move-only, view-bound, and non-escaping;
 only one bounded reference envelope may be returned after final host and
 Persistence currentness rechecks.
 Every refusal is coarse and zero-write. No later adapter can bypass Authority or

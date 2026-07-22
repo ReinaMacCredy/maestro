@@ -28,6 +28,17 @@ use crate::foundation::core::deterministic_cbor::{self, CborError, CborValue};
 mod repository_admission;
 mod repository_leaf_authority;
 
+use super::protected_diagnostic_envelope::{
+    ProtectedContinuityDiagnosticAssemblerModeV1, ProtectedContinuityDiagnosticEnvelopeInputV1,
+    ProtectedContinuityDiagnosticPreparedCarrierV1, ProtectedContinuityDiagnosticReadGuardMarkerV1,
+    ProtectedContinuityDiagnosticReleasedEnvelopeV1, prepare_current_protected_snapshot,
+};
+#[cfg(test)]
+use super::protected_diagnostic_envelope::{
+    protected_diagnostic_envelope_test_observation,
+    reset_protected_diagnostic_envelope_test_observation,
+};
+
 #[cfg(test)]
 pub(crate) use repository_admission::test_support;
 pub(crate) use repository_admission::{
@@ -105,8 +116,22 @@ impl<'store> AuthorityFacadeV1<'store> {
         &mut self,
         connection: &mut dyn TrustedHostDiagnosticConnectionPortV1,
         current_view_provider: &mut dyn ProtectedDiagnosticCurrentViewProviderV1,
-        envelope_builder: &mut dyn ProtectedContinuityDiagnosticEnvelopeBuilderV1,
         requested_subject: ContinuityReferenceV1,
+    ) -> Result<ProtectedContinuityDiagnosticReleasedEnvelopeV1, AuthorityPublicationError> {
+        self.protected_continuity_diagnostic_with_mode(
+            connection,
+            current_view_provider,
+            requested_subject,
+            ProtectedContinuityDiagnosticAssemblerModeV1::Canonical,
+        )
+    }
+
+    fn protected_continuity_diagnostic_with_mode(
+        &mut self,
+        connection: &mut dyn TrustedHostDiagnosticConnectionPortV1,
+        current_view_provider: &mut dyn ProtectedDiagnosticCurrentViewProviderV1,
+        requested_subject: ContinuityReferenceV1,
+        assembler_mode: ProtectedContinuityDiagnosticAssemblerModeV1,
     ) -> Result<ProtectedContinuityDiagnosticReleasedEnvelopeV1, AuthorityPublicationError> {
         let invocation_issuer = ProtectedDiagnosticInvocationIssuerV1::fresh()?;
         let outcome = self.store.with_serialized_active_view(move |view| {
@@ -114,9 +139,9 @@ impl<'store> AuthorityFacadeV1<'store> {
                 view,
                 connection,
                 current_view_provider,
-                envelope_builder,
                 requested_subject,
                 &invocation_issuer,
+                assembler_mode,
             )
         });
         match outcome {
@@ -134,16 +159,34 @@ impl<'store> AuthorityFacadeV1<'store> {
         current_view_provider: &mut ProtectedDiagnosticTestCurrentViewProviderV1,
         requested_subject: ContinuityReferenceV1,
     ) -> Result<ProtectedContinuityDiagnosticReferenceEnvelopeV1, AuthorityPublicationError> {
-        let mut builder = ProtectedContinuityDiagnosticReferenceEnvelopeBuilderV1;
         let released = self.protected_continuity_diagnostic_with_ports(
             connection,
             current_view_provider,
-            &mut builder,
             requested_subject,
         )?;
-        if released.into_bytes()
-            != vec![ProtectedContinuityDiagnosticDispositionV1::CurrentProtectedSnapshot as u8]
-        {
+        if released.into_bytes().is_empty() {
+            return Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot);
+        }
+        Ok(ProtectedContinuityDiagnosticReferenceEnvelopeV1 {
+            disposition: ProtectedContinuityDiagnosticDispositionV1::CurrentProtectedSnapshot,
+        })
+    }
+
+    #[cfg(test)]
+    fn protected_continuity_diagnostic_reference_envelope_with_assembler_mutation(
+        &mut self,
+        connection: &mut TrustedHostDiagnosticTestConnectionV1,
+        current_view_provider: &mut ProtectedDiagnosticTestCurrentViewProviderV1,
+        requested_subject: ContinuityReferenceV1,
+        assembler_mode: ProtectedContinuityDiagnosticAssemblerModeV1,
+    ) -> Result<ProtectedContinuityDiagnosticReferenceEnvelopeV1, AuthorityPublicationError> {
+        let released = self.protected_continuity_diagnostic_with_mode(
+            connection,
+            current_view_provider,
+            requested_subject,
+            assembler_mode,
+        )?;
+        if released.into_bytes().is_empty() {
             return Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot);
         }
         Ok(ProtectedContinuityDiagnosticReferenceEnvelopeV1 {
@@ -1637,6 +1680,8 @@ impl ProtectedContinuityDiagnosticReferenceEnvelopeV1 {
 
 const PROTECTED_DIAGNOSTIC_CHALLENGE_DOMAIN_V1: &[u8] =
     b"maestro.vnext.trusted-host-diagnostic-challenge.v1";
+const PROTECTED_DIAGNOSTIC_ATTESTATION_DOMAIN_V1: &[u8] =
+    b"maestro.vnext.trusted-host-diagnostic-attestation.v1";
 
 #[cfg_attr(
     not(test),
@@ -1723,179 +1768,9 @@ struct ProtectedContinuityDiagnosticReadGuardV1<'anchor, 'view> {
     _current_view_anchor: &'anchor ProtectedDiagnosticCurrentViewAnchorV1<'view>,
 }
 
-trait ProtectedContinuityDiagnosticReadGuardMarkerV1 {}
-
 impl ProtectedContinuityDiagnosticReadGuardMarkerV1
     for ProtectedContinuityDiagnosticReadGuardV1<'_, '_>
 {
-}
-
-pub(crate) struct ProtectedContinuityDiagnosticEnvelopeInputV1<'guard> {
-    _guard: &'guard dyn ProtectedContinuityDiagnosticReadGuardMarkerV1,
-    fence_subject_ref: ContinuityReferenceV1,
-    fence_carrier_ref: ContinuityReferenceV1,
-    attempt_ref: ContinuityReferenceV1,
-    semantic_point_ref: ContinuityReferenceV1,
-    covered_closure_ref: ContinuityReferenceV1,
-    conservative_point_envelope_ref: ContinuityReferenceV1,
-    carrier_revision_ref: ContinuityReferenceV1,
-}
-
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "Stage 5 freezes the envelope input before the Stage 8 builder exists"
-    )
-)]
-impl<'guard> ProtectedContinuityDiagnosticEnvelopeInputV1<'guard> {
-    fn from_guard(guard: &'guard ProtectedContinuityDiagnosticReadGuardV1<'_, '_>) -> Self {
-        Self {
-            _guard: guard,
-            fence_subject_ref: guard._witness.fence_subject_ref(),
-            fence_carrier_ref: guard._witness.fence_carrier_ref(),
-            attempt_ref: guard._witness.attempt_ref(),
-            semantic_point_ref: guard._witness.semantic_point_ref(),
-            covered_closure_ref: guard._witness.covered_closure_ref(),
-            conservative_point_envelope_ref: guard._witness.conservative_point_envelope_ref(),
-            carrier_revision_ref: guard._witness.carrier_revision_ref(),
-        }
-    }
-
-    pub(crate) const fn fence_subject_ref(&self) -> ContinuityReferenceV1 {
-        self.fence_subject_ref
-    }
-
-    pub(crate) const fn fence_carrier_ref(&self) -> ContinuityReferenceV1 {
-        self.fence_carrier_ref
-    }
-
-    pub(crate) const fn attempt_ref(&self) -> ContinuityReferenceV1 {
-        self.attempt_ref
-    }
-
-    pub(crate) const fn semantic_point_ref(&self) -> ContinuityReferenceV1 {
-        self.semantic_point_ref
-    }
-
-    pub(crate) const fn covered_closure_ref(&self) -> ContinuityReferenceV1 {
-        self.covered_closure_ref
-    }
-
-    pub(crate) const fn conservative_point_envelope_ref(&self) -> ContinuityReferenceV1 {
-        self.conservative_point_envelope_ref
-    }
-
-    pub(crate) const fn carrier_revision_ref(&self) -> ContinuityReferenceV1 {
-        self.carrier_revision_ref
-    }
-}
-
-pub(crate) trait ProtectedContinuityDiagnosticEnvelopeBuilderSealedV1 {}
-
-pub(crate) trait ProtectedContinuityDiagnosticPreparedEnvelopeSealedV1 {}
-
-pub(crate) trait ProtectedContinuityDiagnosticPreparedEnvelopeV1:
-    ProtectedContinuityDiagnosticPreparedEnvelopeSealedV1
-{
-    fn commitment(&self) -> [u8; 32];
-
-    fn into_bytes(self: Box<Self>) -> Vec<u8>;
-}
-
-const MAX_PROTECTED_CONTINUITY_DIAGNOSTIC_ENVELOPE_BYTES_V1: usize = 16 * 1024;
-
-struct ProtectedContinuityDiagnosticPreparedCarrierV1 {
-    bytes: Box<[u8]>,
-}
-
-impl ProtectedContinuityDiagnosticPreparedCarrierV1 {
-    fn freeze(prepared: Box<dyn ProtectedContinuityDiagnosticPreparedEnvelopeV1>) -> Option<Self> {
-        let commitment = prepared.commitment();
-        let bytes = prepared.into_bytes();
-        if commitment == [0; 32]
-            || bytes.is_empty()
-            || bytes.len() > MAX_PROTECTED_CONTINUITY_DIAGNOSTIC_ENVELOPE_BYTES_V1
-            || <[u8; 32]>::from(Sha256::digest(&bytes)) != commitment
-        {
-            return None;
-        }
-        Some(Self {
-            bytes: bytes.into_boxed_slice(),
-        })
-    }
-}
-
-pub(crate) struct ProtectedContinuityDiagnosticReleasedEnvelopeV1 {
-    prepared: ProtectedContinuityDiagnosticPreparedCarrierV1,
-}
-
-impl ProtectedContinuityDiagnosticReleasedEnvelopeV1 {
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "Stage 5 freezes the released envelope before Stage 8 consumes it"
-        )
-    )]
-    pub(crate) fn into_bytes(self) -> Vec<u8> {
-        self.prepared.bytes.into_vec()
-    }
-}
-
-pub(crate) trait ProtectedContinuityDiagnosticEnvelopeBuilderV1:
-    ProtectedContinuityDiagnosticEnvelopeBuilderSealedV1
-{
-    fn prepare_current_protected_snapshot(
-        &mut self,
-        input: ProtectedContinuityDiagnosticEnvelopeInputV1<'_>,
-    ) -> Option<Box<dyn ProtectedContinuityDiagnosticPreparedEnvelopeV1>>;
-}
-
-#[cfg(test)]
-struct ProtectedContinuityDiagnosticReferenceEnvelopeBuilderV1;
-
-#[cfg(test)]
-struct ProtectedContinuityDiagnosticReferencePreparedEnvelopeV1;
-
-#[cfg(test)]
-impl ProtectedContinuityDiagnosticEnvelopeBuilderSealedV1
-    for ProtectedContinuityDiagnosticReferenceEnvelopeBuilderV1
-{
-}
-
-#[cfg(test)]
-impl ProtectedContinuityDiagnosticPreparedEnvelopeSealedV1
-    for ProtectedContinuityDiagnosticReferencePreparedEnvelopeV1
-{
-}
-
-#[cfg(test)]
-impl ProtectedContinuityDiagnosticPreparedEnvelopeV1
-    for ProtectedContinuityDiagnosticReferencePreparedEnvelopeV1
-{
-    fn commitment(&self) -> [u8; 32] {
-        Sha256::digest([ProtectedContinuityDiagnosticDispositionV1::CurrentProtectedSnapshot as u8])
-            .into()
-    }
-
-    fn into_bytes(self: Box<Self>) -> Vec<u8> {
-        vec![ProtectedContinuityDiagnosticDispositionV1::CurrentProtectedSnapshot as u8]
-    }
-}
-
-#[cfg(test)]
-impl ProtectedContinuityDiagnosticEnvelopeBuilderV1
-    for ProtectedContinuityDiagnosticReferenceEnvelopeBuilderV1
-{
-    fn prepare_current_protected_snapshot(
-        &mut self,
-        _input: ProtectedContinuityDiagnosticEnvelopeInputV1<'_>,
-    ) -> Option<Box<dyn ProtectedContinuityDiagnosticPreparedEnvelopeV1>> {
-        Some(Box::new(
-            ProtectedContinuityDiagnosticReferencePreparedEnvelopeV1,
-        ))
-    }
 }
 
 struct ProtectedDiagnosticInvocationIssuerV1 {
@@ -2175,9 +2050,9 @@ fn build_protected_continuity_diagnostic(
     view: &StorePublicationViewV1<'_>,
     connection: &mut dyn TrustedHostDiagnosticConnectionPortV1,
     current_view_provider: &mut dyn ProtectedDiagnosticCurrentViewProviderV1,
-    envelope_builder: &mut dyn ProtectedContinuityDiagnosticEnvelopeBuilderV1,
     requested_subject: ContinuityReferenceV1,
     invocation_issuer: &ProtectedDiagnosticInvocationIssuerV1,
+    assembler_mode: ProtectedContinuityDiagnosticAssemblerModeV1,
 ) -> Result<ProtectedContinuityDiagnosticReleasedEnvelopeV1, AuthorityPublicationError> {
     if view.role() != StoreRoleV1::Repository {
         return Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot);
@@ -2262,18 +2137,24 @@ fn build_protected_continuity_diagnostic(
         .attest_in_current_view(challenge)
         .ok_or(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)?;
 
-    let mut presented_operator_matches =
-        Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot);
+    let mut presented_validation = Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot);
     let presented = attestation.present_once(
         &mut |presentation: &dyn TrustedHostDiagnosticPresentationPortV1| {
-            presented_operator_matches = (|| {
-                if presentation.anchor_commitment() != current_view_anchor.commitment()
-                    || presentation.authority_commitment() != authority_commitment
-                    || presentation.protected_subject_commitment() != *requested_subject.as_bytes()
-                    || presentation.protected_subject_commitment() == [0; 32]
-                    || presentation.invocation_nonce() != invocation_nonce
-                    || presentation.challenge_commitment() != challenge_commitment
-                    || presentation.claims_commitment() == [0; 32]
+            presented_validation = (|| {
+                let presented_host_facts =
+                    ProtectedDiagnosticPresentedHostFactsV1::capture(presentation);
+                let recomputed_attestation_commitment =
+                    presented_host_facts.attestation_commitment();
+                if presented_host_facts.anchor_commitment != current_view_anchor.commitment()
+                    || presented_host_facts.authority_commitment != authority_commitment
+                    || presented_host_facts.protected_subject_commitment
+                        != *requested_subject.as_bytes()
+                    || presented_host_facts.protected_subject_commitment == [0; 32]
+                    || presented_host_facts.invocation_nonce != invocation_nonce
+                    || presented_host_facts.challenge_commitment != challenge_commitment
+                    || presented_host_facts.presented_attestation_commitment == [0; 32]
+                    || presented_host_facts.presented_attestation_commitment
+                        != recomputed_attestation_commitment
                 {
                     return Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot);
                 }
@@ -2287,21 +2168,26 @@ fn build_protected_continuity_diagnostic(
                         binding,
                         session,
                         &current_generation,
-                    )? && presentation.principal_identity() == *binding.principal_id().as_bytes()
-                        && presentation.binding_identity() == *binding.id().as_bytes()
-                        && presentation.session_identity() == *session.id().as_bytes()
-                        && presentation.context_identity() == *binding.context_id().as_bytes()
-                        && presentation.trust_root_revision() == binding.trust_root_revision()
-                        && presentation.assurance_revision() == binding.assurance_revision()
-                        && presentation.human_capable() == binding.human_capable()
-                        && presentation.binding_not_before() == binding.validity().not_before()
-                        && presentation.binding_expires_at() == binding.validity().expires_at()
-                        && presentation.session_not_before() == session.validity().not_before()
-                        && presentation.session_expires_at() == session.validity().expires_at()
-                        && presentation.store_generation() == session.store_generation()
-                        && presentation.authority_epoch() == session.authority_epoch()
-                        && presentation.domain_identity() == *view.domain().id().as_bytes()
-                        && presentation.domain_role() == view.role().tag()
+                    )? && presented_host_facts.principal_identity
+                        == *binding.principal_id().as_bytes()
+                        && presented_host_facts.binding_identity == *binding.id().as_bytes()
+                        && presented_host_facts.session_identity == *session.id().as_bytes()
+                        && presented_host_facts.context_identity == *binding.context_id().as_bytes()
+                        && presented_host_facts.trust_root_revision == binding.trust_root_revision()
+                        && presented_host_facts.assurance_revision == binding.assurance_revision()
+                        && presented_host_facts.human_capable == binding.human_capable()
+                        && presented_host_facts.binding_not_before
+                            == binding.validity().not_before()
+                        && presented_host_facts.binding_expires_at
+                            == binding.validity().expires_at()
+                        && presented_host_facts.session_not_before
+                            == session.validity().not_before()
+                        && presented_host_facts.session_expires_at
+                            == session.validity().expires_at()
+                        && presented_host_facts.store_generation == session.store_generation()
+                        && presented_host_facts.authority_epoch == session.authority_epoch()
+                        && presented_host_facts.domain_identity == *view.domain().id().as_bytes()
+                        && presented_host_facts.domain_role == view.role().tag()
                     {
                         let binding_object = find_exact_object(
                             &referenced,
@@ -2317,15 +2203,15 @@ fn build_protected_continuity_diagnostic(
                         matches += 1;
                     }
                 }
-                Ok(matches)
+                Ok((matches, recomputed_attestation_commitment))
             })();
-            presented_operator_matches.is_ok()
+            presented_validation.is_ok()
         },
     );
     if !presented {
         return Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot);
     }
-    let live_operator_matches = presented_operator_matches?;
+    let (live_operator_matches, verified_attestation_commitment) = presented_validation?;
     if live_operator_matches != 1 {
         return Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot);
     }
@@ -2337,7 +2223,7 @@ fn build_protected_continuity_diagnostic(
     }
 
     let authentication_carrier_ref =
-        ContinuityReferenceV1::from_digest(attestation.witness_carrier_commitment());
+        ContinuityReferenceV1::from_digest(verified_attestation_commitment);
     let currentness_and_fence_ref = hash_reference(&CborValue::Array(vec![
         CborValue::text("maestro.vnext.protected-diagnostic-currentness-and-fence.v1")?,
         bytes(current_head.id().as_bytes()),
@@ -2370,14 +2256,29 @@ fn build_protected_continuity_diagnostic(
         _witness: witness,
         _current_view_anchor: &current_view_anchor,
     };
-    let prepared = envelope_builder
-        .prepare_current_protected_snapshot(
-            ProtectedContinuityDiagnosticEnvelopeInputV1::from_guard(&guard),
-        )
+    let envelope_input = ProtectedContinuityDiagnosticEnvelopeInputV1::new(
+        &guard,
+        ContinuityReferenceV1::from_digest(*guard_object.id().as_bytes()),
+        guard._witness.attempt_ref(),
+        ContinuityReferenceV1::from_digest(*current_generation.id().as_bytes()),
+        guard._witness.fence_subject_ref(),
+        guard._witness.fence_carrier_ref(),
+        guard._witness.semantic_point_ref(),
+        guard._witness.covered_closure_ref(),
+        guard._witness.conservative_point_envelope_ref(),
+        guard._witness.carrier_revision_ref(),
+        ContinuityReferenceV1::from_digest(current_view_anchor.commitment()),
+        ContinuityReferenceV1::from_digest(authority_commitment),
+        authentication_carrier_ref,
+    )
+    .ok_or(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)?;
+    let prepared: ProtectedContinuityDiagnosticPreparedCarrierV1 =
+        prepare_current_protected_snapshot(&envelope_input, assembler_mode)
+            .ok_or(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)?;
+    let final_attestation_commitment = attestation
+        .final_recheck()
         .ok_or(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)?;
-    let prepared = ProtectedContinuityDiagnosticPreparedCarrierV1::freeze(prepared)
-        .ok_or(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot)?;
-    if !attestation.final_recheck() {
+    if final_attestation_commitment != verified_attestation_commitment {
         return Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot);
     }
     if view
@@ -2386,7 +2287,142 @@ fn build_protected_continuity_diagnostic(
     {
         return Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot);
     }
-    Ok(ProtectedContinuityDiagnosticReleasedEnvelopeV1 { prepared })
+    Ok(prepared.release())
+}
+
+struct ProtectedDiagnosticPresentedHostFactsV1 {
+    anchor_commitment: [u8; 32],
+    authority_commitment: [u8; 32],
+    protected_subject_commitment: [u8; 32],
+    invocation_nonce: [u8; 32],
+    challenge_commitment: [u8; 32],
+    presented_attestation_commitment: [u8; 32],
+    provider_identity: [u8; 32],
+    profile_identity: [u8; 32],
+    profile_revision: u64,
+    process_incarnation: [u8; 32],
+    connection_incarnation: [u8; 32],
+    channel_incarnation: [u8; 32],
+    issuer_identity: [u8; 32],
+    realm_identity: [u8; 32],
+    audience_identity: [u8; 32],
+    authentication_event_identity: [u8; 32],
+    host_currentness_revision: u64,
+    revocation_revision: u64,
+    freshness_identity: [u8; 32],
+    carrier_commitment: [u8; 32],
+    principal_identity: [u8; 32],
+    binding_identity: [u8; 32],
+    session_identity: [u8; 32],
+    context_identity: [u8; 32],
+    trust_root_revision: u64,
+    assurance_revision: u64,
+    human_capable: bool,
+    binding_not_before: u64,
+    binding_expires_at: u64,
+    session_not_before: u64,
+    session_expires_at: u64,
+    store_generation: u64,
+    authority_epoch: u64,
+    domain_identity: [u8; 32],
+    domain_role: u64,
+    incarnation_revision: u64,
+}
+
+impl ProtectedDiagnosticPresentedHostFactsV1 {
+    fn capture(presentation: &dyn TrustedHostDiagnosticPresentationPortV1) -> Self {
+        Self {
+            anchor_commitment: presentation.anchor_commitment(),
+            authority_commitment: presentation.authority_commitment(),
+            protected_subject_commitment: presentation.protected_subject_commitment(),
+            invocation_nonce: presentation.invocation_nonce(),
+            challenge_commitment: presentation.challenge_commitment(),
+            presented_attestation_commitment: presentation.attestation_commitment(),
+            provider_identity: presentation.provider_identity(),
+            profile_identity: presentation.profile_identity(),
+            profile_revision: presentation.profile_revision(),
+            process_incarnation: presentation.process_incarnation(),
+            connection_incarnation: presentation.connection_incarnation(),
+            channel_incarnation: presentation.channel_incarnation(),
+            issuer_identity: presentation.issuer_identity(),
+            realm_identity: presentation.realm_identity(),
+            audience_identity: presentation.audience_identity(),
+            authentication_event_identity: presentation.authentication_event_identity(),
+            host_currentness_revision: presentation.host_currentness_revision(),
+            revocation_revision: presentation.revocation_revision(),
+            freshness_identity: presentation.freshness_identity(),
+            carrier_commitment: presentation.carrier_commitment(),
+            principal_identity: presentation.principal_identity(),
+            binding_identity: presentation.binding_identity(),
+            session_identity: presentation.session_identity(),
+            context_identity: presentation.context_identity(),
+            trust_root_revision: presentation.trust_root_revision(),
+            assurance_revision: presentation.assurance_revision(),
+            human_capable: presentation.human_capable(),
+            binding_not_before: presentation.binding_not_before(),
+            binding_expires_at: presentation.binding_expires_at(),
+            session_not_before: presentation.session_not_before(),
+            session_expires_at: presentation.session_expires_at(),
+            store_generation: presentation.store_generation(),
+            authority_epoch: presentation.authority_epoch(),
+            domain_identity: presentation.domain_identity(),
+            domain_role: presentation.domain_role(),
+            incarnation_revision: presentation.incarnation_revision(),
+        }
+    }
+
+    fn attestation_commitment(&self) -> [u8; 32] {
+        let profile_revision = self.profile_revision.to_be_bytes();
+        let host_currentness_revision = self.host_currentness_revision.to_be_bytes();
+        let revocation_revision = self.revocation_revision.to_be_bytes();
+        let trust_root_revision = self.trust_root_revision.to_be_bytes();
+        let assurance_revision = self.assurance_revision.to_be_bytes();
+        let human_capable = [u8::from(self.human_capable)];
+        let binding_not_before = self.binding_not_before.to_be_bytes();
+        let binding_expires_at = self.binding_expires_at.to_be_bytes();
+        let session_not_before = self.session_not_before.to_be_bytes();
+        let session_expires_at = self.session_expires_at.to_be_bytes();
+        let store_generation = self.store_generation.to_be_bytes();
+        let authority_epoch = self.authority_epoch.to_be_bytes();
+        let domain_role = self.domain_role.to_be_bytes();
+        let incarnation_revision = self.incarnation_revision.to_be_bytes();
+        protected_diagnostic_tuple_commitment(
+            PROTECTED_DIAGNOSTIC_ATTESTATION_DOMAIN_V1,
+            &[
+                &self.challenge_commitment,
+                &self.provider_identity,
+                &self.profile_identity,
+                &profile_revision,
+                &self.process_incarnation,
+                &self.connection_incarnation,
+                &self.channel_incarnation,
+                &self.issuer_identity,
+                &self.realm_identity,
+                &self.audience_identity,
+                &self.authentication_event_identity,
+                &host_currentness_revision,
+                &revocation_revision,
+                &self.freshness_identity,
+                &self.carrier_commitment,
+                &self.principal_identity,
+                &self.binding_identity,
+                &self.session_identity,
+                &self.context_identity,
+                &trust_root_revision,
+                &assurance_revision,
+                &human_capable,
+                &binding_not_before,
+                &binding_expires_at,
+                &session_not_before,
+                &session_expires_at,
+                &store_generation,
+                &authority_epoch,
+                &self.domain_identity,
+                &domain_role,
+                &incarnation_revision,
+            ],
+        )
+    }
 }
 
 fn protected_diagnostic_invocation_nonce(
