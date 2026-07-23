@@ -27,7 +27,7 @@ C325 = ROOT / "contracts/vnext/public/direct_consumers.c325.v1.json"
 DOMAIN = "maestro.vnext.stage0.effect-home.v1"
 EXPECTED_SOURCE_BINDINGS_SHA256 = "298e5ef0f129c09398126574d73bafb516a0dfc63a04242cd280583bbc5d49ea"
 EXPECTED_INPUTS = {
-    "design": "16a2f079f6ebf3dd3a2fb1a171cd0c6811203fe5f84dda73a7e2e91f67d6f9f7",
+    "design": "abdf9d500d8418a9c8fae247f70af167fdc41de22a7043808b3207ab6c1d5be6",
     "decisions": "1f97e67b156d5a17d13b94ff955ad17efeb3bb71a4b74b1aec14e20dac1100dd",
     "card": "2cdf1f74843a6eca926ff3bc48e060654350e6a03b65342f8d7be48d111379b4",
     "c325": "ccd22243030aa3bbbd02fefd4ab17371b9bfb2c9842311c5acddbee5bd220c29",

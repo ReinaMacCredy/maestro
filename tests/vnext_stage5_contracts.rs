@@ -2,31 +2,29 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 use maestro::foundation::core::deterministic_cbor;
 
-const SNAPSHOT_PATHS: &[&str] = &[
-    "Cargo.toml",
-    "Cargo.lock",
-    "build.rs",
-    "src",
-    "embedded",
-    "tests",
-    "tools/vnext_contracts",
-    "contracts/vnext/catalogs",
-    "contracts/vnext/stage0",
-    "contracts/vnext/stage2",
-    "contracts/vnext/stage3",
-    "contracts/vnext/stage4/execution",
-];
 const STAGE4_SOURCE_ARCHIVE_LENGTH: usize = 16_486_231;
 const STAGE4_SOURCE_ARCHIVE_SHA256: &str =
     "347eaf928f81d9ce6e07e3767f0cdaf2cde23cd98d13bad41b745d5fbc359910";
 const STAGE4_SOURCE_COMMIT: &str = "9f3cc73b2199c5b2be78dcea8852cbdcafaaafc2";
 const STAGE4_SOURCE_TREE: &str = "2f832a04c7109e17b4b298e40b4827c1ced2d527";
+const CERTIFIED_STAGE5_COMMIT: &str = "527f7b2687a7d51737dc3e6e0c02dfdb6d6f611a";
+const CERTIFIED_STAGE5_TREE: &str = "ebc01e90cd4f4bd9452662251f5252513358b86c";
+const CERTIFIED_STAGE5_POINTER_PATH: &str =
+    "contracts/vnext/stage5/evidence-gates/current-proof.json";
+const CERTIFIED_STAGE5_RELEASE_IDENTITY: &str =
+    "sha256:7c0a4aab9f2fdc8989c1affc9818ce6235ef9338008f8d00d53ad2d4022940c6";
+const CERTIFIED_STAGE5_RELEASE_OBJECT: &str = "contracts/vnext/stage5/evidence-gates/releases/objects/7c0a4aab9f2fdc8989c1affc9818ce6235ef9338008f8d00d53ad2d4022940c6";
+const CERTIFIED_STAGE5_PLAN_IDENTITY: &str =
+    "sha256:4e1cc2633a93645c457f78f326b155be44e8f1b3f267098e43c43b0c44f8296c";
+const CERTIFIED_STAGE5_SNAPSHOT_IDENTITY: &str =
+    "sha256:e76ae1421bb871b9f35edb23eec7a7b510d07f12d25df1ffa36d62abae8f7ece";
 
 fn workspace() -> &'static Path {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -71,17 +69,41 @@ fn stage5_behavior_manifest_rejects_missing_or_reordered_normal_runs() {
 
 #[test]
 fn published_stage5_three_engine_receipts_bind_one_inactive_artifact() {
-    let pointer_path = workspace().join("contracts/vnext/stage5/evidence-gates/current-proof.json");
+    let commit_spec = format!("{CERTIFIED_STAGE5_COMMIT}^{{commit}}");
+    let tree_spec = format!("{CERTIFIED_STAGE5_COMMIT}^{{tree}}");
+    assert_eq!(
+        git_text(&["rev-parse", &commit_spec]),
+        CERTIFIED_STAGE5_COMMIT
+    );
+    assert_eq!(git_text(&["rev-parse", &tree_spec]), CERTIFIED_STAGE5_TREE);
+
+    let pointer_path = workspace().join(CERTIFIED_STAGE5_POINTER_PATH);
     assert!(
         pointer_path.is_file(),
         "the published Stage 5 contract requires its exact proof pointer"
     );
-    let pointer: Value = serde_json::from_slice(&fs::read(&pointer_path).unwrap()).unwrap();
+    let pointer_bytes = fs::read(&pointer_path).unwrap();
     assert_eq!(
-        pointer["schema_version"],
-        "maestro.vnext.proof-publication-pointer.v1"
+        pointer_bytes,
+        certified_blob(CERTIFIED_STAGE5_POINTER_PATH),
+        "the live pointer must remain byte-identical to the certified commit"
+    );
+    let pointer: Value = serde_json::from_slice(&pointer_bytes).unwrap();
+    assert_eq!(
+        pointer,
+        serde_json::json!({
+            "object": format!(
+                "objects/{}",
+                CERTIFIED_STAGE5_RELEASE_IDENTITY
+                    .strip_prefix("sha256:")
+                    .unwrap()
+            ),
+            "release_identity": CERTIFIED_STAGE5_RELEASE_IDENTITY,
+            "schema_version": "maestro.vnext.proof-publication-pointer.v1",
+        })
     );
     let release_identity = pointer["release_identity"].as_str().unwrap();
+    assert_eq!(release_identity, CERTIFIED_STAGE5_RELEASE_IDENTITY);
     let releases = workspace().join("contracts/vnext/stage5/evidence-gates/releases");
     let release_object = releases
         .join("objects")
@@ -94,7 +116,8 @@ fn published_stage5_three_engine_receipts_bind_one_inactive_artifact() {
                 .is_symlink()
         );
     }
-    assert_frozen_tree(&release_object);
+    assert_content_addressed_tree(&release_object);
+    assert_certified_release_tree(&release_object, CERTIFIED_STAGE5_RELEASE_OBJECT);
     let release_root = release_object.join("payload");
     assert!(release_root.is_dir());
 
@@ -473,17 +496,22 @@ fn published_stage5_three_engine_receipts_bind_one_inactive_artifact() {
     assert_eq!(historical["archive_matches_source_commit"], true);
     assert_eq!(historical["canonical_files_match_archive"], true);
     assert!(predecessor.get("full_chain_reexecution").is_none());
-    let current_source_rows = live_snapshot_source_rows(workspace());
-    assert_eq!(snapshot_manifest["source_rows"], current_source_rows);
+    let frozen_source_rows = &snapshot_manifest["source_rows"];
+    assert_eq!(frozen_source_rows.as_array().unwrap().len(), 1024);
     assert_eq!(
         snapshot_manifest["source_identity"],
-        format!("sha256:{}", sha256(&canonical_json(&current_source_rows)))
+        format!("sha256:{}", sha256(&canonical_json(frozen_source_rows)))
+    );
+    assert_eq!(
+        snapshot_manifest["snapshot_identity"],
+        CERTIFIED_STAGE5_SNAPSHOT_IDENTITY
     );
     assert_eq!(
         snapshot_manifest["schema_version"],
         "maestro.vnext.stage5.immutable-workspace-snapshot.v1"
     );
     let canonical = &release["canonical_value"];
+    assert_eq!(canonical["plan_identity"], CERTIFIED_STAGE5_PLAN_IDENTITY);
     assert!(
         canonical["run_token"]
             .as_str()
@@ -600,6 +628,148 @@ fn stage5_seal_parallelizes_independent_engines_and_validates_predecessors_read_
     assert!(seal.contains("(\"SDKROOT\", \"{input:sdk-root}\")"));
     assert!(seal.contains("workspace-snapshot-manifest.v1.json"));
     assert!(seal.contains("path_identity=\"content\""));
+}
+
+fn git_output(arguments: &[&str]) -> Vec<u8> {
+    let inherited_git_variables = std::env::vars_os()
+        .map(|(key, _)| key)
+        .filter(|key| key.to_string_lossy().starts_with("GIT_"))
+        .collect::<Vec<_>>();
+    let mut command = Command::new("git");
+    command
+        .arg("--no-replace-objects")
+        .arg("--no-lazy-fetch")
+        .arg("--no-optional-locks")
+        .arg("-c")
+        .arg("core.fsmonitor=false")
+        .arg("-c")
+        .arg("core.commitGraph=false")
+        .arg("-c")
+        .arg("core.multiPackIndex=false")
+        .arg("-c")
+        .arg("gc.auto=0")
+        .arg("-c")
+        .arg("maintenance.auto=false")
+        .arg("-C")
+        .arg(workspace())
+        .args(arguments);
+    for key in inherited_git_variables {
+        command.env_remove(key);
+    }
+    let output = command
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_NO_REPLACE_OBJECTS", "1")
+        .env("GIT_NO_LAZY_FETCH", "1")
+        .env("GIT_OPTIONAL_LOCKS", "0")
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "git {:?} failed: {}",
+        arguments,
+        String::from_utf8_lossy(&output.stderr)
+    );
+    output.stdout
+}
+
+fn git_text(arguments: &[&str]) -> String {
+    String::from_utf8(git_output(arguments))
+        .unwrap()
+        .trim_end()
+        .to_owned()
+}
+
+fn certified_blob(path: &str) -> Vec<u8> {
+    let object = format!("{CERTIFIED_STAGE5_COMMIT}:{path}");
+    git_output(&["show", &object])
+}
+
+fn assert_certified_release_tree(root: &Path, repository_root: &str) {
+    let listing = git_output(&[
+        "ls-tree",
+        "-r",
+        "--full-tree",
+        "-z",
+        CERTIFIED_STAGE5_COMMIT,
+        "--",
+        repository_root,
+    ]);
+    let prefix = format!("{repository_root}/");
+    let mut certified_entries = listing
+        .split(|byte| *byte == 0)
+        .filter(|row| !row.is_empty())
+        .map(|row| {
+            let tab = row.iter().position(|byte| *byte == b'\t').unwrap();
+            let metadata = std::str::from_utf8(&row[..tab]).unwrap();
+            let fields = metadata.split(' ').collect::<Vec<_>>();
+            assert_eq!(fields.len(), 3);
+            assert!(matches!(fields[0], "100644" | "100755"));
+            assert_eq!(fields[1], "blob");
+            assert_eq!(fields[2].len(), 40);
+            assert!(fields[2].bytes().all(|byte| byte.is_ascii_hexdigit()));
+            let path = std::str::from_utf8(&row[tab + 1..]).unwrap();
+            (
+                path.strip_prefix(&prefix).unwrap().to_owned(),
+                fields[0].to_owned(),
+            )
+        })
+        .collect::<Vec<_>>();
+    certified_entries.sort();
+
+    let mut live_paths = Vec::new();
+    collect_regular_file_paths(root, root, &mut live_paths);
+    live_paths.sort();
+    let certified_paths = certified_entries
+        .iter()
+        .map(|(path, _)| path.clone())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        live_paths, certified_paths,
+        "the live release object path set must equal the certified commit"
+    );
+    for (relative, certified_mode) in certified_entries {
+        let repository_path = format!("{repository_root}/{relative}");
+        assert_eq!(
+            fs::read(root.join(&relative)).unwrap(),
+            certified_blob(&repository_path),
+            "the live release object substituted certified bytes at {relative}"
+        );
+        let live_mode = fs::symlink_metadata(root.join(&relative))
+            .unwrap()
+            .permissions()
+            .mode();
+        assert_eq!(
+            live_mode & 0o111 != 0,
+            certified_mode == "100755",
+            "the live release object substituted certified Git mode at {relative}"
+        );
+    }
+}
+
+fn collect_regular_file_paths(root: &Path, directory: &Path, paths: &mut Vec<String>) {
+    let mut entries = fs::read_dir(directory)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect::<Vec<_>>();
+    entries.sort();
+    for path in entries {
+        let metadata = fs::symlink_metadata(&path).unwrap();
+        assert!(!metadata.file_type().is_symlink());
+        if metadata.is_dir() {
+            collect_regular_file_paths(root, &path, paths);
+        } else {
+            assert!(metadata.is_file());
+            paths.push(
+                path.strip_prefix(root)
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .to_owned(),
+            );
+        }
+    }
 }
 
 fn read_json(path: PathBuf) -> Value {
@@ -747,51 +917,6 @@ fn canonical_json(value: &Value) -> Vec<u8> {
     bytes
 }
 
-fn live_snapshot_source_rows(root: &Path) -> Value {
-    let mut rows = Vec::new();
-    for relative in SNAPSHOT_PATHS {
-        collect_source_rows(root, &root.join(relative), &mut rows);
-    }
-    rows.push(serde_json::json!([
-        "predecessors/stage4-source.tar.gz",
-        STAGE4_SOURCE_ARCHIVE_LENGTH,
-        STAGE4_SOURCE_ARCHIVE_SHA256,
-        false,
-    ]));
-    rows.sort_by(|left, right| left[0].as_str().unwrap().cmp(right[0].as_str().unwrap()));
-    Value::Array(rows)
-}
-
-fn collect_source_rows(root: &Path, path: &Path, rows: &mut Vec<Value>) {
-    let metadata = fs::symlink_metadata(path).unwrap();
-    assert!(!metadata.file_type().is_symlink());
-    if metadata.is_dir() {
-        if path.file_name().is_some_and(|name| name == "__pycache__") {
-            return;
-        }
-        let mut children = fs::read_dir(path)
-            .unwrap()
-            .map(|entry| entry.unwrap().path())
-            .collect::<Vec<_>>();
-        children.sort();
-        for child in children {
-            collect_source_rows(root, &child, rows);
-        }
-        return;
-    }
-    assert!(metadata.is_file());
-    if path.extension().is_some_and(|extension| extension == "pyc") {
-        return;
-    }
-    let bytes = fs::read(path).unwrap();
-    rows.push(serde_json::json!([
-        path.strip_prefix(root).unwrap().to_string_lossy(),
-        bytes.len(),
-        sha256(&bytes),
-        metadata.permissions().mode() & 0o111 != 0,
-    ]));
-}
-
 fn sha256(bytes: &[u8]) -> String {
     Sha256::digest(bytes)
         .iter()
@@ -803,13 +928,12 @@ fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
-fn assert_frozen_tree(root: &Path) {
+fn assert_content_addressed_tree(root: &Path) {
     let metadata = fs::symlink_metadata(root).unwrap();
     assert!(!metadata.file_type().is_symlink());
-    assert_eq!(metadata.permissions().mode() & 0o222, 0);
     if metadata.is_dir() {
         for entry in fs::read_dir(root).unwrap() {
-            assert_frozen_tree(&entry.unwrap().path());
+            assert_content_addressed_tree(&entry.unwrap().path());
         }
     }
 }

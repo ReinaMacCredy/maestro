@@ -1,5 +1,7 @@
 //! Immutable Evidence-owned Claim records and their Submission associations.
 
+pub(crate) mod diagnostics;
+
 mod assessment;
 mod claim;
 mod erasure;

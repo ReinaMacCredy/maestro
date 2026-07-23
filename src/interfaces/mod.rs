@@ -5,3 +5,4 @@ pub mod hooks;
 pub mod mcp;
 pub mod shell;
 pub mod tui;
+pub(crate) mod vnext;

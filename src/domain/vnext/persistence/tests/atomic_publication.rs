@@ -1,5 +1,6 @@
 use std::fs;
-use std::sync::{Arc, Barrier};
+use std::sync::{Arc, Barrier, mpsc};
+use std::time::Duration;
 
 use crate as maestro;
 use maestro::domain::vnext::identity::{
@@ -13,7 +14,10 @@ use maestro::domain::vnext::persistence::{
 use maestro::foundation::core::deterministic_cbor::CborValue;
 use rusqlite::Connection;
 
-use super::super::store::install_before_failed_publication_cleanup_test_hook;
+use super::super::store::{
+    fail_next_atomic_publication_after_staging_for_test,
+    install_before_failed_publication_cleanup_test_hook,
+};
 use super::TestTempDir;
 
 fn rendered(byte: u8) -> String {
@@ -463,8 +467,6 @@ fn failed_writer_cleanup_cannot_unlink_an_object_committed_by_a_waiting_writer()
     let domain = StoreDomainV1::derive(StoreRoleV1::Repository, b"atomic-cleanup-race")
         .expect("Store domain");
     let mut setup = StoreV1::create(&path, domain.clone()).expect("Store");
-    let doomed = object(30, vec![]);
-    setup.put_object(&doomed).expect("persist doomed object");
     let initial_result = object(31, vec![]);
     let initial_root = object(32, vec![initial_result.id()]);
     let initial = setup
@@ -476,26 +478,12 @@ fn failed_writer_cleanup_cannot_unlink_an_object_committed_by_a_waiting_writer()
         ))
         .expect("initial publication");
     let initial_head = initial.head().clone();
-    let basis = setup.snapshot_reachability().expect("retention basis");
-    let tombstone = LogicalTombstoneV1::new(initial_head.id(), doomed.id(), [30; 32], [31; 32])
-        .expect("doomed tombstone");
-    setup
-        .tombstone(&tombstone, basis.retention_revision())
-        .expect("tombstone doomed object");
-    let snapshot = setup
-        .snapshot_reachability()
-        .expect("post-tombstone snapshot");
-    let collection = setup.plan_collection(&snapshot).expect("collection plan");
-    assert_eq!(
-        setup.collect(&collection).expect("collect doomed object"),
-        1
-    );
-    let doomed_id = doomed.id();
-    assert!(!path.join(object_file_path(doomed_id)).exists());
     drop(setup);
 
+    let failed_only = object(30, vec![]);
+    let failed_only_id = failed_only.id();
     let shared_result = object(33, vec![]);
-    let mut failing_references = vec![shared_result.id(), doomed.id()];
+    let mut failing_references = vec![shared_result.id(), failed_only.id()];
     failing_references.sort_unstable();
     let failing_root = object(34, failing_references);
     let mut failing_roots = vec![failing_root.id(), shared_result.id()];
@@ -520,7 +508,7 @@ fn failed_writer_cleanup_cannot_unlink_an_object_committed_by_a_waiting_writer()
     let failing_publication = AtomicGenerationPublicationV1::new(
         failing_generation,
         Some(initial_head.id()),
-        vec![shared_result.clone(), doomed, failing_root],
+        vec![shared_result.clone(), failed_only, failing_root],
         failing_idempotency,
     )
     .expect("failing publication shape");
@@ -538,24 +526,35 @@ fn failed_writer_cleanup_cannot_unlink_an_object_committed_by_a_waiting_writer()
         },
     );
 
-    let cleanup_ready = Arc::new(Barrier::new(2));
-    let commit_done = Arc::new(Barrier::new(2));
+    let race_timeout = Duration::from_secs(10);
+    let (cleanup_ready_tx, cleanup_ready_rx) = mpsc::channel();
+    let (commit_done_tx, commit_done_rx) = mpsc::channel();
+    let (failure_tx, failure_rx) = mpsc::sync_channel(1);
     let failing_path = path.clone();
     let failing_domain = domain.clone();
-    let failing_cleanup_ready = Arc::clone(&cleanup_ready);
-    let failing_commit_done = Arc::clone(&commit_done);
     let failing_writer = std::thread::spawn(move || {
         let mut store = StoreV1::open(failing_path, failing_domain).expect("failing Store");
+        fail_next_atomic_publication_after_staging_for_test();
         install_before_failed_publication_cleanup_test_hook(move || {
-            failing_cleanup_ready.wait();
-            failing_commit_done.wait();
+            cleanup_ready_tx
+                .send(())
+                .expect("cleanup readiness receiver");
+            commit_done_rx
+                .recv_timeout(race_timeout)
+                .expect("waiting writer must commit before cleanup resumes");
         });
-        store
+        let failure = store
             .publish_generation_atomically(&failing_publication)
-            .expect_err("tombstoned closure must fail after staging")
+            .expect_err("injected post-staging failure must fail publication");
+        drop(store);
+        failure_tx
+            .send(failure)
+            .expect("failed writer completion receiver");
     });
 
-    cleanup_ready.wait();
+    cleanup_ready_rx
+        .recv_timeout(race_timeout)
+        .expect("failed writer must reach cleanup after staging");
     let mut committed_store = StoreV1::open(&path, domain.clone()).expect("committing Store");
     let committed = committed_store
         .publish_generation_atomically(&committed_publication)
@@ -568,8 +567,13 @@ fn failed_writer_cleanup_cannot_unlink_an_object_committed_by_a_waiting_writer()
             |row| row.get(0),
         )
         .expect("clock before guarded cleanup");
-    commit_done.wait();
-    let failure = failing_writer.join().expect("failing writer thread");
+    commit_done_tx
+        .send(())
+        .expect("failed writer cleanup sender");
+    let failure = failure_rx
+        .recv_timeout(race_timeout)
+        .expect("failed writer must finish cleanup within the race bound");
+    failing_writer.join().expect("failing writer thread");
     assert!(matches!(
         failure,
         maestro::domain::vnext::persistence::StoreError::Metadata(_)
@@ -583,8 +587,8 @@ fn failed_writer_cleanup_cannot_unlink_an_object_committed_by_a_waiting_writer()
         .expect("clock after guarded cleanup");
     assert_eq!(clock_after_cleanup, clock_before_cleanup);
     assert!(
-        !path.join(object_file_path(doomed_id)).exists(),
-        "collected bytes restaged only by the failed writer must be removed"
+        !path.join(object_file_path(failed_only_id)).exists(),
+        "bytes staged only by the failed writer must be removed"
     );
     assert!(
         !path.join(object_file_path(failing_root_id)).exists(),

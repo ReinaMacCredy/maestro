@@ -7,13 +7,11 @@ use crate::domain::vnext::identity::{SchemaIdV1, StoreGenerationIdV1, StoreObjec
 use crate::domain::vnext::persistence::StoreObjectV1;
 use crate::foundation::core::deterministic_cbor::{self, CborError, CborValue};
 
-#[cfg(test)]
-use super::super::RepositoryDownstreamActionLeafV1;
 use super::super::{
     ActionAuthorityBasisKindV1, ActionRequestIdV1, BootstrapControlG0AuthorityBasisV1,
     CmaEffectWithdrawalSlotFamilyV1, CmaObservationPublicationPurposeV1,
     ContinuityMaintenanceAuthorityBasisV1, GrantIdV1, PrincipalBindingIdV1, PrincipalIdV1,
-    RepositoryActionLeafV1, SessionIdV1, StateTokenIdV1,
+    RepositoryActionLeafV1, RepositoryDownstreamActionLeafV1, SessionIdV1, StateTokenIdV1,
 };
 
 const REPOSITORY_LEAF_AUTHORITY_CARRIER_DOMAIN_V1: &str =
@@ -1298,6 +1296,183 @@ impl ExecutionAuthorityV1 {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct RepositoryOwnerFamilyAuthorityRecordV1 {
+    selection: RepositoryAuthoritySelectionV1,
+    action: RepositoryDownstreamActionLeafV1,
+    subject_commitment: [u8; 32],
+    current_semantic_owner_basis_commitment: [u8; 32],
+    exact_payload_commitment: [u8; 32],
+}
+
+impl RepositoryOwnerFamilyAuthorityRecordV1 {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the private record validates the exact nominal owner-family boundary"
+    )]
+    fn new(
+        selection: RepositoryAuthoritySelectionV1,
+        action: RepositoryDownstreamActionLeafV1,
+        subject_commitment: [u8; 32],
+        current_semantic_owner_basis_commitment: [u8; 32],
+        exact_payload_commitment: [u8; 32],
+        expected_owner_tag: u64,
+        expected_family_tag: u64,
+        first_global_tag: u64,
+        last_global_tag: u64,
+    ) -> Result<Self, RepositoryLeafAuthorityErrorV1> {
+        if action.owner_tag() != expected_owner_tag
+            || action.family_tag() != expected_family_tag
+            || !(first_global_tag..=last_global_tag).contains(&action.global_tag())
+        {
+            return Err(RepositoryLeafAuthorityErrorV1::DownstreamOwnerFamilyMismatch);
+        }
+        require_nonzero(subject_commitment)?;
+        require_nonzero(current_semantic_owner_basis_commitment)?;
+        require_nonzero(exact_payload_commitment)?;
+        Ok(Self {
+            selection,
+            action,
+            subject_commitment,
+            current_semantic_owner_basis_commitment,
+            exact_payload_commitment,
+        })
+    }
+
+    const fn selection(self) -> RepositoryAuthoritySelectionV1 {
+        self.selection
+    }
+
+    const fn action(self) -> RepositoryDownstreamActionLeafV1 {
+        self.action
+    }
+
+    const fn subject_commitment(self) -> [u8; 32] {
+        self.subject_commitment
+    }
+
+    const fn current_semantic_owner_basis_commitment(self) -> [u8; 32] {
+        self.current_semantic_owner_basis_commitment
+    }
+
+    const fn exact_payload_commitment(self) -> [u8; 32] {
+        self.exact_payload_commitment
+    }
+}
+
+macro_rules! owner_family_authority {
+    (
+        $type:ident,
+        owner = $owner_tag:literal,
+        family = $family_tag:literal,
+        global = $first_global_tag:literal..=$last_global_tag:literal,
+        reason = $reason:literal
+    ) => {
+        #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+        pub(crate) struct $type(RepositoryOwnerFamilyAuthorityRecordV1);
+
+        impl $type {
+            #[cfg_attr(not(test), expect(dead_code, reason = $reason))]
+            pub(in crate::domain::vnext) fn new(
+                selection: RepositoryAuthoritySelectionV1,
+                action: RepositoryDownstreamActionLeafV1,
+                subject_commitment: [u8; 32],
+                current_semantic_owner_basis_commitment: [u8; 32],
+                exact_payload_commitment: [u8; 32],
+            ) -> Result<Self, RepositoryLeafAuthorityErrorV1> {
+                Ok(Self(RepositoryOwnerFamilyAuthorityRecordV1::new(
+                    selection,
+                    action,
+                    subject_commitment,
+                    current_semantic_owner_basis_commitment,
+                    exact_payload_commitment,
+                    $owner_tag,
+                    $family_tag,
+                    $first_global_tag,
+                    $last_global_tag,
+                )?))
+            }
+
+            const fn selection(self) -> RepositoryAuthoritySelectionV1 {
+                self.0.selection()
+            }
+
+            const fn action(self) -> RepositoryDownstreamActionLeafV1 {
+                self.0.action()
+            }
+
+            const fn subject_commitment(self) -> [u8; 32] {
+                self.0.subject_commitment()
+            }
+
+            const fn current_semantic_owner_basis_commitment(self) -> [u8; 32] {
+                self.0.current_semantic_owner_basis_commitment()
+            }
+
+            const fn exact_payload_commitment(self) -> [u8; 32] {
+                self.0.exact_payload_commitment()
+            }
+        }
+    };
+}
+
+owner_family_authority!(
+    CoordinationRepositoryActionAuthorityV1,
+    owner = 10,
+    family = 9,
+    global = 94..=102,
+    reason = "Stage 7 freezes the Coordination Authority input before its owner consumer"
+);
+owner_family_authority!(
+    PlanningRepositoryActionAuthorityV1,
+    owner = 12,
+    family = 10,
+    global = 103..=106,
+    reason = "Stage 7 freezes the Planning Authority input before its owner consumer"
+);
+owner_family_authority!(
+    PersistenceRepositoryActionAuthorityV1,
+    owner = 14,
+    family = 11,
+    global = 107..=116,
+    reason = "Stage 7 freezes the Persistence Authority input before its owner consumer"
+);
+owner_family_authority!(
+    DistributionRepositoryActionAuthorityV1,
+    owner = 20,
+    family = 12,
+    global = 117..=129,
+    reason = "Stage 7 freezes the Distribution Authority input before its owner consumer"
+);
+owner_family_authority!(
+    SearchMaintenanceRepositoryActionAuthorityV1,
+    owner = 15,
+    family = 13,
+    global = 130..=131,
+    reason = "Stage 7 freezes the SearchMaintenance Authority input before its owner consumer"
+);
+owner_family_authority!(
+    MemoryRepositoryActionAuthorityV1,
+    owner = 16,
+    family = 14,
+    global = 132..=138,
+    reason = "Stage 7 freezes the Memory Authority input before its owner consumer"
+);
+owner_family_authority!(
+    IntakeRepositoryActionAuthorityV1,
+    owner = 17,
+    family = 15,
+    global = 139..=141,
+    reason = "Stage 7 freezes the Intake Authority input before its owner consumer"
+);
+owner_family_authority!(
+    ResearchRepositoryActionAuthorityV1,
+    owner = 18,
+    family = 16,
+    global = 142..=145,
+    reason = "Stage 7 freezes the Research Authority input before its owner consumer"
+);
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ResolveDecisionAuthorityV1 {
     selection: RepositoryAuthoritySelectionV1,
@@ -1504,6 +1679,14 @@ pub(crate) enum RepositoryLeafAuthorityInputV1 {
     ResolveDecision(ResolveDecisionAuthorityV1),
     SubmitStep(SubmitStepAuthorityV1),
     Execution(ExecutionAuthorityV1),
+    Coordination(CoordinationRepositoryActionAuthorityV1),
+    Planning(PlanningRepositoryActionAuthorityV1),
+    Persistence(PersistenceRepositoryActionAuthorityV1),
+    Distribution(DistributionRepositoryActionAuthorityV1),
+    SearchMaintenance(SearchMaintenanceRepositoryActionAuthorityV1),
+    Memory(MemoryRepositoryActionAuthorityV1),
+    Intake(IntakeRepositoryActionAuthorityV1),
+    Research(ResearchRepositoryActionAuthorityV1),
 }
 
 macro_rules! leaf_input_from {
@@ -1525,6 +1708,17 @@ leaf_input_from!(AmendContractAuthorityV1, AmendContract);
 leaf_input_from!(AppendDesignRevisionAuthorityV1, AppendDesignRevision);
 leaf_input_from!(ResolveDecisionAuthorityV1, ResolveDecision);
 leaf_input_from!(SubmitStepAuthorityV1, SubmitStep);
+leaf_input_from!(CoordinationRepositoryActionAuthorityV1, Coordination);
+leaf_input_from!(PlanningRepositoryActionAuthorityV1, Planning);
+leaf_input_from!(PersistenceRepositoryActionAuthorityV1, Persistence);
+leaf_input_from!(DistributionRepositoryActionAuthorityV1, Distribution);
+leaf_input_from!(
+    SearchMaintenanceRepositoryActionAuthorityV1,
+    SearchMaintenance
+);
+leaf_input_from!(MemoryRepositoryActionAuthorityV1, Memory);
+leaf_input_from!(IntakeRepositoryActionAuthorityV1, Intake);
+leaf_input_from!(ResearchRepositoryActionAuthorityV1, Research);
 impl From<GenericExecutionAuthorityV1> for RepositoryLeafAuthorityInputV1 {
     fn from(value: GenericExecutionAuthorityV1) -> Self {
         Self::Execution(value.into())
@@ -1562,6 +1756,16 @@ impl RepositoryLeafAuthorityInputV1 {
             Self::ResolveDecision(_) => RepositoryActionLeafV1::ResolveDecision,
             Self::SubmitStep(_) => RepositoryActionLeafV1::SubmitStep,
             Self::Execution(authority) => authority.action(),
+            Self::Coordination(authority) => RepositoryActionLeafV1::Downstream(authority.action()),
+            Self::Planning(authority) => RepositoryActionLeafV1::Downstream(authority.action()),
+            Self::Persistence(authority) => RepositoryActionLeafV1::Downstream(authority.action()),
+            Self::Distribution(authority) => RepositoryActionLeafV1::Downstream(authority.action()),
+            Self::SearchMaintenance(authority) => {
+                RepositoryActionLeafV1::Downstream(authority.action())
+            }
+            Self::Memory(authority) => RepositoryActionLeafV1::Downstream(authority.action()),
+            Self::Intake(authority) => RepositoryActionLeafV1::Downstream(authority.action()),
+            Self::Research(authority) => RepositoryActionLeafV1::Downstream(authority.action()),
         }
     }
 
@@ -1581,6 +1785,14 @@ impl RepositoryLeafAuthorityInputV1 {
                 ExecutionAuthorityV1::BootstrapG0(_)
                 | ExecutionAuthorityV1::ContinuityMaintenance(_),
             ) => None,
+            Self::Coordination(authority) => Some(authority.selection()),
+            Self::Planning(authority) => Some(authority.selection()),
+            Self::Persistence(authority) => Some(authority.selection()),
+            Self::Distribution(authority) => Some(authority.selection()),
+            Self::SearchMaintenance(authority) => Some(authority.selection()),
+            Self::Memory(authority) => Some(authority.selection()),
+            Self::Intake(authority) => Some(authority.selection()),
+            Self::Research(authority) => Some(authority.selection()),
         }
     }
 
@@ -1596,6 +1808,14 @@ impl RepositoryLeafAuthorityInputV1 {
             Self::ResolveDecision(authority) => authority.subject_commitment,
             Self::SubmitStep(authority) => authority.subject_commitment,
             Self::Execution(authority) => authority.subject_commitment(),
+            Self::Coordination(authority) => authority.subject_commitment(),
+            Self::Planning(authority) => authority.subject_commitment(),
+            Self::Persistence(authority) => authority.subject_commitment(),
+            Self::Distribution(authority) => authority.subject_commitment(),
+            Self::SearchMaintenance(authority) => authority.subject_commitment(),
+            Self::Memory(authority) => authority.subject_commitment(),
+            Self::Intake(authority) => authority.subject_commitment(),
+            Self::Research(authority) => authority.subject_commitment(),
         }
     }
 
@@ -1611,6 +1831,16 @@ impl RepositoryLeafAuthorityInputV1 {
             Self::ResolveDecision(authority) => authority.subject_basis_commitment,
             Self::SubmitStep(authority) => authority.subject_basis_commitment,
             Self::Execution(authority) => authority.current_state_commitment(),
+            Self::Coordination(authority) => authority.current_semantic_owner_basis_commitment(),
+            Self::Planning(authority) => authority.current_semantic_owner_basis_commitment(),
+            Self::Persistence(authority) => authority.current_semantic_owner_basis_commitment(),
+            Self::Distribution(authority) => authority.current_semantic_owner_basis_commitment(),
+            Self::SearchMaintenance(authority) => {
+                authority.current_semantic_owner_basis_commitment()
+            }
+            Self::Memory(authority) => authority.current_semantic_owner_basis_commitment(),
+            Self::Intake(authority) => authority.current_semantic_owner_basis_commitment(),
+            Self::Research(authority) => authority.current_semantic_owner_basis_commitment(),
         }
     }
 
@@ -1618,6 +1848,14 @@ impl RepositoryLeafAuthorityInputV1 {
         match self {
             Self::Execution(authority) => Some(authority.exact_payload_commitment()),
             Self::SubmitStep(authority) => Some(authority.exact_payload_commitment),
+            Self::Coordination(authority) => Some(authority.exact_payload_commitment()),
+            Self::Planning(authority) => Some(authority.exact_payload_commitment()),
+            Self::Persistence(authority) => Some(authority.exact_payload_commitment()),
+            Self::Distribution(authority) => Some(authority.exact_payload_commitment()),
+            Self::SearchMaintenance(authority) => Some(authority.exact_payload_commitment()),
+            Self::Memory(authority) => Some(authority.exact_payload_commitment()),
+            Self::Intake(authority) => Some(authority.exact_payload_commitment()),
+            Self::Research(authority) => Some(authority.exact_payload_commitment()),
             Self::CreateDraftWork(_)
             | Self::SubmitWorkCompletion(_)
             | Self::CancelWork(_)
@@ -1633,6 +1871,14 @@ impl RepositoryLeafAuthorityInputV1 {
         match self {
             Self::Execution(authority) => Some(authority.executor_principal_id()),
             Self::SubmitStep(authority) => Some(authority.executor_principal_id),
+            Self::Coordination(_)
+            | Self::Planning(_)
+            | Self::Persistence(_)
+            | Self::Distribution(_)
+            | Self::SearchMaintenance(_)
+            | Self::Memory(_)
+            | Self::Intake(_)
+            | Self::Research(_) => None,
             Self::CreateDraftWork(_)
             | Self::SubmitWorkCompletion(_)
             | Self::CancelWork(_)
@@ -1651,6 +1897,14 @@ impl RepositoryLeafAuthorityInputV1 {
             Self::ResolveDecision(authority) => Some(&authority.carrier.0),
             Self::Execution(_) => None,
             Self::SubmitStep(_) => None,
+            Self::Coordination(_)
+            | Self::Planning(_)
+            | Self::Persistence(_)
+            | Self::Distribution(_)
+            | Self::SearchMaintenance(_)
+            | Self::Memory(_)
+            | Self::Intake(_)
+            | Self::Research(_) => None,
             Self::CreateDraftWork(_)
             | Self::SubmitWorkCompletion(_)
             | Self::CancelWork(_)
@@ -1907,6 +2161,8 @@ pub enum RepositoryLeafAuthorityErrorV1 {
     NonExecutionAction,
     #[error("Execution Authority basis does not match the exact frozen Action leaf")]
     ExecutionAuthorityBasisMismatch,
+    #[error("the downstream Repository Action does not belong to the exact Authority owner family")]
+    DownstreamOwnerFamilyMismatch,
     #[error("the authenticated human carrier must not be empty")]
     InvalidAuthenticatedCarrier,
     #[error("the Decision presentation is empty, ambiguous, or outside the finite v1 bounds")]
@@ -2054,6 +2310,339 @@ mod tests {
             trusted_time_upper: Some(130),
             prior_consumptions: vec![],
         }
+    }
+
+    type OwnerFamilyInputConstructorV1 =
+        fn(
+            RepositoryAuthoritySelectionV1,
+            RepositoryDownstreamActionLeafV1,
+            [u8; 32],
+            [u8; 32],
+            [u8; 32],
+        ) -> Result<RepositoryLeafAuthorityInputV1, RepositoryLeafAuthorityErrorV1>;
+
+    #[derive(Clone, Copy)]
+    struct OwnerFamilyCaseV1 {
+        owner_tag: u64,
+        family_tag: u64,
+        first_global_tag: u64,
+        last_global_tag: u64,
+        constructor: OwnerFamilyInputConstructorV1,
+    }
+
+    macro_rules! owner_family_test_constructor {
+        ($function:ident, $type:ident) => {
+            fn $function(
+                selection: RepositoryAuthoritySelectionV1,
+                action: RepositoryDownstreamActionLeafV1,
+                subject_commitment: [u8; 32],
+                subject_basis_commitment: [u8; 32],
+                exact_payload_commitment: [u8; 32],
+            ) -> Result<RepositoryLeafAuthorityInputV1, RepositoryLeafAuthorityErrorV1> {
+                $type::new(
+                    selection,
+                    action,
+                    subject_commitment,
+                    subject_basis_commitment,
+                    exact_payload_commitment,
+                )
+                .map(Into::into)
+            }
+        };
+    }
+
+    owner_family_test_constructor!(coordination_input, CoordinationRepositoryActionAuthorityV1);
+    owner_family_test_constructor!(planning_input, PlanningRepositoryActionAuthorityV1);
+    owner_family_test_constructor!(persistence_input, PersistenceRepositoryActionAuthorityV1);
+    owner_family_test_constructor!(distribution_input, DistributionRepositoryActionAuthorityV1);
+    owner_family_test_constructor!(
+        search_maintenance_input,
+        SearchMaintenanceRepositoryActionAuthorityV1
+    );
+    owner_family_test_constructor!(memory_input, MemoryRepositoryActionAuthorityV1);
+    owner_family_test_constructor!(intake_input, IntakeRepositoryActionAuthorityV1);
+    owner_family_test_constructor!(research_input, ResearchRepositoryActionAuthorityV1);
+
+    const OWNER_FAMILY_CASES_V1: [OwnerFamilyCaseV1; 8] = [
+        OwnerFamilyCaseV1 {
+            owner_tag: 10,
+            family_tag: 9,
+            first_global_tag: 94,
+            last_global_tag: 102,
+            constructor: coordination_input,
+        },
+        OwnerFamilyCaseV1 {
+            owner_tag: 12,
+            family_tag: 10,
+            first_global_tag: 103,
+            last_global_tag: 106,
+            constructor: planning_input,
+        },
+        OwnerFamilyCaseV1 {
+            owner_tag: 14,
+            family_tag: 11,
+            first_global_tag: 107,
+            last_global_tag: 116,
+            constructor: persistence_input,
+        },
+        OwnerFamilyCaseV1 {
+            owner_tag: 20,
+            family_tag: 12,
+            first_global_tag: 117,
+            last_global_tag: 129,
+            constructor: distribution_input,
+        },
+        OwnerFamilyCaseV1 {
+            owner_tag: 15,
+            family_tag: 13,
+            first_global_tag: 130,
+            last_global_tag: 131,
+            constructor: search_maintenance_input,
+        },
+        OwnerFamilyCaseV1 {
+            owner_tag: 16,
+            family_tag: 14,
+            first_global_tag: 132,
+            last_global_tag: 138,
+            constructor: memory_input,
+        },
+        OwnerFamilyCaseV1 {
+            owner_tag: 17,
+            family_tag: 15,
+            first_global_tag: 139,
+            last_global_tag: 141,
+            constructor: intake_input,
+        },
+        OwnerFamilyCaseV1 {
+            owner_tag: 18,
+            family_tag: 16,
+            first_global_tag: 142,
+            last_global_tag: 145,
+            constructor: research_input,
+        },
+    ];
+
+    #[test]
+    fn nominal_owner_family_authorities_partition_all_fifty_two_downstream_leaves() {
+        let expected_selection = selection();
+        let subject = digest("downstream-subject");
+        let owner_basis = digest("downstream-current-semantic-owner-basis");
+        let payload = digest("downstream-exact-payload");
+        let mut accepted = 0;
+
+        for action in RepositoryDownstreamActionLeafV1::all() {
+            let repository_action = RepositoryActionLeafV1::Downstream(action);
+            assert!(matches!(
+                repository_action.stage5_owner_dispatch(),
+                super::super::super::RepositoryActionOwnerDispatchV1::OwnerUnavailable(
+                    unavailable
+                ) if unavailable == repository_action
+            ));
+            assert_eq!(repository_action.execution_authority_basis(), None);
+
+            for owner_family in OWNER_FAMILY_CASES_V1 {
+                let result = (owner_family.constructor)(
+                    expected_selection,
+                    action,
+                    subject,
+                    owner_basis,
+                    payload,
+                );
+                if (owner_family.first_global_tag..=owner_family.last_global_tag)
+                    .contains(&action.global_tag())
+                {
+                    let input = result.unwrap();
+                    accepted += 1;
+                    assert_eq!(action.owner_tag(), owner_family.owner_tag);
+                    assert_eq!(action.family_tag(), owner_family.family_tag);
+                    assert_eq!(input.action(), repository_action);
+                    assert_eq!(input.selection(), Some(expected_selection));
+                    assert_eq!(input.subject_commitment(), subject);
+                    assert_eq!(input.subject_basis_commitment(), owner_basis);
+                    assert_eq!(input.exact_payload_commitment(), Some(payload));
+                    assert_eq!(input.executor_principal_id(), None);
+                    assert!(
+                        input
+                            .evaluate_specialized(&evaluation_context())
+                            .unwrap()
+                            .is_none()
+                    );
+                } else {
+                    assert_eq!(
+                        result,
+                        Err(RepositoryLeafAuthorityErrorV1::DownstreamOwnerFamilyMismatch)
+                    );
+                }
+            }
+        }
+
+        assert_eq!(accepted, RepositoryDownstreamActionLeafV1::all().len());
+    }
+
+    #[test]
+    fn every_nominal_owner_family_authority_rejects_each_zero_commitment_position() {
+        let valid = (
+            digest("downstream-subject"),
+            digest("downstream-current-semantic-owner-basis"),
+            digest("downstream-exact-payload"),
+        );
+
+        for owner_family in OWNER_FAMILY_CASES_V1 {
+            let action =
+                RepositoryDownstreamActionLeafV1::from_global_tag(owner_family.first_global_tag)
+                    .unwrap();
+            for commitments in [
+                ([0; 32], valid.1, valid.2),
+                (valid.0, [0; 32], valid.2),
+                (valid.0, valid.1, [0; 32]),
+            ] {
+                assert_eq!(
+                    (owner_family.constructor)(
+                        selection(),
+                        action,
+                        commitments.0,
+                        commitments.1,
+                        commitments.2,
+                    ),
+                    Err(RepositoryLeafAuthorityErrorV1::ZeroCommitment)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn owner_family_authority_names_are_confined_to_authority_and_the_exact_semantic_owner() {
+        const OWNER_ALLOWLIST: [(&str, &str); 8] = [
+            (
+                "CoordinationRepositoryActionAuthorityV1",
+                "src/domain/vnext/coordination",
+            ),
+            (
+                "PlanningRepositoryActionAuthorityV1",
+                "src/domain/vnext/planning",
+            ),
+            (
+                "PersistenceRepositoryActionAuthorityV1",
+                "src/domain/vnext/persistence",
+            ),
+            (
+                "DistributionRepositoryActionAuthorityV1",
+                "src/domain/vnext/distribution",
+            ),
+            (
+                "SearchMaintenanceRepositoryActionAuthorityV1",
+                "src/domain/vnext/search",
+            ),
+            (
+                "MemoryRepositoryActionAuthorityV1",
+                "src/domain/vnext/memory",
+            ),
+            (
+                "IntakeRepositoryActionAuthorityV1",
+                "src/domain/vnext/intake",
+            ),
+            (
+                "ResearchRepositoryActionAuthorityV1",
+                "src/domain/vnext/research",
+            ),
+        ];
+
+        let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        for required_forbidden_root in [
+            "src/interfaces",
+            "src/domain/vnext/integration",
+            "src/domain/vnext/orchestration",
+        ] {
+            assert!(
+                manifest.join(required_forbidden_root).is_dir(),
+                "architecture guard did not scan required forbidden root {required_forbidden_root}"
+            );
+        }
+        if manifest
+            .join("tools/vnext_contracts/fanout/fanout-base.v1.json")
+            .is_file()
+        {
+            for (_, owner_root) in OWNER_ALLOWLIST {
+                assert!(
+                    manifest.join(owner_root).is_dir(),
+                    "combined fanout is missing exact semantic-owner root {owner_root}"
+                );
+            }
+        }
+
+        let mut sources = Vec::new();
+        collect_rust_sources(&manifest.join("src"), &mut sources);
+        let mut violations = Vec::new();
+        for source_path in sources {
+            let source = std::fs::read(&source_path).unwrap();
+            let mut parser = tree_sitter::Parser::new();
+            parser
+                .set_language(&tree_sitter_rust::LANGUAGE.into())
+                .unwrap();
+            let tree = parser.parse(&source, None).unwrap();
+            assert!(
+                !tree.root_node().has_error(),
+                "architecture guard could not parse {}",
+                source_path.display()
+            );
+            let mut identifiers = Vec::new();
+            collect_rust_identifiers(tree.root_node(), &source, &mut identifiers);
+            let relative = source_path
+                .strip_prefix(manifest)
+                .unwrap()
+                .to_string_lossy()
+                .replace('\\', "/");
+            for (authority_type, owner_root) in OWNER_ALLOWLIST {
+                if identifiers
+                    .iter()
+                    .any(|identifier| identifier == authority_type)
+                    && !path_is_within(&relative, "src/domain/vnext/authority")
+                    && !path_is_within(&relative, owner_root)
+                {
+                    violations.push(format!("{authority_type} named from {relative}"));
+                }
+            }
+        }
+
+        assert!(
+            violations.is_empty(),
+            "owner-family Authority wrappers escaped their Authority/semantic-owner allowlists: {violations:?}"
+        );
+    }
+
+    fn collect_rust_sources(path: &std::path::Path, output: &mut Vec<std::path::PathBuf>) {
+        for entry in std::fs::read_dir(path).unwrap() {
+            let entry = entry.unwrap();
+            let file_type = entry.file_type().unwrap();
+            if file_type.is_dir() {
+                collect_rust_sources(&entry.path(), output);
+            } else if file_type.is_file()
+                && entry
+                    .path()
+                    .extension()
+                    .is_some_and(|extension| extension == "rs")
+            {
+                output.push(entry.path());
+            }
+        }
+    }
+
+    fn collect_rust_identifiers(
+        node: tree_sitter::Node<'_>,
+        source: &[u8],
+        output: &mut Vec<String>,
+    ) {
+        if matches!(node.kind(), "identifier" | "type_identifier") {
+            output.push(node.utf8_text(source).unwrap().to_owned());
+        }
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            collect_rust_identifiers(child, source, output);
+        }
+    }
+
+    fn path_is_within(path: &str, root: &str) -> bool {
+        path == format!("{root}.rs") || path.starts_with(&format!("{root}/"))
     }
 
     #[test]

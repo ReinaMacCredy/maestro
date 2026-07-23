@@ -63,6 +63,12 @@ pub use repository_leaf_authority::{
     RepositoryPolicyTransitionV1, ResolveDecisionAuthorityV1, SubmitStepAuthorityV1,
     SubmitWorkCompletionAuthorityV1,
 };
+pub(in crate::domain::vnext) use repository_leaf_authority::{
+    CoordinationRepositoryActionAuthorityV1, DistributionRepositoryActionAuthorityV1,
+    IntakeRepositoryActionAuthorityV1, MemoryRepositoryActionAuthorityV1,
+    PersistenceRepositoryActionAuthorityV1, PlanningRepositoryActionAuthorityV1,
+    ResearchRepositoryActionAuthorityV1, SearchMaintenanceRepositoryActionAuthorityV1,
+};
 
 use super::continuity::{StoreAllocatedContinuityStateTokenV1, StoreAllocationBindingErrorV1};
 use super::publication::{
@@ -605,7 +611,8 @@ fn prepare_bootstrap_publication(
         post_cut_references,
     )?;
 
-    let mut objects = vec![
+    let mut objects = active_objects;
+    objects.extend([
         context_object,
         consent_slot_object,
         manifest_object,
@@ -626,7 +633,7 @@ fn prepare_bootstrap_publication(
         continuity.state_object,
         witness_object,
         post_cut_object.clone(),
-    ];
+    ]);
     objects.extend(successor_grant_objects);
     if newly_minted {
         objects.push(mandate_object);
@@ -1007,23 +1014,27 @@ fn prepare_root_attached_grant_issue(
         meaning_digest,
         result_object.id(),
     )?;
+    let mut objects = active_objects;
+    objects.extend([
+        successor_context,
+        successor_actor_session,
+        successor_responder_session,
+        continuity.closure_object,
+        continuity.guard_object,
+        continuity.state_object,
+        grant_object,
+        delegation_object,
+        basis_object,
+        receipt_object,
+        result_object,
+        successor_snapshot,
+    ]);
+    objects.sort_by_key(StoreObjectV1::id);
+    objects.dedup_by_key(|object| object.id());
     AtomicGenerationPublicationV1::new_from_object_superset(
         generation,
         Some(expected_old),
-        vec![
-            successor_context,
-            successor_actor_session,
-            successor_responder_session,
-            continuity.closure_object,
-            continuity.guard_object,
-            continuity.state_object,
-            grant_object,
-            delegation_object,
-            basis_object,
-            receipt_object,
-            result_object,
-            successor_snapshot,
-        ],
+        objects,
         idempotency,
     )
     .map_err(Into::into)
@@ -1378,7 +1389,8 @@ fn prepare_ordinary_grant_mutation(
         meaning_digest,
         result.id(),
     )?;
-    let mut objects = vec![
+    let mut objects = active_objects;
+    objects.extend([
         successor_context,
         successor_actor_session,
         successor_responder_session,
@@ -1392,10 +1404,12 @@ fn prepare_ordinary_grant_mutation(
         continuity.guard_object,
         continuity.state_object,
         successor_snapshot,
-    ];
+    ]);
     if let Some((grant, delegation)) = candidate_objects {
         objects.extend([grant, delegation]);
     }
+    objects.sort_by_key(StoreObjectV1::id);
+    objects.dedup_by_key(|object| object.id());
     AtomicGenerationPublicationV1::new_from_object_superset(
         generation,
         Some(expected_old),

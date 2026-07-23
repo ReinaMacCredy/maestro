@@ -43,6 +43,70 @@ semantics. The remaining Stage 0 children
 hold frozen literal contracts for later stages and contain no adapter-private
 state or write path.
 
+#### Temporary vNext fanout seam
+
+The certified Stage-5 commit is the immutable predecessor of one externally
+integrated fanout base. `tools/vnext_contracts/fanout/fanout-base.v1.json`
+freezes the certified commit, tree, publication pointer, release, proof-plan,
+and workspace-snapshot identities; the external-orchestrator authority and
+scheduling policy; every shared path/status owned by that orchestrator; and
+the non-overlapping Stage 6-12 write prefixes, fanout-added mutable seeds, and
+exact inherited mutable seeds. The fanout base may change only that exact
+orchestrator-owned set plus every fanout-added mutable seed. Its orchestrator
+additions include the canonical tracked Feature `design.md` and both successor
+Decision `card.yaml` inputs at their deterministic `.maestro/cards/...` paths.
+Each must be a Git `100644` blob with the exact bound byte length and SHA-256;
+missing, substituted, relocated, or mode-changed input bytes fail closed.
+
+An inherited seed must remain byte- and mode-identical between certified Stage
+5 and the fanout base; only its named Stage owner may later modify it, with Git
+status `M` and unchanged ordinary-blob mode. Stage 8 owns exactly
+`authority/protected_diagnostic_envelope_stage8_seed.rs`; Stage 9 owns exactly
+`persistence/mod.rs` and
+`persistence/protected_diagnostic_stage9_seed.rs`; Stage 10 owns exactly
+`integration/mod.rs` and `integration/trusted_host_diagnostic_stage10_seed.rs`
+for the production trusted-host acquisition/presentation adapter and Stage 5/8
+parity proof. Those exact exceptions override their shared Authority,
+Persistence, or Integration deny prefix only for the named owner; every sibling
+path remains frozen. Worker candidates cannot change other shared files,
+predecessor contracts, an existing non-seed file, object type, or executable
+policy.
+
+The temporary domain roots for coordination, installation, intake, maturity,
+memory, planning, projection, research, search, and transport, plus the
+later-owner children under capability, distribution, evidence, migration, and
+orchestration, are crate-internal. `interfaces::vnext` and
+`operations::vnext`, including all of their children, are also crate-internal.
+They predeclare ownership seams for parallel implementation but expose no new
+product API and contain no implementation child at the fanout base. Stage 12
+may promote only the reviewed final facade surface after Stages 6-11 have been
+integrated in canonical order and the consumer/import census passes.
+
+The external validator authenticates the manifest blob from the fanout commit,
+requires the fanout base to be the sole direct child of the certified commit,
+and preflights the resolved Git common directory and object store before reading
+objects. Replacement refs, optional locks, lazy fetch, inherited Git controls,
+global/system config, grafts, shallow metadata, alternates, promisor packs and
+config, symlinked or hardlinked object storage, and external config includes
+fail closed. Every loose object is decompressed and rehashed against its object
+path, every pack/index pair is strictly verified, and each commit, tree, or blob
+read is rehashed before use;
+ordinary linked worktrees remain valid because their local common object store
+is authenticated explicitly. Parentage comes only from raw commit objects, and
+the fanout-to-comparison walk is capped to the exact expected Stage count rather
+than trusting graft-sensitive revision-graph accelerators. The validator checks
+every authenticated tree for control names, reserved `.git` components, and
+case/Unicode filesystem aliases before validating the complete
+certified-to-fanout delta, every canonical comparison checkpoint, and the
+candidate's own direct-child diff. This prevents a valid final-stage diff from
+hiding an earlier shared, frozen, cross-stage, added, deleted, or aliased path.
+
+Certified Stage-5 readback binds the exact commit, tree, path set, blob bytes,
+and Git `100644`/`100755` mode with the same replacement/lazy-fetch and config
+isolation. Checkout write bits are intentionally not a proof input because they
+are platform and checkout-policy dependent; executable semantics come from the
+certified Git tree and are compared with the live release files.
+
 Stage 0 generators under `tools/vnext_contracts/` produce the checked-in
 candidate artifacts in `contracts/vnext/`. Python and Ruby independently encode
 the generated catalogs and manifests; Rust reconstructs the same emitted

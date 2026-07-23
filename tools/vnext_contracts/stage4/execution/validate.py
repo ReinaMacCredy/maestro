@@ -125,7 +125,7 @@ MUTANT_COMMANDS = [
     ["cargo", "test", "--test", "vnext_stage4_contracts", "stage4_proof_rejects_", "--", "--nocapture"],
     ["cargo", "test", "--test", "vnext_stage4_contracts", "independent_execution_artifact_rejects_semantic_and_shape_mutants", "--", "--nocapture"],
 ]
-BEHAVIOR_EXPECTED_PASSED = [70, 5, 1, 1, 1, 1]
+BEHAVIOR_EXPECTED_PASSED = [70, 7, 1, 1, 1, 1]
 MUTANT_EXPECTED_PASSED = [10, 6, 1]
 SANITIZED_ENVIRONMENT_KEYS = [
     "CARGO_BUILD_TARGET", "CARGO_ENCODED_RUSTFLAGS", "CARGO_HOME", "CARGO_INCREMENTAL", "CARGO_TARGET_DIR",

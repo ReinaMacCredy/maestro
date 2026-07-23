@@ -169,6 +169,7 @@ SOURCE_PATHS = %w[
   src/domain/vnext/authority/continuity/state.rs
   src/domain/vnext/authority/continuity/totality.rs
   src/domain/vnext/authority/continuity/trusted_time.rs
+  src/domain/vnext/authority/downstream_action_basis.rs
   src/domain/vnext/authority/evaluator.rs
   src/domain/vnext/authority/facade.rs
   src/domain/vnext/authority/facade/repository_admission.rs
@@ -180,6 +181,8 @@ SOURCE_PATHS = %w[
   src/domain/vnext/authority/mod.rs
   src/domain/vnext/authority/post_cut.rs
   src/domain/vnext/authority/principal.rs
+  src/domain/vnext/authority/protected_diagnostic_envelope.rs
+  src/domain/vnext/authority/protected_diagnostic_envelope_stage8_seed.rs
   src/domain/vnext/authority/publication.rs
   src/domain/vnext/authority/result.rs
   src/domain/vnext/authority/transition.rs
@@ -205,6 +208,7 @@ SOURCE_PATHS = %w[
   src/domain/vnext/design/revision.rs
   src/domain/vnext/evidence/assessment.rs
   src/domain/vnext/evidence/claim.rs
+  src/domain/vnext/evidence/diagnostics/mod.rs
   src/domain/vnext/evidence/erasure.rs
   src/domain/vnext/evidence/identity.rs
   src/domain/vnext/evidence/mod.rs
@@ -221,6 +225,8 @@ SOURCE_PATHS = %w[
   src/domain/vnext/persistence/metadata.rs
   src/domain/vnext/persistence/mod.rs
   src/domain/vnext/persistence/object.rs
+  src/domain/vnext/persistence/protected_diagnostic.rs
+  src/domain/vnext/persistence/protected_diagnostic_stage9_seed.rs
   src/domain/vnext/persistence/retention.rs
   src/domain/vnext/persistence/snapshot.rs
   src/domain/vnext/persistence/snapshot_blocks.rs

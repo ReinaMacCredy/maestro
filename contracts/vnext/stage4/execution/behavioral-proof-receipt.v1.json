@@ -17,13 +17,13 @@
       },
       "exit_code": 0,
       "ignored": 0,
-      "normalized_output_sha256": "07b25addda0661d77d24f2b3000489a5652aa50930bb7498effa7a708ac1659b",
+      "normalized_output_sha256": "e0650862128235ea7df5a8e36a405119f8a9120c5128eab9039f27d7e9f85241",
       "passed": 70,
       "result": "pass",
       "test_binary": {
-        "byte_length": 67064120,
+        "byte_length": 78302408,
         "path": "target/debug/deps/maestro-a87a94f6ecb23659",
-        "sha256": "ce899ca4bb8d7cdf3e3bcbf39998f5d76f829d43d59f09aaa653cbcf45a12740"
+        "sha256": "f5f522be074ac4125397d2a9202580cf3670dc0059bf145d6316c0a02fe7ed06"
       },
       "test_names": [
         "domain::vnext::execution::ceremony::tests::abandoned_initialization_leaf_does_not_publish_or_poison_final_incarnation",
@@ -115,15 +115,17 @@
       },
       "exit_code": 0,
       "ignored": 0,
-      "normalized_output_sha256": "d0b7455e41e634e791e10c273c86ebd012783719cb9b70bea3d1d2bce50e9468",
-      "passed": 5,
+      "normalized_output_sha256": "4163062a174e0c8d4ceb708ed0767b1ede8942fcbb84cc85a29d74d3666976ba",
+      "passed": 7,
       "result": "pass",
       "test_binary": {
-        "byte_length": 67064120,
+        "byte_length": 78302408,
         "path": "target/debug/deps/maestro-a87a94f6ecb23659",
-        "sha256": "ce899ca4bb8d7cdf3e3bcbf39998f5d76f829d43d59f09aaa653cbcf45a12740"
+        "sha256": "f5f522be074ac4125397d2a9202580cf3670dc0059bf145d6316c0a02fe7ed06"
       },
       "test_names": [
+        "domain::vnext::authority::facade::repository_admission::ancestry_tests::every_owner_family_wrapper_enters_the_existing_ordinary_admission_pipeline",
+        "domain::vnext::authority::facade::repository_admission::ancestry_tests::same_key_substitutions_do_not_alias_and_selection_substitution_fails_closed",
         "domain::vnext::authority::facade::repository_admission::ancestry_tests::store_loaded_chain_accepts_g0_through_two_ordinary_grants",
         "domain::vnext::authority::facade::repository_admission::ancestry_tests::store_loaded_chain_rejects_a_missing_ordinary_ancestor_or_delegation_edge",
         "domain::vnext::authority::facade::repository_admission::ancestry_tests::store_loaded_chain_rejects_cycle_orphan_cross_root_non_attenuation_staleness_and_revocation",
@@ -148,13 +150,13 @@
       },
       "exit_code": 0,
       "ignored": 0,
-      "normalized_output_sha256": "c91225ac5226d64d8288cd9a9ed81e906f32836c1800945f83aa7562e72e3fcd",
+      "normalized_output_sha256": "583ebde2da8eec9f8e782a09e6dc19de7386ab6e841159eea89fe06caeca179e",
       "passed": 1,
       "result": "pass",
       "test_binary": {
-        "byte_length": 67064120,
+        "byte_length": 78302408,
         "path": "target/debug/deps/maestro-a87a94f6ecb23659",
-        "sha256": "ce899ca4bb8d7cdf3e3bcbf39998f5d76f829d43d59f09aaa653cbcf45a12740"
+        "sha256": "f5f522be074ac4125397d2a9202580cf3670dc0059bf145d6316c0a02fe7ed06"
       },
       "test_names": [
         "domain::vnext::authority::continuity::trusted_time::tests::carry_plus_fresh_lower_uses_only_max_base_and_lower_and_rejects_invalid_upper"
@@ -178,13 +180,13 @@
       },
       "exit_code": 0,
       "ignored": 0,
-      "normalized_output_sha256": "d82057459366b7d15251e0a5310cb5999a3dfae4add59d5686a6224dd9117215",
+      "normalized_output_sha256": "b6803a5b7daa77f9e27bb56d0dd063aef0836deed4b963ce9889f6cafe20e491",
       "passed": 1,
       "result": "pass",
       "test_binary": {
-        "byte_length": 5046824,
+        "byte_length": 5063848,
         "path": "target/debug/deps/vnext_stage4_contracts-12f4790700102e4b",
-        "sha256": "0ed46227eed6d7b8e75ae645f8b5c63541a21e79b553a36971320721ac98023b"
+        "sha256": "b389d4a2ce347aa61532dfa65dd916ea0a39c280626549bfcbaaae22f262791f"
       },
       "test_names": [
         "stage4_public_effect_facade_exports_are_complete"
@@ -208,13 +210,13 @@
       },
       "exit_code": 0,
       "ignored": 0,
-      "normalized_output_sha256": "9565986f1291dc5e3fbc73de9be38e5be404de93e0edbaeac70546bb9d222232",
+      "normalized_output_sha256": "0afe74fb87e71286fc18ae1754ab04efe6547b209a26c1df3e77907a5e2b483a",
       "passed": 1,
       "result": "pass",
       "test_binary": {
-        "byte_length": 5046824,
+        "byte_length": 5063848,
         "path": "target/debug/deps/vnext_stage4_contracts-12f4790700102e4b",
-        "sha256": "0ed46227eed6d7b8e75ae645f8b5c63541a21e79b553a36971320721ac98023b"
+        "sha256": "b389d4a2ce347aa61532dfa65dd916ea0a39c280626549bfcbaaae22f262791f"
       },
       "test_names": [
         "runtime_withdrawal_catalog_matches_all_sixty_frozen_rows_and_twenty_one_denials"
@@ -238,13 +240,13 @@
       },
       "exit_code": 0,
       "ignored": 0,
-      "normalized_output_sha256": "66c61665359d1cac0ead566a82c2ef261ee2c8c1cfdcd46ecd2e61fb76a95e3f",
+      "normalized_output_sha256": "c666be6caa7a68572fbb3afa2bfcb4d82a9118c9cc5c39fbac96e35c2cc2c372",
       "passed": 1,
       "result": "pass",
       "test_binary": {
-        "byte_length": 1707560,
+        "byte_length": 1702776,
         "path": "target/debug/deps/vnext_effect_home_literals-452e06338a453af5",
-        "sha256": "e4db77150fba2db2906a6fd4b1b6f5c40f49a6c1553d2a4f8e209e6d98358452"
+        "sha256": "2172fde435f8843f7e3df8caa28ece2622dde3de4ce37b4424a19f995a3945b6"
       },
       "test_names": [
         "stage0_effect_home_artifacts_are_reproducible_and_reject_mutants"
@@ -304,7 +306,7 @@
       "--nocapture"
     ]
   ],
-  "identity": "sha256:462d821152e1f621073276d8403ad0ea89d9ec66227cd8b3067cf956bdfaa077",
+  "identity": "sha256:2b19a05858c400f030b28123a6f608f0a919e1f68c3c234aec8f7c3eb55f68fe",
   "mutant_command_receipts": [
     {
       "command": [
@@ -324,13 +326,13 @@
       },
       "exit_code": 0,
       "ignored": 0,
-      "normalized_output_sha256": "ed55a9c026c1d69f48a1ea9fc3273dd962fb755855147a7419e105f3eb80365b",
+      "normalized_output_sha256": "515e28129a5f6c5857978b194d5895db8b7c0abd9c367fb20a39278e9ebe7e47",
       "passed": 10,
       "result": "pass",
       "test_binary": {
-        "byte_length": 5046824,
+        "byte_length": 5063848,
         "path": "target/debug/deps/vnext_stage4_contracts-12f4790700102e4b",
-        "sha256": "0ed46227eed6d7b8e75ae645f8b5c63541a21e79b553a36971320721ac98023b"
+        "sha256": "b389d4a2ce347aa61532dfa65dd916ea0a39c280626549bfcbaaae22f262791f"
       },
       "test_names": [
         "stage4_regenerated_basis_donation_mutant_fails_compiled_contract",
@@ -363,13 +365,13 @@
       },
       "exit_code": 0,
       "ignored": 0,
-      "normalized_output_sha256": "dcd32e07525a9310bba68f81f73bbb5a7fe43297562c6932ea892c89ccf75e23",
+      "normalized_output_sha256": "31ae20309a39da09b2e389ffec525ffd5a94870e6385e6c05348f5b677a3d0c6",
       "passed": 6,
       "result": "pass",
       "test_binary": {
-        "byte_length": 5046824,
+        "byte_length": 5063848,
         "path": "target/debug/deps/vnext_stage4_contracts-12f4790700102e4b",
-        "sha256": "0ed46227eed6d7b8e75ae645f8b5c63541a21e79b553a36971320721ac98023b"
+        "sha256": "b389d4a2ce347aa61532dfa65dd916ea0a39c280626549bfcbaaae22f262791f"
       },
       "test_names": [
         "stage4_proof_rejects_execution_store_disconnection",
@@ -398,13 +400,13 @@
       },
       "exit_code": 0,
       "ignored": 0,
-      "normalized_output_sha256": "97057ba0a3e18619cdf05303c6c413e7364a3a2fd4f3c34dbbea9b93d665be63",
+      "normalized_output_sha256": "03d563810fb8c6d4a105c40db17830fc77fdc93e84380e718b3372c982001ce1",
       "passed": 1,
       "result": "pass",
       "test_binary": {
-        "byte_length": 5046824,
+        "byte_length": 5063848,
         "path": "target/debug/deps/vnext_stage4_contracts-12f4790700102e4b",
-        "sha256": "0ed46227eed6d7b8e75ae645f8b5c63541a21e79b553a36971320721ac98023b"
+        "sha256": "b389d4a2ce347aa61532dfa65dd916ea0a39c280626549bfcbaaae22f262791f"
       },
       "test_names": [
         "independent_execution_artifact_rejects_semantic_and_shape_mutants"

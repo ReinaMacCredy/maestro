@@ -110,7 +110,7 @@ MUTANT_COMMANDS = [
   %w[cargo test --test vnext_stage4_contracts stage4_proof_rejects_ -- --nocapture],
   %w[cargo test --test vnext_stage4_contracts independent_execution_artifact_rejects_semantic_and_shape_mutants -- --nocapture],
 ].freeze
-  BEHAVIOR_EXPECTED_PASSED = [70, 5, 1, 1, 1, 1].freeze
+  BEHAVIOR_EXPECTED_PASSED = [70, 7, 1, 1, 1, 1].freeze
 MUTANT_EXPECTED_PASSED = [10, 6, 1].freeze
 SANITIZED_ENVIRONMENT_KEYS = %w[
   CARGO_BUILD_TARGET CARGO_ENCODED_RUSTFLAGS CARGO_HOME CARGO_INCREMENTAL CARGO_TARGET_DIR CC CFLAGS HOME LDFLAGS

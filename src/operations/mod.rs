@@ -13,6 +13,7 @@ pub mod memory;
 pub mod migrate;
 pub mod sync;
 pub mod update;
+pub(crate) mod vnext;
 
 mod task_verify;
 

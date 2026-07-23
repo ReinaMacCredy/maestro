@@ -1134,6 +1134,10 @@ impl StoreV1 {
                 stage_object_files(root, objects, &mut staged_files).map_err(|error| {
                     ConditionalTransactionError::Operation(PreparedPublicationError::Store(error))
                 })?;
+                #[cfg(test)]
+                fail_atomic_publication_after_staging_for_test().map_err(|error| {
+                    ConditionalTransactionError::Operation(PreparedPublicationError::Store(error))
+                })?;
                 for object in objects {
                     insert_object_metadata(transaction, object)?;
                 }
@@ -4511,8 +4515,31 @@ fn cleanup_staged_object_files_if_unreferenced(
 
 #[cfg(test)]
 thread_local! {
+    static FAIL_NEXT_ATOMIC_PUBLICATION_AFTER_STAGING: std::cell::Cell<bool> =
+        const { std::cell::Cell::new(false) };
     static BEFORE_FAILED_PUBLICATION_CLEANUP_TEST_HOOK:
         std::cell::RefCell<Option<Box<dyn FnOnce()>>> = std::cell::RefCell::new(None);
+}
+
+#[cfg(test)]
+pub(super) fn fail_next_atomic_publication_after_staging_for_test() {
+    FAIL_NEXT_ATOMIC_PUBLICATION_AFTER_STAGING.with(|armed| {
+        assert!(
+            !armed.replace(true),
+            "post-staging publication failure must be exclusive"
+        );
+    });
+}
+
+#[cfg(test)]
+fn fail_atomic_publication_after_staging_for_test() -> Result<(), StoreError> {
+    FAIL_NEXT_ATOMIC_PUBLICATION_AFTER_STAGING.with(|armed| {
+        if armed.replace(false) {
+            Err(MetadataError::FacadeCasMismatch.into())
+        } else {
+            Ok(())
+        }
+    })
 }
 
 #[cfg(test)]

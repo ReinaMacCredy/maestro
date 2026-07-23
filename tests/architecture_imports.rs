@@ -1431,6 +1431,169 @@ fn transitional_public_surfaces_match_phase_policy() {
     );
 }
 
+#[test]
+fn vnext_fanout_facades_are_exactly_crate_internal() {
+    assert_module_visibility(
+        Path::new("src/domain/vnext/mod.rs"),
+        &[
+            "authority",
+            "capability",
+            "contract",
+            "design",
+            "distribution",
+            "evidence",
+            "execution",
+            "gate",
+            "identity",
+            "integration",
+            "migration",
+            "orchestration",
+            "persistence",
+            "repository",
+            "step",
+            "work",
+        ],
+        &[
+            "coordination",
+            "installation",
+            "intake",
+            "maturity",
+            "memory",
+            "planning",
+            "projection",
+            "research",
+            "search",
+            "transport",
+        ],
+    );
+    assert_module_visibility(
+        Path::new("src/interfaces/mod.rs"),
+        &["cli", "hooks", "mcp", "shell", "tui"],
+        &["vnext"],
+    );
+    assert_module_visibility(
+        Path::new("src/operations/mod.rs"),
+        &[
+            "card_migrate",
+            "container_migrate",
+            "feature_close",
+            "feature_prepare",
+            "harness",
+            "init",
+            "memory",
+            "migrate",
+            "sync",
+            "update",
+        ],
+        &["vnext"],
+    );
+    assert_module_visibility(
+        Path::new("src/interfaces/vnext/mod.rs"),
+        &[],
+        &["cli", "connectors", "hooks", "mcp", "shell", "tui"],
+    );
+    assert_module_visibility(
+        Path::new("src/operations/vnext/mod.rs"),
+        &[],
+        &[
+            "action",
+            "adapters",
+            "installation",
+            "migration",
+            "observation",
+            "orchestration",
+        ],
+    );
+    assert_module_visibility(
+        Path::new("src/domain/vnext/capability/mod.rs"),
+        &["literals"],
+        &["generated_catalog", "runtime"],
+    );
+    assert_module_visibility(
+        Path::new("src/domain/vnext/distribution/mod.rs"),
+        &[],
+        &["runtime"],
+    );
+    assert_module_visibility(
+        Path::new("src/domain/vnext/evidence/mod.rs"),
+        &["submission_claim"],
+        &["diagnostics"],
+    );
+    assert_module_visibility(
+        Path::new("src/domain/vnext/migration/mod.rs"),
+        &[],
+        &["runtime"],
+    );
+    assert_module_visibility(
+        Path::new("src/domain/vnext/orchestration/mod.rs"),
+        &["literals"],
+        &["runtime"],
+    );
+
+    for path in [
+        "src/domain/vnext/capability/generated_catalog/mod.rs",
+        "src/domain/vnext/capability/runtime/mod.rs",
+        "src/domain/vnext/coordination/mod.rs",
+        "src/domain/vnext/distribution/runtime/mod.rs",
+        "src/domain/vnext/evidence/diagnostics/mod.rs",
+        "src/domain/vnext/installation/mod.rs",
+        "src/domain/vnext/intake/mod.rs",
+        "src/domain/vnext/maturity/mod.rs",
+        "src/domain/vnext/memory/mod.rs",
+        "src/domain/vnext/migration/runtime/mod.rs",
+        "src/domain/vnext/orchestration/runtime/mod.rs",
+        "src/domain/vnext/planning/mod.rs",
+        "src/domain/vnext/projection/mod.rs",
+        "src/domain/vnext/research/mod.rs",
+        "src/domain/vnext/search/mod.rs",
+        "src/domain/vnext/transport/mod.rs",
+        "src/interfaces/vnext/cli/mod.rs",
+        "src/interfaces/vnext/connectors/mod.rs",
+        "src/interfaces/vnext/hooks/mod.rs",
+        "src/interfaces/vnext/mcp/mod.rs",
+        "src/interfaces/vnext/shell/mod.rs",
+        "src/interfaces/vnext/tui/mod.rs",
+        "src/operations/vnext/action/mod.rs",
+        "src/operations/vnext/adapters/mod.rs",
+        "src/operations/vnext/installation/mod.rs",
+        "src/operations/vnext/migration/mod.rs",
+        "src/operations/vnext/observation/mod.rs",
+        "src/operations/vnext/orchestration/mod.rs",
+    ] {
+        assert!(
+            public_modules(&read_source_file(Path::new(path))).is_empty(),
+            "temporary fanout facade {path} must keep implementation children private"
+        );
+    }
+
+    let mut violations = Vec::new();
+    for file in rust_files_under(Path::new("src/domain/vnext")) {
+        let source = source_without_test_modules(&read_source_file(&file));
+        if source.contains("crate::interfaces::vnext")
+            || source.contains("crate::operations::vnext")
+        {
+            violations.push(format!(
+                "{} imports a higher vNext layer from the domain layer",
+                file.display()
+            ));
+        }
+    }
+    for file in rust_files_under(Path::new("src/operations/vnext")) {
+        let source = source_without_test_modules(&read_source_file(&file));
+        if source.contains("crate::interfaces::vnext") {
+            violations.push(format!(
+                "{} imports the vNext interface layer from operations",
+                file.display()
+            ));
+        }
+    }
+    assert!(
+        violations.is_empty(),
+        "temporary vNext fanout imports must preserve interfaces -> operations -> domain:\n{}",
+        violations.join("\n")
+    );
+}
+
 fn lib_exposes_crate_root(lib: &str, root: &str) -> bool {
     let public_module = format!("pub mod {root};");
 
@@ -1993,6 +2156,34 @@ fn assert_public_modules(path: &Path, expected_modules: &[&str], expected_reexpo
     );
 }
 
+fn assert_module_visibility(
+    path: &Path,
+    expected_public: &[&str],
+    expected_crate_visible: &[&str],
+) {
+    let source = read_source_file(path);
+    let expected_public = expected_public
+        .iter()
+        .map(|module| module.to_string())
+        .collect::<BTreeSet<_>>();
+    let expected_crate_visible = expected_crate_visible
+        .iter()
+        .map(|module| module.to_string())
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        public_modules(&source),
+        expected_public,
+        "{} must expose exactly the approved public modules",
+        path.display()
+    );
+    assert_eq!(
+        crate_visible_modules(&source),
+        expected_crate_visible,
+        "{} must expose exactly the approved crate-internal modules",
+        path.display()
+    );
+}
+
 fn crate_reexports(source: &str) -> BTreeSet<String> {
     source
         .lines()
@@ -2080,6 +2271,20 @@ fn public_modules(source: &str) -> BTreeSet<String> {
         .filter_map(|line| {
             let line = line.trim();
             let module = line.strip_prefix("pub mod ")?;
+            module
+                .strip_suffix(';')
+                .or_else(|| module.strip_suffix(" {"))
+                .map(str::to_string)
+        })
+        .collect()
+}
+
+fn crate_visible_modules(source: &str) -> BTreeSet<String> {
+    source
+        .lines()
+        .filter_map(|line| {
+            let line = line.trim();
+            let module = line.strip_prefix("pub(crate) mod ")?;
             module
                 .strip_suffix(';')
                 .or_else(|| module.strip_suffix(" {"))
@@ -2599,7 +2804,10 @@ fn skip_braced_item(lines: &[&str], start: usize) -> usize {
 fn source_without_pub_mod_statements(source: &str) -> String {
     source
         .lines()
-        .filter(|line| !line.trim_start().starts_with("pub mod "))
+        .filter(|line| {
+            let line = line.trim_start();
+            !line.starts_with("pub mod ") && !line.starts_with("pub(crate) mod ")
+        })
         .collect::<Vec<_>>()
         .join("\n")
 }

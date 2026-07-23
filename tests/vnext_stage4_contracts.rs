@@ -858,11 +858,17 @@ fn stage4_regenerated_basis_donation_mutant_fails_compiled_contract() {
     let authority_path =
         workspace.join("src/domain/vnext/authority/facade/repository_leaf_authority.rs");
     let source = fs::read_to_string(&authority_path).expect("read copied authority facade");
-    let exact_guard = "if !action.is_ordinary_execution_action() {";
+    let exact_guard = "if action.execution_authority_basis()
+            != Some(ActionAuthorityBasisKindV1::OrdinaryLiveRuntime)
+        {";
     assert_eq!(source.matches(exact_guard).count(), 1);
     fs::write(
         &authority_path,
-        source.replacen(exact_guard, "if !action.is_execution_action() {", 1),
+        source.replacen(
+            exact_guard,
+            "if action.execution_authority_basis().is_none() {",
+            1,
+        ),
     )
     .expect("write basis-donation mutant");
 
@@ -1304,7 +1310,7 @@ fn stage4_behavior_receipt_binds_the_compiled_execution_gate() {
         ])
     );
     for (key, expected) in [
-        ("command_receipts", [70, 5, 1, 1, 1, 1].as_slice()),
+        ("command_receipts", [70, 7, 1, 1, 1, 1].as_slice()),
         ("mutant_command_receipts", [10, 6, 1].as_slice()),
     ] {
         let receipts = receipt[key].as_array().expect("execution receipts");
@@ -1452,7 +1458,7 @@ fn stage4_receipts_bind_the_exact_full_predecessor_chain() {
         {
             let reexecution = &receipt["behavioral_reexecution"];
             for (key, expected) in [
-                ("command_receipts", [70, 5, 1, 1, 1, 1].as_slice()),
+                ("command_receipts", [70, 7, 1, 1, 1, 1].as_slice()),
                 ("mutant_command_receipts", [10, 6, 1].as_slice()),
             ] {
                 let rows = reexecution[key]

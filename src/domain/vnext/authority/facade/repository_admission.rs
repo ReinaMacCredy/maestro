@@ -3056,14 +3056,22 @@ pub(crate) mod test_support {
             StoreRoleV1::Repository,
             trusted_time_lower,
             trusted_time_upper,
+            false,
         )
+    }
+
+    pub(crate) fn repository_owner_family_authority_fixture(
+        scopes: Vec<(&'static str, [u8; 32])>,
+        mode: AuthorityFixtureModeV1,
+    ) -> RepositoryAuthorityFixtureV1 {
+        authority_fixture(scopes, mode, StoreRoleV1::Repository, 120, 130, true)
     }
 
     pub(crate) fn installation_authority_fixture(
         scopes: Vec<(&'static str, [u8; 32])>,
         mode: AuthorityFixtureModeV1,
     ) -> RepositoryAuthorityFixtureV1 {
-        authority_fixture(scopes, mode, StoreRoleV1::Installation, 120, 130)
+        authority_fixture(scopes, mode, StoreRoleV1::Installation, 120, 130, false)
     }
 
     fn authority_fixture(
@@ -3072,6 +3080,7 @@ pub(crate) mod test_support {
         role: StoreRoleV1,
         trusted_time_lower: u64,
         trusted_time_upper: u64,
+        allow_owner_family_scopes: bool,
     ) -> RepositoryAuthorityFixtureV1 {
         let external_effect_only = scopes.iter().all(|(literal, _)| {
             RepositoryActionLeafV1::ALL
@@ -3262,8 +3271,10 @@ pub(crate) mod test_support {
                     .find(|leaf| leaf.literal() == action)
                     .unwrap();
                 assert!(
-                    leaf.stage5_owner_dispatch().is_stage5_admitted(),
-                    "Stage 5 fixture cannot mint a scope for owner-unavailable Action {action}"
+                    leaf.stage5_owner_dispatch().is_stage5_admitted()
+                        || (allow_owner_family_scopes
+                            && matches!(leaf, RepositoryActionLeafV1::Downstream(_))),
+                    "ordinary Stage 5 fixtures cannot mint a scope for owner-unavailable Action {action}"
                 );
                 (
                     leaf,
@@ -4004,12 +4015,22 @@ mod ancestry_tests {
 
     use rusqlite::Connection;
 
-    use super::test_support::{AuthorityFixtureModeV1, repository_authority_fixture};
+    use super::test_support::{
+        AuthorityFixtureModeV1, repository_authority_fixture,
+        repository_owner_family_authority_fixture,
+    };
     use super::*;
     use crate::domain::vnext::authority::IdempotencyKeyIdV1;
+    use crate::domain::vnext::authority::{
+        CoordinationRepositoryActionAuthorityV1, DistributionRepositoryActionAuthorityV1,
+        IntakeRepositoryActionAuthorityV1, MemoryRepositoryActionAuthorityV1,
+        PersistenceRepositoryActionAuthorityV1, PlanningRepositoryActionAuthorityV1,
+        PrincipalBindingIdV1, RepositoryDownstreamActionLeafV1,
+        ResearchRepositoryActionAuthorityV1, SearchMaintenanceRepositoryActionAuthorityV1,
+    };
     use crate::domain::vnext::identity::ContractRootIdV1;
     use crate::domain::vnext::persistence::{
-        StoreCompatibilityV1, StoreDomainV1, StoreGenerationV1, StoreV1,
+        PreparedPublicationError, StoreCompatibilityV1, StoreDomainV1, StoreGenerationV1, StoreV1,
     };
     use crate::domain::vnext::repository::{
         CancelWorkPublicationV1, CreateDraftWorkPublicationV1, RepositoryActionIdentityV1,
@@ -4044,6 +4065,285 @@ mod ancestry_tests {
             fixture.selection.terminal_grant_id(),
             &authority_objects,
         )
+    }
+
+    fn owner_family_authority_input(
+        selection: RepositoryAuthoritySelectionV1,
+        action: RepositoryDownstreamActionLeafV1,
+        subject_commitment: [u8; 32],
+        subject_basis_commitment: [u8; 32],
+        exact_payload_commitment: [u8; 32],
+    ) -> RepositoryLeafAuthorityInputV1 {
+        match action.global_tag() {
+            94..=102 => CoordinationRepositoryActionAuthorityV1::new(
+                selection,
+                action,
+                subject_commitment,
+                subject_basis_commitment,
+                exact_payload_commitment,
+            )
+            .unwrap()
+            .into(),
+            103..=106 => PlanningRepositoryActionAuthorityV1::new(
+                selection,
+                action,
+                subject_commitment,
+                subject_basis_commitment,
+                exact_payload_commitment,
+            )
+            .unwrap()
+            .into(),
+            107..=116 => PersistenceRepositoryActionAuthorityV1::new(
+                selection,
+                action,
+                subject_commitment,
+                subject_basis_commitment,
+                exact_payload_commitment,
+            )
+            .unwrap()
+            .into(),
+            117..=129 => DistributionRepositoryActionAuthorityV1::new(
+                selection,
+                action,
+                subject_commitment,
+                subject_basis_commitment,
+                exact_payload_commitment,
+            )
+            .unwrap()
+            .into(),
+            130..=131 => SearchMaintenanceRepositoryActionAuthorityV1::new(
+                selection,
+                action,
+                subject_commitment,
+                subject_basis_commitment,
+                exact_payload_commitment,
+            )
+            .unwrap()
+            .into(),
+            132..=138 => MemoryRepositoryActionAuthorityV1::new(
+                selection,
+                action,
+                subject_commitment,
+                subject_basis_commitment,
+                exact_payload_commitment,
+            )
+            .unwrap()
+            .into(),
+            139..=141 => IntakeRepositoryActionAuthorityV1::new(
+                selection,
+                action,
+                subject_commitment,
+                subject_basis_commitment,
+                exact_payload_commitment,
+            )
+            .unwrap()
+            .into(),
+            142..=145 => ResearchRepositoryActionAuthorityV1::new(
+                selection,
+                action,
+                subject_commitment,
+                subject_basis_commitment,
+                exact_payload_commitment,
+            )
+            .unwrap()
+            .into(),
+            _ => unreachable!("the downstream Action catalog is closed to tags 94..=145"),
+        }
+    }
+
+    fn owner_family_digest(seed: &str) -> [u8; 32] {
+        Sha256::digest(seed.as_bytes()).into()
+    }
+
+    #[test]
+    fn every_owner_family_wrapper_enters_the_existing_ordinary_admission_pipeline() {
+        let subject = owner_family_digest("owner-family-admission-subject");
+        let owner_basis = owner_family_digest("owner-family-admission-current-owner-basis");
+        let payload = owner_family_digest("owner-family-admission-exact-payload");
+        let fixture = repository_owner_family_authority_fixture(
+            RepositoryDownstreamActionLeafV1::all()
+                .into_iter()
+                .map(|action| (action.literal(), subject))
+                .collect(),
+            AuthorityFixtureModeV1::Valid,
+        );
+        let root = test_root();
+        let domain =
+            StoreDomainV1::derive(StoreRoleV1::Repository, b"owner-family-admission").unwrap();
+        let mut store = StoreV1::create(&root, domain.clone()).unwrap();
+        put_objects_in_reference_order(&mut store, fixture.objects);
+        let generation = StoreGenerationV1::new(
+            domain,
+            1,
+            None,
+            ContractRootIdV1::parse(&render_digest([71; 32])).unwrap(),
+            StoreCompatibilityV1::stage0_successor().unwrap(),
+            vec![fixture.authority_root_id],
+        )
+        .unwrap();
+        store.publish_generation(&generation, None).unwrap();
+        activate_store(&root);
+
+        for action in RepositoryDownstreamActionLeafV1::all() {
+            let request_id = ActionRequestIdV1::derive(&format!(
+                "owner-family-admission-request-{}",
+                action.global_tag()
+            ))
+            .unwrap();
+            let authority = owner_family_authority_input(
+                fixture.selection,
+                action,
+                subject,
+                owner_basis,
+                payload,
+            );
+            let admitted = store
+                .with_serialized_active_view(|view| {
+                    admit_repository_action(
+                        view,
+                        &generation,
+                        RepositoryActionAdmissionInputV1::new(request_id, authority),
+                    )
+                })
+                .unwrap();
+
+            assert_eq!(
+                admitted.action(),
+                RepositoryActionLeafV1::Downstream(action)
+            );
+            assert_eq!(admitted.request_id(), request_id);
+            assert_eq!(
+                admitted.authorization_receipt().basis_kind(),
+                ActionAuthorityBasisKindV1::OrdinaryLiveRuntime
+            );
+            assert!(admitted.leaf_authority_carrier.is_none());
+            assert!(admitted.leaf_authority_consumption.is_none());
+        }
+
+        drop(store);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn same_key_substitutions_do_not_alias_and_selection_substitution_fails_closed() {
+        const FIRST_FAMILY_TAGS: [u64; 8] = [94, 103, 107, 117, 130, 132, 139, 142];
+
+        let subject = owner_family_digest("owner-family-substitution-subject");
+        let owner_basis = owner_family_digest("owner-family-substitution-current-owner-basis");
+        let payload = owner_family_digest("owner-family-substitution-exact-payload");
+        let fixture = repository_owner_family_authority_fixture(
+            RepositoryDownstreamActionLeafV1::all()
+                .into_iter()
+                .map(|action| (action.literal(), subject))
+                .collect(),
+            AuthorityFixtureModeV1::Valid,
+        );
+        let root = test_root();
+        let domain =
+            StoreDomainV1::derive(StoreRoleV1::Repository, b"owner-family-substitution").unwrap();
+        let mut store = StoreV1::create(&root, domain.clone()).unwrap();
+        put_objects_in_reference_order(&mut store, fixture.objects);
+        let generation = StoreGenerationV1::new(
+            domain,
+            1,
+            None,
+            ContractRootIdV1::parse(&render_digest([72; 32])).unwrap(),
+            StoreCompatibilityV1::stage0_successor().unwrap(),
+            vec![fixture.authority_root_id],
+        )
+        .unwrap();
+        store.publish_generation(&generation, None).unwrap();
+        activate_store(&root);
+
+        for first_global_tag in FIRST_FAMILY_TAGS {
+            let action =
+                RepositoryDownstreamActionLeafV1::from_global_tag(first_global_tag).unwrap();
+            let substituted_action =
+                RepositoryDownstreamActionLeafV1::from_global_tag(first_global_tag + 1).unwrap();
+            let request_id = ActionRequestIdV1::derive(&format!(
+                "owner-family-same-key-request-{first_global_tag}"
+            ))
+            .unwrap();
+
+            let admit = |store: &mut StoreV1,
+                         selection: RepositoryAuthoritySelectionV1,
+                         action: RepositoryDownstreamActionLeafV1,
+                         basis: [u8; 32],
+                         payload: [u8; 32]| {
+                let authority =
+                    owner_family_authority_input(selection, action, subject, basis, payload);
+                store.with_serialized_active_view(|view| {
+                    admit_repository_action(
+                        view,
+                        &generation,
+                        RepositoryActionAdmissionInputV1::new(request_id, authority),
+                    )
+                })
+            };
+
+            let baseline =
+                admit(&mut store, fixture.selection, action, owner_basis, payload).unwrap();
+            let replay =
+                admit(&mut store, fixture.selection, action, owner_basis, payload).unwrap();
+            assert_eq!(baseline.basis_object().id(), replay.basis_object().id());
+
+            let substituted_owner_basis = admit(
+                &mut store,
+                fixture.selection,
+                action,
+                owner_family_digest("substituted-current-owner-basis"),
+                payload,
+            )
+            .unwrap();
+            assert_ne!(
+                baseline.basis_object().id(),
+                substituted_owner_basis.basis_object().id()
+            );
+
+            let substituted_payload = admit(
+                &mut store,
+                fixture.selection,
+                action,
+                owner_basis,
+                owner_family_digest("substituted-exact-payload"),
+            )
+            .unwrap();
+            assert_ne!(
+                baseline.basis_object().id(),
+                substituted_payload.basis_object().id()
+            );
+
+            let substituted_leaf = admit(
+                &mut store,
+                fixture.selection,
+                substituted_action,
+                owner_basis,
+                payload,
+            )
+            .unwrap();
+            assert_ne!(
+                baseline.basis_object().id(),
+                substituted_leaf.basis_object().id()
+            );
+
+            let hostile_selection = RepositoryAuthoritySelectionV1::new(
+                PrincipalBindingIdV1::derive(&format!(
+                    "owner-family-hostile-binding-{first_global_tag}"
+                ))
+                .unwrap(),
+                fixture.selection.actor_session_id(),
+                fixture.selection.terminal_grant_id(),
+            );
+            assert!(matches!(
+                admit(&mut store, hostile_selection, action, owner_basis, payload,),
+                Err(PreparedPublicationError::Prepare(
+                    RepositoryAuthorityAdmissionErrorV1::AuthoritySelectionMismatch
+                ))
+            ));
+        }
+
+        drop(store);
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

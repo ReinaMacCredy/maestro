@@ -34,7 +34,7 @@
   ],
   "publication_state": "inactive_candidate",
   "result": "semantic_closure_validated",
-  "root_id": "b5e2f26333706871183a581ce929babafccb7f0db417f904c205074c7f75a7ce",
+  "root_id": "120d7e2a998a885ab8242655eee781df759c106ffaee3e2e5d2a81056151474c",
   "schema_version": "maestro.vnext.stage2.authority.semantic-validation-receipt.v1",
   "semantic_counts": {
     "action_authority_bases": 3,
