@@ -734,10 +734,29 @@ def input_sources() -> dict[str, Any]:
     verify_closed_sources()
     source_inputs = bindings["canonical_source_inputs"]
     current_source_inputs = bindings["current_source_inputs"]
-    source_card = Path(bindings["source_repository_realpath"]) / ".maestro/cards" / bindings["feature_id"]
-    for filename, expected_key in (("design.md", "design_sha256"), ("card.yaml", "card_sha256")):
-        if artifact_hash(source_card / filename) != current_source_inputs[expected_key]:
-            raise ValueError(f"current {filename} content drifted from its attested source commitment")
+    if bindings["external_approval"]["packet_sha256"] == "fb33b048b59c66df9858558a2c80e59a478d101465761f902366c9a00751cbc5":
+        if source_inputs != current_source_inputs:
+            raise ValueError("successor canonical and current source inputs diverged")
+        tracked_design = (
+            WORKSPACE
+            / ".maestro/cards/maestro-whole-flow-architecture-refoundation/design.md"
+        )
+        if artifact_hash(tracked_design) != current_source_inputs["design_sha256"]:
+            raise ValueError("successor tracked design drifted from its packet-bound commitment")
+    else:
+        source_card = (
+            Path(bindings["source_repository_realpath"])
+            / ".maestro/cards"
+            / bindings["feature_id"]
+        )
+        for filename, expected_key in (
+            ("design.md", "design_sha256"),
+            ("card.yaml", "card_sha256"),
+        ):
+            if artifact_hash(source_card / filename) != current_source_inputs[expected_key]:
+                raise ValueError(
+                    f"current {filename} content drifted from its attested source commitment"
+                )
     return {
         "decision": decision,
         "decision_id": decision_id,

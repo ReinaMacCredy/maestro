@@ -85,10 +85,13 @@ COMPILATION_ANCESTORS = [
 AUTHORITY_EXTENSION_SOURCES = [
     "src/domain/vnext/authority/action_basis.rs",
     "src/domain/vnext/authority/continuity/trusted_time.rs",
+    "src/domain/vnext/authority/downstream_action_basis.rs",
     "src/domain/vnext/authority/facade.rs",
     "src/domain/vnext/authority/facade/repository_admission.rs",
     "src/domain/vnext/authority/facade/repository_leaf_authority.rs",
+    "src/domain/vnext/authority/materialization.rs",
     "src/domain/vnext/authority/mod.rs",
+    "src/foundation/core/secure_fs.rs",
 ]
 FOCAL_STEP_EVIDENCE_SOURCES = [
     "src/domain/vnext/evidence/mod.rs",

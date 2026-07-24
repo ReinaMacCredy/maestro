@@ -4,6 +4,14 @@
 //! It does not own domain policy, authority, lifecycle, Projection, or
 //! cross-Store atomicity.
 
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "Stage 5 freezes the Persistence-owned consumer current-view lease before its Stage 9 consumer"
+    )
+)]
+pub(in crate::domain::vnext) mod consumer_snapshot;
 mod export;
 mod generation;
 mod idempotency;

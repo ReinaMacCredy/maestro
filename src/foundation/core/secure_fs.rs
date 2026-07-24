@@ -70,6 +70,166 @@ pub(crate) struct RegularFileBinding {
     identity: platform::RegularFileIdentity,
 }
 
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub(crate) enum DescriptorCensusObjectKindV1 {
+    RegularFile,
+    SymbolicLink,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct DescriptorCensusLimitsV1 {
+    maximum_depth: usize,
+    maximum_entries: usize,
+    maximum_leaf_bytes: usize,
+    maximum_total_bytes: usize,
+    maximum_link_target_bytes: usize,
+    maximum_name_bytes: usize,
+}
+
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "Stage 4 freezes bounded descriptor census limits before their Stage 11 consumer"
+    )
+)]
+impl DescriptorCensusLimitsV1 {
+    pub(crate) const fn bounded(
+        maximum_depth: usize,
+        maximum_entries: usize,
+        maximum_leaf_bytes: usize,
+        maximum_total_bytes: usize,
+        maximum_link_target_bytes: usize,
+        maximum_name_bytes: usize,
+    ) -> Option<Self> {
+        if maximum_depth == 0
+            || maximum_depth > MAX_COMPONENTS
+            || maximum_entries == 0
+            || maximum_leaf_bytes == 0
+            || maximum_leaf_bytes > MAX_FILE_BYTES
+            || maximum_total_bytes == 0
+            || maximum_link_target_bytes == 0
+            || maximum_link_target_bytes > MAX_PATH_BYTES
+            || maximum_name_bytes == 0
+            || maximum_name_bytes > MAX_COMPONENT_BYTES
+        {
+            return None;
+        }
+        Some(Self {
+            maximum_depth,
+            maximum_entries,
+            maximum_leaf_bytes,
+            maximum_total_bytes,
+            maximum_link_target_bytes,
+            maximum_name_bytes,
+        })
+    }
+
+    pub(crate) const fn bounded_default() -> Self {
+        Self {
+            maximum_depth: MAX_COMPONENTS,
+            maximum_entries: 100_000,
+            maximum_leaf_bytes: MAX_FILE_BYTES,
+            maximum_total_bytes: MAX_FILE_BYTES * 16,
+            maximum_link_target_bytes: MAX_PATH_BYTES,
+            maximum_name_bytes: MAX_COMPONENT_BYTES,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct DescriptorCensusMutationFenceFactsV1 {
+    writer_identity: [u8; 32],
+    namespace_identity: [u8; 32],
+    monotonic_epoch: u64,
+}
+
+impl DescriptorCensusMutationFenceFactsV1 {
+    pub(in crate::foundation::core) fn from_live_owner(
+        writer_identity: [u8; 32],
+        namespace_identity: [u8; 32],
+        monotonic_epoch: u64,
+    ) -> Option<Self> {
+        if writer_identity == [0; 32] || namespace_identity == [0; 32] || monotonic_epoch == 0 {
+            return None;
+        }
+        Some(Self {
+            writer_identity,
+            namespace_identity,
+            monotonic_epoch,
+        })
+    }
+}
+
+pub(in crate::foundation::core) mod descriptor_census_sealed {
+    pub trait Sealed {}
+}
+
+pub(crate) trait DescriptorCensusMutationFenceV1: descriptor_census_sealed::Sealed {
+    fn current_facts(&self) -> Option<DescriptorCensusMutationFenceFactsV1>;
+}
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub(crate) struct DescriptorCensusRowV1 {
+    relative_name: Vec<u8>,
+    kind: DescriptorCensusObjectKindV1,
+    logical_byte_length: u64,
+    object_identity: [u8; 32],
+    content_identity: [u8; 32],
+}
+
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "Stage 4 freezes descriptor census object bindings before their Stage 11 consumer"
+    )
+)]
+impl DescriptorCensusRowV1 {
+    pub(crate) fn relative_name(&self) -> &[u8] {
+        &self.relative_name
+    }
+
+    pub(crate) const fn kind(&self) -> DescriptorCensusObjectKindV1 {
+        self.kind
+    }
+
+    pub(crate) const fn logical_byte_length(&self) -> u64 {
+        self.logical_byte_length
+    }
+
+    pub(crate) const fn object_identity(&self) -> [u8; 32] {
+        self.object_identity
+    }
+
+    pub(crate) const fn content_identity(&self) -> [u8; 32] {
+        self.content_identity
+    }
+}
+
+#[derive(Eq, PartialEq)]
+pub(crate) struct DescriptorAnchoredCensusV1 {
+    rows: Vec<DescriptorCensusRowV1>,
+    identity: [u8; 32],
+}
+
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "Stage 4 freezes the descriptor-anchored census before its Stage 11 consumer"
+    )
+)]
+impl DescriptorAnchoredCensusV1 {
+    pub(crate) fn rows(&self) -> &[DescriptorCensusRowV1] {
+        &self.rows
+    }
+
+    pub(crate) const fn identity(&self) -> [u8; 32] {
+        self.identity
+    }
+}
+
 impl std::fmt::Debug for RegularFileBinding {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str("RegularFileBinding(..)")
@@ -92,8 +252,11 @@ mod platform {
     use sha2::{Digest, Sha256};
 
     use super::{
-        CreateIfAbsent, MAX_COMPONENT_BYTES, MAX_COMPONENTS, MAX_PATH_BYTES, RegularFileBinding,
-        SecureDirectoryEntry, SecureDirectoryEntryKind, SecureFsError, SecureFsResult,
+        CreateIfAbsent, DescriptorAnchoredCensusV1, DescriptorCensusLimitsV1,
+        DescriptorCensusMutationFenceFactsV1, DescriptorCensusMutationFenceV1,
+        DescriptorCensusObjectKindV1, DescriptorCensusRowV1, MAX_COMPONENT_BYTES, MAX_COMPONENTS,
+        MAX_PATH_BYTES, RegularFileBinding, SecureDirectoryEntry, SecureDirectoryEntryKind,
+        SecureFsError, SecureFsResult,
     };
 
     #[cfg(target_os = "linux")]
@@ -193,6 +356,12 @@ mod platform {
             flags: c_uint,
         ) -> c_int;
         fn unlinkat(directory: c_int, path: *const c_char, flags: c_int) -> c_int;
+        fn readlinkat(
+            directory: c_int,
+            path: *const c_char,
+            buffer: *mut c_char,
+            size: usize,
+        ) -> isize;
         fn linkat(
             old_directory: c_int,
             old_path: *const c_char,
@@ -306,6 +475,86 @@ mod platform {
 
         pub(crate) fn read_dir_entries(&self) -> SecureFsResult<Vec<SecureDirectoryEntry>> {
             descriptor_directory_entries(self)
+        }
+
+        #[cfg_attr(
+            not(test),
+            expect(
+                dead_code,
+                reason = "Stage 4 freezes the Foundation census entry before its Stage 11 consumer"
+            )
+        )]
+        pub(crate) fn descriptor_anchored_census<F: DescriptorCensusMutationFenceV1>(
+            &self,
+            limits: DescriptorCensusLimitsV1,
+            fence: &mut F,
+        ) -> SecureFsResult<DescriptorAnchoredCensusV1> {
+            let observed_fence =
+                fence
+                    .current_facts()
+                    .ok_or_else(|| SecureFsError::UnsafeObject {
+                        path: self.path.clone(),
+                        reason: "descriptor census mutation fence is unavailable",
+                    })?;
+            let initial_fence = DescriptorCensusMutationFenceFactsV1::from_live_owner(
+                observed_fence.writer_identity,
+                observed_fence.namespace_identity,
+                observed_fence.monotonic_epoch,
+            )
+            .ok_or_else(|| SecureFsError::UnsafeObject {
+                path: self.path.clone(),
+                reason: "descriptor census mutation fence is invalid",
+            })?;
+            let initial_root = FileIdentity::from(&metadata(&self.directory, &self.path)?);
+            let first = descriptor_census_pass(self, initial_root.device, limits)?;
+            self.verify_path_binding()?;
+            let second_root = FileIdentity::from(&metadata(&self.directory, &self.path)?);
+            let second = descriptor_census_pass(self, initial_root.device, limits)?;
+            if initial_root != second_root
+                || first != second
+                || fence.current_facts() != Some(initial_fence)
+            {
+                return Err(SecureFsError::ChangedDuringRead {
+                    path: self.path.clone(),
+                });
+            }
+            if first
+                .windows(2)
+                .any(|rows| rows[0].relative_name == rows[1].relative_name)
+            {
+                return Err(SecureFsError::UnsafeObject {
+                    path: self.path.clone(),
+                    reason: "descriptor census contains a duplicate relative locator",
+                });
+            }
+            let mut object_identities = first
+                .iter()
+                .map(|row| row.object_identity)
+                .collect::<Vec<_>>();
+            object_identities.sort_unstable();
+            if object_identities.windows(2).any(|rows| rows[0] == rows[1]) {
+                return Err(SecureFsError::UnsafeObject {
+                    path: self.path.clone(),
+                    reason: "descriptor census contains an object identity alias",
+                });
+            }
+            let mut hasher = Sha256::new();
+            hasher.update(b"maestro.foundation.descriptor-anchored-census.v1\0");
+            for row in &first {
+                hasher.update((row.relative_name.len() as u64).to_be_bytes());
+                hasher.update(&row.relative_name);
+                hasher.update([match row.kind {
+                    DescriptorCensusObjectKindV1::RegularFile => 1,
+                    DescriptorCensusObjectKindV1::SymbolicLink => 2,
+                }]);
+                hasher.update(row.logical_byte_length.to_be_bytes());
+                hasher.update(row.object_identity);
+                hasher.update(row.content_identity);
+            }
+            Ok(DescriptorAnchoredCensusV1 {
+                rows: first,
+                identity: hasher.finalize().into(),
+            })
         }
 
         pub fn create_file_if_absent(
@@ -791,6 +1040,299 @@ mod platform {
         }
         entries.sort_by(|left, right| left.name.cmp(&right.name));
         Ok(entries)
+    }
+
+    fn descriptor_census_pass(
+        root: &SecureRoot,
+        root_device: u64,
+        limits: DescriptorCensusLimitsV1,
+    ) -> SecureFsResult<Vec<DescriptorCensusRowV1>> {
+        let mut state = DescriptorCensusTraversalV1 {
+            root_device,
+            limits,
+            total_bytes: 0,
+            rows: Vec::new(),
+        };
+        descriptor_census_directory(&root.directory, &root.path, &[], 0, &mut state)?;
+        state.rows.sort();
+        Ok(state.rows)
+    }
+
+    struct DescriptorCensusTraversalV1 {
+        root_device: u64,
+        limits: DescriptorCensusLimitsV1,
+        total_bytes: usize,
+        rows: Vec<DescriptorCensusRowV1>,
+    }
+
+    fn descriptor_census_directory(
+        directory: &File,
+        display_path: &Path,
+        relative_prefix: &[u8],
+        depth: usize,
+        state: &mut DescriptorCensusTraversalV1,
+    ) -> SecureFsResult<()> {
+        if depth > state.limits.maximum_depth {
+            return Err(SecureFsError::InvalidPath {
+                path: display_path.to_path_buf(),
+                reason: "census path exceeds the configured depth limit",
+            });
+        }
+        let initial_directory = FileIdentity::from(&metadata(directory, display_path)?);
+        if initial_directory.device != state.root_device {
+            return Err(unsafe_object(
+                display_path,
+                "census directory crosses the root mount",
+            ));
+        }
+        let dot = c".";
+        let stream_directory =
+            open_directory_at_unchecked(directory.as_raw_fd(), dot, display_path)?;
+        let descriptor = stream_directory.into_raw_fd();
+        let stream = unsafe { fdopendir(descriptor) };
+        if stream.is_null() {
+            let source = io::Error::last_os_error();
+            unsafe {
+                drop(File::from_raw_fd(descriptor));
+            }
+            return Err(SecureFsError::Io {
+                operation: "open descriptor-anchored census stream",
+                path: display_path.to_path_buf(),
+                source,
+            });
+        }
+        let stream = OwnedDirectoryStream(stream);
+        let mut names = Vec::new();
+        loop {
+            unsafe {
+                *errno_location() = 0;
+            }
+            let record = unsafe { readdir(stream.0) };
+            if record.is_null() {
+                let errno = unsafe { *errno_location() };
+                if errno != 0 {
+                    return Err(SecureFsError::Io {
+                        operation: "enumerate descriptor-anchored census",
+                        path: display_path.to_path_buf(),
+                        source: io::Error::from_raw_os_error(errno),
+                    });
+                }
+                break;
+            }
+            let name = unsafe { directory_entry_name(&*record) }?;
+            if name == b"." || name == b".." {
+                continue;
+            }
+            if name.is_empty()
+                || name.len() > state.limits.maximum_name_bytes.min(MAX_COMPONENT_BYTES)
+                || name.contains(&0)
+            {
+                return Err(SecureFsError::InvalidPath {
+                    path: display_path.to_path_buf(),
+                    reason: "census entry is not a lossless bounded name",
+                });
+            }
+            names.push(name.to_vec());
+        }
+        names.sort();
+        drop(stream);
+
+        for name in names {
+            if state.rows.len() >= state.limits.maximum_entries {
+                return Err(unsafe_object(
+                    display_path,
+                    "census exceeds the configured entry limit",
+                ));
+            }
+            let component = CString::new(name.clone()).map_err(|_| SecureFsError::InvalidPath {
+                path: display_path.to_path_buf(),
+                reason: "census entry contains a nul byte",
+            })?;
+            let path = display_path.join(OsStr::from_bytes(&name));
+            let mut relative = relative_prefix.to_vec();
+            let component_count = relative_prefix.iter().filter(|byte| **byte == b'/').count()
+                + usize::from(!relative_prefix.is_empty())
+                + 1;
+            let required_bytes = relative.len() + usize::from(!relative.is_empty()) + name.len();
+            if component_count > MAX_COMPONENTS || required_bytes > MAX_PATH_BYTES {
+                return Err(SecureFsError::InvalidPath {
+                    path,
+                    reason: "census path exceeds the bounded relative-name grammar",
+                });
+            }
+            if !relative.is_empty() {
+                relative.push(b'/');
+            }
+            relative.extend_from_slice(&name);
+
+            if let Some(target) = read_link_at(directory.as_raw_fd(), &component, &path)? {
+                if target.len() > state.limits.maximum_link_target_bytes {
+                    return Err(unsafe_object(
+                        &path,
+                        "symbolic-link target exceeds the configured byte limit",
+                    ));
+                }
+                let link = open_symlink_at(directory.as_raw_fd(), &component, &path)?;
+                let identity = FileIdentity::from(&metadata(&link, &path)?);
+                validate_census_leaf(&path, identity, state.root_device)?;
+                state.total_bytes =
+                    state.total_bytes.checked_add(target.len()).ok_or_else(|| {
+                        unsafe_object(&path, "census total logical byte count overflowed")
+                    })?;
+                if state.total_bytes > state.limits.maximum_total_bytes {
+                    return Err(unsafe_object(
+                        &path,
+                        "census exceeds the configured total logical byte limit",
+                    ));
+                }
+                state.rows.push(DescriptorCensusRowV1 {
+                    relative_name: relative,
+                    kind: DescriptorCensusObjectKindV1::SymbolicLink,
+                    logical_byte_length: target.len() as u64,
+                    object_identity: census_object_identity(identity),
+                    content_identity: Sha256::digest(target).into(),
+                });
+                continue;
+            }
+
+            let descriptor = unsafe {
+                openat(
+                    directory.as_raw_fd(),
+                    component.as_ptr(),
+                    flags::O_RDONLY | flags::O_NOFOLLOW | flags::O_CLOEXEC | flags::O_NONBLOCK,
+                )
+            };
+            let mut object =
+                descriptor_to_file(descriptor, "open descriptor-anchored census entry", &path)?;
+            let identity = FileIdentity::from(&metadata(&object, &path)?);
+            if identity.device != state.root_device {
+                return Err(unsafe_object(&path, "census entry crosses the root mount"));
+            }
+            let object_metadata = metadata(&object, &path)?;
+            if object_metadata.is_dir() {
+                validate_directory(&object, &path)?;
+                descriptor_census_directory(&object, &path, &relative, depth + 1, state)?;
+            } else if object_metadata.is_file() {
+                validate_census_leaf(&path, identity, state.root_device)?;
+                let content = read_stable(&mut object, &path)?;
+                if content.len() > state.limits.maximum_leaf_bytes {
+                    return Err(unsafe_object(
+                        &path,
+                        "census leaf exceeds the configured logical byte limit",
+                    ));
+                }
+                state.total_bytes =
+                    state
+                        .total_bytes
+                        .checked_add(content.len())
+                        .ok_or_else(|| {
+                            unsafe_object(&path, "census total logical byte count overflowed")
+                        })?;
+                if state.total_bytes > state.limits.maximum_total_bytes {
+                    return Err(unsafe_object(
+                        &path,
+                        "census exceeds the configured total logical byte limit",
+                    ));
+                }
+                state.rows.push(DescriptorCensusRowV1 {
+                    relative_name: relative,
+                    kind: DescriptorCensusObjectKindV1::RegularFile,
+                    logical_byte_length: content.len() as u64,
+                    object_identity: census_object_identity(identity),
+                    content_identity: Sha256::digest(content).into(),
+                });
+            } else {
+                return Err(unsafe_object(
+                    &path,
+                    "census entry is not a directory, regular file, or symbolic link",
+                ));
+            }
+        }
+        if FileIdentity::from(&metadata(directory, display_path)?) != initial_directory {
+            return Err(SecureFsError::ChangedDuringRead {
+                path: display_path.to_path_buf(),
+            });
+        }
+        Ok(())
+    }
+
+    fn validate_census_leaf(
+        path: &Path,
+        identity: FileIdentity,
+        root_device: u64,
+    ) -> SecureFsResult<()> {
+        if identity.device != root_device {
+            return Err(unsafe_object(path, "census leaf crosses the root mount"));
+        }
+        if identity.links != 1 {
+            return Err(unsafe_object(
+                path,
+                "census leaf must have exactly one filesystem link",
+            ));
+        }
+        Ok(())
+    }
+
+    fn census_object_identity(identity: FileIdentity) -> [u8; 32] {
+        let mut hasher = Sha256::new();
+        hasher.update(b"maestro.foundation.descriptor-object-binding.v1\0");
+        hasher.update(identity.device.to_be_bytes());
+        hasher.update(identity.inode.to_be_bytes());
+        hasher.update(identity.len.to_be_bytes());
+        hasher.update(identity.mtime.0.to_be_bytes());
+        hasher.update(identity.mtime.1.to_be_bytes());
+        hasher.update(identity.ctime.0.to_be_bytes());
+        hasher.update(identity.ctime.1.to_be_bytes());
+        hasher.update(identity.links.to_be_bytes());
+        hasher.update(identity.owner.to_be_bytes());
+        hasher.update(identity.mode.to_be_bytes());
+        hasher.finalize().into()
+    }
+
+    fn read_link_at(directory: RawFd, name: &CStr, path: &Path) -> SecureFsResult<Option<Vec<u8>>> {
+        let mut bytes = vec![0u8; MAX_PATH_BYTES + 1];
+        let length = unsafe {
+            readlinkat(
+                directory,
+                name.as_ptr(),
+                bytes.as_mut_ptr().cast::<c_char>(),
+                bytes.len(),
+            )
+        };
+        if length == -1 {
+            let source = io::Error::last_os_error();
+            if source.raw_os_error() == Some(22) {
+                return Ok(None);
+            }
+            return Err(SecureFsError::Io {
+                operation: "read symbolic link without following it",
+                path: path.to_path_buf(),
+                source,
+            });
+        }
+        let length =
+            usize::try_from(length).map_err(|_| unsafe_object(path, "invalid link size"))?;
+        if length == 0 || length > MAX_PATH_BYTES {
+            return Err(unsafe_object(
+                path,
+                "symbolic-link target is not lossless and bounded",
+            ));
+        }
+        bytes.truncate(length);
+        Ok(Some(bytes))
+    }
+
+    fn open_symlink_at(directory: RawFd, name: &CStr, path: &Path) -> SecureFsResult<File> {
+        #[cfg(target_os = "linux")]
+        const OPEN_LINK: c_int = 0o10000000 | flags::O_NOFOLLOW;
+        #[cfg(target_os = "macos")]
+        const OPEN_LINK: c_int = 0x20_0000;
+        let descriptor = unsafe { openat(directory, name.as_ptr(), OPEN_LINK | flags::O_CLOEXEC) };
+        descriptor_to_file(
+            descriptor,
+            "open symbolic-link identity without following it",
+            path,
+        )
     }
 
     #[cfg(target_os = "linux")]
@@ -1915,7 +2457,9 @@ mod platform {
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
 mod platform {
     use super::{
-        CreateIfAbsent, RegularFileBinding, SecureDirectoryEntry, SecureFsError, SecureFsResult,
+        CreateIfAbsent, DescriptorAnchoredCensusV1, DescriptorCensusLimitsV1,
+        DescriptorCensusMutationFenceV1, RegularFileBinding, SecureDirectoryEntry, SecureFsError,
+        SecureFsResult,
     };
     use std::path::Path;
 
@@ -1941,6 +2485,20 @@ mod platform {
             unsupported()
         }
         pub(crate) fn read_dir_entries(&self) -> SecureFsResult<Vec<SecureDirectoryEntry>> {
+            unsupported()
+        }
+        #[cfg_attr(
+            not(test),
+            expect(
+                dead_code,
+                reason = "Stage 4 freezes the Foundation census entry before its Stage 11 consumer"
+            )
+        )]
+        pub(crate) fn descriptor_anchored_census<F: DescriptorCensusMutationFenceV1>(
+            &self,
+            _limits: DescriptorCensusLimitsV1,
+            _fence: &mut F,
+        ) -> SecureFsResult<DescriptorAnchoredCensusV1> {
             unsupported()
         }
         pub fn open_dir(&self, _path: impl AsRef<Path>) -> SecureFsResult<Self> {
@@ -2053,6 +2611,7 @@ pub use platform::SecureRoot;
 
 #[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
 mod tests {
+    use std::cell::Cell;
     use std::ffi::{CString, OsStr};
     use std::fs;
     use std::os::unix::ffi::OsStrExt;
@@ -2066,9 +2625,52 @@ mod tests {
         removal_resolution_bytes, removal_resolution_name_for_digest,
         removal_sentinel_name_for_digest,
     };
-    use super::{CreateIfAbsent, SecureFsError, SecureRoot};
+    use super::{
+        CreateIfAbsent, DescriptorCensusLimitsV1, DescriptorCensusMutationFenceFactsV1,
+        DescriptorCensusMutationFenceV1, DescriptorCensusObjectKindV1, MAX_COMPONENT_BYTES,
+        MAX_COMPONENTS, MAX_FILE_BYTES, MAX_PATH_BYTES, SecureFsError, SecureRoot,
+        descriptor_census_sealed,
+    };
 
     static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    struct TestCensusFence {
+        epoch: Cell<u64>,
+    }
+
+    impl TestCensusFence {
+        const fn new() -> Self {
+            Self {
+                epoch: Cell::new(1),
+            }
+        }
+    }
+
+    impl descriptor_census_sealed::Sealed for TestCensusFence {}
+
+    impl DescriptorCensusMutationFenceV1 for TestCensusFence {
+        fn current_facts(&self) -> Option<DescriptorCensusMutationFenceFactsV1> {
+            DescriptorCensusMutationFenceFactsV1::from_live_owner(
+                [1; 32],
+                [2; 32],
+                self.epoch.get(),
+            )
+        }
+    }
+
+    struct TurningCensusFence {
+        calls: Cell<u64>,
+    }
+
+    impl descriptor_census_sealed::Sealed for TurningCensusFence {}
+
+    impl DescriptorCensusMutationFenceV1 for TurningCensusFence {
+        fn current_facts(&self) -> Option<DescriptorCensusMutationFenceFactsV1> {
+            let call = self.calls.get() + 1;
+            self.calls.set(call);
+            DescriptorCensusMutationFenceFactsV1::from_live_owner([1; 32], [2; 32], call)
+        }
+    }
 
     struct TestDir(PathBuf);
 
@@ -2561,6 +3163,82 @@ mod tests {
         assert!(matches!(
             root.read_immutable("alias"),
             Err(SecureFsError::UnsafeObject { .. })
+        ));
+    }
+
+    #[test]
+    fn descriptor_census_binds_regular_files_and_symlinks_without_following() {
+        let temp = TestDir::new();
+        let root = SecureRoot::open_or_create(&temp.0).expect("create root");
+        root.create_dir_all("nested")
+            .expect("create nested directory");
+        root.create_file_if_absent("nested/object", b"immutable")
+            .expect("create object");
+        symlink("nested/object", temp.0.join("object-link")).expect("create symlink");
+
+        let census = root
+            .descriptor_anchored_census(
+                DescriptorCensusLimitsV1::bounded(
+                    MAX_COMPONENTS,
+                    100_000,
+                    MAX_FILE_BYTES,
+                    MAX_FILE_BYTES * 16,
+                    MAX_PATH_BYTES,
+                    MAX_COMPONENT_BYTES,
+                )
+                .expect("bounded census limits"),
+                &mut TestCensusFence::new(),
+            )
+            .expect("build census");
+        assert_ne!(census.identity(), [0; 32]);
+        assert_eq!(census.rows().len(), 2);
+        assert_eq!(census.rows()[0].relative_name(), b"nested/object");
+        assert_eq!(
+            census.rows()[0].kind(),
+            DescriptorCensusObjectKindV1::RegularFile
+        );
+        assert_ne!(census.rows()[0].object_identity(), [0; 32]);
+        assert_ne!(census.rows()[0].content_identity(), [0; 32]);
+        assert_eq!(census.rows()[0].logical_byte_length(), 9);
+        assert_eq!(census.rows()[1].relative_name(), b"object-link");
+        assert_eq!(
+            census.rows()[1].kind(),
+            DescriptorCensusObjectKindV1::SymbolicLink
+        );
+    }
+
+    #[test]
+    fn descriptor_census_refuses_every_hard_linked_leaf() {
+        let temp = TestDir::new();
+        let root = SecureRoot::open_or_create(&temp.0).expect("create root");
+        root.create_file_if_absent("object", b"immutable")
+            .expect("create object");
+        fs::hard_link(temp.0.join("object"), temp.0.join("alias")).expect("create hard link");
+
+        assert!(matches!(
+            root.descriptor_anchored_census(
+                DescriptorCensusLimitsV1::bounded_default(),
+                &mut TestCensusFence::new()
+            ),
+            Err(SecureFsError::UnsafeObject { .. })
+        ));
+    }
+
+    #[test]
+    fn descriptor_census_refuses_mutation_fence_turnover() {
+        let temp = TestDir::new();
+        let root = SecureRoot::open_or_create(&temp.0).expect("create root");
+        root.create_file_if_absent("object", b"immutable")
+            .expect("create object");
+        let mut fence = TurningCensusFence {
+            calls: Cell::new(0),
+        };
+        assert!(matches!(
+            root.descriptor_anchored_census(
+                DescriptorCensusLimitsV1::bounded_default(),
+                &mut fence
+            ),
+            Err(SecureFsError::ChangedDuringRead { .. })
         ));
     }
 

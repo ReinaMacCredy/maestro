@@ -16,6 +16,7 @@ mod facade;
 mod grant;
 mod identity;
 mod mandate;
+pub(in crate::domain::vnext) mod materialization;
 mod post_cut;
 mod principal;
 mod protected_diagnostic_envelope;

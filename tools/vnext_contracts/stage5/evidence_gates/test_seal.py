@@ -173,7 +173,7 @@ class Stage5SnapshotTests(unittest.TestCase):
         self.assertEqual(
             json.loads(completed.stdout),
             {
-                "behavior_manifest_identity": "sha256:7647ace03d25f7d57fecc4cfcb93e5c2eaa5982a91fdb94778a3cb752e8e711e",
+                "behavior_manifest_identity": "sha256:fe5df73a47fb802b0ef87afafab04267c0b8a540931c8a6e667749f3a60131a5",
                 "exact_test_output_parser": "pass",
             },
         )

@@ -1,3 +1,11 @@
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "Stage 5 freezes the Integration-owned consumer closure before its Stage 10 consumer"
+    )
+)]
+pub(in crate::domain::vnext) mod consumer_closure;
 pub mod public_literals;
 
 mod trusted_host_diagnostic;

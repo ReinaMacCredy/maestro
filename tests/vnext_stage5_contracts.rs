@@ -201,7 +201,7 @@ fn published_stage5_three_engine_receipts_bind_one_inactive_artifact() {
     }
     assert_eq!(
         artifact["behavior_manifest_identity"],
-        "sha256:7647ace03d25f7d57fecc4cfcb93e5c2eaa5982a91fdb94778a3cb752e8e711e"
+        "sha256:fe5df73a47fb802b0ef87afafab04267c0b8a540931c8a6e667749f3a60131a5"
     );
     assert_eq!(artifact["observation_kinds"].as_array().unwrap().len(), 43);
     assert_eq!(
@@ -276,10 +276,10 @@ fn published_stage5_three_engine_receipts_bind_one_inactive_artifact() {
         assert_eq!(receipt["source_closure_sha256"], source_closure_sha256);
         assert_eq!(
             receipt["behavior_manifest_identity"],
-            "sha256:7647ace03d25f7d57fecc4cfcb93e5c2eaa5982a91fdb94778a3cb752e8e711e"
+            "sha256:fe5df73a47fb802b0ef87afafab04267c0b8a540931c8a6e667749f3a60131a5"
         );
         assert_eq!(receipt["artifact_id"], identity);
-        assert_eq!(receipt["behavior_passed"], 73);
+        assert_eq!(receipt["behavior_passed"], 86);
         assert_eq!(receipt["behavior_runs"].as_array().unwrap().len(), 9);
         assert_eq!(
             receipt["behavior_runs"][8]["label"],
@@ -316,21 +316,21 @@ fn published_stage5_three_engine_receipts_bind_one_inactive_artifact() {
     let builder_runs = builder["behavior_runs"].as_array().unwrap();
     let behavior_rows = exact_behavior_manifest_rows(builder_runs)
         .expect("the eight normal runs and terminal mutant must be exact");
-    assert_eq!(behavior_rows.len(), 73);
+    assert_eq!(behavior_rows.len(), 86);
     assert_eq!(
         behavior_rows
             .iter()
             .map(|row| serde_json::to_string(row).unwrap())
             .collect::<BTreeSet<_>>()
             .len(),
-        73
+        86
     );
     assert_eq!(
         format!(
             "sha256:{}",
             sha256(&canonical_json(&Value::Array(behavior_rows)))
         ),
-        "sha256:7647ace03d25f7d57fecc4cfcb93e5c2eaa5982a91fdb94778a3cb752e8e711e"
+        "sha256:fe5df73a47fb802b0ef87afafab04267c0b8a540931c8a6e667749f3a60131a5"
     );
     let builder_semantics = semantic_behavior_runs(&builder["behavior_runs"]);
     let validator_semantics = semantic_behavior_runs(&validator["behavior_runs"]);
@@ -388,10 +388,10 @@ fn published_stage5_three_engine_receipts_bind_one_inactive_artifact() {
         consensus["exact_behavior_receipt_sha256"],
         sha256(&canonical_json(&builder_semantics))
     );
-    assert_eq!(consensus["behavior_passed"], 73);
+    assert_eq!(consensus["behavior_passed"], 86);
     assert_eq!(
         consensus["behavior_manifest_identity"],
-        "sha256:7647ace03d25f7d57fecc4cfcb93e5c2eaa5982a91fdb94778a3cb752e8e711e"
+        "sha256:fe5df73a47fb802b0ef87afafab04267c0b8a540931c8a6e667749f3a60131a5"
     );
     assert_eq!(consensus["proof_harness_passed"], 66);
     assert_eq!(consensus["diagnostic_proof_claim"], "test_adapter_only");
@@ -494,7 +494,12 @@ fn published_stage5_three_engine_receipts_bind_one_inactive_artifact() {
     assert_eq!(historical["receipt_count"], 4);
     assert_eq!(historical["receipts_report_pass"], true);
     assert_eq!(historical["archive_matches_source_commit"], true);
-    assert_eq!(historical["canonical_files_match_archive"], true);
+    assert_eq!(historical["current_dependency_rows_bound_separately"], true);
+    assert_eq!(predecessor["current_dependency_differs_from_history"], true);
+    assert_eq!(
+        predecessor["current_dependency_files"],
+        artifact["predecessors"]
+    );
     assert!(predecessor.get("full_chain_reexecution").is_none());
     let frozen_source_rows = &snapshot_manifest["source_rows"];
     assert_eq!(frozen_source_rows.as_array().unwrap().len(), 1024);
@@ -861,7 +866,7 @@ fn semantic_behavior_runs(runs: &Value) -> Value {
             .remove("binary_sha256")
             .unwrap();
     }
-    assert_eq!(total_passed, 73);
+    assert_eq!(total_passed, 86);
 
     let (first_target, first_exact_name) = first_exact.unwrap();
     let mutant = &mut projected[normal_count];

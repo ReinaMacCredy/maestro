@@ -29,7 +29,8 @@ SOURCE_PATHS = %w[
   src/domain/vnext/authority/downstream_action_basis.rs
   src/domain/vnext/authority/facade_tests.rs
   src/domain/vnext/authority/facade/repository_admission.rs
-  src/domain/vnext/authority/facade/repository_leaf_authority.rs src/domain/vnext/authority/mod.rs
+  src/domain/vnext/authority/facade/repository_leaf_authority.rs
+  src/domain/vnext/authority/materialization.rs src/domain/vnext/authority/mod.rs
   src/domain/vnext/authority/protected_diagnostic_envelope.rs
   src/domain/vnext/authority/protected_diagnostic_envelope_stage8_seed.rs
   src/domain/vnext/authority/result.rs
@@ -38,12 +39,16 @@ SOURCE_PATHS = %w[
   src/domain/vnext/evidence/erasure.rs src/domain/vnext/evidence/identity.rs
   src/domain/vnext/evidence/mod.rs src/domain/vnext/evidence/observation.rs
   src/domain/vnext/evidence/submission_claim.rs src/domain/vnext/execution/store.rs
+  src/domain/vnext/execution/h3_withdrawal_publication.rs src/domain/vnext/execution/mod.rs
   src/domain/vnext/execution/runtime.rs
   src/domain/vnext/evidence/store.rs src/domain/vnext/gate/mod.rs
+  src/domain/vnext/installation/consumer_snapshot.rs src/domain/vnext/installation/mod.rs
+  src/domain/vnext/integration/consumer_closure.rs
   src/domain/vnext/integration/mod.rs
   src/domain/vnext/integration/trusted_host_diagnostic.rs
   src/domain/vnext/integration/trusted_host_diagnostic_stage10_seed.rs
-  src/domain/vnext/persistence/mod.rs src/domain/vnext/persistence/idempotency.rs
+  src/domain/vnext/persistence/mod.rs src/domain/vnext/persistence/consumer_snapshot.rs
+  src/domain/vnext/persistence/idempotency.rs
   src/domain/vnext/persistence/metadata.rs
   src/domain/vnext/persistence/store.rs
   src/domain/vnext/persistence/protected_diagnostic.rs
@@ -169,6 +174,10 @@ EXPECTED_RUNS = [
   ["authorized-evidence-store", "maestro", %w[
     domain::vnext::authority::action_basis::tests::downstream_leaves_are_materialized_but_have_no_stage_five_admission_basis
     domain::vnext::authority::action_basis::tests::stage_five_owner_dispatch_is_total_and_never_admits_a_later_owner
+    domain::vnext::authority::downstream_action_basis::tests::scheduling_policy_publication_has_one_named_exact_typed_leaf
+    domain::vnext::authority::materialization::tests::downgrade_mandate_and_action_binding_are_one_use_and_exact
+    domain::vnext::authority::materialization::tests::equivalent_policy_and_cross_transaction_substitution_refuse_without_consumption
+    domain::vnext::authority::materialization::tests::wrong_owner_action_cannot_enter_the_scheduling_binding
     domain::vnext::authority::facade::repository_leaf_authority::tests::inert_downstream_leaves_cannot_enter_the_stage_five_authority_carrier
     domain::vnext::authority::facade::tests::protected_continuity_diagnostic_guard_is_non_oracular_across_subjects
     domain::vnext::authority::facade::tests::protected_continuity_diagnostic_guard_is_subject_bound_and_zero_write
@@ -196,6 +205,15 @@ EXPECTED_RUNS = [
     domain::vnext::persistence::idempotency::tests::publication_builder_reduces_a_superset_to_the_exact_generation_closure
     domain::vnext::repository::tests::work_completion_atomically_persists_claim_gate_and_submission_proof
     domain::vnext::repository::tests::work_completion_requires_and_commits_the_exact_current_satisfied_step_submission_closure
+    domain::vnext::execution::h3_withdrawal_publication::tests::all_three_homes_require_the_exact_causal_branch_and_one_use_finality
+    domain::vnext::execution::h3_withdrawal_publication::tests::cross_branch_and_complete_meaning_substitution_refuse_without_consumption
+    domain::vnext::execution::h3_withdrawal_publication::tests::pre_store_has_no_destination_root_or_candidate_seal_field
+    domain::vnext::installation::consumer_snapshot::tests::caller_gate_stage_and_post_issue_currentness_substitution_refuse
+    domain::vnext::installation::consumer_snapshot::tests::owner_issued_snapshot_joins_store_and_host_until_both_final_rechecks
+    domain::vnext::installation::consumer_snapshot::tests::pre_store_is_pre_currentness_only_and_has_no_final_root_or_candidate_seal
+    foundation::core::secure_fs::tests::descriptor_census_binds_regular_files_and_symlinks_without_following
+    foundation::core::secure_fs::tests::descriptor_census_refuses_every_hard_linked_leaf
+    foundation::core::secure_fs::tests::descriptor_census_refuses_mutation_fence_turnover
     foundation::core::secure_fs::tests::digest_addressed_removal_recovers_after_payload_unlink_and_marker_crashes
     foundation::core::secure_fs::tests::digest_addressed_removal_recovers_after_the_quarantine_rename
     foundation::core::secure_fs::tests::crash_residual_temp_blocks_absence_until_digest_bound_cleanup
@@ -233,7 +251,7 @@ EXPECTED_RUNS = [
   ]]
 ].freeze
 EXPECTED_TESTS = EXPECTED_RUNS.sum { |row| row.fetch(2).length }
-EXPECTED_BEHAVIOR_MANIFEST_IDENTITY = "sha256:7647ace03d25f7d57fecc4cfcb93e5c2eaa5982a91fdb94778a3cb752e8e711e"
+EXPECTED_BEHAVIOR_MANIFEST_IDENTITY = "sha256:fe5df73a47fb802b0ef87afafab04267c0b8a540931c8a6e667749f3a60131a5"
 
 def head(major, value)
   raise "CBOR unsigned value exceeds u64" unless value.between?(0, 0xffffffffffffffff)

@@ -5,10 +5,12 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import json
 import os
 import re
 import stat
+import tarfile
 from pathlib import Path
 from typing import Any
 
@@ -20,10 +22,10 @@ EXPECTED_STAGE4_SOURCE_ARCHIVE_LENGTH = 16_486_231
 EXPECTED_STAGE4_SOURCE_ARCHIVE_SHA256 = (
     "347eaf928f81d9ce6e07e3767f0cdaf2cde23cd98d13bad41b745d5fbc359910"
 )
-EXPECTED_BEHAVIOR_TESTS = 73
+EXPECTED_BEHAVIOR_TESTS = 86
 EXPECTED_PROOF_HARNESS_TESTS = 66
 EXPECTED_BEHAVIOR_MANIFEST_IDENTITY = (
-    "sha256:7647ace03d25f7d57fecc4cfcb93e5c2eaa5982a91fdb94778a3cb752e8e711e"
+    "sha256:fe5df73a47fb802b0ef87afafab04267c0b8a540931c8a6e667749f3a60131a5"
 )
 EXPECTED_OBSERVATION_CONTRACT_TABLE_IDENTITY = (
     "sha256:a5f0e9137c091972802cb7084d86070a930091f0570cefcc7df445074478a676"
@@ -73,7 +75,7 @@ ARTIFACT_KEYS = {
 EXPECTED_NORMAL_RUNS = (
     ("assessment-kernel", "maestro", 15),
     ("submission-evidence-join", "maestro", 5),
-    ("authorized-evidence-store", "maestro", 34),
+    ("authorized-evidence-store", "maestro", 47),
     ("work-completion-boundary", "vnext_work_lifecycle", 1),
     ("claim-contracts", "vnext_evidence_claims", 5),
     ("submission-claim-carrier", "vnext_submission_claim_set", 4),
@@ -181,6 +183,7 @@ ARTIFACT_SOURCE_PATHS = (
     "src/domain/vnext/authority/facade_tests.rs",
     "src/domain/vnext/authority/facade/repository_admission.rs",
     "src/domain/vnext/authority/facade/repository_leaf_authority.rs",
+    "src/domain/vnext/authority/materialization.rs",
     "src/domain/vnext/authority/mod.rs",
     "src/domain/vnext/authority/protected_diagnostic_envelope.rs",
     "src/domain/vnext/authority/protected_diagnostic_envelope_stage8_seed.rs",
@@ -194,13 +197,19 @@ ARTIFACT_SOURCE_PATHS = (
     "src/domain/vnext/evidence/observation.rs",
     "src/domain/vnext/evidence/submission_claim.rs",
     "src/domain/vnext/evidence/store.rs",
+    "src/domain/vnext/execution/h3_withdrawal_publication.rs",
+    "src/domain/vnext/execution/mod.rs",
     "src/domain/vnext/execution/store.rs",
     "src/domain/vnext/execution/runtime.rs",
     "src/domain/vnext/gate/mod.rs",
+    "src/domain/vnext/installation/consumer_snapshot.rs",
+    "src/domain/vnext/installation/mod.rs",
+    "src/domain/vnext/integration/consumer_closure.rs",
     "src/domain/vnext/integration/mod.rs",
     "src/domain/vnext/integration/trusted_host_diagnostic.rs",
     "src/domain/vnext/integration/trusted_host_diagnostic_stage10_seed.rs",
     "src/domain/vnext/persistence/mod.rs",
+    "src/domain/vnext/persistence/consumer_snapshot.rs",
     "src/domain/vnext/persistence/idempotency.rs",
     "src/domain/vnext/persistence/metadata.rs",
     "src/domain/vnext/persistence/store.rs",
@@ -344,17 +353,44 @@ def snapshot_rows(root: Path) -> list[list[object]]:
     return rows
 
 
+def historical_predecessor_rows(source_archive: bytes) -> list[list[object]] | None:
+    rows: list[list[object]] = []
+    seen: set[str] = set()
+    try:
+        with tarfile.open(fileobj=io.BytesIO(source_archive), mode="r:gz") as archive:
+            for member in archive.getmembers():
+                if member.name not in PREDECESSOR_PATHS:
+                    continue
+                if member.name in seen or not member.isfile():
+                    return None
+                stream = archive.extractfile(member)
+                if stream is None:
+                    return None
+                data = stream.read()
+                digest = sha256(data)
+                if EXPECTED_PREDECESSOR_SHA256.get(member.name) != digest:
+                    return None
+                seen.add(member.name)
+                rows.append([member.name, len(data), digest])
+    except (OSError, tarfile.TarError):
+        return None
+    if seen != set(PREDECESSOR_PATHS):
+        return None
+    rows.sort(key=lambda row: PREDECESSOR_PATHS.index(str(row[0])))
+    return rows
+
+
 def validate_predecessor(predecessor: dict[str, Any], source_archive: bytes) -> bool:
-    rows = []
-    for relative in PREDECESSOR_PATHS:
-        data, _ = read_regular(WORKSPACE / relative)
-        digest = sha256(data)
-        if EXPECTED_PREDECESSOR_SHA256.get(relative) != digest:
-            return False
-        rows.append([relative, len(data), digest])
+    historical_rows = historical_predecessor_rows(source_archive)
+    if historical_rows is None:
+        return False
+    current_rows = artifact_file_rows(PREDECESSOR_PATHS)
     historical = predecessor.get("historical_receipt_validation")
     return (
-        predecessor.get("files") == rows
+        predecessor.get("files") == historical_rows
+        and predecessor.get("current_dependency_files") == current_rows
+        and predecessor.get("current_dependency_differs_from_history")
+        == (current_rows != historical_rows)
         and predecessor.get("identity") == EXPECTED_STAGE4_IDENTITY
         and predecessor.get("source_commit") == EXPECTED_STAGE4_SOURCE_COMMIT
         and predecessor.get("source_tree") == EXPECTED_STAGE4_SOURCE_TREE
@@ -364,12 +400,10 @@ def validate_predecessor(predecessor: dict[str, Any], source_archive: bytes) -> 
         == EXPECTED_STAGE4_SOURCE_ARCHIVE_SHA256
         and len(source_archive) == EXPECTED_STAGE4_SOURCE_ARCHIVE_LENGTH
         and sha256(source_archive) == EXPECTED_STAGE4_SOURCE_ARCHIVE_SHA256
-        and sha256((WORKSPACE / PREDECESSOR_PATHS[1]).read_bytes())
-        == EXPECTED_STAGE4_IDENTITY.removeprefix("sha256:")
         and historical
         == {
             "archive_matches_source_commit": True,
-            "canonical_files_match_archive": True,
+            "current_dependency_rows_bound_separately": True,
             "mode": "read_only_commit_tree_content_and_receipt_equality",
             "receipt_count": 4,
             "receipts_report_pass": True,

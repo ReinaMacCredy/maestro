@@ -27,6 +27,8 @@ struct RepositoryDownstreamActionMetadataV1 {
 pub struct RepositoryDownstreamActionLeafV1(u8);
 
 impl RepositoryDownstreamActionLeafV1 {
+    pub(super) const PUBLISH_SCHEDULING_POLICY_BINDING: Self = Self(11);
+
     pub fn all() -> [Self; DOWNSTREAM_ACTION_COUNT_V1] {
         std::array::from_fn(|index| Self::from_catalog_index(index as u8))
     }
@@ -706,6 +708,20 @@ mod tests {
         );
         assert!(RepositoryDownstreamActionLeafV1::from_global_tag(93).is_err());
         assert!(RepositoryDownstreamActionLeafV1::from_global_tag(146).is_err());
+    }
+
+    #[test]
+    fn scheduling_policy_publication_has_one_named_exact_typed_leaf() {
+        let action = RepositoryDownstreamActionLeafV1::PUBLISH_SCHEDULING_POLICY_BINDING;
+        assert_eq!(
+            action,
+            RepositoryDownstreamActionLeafV1::from_catalog_index(11)
+        );
+        assert_eq!(action.global_tag(), 105);
+        assert_eq!(action.literal(), "PublishSchedulingPolicyBinding");
+        assert_eq!(action.owner_tag(), 12);
+        assert_eq!(action.family_tag(), 10);
+        assert_eq!(action.local_tag(), 3);
     }
 
     #[test]

@@ -1372,7 +1372,6 @@ macro_rules! owner_family_authority {
         pub(crate) struct $type(RepositoryOwnerFamilyAuthorityRecordV1);
 
         impl $type {
-            #[cfg_attr(not(test), expect(dead_code, reason = $reason))]
             pub(in crate::domain::vnext) fn new(
                 selection: RepositoryAuthoritySelectionV1,
                 action: RepositoryDownstreamActionLeafV1,
@@ -1740,6 +1739,82 @@ impl From<ContinuityMaintenanceExecutionAuthorityV1> for RepositoryLeafAuthority
 impl From<ExecutionAuthorityV1> for RepositoryLeafAuthorityInputV1 {
     fn from(value: ExecutionAuthorityV1) -> Self {
         Self::Execution(value)
+    }
+}
+
+pub(in crate::domain::vnext::authority) fn construct_owner_local_repository_authority_input(
+    selection: RepositoryAuthoritySelectionV1,
+    action: RepositoryDownstreamActionLeafV1,
+    subject_commitment: [u8; 32],
+    subject_basis_commitment: [u8; 32],
+    exact_payload_commitment: [u8; 32],
+) -> Result<RepositoryLeafAuthorityInputV1, RepositoryLeafAuthorityErrorV1> {
+    match action.owner_tag() {
+        10 => CoordinationRepositoryActionAuthorityV1::new(
+            selection,
+            action,
+            subject_commitment,
+            subject_basis_commitment,
+            exact_payload_commitment,
+        )
+        .map(Into::into),
+        12 => PlanningRepositoryActionAuthorityV1::new(
+            selection,
+            action,
+            subject_commitment,
+            subject_basis_commitment,
+            exact_payload_commitment,
+        )
+        .map(Into::into),
+        14 => PersistenceRepositoryActionAuthorityV1::new(
+            selection,
+            action,
+            subject_commitment,
+            subject_basis_commitment,
+            exact_payload_commitment,
+        )
+        .map(Into::into),
+        20 => DistributionRepositoryActionAuthorityV1::new(
+            selection,
+            action,
+            subject_commitment,
+            subject_basis_commitment,
+            exact_payload_commitment,
+        )
+        .map(Into::into),
+        15 => SearchMaintenanceRepositoryActionAuthorityV1::new(
+            selection,
+            action,
+            subject_commitment,
+            subject_basis_commitment,
+            exact_payload_commitment,
+        )
+        .map(Into::into),
+        16 => MemoryRepositoryActionAuthorityV1::new(
+            selection,
+            action,
+            subject_commitment,
+            subject_basis_commitment,
+            exact_payload_commitment,
+        )
+        .map(Into::into),
+        17 => IntakeRepositoryActionAuthorityV1::new(
+            selection,
+            action,
+            subject_commitment,
+            subject_basis_commitment,
+            exact_payload_commitment,
+        )
+        .map(Into::into),
+        18 => ResearchRepositoryActionAuthorityV1::new(
+            selection,
+            action,
+            subject_commitment,
+            subject_basis_commitment,
+            exact_payload_commitment,
+        )
+        .map(Into::into),
+        _ => Err(RepositoryLeafAuthorityErrorV1::DownstreamOwnerFamilyMismatch),
     }
 }
 

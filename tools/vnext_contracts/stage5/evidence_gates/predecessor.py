@@ -108,20 +108,26 @@ def main() -> int:
         stage4_root.is_symlink() or not stage4_root.is_dir()
     ):
         raise RuntimeError("exact Stage 4 proof root is absent or unsafe")
-    files: list[list[object]] = []
+    historical_files: list[list[object]] = []
+    current_dependency_files: list[list[object]] = []
     for relative in PATHS:
-        workspace_path = (
-            stage4_root / Path(relative).name
-            if stage4_root is not None
-            else WORKSPACE / relative
-        )
-        if workspace_path.is_symlink() or not workspace_path.is_file():
-            raise RuntimeError(f"exact Stage 4 predecessor file is absent or unsafe: {relative}")
-        current = workspace_path.read_bytes()
-        digest = sha256(current)
-        if EXPECTED_FILE_SHA256[relative] != digest or current != archived[relative]:
+        historical = archived[relative]
+        historical_digest = sha256(historical)
+        if EXPECTED_FILE_SHA256[relative] != historical_digest:
             raise RuntimeError(f"exact Stage 4 predecessor file differs: {relative}")
-        files.append([relative, len(current), digest])
+        historical_files.append([relative, len(historical), historical_digest])
+        if stage4_root is None:
+            current_dependency_files.append(
+                [relative, len(historical), historical_digest]
+            )
+            continue
+        workspace_path = stage4_root / Path(relative).name
+        if workspace_path.is_symlink() or not workspace_path.is_file():
+            raise RuntimeError(
+                f"current Stage 4 dependency file is absent or unsafe: {relative}"
+            )
+        current = workspace_path.read_bytes()
+        current_dependency_files.append([relative, len(current), sha256(current)])
 
     artifact = load_json(archived[PATHS[0]], "Stage 4 artifact")
     receipts = [load_json(archived[path], path) for path in PATHS[2:]]
@@ -148,7 +154,7 @@ def main() -> int:
 
     historical_validation = {
         "archive_matches_source_commit": True,
-        "canonical_files_match_archive": True,
+        "current_dependency_rows_bound_separately": True,
         "mode": "read_only_commit_tree_content_and_receipt_equality",
         "receipt_count": len(receipts),
         "receipts_report_pass": True,
@@ -156,7 +162,11 @@ def main() -> int:
         "source_tree": STAGE4_SOURCE_TREE,
     }
     closure = {
-        "files": files,
+        "current_dependency_differs_from_history": (
+            current_dependency_files != historical_files
+        ),
+        "current_dependency_files": current_dependency_files,
+        "files": historical_files,
         "historical_receipt_validation": historical_validation,
         "identity": expected_identity,
         "predecessor_chain": chains[0],

@@ -14,12 +14,37 @@ import json
 import os
 import re
 import stat
+import subprocess
 import zlib
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_BINDINGS = ROOT / "contracts/vnext/stage0/input-bindings.json"
+SUCCESSOR_PACKET_SHA256 = "fb33b048b59c66df9858558a2c80e59a478d101465761f902366c9a00751cbc5"
+SUCCESSOR_CANDIDATE_INPUT = "c180b31a6b2649ed416eeeaa614e98960ec3eef030b69ff90a0e0f63ed1ff93e"
+SUCCESSOR_BUILD_HANDOFF = "bd1e6e55ff473250557be13bb8332df97a2c60eac62e964702e5eca67991b352"
+SUCCESSOR_PACKET_ROOT = Path("/private/tmp/maestro-vnext-materialization-successor-packet")
+SUCCESSOR_PACKET_ARTIFACT_SHA256 = "7f13c85b45799e39daedd30846b4a024d1f264134b46c3e3b3cdf720f8e5fb02"
+SUCCESSOR_PACKET_VERIFIER = Path("/private/tmp/verify_maestro_successor_packet.rb")
+SUCCESSOR_PACKET_VERIFIER_SHA256 = "66f1164216bd698b15bb73a25bbfd7cf5cb5b5c038938242d4ffc4d14dbb624d"
+SUCCESSOR_APPROVAL_LOG = Path(
+    "/Users/reinamaccredy/.codex/sessions/2026/07/11/"
+    "rollout-2026-07-11T02-55-42-019f4d99-a48a-7390-9560-7c7a9dc63a8d.jsonl"
+)
+SUCCESSOR_APPROVAL_RECORDS = {
+    "approval_task_started": "68d30466c4ba9e09447a860e434020743420f7439a943246770468cb9aafd69e",
+    "approval_user_message": "e1493db060141a0ce02b40a6d5159e90f85f694c1943116a68c74f3fe54ee3c8",
+    "session_meta": "605f7eb976f7b835ecd6cba019febbb185114d3722b6e7d8f906e60168bccf20",
+}
+SUCCESSOR_RECIPIENT_TASK = "019f4d99-a48a-7390-9560-7c7a9dc63a8d"
+SUCCESSOR_APPROVAL_TURN = "019f9154-6de5-7612-9d3f-136c4c1324fd"
+SUCCESSOR_APPROVAL_MESSAGE = "msg_019f9154-6e72-7d00-8d41-f3ef5e7917dc"
+SUCCESSOR_APPROVAL_STARTED_AT = 1784849657
+SUCCESSOR_APPROVAL_INSTRUCTION = (
+    "APPROVE BUILD PACKET sha256:"
+    f"{SUCCESSOR_PACKET_SHA256}. Execute the staged build plan."
+)
 
 
 def sha256(path: Path) -> str:
@@ -42,6 +67,159 @@ def lp(name: str, value: str) -> bytes:
 
 def digest_records(domain: bytes, records: list[tuple[str, str]]) -> str:
     return hashlib.sha256(domain + b"".join(lp(name, value) for name, value in records)).hexdigest()
+
+
+def successor_approval(bindings: dict[str, object]) -> bool:
+    approval = bindings["external_approval"]
+    assert isinstance(approval, dict)
+    return approval.get("packet_sha256") == SUCCESSOR_PACKET_SHA256
+
+
+def verify_successor_packet_artifacts(bindings: dict[str, object]) -> None:
+    approval = bindings["external_approval"]
+    event = bindings["external_approval_event"]
+    assert isinstance(approval, dict)
+    assert isinstance(event, dict)
+    require_equal("successor approved packet", approval["packet_sha256"], SUCCESSOR_PACKET_SHA256)
+    require_equal("successor candidate input", approval["candidate_input_commitment"], SUCCESSOR_CANDIDATE_INPUT)
+    require_equal("successor build handoff", approval["build_plan_handoff"], SUCCESSOR_BUILD_HANDOFF)
+    require_equal("successor packet root", event["packet_root"], str(SUCCESSOR_PACKET_ROOT))
+    require_equal("successor packet verifier", event["independent_verifier"], str(SUCCESSOR_PACKET_VERIFIER))
+    require_equal("successor packet verifier digest", event["independent_verifier_sha256"], SUCCESSOR_PACKET_VERIFIER_SHA256)
+    for label, path in (
+        ("successor packet root", SUCCESSOR_PACKET_ROOT),
+        ("successor packet verifier", SUCCESSOR_PACKET_VERIFIER),
+    ):
+        metadata = os.lstat(path)
+        if stat.S_ISLNK(metadata.st_mode):
+            raise SystemExit(f"{label} is a symlink")
+    require_equal("successor packet verifier bytes", sha256(SUCCESSOR_PACKET_VERIFIER), SUCCESSOR_PACKET_VERIFIER_SHA256)
+    packet_path = SUCCESSOR_PACKET_ROOT / "replacement-build-approval-packet.v1.json"
+    require_equal("successor packet artifact bytes", sha256(packet_path), SUCCESSOR_PACKET_ARTIFACT_SHA256)
+    packet = json.loads(packet_path.read_text(encoding="utf-8"))
+    require_equal("successor packet identity", packet["packet_sha256"], SUCCESSOR_PACKET_SHA256)
+    require_equal("successor packet candidate", packet["candidate_input"]["identity"], SUCCESSOR_CANDIDATE_INPUT)
+    require_equal("successor packet handoff", packet["build_plan_handoff"]["identity"], SUCCESSOR_BUILD_HANDOFF)
+    require_equal(
+        "successor packet Decision counts",
+        packet["decision_counts"],
+        {"locked": 117, "open": 0, "superseded": 96, "total": 213},
+    )
+    identity_state = packet["sections"]["identity_state"]["text"]
+    if (
+        "candidate_contract_root=absent-before-stage-0" not in identity_state
+        or "canonical_build_handoff=absent-before-stage-0" not in identity_state
+    ):
+        raise SystemExit("successor packet prematurely promotes an external identity")
+    completed = subprocess.run(
+        ["ruby", str(SUCCESSOR_PACKET_VERIFIER), str(SUCCESSOR_PACKET_ROOT)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode != 0:
+        raise SystemExit(f"independent successor packet verifier failed: {completed.stderr}")
+    verdict = json.loads(completed.stdout)
+    require_equal("successor packet verifier schema", verdict["schema"], "ExternalBuildApprovalPacketIndependentVerificationV1")
+    require_equal("successor packet verifier packet", verdict["packet_sha256"], SUCCESSOR_PACKET_SHA256)
+    require_equal("successor packet verifier candidate", verdict["candidate_input"], SUCCESSOR_CANDIDATE_INPUT)
+    require_equal("successor packet verifier handoff", verdict["build_plan_handoff"], SUCCESSOR_BUILD_HANDOFF)
+    require_equal("successor packet verifier status", verdict["status"], "verified")
+
+
+def verify_successor_external_approval_event(bindings: dict[str, object]) -> None:
+    event = bindings["external_approval_event"]
+    assert isinstance(event, dict)
+    required = {
+        "attestation_source",
+        "provenance_assurance",
+        "log_realpath",
+        "record_set_sha256",
+        "record_sha256",
+        "packet_publication_kind",
+        "packet_root",
+        "independent_verifier",
+        "independent_verifier_sha256",
+        "recipient_thread_id",
+        "approval_turn_id",
+        "approval_turn_started_at",
+        "user_message_id",
+        "actor_role",
+        "exact_instruction",
+    }
+    optional = {"historical_superseded_events"}
+    require_equal("successor approval event keys", set(event), required | (set(event) & optional))
+    require_equal("successor approval attestation source", event["attestation_source"], "pinned_local_codex_session_records_v1")
+    require_equal("successor approval assurance", event["provenance_assurance"], "unsigned_local_platform_log_bound_by_sha256")
+    require_equal("successor packet publication kind", event["packet_publication_kind"], "independently_verified_external_packet_v1")
+    require_equal("successor approval log", event["log_realpath"], str(SUCCESSOR_APPROVAL_LOG))
+    require_equal("successor approval recipient", event["recipient_thread_id"], SUCCESSOR_RECIPIENT_TASK)
+    require_equal("successor approval turn", event["approval_turn_id"], SUCCESSOR_APPROVAL_TURN)
+    require_equal("successor approval started", event["approval_turn_started_at"], SUCCESSOR_APPROVAL_STARTED_AT)
+    require_equal("successor approval message", event["user_message_id"], SUCCESSOR_APPROVAL_MESSAGE)
+    require_equal("successor approval actor", event["actor_role"], "user")
+    require_equal("successor approval instruction", event["exact_instruction"], SUCCESSOR_APPROVAL_INSTRUCTION)
+    record_hashes = event["record_sha256"]
+    assert isinstance(record_hashes, dict)
+    require_equal("successor approval record set", record_hashes, SUCCESSOR_APPROVAL_RECORDS)
+    expected_by_hash = {digest: name for name, digest in SUCCESSOR_APPROVAL_RECORDS.items()}
+    captured: dict[str, dict[str, object]] = {}
+    ordinals: dict[str, int] = {}
+    with SUCCESSOR_APPROVAL_LOG.open("rb") as source:
+        for ordinal, raw_line in enumerate(source, start=1):
+            name = expected_by_hash.get(hashlib.sha256(raw_line).hexdigest())
+            if name is None:
+                continue
+            if name in captured:
+                raise SystemExit(f"duplicate successor approval record: {name}")
+            record = json.loads(raw_line)
+            if not isinstance(record, dict):
+                raise SystemExit(f"successor approval record is not an object: {name}")
+            captured[name] = record
+            ordinals[name] = ordinal
+    require_equal("successor approval record closure", set(captured), set(SUCCESSOR_APPROVAL_RECORDS))
+    causal_order = ["approval_task_started", "approval_user_message", "session_meta"]
+    if [ordinals[name] for name in causal_order] != sorted(ordinals[name] for name in causal_order):
+        raise SystemExit("successor approval records are reordered")
+    capture_identity = digest_records(
+        b"maestro.external-successor-approval-capture.v1\0",
+        [
+            ("log_realpath", str(SUCCESSOR_APPROVAL_LOG)),
+            ("recipient_task_id", SUCCESSOR_RECIPIENT_TASK),
+            *[(f"{name}_sha256", SUCCESSOR_APPROVAL_RECORDS[name]) for name in causal_order],
+        ],
+    )
+    require_equal("successor approval record-set identity", event["record_set_sha256"], capture_identity)
+    started = captured["approval_task_started"]
+    require_equal("successor start record type", started["type"], "event_msg")
+    started_payload = started["payload"]
+    assert isinstance(started_payload, dict)
+    require_equal("successor start event type", started_payload["type"], "task_started")
+    require_equal("successor start turn", started_payload["turn_id"], SUCCESSOR_APPROVAL_TURN)
+    require_equal("successor start time", started_payload["started_at"], SUCCESSOR_APPROVAL_STARTED_AT)
+    message = captured["approval_user_message"]
+    require_equal("successor approval record type", message["type"], "response_item")
+    message_payload = message["payload"]
+    assert isinstance(message_payload, dict)
+    require_equal("successor approval payload type", message_payload["type"], "message")
+    require_equal("successor approval payload role", message_payload["role"], "user")
+    require_equal("successor approval payload id", message_payload["id"], SUCCESSOR_APPROVAL_MESSAGE)
+    metadata = message_payload["internal_chat_message_metadata_passthrough"]
+    assert isinstance(metadata, dict)
+    require_equal("successor approval payload turn", metadata["turn_id"], SUCCESSOR_APPROVAL_TURN)
+    require_equal(
+        "successor approval payload content",
+        message_payload["content"],
+        [{"type": "input_text", "text": SUCCESSOR_APPROVAL_INSTRUCTION + "\n"}],
+    )
+    session = captured["session_meta"]
+    require_equal("successor session record type", session["type"], "session_meta")
+    session_payload = session["payload"]
+    assert isinstance(session_payload, dict)
+    require_equal("successor session id", session_payload["session_id"], SUCCESSOR_RECIPIENT_TASK)
+    require_equal("successor session payload id", session_payload["id"], SUCCESSOR_RECIPIENT_TASK)
+    require_equal("successor session cwd", session_payload["cwd"], bindings["source_repository_realpath"])
+    verify_successor_packet_artifacts(bindings)
 
 
 def path_metadata(path: Path) -> dict[str, str]:
@@ -794,6 +972,10 @@ def verify_external_packet(bindings: dict[str, object]) -> None:
 
 
 def verify_external_approval_event(bindings: dict[str, object]) -> None:
+    if successor_approval(bindings):
+        verify_successor_external_approval_event(bindings)
+        return
+
     event = bindings["external_approval_event"]
     plan = bindings["external_build_plan"]
     approval = bindings["external_approval"]
@@ -1229,6 +1411,61 @@ def verify_decision_inventory(bindings: dict[str, object], source: Path) -> None
         raise SystemExit(f"effective composite head is absent: {head}")
 
 
+def verify_successor_source_closure(bindings: dict[str, object]) -> None:
+    packet = json.loads(
+        (SUCCESSOR_PACKET_ROOT / "replacement-build-approval-packet.v1.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    candidate_records = packet["candidate_input"]["records"]
+    assert isinstance(candidate_records, dict)
+    canonical = bindings["canonical_source_inputs"]
+    current = bindings["current_source_inputs"]
+    inventory = bindings["decision_inventory"]
+    baseline = bindings["baseline"]
+    assert isinstance(canonical, dict)
+    assert isinstance(current, dict)
+    assert isinstance(inventory, dict)
+    assert isinstance(baseline, dict)
+    expected_source = {
+        "card_sha256": "2cdf1f74843a6eca926ff3bc48e060654350e6a03b65342f8d7be48d111379b4",
+        "design_sha256": "9d5bda2be6274351ff7afba7f396595d80f9d560622991de1c8214aae0b8fc1b",
+        "decisions_sha256": "18f14bce862e15be09c9d88155d62627582df50c7754e2e8e1d6f6bee8f7d522",
+    }
+    require_equal("successor canonical source inputs", canonical, expected_source)
+    require_equal("successor current source inputs", current, expected_source)
+    for key, value in expected_source.items():
+        require_equal(f"successor packet {key}", candidate_records[key], value)
+    require_equal(
+        "successor baseline",
+        baseline,
+        {
+            "commit": "6182853d1cfaca16159af428503802707607068e",
+            "tree": "ee71253923248688ad8f0668a2cf9ecdec2ea5cb",
+        },
+    )
+    require_equal(
+        "successor Decision inventory",
+        {key: inventory[key] for key in ("total", "locked", "superseded", "open")},
+        {"total": 213, "locked": 117, "superseded": 96, "open": 0},
+    )
+    manifest = SUCCESSOR_PACKET_ROOT / "successor-decision-store-manifest.v1.txt"
+    rows = [line.split("\t") for line in manifest.read_text(encoding="utf-8").splitlines()]
+    if len(rows) != 213 or any(len(row) != 4 for row in rows):
+        raise SystemExit("successor Decision-store manifest is incomplete")
+    if len({row[0] for row in rows}) != 213:
+        raise SystemExit("successor Decision-store manifest has duplicate ids")
+    counts = {
+        status: sum(row[1] == status for row in rows)
+        for status in ("locked", "superseded", "open")
+    }
+    require_equal(
+        "successor Decision-store terminal counts",
+        counts,
+        {"locked": 117, "superseded": 96, "open": 0},
+    )
+
+
 def verify_nonpromotion(bindings: dict[str, object]) -> None:
     require_equal(
         "canonical role",
@@ -1275,15 +1512,18 @@ def main() -> None:
     )
     verify_nonpromotion(bindings)
     verify_external_control_bindings(bindings, source)
-    verify_current_control_rebind(bindings)
     verify_external_candidate_commitment(bindings)
     verify_baseline_objects(bindings, source)
-    verify_external_build_plan(bindings, source)
     verify_external_packet(bindings)
     verify_external_approval_event(bindings)
-    verify_post_approval_execution_plan_revisions(bindings)
-    verify_source_inputs(bindings, source)
-    verify_decision_inventory(bindings, source)
+    if successor_approval(bindings):
+        verify_successor_source_closure(bindings)
+    else:
+        verify_current_control_rebind(bindings)
+        verify_external_build_plan(bindings, source)
+        verify_post_approval_execution_plan_revisions(bindings)
+        verify_source_inputs(bindings, source)
+        verify_decision_inventory(bindings, source)
     print(
         json.dumps(
             {

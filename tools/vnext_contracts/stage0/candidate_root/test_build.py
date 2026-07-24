@@ -91,6 +91,29 @@ class CandidateRootBuildTest(unittest.TestCase):
         self.assertEqual(build.cbor(True), b"\xf5")
         self.assertEqual(build.cbor(0), b"\x00")
 
+    def test_successor_external_provenance_is_forbidden_from_root_values(self) -> None:
+        approval = {
+            "packet_sha256": "fb33b048b59c66df9858558a2c80e59a478d101465761f902366c9a00751cbc5",
+            "candidate_input_commitment": "c180b31a6b2649ed416eeeaa614e98960ec3eef030b69ff90a0e0f63ed1ff93e",
+            "build_plan_handoff": "bd1e6e55ff473250557be13bb8332df97a2c60eac62e964702e5eca67991b352",
+        }
+        event = {
+            "recipient_thread_id": "019f4d99-a48a-7390-9560-7c7a9dc63a8d",
+            "approval_turn_id": "019f9154-6de5-7612-9d3f-136c4c1324fd",
+            "user_message_id": "msg_019f9154-6e72-7d00-8d41-f3ef5e7917dc",
+        }
+        forbidden = build.forbidden_promotion_values(approval, event)
+        for value in (
+            *approval.values(),
+            *event.values(),
+        ):
+            with self.assertRaises(ValueError):
+                build.scan_forbidden({"candidate_root_field": value}, forbidden)
+        build.scan_forbidden(
+            {"candidate_root_field": "sha256:" + "ab" * 32},
+            forbidden,
+        )
+
     def test_closed_fixture_materializes_every_required_surface(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
@@ -297,6 +320,14 @@ class CandidateRootBuildTest(unittest.TestCase):
             original_proof_manifest = build.PROOF_MANIFEST
             original_proof_cbor = build.PROOF_MANIFEST_CBOR
             original_verify = build.verify_closed_sources
+            original_artifact_hash = build.artifact_hash
+            source_inputs = build.load(build.INPUT_BINDINGS)["current_source_inputs"]
+
+            def fixture_artifact_hash(path: Path) -> str:
+                if not path.exists() and path.name in {"card.yaml", "design.md"}:
+                    return source_inputs[f"{path.stem}_sha256"]
+                return original_artifact_hash(path)
+
             try:
                 build.RESOURCE_RELEASE = resource_release
                 build.EMBEDDED_RELEASE = embedded_release
@@ -305,6 +336,7 @@ class CandidateRootBuildTest(unittest.TestCase):
                 build.PROOF_MANIFEST = proof_manifest
                 build.PROOF_MANIFEST_CBOR = proof_manifest.with_suffix(".cbor")
                 build.verify_closed_sources = lambda: None
+                build.artifact_hash = fixture_artifact_hash
                 result = build.build()
             finally:
                 build.RESOURCE_RELEASE = original_resource
@@ -314,6 +346,7 @@ class CandidateRootBuildTest(unittest.TestCase):
                 build.PROOF_MANIFEST = original_proof_manifest
                 build.PROOF_MANIFEST_CBOR = original_proof_cbor
                 build.verify_closed_sources = original_verify
+                build.artifact_hash = original_artifact_hash
 
             output = directory / "candidate-root"
             output.mkdir()

@@ -50,6 +50,7 @@ pub(crate) use repository_admission::{
     current_repository_authority_time, validate_persisted_evidence_mutation_authority,
     validate_persisted_repository_action_basis,
 };
+pub(super) use repository_leaf_authority::construct_owner_local_repository_authority_input;
 pub use repository_leaf_authority::{
     AbsorbWorkAuthorityV1, AmendContractAuthorityV1, AppendDesignRevisionAuthorityV1,
     BootstrapExecutionAuthorityV1, CancelWorkAuthorityV1,
@@ -71,6 +72,7 @@ pub(in crate::domain::vnext) use repository_leaf_authority::{
 };
 
 use super::continuity::{StoreAllocatedContinuityStateTokenV1, StoreAllocationBindingErrorV1};
+use super::materialization::{MaterializationAuthoritySeedV1, authority_materialization_seed_v1};
 use super::publication::{
     AuthorityPublicationKindV1, AuthorityPublicationOutcomeV1, AuthoritySchemaV1,
     ISSUE_BOOTSTRAP_MANDATE_IDEMPOTENCY_NAMESPACE_V1,
@@ -104,11 +106,15 @@ use super::{
 
 pub struct AuthorityFacadeV1<'store> {
     store: &'store mut StoreV1,
+    _materialization_seed: MaterializationAuthoritySeedV1,
 }
 
 impl<'store> AuthorityFacadeV1<'store> {
     pub fn new(store: &'store mut StoreV1) -> Self {
-        Self { store }
+        Self {
+            store,
+            _materialization_seed: authority_materialization_seed_v1(),
+        }
     }
 
     #[cfg_attr(

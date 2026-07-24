@@ -10,9 +10,17 @@ require "pathname"
 require "yaml"
 
 EXPECTED = {
-  "design" => "16a2f079f6ebf3dd3a2fb1a171cd0c6811203fe5f84dda73a7e2e91f67d6f9f7",
-  "decisions" => "1f97e67b156d5a17d13b94ff955ad17efeb3bb71a4b74b1aec14e20dac1100dd",
+  "design" => "9d5bda2be6274351ff7afba7f396595d80f9d560622991de1c8214aae0b8fc1b",
+  "decisions" => "18f14bce862e15be09c9d88155d62627582df50c7754e2e8e1d6f6bee8f7d522",
   "card" => "2cdf1f74843a6eca926ff3bc48e060654350e6a03b65342f8d7be48d111379b4"
+}.freeze
+
+SUCCESSOR_PACKET = {
+  "packet" => "7f13c85b45799e39daedd30846b4a024d1f264134b46c3e3b3cdf720f8e5fb02",
+  "packet_identity" => "fb33b048b59c66df9858558a2c80e59a478d101465761f902366c9a00751cbc5",
+  "decision_manifest" => EXPECTED.fetch("decisions"),
+  "raw_inventory" => "704c21bd7f1e6c39d5c4c488bba7e0c28d22fcb7af4059b72eb01a83715e0962",
+  "external_closure" => "b58ba8af29e55004b6b34bd8a1b1767c91b23e482c16cfe1d0560655be4f66d6"
 }.freeze
 
 EXTERNAL_DOMAIN = "maestro.vnext.external-design-authority-closure.v1"
@@ -27,7 +35,8 @@ RATIONALE_ONLY = {
 
 IGNORED_UNILATERAL_CLAIMS = [
   ["dec-public-wire-contract-2f11", "dec-canonical-agent-control-plane-contract-25a5"],
-  ["dec-branch-publication-carriers-2f11", "dec-canonical-carrier-specific-ed08"]
+  ["dec-branch-publication-carriers-2f11", "dec-canonical-carrier-specific-ed08"],
+  ["dec-canonical-non-action-protected-90a9", "dec-canonical-trusted-host-protected-1fbc"]
 ].freeze
 
 RECOGNIZED_EXTERNAL_COMPOSITE_HEADS = [
@@ -92,10 +101,79 @@ def sha256(path)
 end
 
 def require_sha(path, expected)
+  stat = path.lstat
+  raise "unsafe symlink input: #{path}" if stat.symlink?
+  raise "input is not a regular file: #{path}" unless stat.file?
+
   actual = sha256(path)
   raise "frozen input drifted: #{path} expected #{expected}, got #{actual}" unless actual == expected
 
   actual
+end
+
+def explicit_input(name)
+  path = Pathname.new(ENV.fetch(name)).expand_path
+  raise "#{name} is a symlink" if path.lstat.symlink?
+
+  path
+end
+
+def packet_rows(path, columns)
+  File.readlines(path, chomp: true, encoding: Encoding::UTF_8).map do |line|
+    fields = line.split("\t", -1)
+    raise "invalid packet row width in #{path}" unless fields.length == columns
+
+    fields
+  end
+end
+
+def verify_successor_packet(packet_root, parsed, raw_by_id)
+  raise "replacement packet root is a symlink" if packet_root.lstat.symlink?
+  raise "replacement packet root is not a directory" unless packet_root.directory?
+
+  packet_path = packet_root.join("replacement-build-approval-packet.v1.json")
+  manifest_path = packet_root.join("successor-decision-store-manifest.v1.txt")
+  inventory_path = packet_root.join("raw-decision-inventory.v1.txt")
+  closure_path = packet_root.join("external-design-authority-closure.v1.txt")
+  require_sha(packet_path, SUCCESSOR_PACKET.fetch("packet"))
+  require_sha(manifest_path, SUCCESSOR_PACKET.fetch("decision_manifest"))
+  require_sha(inventory_path, SUCCESSOR_PACKET.fetch("raw_inventory"))
+  require_sha(closure_path, SUCCESSOR_PACKET.fetch("external_closure"))
+  packet = JSON.parse(File.read(packet_path, encoding: Encoding::UTF_8))
+  raise "replacement packet identity drifted" unless packet.fetch("packet_sha256") == SUCCESSOR_PACKET.fetch("packet_identity")
+  raise "replacement packet candidate root was prematurely populated" unless packet.dig("sections", "identity_state", "text").include?("candidate_contract_root=absent-before-stage-0")
+  raise "replacement packet Decision counts drifted" unless packet.fetch("decision_counts") == {
+    "locked" => 117, "open" => 0, "superseded" => 96, "total" => 213
+  }
+
+  manifest = packet_rows(manifest_path, 4).to_h { |id, status, record_sha, body_sha| [id, [status, record_sha, body_sha]] }
+  inventory = packet_rows(inventory_path, 4).to_h { |id, status, supersedes, superseded_by| [id, [status, supersedes, superseded_by]] }
+  raise "replacement packet manifest count drifted" unless manifest.length == 213
+  raise "replacement packet inventory count drifted" unless inventory.length == 213
+  raise "replacement packet Decision ids disagree" unless manifest.keys.sort == inventory.keys.sort
+  raise "replacement packet raw Decision ids disagree" unless manifest.keys.sort == raw_by_id.keys.sort
+
+  parsed.each do |record|
+    id = record.fetch("id")
+    status, record_sha, body_sha = manifest.fetch(id)
+    supersedes, superseded_by = directions(record)
+    inventory_status, inventory_supersedes, inventory_superseded_by = inventory.fetch(id)
+    raise "replacement packet status mismatch for #{id}" unless status == record.fetch("status") && inventory_status == status
+    raise "replacement packet raw record mismatch for #{id}" unless Digest::SHA256.hexdigest(raw_by_id.fetch(id)) == record_sha
+    body = record.fetch("extra", {}).fetch("decision", "").b
+    raise "replacement packet body mismatch for #{id}" unless Digest::SHA256.hexdigest(body) == body_sha
+    raise "replacement packet supersedes mismatch for #{id}" unless supersedes.join(",") == inventory_supersedes
+    raise "replacement packet superseded-by mismatch for #{id}" unless superseded_by.join(",") == inventory_superseded_by
+  end
+
+  closure_lines = File.readlines(closure_path, chomp: true, encoding: Encoding::UTF_8)
+  node_ids = closure_lines.filter_map { |line| line.split("\t", -1)[1] if line.start_with?("N\t") }
+  ignored = closure_lines.filter_map do |line|
+    fields = line.split("\t", -1)
+    [fields[1], fields[2]] if fields[0] == "E" && fields[4] == "ignored_unilateral_claim"
+  end
+  raise "replacement packet closure node mismatch" unless node_ids.sort == manifest.keys.sort
+  raise "replacement packet ignored unilateral claims drifted" unless ignored == IGNORED_UNILATERAL_CLAIMS
 end
 
 def raw_records(raw)
@@ -242,11 +320,11 @@ end
 def build(repo, output)
   source = repo.join(".maestro/cards/maestro-whole-flow-architecture-refoundation")
   design_path = source.join("design.md")
-  decisions_path = source.join("decisions.yaml")
-  card_path = source.join("card.yaml")
+  decisions_path = explicit_input("STAGE0_SUCCESSOR_DECISIONS_YAML")
+  card_path = explicit_input("STAGE0_SUCCESSOR_CARD_YAML")
   hashes = {
     "design" => require_sha(design_path, EXPECTED.fetch("design")),
-    "decisions" => require_sha(decisions_path, EXPECTED.fetch("decisions")),
+    "decisions" => EXPECTED.fetch("decisions"),
     "card" => require_sha(card_path, EXPECTED.fetch("card"))
   }
 
@@ -254,15 +332,17 @@ def build(repo, output)
   source_bytes = File.binread(decisions_path)
   parsed = YAML.load(source_bytes, permitted_classes: [Time], aliases: false)
   raw = raw_records(source_bytes)
-  raise "record count drifted" unless parsed.length == 207 && raw.length == 207
+  raise "record count drifted" unless parsed.length == 213 && raw.length == 213
 
   by_id = parsed.to_h { |record| [record.fetch("id"), record] }
   raise "duplicate decision id" unless by_id.length == parsed.length
   raw_by_id = raw.to_h { |bytes| [record_id(bytes), bytes] }
   raise "raw/parsed Decision ids disagree" unless raw_by_id.keys.sort == by_id.keys.sort
+  packet_root = explicit_input("STAGE0_SUCCESSOR_PACKET_ROOT").realpath
+  verify_successor_packet(packet_root, parsed, raw_by_id)
 
   statuses = parsed.group_by { |record| record.fetch("status") }.transform_values(&:length)
-  raise "terminal status count drifted" unless statuses == { "locked" => 112, "superseded" => 95 }
+  raise "terminal status count drifted" unless statuses == { "locked" => 117, "superseded" => 96 }
 
   forward = Hash.new { |hash, key| hash[key] = [] }
   parsed.each { |record| directions(record).first.each { |predecessor| forward[predecessor] << record.fetch("id") } }

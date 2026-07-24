@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import copy
+import io
 import json
+import tarfile
 import tempfile
 import unittest
 from collections.abc import Iterator
@@ -185,7 +187,7 @@ class Stage5ConsensusTests(unittest.TestCase):
             "artifact_id": artifact["artifact_id"],
             "artifact_sha256": consensus.sha256(consensus.pretty_json(artifact)),
             "behavior_manifest_identity": consensus.EXPECTED_BEHAVIOR_MANIFEST_IDENTITY,
-            "behavior_passed": 73,
+            "behavior_passed": 86,
             "behavior_runs": runs,
             "builder_sha256": dict(
                 (row[0], row[2]) for row in artifact["source_closure"]
@@ -453,12 +455,21 @@ class Stage5ConsensusTests(unittest.TestCase):
                 [relative, (root / relative).stat().st_size, expected[relative]]
                 for relative in paths
             ]
-            source_archive = b"exact-stage4-source"
+            archive_buffer = io.BytesIO()
+            with tarfile.open(fileobj=archive_buffer, mode="w:gz") as archive:
+                for relative in paths:
+                    data = (root / relative).read_bytes()
+                    member = tarfile.TarInfo(relative)
+                    member.size = len(data)
+                    archive.addfile(member, io.BytesIO(data))
+            source_archive = archive_buffer.getvalue()
             predecessor: dict[str, Any] = {
+                "current_dependency_differs_from_history": False,
+                "current_dependency_files": rows,
                 "files": rows,
                 "historical_receipt_validation": {
                     "archive_matches_source_commit": True,
-                    "canonical_files_match_archive": True,
+                    "current_dependency_rows_bound_separately": True,
                     "mode": "read_only_commit_tree_content_and_receipt_equality",
                     "receipt_count": 4,
                     "receipts_report_pass": True,
