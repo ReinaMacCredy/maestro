@@ -19,7 +19,7 @@ use crate::domain::vnext::authority::{
     GrantScopeV1, HalfOpenValidityV1, IdempotencyKeyIdV1, IssueBootstrapMandateInputV1,
     IssueBootstrapMandateRequestV1, IssueRootAttachedBoundedGrantPublicationV1,
     OrdinaryBoundedGrantV1, OrdinaryGrantDelegationV1, PrincipalBindingIdV1, PrincipalBindingV1,
-    PrincipalIdV1, ReissueRootAttachedGrantOneToOnePublicationV1,
+    PrincipalIdV1, ReissueRootAttachedGrantOneToOnePublicationV1, RepositoryDownstreamActionLeafV1,
     RepositoryGovernedCapacitySlotKindV1, RevocationSetV1, RevocationTargetV1,
     RevokeGrantPublicationV1, ScopeAtomV1, SessionIdV1, SessionV1, TargetActionEffectKindV1,
     TargetActionOwnerV1, TargetActionProjectionV1, TargetActionProtocolV1, TargetExpectedHeadsV1,
@@ -1145,6 +1145,210 @@ fn put_objects_in_reference_order(store: &mut StoreV1, objects: Vec<StoreObjectV
         store.put_object(&object).unwrap();
         inserted.insert(object.id());
     }
+}
+
+#[test]
+fn scheduling_materialization_is_one_atomic_authority_operation() {
+    use super::test_support::{AuthorityFixtureModeV1, repository_owner_family_authority_fixture};
+
+    let action = RepositoryDownstreamActionLeafV1::PUBLISH_SCHEDULING_POLICY_BINDING;
+    let subject = digest("scheduling-materialization-subject");
+    let owner_basis = digest("scheduling-materialization-owner-basis");
+    let fixture = repository_owner_family_authority_fixture(
+        vec![(action.literal(), subject)],
+        AuthorityFixtureModeV1::Valid,
+    );
+    let root = test_root();
+    let domain =
+        StoreDomainV1::derive(StoreRoleV1::Repository, b"scheduling-materialization").unwrap();
+    let mut store = StoreV1::create(&root, domain.clone()).unwrap();
+    put_objects_in_reference_order(&mut store, fixture.objects);
+    let generation = StoreGenerationV1::new(
+        domain,
+        1,
+        None,
+        ContractRootIdV1::from_digest(digest("scheduling-materialization-contract")),
+        StoreCompatibilityV1::stage0_successor().unwrap(),
+        vec![fixture.authority_root_id],
+    )
+    .unwrap();
+    let initial_head = store.publish_generation(&generation, None).unwrap();
+    let connection = Connection::open(root.join("store.sqlite3")).unwrap();
+    assert_eq!(
+        connection
+            .execute(
+                "UPDATE store_state SET state = 'active', state_revision = state_revision + 1
+                 WHERE singleton = 1",
+                [],
+            )
+            .unwrap(),
+        1
+    );
+
+    let request_object = StoreObjectV1::new(
+        RepositoryStoreSchemaV1::WorkRecord.schema_id().unwrap(),
+        CborValue::text("scheduling-materialization-request").unwrap(),
+        vec![],
+    )
+    .unwrap();
+    let binding_object = StoreObjectV1::new(
+        RepositoryStoreSchemaV1::WorkRecord.schema_id().unwrap(),
+        CborValue::text("scheduling-materialization-binding").unwrap(),
+        vec![],
+    )
+    .unwrap();
+    let request_id = ActionRequestIdV1::derive("scheduling-materialization-request").unwrap();
+    let authority = PlanningRepositoryActionAuthorityV1::new(
+        fixture.selection,
+        action,
+        subject,
+        owner_basis,
+        *binding_object.id().as_bytes(),
+    )
+    .unwrap();
+    let probe = StoreIdempotencyProbeV1::new(
+        "maestro.test.scheduling-materialization.v1",
+        digest("scheduling-materialization-idempotency-key"),
+        digest("scheduling-materialization-idempotency-meaning"),
+    )
+    .unwrap();
+
+    let forged_authority = PlanningRepositoryActionAuthorityV1::new(
+        fixture.selection,
+        action,
+        subject,
+        owner_basis,
+        digest("forged-scheduling-materialization-payload"),
+    )
+    .unwrap();
+    let rejected_head = store.active_head().unwrap().unwrap();
+    assert!(matches!(
+        AuthorityFacadeV1::new(&mut store).publish_scheduling_policy_without_downgrade(
+            &probe,
+            request_id,
+            forged_authority,
+            request_object.clone(),
+            binding_object.clone(),
+            None,
+            [4, 4, 4, 4],
+            [5, 5, 5, 5],
+            [1, 1, 1, 1],
+            [1, 1, 1, 1],
+            1,
+            1,
+        ),
+        Err(AuthorityMaterializationPublicationErrorV1::Prepare(
+            SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput
+        ))
+    ));
+    assert_eq!(store.active_head().unwrap().unwrap(), rejected_head);
+
+    assert!(matches!(
+        AuthorityFacadeV1::new(&mut store).publish_scheduling_policy_without_downgrade(
+            &probe,
+            request_id,
+            authority,
+            request_object.clone(),
+            binding_object.clone(),
+            None,
+            [4, 4, 4, 4],
+            [3, 3, 3, 3],
+            [1, 1, 1, 1],
+            [1, 1, 1, 1],
+            1,
+            1,
+        ),
+        Err(AuthorityMaterializationPublicationErrorV1::Prepare(
+            SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput
+        ))
+    ));
+    assert_eq!(store.active_head().unwrap().unwrap(), rejected_head);
+
+    assert!(matches!(
+        AuthorityFacadeV1::new(&mut store).publish_scheduling_policy_with_downgrade(
+            &probe,
+            request_id,
+            authority,
+            request_object.clone(),
+            binding_object.clone(),
+            None,
+            [4, 4, 4, 4],
+            [5, 5, 5, 5],
+            [1, 1, 1, 1],
+            [1, 1, 1, 1],
+            1,
+            1,
+            MandateIdV1::derive("unneeded-scheduling-mandate").unwrap(),
+            StoreObjectIdV1::from_digest(digest("unneeded-scheduling-mandate-body")),
+            StoreObjectIdV1::from_digest(digest("unneeded-scheduling-mandate-carrier")),
+            StoreObjectIdV1::from_digest(digest("unneeded-scheduling-mandate-nonce")),
+            StoreObjectIdV1::from_digest(digest("unneeded-scheduling-mandate-atom")),
+            110,
+            190,
+            1,
+        ),
+        Err(AuthorityMaterializationPublicationErrorV1::Prepare(
+            SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput
+        ))
+    ));
+    assert_eq!(store.active_head().unwrap().unwrap(), rejected_head);
+
+    let committed = AuthorityFacadeV1::new(&mut store)
+        .publish_scheduling_policy_without_downgrade(
+            &probe,
+            request_id,
+            authority,
+            request_object.clone(),
+            binding_object.clone(),
+            None,
+            [4, 4, 4, 4],
+            [5, 5, 5, 5],
+            [1, 1, 1, 1],
+            [1, 1, 1, 1],
+            1,
+            1,
+        )
+        .unwrap();
+    assert!(matches!(
+        committed,
+        StorePublicationOutcomeV1::Committed { .. }
+    ));
+    assert_ne!(committed.head().id(), initial_head.id());
+
+    let replayed = AuthorityFacadeV1::new(&mut store)
+        .publish_scheduling_policy_without_downgrade(
+            &probe,
+            request_id,
+            authority,
+            request_object,
+            binding_object,
+            None,
+            [4, 4, 4, 4],
+            [5, 5, 5, 5],
+            [1, 1, 1, 1],
+            [1, 1, 1, 1],
+            1,
+            1,
+        )
+        .unwrap();
+    assert!(matches!(
+        replayed,
+        StorePublicationOutcomeV1::Replayed { .. }
+    ));
+    assert_eq!(replayed.head().id(), committed.head().id());
+
+    let facade_source = include_str!("facade.rs");
+    assert!(!facade_source.contains("pub(crate) fn publish_repository_materialization"));
+    assert!(!facade_source.contains("pub(crate) fn publish_scheduling_policy_materialization"));
+    let materialization_source = include_str!("materialization.rs");
+    assert!(!materialization_source.contains("pub(crate) struct RepositoryActionBindingFactsV1"));
+    assert!(
+        !materialization_source
+            .contains("pub(crate) struct SchedulingPolicyDowngradeMandateFactsV1")
+    );
+
+    drop(store);
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[expect(

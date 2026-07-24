@@ -1394,23 +1394,31 @@ macro_rules! owner_family_authority {
                 )?))
             }
 
-            const fn selection(self) -> RepositoryAuthoritySelectionV1 {
+            pub(in crate::domain::vnext::authority) const fn selection(
+                self,
+            ) -> RepositoryAuthoritySelectionV1 {
                 self.0.selection()
             }
 
-            const fn action(self) -> RepositoryDownstreamActionLeafV1 {
+            pub(in crate::domain::vnext::authority) const fn action(
+                self,
+            ) -> RepositoryDownstreamActionLeafV1 {
                 self.0.action()
             }
 
-            const fn subject_commitment(self) -> [u8; 32] {
+            pub(in crate::domain::vnext::authority) const fn subject_commitment(self) -> [u8; 32] {
                 self.0.subject_commitment()
             }
 
-            const fn current_semantic_owner_basis_commitment(self) -> [u8; 32] {
+            pub(in crate::domain::vnext::authority) const fn current_semantic_owner_basis_commitment(
+                self,
+            ) -> [u8; 32] {
                 self.0.current_semantic_owner_basis_commitment()
             }
 
-            const fn exact_payload_commitment(self) -> [u8; 32] {
+            pub(in crate::domain::vnext::authority) const fn exact_payload_commitment(
+                self,
+            ) -> [u8; 32] {
                 self.0.exact_payload_commitment()
             }
         }

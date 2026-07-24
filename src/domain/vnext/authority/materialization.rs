@@ -30,13 +30,13 @@ pub enum SchedulingPolicyDiffClassV1 {
 const NO_SUPPLEMENTAL_MANDATE_COMMITMENT_V1: [u8; 32] = [0xA5; 32];
 
 impl SchedulingPolicyDiffClassV1 {
-    const fn requires_downgrade_mandate(self) -> bool {
+    pub(in crate::domain::vnext::authority) const fn requires_downgrade_mandate(self) -> bool {
         matches!(self, Self::Weakening | Self::Incomparable)
     }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct SchedulingPolicyMeaningV1 {
+pub(in crate::domain::vnext::authority) struct SchedulingPolicyMeaningV1 {
     current_rules: [u64; 4],
     candidate_rules: [u64; 4],
     safety_floor: [u64; 4],
@@ -45,9 +45,55 @@ struct SchedulingPolicyMeaningV1 {
     classifier_revision: u64,
 }
 
+impl SchedulingPolicyMeaningV1 {
+    pub(in crate::domain::vnext::authority) fn new(
+        current_rules: [u64; 4],
+        candidate_rules: [u64; 4],
+        safety_floor: [u64; 4],
+        governance_floor: [u64; 4],
+        evaluator_revision: u64,
+        classifier_revision: u64,
+    ) -> Result<Self, AuthorityMaterializationErrorV1> {
+        let meaning = Self {
+            current_rules,
+            candidate_rules,
+            safety_floor,
+            governance_floor,
+            evaluator_revision,
+            classifier_revision,
+        };
+        derive_policy_relation(meaning)?;
+        Ok(meaning)
+    }
+
+    pub(in crate::domain::vnext::authority) const fn current_rules(self) -> [u64; 4] {
+        self.current_rules
+    }
+
+    pub(in crate::domain::vnext::authority) const fn candidate_rules(self) -> [u64; 4] {
+        self.candidate_rules
+    }
+
+    pub(in crate::domain::vnext::authority) const fn safety_floor(self) -> [u64; 4] {
+        self.safety_floor
+    }
+
+    pub(in crate::domain::vnext::authority) const fn governance_floor(self) -> [u64; 4] {
+        self.governance_floor
+    }
+
+    pub(in crate::domain::vnext::authority) const fn evaluator_revision(self) -> u64 {
+        self.evaluator_revision
+    }
+
+    pub(in crate::domain::vnext::authority) const fn classifier_revision(self) -> u64 {
+        self.classifier_revision
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::domain::vnext) struct SchedulingPolicyDowngradeMandateFactsV1 {
-    policy_meaning: SchedulingPolicyMeaningV1,
+pub(in crate::domain::vnext::authority) struct SchedulingPolicyDowngradeMandateFactsV1 {
+    pub(in crate::domain::vnext::authority) policy_meaning: SchedulingPolicyMeaningV1,
     pub(crate) mandate_id: MandateIdV1,
     pub(crate) action_request_id: ActionRequestIdV1,
     pub(crate) idempotency_key: IdempotencyKeyIdV1,
@@ -474,8 +520,8 @@ pub(in crate::domain::vnext::authority) struct VerifiedSchedulingPolicyDowngrade
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::domain::vnext) struct RepositoryActionCommitFactsV1 {
-    pub(crate) binding: RepositoryActionBindingFactsV1,
+pub(in crate::domain::vnext::authority) struct RepositoryActionCommitFactsV1 {
+    pub(in crate::domain::vnext::authority) binding: RepositoryActionBindingFactsV1,
 }
 
 pub(in crate::domain::vnext::authority) struct ConsumedSchedulingPolicyDowngradeMandateV1<'tx> {
@@ -747,8 +793,8 @@ pub(in crate::domain::vnext) type SchedulingPolicyBindingOwnerV1 =
     PlanningRepositoryActionBindingOwnerV1<105>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::domain::vnext) struct RepositoryActionBindingFactsV1 {
-    policy_meaning: SchedulingPolicyMeaningV1,
+pub(in crate::domain::vnext::authority) struct RepositoryActionBindingFactsV1 {
+    pub(in crate::domain::vnext::authority) policy_meaning: SchedulingPolicyMeaningV1,
     pub(crate) authority_selection: RepositoryAuthoritySelectionV1,
     pub(crate) request_id: ActionRequestIdV1,
     pub(crate) action: RepositoryActionLeafV1,
@@ -1063,7 +1109,10 @@ fn validate_scheduling_policy_downgrade_mandate(
     Ok(())
 }
 
-fn policy_commitment(domain: &[u8], rows: &[u64]) -> [u8; 32] {
+pub(in crate::domain::vnext::authority) fn policy_commitment(
+    domain: &[u8],
+    rows: &[u64],
+) -> [u8; 32] {
     use sha2::{Digest, Sha256};
 
     let mut writer = Sha256::new();
@@ -1075,7 +1124,7 @@ fn policy_commitment(domain: &[u8], rows: &[u64]) -> [u8; 32] {
     writer.finalize().into()
 }
 
-fn derive_policy_relation(
+pub(in crate::domain::vnext::authority) fn derive_policy_relation(
     meaning: SchedulingPolicyMeaningV1,
 ) -> Result<SchedulingPolicyDiffClassV1, AuthorityMaterializationErrorV1> {
     if meaning.evaluator_revision == 0
@@ -1457,6 +1506,12 @@ mod tests {
             guard_object_id: crate::domain::vnext::identity::StoreObjectIdV1::from_digest([59; 32]),
             state_object_id: crate::domain::vnext::identity::StoreObjectIdV1::from_digest([60; 32]),
             state_token: binding.state_token_id,
+            principal_id: binding.principal_id,
+            selection: Some(binding.authority_selection),
+            authority_context_id: binding.authority_context_id,
+            subject_commitment: binding.subject_commitment,
+            subject_basis_commitment: binding.subject_basis_commitment,
+            exact_payload_commitment: Some(binding.exact_payload_commitment),
         }
     }
 

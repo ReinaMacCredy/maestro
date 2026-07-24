@@ -249,6 +249,12 @@ impl RepositoryActionAdmissionInputV1 {
 pub(crate) struct AdmittedRepositoryActionV1 {
     request_id: ActionRequestIdV1,
     action: RepositoryActionLeafV1,
+    principal_id: PrincipalIdV1,
+    selection: Option<RepositoryAuthoritySelectionV1>,
+    authority_context_id: AuthorityContextIdV1,
+    subject_commitment: [u8; 32],
+    subject_basis_commitment: [u8; 32],
+    exact_payload_commitment: Option<[u8; 32]>,
     receipt: AuthorizationReceiptV1,
     authority_epoch: u64,
     accepted_h_time: u64,
@@ -285,6 +291,12 @@ pub(in crate::domain::vnext::authority) struct MaterializationAuthorityAdmission
     pub(in crate::domain::vnext::authority) guard_object_id: StoreObjectIdV1,
     pub(in crate::domain::vnext::authority) state_object_id: StoreObjectIdV1,
     pub(in crate::domain::vnext::authority) state_token: StateTokenIdV1,
+    pub(in crate::domain::vnext::authority) principal_id: PrincipalIdV1,
+    pub(in crate::domain::vnext::authority) selection: Option<RepositoryAuthoritySelectionV1>,
+    pub(in crate::domain::vnext::authority) authority_context_id: AuthorityContextIdV1,
+    pub(in crate::domain::vnext::authority) subject_commitment: [u8; 32],
+    pub(in crate::domain::vnext::authority) subject_basis_commitment: [u8; 32],
+    pub(in crate::domain::vnext::authority) exact_payload_commitment: Option<[u8; 32]>,
 }
 
 pub(crate) struct ContinuedRepositoryActionV1 {
@@ -327,6 +339,12 @@ impl AdmittedRepositoryActionV1 {
             guard_object_id: self.guard_object_id,
             state_object_id: self.state_object_id,
             state_token: self.state_token,
+            principal_id: self.principal_id,
+            selection: self.selection,
+            authority_context_id: self.authority_context_id,
+            subject_commitment: self.subject_commitment,
+            subject_basis_commitment: self.subject_basis_commitment,
+            exact_payload_commitment: self.exact_payload_commitment,
         }
     }
 
@@ -1247,6 +1265,12 @@ pub(crate) fn admit_repository_action(
     Ok(AdmittedRepositoryActionV1 {
         request_id: input.request_id,
         action,
+        principal_id: facts.actor_binding().principal_id(),
+        selection: Some(selection),
+        authority_context_id: facts.context().context_id(),
+        subject_commitment,
+        subject_basis_commitment,
+        exact_payload_commitment,
         receipt,
         authority_epoch: facts.snapshot().authority_epoch,
         accepted_h_time: current_continuity_state.accepted_time().lower_bound(),
@@ -1852,6 +1876,12 @@ fn admit_specialized_repository_execution_action(
     Ok(AdmittedRepositoryActionV1 {
         request_id,
         action,
+        principal_id: facts.actor_binding().principal_id(),
+        selection: None,
+        authority_context_id: facts.context().context_id(),
+        subject_commitment: authority.subject_commitment(),
+        subject_basis_commitment: authority.current_state_commitment(),
+        exact_payload_commitment: Some(authority.exact_payload_commitment()),
         receipt,
         authority_epoch: facts.snapshot().authority_epoch,
         accepted_h_time: current_continuity_state.accepted_time().lower_bound(),
