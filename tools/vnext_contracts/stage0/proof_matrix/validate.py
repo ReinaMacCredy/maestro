@@ -401,7 +401,7 @@ def mutant_rejections(document: dict[str, Any]) -> list[str]:
 
 def ruby_equality() -> dict[str, Any]:
     process = subprocess.run(
-        ["ruby", str(TOOLS / "encode.rb")],
+        ["/usr/bin/ruby", str(TOOLS / "encode.rb")],
         cwd=WORKSPACE,
         capture_output=True,
         text=True,

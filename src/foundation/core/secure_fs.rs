@@ -12,6 +12,8 @@ pub type SecureFsResult<T> = Result<T, SecureFsError>;
 
 #[derive(Debug, Error)]
 pub enum SecureFsError {
+    #[error("descriptor-anchored census refused")]
+    CensusRefused,
     #[error("secure filesystem operations are unsupported on {platform}")]
     UnsupportedPlatform { platform: &'static str },
     #[error("invalid secure filesystem path {path}: {reason}")]
@@ -71,13 +73,13 @@ pub(crate) struct RegularFileBinding {
 }
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub(crate) enum DescriptorCensusObjectKindV1 {
+pub enum DescriptorCensusObjectKindV1 {
     RegularFile,
     SymbolicLink,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct DescriptorCensusLimitsV1 {
+pub struct DescriptorCensusLimitsV1 {
     maximum_depth: usize,
     maximum_entries: usize,
     maximum_leaf_bytes: usize,
@@ -86,15 +88,8 @@ pub(crate) struct DescriptorCensusLimitsV1 {
     maximum_name_bytes: usize,
 }
 
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "Stage 4 freezes bounded descriptor census limits before their Stage 11 consumer"
-    )
-)]
 impl DescriptorCensusLimitsV1 {
-    pub(crate) const fn bounded(
+    pub const fn bounded(
         maximum_depth: usize,
         maximum_entries: usize,
         maximum_leaf_bytes: usize,
@@ -125,7 +120,7 @@ impl DescriptorCensusLimitsV1 {
         })
     }
 
-    pub(crate) const fn bounded_default() -> Self {
+    pub const fn bounded_default() -> Self {
         Self {
             maximum_depth: MAX_COMPONENTS,
             maximum_entries: 100_000,
@@ -162,6 +157,7 @@ impl DescriptorCensusMutationFenceFactsV1 {
 }
 
 pub(in crate::foundation::core) mod descriptor_census_sealed {
+    #[cfg(test)]
     pub trait FenceSealed {}
     pub trait LeaseSealed {}
 }
@@ -185,6 +181,7 @@ pub(crate) trait DescriptorCensusMutationLeasePortV1:
     fn consume_final_recheck(self) -> bool;
 }
 
+#[cfg(test)]
 pub(crate) trait DescriptorCensusMutationFenceV1:
     descriptor_census_sealed::FenceSealed
 {
@@ -199,20 +196,20 @@ pub(crate) trait DescriptorCensusMutationFenceV1:
 }
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub(crate) struct VerifiedRelativeLocatorV1(Vec<u8>);
+pub struct VerifiedRelativeLocatorV1(Vec<u8>);
 
 impl VerifiedRelativeLocatorV1 {
     fn from_lossless_bounded_bytes(bytes: Vec<u8>) -> Self {
         Self(bytes)
     }
 
-    pub(crate) fn as_bytes(&self) -> &[u8] {
+    pub fn as_bytes(&self) -> &[u8] {
         &self.0
     }
 }
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub(crate) struct InventoryRowV1 {
+pub struct InventoryRowV1 {
     locator: VerifiedRelativeLocatorV1,
     kind: DescriptorCensusObjectKindV1,
     logical_byte_length: u64,
@@ -220,54 +217,40 @@ pub(crate) struct InventoryRowV1 {
     content_identity: [u8; 32],
 }
 
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "Stage 4 freezes descriptor census object bindings before their Stage 11 consumer"
-    )
-)]
 impl InventoryRowV1 {
-    pub(crate) fn relative_name(&self) -> &[u8] {
+    pub fn relative_name(&self) -> &[u8] {
         self.locator.as_bytes()
     }
 
-    pub(crate) const fn kind(&self) -> DescriptorCensusObjectKindV1 {
+    pub const fn kind(&self) -> DescriptorCensusObjectKindV1 {
         self.kind
     }
 
-    pub(crate) const fn logical_byte_length(&self) -> u64 {
+    pub const fn logical_byte_length(&self) -> u64 {
         self.logical_byte_length
     }
 
-    pub(crate) const fn object_identity(&self) -> [u8; 32] {
+    pub const fn object_identity(&self) -> [u8; 32] {
         self.object_identity
     }
 
-    pub(crate) const fn content_identity(&self) -> [u8; 32] {
+    pub const fn content_identity(&self) -> [u8; 32] {
         self.content_identity
     }
 }
 
 #[derive(Eq, PartialEq)]
-pub(crate) struct DescriptorAnchoredCensusV1 {
+pub struct DescriptorAnchoredCensusV1 {
     rows: Vec<InventoryRowV1>,
     identity: [u8; 32],
 }
 
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "Stage 4 freezes the descriptor-anchored census before its Stage 11 consumer"
-    )
-)]
 impl DescriptorAnchoredCensusV1 {
-    pub(crate) fn rows(&self) -> &[InventoryRowV1] {
+    pub fn rows(&self) -> &[InventoryRowV1] {
         &self.rows
     }
 
-    pub(crate) const fn identity(&self) -> [u8; 32] {
+    pub const fn identity(&self) -> [u8; 32] {
         self.identity
     }
 }
@@ -293,13 +276,15 @@ mod platform {
 
     use sha2::{Digest, Sha256};
 
+    #[cfg(test)]
+    use super::DescriptorCensusMutationFenceV1;
     use super::{
         CreateIfAbsent, DescriptorAnchoredCensusV1, DescriptorCensusLimitsV1,
-        DescriptorCensusMutationFenceFactsV1, DescriptorCensusMutationFenceV1,
-        DescriptorCensusMutationLeasePortV1, DescriptorCensusObjectKindV1,
-        DescriptorCensusRootBindingV1, InventoryRowV1, MAX_COMPONENT_BYTES, MAX_COMPONENTS,
-        MAX_PATH_BYTES, RegularFileBinding, SecureDirectoryEntry, SecureDirectoryEntryKind,
-        SecureFsError, SecureFsResult, VerifiedRelativeLocatorV1,
+        DescriptorCensusMutationFenceFactsV1, DescriptorCensusMutationLeasePortV1,
+        DescriptorCensusObjectKindV1, DescriptorCensusRootBindingV1, InventoryRowV1,
+        MAX_COMPONENT_BYTES, MAX_COMPONENTS, MAX_PATH_BYTES, RegularFileBinding,
+        SecureDirectoryEntry, SecureDirectoryEntryKind, SecureFsError, SecureFsResult,
+        VerifiedRelativeLocatorV1,
     };
 
     #[cfg(target_os = "linux")]
@@ -312,9 +297,12 @@ mod platform {
     const WRITABLE_BY_OTHERS: u32 = 0o022;
     const TEMP_ATTEMPTS: usize = 32;
     static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
+    static NAMESPACE_EPOCH: AtomicU64 = AtomicU64::new(1);
 
     #[cfg(test)]
     type RemovalUnlinkHook = Option<Box<dyn FnOnce(&Path)>>;
+    #[cfg(test)]
+    type CensusPassHook = Option<Box<dyn FnOnce(&Path)>>;
 
     #[cfg(test)]
     thread_local! {
@@ -322,6 +310,10 @@ mod platform {
             std::cell::RefCell<RemovalUnlinkHook> = std::cell::RefCell::new(None);
         static AFTER_REMOVAL_SENTINEL_CHECK_TEST_HOOK:
             std::cell::RefCell<RemovalUnlinkHook> = std::cell::RefCell::new(None);
+        static FORCE_PLATFORM_CENSUS_FENCE_LOSS: std::cell::Cell<bool> =
+            const { std::cell::Cell::new(false) };
+        static AFTER_FIRST_CENSUS_PASS_TEST_HOOK:
+            std::cell::RefCell<CensusPassHook> = std::cell::RefCell::new(None);
     }
 
     #[cfg(target_os = "linux")]
@@ -434,6 +426,7 @@ mod platform {
         #[link_name = "readdir$INODE64"]
         fn readdir(stream: *mut DirectoryStream) -> *mut DirectoryEntryRecord;
         fn closedir(stream: *mut DirectoryStream) -> c_int;
+        fn flock(descriptor: c_int, operation: c_int) -> c_int;
         #[cfg(target_os = "linux")]
         fn __errno_location() -> *mut c_int;
         #[cfg(target_os = "macos")]
@@ -473,8 +466,74 @@ mod platform {
     #[derive(Debug)]
     pub struct SecureRoot {
         directory: File,
+        namespace_anchor: File,
         descriptor_chain: Vec<RetainedDescriptorEdgeV1>,
         path: PathBuf,
+    }
+
+    const LOCK_EXCLUSIVE: c_int = 2;
+    const LOCK_UNLOCK: c_int = 8;
+
+    struct NamespaceMutationLeaseV1 {
+        descriptor: File,
+    }
+
+    impl NamespaceMutationLeaseV1 {
+        fn acquire(anchor: &File, path: &Path) -> SecureFsResult<Self> {
+            let descriptor = open_directory_at_unchecked(anchor.as_raw_fd(), c".", path)?;
+            if unsafe { flock(descriptor.as_raw_fd(), LOCK_EXCLUSIVE) } != 0 {
+                return Err(SecureFsError::Io {
+                    operation: "acquire secure namespace mutation fence",
+                    path: path.to_path_buf(),
+                    source: io::Error::last_os_error(),
+                });
+            }
+            NAMESPACE_EPOCH.fetch_add(1, Ordering::AcqRel);
+            Ok(Self { descriptor })
+        }
+    }
+
+    impl Drop for NamespaceMutationLeaseV1 {
+        fn drop(&mut self) {
+            unsafe {
+                flock(self.descriptor.as_raw_fd(), LOCK_UNLOCK);
+            }
+        }
+    }
+
+    struct PlatformCensusLeaseV1 {
+        lease: NamespaceMutationLeaseV1,
+        facts: DescriptorCensusMutationFenceFactsV1,
+        root_binding: DescriptorCensusRootBindingV1,
+    }
+
+    impl super::descriptor_census_sealed::LeaseSealed for PlatformCensusLeaseV1 {}
+
+    pub struct AdmittedDescriptorCensusRootV1<'root> {
+        root: &'root SecureRoot,
+        initial_root: FileIdentity,
+        root_mount: [u8; 32],
+        root_binding: DescriptorCensusRootBindingV1,
+        lease: PlatformCensusLeaseV1,
+    }
+
+    impl DescriptorCensusMutationLeasePortV1 for PlatformCensusLeaseV1 {
+        fn facts(&self) -> DescriptorCensusMutationFenceFactsV1 {
+            self.facts
+        }
+
+        fn root_binding(&self) -> DescriptorCensusRootBindingV1 {
+            self.root_binding
+        }
+
+        fn consume_final_recheck(self) -> bool {
+            let _held_until_return = self.lease;
+            #[cfg(test)]
+            if FORCE_PLATFORM_CENSUS_FENCE_LOSS.with(std::cell::Cell::take) {
+                return false;
+            }
+            true
+        }
     }
 
     impl SecureRoot {
@@ -555,12 +614,18 @@ mod platform {
             validate_directory(&directory, &path)?;
             Ok(Self {
                 directory,
+                namespace_anchor: open_directory_at_unchecked(
+                    self.namespace_anchor.as_raw_fd(),
+                    c".",
+                    &self.path,
+                )?,
                 descriptor_chain,
                 path,
             })
         }
 
         pub fn create_dir_all(&self, relative: impl AsRef<Path>) -> SecureFsResult<()> {
+            let _namespace = self.acquire_namespace_mutation_lease()?;
             let relative = BoundedPath::new(relative.as_ref())?;
             let mut directory = self.clone_directory()?;
             let mut traversed = PathBuf::new();
@@ -576,14 +641,84 @@ mod platform {
             descriptor_directory_entries(self)
         }
 
-        #[cfg_attr(
-            not(test),
-            expect(
-                dead_code,
-                reason = "Stage 4 freezes the Foundation census entry before its Stage 11 consumer"
-            )
-        )]
+        #[cfg(test)]
         pub(crate) fn descriptor_anchored_census<F: DescriptorCensusMutationFenceV1>(
+            &self,
+            limits: DescriptorCensusLimitsV1,
+            fence: &mut F,
+        ) -> SecureFsResult<DescriptorAnchoredCensusV1> {
+            self.descriptor_anchored_census_inner(limits, fence)
+                .map_err(|_| SecureFsError::CensusRefused)
+        }
+
+        pub(in crate::foundation::core) fn admit_descriptor_census_root(
+            &self,
+        ) -> SecureFsResult<AdmittedDescriptorCensusRootV1<'_>> {
+            let initial_root = FileIdentity::from(&metadata(&self.directory, &self.path)?);
+            let root_mount = mount_identity(&self.directory, &self.path)?;
+            let root_binding = self.descriptor_chain_binding(root_mount)?;
+            let lease = NamespaceMutationLeaseV1::acquire(&self.namespace_anchor, &self.path)?;
+            let mut writer = Sha256::new();
+            writer.update(b"maestro.foundation.namespace-writer.v1\0");
+            writer.update(process::id().to_be_bytes());
+            writer.update(root_binding.identity);
+            let lease = PlatformCensusLeaseV1 {
+                lease,
+                facts: DescriptorCensusMutationFenceFactsV1 {
+                    writer_identity: writer.finalize().into(),
+                    namespace_identity: root_binding.identity,
+                    monotonic_epoch: NAMESPACE_EPOCH.fetch_add(1, Ordering::AcqRel),
+                },
+                root_binding,
+            };
+            Ok(AdmittedDescriptorCensusRootV1 {
+                root: self,
+                initial_root,
+                root_mount,
+                root_binding,
+                lease,
+            })
+        }
+
+        pub(in crate::foundation::core) fn census_admitted_descriptor_root(
+            admitted: AdmittedDescriptorCensusRootV1<'_>,
+            limits: DescriptorCensusLimitsV1,
+        ) -> SecureFsResult<DescriptorAnchoredCensusV1> {
+            let AdmittedDescriptorCensusRootV1 {
+                root,
+                initial_root,
+                root_mount,
+                root_binding,
+                lease,
+            } = admitted;
+            root.descriptor_anchored_census_with_lease(
+                limits,
+                initial_root,
+                root_mount,
+                root_binding,
+                lease,
+            )
+        }
+
+        #[cfg(test)]
+        pub(crate) fn force_platform_census_fence_loss_for_test() {
+            FORCE_PLATFORM_CENSUS_FENCE_LOSS.with(|slot| slot.set(true));
+        }
+
+        #[cfg(test)]
+        pub(crate) fn install_after_first_census_pass_test_hook(
+            hook: impl FnOnce(&Path) + 'static,
+        ) {
+            AFTER_FIRST_CENSUS_PASS_TEST_HOOK.with(|slot| {
+                assert!(
+                    slot.borrow_mut().replace(Box::new(hook)).is_none(),
+                    "descriptor census first-pass hook must be exclusive"
+                );
+            });
+        }
+
+        #[cfg(test)]
+        fn descriptor_anchored_census_inner<F: DescriptorCensusMutationFenceV1>(
             &self,
             limits: DescriptorCensusLimitsV1,
             fence: &mut F,
@@ -597,6 +732,23 @@ mod platform {
                     reason: "descriptor census namespace-writer lease is unavailable",
                 }
             })?;
+            self.descriptor_anchored_census_with_lease(
+                limits,
+                initial_root,
+                root_mount,
+                root_binding,
+                lease,
+            )
+        }
+
+        fn descriptor_anchored_census_with_lease<L: DescriptorCensusMutationLeasePortV1>(
+            &self,
+            limits: DescriptorCensusLimitsV1,
+            initial_root: FileIdentity,
+            root_mount: [u8; 32],
+            root_binding: DescriptorCensusRootBindingV1,
+            lease: L,
+        ) -> SecureFsResult<DescriptorAnchoredCensusV1> {
             let initial_fence = lease.facts();
             if DescriptorCensusMutationFenceFactsV1::from_live_owner(
                 initial_fence.writer_identity,
@@ -612,6 +764,12 @@ mod platform {
             }
             ensure_no_semantic_metadata(&self.directory, &self.path)?;
             let first = descriptor_census_pass(self, initial_root.device, root_mount, limits)?;
+            #[cfg(test)]
+            AFTER_FIRST_CENSUS_PASS_TEST_HOOK.with(|slot| {
+                if let Some(hook) = slot.borrow_mut().take() {
+                    hook(&self.path);
+                }
+            });
             if self.descriptor_chain_binding(root_mount)? != root_binding {
                 return Err(SecureFsError::ChangedDuringRead {
                     path: self.path.clone(),
@@ -705,6 +863,7 @@ mod platform {
             relative: impl AsRef<Path>,
             contents: &[u8],
         ) -> SecureFsResult<CreateIfAbsent> {
+            let _namespace = self.acquire_namespace_mutation_lease()?;
             if contents.len() > super::MAX_FILE_BYTES {
                 return Err(SecureFsError::UnsafeObject {
                     path: self.path.join(relative.as_ref()),
@@ -740,6 +899,7 @@ mod platform {
             source: impl AsRef<Path>,
             destination: impl AsRef<Path>,
         ) -> SecureFsResult<CreateIfAbsent> {
+            let _namespace = self.acquire_namespace_mutation_lease()?;
             let source = BoundedPath::new(source.as_ref())?;
             let destination = BoundedPath::new(destination.as_ref())?;
             let (source_leaf, source_parents) = source
@@ -871,6 +1031,7 @@ mod platform {
             relative: impl AsRef<Path>,
             expected: &[u8],
         ) -> SecureFsResult<bool> {
+            let _namespace = self.acquire_namespace_mutation_lease()?;
             let relative = BoundedPath::new(relative.as_ref())?;
             let (parent, leaf, path) = self.open_parent(&relative)?;
             let quarantine = removal_quarantine_name(expected);
@@ -909,6 +1070,7 @@ mod platform {
             relative: impl AsRef<Path>,
             expected_digest: &[u8; 32],
         ) -> SecureFsResult<bool> {
+            let _namespace = self.acquire_namespace_mutation_lease()?;
             let relative = BoundedPath::new(relative.as_ref())?;
             let (parent, leaf, path) = self.open_parent(&relative)?;
             let state = RemovalState::new(
@@ -977,6 +1139,11 @@ mod platform {
             let directory = if relative == Path::new(".") {
                 Self {
                     directory: self.clone_directory()?,
+                    namespace_anchor: open_directory_at_unchecked(
+                        self.namespace_anchor.as_raw_fd(),
+                        c".",
+                        &self.path,
+                    )?,
                     descriptor_chain: clone_descriptor_chain(&self.descriptor_chain, &self.path)?,
                     path: self.path.clone(),
                 }
@@ -997,6 +1164,7 @@ mod platform {
         }
 
         pub fn remove_empty_dir(&self, relative: impl AsRef<Path>) -> SecureFsResult<bool> {
+            let _namespace = self.acquire_namespace_mutation_lease()?;
             let relative = BoundedPath::new(relative.as_ref())?;
             let (parent, leaf, path) = self.open_parent(&relative)?;
             let directory = match open_directory_at(parent.as_raw_fd(), leaf, &path) {
@@ -1069,6 +1237,11 @@ mod platform {
             Ok((
                 Self {
                     directory,
+                    namespace_anchor: open_directory_at_unchecked(
+                        self.namespace_anchor.as_raw_fd(),
+                        c".",
+                        &self.path,
+                    )?,
                     descriptor_chain,
                     path: parent_path,
                 },
@@ -1085,6 +1258,10 @@ mod platform {
                     path: self.path.clone(),
                     source,
                 })
+        }
+
+        fn acquire_namespace_mutation_lease(&self) -> SecureFsResult<NamespaceMutationLeaseV1> {
+            NamespaceMutationLeaseV1::acquire(&self.namespace_anchor, &self.path)
         }
     }
 
@@ -1329,7 +1506,10 @@ mod platform {
                 + usize::from(!relative_prefix.is_empty())
                 + 1;
             let required_bytes = relative.len() + usize::from(!relative.is_empty()) + name.len();
-            if component_count > MAX_COMPONENTS || required_bytes > MAX_PATH_BYTES {
+            if component_count > state.limits.maximum_depth
+                || component_count > MAX_COMPONENTS
+                || required_bytes > MAX_PATH_BYTES
+            {
                 return Err(SecureFsError::InvalidPath {
                     path,
                     reason: "census path exceeds the bounded relative-name grammar",
@@ -1826,8 +2006,10 @@ mod platform {
             directory = next;
         }
         validate_directory(&directory, &anchored)?;
+        let namespace_anchor = open_directory_at_unchecked(directory.as_raw_fd(), c".", &anchored)?;
         Ok(SecureRoot {
             directory,
+            namespace_anchor,
             descriptor_chain,
             path: anchored,
         })
@@ -2781,15 +2963,20 @@ mod platform {
 
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
 mod platform {
+    #[cfg(test)]
+    use super::DescriptorCensusMutationFenceV1;
     use super::{
-        CreateIfAbsent, DescriptorAnchoredCensusV1, DescriptorCensusLimitsV1,
-        DescriptorCensusMutationFenceV1, RegularFileBinding, SecureDirectoryEntry, SecureFsError,
-        SecureFsResult,
+        CreateIfAbsent, DescriptorAnchoredCensusV1, DescriptorCensusLimitsV1, RegularFileBinding,
+        SecureDirectoryEntry, SecureFsError, SecureFsResult,
     };
     use std::path::Path;
 
     #[derive(Debug)]
     pub struct SecureRoot;
+
+    pub struct AdmittedDescriptorCensusRootV1<'root> {
+        _root: std::marker::PhantomData<&'root SecureRoot>,
+    }
 
     #[derive(Clone, Copy, Eq, PartialEq)]
     pub(super) struct RegularFileIdentity {
@@ -2812,17 +2999,22 @@ mod platform {
         pub(crate) fn read_dir_entries(&self) -> SecureFsResult<Vec<SecureDirectoryEntry>> {
             unsupported()
         }
-        #[cfg_attr(
-            not(test),
-            expect(
-                dead_code,
-                reason = "Stage 4 freezes the Foundation census entry before its Stage 11 consumer"
-            )
-        )]
+        #[cfg(test)]
         pub(crate) fn descriptor_anchored_census<F: DescriptorCensusMutationFenceV1>(
             &self,
             _limits: DescriptorCensusLimitsV1,
             _fence: &mut F,
+        ) -> SecureFsResult<DescriptorAnchoredCensusV1> {
+            unsupported()
+        }
+        pub(in crate::foundation::core) fn admit_descriptor_census_root(
+            &self,
+        ) -> SecureFsResult<AdmittedDescriptorCensusRootV1<'_>> {
+            unsupported()
+        }
+        pub(in crate::foundation::core) fn census_admitted_descriptor_root(
+            _admitted: AdmittedDescriptorCensusRootV1<'_>,
+            _limits: DescriptorCensusLimitsV1,
         ) -> SecureFsResult<DescriptorAnchoredCensusV1> {
             unsupported()
         }
@@ -2932,7 +3124,7 @@ mod platform {
     }
 }
 
-pub use platform::SecureRoot;
+pub use platform::{AdmittedDescriptorCensusRootV1, SecureRoot};
 
 #[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
 mod tests {
@@ -3452,7 +3644,7 @@ mod tests {
         fs::hard_link(temp.0.join("target"), temp.0.join("alias")).expect("create hard link");
         assert!(matches!(
             root.verify_regular_file_binding("target", &binding),
-            Err(SecureFsError::UnsafeObject { .. })
+            Err(SecureFsError::CensusRefused)
         ));
         assert!(matches!(
             root.verify_optional_regular_file_binding("target", Some(&binding)),
@@ -3607,6 +3799,49 @@ mod tests {
     }
 
     #[test]
+    fn platform_descriptor_census_holds_the_foundation_namespace_fence() {
+        let temp = TestDir::for_descriptor_census();
+        let root = SecureRoot::open_or_create(&temp.0).expect("create root");
+        root.create_file_if_absent("object", b"immutable")
+            .expect("create object");
+
+        let census = crate::foundation::core::descriptor_census_platform::admit_and_census(
+            &root,
+            DescriptorCensusLimitsV1::bounded_default(),
+        )
+        .expect("platform census");
+        assert_eq!(census.rows().len(), 1);
+        assert_eq!(census.rows()[0].relative_name(), b"object");
+    }
+
+    #[test]
+    fn platform_descriptor_census_refuses_fence_loss_and_external_mutation() {
+        let temp = TestDir::for_descriptor_census();
+        let root = SecureRoot::open_or_create(&temp.0).expect("create root");
+        root.create_file_if_absent("object", b"immutable")
+            .expect("create object");
+        SecureRoot::force_platform_census_fence_loss_for_test();
+        assert!(matches!(
+            crate::foundation::core::descriptor_census_platform::admit_and_census(
+                &root,
+                DescriptorCensusLimitsV1::bounded_default()
+            ),
+            Err(SecureFsError::CensusRefused)
+        ));
+
+        SecureRoot::install_after_first_census_pass_test_hook(|root| {
+            fs::write(root.join("object"), b"substitute").expect("mutate outside writer fence");
+        });
+        assert!(matches!(
+            crate::foundation::core::descriptor_census_platform::admit_and_census(
+                &root,
+                DescriptorCensusLimitsV1::bounded_default()
+            ),
+            Err(SecureFsError::CensusRefused)
+        ));
+    }
+
+    #[test]
     fn descriptor_census_refuses_every_hard_linked_leaf() {
         let temp = TestDir::for_descriptor_census();
         let root = SecureRoot::open_or_create(&temp.0).expect("create root");
@@ -3619,7 +3854,7 @@ mod tests {
                 DescriptorCensusLimitsV1::bounded_default(),
                 &mut TestCensusFence::new()
             ),
-            Err(SecureFsError::UnsafeObject { .. })
+            Err(SecureFsError::CensusRefused)
         ));
     }
 
@@ -3637,7 +3872,7 @@ mod tests {
                 DescriptorCensusLimitsV1::bounded_default(),
                 &mut fence
             ),
-            Err(SecureFsError::ChangedDuringRead { .. })
+            Err(SecureFsError::CensusRefused)
         ));
     }
 
@@ -3661,8 +3896,33 @@ mod tests {
         .expect("bounded census limits");
         assert!(matches!(
             root.descriptor_anchored_census(limits, &mut TestCensusFence::new()),
-            Err(SecureFsError::UnsafeObject { .. })
+            Err(SecureFsError::CensusRefused)
         ));
+    }
+
+    #[test]
+    fn descriptor_census_applies_depth_limit_to_leaves_and_hides_names() {
+        let temp = TestDir::for_descriptor_census();
+        let root = SecureRoot::open_or_create(&temp.0).expect("create root");
+        root.create_dir_all("directory").expect("create directory");
+        root.create_file_if_absent("directory/secret-name", b"immutable")
+            .expect("create leaf");
+        let limits = DescriptorCensusLimitsV1::bounded(
+            1,
+            100,
+            MAX_FILE_BYTES,
+            MAX_FILE_BYTES,
+            MAX_PATH_BYTES,
+            MAX_COMPONENT_BYTES,
+        )
+        .expect("bounded census limits");
+        let error = match root.descriptor_anchored_census(limits, &mut TestCensusFence::new()) {
+            Ok(_) => panic!("leaf beyond depth must refuse"),
+            Err(error) => error,
+        };
+        assert!(matches!(error, SecureFsError::CensusRefused));
+        assert_eq!(error.to_string(), "descriptor-anchored census refused");
+        assert!(!error.to_string().contains("secret-name"));
     }
 
     #[test]

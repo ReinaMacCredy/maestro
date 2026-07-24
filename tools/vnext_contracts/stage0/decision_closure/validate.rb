@@ -20,7 +20,9 @@ SUCCESSOR_HEADS = {
 
 class Bytes
   attr_reader :value
-  def initialize(hex) = @value = [hex].pack("H*")
+  def initialize(hex)
+    @value = [hex].pack("H*")
+  end
 end
 
 def head(major, value)
@@ -47,9 +49,13 @@ def encode(value)
   end
 end
 
-def optional(value) = value.nil? ? [0] : [1, value]
+def optional(value)
+  value.nil? ? [0] : [1, value]
+end
 
-def raw_bytes(record) = Bytes.new(record.fetch("raw_record_bytes").fetch("bytes"))
+def raw_bytes(record)
+  Bytes.new(record.fetch("raw_record_bytes").fetch("bytes"))
+end
 
 def external_record(record)
   [record.fetch("id"), record.fetch("terminal_status"), Bytes.new(record.fetch("raw_record_sha256")), Bytes.new(record.fetch("raw_body_sha256")), record.fetch("raw_supersedes"), record.fetch("raw_superseded_by"), record.fetch("external_authoring_disposition"), optional(record["normalized_successor"]), record.fetch("consequence_classification"), optional(record["rationale_disposition"]), record.fetch("materialization_ids").map { |item| Bytes.new(item) }, record.fetch("derived_effect_status"), raw_bytes(record)]

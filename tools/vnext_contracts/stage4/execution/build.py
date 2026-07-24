@@ -99,6 +99,7 @@ AUTHORITY_EXTENSION_SOURCES = [
     "src/domain/vnext/authority/materialization.rs",
     "src/domain/vnext/authority/mod.rs",
     "src/foundation/core/secure_fs.rs",
+    "src/foundation/core/descriptor_census_platform.rs",
 ]
 FOCAL_STEP_EVIDENCE_SOURCES = [
     "src/domain/vnext/evidence/mod.rs",
@@ -870,6 +871,10 @@ def source_paths() -> list[str]:
                 + contract_ownership_sources()
             + execution_sources()
             + persistence_sources()
+            + [
+                "src/domain/vnext/installation/consumer_snapshot.rs",
+                "src/domain/vnext/integration/consumer_closure.rs",
+            ]
             + TOOL_SOURCES
         )
     )

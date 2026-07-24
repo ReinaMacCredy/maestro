@@ -29,6 +29,11 @@ SUCCESSOR_PACKET_ROOT = Path("/private/tmp/maestro-vnext-materialization-success
 SUCCESSOR_PACKET_ARTIFACT_SHA256 = "7f13c85b45799e39daedd30846b4a024d1f264134b46c3e3b3cdf720f8e5fb02"
 SUCCESSOR_PACKET_VERIFIER = Path("/private/tmp/verify_maestro_successor_packet.rb")
 SUCCESSOR_PACKET_VERIFIER_SHA256 = "66f1164216bd698b15bb73a25bbfd7cf5cb5b5c038938242d4ffc4d14dbb624d"
+SUCCESSOR_RUBY = Path("/usr/bin/ruby")
+SUCCESSOR_RUBY_SHA256 = "5340838cbee187f366d75d1ec540e6acb962757f1c170111024970c170280c04"
+SUCCESSOR_RUBY_PROBE = (
+    "ruby 2.6.10p210 (2022-04-12 revision 67958) [universal.arm64e-darwin26]"
+)
 SUCCESSOR_APPROVAL_LOG = Path(
     "/Users/reinamaccredy/.codex/sessions/2026/07/11/"
     "rollout-2026-07-11T02-55-42-019f4d99-a48a-7390-9560-7c7a9dc63a8d.jsonl"
@@ -60,11 +65,12 @@ SUCCESSOR_APPROVAL_INSTRUCTION = (
 
 
 def _directory_flags() -> int:
+    if not hasattr(os, "O_NOFOLLOW"):
+        raise SystemExit("descriptor capture requires O_NOFOLLOW")
     flags = os.O_RDONLY | os.O_DIRECTORY
     if hasattr(os, "O_CLOEXEC"):
         flags |= os.O_CLOEXEC
-    if hasattr(os, "O_NOFOLLOW"):
-        flags |= os.O_NOFOLLOW
+    flags |= os.O_NOFOLLOW
     return flags
 
 
@@ -79,12 +85,17 @@ def _validate_directory_descriptor(descriptor: int, display: Path) -> None:
         raise SystemExit(f"unsafe descriptor-captured ancestor: {display}")
 
 
-def _open_directory_chain(path: Path) -> list[int]:
+def _descriptor_absolute_path(path: Path) -> Path:
     absolute = path.absolute()
     if absolute.parts[:2] == ("/", "var"):
         absolute = Path("/private").joinpath(*absolute.parts[1:])
     elif absolute.parts[:2] == ("/", "tmp"):
         absolute = Path("/private/tmp").joinpath(*absolute.parts[2:])
+    return absolute
+
+
+def _open_directory_chain(path: Path) -> list[int]:
+    absolute = _descriptor_absolute_path(path)
     descriptors = [os.open("/", _directory_flags())]
     try:
         _validate_directory_descriptor(descriptors[-1], Path("/"))
@@ -101,20 +112,42 @@ def _open_directory_chain(path: Path) -> list[int]:
         raise
 
 
-def _descriptor_capture_at(parent: int, name: str, display: Path) -> bytes:
+def _validate_directory_chain(descriptors: list[int], path: Path) -> None:
+    absolute = _descriptor_absolute_path(path)
+    if len(descriptors) != len(absolute.parts):
+        raise SystemExit(f"descriptor-captured ancestor closure changed: {path}")
+    for index, component in enumerate(absolute.parts[1:], start=1):
+        named = os.stat(component, dir_fd=descriptors[index - 1], follow_symlinks=False)
+        opened = os.fstat(descriptors[index])
+        identity = lambda value: (
+            value.st_dev,
+            value.st_ino,
+            value.st_mode,
+            value.st_uid,
+            value.st_gid,
+        )
+        if identity(named) != identity(opened):
+            raise SystemExit(f"descriptor-captured ancestor was substituted: {path}")
+
+
+def _descriptor_capture_at(
+    parent: int, name: str, display: Path, *, allow_root_owner: bool = False
+) -> bytes:
+    if not hasattr(os, "O_NOFOLLOW"):
+        raise SystemExit("descriptor capture requires O_NOFOLLOW")
     named_before = os.stat(name, dir_fd=parent, follow_symlinks=False)
     flags = os.O_RDONLY
     if hasattr(os, "O_CLOEXEC"):
         flags |= os.O_CLOEXEC
-    if hasattr(os, "O_NOFOLLOW"):
-        flags |= os.O_NOFOLLOW
+    flags |= os.O_NOFOLLOW
     descriptor = os.open(name, flags, dir_fd=parent)
     try:
         before = os.fstat(descriptor)
         if (
             not stat.S_ISREG(before.st_mode)
             or before.st_nlink != 1
-            or before.st_uid != os.geteuid()
+            or before.st_uid
+            not in ({0, os.geteuid()} if allow_root_owner else {os.geteuid()})
             or stat.S_IMODE(before.st_mode) & 0o022
         ):
             raise SystemExit(f"unsafe descriptor-captured input: {display}")
@@ -156,19 +189,32 @@ def _descriptor_capture_at(parent: int, name: str, display: Path) -> bytes:
         os.close(descriptor)
 
 
-def descriptor_capture(path: Path) -> bytes:
+def descriptor_capture(path: Path, *, allow_root_owner: bool = False) -> bytes:
     descriptors = _open_directory_chain(path.parent)
     try:
-        return _descriptor_capture_at(descriptors[-1], path.name, path)
+        captured = _descriptor_capture_at(
+            descriptors[-1],
+            path.name,
+            path,
+            allow_root_owner=allow_root_owner,
+        )
+        _validate_directory_chain(descriptors, path.parent)
+        return captured
     finally:
         for descriptor in reversed(descriptors):
             os.close(descriptor)
 
 
-def descriptor_capture_directory(path: Path) -> dict[str, bytes]:
+def descriptor_capture_directory(
+    path: Path, *, after_open_for_test: object | None = None
+) -> dict[str, bytes]:
     descriptors = _open_directory_chain(path)
     directory = descriptors[-1]
     try:
+        if after_open_for_test is not None:
+            if not callable(after_open_for_test):
+                raise SystemExit("descriptor-capture test hook is not callable")
+            after_open_for_test()
         before = os.fstat(directory)
         captured: dict[str, bytes] = {}
         for entry in sorted(os.scandir(directory), key=lambda candidate: candidate.name):
@@ -192,6 +238,7 @@ def descriptor_capture_directory(path: Path) -> dict[str, bytes]:
         )
         if identity(before) != identity(after):
             raise SystemExit(f"descriptor-captured directory changed during read: {path}")
+        _validate_directory_chain(descriptors, path)
         return captured
     finally:
         for descriptor in reversed(descriptors):
@@ -243,7 +290,9 @@ def successor_approval(bindings: dict[str, object]) -> bool:
     return approval.get("packet_sha256") == SUCCESSOR_PACKET_SHA256
 
 
-def verify_successor_packet_artifacts(bindings: dict[str, object]) -> None:
+def verify_successor_packet_artifacts(
+    bindings: dict[str, object],
+) -> dict[str, bytes]:
     approval = bindings["external_approval"]
     event = bindings["external_approval_event"]
     assert isinstance(approval, dict)
@@ -268,6 +317,25 @@ def verify_successor_packet_artifacts(bindings: dict[str, object]) -> None:
         SUCCESSOR_PACKET_VERIFIER_SHA256,
     )
     packet_files = descriptor_capture_directory(SUCCESSOR_PACKET_ROOT)
+    ruby_bytes = descriptor_capture(SUCCESSOR_RUBY, allow_root_owner=True)
+    require_equal(
+        "successor Ruby executable bytes",
+        hashlib.sha256(ruby_bytes).hexdigest(),
+        SUCCESSOR_RUBY_SHA256,
+    )
+    ruby_probe = subprocess.run(
+        [str(SUCCESSOR_RUBY), "--version"],
+        check=False,
+        capture_output=True,
+        text=True,
+        env={"LANG": "C", "LC_ALL": "C", "PATH": "/usr/bin:/bin"},
+    )
+    require_equal("successor Ruby probe exit", ruby_probe.returncode, 0)
+    require_equal(
+        "successor Ruby probe",
+        (ruby_probe.stdout or ruby_probe.stderr).strip(),
+        SUCCESSOR_RUBY_PROBE,
+    )
     packet_name = "replacement-build-approval-packet.v1.json"
     if packet_name not in packet_files:
         raise SystemExit("successor packet artifact is absent")
@@ -305,10 +373,18 @@ def verify_successor_packet_artifacts(bindings: dict[str, object]) -> None:
         verifier_snapshot.write_bytes(verifier_bytes)
         verifier_snapshot.chmod(0o500)
         completed = subprocess.run(
-            ["ruby", str(verifier_snapshot), str(packet_snapshot)],
+            [str(SUCCESSOR_RUBY), str(verifier_snapshot), str(packet_snapshot)],
             check=False,
             capture_output=True,
             text=True,
+            cwd=snapshot,
+            env={
+                "HOME": str(snapshot),
+                "LANG": "C",
+                "LC_ALL": "C",
+                "PATH": "/usr/bin:/bin",
+                "RUBYOPT": "",
+            },
         )
     if completed.returncode != 0:
         raise SystemExit(f"independent successor packet verifier failed: {completed.stderr}")
@@ -318,9 +394,12 @@ def verify_successor_packet_artifacts(bindings: dict[str, object]) -> None:
     require_equal("successor packet verifier candidate", verdict["candidate_input"], SUCCESSOR_CANDIDATE_INPUT)
     require_equal("successor packet verifier handoff", verdict["build_plan_handoff"], SUCCESSOR_BUILD_HANDOFF)
     require_equal("successor packet verifier status", verdict["status"], "verified")
+    return packet_files
 
 
-def verify_successor_external_approval_event(bindings: dict[str, object]) -> None:
+def verify_successor_external_approval_event(
+    bindings: dict[str, object],
+) -> dict[str, bytes]:
     event = bindings["external_approval_event"]
     assert isinstance(event, dict)
     required = {
@@ -486,7 +565,7 @@ def verify_successor_external_approval_event(bindings: dict[str, object]) -> Non
     )
     if int(packet_complete_payload["completed_at"]) >= SUCCESSOR_APPROVAL_STARTED_AT:
         raise SystemExit("successor approval is not strictly post-packet")
-    verify_successor_packet_artifacts(bindings)
+    return verify_successor_packet_artifacts(bindings)
 
 
 def path_metadata(path: Path) -> dict[str, str]:
@@ -1238,10 +1317,11 @@ def verify_external_packet(bindings: dict[str, object]) -> None:
     )
 
 
-def verify_external_approval_event(bindings: dict[str, object]) -> None:
+def verify_external_approval_event(
+    bindings: dict[str, object],
+) -> dict[str, bytes] | None:
     if successor_approval(bindings):
-        verify_successor_external_approval_event(bindings)
-        return
+        return verify_successor_external_approval_event(bindings)
 
     event = bindings["external_approval_event"]
     plan = bindings["external_build_plan"]
@@ -1678,12 +1758,14 @@ def verify_decision_inventory(bindings: dict[str, object], source: Path) -> None
         raise SystemExit(f"effective composite head is absent: {head}")
 
 
-def verify_successor_source_closure(bindings: dict[str, object]) -> None:
-    packet = json.loads(
-        (SUCCESSOR_PACKET_ROOT / "replacement-build-approval-packet.v1.json").read_text(
-            encoding="utf-8"
-        )
-    )
+def verify_successor_source_closure(
+    bindings: dict[str, object], packet_files: dict[str, bytes]
+) -> None:
+    packet_name = "replacement-build-approval-packet.v1.json"
+    manifest_name = "successor-decision-store-manifest.v1.txt"
+    if packet_name not in packet_files or manifest_name not in packet_files:
+        raise SystemExit("successor packet source closure is incomplete")
+    packet = json.loads(packet_files[packet_name])
     candidate_records = packet["candidate_input"]["records"]
     assert isinstance(candidate_records, dict)
     canonical = bindings["canonical_source_inputs"]
@@ -1716,8 +1798,10 @@ def verify_successor_source_closure(bindings: dict[str, object]) -> None:
         {key: inventory[key] for key in ("total", "locked", "superseded", "open")},
         {"total": 213, "locked": 117, "superseded": 96, "open": 0},
     )
-    manifest = SUCCESSOR_PACKET_ROOT / "successor-decision-store-manifest.v1.txt"
-    rows = [line.split("\t") for line in manifest.read_text(encoding="utf-8").splitlines()]
+    rows = [
+        line.split("\t")
+        for line in packet_files[manifest_name].decode("utf-8").splitlines()
+    ]
     if len(rows) != 213 or any(len(row) != 4 for row in rows):
         raise SystemExit("successor Decision-store manifest is incomplete")
     if len({row[0] for row in rows}) != 213:
@@ -1782,9 +1866,11 @@ def main() -> None:
     verify_external_candidate_commitment(bindings)
     verify_baseline_objects(bindings, source)
     verify_external_packet(bindings)
-    verify_external_approval_event(bindings)
+    successor_packet_files = verify_external_approval_event(bindings)
     if successor_approval(bindings):
-        verify_successor_source_closure(bindings)
+        if successor_packet_files is None:
+            raise SystemExit("successor packet capture is unavailable")
+        verify_successor_source_closure(bindings, successor_packet_files)
     else:
         verify_current_control_rebind(bindings)
         verify_external_build_plan(bindings, source)

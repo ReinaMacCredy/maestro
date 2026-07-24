@@ -134,7 +134,7 @@ pub(in crate::domain::vnext) trait ConsumerClosureLeasePortV1:
     consumer_sealed::LeaseSealed
 {
     fn initial(&self) -> &ConsumerClosureFactsV1;
-    fn consume_final_recheck(self) -> Result<(), ConsumerClosureErrorV1>;
+    fn recheck_current(&mut self) -> Result<(), ConsumerClosureErrorV1>;
 }
 
 pub(in crate::domain::vnext) struct HostConsumerAdmissionGuardV1<'connection, L> {
@@ -191,10 +191,10 @@ impl<'connection, L: ConsumerClosureLeasePortV1> HostConsumerAdmissionGuardV1<'c
         commitments
     }
 
-    pub(in crate::domain::vnext) fn consume_final_recheck(
-        self,
+    pub(in crate::domain::vnext) fn recheck_current(
+        &mut self,
     ) -> Result<(), ConsumerClosureErrorV1> {
-        self.lease.consume_final_recheck()
+        self.lease.recheck_current()
     }
 }
 
@@ -243,7 +243,7 @@ pub(in crate::domain::vnext) mod test_seed {
             &self.initial
         }
 
-        fn consume_final_recheck(self) -> Result<(), ConsumerClosureErrorV1> {
+        fn recheck_current(&mut self) -> Result<(), ConsumerClosureErrorV1> {
             if self.provider.facts.borrow().as_ref() != Some(&self.initial) {
                 return Err(ConsumerClosureErrorV1::Changed);
             }

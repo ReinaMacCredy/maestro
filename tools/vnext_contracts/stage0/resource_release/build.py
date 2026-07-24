@@ -1950,7 +1950,7 @@ def main() -> int:
     if not mismatches:
         try:
             process = subprocess.run(
-                ["ruby", "tools/vnext_contracts/stage0/resource_release/verify.rb"],
+                ["/usr/bin/ruby", "tools/vnext_contracts/stage0/resource_release/verify.rb"],
                 cwd=ROOT,
                 check=True,
                 capture_output=True,

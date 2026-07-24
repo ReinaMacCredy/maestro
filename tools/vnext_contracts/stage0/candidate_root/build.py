@@ -817,7 +817,7 @@ def verify_closed_sources() -> None:
         [sys.executable, str(WORKSPACE / "tools/vnext_contracts/stage0/decision_closure/validate.py")],
         [sys.executable, str(WORKSPACE / "tools/vnext_contracts/stage0/public_identity/verify.py")],
         [sys.executable, str(WORKSPACE / "tools/vnext_contracts/stage0/effect_home/validate.py")],
-        ["ruby", str(WORKSPACE / "tools/vnext_contracts/stage0/submission_claim/verify.rb")],
+        ["/usr/bin/ruby", str(WORKSPACE / "tools/vnext_contracts/stage0/submission_claim/verify.rb")],
         [sys.executable, str(WORKSPACE / "tools/vnext_contracts/stage0/proof_matrix/validate.py")],
     )
     for command in commands:

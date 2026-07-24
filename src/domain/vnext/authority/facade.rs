@@ -39,6 +39,7 @@ use super::protected_diagnostic_envelope::{
     reset_protected_diagnostic_envelope_test_observation,
 };
 
+pub(in crate::domain::vnext::authority) use repository_admission::MaterializationAuthorityAdmissionV1;
 #[cfg(test)]
 pub(crate) use repository_admission::test_support;
 pub(crate) use repository_admission::{
@@ -72,8 +73,11 @@ pub use repository_leaf_authority::{
 
 use super::continuity::{StoreAllocatedContinuityStateTokenV1, StoreAllocationBindingErrorV1};
 use super::materialization::{
-    AuthorityMaterializationErrorV1, AuthorityMaterializationPublicationErrorV1,
-    AuthorityMaterializationTransactionV1,
+    AdmittedRepositoryActionBindingV1, AuthorityMaterializationErrorV1,
+    AuthorityMaterializationTransactionV1, MaterializationAtomicPublicationPortV1,
+    MaterializationStoreViewPortV1, RepositoryActionBindingFactsV1, RepositoryActionBindingKindV1,
+    RepositoryActionCommitFactsV1, SchedulingPolicyBindingOwnerV1,
+    SchedulingPolicyDowngradeMandateFactsV1, VerifiedSchedulingPolicyDowngradeMandateUseV1,
 };
 use super::publication::{
     AuthorityPublicationKindV1, AuthorityPublicationOutcomeV1, AuthoritySchemaV1,
@@ -110,16 +114,177 @@ pub struct AuthorityFacadeV1<'store> {
     store: &'store mut StoreV1,
 }
 
+// TODO(Authority Stage 7/8): Remove this expectation on or after 2026-07-24
+// when the first materialization caller handles the typed publication failure.
+#[expect(
+    dead_code,
+    reason = "the owner-private materialization publication error is frozen before its Stage 7/8 consumers integrate"
+)]
+#[derive(Debug)]
+pub(in crate::domain::vnext) enum AuthorityMaterializationPublicationErrorV1<E> {
+    Store(crate::domain::vnext::persistence::StoreError),
+    Prepare(E),
+}
+
+struct AuthorityMaterializationPublicationViewV1<'a> {
+    publication: &'a AtomicGenerationPublicationV1,
+    probe: &'a StoreIdempotencyProbeV1,
+}
+
+impl MaterializationAtomicPublicationPortV1 for AuthorityMaterializationPublicationViewV1<'_> {
+    fn expected_old(&self) -> Option<crate::domain::vnext::identity::StoreHeadIdV1> {
+        self.publication.expected_old()
+    }
+
+    fn generation_ordinal(&self) -> u64 {
+        self.publication.generation().ordinal()
+    }
+
+    fn generation_previous(&self) -> Option<crate::domain::vnext::identity::StoreGenerationIdV1> {
+        self.publication.generation().previous()
+    }
+
+    fn probe_key_digest(&self) -> [u8; 32] {
+        *self.probe.key_digest()
+    }
+
+    fn probe_meaning_digest(&self) -> [u8; 32] {
+        *self.probe.meaning_digest()
+    }
+
+    fn idempotency_key_digest(&self) -> [u8; 32] {
+        *self.publication.idempotency().key_digest()
+    }
+
+    fn idempotency_meaning_digest(&self) -> [u8; 32] {
+        *self.publication.idempotency().meaning_digest()
+    }
+
+    fn idempotency_result_object_id(&self) -> StoreObjectIdV1 {
+        self.publication.idempotency().result_object_id()
+    }
+
+    fn object_ids(&self) -> Vec<StoreObjectIdV1> {
+        self.publication
+            .objects()
+            .iter()
+            .map(|object| object.id())
+            .collect()
+    }
+}
+
+pub(crate) struct AuthorityMaterializationPortV1<'tx> {
+    view: &'tx StorePublicationViewV1<'tx>,
+    transaction: AuthorityMaterializationTransactionV1<'tx>,
+}
+
+impl MaterializationStoreViewPortV1 for StorePublicationViewV1<'_> {
+    fn active_head_id(
+        &self,
+    ) -> Result<
+        Option<crate::domain::vnext::identity::StoreHeadIdV1>,
+        AuthorityMaterializationErrorV1,
+    > {
+        self.active_head()
+            .map(|head| head.map(|head| head.id()))
+            .map_err(|_| AuthorityMaterializationErrorV1::StoreCurrentness)
+    }
+
+    fn active_generation_id(
+        &self,
+    ) -> Result<crate::domain::vnext::identity::StoreGenerationIdV1, AuthorityMaterializationErrorV1>
+    {
+        self.active_generation()
+            .map_err(|_| AuthorityMaterializationErrorV1::StoreCurrentness)?
+            .map(|generation| generation.id())
+            .ok_or(AuthorityMaterializationErrorV1::StoreCurrentness)
+    }
+
+    fn active_generation_object_ids(
+        &self,
+    ) -> Result<Vec<StoreObjectIdV1>, AuthorityMaterializationErrorV1> {
+        self.active_generation_objects()
+            .map(|objects| objects.into_iter().map(|object| object.id()).collect())
+            .map_err(|_| AuthorityMaterializationErrorV1::StoreCurrentness)
+    }
+}
+
+// TODO(Authority Stage 7/8): Remove this expectation on or after 2026-07-24
+// when the first Planning/repository-owner consumer calls these operations.
+#[expect(
+    dead_code,
+    reason = "the owner-private Authority materialization operations are frozen before their Stage 7/8 consumers integrate"
+)]
+impl<'tx> AuthorityMaterializationPortV1<'tx> {
+    pub(in crate::domain::vnext::authority) fn mint_mandate(
+        &'tx self,
+        facts: SchedulingPolicyDowngradeMandateFactsV1,
+    ) -> Result<VerifiedSchedulingPolicyDowngradeMandateUseV1<'tx>, AuthorityMaterializationErrorV1>
+    {
+        self.transaction.mint_mandate(facts)
+    }
+
+    pub(in crate::domain::vnext::authority) fn admit_binding<K: RepositoryActionBindingKindV1>(
+        &'tx self,
+        input: RepositoryActionAdmissionInputV1,
+        facts: RepositoryActionBindingFactsV1,
+    ) -> Result<AdmittedRepositoryActionBindingV1<'tx, K>, AuthorityMaterializationErrorV1> {
+        let generation = self
+            .view
+            .active_generation()
+            .map_err(|_| AuthorityMaterializationErrorV1::StoreCurrentness)?
+            .ok_or(AuthorityMaterializationErrorV1::StoreCurrentness)?;
+        let admitted = admit_repository_action(self.view, &generation, input)
+            .map_err(|_| AuthorityMaterializationErrorV1::BindingMismatch)?;
+        self.transaction.mint_binding::<K>(&admitted, facts)
+    }
+
+    pub(in crate::domain::vnext) fn execute_owner_materialization<
+        K: RepositoryActionBindingKindV1,
+    >(
+        &'tx self,
+        input: RepositoryActionAdmissionInputV1,
+        facts: RepositoryActionBindingFactsV1,
+        commit: RepositoryActionCommitFactsV1,
+        publication: AtomicGenerationPublicationV1,
+    ) -> Result<AtomicGenerationPublicationV1, AuthorityMaterializationErrorV1> {
+        let binding = self.admit_binding::<K>(input, facts)?;
+        self.transaction
+            .consume_binding_without_mandate(binding, commit)?;
+        Ok(publication)
+    }
+
+    pub(in crate::domain::vnext) fn execute_scheduling_downgrade_materialization(
+        &'tx self,
+        input: RepositoryActionAdmissionInputV1,
+        mandate: SchedulingPolicyDowngradeMandateFactsV1,
+        facts: RepositoryActionBindingFactsV1,
+        commit: RepositoryActionCommitFactsV1,
+        publication: AtomicGenerationPublicationV1,
+    ) -> Result<AtomicGenerationPublicationV1, AuthorityMaterializationErrorV1> {
+        let mandate_use = self.mint_mandate(mandate)?;
+        let binding = self.admit_binding::<SchedulingPolicyBindingOwnerV1>(input, facts)?;
+        mandate_use.consume_with_action_binding(binding, commit)?;
+        Ok(publication)
+    }
+}
+
 impl<'store> AuthorityFacadeV1<'store> {
     pub fn new(store: &'store mut StoreV1) -> Self {
         Self { store }
     }
 
-    pub fn publish_planning_materialization<E>(
+    // TODO(Authority Stage 7): Remove this expectation on or after 2026-07-24
+    // when Planning invokes this canonical Store transaction boundary.
+    #[expect(
+        dead_code,
+        reason = "the canonical Planning materialization entry is frozen before its Stage 7 consumer integrates"
+    )]
+    pub(in crate::domain::vnext) fn publish_repository_materialization<E>(
         &mut self,
         probe: &StoreIdempotencyProbeV1,
         prepare: impl for<'tx> FnOnce(
-            &'tx AuthorityMaterializationTransactionV1<'tx>,
+            &'tx AuthorityMaterializationPortV1<'tx>,
         ) -> Result<AtomicGenerationPublicationV1, E>,
     ) -> Result<StorePublicationOutcomeV1, AuthorityMaterializationPublicationErrorV1<E>>
     where
@@ -127,14 +292,24 @@ impl<'store> AuthorityFacadeV1<'store> {
     {
         self.store
             .publish_generation_atomically_with_prepare(probe, |view| {
-                let transaction =
-                    AuthorityMaterializationTransactionV1::from_live_store_transaction(view);
-                let publication = prepare(&transaction)?;
-                if !transaction.is_consumed() {
+                let port = AuthorityMaterializationPortV1 {
+                    view,
+                    transaction: AuthorityMaterializationTransactionV1::from_live_store_transaction(
+                        view,
+                    ),
+                };
+                let publication = prepare(&port)?;
+                if !port.transaction.is_consumed() {
                     return Err(E::from(
                         AuthorityMaterializationErrorV1::IncompleteTransaction,
                     ));
                 }
+                port.transaction
+                    .validate_atomic_publication(&AuthorityMaterializationPublicationViewV1 {
+                        publication: &publication,
+                        probe,
+                    })
+                    .map_err(E::from)?;
                 Ok(publication)
             })
             .map_err(|error| match error {

@@ -1,4 +1,3 @@
-use std::cell::Cell;
 use std::marker::PhantomData;
 use std::rc::Rc;
 
@@ -41,90 +40,270 @@ impl ConsumerClosureStageV1 for PhysicalPruningConsumerStageV1 {
     const TAG: u8 = 3;
 }
 
-mod owner_operation_sealed {
+pub(in crate::domain::vnext) mod owner_operation_sealed {
     pub trait Sealed {}
 }
 
-pub(in crate::domain::vnext) trait ConsumerClosureOwnerOperationPortV1<K>:
+pub(in crate::domain::vnext) trait ConsumerClosureOwnerOperationPortV1<K, S, H>:
     owner_operation_sealed::Sealed
 where
     K: ConsumerClosureStageV1,
+    S: ConsumerSnapshotCurrentViewLeasePortV1,
+    H: ConsumerClosureLeasePortV1,
 {
     fn operation_identity(&self) -> [u8; 32];
     fn linearize(
         self,
-        guard: ConsumerClosureFinalityGuardV1<'_, K>,
-    ) -> Result<(), InstallationConsumerSnapshotErrorV1>;
+        guard: ConsumerClosureFinalityGuardV1<'_, '_, S, H, K>,
+    ) -> Result<ConsumerClosureFinalityFactsV1, InstallationConsumerSnapshotErrorV1>;
+}
+
+pub(in crate::domain::vnext) trait ConsumerClosureStageProofIssuerV1<K>:
+    owner_operation_sealed::Sealed
+where
+    K: ConsumerClosureStageV1,
+{
 }
 
 #[derive(Clone, Copy)]
-struct ConsumerClosureFinalityFactsV1 {
+pub(in crate::domain::vnext) struct ConsumerClosureFinalityFactsV1 {
     owner_operation: [u8; 32],
-    active_consumer_count: u64,
-    protected_reader_count: u64,
-    association_write: bool,
+    stage_proof_commitment: [u8; 32],
     expected_old_cas: [u8; 32],
 }
 
-pub(in crate::domain::vnext) struct ConsumerClosureFinalityGuardV1<'finality, K> {
+pub(in crate::domain::vnext) struct PreCurrentnessClosureProofV1 {
+    active_consumer_zero: [u8; 32],
+    canonical_consumer_rows: [u8; 32],
+    association_write_set: [u8; 32],
+}
+
+pub(in crate::domain::vnext) struct ProtectedRetentionClosureProofV1 {
+    admitted_typed_reader_set: [u8; 32],
+    sealed_reader_closure: [u8; 32],
+    retention_authority: [u8; 32],
+}
+
+pub(in crate::domain::vnext) struct PhysicalPruningClosureProofV1 {
+    reader_zero: [u8; 32],
+    hold_zero: [u8; 32],
+    custody: [u8; 32],
+    authority: [u8; 32],
+    rollback_safety: [u8; 32],
+    erasure_safety: [u8; 32],
+    legacy_removal_authorization: [u8; 32],
+}
+
+impl PreCurrentnessClosureProofV1 {
+    pub(in crate::domain::vnext) fn from_owner_proof<I>(
+        _issuer: &I,
+        active_consumer_zero: [u8; 32],
+        canonical_consumer_rows: [u8; 32],
+        association_write_set: [u8; 32],
+    ) -> Result<Self, InstallationConsumerSnapshotErrorV1>
+    where
+        I: ConsumerClosureStageProofIssuerV1<PreCurrentnessConsumerStageV1>,
+    {
+        require_nonzero([
+            active_consumer_zero,
+            canonical_consumer_rows,
+            association_write_set,
+        ])?;
+        Ok(Self {
+            active_consumer_zero,
+            canonical_consumer_rows,
+            association_write_set,
+        })
+    }
+
+    fn commitment(&self) -> [u8; 32] {
+        canonical_stage_proof(
+            1,
+            &[
+                self.active_consumer_zero,
+                self.canonical_consumer_rows,
+                self.association_write_set,
+            ],
+        )
+    }
+}
+
+impl ProtectedRetentionClosureProofV1 {
+    pub(in crate::domain::vnext) fn from_owner_proof<I>(
+        _issuer: &I,
+        admitted_typed_reader_set: [u8; 32],
+        sealed_reader_closure: [u8; 32],
+        retention_authority: [u8; 32],
+    ) -> Result<Self, InstallationConsumerSnapshotErrorV1>
+    where
+        I: ConsumerClosureStageProofIssuerV1<ProtectedRetentionConsumerStageV1>,
+    {
+        require_nonzero([
+            admitted_typed_reader_set,
+            sealed_reader_closure,
+            retention_authority,
+        ])?;
+        Ok(Self {
+            admitted_typed_reader_set,
+            sealed_reader_closure,
+            retention_authority,
+        })
+    }
+
+    fn commitment(&self) -> [u8; 32] {
+        canonical_stage_proof(
+            2,
+            &[
+                self.admitted_typed_reader_set,
+                self.sealed_reader_closure,
+                self.retention_authority,
+            ],
+        )
+    }
+}
+
+impl PhysicalPruningClosureProofV1 {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "physical pruning requires the complete locked safety conjunction"
+    )]
+    pub(in crate::domain::vnext) fn from_owner_proof<I>(
+        _issuer: &I,
+        reader_zero: [u8; 32],
+        hold_zero: [u8; 32],
+        custody: [u8; 32],
+        authority: [u8; 32],
+        rollback_safety: [u8; 32],
+        erasure_safety: [u8; 32],
+        legacy_removal_authorization: [u8; 32],
+    ) -> Result<Self, InstallationConsumerSnapshotErrorV1>
+    where
+        I: ConsumerClosureStageProofIssuerV1<PhysicalPruningConsumerStageV1>,
+    {
+        require_nonzero([
+            reader_zero,
+            hold_zero,
+            custody,
+            authority,
+            rollback_safety,
+            erasure_safety,
+            legacy_removal_authorization,
+        ])?;
+        Ok(Self {
+            reader_zero,
+            hold_zero,
+            custody,
+            authority,
+            rollback_safety,
+            erasure_safety,
+            legacy_removal_authorization,
+        })
+    }
+
+    fn commitment(&self) -> [u8; 32] {
+        canonical_stage_proof(
+            3,
+            &[
+                self.reader_zero,
+                self.hold_zero,
+                self.custody,
+                self.authority,
+                self.rollback_safety,
+                self.erasure_safety,
+                self.legacy_removal_authorization,
+            ],
+        )
+    }
+}
+
+pub(in crate::domain::vnext) struct ConsumerClosureFinalityGuardV1<'view, 'connection, S, H, K> {
     owner_operation: [u8; 32],
-    slot: &'finality Cell<Option<ConsumerClosureFinalityFactsV1>>,
+    store: ConsumerSnapshotCurrentViewLeaseV1<'view, S>,
+    host: HostConsumerAdmissionGuardV1<'connection, H>,
     _stage: PhantomData<K>,
     _not_send_or_sync: PhantomData<Rc<()>>,
 }
 
-impl<K: ConsumerClosureStageV1> ConsumerClosureFinalityGuardV1<'_, K> {
-    fn record(
-        &self,
-        active_consumer_count: u64,
-        protected_reader_count: u64,
-        association_write: bool,
+impl<
+    S: ConsumerSnapshotCurrentViewLeasePortV1,
+    H: ConsumerClosureLeasePortV1,
+    K: ConsumerClosureStageV1,
+> ConsumerClosureFinalityGuardV1<'_, '_, S, H, K>
+{
+    fn linearize(
+        mut self,
+        stage_proof_commitment: [u8; 32],
         expected_old_cas: [u8; 32],
+        durable_effect: impl FnOnce() -> Result<(), InstallationConsumerSnapshotErrorV1>,
     ) -> Result<(), InstallationConsumerSnapshotErrorV1> {
-        if expected_old_cas == [0; 32] || self.slot.get().is_some() {
+        if stage_proof_commitment == [0; 32] || expected_old_cas == [0; 32] {
             return Err(InstallationConsumerSnapshotErrorV1::FinalityMismatch);
         }
-        let valid = match K::TAG {
-            1 => active_consumer_count == 0 && association_write,
-            2 => protected_reader_count > 0 && !association_write,
-            3 => protected_reader_count == 0 && !association_write,
-            _ => false,
-        };
-        if !valid {
-            return Err(InstallationConsumerSnapshotErrorV1::FinalityMismatch);
+        self.host.recheck_current()?;
+        let current = self.store.recheck_current()?;
+        if current.owner_stage_tag() != K::TAG || current.owner_operation() != self.owner_operation
+        {
+            return Err(InstallationConsumerSnapshotErrorV1::OwnerStageMismatch);
         }
-        self.slot.set(Some(ConsumerClosureFinalityFactsV1 {
-            owner_operation: self.owner_operation,
-            active_consumer_count,
-            protected_reader_count,
-            association_write,
-            expected_old_cas,
-        }));
+        durable_effect()?;
         Ok(())
     }
 
-    pub(in crate::domain::vnext) fn linearize_pre_currentness_association(
+    fn finality(
         &self,
-        active_consumer_count: u64,
+        stage_proof_commitment: [u8; 32],
         expected_old_cas: [u8; 32],
-    ) -> Result<(), InstallationConsumerSnapshotErrorV1> {
-        self.record(active_consumer_count, 0, true, expected_old_cas)
+    ) -> ConsumerClosureFinalityFactsV1 {
+        ConsumerClosureFinalityFactsV1 {
+            owner_operation: self.owner_operation,
+            stage_proof_commitment,
+            expected_old_cas,
+        }
+    }
+
+    pub(in crate::domain::vnext) fn linearize_pre_currentness_association(
+        self,
+        proof: PreCurrentnessClosureProofV1,
+        expected_old_cas: [u8; 32],
+        durable_effect: impl FnOnce() -> Result<(), InstallationConsumerSnapshotErrorV1>,
+    ) -> Result<ConsumerClosureFinalityFactsV1, InstallationConsumerSnapshotErrorV1> {
+        if K::TAG != PreCurrentnessConsumerStageV1::TAG {
+            return Err(InstallationConsumerSnapshotErrorV1::FinalityMismatch);
+        }
+        let commitment = proof.commitment();
+        let finality = self.finality(commitment, expected_old_cas);
+        self.linearize(commitment, expected_old_cas, durable_effect)?;
+        Ok(finality)
     }
 
     pub(in crate::domain::vnext) fn linearize_protected_retention(
-        &self,
-        protected_reader_count: u64,
+        self,
+        proof: ProtectedRetentionClosureProofV1,
         expected_old_cas: [u8; 32],
-    ) -> Result<(), InstallationConsumerSnapshotErrorV1> {
-        self.record(0, protected_reader_count, false, expected_old_cas)
+        durable_effect: impl FnOnce() -> Result<(), InstallationConsumerSnapshotErrorV1>,
+    ) -> Result<ConsumerClosureFinalityFactsV1, InstallationConsumerSnapshotErrorV1> {
+        if K::TAG != ProtectedRetentionConsumerStageV1::TAG {
+            return Err(InstallationConsumerSnapshotErrorV1::FinalityMismatch);
+        }
+        let commitment = proof.commitment();
+        let finality = self.finality(commitment, expected_old_cas);
+        self.linearize(commitment, expected_old_cas, durable_effect)?;
+        Ok(finality)
     }
 
     pub(in crate::domain::vnext) fn linearize_physical_pruning(
-        &self,
-        protected_reader_count: u64,
+        self,
+        proof: PhysicalPruningClosureProofV1,
         expected_old_cas: [u8; 32],
-    ) -> Result<(), InstallationConsumerSnapshotErrorV1> {
-        self.record(0, protected_reader_count, false, expected_old_cas)
+        durable_effect: impl FnOnce() -> Result<(), InstallationConsumerSnapshotErrorV1>,
+    ) -> Result<ConsumerClosureFinalityFactsV1, InstallationConsumerSnapshotErrorV1> {
+        if K::TAG != PhysicalPruningConsumerStageV1::TAG {
+            return Err(InstallationConsumerSnapshotErrorV1::FinalityMismatch);
+        }
+        let commitment = proof.commitment();
+        let finality = self.finality(commitment, expected_old_cas);
+        self.linearize(commitment, expected_old_cas, durable_effect)?;
+        Ok(finality)
     }
 }
 
@@ -142,7 +321,7 @@ impl<
     'connection,
     S: ConsumerSnapshotCurrentViewLeasePortV1,
     H: ConsumerClosureLeasePortV1,
-    O: ConsumerClosureOwnerOperationPortV1<K>,
+    O: ConsumerClosureOwnerOperationPortV1<K, S, H>,
     K: ConsumerClosureStageV1,
 > InstallationConsumerSnapshotV1<'view, 'connection, S, H, O, K>
 {
@@ -185,30 +364,20 @@ impl<
 
     pub(in crate::domain::vnext::installation) fn consume_finality(
         self,
-        exact_consumer_gate_result_id: [u8; 32],
     ) -> Result<ConsumerClosureReceiptV1<'view, 'connection, K>, InstallationConsumerSnapshotErrorV1>
     {
-        if exact_consumer_gate_result_id != self.consumer_set_id {
-            return Err(InstallationConsumerSnapshotErrorV1::GateMismatch);
-        }
-        let slot = Cell::new(None);
-        self.owner_operation
+        let initial_owner_operation = self.store.initial().owner_operation();
+        let finality = self
+            .owner_operation
             .linearize(ConsumerClosureFinalityGuardV1 {
-                owner_operation: self.store.initial().owner_operation(),
-                slot: &slot,
+                owner_operation: initial_owner_operation,
+                store: self.store,
+                host: self.host,
                 _stage: PhantomData,
                 _not_send_or_sync: PhantomData,
             })?;
-        let finality = slot
-            .take()
-            .ok_or(InstallationConsumerSnapshotErrorV1::FinalityMismatch)?;
-        self.host.consume_final_recheck()?;
-        let current = self.store.consume_final_recheck()?;
-        if current.owner_stage_tag() != K::TAG {
-            return Err(InstallationConsumerSnapshotErrorV1::OwnerStageMismatch);
-        }
         Ok(ConsumerClosureReceiptV1 {
-            owner_operation: current.owner_operation(),
+            owner_operation: initial_owner_operation,
             consumer_set_id: self.consumer_set_id,
             finality_commitment: finality_commitment::<K>(&finality),
             _view: PhantomData,
@@ -243,8 +412,6 @@ pub(in crate::domain::vnext) enum InstallationConsumerSnapshotErrorV1 {
     Host(#[from] ConsumerClosureErrorV1),
     #[error("consumer stage does not match the sealed owning operation")]
     OwnerStageMismatch,
-    #[error("consumer gate result does not bind the owner-issued consumer set")]
-    GateMismatch,
     #[error("consumer closure does not bind the exact owning finality operation")]
     FinalityMismatch,
 }
@@ -256,16 +423,35 @@ fn finality_commitment<K: ConsumerClosureStageV1>(
     hasher.update(b"maestro.vnext.consumer-closure-finality.v1\0");
     hasher.update([K::TAG]);
     hasher.update(finality.owner_operation);
-    hasher.update(finality.active_consumer_count.to_be_bytes());
-    hasher.update(finality.protected_reader_count.to_be_bytes());
-    hasher.update([u8::from(finality.association_write)]);
+    hasher.update(finality.stage_proof_commitment);
     hasher.update(finality.expected_old_cas);
+    hasher.finalize().into()
+}
+
+fn require_nonzero<const N: usize>(
+    values: [[u8; 32]; N],
+) -> Result<(), InstallationConsumerSnapshotErrorV1> {
+    if values.contains(&[0; 32]) {
+        return Err(InstallationConsumerSnapshotErrorV1::FinalityMismatch);
+    }
+    Ok(())
+}
+
+fn canonical_stage_proof(tag: u8, commitments: &[[u8; 32]]) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(b"maestro.vnext.consumer-closure-stage-proof.v1\0");
+    hasher.update([tag]);
+    for commitment in commitments {
+        hasher.update(commitment);
+    }
     hasher.finalize().into()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::cell::Cell;
+
     use crate::domain::vnext::integration::consumer_closure::test_seed as integration_seed;
     use crate::domain::vnext::persistence::consumer_snapshot::{
         ConsumerSnapshotCurrentFactsV1, test_seed as persistence_seed,
@@ -277,22 +463,91 @@ mod tests {
     }
 
     impl<K> owner_operation_sealed::Sealed for TestOwnerOperationV1<K> {}
+    impl<K> ConsumerClosureStageProofIssuerV1<PreCurrentnessConsumerStageV1>
+        for TestOwnerOperationV1<K>
+    {
+    }
+    impl<K> ConsumerClosureStageProofIssuerV1<ProtectedRetentionConsumerStageV1>
+        for TestOwnerOperationV1<K>
+    {
+    }
+    impl<K> ConsumerClosureStageProofIssuerV1<PhysicalPruningConsumerStageV1>
+        for TestOwnerOperationV1<K>
+    {
+    }
 
-    impl<K: ConsumerClosureStageV1> ConsumerClosureOwnerOperationPortV1<K> for TestOwnerOperationV1<K> {
+    impl<K, S, H> ConsumerClosureOwnerOperationPortV1<K, S, H> for TestOwnerOperationV1<K>
+    where
+        K: ConsumerClosureStageV1,
+        S: ConsumerSnapshotCurrentViewLeasePortV1,
+        H: ConsumerClosureLeasePortV1,
+    {
         fn operation_identity(&self) -> [u8; 32] {
             self.operation_identity
         }
 
         fn linearize(
             self,
-            guard: ConsumerClosureFinalityGuardV1<'_, K>,
-        ) -> Result<(), InstallationConsumerSnapshotErrorV1> {
+            guard: ConsumerClosureFinalityGuardV1<'_, '_, S, H, K>,
+        ) -> Result<ConsumerClosureFinalityFactsV1, InstallationConsumerSnapshotErrorV1> {
             match K::TAG {
-                1 => guard.linearize_pre_currentness_association(0, [90; 32]),
-                2 => guard.linearize_protected_retention(1, [90; 32]),
-                3 => guard.linearize_physical_pruning(0, [90; 32]),
+                1 => guard.linearize_pre_currentness_association(
+                    PreCurrentnessClosureProofV1::from_owner_proof(
+                        &self, [81; 32], [82; 32], [83; 32],
+                    )?,
+                    [90; 32],
+                    || Ok(()),
+                ),
+                2 => guard.linearize_protected_retention(
+                    ProtectedRetentionClosureProofV1::from_owner_proof(
+                        &self, [84; 32], [85; 32], [86; 32],
+                    )?,
+                    [90; 32],
+                    || Ok(()),
+                ),
+                3 => guard.linearize_physical_pruning(
+                    PhysicalPruningClosureProofV1::from_owner_proof(
+                        &self, [87; 32], [88; 32], [89; 32], [91; 32], [92; 32], [93; 32], [94; 32],
+                    )?,
+                    [90; 32],
+                    || Ok(()),
+                ),
                 _ => Err(InstallationConsumerSnapshotErrorV1::FinalityMismatch),
             }
+        }
+    }
+
+    struct CountingOwnerOperationV1 {
+        effects: Rc<Cell<u64>>,
+    }
+
+    impl owner_operation_sealed::Sealed for CountingOwnerOperationV1 {}
+    impl ConsumerClosureStageProofIssuerV1<PreCurrentnessConsumerStageV1> for CountingOwnerOperationV1 {}
+
+    impl<S, H> ConsumerClosureOwnerOperationPortV1<PreCurrentnessConsumerStageV1, S, H>
+        for CountingOwnerOperationV1
+    where
+        S: ConsumerSnapshotCurrentViewLeasePortV1,
+        H: ConsumerClosureLeasePortV1,
+    {
+        fn operation_identity(&self) -> [u8; 32] {
+            [1; 32]
+        }
+
+        fn linearize(
+            self,
+            guard: ConsumerClosureFinalityGuardV1<'_, '_, S, H, PreCurrentnessConsumerStageV1>,
+        ) -> Result<ConsumerClosureFinalityFactsV1, InstallationConsumerSnapshotErrorV1> {
+            guard.linearize_pre_currentness_association(
+                PreCurrentnessClosureProofV1::from_owner_proof(
+                    &self, [81; 32], [82; 32], [83; 32],
+                )?,
+                [90; 32],
+                || {
+                    self.effects.set(self.effects.get() + 1);
+                    Ok(())
+                },
+            )
         }
     }
 
@@ -392,7 +647,7 @@ mod tests {
         let mut host = integration_seed::TestProviderV1::new(integration_seed::standard_facts());
         let snapshot = issue::<PreCurrentnessConsumerStageV1>(&mut store, &mut host).unwrap();
         let expected = snapshot.consumer_set_id;
-        let receipt = snapshot.consume_finality(expected).unwrap();
+        let receipt = snapshot.consume_finality().unwrap();
         assert_eq!(receipt.owner_operation, [1; 32]);
         assert_eq!(receipt.consumer_set_id, expected);
         assert_ne!(receipt.finality_commitment(), [0; 32]);
@@ -400,16 +655,6 @@ mod tests {
 
     #[test]
     fn caller_gate_stage_and_post_issue_currentness_substitution_refuse() {
-        let mut store = persistence_seed::TestProviderV1::new(active_store_facts(
-            PreCurrentnessConsumerStageV1::TAG,
-        ));
-        let mut host = integration_seed::TestProviderV1::new(integration_seed::standard_facts());
-        let snapshot = issue::<PreCurrentnessConsumerStageV1>(&mut store, &mut host).unwrap();
-        assert!(matches!(
-            snapshot.consume_finality([99; 32]),
-            Err(InstallationConsumerSnapshotErrorV1::GateMismatch)
-        ));
-
         let mut store = persistence_seed::TestProviderV1::new(active_store_facts(
             PreCurrentnessConsumerStageV1::TAG,
         ));
@@ -430,10 +675,9 @@ mod tests {
         let mut host = integration_seed::TestProviderV1::new(integration_seed::standard_facts());
         let host_control = host.control();
         let snapshot = issue::<PreCurrentnessConsumerStageV1>(&mut store, &mut host).unwrap();
-        let expected = snapshot.consumer_set_id;
         integration_seed::change_admission_epoch(&host_control, [88; 32]);
         assert!(matches!(
-            snapshot.consume_finality(expected),
+            snapshot.consume_finality(),
             Err(InstallationConsumerSnapshotErrorV1::Host(
                 ConsumerClosureErrorV1::Changed
             ))
@@ -445,7 +689,6 @@ mod tests {
         let store_control = store.control();
         let mut host = integration_seed::TestProviderV1::new(integration_seed::standard_facts());
         let snapshot = issue::<PreCurrentnessConsumerStageV1>(&mut store, &mut host).unwrap();
-        let expected = snapshot.consumer_set_id;
         let mut changed = store_control.borrow().clone().unwrap();
         if let ConsumerSnapshotCurrentFactsV1::ActiveStore {
             restore_incarnation,
@@ -456,7 +699,7 @@ mod tests {
         }
         *store_control.borrow_mut() = Some(changed);
         assert!(matches!(
-            snapshot.consume_finality(expected),
+            snapshot.consume_finality(),
             Err(InstallationConsumerSnapshotErrorV1::Store(
                 ConsumerSnapshotCurrentnessErrorV1::Changed
             ))
@@ -464,12 +707,57 @@ mod tests {
     }
 
     #[test]
+    fn changed_host_or_store_currentness_refuses_before_owner_effect() {
+        let effects = Rc::new(Cell::new(0));
+        let mut store = persistence_seed::TestProviderV1::new(active_store_facts(
+            PreCurrentnessConsumerStageV1::TAG,
+        ));
+        let mut host = integration_seed::TestProviderV1::new(integration_seed::standard_facts());
+        let host_control = host.control();
+        let snapshot = InstallationConsumerSnapshotV1::issue(
+            persistence_seed::bind(&mut store).unwrap(),
+            integration_seed::bind(&mut host).unwrap(),
+            CountingOwnerOperationV1 {
+                effects: effects.clone(),
+            },
+        )
+        .unwrap();
+        integration_seed::change_admission_epoch(&host_control, [88; 32]);
+        assert!(snapshot.consume_finality().is_err());
+        assert_eq!(effects.get(), 0);
+
+        let mut store = persistence_seed::TestProviderV1::new(active_store_facts(
+            PreCurrentnessConsumerStageV1::TAG,
+        ));
+        let store_control = store.control();
+        let mut host = integration_seed::TestProviderV1::new(integration_seed::standard_facts());
+        let snapshot = InstallationConsumerSnapshotV1::issue(
+            persistence_seed::bind(&mut store).unwrap(),
+            integration_seed::bind(&mut host).unwrap(),
+            CountingOwnerOperationV1 {
+                effects: effects.clone(),
+            },
+        )
+        .unwrap();
+        let mut changed = store_control.borrow().clone().unwrap();
+        if let ConsumerSnapshotCurrentFactsV1::ActiveStore {
+            activation_incarnation,
+            ..
+        } = &mut changed
+        {
+            *activation_incarnation = [77; 32];
+        }
+        *store_control.borrow_mut() = Some(changed);
+        assert!(snapshot.consume_finality().is_err());
+        assert_eq!(effects.get(), 0);
+    }
+
+    #[test]
     fn pre_store_is_pre_currentness_only_and_has_no_final_root_or_candidate_seal() {
         let mut store = persistence_seed::TestProviderV1::new(pre_store_facts());
         let mut host = integration_seed::TestProviderV1::new(integration_seed::standard_facts());
         let snapshot = issue::<PreCurrentnessConsumerStageV1>(&mut store, &mut host).unwrap();
-        let expected = snapshot.consumer_set_id;
-        snapshot.consume_finality(expected).unwrap();
+        snapshot.consume_finality().unwrap();
 
         let source = include_str!("../persistence/consumer_snapshot.rs");
         assert!(!source.contains("final_candidate_root"));

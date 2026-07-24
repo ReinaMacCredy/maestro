@@ -85,6 +85,7 @@ AUTHORITY_EXTENSION_SOURCES = %w[
   src/domain/vnext/authority/materialization.rs
   src/domain/vnext/authority/mod.rs
   src/foundation/core/secure_fs.rs
+  src/foundation/core/descriptor_census_platform.rs
 ].freeze
 FOCAL_STEP_EVIDENCE_SOURCES = %w[
   src/domain/vnext/evidence/mod.rs
@@ -657,7 +658,10 @@ def source_paths
     CATALOG_PATHS + [DISPATCH_PATH, WITHDRAWAL_PATH] + PREDECESSOR_MANIFESTS.values +
     PREDECESSOR_RECEIPTS.values.flatten + COMPILATION_ANCESTORS + AUTHORITY_EXTENSION_SOURCES +
     FOCAL_STEP_EVIDENCE_SOURCES + contract_ownership_sources + execution_sources +
-    persistence_sources + TOOL_SOURCES
+    persistence_sources + [
+      "src/domain/vnext/installation/consumer_snapshot.rs",
+      "src/domain/vnext/integration/consumer_closure.rs"
+    ] + TOOL_SOURCES
   ).uniq.sort
   leaked = paths.any? do |path|
     path.start_with?("src/domain/vnext/gate/") ||

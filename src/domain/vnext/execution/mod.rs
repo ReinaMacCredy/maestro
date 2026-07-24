@@ -7,7 +7,16 @@ pub mod dispatch_state;
 pub mod effect_home;
 pub mod effect_routes;
 pub mod effects;
-pub mod h3_withdrawal_publication;
+// TODO(Execution Stage 11): Remove this expectation on or after 2026-07-24 when
+// Migration integrates the native withdrawal-publication consumer.
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "Stage 5 freezes the owner-private H3 withdrawal-publication port before its Stage 11 consumer integrates"
+    )
+)]
+pub(crate) mod h3_withdrawal_publication;
 pub mod runtime;
 pub mod store;
 pub mod withdrawal;

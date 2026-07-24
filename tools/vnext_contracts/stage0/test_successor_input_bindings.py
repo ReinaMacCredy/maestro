@@ -128,6 +128,58 @@ def main() -> None:
             pass
         else:
             raise SystemExit("descriptor capture accepted a symlink substitution")
+        ancestor = root / "ancestor"
+        packet = ancestor / "packet"
+        packet.mkdir(parents=True)
+        (packet / "artifact").write_bytes(b"captured\n")
+        (packet / "artifact").chmod(0o600)
+
+        def replace_ancestor() -> None:
+            ancestor.rename(root / "displaced-ancestor")
+            replacement = root / "ancestor" / "packet"
+            replacement.mkdir(parents=True)
+            (replacement / "artifact").write_bytes(b"substituted\n")
+            (replacement / "artifact").chmod(0o600)
+
+        try:
+            verifier.descriptor_capture_directory(
+                packet, after_open_for_test=replace_ancestor
+            )
+        except (OSError, SystemExit):
+            pass
+        else:
+            raise SystemExit("descriptor capture accepted ancestor replacement")
+
+        packet_root = root / "packet-root"
+        packet_root.mkdir()
+        (packet_root / "artifact").write_bytes(b"captured\n")
+        (packet_root / "artifact").chmod(0o600)
+
+        def replace_packet_directory() -> None:
+            packet_root.rename(root / "displaced-packet")
+            packet_root.mkdir()
+            (packet_root / "artifact").write_bytes(b"substituted\n")
+            (packet_root / "artifact").chmod(0o600)
+
+        try:
+            verifier.descriptor_capture_directory(
+                packet_root, after_open_for_test=replace_packet_directory
+            )
+        except (OSError, SystemExit):
+            pass
+        else:
+            raise SystemExit("descriptor capture accepted packet-directory replacement")
+
+        fake_ruby = root / "ruby"
+        fake_ruby.write_bytes(b"#!/bin/sh\nexit 0\n")
+        fake_ruby.chmod(0o500)
+        original_ruby = verifier.SUCCESSOR_RUBY
+        verifier.SUCCESSOR_RUBY = fake_ruby
+        try:
+            if not rejected(original):
+                raise SystemExit("successor verifier accepted substituted Ruby executable")
+        finally:
+            verifier.SUCCESSOR_RUBY = original_ruby
     print(
         json.dumps(
             {

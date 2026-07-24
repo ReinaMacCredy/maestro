@@ -1,4 +1,5 @@
 pub mod backup;
+pub mod descriptor_census_platform;
 pub mod deterministic_cbor;
 pub mod diff;
 pub mod error;

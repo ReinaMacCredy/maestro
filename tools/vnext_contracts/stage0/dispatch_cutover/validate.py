@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -296,7 +297,15 @@ def command(args: list[str], contract: Path) -> subprocess.CompletedProcess[str]
         check=False,
         capture_output=True,
         text=True,
-        env={**os.environ, "STAGE0_DISPATCH_CUTOVER_ROOT": str(contract)},
+        env={
+            "HOME": tempfile.gettempdir(),
+            "LANG": "C",
+            "LC_ALL": "C",
+            "PATH": "/usr/bin:/bin",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "RUBYOPT": "",
+            "STAGE0_DISPATCH_CUTOVER_ROOT": str(contract),
+        },
     )
 
 
@@ -346,8 +355,8 @@ def run_mutants(contract: Path) -> dict[str, Any]:
             mutant_documents = copy.deepcopy(documents)
             mutate(name, mutant_documents)
             rewrite_artifacts(mutant_root, mutant_documents)
-            python = command(["python3", str(Path(__file__)), "--root", str(mutant_root)], mutant_root)
-            ruby = command(["ruby", str(RUBY_VALIDATOR)], mutant_root)
+            python = command([sys.executable, str(Path(__file__)), "--root", str(mutant_root)], mutant_root)
+            ruby = command(["/usr/bin/ruby", str(RUBY_VALIDATOR)], mutant_root)
             for label, result in (("python", python), ("ruby", ruby)):
                 if result.returncode == 0:
                     escaped.append(f"{label}:{name}")
@@ -373,7 +382,7 @@ def main() -> int:
         print(json.dumps(python_receipt, sort_keys=True, separators=(",", ":")))
         return 0
 
-    ruby = command(["ruby", str(RUBY_VALIDATOR)], contract)
+    ruby = command(["/usr/bin/ruby", str(RUBY_VALIDATOR)], contract)
     require(ruby.returncode == 0, f"Ruby baseline failed: {ruby.stderr}")
     ruby_receipt = json.loads(ruby.stdout)
     require(ruby_receipt["artifact_ids"] == python_receipt["artifact_ids"], "independent encoders disagree")

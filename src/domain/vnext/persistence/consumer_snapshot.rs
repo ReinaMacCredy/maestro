@@ -284,8 +284,8 @@ pub(in crate::domain::vnext) trait ConsumerSnapshotCurrentViewLeasePortV1:
     consumer_currentness_sealed::LeaseSealed
 {
     fn initial(&self) -> &ConsumerSnapshotCurrentFactsV1;
-    fn consume_final_recheck(
-        self,
+    fn recheck_current(
+        &mut self,
     ) -> Result<ConsumerSnapshotCurrentFactsV1, ConsumerSnapshotCurrentnessErrorV1>;
 }
 
@@ -318,10 +318,10 @@ impl<'view, L: ConsumerSnapshotCurrentViewLeasePortV1>
         &self.initial
     }
 
-    pub(in crate::domain::vnext) fn consume_final_recheck(
-        self,
+    pub(in crate::domain::vnext) fn recheck_current(
+        &mut self,
     ) -> Result<ConsumerSnapshotCurrentFactsV1, ConsumerSnapshotCurrentnessErrorV1> {
-        self.lease.consume_final_recheck()
+        self.lease.recheck_current()
     }
 }
 
@@ -370,13 +370,13 @@ pub(in crate::domain::vnext) mod test_seed {
             &self.initial
         }
 
-        fn consume_final_recheck(
-            self,
+        fn recheck_current(
+            &mut self,
         ) -> Result<ConsumerSnapshotCurrentFactsV1, ConsumerSnapshotCurrentnessErrorV1> {
             if self.provider.facts.borrow().as_ref() != Some(&self.initial) {
                 return Err(ConsumerSnapshotCurrentnessErrorV1::Changed);
             }
-            Ok(self.initial)
+            Ok(self.initial.clone())
         }
     }
 

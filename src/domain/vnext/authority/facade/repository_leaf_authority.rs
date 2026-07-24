@@ -1422,7 +1422,7 @@ owner_family_authority!(
     owner = 10,
     family = 9,
     global = 94..=102,
-    constructor = cfg(test),
+    constructor = cfg(all()),
     reason = "Stage 7 freezes the Coordination Authority input before its owner consumer"
 );
 owner_family_authority!(
@@ -1438,7 +1438,7 @@ owner_family_authority!(
     owner = 14,
     family = 11,
     global = 107..=116,
-    constructor = cfg(test),
+    constructor = cfg(all()),
     reason = "Stage 7 freezes the Persistence Authority input before its owner consumer"
 );
 owner_family_authority!(
@@ -1446,7 +1446,7 @@ owner_family_authority!(
     owner = 20,
     family = 12,
     global = 117..=129,
-    constructor = cfg(test),
+    constructor = cfg(all()),
     reason = "Stage 7 freezes the Distribution Authority input before its owner consumer"
 );
 owner_family_authority!(
@@ -1454,7 +1454,7 @@ owner_family_authority!(
     owner = 15,
     family = 13,
     global = 130..=131,
-    constructor = cfg(test),
+    constructor = cfg(all()),
     reason = "Stage 7 freezes the SearchMaintenance Authority input before its owner consumer"
 );
 owner_family_authority!(
@@ -1462,7 +1462,7 @@ owner_family_authority!(
     owner = 16,
     family = 14,
     global = 132..=138,
-    constructor = cfg(test),
+    constructor = cfg(all()),
     reason = "Stage 7 freezes the Memory Authority input before its owner consumer"
 );
 owner_family_authority!(
@@ -1470,7 +1470,7 @@ owner_family_authority!(
     owner = 17,
     family = 15,
     global = 139..=141,
-    constructor = cfg(test),
+    constructor = cfg(all()),
     reason = "Stage 7 freezes the Intake Authority input before its owner consumer"
 );
 owner_family_authority!(
@@ -1478,7 +1478,7 @@ owner_family_authority!(
     owner = 18,
     family = 16,
     global = 142..=145,
-    constructor = cfg(test),
+    constructor = cfg(all()),
     reason = "Stage 7 freezes the Research Authority input before its owner consumer"
 );
 

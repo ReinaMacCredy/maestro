@@ -6,9 +6,17 @@ use std::cell::Cell;
 use thiserror::Error;
 
 use super::{EffectIntentHomeKindV1, WithdrawalCatalogCellV1, WithdrawalRouteBindingV1};
+use crate::domain::vnext::migration::{
+    ActiveStoreFinalityV1, MigrationCutoverAssociationV1, MigrationCutoverContextV1,
+    PreStoreFinalityV1, ReleaseBindingV1,
+};
 
+#[expect(
+    clippy::enum_variant_names,
+    reason = "the locked H3 home spellings are exactly ActiveStore, PreStore, and NoStore"
+)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum H3WithdrawalPublicationSourceV1 {
+pub(in crate::domain::vnext::execution) enum H3WithdrawalPublicationSourceV1 {
     ActiveStore {
         store_identity: [u8; 32],
         domain_identity: [u8; 32],
@@ -114,7 +122,7 @@ impl H3WithdrawalPublicationSourceV1 {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum H3WithdrawalPublicationOriginV1 {
+pub(in crate::domain::vnext::execution) enum H3WithdrawalPublicationOriginV1 {
     Action {
         leaf_tag: u64,
         action_spec: [u8; 32],
@@ -162,7 +170,7 @@ impl H3WithdrawalPublicationOriginV1 {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct H3WithdrawalPublicationFactsV1 {
+pub(in crate::domain::vnext::execution) struct H3WithdrawalPublicationFactsV1 {
     catalog_cell: WithdrawalCatalogCellV1,
     source: H3WithdrawalPublicationSourceV1,
     origin: H3WithdrawalPublicationOriginV1,
@@ -220,7 +228,9 @@ pub(in crate::domain::vnext::execution) mod native_publication_sealed {
     pub trait Sealed {}
 }
 
-pub trait NativeH3WithdrawalPublicationPortV1: native_publication_sealed::Sealed {
+pub(in crate::domain::vnext::execution) trait NativeH3WithdrawalPublicationPortV1:
+    native_publication_sealed::Sealed
+{
     fn publication_identity(&self) -> [u8; 32];
     fn catalog_cell(&self) -> WithdrawalCatalogCellV1;
     fn source(&self) -> H3WithdrawalPublicationSourceV1;
@@ -228,30 +238,25 @@ pub trait NativeH3WithdrawalPublicationPortV1: native_publication_sealed::Sealed
     fn consume_once(&self) -> Result<(), H3WithdrawalPublicationErrorV1>;
 }
 
-pub struct VerifiedH3WithdrawalPublicationUseV1<'tx> {
+pub(in crate::domain::vnext) struct VerifiedH3WithdrawalPublicationUseV1<'tx> {
     facts: H3WithdrawalPublicationFactsV1,
     native_publication: &'tx dyn NativeH3WithdrawalPublicationPortV1,
     _not_send_or_sync: PhantomData<Rc<()>>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct H3WithdrawalPublicationCommitV1 {
+struct H3WithdrawalPublicationCommitV1 {
     facts: H3WithdrawalPublicationFactsV1,
 }
 
-pub struct ConsumedH3WithdrawalPublicationV1<'tx> {
-    source: H3WithdrawalPublicationSourceV1,
-    origin: H3WithdrawalPublicationOriginV1,
-    publication_identity: [u8; 32],
-    optional_release: Option<[u8; 32]>,
-    association_input_context: Option<[u8; 32]>,
-    finality_context: [u8; 32],
+pub(in crate::domain::vnext) struct ConsumedH3WithdrawalPublicationV1<'tx> {
+    facts: H3WithdrawalPublicationFactsV1,
     _transaction: PhantomData<&'tx mut ()>,
     _not_send_or_sync: PhantomData<Rc<()>>,
 }
 
 impl<'tx> VerifiedH3WithdrawalPublicationUseV1<'tx> {
-    pub fn consume(
+    fn consume(
         self,
         commit: H3WithdrawalPublicationCommitV1,
     ) -> Result<ConsumedH3WithdrawalPublicationV1<'tx>, H3WithdrawalPublicationErrorV1> {
@@ -259,40 +264,34 @@ impl<'tx> VerifiedH3WithdrawalPublicationUseV1<'tx> {
             return Err(H3WithdrawalPublicationErrorV1::BindingMismatch);
         }
         self.native_publication.consume_once()?;
-        let (association_input_context, finality_context) = match self.facts.source {
-            H3WithdrawalPublicationSourceV1::ActiveStore {
-                association_input_context,
-                finality_context,
-                ..
-            } => (Some(association_input_context), finality_context),
-            H3WithdrawalPublicationSourceV1::PreStore {
-                withdrawal_cas,
-                withdrawal_publication_root,
-                ..
-            } => (
-                None,
-                canonical_pair(withdrawal_cas, withdrawal_publication_root),
-            ),
-            H3WithdrawalPublicationSourceV1::NoStore {
-                occurrence,
-                carrier,
-                ..
-            } => (None, canonical_pair(occurrence, carrier)),
-        };
-        Ok(ConsumedH3WithdrawalPublicationV1 {
-            source: self.facts.source,
-            origin: self.facts.origin,
-            publication_identity: self.facts.withdrawal_publication,
-            optional_release: self.facts.optional_release,
-            association_input_context,
-            finality_context,
+        let consumed = ConsumedH3WithdrawalPublicationV1 {
+            facts: self.facts,
             _transaction: PhantomData,
             _not_send_or_sync: PhantomData,
-        })
+        };
+        if consumed.facts != commit.facts {
+            return Err(H3WithdrawalPublicationErrorV1::BindingMismatch);
+        }
+        Ok(consumed)
+    }
+
+    pub(in crate::domain::vnext) fn consume_for_migration(
+        self,
+        association: &MigrationCutoverAssociationV1,
+        finality: H3MigrationFinalityV1<'_>,
+    ) -> Result<ConsumedH3WithdrawalPublicationV1<'tx>, H3WithdrawalPublicationErrorV1> {
+        validate_migration_association(self.facts, association, finality)?;
+        let commit = H3WithdrawalPublicationCommitV1 { facts: self.facts };
+        self.consume(commit)
     }
 }
 
-pub fn verify_h3_withdrawal_publication_use<'tx>(
+pub(in crate::domain::vnext) enum H3MigrationFinalityV1<'a> {
+    ActiveStore(&'a ActiveStoreFinalityV1),
+    PreStore(&'a PreStoreFinalityV1),
+}
+
+pub(in crate::domain::vnext::execution) fn verify_h3_withdrawal_publication_use<'tx>(
     facts: H3WithdrawalPublicationFactsV1,
     native_publication: &'tx dyn NativeH3WithdrawalPublicationPortV1,
 ) -> Result<VerifiedH3WithdrawalPublicationUseV1<'tx>, H3WithdrawalPublicationErrorV1> {
@@ -374,16 +373,6 @@ pub fn verify_h3_withdrawal_publication_use<'tx>(
     })
 }
 
-fn canonical_pair(left: [u8; 32], right: [u8; 32]) -> [u8; 32] {
-    use sha2::{Digest, Sha256};
-
-    let mut hasher = Sha256::new();
-    hasher.update(b"maestro.vnext.h3-finality-context.v1\0");
-    hasher.update(left);
-    hasher.update(right);
-    hasher.finalize().into()
-}
-
 fn validate_source_origin_equality(
     facts: H3WithdrawalPublicationFactsV1,
 ) -> Result<(), H3WithdrawalPublicationErrorV1> {
@@ -440,6 +429,59 @@ fn validate_source_origin_equality(
     }
 }
 
+fn validate_migration_association(
+    facts: H3WithdrawalPublicationFactsV1,
+    association: &MigrationCutoverAssociationV1,
+    finality: H3MigrationFinalityV1<'_>,
+) -> Result<(), H3WithdrawalPublicationErrorV1> {
+    let material = association.material();
+    let exact_material = material.inventory_id.as_bytes() == &facts.source_inventory
+        && material.target_set_id.as_bytes() == &facts.declared_target_closure
+        && material.quarantine_set_id.as_bytes() == &facts.quarantine_roots
+        && material.consumer_set_id.as_bytes() == &facts.consumer_gate
+        && material.distribution_receipt_id.as_bytes() == &facts.authorization_receipt
+        && material.schema_read_write_set_id.as_bytes() == &facts.claims_catalog_verification;
+    let exact_release = match (association.release(), facts.optional_release) {
+        (ReleaseBindingV1::RepositoryAbsent, None) => true,
+        (ReleaseBindingV1::InstallationExact(release), Some(expected)) => {
+            release.as_bytes() == &expected
+        }
+        _ => false,
+    };
+    let exact_context = match (facts.source, association.context(), finality) {
+        (
+            H3WithdrawalPublicationSourceV1::ActiveStore { .. },
+            MigrationCutoverContextV1::ActiveStore { .. },
+            H3MigrationFinalityV1::ActiveStore(finality),
+        ) => &finality.parts().association == association,
+        (
+            H3WithdrawalPublicationSourceV1::PreStore {
+                attempt,
+                expected_old_source,
+                ..
+            },
+            MigrationCutoverContextV1::PreStore {
+                sealed_ceremony_attempt_id,
+                expected_old_root_id,
+                ..
+            },
+            H3MigrationFinalityV1::PreStore(finality),
+        ) => {
+            &finality.parts().association == association
+                && sealed_ceremony_attempt_id.as_bytes() == &attempt
+                && expected_old_root_id.as_bytes() == &expected_old_source
+        }
+        (H3WithdrawalPublicationSourceV1::NoStore { .. }, _, _) => {
+            return Err(H3WithdrawalPublicationErrorV1::NonPromoting);
+        }
+        _ => false,
+    };
+    if !exact_material || !exact_release || !exact_context {
+        return Err(H3WithdrawalPublicationErrorV1::BindingMismatch);
+    }
+    Ok(())
+}
+
 fn canonical_home_commitment(home: EffectIntentHomeKindV1) -> [u8; 32] {
     use sha2::{Digest, Sha256};
 
@@ -451,45 +493,27 @@ fn canonical_home_commitment(home: EffectIntentHomeKindV1) -> [u8; 32] {
     Sha256::digest(literal).into()
 }
 
-impl ConsumedH3WithdrawalPublicationV1<'_> {
-    pub const fn source(&self) -> H3WithdrawalPublicationSourceV1 {
-        self.source
-    }
-
-    pub const fn origin(&self) -> H3WithdrawalPublicationOriginV1 {
-        self.origin
-    }
-
-    pub const fn publication_identity(&self) -> [u8; 32] {
-        self.publication_identity
-    }
-
-    pub const fn optional_release(&self) -> Option<[u8; 32]> {
-        self.optional_release
-    }
-
-    pub const fn association_input_context(&self) -> Option<[u8; 32]> {
-        self.association_input_context
-    }
-
-    pub const fn finality_context(&self) -> [u8; 32] {
-        self.finality_context
-    }
-}
-
 #[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
-pub enum H3WithdrawalPublicationErrorV1 {
+pub(in crate::domain::vnext) enum H3WithdrawalPublicationErrorV1 {
     #[error("H3 withdrawal publication carrier is invalid")]
     InvalidCarrier,
     #[error("H3 source and Action/Ceremony causal branch disagree")]
     CausalBranchMismatch,
     #[error("H3 withdrawal publication does not match the exact finality use")]
     BindingMismatch,
+    #[error("H3 withdrawal publication is non-promoting in the selected migration context")]
+    NonPromoting,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::vnext::migration::{
+        ActiveStoreAtomicParticipantV1, ActiveStoreFinalityPartsV1, ActiveStoreOwningHeadV1,
+        ActiveStorePreconditionV1, CutoverCommitmentV1, CutoverDomainRefV1, CutoverDomainV1,
+        MigrationCutoverMaterialV1, PreStoreAtomicParticipantV1, PreStoreCandidateSealV1,
+        PreStoreFinalityPartsV1, PreStorePreconditionV1, ProtectedExpectedOldCasV1,
+    };
 
     struct TestNativePublicationV1 {
         consumed: Cell<bool>,
@@ -531,6 +555,139 @@ mod tests {
             publication_identity: facts.withdrawal_publication,
             catalog_cell: facts.catalog_cell,
             source: facts.source,
+        }
+    }
+
+    fn commitment(bytes: [u8; 32]) -> CutoverCommitmentV1 {
+        CutoverCommitmentV1::new(bytes).unwrap()
+    }
+
+    #[expect(
+        clippy::enum_variant_names,
+        reason = "the conformance fixture mirrors the locked ActiveStore, PreStore, and NoStore homes"
+    )]
+    enum TestMigrationFinalityV1 {
+        ActiveStore(ActiveStoreFinalityV1),
+        PreStore(PreStoreFinalityV1),
+        NoStore,
+    }
+
+    fn migration_finality(
+        facts: H3WithdrawalPublicationFactsV1,
+    ) -> (MigrationCutoverAssociationV1, TestMigrationFinalityV1) {
+        let domain_ref =
+            CutoverDomainRefV1::new(CutoverDomainV1::Installation, commitment([70; 32]), 1, 1)
+                .unwrap();
+        let release =
+            ReleaseBindingV1::InstallationExact(commitment(facts.optional_release.unwrap()));
+        let material = MigrationCutoverMaterialV1 {
+            association_id: commitment([71; 32]),
+            inventory_id: commitment(facts.source_inventory),
+            target_set_id: commitment(facts.declared_target_closure),
+            quarantine_set_id: commitment(facts.quarantine_roots),
+            consumer_set_id: commitment(facts.consumer_gate),
+            distribution_receipt_id: commitment(facts.authorization_receipt),
+            candidate_store_root_id: commitment([72; 32]),
+            schema_read_write_set_id: commitment(facts.claims_catalog_verification),
+            writer_protocol_epoch_id: commitment([73; 32]),
+            migration_epoch_id: commitment([74; 32]),
+        };
+        match facts.source {
+            H3WithdrawalPublicationSourceV1::ActiveStore { .. } => {
+                let commit_record = commitment([75; 32]);
+                let association = MigrationCutoverAssociationV1::new(
+                    domain_ref.clone(),
+                    release.clone(),
+                    MigrationCutoverContextV1::ActiveStore {
+                        distribution_commit_record_id: commit_record,
+                    },
+                    material.clone(),
+                )
+                .unwrap();
+                let finality = ActiveStoreFinalityV1::new(ActiveStoreFinalityPartsV1 {
+                    association: association.clone(),
+                    ordered_preconditions: vec![
+                        ActiveStorePreconditionV1::DistributionReceipt(
+                            material.distribution_receipt_id,
+                        ),
+                        ActiveStorePreconditionV1::DistributionCommitRecord {
+                            commit_record_id: commit_record,
+                            receipt_id: material.distribution_receipt_id,
+                        },
+                    ],
+                    atomic_participants: vec![
+                        ActiveStoreAtomicParticipantV1::Association(material.association_id),
+                        ActiveStoreAtomicParticipantV1::OwningHead(ActiveStoreOwningHeadV1 {
+                            association_id: material.association_id,
+                            distribution_commit_record_id: commit_record,
+                            distribution_receipt_id: material.distribution_receipt_id,
+                            domain_ref,
+                            release,
+                            candidate_store_root_id: material.candidate_store_root_id,
+                        }),
+                    ],
+                })
+                .unwrap();
+                (association, TestMigrationFinalityV1::ActiveStore(finality))
+            }
+            H3WithdrawalPublicationSourceV1::PreStore {
+                attempt,
+                expected_old_source,
+                ..
+            } => {
+                let attempt = commitment(attempt);
+                let candidate_seal = commitment([75; 32]);
+                let expected_old = commitment(expected_old_source);
+                let association = MigrationCutoverAssociationV1::new(
+                    domain_ref.clone(),
+                    release.clone(),
+                    MigrationCutoverContextV1::PreStore {
+                        sealed_ceremony_attempt_id: attempt,
+                        candidate_seal_id: candidate_seal,
+                        expected_old_root_id: expected_old,
+                    },
+                    material.clone(),
+                )
+                .unwrap();
+                let finality = PreStoreFinalityV1::new(PreStoreFinalityPartsV1 {
+                    association: association.clone(),
+                    ordered_preconditions: vec![PreStorePreconditionV1::SealedCeremonyAttempt(
+                        attempt,
+                    )],
+                    atomic_participants: vec![
+                        PreStoreAtomicParticipantV1::Association(material.association_id),
+                        PreStoreAtomicParticipantV1::CandidateSeal(PreStoreCandidateSealV1 {
+                            association_id: material.association_id,
+                            candidate_seal_id: candidate_seal,
+                            sealed_ceremony_attempt_id: attempt,
+                            domain_ref: domain_ref.clone(),
+                            release: release.clone(),
+                            candidate_store_root_id: material.candidate_store_root_id,
+                        }),
+                        PreStoreAtomicParticipantV1::ProtectedExpectedOldCas(
+                            ProtectedExpectedOldCasV1 {
+                                association_id: material.association_id,
+                                expected_old_root_id: expected_old,
+                                candidate_store_root_id: material.candidate_store_root_id,
+                            },
+                        ),
+                    ],
+                })
+                .unwrap();
+                (association, TestMigrationFinalityV1::PreStore(finality))
+            }
+            H3WithdrawalPublicationSourceV1::NoStore { .. } => {
+                let association = MigrationCutoverAssociationV1::new(
+                    domain_ref,
+                    release,
+                    MigrationCutoverContextV1::ActiveStore {
+                        distribution_commit_record_id: commitment([75; 32]),
+                    },
+                    material,
+                )
+                .unwrap();
+                (association, TestMigrationFinalityV1::NoStore)
+            }
         }
     }
 
@@ -693,16 +850,46 @@ mod tests {
     #[test]
     fn all_three_homes_require_the_exact_causal_branch_and_one_use_finality() {
         for source in sources() {
-            let facts = facts(source);
-            let native = test_native(facts);
-            let verified = verify_h3_withdrawal_publication_use(facts, &native).unwrap();
-            verified
-                .consume(H3WithdrawalPublicationCommitV1 { facts })
-                .unwrap();
-            assert!(matches!(
-                verify_h3_withdrawal_publication_use(facts, &native),
-                Err(H3WithdrawalPublicationErrorV1::InvalidCarrier)
-            ));
+            let bound = facts(source);
+            let native = test_native(bound);
+            let verified = verify_h3_withdrawal_publication_use(bound, &native).unwrap();
+            let (association, finality) = migration_finality(bound);
+            let outcome = match finality {
+                TestMigrationFinalityV1::ActiveStore(finality) => verified
+                    .consume_for_migration(
+                        &association,
+                        H3MigrationFinalityV1::ActiveStore(&finality),
+                    )
+                    .map(|_| ()),
+                TestMigrationFinalityV1::PreStore(finality) => verified
+                    .consume_for_migration(&association, H3MigrationFinalityV1::PreStore(&finality))
+                    .map(|_| ()),
+                TestMigrationFinalityV1::NoStore => {
+                    let (_, fallback) = migration_finality(facts(sources()[0]));
+                    let TestMigrationFinalityV1::ActiveStore(fallback) = fallback else {
+                        unreachable!()
+                    };
+                    verified
+                        .consume_for_migration(
+                            &association,
+                            H3MigrationFinalityV1::ActiveStore(&fallback),
+                        )
+                        .map(|_| ())
+                }
+            };
+            if matches!(source, H3WithdrawalPublicationSourceV1::NoStore { .. }) {
+                assert!(matches!(
+                    outcome,
+                    Err(H3WithdrawalPublicationErrorV1::NonPromoting)
+                ));
+                assert!(verify_h3_withdrawal_publication_use(bound, &native).is_ok());
+            } else {
+                outcome.unwrap();
+                assert!(matches!(
+                    verify_h3_withdrawal_publication_use(bound, &native),
+                    Err(H3WithdrawalPublicationErrorV1::InvalidCarrier)
+                ));
+            }
         }
     }
 

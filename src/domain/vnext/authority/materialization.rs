@@ -1,4 +1,4 @@
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::marker::PhantomData;
 use std::rc::Rc;
 
@@ -6,21 +6,19 @@ use thiserror::Error;
 
 #[cfg(test)]
 use super::GrantIdV1;
-use super::facade::PlanningRepositoryActionAuthorityV1;
+use super::facade::{
+    AdmittedRepositoryActionV1, CoordinationRepositoryActionAuthorityV1,
+    DistributionRepositoryActionAuthorityV1, IntakeRepositoryActionAuthorityV1,
+    MaterializationAuthorityAdmissionV1, MemoryRepositoryActionAuthorityV1,
+    PersistenceRepositoryActionAuthorityV1, PlanningRepositoryActionAuthorityV1,
+    ResearchRepositoryActionAuthorityV1, SearchMaintenanceRepositoryActionAuthorityV1,
+};
 use super::{
     ActionRequestIdV1, AuthorityContextIdV1, AuthorizationReceiptIdV1, IdempotencyKeyIdV1,
     MandateIdV1, PrincipalBindingIdV1, PrincipalIdV1, RepositoryActionLeafV1,
     RepositoryAuthoritySelectionV1, RepositoryDownstreamActionLeafV1, SessionIdV1, StateTokenIdV1,
 };
-use crate::domain::vnext::identity::StoreGenerationIdV1;
-use crate::domain::vnext::persistence::{StoreError, StorePublicationViewV1};
-
-#[derive(Debug)]
-pub enum AuthorityMaterializationPublicationErrorV1<E> {
-    Store(StoreError),
-    Prepare(E),
-}
-
+use crate::domain::vnext::identity::{StoreGenerationIdV1, StoreHeadIdV1, StoreObjectIdV1};
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SchedulingPolicyDiffClassV1 {
     Equivalent,
@@ -38,7 +36,7 @@ impl SchedulingPolicyDiffClassV1 {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct SchedulingPolicyDowngradeMandateFactsV1 {
+pub(in crate::domain::vnext) struct SchedulingPolicyDowngradeMandateFactsV1 {
     pub(crate) mandate_id: MandateIdV1,
     pub(crate) action_request_id: ActionRequestIdV1,
     pub(crate) idempotency_key: IdempotencyKeyIdV1,
@@ -111,30 +109,102 @@ enum MaterializationTransactionStateV1 {
     Consumed,
 }
 
-pub struct AuthorityMaterializationTransactionV1<'tx> {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct ConsumedRepositoryActionBindingV1 {
+    repository_generation_id: StoreGenerationIdV1,
+    successor_store_generation: u64,
+    idempotency_key: IdempotencyKeyIdV1,
+    idempotency_meaning_commitment: [u8; 32],
+    result_commitment: [u8; 32],
+    write_set_commitment: [u8; 32],
+    receipt_object_id: StoreObjectIdV1,
+    basis_object_id: StoreObjectIdV1,
+    current_snapshot_id: StoreObjectIdV1,
+    successor_snapshot_id: StoreObjectIdV1,
+    current_capacity_root_id: StoreObjectIdV1,
+    successor_capacity_root_id: StoreObjectIdV1,
+    capacity_debit_id: StoreObjectIdV1,
+    leaf_authority_carrier_id: Option<StoreObjectIdV1>,
+    leaf_authority_consumption_id: Option<StoreObjectIdV1>,
+    guard_object_id: StoreObjectIdV1,
+    state_object_id: StoreObjectIdV1,
+}
+
+impl ConsumedRepositoryActionBindingV1 {
+    fn new(
+        facts: RepositoryActionBindingFactsV1,
+        admission: MaterializationAuthorityAdmissionV1,
+    ) -> Self {
+        Self {
+            repository_generation_id: facts.repository_generation_id,
+            successor_store_generation: admission.successor_store_generation,
+            idempotency_key: facts.idempotency_key,
+            idempotency_meaning_commitment: facts.idempotency_meaning_commitment,
+            result_commitment: facts.result_commitment,
+            write_set_commitment: facts.write_set_commitment,
+            receipt_object_id: StoreObjectIdV1::from_digest(
+                facts.authorization_receipt_object_commitment,
+            ),
+            basis_object_id: admission.basis_object_id,
+            current_snapshot_id: admission.current_snapshot_id,
+            successor_snapshot_id: admission.successor_snapshot_id,
+            current_capacity_root_id: admission.current_capacity_root_id,
+            successor_capacity_root_id: admission.successor_capacity_root_id,
+            capacity_debit_id: admission.capacity_debit_id,
+            leaf_authority_carrier_id: admission.leaf_authority_carrier_id,
+            leaf_authority_consumption_id: admission.leaf_authority_consumption_id,
+            guard_object_id: admission.guard_object_id,
+            state_object_id: admission.state_object_id,
+        }
+    }
+}
+
+pub(in crate::domain::vnext::authority) struct AuthorityMaterializationTransactionV1<'tx> {
     view: MaterializationCurrentViewV1<'tx>,
     state: Cell<MaterializationTransactionStateV1>,
+    consumed_binding: RefCell<Option<ConsumedRepositoryActionBindingV1>>,
     _not_send_or_sync: PhantomData<Rc<()>>,
 }
 
+pub(in crate::domain::vnext::authority) trait MaterializationStoreViewPortV1 {
+    fn active_head_id(&self) -> Result<Option<StoreHeadIdV1>, AuthorityMaterializationErrorV1>;
+    fn active_generation_id(&self) -> Result<StoreGenerationIdV1, AuthorityMaterializationErrorV1>;
+    fn active_generation_object_ids(
+        &self,
+    ) -> Result<Vec<StoreObjectIdV1>, AuthorityMaterializationErrorV1>;
+}
+
+pub(in crate::domain::vnext::authority) trait MaterializationAtomicPublicationPortV1 {
+    fn expected_old(&self) -> Option<StoreHeadIdV1>;
+    fn generation_ordinal(&self) -> u64;
+    fn generation_previous(&self) -> Option<StoreGenerationIdV1>;
+    fn probe_key_digest(&self) -> [u8; 32];
+    fn probe_meaning_digest(&self) -> [u8; 32];
+    fn idempotency_key_digest(&self) -> [u8; 32];
+    fn idempotency_meaning_digest(&self) -> [u8; 32];
+    fn idempotency_result_object_id(&self) -> StoreObjectIdV1;
+    fn object_ids(&self) -> Vec<StoreObjectIdV1>;
+}
+
 enum MaterializationCurrentViewV1<'tx> {
-    Store(&'tx StorePublicationViewV1<'tx>),
+    Store(&'tx dyn MaterializationStoreViewPortV1),
     #[cfg(test)]
     Test(StoreGenerationIdV1),
 }
 
 impl<'tx> AuthorityMaterializationTransactionV1<'tx> {
     pub(in crate::domain::vnext::authority) fn from_live_store_transaction(
-        view: &'tx StorePublicationViewV1<'tx>,
+        view: &'tx dyn MaterializationStoreViewPortV1,
     ) -> Self {
         Self {
             view: MaterializationCurrentViewV1::Store(view),
             state: Cell::new(MaterializationTransactionStateV1::Fresh),
+            consumed_binding: RefCell::new(None),
             _not_send_or_sync: PhantomData,
         }
     }
 
-    pub fn mint_mandate(
+    pub(in crate::domain::vnext::authority) fn mint_mandate(
         &'tx self,
         facts: SchedulingPolicyDowngradeMandateFactsV1,
     ) -> Result<VerifiedSchedulingPolicyDowngradeMandateUseV1<'tx>, AuthorityMaterializationErrorV1>
@@ -160,14 +230,13 @@ impl<'tx> AuthorityMaterializationTransactionV1<'tx> {
         })
     }
 
-    pub fn mint_binding(
+    pub(in crate::domain::vnext::authority) fn mint_binding<K: RepositoryActionBindingKindV1>(
         &'tx self,
+        admission: &AdmittedRepositoryActionV1,
         facts: RepositoryActionBindingFactsV1,
-    ) -> Result<
-        AdmittedRepositoryActionBindingV1<'tx, SchedulingPolicyBindingOwnerV1>,
-        AuthorityMaterializationErrorV1,
-    > {
-        validate_scheduling_policy_binding(facts, true)?;
+    ) -> Result<AdmittedRepositoryActionBindingV1<'tx, K>, AuthorityMaterializationErrorV1> {
+        let admission = admission.materialization_admission();
+        validate_repository_action_binding::<K>(facts, admission)?;
         self.require_live_generation(facts.repository_generation_id)?;
         self.state.set(match self.state.get() {
             MaterializationTransactionStateV1::Fresh => {
@@ -183,20 +252,59 @@ impl<'tx> AuthorityMaterializationTransactionV1<'tx> {
         });
         Ok(AdmittedRepositoryActionBindingV1 {
             facts,
+            admission,
             transaction: self,
             _transaction: PhantomData,
             _not_send_or_sync: PhantomData,
         })
     }
 
-    pub fn consume_binding_without_mandate(
-        &self,
+    #[cfg(test)]
+    fn mint_binding_from_test_admission<K: RepositoryActionBindingKindV1>(
+        &'tx self,
+        admission: MaterializationAuthorityAdmissionV1,
         facts: RepositoryActionBindingFactsV1,
-        commit: RepositoryActionCommitFactsV1,
-    ) -> Result<ConsumedSchedulingPolicyNoMandateV1<'_>, AuthorityMaterializationErrorV1> {
-        validate_scheduling_policy_binding(facts, false)?;
+    ) -> Result<AdmittedRepositoryActionBindingV1<'tx, K>, AuthorityMaterializationErrorV1> {
+        validate_repository_action_binding::<K>(facts, admission)?;
         self.require_live_generation(facts.repository_generation_id)?;
-        if self.state.get() != MaterializationTransactionStateV1::Fresh
+        self.state.set(match self.state.get() {
+            MaterializationTransactionStateV1::Fresh => {
+                MaterializationTransactionStateV1::BindingMinted(facts.invocation_commitment)
+            }
+            MaterializationTransactionStateV1::MandateMinted(mandate_atom) => {
+                MaterializationTransactionStateV1::BothMinted {
+                    mandate_atom,
+                    invocation: facts.invocation_commitment,
+                }
+            }
+            _ => return Err(AuthorityMaterializationErrorV1::DuplicateUse),
+        });
+        Ok(AdmittedRepositoryActionBindingV1 {
+            facts,
+            admission,
+            transaction: self,
+            _transaction: PhantomData,
+            _not_send_or_sync: PhantomData,
+        })
+    }
+
+    pub(in crate::domain::vnext::authority) fn consume_binding_without_mandate<
+        K: RepositoryActionBindingKindV1,
+    >(
+        &self,
+        binding: AdmittedRepositoryActionBindingV1<'_, K>,
+        commit: RepositoryActionCommitFactsV1,
+    ) -> Result<ConsumedRepositoryActionMaterializationV1<'_>, AuthorityMaterializationErrorV1>
+    {
+        let facts = binding.facts;
+        validate_repository_action_binding::<K>(facts, binding.admission)?;
+        if K::ACTION == SchedulingPolicyBindingOwnerV1::ACTION {
+            validate_scheduling_policy_binding(facts, binding.admission, false)?;
+        }
+        self.require_live_generation(facts.repository_generation_id)?;
+        if !std::ptr::eq(self, binding.transaction)
+            || self.state.get()
+                != MaterializationTransactionStateV1::BindingMinted(facts.invocation_commitment)
             || facts != commit.binding
             || facts.supplemental_mandate_id.is_some()
             || facts.supplemental_mandate_atom != NO_SUPPLEMENTAL_MANDATE_COMMITMENT_V1
@@ -207,8 +315,13 @@ impl<'tx> AuthorityMaterializationTransactionV1<'tx> {
         {
             return Err(AuthorityMaterializationErrorV1::BindingMismatch);
         }
+        self.consumed_binding
+            .replace(Some(ConsumedRepositoryActionBindingV1::new(
+                facts,
+                binding.admission,
+            )));
         self.state.set(MaterializationTransactionStateV1::Consumed);
-        Ok(ConsumedSchedulingPolicyNoMandateV1 {
+        Ok(ConsumedRepositoryActionMaterializationV1 {
             _transaction: PhantomData,
             _not_send_or_sync: PhantomData,
         })
@@ -219,11 +332,7 @@ impl<'tx> AuthorityMaterializationTransactionV1<'tx> {
         generation_id: StoreGenerationIdV1,
     ) -> Result<(), AuthorityMaterializationErrorV1> {
         let active_generation_id = match self.view {
-            MaterializationCurrentViewV1::Store(view) => view
-                .active_generation()
-                .map_err(|_| AuthorityMaterializationErrorV1::StoreCurrentness)?
-                .ok_or(AuthorityMaterializationErrorV1::StoreCurrentness)?
-                .id(),
+            MaterializationCurrentViewV1::Store(view) => view.active_generation_id()?,
             #[cfg(test)]
             MaterializationCurrentViewV1::Test(generation_id) => generation_id,
         };
@@ -238,43 +347,121 @@ impl<'tx> AuthorityMaterializationTransactionV1<'tx> {
         Self {
             view: MaterializationCurrentViewV1::Test(generation_id),
             state: Cell::new(MaterializationTransactionStateV1::Fresh),
+            consumed_binding: RefCell::new(None),
             _not_send_or_sync: PhantomData,
         }
     }
 
-    pub fn is_consumed(&self) -> bool {
+    pub(in crate::domain::vnext::authority) fn validate_atomic_publication(
+        &self,
+        publication: &dyn MaterializationAtomicPublicationPortV1,
+    ) -> Result<(), AuthorityMaterializationErrorV1> {
+        if self.state.get() != MaterializationTransactionStateV1::Consumed {
+            return Err(AuthorityMaterializationErrorV1::IncompleteTransaction);
+        }
+        let binding = self
+            .consumed_binding
+            .borrow()
+            .as_ref()
+            .copied()
+            .ok_or(AuthorityMaterializationErrorV1::IncompleteTransaction)?;
+        let mut write_set = sha2::Sha256::new();
+        use sha2::Digest;
+        write_set.update(b"maestro.authority.materialization-write-set.v1\0");
+        let object_ids = publication.object_ids();
+        for object_id in &object_ids {
+            write_set.update(object_id.as_bytes());
+        }
+        let write_set_commitment: [u8; 32] = write_set.finalize().into();
+        let (expected_old, active_generation_id, active_objects) = match self.view {
+            MaterializationCurrentViewV1::Store(view) => (
+                view.active_head_id()?,
+                view.active_generation_id()?,
+                view.active_generation_object_ids()?,
+            ),
+            #[cfg(test)]
+            MaterializationCurrentViewV1::Test(_) => (
+                publication.expected_old(),
+                binding.repository_generation_id,
+                Vec::new(),
+            ),
+        };
+        let current_object_ids = [
+            binding.current_snapshot_id,
+            binding.current_capacity_root_id,
+            binding.guard_object_id,
+            binding.state_object_id,
+        ];
+        if active_generation_id != binding.repository_generation_id
+            || publication.expected_old() != expected_old
+            || publication.generation_ordinal() != binding.successor_store_generation
+            || publication.generation_previous() != Some(binding.repository_generation_id)
+            || publication.probe_key_digest() != *binding.idempotency_key.as_bytes()
+            || publication.probe_meaning_digest() != binding.idempotency_meaning_commitment
+            || publication.idempotency_key_digest() != *binding.idempotency_key.as_bytes()
+            || publication.idempotency_meaning_digest() != binding.idempotency_meaning_commitment
+            || publication.idempotency_result_object_id().as_bytes() != &binding.result_commitment
+            || write_set_commitment != binding.write_set_commitment
+            || !object_ids.contains(&binding.receipt_object_id)
+            || ![
+                binding.basis_object_id,
+                binding.successor_snapshot_id,
+                binding.successor_capacity_root_id,
+                binding.capacity_debit_id,
+            ]
+            .into_iter()
+            .chain(binding.leaf_authority_carrier_id)
+            .chain(binding.leaf_authority_consumption_id)
+            .all(|required| object_ids.contains(&required))
+            || (!active_objects.is_empty()
+                && !current_object_ids
+                    .into_iter()
+                    .all(|required| active_objects.contains(&required)))
+        {
+            return Err(AuthorityMaterializationErrorV1::BindingMismatch);
+        }
+        Ok(())
+    }
+
+    pub(in crate::domain::vnext::authority) fn is_consumed(&self) -> bool {
         self.state.get() == MaterializationTransactionStateV1::Consumed
     }
 }
 
-pub struct VerifiedSchedulingPolicyDowngradeMandateUseV1<'tx> {
+pub(in crate::domain::vnext::authority) struct VerifiedSchedulingPolicyDowngradeMandateUseV1<'tx> {
     facts: SchedulingPolicyDowngradeMandateFactsV1,
     transaction: &'tx AuthorityMaterializationTransactionV1<'tx>,
     _not_send_or_sync: PhantomData<Rc<()>>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct RepositoryActionCommitFactsV1 {
+pub(in crate::domain::vnext) struct RepositoryActionCommitFactsV1 {
     pub(crate) binding: RepositoryActionBindingFactsV1,
 }
 
-pub struct ConsumedSchedulingPolicyDowngradeMandateV1<'tx> {
+pub(in crate::domain::vnext::authority) struct ConsumedSchedulingPolicyDowngradeMandateV1<'tx> {
     _transaction: PhantomData<&'tx mut ()>,
     _not_send_or_sync: PhantomData<Rc<()>>,
 }
 
-pub struct ConsumedSchedulingPolicyNoMandateV1<'tx> {
+pub(in crate::domain::vnext::authority) struct ConsumedRepositoryActionMaterializationV1<'tx> {
     _transaction: PhantomData<&'tx mut ()>,
     _not_send_or_sync: PhantomData<Rc<()>>,
 }
 
 impl<'tx> VerifiedSchedulingPolicyDowngradeMandateUseV1<'tx> {
-    pub fn consume_with_action_binding(
+    pub(in crate::domain::vnext::authority) fn consume_with_action_binding<
+        K: RepositoryActionBindingKindV1,
+    >(
         self,
-        binding: AdmittedRepositoryActionBindingV1<'tx, SchedulingPolicyBindingOwnerV1>,
+        binding: AdmittedRepositoryActionBindingV1<'tx, K>,
         commit: RepositoryActionCommitFactsV1,
     ) -> Result<ConsumedSchedulingPolicyDowngradeMandateV1<'tx>, AuthorityMaterializationErrorV1>
     {
+        if K::ACTION != SchedulingPolicyBindingOwnerV1::ACTION {
+            return Err(AuthorityMaterializationErrorV1::BindingMismatch);
+        }
+        validate_scheduling_policy_binding(binding.facts, binding.admission, true)?;
         if !std::ptr::eq(self.transaction, binding.transaction)
             || binding.facts != commit.binding
             || self.facts.repository_generation_id != commit.binding.repository_generation_id
@@ -359,6 +546,9 @@ impl<'tx> VerifiedSchedulingPolicyDowngradeMandateUseV1<'tx> {
             } if mandate_atom == self.facts.mandate_atom_commitment
                 && invocation == self.facts.invocation_commitment =>
             {
+                self.transaction.consumed_binding.replace(Some(
+                    ConsumedRepositoryActionBindingV1::new(binding.facts, binding.admission),
+                ));
                 self.transaction
                     .state
                     .set(MaterializationTransactionStateV1::Consumed);
@@ -376,22 +566,120 @@ mod owner_sealed {
     pub trait Sealed {}
 }
 
-pub trait RepositoryActionBindingKindV1: owner_sealed::Sealed {
+pub(in crate::domain::vnext) trait RepositoryActionBindingKindV1:
+    owner_sealed::Sealed
+{
     const ACTION: RepositoryActionLeafV1;
+
+    fn validate_owner(
+        selection: RepositoryAuthoritySelectionV1,
+        subject_commitment: [u8; 32],
+        current_semantic_owner_basis_commitment: [u8; 32],
+        exact_payload_commitment: [u8; 32],
+    ) -> Result<(), AuthorityMaterializationErrorV1>;
 }
 
-pub struct SchedulingPolicyBindingOwnerV1;
+macro_rules! owner_binding_kind {
+    ($type:ident, $authority:ty, $first:literal..=$last:literal) => {
+        pub(in crate::domain::vnext) struct $type<const GLOBAL_TAG: u64>;
 
-impl owner_sealed::Sealed for SchedulingPolicyBindingOwnerV1 {}
+        impl<const GLOBAL_TAG: u64> owner_sealed::Sealed for $type<GLOBAL_TAG> {}
 
-impl RepositoryActionBindingKindV1 for SchedulingPolicyBindingOwnerV1 {
-    const ACTION: RepositoryActionLeafV1 = RepositoryActionLeafV1::Downstream(
-        RepositoryDownstreamActionLeafV1::PUBLISH_SCHEDULING_POLICY_BINDING,
-    );
+        impl<const GLOBAL_TAG: u64> RepositoryActionBindingKindV1 for $type<GLOBAL_TAG> {
+            const ACTION: RepositoryActionLeafV1 = {
+                assert!(GLOBAL_TAG >= $first && GLOBAL_TAG <= $last);
+                RepositoryActionLeafV1::Downstream(if GLOBAL_TAG == 105 {
+                    RepositoryDownstreamActionLeafV1::PUBLISH_SCHEDULING_POLICY_BINDING
+                } else {
+                    RepositoryDownstreamActionLeafV1::from_catalog_index((GLOBAL_TAG - 94) as u8)
+                })
+            };
+
+            fn validate_owner(
+                selection: RepositoryAuthoritySelectionV1,
+                subject_commitment: [u8; 32],
+                current_semantic_owner_basis_commitment: [u8; 32],
+                exact_payload_commitment: [u8; 32],
+            ) -> Result<(), AuthorityMaterializationErrorV1> {
+                Self::authority(
+                    selection,
+                    subject_commitment,
+                    current_semantic_owner_basis_commitment,
+                    exact_payload_commitment,
+                )
+                .map(|_| ())
+                .map_err(|_| AuthorityMaterializationErrorV1::BindingMismatch)
+            }
+        }
+
+        impl<const GLOBAL_TAG: u64> $type<GLOBAL_TAG> {
+            pub(in crate::domain::vnext) fn authority(
+                selection: RepositoryAuthoritySelectionV1,
+                subject_commitment: [u8; 32],
+                current_semantic_owner_basis_commitment: [u8; 32],
+                exact_payload_commitment: [u8; 32],
+            ) -> Result<$authority, super::facade::RepositoryLeafAuthorityErrorV1> {
+                <$authority>::new(
+                    selection,
+                    match <Self as RepositoryActionBindingKindV1>::ACTION {
+                        RepositoryActionLeafV1::Downstream(action) => action,
+                        _ => unreachable!(),
+                    },
+                    subject_commitment,
+                    current_semantic_owner_basis_commitment,
+                    exact_payload_commitment,
+                )
+            }
+        }
+    };
 }
+
+owner_binding_kind!(
+    CoordinationRepositoryActionBindingOwnerV1,
+    CoordinationRepositoryActionAuthorityV1,
+    94..=102
+);
+owner_binding_kind!(
+    PlanningRepositoryActionBindingOwnerV1,
+    PlanningRepositoryActionAuthorityV1,
+    103..=106
+);
+owner_binding_kind!(
+    PersistenceRepositoryActionBindingOwnerV1,
+    PersistenceRepositoryActionAuthorityV1,
+    107..=116
+);
+owner_binding_kind!(
+    DistributionRepositoryActionBindingOwnerV1,
+    DistributionRepositoryActionAuthorityV1,
+    117..=129
+);
+owner_binding_kind!(
+    SearchMaintenanceRepositoryActionBindingOwnerV1,
+    SearchMaintenanceRepositoryActionAuthorityV1,
+    130..=131
+);
+owner_binding_kind!(
+    MemoryRepositoryActionBindingOwnerV1,
+    MemoryRepositoryActionAuthorityV1,
+    132..=138
+);
+owner_binding_kind!(
+    IntakeRepositoryActionBindingOwnerV1,
+    IntakeRepositoryActionAuthorityV1,
+    139..=141
+);
+owner_binding_kind!(
+    ResearchRepositoryActionBindingOwnerV1,
+    ResearchRepositoryActionAuthorityV1,
+    142..=145
+);
+
+pub(in crate::domain::vnext) type SchedulingPolicyBindingOwnerV1 =
+    PlanningRepositoryActionBindingOwnerV1<105>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct RepositoryActionBindingFactsV1 {
+pub(in crate::domain::vnext) struct RepositoryActionBindingFactsV1 {
     pub(crate) authority_selection: RepositoryAuthoritySelectionV1,
     pub(crate) request_id: ActionRequestIdV1,
     pub(crate) action: RepositoryActionLeafV1,
@@ -430,6 +718,17 @@ pub struct RepositoryActionBindingFactsV1 {
     pub(crate) idempotency_mapping_commitment: [u8; 32],
     pub(crate) successor_capacity_commitment: [u8; 32],
     pub(crate) receipt_id: AuthorizationReceiptIdV1,
+    pub(crate) authorization_receipt_object_commitment: [u8; 32],
+    pub(crate) basis_object_commitment: [u8; 32],
+    pub(crate) current_snapshot_object_commitment: [u8; 32],
+    pub(crate) successor_snapshot_object_commitment: [u8; 32],
+    pub(crate) current_capacity_root_object_commitment: [u8; 32],
+    pub(crate) successor_capacity_root_object_commitment: [u8; 32],
+    pub(crate) capacity_debit_object_commitment: [u8; 32],
+    pub(crate) leaf_authority_carrier_object_commitment: Option<[u8; 32]>,
+    pub(crate) leaf_authority_consumption_object_commitment: Option<[u8; 32]>,
+    pub(crate) guard_object_commitment: [u8; 32],
+    pub(crate) state_object_commitment: [u8; 32],
     pub(crate) result_commitment: [u8; 32],
     pub(crate) invocation_commitment: [u8; 32],
     pub(crate) supplemental_mandate_body_commitment: [u8; 32],
@@ -454,8 +753,9 @@ pub struct RepositoryActionBindingFactsV1 {
     pub(crate) supplemental_mandate_diff_class: SchedulingPolicyDiffClassV1,
 }
 
-pub struct AdmittedRepositoryActionBindingV1<'tx, K> {
+pub(in crate::domain::vnext::authority) struct AdmittedRepositoryActionBindingV1<'tx, K> {
     facts: RepositoryActionBindingFactsV1,
+    admission: MaterializationAuthorityAdmissionV1,
     transaction: &'tx AuthorityMaterializationTransactionV1<'tx>,
     _transaction: PhantomData<&'tx mut K>,
     _not_send_or_sync: PhantomData<Rc<()>>,
@@ -491,6 +791,15 @@ impl<'tx, K: RepositoryActionBindingKindV1> AdmittedRepositoryActionBindingV1<'t
             facts.planned_consumption_commitment,
             facts.idempotency_mapping_commitment,
             facts.successor_capacity_commitment,
+            facts.authorization_receipt_object_commitment,
+            facts.basis_object_commitment,
+            facts.current_snapshot_object_commitment,
+            facts.successor_snapshot_object_commitment,
+            facts.current_capacity_root_object_commitment,
+            facts.successor_capacity_root_object_commitment,
+            facts.capacity_debit_object_commitment,
+            facts.guard_object_commitment,
+            facts.state_object_commitment,
             facts.result_commitment,
             facts.invocation_commitment,
             facts.supplemental_mandate_body_commitment,
@@ -528,6 +837,12 @@ impl<'tx, K: RepositoryActionBindingKindV1> AdmittedRepositoryActionBindingV1<'t
         };
         if facts.action != K::ACTION
             || commitments.contains(&[0; 32])
+            || facts
+                .leaf_authority_carrier_object_commitment
+                .is_some_and(|value| value == [0; 32])
+            || facts
+                .leaf_authority_consumption_object_commitment
+                .is_some_and(|value| value == [0; 32])
             || facts.authority_epoch == 0
             || facts.trusted_time == 0
             || facts.authority_selection.actor_binding_id() != facts.binding_id
@@ -536,26 +851,55 @@ impl<'tx, K: RepositoryActionBindingKindV1> AdmittedRepositoryActionBindingV1<'t
         {
             return Err(AuthorityMaterializationErrorV1::BindingMismatch);
         }
-        let RepositoryActionLeafV1::Downstream(downstream) = facts.action else {
-            return Err(AuthorityMaterializationErrorV1::BindingMismatch);
-        };
-        PlanningRepositoryActionAuthorityV1::new(
+        K::validate_owner(
             facts.authority_selection,
-            downstream,
             facts.subject_commitment,
             facts.subject_basis_commitment,
             facts.exact_payload_commitment,
-        )
-        .map_err(|_| AuthorityMaterializationErrorV1::BindingMismatch)?;
+        )?;
         Ok(())
     }
 }
 
+fn validate_repository_action_binding<K: RepositoryActionBindingKindV1>(
+    facts: RepositoryActionBindingFactsV1,
+    admission: MaterializationAuthorityAdmissionV1,
+) -> Result<(), AuthorityMaterializationErrorV1> {
+    AdmittedRepositoryActionBindingV1::<K>::validate_facts(facts)?;
+    if admission.request_id != facts.request_id
+        || admission.action != facts.action
+        || admission.receipt_id != facts.receipt_id
+        || admission.authority_epoch != facts.authority_epoch
+        || admission.accepted_h_time != facts.trusted_time
+        || admission.state_token != facts.state_token_id
+        || admission.basis_object_id.as_bytes() != &facts.basis_object_commitment
+        || admission.current_snapshot_id.as_bytes() != &facts.current_snapshot_object_commitment
+        || admission.successor_snapshot_id.as_bytes() != &facts.successor_snapshot_object_commitment
+        || admission.current_capacity_root_id.as_bytes()
+            != &facts.current_capacity_root_object_commitment
+        || admission.successor_capacity_root_id.as_bytes()
+            != &facts.successor_capacity_root_object_commitment
+        || admission.capacity_debit_id.as_bytes() != &facts.capacity_debit_object_commitment
+        || admission.leaf_authority_carrier_id.map(|id| *id.as_bytes())
+            != facts.leaf_authority_carrier_object_commitment
+        || admission
+            .leaf_authority_consumption_id
+            .map(|id| *id.as_bytes())
+            != facts.leaf_authority_consumption_object_commitment
+        || admission.guard_object_id.as_bytes() != &facts.guard_object_commitment
+        || admission.state_object_id.as_bytes() != &facts.state_object_commitment
+    {
+        return Err(AuthorityMaterializationErrorV1::BindingMismatch);
+    }
+    Ok(())
+}
+
 fn validate_scheduling_policy_binding(
     facts: RepositoryActionBindingFactsV1,
+    admission: MaterializationAuthorityAdmissionV1,
     mandate_required: bool,
 ) -> Result<(), AuthorityMaterializationErrorV1> {
-    AdmittedRepositoryActionBindingV1::<SchedulingPolicyBindingOwnerV1>::validate_facts(facts)?;
+    validate_repository_action_binding::<SchedulingPolicyBindingOwnerV1>(facts, admission)?;
     if mandate_required
         != facts
             .supplemental_mandate_diff_class
@@ -761,6 +1105,17 @@ mod tests {
             idempotency_mapping_commitment: [43; 32],
             successor_capacity_commitment: facts().successor_capacity_commitment,
             receipt_id: AuthorizationReceiptIdV1::derive("materialization-receipt").unwrap(),
+            authorization_receipt_object_commitment: [50; 32],
+            basis_object_commitment: [51; 32],
+            current_snapshot_object_commitment: [52; 32],
+            successor_snapshot_object_commitment: [53; 32],
+            current_capacity_root_object_commitment: [54; 32],
+            successor_capacity_root_object_commitment: [55; 32],
+            capacity_debit_object_commitment: [56; 32],
+            leaf_authority_carrier_object_commitment: Some([57; 32]),
+            leaf_authority_consumption_object_commitment: Some([58; 32]),
+            guard_object_commitment: [59; 32],
+            state_object_commitment: [60; 32],
             result_commitment: [44; 32],
             invocation_commitment: facts().invocation_commitment,
             supplemental_mandate_body_commitment: facts().mandate_body_commitment,
@@ -803,12 +1158,54 @@ mod tests {
         facts
     }
 
+    fn test_admission(
+        binding: RepositoryActionBindingFactsV1,
+    ) -> MaterializationAuthorityAdmissionV1 {
+        MaterializationAuthorityAdmissionV1 {
+            request_id: binding.request_id,
+            action: binding.action,
+            receipt_id: binding.receipt_id,
+            authority_epoch: binding.authority_epoch,
+            accepted_h_time: binding.trusted_time,
+            basis_object_id: crate::domain::vnext::identity::StoreObjectIdV1::from_digest([51; 32]),
+            current_snapshot_id: crate::domain::vnext::identity::StoreObjectIdV1::from_digest(
+                [52; 32],
+            ),
+            successor_snapshot_id: crate::domain::vnext::identity::StoreObjectIdV1::from_digest(
+                [53; 32],
+            ),
+            successor_store_generation: 2,
+            current_capacity_root_id: crate::domain::vnext::identity::StoreObjectIdV1::from_digest(
+                [54; 32],
+            ),
+            successor_capacity_root_id:
+                crate::domain::vnext::identity::StoreObjectIdV1::from_digest([55; 32]),
+            capacity_debit_id: crate::domain::vnext::identity::StoreObjectIdV1::from_digest(
+                [56; 32],
+            ),
+            leaf_authority_carrier_id: Some(
+                crate::domain::vnext::identity::StoreObjectIdV1::from_digest([57; 32]),
+            ),
+            leaf_authority_consumption_id: Some(
+                crate::domain::vnext::identity::StoreObjectIdV1::from_digest([58; 32]),
+            ),
+            guard_object_id: crate::domain::vnext::identity::StoreObjectIdV1::from_digest([59; 32]),
+            state_object_id: crate::domain::vnext::identity::StoreObjectIdV1::from_digest([60; 32]),
+            state_token: binding.state_token_id,
+        }
+    }
+
     #[test]
     fn downgrade_mandate_and_action_binding_are_one_use_and_exact() {
         let transaction =
             AuthorityMaterializationTransactionV1::for_test(facts().repository_generation_id);
         let use_token = transaction.mint_mandate(facts()).unwrap();
-        let binding = transaction.mint_binding(binding_facts()).unwrap();
+        let binding = transaction
+            .mint_binding_from_test_admission::<SchedulingPolicyBindingOwnerV1>(
+                test_admission(binding_facts()),
+                binding_facts(),
+            )
+            .unwrap();
         let commit = RepositoryActionCommitFactsV1 {
             binding: binding_facts(),
         };
@@ -820,7 +1217,10 @@ mod tests {
             Err(AuthorityMaterializationErrorV1::DuplicateUse)
         ));
         assert!(matches!(
-            transaction.mint_binding(binding_facts()),
+            transaction.mint_binding_from_test_admission::<SchedulingPolicyBindingOwnerV1>(
+                test_admission(binding_facts()),
+                binding_facts(),
+            ),
             Err(AuthorityMaterializationErrorV1::DuplicateUse)
         ));
     }
@@ -837,7 +1237,12 @@ mod tests {
         ));
 
         let use_token = transaction.mint_mandate(facts()).unwrap();
-        let binding = transaction.mint_binding(binding_facts()).unwrap();
+        let binding = transaction
+            .mint_binding_from_test_admission::<SchedulingPolicyBindingOwnerV1>(
+                test_admission(binding_facts()),
+                binding_facts(),
+            )
+            .unwrap();
         let mut substituted = binding_facts();
         substituted.request_id = ActionRequestIdV1::derive("other-request").unwrap();
         let wrong = RepositoryActionCommitFactsV1 {
@@ -875,7 +1280,12 @@ mod tests {
             let transaction =
                 AuthorityMaterializationTransactionV1::for_test(facts().repository_generation_id);
             let use_token = transaction.mint_mandate(facts()).unwrap();
-            let binding = transaction.mint_binding(binding_facts()).unwrap();
+            let binding = transaction
+                .mint_binding_from_test_admission::<SchedulingPolicyBindingOwnerV1>(
+                    test_admission(binding_facts()),
+                    binding_facts(),
+                )
+                .unwrap();
             assert!(matches!(
                 use_token.consume_with_action_binding(
                     binding,
@@ -910,7 +1320,10 @@ mod tests {
         let transaction =
             AuthorityMaterializationTransactionV1::for_test(facts.repository_generation_id);
         assert!(matches!(
-            transaction.mint_binding(facts),
+            transaction.mint_binding_from_test_admission::<SchedulingPolicyBindingOwnerV1>(
+                test_admission(facts),
+                facts,
+            ),
             Err(AuthorityMaterializationErrorV1::BindingMismatch)
         ));
     }
@@ -924,9 +1337,15 @@ mod tests {
             let facts = binding_facts_without_mandate(diff_class);
             let transaction =
                 AuthorityMaterializationTransactionV1::for_test(facts.repository_generation_id);
+            let binding = transaction
+                .mint_binding_from_test_admission::<SchedulingPolicyBindingOwnerV1>(
+                    test_admission(facts),
+                    facts,
+                )
+                .unwrap();
             transaction
                 .consume_binding_without_mandate(
-                    facts,
+                    binding,
                     RepositoryActionCommitFactsV1 { binding: facts },
                 )
                 .unwrap();
@@ -937,11 +1356,29 @@ mod tests {
         let transaction =
             AuthorityMaterializationTransactionV1::for_test(facts.repository_generation_id);
         assert!(matches!(
-            transaction.consume_binding_without_mandate(
+            transaction.mint_binding_from_test_admission::<SchedulingPolicyBindingOwnerV1>(
+                test_admission(facts),
                 facts,
-                RepositoryActionCommitFactsV1 { binding: facts },
             ),
             Err(AuthorityMaterializationErrorV1::BindingMismatch)
         ));
+    }
+
+    #[test]
+    fn every_frozen_repository_owner_kind_is_nominally_reachable() {
+        macro_rules! assert_owner {
+            ($owner:ty) => {
+                assert!(<$owner>::authority(selection(), [30; 32], [31; 32], [32; 32]).is_ok());
+            };
+        }
+
+        assert_owner!(CoordinationRepositoryActionBindingOwnerV1<94>);
+        assert_owner!(PlanningRepositoryActionBindingOwnerV1<103>);
+        assert_owner!(PersistenceRepositoryActionBindingOwnerV1<107>);
+        assert_owner!(DistributionRepositoryActionBindingOwnerV1<117>);
+        assert_owner!(SearchMaintenanceRepositoryActionBindingOwnerV1<130>);
+        assert_owner!(MemoryRepositoryActionBindingOwnerV1<132>);
+        assert_owner!(IntakeRepositoryActionBindingOwnerV1<139>);
+        assert_owner!(ResearchRepositoryActionBindingOwnerV1<142>);
     }
 }

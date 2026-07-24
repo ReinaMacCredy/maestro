@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -93,8 +94,8 @@ def main() -> None:
     if packet["packet_sha256"] != "fb33b048b59c66df9858558a2c80e59a478d101465761f902366c9a00751cbc5":
         raise SystemExit("successor packet identity drifted")
     for command in (
-        ["python3", str(Path(__file__).with_name("validate.py"))],
-        ["ruby", str(Path(__file__).with_name("validate.rb"))],
+        [sys.executable, str(Path(__file__).with_name("validate.py"))],
+        ["/usr/bin/ruby", str(Path(__file__).with_name("validate.rb"))],
     ):
         completed = subprocess.run(command, check=False, capture_output=True, text=True)
         if completed.returncode != 0:

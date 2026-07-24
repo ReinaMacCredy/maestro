@@ -84,6 +84,7 @@ SOURCE_PATHS = (
     "src/domain/vnext/work/mod.rs",
     "src/domain/vnext/work/submission.rs",
     "src/foundation/core/secure_fs.rs",
+    "src/foundation/core/descriptor_census_platform.rs",
     "tests/vnext_evidence_claims.rs", "tests/vnext_submission_claim_set.rs",
     "tests/vnext_stage5_contracts.rs",
     "tests/vnext_stage5_evidence_gates.rs",

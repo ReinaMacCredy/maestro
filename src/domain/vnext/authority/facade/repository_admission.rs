@@ -255,6 +255,7 @@ pub(crate) struct AdmittedRepositoryActionV1 {
     basis_object: StoreObjectV1,
     current_snapshot_id: StoreObjectIdV1,
     successor_snapshot: StoreObjectV1,
+    successor_store_generation: u64,
     current_capacity_root_id: StoreObjectIdV1,
     successor_capacity_root: StoreObjectV1,
     capacity_debit: StoreObjectV1,
@@ -263,6 +264,27 @@ pub(crate) struct AdmittedRepositoryActionV1 {
     guard_object_id: StoreObjectIdV1,
     state_object_id: StoreObjectIdV1,
     state_token: StateTokenIdV1,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::domain::vnext::authority) struct MaterializationAuthorityAdmissionV1 {
+    pub(in crate::domain::vnext::authority) request_id: ActionRequestIdV1,
+    pub(in crate::domain::vnext::authority) action: RepositoryActionLeafV1,
+    pub(in crate::domain::vnext::authority) receipt_id: AuthorizationReceiptIdV1,
+    pub(in crate::domain::vnext::authority) authority_epoch: u64,
+    pub(in crate::domain::vnext::authority) accepted_h_time: u64,
+    pub(in crate::domain::vnext::authority) basis_object_id: StoreObjectIdV1,
+    pub(in crate::domain::vnext::authority) current_snapshot_id: StoreObjectIdV1,
+    pub(in crate::domain::vnext::authority) successor_snapshot_id: StoreObjectIdV1,
+    pub(in crate::domain::vnext::authority) successor_store_generation: u64,
+    pub(in crate::domain::vnext::authority) current_capacity_root_id: StoreObjectIdV1,
+    pub(in crate::domain::vnext::authority) successor_capacity_root_id: StoreObjectIdV1,
+    pub(in crate::domain::vnext::authority) capacity_debit_id: StoreObjectIdV1,
+    pub(in crate::domain::vnext::authority) leaf_authority_carrier_id: Option<StoreObjectIdV1>,
+    pub(in crate::domain::vnext::authority) leaf_authority_consumption_id: Option<StoreObjectIdV1>,
+    pub(in crate::domain::vnext::authority) guard_object_id: StoreObjectIdV1,
+    pub(in crate::domain::vnext::authority) state_object_id: StoreObjectIdV1,
+    pub(in crate::domain::vnext::authority) state_token: StateTokenIdV1,
 }
 
 pub(crate) struct ContinuedRepositoryActionV1 {
@@ -281,6 +303,33 @@ impl ContinuedRepositoryActionV1 {
 }
 
 impl AdmittedRepositoryActionV1 {
+    pub(in crate::domain::vnext::authority) fn materialization_admission(
+        &self,
+    ) -> MaterializationAuthorityAdmissionV1 {
+        MaterializationAuthorityAdmissionV1 {
+            request_id: self.request_id,
+            action: self.action,
+            receipt_id: self.receipt.id(),
+            authority_epoch: self.authority_epoch,
+            accepted_h_time: self.accepted_h_time,
+            basis_object_id: self.basis_object.id(),
+            current_snapshot_id: self.current_snapshot_id,
+            successor_snapshot_id: self.successor_snapshot.id(),
+            successor_store_generation: self.successor_store_generation,
+            current_capacity_root_id: self.current_capacity_root_id,
+            successor_capacity_root_id: self.successor_capacity_root.id(),
+            capacity_debit_id: self.capacity_debit.id(),
+            leaf_authority_carrier_id: self.leaf_authority_carrier.as_ref().map(StoreObjectV1::id),
+            leaf_authority_consumption_id: self
+                .leaf_authority_consumption
+                .as_ref()
+                .map(StoreObjectV1::id),
+            guard_object_id: self.guard_object_id,
+            state_object_id: self.state_object_id,
+            state_token: self.state_token,
+        }
+    }
+
     pub(crate) const fn request_id(&self) -> ActionRequestIdV1 {
         self.request_id
     }
@@ -1204,6 +1253,7 @@ pub(crate) fn admit_repository_action(
         basis_object,
         current_snapshot_id: snapshot_object.id(),
         successor_snapshot,
+        successor_store_generation: next_generation,
         current_capacity_root_id: current_capacity_root_object.id(),
         successor_capacity_root,
         capacity_debit,
@@ -1808,6 +1858,7 @@ fn admit_specialized_repository_execution_action(
         basis_object,
         current_snapshot_id: snapshot_object.id(),
         successor_snapshot,
+        successor_store_generation: next_generation,
         current_capacity_root_id: current_capacity_root_object.id(),
         successor_capacity_root,
         capacity_debit,

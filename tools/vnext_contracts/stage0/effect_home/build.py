@@ -14,6 +14,7 @@ import hashlib
 import json
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -25,10 +26,9 @@ EVIDENCE = ROOT / "contracts/vnext/catalogs/evidence/predecessors.json"
 SOURCE_BINDINGS = ROOT / "contracts/vnext/stage0/input-bindings.json"
 C325 = ROOT / "contracts/vnext/public/direct_consumers.c325.v1.json"
 DOMAIN = "maestro.vnext.stage0.effect-home.v1"
-EXPECTED_SOURCE_BINDINGS_SHA256 = "298e5ef0f129c09398126574d73bafb516a0dfc63a04242cd280583bbc5d49ea"
 EXPECTED_INPUTS = {
-    "design": "abdf9d500d8418a9c8fae247f70af167fdc41de22a7043808b3207ab6c1d5be6",
-    "decisions": "1f97e67b156d5a17d13b94ff955ad17efeb3bb71a4b74b1aec14e20dac1100dd",
+    "design": "9d5bda2be6274351ff7afba7f396595d80f9d560622991de1c8214aae0b8fc1b",
+    "decisions": "18f14bce862e15be09c9d88155d62627582df50c7754e2e8e1d6f6bee8f7d522",
     "card": "2cdf1f74843a6eca926ff3bc48e060654350e6a03b65342f8d7be48d111379b4",
     "c325": "ccd22243030aa3bbbd02fefd4ab17371b9bfb2c9842311c5acddbee5bd220c29",
 }
@@ -201,6 +201,7 @@ SEMANTIC_LITERAL_SOURCES = {
     "src/domain/vnext/execution/effect_home.rs": ("Execution", "candidate_contract_definition", "direct_execution_literal"),
     "src/domain/vnext/execution/effect_routes.rs": ("Execution", "candidate_contract_definition", "direct_execution_literal"),
     "src/domain/vnext/execution/effects.rs": ("Execution", "candidate_contract_definition", "direct_stage4_effect_runtime_literal"),
+    "src/domain/vnext/execution/h3_withdrawal_publication.rs": ("Execution", "candidate_contract_definition", "direct_stage4_h3_withdrawal_publication_literal"),
     "src/domain/vnext/execution/mod.rs": ("Execution", "candidate_contract_definition", "direct_execution_literal"),
     "src/domain/vnext/execution/runtime.rs": ("Execution", "candidate_contract_definition", "direct_stage4_execution_runtime_literal"),
     "src/domain/vnext/execution/store.rs": ("Execution", "candidate_contract_definition", "direct_stage4_atomic_store_literal"),
@@ -430,7 +431,29 @@ def require_sha(path: Path, expected: str) -> str:
 
 
 def frozen_source_hashes() -> dict[str, str]:
-    require_sha(SOURCE_BINDINGS, EXPECTED_SOURCE_BINDINGS_SHA256)
+    verification = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "tools/vnext_contracts/stage0/verify_input_bindings.py"),
+            "--bindings",
+            str(SOURCE_BINDINGS),
+        ],
+        check=False,
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        env={
+            "HOME": tempfile.gettempdir(),
+            "LANG": "C",
+            "LC_ALL": "C",
+            "PATH": "/usr/bin:/bin",
+            "PYTHONDONTWRITEBYTECODE": "1",
+        },
+    )
+    if verification.returncode != 0:
+        raise ValueError(
+            f"Stage-0 source bindings failed exact verification: {verification.stderr}"
+        )
     bindings = read_json(SOURCE_BINDINGS)
     if bindings.get("schema") != "maestro.vnext.stage0-input-bindings.v1":
         raise ValueError("Stage-0 source bindings use an unexpected schema")
@@ -447,6 +470,7 @@ def frozen_source_hashes() -> dict[str, str]:
             "Stage-0 source bindings do not match the approved canonical source inputs"
         )
     return {
+        "input_bindings": sha256_bytes(SOURCE_BINDINGS.read_bytes()),
         "design": expected_recorded["design_sha256"],
         "decisions": expected_recorded["decisions_sha256"],
         "card": expected_recorded["card_sha256"],
@@ -1451,11 +1475,12 @@ def artifacts(documents: dict[str, dict[str, object]], input_hashes: dict[str, s
 
 def ruby_receipts(input_path: Path) -> dict[str, object]:
     result = subprocess.run(
-        ["ruby", str(Path(__file__).with_name("encode.rb")), str(input_path)],
+        ["/usr/bin/ruby", str(Path(__file__).with_name("encode.rb")), str(input_path)],
         check=True,
         cwd=ROOT,
         capture_output=True,
         text=True,
+        env={"HOME": tempfile.gettempdir(), "LANG": "C", "LC_ALL": "C", "PATH": "/usr/bin:/bin", "RUBYOPT": ""},
     )
     return json.loads(result.stdout)
 

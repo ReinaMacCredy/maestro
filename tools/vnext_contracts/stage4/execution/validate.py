@@ -92,6 +92,7 @@ AUTHORITY_EXTENSION_SOURCES = [
     "src/domain/vnext/authority/materialization.rs",
     "src/domain/vnext/authority/mod.rs",
     "src/foundation/core/secure_fs.rs",
+    "src/foundation/core/descriptor_census_platform.rs",
 ]
 FOCAL_STEP_EVIDENCE_SOURCES = [
     "src/domain/vnext/evidence/mod.rs",
@@ -576,7 +577,7 @@ def contract_ownership_sources() -> list[str]:
 
 
 def reconstruct_source_paths() -> list[str]:
-    paths = sorted(set(CATALOG_PATHS + [DISPATCH_PATH, WITHDRAWAL_PATH] + list(PREDECESSOR_MANIFESTS.values()) + [path for group in PREDECESSOR_RECEIPTS.values() for path in group] + COMPILATION_ANCESTORS + AUTHORITY_EXTENSION_SOURCES + FOCAL_STEP_EVIDENCE_SOURCES + contract_ownership_sources() + execution_sources() + persistence_sources() + TOOL_SOURCES))
+    paths = sorted(set(CATALOG_PATHS + [DISPATCH_PATH, WITHDRAWAL_PATH] + list(PREDECESSOR_MANIFESTS.values()) + [path for group in PREDECESSOR_RECEIPTS.values() for path in group] + COMPILATION_ANCESTORS + AUTHORITY_EXTENSION_SOURCES + FOCAL_STEP_EVIDENCE_SOURCES + contract_ownership_sources() + execution_sources() + persistence_sources() + ["src/domain/vnext/installation/consumer_snapshot.rs", "src/domain/vnext/integration/consumer_closure.rs"] + TOOL_SOURCES))
     if any(path.startswith("src/domain/vnext/gate/") or (path.startswith("src/domain/vnext/evidence/") and path not in FOCAL_STEP_EVIDENCE_SOURCES) for path in paths):
         fail("Stage 5 Gate or non-submission Evidence source leaked into Stage 4 closure")
     return paths

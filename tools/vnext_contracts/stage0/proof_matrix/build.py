@@ -603,7 +603,7 @@ def build_manifest() -> tuple[dict[str, Any], bytes]:
                 "vector_count": len(submission["vectors"]),
             },
             assertions={"schema_id": submission["schema_id"]},
-            commands=[["ruby", "tools/vnext_contracts/stage0/submission_claim/verify.rb"]],
+            commands=[["/usr/bin/ruby", "tools/vnext_contracts/stage0/submission_claim/verify.rb"]],
         )
     )
     dispatch_paths = sorted(

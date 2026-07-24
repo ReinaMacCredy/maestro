@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import sys
 import unittest
 from pathlib import Path
@@ -11,30 +10,24 @@ import build
 
 
 PINNED_CANONICAL_DESIGN_SHA256 = (
-    "abdf9d500d8418a9c8fae247f70af167fdc41de22a7043808b3207ab6c1d5be6"
+    "9d5bda2be6274351ff7afba7f396595d80f9d560622991de1c8214aae0b8fc1b"
 )
 
 
 class EffectHomeBuildTest(unittest.TestCase):
     def test_expected_source_inputs_match_pinned_bindings(self) -> None:
-        bindings = json.loads(build.SOURCE_BINDINGS.read_text(encoding="ascii"))
-        current_source_inputs = bindings["current_source_inputs"]
-
         self.assertEqual(
             PINNED_CANONICAL_DESIGN_SHA256,
-            current_source_inputs["design_sha256"],
+            build.EXPECTED_INPUTS["design"],
         )
         self.assertEqual(
-            {
-                "design_sha256": build.EXPECTED_INPUTS["design"],
-                "decisions_sha256": build.EXPECTED_INPUTS["decisions"],
-                "card_sha256": build.EXPECTED_INPUTS["card"],
-            },
-            current_source_inputs,
+            "18f14bce862e15be09c9d88155d62627582df50c7754e2e8e1d6f6bee8f7d522",
+            build.EXPECTED_INPUTS["decisions"],
         )
-        self.assertEqual(
-            PINNED_CANONICAL_DESIGN_SHA256,
-            build.frozen_source_hashes()["design"],
+        self.assertNotIn("EXPECTED_SOURCE_BINDINGS_SHA256", vars(build))
+        self.assertIn(
+            "verify_input_bindings.py",
+            Path(build.__file__).read_text(encoding="utf-8"),
         )
 
 
