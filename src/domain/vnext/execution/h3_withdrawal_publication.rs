@@ -206,6 +206,10 @@ pub(in crate::domain::vnext::execution) struct H3WithdrawalPublicationFactsV1 {
     material_currentness: [u8; 32],
     credential_currentness: [u8; 32],
     use_fence_currentness: [u8; 32],
+    native_cancelled_member_identity: [u8; 32],
+    source_member_identity: [u8; 32],
+    target_member_identity: [u8; 32],
+    source_inventory_row: [u8; 32],
     source_inventory: [u8; 32],
     source_inventory_rows: [u8; 32],
     declared_target_closure: [u8; 32],
@@ -254,6 +258,151 @@ pub(in crate::domain::vnext) struct ConsumedH3WithdrawalPublicationV1<'tx> {
     _not_send_or_sync: PhantomData<Rc<()>>,
 }
 
+pub(in crate::domain::vnext) struct H3NativeCancelledSourceMemberV1 {
+    member_identity: [u8; 32],
+    inventory_row: [u8; 32],
+    source_inventory: [u8; 32],
+    source_inventory_rows: [u8; 32],
+    display_identity: [u8; 32],
+    resolved_identity: [u8; 32],
+    effect_lineage: [u8; 32],
+    custody_transition: [u8; 32],
+}
+
+impl H3NativeCancelledSourceMemberV1 {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the untrusted Migration claim names the exact closed source-member tuple"
+    )]
+    pub(in crate::domain::vnext) fn new(
+        member_identity: [u8; 32],
+        inventory_row: [u8; 32],
+        source_inventory: [u8; 32],
+        source_inventory_rows: [u8; 32],
+        display_identity: [u8; 32],
+        resolved_identity: [u8; 32],
+        effect_lineage: [u8; 32],
+        custody_transition: [u8; 32],
+    ) -> Result<Self, H3WithdrawalPublicationErrorV1> {
+        if [
+            member_identity,
+            inventory_row,
+            source_inventory,
+            source_inventory_rows,
+            display_identity,
+            resolved_identity,
+            effect_lineage,
+            custody_transition,
+        ]
+        .contains(&[0; 32])
+        {
+            return Err(H3WithdrawalPublicationErrorV1::BindingMismatch);
+        }
+        Ok(Self {
+            member_identity,
+            inventory_row,
+            source_inventory,
+            source_inventory_rows,
+            display_identity,
+            resolved_identity,
+            effect_lineage,
+            custody_transition,
+        })
+    }
+}
+
+pub(in crate::domain::vnext) struct H3NativeCancelledTargetMemberV1 {
+    member_identity: [u8; 32],
+    declared_target_closure: [u8; 32],
+    cancelled_target: [u8; 32],
+    quarantine_roots: [u8; 32],
+    protected_roots: [u8; 32],
+    consumer_gate: [u8; 32],
+    claims_catalog_verification: [u8; 32],
+}
+
+impl H3NativeCancelledTargetMemberV1 {
+    pub(in crate::domain::vnext) fn new(
+        member_identity: [u8; 32],
+        declared_target_closure: [u8; 32],
+        cancelled_target: [u8; 32],
+        quarantine_roots: [u8; 32],
+        protected_roots: [u8; 32],
+        consumer_gate: [u8; 32],
+        claims_catalog_verification: [u8; 32],
+    ) -> Result<Self, H3WithdrawalPublicationErrorV1> {
+        if [
+            member_identity,
+            declared_target_closure,
+            cancelled_target,
+            quarantine_roots,
+            protected_roots,
+            consumer_gate,
+            claims_catalog_verification,
+        ]
+        .contains(&[0; 32])
+        {
+            return Err(H3WithdrawalPublicationErrorV1::BindingMismatch);
+        }
+        Ok(Self {
+            member_identity,
+            declared_target_closure,
+            cancelled_target,
+            quarantine_roots,
+            protected_roots,
+            consumer_gate,
+            claims_catalog_verification,
+        })
+    }
+}
+
+pub(in crate::domain::vnext) struct H3NativeCancelledClassificationV1 {
+    member_identity: [u8; 32],
+    withdrawal_publication: [u8; 32],
+    authorizing_branch: [u8; 32],
+    optional_release: Option<[u8; 32]>,
+    result: [u8; 32],
+    idempotency_meaning: [u8; 32],
+}
+
+impl H3NativeCancelledClassificationV1 {
+    pub(in crate::domain::vnext) fn new(
+        member_identity: [u8; 32],
+        withdrawal_publication: [u8; 32],
+        authorizing_branch: [u8; 32],
+        optional_release: Option<[u8; 32]>,
+        result: [u8; 32],
+        idempotency_meaning: [u8; 32],
+    ) -> Result<Self, H3WithdrawalPublicationErrorV1> {
+        if [
+            member_identity,
+            withdrawal_publication,
+            authorizing_branch,
+            result,
+            idempotency_meaning,
+        ]
+        .contains(&[0; 32])
+            || optional_release == Some([0; 32])
+        {
+            return Err(H3WithdrawalPublicationErrorV1::BindingMismatch);
+        }
+        Ok(Self {
+            member_identity,
+            withdrawal_publication,
+            authorizing_branch,
+            optional_release,
+            result,
+            idempotency_meaning,
+        })
+    }
+}
+
+pub(in crate::domain::vnext) struct ConsumedH3NativeCancelledMemberV1<'tx> {
+    _withdrawal: ConsumedH3WithdrawalPublicationV1<'tx>,
+    _binding_commitment: [u8; 32],
+    _not_send_or_sync: PhantomData<Rc<()>>,
+}
+
 impl<'tx> VerifiedH3WithdrawalPublicationUseV1<'tx> {
     fn consume(
         self,
@@ -274,17 +423,33 @@ impl<'tx> VerifiedH3WithdrawalPublicationUseV1<'tx> {
         Ok(consumed)
     }
 
-    pub(in crate::domain::vnext) fn consume_for_migration(
+    pub(in crate::domain::vnext) fn consume_native_cancelled_member_for_migration(
         self,
         association: &MigrationCutoverAssociationV1,
         finality: H3MigrationFinalityV1<'_>,
-    ) -> Result<ConsumedH3WithdrawalPublicationV1<'tx>, H3WithdrawalPublicationErrorV1> {
+        source: H3NativeCancelledSourceMemberV1,
+        target: H3NativeCancelledTargetMemberV1,
+        classification: H3NativeCancelledClassificationV1,
+    ) -> Result<ConsumedH3NativeCancelledMemberV1<'tx>, H3WithdrawalPublicationErrorV1> {
         validate_migration_association(self.facts, association, finality)?;
+        let binding_commitment = validate_native_cancelled_member(
+            self.facts,
+            association,
+            finality,
+            source,
+            target,
+            classification,
+        )?;
         let commit = H3WithdrawalPublicationCommitV1 { facts: self.facts };
-        self.consume(commit)
+        Ok(ConsumedH3NativeCancelledMemberV1 {
+            _withdrawal: self.consume(commit)?,
+            _binding_commitment: binding_commitment,
+            _not_send_or_sync: PhantomData,
+        })
     }
 }
 
+#[derive(Clone, Copy)]
 pub(in crate::domain::vnext) enum H3MigrationFinalityV1<'a> {
     ActiveStore(&'a ActiveStoreFinalityV1),
     PreStore(&'a PreStoreFinalityV1),
@@ -332,6 +497,10 @@ pub(in crate::domain::vnext::execution) fn verify_h3_withdrawal_publication_use<
         facts.material_currentness,
         facts.credential_currentness,
         facts.use_fence_currentness,
+        facts.native_cancelled_member_identity,
+        facts.source_member_identity,
+        facts.target_member_identity,
+        facts.source_inventory_row,
         facts.source_inventory,
         facts.source_inventory_rows,
         facts.declared_target_closure,
@@ -353,6 +522,8 @@ pub(in crate::domain::vnext::execution) fn verify_h3_withdrawal_publication_use<
         || !native_publication.is_unused()
         || facts.catalog_cell.home() != facts.source.home()
         || facts.catalog_cell.route() != facts.origin.route()
+        || facts.native_cancelled_member_identity != native_cancelled_member_identity(facts)
+        || facts.source_member_identity == facts.target_member_identity
     {
         return Err(H3WithdrawalPublicationErrorV1::InvalidCarrier);
     }
@@ -392,6 +563,10 @@ fn h3_facts_commitment(facts: H3WithdrawalPublicationFactsV1) -> [u8; 32] {
         facts.intent_identity,
         facts.intent_revision,
         facts.withdrawal_publication,
+        facts.native_cancelled_member_identity,
+        facts.source_member_identity,
+        facts.target_member_identity,
+        facts.source_inventory_row,
         facts.source_inventory,
         facts.source_inventory_rows,
         facts.declared_target_closure,
@@ -462,6 +637,75 @@ fn validate_source_origin_equality(
         }
         _ => Err(H3WithdrawalPublicationErrorV1::CausalBranchMismatch),
     }
+}
+
+fn validate_native_cancelled_member(
+    facts: H3WithdrawalPublicationFactsV1,
+    association: &MigrationCutoverAssociationV1,
+    finality: H3MigrationFinalityV1<'_>,
+    source: H3NativeCancelledSourceMemberV1,
+    target: H3NativeCancelledTargetMemberV1,
+    classification: H3NativeCancelledClassificationV1,
+) -> Result<[u8; 32], H3WithdrawalPublicationErrorV1> {
+    if facts.native_cancelled_member_identity != native_cancelled_member_identity(facts)
+        || facts.source_member_identity == facts.target_member_identity
+        || source.member_identity != facts.source_member_identity
+        || source.inventory_row != facts.source_inventory_row
+        || source.source_inventory != facts.source_inventory
+        || source.source_inventory_rows != facts.source_inventory_rows
+        || source.display_identity != facts.display_identity
+        || source.resolved_identity != facts.resolved_identity
+        || source.effect_lineage != facts.effect_lineage
+        || source.custody_transition != facts.custody_transition
+        || target.member_identity != facts.target_member_identity
+        || target.declared_target_closure != facts.declared_target_closure
+        || target.cancelled_target != facts.cancelled_target
+        || target.quarantine_roots != facts.quarantine_roots
+        || target.protected_roots != facts.protected_roots
+        || target.consumer_gate != facts.consumer_gate
+        || target.claims_catalog_verification != facts.claims_catalog_verification
+        || classification.member_identity != facts.native_cancelled_member_identity
+        || classification.withdrawal_publication != facts.withdrawal_publication
+        || classification.authorizing_branch != facts.authorizing_branch
+        || classification.optional_release != facts.optional_release
+        || classification.result != facts.result
+        || classification.idempotency_meaning != facts.idempotency_meaning
+    {
+        return Err(H3WithdrawalPublicationErrorV1::BindingMismatch);
+    }
+
+    use sha2::{Digest, Sha256};
+
+    let mut writer = Sha256::new();
+    writer.update(b"maestro.execution.h3-native-cancelled-member-use.v1\0");
+    writer.update(h3_facts_commitment(facts));
+    writer.update(canonical_association_context(association));
+    writer.update(canonical_h3_finality_context(finality));
+    writer.update(facts.native_cancelled_member_identity);
+    writer.update(facts.source_member_identity);
+    writer.update(facts.target_member_identity);
+    writer.update(facts.source_inventory_row);
+    writer.update(facts.withdrawal_publication);
+    writer.update(facts.effect_lineage);
+    writer.update(facts.custody_transition);
+    writer.update(facts.result);
+    writer.update(facts.idempotency_meaning);
+    Ok(writer.finalize().into())
+}
+
+fn native_cancelled_member_identity(facts: H3WithdrawalPublicationFactsV1) -> [u8; 32] {
+    use sha2::{Digest, Sha256};
+
+    let mut writer = Sha256::new();
+    writer.update(b"maestro.execution.h3-native-cancelled-member.v1\0");
+    writer.update(facts.withdrawal_publication);
+    writer.update(facts.source_member_identity);
+    writer.update(facts.target_member_identity);
+    writer.update(facts.source_inventory_row);
+    writer.update(facts.cancelled_target);
+    writer.update(facts.effect_lineage);
+    writer.update(facts.custody_transition);
+    writer.finalize().into()
 }
 
 fn validate_migration_association(
@@ -542,6 +786,22 @@ fn canonical_active_finality_context(finality: &ActiveStoreFinalityV1) -> [u8; 3
     writer.update((finality.parts().ordered_preconditions.len() as u64).to_be_bytes());
     writer.update((finality.parts().atomic_participants.len() as u64).to_be_bytes());
     writer.finalize().into()
+}
+
+fn canonical_h3_finality_context(finality: H3MigrationFinalityV1<'_>) -> [u8; 32] {
+    use sha2::{Digest, Sha256};
+
+    match finality {
+        H3MigrationFinalityV1::ActiveStore(finality) => canonical_active_finality_context(finality),
+        H3MigrationFinalityV1::PreStore(finality) => {
+            let mut writer = Sha256::new();
+            writer.update(b"maestro.execution.h3-pre-store-finality.v1\0");
+            writer.update(canonical_association_context(&finality.parts().association));
+            writer.update((finality.parts().ordered_preconditions.len() as u64).to_be_bytes());
+            writer.update((finality.parts().atomic_participants.len() as u64).to_be_bytes());
+            writer.finalize().into()
+        }
+    }
 }
 
 fn canonical_home_commitment(home: EffectIntentHomeKindV1) -> [u8; 32] {
@@ -818,7 +1078,7 @@ mod tests {
             .into_iter()
             .find(|cell| cell.home() == source.home() && cell.route() == origin.route())
             .unwrap();
-        H3WithdrawalPublicationFactsV1 {
+        let mut facts = H3WithdrawalPublicationFactsV1 {
             catalog_cell,
             source,
             origin,
@@ -869,6 +1129,10 @@ mod tests {
             material_currentness: [30; 32],
             credential_currentness: [31; 32],
             use_fence_currentness: [32; 32],
+            native_cancelled_member_identity: [49; 32],
+            source_member_identity: [68; 32],
+            target_member_identity: [69; 32],
+            source_inventory_row: [76; 32],
             source_inventory: [33; 32],
             source_inventory_rows: [34; 32],
             declared_target_closure: [35; 32],
@@ -885,7 +1149,66 @@ mod tests {
             optional_release: Some([46; 32]),
             result: [47; 32],
             idempotency_meaning: [48; 32],
-        }
+        };
+        facts.native_cancelled_member_identity = native_cancelled_member_identity(facts);
+        facts
+    }
+
+    fn member_claims(
+        facts: H3WithdrawalPublicationFactsV1,
+    ) -> (
+        H3NativeCancelledSourceMemberV1,
+        H3NativeCancelledTargetMemberV1,
+        H3NativeCancelledClassificationV1,
+    ) {
+        (
+            H3NativeCancelledSourceMemberV1::new(
+                facts.source_member_identity,
+                facts.source_inventory_row,
+                facts.source_inventory,
+                facts.source_inventory_rows,
+                facts.display_identity,
+                facts.resolved_identity,
+                facts.effect_lineage,
+                facts.custody_transition,
+            )
+            .unwrap(),
+            H3NativeCancelledTargetMemberV1::new(
+                facts.target_member_identity,
+                facts.declared_target_closure,
+                facts.cancelled_target,
+                facts.quarantine_roots,
+                facts.protected_roots,
+                facts.consumer_gate,
+                facts.claims_catalog_verification,
+            )
+            .unwrap(),
+            H3NativeCancelledClassificationV1::new(
+                facts.native_cancelled_member_identity,
+                facts.withdrawal_publication,
+                facts.authorizing_branch,
+                facts.optional_release,
+                facts.result,
+                facts.idempotency_meaning,
+            )
+            .unwrap(),
+        )
+    }
+
+    fn consume_member<'tx>(
+        verified: VerifiedH3WithdrawalPublicationUseV1<'tx>,
+        facts: H3WithdrawalPublicationFactsV1,
+        association: &MigrationCutoverAssociationV1,
+        finality: H3MigrationFinalityV1<'_>,
+    ) -> Result<ConsumedH3NativeCancelledMemberV1<'tx>, H3WithdrawalPublicationErrorV1> {
+        let (source, target, classification) = member_claims(facts);
+        verified.consume_native_cancelled_member_for_migration(
+            association,
+            finality,
+            source,
+            target,
+            classification,
+        )
     }
 
     fn sources() -> [H3WithdrawalPublicationSourceV1; 3] {
@@ -933,26 +1256,32 @@ mod tests {
             let native = test_native(bound);
             let verified = verify_h3_withdrawal_publication_use(&native).unwrap();
             let outcome = match finality {
-                TestMigrationFinalityV1::ActiveStore(finality) => verified
-                    .consume_for_migration(
-                        &association,
-                        H3MigrationFinalityV1::ActiveStore(&finality),
-                    )
-                    .map(|_| ()),
-                TestMigrationFinalityV1::PreStore(finality) => verified
-                    .consume_for_migration(&association, H3MigrationFinalityV1::PreStore(&finality))
-                    .map(|_| ()),
+                TestMigrationFinalityV1::ActiveStore(finality) => consume_member(
+                    verified,
+                    bound,
+                    &association,
+                    H3MigrationFinalityV1::ActiveStore(&finality),
+                )
+                .map(|_| ()),
+                TestMigrationFinalityV1::PreStore(finality) => consume_member(
+                    verified,
+                    bound,
+                    &association,
+                    H3MigrationFinalityV1::PreStore(&finality),
+                )
+                .map(|_| ()),
                 TestMigrationFinalityV1::NoStore => {
                     let (_, _, fallback) = migration_finality(facts(sources()[0]));
                     let TestMigrationFinalityV1::ActiveStore(fallback) = fallback else {
                         unreachable!()
                     };
-                    verified
-                        .consume_for_migration(
-                            &association,
-                            H3MigrationFinalityV1::ActiveStore(&fallback),
-                        )
-                        .map(|_| ())
+                    consume_member(
+                        verified,
+                        bound,
+                        &association,
+                        H3MigrationFinalityV1::ActiveStore(&fallback),
+                    )
+                    .map(|_| ())
                 }
             };
             if matches!(source, H3WithdrawalPublicationSourceV1::NoStore { .. }) {
@@ -982,16 +1311,122 @@ mod tests {
                 | Err(H3WithdrawalPublicationErrorV1::InvalidCarrier)
         ));
 
-        let facts = facts(sources()[1]);
-        let native = test_native(facts);
+        let pre_store_facts = facts(sources()[1]);
+        let native = test_native(pre_store_facts);
         let verified = verify_h3_withdrawal_publication_use(&native).unwrap();
-        let mut substituted = facts;
+        let mut substituted = pre_store_facts;
         substituted.consumer_gate = [99; 32];
         assert!(matches!(
             verified.consume(H3WithdrawalPublicationCommitV1 { facts: substituted }),
             Err(H3WithdrawalPublicationErrorV1::BindingMismatch)
         ));
         assert!(verify_h3_withdrawal_publication_use(&native).is_ok());
+
+        let (bound, association, finality) = migration_finality(facts(sources()[0]));
+        let TestMigrationFinalityV1::ActiveStore(finality) = finality else {
+            unreachable!()
+        };
+        let native = test_native(bound);
+        let verified = verify_h3_withdrawal_publication_use(&native).unwrap();
+        let (source, target, classification) = member_claims(bound);
+        let swapped_source = H3NativeCancelledSourceMemberV1::new(
+            bound.target_member_identity,
+            source.inventory_row,
+            source.source_inventory,
+            source.source_inventory_rows,
+            source.display_identity,
+            source.resolved_identity,
+            source.effect_lineage,
+            source.custody_transition,
+        )
+        .unwrap();
+        let swapped_target = H3NativeCancelledTargetMemberV1::new(
+            bound.source_member_identity,
+            target.declared_target_closure,
+            target.cancelled_target,
+            target.quarantine_roots,
+            target.protected_roots,
+            target.consumer_gate,
+            target.claims_catalog_verification,
+        )
+        .unwrap();
+        assert!(matches!(
+            verified.consume_native_cancelled_member_for_migration(
+                &association,
+                H3MigrationFinalityV1::ActiveStore(&finality),
+                swapped_source,
+                swapped_target,
+                classification,
+            ),
+            Err(H3WithdrawalPublicationErrorV1::BindingMismatch)
+        ));
+        assert!(verify_h3_withdrawal_publication_use(&native).is_ok());
+
+        let verified = verify_h3_withdrawal_publication_use(&native).unwrap();
+        let (source, target, classification) = member_claims(bound);
+        let partial_source = H3NativeCancelledSourceMemberV1::new(
+            source.member_identity,
+            [97; 32],
+            source.source_inventory,
+            source.source_inventory_rows,
+            source.display_identity,
+            source.resolved_identity,
+            source.effect_lineage,
+            source.custody_transition,
+        )
+        .unwrap();
+        assert!(matches!(
+            verified.consume_native_cancelled_member_for_migration(
+                &association,
+                H3MigrationFinalityV1::ActiveStore(&finality),
+                partial_source,
+                target,
+                classification,
+            ),
+            Err(H3WithdrawalPublicationErrorV1::BindingMismatch)
+        ));
+        assert!(verify_h3_withdrawal_publication_use(&native).is_ok());
+
+        let mut another_carrier_facts = bound;
+        another_carrier_facts.withdrawal_publication = [98; 32];
+        let H3WithdrawalPublicationSourceV1::ActiveStore {
+            withdrawal_publication,
+            ..
+        } = &mut another_carrier_facts.source
+        else {
+            unreachable!()
+        };
+        *withdrawal_publication = [98; 32];
+        another_carrier_facts.native_cancelled_member_identity =
+            native_cancelled_member_identity(another_carrier_facts);
+        let another_native = test_native(another_carrier_facts);
+        let another_verified = verify_h3_withdrawal_publication_use(&another_native).unwrap();
+        let (source, target, classification) = member_claims(bound);
+        assert!(matches!(
+            another_verified.consume_native_cancelled_member_for_migration(
+                &association,
+                H3MigrationFinalityV1::ActiveStore(&finality),
+                source,
+                target,
+                classification,
+            ),
+            Err(H3WithdrawalPublicationErrorV1::BindingMismatch)
+        ));
+        assert!(verify_h3_withdrawal_publication_use(&another_native).is_ok());
+
+        assert!(matches!(
+            H3NativeCancelledSourceMemberV1::new(
+                [0; 32],
+                bound.source_inventory_row,
+                bound.source_inventory,
+                bound.source_inventory_rows,
+                bound.display_identity,
+                bound.resolved_identity,
+                bound.effect_lineage,
+                bound.custody_transition,
+            ),
+            Err(H3WithdrawalPublicationErrorV1::BindingMismatch)
+        ));
     }
 
     #[test]
@@ -1039,7 +1474,9 @@ mod tests {
             unreachable!()
         };
         assert!(matches!(
-            verified.consume_for_migration(
+            consume_member(
+                verified,
+                bound,
                 &association,
                 H3MigrationFinalityV1::ActiveStore(&finality),
             ),
