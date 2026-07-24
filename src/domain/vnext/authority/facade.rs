@@ -50,7 +50,6 @@ pub(crate) use repository_admission::{
     current_repository_authority_time, validate_persisted_evidence_mutation_authority,
     validate_persisted_repository_action_basis,
 };
-pub(super) use repository_leaf_authority::construct_owner_local_repository_authority_input;
 pub use repository_leaf_authority::{
     AbsorbWorkAuthorityV1, AmendContractAuthorityV1, AppendDesignRevisionAuthorityV1,
     BootstrapExecutionAuthorityV1, CancelWorkAuthorityV1,
@@ -64,7 +63,7 @@ pub use repository_leaf_authority::{
     RepositoryPolicyTransitionV1, ResolveDecisionAuthorityV1, SubmitStepAuthorityV1,
     SubmitWorkCompletionAuthorityV1,
 };
-pub(in crate::domain::vnext) use repository_leaf_authority::{
+pub use repository_leaf_authority::{
     CoordinationRepositoryActionAuthorityV1, DistributionRepositoryActionAuthorityV1,
     IntakeRepositoryActionAuthorityV1, MemoryRepositoryActionAuthorityV1,
     PersistenceRepositoryActionAuthorityV1, PlanningRepositoryActionAuthorityV1,
@@ -72,7 +71,10 @@ pub(in crate::domain::vnext) use repository_leaf_authority::{
 };
 
 use super::continuity::{StoreAllocatedContinuityStateTokenV1, StoreAllocationBindingErrorV1};
-use super::materialization::{MaterializationAuthoritySeedV1, authority_materialization_seed_v1};
+use super::materialization::{
+    AuthorityMaterializationErrorV1, AuthorityMaterializationPublicationErrorV1,
+    AuthorityMaterializationTransactionV1,
+};
 use super::publication::{
     AuthorityPublicationKindV1, AuthorityPublicationOutcomeV1, AuthoritySchemaV1,
     ISSUE_BOOTSTRAP_MANDATE_IDEMPOTENCY_NAMESPACE_V1,
@@ -106,15 +108,43 @@ use super::{
 
 pub struct AuthorityFacadeV1<'store> {
     store: &'store mut StoreV1,
-    _materialization_seed: MaterializationAuthoritySeedV1,
 }
 
 impl<'store> AuthorityFacadeV1<'store> {
     pub fn new(store: &'store mut StoreV1) -> Self {
-        Self {
-            store,
-            _materialization_seed: authority_materialization_seed_v1(),
-        }
+        Self { store }
+    }
+
+    pub fn publish_planning_materialization<E>(
+        &mut self,
+        probe: &StoreIdempotencyProbeV1,
+        prepare: impl for<'tx> FnOnce(
+            &'tx AuthorityMaterializationTransactionV1<'tx>,
+        ) -> Result<AtomicGenerationPublicationV1, E>,
+    ) -> Result<StorePublicationOutcomeV1, AuthorityMaterializationPublicationErrorV1<E>>
+    where
+        E: From<AuthorityMaterializationErrorV1>,
+    {
+        self.store
+            .publish_generation_atomically_with_prepare(probe, |view| {
+                let transaction =
+                    AuthorityMaterializationTransactionV1::from_live_store_transaction(view);
+                let publication = prepare(&transaction)?;
+                if !transaction.is_consumed() {
+                    return Err(E::from(
+                        AuthorityMaterializationErrorV1::IncompleteTransaction,
+                    ));
+                }
+                Ok(publication)
+            })
+            .map_err(|error| match error {
+                PreparedPublicationError::Store(error) => {
+                    AuthorityMaterializationPublicationErrorV1::Store(error)
+                }
+                PreparedPublicationError::Prepare(error) => {
+                    AuthorityMaterializationPublicationErrorV1::Prepare(error)
+                }
+            })
     }
 
     #[cfg_attr(

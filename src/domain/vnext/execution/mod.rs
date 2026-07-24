@@ -7,14 +7,7 @@ pub mod dispatch_state;
 pub mod effect_home;
 pub mod effect_routes;
 pub mod effects;
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "Stage 4 freezes verified H3 withdrawal-publication use before its Stage 11 consumer"
-    )
-)]
-pub(in crate::domain::vnext) mod h3_withdrawal_publication;
+pub mod h3_withdrawal_publication;
 pub mod runtime;
 pub mod store;
 pub mod withdrawal;

@@ -93,6 +93,16 @@ def validate(document, external)
   raise "records unsorted or duplicate" unless ids == ids.sort && ids.uniq.length == summary.fetch("total")
   index = records.to_h { |record| [record.fetch("id"), record] }
   if decisions_sha256 == SUCCESSOR_DECISION_STORE
+    manifest_bytes = records.map do |record|
+      [
+        record.fetch("id"),
+        record.fetch("terminal_status"),
+        record.fetch("raw_record_sha256"),
+        record.fetch("raw_body_sha256")
+      ].join("\t")
+    end.join("\n") + "\n"
+    raise "all-Decision successor manifest reconstruction mismatch" unless
+      Digest::SHA256.hexdigest(manifest_bytes) == SUCCESSOR_DECISION_STORE
     SUCCESSOR_HEADS.each do |decision_id, expected|
       record = index.fetch(decision_id) { raise "missing successor Decision head: #{decision_id}" }
       actual = [record.fetch("terminal_status"), record.fetch("raw_record_sha256"), record.fetch("raw_body_sha256")]

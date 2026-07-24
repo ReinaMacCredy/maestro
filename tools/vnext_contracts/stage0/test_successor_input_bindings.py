@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 import sys
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -45,6 +47,13 @@ def event() -> dict[str, object]:
         "user_message_id": verifier.SUCCESSOR_APPROVAL_MESSAGE,
         "actor_role": "user",
         "exact_instruction": verifier.SUCCESSOR_APPROVAL_INSTRUCTION,
+        "packet_publication_log_realpath": str(verifier.SUCCESSOR_PACKET_PUBLICATION_LOG),
+        "packet_publication_turn_id": verifier.SUCCESSOR_PACKET_PUBLICATION_TURN,
+        "packet_publication_message_id": verifier.SUCCESSOR_PACKET_PUBLICATION_MESSAGE,
+        "packet_publication_record_sha256": dict(
+            verifier.SUCCESSOR_PACKET_PUBLICATION_RECORDS
+        ),
+        "packet_turn_completed_at": verifier.SUCCESSOR_PACKET_COMPLETED_AT,
     }
 
 
@@ -78,22 +87,47 @@ def main() -> None:
         "packet artifact": ("external_approval_event", "packet_root"),
         "event recipient": ("external_approval_event", "recipient_thread_id"),
         "event order": ("external_approval_event", "record_sha256"),
+        "packet publication": (
+            "external_approval_event",
+            "packet_publication_record_sha256",
+        ),
+        "synthetic approval log": ("external_approval_event", "log_realpath"),
+        "pre-publication approval": (
+            "external_approval_event",
+            "packet_turn_completed_at",
+        ),
     }
     for name, (parent, key) in cases.items():
         candidate = copy.deepcopy(original)
         section = candidate[parent]
         assert isinstance(section, dict)
-        if name == "event order":
+        if name in {"event order", "packet publication"}:
             records = section[key]
             assert isinstance(records, dict)
-            records["approval_task_started"], records["approval_user_message"] = (
-                records["approval_user_message"],
-                records["approval_task_started"],
-            )
+            names = list(records)
+            records[names[0]], records[names[1]] = records[names[1]], records[names[0]]
+        elif name == "pre-publication approval":
+            section[key] = verifier.SUCCESSOR_APPROVAL_STARTED_AT + 1
         else:
             section[key] = "0" * 64
         if not rejected(candidate):
             raise SystemExit(f"successor input-binding mutant was accepted: {name}")
+
+    with tempfile.TemporaryDirectory(prefix="maestro-stage0-descriptor-") as directory:
+        root = Path(directory)
+        regular = root / "input.json"
+        regular.write_bytes(b'{"exact":true}\n')
+        regular.chmod(0o600)
+        if verifier.descriptor_capture(regular) != b'{"exact":true}\n':
+            raise SystemExit("descriptor capture changed exact bytes")
+        symlink = root / "substituted.json"
+        os.symlink(regular.name, symlink)
+        try:
+            verifier.descriptor_capture(symlink)
+        except (OSError, SystemExit):
+            pass
+        else:
+            raise SystemExit("descriptor capture accepted a symlink substitution")
     print(
         json.dumps(
             {

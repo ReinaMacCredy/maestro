@@ -4,8 +4,40 @@ use std::rc::Rc;
 use thiserror::Error;
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub(in crate::domain::vnext) enum AdmittedConsumerKindV1 {
+    PublicCli,
+    PublicSkill,
+    GlobalMcp,
+    HostActivation,
+    LegacyReader,
+    OldReader,
+}
+
+impl AdmittedConsumerKindV1 {
+    const ALL: [Self; 6] = [
+        Self::PublicCli,
+        Self::PublicSkill,
+        Self::GlobalMcp,
+        Self::HostActivation,
+        Self::LegacyReader,
+        Self::OldReader,
+    ];
+
+    const fn tag(self) -> u8 {
+        match self {
+            Self::PublicCli => 1,
+            Self::PublicSkill => 2,
+            Self::GlobalMcp => 3,
+            Self::HostActivation => 4,
+            Self::LegacyReader => 5,
+            Self::OldReader => 6,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub(in crate::domain::vnext) struct AdmittedConsumerIdentityV1 {
-    kind_tag: u8,
+    kind: AdmittedConsumerKindV1,
     identity_commitment: [u8; 32],
     descriptor_commitment: [u8; 32],
     binary_commitment: [u8; 32],
@@ -58,54 +90,70 @@ impl ConsumerClosureFactsV1 {
         ordered == self.consumers
             && ordered.windows(2).all(|pair| {
                 pair[0].identity_commitment != pair[1].identity_commitment
-                    && (pair[0].kind_tag, pair[0].identity_commitment)
-                        < (pair[1].kind_tag, pair[1].identity_commitment)
+                    && (pair[0].kind, pair[0].identity_commitment)
+                        < (pair[1].kind, pair[1].identity_commitment)
+            })
+            && AdmittedConsumerKindV1::ALL.iter().all(|kind| {
+                ordered
+                    .iter()
+                    .any(|consumer| consumer.kind == *kind && consumer.required)
             })
             && ordered.iter().all(|consumer| {
-                consumer.kind_tag != 0
-                    && [
-                        consumer.identity_commitment,
-                        consumer.descriptor_commitment,
-                        consumer.binary_commitment,
-                        consumer.protocol_commitment,
-                        consumer.release_commitment,
-                        consumer.currentness_commitment,
-                    ]
-                    .iter()
-                    .all(|value| *value != [0; 32])
+                [
+                    consumer.identity_commitment,
+                    consumer.descriptor_commitment,
+                    consumer.binary_commitment,
+                    consumer.protocol_commitment,
+                    consumer.release_commitment,
+                    consumer.currentness_commitment,
+                ]
+                .iter()
+                .all(|value| *value != [0; 32])
             })
     }
 }
 
 pub(in crate::domain::vnext::integration) mod consumer_sealed {
-    pub trait Sealed {}
+    pub trait ProviderSealed {}
+    pub trait LeaseSealed {}
 }
 
 pub(in crate::domain::vnext) trait ConsumerClosureProviderV1:
-    consumer_sealed::Sealed
+    consumer_sealed::ProviderSealed
 {
-    fn current_facts(&self) -> Option<ConsumerClosureFactsV1>;
+    type Lease<'connection>: ConsumerClosureLeasePortV1
+    where
+        Self: 'connection;
+
+    fn acquire_authenticated_complete_closure(
+        &mut self,
+    ) -> Result<Self::Lease<'_>, ConsumerClosureErrorV1>;
 }
 
-pub(in crate::domain::vnext) struct HostConsumerAdmissionGuardV1<'connection, P> {
-    provider: &'connection mut P,
+pub(in crate::domain::vnext) trait ConsumerClosureLeasePortV1:
+    consumer_sealed::LeaseSealed
+{
+    fn initial(&self) -> &ConsumerClosureFactsV1;
+    fn consume_final_recheck(self) -> Result<(), ConsumerClosureErrorV1>;
+}
+
+pub(in crate::domain::vnext) struct HostConsumerAdmissionGuardV1<'connection, L> {
+    lease: L,
     initial: ConsumerClosureFactsV1,
-    _exclusive: PhantomData<&'connection mut P>,
+    _exclusive: PhantomData<&'connection mut ()>,
     _not_send_or_sync: PhantomData<Rc<()>>,
 }
 
-impl<'connection, P: ConsumerClosureProviderV1> HostConsumerAdmissionGuardV1<'connection, P> {
+impl<'connection, L: ConsumerClosureLeasePortV1> HostConsumerAdmissionGuardV1<'connection, L> {
     pub(in crate::domain::vnext::integration) fn bind(
-        provider: &'connection mut P,
+        lease: L,
     ) -> Result<Self, ConsumerClosureErrorV1> {
-        let initial = provider
-            .current_facts()
-            .ok_or(ConsumerClosureErrorV1::Unavailable)?;
+        let initial = lease.initial().clone();
         if !initial.is_valid() {
             return Err(ConsumerClosureErrorV1::InvalidClosure);
         }
         Ok(Self {
-            provider,
+            lease,
             initial,
             _exclusive: PhantomData,
             _not_send_or_sync: PhantomData,
@@ -130,7 +178,7 @@ impl<'connection, P: ConsumerClosureProviderV1> HostConsumerAdmissionGuardV1<'co
         ];
         for consumer in &self.initial.consumers {
             commitments.extend([
-                [consumer.kind_tag; 32],
+                [consumer.kind.tag(); 32],
                 [u8::from(consumer.required); 32],
                 consumer.identity_commitment,
                 consumer.descriptor_commitment,
@@ -146,10 +194,7 @@ impl<'connection, P: ConsumerClosureProviderV1> HostConsumerAdmissionGuardV1<'co
     pub(in crate::domain::vnext) fn consume_final_recheck(
         self,
     ) -> Result<(), ConsumerClosureErrorV1> {
-        if self.provider.current_facts() != Some(self.initial) {
-            return Err(ConsumerClosureErrorV1::Changed);
-        }
-        Ok(())
+        self.lease.consume_final_recheck()
     }
 }
 
@@ -186,18 +231,50 @@ pub(in crate::domain::vnext) mod test_seed {
         }
     }
 
-    impl consumer_sealed::Sealed for TestProviderV1 {}
+    pub struct TestLeaseV1<'connection> {
+        provider: &'connection mut TestProviderV1,
+        initial: ConsumerClosureFactsV1,
+    }
+
+    impl consumer_sealed::LeaseSealed for TestLeaseV1<'_> {}
+
+    impl ConsumerClosureLeasePortV1 for TestLeaseV1<'_> {
+        fn initial(&self) -> &ConsumerClosureFactsV1 {
+            &self.initial
+        }
+
+        fn consume_final_recheck(self) -> Result<(), ConsumerClosureErrorV1> {
+            if self.provider.facts.borrow().as_ref() != Some(&self.initial) {
+                return Err(ConsumerClosureErrorV1::Changed);
+            }
+            Ok(())
+        }
+    }
+
+    impl consumer_sealed::ProviderSealed for TestProviderV1 {}
 
     impl ConsumerClosureProviderV1 for TestProviderV1 {
-        fn current_facts(&self) -> Option<ConsumerClosureFactsV1> {
-            self.facts.borrow().clone()
+        type Lease<'connection> = TestLeaseV1<'connection>;
+
+        fn acquire_authenticated_complete_closure(
+            &mut self,
+        ) -> Result<Self::Lease<'_>, ConsumerClosureErrorV1> {
+            let initial = self
+                .facts
+                .borrow()
+                .clone()
+                .ok_or(ConsumerClosureErrorV1::Unavailable)?;
+            Ok(TestLeaseV1 {
+                provider: self,
+                initial,
+            })
         }
     }
 
     pub fn bind(
         provider: &mut TestProviderV1,
-    ) -> Result<HostConsumerAdmissionGuardV1<'_, TestProviderV1>, ConsumerClosureErrorV1> {
-        HostConsumerAdmissionGuardV1::bind(provider)
+    ) -> Result<HostConsumerAdmissionGuardV1<'_, TestLeaseV1<'_>>, ConsumerClosureErrorV1> {
+        HostConsumerAdmissionGuardV1::bind(provider.acquire_authenticated_complete_closure()?)
     }
 
     pub fn change_admission_epoch(
@@ -224,28 +301,23 @@ pub(in crate::domain::vnext) mod test_seed {
             admission_set_epoch: [40; 32],
             monotonic_currentness_fence: [41; 32],
             revocation_fence: [42; 32],
-            consumers: vec![
-                AdmittedConsumerIdentityV1 {
-                    kind_tag: 1,
-                    identity_commitment: [43; 32],
-                    descriptor_commitment: [44; 32],
-                    binary_commitment: [45; 32],
-                    protocol_commitment: [46; 32],
-                    release_commitment: [47; 32],
-                    currentness_commitment: [48; 32],
-                    required: true,
-                },
-                AdmittedConsumerIdentityV1 {
-                    kind_tag: 2,
-                    identity_commitment: [49; 32],
-                    descriptor_commitment: [50; 32],
-                    binary_commitment: [51; 32],
-                    protocol_commitment: [52; 32],
-                    release_commitment: [53; 32],
-                    currentness_commitment: [54; 32],
-                    required: false,
-                },
-            ],
+            consumers: AdmittedConsumerKindV1::ALL
+                .into_iter()
+                .enumerate()
+                .map(|(index, kind)| {
+                    let base = 43 + (index as u8 * 6);
+                    AdmittedConsumerIdentityV1 {
+                        kind,
+                        identity_commitment: [base; 32],
+                        descriptor_commitment: [base + 1; 32],
+                        binary_commitment: [base + 2; 32],
+                        protocol_commitment: [base + 3; 32],
+                        release_commitment: [base + 4; 32],
+                        currentness_commitment: [base + 5; 32],
+                        required: true,
+                    }
+                })
+                .collect(),
         }
     }
 }

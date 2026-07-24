@@ -1,17 +1,14 @@
-use std::cell::Cell;
 use std::marker::PhantomData;
 use std::rc::Rc;
 
+#[cfg(test)]
+use std::cell::Cell;
 use thiserror::Error;
 
-use super::{EffectIntentHomeKindV1, WithdrawalRouteBindingV1};
+use super::{EffectIntentHomeKindV1, WithdrawalCatalogCellV1, WithdrawalRouteBindingV1};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[expect(
-    clippy::enum_variant_names,
-    reason = "the locked H3 source grammar names the exact ActiveStore, PreStore, and NoStore homes"
-)]
-pub(in crate::domain::vnext) enum H3WithdrawalPublicationSourceV1 {
+pub enum H3WithdrawalPublicationSourceV1 {
     ActiveStore {
         store_identity: [u8; 32],
         domain_identity: [u8; 32],
@@ -117,7 +114,7 @@ impl H3WithdrawalPublicationSourceV1 {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::domain::vnext) enum H3WithdrawalPublicationOriginV1 {
+pub enum H3WithdrawalPublicationOriginV1 {
     Action {
         leaf_tag: u64,
         action_spec: [u8; 32],
@@ -165,7 +162,8 @@ impl H3WithdrawalPublicationOriginV1 {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::domain::vnext) struct H3WithdrawalPublicationFactsV1 {
+pub struct H3WithdrawalPublicationFactsV1 {
+    catalog_cell: WithdrawalCatalogCellV1,
     source: H3WithdrawalPublicationSourceV1,
     origin: H3WithdrawalPublicationOriginV1,
     intent_identity: [u8; 32],
@@ -218,53 +216,85 @@ pub(in crate::domain::vnext) struct H3WithdrawalPublicationFactsV1 {
     idempotency_meaning: [u8; 32],
 }
 
-pub(in crate::domain::vnext) struct H3WithdrawalPublicationUseCellV1 {
-    consumed: Cell<bool>,
+pub(in crate::domain::vnext::execution) mod native_publication_sealed {
+    pub trait Sealed {}
 }
 
-impl H3WithdrawalPublicationUseCellV1 {
-    pub(in crate::domain::vnext::execution) const fn new() -> Self {
-        Self {
-            consumed: Cell::new(false),
-        }
-    }
+pub trait NativeH3WithdrawalPublicationPortV1: native_publication_sealed::Sealed {
+    fn publication_identity(&self) -> [u8; 32];
+    fn catalog_cell(&self) -> WithdrawalCatalogCellV1;
+    fn source(&self) -> H3WithdrawalPublicationSourceV1;
+    fn is_unused(&self) -> bool;
+    fn consume_once(&self) -> Result<(), H3WithdrawalPublicationErrorV1>;
 }
 
-pub(in crate::domain::vnext) struct VerifiedH3WithdrawalPublicationUseV1<'tx> {
+pub struct VerifiedH3WithdrawalPublicationUseV1<'tx> {
     facts: H3WithdrawalPublicationFactsV1,
-    cell: &'tx H3WithdrawalPublicationUseCellV1,
+    native_publication: &'tx dyn NativeH3WithdrawalPublicationPortV1,
     _not_send_or_sync: PhantomData<Rc<()>>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::domain::vnext) struct H3WithdrawalPublicationCommitV1 {
+pub struct H3WithdrawalPublicationCommitV1 {
     facts: H3WithdrawalPublicationFactsV1,
 }
 
-pub(in crate::domain::vnext) struct ConsumedH3WithdrawalPublicationV1<'tx> {
+pub struct ConsumedH3WithdrawalPublicationV1<'tx> {
+    source: H3WithdrawalPublicationSourceV1,
+    origin: H3WithdrawalPublicationOriginV1,
+    publication_identity: [u8; 32],
+    optional_release: Option<[u8; 32]>,
+    association_input_context: Option<[u8; 32]>,
+    finality_context: [u8; 32],
     _transaction: PhantomData<&'tx mut ()>,
     _not_send_or_sync: PhantomData<Rc<()>>,
 }
 
 impl<'tx> VerifiedH3WithdrawalPublicationUseV1<'tx> {
-    pub(in crate::domain::vnext) fn consume(
+    pub fn consume(
         self,
         commit: H3WithdrawalPublicationCommitV1,
     ) -> Result<ConsumedH3WithdrawalPublicationV1<'tx>, H3WithdrawalPublicationErrorV1> {
-        if self.cell.consumed.get() || self.facts != commit.facts {
+        if !self.native_publication.is_unused() || self.facts != commit.facts {
             return Err(H3WithdrawalPublicationErrorV1::BindingMismatch);
         }
-        self.cell.consumed.set(true);
+        self.native_publication.consume_once()?;
+        let (association_input_context, finality_context) = match self.facts.source {
+            H3WithdrawalPublicationSourceV1::ActiveStore {
+                association_input_context,
+                finality_context,
+                ..
+            } => (Some(association_input_context), finality_context),
+            H3WithdrawalPublicationSourceV1::PreStore {
+                withdrawal_cas,
+                withdrawal_publication_root,
+                ..
+            } => (
+                None,
+                canonical_pair(withdrawal_cas, withdrawal_publication_root),
+            ),
+            H3WithdrawalPublicationSourceV1::NoStore {
+                occurrence,
+                carrier,
+                ..
+            } => (None, canonical_pair(occurrence, carrier)),
+        };
         Ok(ConsumedH3WithdrawalPublicationV1 {
+            source: self.facts.source,
+            origin: self.facts.origin,
+            publication_identity: self.facts.withdrawal_publication,
+            optional_release: self.facts.optional_release,
+            association_input_context,
+            finality_context,
             _transaction: PhantomData,
             _not_send_or_sync: PhantomData,
         })
     }
 }
 
-pub(in crate::domain::vnext::execution) fn verify_h3_withdrawal_publication_use<'tx>(
+pub fn verify_h3_withdrawal_publication_use<'tx>(
     facts: H3WithdrawalPublicationFactsV1,
-    cell: &'tx H3WithdrawalPublicationUseCellV1,
+    native_publication: &'tx dyn NativeH3WithdrawalPublicationPortV1,
 ) -> Result<VerifiedH3WithdrawalPublicationUseV1<'tx>, H3WithdrawalPublicationErrorV1> {
     let mut required = facts.source.commitments();
     required.extend(facts.origin.commitments());
@@ -317,9 +347,18 @@ pub(in crate::domain::vnext::execution) fn verify_h3_withdrawal_publication_use<
         facts.result,
         facts.idempotency_meaning,
     ]);
-    if required.contains(&[0; 32]) || cell.consumed.get() {
+    if required.contains(&[0; 32])
+        || facts.optional_release == Some([0; 32])
+        || !native_publication.is_unused()
+        || facts.catalog_cell != native_publication.catalog_cell()
+        || facts.withdrawal_publication != native_publication.publication_identity()
+        || facts.source != native_publication.source()
+        || facts.catalog_cell.home() != facts.source.home()
+        || facts.catalog_cell.route() != facts.origin.route()
+    {
         return Err(H3WithdrawalPublicationErrorV1::InvalidCarrier);
     }
+    validate_source_origin_equality(facts)?;
     match (facts.source.home(), facts.origin.route()) {
         (EffectIntentHomeKindV1::ActiveStore, WithdrawalRouteBindingV1::Ceremony { .. })
         | (
@@ -330,13 +369,116 @@ pub(in crate::domain::vnext::execution) fn verify_h3_withdrawal_publication_use<
     }
     Ok(VerifiedH3WithdrawalPublicationUseV1 {
         facts,
-        cell,
+        native_publication,
         _not_send_or_sync: PhantomData,
     })
 }
 
+fn canonical_pair(left: [u8; 32], right: [u8; 32]) -> [u8; 32] {
+    use sha2::{Digest, Sha256};
+
+    let mut hasher = Sha256::new();
+    hasher.update(b"maestro.vnext.h3-finality-context.v1\0");
+    hasher.update(left);
+    hasher.update(right);
+    hasher.finalize().into()
+}
+
+fn validate_source_origin_equality(
+    facts: H3WithdrawalPublicationFactsV1,
+) -> Result<(), H3WithdrawalPublicationErrorV1> {
+    if facts.intent_home != canonical_home_commitment(facts.source.home()) {
+        return Err(H3WithdrawalPublicationErrorV1::CausalBranchMismatch);
+    }
+    match (facts.source, facts.origin) {
+        (
+            H3WithdrawalPublicationSourceV1::ActiveStore {
+                withdrawal_publication,
+                ..
+            },
+            H3WithdrawalPublicationOriginV1::Action { .. },
+        ) if withdrawal_publication == facts.withdrawal_publication => Ok(()),
+        (
+            H3WithdrawalPublicationSourceV1::PreStore {
+                ceremony_spec,
+                attempt,
+                withdrawal_carrier,
+                ..
+            },
+            H3WithdrawalPublicationOriginV1::Ceremony {
+                ceremony_spec: origin_spec,
+                attempt: origin_attempt,
+                ..
+            },
+        ) if ceremony_spec == origin_spec
+            && attempt == origin_attempt
+            && withdrawal_carrier == facts.carrier =>
+        {
+            Ok(())
+        }
+        (
+            H3WithdrawalPublicationSourceV1::NoStore {
+                ceremony_spec,
+                attempt,
+                occurrence,
+                carrier,
+                ..
+            },
+            H3WithdrawalPublicationOriginV1::Ceremony {
+                ceremony_spec: origin_spec,
+                attempt: origin_attempt,
+                ..
+            },
+        ) if ceremony_spec == origin_spec
+            && attempt == origin_attempt
+            && occurrence == facts.occurrence
+            && carrier == facts.carrier =>
+        {
+            Ok(())
+        }
+        _ => Err(H3WithdrawalPublicationErrorV1::CausalBranchMismatch),
+    }
+}
+
+fn canonical_home_commitment(home: EffectIntentHomeKindV1) -> [u8; 32] {
+    use sha2::{Digest, Sha256};
+
+    let literal = match home {
+        EffectIntentHomeKindV1::ActiveStore => b"ActiveStore".as_slice(),
+        EffectIntentHomeKindV1::PreStoreCeremony => b"PreStore".as_slice(),
+        EffectIntentHomeKindV1::NoStoreCeremony => b"NoStore".as_slice(),
+    };
+    Sha256::digest(literal).into()
+}
+
+impl ConsumedH3WithdrawalPublicationV1<'_> {
+    pub const fn source(&self) -> H3WithdrawalPublicationSourceV1 {
+        self.source
+    }
+
+    pub const fn origin(&self) -> H3WithdrawalPublicationOriginV1 {
+        self.origin
+    }
+
+    pub const fn publication_identity(&self) -> [u8; 32] {
+        self.publication_identity
+    }
+
+    pub const fn optional_release(&self) -> Option<[u8; 32]> {
+        self.optional_release
+    }
+
+    pub const fn association_input_context(&self) -> Option<[u8; 32]> {
+        self.association_input_context
+    }
+
+    pub const fn finality_context(&self) -> [u8; 32] {
+        self.finality_context
+    }
+}
+
 #[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
-pub(in crate::domain::vnext) enum H3WithdrawalPublicationErrorV1 {
+pub enum H3WithdrawalPublicationErrorV1 {
     #[error("H3 withdrawal publication carrier is invalid")]
     InvalidCarrier,
     #[error("H3 source and Action/Ceremony causal branch disagree")]
@@ -348,6 +490,49 @@ pub(in crate::domain::vnext) enum H3WithdrawalPublicationErrorV1 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct TestNativePublicationV1 {
+        consumed: Cell<bool>,
+        publication_identity: [u8; 32],
+        catalog_cell: WithdrawalCatalogCellV1,
+        source: H3WithdrawalPublicationSourceV1,
+    }
+
+    impl native_publication_sealed::Sealed for TestNativePublicationV1 {}
+
+    impl NativeH3WithdrawalPublicationPortV1 for TestNativePublicationV1 {
+        fn publication_identity(&self) -> [u8; 32] {
+            self.publication_identity
+        }
+
+        fn catalog_cell(&self) -> WithdrawalCatalogCellV1 {
+            self.catalog_cell
+        }
+
+        fn source(&self) -> H3WithdrawalPublicationSourceV1 {
+            self.source
+        }
+
+        fn is_unused(&self) -> bool {
+            !self.consumed.get()
+        }
+
+        fn consume_once(&self) -> Result<(), H3WithdrawalPublicationErrorV1> {
+            if self.consumed.replace(true) {
+                return Err(H3WithdrawalPublicationErrorV1::BindingMismatch);
+            }
+            Ok(())
+        }
+    }
+
+    fn test_native(facts: H3WithdrawalPublicationFactsV1) -> TestNativePublicationV1 {
+        TestNativePublicationV1 {
+            consumed: Cell::new(false),
+            publication_identity: facts.withdrawal_publication,
+            catalog_cell: facts.catalog_cell,
+            source: facts.source,
+        }
+    }
 
     fn action_origin() -> H3WithdrawalPublicationOriginV1 {
         H3WithdrawalPublicationOriginV1::Action {
@@ -369,22 +554,53 @@ mod tests {
     }
 
     fn facts(source: H3WithdrawalPublicationSourceV1) -> H3WithdrawalPublicationFactsV1 {
-        let origin = if matches!(source, H3WithdrawalPublicationSourceV1::ActiveStore { .. }) {
-            action_origin()
-        } else {
-            ceremony_origin()
+        let origin = match source {
+            H3WithdrawalPublicationSourceV1::ActiveStore { .. } => action_origin(),
+            H3WithdrawalPublicationSourceV1::PreStore {
+                ceremony_spec,
+                attempt,
+                ..
+            } => H3WithdrawalPublicationOriginV1::Ceremony {
+                ceremony_tag: 9,
+                ceremony_spec,
+                attempt,
+                withdraw_mode: [66; 32],
+                route: [67; 32],
+            },
+            H3WithdrawalPublicationSourceV1::NoStore {
+                ceremony_spec,
+                attempt,
+                ..
+            } => H3WithdrawalPublicationOriginV1::Ceremony {
+                ceremony_tag: 1,
+                ceremony_spec,
+                attempt,
+                withdraw_mode: [66; 32],
+                route: [67; 32],
+            },
         };
+        let catalog_cell = crate::domain::vnext::execution::withdrawal_catalog_cells_v1()
+            .into_iter()
+            .find(|cell| cell.home() == source.home() && cell.route() == origin.route())
+            .unwrap();
         H3WithdrawalPublicationFactsV1 {
+            catalog_cell,
             source,
             origin,
             intent_identity: [1; 32],
             intent_revision: [2; 32],
             intent_origin: [3; 32],
-            intent_home: [4; 32],
+            intent_home: canonical_home_commitment(source.home()),
             originating_result: [5; 32],
             withdrawal_result: [6; 32],
             withdrawal_request: [7; 32],
-            withdrawal_publication: [8; 32],
+            withdrawal_publication: match source {
+                H3WithdrawalPublicationSourceV1::ActiveStore {
+                    withdrawal_publication,
+                    ..
+                } => withdrawal_publication,
+                _ => [8; 32],
+            },
             authority_basis: [9; 32],
             authority_snapshot: [10; 32],
             authority_fence: [11; 32],
@@ -396,8 +612,17 @@ mod tests {
             debit_map: [17; 32],
             committed_withdrawal_debit: [18; 32],
             authorization_receipt: [19; 32],
-            occurrence: [20; 32],
-            carrier: [21; 32],
+            occurrence: match source {
+                H3WithdrawalPublicationSourceV1::NoStore { occurrence, .. } => occurrence,
+                _ => [20; 32],
+            },
+            carrier: match source {
+                H3WithdrawalPublicationSourceV1::PreStore {
+                    withdrawal_carrier, ..
+                } => withdrawal_carrier,
+                H3WithdrawalPublicationSourceV1::NoStore { carrier, .. } => carrier,
+                _ => [21; 32],
+            },
             incarnation: [22; 32],
             no_live_attempt: [23; 32],
             no_live_fence: [24; 32],
@@ -469,13 +694,13 @@ mod tests {
     fn all_three_homes_require_the_exact_causal_branch_and_one_use_finality() {
         for source in sources() {
             let facts = facts(source);
-            let cell = H3WithdrawalPublicationUseCellV1::new();
-            let verified = verify_h3_withdrawal_publication_use(facts, &cell).unwrap();
+            let native = test_native(facts);
+            let verified = verify_h3_withdrawal_publication_use(facts, &native).unwrap();
             verified
                 .consume(H3WithdrawalPublicationCommitV1 { facts })
                 .unwrap();
             assert!(matches!(
-                verify_h3_withdrawal_publication_use(facts, &cell),
+                verify_h3_withdrawal_publication_use(facts, &native),
                 Err(H3WithdrawalPublicationErrorV1::InvalidCarrier)
             ));
         }
@@ -485,21 +710,50 @@ mod tests {
     fn cross_branch_and_complete_meaning_substitution_refuse_without_consumption() {
         let mut active = facts(sources()[0]);
         active.origin = ceremony_origin();
+        let native = test_native(active);
         assert!(matches!(
-            verify_h3_withdrawal_publication_use(active, &H3WithdrawalPublicationUseCellV1::new()),
+            verify_h3_withdrawal_publication_use(active, &native),
             Err(H3WithdrawalPublicationErrorV1::CausalBranchMismatch)
+                | Err(H3WithdrawalPublicationErrorV1::InvalidCarrier)
         ));
 
         let facts = facts(sources()[1]);
-        let cell = H3WithdrawalPublicationUseCellV1::new();
-        let verified = verify_h3_withdrawal_publication_use(facts, &cell).unwrap();
+        let native = test_native(facts);
+        let verified = verify_h3_withdrawal_publication_use(facts, &native).unwrap();
         let mut substituted = facts;
         substituted.consumer_gate = [99; 32];
         assert!(matches!(
             verified.consume(H3WithdrawalPublicationCommitV1 { facts: substituted }),
             Err(H3WithdrawalPublicationErrorV1::BindingMismatch)
         ));
-        assert!(verify_h3_withdrawal_publication_use(facts, &cell).is_ok());
+        assert!(verify_h3_withdrawal_publication_use(facts, &native).is_ok());
+    }
+
+    #[test]
+    fn native_publication_source_catalog_and_release_substitution_refuse() {
+        let facts = facts(sources()[0]);
+        let mut wrong_source_facts = facts;
+        wrong_source_facts.source = sources()[1];
+        let native = test_native(facts);
+        assert!(matches!(
+            verify_h3_withdrawal_publication_use(wrong_source_facts, &native),
+            Err(H3WithdrawalPublicationErrorV1::InvalidCarrier)
+        ));
+
+        let mut wrong_catalog_facts = facts;
+        wrong_catalog_facts.catalog_cell =
+            crate::domain::vnext::execution::withdrawal_catalog_cells_v1()[1];
+        assert!(matches!(
+            verify_h3_withdrawal_publication_use(wrong_catalog_facts, &native),
+            Err(H3WithdrawalPublicationErrorV1::InvalidCarrier)
+        ));
+
+        let mut zero_release = facts;
+        zero_release.optional_release = Some([0; 32]);
+        assert!(matches!(
+            verify_h3_withdrawal_publication_use(zero_release, &native),
+            Err(H3WithdrawalPublicationErrorV1::InvalidCarrier)
+        ));
     }
 
     #[test]

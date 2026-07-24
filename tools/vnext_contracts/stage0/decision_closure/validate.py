@@ -126,6 +126,15 @@ def validate(document: dict[str, object], external: bool) -> tuple[str, bytes]:
     if summary != expected:
         raise ValueError("summary drift")
     if decisions_sha256 == SUCCESSOR_DECISION_STORE:
+        manifest_bytes = (
+            "".join(
+                f"{item['id']}\t{item['terminal_status']}\t"
+                f"{item['raw_record_sha256']}\t{item['raw_body_sha256']}\n"
+                for item in records
+            )
+        ).encode("ascii")
+        if hashlib.sha256(manifest_bytes).hexdigest() != SUCCESSOR_DECISION_STORE:
+            raise ValueError("all-Decision successor manifest reconstruction mismatch")
         index = {item["id"]: item for item in records}
         for decision_id, (status, record_sha, body_sha) in SUCCESSOR_HEADS.items():
             item = index.get(decision_id)

@@ -1366,12 +1366,14 @@ macro_rules! owner_family_authority {
         owner = $owner_tag:literal,
         family = $family_tag:literal,
         global = $first_global_tag:literal..=$last_global_tag:literal,
+        constructor = $constructor_cfg:meta,
         reason = $reason:literal
     ) => {
         #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-        pub(crate) struct $type(RepositoryOwnerFamilyAuthorityRecordV1);
+        pub struct $type(RepositoryOwnerFamilyAuthorityRecordV1);
 
         impl $type {
+            #[$constructor_cfg]
             pub(in crate::domain::vnext) fn new(
                 selection: RepositoryAuthoritySelectionV1,
                 action: RepositoryDownstreamActionLeafV1,
@@ -1420,6 +1422,7 @@ owner_family_authority!(
     owner = 10,
     family = 9,
     global = 94..=102,
+    constructor = cfg(test),
     reason = "Stage 7 freezes the Coordination Authority input before its owner consumer"
 );
 owner_family_authority!(
@@ -1427,6 +1430,7 @@ owner_family_authority!(
     owner = 12,
     family = 10,
     global = 103..=106,
+    constructor = cfg(all()),
     reason = "Stage 7 freezes the Planning Authority input before its owner consumer"
 );
 owner_family_authority!(
@@ -1434,6 +1438,7 @@ owner_family_authority!(
     owner = 14,
     family = 11,
     global = 107..=116,
+    constructor = cfg(test),
     reason = "Stage 7 freezes the Persistence Authority input before its owner consumer"
 );
 owner_family_authority!(
@@ -1441,6 +1446,7 @@ owner_family_authority!(
     owner = 20,
     family = 12,
     global = 117..=129,
+    constructor = cfg(test),
     reason = "Stage 7 freezes the Distribution Authority input before its owner consumer"
 );
 owner_family_authority!(
@@ -1448,6 +1454,7 @@ owner_family_authority!(
     owner = 15,
     family = 13,
     global = 130..=131,
+    constructor = cfg(test),
     reason = "Stage 7 freezes the SearchMaintenance Authority input before its owner consumer"
 );
 owner_family_authority!(
@@ -1455,6 +1462,7 @@ owner_family_authority!(
     owner = 16,
     family = 14,
     global = 132..=138,
+    constructor = cfg(test),
     reason = "Stage 7 freezes the Memory Authority input before its owner consumer"
 );
 owner_family_authority!(
@@ -1462,6 +1470,7 @@ owner_family_authority!(
     owner = 17,
     family = 15,
     global = 139..=141,
+    constructor = cfg(test),
     reason = "Stage 7 freezes the Intake Authority input before its owner consumer"
 );
 owner_family_authority!(
@@ -1469,6 +1478,7 @@ owner_family_authority!(
     owner = 18,
     family = 16,
     global = 142..=145,
+    constructor = cfg(test),
     reason = "Stage 7 freezes the Research Authority input before its owner consumer"
 );
 
@@ -1739,82 +1749,6 @@ impl From<ContinuityMaintenanceExecutionAuthorityV1> for RepositoryLeafAuthority
 impl From<ExecutionAuthorityV1> for RepositoryLeafAuthorityInputV1 {
     fn from(value: ExecutionAuthorityV1) -> Self {
         Self::Execution(value)
-    }
-}
-
-pub(in crate::domain::vnext::authority) fn construct_owner_local_repository_authority_input(
-    selection: RepositoryAuthoritySelectionV1,
-    action: RepositoryDownstreamActionLeafV1,
-    subject_commitment: [u8; 32],
-    subject_basis_commitment: [u8; 32],
-    exact_payload_commitment: [u8; 32],
-) -> Result<RepositoryLeafAuthorityInputV1, RepositoryLeafAuthorityErrorV1> {
-    match action.owner_tag() {
-        10 => CoordinationRepositoryActionAuthorityV1::new(
-            selection,
-            action,
-            subject_commitment,
-            subject_basis_commitment,
-            exact_payload_commitment,
-        )
-        .map(Into::into),
-        12 => PlanningRepositoryActionAuthorityV1::new(
-            selection,
-            action,
-            subject_commitment,
-            subject_basis_commitment,
-            exact_payload_commitment,
-        )
-        .map(Into::into),
-        14 => PersistenceRepositoryActionAuthorityV1::new(
-            selection,
-            action,
-            subject_commitment,
-            subject_basis_commitment,
-            exact_payload_commitment,
-        )
-        .map(Into::into),
-        20 => DistributionRepositoryActionAuthorityV1::new(
-            selection,
-            action,
-            subject_commitment,
-            subject_basis_commitment,
-            exact_payload_commitment,
-        )
-        .map(Into::into),
-        15 => SearchMaintenanceRepositoryActionAuthorityV1::new(
-            selection,
-            action,
-            subject_commitment,
-            subject_basis_commitment,
-            exact_payload_commitment,
-        )
-        .map(Into::into),
-        16 => MemoryRepositoryActionAuthorityV1::new(
-            selection,
-            action,
-            subject_commitment,
-            subject_basis_commitment,
-            exact_payload_commitment,
-        )
-        .map(Into::into),
-        17 => IntakeRepositoryActionAuthorityV1::new(
-            selection,
-            action,
-            subject_commitment,
-            subject_basis_commitment,
-            exact_payload_commitment,
-        )
-        .map(Into::into),
-        18 => ResearchRepositoryActionAuthorityV1::new(
-            selection,
-            action,
-            subject_commitment,
-            subject_basis_commitment,
-            exact_payload_commitment,
-        )
-        .map(Into::into),
-        _ => Err(RepositoryLeafAuthorityErrorV1::DownstreamOwnerFamilyMismatch),
     }
 }
 

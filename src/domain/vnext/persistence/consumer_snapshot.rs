@@ -207,6 +207,31 @@ impl ConsumerSnapshotCurrentFactsV1 {
         }
     }
 
+    pub(in crate::domain::vnext) fn canonical_scalars(&self) -> Vec<u64> {
+        match self {
+            Self::ActiveStore {
+                owner_stage_tag,
+                generation_ordinal,
+                writer_protocol_epoch,
+                schema_epoch,
+                migration_epoch,
+                ..
+            } => vec![
+                u64::from(*owner_stage_tag),
+                *generation_ordinal,
+                *writer_protocol_epoch,
+                *schema_epoch,
+                *migration_epoch,
+            ],
+            Self::PreStore {
+                writer_protocol_epoch,
+                schema_epoch,
+                migration_epoch,
+                ..
+            } => vec![1, *writer_protocol_epoch, *schema_epoch, *migration_epoch],
+        }
+    }
+
     fn is_valid(&self) -> bool {
         let epochs_valid = match self {
             Self::ActiveStore {
@@ -239,34 +264,50 @@ impl ConsumerSnapshotCurrentFactsV1 {
 }
 
 pub(in crate::domain::vnext::persistence) mod consumer_currentness_sealed {
-    pub trait Sealed {}
+    pub trait ProviderSealed {}
+    pub trait LeaseSealed {}
 }
 
 pub(in crate::domain::vnext) trait ConsumerSnapshotCurrentViewProviderV1:
-    consumer_currentness_sealed::Sealed
+    consumer_currentness_sealed::ProviderSealed
 {
-    fn current_facts(&self) -> Option<ConsumerSnapshotCurrentFactsV1>;
+    type Lease<'view>: ConsumerSnapshotCurrentViewLeasePortV1
+    where
+        Self: 'view;
+
+    fn acquire_current_view(
+        &mut self,
+    ) -> Result<Self::Lease<'_>, ConsumerSnapshotCurrentnessErrorV1>;
 }
 
-pub(in crate::domain::vnext) struct ConsumerSnapshotCurrentViewLeaseV1<'view, P> {
-    provider: &'view mut P,
+pub(in crate::domain::vnext) trait ConsumerSnapshotCurrentViewLeasePortV1:
+    consumer_currentness_sealed::LeaseSealed
+{
+    fn initial(&self) -> &ConsumerSnapshotCurrentFactsV1;
+    fn consume_final_recheck(
+        self,
+    ) -> Result<ConsumerSnapshotCurrentFactsV1, ConsumerSnapshotCurrentnessErrorV1>;
+}
+
+pub(in crate::domain::vnext) struct ConsumerSnapshotCurrentViewLeaseV1<'view, L> {
+    lease: L,
     initial: ConsumerSnapshotCurrentFactsV1,
-    _exclusive: PhantomData<&'view mut P>,
+    _exclusive: PhantomData<&'view mut ()>,
     _not_send_or_sync: PhantomData<Rc<()>>,
 }
 
-impl<'view, P: ConsumerSnapshotCurrentViewProviderV1> ConsumerSnapshotCurrentViewLeaseV1<'view, P> {
+impl<'view, L: ConsumerSnapshotCurrentViewLeasePortV1>
+    ConsumerSnapshotCurrentViewLeaseV1<'view, L>
+{
     pub(in crate::domain::vnext::persistence) fn bind(
-        provider: &'view mut P,
+        lease: L,
     ) -> Result<Self, ConsumerSnapshotCurrentnessErrorV1> {
-        let initial = provider
-            .current_facts()
-            .ok_or(ConsumerSnapshotCurrentnessErrorV1::Unavailable)?;
+        let initial = lease.initial().clone();
         if !initial.is_valid() {
             return Err(ConsumerSnapshotCurrentnessErrorV1::InvalidCurrentView);
         }
         Ok(Self {
-            provider,
+            lease,
             initial,
             _exclusive: PhantomData,
             _not_send_or_sync: PhantomData,
@@ -280,10 +321,7 @@ impl<'view, P: ConsumerSnapshotCurrentViewProviderV1> ConsumerSnapshotCurrentVie
     pub(in crate::domain::vnext) fn consume_final_recheck(
         self,
     ) -> Result<ConsumerSnapshotCurrentFactsV1, ConsumerSnapshotCurrentnessErrorV1> {
-        if self.provider.current_facts() != Some(self.initial.clone()) {
-            return Err(ConsumerSnapshotCurrentnessErrorV1::Changed);
-        }
-        Ok(self.initial)
+        self.lease.consume_final_recheck()
     }
 }
 
@@ -320,20 +358,54 @@ pub(in crate::domain::vnext) mod test_seed {
         }
     }
 
-    impl consumer_currentness_sealed::Sealed for TestProviderV1 {}
+    pub struct TestLeaseV1<'view> {
+        provider: &'view mut TestProviderV1,
+        initial: ConsumerSnapshotCurrentFactsV1,
+    }
+
+    impl consumer_currentness_sealed::LeaseSealed for TestLeaseV1<'_> {}
+
+    impl ConsumerSnapshotCurrentViewLeasePortV1 for TestLeaseV1<'_> {
+        fn initial(&self) -> &ConsumerSnapshotCurrentFactsV1 {
+            &self.initial
+        }
+
+        fn consume_final_recheck(
+            self,
+        ) -> Result<ConsumerSnapshotCurrentFactsV1, ConsumerSnapshotCurrentnessErrorV1> {
+            if self.provider.facts.borrow().as_ref() != Some(&self.initial) {
+                return Err(ConsumerSnapshotCurrentnessErrorV1::Changed);
+            }
+            Ok(self.initial)
+        }
+    }
+
+    impl consumer_currentness_sealed::ProviderSealed for TestProviderV1 {}
 
     impl ConsumerSnapshotCurrentViewProviderV1 for TestProviderV1 {
-        fn current_facts(&self) -> Option<ConsumerSnapshotCurrentFactsV1> {
-            self.facts.borrow().clone()
+        type Lease<'view> = TestLeaseV1<'view>;
+
+        fn acquire_current_view(
+            &mut self,
+        ) -> Result<Self::Lease<'_>, ConsumerSnapshotCurrentnessErrorV1> {
+            let initial = self
+                .facts
+                .borrow()
+                .clone()
+                .ok_or(ConsumerSnapshotCurrentnessErrorV1::Unavailable)?;
+            Ok(TestLeaseV1 {
+                provider: self,
+                initial,
+            })
         }
     }
 
     pub fn bind(
         provider: &mut TestProviderV1,
     ) -> Result<
-        ConsumerSnapshotCurrentViewLeaseV1<'_, TestProviderV1>,
+        ConsumerSnapshotCurrentViewLeaseV1<'_, TestLeaseV1<'_>>,
         ConsumerSnapshotCurrentnessErrorV1,
     > {
-        ConsumerSnapshotCurrentViewLeaseV1::bind(provider)
+        ConsumerSnapshotCurrentViewLeaseV1::bind(provider.acquire_current_view()?)
     }
 }

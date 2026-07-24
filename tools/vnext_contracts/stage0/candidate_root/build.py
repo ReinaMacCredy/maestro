@@ -49,6 +49,12 @@ FINALIZATION_DOMAIN = "maestro.vnext.design-finalization-manifest.v1"
 HANDOFF_DOMAIN = "maestro.vnext.build-handoff-projection.v1"
 CANDIDATE_SCHEMA_CLOSURE_DOMAIN = "maestro.vnext.candidate-root-schema-closure.v1"
 STAGE0_PROOF_MANIFEST_DOMAIN = "maestro.vnext.stage0-proof-manifest.v1"
+SUCCESSOR_DECISION_STORE_MANIFEST_SHA256 = (
+    "18f14bce862e15be09c9d88155d62627582df50c7754e2e8e1d6f6bee8f7d522"
+)
+SUCCESSOR_PACKET_SHA256 = (
+    "fb33b048b59c66df9858558a2c80e59a478d101465761f902366c9a00751cbc5"
+)
 
 NORMATIVE_INPUTS_KIND = 12
 REQUIRED_PROOF_GATES = (
@@ -667,6 +673,22 @@ def stage0_proof_manifest(forbidden: set[str]) -> tuple[dict[str, Any], bytes, b
     return document, proof_id, exact_hash(artifact_hash(PROOF_MANIFEST)), len(gates)
 
 
+def validate_successor_decision_manifest(decision: dict[str, Any]) -> None:
+    provenance = decision.get("source_provenance_excluded_from_identity", {})
+    if provenance.get("decisions_sha256") != SUCCESSOR_DECISION_STORE_MANIFEST_SHA256:
+        raise ValueError("candidate root is not bound to the successor Decision store")
+    records = decision.get("records")
+    if not isinstance(records, list) or len(records) != 213:
+        raise ValueError("candidate root lacks the exact successor Decision closure")
+    manifest = "".join(
+        f"{item['id']}\t{item['terminal_status']}\t"
+        f"{item['raw_record_sha256']}\t{item['raw_body_sha256']}\n"
+        for item in records
+    ).encode("ascii")
+    if hashlib.sha256(manifest).hexdigest() != SUCCESSOR_DECISION_STORE_MANIFEST_SHA256:
+        raise ValueError("candidate root successor Decision manifest reconstruction mismatch")
+
+
 def input_sources() -> dict[str, Any]:
     bindings = load(INPUT_BINDINGS)
     forbidden = forbidden_promotion_values(
@@ -677,6 +699,8 @@ def input_sources() -> dict[str, Any]:
     effect, effect_id, effect_finalization = final_effect_home()
     resource_release, resource_release_id = final_resource_release(effect_id, effect_finalization)
     decision = load(DECISION)
+    if bindings["external_approval"]["packet_sha256"] == SUCCESSOR_PACKET_SHA256:
+        validate_successor_decision_manifest(decision)
     decision_id = immutable_artifact(DECISION, decision, require_candidate=False)
     materials = decision.get("materializations")
     base = {
@@ -734,7 +758,7 @@ def input_sources() -> dict[str, Any]:
     verify_closed_sources()
     source_inputs = bindings["canonical_source_inputs"]
     current_source_inputs = bindings["current_source_inputs"]
-    if bindings["external_approval"]["packet_sha256"] == "fb33b048b59c66df9858558a2c80e59a478d101465761f902366c9a00751cbc5":
+    if bindings["external_approval"]["packet_sha256"] == SUCCESSOR_PACKET_SHA256:
         if source_inputs != current_source_inputs:
             raise ValueError("successor canonical and current source inputs diverged")
         tracked_design = (

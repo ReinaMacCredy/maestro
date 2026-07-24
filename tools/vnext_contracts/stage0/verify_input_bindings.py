@@ -15,6 +15,7 @@ import os
 import re
 import stat
 import subprocess
+import tempfile
 import zlib
 from pathlib import Path
 
@@ -41,18 +42,185 @@ SUCCESSOR_RECIPIENT_TASK = "019f4d99-a48a-7390-9560-7c7a9dc63a8d"
 SUCCESSOR_APPROVAL_TURN = "019f9154-6de5-7612-9d3f-136c4c1324fd"
 SUCCESSOR_APPROVAL_MESSAGE = "msg_019f9154-6e72-7d00-8d41-f3ef5e7917dc"
 SUCCESSOR_APPROVAL_STARTED_AT = 1784849657
+SUCCESSOR_PACKET_PUBLICATION_LOG = Path(
+    "/Users/reinamaccredy/.codex/sessions/2026/07/21/"
+    "rollout-2026-07-21T19-34-16-019f84ab-7237-7ad2-93b7-332abe8329be.jsonl"
+)
+SUCCESSOR_PACKET_PUBLICATION_TURN = "019f8fff-85d5-7781-89de-5f24fc66223b"
+SUCCESSOR_PACKET_PUBLICATION_MESSAGE = "msg_0a802c5cd719d2ce016a625df68b1c819a8de9542cabd67403"
+SUCCESSOR_PACKET_PUBLICATION_RECORDS = {
+    "packet_assistant_message": "b9911b90224d46d0925dd10cff9330373e4c5fc60cdca763139cd469f3b65c59",
+    "packet_task_complete": "a4ed4ca62e8dfa4b05c0247d92d459a35254543fa6f3baf505f8075c15ecb848",
+}
+SUCCESSOR_PACKET_COMPLETED_AT = 1784831493
 SUCCESSOR_APPROVAL_INSTRUCTION = (
     "APPROVE BUILD PACKET sha256:"
     f"{SUCCESSOR_PACKET_SHA256}. Execute the staged build plan."
 )
 
 
+def _directory_flags() -> int:
+    flags = os.O_RDONLY | os.O_DIRECTORY
+    if hasattr(os, "O_CLOEXEC"):
+        flags |= os.O_CLOEXEC
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    return flags
+
+
+def _validate_directory_descriptor(descriptor: int, display: Path) -> None:
+    metadata = os.fstat(descriptor)
+    mode = stat.S_IMODE(metadata.st_mode)
+    if (
+        not stat.S_ISDIR(metadata.st_mode)
+        or metadata.st_uid not in {0, os.geteuid()}
+        or (mode & 0o022 and not mode & stat.S_ISVTX)
+    ):
+        raise SystemExit(f"unsafe descriptor-captured ancestor: {display}")
+
+
+def _open_directory_chain(path: Path) -> list[int]:
+    absolute = path.absolute()
+    if absolute.parts[:2] == ("/", "var"):
+        absolute = Path("/private").joinpath(*absolute.parts[1:])
+    elif absolute.parts[:2] == ("/", "tmp"):
+        absolute = Path("/private/tmp").joinpath(*absolute.parts[2:])
+    descriptors = [os.open("/", _directory_flags())]
+    try:
+        _validate_directory_descriptor(descriptors[-1], Path("/"))
+        current = Path("/")
+        for component in absolute.parts[1:]:
+            current /= component
+            descriptor = os.open(component, _directory_flags(), dir_fd=descriptors[-1])
+            descriptors.append(descriptor)
+            _validate_directory_descriptor(descriptor, current)
+        return descriptors
+    except BaseException:
+        for descriptor in reversed(descriptors):
+            os.close(descriptor)
+        raise
+
+
+def _descriptor_capture_at(parent: int, name: str, display: Path) -> bytes:
+    named_before = os.stat(name, dir_fd=parent, follow_symlinks=False)
+    flags = os.O_RDONLY
+    if hasattr(os, "O_CLOEXEC"):
+        flags |= os.O_CLOEXEC
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    descriptor = os.open(name, flags, dir_fd=parent)
+    try:
+        before = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or before.st_nlink != 1
+            or before.st_uid != os.geteuid()
+            or stat.S_IMODE(before.st_mode) & 0o022
+        ):
+            raise SystemExit(f"unsafe descriptor-captured input: {display}")
+        named_identity = lambda value: (
+            value.st_dev,
+            value.st_ino,
+            value.st_mode,
+            value.st_uid,
+            value.st_gid,
+            value.st_nlink,
+        )
+        if named_identity(named_before) != named_identity(before):
+            raise SystemExit(f"descriptor-captured name was substituted: {display}")
+        chunks: list[bytes] = []
+        while chunk := os.read(descriptor, 1024 * 1024):
+            chunks.append(chunk)
+        after = os.fstat(descriptor)
+        named_after = os.stat(name, dir_fd=parent, follow_symlinks=False)
+        identity = lambda value: (
+            value.st_dev,
+            value.st_ino,
+            value.st_size,
+            value.st_mtime_ns,
+            value.st_ctime_ns,
+            value.st_mode,
+            value.st_uid,
+            value.st_gid,
+            value.st_nlink,
+        )
+        if identity(before) != identity(after):
+            raise SystemExit(f"descriptor-captured input changed during read: {display}")
+        if named_identity(named_before) != named_identity(named_after):
+            raise SystemExit(f"descriptor-captured name changed during read: {display}")
+        data = b"".join(chunks)
+        if len(data) != before.st_size:
+            raise SystemExit(f"descriptor-captured input length changed: {display}")
+        return data
+    finally:
+        os.close(descriptor)
+
+
+def descriptor_capture(path: Path) -> bytes:
+    descriptors = _open_directory_chain(path.parent)
+    try:
+        return _descriptor_capture_at(descriptors[-1], path.name, path)
+    finally:
+        for descriptor in reversed(descriptors):
+            os.close(descriptor)
+
+
+def descriptor_capture_directory(path: Path) -> dict[str, bytes]:
+    descriptors = _open_directory_chain(path)
+    directory = descriptors[-1]
+    try:
+        before = os.fstat(directory)
+        captured: dict[str, bytes] = {}
+        for entry in sorted(os.scandir(directory), key=lambda candidate: candidate.name):
+            if entry.name in {".", ".."}:
+                continue
+            metadata = os.stat(entry.name, dir_fd=directory, follow_symlinks=False)
+            if not stat.S_ISREG(metadata.st_mode):
+                raise SystemExit(f"unsafe successor packet entry: {path / entry.name}")
+            captured[entry.name] = _descriptor_capture_at(
+                directory, entry.name, path / entry.name
+            )
+        after = os.fstat(directory)
+        identity = lambda value: (
+            value.st_dev,
+            value.st_ino,
+            value.st_mtime_ns,
+            value.st_ctime_ns,
+            value.st_mode,
+            value.st_uid,
+            value.st_gid,
+        )
+        if identity(before) != identity(after):
+            raise SystemExit(f"descriptor-captured directory changed during read: {path}")
+        return captured
+    finally:
+        for descriptor in reversed(descriptors):
+            os.close(descriptor)
+
+
 def sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as source:
-        for chunk in iter(lambda: source.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+    return hashlib.sha256(descriptor_capture(path)).hexdigest()
+
+
+def capture_log_records(
+    path: Path, expected: dict[str, str]
+) -> tuple[dict[str, dict[str, object]], dict[str, int]]:
+    expected_by_hash = {digest: name for name, digest in expected.items()}
+    captured: dict[str, dict[str, object]] = {}
+    ordinals: dict[str, int] = {}
+    for ordinal, raw_line in enumerate(descriptor_capture(path).splitlines(keepends=True), start=1):
+        name = expected_by_hash.get(hashlib.sha256(raw_line).hexdigest())
+        if name is None:
+            continue
+        if name in captured:
+            raise SystemExit(f"duplicate captured record: {name}")
+        record = json.loads(raw_line)
+        if not isinstance(record, dict):
+            raise SystemExit(f"captured record is not an object: {name}")
+        captured[name] = record
+        ordinals[name] = ordinal
+    require_equal("captured record closure", set(captured), set(expected))
+    return captured, ordinals
 
 
 def require_equal(label: str, actual: object, expected: object) -> None:
@@ -93,10 +261,23 @@ def verify_successor_packet_artifacts(bindings: dict[str, object]) -> None:
         metadata = os.lstat(path)
         if stat.S_ISLNK(metadata.st_mode):
             raise SystemExit(f"{label} is a symlink")
-    require_equal("successor packet verifier bytes", sha256(SUCCESSOR_PACKET_VERIFIER), SUCCESSOR_PACKET_VERIFIER_SHA256)
-    packet_path = SUCCESSOR_PACKET_ROOT / "replacement-build-approval-packet.v1.json"
-    require_equal("successor packet artifact bytes", sha256(packet_path), SUCCESSOR_PACKET_ARTIFACT_SHA256)
-    packet = json.loads(packet_path.read_text(encoding="utf-8"))
+    verifier_bytes = descriptor_capture(SUCCESSOR_PACKET_VERIFIER)
+    require_equal(
+        "successor packet verifier bytes",
+        hashlib.sha256(verifier_bytes).hexdigest(),
+        SUCCESSOR_PACKET_VERIFIER_SHA256,
+    )
+    packet_files = descriptor_capture_directory(SUCCESSOR_PACKET_ROOT)
+    packet_name = "replacement-build-approval-packet.v1.json"
+    if packet_name not in packet_files:
+        raise SystemExit("successor packet artifact is absent")
+    packet_bytes = packet_files[packet_name]
+    require_equal(
+        "successor packet artifact bytes",
+        hashlib.sha256(packet_bytes).hexdigest(),
+        SUCCESSOR_PACKET_ARTIFACT_SHA256,
+    )
+    packet = json.loads(packet_bytes)
     require_equal("successor packet identity", packet["packet_sha256"], SUCCESSOR_PACKET_SHA256)
     require_equal("successor packet candidate", packet["candidate_input"]["identity"], SUCCESSOR_CANDIDATE_INPUT)
     require_equal("successor packet handoff", packet["build_plan_handoff"]["identity"], SUCCESSOR_BUILD_HANDOFF)
@@ -111,12 +292,24 @@ def verify_successor_packet_artifacts(bindings: dict[str, object]) -> None:
         or "canonical_build_handoff=absent-before-stage-0" not in identity_state
     ):
         raise SystemExit("successor packet prematurely promotes an external identity")
-    completed = subprocess.run(
-        ["ruby", str(SUCCESSOR_PACKET_VERIFIER), str(SUCCESSOR_PACKET_ROOT)],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
+    with tempfile.TemporaryDirectory(prefix="maestro-successor-packet-") as directory:
+        snapshot = Path(directory)
+        snapshot.chmod(0o700)
+        packet_snapshot = snapshot / "packet"
+        packet_snapshot.mkdir(mode=0o700)
+        for name, captured in packet_files.items():
+            destination = packet_snapshot / name
+            destination.write_bytes(captured)
+            destination.chmod(0o400)
+        verifier_snapshot = snapshot / "verify.rb"
+        verifier_snapshot.write_bytes(verifier_bytes)
+        verifier_snapshot.chmod(0o500)
+        completed = subprocess.run(
+            ["ruby", str(verifier_snapshot), str(packet_snapshot)],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
     if completed.returncode != 0:
         raise SystemExit(f"independent successor packet verifier failed: {completed.stderr}")
     verdict = json.loads(completed.stdout)
@@ -146,6 +339,11 @@ def verify_successor_external_approval_event(bindings: dict[str, object]) -> Non
         "user_message_id",
         "actor_role",
         "exact_instruction",
+        "packet_publication_log_realpath",
+        "packet_publication_turn_id",
+        "packet_publication_message_id",
+        "packet_publication_record_sha256",
+        "packet_turn_completed_at",
     }
     optional = {"historical_superseded_events"}
     require_equal("successor approval event keys", set(event), required | (set(event) & optional))
@@ -159,25 +357,39 @@ def verify_successor_external_approval_event(bindings: dict[str, object]) -> Non
     require_equal("successor approval message", event["user_message_id"], SUCCESSOR_APPROVAL_MESSAGE)
     require_equal("successor approval actor", event["actor_role"], "user")
     require_equal("successor approval instruction", event["exact_instruction"], SUCCESSOR_APPROVAL_INSTRUCTION)
+    require_equal(
+        "successor packet publication log",
+        event["packet_publication_log_realpath"],
+        str(SUCCESSOR_PACKET_PUBLICATION_LOG),
+    )
+    require_equal(
+        "successor packet publication turn",
+        event["packet_publication_turn_id"],
+        SUCCESSOR_PACKET_PUBLICATION_TURN,
+    )
+    require_equal(
+        "successor packet publication message",
+        event["packet_publication_message_id"],
+        SUCCESSOR_PACKET_PUBLICATION_MESSAGE,
+    )
+    require_equal(
+        "successor packet publication completion",
+        event["packet_turn_completed_at"],
+        SUCCESSOR_PACKET_COMPLETED_AT,
+    )
+    packet_record_hashes = event["packet_publication_record_sha256"]
+    assert isinstance(packet_record_hashes, dict)
+    require_equal(
+        "successor packet publication records",
+        packet_record_hashes,
+        SUCCESSOR_PACKET_PUBLICATION_RECORDS,
+    )
     record_hashes = event["record_sha256"]
     assert isinstance(record_hashes, dict)
     require_equal("successor approval record set", record_hashes, SUCCESSOR_APPROVAL_RECORDS)
-    expected_by_hash = {digest: name for name, digest in SUCCESSOR_APPROVAL_RECORDS.items()}
-    captured: dict[str, dict[str, object]] = {}
-    ordinals: dict[str, int] = {}
-    with SUCCESSOR_APPROVAL_LOG.open("rb") as source:
-        for ordinal, raw_line in enumerate(source, start=1):
-            name = expected_by_hash.get(hashlib.sha256(raw_line).hexdigest())
-            if name is None:
-                continue
-            if name in captured:
-                raise SystemExit(f"duplicate successor approval record: {name}")
-            record = json.loads(raw_line)
-            if not isinstance(record, dict):
-                raise SystemExit(f"successor approval record is not an object: {name}")
-            captured[name] = record
-            ordinals[name] = ordinal
-    require_equal("successor approval record closure", set(captured), set(SUCCESSOR_APPROVAL_RECORDS))
+    captured, ordinals = capture_log_records(
+        SUCCESSOR_APPROVAL_LOG, SUCCESSOR_APPROVAL_RECORDS
+    )
     causal_order = ["approval_task_started", "approval_user_message", "session_meta"]
     if [ordinals[name] for name in causal_order] != sorted(ordinals[name] for name in causal_order):
         raise SystemExit("successor approval records are reordered")
@@ -219,6 +431,61 @@ def verify_successor_external_approval_event(bindings: dict[str, object]) -> Non
     require_equal("successor session id", session_payload["session_id"], SUCCESSOR_RECIPIENT_TASK)
     require_equal("successor session payload id", session_payload["id"], SUCCESSOR_RECIPIENT_TASK)
     require_equal("successor session cwd", session_payload["cwd"], bindings["source_repository_realpath"])
+    packet_captured, packet_ordinals = capture_log_records(
+        SUCCESSOR_PACKET_PUBLICATION_LOG, SUCCESSOR_PACKET_PUBLICATION_RECORDS
+    )
+    if packet_ordinals["packet_assistant_message"] >= packet_ordinals["packet_task_complete"]:
+        raise SystemExit("successor packet publication records are reordered")
+    packet_message = packet_captured["packet_assistant_message"]
+    require_equal("successor packet message type", packet_message["type"], "response_item")
+    packet_message_payload = packet_message["payload"]
+    assert isinstance(packet_message_payload, dict)
+    require_equal("successor packet message role", packet_message_payload["role"], "assistant")
+    require_equal(
+        "successor packet message id",
+        packet_message_payload["id"],
+        SUCCESSOR_PACKET_PUBLICATION_MESSAGE,
+    )
+    packet_metadata = packet_message_payload["internal_chat_message_metadata_passthrough"]
+    assert isinstance(packet_metadata, dict)
+    require_equal(
+        "successor packet message turn",
+        packet_metadata["turn_id"],
+        SUCCESSOR_PACKET_PUBLICATION_TURN,
+    )
+    packet_content = packet_message_payload["content"]
+    if not isinstance(packet_content, list) or len(packet_content) != 1:
+        raise SystemExit("successor packet publication is not one assistant message")
+    packet_text = str(packet_content[0].get("text", ""))
+    for literal in (
+        SUCCESSOR_PACKET_SHA256,
+        SUCCESSOR_CANDIDATE_INPUT,
+        SUCCESSOR_BUILD_HANDOFF,
+        SUCCESSOR_APPROVAL_INSTRUCTION,
+    ):
+        if literal not in packet_text:
+            raise SystemExit("successor packet publication omits an exact bound identity")
+    packet_complete = packet_captured["packet_task_complete"]
+    require_equal("successor packet completion type", packet_complete["type"], "event_msg")
+    packet_complete_payload = packet_complete["payload"]
+    assert isinstance(packet_complete_payload, dict)
+    require_equal(
+        "successor packet completion event",
+        packet_complete_payload["type"],
+        "task_complete",
+    )
+    require_equal(
+        "successor packet completion turn",
+        packet_complete_payload["turn_id"],
+        SUCCESSOR_PACKET_PUBLICATION_TURN,
+    )
+    require_equal(
+        "successor packet completion time",
+        packet_complete_payload["completed_at"],
+        SUCCESSOR_PACKET_COMPLETED_AT,
+    )
+    if int(packet_complete_payload["completed_at"]) >= SUCCESSOR_APPROVAL_STARTED_AT:
+        raise SystemExit("successor approval is not strictly post-packet")
     verify_successor_packet_artifacts(bindings)
 
 

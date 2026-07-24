@@ -430,6 +430,40 @@ class CandidateRootBuildTest(unittest.TestCase):
                 build.PROOF_MANIFEST = original_proof_manifest
                 build.PROOF_MANIFEST_CBOR = original_proof_cbor
 
+    def test_successor_decision_manifest_binds_every_record_before_candidate_root(self) -> None:
+        manifest_path = Path(
+            "/private/tmp/maestro-vnext-materialization-successor-packet/"
+            "successor-decision-store-manifest.v1.txt"
+        )
+        records = [
+            {
+                "id": decision_id,
+                "terminal_status": terminal_status,
+                "raw_record_sha256": raw_record_sha256,
+                "raw_body_sha256": raw_body_sha256,
+            }
+            for decision_id, terminal_status, raw_record_sha256, raw_body_sha256 in (
+                line.split("\t")
+                for line in manifest_path.read_text(encoding="ascii").splitlines()
+            )
+        ]
+        decision = {
+            "source_provenance_excluded_from_identity": {
+                "decisions_sha256": build.SUCCESSOR_DECISION_STORE_MANIFEST_SHA256
+            },
+            "records": records,
+            "materializations": [{"decision_sources": [records[0].copy()]}],
+        }
+        build.validate_successor_decision_manifest(decision)
+
+        mutant = json.loads(json.dumps(decision))
+        mutant["records"][0]["raw_body_sha256"] = "00" * 32
+        mutant["materializations"][0]["decision_sources"][0][
+            "raw_body_sha256"
+        ] = "00" * 32
+        with self.assertRaises(ValueError):
+            build.validate_successor_decision_manifest(mutant)
+
 
 if __name__ == "__main__":
     unittest.main()

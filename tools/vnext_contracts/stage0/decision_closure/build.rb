@@ -5,6 +5,7 @@
 # an importer of frozen v1 provenance, not a vNext Decision writer.
 
 require "digest"
+require "fiddle/import"
 require "json"
 require "pathname"
 require "yaml"
@@ -96,19 +97,118 @@ def json_bytes(value)
   { "bytes" => hex(value) }
 end
 
-def sha256(path)
-  Digest::SHA256.hexdigest(File.binread(path))
+module DescriptorCapture
+  extend Fiddle::Importer
+  dlload Fiddle::Handle::DEFAULT
+  extern "int openat(int, const char*, int, ...)"
 end
 
-def require_sha(path, expected)
-  stat = path.lstat
-  raise "unsafe symlink input: #{path}" if stat.symlink?
-  raise "input is not a regular file: #{path}" unless stat.file?
+O_DIRECTORY = RUBY_PLATFORM.include?("darwin") ? 0x10_0000 : 0o200000
+O_CLOEXEC = RUBY_PLATFORM.include?("darwin") ? 0x100_0000 : 0o2000000
 
-  actual = sha256(path)
+def descriptor_identity(value)
+  [
+    value.dev, value.ino, value.mode, value.uid, value.gid, value.nlink,
+    value.size, value.mtime.to_i, value.mtime.nsec, value.ctime.to_i, value.ctime.nsec
+  ]
+end
+
+def descriptor_object_identity(value)
+  [value.dev, value.ino, value.mode, value.uid, value.gid]
+end
+
+def openat_io(parent, name, flags)
+  descriptor = DescriptorCapture.openat(parent.fileno, name, flags)
+  raise SystemCallError.new("openat #{name}", Fiddle.last_error) if descriptor.negative?
+
+  IO.for_fd(descriptor, autoclose: true)
+end
+
+def descriptor_chain(path)
+  absolute = path.expand_path
+  if absolute.to_s == "/var" || absolute.to_s.start_with?("/var/")
+    absolute = Pathname.new("/private").join(absolute.relative_path_from(Pathname.new("/")))
+  elsif absolute.to_s == "/tmp" || absolute.to_s.start_with?("/tmp/")
+    absolute = Pathname.new("/private/tmp").join(
+      absolute.relative_path_from(Pathname.new("/tmp"))
+    )
+  end
+  components = absolute.each_filename.to_a
+  raise "descriptor input path is not absolute: #{path}" unless absolute.absolute?
+  raise "descriptor input path has no leaf: #{path}" if components.empty?
+
+  directories = [File.open("/", File::RDONLY)]
+  components[0...-1].each do |component|
+    directory = openat_io(
+      directories.last,
+      component,
+      File::RDONLY | File::NOFOLLOW | O_DIRECTORY | O_CLOEXEC
+    )
+    metadata = directory.stat
+    mode = metadata.mode & 0o7777
+    unsafe_writable = (mode & 0o022) != 0 && (mode & 0o1000).zero?
+    raise "unsafe descriptor-captured ancestor: #{path}" unless
+      metadata.directory? && [0, Process.euid].include?(metadata.uid) && !unsafe_writable
+    directories << directory
+  end
+  [directories, components.last, components]
+rescue StandardError
+  directories&.reverse_each(&:close)
+  raise
+end
+
+def capture_regular(path)
+  directories, leaf, components = descriptor_chain(path)
+  parent = directories.last
+  io = openat_io(parent, leaf, File::RDONLY | File::NOFOLLOW | O_CLOEXEC)
+  begin
+    descriptor_before = io.stat
+    raise "input is not a regular file: #{path}" unless descriptor_before.file?
+    named_before = openat_io(parent, leaf, File::RDONLY | File::NOFOLLOW | O_CLOEXEC)
+    begin
+      raise "descriptor-captured input name mismatch: #{path}" unless
+        descriptor_identity(named_before.stat) == descriptor_identity(descriptor_before)
+    ensure
+      named_before.close
+    end
+    bytes = io.read.b
+    descriptor_after = io.stat
+    named_after = openat_io(parent, leaf, File::RDONLY | File::NOFOLLOW | O_CLOEXEC)
+    begin
+      raise "descriptor-captured input changed: #{path}" unless
+        descriptor_identity(descriptor_before) == descriptor_identity(descriptor_after) &&
+          descriptor_identity(descriptor_before) == descriptor_identity(named_after.stat) &&
+          bytes.bytesize == descriptor_before.size
+    ensure
+      named_after.close
+    end
+    directories.each_cons(2).with_index do |(retained_parent, retained_child), index|
+      observed = openat_io(
+        retained_parent,
+        components[index],
+        File::RDONLY | File::NOFOLLOW | O_DIRECTORY | O_CLOEXEC
+      )
+      begin
+        raise "descriptor ancestor changed during read: #{path}" unless
+          descriptor_object_identity(observed.stat) ==
+            descriptor_object_identity(retained_child.stat)
+      ensure
+        observed.close
+      end
+    end
+    bytes
+  ensure
+    io.close
+    directories.reverse_each(&:close)
+  end
+end
+
+def require_bytes(path, expected)
+  bytes = capture_regular(path)
+  actual = Digest::SHA256.hexdigest(bytes)
   raise "frozen input drifted: #{path} expected #{expected}, got #{actual}" unless actual == expected
 
-  actual
+  bytes
 end
 
 def explicit_input(name)
@@ -118,8 +218,8 @@ def explicit_input(name)
   path
 end
 
-def packet_rows(path, columns)
-  File.readlines(path, chomp: true, encoding: Encoding::UTF_8).map do |line|
+def packet_rows(bytes, columns, path)
+  bytes.force_encoding(Encoding::UTF_8).lines(chomp: true).map do |line|
     fields = line.split("\t", -1)
     raise "invalid packet row width in #{path}" unless fields.length == columns
 
@@ -135,19 +235,19 @@ def verify_successor_packet(packet_root, parsed, raw_by_id)
   manifest_path = packet_root.join("successor-decision-store-manifest.v1.txt")
   inventory_path = packet_root.join("raw-decision-inventory.v1.txt")
   closure_path = packet_root.join("external-design-authority-closure.v1.txt")
-  require_sha(packet_path, SUCCESSOR_PACKET.fetch("packet"))
-  require_sha(manifest_path, SUCCESSOR_PACKET.fetch("decision_manifest"))
-  require_sha(inventory_path, SUCCESSOR_PACKET.fetch("raw_inventory"))
-  require_sha(closure_path, SUCCESSOR_PACKET.fetch("external_closure"))
-  packet = JSON.parse(File.read(packet_path, encoding: Encoding::UTF_8))
+  packet_bytes = require_bytes(packet_path, SUCCESSOR_PACKET.fetch("packet"))
+  manifest_bytes = require_bytes(manifest_path, SUCCESSOR_PACKET.fetch("decision_manifest"))
+  inventory_bytes = require_bytes(inventory_path, SUCCESSOR_PACKET.fetch("raw_inventory"))
+  closure_bytes = require_bytes(closure_path, SUCCESSOR_PACKET.fetch("external_closure"))
+  packet = JSON.parse(packet_bytes.force_encoding(Encoding::UTF_8))
   raise "replacement packet identity drifted" unless packet.fetch("packet_sha256") == SUCCESSOR_PACKET.fetch("packet_identity")
   raise "replacement packet candidate root was prematurely populated" unless packet.dig("sections", "identity_state", "text").include?("candidate_contract_root=absent-before-stage-0")
   raise "replacement packet Decision counts drifted" unless packet.fetch("decision_counts") == {
     "locked" => 117, "open" => 0, "superseded" => 96, "total" => 213
   }
 
-  manifest = packet_rows(manifest_path, 4).to_h { |id, status, record_sha, body_sha| [id, [status, record_sha, body_sha]] }
-  inventory = packet_rows(inventory_path, 4).to_h { |id, status, supersedes, superseded_by| [id, [status, supersedes, superseded_by]] }
+  manifest = packet_rows(manifest_bytes, 4, manifest_path).to_h { |id, status, record_sha, body_sha| [id, [status, record_sha, body_sha]] }
+  inventory = packet_rows(inventory_bytes, 4, inventory_path).to_h { |id, status, supersedes, superseded_by| [id, [status, supersedes, superseded_by]] }
   raise "replacement packet manifest count drifted" unless manifest.length == 213
   raise "replacement packet inventory count drifted" unless inventory.length == 213
   raise "replacement packet Decision ids disagree" unless manifest.keys.sort == inventory.keys.sort
@@ -165,8 +265,21 @@ def verify_successor_packet(packet_root, parsed, raw_by_id)
     raise "replacement packet supersedes mismatch for #{id}" unless supersedes.join(",") == inventory_supersedes
     raise "replacement packet superseded-by mismatch for #{id}" unless superseded_by.join(",") == inventory_superseded_by
   end
+  reconstructed_manifest = parsed.sort_by { |record| record.fetch("id") }.map do |record|
+    id = record.fetch("id")
+    body = record.fetch("extra", {}).fetch("decision", "").b
+    [
+      id,
+      record.fetch("status"),
+      Digest::SHA256.hexdigest(raw_by_id.fetch(id)),
+      Digest::SHA256.hexdigest(body)
+    ].join("\t")
+  end.join("\n") + "\n"
+  raise "replacement packet manifest is not the exact all-Decision reconstruction" unless
+    Digest::SHA256.hexdigest(reconstructed_manifest) == SUCCESSOR_PACKET.fetch("decision_manifest") &&
+      manifest_bytes == reconstructed_manifest
 
-  closure_lines = File.readlines(closure_path, chomp: true, encoding: Encoding::UTF_8)
+  closure_lines = closure_bytes.force_encoding(Encoding::UTF_8).lines(chomp: true)
   node_ids = closure_lines.filter_map { |line| line.split("\t", -1)[1] if line.start_with?("N\t") }
   ignored = closure_lines.filter_map do |line|
     fields = line.split("\t", -1)
@@ -182,12 +295,28 @@ def raw_records(raw)
 
   starts.each_with_index.map do |start, index|
     finish = starts.fetch(index + 1, raw.bytesize)
-    raw.byteslice(start, finish - start)
+    aggregate = raw.byteslice(start, finish - start)
+    lines = aggregate.lines
+    first = lines.shift
+    raise "Decision aggregate record lacks list prefix" unless first == "- schema_version: maestro.card.v1\n"
+    standalone = +"schema_version: maestro.card.v1\n"
+    lines.each do |line|
+      if line == "\n"
+        standalone << line
+      elsif line.start_with?("  ")
+        standalone << line.byteslice(2, line.bytesize - 2)
+      else
+        raise "Decision aggregate record has non-reversible indentation"
+      end
+    end
+    standalone = standalone.sub(/\n+\z/, "\n")
+    raise "standalone Decision record lacks one final LF" unless standalone.end_with?("\n") && !standalone.end_with?("\n\n")
+    standalone.b
   end
 end
 
 def record_id(raw)
-  match = raw.match(/^  id: ([a-z0-9-]+)$/)
+  match = raw.match(/^id: ([a-z0-9-]+)$/)
   raise "raw Decision record lacks id" unless match
 
   match[1]
@@ -322,14 +451,16 @@ def build(repo, output)
   design_path = source.join("design.md")
   decisions_path = explicit_input("STAGE0_SUCCESSOR_DECISIONS_YAML")
   card_path = explicit_input("STAGE0_SUCCESSOR_CARD_YAML")
+  design_bytes = require_bytes(design_path, EXPECTED.fetch("design"))
+  source_bytes = capture_regular(decisions_path)
+  card_bytes = require_bytes(card_path, EXPECTED.fetch("card"))
   hashes = {
-    "design" => require_sha(design_path, EXPECTED.fetch("design")),
+    "design" => Digest::SHA256.hexdigest(design_bytes),
     "decisions" => EXPECTED.fetch("decisions"),
-    "card" => require_sha(card_path, EXPECTED.fetch("card"))
+    "card" => Digest::SHA256.hexdigest(card_bytes)
   }
 
-  design = File.read(design_path, encoding: Encoding::UTF_8)
-  source_bytes = File.binread(decisions_path)
+  design = design_bytes.force_encoding(Encoding::UTF_8)
   parsed = YAML.load(source_bytes, permitted_classes: [Time], aliases: false)
   raw = raw_records(source_bytes)
   raise "record count drifted" unless parsed.length == 213 && raw.length == 213
@@ -520,6 +651,53 @@ def build(repo, output)
     ]
   })
   puts JSON.generate({ "external_closure_id" => external.fetch("identity"), "decision_closure_id" => decision.fetch("identity"), "material" => material_count, "rationale_only" => rationale_count, "unresolved_mappings" => 0 })
+end
+
+if ENV["STAGE0_DESCRIPTOR_CAPTURE_TEST"] == "1"
+  path = Pathname.new(ENV.fetch("STAGE0_DESCRIPTOR_CAPTURE_FIXTURE"))
+  bytes = capture_regular(path)
+  puts JSON.generate({
+    "schema" => "maestro.vnext.stage0-descriptor-capture-test.v1",
+    "sha256" => Digest::SHA256.hexdigest(bytes),
+    "byte_length" => bytes.bytesize
+  })
+  exit
+end
+
+if ENV["STAGE0_RAW_RECORD_RECONSTRUCTION_TEST"] == "1"
+  fixture = File.binread(ENV.fetch("STAGE0_RAW_RECORD_FIXTURE"))
+  raise "fixture is not one standalone card with one final LF" unless
+    fixture.start_with?("schema_version: maestro.card.v1\n") &&
+      fixture.end_with?("\n") &&
+      !fixture.end_with?("\n\n")
+  aggregate = fixture.lines.each_with_index.map do |line, index|
+    index.zero? ? "- #{line}" : (line == "\n" ? line : "  #{line}")
+  end.join
+  reconstructed = raw_records(aggregate).fetch(0)
+  raise "live-shape standalone record reconstruction drifted" unless reconstructed == fixture
+  expected_hash = Digest::SHA256.hexdigest(fixture)
+  raise "live-shape standalone record hash drifted" unless
+    Digest::SHA256.hexdigest(reconstructed) == expected_hash
+  {
+    "one_byte" => aggregate.sub("maestro.card.v1", "maestro.card.v2"),
+    "indent" => aggregate.sub(/^  id:/, " id:"),
+    "final_lf" => aggregate.delete_suffix("\n")
+  }.each do |name, mutant|
+    accepted = false
+    begin
+      candidate = raw_records(mutant)
+      accepted = candidate == [fixture]
+    rescue RuntimeError
+      accepted = false
+    end
+    raise "#{name} mutant was accepted" if accepted
+  end
+  puts JSON.generate({
+    "schema" => "maestro.vnext.stage0-standalone-decision-record-reconstruction-test.v1",
+    "fixture_sha256" => expected_hash,
+    "mutants_rejected" => %w[one_byte indent final_lf]
+  })
+  exit
 end
 
 workspace = Pathname.new(__dir__).join("../../../../").realpath

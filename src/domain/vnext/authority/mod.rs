@@ -16,7 +16,7 @@ mod facade;
 mod grant;
 mod identity;
 mod mandate;
-pub(in crate::domain::vnext) mod materialization;
+pub mod materialization;
 mod post_cut;
 mod principal;
 mod protected_diagnostic_envelope;
@@ -106,11 +106,7 @@ pub(crate) use facade::{
     current_repository_authority_time, validate_persisted_evidence_mutation_authority,
     validate_persisted_repository_action_basis,
 };
-#[allow(
-    unused_imports,
-    reason = "Stage 7 freezes owner-family Authority inputs before their semantic-owner consumers"
-)]
-pub(in crate::domain::vnext) use facade::{
+pub use facade::{
     CoordinationRepositoryActionAuthorityV1, DistributionRepositoryActionAuthorityV1,
     IntakeRepositoryActionAuthorityV1, MemoryRepositoryActionAuthorityV1,
     PersistenceRepositoryActionAuthorityV1, PlanningRepositoryActionAuthorityV1,
