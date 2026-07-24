@@ -1,5 +1,6 @@
 pub mod backup;
 pub(crate) mod descriptor_census_platform;
+mod descriptor_census_platform_stage11_seed;
 pub mod deterministic_cbor;
 pub mod diff;
 pub mod error;
