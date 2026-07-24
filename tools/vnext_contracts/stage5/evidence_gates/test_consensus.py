@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import io
 import json
+import re
 import tarfile
 import tempfile
 import unittest
@@ -21,6 +22,19 @@ from tools.vnext_contracts.stage5.evidence_gates import (
 
 
 class Stage5ConsensusTests(unittest.TestCase):
+    def test_all_independent_engines_bind_the_exact_same_source_set(self) -> None:
+        ruby_source = (
+            Path(__file__).with_name("verify.rb").read_text(encoding="utf-8")
+        )
+        match = re.search(r"SOURCE_PATHS = %w\[(.*?)\]\.freeze", ruby_source, re.S)
+        self.assertIsNotNone(match)
+        ruby_paths = tuple(sorted(match.group(1).split()))
+        expected = tuple(sorted(stage5_build.SOURCE_PATHS))
+        self.assertEqual(expected, tuple(sorted(validate.SOURCE_PATHS)))
+        self.assertEqual(expected, tuple(sorted(consensus.ARTIFACT_SOURCE_PATHS)))
+        self.assertEqual(expected, ruby_paths)
+        self.assertIn("src/foundation/core/mod.rs", expected)
+
     def test_engine_local_binary_hashes_are_validated_before_semantic_consensus(self) -> None:
         runs = self.behavior_runs("a" * 64)
         self.assertEqual(

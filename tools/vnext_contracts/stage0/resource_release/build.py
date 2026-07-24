@@ -15,9 +15,23 @@ import hashlib
 import json
 import subprocess
 import sys
+import tempfile
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
+
+
+def proof_environment() -> dict[str, str]:
+    return {
+        "HOME": tempfile.gettempdir(),
+        "LANG": "C",
+        "LC_ALL": "C",
+        "PATH": "/usr/bin:/bin",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONNOUSERSITE": "1",
+        "RUBYOPT": "",
+        "RUBYLIB": "",
+    }
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 if str(REPO_ROOT) not in sys.path:
@@ -1955,6 +1969,7 @@ def main() -> int:
                 check=True,
                 capture_output=True,
                 text=True,
+                env=proof_environment(),
             )
         except subprocess.CalledProcessError as error:
             raise BuildError(f"independent Ruby verifier failed: {error.stderr.strip()}") from error

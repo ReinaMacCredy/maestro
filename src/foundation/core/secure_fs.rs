@@ -701,11 +701,6 @@ mod platform {
         }
 
         #[cfg(test)]
-        pub(crate) fn force_platform_census_fence_loss_for_test() {
-            FORCE_PLATFORM_CENSUS_FENCE_LOSS.with(|slot| slot.set(true));
-        }
-
-        #[cfg(test)]
         pub(crate) fn install_after_first_census_pass_test_hook(
             hook: impl FnOnce(&Path) + 'static,
         ) {
@@ -3799,19 +3794,19 @@ mod tests {
     }
 
     #[test]
-    fn platform_descriptor_census_holds_the_foundation_namespace_fence() {
+    fn platform_descriptor_census_refuses_without_namespace_wide_exclusion() {
         let temp = TestDir::for_descriptor_census();
         let root = SecureRoot::open_or_create(&temp.0).expect("create root");
         root.create_file_if_absent("object", b"immutable")
             .expect("create object");
 
-        let census = crate::foundation::core::descriptor_census_platform::admit_and_census(
-            &root,
-            DescriptorCensusLimitsV1::bounded_default(),
-        )
-        .expect("platform census");
-        assert_eq!(census.rows().len(), 1);
-        assert_eq!(census.rows()[0].relative_name(), b"object");
+        assert!(matches!(
+            crate::foundation::core::descriptor_census_platform::census(
+                &root,
+                DescriptorCensusLimitsV1::bounded_default(),
+            ),
+            Err(SecureFsError::CensusRefused)
+        ));
     }
 
     #[test]
@@ -3820,9 +3815,8 @@ mod tests {
         let root = SecureRoot::open_or_create(&temp.0).expect("create root");
         root.create_file_if_absent("object", b"immutable")
             .expect("create object");
-        SecureRoot::force_platform_census_fence_loss_for_test();
         assert!(matches!(
-            crate::foundation::core::descriptor_census_platform::admit_and_census(
+            crate::foundation::core::descriptor_census_platform::census(
                 &root,
                 DescriptorCensusLimitsV1::bounded_default()
             ),
@@ -3833,7 +3827,7 @@ mod tests {
             fs::write(root.join("object"), b"substitute").expect("mutate outside writer fence");
         });
         assert!(matches!(
-            crate::foundation::core::descriptor_census_platform::admit_and_census(
+            crate::foundation::core::descriptor_census_platform::census(
                 &root,
                 DescriptorCensusLimitsV1::bounded_default()
             ),

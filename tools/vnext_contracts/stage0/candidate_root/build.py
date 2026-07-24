@@ -15,6 +15,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -755,7 +756,6 @@ def input_sources() -> dict[str, Any]:
     )
     for source in (effect, resource_release, load(EFFECT_FINALIZATION), proof_manifest):
         scan_forbidden(source, forbidden)
-    verify_closed_sources()
     source_inputs = bindings["canonical_source_inputs"]
     current_source_inputs = bindings["current_source_inputs"]
     if bindings["external_approval"]["packet_sha256"] == SUCCESSOR_PACKET_SHA256:
@@ -805,17 +805,38 @@ def input_sources() -> dict[str, Any]:
     }
 
 
-def verify_closed_sources() -> None:
+def proof_environment(extra: dict[str, str] | None = None) -> dict[str, str]:
     env = {
-        **os.environ,
-        "MAESTRO_AUTHORITATIVE_SOURCE": load(INPUT_BINDINGS)[
-            "source_repository_realpath"
-        ],
+        "HOME": tempfile.gettempdir(),
+        "LANG": "C",
+        "LC_ALL": "C",
+        "PATH": "/usr/bin:/bin",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONNOUSERSITE": "1",
+        "RUBYOPT": "",
+        "RUBYLIB": "",
     }
+    if extra:
+        env.update(extra)
+    return env
+
+
+def verify_closed_sources(check: bool = False) -> None:
+    env = proof_environment(
+        {
+            "MAESTRO_AUTHORITATIVE_SOURCE": load(INPUT_BINDINGS)[
+                "source_repository_realpath"
+            ]
+        }
+    )
     commands = (
         [sys.executable, str(WORKSPACE / "tools/vnext_contracts/stage0/verify_input_bindings.py")],
         [sys.executable, str(WORKSPACE / "tools/vnext_contracts/stage0/decision_closure/validate.py")],
-        [sys.executable, str(WORKSPACE / "tools/vnext_contracts/stage0/public_identity/verify.py")],
+        [
+            sys.executable,
+            str(WORKSPACE / "tools/vnext_contracts/stage0/public_identity/verify.py"),
+            *(["--check"] if check else []),
+        ],
         [sys.executable, str(WORKSPACE / "tools/vnext_contracts/stage0/effect_home/validate.py")],
         ["/usr/bin/ruby", str(WORKSPACE / "tools/vnext_contracts/stage0/submission_claim/verify.rb")],
         [sys.executable, str(WORKSPACE / "tools/vnext_contracts/stage0/proof_matrix/validate.py")],
@@ -1101,7 +1122,8 @@ def write_artifact(path: Path, document: dict[str, Any], canonical: Any) -> None
     path.write_text(json.dumps(document, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
 
 
-def build() -> dict[str, Any]:
+def build(check: bool = False) -> dict[str, Any]:
+    verify_closed_sources(check=check)
     sources = input_sources()
     schemas = candidate_schema_descriptors()
     design_id, design_value = design_revision(sources, schemas)
@@ -1217,7 +1239,7 @@ def scan_forbidden(document: Any, forbidden: set[str]) -> None:
 
 def execute(check: bool) -> None:
     try:
-        result = build()
+        result = build(check=check)
     except Blocked as error:
         print(json.dumps({"status": "blocked", "reason": str(error)}))
         raise SystemExit(2) from error

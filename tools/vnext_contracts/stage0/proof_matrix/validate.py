@@ -400,12 +400,14 @@ def mutant_rejections(document: dict[str, Any]) -> list[str]:
 
 
 def ruby_equality() -> dict[str, Any]:
+    env = build.proof_environment()
     process = subprocess.run(
         ["/usr/bin/ruby", str(TOOLS / "encode.rb")],
         cwd=WORKSPACE,
         capture_output=True,
         text=True,
         check=False,
+        env=env,
     )
     if process.returncode != 0:
         raise ProofValidationError(process.stderr.strip() or "independent Ruby proof encoder failed")
@@ -424,7 +426,7 @@ def execute() -> None:
     except OSError as error:
         raise ProofValidationError("Stage0ProofManifest CBOR is unavailable") from error
     summary = validate_document(document, encoded, verify_files=True)
-    expected_document, expected_encoded = build.build_manifest()
+    expected_document, expected_encoded = build.build_manifest(check=True)
     require(document == expected_document and encoded == expected_encoded, "Stage0ProofManifest was not built from final current producer bytes")
     ruby = ruby_equality()
     rejected = mutant_rejections(document)

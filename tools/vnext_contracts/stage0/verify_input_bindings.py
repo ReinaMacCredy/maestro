@@ -131,7 +131,12 @@ def _validate_directory_chain(descriptors: list[int], path: Path) -> None:
 
 
 def _descriptor_capture_at(
-    parent: int, name: str, display: Path, *, allow_root_owner: bool = False
+    parent: int,
+    name: str,
+    display: Path,
+    *,
+    allow_root_owner: bool = False,
+    after_read_for_test: object | None = None,
 ) -> bytes:
     if not hasattr(os, "O_NOFOLLOW"):
         raise SystemExit("descriptor capture requires O_NOFOLLOW")
@@ -164,6 +169,10 @@ def _descriptor_capture_at(
         chunks: list[bytes] = []
         while chunk := os.read(descriptor, 1024 * 1024):
             chunks.append(chunk)
+        if after_read_for_test is not None:
+            if not callable(after_read_for_test):
+                raise SystemExit("descriptor-capture read hook is not callable")
+            after_read_for_test()
         after = os.fstat(descriptor)
         named_after = os.stat(name, dir_fd=parent, follow_symlinks=False)
         identity = lambda value: (
@@ -206,7 +215,10 @@ def descriptor_capture(path: Path, *, allow_root_owner: bool = False) -> bytes:
 
 
 def descriptor_capture_directory(
-    path: Path, *, after_open_for_test: object | None = None
+    path: Path,
+    *,
+    after_open_for_test: object | None = None,
+    after_file_read_for_test: object | None = None,
 ) -> dict[str, bytes]:
     descriptors = _open_directory_chain(path)
     directory = descriptors[-1]
@@ -224,7 +236,14 @@ def descriptor_capture_directory(
             if not stat.S_ISREG(metadata.st_mode):
                 raise SystemExit(f"unsafe successor packet entry: {path / entry.name}")
             captured[entry.name] = _descriptor_capture_at(
-                directory, entry.name, path / entry.name
+                directory,
+                entry.name,
+                path / entry.name,
+                after_read_for_test=(
+                    (lambda name=entry.name: after_file_read_for_test(name))
+                    if callable(after_file_read_for_test)
+                    else after_file_read_for_test
+                ),
             )
         after = os.fstat(directory)
         identity = lambda value: (
@@ -247,6 +266,16 @@ def descriptor_capture_directory(
 
 def sha256(path: Path) -> str:
     return hashlib.sha256(descriptor_capture(path)).hexdigest()
+
+
+def require_record_order(label: str, ordinals: list[int]) -> None:
+    if ordinals != sorted(ordinals) or len(set(ordinals)) != len(ordinals):
+        raise SystemExit(f"{label} records are reordered")
+
+
+def require_strictly_before(label: str, earlier: int, later: int) -> None:
+    if earlier >= later:
+        raise SystemExit(f"{label} is not strictly ordered")
 
 
 def capture_log_records(
@@ -470,8 +499,9 @@ def verify_successor_external_approval_event(
         SUCCESSOR_APPROVAL_LOG, SUCCESSOR_APPROVAL_RECORDS
     )
     causal_order = ["approval_task_started", "approval_user_message", "session_meta"]
-    if [ordinals[name] for name in causal_order] != sorted(ordinals[name] for name in causal_order):
-        raise SystemExit("successor approval records are reordered")
+    require_record_order(
+        "successor approval", [ordinals[name] for name in causal_order]
+    )
     capture_identity = digest_records(
         b"maestro.external-successor-approval-capture.v1\0",
         [
@@ -513,8 +543,13 @@ def verify_successor_external_approval_event(
     packet_captured, packet_ordinals = capture_log_records(
         SUCCESSOR_PACKET_PUBLICATION_LOG, SUCCESSOR_PACKET_PUBLICATION_RECORDS
     )
-    if packet_ordinals["packet_assistant_message"] >= packet_ordinals["packet_task_complete"]:
-        raise SystemExit("successor packet publication records are reordered")
+    require_record_order(
+        "successor packet publication",
+        [
+            packet_ordinals["packet_assistant_message"],
+            packet_ordinals["packet_task_complete"],
+        ],
+    )
     packet_message = packet_captured["packet_assistant_message"]
     require_equal("successor packet message type", packet_message["type"], "response_item")
     packet_message_payload = packet_message["payload"]
@@ -563,8 +598,11 @@ def verify_successor_external_approval_event(
         packet_complete_payload["completed_at"],
         SUCCESSOR_PACKET_COMPLETED_AT,
     )
-    if int(packet_complete_payload["completed_at"]) >= SUCCESSOR_APPROVAL_STARTED_AT:
-        raise SystemExit("successor approval is not strictly post-packet")
+    require_strictly_before(
+        "successor packet publication before approval",
+        int(packet_complete_payload["completed_at"]),
+        SUCCESSOR_APPROVAL_STARTED_AT,
+    )
     return verify_successor_packet_artifacts(bindings)
 
 

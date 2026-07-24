@@ -36,7 +36,18 @@ impl SchedulingPolicyDiffClassV1 {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct SchedulingPolicyMeaningV1 {
+    current_rules: [u64; 4],
+    candidate_rules: [u64; 4],
+    safety_floor: [u64; 4],
+    governance_floor: [u64; 4],
+    evaluator_revision: u64,
+    classifier_revision: u64,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::domain::vnext) struct SchedulingPolicyDowngradeMandateFactsV1 {
+    policy_meaning: SchedulingPolicyMeaningV1,
     pub(crate) mandate_id: MandateIdV1,
     pub(crate) action_request_id: ActionRequestIdV1,
     pub(crate) idempotency_key: IdempotencyKeyIdV1,
@@ -128,6 +139,7 @@ struct ConsumedRepositoryActionBindingV1 {
     leaf_authority_consumption_id: Option<StoreObjectIdV1>,
     guard_object_id: StoreObjectIdV1,
     state_object_id: StoreObjectIdV1,
+    mandate_object_ids: Option<[StoreObjectIdV1; 4]>,
 }
 
 impl ConsumedRepositoryActionBindingV1 {
@@ -155,6 +167,14 @@ impl ConsumedRepositoryActionBindingV1 {
             leaf_authority_consumption_id: admission.leaf_authority_consumption_id,
             guard_object_id: admission.guard_object_id,
             state_object_id: admission.state_object_id,
+            mandate_object_ids: facts.supplemental_mandate_id.map(|_| {
+                [
+                    StoreObjectIdV1::from_digest(facts.supplemental_mandate_atom),
+                    StoreObjectIdV1::from_digest(facts.supplemental_mandate_body_commitment),
+                    StoreObjectIdV1::from_digest(facts.supplemental_mandate_carrier_commitment),
+                    StoreObjectIdV1::from_digest(facts.supplemental_mandate_nonce_commitment),
+                ]
+            }),
         }
     }
 }
@@ -196,6 +216,7 @@ impl<'tx> AuthorityMaterializationTransactionV1<'tx> {
     pub(in crate::domain::vnext::authority) fn from_live_store_transaction(
         view: &'tx dyn MaterializationStoreViewPortV1,
     ) -> Self {
+        freeze_repository_owner_ports();
         Self {
             view: MaterializationCurrentViewV1::Store(view),
             state: Cell::new(MaterializationTransactionStateV1::Fresh),
@@ -413,6 +434,9 @@ impl<'tx> AuthorityMaterializationTransactionV1<'tx> {
             .chain(binding.leaf_authority_carrier_id)
             .chain(binding.leaf_authority_consumption_id)
             .all(|required| object_ids.contains(&required))
+            || binding
+                .mandate_object_ids
+                .is_some_and(|required| !required.into_iter().all(|id| object_ids.contains(&id)))
             || (!active_objects.is_empty()
                 && !current_object_ids
                     .into_iter()
@@ -426,6 +450,21 @@ impl<'tx> AuthorityMaterializationTransactionV1<'tx> {
     pub(in crate::domain::vnext::authority) fn is_consumed(&self) -> bool {
         self.state.get() == MaterializationTransactionStateV1::Consumed
     }
+}
+
+fn freeze_owner_port<K: RepositoryActionBindingKindV1>() {
+    let _ = K::ACTION;
+}
+
+fn freeze_repository_owner_ports() {
+    freeze_owner_port::<CoordinationRepositoryActionBindingOwnerV1<94>>();
+    freeze_owner_port::<PlanningRepositoryActionBindingOwnerV1<103>>();
+    freeze_owner_port::<PersistenceRepositoryActionBindingOwnerV1<107>>();
+    freeze_owner_port::<DistributionRepositoryActionBindingOwnerV1<117>>();
+    freeze_owner_port::<SearchMaintenanceRepositoryActionBindingOwnerV1<130>>();
+    freeze_owner_port::<MemoryRepositoryActionBindingOwnerV1<132>>();
+    freeze_owner_port::<IntakeRepositoryActionBindingOwnerV1<139>>();
+    freeze_owner_port::<ResearchRepositoryActionBindingOwnerV1<142>>();
 }
 
 pub(in crate::domain::vnext::authority) struct VerifiedSchedulingPolicyDowngradeMandateUseV1<'tx> {
@@ -580,7 +619,7 @@ pub(in crate::domain::vnext) trait RepositoryActionBindingKindV1:
 }
 
 macro_rules! owner_binding_kind {
-    ($type:ident, $authority:ty, $first:literal..=$last:literal) => {
+    ($type:ident, $authority:ty, $first:literal..=$last:literal, $future:meta) => {
         pub(in crate::domain::vnext) struct $type<const GLOBAL_TAG: u64>;
 
         impl<const GLOBAL_TAG: u64> owner_sealed::Sealed for $type<GLOBAL_TAG> {}
@@ -637,42 +676,71 @@ macro_rules! owner_binding_kind {
 owner_binding_kind!(
     CoordinationRepositoryActionBindingOwnerV1,
     CoordinationRepositoryActionAuthorityV1,
-    94..=102
+    94..=102,
+    expect(
+        dead_code,
+        reason = "Stage 7 Coordination binding port is frozen before integration"
+    )
 );
 owner_binding_kind!(
     PlanningRepositoryActionBindingOwnerV1,
     PlanningRepositoryActionAuthorityV1,
-    103..=106
+    103..=106,
+    cfg(all())
 );
 owner_binding_kind!(
     PersistenceRepositoryActionBindingOwnerV1,
     PersistenceRepositoryActionAuthorityV1,
-    107..=116
+    107..=116,
+    expect(
+        dead_code,
+        reason = "Stage 7 Persistence binding port is frozen before integration"
+    )
 );
 owner_binding_kind!(
     DistributionRepositoryActionBindingOwnerV1,
     DistributionRepositoryActionAuthorityV1,
-    117..=129
+    117..=129,
+    expect(
+        dead_code,
+        reason = "Stage 7 Distribution binding port is frozen before integration"
+    )
 );
 owner_binding_kind!(
     SearchMaintenanceRepositoryActionBindingOwnerV1,
     SearchMaintenanceRepositoryActionAuthorityV1,
-    130..=131
+    130..=131,
+    expect(
+        dead_code,
+        reason = "Stage 7 Search binding port is frozen before integration"
+    )
 );
 owner_binding_kind!(
     MemoryRepositoryActionBindingOwnerV1,
     MemoryRepositoryActionAuthorityV1,
-    132..=138
+    132..=138,
+    expect(
+        dead_code,
+        reason = "Stage 7 Memory binding port is frozen before integration"
+    )
 );
 owner_binding_kind!(
     IntakeRepositoryActionBindingOwnerV1,
     IntakeRepositoryActionAuthorityV1,
-    139..=141
+    139..=141,
+    expect(
+        dead_code,
+        reason = "Stage 7 Intake binding port is frozen before integration"
+    )
 );
 owner_binding_kind!(
     ResearchRepositoryActionBindingOwnerV1,
     ResearchRepositoryActionAuthorityV1,
-    142..=145
+    142..=145,
+    expect(
+        dead_code,
+        reason = "Stage 7 Research binding port is frozen before integration"
+    )
 );
 
 pub(in crate::domain::vnext) type SchedulingPolicyBindingOwnerV1 =
@@ -680,6 +748,7 @@ pub(in crate::domain::vnext) type SchedulingPolicyBindingOwnerV1 =
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::domain::vnext) struct RepositoryActionBindingFactsV1 {
+    policy_meaning: SchedulingPolicyMeaningV1,
     pub(crate) authority_selection: RepositoryAuthoritySelectionV1,
     pub(crate) request_id: ActionRequestIdV1,
     pub(crate) action: RepositoryActionLeafV1,
@@ -900,11 +969,21 @@ fn validate_scheduling_policy_binding(
     mandate_required: bool,
 ) -> Result<(), AuthorityMaterializationErrorV1> {
     validate_repository_action_binding::<SchedulingPolicyBindingOwnerV1>(facts, admission)?;
-    if mandate_required
-        != facts
-            .supplemental_mandate_diff_class
-            .requires_downgrade_mandate()
+    let derived = derive_policy_relation(facts.policy_meaning)?;
+    if mandate_required != derived.requires_downgrade_mandate()
+        || derived != facts.supplemental_mandate_diff_class
         || mandate_required != facts.supplemental_mandate_id.is_some()
+        || !policy_commitments_match(
+            facts.policy_meaning,
+            facts.current_policy_commitment,
+            facts.candidate_policy_commitment,
+            facts.evaluator_commitment,
+            facts.complete_diff_commitment,
+            facts.classifier_commitment,
+            facts.classifier_revision_commitment,
+            facts.safety_floor_commitment,
+            facts.governance_floor_commitment,
+        )
     {
         return Err(AuthorityMaterializationErrorV1::BindingMismatch);
     }
@@ -957,7 +1036,20 @@ fn validate_scheduling_policy_downgrade_mandate(
         facts.mandate_atom_commitment,
         facts.successor_capacity_commitment,
     ];
-    if !facts.diff_class.requires_downgrade_mandate()
+    let derived = derive_policy_relation(facts.policy_meaning)?;
+    if !derived.requires_downgrade_mandate()
+        || derived != facts.diff_class
+        || !policy_commitments_match(
+            facts.policy_meaning,
+            facts.current_policy_commitment,
+            facts.candidate_policy_commitment,
+            facts.evaluator_commitment,
+            facts.complete_diff_commitment,
+            facts.classifier_commitment,
+            facts.classifier_revision_commitment,
+            facts.safety_floor_commitment,
+            facts.governance_floor_commitment,
+        )
         || commitments.contains(&[0; 32])
         || facts.current_policy_commitment == facts.candidate_policy_commitment
         || facts.mandate_schema_version == 0
@@ -969,6 +1061,115 @@ fn validate_scheduling_policy_downgrade_mandate(
         return Err(AuthorityMaterializationErrorV1::InvalidMandate);
     }
     Ok(())
+}
+
+fn policy_commitment(domain: &[u8], rows: &[u64]) -> [u8; 32] {
+    use sha2::{Digest, Sha256};
+
+    let mut writer = Sha256::new();
+    writer.update(domain);
+    writer.update((rows.len() as u64).to_be_bytes());
+    for row in rows {
+        writer.update(row.to_be_bytes());
+    }
+    writer.finalize().into()
+}
+
+fn derive_policy_relation(
+    meaning: SchedulingPolicyMeaningV1,
+) -> Result<SchedulingPolicyDiffClassV1, AuthorityMaterializationErrorV1> {
+    if meaning.evaluator_revision == 0
+        || meaning.classifier_revision == 0
+        || meaning
+            .candidate_rules
+            .iter()
+            .zip(meaning.safety_floor)
+            .any(|(candidate, floor)| *candidate < floor)
+        || meaning
+            .candidate_rules
+            .iter()
+            .zip(meaning.governance_floor)
+            .any(|(candidate, floor)| *candidate < floor)
+    {
+        return Err(AuthorityMaterializationErrorV1::InvalidMandate);
+    }
+    let greater = meaning
+        .candidate_rules
+        .iter()
+        .zip(meaning.current_rules)
+        .any(|(candidate, current)| *candidate > current);
+    let lower = meaning
+        .candidate_rules
+        .iter()
+        .zip(meaning.current_rules)
+        .any(|(candidate, current)| *candidate < current);
+    Ok(match (greater, lower) {
+        (false, false) => SchedulingPolicyDiffClassV1::Equivalent,
+        (true, false) => SchedulingPolicyDiffClassV1::Strengthening,
+        (false, true) => SchedulingPolicyDiffClassV1::Weakening,
+        (true, true) => SchedulingPolicyDiffClassV1::Incomparable,
+    })
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the closed Authority policy tuple is intentionally compared field-for-field"
+)]
+fn policy_commitments_match(
+    meaning: SchedulingPolicyMeaningV1,
+    current: [u8; 32],
+    candidate: [u8; 32],
+    evaluator: [u8; 32],
+    complete_diff: [u8; 32],
+    classifier: [u8; 32],
+    classifier_revision: [u8; 32],
+    safety_floor: [u8; 32],
+    governance_floor: [u8; 32],
+) -> bool {
+    current
+        == policy_commitment(
+            b"maestro.authority.scheduling-current-policy.v1\0",
+            &meaning.current_rules,
+        )
+        && candidate
+            == policy_commitment(
+                b"maestro.authority.scheduling-candidate-policy.v1\0",
+                &meaning.candidate_rules,
+            )
+        && evaluator
+            == policy_commitment(
+                b"maestro.authority.scheduling-evaluator.v1\0",
+                &[meaning.evaluator_revision],
+            )
+        && complete_diff
+            == policy_commitment(
+                b"maestro.authority.scheduling-complete-diff.v1\0",
+                &[
+                    meaning.current_rules.as_slice(),
+                    meaning.candidate_rules.as_slice(),
+                ]
+                .concat(),
+            )
+        && classifier
+            == policy_commitment(
+                b"maestro.authority.scheduling-classifier.v1\0",
+                &[meaning.classifier_revision],
+            )
+        && classifier_revision
+            == policy_commitment(
+                b"maestro.authority.scheduling-classifier-revision.v1\0",
+                &[meaning.classifier_revision],
+            )
+        && safety_floor
+            == policy_commitment(
+                b"maestro.authority.scheduling-safety-floor.v1\0",
+                &meaning.safety_floor,
+            )
+        && governance_floor
+            == policy_commitment(
+                b"maestro.authority.scheduling-governance-floor.v1\0",
+                &meaning.governance_floor,
+            )
 }
 
 #[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
@@ -1001,8 +1202,21 @@ mod tests {
         )
     }
 
+    fn policy_meaning() -> SchedulingPolicyMeaningV1 {
+        SchedulingPolicyMeaningV1 {
+            current_rules: [5, 5, 5, 5],
+            candidate_rules: [4, 4, 4, 4],
+            safety_floor: [1, 1, 1, 1],
+            governance_floor: [2, 2, 2, 2],
+            evaluator_revision: 3,
+            classifier_revision: 4,
+        }
+    }
+
     fn facts() -> SchedulingPolicyDowngradeMandateFactsV1 {
+        let policy_meaning = policy_meaning();
         SchedulingPolicyDowngradeMandateFactsV1 {
+            policy_meaning,
             mandate_id: MandateIdV1::derive("materialization-mandate").unwrap(),
             action_request_id: request(),
             idempotency_key: IdempotencyKeyIdV1::derive("materialization-idempotency").unwrap(),
@@ -1026,14 +1240,42 @@ mod tests {
             store_instance_commitment: [5; 32],
             head_commitment: [6; 32],
             expected_old_binding_commitment: [7; 32],
-            current_policy_commitment: [8; 32],
-            candidate_policy_commitment: [9; 32],
-            evaluator_commitment: [10; 32],
-            complete_diff_commitment: [11; 32],
-            classifier_commitment: [12; 32],
-            classifier_revision_commitment: [13; 32],
-            safety_floor_commitment: [14; 32],
-            governance_floor_commitment: [15; 32],
+            current_policy_commitment: policy_commitment(
+                b"maestro.authority.scheduling-current-policy.v1\0",
+                &policy_meaning.current_rules,
+            ),
+            candidate_policy_commitment: policy_commitment(
+                b"maestro.authority.scheduling-candidate-policy.v1\0",
+                &policy_meaning.candidate_rules,
+            ),
+            evaluator_commitment: policy_commitment(
+                b"maestro.authority.scheduling-evaluator.v1\0",
+                &[policy_meaning.evaluator_revision],
+            ),
+            complete_diff_commitment: policy_commitment(
+                b"maestro.authority.scheduling-complete-diff.v1\0",
+                &[
+                    policy_meaning.current_rules.as_slice(),
+                    policy_meaning.candidate_rules.as_slice(),
+                ]
+                .concat(),
+            ),
+            classifier_commitment: policy_commitment(
+                b"maestro.authority.scheduling-classifier.v1\0",
+                &[policy_meaning.classifier_revision],
+            ),
+            classifier_revision_commitment: policy_commitment(
+                b"maestro.authority.scheduling-classifier-revision.v1\0",
+                &[policy_meaning.classifier_revision],
+            ),
+            safety_floor_commitment: policy_commitment(
+                b"maestro.authority.scheduling-safety-floor.v1\0",
+                &policy_meaning.safety_floor,
+            ),
+            governance_floor_commitment: policy_commitment(
+                b"maestro.authority.scheduling-governance-floor.v1\0",
+                &policy_meaning.governance_floor,
+            ),
             request_payload_commitment: [16; 32],
             idempotency_meaning_commitment: [17; 32],
             idempotency_mapping_commitment: [43; 32],
@@ -1067,6 +1309,7 @@ mod tests {
 
     fn binding_facts() -> RepositoryActionBindingFactsV1 {
         RepositoryActionBindingFactsV1 {
+            policy_meaning: facts().policy_meaning,
             authority_selection: selection(),
             request_id: request(),
             action: SchedulingPolicyBindingOwnerV1::ACTION,
@@ -1145,6 +1388,28 @@ mod tests {
         diff_class: SchedulingPolicyDiffClassV1,
     ) -> RepositoryActionBindingFactsV1 {
         let mut facts = binding_facts();
+        facts.policy_meaning.candidate_rules = match diff_class {
+            SchedulingPolicyDiffClassV1::Equivalent => facts.policy_meaning.current_rules,
+            SchedulingPolicyDiffClassV1::Strengthening => [6, 6, 6, 6],
+            SchedulingPolicyDiffClassV1::Weakening => [4, 4, 4, 4],
+            SchedulingPolicyDiffClassV1::Incomparable => [6, 4, 6, 4],
+        };
+        facts.current_policy_commitment = policy_commitment(
+            b"maestro.authority.scheduling-current-policy.v1\0",
+            &facts.policy_meaning.current_rules,
+        );
+        facts.candidate_policy_commitment = policy_commitment(
+            b"maestro.authority.scheduling-candidate-policy.v1\0",
+            &facts.policy_meaning.candidate_rules,
+        );
+        facts.complete_diff_commitment = policy_commitment(
+            b"maestro.authority.scheduling-complete-diff.v1\0",
+            &[
+                facts.policy_meaning.current_rules.as_slice(),
+                facts.policy_meaning.candidate_rules.as_slice(),
+            ]
+            .concat(),
+        );
         facts.supplemental_mandate_id = None;
         facts.supplemental_mandate_schema_version = 0;
         facts.supplemental_mandate_valid_from = 0;
@@ -1306,10 +1571,10 @@ mod tests {
             variant.diff_class = diff_class;
             let transaction =
                 AuthorityMaterializationTransactionV1::for_test(facts().repository_generation_id);
-            assert_eq!(
-                transaction.mint_mandate(variant).is_ok(),
-                diff_class == SchedulingPolicyDiffClassV1::Incomparable
-            );
+            assert!(matches!(
+                transaction.mint_mandate(variant),
+                Err(AuthorityMaterializationErrorV1::InvalidMandate)
+            ));
         }
     }
 

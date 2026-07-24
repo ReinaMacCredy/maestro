@@ -70,6 +70,8 @@ pub(in crate::domain::vnext) struct ConsumerClosureFinalityFactsV1 {
     owner_operation: [u8; 32],
     stage_proof_commitment: [u8; 32],
     expected_old_cas: [u8; 32],
+    consumer_set_id: [u8; 32],
+    association_gate_result: [u8; 32],
 }
 
 pub(in crate::domain::vnext) struct PreCurrentnessClosureProofV1 {
@@ -218,6 +220,7 @@ impl PhysicalPruningClosureProofV1 {
 
 pub(in crate::domain::vnext) struct ConsumerClosureFinalityGuardV1<'view, 'connection, S, H, K> {
     owner_operation: [u8; 32],
+    consumer_set_id: [u8; 32],
     store: ConsumerSnapshotCurrentViewLeaseV1<'view, S>,
     host: HostConsumerAdmissionGuardV1<'connection, H>,
     _stage: PhantomData<K>,
@@ -230,34 +233,54 @@ impl<
     K: ConsumerClosureStageV1,
 > ConsumerClosureFinalityGuardV1<'_, '_, S, H, K>
 {
+    fn expected_old_cas(&self) -> [u8; 32] {
+        self.store.initial().expected_old_cas()
+    }
+
     fn linearize(
         mut self,
         stage_proof_commitment: [u8; 32],
         expected_old_cas: [u8; 32],
-        durable_effect: impl FnOnce() -> Result<(), InstallationConsumerSnapshotErrorV1>,
-    ) -> Result<(), InstallationConsumerSnapshotErrorV1> {
+        durable_effect: impl FnOnce(
+            [u8; 32],
+            [u8; 32],
+        ) -> Result<[u8; 32], InstallationConsumerSnapshotErrorV1>,
+    ) -> Result<[u8; 32], InstallationConsumerSnapshotErrorV1> {
         if stage_proof_commitment == [0; 32] || expected_old_cas == [0; 32] {
             return Err(InstallationConsumerSnapshotErrorV1::FinalityMismatch);
         }
         self.host.recheck_current()?;
         let current = self.store.recheck_current()?;
-        if current.owner_stage_tag() != K::TAG || current.owner_operation() != self.owner_operation
+        if current.owner_stage_tag() != K::TAG
+            || current.owner_operation() != self.owner_operation
+            || current.expected_old_cas() != expected_old_cas
         {
             return Err(InstallationConsumerSnapshotErrorV1::OwnerStageMismatch);
         }
-        durable_effect()?;
-        Ok(())
+        let association_gate_result = durable_effect(expected_old_cas, self.consumer_set_id)?;
+        self.host.recheck_current()?;
+        let after = self.store.recheck_current()?;
+        if after.expected_old_cas() != expected_old_cas
+            || association_gate_result != self.consumer_set_id
+        {
+            return Err(InstallationConsumerSnapshotErrorV1::FinalityMismatch);
+        }
+        Ok(association_gate_result)
     }
 
     fn finality(
-        &self,
+        owner_operation: [u8; 32],
+        consumer_set_id: [u8; 32],
         stage_proof_commitment: [u8; 32],
         expected_old_cas: [u8; 32],
+        association_gate_result: [u8; 32],
     ) -> ConsumerClosureFinalityFactsV1 {
         ConsumerClosureFinalityFactsV1 {
-            owner_operation: self.owner_operation,
+            owner_operation,
             stage_proof_commitment,
             expected_old_cas,
+            consumer_set_id,
+            association_gate_result,
         }
     }
 
@@ -265,14 +288,26 @@ impl<
         self,
         proof: PreCurrentnessClosureProofV1,
         expected_old_cas: [u8; 32],
-        durable_effect: impl FnOnce() -> Result<(), InstallationConsumerSnapshotErrorV1>,
+        durable_effect: impl FnOnce(
+            [u8; 32],
+            [u8; 32],
+        ) -> Result<[u8; 32], InstallationConsumerSnapshotErrorV1>,
     ) -> Result<ConsumerClosureFinalityFactsV1, InstallationConsumerSnapshotErrorV1> {
         if K::TAG != PreCurrentnessConsumerStageV1::TAG {
             return Err(InstallationConsumerSnapshotErrorV1::FinalityMismatch);
         }
         let commitment = proof.commitment();
-        let finality = self.finality(commitment, expected_old_cas);
-        self.linearize(commitment, expected_old_cas, durable_effect)?;
+        let owner_operation = self.owner_operation;
+        let consumer_set_id = self.consumer_set_id;
+        let association_gate_result =
+            self.linearize(commitment, expected_old_cas, durable_effect)?;
+        let finality = Self::finality(
+            owner_operation,
+            consumer_set_id,
+            commitment,
+            expected_old_cas,
+            association_gate_result,
+        );
         Ok(finality)
     }
 
@@ -280,14 +315,26 @@ impl<
         self,
         proof: ProtectedRetentionClosureProofV1,
         expected_old_cas: [u8; 32],
-        durable_effect: impl FnOnce() -> Result<(), InstallationConsumerSnapshotErrorV1>,
+        durable_effect: impl FnOnce(
+            [u8; 32],
+            [u8; 32],
+        ) -> Result<[u8; 32], InstallationConsumerSnapshotErrorV1>,
     ) -> Result<ConsumerClosureFinalityFactsV1, InstallationConsumerSnapshotErrorV1> {
         if K::TAG != ProtectedRetentionConsumerStageV1::TAG {
             return Err(InstallationConsumerSnapshotErrorV1::FinalityMismatch);
         }
         let commitment = proof.commitment();
-        let finality = self.finality(commitment, expected_old_cas);
-        self.linearize(commitment, expected_old_cas, durable_effect)?;
+        let owner_operation = self.owner_operation;
+        let consumer_set_id = self.consumer_set_id;
+        let association_gate_result =
+            self.linearize(commitment, expected_old_cas, durable_effect)?;
+        let finality = Self::finality(
+            owner_operation,
+            consumer_set_id,
+            commitment,
+            expected_old_cas,
+            association_gate_result,
+        );
         Ok(finality)
     }
 
@@ -295,14 +342,26 @@ impl<
         self,
         proof: PhysicalPruningClosureProofV1,
         expected_old_cas: [u8; 32],
-        durable_effect: impl FnOnce() -> Result<(), InstallationConsumerSnapshotErrorV1>,
+        durable_effect: impl FnOnce(
+            [u8; 32],
+            [u8; 32],
+        ) -> Result<[u8; 32], InstallationConsumerSnapshotErrorV1>,
     ) -> Result<ConsumerClosureFinalityFactsV1, InstallationConsumerSnapshotErrorV1> {
         if K::TAG != PhysicalPruningConsumerStageV1::TAG {
             return Err(InstallationConsumerSnapshotErrorV1::FinalityMismatch);
         }
         let commitment = proof.commitment();
-        let finality = self.finality(commitment, expected_old_cas);
-        self.linearize(commitment, expected_old_cas, durable_effect)?;
+        let owner_operation = self.owner_operation;
+        let consumer_set_id = self.consumer_set_id;
+        let association_gate_result =
+            self.linearize(commitment, expected_old_cas, durable_effect)?;
+        let finality = Self::finality(
+            owner_operation,
+            consumer_set_id,
+            commitment,
+            expected_old_cas,
+            association_gate_result,
+        );
         Ok(finality)
     }
 }
@@ -371,6 +430,7 @@ impl<
             .owner_operation
             .linearize(ConsumerClosureFinalityGuardV1 {
                 owner_operation: initial_owner_operation,
+                consumer_set_id: self.consumer_set_id,
                 store: self.store,
                 host: self.host,
                 _stage: PhantomData,
@@ -425,6 +485,8 @@ fn finality_commitment<K: ConsumerClosureStageV1>(
     hasher.update(finality.owner_operation);
     hasher.update(finality.stage_proof_commitment);
     hasher.update(finality.expected_old_cas);
+    hasher.update(finality.consumer_set_id);
+    hasher.update(finality.association_gate_result);
     hasher.finalize().into()
 }
 
@@ -490,27 +552,28 @@ mod tests {
             self,
             guard: ConsumerClosureFinalityGuardV1<'_, '_, S, H, K>,
         ) -> Result<ConsumerClosureFinalityFactsV1, InstallationConsumerSnapshotErrorV1> {
+            let expected_old_cas = guard.expected_old_cas();
             match K::TAG {
                 1 => guard.linearize_pre_currentness_association(
                     PreCurrentnessClosureProofV1::from_owner_proof(
                         &self, [81; 32], [82; 32], [83; 32],
                     )?,
-                    [90; 32],
-                    || Ok(()),
+                    expected_old_cas,
+                    |_, consumer_set_id| Ok(consumer_set_id),
                 ),
                 2 => guard.linearize_protected_retention(
                     ProtectedRetentionClosureProofV1::from_owner_proof(
                         &self, [84; 32], [85; 32], [86; 32],
                     )?,
-                    [90; 32],
-                    || Ok(()),
+                    expected_old_cas,
+                    |_, consumer_set_id| Ok(consumer_set_id),
                 ),
                 3 => guard.linearize_physical_pruning(
                     PhysicalPruningClosureProofV1::from_owner_proof(
                         &self, [87; 32], [88; 32], [89; 32], [91; 32], [92; 32], [93; 32], [94; 32],
                     )?,
-                    [90; 32],
-                    || Ok(()),
+                    expected_old_cas,
+                    |_, consumer_set_id| Ok(consumer_set_id),
                 ),
                 _ => Err(InstallationConsumerSnapshotErrorV1::FinalityMismatch),
             }
@@ -538,14 +601,15 @@ mod tests {
             self,
             guard: ConsumerClosureFinalityGuardV1<'_, '_, S, H, PreCurrentnessConsumerStageV1>,
         ) -> Result<ConsumerClosureFinalityFactsV1, InstallationConsumerSnapshotErrorV1> {
+            let expected_old_cas = guard.expected_old_cas();
             guard.linearize_pre_currentness_association(
                 PreCurrentnessClosureProofV1::from_owner_proof(
                     &self, [81; 32], [82; 32], [83; 32],
                 )?,
-                [90; 32],
-                || {
+                expected_old_cas,
+                |_, consumer_set_id| {
                     self.effects.set(self.effects.get() + 1);
-                    Ok(())
+                    Ok(consumer_set_id)
                 },
             )
         }

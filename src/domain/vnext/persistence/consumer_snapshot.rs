@@ -86,6 +86,15 @@ impl ConsumerSnapshotCurrentFactsV1 {
         }
     }
 
+    pub(in crate::domain::vnext) const fn expected_old_cas(&self) -> [u8; 32] {
+        match self {
+            Self::ActiveStore { head_revision, .. } => *head_revision,
+            Self::PreStore {
+                expected_old_cas, ..
+            } => *expected_old_cas,
+        }
+    }
+
     pub(in crate::domain::vnext) fn census_rows(&self) -> &[[u8; 32]] {
         match self {
             Self::ActiveStore { census_rows, .. } => census_rows,

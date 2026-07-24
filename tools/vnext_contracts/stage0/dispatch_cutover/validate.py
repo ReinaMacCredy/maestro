@@ -371,6 +371,7 @@ def main() -> int:
     parser.add_argument("--root", type=Path, default=DEFAULT_CONTRACT)
     parser.add_argument("--mutant-suite", action="store_true")
     parser.add_argument("--no-write", action="store_true")
+    parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     contract = args.root.resolve()
     try:
@@ -402,8 +403,14 @@ def main() -> int:
         },
     }
     output = json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n"
-    if not args.no_write:
-        (contract / "validation-receipt.v1.json").write_text(output, encoding="ascii")
+    receipt_path = contract / "validation-receipt.v1.json"
+    if args.check:
+        require(
+            receipt_path.is_file() and receipt_path.read_bytes() == output.encode("ascii"),
+            "dispatch-cutover validation receipt drifted or is missing",
+        )
+    elif not args.no_write:
+        receipt_path.write_text(output, encoding="ascii")
     print(output, end="")
     return 0
 

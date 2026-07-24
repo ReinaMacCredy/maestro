@@ -16,16 +16,6 @@ mod facade;
 mod grant;
 mod identity;
 mod mandate;
-// TODO(Authority Stage 7/8): Remove this expectation on or after 2026-07-24 when
-// the Planning and repository-owner materialization consumers integrate and call
-// the frozen owner-private port in production.
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "Stage 5 freezes the owner-private Authority materialization port before its Stage 7/8 consumers integrate"
-    )
-)]
 pub(crate) mod materialization;
 mod post_cut;
 mod principal;

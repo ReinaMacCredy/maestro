@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import copy
+import argparse
 import hashlib
 import json
 import os
@@ -97,6 +98,9 @@ def write_documents(root: Path, external: dict[str, object], decision: dict[str,
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
     baseline_python = command([sys.executable, str(PYTHON)], CONTRACT)
     baseline_ruby = command(["/usr/bin/ruby", str(RUBY)], CONTRACT)
     if baseline_python.returncode or baseline_ruby.returncode:
@@ -139,7 +143,13 @@ def main() -> int:
         "mutants": {"cases": mutant_names, "rejected": rejected, "total": sum(rejected.values())},
         "validator_sha256": {"python": hashlib.sha256(PYTHON.read_bytes()).hexdigest(), "ruby": hashlib.sha256(RUBY.read_bytes()).hexdigest()},
     }
-    (CONTRACT / "encoder-receipt.v1.json").write_text(json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n", encoding="ascii")
+    receipt_bytes = (json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n").encode("ascii")
+    receipt_path = CONTRACT / "encoder-receipt.v1.json"
+    if args.check:
+        if not receipt_path.is_file() or receipt_path.read_bytes() != receipt_bytes:
+            raise SystemExit("decision-closure encoder receipt drifted or is missing")
+    else:
+        receipt_path.write_bytes(receipt_bytes)
     print(json.dumps(receipt, sort_keys=True, separators=(",", ":")))
     return 0
 

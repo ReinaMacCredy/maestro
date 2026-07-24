@@ -170,6 +170,46 @@ def main() -> None:
         else:
             raise SystemExit("descriptor capture accepted packet-directory replacement")
 
+        in_place = root / "in-place"
+        in_place.mkdir()
+        in_place_artifact = in_place / "artifact"
+        in_place_artifact.write_bytes(b"captured\n")
+        in_place_artifact.chmod(0o600)
+
+        def mutate_in_place(name: str) -> None:
+            if name == "artifact":
+                in_place_artifact.write_bytes(b"mutated!\n")
+
+        try:
+            verifier.descriptor_capture_directory(
+                in_place, after_file_read_for_test=mutate_in_place
+            )
+        except (OSError, SystemExit):
+            pass
+        else:
+            raise SystemExit("descriptor capture accepted in-place packet mutation")
+
+        for label, action in (
+            (
+                "approval record order",
+                lambda: verifier.require_record_order("approval", [2, 1, 3]),
+            ),
+            (
+                "packet publication order",
+                lambda: verifier.require_record_order("packet", [9, 9]),
+            ),
+            (
+                "publication before approval",
+                lambda: verifier.require_strictly_before("publication", 10, 10),
+            ),
+        ):
+            try:
+                action()
+            except SystemExit:
+                pass
+            else:
+                raise SystemExit(f"successor verifier omitted {label} guard")
+
         fake_ruby = root / "ruby"
         fake_ruby.write_bytes(b"#!/bin/sh\nexit 0\n")
         fake_ruby.chmod(0o500)

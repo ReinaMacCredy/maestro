@@ -22,7 +22,8 @@ RUBY_RECEIPT_KEYS = %w[
   source_closure_sha256 verifier_sha256
 ].sort.freeze
 SOURCE_PATHS = %w[
-  Cargo.toml Cargo.lock build.rs src/lib.rs src/domain/mod.rs src/domain/vnext/mod.rs
+    Cargo.toml Cargo.lock build.rs src/lib.rs src/domain/mod.rs src/domain/vnext/mod.rs
+    src/foundation/core/mod.rs
   contracts/vnext/catalogs/generated/catalog-01-observation.json
   contracts/vnext/catalogs/generated/catalog-09-action-spec.json
   src/domain/vnext/authority/action_basis.rs src/domain/vnext/authority/facade.rs

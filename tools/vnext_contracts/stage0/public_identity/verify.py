@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import copy
+import argparse
 import hashlib
 import json
 import os
@@ -262,6 +263,9 @@ def materialize_mutant(root: Path, value: dict[str, Any]) -> None:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
     authoritative = {
         key: value
         for key, value in os.environ.items()
@@ -326,9 +330,13 @@ def main() -> int:
         "current_live_equality": validation["current_live_equality"],
         "stage11_recensus_required": validation["stage11_recensus_required"],
     }
-    (ARTIFACT / "encoder-receipt.v1.json").write_text(
-        json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
+    receipt_bytes = (json.dumps(receipt, indent=2, sort_keys=True) + "\n").encode()
+    receipt_path = ARTIFACT / "encoder-receipt.v1.json"
+    if args.check:
+        if not receipt_path.is_file() or receipt_path.read_bytes() != receipt_bytes:
+            raise SystemExit("public-identity encoder receipt drifted or is missing")
+    else:
+        receipt_path.write_bytes(receipt_bytes)
     print(json.dumps(receipt, sort_keys=True))
     return 0
 
