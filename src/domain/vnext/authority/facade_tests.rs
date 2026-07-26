@@ -9,17 +9,18 @@ use sha2::{Digest, Sha256};
 
 use super::*;
 use crate::domain::vnext::authority::{
-    AuthorityRevocationSetV1, AuthoritySnapshotV1, AuthorityUseConstraintV1,
+    AuthorityMandateV1, AuthorityRevocationSetV1, AuthoritySnapshotV1, AuthorityUseConstraintV1,
     BootstrapContinuityTransitionProofV1, BootstrapG0PathV1, BootstrapInteractionSubjectV1,
-    BootstrapMandateInteractionObservationJoinV1, BootstrapMandatePresentationObservationV1,
-    BootstrapMandateResponseObservationV1, BootstrapMandateTargetV1,
-    BootstrapResponseDispositionV1, CapacityRootIdV1, ConsentSlotEvaluationFactsV1, DelegationIdV1,
-    DelegationV1, GenesisGrantIdV1, GovernedCapacityKindV1, GovernedCapacityRootV1,
-    GrantActionIdentityV1, GrantAdministrationAuthorityV1, GrantDefinitionV1, GrantIdV1,
-    GrantScopeV1, HalfOpenValidityV1, IdempotencyKeyIdV1, IssueBootstrapMandateInputV1,
-    IssueBootstrapMandateRequestV1, IssueRootAttachedBoundedGrantPublicationV1,
-    OrdinaryBoundedGrantV1, OrdinaryGrantDelegationV1, PrincipalBindingIdV1, PrincipalBindingV1,
-    PrincipalIdV1, ReissueRootAttachedGrantOneToOnePublicationV1, RepositoryDownstreamActionLeafV1,
+    BootstrapMandateInteractionObservationJoinV1, BootstrapMandateIssuanceBindingV1,
+    BootstrapMandatePresentationObservationV1, BootstrapMandateResponseObservationV1,
+    BootstrapMandateTargetV1, BootstrapResponseDispositionV1, CapacityRootIdV1,
+    ConsentSlotEvaluationFactsV1, DelegationIdV1, DelegationV1, GenesisGrantIdV1,
+    GovernedCapacityKindV1, GovernedCapacityRootV1, GrantActionIdentityV1,
+    GrantAdministrationAuthorityV1, GrantDefinitionV1, GrantIdV1, GrantScopeV1, HalfOpenValidityV1,
+    IdempotencyKeyIdV1, IssueBootstrapMandateInputV1, IssueBootstrapMandateRequestV1,
+    IssueRootAttachedBoundedGrantPublicationV1, OrdinaryBoundedGrantV1, OrdinaryGrantDelegationV1,
+    PrincipalBindingIdV1, PrincipalBindingV1, PrincipalIdV1,
+    ReissueRootAttachedGrantOneToOnePublicationV1, RepositoryDownstreamActionLeafV1,
     RepositoryGovernedCapacitySlotKindV1, RevocationSetV1, RevocationTargetV1,
     RevokeGrantPublicationV1, ScopeAtomV1, SessionIdV1, SessionV1, TargetActionEffectKindV1,
     TargetActionOwnerV1, TargetActionProjectionV1, TargetActionProtocolV1, TargetExpectedHeadsV1,
@@ -1278,14 +1279,6 @@ fn scheduling_materialization_is_one_atomic_authority_operation() {
             [1, 1, 1, 1],
             1,
             1,
-            MandateIdV1::derive("unneeded-scheduling-mandate").unwrap(),
-            StoreObjectIdV1::from_digest(digest("unneeded-scheduling-mandate-body")),
-            StoreObjectIdV1::from_digest(digest("unneeded-scheduling-mandate-carrier")),
-            StoreObjectIdV1::from_digest(digest("unneeded-scheduling-mandate-nonce")),
-            StoreObjectIdV1::from_digest(digest("unneeded-scheduling-mandate-atom")),
-            110,
-            190,
-            1,
         ),
         Err(AuthorityMaterializationPublicationErrorV1::Prepare(
             SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput
@@ -1346,6 +1339,193 @@ fn scheduling_materialization_is_one_atomic_authority_operation() {
         !materialization_source
             .contains("pub(crate) struct SchedulingPolicyDowngradeMandateFactsV1")
     );
+
+    drop(store);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn scheduling_downgrade_resolves_and_consumes_one_live_stored_mandate() {
+    use super::test_support::{AuthorityFixtureModeV1, repository_owner_family_authority_fixture};
+
+    let action = RepositoryDownstreamActionLeafV1::PUBLISH_SCHEDULING_POLICY_BINDING;
+    let subject = digest("scheduling-downgrade-subject");
+    let owner_basis = digest("scheduling-downgrade-owner-basis");
+    let mut fixture = repository_owner_family_authority_fixture(
+        vec![(action.literal(), subject)],
+        AuthorityFixtureModeV1::Valid,
+    );
+    let request_object = StoreObjectV1::new(
+        RepositoryStoreSchemaV1::WorkRecord.schema_id().unwrap(),
+        CborValue::text("scheduling-downgrade-request").unwrap(),
+        vec![],
+    )
+    .unwrap();
+    let binding_object = StoreObjectV1::new(
+        RepositoryStoreSchemaV1::WorkRecord.schema_id().unwrap(),
+        CborValue::text("scheduling-downgrade-binding").unwrap(),
+        vec![],
+    )
+    .unwrap();
+    let authority_root = fixture.authority_root_id;
+    let snapshot_object = one_schema_object(
+        &fixture.objects,
+        AuthoritySchemaV1::BootstrapAuthoritySnapshot,
+    )
+    .unwrap();
+    let snapshot = BootstrapAuthoritySnapshotV1::from_canonical_bytes(
+        &object_value_bytes(&snapshot_object).unwrap(),
+    )
+    .unwrap();
+    let consent_object = one_schema_object(
+        &fixture.objects,
+        AuthoritySchemaV1::ConsentSlotBindingParameter,
+    )
+    .unwrap();
+    let interaction_closure = digest("scheduling-downgrade-interaction-closure");
+    let mandate_value = CborValue::Array(vec![
+        CborValue::text(AuthorityMandateV1::SCHEMA_DOMAIN).unwrap(),
+        CborValue::Bytes(snapshot.context().context_id().as_bytes().to_vec()),
+        CborValue::text(action.literal()).unwrap(),
+        CborValue::text(scheduling_policy_mandate_subject(binding_object.id())).unwrap(),
+        CborValue::Unsigned(1),
+        consent_object.value().clone(),
+        CborValue::Bytes(snapshot.responder_binding().id().as_bytes().to_vec()),
+        CborValue::Unsigned(snapshot.responder_binding().assurance_revision()),
+        CborValue::Bytes(interaction_closure.to_vec()),
+        CborValue::Bytes(owner_basis.to_vec()),
+        CborValue::Unsigned(110),
+        CborValue::Unsigned(190),
+        CborValue::Unsigned(1),
+        CborValue::Unsigned(0),
+    ]);
+    let mandate_object = authority_object(
+        AuthoritySchemaV1::AuthorityMandate,
+        mandate_value,
+        vec![consent_object.id(), authority_root],
+    )
+    .unwrap();
+    let mandate_id = MandateIdV1::from_digest(
+        Sha256::digest(object_value_bytes(&mandate_object).unwrap()).into(),
+    );
+    let carrier_object = authority_object(
+        AuthoritySchemaV1::BootstrapMandateIssuanceBinding,
+        CborValue::Array(vec![
+            CborValue::text(BootstrapMandateIssuanceBindingV1::SCHEMA_DOMAIN).unwrap(),
+            CborValue::Bytes(mandate_id.as_bytes().to_vec()),
+            CborValue::Bytes(
+                materialization_commitment(
+                    b"maestro.authority.scheduling-action-spec.v1\0",
+                    &[action.literal().as_bytes()],
+                )
+                .to_vec(),
+            ),
+            CborValue::Bytes(digest_value(consent_object.value()).unwrap().to_vec()),
+            CborValue::Bytes(interaction_closure.to_vec()),
+        ]),
+        vec![
+            mandate_object.id(),
+            request_object.id(),
+            consent_object.id(),
+        ],
+    )
+    .unwrap();
+    fixture.objects.extend([
+        request_object.clone(),
+        mandate_object,
+        carrier_object.clone(),
+    ]);
+
+    let root = test_root();
+    let domain = StoreDomainV1::derive(StoreRoleV1::Repository, b"scheduling-downgrade").unwrap();
+    let mut store = StoreV1::create(&root, domain.clone()).unwrap();
+    put_objects_in_reference_order(&mut store, fixture.objects);
+    let mut roots = vec![authority_root, carrier_object.id()];
+    roots.sort_unstable();
+    let generation = StoreGenerationV1::new(
+        domain,
+        1,
+        None,
+        ContractRootIdV1::from_digest(digest("scheduling-downgrade-contract")),
+        StoreCompatibilityV1::stage0_successor().unwrap(),
+        roots,
+    )
+    .unwrap();
+    store.publish_generation(&generation, None).unwrap();
+    let connection = Connection::open(root.join("store.sqlite3")).unwrap();
+    connection
+        .execute(
+            "UPDATE store_state SET state = 'active', state_revision = state_revision + 1
+             WHERE singleton = 1",
+            [],
+        )
+        .unwrap();
+
+    let request_id = ActionRequestIdV1::derive("scheduling-downgrade-request").unwrap();
+    let authority = PlanningRepositoryActionAuthorityV1::new(
+        fixture.selection,
+        action,
+        subject,
+        owner_basis,
+        *binding_object.id().as_bytes(),
+    )
+    .unwrap();
+    let probe = StoreIdempotencyProbeV1::new(
+        "maestro.test.scheduling-downgrade.v1",
+        digest("scheduling-downgrade-key"),
+        digest("scheduling-downgrade-meaning"),
+    )
+    .unwrap();
+    let committed = AuthorityFacadeV1::new(&mut store)
+        .publish_scheduling_policy_with_downgrade(
+            &probe,
+            request_id,
+            authority,
+            request_object.clone(),
+            binding_object.clone(),
+            None,
+            [4, 4, 4, 4],
+            [3, 3, 3, 3],
+            [1, 1, 1, 1],
+            [1, 1, 1, 1],
+            1,
+            1,
+        )
+        .unwrap();
+    assert!(matches!(
+        committed,
+        StorePublicationOutcomeV1::Committed { .. }
+    ));
+    let active_head = store.active_head().unwrap().unwrap();
+    let active_generation = store.generation(active_head.generation_id()).unwrap();
+    assert!(!active_generation.roots().contains(&carrier_object.id()));
+
+    let replay_probe = StoreIdempotencyProbeV1::new(
+        "maestro.test.scheduling-downgrade.v1",
+        digest("scheduling-downgrade-second-key"),
+        digest("scheduling-downgrade-second-meaning"),
+    )
+    .unwrap();
+    let committed_head = store.active_head().unwrap().unwrap();
+    assert!(
+        AuthorityFacadeV1::new(&mut store)
+            .publish_scheduling_policy_with_downgrade(
+                &replay_probe,
+                request_id,
+                authority,
+                request_object,
+                binding_object,
+                None,
+                [4, 4, 4, 4],
+                [3, 3, 3, 3],
+                [1, 1, 1, 1],
+                [1, 1, 1, 1],
+                1,
+                1,
+            )
+            .is_err()
+    );
+    assert_eq!(store.active_head().unwrap().unwrap(), committed_head);
 
     drop(store);
     fs::remove_dir_all(root).unwrap();

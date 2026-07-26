@@ -185,7 +185,7 @@ struct ConsumedRepositoryActionBindingV1 {
     leaf_authority_consumption_id: Option<StoreObjectIdV1>,
     guard_object_id: StoreObjectIdV1,
     state_object_id: StoreObjectIdV1,
-    mandate_object_ids: Option<[StoreObjectIdV1; 4]>,
+    mandate_object_ids: Option<[StoreObjectIdV1; 3]>,
 }
 
 impl ConsumedRepositoryActionBindingV1 {
@@ -218,7 +218,6 @@ impl ConsumedRepositoryActionBindingV1 {
                     StoreObjectIdV1::from_digest(facts.supplemental_mandate_atom),
                     StoreObjectIdV1::from_digest(facts.supplemental_mandate_body_commitment),
                     StoreObjectIdV1::from_digest(facts.supplemental_mandate_carrier_commitment),
-                    StoreObjectIdV1::from_digest(facts.supplemental_mandate_nonce_commitment),
                 ]
             }),
         }
@@ -480,9 +479,10 @@ impl<'tx> AuthorityMaterializationTransactionV1<'tx> {
             .chain(binding.leaf_authority_carrier_id)
             .chain(binding.leaf_authority_consumption_id)
             .all(|required| object_ids.contains(&required))
-            || binding
-                .mandate_object_ids
-                .is_some_and(|required| !required.into_iter().all(|id| object_ids.contains(&id)))
+            || (!active_objects.is_empty()
+                && binding.mandate_object_ids.is_some_and(|required| {
+                    !required.into_iter().all(|id| active_objects.contains(&id))
+                }))
             || (!active_objects.is_empty()
                 && !current_object_ids
                     .into_iter()
@@ -550,9 +550,6 @@ impl<'tx> VerifiedSchedulingPolicyDowngradeMandateUseV1<'tx> {
         if !std::ptr::eq(self.transaction, binding.transaction)
             || binding.facts != commit.binding
             || self.facts.repository_generation_id != commit.binding.repository_generation_id
-            || self.facts.principal_id != commit.binding.principal_id
-            || self.facts.human_binding_id != commit.binding.binding_id
-            || self.facts.human_session_id != commit.binding.session_id
             || self.facts.authority_context_id != commit.binding.authority_context_id
             || self.facts.state_token_id != commit.binding.state_token_id
             || self.facts.authority_epoch != commit.binding.authority_epoch

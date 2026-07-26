@@ -23,6 +23,8 @@ RUBY_RECEIPT_KEYS = %w[
 ].sort.freeze
 SOURCE_PATHS = %w[
     Cargo.toml Cargo.lock build.rs src/lib.rs src/domain/mod.rs src/domain/vnext/mod.rs
+    src/domain/vnext/contract/mod.rs src/domain/vnext/persistence/tests/mod.rs
+    src/foundation/mod.rs
     src/foundation/core/mod.rs
   contracts/vnext/catalogs/generated/catalog-01-observation.json
   contracts/vnext/catalogs/generated/catalog-09-action-spec.json

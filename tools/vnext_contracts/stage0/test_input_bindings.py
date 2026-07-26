@@ -5,6 +5,9 @@ from __future__ import annotations
 
 import copy
 import json
+import os
+import pwd
+import runpy
 import subprocess
 import sys
 import tempfile
@@ -14,6 +17,20 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 BINDINGS = ROOT / "contracts/vnext/stage0/input-bindings.json"
 VERIFIER = Path(__file__).with_name("verify_input_bindings.py")
+
+
+def subprocess_environment() -> dict[str, str]:
+    home = pwd.getpwuid(os.getuid()).pw_dir
+    return {
+        "HOME": home,
+        "LANG": "C",
+        "LC_ALL": "C",
+        "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONNOUSERSITE": "1",
+        "RUBYLIB": "",
+        "RUBYOPT": "",
+    }
 
 
 def verify(document: dict[str, object]) -> subprocess.CompletedProcess[str]:
@@ -35,6 +52,7 @@ def verify(document: dict[str, object]) -> subprocess.CompletedProcess[str]:
             check=False,
             capture_output=True,
             text=True,
+            env=subprocess_environment(),
         )
 
 
@@ -221,6 +239,41 @@ def main() -> None:
     if verify(combined).returncode == 0:
         raise SystemExit("combined fabricated approval event was accepted")
     rejected.append("combined fabricated approval event")
+
+    verifier = runpy.run_path(VERIFIER)
+    approval_order = verifier["require_successor_approval_record_order"]
+    packet_order = verifier["require_successor_packet_record_order"]
+    packet_before_approval = verifier["require_successor_packet_before_approval"]
+    approval_order([10, 11, 12])
+    packet_order([20, 21])
+    packet_before_approval(30, 31)
+    causal_mutants = (
+        ("successor approval record order", approval_order, [10, 12, 11]),
+        ("successor packet record order", packet_order, [21, 20]),
+        (
+            "successor packet publication before approval",
+            packet_before_approval,
+            (31, 31),
+        ),
+    )
+    for name, guard, arguments in causal_mutants:
+        try:
+            if isinstance(arguments, tuple):
+                guard(*arguments)
+            else:
+                guard(arguments)
+        except SystemExit:
+            rejected.append(name)
+        else:
+            raise SystemExit(f"causal approval mutant was accepted: {name}")
+
+    verifier_source = VERIFIER.read_text(encoding="utf-8")
+    for forbidden in ("os.environ", "PYTHONPATH", "PYTHONHOME"):
+        if forbidden in verifier_source:
+            raise SystemExit(f"successor verifier inherits unsafe environment input: {forbidden}")
+    for required in ('"RUBYLIB": ""', '"RUBYOPT": ""'):
+        if verifier_source.count(required) != 2:
+            raise SystemExit(f"successor verifier does not sanitize every Ruby subprocess: {required}")
 
     print(
         json.dumps(

@@ -106,8 +106,8 @@ use super::{
     GrantAdministrationAuthorityV1, GuardAdmissionKindV1, HTimeAcceptanceErrorV1,
     HTimeCarryBasisV1, HTimeContinuationContributionV1, IdempotencyKeyIdV1,
     IssueBootstrapMandateError, LinearizationCoverageWitnessV1, LinearizationFenceCarrierV1,
-    MandateIdV1, RepositoryActionLeafV1, RepositoryGovernedCapacitySlotKindV1, StateTokenIdV1,
-    SuccessVisibleAuthorityContinuityStateV1, TransitionGuardOwnerCensusV1,
+    MandateIdV1, RepositoryActionLeafV1, RepositoryGovernedCapacitySlotKindV1, RevocationTargetV1,
+    StateTokenIdV1, SuccessVisibleAuthorityContinuityStateV1, TransitionGuardOwnerCensusV1,
     TransitionGuardTermFactV1, TrustedTimeV1, issue_bootstrap_mandate, validate_delegation,
     validate_ordinary_authority,
 };
@@ -151,16 +151,19 @@ struct SchedulingPolicyOwnerPublicationV1 {
     request_object: StoreObjectV1,
     binding_object: StoreObjectV1,
     current_binding_root: Option<StoreObjectIdV1>,
+    current_owner_basis_commitment: [u8; 32],
     policy: SchedulingPolicyMeaningV1,
 }
 
-#[derive(Clone, Copy)]
 struct SchedulingPolicyDowngradeMaterializationV1 {
     mandate_id: MandateIdV1,
+    human_principal_id: crate::domain::vnext::authority::PrincipalIdV1,
+    human_binding_id: crate::domain::vnext::authority::PrincipalBindingIdV1,
+    human_session_id: crate::domain::vnext::authority::SessionIdV1,
     mandate_body_object_id: StoreObjectIdV1,
     mandate_carrier_object_id: StoreObjectIdV1,
-    mandate_nonce_object_id: StoreObjectIdV1,
     mandate_atom_object_id: StoreObjectIdV1,
+    mandate_nonce_commitment: [u8; 32],
     valid_from: u64,
     valid_until: u64,
     revocation_revision: u64,
@@ -312,7 +315,7 @@ impl<'tx> AuthorityMaterializationPortV1<'tx> {
         &'tx self,
         probe: &StoreIdempotencyProbeV1,
         owner: SchedulingPolicyOwnerPublicationV1,
-        downgrade: Option<SchedulingPolicyDowngradeMaterializationV1>,
+        requires_downgrade_mandate: bool,
     ) -> Result<AtomicGenerationPublicationV1, SchedulingPolicyMaterializationErrorV1> {
         let current_head = self
             .view
@@ -324,44 +327,36 @@ impl<'tx> AuthorityMaterializationPortV1<'tx> {
             .ok_or(SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput)?;
         let active_objects = self.view.active_generation_objects()?;
         let relation = derive_policy_relation(owner.policy)?;
-        if relation.requires_downgrade_mandate() != downgrade.is_some()
+        if relation.requires_downgrade_mandate() != requires_downgrade_mandate
             || owner
                 .current_binding_root
                 .is_some_and(|root| !current_generation.roots().contains(&root))
         {
             return Err(SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput);
         }
-        if let Some(mandate) = downgrade {
-            let mandate_objects = [
-                mandate.mandate_body_object_id,
-                mandate.mandate_carrier_object_id,
-                mandate.mandate_nonce_object_id,
-                mandate.mandate_atom_object_id,
-            ];
-            if mandate.valid_from >= mandate.valid_until
-                || mandate.revocation_revision == 0
-                || mandate_objects
-                    .iter()
-                    .any(|id| !active_objects.iter().any(|object| object.id() == *id))
-                || mandate_objects
-                    .iter()
-                    .copied()
-                    .collect::<std::collections::BTreeSet<_>>()
-                    .len()
-                    != mandate_objects.len()
-            {
-                return Err(SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput);
-            }
-        }
-
-        let admitted =
-            admit_repository_action(self.view, &current_generation, owner.admission_input)?;
+        let admitted = admit_repository_action(
+            self.view,
+            &current_generation,
+            owner.admission_input.clone(),
+        )?;
         let admission = admitted.materialization_admission();
         if admission.action != SchedulingPolicyBindingOwnerV1::ACTION
             || admission.exact_payload_commitment != Some(*owner.binding_object.id().as_bytes())
         {
             return Err(SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput);
         }
+        let downgrade = requires_downgrade_mandate
+            .then(|| {
+                resolve_scheduling_policy_downgrade_mandate(
+                    self.view,
+                    &current_head,
+                    &current_generation,
+                    &active_objects,
+                    &owner,
+                    admission,
+                )
+            })
+            .transpose()?;
         let produced_objects = vec![owner.binding_object.clone()];
         let artifacts =
             admitted.issue_committed_artifacts(&owner.request_object, &produced_objects)?;
@@ -371,6 +366,9 @@ impl<'tx> AuthorityMaterializationPortV1<'tx> {
             replace_materialization_root(&mut roots, current, owner.binding_object.id())?;
         } else {
             roots.push(owner.binding_object.id());
+        }
+        if let Some(mandate) = downgrade.as_ref() {
+            consume_materialization_root(&mut roots, mandate.mandate_atom_object_id)?;
         }
         replace_materialization_root(
             &mut roots,
@@ -428,7 +426,7 @@ impl<'tx> AuthorityMaterializationPortV1<'tx> {
             probe,
             &publication,
             artifacts.receipt_object().id(),
-            downgrade,
+            downgrade.as_ref(),
         )?;
         if let Some(mandate) = downgrade {
             let mandate_facts = derive_scheduling_policy_mandate_facts(binding_facts, mandate);
@@ -477,6 +475,224 @@ fn replace_materialization_root(
     Ok(())
 }
 
+fn consume_materialization_root(
+    roots: &mut Vec<StoreObjectIdV1>,
+    consumed: StoreObjectIdV1,
+) -> Result<(), SchedulingPolicyMaterializationErrorV1> {
+    let original_len = roots.len();
+    roots.retain(|root| *root != consumed);
+    if roots.len() + 1 != original_len {
+        return Err(SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput);
+    }
+    Ok(())
+}
+
+fn resolve_scheduling_policy_downgrade_mandate(
+    view: &StorePublicationViewV1<'_>,
+    current_head: &crate::domain::vnext::persistence::StoreHeadV1,
+    current_generation: &StoreGenerationV1,
+    active_objects: &[StoreObjectV1],
+    owner: &SchedulingPolicyOwnerPublicationV1,
+    admission: MaterializationAuthorityAdmissionV1,
+) -> Result<SchedulingPolicyDowngradeMaterializationV1, SchedulingPolicyMaterializationErrorV1> {
+    let authority_root = select_current_authority_root(current_generation, active_objects)
+        .map_err(|_| SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput)?;
+    let current = load_current_authority(
+        view,
+        current_head,
+        current_generation,
+        authority_root,
+        active_objects,
+    )
+    .map_err(|_| SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput)?;
+    let expected_subject = scheduling_policy_mandate_subject(owner.binding_object.id());
+    let expected_action_commitment = materialization_commitment(
+        b"maestro.authority.scheduling-action-spec.v1\0",
+        &[SchedulingPolicyBindingOwnerV1::ACTION.literal().as_bytes()],
+    );
+    let binding_schema = AuthoritySchemaV1::BootstrapMandateIssuanceBinding
+        .id()
+        .map_err(SchedulingPolicyMaterializationErrorV1::Identity)?;
+    let mandate_schema = AuthoritySchemaV1::AuthorityMandate
+        .id()
+        .map_err(SchedulingPolicyMaterializationErrorV1::Identity)?;
+    let consent_schema = AuthoritySchemaV1::ConsentSlotBindingParameter
+        .id()
+        .map_err(SchedulingPolicyMaterializationErrorV1::Identity)?;
+    let request_schema = owner.request_object.schema_id();
+    let mut matches = Vec::new();
+
+    for atom_id in current_generation.roots() {
+        let Some(carrier) = active_objects
+            .iter()
+            .find(|object| object.id() == *atom_id && object.schema_id() == binding_schema)
+        else {
+            continue;
+        };
+        let carrier_fields = exact_current_fields(carrier, 5)
+            .map_err(|_| SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput)?;
+        let carrier_references = direct_reference_objects(carrier, active_objects)
+            .map_err(|_| SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput)?;
+        let mut mandate_objects = carrier_references
+            .iter()
+            .filter(|object| object.schema_id() == mandate_schema);
+        let Some(mandate_object) = mandate_objects.next() else {
+            continue;
+        };
+        if mandate_objects.next().is_some() {
+            return Err(SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput);
+        }
+        let mandate_fields = exact_current_fields(mandate_object, 14)
+            .map_err(|_| SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput)?;
+        if !matches!(
+            &mandate_fields[2],
+            CborValue::Text(action) if action == SchedulingPolicyBindingOwnerV1::ACTION.literal()
+        ) {
+            continue;
+        }
+        let mut consent_objects = carrier_references
+            .iter()
+            .filter(|object| object.schema_id() == consent_schema);
+        let Some(consent_object) = consent_objects.next() else {
+            return Err(SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput);
+        };
+        if consent_objects.next().is_some()
+            || carrier_references.len() != 3
+            || !carrier_references.iter().any(|object| {
+                object.id() == owner.request_object.id() && object.schema_id() == request_schema
+            })
+            || mandate_object.references().len() != 2
+            || !mandate_object.references().contains(&consent_object.id())
+            || !mandate_object.references().contains(&authority_root)
+        {
+            return Err(SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput);
+        }
+
+        let mandate_bytes = object_value_bytes(mandate_object)
+            .map_err(|_| SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput)?;
+        let mandate_id = MandateIdV1::from_digest(Sha256::digest(&mandate_bytes).into());
+        let context_id = exact_current_digest(&mandate_fields[1])
+            .map_err(|_| SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput)?;
+        let responder_binding = exact_current_digest(&mandate_fields[6])
+            .map_err(|_| SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput)?;
+        let mut operators = [
+            (current.facts.actor_binding(), current.facts.actor_session()),
+            (
+                current.facts.responder_binding(),
+                current.facts.responder_session(),
+            ),
+        ]
+        .into_iter()
+        .filter(|(binding, session)| {
+            *binding.id().as_bytes() == responder_binding
+                && session.binding_id() == binding.id()
+                && binding.context_id() == admission.authority_context_id
+                && session.context_id() == admission.authority_context_id
+                && binding.human_capable()
+                && binding.validity().contains(admission.accepted_h_time)
+                && session.validity().contains(admission.accepted_h_time)
+        });
+        let Some((binding, session)) = operators.next() else {
+            return Err(SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput);
+        };
+        if operators.next().is_some() {
+            return Err(SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput);
+        }
+        let interaction_closure = exact_current_digest(&mandate_fields[8])
+            .map_err(|_| SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput)?;
+        let authority_basis = exact_current_digest(&mandate_fields[9])
+            .map_err(|_| SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput)?;
+        let valid_from = exact_current_unsigned(&mandate_fields[10])?;
+        let valid_until = exact_current_unsigned(&mandate_fields[11])?;
+        let logical_mandate_id = exact_current_digest(&carrier_fields[1])
+            .map_err(|_| SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput)?;
+        let target_action_commitment = exact_current_digest(&carrier_fields[2])
+            .map_err(|_| SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput)?;
+        let consent_commitment = exact_current_digest(&carrier_fields[3])
+            .map_err(|_| SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput)?;
+        let carrier_interaction_closure = exact_current_digest(&carrier_fields[4])
+            .map_err(|_| SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput)?;
+        let subject = match &mandate_fields[3] {
+            CborValue::Text(value) => value,
+            _ => return Err(SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput),
+        };
+        if logical_mandate_id != *mandate_id.as_bytes()
+            || context_id != *admission.authority_context_id.as_bytes()
+            || subject != &expected_subject
+            || exact_current_unsigned(&mandate_fields[4])? != owner.policy.classifier_revision()
+            || mandate_fields[5] != *consent_object.value()
+            || exact_current_unsigned(&mandate_fields[7])? != binding.assurance_revision()
+            || authority_basis != owner.current_owner_basis_commitment
+            || valid_from >= valid_until
+            || !(valid_from <= admission.accepted_h_time && admission.accepted_h_time < valid_until)
+            || exact_current_unsigned(&mandate_fields[12])? != 1
+            || exact_current_unsigned(&mandate_fields[13])? != 0
+            || target_action_commitment != expected_action_commitment
+            || consent_commitment
+                != digest_value(consent_object.value())
+                    .map_err(|_| SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput)?
+            || carrier_interaction_closure != interaction_closure
+            || current
+                .facts
+                .revocations()
+                .revocations()
+                .contains(RevocationTargetV1::Mandate(mandate_id))
+        {
+            return Err(SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput);
+        }
+        matches.push(SchedulingPolicyDowngradeMaterializationV1 {
+            mandate_id,
+            human_principal_id: binding.principal_id(),
+            human_binding_id: binding.id(),
+            human_session_id: session.id(),
+            mandate_body_object_id: mandate_object.id(),
+            mandate_carrier_object_id: carrier.id(),
+            mandate_atom_object_id: carrier.id(),
+            mandate_nonce_commitment: materialization_commitment(
+                b"maestro.authority.scheduling-mandate-use.v1\0",
+                &[
+                    interaction_closure.as_slice(),
+                    binding.principal_id().as_bytes(),
+                    binding.id().as_bytes(),
+                    session.id().as_bytes(),
+                    admission.request_id.as_bytes(),
+                    owner.request_object.id().as_bytes(),
+                    owner.binding_object.id().as_bytes(),
+                ],
+            ),
+            valid_from,
+            valid_until,
+            revocation_revision: current.facts.snapshot().authority_epoch,
+        });
+    }
+    if matches.len() != 1 {
+        return Err(SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput);
+    }
+    Ok(matches
+        .pop()
+        .expect("invariant: exact one applicable scheduling Mandate"))
+}
+
+fn exact_current_unsigned(
+    value: &CborValue,
+) -> Result<u64, SchedulingPolicyMaterializationErrorV1> {
+    match value {
+        CborValue::Unsigned(value) => Ok(*value),
+        _ => Err(SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput),
+    }
+}
+
+fn scheduling_policy_mandate_subject(binding_id: StoreObjectIdV1) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut subject = String::with_capacity(71);
+    subject.push_str("sha256:");
+    for byte in binding_id.as_bytes() {
+        subject.push(HEX[(byte >> 4) as usize] as char);
+        subject.push(HEX[(byte & 0x0f) as usize] as char);
+    }
+    subject
+}
+
 fn derive_scheduling_policy_binding_facts(
     admission: MaterializationAuthorityAdmissionV1,
     policy: SchedulingPolicyMeaningV1,
@@ -484,7 +700,7 @@ fn derive_scheduling_policy_binding_facts(
     probe: &StoreIdempotencyProbeV1,
     publication: &AtomicGenerationPublicationV1,
     receipt_object_id: StoreObjectIdV1,
-    downgrade: Option<SchedulingPolicyDowngradeMaterializationV1>,
+    downgrade: Option<&SchedulingPolicyDowngradeMaterializationV1>,
 ) -> Result<RepositoryActionBindingFactsV1, SchedulingPolicyMaterializationErrorV1> {
     let selection = admission
         .selection
@@ -598,7 +814,7 @@ fn derive_scheduling_policy_binding_facts(
                 *mandate.mandate_atom_object_id.as_bytes(),
                 *mandate.mandate_body_object_id.as_bytes(),
                 *mandate.mandate_carrier_object_id.as_bytes(),
-                *mandate.mandate_nonce_object_id.as_bytes(),
+                mandate.mandate_nonce_commitment,
             )
         },
     );
@@ -752,9 +968,9 @@ fn derive_scheduling_policy_mandate_facts(
         action_request_id: binding.request_id,
         idempotency_key: binding.idempotency_key,
         repository_generation_id: binding.repository_generation_id,
-        principal_id: binding.principal_id,
-        human_binding_id: binding.binding_id,
-        human_session_id: binding.session_id,
+        principal_id: mandate.human_principal_id,
+        human_binding_id: mandate.human_binding_id,
+        human_session_id: mandate.human_session_id,
         authority_context_id: binding.authority_context_id,
         state_token_id: binding.state_token_id,
         mandate_schema_version: binding.supplemental_mandate_schema_version,
@@ -841,6 +1057,8 @@ fn materialization_commitment(domain: &[u8], fields: &[&[u8]]) -> [u8; 32] {
 
 impl<'store> AuthorityFacadeV1<'store> {
     pub fn new(store: &'store mut StoreV1) -> Self {
+        let _ = Self::publish_scheduling_policy_without_downgrade;
+        let _ = Self::publish_scheduling_policy_with_downgrade;
         Self { store }
     }
 
@@ -890,13 +1108,6 @@ impl<'store> AuthorityFacadeV1<'store> {
         clippy::too_many_arguments,
         reason = "the owner-local entry accepts the exact semantic policy tuple without exposing Authority fact bags"
     )]
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "Stage 5 freezes the atomic scheduling entry before its Stage 7 owner integrates"
-        )
-    )]
     pub(in crate::domain::vnext) fn publish_scheduling_policy_without_downgrade(
         &mut self,
         probe: &StoreIdempotencyProbeV1,
@@ -915,6 +1126,7 @@ impl<'store> AuthorityFacadeV1<'store> {
         StorePublicationOutcomeV1,
         AuthorityMaterializationPublicationErrorV1<SchedulingPolicyMaterializationErrorV1>,
     > {
+        let current_owner_basis_commitment = authority.current_semantic_owner_basis_commitment();
         let policy = SchedulingPolicyMeaningV1::new(
             current_rules,
             candidate_rules,
@@ -944,22 +1156,16 @@ impl<'store> AuthorityFacadeV1<'store> {
                 request_object,
                 binding_object,
                 current_binding_root,
+                current_owner_basis_commitment,
                 policy,
             },
-            None,
+            false,
         )
     }
 
     #[expect(
         clippy::too_many_arguments,
-        reason = "the owner-local entry accepts exact stored Mandate identities without exposing Authority fact bags"
-    )]
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "Stage 5 freezes the atomic scheduling entry before its Stage 7 owner integrates"
-        )
+        reason = "the owner-local entry accepts the exact policy tuple while Authority resolves the stored Mandate"
     )]
     pub(in crate::domain::vnext) fn publish_scheduling_policy_with_downgrade(
         &mut self,
@@ -975,18 +1181,11 @@ impl<'store> AuthorityFacadeV1<'store> {
         governance_floor: [u64; 4],
         evaluator_revision: u64,
         classifier_revision: u64,
-        mandate_id: MandateIdV1,
-        mandate_body_object_id: StoreObjectIdV1,
-        mandate_carrier_object_id: StoreObjectIdV1,
-        mandate_nonce_object_id: StoreObjectIdV1,
-        mandate_atom_object_id: StoreObjectIdV1,
-        valid_from: u64,
-        valid_until: u64,
-        revocation_revision: u64,
     ) -> Result<
         StorePublicationOutcomeV1,
         AuthorityMaterializationPublicationErrorV1<SchedulingPolicyMaterializationErrorV1>,
     > {
+        let current_owner_basis_commitment = authority.current_semantic_owner_basis_commitment();
         let policy = SchedulingPolicyMeaningV1::new(
             current_rules,
             candidate_rules,
@@ -998,8 +1197,6 @@ impl<'store> AuthorityFacadeV1<'store> {
         .map_err(|error| AuthorityMaterializationPublicationErrorV1::Prepare(error.into()))?;
         if !derive_policy_relation(policy)
             .is_ok_and(SchedulingPolicyDiffClassV1::requires_downgrade_mandate)
-            || valid_from >= valid_until
-            || revocation_revision == 0
             || authority.action()
                 != match SchedulingPolicyBindingOwnerV1::ACTION {
                     RepositoryActionLeafV1::Downstream(action) => action,
@@ -1018,18 +1215,10 @@ impl<'store> AuthorityFacadeV1<'store> {
                 request_object,
                 binding_object,
                 current_binding_root,
+                current_owner_basis_commitment,
                 policy,
             },
-            Some(SchedulingPolicyDowngradeMaterializationV1 {
-                mandate_id,
-                mandate_body_object_id,
-                mandate_carrier_object_id,
-                mandate_nonce_object_id,
-                mandate_atom_object_id,
-                valid_from,
-                valid_until,
-                revocation_revision,
-            }),
+            true,
         )
     }
 
@@ -1037,13 +1226,13 @@ impl<'store> AuthorityFacadeV1<'store> {
         &mut self,
         probe: &StoreIdempotencyProbeV1,
         owner: SchedulingPolicyOwnerPublicationV1,
-        downgrade: Option<SchedulingPolicyDowngradeMaterializationV1>,
+        requires_downgrade_mandate: bool,
     ) -> Result<
         StorePublicationOutcomeV1,
         AuthorityMaterializationPublicationErrorV1<SchedulingPolicyMaterializationErrorV1>,
     > {
         self.publish_repository_materialization(probe, move |port| {
-            port.execute_scheduling_policy_materialization(probe, owner, downgrade)
+            port.execute_scheduling_policy_materialization(probe, owner, requires_downgrade_mandate)
         })
     }
 

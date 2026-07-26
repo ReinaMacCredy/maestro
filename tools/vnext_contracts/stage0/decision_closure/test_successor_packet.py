@@ -4,7 +4,10 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
+import os
+import pwd
 import subprocess
 import sys
 from pathlib import Path
@@ -45,11 +48,83 @@ EXPECTED = {
 }
 
 
+def subprocess_environment() -> dict[str, str]:
+    home = pwd.getpwuid(os.getuid()).pw_dir
+    return {
+        "HOME": home,
+        "LANG": "C",
+        "LC_ALL": "C",
+        "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONNOUSERSITE": "1",
+        "RUBYLIB": "",
+        "RUBYOPT": "",
+    }
+
+
+def verify_successor_order_guards() -> None:
+    verifier_path = Path(__file__).resolve().parents[1] / "verify_input_bindings.py"
+    spec = importlib.util.spec_from_file_location("stage0_verify_input_bindings", verifier_path)
+    if spec is None or spec.loader is None:
+        raise SystemExit("successor input-binding verifier cannot be loaded")
+    verifier = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(verifier)
+
+    guards = (
+        ("approval record order", verifier.require_successor_approval_record_order, [3, 2, 4]),
+        ("packet record order", verifier.require_successor_packet_record_order, [6, 5]),
+        (
+            "packet publication before approval",
+            lambda values: verifier.require_successor_packet_before_approval(*values),
+            [8, 8],
+        ),
+    )
+    verifier.require_successor_approval_record_order([2, 3, 4])
+    verifier.require_successor_packet_record_order([5, 6])
+    verifier.require_successor_packet_before_approval(7, 8)
+    for label, guard, mutant in guards:
+        try:
+            guard(mutant)
+        except SystemExit:
+            continue
+        raise SystemExit(f"successor causal guard accepted mutant: {label}")
+
+
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def main() -> None:
+def main(*, causal_only: bool = False) -> None:
+    hostile = {
+        "PATH": "/hostile",
+        "PYTHONPATH": "/inject",
+        "PYTHONHOME": "/inject",
+        "RUBYLIB": "/inject",
+        "RUBYOPT": "-rinject",
+    }
+    original_environment = dict(os.environ)
+    try:
+        os.environ.update(hostile)
+        environment = subprocess_environment()
+        if any(environment.get(key) == value for key, value in hostile.items()):
+            raise SystemExit("successor Decision source test inherited hostile environment")
+    finally:
+        os.environ.clear()
+        os.environ.update(original_environment)
+    verify_successor_order_guards()
+    if causal_only:
+        print(
+            json.dumps(
+                {
+                    "schema": "maestro.vnext.stage0-successor-decision-causal-test.v1",
+                    "environment": "sanitized",
+                    "order_guards": "pass",
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+        )
+        return
     manifest_path = ROOT / "successor-decision-store-manifest.v1.txt"
     inventory_path = ROOT / "raw-decision-inventory.v1.txt"
     closure_path = ROOT / "external-design-authority-closure.v1.txt"
@@ -97,7 +172,13 @@ def main() -> None:
         [sys.executable, str(Path(__file__).with_name("validate.py"))],
         ["/usr/bin/ruby", str(Path(__file__).with_name("validate.rb"))],
     ):
-        completed = subprocess.run(command, check=False, capture_output=True, text=True)
+        completed = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            env=environment,
+        )
         if completed.returncode != 0:
             raise SystemExit(f"historical Decision closure readback failed: {completed.stderr}")
     print(
@@ -118,4 +199,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    main(causal_only=sys.argv[1:] == ["--causal-only"])

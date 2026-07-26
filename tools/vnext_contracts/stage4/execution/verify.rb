@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 require "digest"
+require "etc"
 require "json"
 require "open3"
 require "optparse"
@@ -86,6 +87,7 @@ AUTHORITY_EXTENSION_SOURCES = %w[
   src/domain/vnext/authority/mod.rs
   src/foundation/core/secure_fs.rs
   src/foundation/core/descriptor_census_platform.rs
+  src/foundation/core/descriptor_census_platform_stage11_seed.rs
 ].freeze
 FOCAL_STEP_EVIDENCE_SOURCES = %w[
   src/domain/vnext/evidence/mod.rs
@@ -98,6 +100,7 @@ TOOL_SOURCES = %w[
   tests/vnext_stage4_contracts.rs
   tools/vnext_contracts/catalogs/cbor_py.py
   tools/vnext_contracts/stage4/execution/build.py
+  tools/vnext_contracts/stage4/execution/test_behavior_census.py
   tools/vnext_contracts/stage4/execution/validate.py
   tools/vnext_contracts/stage4/execution/verify.rb
 ].freeze
@@ -370,14 +373,18 @@ def bound_environment_value(key, environment)
 end
 
 def command_environment
-  environment = ENV.to_h
-  UNSET_BUILD_OVERRIDE_KEYS.each { |key| environment.delete(key) }
-  environment["CARGO_HOME"] ||= File.join(Dir.home, ".cargo")
-  environment["RUSTUP_HOME"] ||= File.join(Dir.home, ".rustup")
-  environment["CARGO_INCREMENTAL"] = "0"
-  environment["PYTHONDONTWRITEBYTECODE"] = "1"
-  environment["RUSTC"] = tool_descriptor("rustc").fetch("invocation_path")
-  environment
+  home = Etc.getpwuid.dir
+  {
+    "CARGO_HOME" => File.join(home, ".cargo"),
+    "CARGO_INCREMENTAL" => "0",
+    "HOME" => home,
+    "LANG" => "C",
+    "LC_ALL" => "C",
+    "PATH" => "/usr/bin:/bin:/usr/sbin:/sbin",
+    "PYTHONDONTWRITEBYTECODE" => "1",
+    "RUSTC" => tool_descriptor("rustc").fetch("invocation_path"),
+    "RUSTUP_HOME" => File.join(home, ".rustup"),
+  }
 end
 
 def canonical_json(value)

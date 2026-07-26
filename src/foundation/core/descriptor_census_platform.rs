@@ -14,15 +14,6 @@ pub(super) struct NamespaceWideSnapshotFactsV1 {
 }
 
 impl NamespaceWideSnapshotFactsV1 {
-    // TODO(Foundation Stage 11): Remove this expectation when the platform seed
-    // mints the first production namespace snapshot after owner integration.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "the Stage 11 owner seed is predeclared but intentionally fail-closed"
-        )
-    )]
     pub(super) fn from_stage11_owner(
         namespace_identity: [u8; 32],
         provider_incarnation: [u8; 32],

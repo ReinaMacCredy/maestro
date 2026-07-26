@@ -72,12 +72,65 @@ def bindings() -> dict[str, object]:
 def rejected(document: dict[str, object]) -> bool:
     try:
         verifier.verify_successor_external_approval_event(document)
-    except (AssertionError, KeyError, SystemExit):
+    except SystemExit:
         return True
     return False
 
 
-def main() -> None:
+def require_causal_guard_rejection(
+    label: str,
+    guard: object,
+    argument: object,
+) -> None:
+    assert callable(guard)
+    try:
+        if isinstance(argument, tuple):
+            guard(*argument)
+        else:
+            guard(argument)
+    except SystemExit:
+        return
+    raise SystemExit(f"successor verifier omitted {label} guard")
+
+
+def verify_causal_mutants() -> dict[str, tuple[object, object]]:
+    causal_mutants = {
+        "event order": (
+            verifier.require_successor_approval_record_order,
+            [2, 1, 3],
+        ),
+        "packet publication order": (
+            verifier.require_successor_packet_record_order,
+            [9, 8],
+        ),
+        "pre-publication approval": (
+            verifier.require_successor_packet_before_approval,
+            (
+                verifier.SUCCESSOR_APPROVAL_STARTED_AT,
+                verifier.SUCCESSOR_APPROVAL_STARTED_AT,
+            ),
+        ),
+    }
+    for label, (guard, argument) in causal_mutants.items():
+        require_causal_guard_rejection(label, guard, argument)
+    return causal_mutants
+
+
+def main(*, causal_only: bool = False) -> None:
+    causal_mutants = verify_causal_mutants()
+    if causal_only:
+        print(
+            json.dumps(
+                {
+                    "schema": "maestro.vnext.stage0-successor-causal-guard-test.v1",
+                    "rejected_mutants": sorted(causal_mutants),
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+        )
+        return
+
     original = bindings()
     verifier.verify_successor_external_approval_event(original)
     cases = {
@@ -86,30 +139,13 @@ def main() -> None:
         "handoff": ("external_approval", "build_plan_handoff"),
         "packet artifact": ("external_approval_event", "packet_root"),
         "event recipient": ("external_approval_event", "recipient_thread_id"),
-        "event order": ("external_approval_event", "record_sha256"),
-        "packet publication": (
-            "external_approval_event",
-            "packet_publication_record_sha256",
-        ),
         "synthetic approval log": ("external_approval_event", "log_realpath"),
-        "pre-publication approval": (
-            "external_approval_event",
-            "packet_turn_completed_at",
-        ),
     }
     for name, (parent, key) in cases.items():
         candidate = copy.deepcopy(original)
         section = candidate[parent]
         assert isinstance(section, dict)
-        if name in {"event order", "packet publication"}:
-            records = section[key]
-            assert isinstance(records, dict)
-            names = list(records)
-            records[names[0]], records[names[1]] = records[names[1]], records[names[0]]
-        elif name == "pre-publication approval":
-            section[key] = verifier.SUCCESSOR_APPROVAL_STARTED_AT + 1
-        else:
-            section[key] = "0" * 64
+        section[key] = "0" * 64
         if not rejected(candidate):
             raise SystemExit(f"successor input-binding mutant was accepted: {name}")
 
@@ -189,27 +225,6 @@ def main() -> None:
         else:
             raise SystemExit("descriptor capture accepted in-place packet mutation")
 
-        for label, action in (
-            (
-                "approval record order",
-                lambda: verifier.require_record_order("approval", [2, 1, 3]),
-            ),
-            (
-                "packet publication order",
-                lambda: verifier.require_record_order("packet", [9, 9]),
-            ),
-            (
-                "publication before approval",
-                lambda: verifier.require_strictly_before("publication", 10, 10),
-            ),
-        ):
-            try:
-                action()
-            except SystemExit:
-                pass
-            else:
-                raise SystemExit(f"successor verifier omitted {label} guard")
-
         fake_ruby = root / "ruby"
         fake_ruby.write_bytes(b"#!/bin/sh\nexit 0\n")
         fake_ruby.chmod(0o500)
@@ -225,7 +240,7 @@ def main() -> None:
             {
                 "schema": "maestro.vnext.stage0-successor-input-binding-test.v1",
                 "positive": "verified",
-                "rejected_mutants": sorted(cases),
+                "rejected_mutants": sorted([*cases, *causal_mutants]),
             },
             sort_keys=True,
             separators=(",", ":"),
@@ -234,4 +249,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    main(causal_only=sys.argv[1:] == ["--causal-only"])

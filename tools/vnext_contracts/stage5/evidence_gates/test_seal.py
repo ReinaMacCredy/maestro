@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import json
 import os
+import pwd
 import shutil
 import subprocess
 import sys
@@ -160,16 +161,26 @@ class Stage5SnapshotTests(unittest.TestCase):
                 seal.build_snapshot(Path("/bin/false"), cache)
 
     def test_ruby_verifier_executes_its_exact_test_output_parser(self) -> None:
-        ruby = shutil.which("ruby")
-        if ruby is None:
-            self.fail("Ruby is required for the independent Stage 5 verifier")
+        ruby = seal.required_tool("ruby")
+        ruby_before, _ = seal.read_regular_file(ruby)
+        home = pwd.getpwuid(os.getuid()).pw_dir
         completed = subprocess.run(
-            [ruby, str(Path(seal.__file__).with_name("verify.rb")), "--self-test-output-parser"],
+            [str(ruby), str(Path(seal.__file__).with_name("verify.rb")), "--self-test-output-parser"],
             capture_output=True,
             check=False,
             text=True,
+            env={
+                "HOME": home,
+                "LANG": "C",
+                "LC_ALL": "C",
+                "PATH": "/usr/bin:/bin",
+                "RUBYLIB": "",
+                "RUBYOPT": "",
+            },
         )
         self.assertEqual(completed.returncode, 0, completed.stderr)
+        ruby_after, _ = seal.read_regular_file(ruby)
+        self.assertEqual(seal.sha256(ruby_before), seal.sha256(ruby_after))
         self.assertEqual(
             json.loads(completed.stdout),
             {

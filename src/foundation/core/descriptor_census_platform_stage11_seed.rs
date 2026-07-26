@@ -19,6 +19,7 @@ impl NamespaceWideSnapshotBackendV1 for Stage11NamespaceWideSnapshotSeedV1 {
 pub(super) fn acquire_namespace_wide_snapshot(
     _root: &SecureRoot,
 ) -> SecureFsResult<Stage11NamespaceWideSnapshotSeedV1> {
+    let _ = NamespaceWideSnapshotFactsV1::from_stage11_owner;
     // Stage 11 replaces only this owner seed with the supported-platform
     // namespace snapshot/journal implementation. The Foundation interface,
     // opaque lease, and final recheck remain unchanged.

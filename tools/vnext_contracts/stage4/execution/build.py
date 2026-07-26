@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import pwd
 import re
 import shutil
 import subprocess
@@ -100,6 +101,7 @@ AUTHORITY_EXTENSION_SOURCES = [
     "src/domain/vnext/authority/mod.rs",
     "src/foundation/core/secure_fs.rs",
     "src/foundation/core/descriptor_census_platform.rs",
+    "src/foundation/core/descriptor_census_platform_stage11_seed.rs",
 ]
 FOCAL_STEP_EVIDENCE_SOURCES = [
     "src/domain/vnext/evidence/mod.rs",
@@ -112,6 +114,7 @@ TOOL_SOURCES = [
     "tests/vnext_stage4_contracts.rs",
     "tools/vnext_contracts/catalogs/cbor_py.py",
     "tools/vnext_contracts/stage4/execution/build.py",
+    "tools/vnext_contracts/stage4/execution/test_behavior_census.py",
     "tools/vnext_contracts/stage4/execution/validate.py",
     "tools/vnext_contracts/stage4/execution/verify.rb",
 ]
@@ -500,15 +503,18 @@ def bound_environment_value(key: str, environment: dict[str, str]) -> str:
 
 
 def command_environment() -> dict[str, str]:
-    environment = dict(os.environ)
-    for key in UNSET_BUILD_OVERRIDE_KEYS:
-        environment.pop(key, None)
-    environment.setdefault("CARGO_HOME", str(Path.home() / ".cargo"))
-    environment.setdefault("RUSTUP_HOME", str(Path.home() / ".rustup"))
-    environment["CARGO_INCREMENTAL"] = "0"
-    environment["PYTHONDONTWRITEBYTECODE"] = "1"
-    environment["RUSTC"] = str(tool_descriptor("rustc")["invocation_path"])
-    return environment
+    home = pwd.getpwuid(os.getuid()).pw_dir
+    return {
+        "CARGO_HOME": str(Path(home) / ".cargo"),
+        "CARGO_INCREMENTAL": "0",
+        "HOME": home,
+        "LANG": "C",
+        "LC_ALL": "C",
+        "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "RUSTC": str(tool_descriptor("rustc")["invocation_path"]),
+        "RUSTUP_HOME": str(Path(home) / ".rustup"),
+    }
 
 
 def command_result_digest(payload: object) -> str:
@@ -1130,9 +1136,11 @@ def certify(
     parent_certification_identity: str | None,
 ) -> None:
     certify_behavior(root, run_mutants, validation_mode, parent_certification_identity)
+    python = str(tool_descriptor("python-current")["invocation_path"])
+    ruby = str(tool_descriptor("ruby")["invocation_path"])
     for command in [
-        [sys.executable, str(TOOLS / "validate.py"), "--root", str(root)],
-        ["ruby", str(TOOLS / "verify.rb"), "--root", str(root)],
+        [python, str(TOOLS / "validate.py"), "--root", str(root)],
+        [ruby, str(TOOLS / "verify.rb"), "--root", str(root)],
     ]:
         if not run_mutants:
             command.extend(

@@ -357,7 +357,13 @@ def verify_successor_packet_artifacts(
         check=False,
         capture_output=True,
         text=True,
-        env={"LANG": "C", "LC_ALL": "C", "PATH": "/usr/bin:/bin"},
+        env={
+            "LANG": "C",
+            "LC_ALL": "C",
+            "PATH": "/usr/bin:/bin",
+            "RUBYLIB": "",
+            "RUBYOPT": "",
+        },
     )
     require_equal("successor Ruby probe exit", ruby_probe.returncode, 0)
     require_equal(
@@ -412,6 +418,7 @@ def verify_successor_packet_artifacts(
                 "LANG": "C",
                 "LC_ALL": "C",
                 "PATH": "/usr/bin:/bin",
+                "RUBYLIB": "",
                 "RUBYOPT": "",
             },
         )
@@ -499,8 +506,8 @@ def verify_successor_external_approval_event(
         SUCCESSOR_APPROVAL_LOG, SUCCESSOR_APPROVAL_RECORDS
     )
     causal_order = ["approval_task_started", "approval_user_message", "session_meta"]
-    require_record_order(
-        "successor approval", [ordinals[name] for name in causal_order]
+    require_successor_approval_record_order(
+        [ordinals[name] for name in causal_order]
     )
     capture_identity = digest_records(
         b"maestro.external-successor-approval-capture.v1\0",
@@ -543,12 +550,11 @@ def verify_successor_external_approval_event(
     packet_captured, packet_ordinals = capture_log_records(
         SUCCESSOR_PACKET_PUBLICATION_LOG, SUCCESSOR_PACKET_PUBLICATION_RECORDS
     )
-    require_record_order(
-        "successor packet publication",
+    require_successor_packet_record_order(
         [
             packet_ordinals["packet_assistant_message"],
             packet_ordinals["packet_task_complete"],
-        ],
+        ]
     )
     packet_message = packet_captured["packet_assistant_message"]
     require_equal("successor packet message type", packet_message["type"], "response_item")
@@ -598,12 +604,30 @@ def verify_successor_external_approval_event(
         packet_complete_payload["completed_at"],
         SUCCESSOR_PACKET_COMPLETED_AT,
     )
-    require_strictly_before(
-        "successor packet publication before approval",
+    require_successor_packet_before_approval(
         int(packet_complete_payload["completed_at"]),
         SUCCESSOR_APPROVAL_STARTED_AT,
     )
     return verify_successor_packet_artifacts(bindings)
+
+
+def require_successor_approval_record_order(ordinals: list[int]) -> None:
+    require_record_order("successor approval", ordinals)
+
+
+def require_successor_packet_record_order(ordinals: list[int]) -> None:
+    require_record_order("successor packet publication", ordinals)
+
+
+def require_successor_packet_before_approval(
+    packet_completed_at: int,
+    approval_started_at: int,
+) -> None:
+    require_strictly_before(
+        "successor packet publication before approval",
+        packet_completed_at,
+        approval_started_at,
+    )
 
 
 def path_metadata(path: Path) -> dict[str, str]:
