@@ -12095,6 +12095,125 @@ packet may authorize implementation. Until then, implementation, canonical
 artifact regeneration, sealing, integration, publication, installation,
 release and live external mutation remain forbidden.
 
+#### Persisted Repository Governance Floor head successor
+
+`dec-canonical-authority-owned-persisted-454e`, **Canonical Authority-owned
+persisted Repository Governance Floor head**, is the one additive Decision in
+this successor pass. It does not supersede
+`dec-canonical-authority-owned-governance-c77d`,
+`dec-canonical-authority-materialization-df3b` or any other unaffected law. It
+materializes the Authority-owned current governance fact required by those
+Decisions and expressly replaces only this section's earlier statement that
+there is no persisted-schema delta.
+
+Authority appends one internal Repository Store schema at local
+`AuthoritySchemaV1` tag 25:
+`RepositoryGovernanceFloorSnapshotV1`, canonical domain
+`maestro.vnext.repository-governance-floor-snapshot.v1`. Tags 1 through 24,
+their names, SchemaIds and canonical bytes remain an immutable prefix. The new
+Snapshot is internal durable Store data, not a public schema, API, Action,
+Resource, wire object or capability. Public schema, public API, Action,
+ActionSpec, owner-row, participant, Observation, Effect Origin, Ceremony,
+Resource and catalog counts remain unchanged.
+
+Every floor-enabled active Repository Store Generation has exactly one direct
+immutable Snapshot root. The Snapshot binds its identity, schema domain and
+version, positive revision, optional predecessor, activation basis and
+Generation ordinal, Repository Store-domain and Authority-context identities,
+Authority Epoch, Trust Root revision and binding, Authority Transition Protocol,
+minimum assurance requirements, Authority requirement grammar and evaluator
+identities and revisions, a bounded sorted unique set of closed requirement
+rows, canonicalization versions and a recomputed semantic hash. It contains
+exactly one Action-105 governance row with Action tag 105, Planning owner tag 12
+and the fixed Planning, Authority and Persistence participant set. The existing
+Authority-owned `RepositoryGovernanceHead` continuity class remains class tag 8
+and closes over the exact direct root plus its immutable, gap-free predecessor
+history. No second mutable head object, generic owner-fact hash, caller digest
+or active-object-set hash may select or stand in for the Snapshot.
+
+Governance and Scheduling Safety remain separate namespaces. The persisted
+Snapshot owns the Authority Transition Protocol and governance requirement; it
+does not store or select the Scheduling Safety classifier. Authority resolves
+the current direct root, validates its schema, lineage, rows and semantic hash,
+then separately resolves and joins the pinned Scheduling Safety Floor,
+classifier, evaluator and compatibility result.
+
+Stage 5 adds one Authority-private transaction-lifetime
+`RepositoryGovernanceFloorCurrentViewV1<'tx>` resolver and consumer to the
+frozen boundary. Persistence exposes only the coherent generic Store
+transaction view. Authority alone selects and retains the unique direct root
+and binds the Store instance and incarnation, current Head and revision,
+Generation identity and ordinal, Authority Context and Epoch, Trust Root,
+continuity state token, fence and currentness, revocation object and subject
+revision, Snapshot identity and revision, class root, Action-105 requirement
+and the separately resolved Scheduling Safety tuple. The resolver has no public
+constructor, serialization, cache, registry, callback, hidden global lookup or
+caller-selectable currentness.
+
+The Action-105 ordering is fixed: committed-Result replay or conflict is checked
+before capability acquisition; Authority resolves the retained current view;
+authenticates Principal, human Binding and Session; accepts only typed Planning
+current-policy, candidate-policy and Safety facts; evaluates the governance
+requirement and Scheduling Safety classifier independently; mints the existing
+process-local `GovernanceAttestationV1<'tx>`, df3b binding and any required
+downgrade Mandate use; preserves the direct floor root in the successor
+Generation; and immediately before the Store-head CAS re-resolves and
+equality-checks every Store, Head, Generation, floor, class-root, requirement,
+classifier/evaluator, Safety Floor, Authority, revocation, trusted-time,
+expected-old, idempotency, debit, carrier and Mandate fact. Planning and Stage 7
+never supply a floor tuple, id, revision, hash, requirement, classifier
+selection/result, raw Authority state or parsed Snapshot.
+
+Repository genesis is the only absent-to-present branch and atomically
+publishes revision 1 with the class root and Store Head. Later rotation reuses
+existing Action 68 `AcceptContinuityFloor` and the existing continuity/root
+rotation guard; weakening additionally consumes the already-required exact
+governance downgrade Mandate. Action 105 preserves rather than rotates the
+root. A legacy Store without a native direct root requires one explicit
+authorized migration transaction; floor-dependent mutation refuses until it
+commits. Restore accepts only the exact direct root and complete predecessor
+chain after Store Generation continuity, old-writer fencing, Epoch, Trust Root,
+currentness, anti-rollback and writer/schema compatibility proof. No raw legacy
+number, policy value, filename, label, generic continuity hash, copied byte set
+or time ordering becomes governance evidence.
+
+The rotated proof-input closure adds the internal tag-25 descriptor and
+canonical encoding, the unchanged 1-through-24 prefix, exact direct-root and
+class closure, Action-68/105 separation, Action-105 row totality,
+Governance/Scheduling classifier separation, retained current-view equality,
+Result-before-capability ordering, genesis, guarded rotation, explicit
+migration, restore anti-rollback, old-writer compatibility, crash and
+acknowledgement-loss cuts, and zero-write/zero-spend refusals. Negative mutants
+cover every missing, duplicate, non-root, stale, forked, cyclic, truncated,
+wrong-domain/context/Generation/Epoch/Trust-Root/revocation, wrong-row,
+wrong-grammar/evaluator/protocol, caller-supplied, cross-namespace,
+cross-request, escaping, replayed or split-commit variant. Every affected
+Stage-2, Stage-4, Stage-5, candidate-root and enclosing identity is regenerated
+only after replacement packet approval. Historical receipts remain immutable,
+noncurrent evidence.
+
+The exact external design-authority closure is now 218 raw Decision records:
+122 locked heads, 96 matched superseded records, zero open and zero invalid.
+The previously approved packet
+`sha256:c95d128a072c36acaf231504eb6392f487185186d69accf9579cfd6c88230c8d`
+is obsolete historical provenance because it does not bind this Decision,
+schema suffix, resolver, proof inputs or fanout delta. The blocked,
+compile-clean provisional Stage-5 correction remains preserved and unverified
+at commit `92dca6b8c6c54b435206fd734fca4dbfddfbdbaf`, tree
+`db4be514b0437062c86266c3fc554229ed34a4a1`, in the existing dedicated
+workspace. Stages 6 through 12 remain preserved at their exact candidate
+commits and are not integrated by this design pass.
+
+The replacement External Build Plan Handoff binds this new design commit and
+tree, all 218 Decision records, internal schema tag 25, the rotated five-seam
+Stage-5 boundary, proof inputs, fanout ownership and denylist, the existing
+clean provisional implementation workspace, preserved candidates, protected
+primary dirty-work boundary and exact recipient task. Before the exact
+replacement approval phrase is received, implementation-workspace
+fast-forward, product edits, canonical artifact regeneration, sealing,
+candidate reconstruction or integration, publication, installation, release
+and live external mutation remain forbidden.
+
 ### FINAL-MAIN Capability-clause materialization ledger through efa0
 
 These side-handoff clauses are now canonical through effective efa0, which incorporates a13b/d21e/d116/7138/831a and preserves their unaffected Capability laws rather than leaving them as candidate-only notes. The H3 withdrawal and efa0 lifecycle/catalog extensions change none of their Skill, Job, Method, Recipe, Packet or Setup semantics.
