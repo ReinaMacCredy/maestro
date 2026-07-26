@@ -11923,6 +11923,172 @@ Each material clause has exactly one original classification. A later resolution
 | ER-14 linked Release and Installation censuses | consistent explanatory expansion | E204/C325/28,102 closure is complete; superseded c868 supplies immutable checkpoint schemas/totality, effective efa0 incorporates the semantic law, and Stage 0 generates every dependency-bound successor with concrete Release rows |
 | ER-15 one public Skill with seven internal jobs | conflicting and requiring supersession | effective efa0 incorporates a13b/d21e/d116/7138, 831a and therefore 7305; no legacy public Skill or runtime alias survives |
 
+### Governance, locator, census and finality successor amendment
+
+This section is the current external-build design head. It is an additive
+successor amendment to every unaffected clause above and rotates the frozen
+Stage-5 internal interface boundary before any new implementation or proof
+publication. It changes no Action, owner tag, public or persisted schema,
+Catalog member, Resource, Bundle, Release, wire representation or canonical
+identity algorithm. Where this section expressly supersedes an older production
+materialization seam, the older Decision remains immutable predecessor evidence
+and its unaffected laws remain normative.
+
+#### Locked Decision order and common capability law
+
+The following four Decisions were opened and locked in this exact order:
+
+1. `dec-canonical-authority-owned-governance-c77d`, **Canonical Authority-owned Governance Attestation**.
+2. `dec-canonical-persistence-owned-protected-ca82`, **Canonical Persistence-owned Protected Locator Lease**.
+3. `dec-canonical-foundation-owned-aggregate-f9e7`, **Canonical Foundation-owned Aggregate Census Lease**.
+4. `dec-canonical-installation-owned-durable-f439`, **Canonical Installation-owned Durable Finality Provider**.
+
+Every capability introduced by these Decisions is process-local, owner-minted,
+move-only, non-cloneable, non-serializable, non-cacheable, non-replayable and
+non-transferable. Each has private fields, a private constructor and a
+non-static owner-operation lifetime. None has a public or crate-wide
+constructor, `Copy`, `Clone`, `Default`, `Debug`, `Send`, `Sync`, `'static`
+escape, bearer accessor, downcast or conversion, canonical bytes, persistence,
+registry, cache, log form, Resource identity, wire representation, restart
+reconstruction or hidden global lookup. Capability replay is forbidden while
+exact committed-Result idempotency replay remains required.
+
+Authority alone derives and atomically rechecks the live Repository Governance
+Floor object and Action-105 requirement. It separately validates the Scheduling
+Safety Floor's pinned policy-diff classifier; neither namespace may substitute
+for the other. Planning supplies only nominal typed policy and safety facts and
+cannot supply governance ids, revisions, requirements, classifier selection or
+result, downgrade route, raw floor values, currentness, revocation or parsed
+Authority state. The new `GovernanceAttestationV1<'tx>` joins rather than
+replaces the existing scheduling-downgrade Mandate use and sealed repository
+Action binding.
+
+Persistence owns the real protected-locator observation and
+`ProtectedLocatorLeaseV1<'locator>`. The lease retains the exact facility,
+provider incarnation, external anchor and backend handle; binds Realm, locator
+slot, root, CAS token/version/incarnation, Ceremony, Attempt, carrier,
+anti-rollback and currentness; and performs full-tuple rereads before dispatch
+and during final resolution. Callers provide no root, path, raw CAS, count,
+absence claim, final candidate root or seal as evidence. Candidate root and seal
+are derived only after inert association materialization. Exact post-dispatch
+readback distinguishes committed, `recovery_required`, `in_doubt` and
+integrity-blocked outcomes without blind retry.
+
+Foundation owns one `AggregateCensusLeaseV1<'scan>` and one
+single-consumption sealed result across the complete admitted root capability
+set. This expressly supersedes the production singular-root cardinality, lease
+and finality clauses of `dec-canonical-foundation-descriptor-a128`; the older
+descriptor-relative no-follow, same-mount descendant, single-link leaf,
+lossless-locator, zero-partial-result and physical-ownership laws remain
+unchanged. All root handles and component fences remain live simultaneously
+through pass A over all roots, the complete scan, pass B over all roots and one
+coherent final cross-root recheck. Optional-root membership drift, overlap,
+physical aliasing, mutation, replacement, ABA, mount/provider change,
+component-fence loss or aggregate overflow fails the whole census with zero
+rows.
+
+Installation owns
+`DurableInstallationFinalityBackendV1<'effect>`, which captures one
+owner-bound durable effect provider inside a nominal ActiveStore or PreStore
+backend. ActiveStore performs the exact same-domain atomic Store commit and
+owner-local postcondition readback; acknowledgement loss is resolved by exact
+idempotency and readback, never post-write refusal or blind retry. PreStore is
+strictly inert: it performs no Store, network, locator or currentness mutation,
+and only validates the already materialized association, consumer commitment,
+candidate root, seal, Ceremony, Attempt, carrier and postcondition while
+joining the live protected-locator lease. The existing Ceremony owner alone
+dispatches and resolves the protected CAS. No caller callback, ambient Store,
+registry or hidden lookup may act as a finality provider.
+
+#### Rotated Stage-5 frozen interface boundary
+
+The Stage-5 source boundary must now freeze exactly four owner-private,
+non-static seams and their test-only conformance adapters:
+
+| Frozen Stage-5 seam | Owner and minter | Exact later production obligation |
+| --- | --- | --- |
+| `GovernanceAttestationV1<'tx>` plus consuming scheduling-publication continuation | Authority | Stage 7 replaces the provisional caller governance tuple with typed Planning facts and Authority-owned derivation and coherent final recheck |
+| `ProtectedLocatorLeaseV1<'locator>` plus Installation acquisition and consuming PreStore-finality port | Persistence owns physical currentness and minting; Installation owns operation composition | Stage 9 supplies the real protected-locator provider; Stage 11 consumes it only through the frozen owner operation |
+| `AggregateCensusLeaseV1<'scan>` plus sealed single-consumption result | Foundation | Stage 11 replaces the singular production path with the complete admitted-root operation and a supported-platform aggregate backend |
+| `DurableInstallationFinalityBackendV1<'effect>` with captured ActiveStore/PreStore provider variants | Installation | Stages 9 and 11 provide real context-specific operations; ActiveStore owns atomic effect/readback and PreStore remains inert |
+
+All four Stage-5 conformance adapters are test-only and fail closed outside
+their exact fixtures. They do not attest production provenance, Store
+finality, protected-locator currentness or platform-wide census currentness.
+The frozen seam may use private nominal carrier types but may not expose public
+or persistent schemas, add an Action, alter the 145-Action/444-row catalog, or
+duplicate Stage-7, Stage-9 or Stage-11 product behavior.
+
+#### Rotated proof inputs and acceptance
+
+The current design-authority closure is externally reconstructed from 217 raw
+Decision records: 121 locked heads, 96 matched superseded records and zero open
+or invalid records. It comprises the prior 209-card authoring closure, the four
+locked materialization Decisions `df3b`, `0939`, `a128`, `c1fe`, and the four
+successor Decisions above. Exact raw inventory, node/edge closure and every
+card byte are packet-bound inputs. They are not canonical vNext proof artifacts.
+
+The next authorized build must add negative and positive proof inputs for:
+
+- wrong or caller-supplied Governance Floor, requirement, classifier namespace,
+  classifier result, currentness, revocation, downgrade route and parsed
+  Authority state; same-transaction consumption, zero-write refusal and
+  committed-Result-only replay;
+- caller-supplied locator root/CAS/count/absence, alias and symlink
+  substitution, full-tuple drift, ABA, mount/provider and restore races,
+  pre/post-dispatch crash cuts and exact
+  committed/`recovery_required`/`in_doubt`/integrity-blocked resolution;
+- sequential single-root composition, optional-root membership drift,
+  overlap/cross-root alias, mutation between any pass/root/final cut,
+  replacement/ABA, mount/provider change, journal/fence loss, aggregate
+  overflow and zero-partial-result refusal;
+- no-op, partial-write, wrong-Store, wrong-row, false-success and stale-readback
+  finality providers; ActiveStore atomic rows/Head/Result plus postcondition
+  readback; PreStore zero-effect behavior; double consumption, capability
+  escape, serialization, caching and replay across all four seams.
+
+Every changed source, executable test, validator, proof input, toolchain or
+predecessor byte invalidates the exact affected identity and must be
+regenerated under the approved build plan. Historical Stage-0/4/5 receipts and
+canonical artifacts remain immutable evidence only and cannot certify this
+successor closure. This design pass itself generates no canonical artifact,
+receipt, Contract Root, Design Finalization Manifest, canonical Build Handoff
+or seal.
+
+#### Preserved candidate state and rotated fanout
+
+No Stage-6-through-12 candidate is integrated by this design pass. The exact
+pre-amendment commits remain preserved, noncurrent implementation evidence:
+
+| Stage | Preserved commit | Disposition |
+| --- | --- | --- |
+| 6 | `f1dcaf1a9cbd53b634905788d736b7289a48d87f` | retained integration-candidate evidence; must be reconstructed on the approved successor base |
+| 7 | `60930c2d98162df1a5b6db31511ccc92c2012b20` | retained candidate evidence |
+| 8 | `702577f1d61ce8c5acd84218e526c4167d84529c` | retained candidate evidence |
+| 9 | `3cbe2e0041d00ec104a4299fc12418899c0bea2a` | retained candidate evidence |
+| 10 | `835a8a942b448d5789bb1a675acfcf6e8c31bfc2` | retained candidate evidence |
+| 11 | `99abf6bb34c99512951c5f074128fd5953bb82b4` | retained candidate evidence |
+| 12 | `ca397f25ceea5ae99610bef9c042271d92d73d31` | retained candidate evidence |
+
+The rotated fanout manifest binds these commits as preservation inputs only.
+After exact approval, each slice must be reconstructed on the new clean
+successor boundary and integrated strictly `6 -> 7 -> 8 -> 9 -> 10 -> 11 ->
+12`. Candidate commits, test adapters and historical receipts are never
+currentness proof. Stage 12 production deletion, namespace promotion and
+pruning remain unavailable before Stage 11 integration and consumer-zero
+proof.
+
+The external Build Plan Handoff binds the new design commit and tree, all 217
+Decision records, the rotated Stage-5 boundary and proof inputs, the complete
+fanout manifest, the exact preserved candidate commits, the dedicated absent
+implementation-workspace leaf and the exact recipient task. The previous
+external packet `sha256:fb33b048b59c66df9858558a2c80e59a478d101465761f902366c9a00751cbc5`
+is obsolete historical provenance and cannot authorize this closure. Only the
+fresh exact replacement approval phrase printed by the independently verified
+packet may authorize implementation. Until then, implementation, canonical
+artifact regeneration, sealing, integration, publication, installation,
+release and live external mutation remain forbidden.
+
 ### FINAL-MAIN Capability-clause materialization ledger through efa0
 
 These side-handoff clauses are now canonical through effective efa0, which incorporates a13b/d21e/d116/7138/831a and preserves their unaffected Capability laws rather than leaving them as candidate-only notes. The H3 withdrawal and efa0 lifecycle/catalog extensions change none of their Skill, Job, Method, Recipe, Packet or Setup semantics.

@@ -1,0 +1,33 @@
+schema_version: maestro.card.v1
+id: dec-canonical-foundation-owned-aggregate-f9e7
+type: decision
+title: Canonical Foundation-owned Aggregate Census Lease
+status: locked
+parent: maestro-whole-flow-architecture-refoundation
+created_at: 2026-07-26T03:39:32.148Z
+updated_at: 2026-07-26T03:39:32.152Z
+extra:
+  locked_at: 2026-07-26T03:39:32.152Z
+  decision: |-
+    Foundation owns one sealed AggregateCensusLeaseV1<'scan>, one sealed single-consumption AggregateCensusResultV1<'scan> and one aggregate census operation over the complete admitted root set. This Decision explicitly supersedes the production singular-root cardinality, lease and finality clauses of dec-canonical-foundation-descriptor-a128; its unaffected descriptor-relative no-follow, same-mount descendant, single-link leaf, lossless-locator, zero-partial-result and physical-ownership laws remain locked. Migration must not obtain a production census by calling or composing the old census(root, limits) success path.
+
+    Before the first scan, Foundation consumes the complete finite admitted root capability set, including the exact status of every optional root, and canonicalizes the exact count, order, aggregate checked limits and membership. It resolves physical alias closure, rejects duplicate physical roots, overlapping ancestor/descendant roots and cross-root object aliases, and acquires retained ancestor/root handles plus every component snapshot, journal or namespace fence required to cover all admitted roots simultaneously. Each root binds path bytes, descriptor-chain and root-object identity, mount/volume/filesystem identity, namespace identity, provider incarnation, monotonic epoch, device, inode, mode, owner, link count and admission class. The lease also binds backend identities and revisions, aggregate journal loss/overflow state, unique scan invocation, root-set currentness and revocation. An unfenceable multi-provider or multi-mount set refuses.
+
+    All retained handles and component fences remain live concurrently across pass A over all roots, the complete recursive no-follow scan, pass B over all roots, all cross-root normalization, alias and collision checks, checked cumulative limits, and one coherent final cross-root recheck performed only after every root and row has been observed. Foundation may compose owner-held component mechanisms internally, but per-root leases released before other roots finish are forbidden. Migration may request the admitted-root operation and consume the sealed result once through its owner port; it may not provide raw paths, root lists, counts, digests, rows, optional-root absence claims or per-root epochs, choose final-recheck order, substitute a registry, loop a single-root port, or combine independently current snapshots.
+
+    Pass A and pass B must prove stable object identity and stable complete row meaning for every directory, regular file, symlink and admitted special refusal. The consuming finish compares the complete root-set membership, every retained handle, mount/volume/filesystem and provider identity, alias closure, namespace/journal epoch, aggregate limits, backend loss/overflow state and currentness fence while all component mechanisms remain live. Any optional-root appearance or disappearance, creation, deletion, content or metadata mutation, rename, root or provider replacement, symlink or alias substitution, cross-root alias, ABA event, mount change, device or inode drift, journal drop/overflow/wrap, permission blind spot, component-fence loss, aggregate overflow, fence revocation, unavailable identity or backend uncertainty in any root invalidates the whole census. Failure returns zero rows and produces zero Migration classification or currentness effect.
+
+    The aggregate platform capability may be implemented by owner-supported snapshots, namespace leases, journal fences or stronger mechanisms only if their simultaneous composition proves the full claim. Advisory events alone, a quiet event counter, sequential per-root descriptors, timestamps or hashes as sole proof, retrying only the changed root, or a process-local mutex excluding only Maestro writers are insufficient. A platform unable to prove complete cross-root currentness refuses production success.
+
+    AggregateCensusLeaseV1 and its sealed result are process-local, Foundation-minted, move-only, non-cloneable, non-serializable, non-cacheable, non-replayable and non-transferable. They have private fields, private constructors and non-static scan lifetimes; no public or crate-wide constructor, Copy, Clone, Default, Debug, Send, Sync, 'static escape, repeatable row or identity accessor, digest-only proof, downcast or conversion, canonical bytes, persistence, registry, cache, log form, Resource identity, wire representation, restart reconstruction or hidden global state exists. Stage 5 freezes the aggregate owner port and test-only conformance adapter; Stage 11 implements the real supported-platform backend and consumes only the sealed result. Proof mutates each root between every root/pass/final cut; exercises optional membership, overlap, cross-root alias, rename, replace, ABA, mount/provider, symlink, journal loss, permission, fence-loss, overflow and concurrent-writer cases; rejects sequential composition and partial success; and preserves the unchanged InventoryRowV1, schema, catalog and Resource closure.
+  preview: |-
+    complete admitted root set
+      -> Foundation acquires all root descriptors + one aggregate fence
+      -> pass 1 + complete scan + pass 2
+      -> one final cross-root recheck
+      -> complete sealed census or one fail-closed refusal
+  rejected:
+  - 'Loop the existing single-root census and join its outputs: roots can be observed at different namespace moments.'
+  - 'Use only FSEvents or another advisory counter without proving complete visibility, no loss and exact root binding: quiet or filtered streams are not an aggregate snapshot.'
+  - 'Use a process-local mutex that excludes only cooperating Maestro writers: external mutation and mount replacement remain possible.'
+  - 'Return stable roots while dropping only a mutated root: the frozen claim is one complete byte-total census, so any root failure invalidates the whole result.'
