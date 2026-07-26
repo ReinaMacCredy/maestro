@@ -167,7 +167,7 @@ struct SchedulingPolicyOwnerPublicationV1 {
     planning: PlanningSchedulingPolicyInputV1,
 }
 
-pub(in crate::domain::vnext) struct SchedulingPolicyPublicationInputV1 {
+pub(super) struct SchedulingPolicyPublicationInputV1 {
     request_id: ActionRequestIdV1,
     request_object: StoreObjectV1,
     binding_object: StoreObjectV1,
@@ -176,16 +176,7 @@ pub(in crate::domain::vnext) struct SchedulingPolicyPublicationInputV1 {
 }
 
 impl SchedulingPolicyPublicationInputV1 {
-    // TODO(Planning Stage 7): Remove this expectation when Planning constructs
-    // the frozen typed scheduling publication input.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "Stage 5 freezes the typed Stage 7 scheduling publication input before Planning integrates"
-        )
-    )]
-    pub(in crate::domain::vnext) fn new(
+    pub(super) fn new(
         request_id: ActionRequestIdV1,
         request_object: StoreObjectV1,
         binding_object: StoreObjectV1,
@@ -1288,7 +1279,7 @@ impl<'store> AuthorityFacadeV1<'store> {
             })
     }
 
-    pub(in crate::domain::vnext) fn publish_scheduling_policy_without_downgrade(
+    pub(super) fn publish_scheduling_policy_without_downgrade(
         &mut self,
         probe: &StoreIdempotencyProbeV1,
         authority: PlanningRepositoryActionAuthorityV1,
@@ -1337,7 +1328,7 @@ impl<'store> AuthorityFacadeV1<'store> {
         )
     }
 
-    pub(in crate::domain::vnext) fn publish_scheduling_policy_with_downgrade(
+    pub(super) fn publish_scheduling_policy_with_downgrade(
         &mut self,
         probe: &StoreIdempotencyProbeV1,
         authority: PlanningRepositoryActionAuthorityV1,

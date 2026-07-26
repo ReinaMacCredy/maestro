@@ -155,6 +155,12 @@ impl AggregateCensusResultV1<'_> {
             roots: &self.roots,
         })
     }
+
+    pub(super) fn into_stage11_parts(
+        self,
+    ) -> ([u8; 32], u64, u64, Vec<AggregateComponentCensusV1>) {
+        (self.admitted_set, self.entries, self.bytes, self.roots)
+    }
 }
 
 fn validate_root_set(roots: &AggregateRootSetFactsV1) -> SecureFsResult<()> {

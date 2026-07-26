@@ -3657,6 +3657,7 @@ fn stage5_protected_diagnostic_ports_are_sealed_test_only_and_non_bearer() {
 
 #[test]
 fn stage5_successor_seams_are_owner_private_and_production_replaceable() {
+    let authority_facade = read_source_file(Path::new("src/domain/vnext/authority/facade.rs"));
     let authority = read_source_file(Path::new(
         "src/domain/vnext/authority/governance_attestation.rs",
     ));
@@ -3691,6 +3692,7 @@ fn stage5_successor_seams_are_owner_private_and_production_replaceable() {
     let singular = read_source_file(Path::new(
         "src/foundation/core/descriptor_census_platform.rs",
     ));
+    let vnext_module = read_source_file(Path::new("src/domain/vnext/mod.rs"));
 
     assert!(authority.contains("GovernanceAttestationV1<'tx"));
     assert!(authority.contains("RepositoryGovernanceFloorCurrentViewV1<'tx>"));
@@ -3706,7 +3708,18 @@ fn stage5_successor_seams_are_owner_private_and_production_replaceable() {
     assert!(!authority.contains("pub struct GovernanceAttestationV1"));
     assert!(authority_seed.contains("publish_scheduling_policy_from_stage7"));
     assert!(authority_seed.contains("SchedulingPolicyPublicationInputV1"));
-    assert!(!authority_seed.contains("PlanningSchedulingPolicyInputV1"));
+    assert!(authority_seed.contains("PlanningSchedulingPolicyInputV1"));
+    assert!(authority_seed.contains("SchedulingPolicyPublicationInputV1::new"));
+    assert!(authority_facade.contains("pub(super) struct SchedulingPolicyPublicationInputV1"));
+    assert!(
+        !authority_facade
+            .contains("pub(in crate::domain::vnext) struct SchedulingPolicyPublicationInputV1")
+    );
+    assert!(authority_facade.contains("pub(super) fn new("));
+    assert!(authority_facade.contains("pub(super) fn publish_scheduling_policy_without_downgrade"));
+    assert!(authority_facade.contains("pub(super) fn publish_scheduling_policy_with_downgrade"));
+    assert!(vnext_module.contains("stage7_governance_seed_compile_probe"));
+    assert!(vnext_module.contains("stage7_sibling_can_name_and_call_only_the_seed_owned_entry"));
 
     assert!(persistence.contains("ProtectedLocatorLeaseV1<'locator>"));
     assert!(persistence.contains("begin_pre_store"));
@@ -3721,6 +3734,11 @@ fn stage5_successor_seams_are_owner_private_and_production_replaceable() {
     assert!(foundation.contains("acquire_complete_root_set"));
     assert!(foundation.contains("final_root_set_recheck"));
     assert!(foundation_seed.contains("Stage11AggregateCensusBackendSeedV1"));
+    assert!(foundation_seed.contains("Stage11AggregateCensusOutputV1<'scan>"));
+    assert!(foundation_seed.contains("pub(super) fn census_from_stage11_owner"));
+    assert!(foundation_seed.contains("pub(super) fn into_parts"));
+    assert!(!foundation_seed.contains("pub fn census_from_stage11_owner"));
+    assert!(!foundation_seed.contains("#[derive(Clone"));
     assert!(singular.contains("singular-root production route is intentionally retired"));
     assert!(!foundation.contains("pub struct AggregateCensusLeaseV1"));
 
@@ -3732,13 +3750,47 @@ fn stage5_successor_seams_are_owner_private_and_production_replaceable() {
     assert!(installation.contains("ProtectedLocatorCeremonyContinuationV1<'locator>"));
     assert!(installation_stage9.contains("impl ActiveStoreFinalityOwnerV1"));
     assert!(installation_stage11.contains("impl PreStoreFinalityOwnerV1"));
+    assert!(installation.contains("Stage11PreStoreFinalityOperationV1<'effect>"));
+    assert!(installation.contains("Stage9ActiveStoreFinalityOperationV1<'effect>"));
+    assert!(installation.contains("prepare_active_from_stage9_owner"));
+    assert!(installation.contains("prepare_pre_store_from_stage11_owner"));
+    assert!(installation.contains("execute_pre_store_from_stage11_owner"));
+    assert!(!installation.contains("pub struct Stage11PreStoreFinalityOperationV1"));
+    assert!(!installation.contains("#[derive(Clone, Copy)]\npub(in crate::domain::vnext) struct Stage11PreStoreFinalityOperationV1"));
     assert!(!installation.contains("impl FnOnce"));
     assert!(!installation.contains("pub struct DurableInstallationFinalityBackendV1"));
 
     assert!(!authority_mod.contains("pub mod governance_attestation"));
     assert!(!persistence_mod.contains("pub mod protected_locator_lease"));
     assert!(!foundation_mod.contains("pub mod aggregate_census"));
+    assert!(!foundation_mod.contains("pub(crate) mod aggregate_census_stage11_seed"));
     assert!(!installation_mod.contains("pub mod durable_finality"));
+    assert!(
+        !installation_mod
+            .contains("pub(in crate::domain::vnext) mod durable_finality_stage11_seed")
+    );
+    assert!(
+        !installation_mod.contains("pub(in crate::domain::vnext) mod durable_finality_stage9_seed")
+    );
+    assert!(foundation_mod.contains("pub(crate) mod stage11_aggregate_census"));
+    assert!(foundation_mod.contains("pub(crate) fn census_from_stage11_owner"));
+    assert!(foundation_mod.contains("pub(crate) fn into_parts"));
+    assert!(installation_mod.contains("pub(in crate::domain::vnext) mod stage9_finality"));
+    assert!(installation_mod.contains("pub(in crate::domain::vnext) mod stage11_finality"));
+    assert!(
+        installation_mod
+            .contains("pub(in crate::domain::vnext) fn prepare_active_from_stage9_owner")
+    );
+    assert!(
+        installation_mod
+            .contains("pub(in crate::domain::vnext) fn prepare_pre_store_from_stage11_owner")
+    );
+    assert!(vnext_module.contains("stage11_frozen_owner_seed_compile_probe"));
+    assert!(
+        vnext_module.contains("stage11_sibling_can_name_and_call_only_the_frozen_owner_entries")
+    );
+    assert!(vnext_module.contains("stage9_frozen_owner_seed_compile_probe"));
+    assert!(vnext_module.contains("stage9_sibling_can_name_and_call_only_the_frozen_owner_entry"));
 }
 
 fn rust_files_under(root: &Path) -> Vec<PathBuf> {

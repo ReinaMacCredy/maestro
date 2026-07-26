@@ -392,24 +392,142 @@ fn active_readback_matches(
         && readback.idempotency_rows == decision.idempotency_meaning
 }
 
-pub(super) fn execute_active_from_stage9_owner(
+pub(super) struct Stage9ActiveStoreFinalityOperationV1<'effect> {
+    backend: &'effect mut super::durable_finality_stage9_seed::Stage9ActiveStoreFinalitySeedV1,
     request: ActiveStoreFinalityRequestV1,
-) -> Result<(), DurableInstallationFinalityErrorV1> {
-    let mut backend = super::durable_finality_stage9_seed::acquire();
-    DurableInstallationFinalityBackendV1::capture(&mut backend)
-        .consume_active(request)
-        .map(|_| ())
+    _not_send_or_sync: PhantomData<Rc<()>>,
+}
+
+pub(super) struct Stage9ActiveStoreFinalityOutcomeV1 {
+    class: Stage9ActiveStoreFinalityOutcomeClassV1,
+    _not_send_or_sync: PhantomData<Rc<()>>,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub(super) enum Stage9ActiveStoreFinalityOutcomeClassV1 {
+    Committed,
+    RecoveryRequired,
+    InDoubt,
+    IntegrityBlocked,
+}
+
+#[derive(Debug, Error, Eq, PartialEq)]
+#[error("the Stage 9 ActiveStore finality operation was refused")]
+pub(super) struct Stage9ActiveStoreFinalityErrorV1;
+
+impl Stage9ActiveStoreFinalityOutcomeV1 {
+    pub(super) fn into_class(self) -> Stage9ActiveStoreFinalityOutcomeClassV1 {
+        self.class
+    }
+}
+
+pub(super) fn prepare_active_from_stage9_owner(
+    backend: &mut super::durable_finality_stage9_seed::Stage9ActiveStoreFinalitySeedV1,
+) -> Result<Stage9ActiveStoreFinalityOperationV1<'_>, Stage9ActiveStoreFinalityErrorV1> {
+    let request = backend
+        .prepare_request()
+        .map_err(|_| Stage9ActiveStoreFinalityErrorV1)?;
+    validate_active_request(&request).map_err(|_| Stage9ActiveStoreFinalityErrorV1)?;
+    Ok(Stage9ActiveStoreFinalityOperationV1 {
+        backend,
+        request,
+        _not_send_or_sync: PhantomData,
+    })
+}
+
+pub(super) fn execute_active_from_stage9_owner(
+    operation: Stage9ActiveStoreFinalityOperationV1<'_>,
+) -> Result<Stage9ActiveStoreFinalityOutcomeV1, Stage9ActiveStoreFinalityErrorV1> {
+    DurableInstallationFinalityBackendV1::capture(operation.backend)
+        .consume_active(operation.request)
+        .map_err(|_| Stage9ActiveStoreFinalityErrorV1)
+        .map(|outcome| Stage9ActiveStoreFinalityOutcomeV1 {
+            class: match outcome {
+                DurableInstallationFinalityOutcomeV1::Committed => {
+                    Stage9ActiveStoreFinalityOutcomeClassV1::Committed
+                }
+                DurableInstallationFinalityOutcomeV1::RecoveryRequired => {
+                    Stage9ActiveStoreFinalityOutcomeClassV1::RecoveryRequired
+                }
+                DurableInstallationFinalityOutcomeV1::InDoubt => {
+                    Stage9ActiveStoreFinalityOutcomeClassV1::InDoubt
+                }
+                DurableInstallationFinalityOutcomeV1::IntegrityBlocked => {
+                    Stage9ActiveStoreFinalityOutcomeClassV1::IntegrityBlocked
+                }
+            },
+            _not_send_or_sync: PhantomData,
+        })
+}
+
+pub(super) struct Stage11PreStoreFinalityOperationV1<'effect> {
+    backend: &'effect mut super::durable_finality_stage11_seed::Stage11PreStoreFinalitySeedV1,
+    request: PreStoreFinalityRequestV1,
+    _not_send_or_sync: PhantomData<Rc<()>>,
+}
+
+pub(super) struct Stage11PreStoreFinalityOutcomeV1 {
+    class: Stage11PreStoreFinalityOutcomeClassV1,
+    _not_send_or_sync: PhantomData<Rc<()>>,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub(super) enum Stage11PreStoreFinalityOutcomeClassV1 {
+    Committed,
+    RecoveryRequired,
+    InDoubt,
+    IntegrityBlocked,
+}
+
+#[derive(Debug, Error, Eq, PartialEq)]
+#[error("the Stage 11 PreStore finality operation was refused")]
+pub(super) struct Stage11PreStoreFinalityErrorV1;
+
+impl Stage11PreStoreFinalityOutcomeV1 {
+    pub(super) fn into_class(self) -> Stage11PreStoreFinalityOutcomeClassV1 {
+        self.class
+    }
+}
+
+pub(super) fn prepare_pre_store_from_stage11_owner(
+    backend: &mut super::durable_finality_stage11_seed::Stage11PreStoreFinalitySeedV1,
+) -> Result<Stage11PreStoreFinalityOperationV1<'_>, Stage11PreStoreFinalityErrorV1> {
+    let request = backend
+        .prepare_request()
+        .map_err(|_| Stage11PreStoreFinalityErrorV1)?;
+    validate_pre_store_request(&request).map_err(|_| Stage11PreStoreFinalityErrorV1)?;
+    Ok(Stage11PreStoreFinalityOperationV1 {
+        backend,
+        request,
+        _not_send_or_sync: PhantomData,
+    })
 }
 
 pub(super) fn execute_pre_store_from_stage11_owner<'locator>(
-    request: PreStoreFinalityRequestV1,
+    operation: Stage11PreStoreFinalityOperationV1<'_>,
     locator_lease: ProtectedLocatorLeaseV1<'locator>,
-) -> Result<(), DurableInstallationFinalityErrorV1> {
-    let mut backend = super::durable_finality_stage11_seed::acquire();
-    DurableInstallationFinalityBackendV1::capture(&mut backend)
-        .consume_pre_store(request, locator_lease)
+) -> Result<Stage11PreStoreFinalityOutcomeV1, Stage11PreStoreFinalityErrorV1> {
+    DurableInstallationFinalityBackendV1::capture(operation.backend)
+        .consume_pre_store(operation.request, locator_lease)
         .and_then(PreStoreCeremonyContinuationV1::dispatch)
-        .map(|_| ())
+        .map_err(|_| Stage11PreStoreFinalityErrorV1)
+        .map(|outcome| Stage11PreStoreFinalityOutcomeV1 {
+            class: match outcome {
+                DurableInstallationFinalityOutcomeV1::Committed => {
+                    Stage11PreStoreFinalityOutcomeClassV1::Committed
+                }
+                DurableInstallationFinalityOutcomeV1::RecoveryRequired => {
+                    Stage11PreStoreFinalityOutcomeClassV1::RecoveryRequired
+                }
+                DurableInstallationFinalityOutcomeV1::InDoubt => {
+                    Stage11PreStoreFinalityOutcomeClassV1::InDoubt
+                }
+                DurableInstallationFinalityOutcomeV1::IntegrityBlocked => {
+                    Stage11PreStoreFinalityOutcomeClassV1::IntegrityBlocked
+                }
+            },
+            _not_send_or_sync: PhantomData,
+        })
 }
 
 fn validate_active_request(

@@ -742,11 +742,7 @@ mod tests {
     fn pre_store_hands_the_live_lease_to_the_ceremony_cas_continuation() {
         let mut backend = backend();
         let lease = ProtectedLocatorLeaseV1::acquire(&mut backend, request()).unwrap();
-        assert!(
-            crate::domain::vnext::installation::durable_finality::consume_pre_store_with_test_owner(
-                lease, 0
-            )
-        );
+        assert!(crate::domain::vnext::installation::consume_pre_store_with_test_owner(lease, 0));
         assert_eq!(backend.dispatches, 1);
     }
 
@@ -754,11 +750,7 @@ mod tests {
     fn pre_store_false_success_with_a_write_is_rejected_through_the_same_live_lease() {
         let mut backend = backend();
         let lease = ProtectedLocatorLeaseV1::acquire(&mut backend, request()).unwrap();
-        assert!(
-            !crate::domain::vnext::installation::durable_finality::consume_pre_store_with_test_owner(
-                lease, 1
-            )
-        );
+        assert!(!crate::domain::vnext::installation::consume_pre_store_with_test_owner(lease, 1));
         assert_eq!(backend.dispatches, 0);
     }
 }

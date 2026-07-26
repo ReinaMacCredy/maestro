@@ -14,6 +14,62 @@ pub(crate) mod aggregate_census;
     )
 )]
 mod aggregate_census_stage11_seed;
+
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "TODO(foundation-stage11): Remove after Stage 11 integrates the frozen aggregate census facade"
+    )
+)]
+pub(crate) mod stage11_aggregate_census {
+    use super::aggregate_census_stage11_seed;
+    use super::secure_fs::{InventoryRowV1, SecureFsResult};
+
+    pub(crate) struct Stage11AggregateCensusBackendSeedV1 {
+        inner: aggregate_census_stage11_seed::Stage11AggregateCensusBackendSeedV1,
+    }
+
+    pub(crate) struct Stage11AggregateCensusOutputV1<'scan> {
+        inner: aggregate_census_stage11_seed::Stage11AggregateCensusOutputV1<'scan>,
+    }
+
+    pub(crate) struct Stage11AggregateCensusComponentV1 {
+        inner: aggregate_census_stage11_seed::Stage11AggregateCensusComponentV1,
+    }
+
+    pub(crate) fn acquire_seed() -> Stage11AggregateCensusBackendSeedV1 {
+        Stage11AggregateCensusBackendSeedV1 {
+            inner: aggregate_census_stage11_seed::acquire(),
+        }
+    }
+
+    pub(crate) fn census_from_stage11_owner<'scan>(
+        backend: &'scan mut Stage11AggregateCensusBackendSeedV1,
+    ) -> SecureFsResult<Stage11AggregateCensusOutputV1<'scan>> {
+        aggregate_census_stage11_seed::census_from_stage11_owner(&mut backend.inner)
+            .map(|inner| Stage11AggregateCensusOutputV1 { inner })
+    }
+
+    impl Stage11AggregateCensusOutputV1<'_> {
+        pub(crate) fn into_parts(
+            self,
+        ) -> ([u8; 32], u64, u64, Vec<Stage11AggregateCensusComponentV1>) {
+            let (admitted_set, entries, bytes, roots) = self.inner.into_parts();
+            let roots = roots
+                .into_iter()
+                .map(|inner| Stage11AggregateCensusComponentV1 { inner })
+                .collect();
+            (admitted_set, entries, bytes, roots)
+        }
+    }
+
+    impl Stage11AggregateCensusComponentV1 {
+        pub(crate) fn into_parts(self) -> ([u8; 32], [u8; 32], [u8; 32], Vec<InventoryRowV1>) {
+            self.inner.into_parts()
+        }
+    }
+}
 pub mod backup;
 #[cfg_attr(
     not(test),

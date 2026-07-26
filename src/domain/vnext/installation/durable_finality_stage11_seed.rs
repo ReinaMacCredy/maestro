@@ -11,6 +11,14 @@ pub(super) fn acquire() -> Stage11PreStoreFinalitySeedV1 {
     Stage11PreStoreFinalitySeedV1 { _private: () }
 }
 
+impl Stage11PreStoreFinalitySeedV1 {
+    pub(super) fn prepare_request(
+        &mut self,
+    ) -> Result<PreStoreFinalityRequestV1, DurableInstallationFinalityErrorV1> {
+        Err(DurableInstallationFinalityErrorV1::BackendUnavailable)
+    }
+}
+
 impl owner_sealed::Sealed for Stage11PreStoreFinalitySeedV1 {}
 
 impl PreStoreFinalityOwnerV1 for Stage11PreStoreFinalitySeedV1 {
@@ -46,6 +54,10 @@ mod tests {
 
     #[test]
     fn stage11_owner_seed_is_constructible_only_in_its_owner_module() {
-        let _ = acquire();
+        let mut backend = acquire();
+        assert!(matches!(
+            super::super::durable_finality::prepare_pre_store_from_stage11_owner(&mut backend),
+            Err(super::super::durable_finality::Stage11PreStoreFinalityErrorV1)
+        ));
     }
 }
