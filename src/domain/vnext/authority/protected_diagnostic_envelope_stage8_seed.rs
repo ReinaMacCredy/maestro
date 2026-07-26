@@ -1,10 +1,10 @@
+use super::facade::ProtectedDiagnosticCurrentViewProviderV1;
 use super::protected_diagnostic_envelope::{
     ProtectedContinuityDiagnosticAssemblerModeV1, ProtectedContinuityDiagnosticCandidateEnvelopeV1,
     ProtectedContinuityDiagnosticEnvelopeInputV1,
 };
 use super::{AuthorityFacadeV1, AuthorityPublicationError, ContinuityReferenceV1};
 use crate::domain::vnext::integration::TrustedHostDiagnosticConnectionPortV1;
-use crate::domain::vnext::persistence::ProtectedDiagnosticCurrentViewProviderV1;
 
 const _: () = {
     fn bind_stage8_production_consumer<'store>(

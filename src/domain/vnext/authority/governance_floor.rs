@@ -5,12 +5,12 @@ use std::rc::Rc;
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
-use crate::domain::vnext::identity::{
-    IdentityError, SchemaIdV1, StoreGenerationIdV1, StoreHeadIdV1, StoreObjectIdV1,
-};
-use crate::domain::vnext::persistence::{
+use super::facade::{
     StoreGenerationV1, StoreHeadV1, StoreObjectError, StoreObjectV1, StorePublicationViewV1,
     StoreRoleV1,
+};
+use crate::domain::vnext::identity::{
+    IdentityError, SchemaIdV1, StoreGenerationIdV1, StoreHeadIdV1, StoreObjectIdV1,
 };
 use crate::foundation::core::deterministic_cbor::{self, CborError, CborValue};
 

@@ -1,9 +1,7 @@
-use crate::domain::vnext::persistence::{StoreIdempotencyProbeV1, StorePublicationOutcomeV1};
-
 use super::facade::{
     AuthorityFacadeV1, AuthorityMaterializationPublicationErrorV1,
     PlanningRepositoryActionAuthorityV1, SchedulingPolicyMaterializationErrorV1,
-    SchedulingPolicyPublicationInputV1,
+    SchedulingPolicyPublicationInputV1, StoreIdempotencyProbeV1, StorePublicationOutcomeV1,
 };
 
 // TODO(Planning Stage 7): Remove these expectations when the Planning caller

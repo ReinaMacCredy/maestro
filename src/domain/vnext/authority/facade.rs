@@ -12,16 +12,20 @@ use crate::domain::vnext::integration::TrustedHostDiagnosticTestConnectionV1;
 use crate::domain::vnext::integration::{
     TrustedHostDiagnosticConnectionPortV1, TrustedHostDiagnosticPresentationPortV1,
 };
+use crate::domain::vnext::persistence::ProtectedDiagnosticCurrentViewAnchorV1;
 #[cfg(test)]
 use crate::domain::vnext::persistence::ProtectedDiagnosticTestCurrentViewProviderV1;
 use crate::domain::vnext::persistence::{
     AtomicGenerationPublicationV1, AtomicPublicationError, GenerationError,
-    PreparedPublicationError, StoreCompatibilityV1, StoreGenerationV1, StoreIdempotencyProbeV1,
-    StoreIdempotencyV1, StoreObjectError, StoreObjectV1, StorePublicationAllocationV1,
-    StorePublicationOutcomeV1, StorePublicationViewV1, StoreRoleV1, StoreStateV1, StoreV1,
+    PreparedPublicationError, StoreCompatibilityV1, StoreIdempotencyV1,
+    StorePublicationAllocationV1, StoreStateV1, StoreV1,
 };
-use crate::domain::vnext::persistence::{
-    ProtectedDiagnosticCurrentViewAnchorV1, ProtectedDiagnosticCurrentViewProviderV1,
+pub(super) use crate::domain::vnext::persistence::{
+    ProtectedDiagnosticCurrentViewProviderV1, StoreGenerationV1, StoreHeadV1, StoreObjectError,
+    StoreObjectV1, StorePublicationViewV1, StoreRoleV1,
+};
+pub(in crate::domain::vnext) use crate::domain::vnext::persistence::{
+    StoreIdempotencyProbeV1, StorePublicationOutcomeV1,
 };
 use crate::foundation::core::deterministic_cbor::{self, CborError, CborValue};
 
