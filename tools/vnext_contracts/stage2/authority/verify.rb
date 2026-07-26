@@ -149,6 +149,9 @@ STAGE2_SEMANTIC_LITERAL_PATTERNS = [
   "EffectWithdrawal", "WithdrawEffectIntent", "RecoverReserved", "ControlHead", "ControlRevision", "WriterTerm",
   "PublishBootstrapMandateInteractionOutcome", *CMA_OBSERVATION_PUBLICATION_PURPOSES,
   *CMA_EFFECT_WITHDRAWAL_SLOT_FAMILIES, *TRANSITION_GUARD_KINDS,
+  "RepositoryGovernanceFloorSnapshotV1",
+  "maestro.vnext.repository-governance-floor-snapshot.v1",
+  "maestro.vnext.repository-governance-head-class-8.v1",
 ].uniq.freeze
 STAGE2_SEMANTIC_SOURCE_DECLARATIONS = {
   "src/domain/vnext/authority/action_basis.rs" => ["Authority", "candidate_contract_definition", "exact_stage4_execution_basis_partition"],
@@ -171,6 +174,40 @@ STAGE2_SEMANTIC_SOURCE_DECLARATIONS = {
   "tools/vnext_contracts/stage2/authority/validate.py" => ["Stage2Proof", "candidate_proof_reader", "independent_stage2_semantic_reconstruction"],
   "tools/vnext_contracts/stage2/authority/verify.rb" => ["Stage2Proof", "candidate_proof_reader", "independent_stage2_ruby_reconstruction"],
 }.freeze
+STAGE2_REQUIRED_LITERALS_BY_SOURCE = {
+  "src/domain/vnext/authority/governance_floor.rs" => [
+    "RepositoryGovernanceFloorSnapshotV1",
+    "maestro.vnext.repository-governance-floor-snapshot.v1",
+    "maestro.vnext.repository-governance-head-class-8.v1",
+  ].freeze,
+}.freeze
+GOVERNANCE_FLOOR_REQUIRED_SOURCE_FRAGMENTS = [
+  "pub(super) struct RepositoryGovernanceFloorSnapshotV1 {",
+  "let snapshot = RepositoryGovernanceFloorSnapshotV1::decode_object(direct_object)?;",
+  [
+    "let history = validate_history(*direct_root, &by_id)?;",
+    "let class_root = hash_value(&CborValue::Array(vec![",
+    'CborValue::text("maestro.vnext.repository-governance-head-class-8.v1")?,',
+  ].join(" "),
+  [
+    "let commitment = current_view_commitment(",
+    "view, head, generation, &snapshot, *direct_root, class_root,",
+  ].join(" "),
+].freeze
+GOVERNANCE_FLOOR_SOURCE_MUTANTS = [
+  [
+    "pub(super) struct RepositoryGovernanceFloorSnapshotV1 {",
+    "pub(super) struct RepositoryGovernanceFloorSnapshotMutantV1 {",
+  ],
+  ["decode_object(direct_object)?", "decode_object(mutant_object)?"],
+  [
+    "maestro.vnext.repository-governance-head-class-8.v1",
+    "maestro.vnext.repository-governance-head-class-mutant.v1",
+  ],
+  ["class_root,\n        authority,", "[0; 32],\n        authority,"],
+].freeze
+
+class SourceSemanticError < StandardError; end
 
 def head(major, value)
   raise "canonical integers and lengths are unsigned u64" unless value.is_a?(Integer) && value.between?(0, U64_MAX)
@@ -236,13 +273,23 @@ def tracked_stage0_tree_digest
   digest.hexdigest
 end
 
-def semantic_delta
-  delta = JSON.parse(File.read(STAGE2_DELTA_PATH, encoding: Encoding::US_ASCII))
-  rows = STAGE2_SEMANTIC_SOURCE_DECLARATIONS.sort.map do |path, (owner, disposition, proof)|
-    bytes = File.binread(File.join(WORKSPACE, path))
+def semantic_source_rows(source_overrides = {})
+  raise "Stage 2 semantic source override is undeclared" unless (source_overrides.keys - STAGE2_SEMANTIC_SOURCE_DECLARATIONS.keys).empty?
+  STAGE2_SEMANTIC_SOURCE_DECLARATIONS.sort.map do |path, (owner, disposition, proof)|
+    bytes = source_overrides.fetch(path) { File.binread(File.join(WORKSPACE, path)) }
     contents = bytes.force_encoding(Encoding::UTF_8).scrub
     matched = STAGE2_SEMANTIC_LITERAL_PATTERNS.select { |literal| contents.include?(literal) }
     raise "Stage 2 semantic consumer has no literal: #{path}" if matched.empty?
+    missing = STAGE2_REQUIRED_LITERALS_BY_SOURCE.fetch(path, []).reject { |literal| contents.include?(literal) }
+    unless missing.empty?
+      raise SourceSemanticError, "Stage 2 semantic consumer is missing exact literals: #{path}: #{missing.join(', ')}"
+    end
+    if path == "src/domain/vnext/authority/governance_floor.rs"
+      normalized = contents.split.join(" ")
+      unless GOVERNANCE_FLOOR_REQUIRED_SOURCE_FRAGMENTS.all? { |fragment| normalized.include?(fragment) }
+        raise SourceSemanticError, "Stage 2 governance-floor source is missing causal persistence/current-head binding"
+      end
+    end
     digest = Digest::SHA256.hexdigest(bytes)
     {
       "path" => path, "resource_identity" => "sha256:#{digest}", "worktree_sha256" => digest,
@@ -250,6 +297,43 @@ def semantic_delta
       "proof" => proof,
     }
   end
+end
+
+def semantic_source_identity(rows)
+  canonical_rows = rows.map do |row|
+    [
+      row.fetch("path"),
+      row.fetch("resource_identity"),
+      row.fetch("worktree_sha256"),
+      row.fetch("matched_literals"),
+      row.fetch("owner"),
+      row.fetch("consumer_disposition"),
+      row.fetch("proof"),
+    ]
+  end
+  digest, = identity(["maestro.vnext.stage2.authority.semantic-source-closure.v1", canonical_rows])
+  "sha256:#{digest}"
+end
+
+def self_test_semantic_sources
+  semantic_source_rows
+  path = "src/domain/vnext/authority/governance_floor.rs"
+  source = File.binread(File.join(WORKSPACE, path))
+  GOVERNANCE_FLOOR_SOURCE_MUTANTS.each do |target, replacement|
+    raise "governance-floor mutant target is absent: #{target.inspect}" unless source.include?(target)
+    mutated = source.gsub(target, replacement)
+    begin
+      semantic_source_rows(path => mutated)
+    rescue SourceSemanticError
+      next
+    end
+    raise "governance-floor causal mutant was accepted: #{target.inspect}"
+  end
+end
+
+def semantic_delta
+  delta = JSON.parse(File.read(STAGE2_DELTA_PATH, encoding: Encoding::US_ASCII))
+  rows = semantic_source_rows
   raise "Stage 2 semantic-consumer delta rows drifted" unless delta.fetch("consumer_rows") == rows
   delta_id, = identity([STAGE0_EFFECT_HOME_DOMAIN, delta.fetch("canonical_value")])
   raise "Stage 2 semantic-consumer delta identity drifted" unless delta.fetch("identity") == "sha256:#{delta_id}"
@@ -413,11 +497,24 @@ def expected_documents(root)
   [documents, cbor, descriptor_paths, root_id]
 end
 
-options = { root: DEFAULT_ROOT, emit: false }
+options = { root: DEFAULT_ROOT, emit: false, source_only: false, self_test_source_only: false }
 OptionParser.new do |parser|
   parser.on("--root PATH") { |path| options[:root] = File.expand_path(path) }
   parser.on("--emit") { options[:emit] = true }
+  parser.on("--source-only") { options[:source_only] = true }
+  parser.on("--self-test-source-only") { options[:self_test_source_only] = true }
 end.parse!
+
+if options.fetch(:source_only)
+  rows = semantic_source_rows
+  puts JSON.generate({ "consumer_count" => rows.length, "source_identity" => semantic_source_identity(rows) })
+  exit 0
+end
+if options.fetch(:self_test_source_only)
+  self_test_semantic_sources
+  puts "Stage 2 Authority source-only mutants rejected"
+  exit 0
+end
 
 root = options.fetch(:root)
 documents, cbor_files, descriptor_paths, root_id = expected_documents(root)

@@ -28,6 +28,37 @@ STAGE2_SEMANTIC_DELTA = (
     WORKSPACE
     / "contracts/vnext/stage0/effect-home/stage2-semantic-consumer-delta-v1.json"
 )
+GOVERNANCE_FLOOR_SOURCE = "src/domain/vnext/authority/governance_floor.rs"
+GOVERNANCE_FLOOR_REQUIRED_LITERALS = (
+    "RepositoryGovernanceFloorSnapshotV1",
+    "maestro.vnext.repository-governance-floor-snapshot.v1",
+    "maestro.vnext.repository-governance-head-class-8.v1",
+)
+GOVERNANCE_FLOOR_REQUIRED_SOURCE_FRAGMENTS = (
+    "pub(super) struct RepositoryGovernanceFloorSnapshotV1 {",
+    "let snapshot = RepositoryGovernanceFloorSnapshotV1::decode_object(direct_object)?;",
+    (
+        "let history = validate_history(*direct_root, &by_id)?; "
+        "let class_root = hash_value(&CborValue::Array(vec![ "
+        'CborValue::text("maestro.vnext.repository-governance-head-class-8.v1")?,'
+    ),
+    (
+        "let commitment = current_view_commitment( view, head, generation, &snapshot, "
+        "*direct_root, class_root,"
+    ),
+)
+GOVERNANCE_FLOOR_SOURCE_MUTANTS = (
+    (
+        b"pub(super) struct RepositoryGovernanceFloorSnapshotV1 {",
+        b"pub(super) struct RepositoryGovernanceFloorSnapshotMutantV1 {",
+    ),
+    (b"decode_object(direct_object)?", b"decode_object(mutant_object)?"),
+    (
+        b"maestro.vnext.repository-governance-head-class-8.v1",
+        b"maestro.vnext.repository-governance-head-class-mutant.v1",
+    ),
+    (b"class_root,\n        authority,", b"[0; 32],\n        authority,"),
+)
 PREDECESSOR_ACTION_SPEC_DESCRIPTOR_ID = (
     "bf2075863bfa3ec7e5269560464182264e78fbeec6dff8197d5dae7bf278a0b4"
 )
@@ -535,6 +566,46 @@ def tracked_stage0_tree_digest() -> str:
     return digest.hexdigest()
 
 
+def verify_governance_floor_source(source_bytes: bytes | None = None) -> None:
+    if source_bytes is None:
+        source_bytes = (WORKSPACE / GOVERNANCE_FLOOR_SOURCE).read_bytes()
+    contents = source_bytes.decode("utf-8", errors="ignore")
+    missing = [
+        literal
+        for literal in GOVERNANCE_FLOOR_REQUIRED_LITERALS
+        if literal not in contents
+    ]
+    if missing:
+        raise BuildError(
+            "Stage 2 governance-floor source is missing exact persisted semantics: "
+            + ", ".join(missing)
+        )
+    normalized = " ".join(contents.split())
+    missing_fragments = [
+        fragment
+        for fragment in GOVERNANCE_FLOOR_REQUIRED_SOURCE_FRAGMENTS
+        if fragment not in normalized
+    ]
+    if missing_fragments:
+        raise BuildError(
+            "Stage 2 governance-floor source is missing causal persistence/current-head binding"
+        )
+
+
+def self_test_governance_floor_source() -> None:
+    source = (WORKSPACE / GOVERNANCE_FLOOR_SOURCE).read_bytes()
+    verify_governance_floor_source(source)
+    for target, replacement in GOVERNANCE_FLOOR_SOURCE_MUTANTS:
+        if target not in source:
+            raise BuildError(f"governance-floor mutant target is absent: {target!r}")
+        mutated = source.replace(target, replacement)
+        try:
+            verify_governance_floor_source(mutated)
+        except BuildError:
+            continue
+        raise BuildError(f"governance-floor causal mutant was accepted: {target!r}")
+
+
 def load_catalog(number: int) -> dict[str, Any]:
     names = {
         1: "catalog-01-observation.json", 2: "catalog-02-effect.json",
@@ -547,6 +618,7 @@ def load_catalog(number: int) -> dict[str, Any]:
 
 
 def verify_frozen_inputs() -> None:
+    verify_governance_floor_source()
     digest = tracked_stage0_tree_digest()
     if len(digest) != 64:
         raise BuildError("Stage 0 tree digest is not SHA-256")
@@ -893,8 +965,18 @@ def compare_trees(expected: Path, actual: Path) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--check", action="store_true")
+    parser.add_argument("--source-only", action="store_true")
+    parser.add_argument("--self-test-source-only", action="store_true")
     args = parser.parse_args()
     try:
+        if args.source_only:
+            verify_governance_floor_source()
+            print("Stage 2 Authority builder source semantics valid")
+            return 0
+        if args.self_test_source_only:
+            self_test_governance_floor_source()
+            print("Stage 2 Authority builder source-only mutants rejected")
+            return 0
         with tempfile.TemporaryDirectory(prefix="maestro-stage2-authority-") as temporary:
             generated = Path(temporary) / "authority"
             build_to(generated)
