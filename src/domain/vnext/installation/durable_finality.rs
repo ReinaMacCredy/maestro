@@ -4,7 +4,10 @@ use std::rc::Rc;
 
 use thiserror::Error;
 
-use crate::domain::vnext::persistence::protected_locator_lease::ProtectedLocatorLeaseV1;
+use crate::domain::vnext::persistence::protected_locator_lease::{
+    ProtectedLocatorCeremonyContinuationV1, ProtectedLocatorFinalityDispositionV1,
+    ProtectedLocatorLeaseV1, ProtectedLocatorPreStoreJoinV1,
+};
 
 pub(super) mod owner_sealed {
     pub trait Sealed {}
@@ -23,32 +26,48 @@ impl InstallationFinalityVariantV1 for PreStoreFinalityV1 {}
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub(super) struct InstallationFinalityCurrentnessV1 {
     pub(super) installation: [u8; 32],
+    pub(super) tenant: [u8; 32],
+    pub(super) principal: [u8; 32],
+    pub(super) authority: [u8; 32],
     pub(super) realm: [u8; 32],
     pub(super) domain: [u8; 32],
     pub(super) store_instance: [u8; 32],
+    pub(super) activation_incarnation: [u8; 32],
     pub(super) head: [u8; 32],
+    pub(super) head_revision: u64,
     pub(super) generation: [u8; 32],
+    pub(super) generation_ordinal: u64,
     pub(super) store_cas: [u8; 32],
     pub(super) host_connection: [u8; 32],
     pub(super) host_currentness: [u8; 32],
+    pub(super) currentness: [u8; 32],
+    pub(super) fence: [u8; 32],
     pub(super) revocation_revision: u64,
 }
 
 impl InstallationFinalityCurrentnessV1 {
     fn validate(self) -> Result<(), DurableInstallationFinalityErrorV1> {
         if [
-            self.installation,
-            self.realm,
-            self.domain,
-            self.store_instance,
-            self.head,
-            self.generation,
-            self.store_cas,
-            self.host_connection,
-            self.host_currentness,
-        ]
-        .contains(&[0; 32])
-            || self.revocation_revision == 0
+              self.installation,
+              self.tenant,
+              self.principal,
+              self.authority,
+              self.realm,
+              self.domain,
+              self.store_instance,
+              self.activation_incarnation,
+              self.head,
+              self.generation,
+              self.store_cas,
+              self.host_connection,
+              self.host_currentness,
+              self.currentness,
+              self.fence,
+          ]
+          .contains(&[0; 32])
+              || self.head_revision == 0
+              || self.generation_ordinal == 0
+              || self.revocation_revision == 0
         {
             return Err(DurableInstallationFinalityErrorV1::CurrentnessMismatch);
         }
@@ -70,6 +89,8 @@ pub(super) struct PreStoreFinalityRequestV1 {
 pub(super) struct ActiveStoreDecisionTupleV1 {
     pub(super) operation: [u8; 32],
     pub(super) attempt: [u8; 32],
+    pub(super) action: [u8; 32],
+    pub(super) request: [u8; 32],
     pub(super) release: [u8; 32],
     pub(super) rows: [u8; 32],
     pub(super) successor_head: [u8; 32],
@@ -81,9 +102,11 @@ pub(super) struct ActiveStoreDecisionTupleV1 {
     pub(super) migration_epoch: u64,
     pub(super) census: [u8; 32],
     pub(super) consumer_set: [u8; 32],
+    pub(super) consumer_gate_result: [u8; 32],
     pub(super) association_identity: [u8; 32],
     pub(super) association_meaning: [u8; 32],
     pub(super) distribution_commit: [u8; 32],
+    pub(super) receipt: [u8; 32],
     pub(super) expected_old_owner_state: [u8; 32],
     pub(super) invocation: [u8; 32],
     pub(super) carrier: [u8; 32],
@@ -94,56 +117,93 @@ pub(super) struct ActiveStoreDecisionTupleV1 {
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub(super) struct PreStoreDecisionTupleV1 {
     pub(super) operation: [u8; 32],
+    pub(super) ceremony_spec: [u8; 32],
     pub(super) attempt: [u8; 32],
+    pub(super) protected_attempt_currentness: [u8; 32],
     pub(super) release: [u8; 32],
     pub(super) facility: [u8; 32],
     pub(super) locator_identity: [u8; 32],
     pub(super) candidate_association: [u8; 32],
     pub(super) association_meaning: [u8; 32],
-    pub(super) candidate_root: [u8; 32],
-    pub(super) candidate_seal: [u8; 32],
+    pub(super) candidate_store_lineage: [u8; 32],
+    pub(super) target: [u8; 32],
     pub(super) distribution_commit: [u8; 32],
     pub(super) source_carrier: [u8; 32],
     pub(super) candidate_carrier: [u8; 32],
+    pub(super) writer_protocol_epoch: u64,
+    pub(super) schema_epoch: u64,
+    pub(super) migration_epoch: u64,
+    pub(super) census: [u8; 32],
+    pub(super) consumer_set: [u8; 32],
+    pub(super) invocation: [u8; 32],
+    pub(super) idempotency_key: [u8; 32],
+    pub(super) idempotency_meaning: [u8; 32],
+    pub(super) host_guard: [u8; 32],
+    pub(super) currentness_fence: [u8; 32],
+    pub(super) candidate_postcondition: [u8; 32],
     pub(super) inert_marker: [u8; 32],
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
-pub(super) struct ActiveStoreFinalityReadbackV1 {
+pub(super) struct ActiveStoreCommittedReadbackV1 {
     pub(super) currentness: InstallationFinalityCurrentnessV1,
     pub(super) decision: ActiveStoreDecisionTupleV1,
-    pub(super) durable_effect: [u8; 32],
+    pub(super) association: [u8; 32],
+    pub(super) consumer_gate_result: [u8; 32],
+    pub(super) receipt: [u8; 32],
+    pub(super) distribution_commit: [u8; 32],
+    pub(super) committed_head: [u8; 32],
+    pub(super) result: [u8; 32],
+    pub(super) idempotency_rows: [u8; 32],
 }
 
-#[derive(Clone, Copy, Eq, PartialEq)]
-pub(super) struct PreStoreFinalityReadbackV1 {
+pub(super) enum ActiveStoreOwnerOutcomeV1 {
+    PreCommitRefused,
+    Committed(ActiveStoreCommittedReadbackV1),
+    AcknowledgementLost(Option<ActiveStoreCommittedReadbackV1>),
+    UnknownOccurrence,
+    IntegrityBlocked,
+}
+
+pub(super) struct PreStoreOwnerValidationV1 {
     pub(super) currentness: InstallationFinalityCurrentnessV1,
     pub(super) decision: PreStoreDecisionTupleV1,
     pub(super) write_count: u64,
+    _not_send_or_sync: PhantomData<Rc<()>>,
 }
 
-pub(super) trait DurableInstallationOwnerEffectV1<K>: owner_sealed::Sealed
-where
-    K: InstallationFinalityVariantV1,
-{
-    type Readback;
-
-    fn linearize(
+pub(super) trait ActiveStoreFinalityOwnerV1: owner_sealed::Sealed {
+    fn commit_and_readback(
         &mut self,
         expected: InstallationFinalityCurrentnessV1,
-        request: &DurableInstallationFinalityRequestV1<K>,
-    ) -> Result<Self::Readback, DurableInstallationFinalityErrorV1>;
+        request: &ActiveStoreFinalityRequestV1,
+    ) -> Result<ActiveStoreOwnerOutcomeV1, DurableInstallationFinalityErrorV1>;
 }
 
-pub(super) enum DurableInstallationFinalityRequestV1<K> {
-    Active(ActiveStoreFinalityRequestV1, PhantomData<K>),
-    PreStore(PreStoreFinalityRequestV1, PhantomData<K>),
+pub(super) trait PreStoreFinalityOwnerV1: owner_sealed::Sealed {
+    fn validate_inactive_candidate(
+        &mut self,
+        expected: InstallationFinalityCurrentnessV1,
+        request: &PreStoreFinalityRequestV1,
+    ) -> Result<PreStoreOwnerValidationV1, DurableInstallationFinalityErrorV1>;
+
+    fn pre_dispatch_recheck(
+        &mut self,
+        expected: InstallationFinalityCurrentnessV1,
+        request: &PreStoreFinalityRequestV1,
+    ) -> Result<(), DurableInstallationFinalityErrorV1>;
+
+    fn final_recheck(
+        &mut self,
+        expected: InstallationFinalityCurrentnessV1,
+        request: &PreStoreFinalityRequestV1,
+        outcome: ProtectedLocatorFinalityDispositionV1,
+    ) -> Result<(), DurableInstallationFinalityErrorV1>;
 }
 
 struct DurableInstallationFinalityBackendV1<'effect, B, K>
 where
     K: InstallationFinalityVariantV1,
-    B: DurableInstallationOwnerEffectV1<K>,
 {
     backend: &'effect mut B,
     consumed: Cell<bool>,
@@ -154,7 +214,6 @@ where
 impl<'effect, B, K> DurableInstallationFinalityBackendV1<'effect, B, K>
 where
     K: InstallationFinalityVariantV1,
-    B: DurableInstallationOwnerEffectV1<K>,
 {
     fn capture(backend: &'effect mut B) -> Self {
         Self {
@@ -168,98 +227,161 @@ where
 
 impl<'effect, B> DurableInstallationFinalityBackendV1<'effect, B, ActiveStoreFinalityV1>
 where
-    B: DurableInstallationOwnerEffectV1<
-            ActiveStoreFinalityV1,
-            Readback = ActiveStoreFinalityReadbackV1,
-        >,
+    B: ActiveStoreFinalityOwnerV1,
 {
     fn consume_active(
         self,
         request: ActiveStoreFinalityRequestV1,
-    ) -> Result<DurableInstallationFinalityV1<'effect>, DurableInstallationFinalityErrorV1> {
+      ) -> Result<DurableInstallationFinalityOutcomeV1, DurableInstallationFinalityErrorV1> {
         validate_active_request(&request)?;
         if self.consumed.replace(true) {
             return Err(DurableInstallationFinalityErrorV1::Replay);
         }
         let expected = request.currentness;
-        let wrapped = DurableInstallationFinalityRequestV1::Active(
-            request,
-            PhantomData::<ActiveStoreFinalityV1>,
-        );
-        let readback = self.backend.linearize(expected, &wrapped)?;
-        let DurableInstallationFinalityRequestV1::Active(request, _) = &wrapped else {
-            unreachable!("invariant: nominal ActiveStore request");
-        };
-        if readback.currentness != expected
-            || readback.decision != request.decision
-            || readback.durable_effect == [0; 32]
-        {
-            return Err(DurableInstallationFinalityErrorV1::PostconditionMismatch);
+        match self.backend.commit_and_readback(expected, &request)? {
+            ActiveStoreOwnerOutcomeV1::PreCommitRefused => {
+                Err(DurableInstallationFinalityErrorV1::PostconditionMismatch)
+            }
+            ActiveStoreOwnerOutcomeV1::Committed(readback)
+            | ActiveStoreOwnerOutcomeV1::AcknowledgementLost(Some(readback)) => {
+                if active_readback_matches(expected, request.decision, readback) {
+                    Ok(DurableInstallationFinalityOutcomeV1::Committed)
+                } else {
+                    Ok(DurableInstallationFinalityOutcomeV1::IntegrityBlocked)
+                }
+            }
+            ActiveStoreOwnerOutcomeV1::AcknowledgementLost(None) => {
+                Ok(DurableInstallationFinalityOutcomeV1::RecoveryRequired)
+            }
+            ActiveStoreOwnerOutcomeV1::UnknownOccurrence => {
+                Ok(DurableInstallationFinalityOutcomeV1::InDoubt)
+            }
+            ActiveStoreOwnerOutcomeV1::IntegrityBlocked => {
+                Ok(DurableInstallationFinalityOutcomeV1::IntegrityBlocked)
+            }
         }
-        Ok(DurableInstallationFinalityV1 {
-            effect: readback.durable_effect,
-            _lifetime: PhantomData,
-            _not_send_or_sync: PhantomData,
-        })
     }
 }
 
 impl<'effect, B> DurableInstallationFinalityBackendV1<'effect, B, PreStoreFinalityV1>
 where
-    B: DurableInstallationOwnerEffectV1<PreStoreFinalityV1, Readback = PreStoreFinalityReadbackV1>,
+    B: PreStoreFinalityOwnerV1,
 {
     fn consume_pre_store<'locator>(
         self,
         request: PreStoreFinalityRequestV1,
         locator_lease: ProtectedLocatorLeaseV1<'locator>,
-    ) -> Result<DurableInstallationFinalityV1<'effect>, DurableInstallationFinalityErrorV1> {
+      ) -> Result<PreStoreCeremonyContinuationV1<'effect, 'locator, B>, DurableInstallationFinalityErrorV1> {
         validate_pre_store_request(&request)?;
         if self.consumed.replace(true) {
             return Err(DurableInstallationFinalityErrorV1::Replay);
         }
         let expected = request.currentness;
-        let wrapped = DurableInstallationFinalityRequestV1::PreStore(
-            request,
-            PhantomData::<PreStoreFinalityV1>,
-        );
-        let readback = self.backend.linearize(expected, &wrapped)?;
-        let DurableInstallationFinalityRequestV1::PreStore(request, _) = &wrapped else {
-            unreachable!("invariant: nominal PreStore request");
-        };
+        let readback = self
+            .backend
+            .validate_inactive_candidate(expected, &request)?;
         if readback.currentness != expected
-            || readback.decision != request.decision
-            || readback.write_count != 0
+              || readback.decision != request.decision
+              || readback.write_count != 0
         {
             return Err(DurableInstallationFinalityErrorV1::PostconditionMismatch);
         }
-        let _locator_validation = locator_lease
-            .consume_pre_store_inert(
-                request.currentness.installation,
-                request.currentness.realm,
-                request.currentness.domain,
-                request.decision.operation,
-                request.decision.attempt,
-                request.decision.facility,
-                request.decision.locator_identity,
-                request.decision.candidate_association,
-                request.decision.source_carrier,
-                request.decision.candidate_carrier,
-                request.decision.candidate_root,
-                request.decision.candidate_seal,
-            )
+        let join = ProtectedLocatorPreStoreJoinV1::from_installation_owner(
+                  request.decision.operation,
+                  request.decision.ceremony_spec,
+                  request.decision.attempt,
+                  request.decision.candidate_association,
+                  request.decision.target,
+                  request.currentness.installation,
+                  request.currentness.realm,
+                  request.currentness.domain,
+                  request.decision.facility,
+                  request.decision.locator_identity,
+              )
+              .map_err(|_| DurableInstallationFinalityErrorV1::CurrentnessMismatch)?;
+        let locator = locator_lease
+            .begin_pre_store(join)
             .map_err(|_| DurableInstallationFinalityErrorV1::CurrentnessMismatch)?;
-        Ok(DurableInstallationFinalityV1 {
-            effect: request.decision.inert_marker,
-            _lifetime: PhantomData,
-            _not_send_or_sync: PhantomData,
-        })
+          Ok(PreStoreCeremonyContinuationV1 {
+              backend: self.backend,
+              request,
+              locator,
+              consumed: Cell::new(false),
+              _not_send_or_sync: PhantomData,
+          })
+      }
+}
+
+pub(super) struct PreStoreCeremonyContinuationV1<'effect, 'locator, B: PreStoreFinalityOwnerV1> {
+    backend: &'effect mut B,
+    request: PreStoreFinalityRequestV1,
+    locator: ProtectedLocatorCeremonyContinuationV1<'locator>,
+    consumed: Cell<bool>,
+    _not_send_or_sync: PhantomData<Rc<()>>,
+}
+
+impl<B: PreStoreFinalityOwnerV1> PreStoreCeremonyContinuationV1<'_, '_, B> {
+    fn dispatch(
+        self,
+    ) -> Result<DurableInstallationFinalityOutcomeV1, DurableInstallationFinalityErrorV1> {
+        if self.consumed.replace(true) {
+            return Err(DurableInstallationFinalityErrorV1::Replay);
+        }
+        self.backend
+            .pre_dispatch_recheck(self.request.currentness, &self.request)?;
+        let locator_outcome = self
+            .locator
+            .dispatch()
+            .map_err(|_| DurableInstallationFinalityErrorV1::PostconditionMismatch)?;
+        if self
+            .backend
+            .final_recheck(self.request.currentness, &self.request, locator_outcome)
+            .is_err()
+        {
+            return Ok(match locator_outcome {
+                ProtectedLocatorFinalityDispositionV1::InDoubt => {
+                    DurableInstallationFinalityOutcomeV1::InDoubt
+                }
+                _ => DurableInstallationFinalityOutcomeV1::IntegrityBlocked,
+            });
+        }
+        Ok(locator_outcome.into())
     }
 }
 
-struct DurableInstallationFinalityV1<'effect> {
-    effect: [u8; 32],
-    _lifetime: PhantomData<&'effect mut ()>,
-    _not_send_or_sync: PhantomData<Rc<()>>,
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum DurableInstallationFinalityOutcomeV1 {
+    Committed,
+    RecoveryRequired,
+    InDoubt,
+    IntegrityBlocked,
+}
+
+impl From<ProtectedLocatorFinalityDispositionV1> for DurableInstallationFinalityOutcomeV1 {
+    fn from(value: ProtectedLocatorFinalityDispositionV1) -> Self {
+        match value {
+            ProtectedLocatorFinalityDispositionV1::Committed => Self::Committed,
+            ProtectedLocatorFinalityDispositionV1::RecoveryRequired => Self::RecoveryRequired,
+            ProtectedLocatorFinalityDispositionV1::InDoubt => Self::InDoubt,
+            ProtectedLocatorFinalityDispositionV1::IntegrityBlocked => Self::IntegrityBlocked,
+        }
+    }
+}
+
+fn active_readback_matches(
+    expected: InstallationFinalityCurrentnessV1,
+    decision: ActiveStoreDecisionTupleV1,
+    readback: ActiveStoreCommittedReadbackV1,
+) -> bool {
+    readback.currentness == expected
+        && readback.decision == decision
+        && readback.association == decision.association_identity
+        && readback.consumer_gate_result == decision.consumer_gate_result
+        && readback.receipt == decision.receipt
+        && readback.distribution_commit == decision.distribution_commit
+        && readback.committed_head == decision.successor_head
+        && readback.result == decision.result
+        && readback.idempotency_rows == decision.idempotency_meaning
 }
 
 pub(super) fn execute_active_from_stage9_owner(
@@ -278,6 +400,7 @@ pub(super) fn execute_pre_store_from_stage11_owner<'locator>(
     let mut backend = super::durable_finality_stage11_seed::acquire();
     DurableInstallationFinalityBackendV1::capture(&mut backend)
         .consume_pre_store(request, locator_lease)
+        .and_then(PreStoreCeremonyContinuationV1::dispatch)
         .map(|_| ())
 }
 
@@ -286,19 +409,23 @@ fn validate_active_request(
 ) -> Result<(), DurableInstallationFinalityErrorV1> {
     request.currentness.validate()?;
     if [
-        request.decision.operation,
-        request.decision.attempt,
-        request.decision.release,
+          request.decision.operation,
+          request.decision.attempt,
+          request.decision.action,
+          request.decision.request,
+          request.decision.release,
         request.decision.rows,
         request.decision.successor_head,
         request.decision.result,
         request.decision.idempotency_key,
         request.decision.idempotency_meaning,
         request.decision.census,
-        request.decision.consumer_set,
+          request.decision.consumer_set,
+          request.decision.consumer_gate_result,
         request.decision.association_identity,
         request.decision.association_meaning,
-        request.decision.distribution_commit,
+          request.decision.distribution_commit,
+          request.decision.receipt,
         request.decision.expected_old_owner_state,
         request.decision.invocation,
         request.decision.carrier,
@@ -323,24 +450,40 @@ fn validate_pre_store_request(
 ) -> Result<(), DurableInstallationFinalityErrorV1> {
     request.currentness.validate()?;
     if [
-        request.decision.operation,
-        request.decision.attempt,
-        request.decision.release,
+          request.decision.operation,
+          request.decision.ceremony_spec,
+          request.decision.attempt,
+          request.decision.protected_attempt_currentness,
+          request.decision.release,
         request.decision.facility,
         request.decision.locator_identity,
-        request.decision.candidate_association,
-        request.decision.association_meaning,
-        request.decision.candidate_root,
-        request.decision.candidate_seal,
-        request.decision.distribution_commit,
-        request.decision.source_carrier,
-        request.decision.candidate_carrier,
-        request.decision.inert_marker,
+          request.decision.candidate_association,
+          request.decision.association_meaning,
+          request.decision.candidate_store_lineage,
+          request.decision.target,
+          request.decision.distribution_commit,
+          request.decision.source_carrier,
+          request.decision.candidate_carrier,
+          request.decision.census,
+          request.decision.consumer_set,
+          request.decision.invocation,
+          request.decision.idempotency_key,
+          request.decision.idempotency_meaning,
+          request.decision.host_guard,
+          request.decision.currentness_fence,
+          request.decision.candidate_postcondition,
+          request.decision.inert_marker,
     ]
     .contains(&[0; 32])
-    {
-        return Err(DurableInstallationFinalityErrorV1::InvalidRequest);
-    }
+      {
+          return Err(DurableInstallationFinalityErrorV1::InvalidRequest);
+      }
+      if request.decision.writer_protocol_epoch == 0
+          || request.decision.schema_epoch == 0
+          || request.decision.migration_epoch == 0
+      {
+          return Err(DurableInstallationFinalityErrorV1::InvalidRequest);
+      }
     Ok(())
 }
 
@@ -361,25 +504,52 @@ pub(super) enum DurableInstallationFinalityErrorV1 {
 #[cfg(test)]
 struct PreStoreConformanceBackendV1 {
     expected: InstallationFinalityCurrentnessV1,
-    readback: PreStoreFinalityReadbackV1,
+    decision: PreStoreDecisionTupleV1,
+    write_count: u64,
+    rechecks: u64,
 }
 
 #[cfg(test)]
 impl owner_sealed::Sealed for PreStoreConformanceBackendV1 {}
 
 #[cfg(test)]
-impl DurableInstallationOwnerEffectV1<PreStoreFinalityV1> for PreStoreConformanceBackendV1 {
-    type Readback = PreStoreFinalityReadbackV1;
-
-    fn linearize(
+impl PreStoreFinalityOwnerV1 for PreStoreConformanceBackendV1 {
+    fn validate_inactive_candidate(
         &mut self,
         expected: InstallationFinalityCurrentnessV1,
-        _request: &DurableInstallationFinalityRequestV1<PreStoreFinalityV1>,
-    ) -> Result<Self::Readback, DurableInstallationFinalityErrorV1> {
-        if expected != self.expected {
+        request: &PreStoreFinalityRequestV1,
+    ) -> Result<PreStoreOwnerValidationV1, DurableInstallationFinalityErrorV1> {
+        Ok(PreStoreOwnerValidationV1 {
+            currentness: expected,
+            decision: request.decision,
+            write_count: self.write_count,
+            _not_send_or_sync: PhantomData,
+        })
+    }
+
+    fn pre_dispatch_recheck(
+        &mut self,
+        expected: InstallationFinalityCurrentnessV1,
+        request: &PreStoreFinalityRequestV1,
+    ) -> Result<(), DurableInstallationFinalityErrorV1> {
+        if expected != self.expected || request.decision != self.decision {
             return Err(DurableInstallationFinalityErrorV1::CurrentnessMismatch);
         }
-        Ok(self.readback)
+        self.rechecks += 1;
+        Ok(())
+    }
+
+    fn final_recheck(
+        &mut self,
+        expected: InstallationFinalityCurrentnessV1,
+        request: &PreStoreFinalityRequestV1,
+        _outcome: ProtectedLocatorFinalityDispositionV1,
+    ) -> Result<(), DurableInstallationFinalityErrorV1> {
+        if expected != self.expected || request.decision != self.decision {
+            return Err(DurableInstallationFinalityErrorV1::CurrentnessMismatch);
+        }
+        self.rechecks += 1;
+        Ok(())
     }
 }
 
@@ -390,29 +560,50 @@ pub(in crate::domain::vnext) fn consume_pre_store_with_test_owner<'locator>(
 ) -> bool {
     let currentness = InstallationFinalityCurrentnessV1 {
         installation: [1; 32],
+        tenant: [60; 32],
+        principal: [61; 32],
+        authority: [62; 32],
         realm: [2; 32],
         domain: [3; 32],
         store_instance: [44; 32],
+        activation_incarnation: [63; 32],
         head: [45; 32],
+        head_revision: 64,
         generation: [46; 32],
+        generation_ordinal: 65,
         store_cas: [47; 32],
         host_connection: [48; 32],
         host_currentness: [49; 32],
+        currentness: [66; 32],
+        fence: [67; 32],
         revocation_revision: 50,
     };
     let decision = PreStoreDecisionTupleV1 {
         operation: [4; 32],
+        ceremony_spec: [5; 32],
         attempt: [6; 32],
+        protected_attempt_currentness: [51; 32],
         release: [53; 32],
         facility: [11; 32],
         locator_identity: [15; 32],
         candidate_association: [9; 32],
         association_meaning: [56; 32],
-        candidate_root: [29; 32],
-        candidate_seal: [30; 32],
+        candidate_store_lineage: [68; 32],
+        target: [10; 32],
         distribution_commit: [57; 32],
         source_carrier: [7; 32],
         candidate_carrier: [8; 32],
+        writer_protocol_epoch: 69,
+        schema_epoch: 70,
+        migration_epoch: 71,
+        census: [72; 32],
+        consumer_set: [73; 32],
+        invocation: [74; 32],
+        idempotency_key: [75; 32],
+        idempotency_meaning: [76; 32],
+        host_guard: [77; 32],
+        currentness_fence: [78; 32],
+        candidate_postcondition: [79; 32],
         inert_marker: [58; 32],
     };
     let request = PreStoreFinalityRequestV1 {
@@ -421,14 +612,13 @@ pub(in crate::domain::vnext) fn consume_pre_store_with_test_owner<'locator>(
     };
     let mut backend = PreStoreConformanceBackendV1 {
         expected: currentness,
-        readback: PreStoreFinalityReadbackV1 {
-            currentness,
-            decision,
-            write_count,
-        },
+        decision,
+        write_count,
+        rechecks: 0,
     };
     DurableInstallationFinalityBackendV1::capture(&mut backend)
         .consume_pre_store(request, locator_lease)
+        .and_then(PreStoreCeremonyContinuationV1::dispatch)
         .is_ok()
 }
 
@@ -438,39 +628,51 @@ mod tests {
 
     struct ActiveBackendV1 {
         expected: InstallationFinalityCurrentnessV1,
-        readback: ActiveStoreFinalityReadbackV1,
+        outcome: Option<ActiveStoreOwnerOutcomeV1>,
         effects: u64,
     }
 
     impl owner_sealed::Sealed for ActiveBackendV1 {}
 
-    impl DurableInstallationOwnerEffectV1<ActiveStoreFinalityV1> for ActiveBackendV1 {
-        type Readback = ActiveStoreFinalityReadbackV1;
-
-        fn linearize(
+    impl ActiveStoreFinalityOwnerV1 for ActiveBackendV1 {
+        fn commit_and_readback(
             &mut self,
             expected: InstallationFinalityCurrentnessV1,
-            _request: &DurableInstallationFinalityRequestV1<ActiveStoreFinalityV1>,
-        ) -> Result<Self::Readback, DurableInstallationFinalityErrorV1> {
+            _request: &ActiveStoreFinalityRequestV1,
+        ) -> Result<ActiveStoreOwnerOutcomeV1, DurableInstallationFinalityErrorV1> {
             if expected != self.expected {
                 return Err(DurableInstallationFinalityErrorV1::CurrentnessMismatch);
             }
-            self.effects += 1;
-            Ok(self.readback)
+            let outcome = self
+                .outcome
+                .take()
+                .ok_or(DurableInstallationFinalityErrorV1::Replay)?;
+            if !matches!(outcome, ActiveStoreOwnerOutcomeV1::PreCommitRefused) {
+                self.effects += 1;
+            }
+            Ok(outcome)
         }
     }
 
     fn currentness() -> InstallationFinalityCurrentnessV1 {
         InstallationFinalityCurrentnessV1 {
             installation: [1; 32],
+            tenant: [40; 32],
+            principal: [41; 32],
+            authority: [42; 32],
             realm: [2; 32],
             domain: [3; 32],
             store_instance: [4; 32],
+            activation_incarnation: [43; 32],
             head: [5; 32],
+            head_revision: 44,
             generation: [6; 32],
+            generation_ordinal: 45,
             store_cas: [7; 32],
             host_connection: [8; 32],
             host_currentness: [9; 32],
+            currentness: [46; 32],
+            fence: [47; 32],
             revocation_revision: 11,
         }
     }
@@ -479,6 +681,8 @@ mod tests {
         ActiveStoreDecisionTupleV1 {
             operation: [12; 32],
             attempt: [13; 32],
+            action: [48; 32],
+            request: [49; 32],
             release: [14; 32],
             rows: [15; 32],
             successor_head: [16; 32],
@@ -490,9 +694,11 @@ mod tests {
             migration_epoch: 22,
             census: [23; 32],
             consumer_set: [24; 32],
+            consumer_gate_result: [50; 32],
             association_identity: [25; 32],
             association_meaning: [26; 32],
             distribution_commit: [27; 32],
+            receipt: [51; 32],
             expected_old_owner_state: [28; 32],
             invocation: [29; 32],
             carrier: [30; 32],
@@ -508,11 +714,17 @@ mod tests {
         }
     }
 
-    fn active_readback() -> ActiveStoreFinalityReadbackV1 {
-        ActiveStoreFinalityReadbackV1 {
+    fn active_readback() -> ActiveStoreCommittedReadbackV1 {
+        ActiveStoreCommittedReadbackV1 {
             currentness: currentness(),
             decision: active_decision(),
-            durable_effect: [33; 32],
+            association: active_decision().association_identity,
+            consumer_gate_result: active_decision().consumer_gate_result,
+            receipt: active_decision().receipt,
+            distribution_commit: active_decision().distribution_commit,
+            committed_head: active_decision().successor_head,
+            result: active_decision().result,
+            idempotency_rows: active_decision().idempotency_meaning,
         }
     }
 
@@ -520,24 +732,21 @@ mod tests {
     fn active_store_owner_effect_and_readback_are_one_typed_operation() {
         let mut backend = ActiveBackendV1 {
             expected: currentness(),
-            readback: active_readback(),
+            outcome: Some(ActiveStoreOwnerOutcomeV1::Committed(active_readback())),
             effects: 0,
         };
         let finality = DurableInstallationFinalityBackendV1::capture(&mut backend)
             .consume_active(active_request())
             .unwrap();
-        assert_eq!(finality.effect, [33; 32]);
+        assert_eq!(finality, DurableInstallationFinalityOutcomeV1::Committed);
         assert_eq!(backend.effects, 1);
     }
 
     #[test]
-    fn false_success_and_partial_readback_cannot_mint_finality() {
+    fn active_store_no_op_cannot_mint_finality_from_an_echoed_nonzero_digest() {
         let mut backend = ActiveBackendV1 {
             expected: currentness(),
-            readback: ActiveStoreFinalityReadbackV1 {
-                durable_effect: [0; 32],
-                ..active_readback()
-            },
+            outcome: Some(ActiveStoreOwnerOutcomeV1::PreCommitRefused),
             effects: 0,
         };
         assert!(matches!(
@@ -545,6 +754,55 @@ mod tests {
                 .consume_active(active_request()),
             Err(DurableInstallationFinalityErrorV1::PostconditionMismatch)
         ));
+        assert_eq!(backend.effects, 0);
+    }
+
+    #[test]
+    fn false_success_and_partial_readback_cannot_mint_finality() {
+        let mut backend = ActiveBackendV1 {
+            expected: currentness(),
+            outcome: Some(ActiveStoreOwnerOutcomeV1::Committed(
+                ActiveStoreCommittedReadbackV1 {
+                    receipt: [0; 32],
+                    ..active_readback()
+                },
+            )),
+            effects: 0,
+        };
+        assert!(matches!(
+            DurableInstallationFinalityBackendV1::capture(&mut backend)
+                .consume_active(active_request()),
+            Ok(DurableInstallationFinalityOutcomeV1::IntegrityBlocked)
+        ));
+    }
+
+    #[test]
+    fn post_write_outcomes_are_never_reported_as_ordinary_refusal() {
+        for (owner_outcome, expected) in [
+            (
+                ActiveStoreOwnerOutcomeV1::AcknowledgementLost(None),
+                DurableInstallationFinalityOutcomeV1::RecoveryRequired,
+            ),
+            (
+                ActiveStoreOwnerOutcomeV1::UnknownOccurrence,
+                DurableInstallationFinalityOutcomeV1::InDoubt,
+            ),
+            (
+                ActiveStoreOwnerOutcomeV1::IntegrityBlocked,
+                DurableInstallationFinalityOutcomeV1::IntegrityBlocked,
+            ),
+        ] {
+            let mut backend = ActiveBackendV1 {
+                expected: currentness(),
+                outcome: Some(owner_outcome),
+                effects: 0,
+            };
+            assert_eq!(
+                DurableInstallationFinalityBackendV1::capture(&mut backend)
+                    .consume_active(active_request()),
+                Ok(expected)
+            );
+        }
     }
 
     // PreStore success and refusal are exercised from Persistence with a real

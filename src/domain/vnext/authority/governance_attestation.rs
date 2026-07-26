@@ -5,29 +5,25 @@ use std::rc::Rc;
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
-use super::materialization::{
-    AdmittedRepositoryActionBindingV1, AuthorityMaterializationTransactionV1,
-    RepositoryActionCommitFactsV1, SchedulingPolicyBindingOwnerV1,
-    VerifiedSchedulingPolicyDowngradeMandateUseV1,
-};
+use super::materialization::{SchedulingPolicyMeaningV1, policy_commitment};
 
 #[derive(Clone, Copy)]
 pub(in crate::domain::vnext) struct PlanningSchedulingPolicyInputV1 {
-    pub(super) current_policy: [u64; 4],
-    pub(super) candidate_policy: [u64; 4],
-    pub(super) safety_floor: [u64; 4],
-    pub(super) expected_binding: [u8; 32],
-    pub(super) candidate_binding: [u8; 32],
-    pub(super) request: [u8; 32],
-    pub(super) payload: [u8; 32],
-    pub(super) idempotency_key: [u8; 32],
-    pub(super) idempotency_meaning: [u8; 32],
+    current_policy: [u64; 4],
+    candidate_policy: [u64; 4],
+    safety_floor: [u64; 4],
+    expected_binding: [u8; 32],
+    candidate_binding: [u8; 32],
+    request: [u8; 32],
+    payload: [u8; 32],
+    idempotency_key: [u8; 32],
+    idempotency_meaning: [u8; 32],
 }
 
 impl PlanningSchedulingPolicyInputV1 {
     #[expect(
         clippy::too_many_arguments,
-        reason = "the Stage 7 Planning input is a closed typed tuple and contains no Authority-owned governance values"
+        reason = "the Stage 7 Planning input is one closed typed Scheduling namespace and contains no Authority-owned governance value"
     )]
     pub(in crate::domain::vnext) fn from_stage7_planning(
         current_policy: [u64; 4],
@@ -40,15 +36,15 @@ impl PlanningSchedulingPolicyInputV1 {
         idempotency_key: [u8; 32],
         idempotency_meaning: [u8; 32],
     ) -> Result<Self, GovernanceAttestationErrorV1> {
-        let commitments = [
+        if [
             expected_binding,
             candidate_binding,
             request,
             payload,
             idempotency_key,
             idempotency_meaning,
-        ];
-        if commitments.contains(&[0; 32])
+        ]
+        .contains(&[0; 32])
             || current_policy == [0; 4]
             || candidate_policy == [0; 4]
             || safety_floor == [0; 4]
@@ -67,6 +63,42 @@ impl PlanningSchedulingPolicyInputV1 {
             idempotency_meaning,
         })
     }
+
+    pub(super) const fn current_policy(self) -> [u64; 4] {
+        self.current_policy
+    }
+
+    pub(super) const fn candidate_policy(self) -> [u64; 4] {
+        self.candidate_policy
+    }
+
+    pub(super) const fn safety_floor(self) -> [u64; 4] {
+        self.safety_floor
+    }
+
+    pub(super) const fn expected_binding(self) -> [u8; 32] {
+        self.expected_binding
+    }
+
+    pub(super) const fn candidate_binding(self) -> [u8; 32] {
+        self.candidate_binding
+    }
+
+    pub(super) const fn request(self) -> [u8; 32] {
+        self.request
+    }
+
+    pub(super) const fn payload(self) -> [u8; 32] {
+        self.payload
+    }
+
+    pub(super) const fn idempotency_key(self) -> [u8; 32] {
+        self.idempotency_key
+    }
+
+    pub(super) const fn idempotency_meaning(self) -> [u8; 32] {
+        self.idempotency_meaning
+    }
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -75,6 +107,12 @@ pub(super) enum PolicyDiffClassV1 {
     Strengthening,
     Weakening,
     Incomparable,
+}
+
+impl PolicyDiffClassV1 {
+    pub(super) const fn requires_supplemental_mandate(self) -> bool {
+        matches!(self, Self::Weakening | Self::Incomparable)
+    }
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -97,12 +135,20 @@ pub(super) struct GovernanceOwnerSnapshotV1 {
     pub(super) governance_floor_schema: [u8; 32],
     pub(super) governance_floor_version: u64,
     pub(super) governance_floor_revision: u64,
+    pub(super) governance_floor_semantic_hash: [u8; 32],
     pub(super) governance_floor: [u64; 4],
     pub(super) action_requirement: [u8; 32],
     pub(super) requirement_grammar: [u8; 32],
     pub(super) requirement_evaluator: [u8; 32],
-    pub(super) classifier: [u8; 32],
+    pub(super) classifier_identity: [u8; 32],
+    pub(super) classifier_semantic_hash: [u8; 32],
     pub(super) classifier_revision: u64,
+    pub(super) safety_floor_identity: [u8; 32],
+    pub(super) safety_floor_version: u64,
+    pub(super) safety_floor_semantic_hash: [u8; 32],
+    pub(super) evaluator_identity: [u8; 32],
+    pub(super) evaluator_revision: u64,
+    pub(super) evaluator_compatibility: [u8; 32],
     pub(super) authority_witness: [u8; 32],
     pub(super) debit_map: [u8; 32],
     pub(super) root_use_atoms: [u8; 32],
@@ -111,7 +157,7 @@ pub(super) struct GovernanceOwnerSnapshotV1 {
 
 impl GovernanceOwnerSnapshotV1 {
     fn validate(self) -> Result<(), GovernanceAttestationErrorV1> {
-        let commitments = [
+        if [
             self.repository,
             self.store_instance,
             self.activation_incarnation,
@@ -123,24 +169,35 @@ impl GovernanceOwnerSnapshotV1 {
             self.fence,
             self.governance_floor_identity,
             self.governance_floor_schema,
+            self.governance_floor_semantic_hash,
             self.action_requirement,
             self.requirement_grammar,
             self.requirement_evaluator,
-            self.classifier,
+            self.classifier_identity,
+            self.classifier_semantic_hash,
+            self.safety_floor_identity,
+            self.safety_floor_semantic_hash,
+            self.evaluator_identity,
+            self.evaluator_compatibility,
             self.authority_witness,
             self.debit_map,
             self.root_use_atoms,
             self.transaction_occurrence,
-        ];
-        if commitments.contains(&[0; 32])
-            || self.generation_ordinal == 0
-            || self.head_revision == 0
-            || self.epoch == 0
-            || self.trusted_time == 0
-            || self.revocation_revision == 0
-            || self.governance_floor_version == 0
-            || self.governance_floor_revision == 0
-            || self.classifier_revision == 0
+        ]
+        .contains(&[0; 32])
+            || [
+                self.generation_ordinal,
+                self.head_revision,
+                self.epoch,
+                self.trusted_time,
+                self.revocation_revision,
+                self.governance_floor_version,
+                self.governance_floor_revision,
+                self.classifier_revision,
+                self.safety_floor_version,
+                self.evaluator_revision,
+            ]
+            .contains(&0)
             || self.governance_floor == [0; 4]
         {
             return Err(GovernanceAttestationErrorV1::InvalidAuthorityView);
@@ -149,163 +206,87 @@ impl GovernanceOwnerSnapshotV1 {
     }
 }
 
-pub(super) trait GovernanceAttestationOwnerPortV1 {
-    fn same_key_committed_result(
-        &mut self,
-        key: [u8; 32],
-        meaning: [u8; 32],
-    ) -> Result<Option<[u8; 32]>, GovernanceAttestationErrorV1>;
-
-    fn retained_snapshot(
-        &mut self,
-    ) -> Result<GovernanceOwnerSnapshotV1, GovernanceAttestationErrorV1>;
-
-    fn consume_joined_publication(
-        &mut self,
-        request: GovernanceJoinedPublicationV1,
-    ) -> Result<[u8; 32], GovernanceAttestationErrorV1>;
-}
-
-pub(super) enum GovernanceMaterializationUseV1<'tx> {
-    #[cfg_attr(
-        test,
-        expect(
-            dead_code,
-            reason = "the production no-Mandate carrier is exercised by the Stage 7 owner integration"
-        )
-    )]
-    NoMandate(Box<GovernanceNoMandateUseV1<'tx>>),
-    #[cfg_attr(
-        test,
-        expect(
-            dead_code,
-            reason = "the production downgrade carrier is exercised by the Stage 7 owner integration"
-        )
-    )]
-    Downgrade(Box<GovernanceDowngradeUseV1<'tx>>),
-    #[cfg(test)]
-    Conformance {
-        supplemental: bool,
-        _lifetime: PhantomData<&'tx mut ()>,
-    },
-}
-
-pub(super) struct GovernanceNoMandateUseV1<'tx> {
-    pub(super) transaction: &'tx AuthorityMaterializationTransactionV1<'tx>,
-    pub(super) binding: AdmittedRepositoryActionBindingV1<'tx, SchedulingPolicyBindingOwnerV1>,
-    pub(super) commit: RepositoryActionCommitFactsV1,
-}
-
-pub(super) struct GovernanceDowngradeUseV1<'tx> {
-    pub(super) mandate: VerifiedSchedulingPolicyDowngradeMandateUseV1<'tx>,
-    pub(super) binding: AdmittedRepositoryActionBindingV1<'tx, SchedulingPolicyBindingOwnerV1>,
-    pub(super) commit: RepositoryActionCommitFactsV1,
-}
-
-impl GovernanceMaterializationUseV1<'_> {
-    const fn is_supplemental(&self) -> bool {
-        match self {
-            Self::NoMandate(_) => false,
-            Self::Downgrade(_) => true,
-            #[cfg(test)]
-            Self::Conformance { supplemental, .. } => *supplemental,
-        }
-    }
-
-    fn consume_existing_materialization(
-        self,
-    ) -> Result<(), super::materialization::AuthorityMaterializationErrorV1> {
-        match self {
-            Self::NoMandate(use_token) => {
-                let use_token = *use_token;
-                use_token
-                    .transaction
-                    .consume_binding_without_mandate(use_token.binding, use_token.commit)
-                    .map(|_| ())
-            }
-            Self::Downgrade(use_token) => {
-                let use_token = *use_token;
-                use_token
-                    .mandate
-                    .consume_with_action_binding(use_token.binding, use_token.commit)
-                    .map(|_| ())
-            }
-            #[cfg(test)]
-            Self::Conformance { .. } => Ok(()),
-        }
-    }
-}
-
-pub(super) struct GovernanceJoinedPublicationV1 {
-    pub(super) attestation_commitment: [u8; 32],
-    pub(super) expected_snapshot: GovernanceOwnerSnapshotV1,
-    pub(super) planning: PlanningSchedulingPolicyInputV1,
-    pub(super) relation: PolicyDiffClassV1,
-}
-
-struct GovernanceAttestationV1<'tx, P: GovernanceAttestationOwnerPortV1> {
-    owner: &'tx mut P,
+pub(super) struct GovernanceAttestationV1<'tx> {
     planning: PlanningSchedulingPolicyInputV1,
     snapshot: GovernanceOwnerSnapshotV1,
     relation: PolicyDiffClassV1,
     commitment: [u8; 32],
     consumed: Cell<bool>,
+    _transaction: PhantomData<&'tx mut ()>,
     _not_send_or_sync: PhantomData<Rc<()>>,
 }
 
-impl<'tx, P: GovernanceAttestationOwnerPortV1> GovernanceAttestationV1<'tx, P> {
-    fn derive(
-        owner: &'tx mut P,
+pub(super) struct GovernanceAttestedPolicyV1<'tx> {
+    policy: SchedulingPolicyMeaningV1,
+    commitment: [u8; 32],
+    relation: PolicyDiffClassV1,
+    _transaction: PhantomData<&'tx mut ()>,
+    _not_send_or_sync: PhantomData<Rc<()>>,
+}
+
+impl GovernanceAttestedPolicyV1<'_> {
+    pub(super) const fn policy(&self) -> SchedulingPolicyMeaningV1 {
+        self.policy
+    }
+
+    pub(super) const fn relation(&self) -> PolicyDiffClassV1 {
+        self.relation
+    }
+
+    pub(super) const fn commitment(&self) -> [u8; 32] {
+        self.commitment
+    }
+}
+
+impl<'tx> GovernanceAttestationV1<'tx> {
+    pub(super) fn derive(
         planning: PlanningSchedulingPolicyInputV1,
+        snapshot: GovernanceOwnerSnapshotV1,
     ) -> Result<Self, GovernanceAttestationErrorV1> {
-        let snapshot = owner.retained_snapshot()?;
         snapshot.validate()?;
         let relation = classify_policy(planning, snapshot)?;
         let commitment = governance_commitment(planning, snapshot, relation);
         Ok(Self {
-            owner,
             planning,
             snapshot,
             relation,
             commitment,
             consumed: Cell::new(false),
+            _transaction: PhantomData,
             _not_send_or_sync: PhantomData,
         })
     }
 
-    fn consume(
+    pub(super) fn consume(
         self,
-        materialization: GovernanceMaterializationUseV1<'tx>,
-    ) -> Result<[u8; 32], GovernanceAttestationErrorV1> {
+        policy: SchedulingPolicyMeaningV1,
+    ) -> Result<GovernanceAttestedPolicyV1<'tx>, GovernanceAttestationErrorV1> {
         if self.consumed.replace(true)
-            || materialization.is_supplemental() != requires_supplemental_mandate(self.relation)
+            || policy.current_rules() != self.planning.current_policy
+            || policy.candidate_rules() != self.planning.candidate_policy
+            || policy.safety_floor() != self.planning.safety_floor
+            || policy.governance_floor() != self.snapshot.governance_floor
+            || policy.evaluator_revision() != self.snapshot.evaluator_revision
+            || policy.classifier_revision() != self.snapshot.classifier_revision
+            || policy_commitment(
+                b"maestro.authority.scheduling-safety-floor.v1\0",
+                &policy.safety_floor(),
+            ) != self.snapshot.safety_floor_semantic_hash
+            || policy_commitment(
+                b"maestro.authority.scheduling-governance-floor.v1\0",
+                &policy.governance_floor(),
+            ) != self.snapshot.governance_floor_semantic_hash
         {
             return Err(GovernanceAttestationErrorV1::CapabilityMismatch);
         }
-        materialization
-            .consume_existing_materialization()
-            .map_err(|_| GovernanceAttestationErrorV1::CapabilityMismatch)?;
-        self.owner
-            .consume_joined_publication(GovernanceJoinedPublicationV1 {
-                attestation_commitment: self.commitment,
-                expected_snapshot: self.snapshot,
-                planning: self.planning,
-                relation: self.relation,
-            })
+        Ok(GovernanceAttestedPolicyV1 {
+            policy,
+            commitment: self.commitment,
+            relation: self.relation,
+            _transaction: PhantomData,
+            _not_send_or_sync: PhantomData,
+        })
     }
-}
-
-pub(super) fn publish_with_governance<'tx, P: GovernanceAttestationOwnerPortV1>(
-    owner: &'tx mut P,
-    planning: PlanningSchedulingPolicyInputV1,
-    materialization: GovernanceMaterializationUseV1<'tx>,
-) -> Result<[u8; 32], GovernanceAttestationErrorV1> {
-    if let Some(result) =
-        owner.same_key_committed_result(planning.idempotency_key, planning.idempotency_meaning)?
-    {
-        return Ok(result);
-    }
-    GovernanceAttestationV1::derive(owner, planning)?.consume(materialization)
 }
 
 fn classify_policy(
@@ -343,13 +324,6 @@ fn classify_policy(
     })
 }
 
-const fn requires_supplemental_mandate(relation: PolicyDiffClassV1) -> bool {
-    matches!(
-        relation,
-        PolicyDiffClassV1::Weakening | PolicyDiffClassV1::Incomparable
-    )
-}
-
 fn governance_commitment(
     planning: PlanningSchedulingPolicyInputV1,
     snapshot: GovernanceOwnerSnapshotV1,
@@ -385,10 +359,16 @@ fn governance_commitment(
         snapshot.fence,
         snapshot.governance_floor_identity,
         snapshot.governance_floor_schema,
+        snapshot.governance_floor_semantic_hash,
         snapshot.action_requirement,
         snapshot.requirement_grammar,
         snapshot.requirement_evaluator,
-        snapshot.classifier,
+        snapshot.classifier_identity,
+        snapshot.classifier_semantic_hash,
+        snapshot.safety_floor_identity,
+        snapshot.safety_floor_semantic_hash,
+        snapshot.evaluator_identity,
+        snapshot.evaluator_compatibility,
         snapshot.authority_witness,
         snapshot.debit_map,
         snapshot.root_use_atoms,
@@ -405,6 +385,8 @@ fn governance_commitment(
         snapshot.governance_floor_version,
         snapshot.governance_floor_revision,
         snapshot.classifier_revision,
+        snapshot.safety_floor_version,
+        snapshot.evaluator_revision,
     ] {
         digest.update(scalar.to_be_bytes());
     }
@@ -422,68 +404,11 @@ pub(in crate::domain::vnext) enum GovernanceAttestationErrorV1 {
     FloorViolation,
     #[error("governance capability does not match the publication")]
     CapabilityMismatch,
-    #[error("governance currentness changed")]
-    Changed,
-    #[error("idempotency meaning conflicts")]
-    IdempotencyConflict,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    struct TestOwnerV1 {
-        initial: GovernanceOwnerSnapshotV1,
-        final_snapshot: GovernanceOwnerSnapshotV1,
-        writes: u64,
-        spends: u64,
-        prior: Option<([u8; 32], [u8; 32], [u8; 32])>,
-    }
-
-    impl GovernanceAttestationOwnerPortV1 for TestOwnerV1 {
-        fn same_key_committed_result(
-            &mut self,
-            key: [u8; 32],
-            meaning: [u8; 32],
-        ) -> Result<Option<[u8; 32]>, GovernanceAttestationErrorV1> {
-            match self.prior {
-                Some((stored_key, stored_meaning, result))
-                    if stored_key == key && stored_meaning == meaning =>
-                {
-                    Ok(Some(result))
-                }
-                Some((stored_key, _, _)) if stored_key == key => {
-                    Err(GovernanceAttestationErrorV1::IdempotencyConflict)
-                }
-                _ => Ok(None),
-            }
-        }
-
-        fn retained_snapshot(
-            &mut self,
-        ) -> Result<GovernanceOwnerSnapshotV1, GovernanceAttestationErrorV1> {
-            Ok(self.initial)
-        }
-
-        fn consume_joined_publication(
-            &mut self,
-            request: GovernanceJoinedPublicationV1,
-        ) -> Result<[u8; 32], GovernanceAttestationErrorV1> {
-            if self.final_snapshot != request.expected_snapshot
-                || request.attestation_commitment
-                    != governance_commitment(
-                        request.planning,
-                        request.expected_snapshot,
-                        request.relation,
-                    )
-            {
-                return Err(GovernanceAttestationErrorV1::Changed);
-            }
-            self.writes += 1;
-            self.spends += u64::from(requires_supplemental_mandate(request.relation));
-            Ok([0xE1; 32])
-        }
-    }
 
     fn snapshot() -> GovernanceOwnerSnapshotV1 {
         GovernanceOwnerSnapshotV1 {
@@ -505,126 +430,83 @@ mod tests {
             governance_floor_schema: [16; 32],
             governance_floor_version: 17,
             governance_floor_revision: 18,
+            governance_floor_semantic_hash: policy_commitment(
+                b"maestro.authority.scheduling-governance-floor.v1\0",
+                &[2, 2, 2, 2],
+            ),
             governance_floor: [2, 2, 2, 2],
             action_requirement: [19; 32],
             requirement_grammar: [20; 32],
             requirement_evaluator: [21; 32],
-            classifier: [22; 32],
-            classifier_revision: 23,
-            authority_witness: [24; 32],
-            debit_map: [25; 32],
-            root_use_atoms: [26; 32],
-            transaction_occurrence: [27; 32],
+            classifier_identity: [22; 32],
+            classifier_semantic_hash: [23; 32],
+            classifier_revision: 24,
+            safety_floor_identity: [25; 32],
+            safety_floor_version: 26,
+            safety_floor_semantic_hash: policy_commitment(
+                b"maestro.authority.scheduling-safety-floor.v1\0",
+                &[1, 1, 1, 1],
+            ),
+            evaluator_identity: [27; 32],
+            evaluator_revision: 28,
+            evaluator_compatibility: [29; 32],
+            authority_witness: [30; 32],
+            debit_map: [31; 32],
+            root_use_atoms: [32; 32],
+            transaction_occurrence: [33; 32],
         }
     }
 
-    fn planning(candidate_policy: [u64; 4]) -> PlanningSchedulingPolicyInputV1 {
+    fn planning(candidate: [u64; 4]) -> PlanningSchedulingPolicyInputV1 {
         PlanningSchedulingPolicyInputV1::from_stage7_planning(
-            [4, 4, 4, 4],
-            candidate_policy,
-            [1, 1, 1, 1],
-            [31; 32],
-            [32; 32],
-            [33; 32],
-            [34; 32],
-            [35; 32],
-            [36; 32],
+            [4; 4], candidate, [1; 4], [34; 32], [35; 32], [36; 32], [37; 32],
+            [38; 32], [39; 32],
         )
         .unwrap()
     }
 
     #[test]
-    fn authority_derives_governance_and_classifier_and_consumes_with_publication() {
-        let current = snapshot();
-        let mut owner = TestOwnerV1 {
-            initial: current,
-            final_snapshot: current,
-            writes: 0,
-            spends: 0,
-            prior: None,
-        };
-
-        let result = publish_with_governance(
-            &mut owner,
-            planning([3, 3, 3, 3]),
-            GovernanceMaterializationUseV1::Conformance {
-                supplemental: true,
-                _lifetime: PhantomData,
-            },
+    fn authority_derives_noninterchangeable_governance_and_scheduling_namespaces() {
+        let snapshot = snapshot();
+        let attestation =
+            GovernanceAttestationV1::derive(planning([5; 4]), snapshot).unwrap();
+        let policy = SchedulingPolicyMeaningV1::new(
+            [4; 4],
+            [5; 4],
+            [1; 4],
+            [2; 4],
+            snapshot.evaluator_revision,
+            snapshot.classifier_revision,
         )
         .unwrap();
-
-        assert_eq!(result, [0xE1; 32]);
-        assert_eq!(owner.writes, 1);
-        assert_eq!(owner.spends, 1);
+        let consumed = attestation.consume(policy).unwrap();
+        assert_eq!(consumed.policy(), policy);
+        assert_eq!(consumed.relation(), PolicyDiffClassV1::Strengthening);
+        assert_ne!(consumed.commitment(), [0; 32]);
     }
 
     #[test]
-    fn raw_floor_stale_view_and_wrong_mandate_route_refuse_zero_write_zero_spend() {
-        let current = snapshot();
-        let mut changed = current;
-        changed.governance_floor_revision += 1;
-        let mut owner = TestOwnerV1 {
-            initial: current,
-            final_snapshot: changed,
-            writes: 0,
-            spends: 0,
-            prior: None,
-        };
+    fn wrong_floor_classifier_or_namespace_substitution_refuses() {
+        let snapshot = snapshot();
+        let mut wrong = snapshot;
+        wrong.safety_floor_semantic_hash = [0xA1; 32];
+        let policy = SchedulingPolicyMeaningV1::new(
+            [4; 4],
+            [5; 4],
+            [1; 4],
+            [2; 4],
+            snapshot.evaluator_revision,
+            snapshot.classifier_revision,
+        )
+        .unwrap();
         assert_eq!(
-            publish_with_governance(
-                &mut owner,
-                planning([3, 3, 3, 3]),
-                GovernanceMaterializationUseV1::Conformance {
-                    supplemental: true,
-                    _lifetime: PhantomData,
-                },
-            ),
-            Err(GovernanceAttestationErrorV1::Changed)
+            GovernanceAttestationV1::derive(planning([5; 4]), wrong)
+                .and_then(|attestation| attestation.consume(policy))
+                .err(),
+            Some(GovernanceAttestationErrorV1::CapabilityMismatch)
         );
-        assert_eq!((owner.writes, owner.spends), (0, 0));
 
-        owner.final_snapshot = owner.initial;
-        assert_eq!(
-            publish_with_governance(
-                &mut owner,
-                planning([3, 3, 3, 3]),
-                GovernanceMaterializationUseV1::Conformance {
-                    supplemental: false,
-                    _lifetime: PhantomData,
-                },
-            ),
-            Err(GovernanceAttestationErrorV1::CapabilityMismatch)
-        );
-        assert_eq!((owner.writes, owner.spends), (0, 0));
-    }
-
-    #[test]
-    fn exact_committed_result_replays_without_capability_or_spend() {
-        let current = snapshot();
-        let planning = planning([3, 3, 3, 3]);
-        let mut owner = TestOwnerV1 {
-            initial: current,
-            final_snapshot: current,
-            writes: 0,
-            spends: 0,
-            prior: Some((
-                planning.idempotency_key,
-                planning.idempotency_meaning,
-                [0xA1; 32],
-            )),
-        };
-        assert_eq!(
-            publish_with_governance(
-                &mut owner,
-                planning,
-                GovernanceMaterializationUseV1::Conformance {
-                    supplemental: true,
-                    _lifetime: PhantomData,
-                },
-            ),
-            Ok([0xA1; 32])
-        );
-        assert_eq!((owner.writes, owner.spends), (0, 0));
+        let weakening = GovernanceAttestationV1::derive(planning([3; 4]), snapshot).unwrap();
+        assert!(weakening.relation.requires_supplemental_mandate());
     }
 }

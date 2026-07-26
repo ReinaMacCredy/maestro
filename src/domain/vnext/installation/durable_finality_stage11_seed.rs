@@ -1,7 +1,6 @@
 use super::durable_finality::{
-    DurableInstallationFinalityErrorV1, DurableInstallationFinalityRequestV1,
-    DurableInstallationOwnerEffectV1, InstallationFinalityCurrentnessV1,
-    PreStoreFinalityReadbackV1, PreStoreFinalityV1, owner_sealed,
+    DurableInstallationFinalityErrorV1, InstallationFinalityCurrentnessV1,
+    PreStoreFinalityOwnerV1, PreStoreFinalityRequestV1, PreStoreOwnerValidationV1, owner_sealed,
 };
 
 pub(super) struct Stage11PreStoreFinalitySeedV1 {
@@ -14,14 +13,29 @@ pub(super) fn acquire() -> Stage11PreStoreFinalitySeedV1 {
 
 impl owner_sealed::Sealed for Stage11PreStoreFinalitySeedV1 {}
 
-impl DurableInstallationOwnerEffectV1<PreStoreFinalityV1> for Stage11PreStoreFinalitySeedV1 {
-    type Readback = PreStoreFinalityReadbackV1;
-
-    fn linearize(
+impl PreStoreFinalityOwnerV1 for Stage11PreStoreFinalitySeedV1 {
+    fn validate_inactive_candidate(
         &mut self,
         _expected: InstallationFinalityCurrentnessV1,
-        _request: &DurableInstallationFinalityRequestV1<PreStoreFinalityV1>,
-    ) -> Result<Self::Readback, DurableInstallationFinalityErrorV1> {
+        _request: &PreStoreFinalityRequestV1,
+    ) -> Result<PreStoreOwnerValidationV1, DurableInstallationFinalityErrorV1> {
+        Err(DurableInstallationFinalityErrorV1::BackendUnavailable)
+    }
+
+    fn pre_dispatch_recheck(
+        &mut self,
+        _expected: InstallationFinalityCurrentnessV1,
+        _request: &PreStoreFinalityRequestV1,
+    ) -> Result<(), DurableInstallationFinalityErrorV1> {
+        Err(DurableInstallationFinalityErrorV1::BackendUnavailable)
+    }
+
+    fn final_recheck(
+        &mut self,
+        _expected: InstallationFinalityCurrentnessV1,
+        _request: &PreStoreFinalityRequestV1,
+        _outcome: crate::domain::vnext::persistence::protected_locator_lease::ProtectedLocatorFinalityDispositionV1,
+    ) -> Result<(), DurableInstallationFinalityErrorV1> {
         Err(DurableInstallationFinalityErrorV1::BackendUnavailable)
     }
 }

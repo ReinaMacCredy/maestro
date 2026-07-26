@@ -1,5 +1,6 @@
 use super::protected_locator_lease::{
-    ProtectedLocatorBackendV1, ProtectedLocatorDispatchOccurrenceV1,
+    ProtectedLocatorBackendV1, ProtectedLocatorCandidateTransitionV1,
+    ProtectedLocatorDispatchOccurrenceV1,
     ProtectedLocatorFinalReadbackV1, ProtectedLocatorLeaseErrorV1, ProtectedLocatorLeaseV1,
     ProtectedLocatorObservedStateV1, ProtectedLocatorOperationRequestV1, owner_sealed,
 };
@@ -27,9 +28,15 @@ impl ProtectedLocatorBackendV1 for Stage9ProtectedLocatorBackendSeedV1 {
     fn dispatch_expected_old(
         &mut self,
         _expected_old: [u8; 32],
-        _candidate_root: [u8; 32],
-        _candidate_seal: [u8; 32],
+        _candidate: &ProtectedLocatorCandidateTransitionV1,
     ) -> Result<ProtectedLocatorDispatchOccurrenceV1, ProtectedLocatorLeaseErrorV1> {
+        Err(ProtectedLocatorLeaseErrorV1::ProviderUnavailable)
+    }
+
+    fn prepare_candidate_transition(
+        &mut self,
+        _request: ProtectedLocatorOperationRequestV1,
+    ) -> Result<ProtectedLocatorCandidateTransitionV1, ProtectedLocatorLeaseErrorV1> {
         Err(ProtectedLocatorLeaseErrorV1::ProviderUnavailable)
     }
 

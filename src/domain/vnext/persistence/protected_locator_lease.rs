@@ -2,6 +2,7 @@ use std::cell::Cell;
 use std::marker::PhantomData;
 use std::rc::Rc;
 
+use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 #[derive(Clone, Copy)]
@@ -16,6 +17,9 @@ pub(in crate::domain::vnext) struct ProtectedLocatorOperationRequestV1 {
     candidate_carrier: [u8; 32],
     candidate_association: [u8; 32],
     target: [u8; 32],
+    invocation: [u8; 32],
+    source_carrier_identity: [u8; 32],
+    candidate_carrier_identity: [u8; 32],
 }
 
 impl ProtectedLocatorOperationRequestV1 {
@@ -50,6 +54,18 @@ impl ProtectedLocatorOperationRequestV1 {
         if values.contains(&[0; 32]) {
             return Err(ProtectedLocatorLeaseErrorV1::InvalidRequest);
         }
+        let invocation = protected_locator_commitment(
+            b"maestro.persistence.protected-locator-invocation.v1\0",
+            &[&installation, &operation, &ceremony, &attempt, &target],
+        );
+        let source_carrier_identity = protected_locator_commitment(
+            b"maestro.persistence.protected-locator-source-carrier.v1\0",
+            &[&source_carrier],
+        );
+        let candidate_carrier_identity = protected_locator_commitment(
+            b"maestro.persistence.protected-locator-candidate-carrier.v1\0",
+            &[&candidate_carrier],
+        );
         Ok(Self {
             installation,
             realm,
@@ -61,6 +77,9 @@ impl ProtectedLocatorOperationRequestV1 {
             candidate_carrier,
             candidate_association,
             target,
+            invocation,
+            source_carrier_identity,
+            candidate_carrier_identity,
         })
     }
 }
@@ -82,7 +101,11 @@ pub(super) struct ProtectedLocatorObservedStateV1 {
     pub(super) cas_version: u64,
     pub(super) cas_incarnation: [u8; 32],
     pub(super) source_carrier: [u8; 32],
+    pub(super) source_carrier_identity: [u8; 32],
     pub(super) candidate_carrier: [u8; 32],
+    pub(super) candidate_carrier_identity: [u8; 32],
+    pub(super) operation: [u8; 32],
+    pub(super) invocation: [u8; 32],
     pub(super) ceremony: [u8; 32],
     pub(super) attempt: [u8; 32],
     pub(super) candidate_association: [u8; 32],
@@ -116,7 +139,11 @@ impl ProtectedLocatorObservedStateV1 {
             self.observed_cas,
             self.cas_incarnation,
             self.source_carrier,
+            self.source_carrier_identity,
             self.candidate_carrier,
+            self.candidate_carrier_identity,
+            self.operation,
+            self.invocation,
             self.ceremony,
             self.attempt,
             self.candidate_association,
@@ -135,8 +162,12 @@ impl ProtectedLocatorObservedStateV1 {
             || self.realm != request.realm
             || self.installation_domain != request.installation_domain
             || request.operation == [0; 32]
-            || self.source_carrier != request.source_carrier
-            || self.candidate_carrier != request.candidate_carrier
+              || self.source_carrier != request.source_carrier
+              || self.source_carrier_identity != request.source_carrier_identity
+              || self.candidate_carrier != request.candidate_carrier
+              || self.candidate_carrier_identity != request.candidate_carrier_identity
+              || self.operation != request.operation
+              || self.invocation != request.invocation
             || self.ceremony != request.ceremony
             || self.attempt != request.attempt
             || self.candidate_association != request.candidate_association
@@ -167,9 +198,13 @@ pub(in crate::domain::vnext::persistence) trait ProtectedLocatorBackendV1:
     fn dispatch_expected_old(
         &mut self,
         expected_old: [u8; 32],
-        candidate_root: [u8; 32],
-        candidate_seal: [u8; 32],
+        candidate: &ProtectedLocatorCandidateTransitionV1,
     ) -> Result<ProtectedLocatorDispatchOccurrenceV1, ProtectedLocatorLeaseErrorV1>;
+
+    fn prepare_candidate_transition(
+        &mut self,
+        request: ProtectedLocatorOperationRequestV1,
+    ) -> Result<ProtectedLocatorCandidateTransitionV1, ProtectedLocatorLeaseErrorV1>;
 
     fn final_readback(
         &mut self,
@@ -190,6 +225,18 @@ pub(super) struct ProtectedLocatorFinalReadbackV1 {
     pub(super) seal_valid: bool,
     pub(super) definite_non_occurrence: bool,
     pub(super) no_late_apply: bool,
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub(super) struct ProtectedLocatorCandidateTransitionV1 {
+    pub(super) root: [u8; 32],
+    pub(super) seal: [u8; 32],
+    pub(super) carrier_identity: [u8; 32],
+    pub(super) carrier_commitment: [u8; 32],
+    pub(super) association: [u8; 32],
+    pub(super) ceremony: [u8; 32],
+    pub(super) attempt: [u8; 32],
+    pub(super) invocation: [u8; 32],
 }
 
 pub(in crate::domain::vnext) struct ProtectedLocatorLeaseV1<'locator> {
@@ -218,99 +265,225 @@ impl<'locator> ProtectedLocatorLeaseV1<'locator> {
 
     fn consume_finality(
         self,
-        candidate_root: [u8; 32],
-        candidate_seal: [u8; 32],
     ) -> Result<ProtectedLocatorFinalityDispositionV1, ProtectedLocatorLeaseErrorV1> {
-        if self.consumed.replace(true) || candidate_root == [0; 32] || candidate_seal == [0; 32] {
+        let join = ProtectedLocatorPreStoreJoinV1::from_lease(&self);
+        self.begin_pre_store(join)?.dispatch()
+    }
+
+    pub(in crate::domain::vnext) fn begin_pre_store(
+        self,
+        join: ProtectedLocatorPreStoreJoinV1,
+    ) -> Result<ProtectedLocatorCeremonyContinuationV1<'locator>, ProtectedLocatorLeaseErrorV1> {
+        if self.consumed.get() || !join.matches(&self) {
             return Err(ProtectedLocatorLeaseErrorV1::CapabilityMismatch);
         }
         let before_dispatch = self.backend.pre_dispatch_recheck()?;
         if before_dispatch != self.observed {
             return Err(ProtectedLocatorLeaseErrorV1::Changed);
         }
-        let occurrence = self.backend.dispatch_expected_old(
-            self.observed.observed_cas,
-            candidate_root,
-            candidate_seal,
-        )?;
-        let readback = self.backend.final_readback()?;
-        if readback.state != self.observed {
+        Ok(ProtectedLocatorCeremonyContinuationV1 {
+            lease: self,
+            _not_send_or_sync: PhantomData,
+        })
+    }
+
+    fn stable_binding_matches(&self, current: ProtectedLocatorObservedStateV1) -> bool {
+        current.facility == self.observed.facility
+            && current.provider_incarnation == self.observed.provider_incarnation
+            && current.external_anchor == self.observed.external_anchor
+            && current.backend_handle == self.observed.backend_handle
+            && current.installation == self.observed.installation
+            && current.realm == self.observed.realm
+            && current.installation_domain == self.observed.installation_domain
+            && current.locator_identity == self.observed.locator_identity
+            && current.locator_slot == self.observed.locator_slot
+            && current.custody_class == self.observed.custody_class
+            && current.source_carrier == self.observed.source_carrier
+            && current.source_carrier_identity == self.observed.source_carrier_identity
+            && current.candidate_carrier == self.observed.candidate_carrier
+            && current.candidate_carrier_identity == self.observed.candidate_carrier_identity
+            && current.operation == self.observed.operation
+            && current.invocation == self.observed.invocation
+            && current.ceremony == self.observed.ceremony
+            && current.attempt == self.observed.attempt
+            && current.candidate_association == self.observed.candidate_association
+            && current.publication_incarnation == self.observed.publication_incarnation
+            && current.restore_incarnation == self.observed.restore_incarnation
+            && current.currentness == self.observed.currentness
+            && current.anti_rollback_epoch == self.observed.anti_rollback_epoch
+            && current.state_token == self.observed.state_token
+            && current.fence == self.observed.fence
+            && current.revocation_revision == self.observed.revocation_revision
+            && current.target == self.observed.target
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(in crate::domain::vnext) struct ProtectedLocatorPreStoreJoinV1 {
+    installation: [u8; 32],
+    realm: [u8; 32],
+    installation_domain: [u8; 32],
+    operation: [u8; 32],
+    ceremony: [u8; 32],
+    attempt: [u8; 32],
+    facility: [u8; 32],
+    locator_identity: [u8; 32],
+    candidate_association: [u8; 32],
+    invocation: [u8; 32],
+}
+
+impl ProtectedLocatorPreStoreJoinV1 {
+    fn from_lease(lease: &ProtectedLocatorLeaseV1<'_>) -> Self {
+        Self {
+            installation: lease.request.installation,
+            realm: lease.request.realm,
+            installation_domain: lease.request.installation_domain,
+            operation: lease.request.operation,
+            ceremony: lease.request.ceremony,
+            attempt: lease.request.attempt,
+            facility: lease.observed.facility,
+            locator_identity: lease.observed.locator_identity,
+            candidate_association: lease.request.candidate_association,
+            invocation: lease.request.invocation,
+        }
+    }
+
+    pub(in crate::domain::vnext) fn from_installation_owner(
+        operation: [u8; 32],
+        ceremony: [u8; 32],
+        attempt: [u8; 32],
+        candidate_association: [u8; 32],
+        target: [u8; 32],
+        installation: [u8; 32],
+        realm: [u8; 32],
+        installation_domain: [u8; 32],
+        facility: [u8; 32],
+        locator_identity: [u8; 32],
+    ) -> Result<Self, ProtectedLocatorLeaseErrorV1> {
+        let invocation = protected_locator_commitment(
+            b"maestro.persistence.protected-locator-invocation.v1\0",
+            &[&installation, &operation, &ceremony, &attempt, &target],
+        );
+        let value = Self {
+            installation,
+            realm,
+            installation_domain,
+            operation,
+            ceremony,
+            attempt,
+            facility,
+            locator_identity,
+            candidate_association,
+            invocation,
+        };
+        if [
+            operation,
+            ceremony,
+            attempt,
+            candidate_association,
+            target,
+            installation,
+            realm,
+            installation_domain,
+            facility,
+            locator_identity,
+        ]
+        .contains(&[0; 32])
+        {
+            return Err(ProtectedLocatorLeaseErrorV1::CapabilityMismatch);
+        }
+        Ok(value)
+    }
+
+    fn matches(self, lease: &ProtectedLocatorLeaseV1<'_>) -> bool {
+        self == Self::from_lease(lease)
+    }
+}
+
+impl Eq for ProtectedLocatorPreStoreJoinV1 {}
+
+impl PartialEq for ProtectedLocatorPreStoreJoinV1 {
+    fn eq(&self, other: &Self) -> bool {
+        self.installation == other.installation
+            && self.realm == other.realm
+            && self.installation_domain == other.installation_domain
+            && self.operation == other.operation
+            && self.ceremony == other.ceremony
+            && self.attempt == other.attempt
+            && self.facility == other.facility
+            && self.locator_identity == other.locator_identity
+            && self.candidate_association == other.candidate_association
+            && self.invocation == other.invocation
+    }
+}
+
+pub(in crate::domain::vnext) struct ProtectedLocatorCeremonyContinuationV1<'locator> {
+    lease: ProtectedLocatorLeaseV1<'locator>,
+    _not_send_or_sync: PhantomData<Rc<()>>,
+}
+
+impl ProtectedLocatorCeremonyContinuationV1<'_> {
+    pub(in crate::domain::vnext) fn dispatch(
+        self,
+    ) -> Result<ProtectedLocatorFinalityDispositionV1, ProtectedLocatorLeaseErrorV1> {
+        let lease = self.lease;
+        if lease.consumed.replace(true) {
+            return Err(ProtectedLocatorLeaseErrorV1::CapabilityMismatch);
+        }
+        let candidate = lease.backend.prepare_candidate_transition(lease.request)?;
+        if candidate.root == [0; 32]
+            || candidate.seal == [0; 32]
+            || candidate.carrier_identity != lease.request.candidate_carrier_identity
+            || candidate.carrier_commitment != lease.request.candidate_carrier
+            || candidate.association != lease.request.candidate_association
+            || candidate.ceremony != lease.request.ceremony
+            || candidate.attempt != lease.request.attempt
+            || candidate.invocation != lease.request.invocation
+        {
+            return Err(ProtectedLocatorLeaseErrorV1::CapabilityMismatch);
+        }
+        let before_dispatch = lease.backend.pre_dispatch_recheck()?;
+        if before_dispatch != lease.observed {
+            return Err(ProtectedLocatorLeaseErrorV1::Changed);
+        }
+        let occurrence = lease
+            .backend
+            .dispatch_expected_old(lease.observed.observed_cas, &candidate)?;
+        let readback = lease.backend.final_readback()?;
+        if !lease.stable_binding_matches(readback.state) {
             return Ok(ProtectedLocatorFinalityDispositionV1::IntegrityBlocked);
         }
-        if readback.root == candidate_root
-            && readback.carrier == self.request.candidate_carrier
+        if readback.root == candidate.root
+            && readback.carrier == candidate.carrier_commitment
             && readback.seal_valid
         {
             return Ok(ProtectedLocatorFinalityDispositionV1::Committed);
         }
+        if readback.root != lease.observed.protected_root
+            || readback.carrier != lease.request.source_carrier
+            || readback.seal_valid
+        {
+            return Ok(ProtectedLocatorFinalityDispositionV1::IntegrityBlocked);
+        }
         if occurrence == ProtectedLocatorDispatchOccurrenceV1::Unknown {
             return Ok(ProtectedLocatorFinalityDispositionV1::InDoubt);
         }
-        if readback.root == self.observed.protected_root
-            && readback.carrier == self.request.source_carrier
-            && readback.definite_non_occurrence
-            && readback.no_late_apply
-        {
+        if readback.definite_non_occurrence && readback.no_late_apply {
             return Ok(ProtectedLocatorFinalityDispositionV1::RecoveryRequired);
         }
         Ok(ProtectedLocatorFinalityDispositionV1::IntegrityBlocked)
     }
-
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "the live lease joins the exact Installation tuple without introducing a digest bearer"
-    )]
-    pub(in crate::domain::vnext) fn consume_pre_store_inert(
-        self,
-        installation: [u8; 32],
-        realm: [u8; 32],
-        installation_domain: [u8; 32],
-        operation: [u8; 32],
-        attempt: [u8; 32],
-        facility: [u8; 32],
-        locator_identity: [u8; 32],
-        candidate_association: [u8; 32],
-        source_carrier: [u8; 32],
-        candidate_carrier: [u8; 32],
-        candidate_root: [u8; 32],
-        candidate_seal: [u8; 32],
-    ) -> Result<ProtectedLocatorPreStoreValidationV1<'locator>, ProtectedLocatorLeaseErrorV1> {
-        if self.consumed.replace(true) || candidate_root == [0; 32] || candidate_seal == [0; 32] {
-            return Err(ProtectedLocatorLeaseErrorV1::CapabilityMismatch);
-        }
-        let before = self.backend.pre_dispatch_recheck()?;
-        if before != self.observed
-            || installation != self.request.installation
-            || realm != self.request.realm
-            || installation_domain != self.request.installation_domain
-            || operation != self.request.operation
-            || attempt != self.request.attempt
-            || facility != self.observed.facility
-            || locator_identity != self.observed.locator_identity
-            || candidate_association != self.request.candidate_association
-            || source_carrier != self.request.source_carrier
-            || candidate_carrier != self.request.candidate_carrier
-        {
-            return Err(ProtectedLocatorLeaseErrorV1::Changed);
-        }
-        let readback = self.backend.final_readback()?;
-        if readback.state != self.observed
-            || readback.root != candidate_root
-            || readback.carrier != self.request.candidate_carrier
-            || !readback.seal_valid
-        {
-            return Err(ProtectedLocatorLeaseErrorV1::Changed);
-        }
-        Ok(ProtectedLocatorPreStoreValidationV1 {
-            _locator: PhantomData,
-            _not_send_or_sync: PhantomData,
-        })
-    }
 }
 
-pub(in crate::domain::vnext) struct ProtectedLocatorPreStoreValidationV1<'locator> {
-    _locator: PhantomData<&'locator mut ()>,
-    _not_send_or_sync: PhantomData<Rc<()>>,
+fn protected_locator_commitment(domain: &[u8], fields: &[&[u8]]) -> [u8; 32] {
+    let mut digest = Sha256::new();
+    digest.update((domain.len() as u64).to_be_bytes());
+    digest.update(domain);
+    for field in fields {
+        digest.update((field.len() as u64).to_be_bytes());
+        digest.update(field);
+    }
+    digest.finalize().into()
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -339,12 +512,13 @@ pub(in crate::domain::vnext) enum ProtectedLocatorLeaseErrorV1 {
 mod tests {
     use super::*;
 
-    struct TestBackendV1 {
+      struct TestBackendV1 {
         acquisition: ProtectedLocatorObservedStateV1,
         before_dispatch: ProtectedLocatorObservedStateV1,
         final_readback: ProtectedLocatorFinalReadbackV1,
-        occurrence: ProtectedLocatorDispatchOccurrenceV1,
-        dispatches: u64,
+          occurrence: ProtectedLocatorDispatchOccurrenceV1,
+          candidate: ProtectedLocatorCandidateTransitionV1,
+          dispatches: u64,
     }
 
     impl owner_sealed::Sealed for TestBackendV1 {}
@@ -363,18 +537,24 @@ mod tests {
             Ok(self.before_dispatch)
         }
 
-        fn dispatch_expected_old(
-            &mut self,
-            expected_old: [u8; 32],
-            _candidate_root: [u8; 32],
-            _candidate_seal: [u8; 32],
-        ) -> Result<ProtectedLocatorDispatchOccurrenceV1, ProtectedLocatorLeaseErrorV1> {
-            if expected_old != self.acquisition.observed_cas {
-                return Err(ProtectedLocatorLeaseErrorV1::CurrentnessMismatch);
-            }
-            self.dispatches += 1;
-            Ok(self.occurrence)
-        }
+          fn dispatch_expected_old(
+              &mut self,
+              expected_old: [u8; 32],
+              candidate: &ProtectedLocatorCandidateTransitionV1,
+          ) -> Result<ProtectedLocatorDispatchOccurrenceV1, ProtectedLocatorLeaseErrorV1> {
+              if expected_old != self.acquisition.observed_cas || candidate != &self.candidate {
+                  return Err(ProtectedLocatorLeaseErrorV1::CurrentnessMismatch);
+              }
+              self.dispatches += 1;
+              Ok(self.occurrence)
+          }
+
+          fn prepare_candidate_transition(
+              &mut self,
+              _request: ProtectedLocatorOperationRequestV1,
+          ) -> Result<ProtectedLocatorCandidateTransitionV1, ProtectedLocatorLeaseErrorV1> {
+              Ok(self.candidate)
+          }
 
         fn final_readback(
             &mut self,
@@ -407,8 +587,12 @@ mod tests {
             observed_cas: [19; 32],
             cas_version: 20,
             cas_incarnation: [21; 32],
-            source_carrier: [7; 32],
-            candidate_carrier: [8; 32],
+              source_carrier: [7; 32],
+              source_carrier_identity: request().source_carrier_identity,
+              candidate_carrier: [8; 32],
+              candidate_carrier_identity: request().candidate_carrier_identity,
+              operation: [4; 32],
+              invocation: request().invocation,
             ceremony: [5; 32],
             attempt: [6; 32],
             candidate_association: [9; 32],
@@ -436,17 +620,30 @@ mod tests {
                 definite_non_occurrence: false,
                 no_late_apply: false,
             },
-            occurrence: ProtectedLocatorDispatchOccurrenceV1::Definite,
-            dispatches: 0,
+              occurrence: ProtectedLocatorDispatchOccurrenceV1::Definite,
+              candidate: ProtectedLocatorCandidateTransitionV1 {
+                  root: [29; 32],
+                  seal: [30; 32],
+                  carrier_identity: request().candidate_carrier_identity,
+                  carrier_commitment: [8; 32],
+                  association: [9; 32],
+                  ceremony: [5; 32],
+                  attempt: [6; 32],
+                  invocation: request().invocation,
+              },
+              dispatches: 0,
         }
     }
 
     #[test]
     fn owner_observes_and_rereads_the_same_locator_through_finality() {
         let mut backend = backend();
+        backend.final_readback.state.protected_root = [29; 32];
+        backend.final_readback.state.observed_cas = [41; 32];
+        backend.final_readback.state.cas_version += 1;
         let lease = ProtectedLocatorLeaseV1::acquire(&mut backend, request()).unwrap();
         assert!(matches!(
-            lease.consume_finality([29; 32], [30; 32]),
+              lease.consume_finality(),
             Ok(ProtectedLocatorFinalityDispositionV1::Committed)
         ));
         assert_eq!(backend.dispatches, 1);
@@ -458,7 +655,7 @@ mod tests {
         backend.before_dispatch.restore_incarnation = [31; 32];
         let lease = ProtectedLocatorLeaseV1::acquire(&mut backend, request()).unwrap();
         assert!(matches!(
-            lease.consume_finality([29; 32], [30; 32]),
+              lease.consume_finality(),
             Err(ProtectedLocatorLeaseErrorV1::Changed)
         ));
         assert_eq!(backend.dispatches, 0);
@@ -472,7 +669,7 @@ mod tests {
         unknown.final_readback.carrier = unknown.acquisition.source_carrier;
         let lease = ProtectedLocatorLeaseV1::acquire(&mut unknown, request()).unwrap();
         assert!(matches!(
-            lease.consume_finality([29; 32], [30; 32]),
+              lease.consume_finality(),
             Ok(ProtectedLocatorFinalityDispositionV1::InDoubt)
         ));
 
@@ -484,7 +681,7 @@ mod tests {
         not_applied.final_readback.no_late_apply = true;
         let lease = ProtectedLocatorLeaseV1::acquire(&mut not_applied, request()).unwrap();
         assert!(matches!(
-            lease.consume_finality([29; 32], [30; 32]),
+              lease.consume_finality(),
             Ok(ProtectedLocatorFinalityDispositionV1::RecoveryRequired)
         ));
     }
