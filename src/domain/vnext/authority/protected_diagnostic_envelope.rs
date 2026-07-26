@@ -198,13 +198,6 @@ pub(crate) struct ProtectedContinuityDiagnosticReleasedEnvelopeV1 {
 }
 
 impl ProtectedContinuityDiagnosticReleasedEnvelopeV1 {
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "Stage 5 freezes the released envelope before its Stage 8 consumer"
-        )
-    )]
     pub(crate) fn into_bytes(self) -> Box<[u8]> {
         self.prepared.bytes[..self.prepared.len]
             .to_vec()

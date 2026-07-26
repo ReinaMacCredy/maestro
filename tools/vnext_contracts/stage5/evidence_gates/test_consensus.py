@@ -208,7 +208,7 @@ class Stage5ConsensusTests(unittest.TestCase):
             "artifact_id": artifact["artifact_id"],
             "artifact_sha256": consensus.sha256(consensus.pretty_json(artifact)),
             "behavior_manifest_identity": consensus.EXPECTED_BEHAVIOR_MANIFEST_IDENTITY,
-            "behavior_passed": 86,
+            "behavior_passed": behavior.EXPECTED_TESTS,
             "behavior_runs": runs,
             "builder_sha256": dict(
                 (row[0], row[2]) for row in artifact["source_closure"]

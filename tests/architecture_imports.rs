@@ -3308,6 +3308,9 @@ fn stage5_protected_diagnostic_ports_are_sealed_test_only_and_non_bearer() {
         stage8_seed
             .contains("fn stage8_owner_local_descendant_is_the_only_concrete_assembler_seed")
     );
+    assert!(stage8_seed.contains("const _: () = {"));
+    assert!(stage8_seed.contains("protected_continuity_diagnostic_with_ports("));
+    assert!(stage8_seed.contains(".map(|released| released.into_bytes())"));
 
     for forbidden in [
         "RepositoryAuthenticatedHumanV1",
@@ -3657,6 +3660,11 @@ fn stage5_successor_seams_are_owner_private_and_production_replaceable() {
     let authority = read_source_file(Path::new(
         "src/domain/vnext/authority/governance_attestation.rs",
     ));
+    let materialization =
+        read_source_file(Path::new("src/domain/vnext/authority/materialization.rs"));
+    let governance_floor =
+        read_source_file(Path::new("src/domain/vnext/authority/governance_floor.rs"));
+    let publication = read_source_file(Path::new("src/domain/vnext/authority/publication.rs"));
     let authority_seed = read_source_file(Path::new(
         "src/domain/vnext/authority/governance_attestation_stage7_seed.rs",
     ));
@@ -3670,6 +3678,12 @@ fn stage5_successor_seams_are_owner_private_and_production_replaceable() {
     let installation = read_source_file(Path::new(
         "src/domain/vnext/installation/durable_finality.rs",
     ));
+    let installation_stage9 = read_source_file(Path::new(
+        "src/domain/vnext/installation/durable_finality_stage9_seed.rs",
+    ));
+    let installation_stage11 = read_source_file(Path::new(
+        "src/domain/vnext/installation/durable_finality_stage11_seed.rs",
+    ));
     let authority_mod = read_source_file(Path::new("src/domain/vnext/authority/mod.rs"));
     let persistence_mod = read_source_file(Path::new("src/domain/vnext/persistence/mod.rs"));
     let foundation_mod = read_source_file(Path::new("src/foundation/core/mod.rs"));
@@ -3679,15 +3693,25 @@ fn stage5_successor_seams_are_owner_private_and_production_replaceable() {
     ));
 
     assert!(authority.contains("GovernanceAttestationV1<'tx"));
-    assert!(authority.contains("VerifiedSchedulingPolicyDowngradeMandateUseV1"));
-    assert!(authority.contains("AdmittedRepositoryActionBindingV1"));
+    assert!(authority.contains("RepositoryGovernanceFloorCurrentViewV1<'tx>"));
+    assert!(materialization.contains("VerifiedSchedulingPolicyDowngradeMandateUseV1"));
+    assert!(materialization.contains("AdmittedRepositoryActionBindingV1"));
     assert!(!authority.contains("supplemental_mandate_present: bool"));
+    assert!(!authority.contains("governance_floor: [u64; 4]"));
+    assert!(!authority.contains("classifier_result"));
+    assert!(governance_floor.contains("REPOSITORY_GOVERNANCE_FLOOR_SCHEMA_TAG_V1: usize = 25"));
+    assert!(governance_floor.contains("\"maestro.vnext.repository-governance-floor-snapshot.v1\""));
+    assert!(governance_floor.contains("restore_requires_exact_same_domain_chain"));
+    assert!(publication.contains("RepositoryGovernanceFloorSnapshot"));
     assert!(!authority.contains("pub struct GovernanceAttestationV1"));
     assert!(authority_seed.contains("publish_scheduling_policy_from_stage7"));
-    assert!(authority_seed.contains("InvalidAuthorityView"));
+    assert!(authority_seed.contains("SchedulingPolicyPublicationInputV1"));
+    assert!(!authority_seed.contains("PlanningSchedulingPolicyInputV1"));
 
     assert!(persistence.contains("ProtectedLocatorLeaseV1<'locator>"));
-    assert!(persistence.contains("consume_pre_store_inert"));
+    assert!(persistence.contains("begin_pre_store"));
+    assert!(persistence.contains("ProtectedLocatorCeremonyContinuationV1<'locator>"));
+    assert!(persistence.contains("dispatch_expected_old"));
     assert!(!persistence.contains(
         "#[derive(Clone, Copy)]\npub(in crate::domain::vnext) struct ProtectedLocatorLeaseV1"
     ));
@@ -3704,6 +3728,10 @@ fn stage5_successor_seams_are_owner_private_and_production_replaceable() {
     assert!(installation.contains("ProtectedLocatorLeaseV1<'locator>"));
     assert!(installation.contains("ActiveStoreDecisionTupleV1"));
     assert!(installation.contains("PreStoreDecisionTupleV1"));
+    assert!(installation.contains("commit_and_readback"));
+    assert!(installation.contains("ProtectedLocatorCeremonyContinuationV1<'locator>"));
+    assert!(installation_stage9.contains("impl ActiveStoreFinalityOwnerV1"));
+    assert!(installation_stage11.contains("impl PreStoreFinalityOwnerV1"));
     assert!(!installation.contains("impl FnOnce"));
     assert!(!installation.contains("pub struct DurableInstallationFinalityBackendV1"));
 

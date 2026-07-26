@@ -2,6 +2,28 @@ use super::protected_diagnostic_envelope::{
     ProtectedContinuityDiagnosticAssemblerModeV1, ProtectedContinuityDiagnosticCandidateEnvelopeV1,
     ProtectedContinuityDiagnosticEnvelopeInputV1,
 };
+use super::{AuthorityFacadeV1, AuthorityPublicationError, ContinuityReferenceV1};
+use crate::domain::vnext::integration::TrustedHostDiagnosticConnectionPortV1;
+use crate::domain::vnext::persistence::ProtectedDiagnosticCurrentViewProviderV1;
+
+const _: () = {
+    fn bind_stage8_production_consumer<'store>(
+        facade: &mut AuthorityFacadeV1<'store>,
+        connection: &mut dyn TrustedHostDiagnosticConnectionPortV1,
+        current_view_provider: &mut dyn ProtectedDiagnosticCurrentViewProviderV1,
+        requested_subject: ContinuityReferenceV1,
+    ) -> Result<Box<[u8]>, AuthorityPublicationError> {
+        facade
+            .protected_continuity_diagnostic_with_ports(
+                connection,
+                current_view_provider,
+                requested_subject,
+            )
+            .map(|released| released.into_bytes())
+    }
+
+    let _ = bind_stage8_production_consumer;
+};
 
 pub(super) fn assemble(
     input: &ProtectedContinuityDiagnosticEnvelopeInputV1<'_>,

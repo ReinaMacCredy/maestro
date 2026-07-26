@@ -54,6 +54,13 @@ EXPECTED_RUNS = (
             "domain::vnext::authority::materialization::tests::downgrade_mandate_and_action_binding_are_one_use_and_exact",
             "domain::vnext::authority::materialization::tests::equivalent_policy_and_cross_transaction_substitution_refuse_without_consumption",
             "domain::vnext::authority::materialization::tests::wrong_owner_action_cannot_enter_the_scheduling_binding",
+            "domain::vnext::authority::governance_floor::tests::explicit_legacy_migration_is_a_distinct_genesis_basis",
+            "domain::vnext::authority::governance_floor::tests::rotation_requires_action_68_and_a_gap_free_advancing_lineage",
+            "domain::vnext::authority::governance_floor::tests::restore_or_gap_in_floor_history_refuses_while_the_exact_same_domain_chain_passes",
+            "domain::vnext::authority::governance_floor::tests::semantic_or_action_105_substitution_refuses",
+            "domain::vnext::authority::governance_floor::tests::tag_25_snapshot_round_trips_and_preserves_the_action_105_totality_row",
+            "domain::vnext::authority::facade::tests::scheduling_downgrade_resolves_and_consumes_one_live_stored_mandate",
+            "domain::vnext::authority::facade::tests::scheduling_materialization_is_one_atomic_authority_operation",
             "domain::vnext::authority::facade::repository_leaf_authority::tests::inert_downstream_leaves_cannot_enter_the_stage_five_authority_carrier",
             "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_guard_is_non_oracular_across_subjects",
             "domain::vnext::authority::facade::tests::protected_continuity_diagnostic_guard_is_subject_bound_and_zero_write",
@@ -87,6 +94,24 @@ EXPECTED_RUNS = (
             "domain::vnext::installation::consumer_snapshot::tests::caller_gate_stage_and_post_issue_currentness_substitution_refuse",
             "domain::vnext::installation::consumer_snapshot::tests::owner_issued_snapshot_joins_store_and_host_until_both_final_rechecks",
             "domain::vnext::installation::consumer_snapshot::tests::pre_store_is_pre_currentness_only_and_has_no_final_root_or_candidate_seal",
+            "domain::vnext::installation::durable_finality::tests::active_store_no_op_cannot_mint_finality_from_an_echoed_nonzero_digest",
+            "domain::vnext::installation::durable_finality::tests::active_store_owner_effect_and_readback_are_one_typed_operation",
+            "domain::vnext::installation::durable_finality::tests::false_success_and_partial_readback_cannot_mint_finality",
+            "domain::vnext::installation::durable_finality::tests::post_write_outcomes_are_never_reported_as_ordinary_refusal",
+            "domain::vnext::installation::durable_finality::tests::production_owner_entry_points_are_frozen_for_stage9_and_stage11",
+            "domain::vnext::installation::durable_finality_stage9_seed::tests::stage9_owner_seed_is_constructible_only_in_its_owner_module",
+            "domain::vnext::installation::durable_finality_stage11_seed::tests::stage11_owner_seed_is_constructible_only_in_its_owner_module",
+            "domain::vnext::persistence::protected_locator_lease::tests::owner_observes_and_rereads_the_same_locator_through_finality",
+            "domain::vnext::persistence::protected_locator_lease::tests::pre_store_false_success_with_a_write_is_rejected_through_the_same_live_lease",
+            "domain::vnext::persistence::protected_locator_lease::tests::pre_store_hands_the_live_lease_to_the_ceremony_cas_continuation",
+            "domain::vnext::persistence::protected_locator_lease::tests::stale_pre_dispatch_tuple_refuses_without_cas",
+            "domain::vnext::persistence::protected_locator_lease::tests::unknown_and_old_root_readback_preserve_recovery_laws",
+            "foundation::core::aggregate_census::tests::aliases_and_aggregate_overflow_refuse",
+            "foundation::core::aggregate_census::tests::optional_absence_overlap_and_early_fence_release_refuse",
+            "foundation::core::aggregate_census::tests::owner_holds_the_complete_root_set_across_both_passes",
+            "foundation::core::aggregate_census::tests::partial_or_sequential_component_results_refuse",
+            "foundation::core::aggregate_census::tests::production_stage11_seed_is_fail_closed_until_the_backend_integrates",
+            "foundation::core::aggregate_census_stage11_seed::tests::production_seed_is_explicitly_replaceable_and_fail_closed",
             "foundation::core::secure_fs::tests::descriptor_census_binds_regular_files_and_symlinks_without_following",
             "foundation::core::secure_fs::tests::descriptor_census_refuses_every_hard_linked_leaf",
             "foundation::core::secure_fs::tests::descriptor_census_refuses_mutation_fence_turnover",
@@ -140,12 +165,15 @@ EXPECTED_RUNS = (
     (
         "diagnostic-architecture",
         "architecture_imports",
-        ("stage5_protected_diagnostic_ports_are_sealed_test_only_and_non_bearer",),
+        (
+            "stage5_protected_diagnostic_ports_are_sealed_test_only_and_non_bearer",
+            "stage5_successor_seams_are_owner_private_and_production_replaceable",
+        ),
     ),
 )
 EXPECTED_TESTS = sum(len(row[2]) for row in EXPECTED_RUNS)
 EXPECTED_BEHAVIOR_MANIFEST_IDENTITY = (
-    "sha256:fe5df73a47fb802b0ef87afafab04267c0b8a540931c8a6e667749f3a60131a5"
+    "sha256:bc8d5dd0b46c8dda55b02791abbec7c92122e55e30643e0aa5e87a36add40665"
 )
 
 

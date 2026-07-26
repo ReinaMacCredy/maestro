@@ -1,6 +1,6 @@
 use super::durable_finality::{
-    DurableInstallationFinalityErrorV1, InstallationFinalityCurrentnessV1,
-    PreStoreFinalityOwnerV1, PreStoreFinalityRequestV1, PreStoreOwnerValidationV1, owner_sealed,
+    DurableInstallationFinalityErrorV1, InstallationFinalityCurrentnessV1, PreStoreFinalityOwnerV1,
+    PreStoreFinalityRequestV1, PreStoreOwnerValidationV1, owner_sealed,
 };
 
 pub(super) struct Stage11PreStoreFinalitySeedV1 {

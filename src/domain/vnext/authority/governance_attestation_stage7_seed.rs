@@ -1,29 +1,42 @@
-use super::governance_attestation::{
-    GovernanceAttestationErrorV1, PlanningSchedulingPolicyInputV1,
+use crate::domain::vnext::persistence::{StoreIdempotencyProbeV1, StorePublicationOutcomeV1};
+
+use super::facade::{
+    AuthorityFacadeV1, AuthorityMaterializationPublicationErrorV1,
+    PlanningRepositoryActionAuthorityV1, SchedulingPolicyMaterializationErrorV1,
+    SchedulingPolicyPublicationInputV1,
 };
 
-pub(in crate::domain::vnext) fn publish_scheduling_policy_from_stage7(
-    _planning: PlanningSchedulingPolicyInputV1,
-) -> Result<[u8; 32], GovernanceAttestationErrorV1> {
-    // Stage 7 replaces only this Authority-owned seed body with the live Store
-    // transaction that mints the existing df3b Mandate-use and Action-binding
-    // carriers. Planning never receives their constructors or Authority facts.
-    Err(GovernanceAttestationErrorV1::InvalidAuthorityView)
+// TODO(Planning Stage 7): Remove these expectations when the Planning caller
+// integrates this frozen Authority operation.
+#[expect(
+    dead_code,
+    reason = "Stage 5 freezes the production-callable Stage 7 operation before Planning integrates"
+)]
+pub(in crate::domain::vnext) enum SchedulingPolicyPublicationKindV1 {
+    EquivalentOrStrengthening,
+    WeakeningOrIncomparableWithMandate,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn stage7_entry_is_callable_but_fail_closed_before_owner_integration() {
-        let planning = PlanningSchedulingPolicyInputV1::from_stage7_planning(
-            [4; 4], [5; 4], [1; 4], [1; 32], [2; 32], [3; 32], [4; 32], [5; 32], [6; 32],
-        )
-        .unwrap();
-        assert_eq!(
-            publish_scheduling_policy_from_stage7(planning),
-            Err(GovernanceAttestationErrorV1::InvalidAuthorityView)
-        );
+#[expect(
+    dead_code,
+    reason = "Stage 5 freezes the production-callable Stage 7 operation before Planning integrates"
+)]
+pub(in crate::domain::vnext) fn publish_scheduling_policy_from_stage7(
+    facade: &mut AuthorityFacadeV1<'_>,
+    probe: &StoreIdempotencyProbeV1,
+    authority: PlanningRepositoryActionAuthorityV1,
+    input: SchedulingPolicyPublicationInputV1,
+    kind: SchedulingPolicyPublicationKindV1,
+) -> Result<
+    StorePublicationOutcomeV1,
+    AuthorityMaterializationPublicationErrorV1<SchedulingPolicyMaterializationErrorV1>,
+> {
+    match kind {
+        SchedulingPolicyPublicationKindV1::EquivalentOrStrengthening => {
+            facade.publish_scheduling_policy_without_downgrade(probe, authority, input)
+        }
+        SchedulingPolicyPublicationKindV1::WeakeningOrIncomparableWithMandate => {
+            facade.publish_scheduling_policy_with_downgrade(probe, authority, input)
+        }
     }
 }

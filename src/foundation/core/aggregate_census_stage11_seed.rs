@@ -30,10 +30,7 @@ impl AggregateCensusBackendV1 for Stage11AggregateCensusBackendSeedV1 {
         false
     }
 
-    fn consume_final_aggregate_fence(
-        &mut self,
-        _scan_invocation: [u8; 32],
-    ) -> SecureFsResult<()> {
+    fn consume_final_aggregate_fence(&mut self, _scan_invocation: [u8; 32]) -> SecureFsResult<()> {
         Err(SecureFsError::CensusRefused)
     }
 }

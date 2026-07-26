@@ -1,8 +1,8 @@
 use super::protected_locator_lease::{
     ProtectedLocatorBackendV1, ProtectedLocatorCandidateTransitionV1,
-    ProtectedLocatorDispatchOccurrenceV1,
-    ProtectedLocatorFinalReadbackV1, ProtectedLocatorLeaseErrorV1, ProtectedLocatorLeaseV1,
-    ProtectedLocatorObservedStateV1, ProtectedLocatorOperationRequestV1, owner_sealed,
+    ProtectedLocatorDispatchOccurrenceV1, ProtectedLocatorFinalReadbackV1,
+    ProtectedLocatorLeaseErrorV1, ProtectedLocatorLeaseV1, ProtectedLocatorObservedStateV1,
+    ProtectedLocatorOperationRequestV1, owner_sealed,
 };
 
 pub(in crate::domain::vnext::persistence) struct Stage9ProtectedLocatorBackendSeedV1 {

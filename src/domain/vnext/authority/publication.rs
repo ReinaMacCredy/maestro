@@ -338,10 +338,11 @@ pub(super) enum AuthoritySchemaV1 {
     AuthorityContinuityPostCutConsequenceSet,
     OrdinaryBoundedGrant,
     OrdinaryGrantDelegation,
+    RepositoryGovernanceFloorSnapshot,
 }
 
 impl AuthoritySchemaV1 {
-    pub(super) const ALL: [Self; 24] = [
+    pub(super) const ALL: [Self; 25] = [
         Self::AuthorityMandate,
         Self::BootstrapMandateIssuanceBinding,
         Self::AuthorizationReceipt,
@@ -366,6 +367,7 @@ impl AuthoritySchemaV1 {
         Self::AuthorityContinuityClosure,
         Self::OrdinaryBoundedGrant,
         Self::OrdinaryGrantDelegation,
+        Self::RepositoryGovernanceFloorSnapshot,
     ];
 
     pub(super) fn id(self) -> Result<SchemaIdV1, crate::domain::vnext::identity::IdentityError> {
@@ -438,6 +440,9 @@ impl AuthoritySchemaV1 {
             }
             Self::OrdinaryBoundedGrant => OrdinaryBoundedGrantV1::STORE_SCHEMA_ID,
             Self::OrdinaryGrantDelegation => OrdinaryGrantDelegationV1::STORE_SCHEMA_ID,
+            Self::RepositoryGovernanceFloorSnapshot => {
+                return super::governance_floor::repository_governance_floor_schema_id();
+            }
         })
     }
 
@@ -470,6 +475,7 @@ impl AuthoritySchemaV1 {
             Self::AuthorityContinuityPostCutConsequenceSet => fields.len() == 13,
             Self::OrdinaryBoundedGrant => fields.len() == 11,
             Self::OrdinaryGrantDelegation => fields.len() == 6,
+            Self::RepositoryGovernanceFloorSnapshot => fields.len() == 20,
         };
         if !valid_length {
             return false;
@@ -526,6 +532,9 @@ impl AuthoritySchemaV1 {
             }
             Self::OrdinaryBoundedGrant => Some("maestro.vnext.ordinary-bounded-grant.v1"),
             Self::OrdinaryGrantDelegation => Some("maestro.vnext.ordinary-grant-delegation.v1"),
+            Self::RepositoryGovernanceFloorSnapshot => {
+                Some("maestro.vnext.repository-governance-floor-snapshot.v1")
+            }
         }
     }
 
@@ -562,6 +571,7 @@ impl AuthoritySchemaV1 {
             }
             Self::OrdinaryBoundedGrant => "OrdinaryBoundedGrantV1",
             Self::OrdinaryGrantDelegation => "OrdinaryGrantDelegationV1",
+            Self::RepositoryGovernanceFloorSnapshot => "RepositoryGovernanceFloorSnapshotV1",
         }
     }
 
@@ -592,6 +602,7 @@ impl AuthoritySchemaV1 {
             Self::AuthorityContinuityPostCutConsequenceSet => 12,
             Self::OrdinaryBoundedGrant => 10,
             Self::OrdinaryGrantDelegation => 5,
+            Self::RepositoryGovernanceFloorSnapshot => 19,
         }
     }
 }
@@ -632,7 +643,35 @@ mod tests {
             (23, AuthoritySchemaV1::OrdinaryBoundedGrant),
             (24, AuthoritySchemaV1::OrdinaryGrantDelegation),
         ];
-        assert_eq!(AuthoritySchemaV1::ALL.len(), 24);
+        assert_eq!(
+            &AuthoritySchemaV1::ALL[..24],
+            &[
+                AuthoritySchemaV1::AuthorityMandate,
+                AuthoritySchemaV1::BootstrapMandateIssuanceBinding,
+                AuthoritySchemaV1::AuthorizationReceipt,
+                AuthoritySchemaV1::ActionResult,
+                AuthoritySchemaV1::IssueBootstrapMandateRequest,
+                AuthoritySchemaV1::ConsentSlotBindingParameter,
+                AuthoritySchemaV1::ActionAuthorityBasis,
+                AuthoritySchemaV1::AuthorityContext,
+                AuthoritySchemaV1::GovernedCapacityDebit,
+                AuthoritySchemaV1::AuthorityContinuityManifest,
+                AuthoritySchemaV1::PrincipalBinding,
+                AuthoritySchemaV1::Session,
+                AuthoritySchemaV1::BootstrapGenesisGrant,
+                AuthoritySchemaV1::BootstrapMandateInteractionObservationJoin,
+                AuthoritySchemaV1::RevocationSet,
+                AuthoritySchemaV1::BootstrapAuthoritySnapshot,
+                AuthoritySchemaV1::GovernedCapacityRoot,
+                AuthoritySchemaV1::SuccessVisibleAuthorityContinuityState,
+                AuthoritySchemaV1::AdmittedTransitionGuard,
+                AuthoritySchemaV1::LinearizationCoverageWitness,
+                AuthoritySchemaV1::AuthorityContinuityPostCutConsequenceSet,
+                AuthoritySchemaV1::AuthorityContinuityClosure,
+                AuthoritySchemaV1::OrdinaryBoundedGrant,
+                AuthoritySchemaV1::OrdinaryGrantDelegation,
+            ]
+        );
         for (tag, expected) in additions {
             assert_eq!(AuthoritySchemaV1::ALL[tag - 1], expected);
         }
@@ -643,6 +682,19 @@ mod tests {
         assert_eq!(
             AuthoritySchemaV1::ALL[23].schema_name(),
             "OrdinaryGrantDelegationV1"
+        );
+    }
+
+    #[test]
+    fn runtime_schema_registry_appends_internal_repository_governance_floor_tag_twenty_five() {
+        assert_eq!(AuthoritySchemaV1::ALL.len(), 25);
+        assert_eq!(
+            AuthoritySchemaV1::ALL[24],
+            AuthoritySchemaV1::RepositoryGovernanceFloorSnapshot
+        );
+        assert_eq!(
+            AuthoritySchemaV1::RepositoryGovernanceFloorSnapshot.value_domain(),
+            Some("maestro.vnext.repository-governance-floor-snapshot.v1")
         );
     }
 }

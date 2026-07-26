@@ -40,7 +40,7 @@ pub(in crate::domain::vnext::authority) struct SchedulingPolicyMeaningV1 {
     current_rules: [u64; 4],
     candidate_rules: [u64; 4],
     safety_floor: [u64; 4],
-    governance_floor: [u64; 4],
+    governance_floor_binding: [u8; 32],
     evaluator_revision: u64,
     classifier_revision: u64,
 }
@@ -50,7 +50,7 @@ impl SchedulingPolicyMeaningV1 {
         current_rules: [u64; 4],
         candidate_rules: [u64; 4],
         safety_floor: [u64; 4],
-        governance_floor: [u64; 4],
+        governance_floor_binding: [u8; 32],
         evaluator_revision: u64,
         classifier_revision: u64,
     ) -> Result<Self, AuthorityMaterializationErrorV1> {
@@ -58,7 +58,7 @@ impl SchedulingPolicyMeaningV1 {
             current_rules,
             candidate_rules,
             safety_floor,
-            governance_floor,
+            governance_floor_binding,
             evaluator_revision,
             classifier_revision,
         };
@@ -78,8 +78,8 @@ impl SchedulingPolicyMeaningV1 {
         self.safety_floor
     }
 
-    pub(in crate::domain::vnext::authority) const fn governance_floor(self) -> [u64; 4] {
-        self.governance_floor
+    pub(in crate::domain::vnext::authority) const fn governance_floor_binding(self) -> [u8; 32] {
+        self.governance_floor_binding
     }
 
     pub(in crate::domain::vnext::authority) const fn evaluator_revision(self) -> u64 {
@@ -1131,11 +1131,7 @@ pub(in crate::domain::vnext::authority) fn derive_policy_relation(
             .iter()
             .zip(meaning.safety_floor)
             .any(|(candidate, floor)| *candidate < floor)
-        || meaning
-            .candidate_rules
-            .iter()
-            .zip(meaning.governance_floor)
-            .any(|(candidate, floor)| *candidate < floor)
+        || meaning.governance_floor_binding == [0; 32]
     {
         return Err(AuthorityMaterializationErrorV1::InvalidMandate);
     }
@@ -1211,11 +1207,7 @@ fn policy_commitments_match(
                 b"maestro.authority.scheduling-safety-floor.v1\0",
                 &meaning.safety_floor,
             )
-        && governance_floor
-            == policy_commitment(
-                b"maestro.authority.scheduling-governance-floor.v1\0",
-                &meaning.governance_floor,
-            )
+        && governance_floor == meaning.governance_floor_binding
 }
 
 #[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
@@ -1253,7 +1245,7 @@ mod tests {
             current_rules: [5, 5, 5, 5],
             candidate_rules: [4, 4, 4, 4],
             safety_floor: [1, 1, 1, 1],
-            governance_floor: [2, 2, 2, 2],
+            governance_floor_binding: [42; 32],
             evaluator_revision: 3,
             classifier_revision: 4,
         }
@@ -1318,10 +1310,7 @@ mod tests {
                 b"maestro.authority.scheduling-safety-floor.v1\0",
                 &policy_meaning.safety_floor,
             ),
-            governance_floor_commitment: policy_commitment(
-                b"maestro.authority.scheduling-governance-floor.v1\0",
-                &policy_meaning.governance_floor,
-            ),
+            governance_floor_commitment: policy_meaning.governance_floor_binding,
             request_payload_commitment: [16; 32],
             idempotency_meaning_commitment: [17; 32],
             idempotency_mapping_commitment: [43; 32],

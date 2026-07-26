@@ -68,10 +68,7 @@ pub(super) trait AggregateCensusBackendV1: owner_sealed::Sealed {
 
     fn aggregate_fence_is_live(&self) -> bool;
 
-    fn consume_final_aggregate_fence(
-        &mut self,
-        scan_invocation: [u8; 32],
-    ) -> SecureFsResult<()>;
+    fn consume_final_aggregate_fence(&mut self, scan_invocation: [u8; 32]) -> SecureFsResult<()>;
 }
 
 struct AggregateCensusLeaseV1<'scan, B: AggregateCensusBackendV1> {
@@ -164,16 +161,16 @@ fn validate_root_set(roots: &AggregateRootSetFactsV1) -> SecureFsResult<()> {
     if roots.admitted_set == [0; 32]
         || roots.namespace_epoch == 0
         || roots.roots.is_empty()
-          || roots.maximum_entries == 0
-          || roots.maximum_bytes == 0
-          || roots.maximum_roots == 0
-          || roots.maximum_descriptors == 0
-          || roots.maximum_depth == 0
-          || roots.maximum_name_bytes == 0
-          || roots.scan_invocation == [0; 32]
-          || roots.root_set_currentness == [0; 32]
-          || roots.revocation_revision == 0
-          || roots.roots.len() as u64 > roots.maximum_roots
+        || roots.maximum_entries == 0
+        || roots.maximum_bytes == 0
+        || roots.maximum_roots == 0
+        || roots.maximum_descriptors == 0
+        || roots.maximum_depth == 0
+        || roots.maximum_name_bytes == 0
+        || roots.scan_invocation == [0; 32]
+        || roots.root_set_currentness == [0; 32]
+        || roots.revocation_revision == 0
+        || roots.roots.len() as u64 > roots.maximum_roots
     {
         return Err(SecureFsError::CensusRefused);
     }
@@ -182,16 +179,13 @@ fn validate_root_set(roots: &AggregateRootSetFactsV1) -> SecureFsResult<()> {
             root.role,
             AggregateRootRoleV1::Required | AggregateRootRoleV1::OptionalPresent
         );
-        let commitments = [
-            root.declared_locator,
-        ];
+        let commitments = [root.declared_locator];
         if commitments.contains(&[0; 32])
             || root.locator_components.is_empty()
             || root.locator_components.len() as u64 > roots.maximum_depth
-            || root
-                .locator_components
-                .iter()
-                .any(|component| component.is_empty() || component.len() as u64 > roots.maximum_name_bytes)
+            || root.locator_components.iter().any(|component| {
+                component.is_empty() || component.len() as u64 > roots.maximum_name_bytes
+            })
             || (present
                 && [
                     root.resolved_identity,
@@ -246,8 +240,7 @@ fn validate_pass(
             || census.inventory == [0; 32]
             || census.root_binding == [0; 32]
             || census.entry_count != census.rows.len() as u64
-              || census.byte_count
-                  != checked_row_bytes(&census.rows)?
+            || census.byte_count != checked_row_bytes(&census.rows)?
         {
             return Err(SecureFsError::CensusRefused);
         }
@@ -478,10 +471,7 @@ mod tests {
             .unwrap();
         let mut consumer = TestConsumerV1 { observed: None };
         output.consume_by_stage11(&mut consumer).unwrap();
-        assert_eq!(
-            consumer.observed,
-            Some(([1; 32], 0, 0, 2))
-        );
+        assert_eq!(consumer.observed, Some(([1; 32], 0, 0, 2)));
         assert_eq!(backend.passes, [1, 2]);
         assert!(backend.fence_consumed);
     }
@@ -560,6 +550,9 @@ mod tests {
     #[test]
     fn production_stage11_seed_is_fail_closed_until_the_backend_integrates() {
         let mut backend = super::super::aggregate_census_stage11_seed::acquire();
-        assert!(matches!(census_from_stage11_owner(&mut backend), Err(SecureFsError::CensusRefused)));
+        assert!(matches!(
+            census_from_stage11_owner(&mut backend),
+            Err(SecureFsError::CensusRefused)
+        ));
     }
 }

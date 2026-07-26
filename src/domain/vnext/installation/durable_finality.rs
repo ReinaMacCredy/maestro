@@ -6,7 +6,8 @@ use thiserror::Error;
 
 use crate::domain::vnext::persistence::protected_locator_lease::{
     ProtectedLocatorCeremonyContinuationV1, ProtectedLocatorFinalityDispositionV1,
-    ProtectedLocatorLeaseV1, ProtectedLocatorPreStoreJoinV1,
+    ProtectedLocatorLeaseV1, ProtectedLocatorOperationJoinV1, ProtectedLocatorOwnerJoinV1,
+    ProtectedLocatorPreStoreJoinV1,
 };
 
 pub(super) mod owner_sealed {
@@ -48,26 +49,26 @@ pub(super) struct InstallationFinalityCurrentnessV1 {
 impl InstallationFinalityCurrentnessV1 {
     fn validate(self) -> Result<(), DurableInstallationFinalityErrorV1> {
         if [
-              self.installation,
-              self.tenant,
-              self.principal,
-              self.authority,
-              self.realm,
-              self.domain,
-              self.store_instance,
-              self.activation_incarnation,
-              self.head,
-              self.generation,
-              self.store_cas,
-              self.host_connection,
-              self.host_currentness,
-              self.currentness,
-              self.fence,
-          ]
-          .contains(&[0; 32])
-              || self.head_revision == 0
-              || self.generation_ordinal == 0
-              || self.revocation_revision == 0
+            self.installation,
+            self.tenant,
+            self.principal,
+            self.authority,
+            self.realm,
+            self.domain,
+            self.store_instance,
+            self.activation_incarnation,
+            self.head,
+            self.generation,
+            self.store_cas,
+            self.host_connection,
+            self.host_currentness,
+            self.currentness,
+            self.fence,
+        ]
+        .contains(&[0; 32])
+            || self.head_revision == 0
+            || self.generation_ordinal == 0
+            || self.revocation_revision == 0
         {
             return Err(DurableInstallationFinalityErrorV1::CurrentnessMismatch);
         }
@@ -232,7 +233,7 @@ where
     fn consume_active(
         self,
         request: ActiveStoreFinalityRequestV1,
-      ) -> Result<DurableInstallationFinalityOutcomeV1, DurableInstallationFinalityErrorV1> {
+    ) -> Result<DurableInstallationFinalityOutcomeV1, DurableInstallationFinalityErrorV1> {
         validate_active_request(&request)?;
         if self.consumed.replace(true) {
             return Err(DurableInstallationFinalityErrorV1::Replay);
@@ -271,7 +272,10 @@ where
         self,
         request: PreStoreFinalityRequestV1,
         locator_lease: ProtectedLocatorLeaseV1<'locator>,
-      ) -> Result<PreStoreCeremonyContinuationV1<'effect, 'locator, B>, DurableInstallationFinalityErrorV1> {
+    ) -> Result<
+        PreStoreCeremonyContinuationV1<'effect, 'locator, B>,
+        DurableInstallationFinalityErrorV1,
+    > {
         validate_pre_store_request(&request)?;
         if self.consumed.replace(true) {
             return Err(DurableInstallationFinalityErrorV1::Replay);
@@ -281,35 +285,39 @@ where
             .backend
             .validate_inactive_candidate(expected, &request)?;
         if readback.currentness != expected
-              || readback.decision != request.decision
-              || readback.write_count != 0
+            || readback.decision != request.decision
+            || readback.write_count != 0
         {
             return Err(DurableInstallationFinalityErrorV1::PostconditionMismatch);
         }
         let join = ProtectedLocatorPreStoreJoinV1::from_installation_owner(
-                  request.decision.operation,
-                  request.decision.ceremony_spec,
-                  request.decision.attempt,
-                  request.decision.candidate_association,
-                  request.decision.target,
-                  request.currentness.installation,
-                  request.currentness.realm,
-                  request.currentness.domain,
-                  request.decision.facility,
-                  request.decision.locator_identity,
-              )
-              .map_err(|_| DurableInstallationFinalityErrorV1::CurrentnessMismatch)?;
+            ProtectedLocatorOperationJoinV1::new(
+                request.decision.operation,
+                request.decision.ceremony_spec,
+                request.decision.attempt,
+                request.decision.candidate_association,
+                request.decision.target,
+            ),
+            ProtectedLocatorOwnerJoinV1::new(
+                request.currentness.installation,
+                request.currentness.realm,
+                request.currentness.domain,
+                request.decision.facility,
+                request.decision.locator_identity,
+            ),
+        )
+        .map_err(|_| DurableInstallationFinalityErrorV1::CurrentnessMismatch)?;
         let locator = locator_lease
             .begin_pre_store(join)
             .map_err(|_| DurableInstallationFinalityErrorV1::CurrentnessMismatch)?;
-          Ok(PreStoreCeremonyContinuationV1 {
-              backend: self.backend,
-              request,
-              locator,
-              consumed: Cell::new(false),
-              _not_send_or_sync: PhantomData,
-          })
-      }
+        Ok(PreStoreCeremonyContinuationV1 {
+            backend: self.backend,
+            request,
+            locator,
+            consumed: Cell::new(false),
+            _not_send_or_sync: PhantomData,
+        })
+    }
 }
 
 pub(super) struct PreStoreCeremonyContinuationV1<'effect, 'locator, B: PreStoreFinalityOwnerV1> {
@@ -409,23 +417,23 @@ fn validate_active_request(
 ) -> Result<(), DurableInstallationFinalityErrorV1> {
     request.currentness.validate()?;
     if [
-          request.decision.operation,
-          request.decision.attempt,
-          request.decision.action,
-          request.decision.request,
-          request.decision.release,
+        request.decision.operation,
+        request.decision.attempt,
+        request.decision.action,
+        request.decision.request,
+        request.decision.release,
         request.decision.rows,
         request.decision.successor_head,
         request.decision.result,
         request.decision.idempotency_key,
         request.decision.idempotency_meaning,
         request.decision.census,
-          request.decision.consumer_set,
-          request.decision.consumer_gate_result,
+        request.decision.consumer_set,
+        request.decision.consumer_gate_result,
         request.decision.association_identity,
         request.decision.association_meaning,
-          request.decision.distribution_commit,
-          request.decision.receipt,
+        request.decision.distribution_commit,
+        request.decision.receipt,
         request.decision.expected_old_owner_state,
         request.decision.invocation,
         request.decision.carrier,
@@ -450,40 +458,40 @@ fn validate_pre_store_request(
 ) -> Result<(), DurableInstallationFinalityErrorV1> {
     request.currentness.validate()?;
     if [
-          request.decision.operation,
-          request.decision.ceremony_spec,
-          request.decision.attempt,
-          request.decision.protected_attempt_currentness,
-          request.decision.release,
+        request.decision.operation,
+        request.decision.ceremony_spec,
+        request.decision.attempt,
+        request.decision.protected_attempt_currentness,
+        request.decision.release,
         request.decision.facility,
         request.decision.locator_identity,
-          request.decision.candidate_association,
-          request.decision.association_meaning,
-          request.decision.candidate_store_lineage,
-          request.decision.target,
-          request.decision.distribution_commit,
-          request.decision.source_carrier,
-          request.decision.candidate_carrier,
-          request.decision.census,
-          request.decision.consumer_set,
-          request.decision.invocation,
-          request.decision.idempotency_key,
-          request.decision.idempotency_meaning,
-          request.decision.host_guard,
-          request.decision.currentness_fence,
-          request.decision.candidate_postcondition,
-          request.decision.inert_marker,
+        request.decision.candidate_association,
+        request.decision.association_meaning,
+        request.decision.candidate_store_lineage,
+        request.decision.target,
+        request.decision.distribution_commit,
+        request.decision.source_carrier,
+        request.decision.candidate_carrier,
+        request.decision.census,
+        request.decision.consumer_set,
+        request.decision.invocation,
+        request.decision.idempotency_key,
+        request.decision.idempotency_meaning,
+        request.decision.host_guard,
+        request.decision.currentness_fence,
+        request.decision.candidate_postcondition,
+        request.decision.inert_marker,
     ]
     .contains(&[0; 32])
-      {
-          return Err(DurableInstallationFinalityErrorV1::InvalidRequest);
-      }
-      if request.decision.writer_protocol_epoch == 0
-          || request.decision.schema_epoch == 0
-          || request.decision.migration_epoch == 0
-      {
-          return Err(DurableInstallationFinalityErrorV1::InvalidRequest);
-      }
+    {
+        return Err(DurableInstallationFinalityErrorV1::InvalidRequest);
+    }
+    if request.decision.writer_protocol_epoch == 0
+        || request.decision.schema_epoch == 0
+        || request.decision.migration_epoch == 0
+    {
+        return Err(DurableInstallationFinalityErrorV1::InvalidRequest);
+    }
     Ok(())
 }
 

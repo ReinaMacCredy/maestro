@@ -28,6 +28,10 @@ use crate::foundation::core::deterministic_cbor::{self, CborError, CborValue};
 mod repository_admission;
 mod repository_leaf_authority;
 
+use super::governance_attestation::{GovernanceAttestationV1, PlanningSchedulingPolicyInputV1};
+use super::governance_floor::{
+    RepositoryGovernanceAuthorityCurrentnessV1, resolve_repository_governance_floor_current_view,
+};
 use super::protected_diagnostic_envelope::{
     ProtectedContinuityDiagnosticAssemblerModeV1, ProtectedContinuityDiagnosticEnvelopeInputV1,
     ProtectedContinuityDiagnosticPreparedCarrierV1, ProtectedContinuityDiagnosticReadGuardMarkerV1,
@@ -78,7 +82,7 @@ use super::materialization::{
     MaterializationStoreViewPortV1, RepositoryActionBindingFactsV1, RepositoryActionBindingKindV1,
     RepositoryActionCommitFactsV1, SchedulingPolicyBindingOwnerV1, SchedulingPolicyDiffClassV1,
     SchedulingPolicyDowngradeMandateFactsV1, SchedulingPolicyMeaningV1,
-    VerifiedSchedulingPolicyDowngradeMandateUseV1, derive_policy_relation, policy_commitment,
+    VerifiedSchedulingPolicyDowngradeMandateUseV1, policy_commitment,
 };
 use super::publication::{
     AuthorityPublicationKindV1, AuthorityPublicationOutcomeV1, AuthoritySchemaV1,
@@ -144,6 +148,10 @@ pub(crate) enum SchedulingPolicyMaterializationErrorV1 {
     Identity(#[from] crate::domain::vnext::identity::IdentityError),
     #[error(transparent)]
     Store(#[from] crate::domain::vnext::persistence::StoreError),
+    #[error(transparent)]
+    Governance(#[from] super::governance_attestation::GovernanceAttestationErrorV1),
+    #[error(transparent)]
+    GovernanceFloor(#[from] super::governance_floor::RepositoryGovernanceFloorErrorV1),
 }
 
 struct SchedulingPolicyOwnerPublicationV1 {
@@ -152,7 +160,42 @@ struct SchedulingPolicyOwnerPublicationV1 {
     binding_object: StoreObjectV1,
     current_binding_root: Option<StoreObjectIdV1>,
     current_owner_basis_commitment: [u8; 32],
-    policy: SchedulingPolicyMeaningV1,
+    planning: PlanningSchedulingPolicyInputV1,
+}
+
+pub(in crate::domain::vnext) struct SchedulingPolicyPublicationInputV1 {
+    request_id: ActionRequestIdV1,
+    request_object: StoreObjectV1,
+    binding_object: StoreObjectV1,
+    current_binding_root: Option<StoreObjectIdV1>,
+    planning: PlanningSchedulingPolicyInputV1,
+}
+
+impl SchedulingPolicyPublicationInputV1 {
+    // TODO(Planning Stage 7): Remove this expectation when Planning constructs
+    // the frozen typed scheduling publication input.
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "Stage 5 freezes the typed Stage 7 scheduling publication input before Planning integrates"
+        )
+    )]
+    pub(in crate::domain::vnext) fn new(
+        request_id: ActionRequestIdV1,
+        request_object: StoreObjectV1,
+        binding_object: StoreObjectV1,
+        current_binding_root: Option<StoreObjectIdV1>,
+        planning: PlanningSchedulingPolicyInputV1,
+    ) -> Self {
+        Self {
+            request_id,
+            request_object,
+            binding_object,
+            current_binding_root,
+            planning,
+        }
+    }
 }
 
 struct SchedulingPolicyDowngradeMaterializationV1 {
@@ -326,11 +369,9 @@ impl<'tx> AuthorityMaterializationPortV1<'tx> {
             .active_generation()?
             .ok_or(SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput)?;
         let active_objects = self.view.active_generation_objects()?;
-        let relation = derive_policy_relation(owner.policy)?;
-        if relation.requires_downgrade_mandate() != requires_downgrade_mandate
-            || owner
-                .current_binding_root
-                .is_some_and(|root| !current_generation.roots().contains(&root))
+        if owner
+            .current_binding_root
+            .is_some_and(|root| !current_generation.roots().contains(&root))
         {
             return Err(SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput);
         }
@@ -345,6 +386,34 @@ impl<'tx> AuthorityMaterializationPortV1<'tx> {
         {
             return Err(SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput);
         }
+        let authority_root = select_current_authority_root(&current_generation, &active_objects)
+            .map_err(|_| SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput)?;
+        let current_authority = load_current_authority(
+            self.view,
+            &current_head,
+            &current_generation,
+            authority_root,
+            &active_objects,
+        )
+        .map_err(|_| SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput)?;
+        let authority_currentness =
+            repository_governance_currentness(&current_authority, admission)?;
+        let governance_view = resolve_repository_governance_floor_current_view(
+            self.view,
+            &current_head,
+            &current_generation,
+            &active_objects,
+            authority_currentness,
+            owner.planning.safety_floor(),
+        )?;
+        let attestation =
+            GovernanceAttestationV1::derive(owner.planning, &governance_view, admission)?;
+        let attested = attestation.consume(&governance_view, admission)?;
+        let policy = attested.policy();
+        let relation = attested.relation();
+        if relation.requires_downgrade_mandate() != requires_downgrade_mandate {
+            return Err(SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput);
+        }
         let downgrade = requires_downgrade_mandate
             .then(|| {
                 resolve_scheduling_policy_downgrade_mandate(
@@ -353,6 +422,7 @@ impl<'tx> AuthorityMaterializationPortV1<'tx> {
                     &current_generation,
                     &active_objects,
                     &owner,
+                    policy,
                     admission,
                 )
             })
@@ -385,6 +455,15 @@ impl<'tx> AuthorityMaterializationPortV1<'tx> {
         roots.push(artifacts.result_object().id());
         roots.sort_unstable();
         roots.dedup();
+        if !governance_view.preserved_by_roots(&roots)
+            || roots
+                .iter()
+                .filter(|root| **root == attested.direct_floor_root())
+                .count()
+                != 1
+        {
+            return Err(SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput);
+        }
         let generation = StoreGenerationV1::new(
             self.view.domain().clone(),
             admission.successor_store_generation,
@@ -419,15 +498,18 @@ impl<'tx> AuthorityMaterializationPortV1<'tx> {
             objects,
             idempotency,
         )?;
-        let binding_facts = derive_scheduling_policy_binding_facts(
-            admission,
-            owner.policy,
-            relation,
-            probe,
-            &publication,
-            artifacts.receipt_object().id(),
-            downgrade.as_ref(),
-        )?;
+        let binding_facts =
+            derive_scheduling_policy_binding_facts(SchedulingPolicyBindingDerivationV1 {
+                admission,
+                policy,
+                relation,
+                governance_attestation_commitment: attested.governance_commitment(),
+                governance_current_view_commitment: attested.current_view_commitment(),
+                probe,
+                publication: &publication,
+                receipt_object_id: artifacts.receipt_object().id(),
+                downgrade: downgrade.as_ref(),
+            })?;
         if let Some(mandate) = downgrade {
             let mandate_facts = derive_scheduling_policy_mandate_facts(binding_facts, mandate);
             let mandate_use = self.transaction.mint_mandate(mandate_facts)?;
@@ -454,6 +536,62 @@ impl<'tx> AuthorityMaterializationPortV1<'tx> {
             Ok(publication)
         }
     }
+}
+
+fn repository_governance_currentness(
+    current: &CurrentAuthorityV1,
+    admission: MaterializationAuthorityAdmissionV1,
+) -> Result<RepositoryGovernanceAuthorityCurrentnessV1, SchedulingPolicyMaterializationErrorV1> {
+    let selection = admission
+        .selection
+        .ok_or(SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput)?;
+    let mut operators = [
+        (current.facts.actor_binding(), current.facts.actor_session()),
+        (
+            current.facts.responder_binding(),
+            current.facts.responder_session(),
+        ),
+    ]
+    .into_iter()
+    .filter(|(binding, session)| {
+        binding.id() == selection.actor_binding_id()
+            && session.id() == selection.actor_session_id()
+            && session.binding_id() == binding.id()
+            && binding.principal_id() == admission.principal_id
+            && binding.context_id() == admission.authority_context_id
+            && session.context_id() == admission.authority_context_id
+            && binding.validity().contains(admission.accepted_h_time)
+            && session.validity().contains(admission.accepted_h_time)
+    });
+    let Some((binding, session)) = operators.next() else {
+        return Err(SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput);
+    };
+    if operators.next().is_some() {
+        return Err(SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput);
+    }
+    let trust_root_binding_commitment = materialization_commitment(
+        b"maestro.authority.repository-governance-trust-root-binding.v1\0",
+        &[
+            admission.authority_context_id.as_bytes(),
+            binding.id().as_bytes(),
+            session.id().as_bytes(),
+            &binding.trust_root_revision().to_be_bytes(),
+        ],
+    );
+    Ok(RepositoryGovernanceAuthorityCurrentnessV1 {
+        authority_context: *admission.authority_context_id.as_bytes(),
+        authority_epoch: admission.authority_epoch,
+        trust_root_revision: binding.trust_root_revision(),
+        trust_root_binding_commitment,
+        authority_state_token: *current.state.state_token().as_bytes(),
+        authority_fence: *current.state.carrier_fence().as_bytes(),
+        revocation_revision: current.state.authority_epoch(),
+        principal: *binding.principal_id().as_bytes(),
+        binding: *binding.id().as_bytes(),
+        session: *session.id().as_bytes(),
+        assurance_revision: binding.assurance_revision(),
+        trusted_time: admission.accepted_h_time,
+    })
 }
 
 fn replace_materialization_root(
@@ -487,12 +625,38 @@ fn consume_materialization_root(
     Ok(())
 }
 
+fn authority_successor_roots_preserving_governance(
+    primary_root: StoreObjectIdV1,
+    current_generation: &StoreGenerationV1,
+    active_objects: &[StoreObjectV1],
+) -> Result<Vec<StoreObjectIdV1>, AuthorityPublicationError> {
+    let governance_schema = AuthoritySchemaV1::RepositoryGovernanceFloorSnapshot.id()?;
+    let mut governance_roots = current_generation
+        .roots()
+        .iter()
+        .filter(|root| {
+            active_objects
+                .iter()
+                .any(|object| object.id() == **root && object.schema_id() == governance_schema)
+        })
+        .copied()
+        .collect::<Vec<_>>();
+    if governance_roots.len() > 1 {
+        return Err(AuthorityPublicationError::InvalidCurrentAuthoritySnapshot);
+    }
+    governance_roots.push(primary_root);
+    governance_roots.sort_unstable();
+    governance_roots.dedup();
+    Ok(governance_roots)
+}
+
 fn resolve_scheduling_policy_downgrade_mandate(
     view: &StorePublicationViewV1<'_>,
     current_head: &crate::domain::vnext::persistence::StoreHeadV1,
     current_generation: &StoreGenerationV1,
     active_objects: &[StoreObjectV1],
     owner: &SchedulingPolicyOwnerPublicationV1,
+    policy: SchedulingPolicyMeaningV1,
     admission: MaterializationAuthorityAdmissionV1,
 ) -> Result<SchedulingPolicyDowngradeMaterializationV1, SchedulingPolicyMaterializationErrorV1> {
     let authority_root = select_current_authority_root(current_generation, active_objects)
@@ -619,7 +783,7 @@ fn resolve_scheduling_policy_downgrade_mandate(
         if logical_mandate_id != *mandate_id.as_bytes()
             || context_id != *admission.authority_context_id.as_bytes()
             || subject != &expected_subject
-            || exact_current_unsigned(&mandate_fields[4])? != owner.policy.classifier_revision()
+            || exact_current_unsigned(&mandate_fields[4])? != policy.classifier_revision()
             || mandate_fields[5] != *consent_object.value()
             || exact_current_unsigned(&mandate_fields[7])? != binding.assurance_revision()
             || authority_basis != owner.current_owner_basis_commitment
@@ -693,15 +857,32 @@ fn scheduling_policy_mandate_subject(binding_id: StoreObjectIdV1) -> String {
     subject
 }
 
-fn derive_scheduling_policy_binding_facts(
+struct SchedulingPolicyBindingDerivationV1<'a> {
     admission: MaterializationAuthorityAdmissionV1,
     policy: SchedulingPolicyMeaningV1,
     relation: SchedulingPolicyDiffClassV1,
-    probe: &StoreIdempotencyProbeV1,
-    publication: &AtomicGenerationPublicationV1,
+    governance_attestation_commitment: [u8; 32],
+    governance_current_view_commitment: [u8; 32],
+    probe: &'a StoreIdempotencyProbeV1,
+    publication: &'a AtomicGenerationPublicationV1,
     receipt_object_id: StoreObjectIdV1,
-    downgrade: Option<&SchedulingPolicyDowngradeMaterializationV1>,
+    downgrade: Option<&'a SchedulingPolicyDowngradeMaterializationV1>,
+}
+
+fn derive_scheduling_policy_binding_facts(
+    derivation: SchedulingPolicyBindingDerivationV1<'_>,
 ) -> Result<RepositoryActionBindingFactsV1, SchedulingPolicyMaterializationErrorV1> {
+    let SchedulingPolicyBindingDerivationV1 {
+        admission,
+        policy,
+        relation,
+        governance_attestation_commitment,
+        governance_current_view_commitment,
+        probe,
+        publication,
+        receipt_object_id,
+        downgrade,
+    } = derivation;
     let selection = admission
         .selection
         .ok_or(SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput)?;
@@ -741,6 +922,8 @@ fn derive_scheduling_policy_binding_facts(
             active_generation_id.as_bytes(),
             admission.current_snapshot_id.as_bytes(),
             admission.state_object_id.as_bytes(),
+            &governance_attestation_commitment,
+            &governance_current_view_commitment,
         ],
     );
     let authority_fence_commitment = materialization_commitment(
@@ -936,10 +1119,7 @@ fn derive_scheduling_policy_binding_facts(
             b"maestro.authority.scheduling-safety-floor.v1\0",
             &policy.safety_floor(),
         ),
-        governance_floor_commitment: policy_commitment(
-            b"maestro.authority.scheduling-governance-floor.v1\0",
-            &policy.governance_floor(),
-        ),
+        governance_floor_commitment: policy.governance_floor_binding(),
         request_payload_commitment: exact_payload_commitment,
         idempotency_meaning_commitment: *probe.meaning_digest(),
         trust_root_commitment: materialization_commitment(
@@ -1104,46 +1284,36 @@ impl<'store> AuthorityFacadeV1<'store> {
             })
     }
 
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "the owner-local entry accepts the exact semantic policy tuple without exposing Authority fact bags"
-    )]
     pub(in crate::domain::vnext) fn publish_scheduling_policy_without_downgrade(
         &mut self,
         probe: &StoreIdempotencyProbeV1,
-        request_id: ActionRequestIdV1,
         authority: PlanningRepositoryActionAuthorityV1,
-        request_object: StoreObjectV1,
-        binding_object: StoreObjectV1,
-        current_binding_root: Option<StoreObjectIdV1>,
-        current_rules: [u64; 4],
-        candidate_rules: [u64; 4],
-        safety_floor: [u64; 4],
-        governance_floor: [u64; 4],
-        evaluator_revision: u64,
-        classifier_revision: u64,
+        input: SchedulingPolicyPublicationInputV1,
     ) -> Result<
         StorePublicationOutcomeV1,
         AuthorityMaterializationPublicationErrorV1<SchedulingPolicyMaterializationErrorV1>,
     > {
+        let SchedulingPolicyPublicationInputV1 {
+            request_id,
+            request_object,
+            binding_object,
+            current_binding_root,
+            planning,
+        } = input;
         let current_owner_basis_commitment = authority.current_semantic_owner_basis_commitment();
-        let policy = SchedulingPolicyMeaningV1::new(
-            current_rules,
-            candidate_rules,
-            safety_floor,
-            governance_floor,
-            evaluator_revision,
-            classifier_revision,
-        )
-        .map_err(|error| AuthorityMaterializationPublicationErrorV1::Prepare(error.into()))?;
-        if derive_policy_relation(policy)
-            .is_ok_and(SchedulingPolicyDiffClassV1::requires_downgrade_mandate)
-            || authority.action()
-                != match SchedulingPolicyBindingOwnerV1::ACTION {
-                    RepositoryActionLeafV1::Downstream(action) => action,
-                    _ => unreachable!("Scheduling owner is one exact downstream Action"),
-                }
+        if authority.action()
+            != match SchedulingPolicyBindingOwnerV1::ACTION {
+                RepositoryActionLeafV1::Downstream(action) => action,
+                _ => unreachable!("Scheduling owner is one exact downstream Action"),
+            }
             || authority.exact_payload_commitment() != *binding_object.id().as_bytes()
+            || planning.request() != *request_id.as_bytes()
+            || planning.payload() != *binding_object.id().as_bytes()
+            || planning.candidate_binding() != *binding_object.id().as_bytes()
+            || planning.expected_binding()
+                != current_binding_root.map_or([0xA5; 32], |root| *root.as_bytes())
+            || planning.idempotency_key() != *probe.key_digest()
+            || planning.idempotency_meaning() != *probe.meaning_digest()
         {
             return Err(AuthorityMaterializationPublicationErrorV1::Prepare(
                 SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput,
@@ -1157,52 +1327,42 @@ impl<'store> AuthorityFacadeV1<'store> {
                 binding_object,
                 current_binding_root,
                 current_owner_basis_commitment,
-                policy,
+                planning,
             },
             false,
         )
     }
 
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "the owner-local entry accepts the exact policy tuple while Authority resolves the stored Mandate"
-    )]
     pub(in crate::domain::vnext) fn publish_scheduling_policy_with_downgrade(
         &mut self,
         probe: &StoreIdempotencyProbeV1,
-        request_id: ActionRequestIdV1,
         authority: PlanningRepositoryActionAuthorityV1,
-        request_object: StoreObjectV1,
-        binding_object: StoreObjectV1,
-        current_binding_root: Option<StoreObjectIdV1>,
-        current_rules: [u64; 4],
-        candidate_rules: [u64; 4],
-        safety_floor: [u64; 4],
-        governance_floor: [u64; 4],
-        evaluator_revision: u64,
-        classifier_revision: u64,
+        input: SchedulingPolicyPublicationInputV1,
     ) -> Result<
         StorePublicationOutcomeV1,
         AuthorityMaterializationPublicationErrorV1<SchedulingPolicyMaterializationErrorV1>,
     > {
+        let SchedulingPolicyPublicationInputV1 {
+            request_id,
+            request_object,
+            binding_object,
+            current_binding_root,
+            planning,
+        } = input;
         let current_owner_basis_commitment = authority.current_semantic_owner_basis_commitment();
-        let policy = SchedulingPolicyMeaningV1::new(
-            current_rules,
-            candidate_rules,
-            safety_floor,
-            governance_floor,
-            evaluator_revision,
-            classifier_revision,
-        )
-        .map_err(|error| AuthorityMaterializationPublicationErrorV1::Prepare(error.into()))?;
-        if !derive_policy_relation(policy)
-            .is_ok_and(SchedulingPolicyDiffClassV1::requires_downgrade_mandate)
-            || authority.action()
-                != match SchedulingPolicyBindingOwnerV1::ACTION {
-                    RepositoryActionLeafV1::Downstream(action) => action,
-                    _ => unreachable!("Scheduling owner is one exact downstream Action"),
-                }
+        if authority.action()
+            != match SchedulingPolicyBindingOwnerV1::ACTION {
+                RepositoryActionLeafV1::Downstream(action) => action,
+                _ => unreachable!("Scheduling owner is one exact downstream Action"),
+            }
             || authority.exact_payload_commitment() != *binding_object.id().as_bytes()
+            || planning.request() != *request_id.as_bytes()
+            || planning.payload() != *binding_object.id().as_bytes()
+            || planning.candidate_binding() != *binding_object.id().as_bytes()
+            || planning.expected_binding()
+                != current_binding_root.map_or([0xA5; 32], |root| *root.as_bytes())
+            || planning.idempotency_key() != *probe.key_digest()
+            || planning.idempotency_meaning() != *probe.meaning_digest()
         {
             return Err(AuthorityMaterializationPublicationErrorV1::Prepare(
                 SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput,
@@ -1216,7 +1376,7 @@ impl<'store> AuthorityFacadeV1<'store> {
                 binding_object,
                 current_binding_root,
                 current_owner_basis_commitment,
-                policy,
+                planning,
             },
             true,
         )
@@ -1236,13 +1396,6 @@ impl<'store> AuthorityFacadeV1<'store> {
         })
     }
 
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "Stage 5 freezes the Authority entry before Stage 8 supplies its builder"
-        )
-    )]
     pub(crate) fn protected_continuity_diagnostic_with_ports(
         &mut self,
         connection: &mut dyn TrustedHostDiagnosticConnectionPortV1,
@@ -1735,6 +1888,11 @@ fn prepare_bootstrap_publication(
         post_cut.schema_value()?,
         post_cut_references,
     )?;
+    let generation_roots = authority_successor_roots_preserving_governance(
+        post_cut_object.id(),
+        &current_generation,
+        &active_objects,
+    )?;
 
     let mut objects = active_objects;
     objects.extend([
@@ -1770,7 +1928,7 @@ fn prepare_bootstrap_publication(
         Some(plan.previous_generation_id),
         plan.contract_root_id,
         StoreCompatibilityV1::stage0_successor()?,
-        vec![post_cut_object.id()],
+        generation_roots,
     )?;
     let idempotency = StoreIdempotencyV1::new(
         ISSUE_BOOTSTRAP_MANDATE_IDEMPOTENCY_NAMESPACE_V1,
@@ -2125,13 +2283,18 @@ fn prepare_root_attached_grant_issue(
         successor_facts.schema_value()?,
         snapshot_references,
     )?;
+    let generation_roots = authority_successor_roots_preserving_governance(
+        successor_snapshot.id(),
+        &current_generation,
+        &active_objects,
+    )?;
     let generation = StoreGenerationV1::new(
         view.domain().clone(),
         next_generation,
         Some(previous_generation_id),
         plan.lineage.contract_root_id(),
         StoreCompatibilityV1::stage0_successor()?,
-        vec![successor_snapshot.id()],
+        generation_roots,
     )?;
     let idempotency = StoreIdempotencyV1::new(
         ISSUE_ROOT_ATTACHED_BOUNDED_GRANT_IDEMPOTENCY_NAMESPACE_V1,
@@ -2500,13 +2663,18 @@ fn prepare_ordinary_grant_mutation(
         successor_facts.schema_value()?,
         snapshot_references,
     )?;
+    let generation_roots = authority_successor_roots_preserving_governance(
+        successor_snapshot.id(),
+        &current_generation,
+        &active_objects,
+    )?;
     let generation = StoreGenerationV1::new(
         view.domain().clone(),
         next_generation,
         Some(previous_generation_id),
         lineage.contract_root_id(),
         StoreCompatibilityV1::stage0_successor()?,
-        vec![successor_snapshot.id()],
+        generation_roots,
     )?;
     let idempotency = StoreIdempotencyV1::new(
         mutation.idempotency_namespace(),
@@ -2951,7 +3119,7 @@ fn load_current_authority(
     prior_authority_root: StoreObjectIdV1,
     active_objects: &[StoreObjectV1],
 ) -> Result<CurrentAuthorityV1, AuthorityPublicationError> {
-    debug_assert_eq!(AuthoritySchemaV1::ALL.len(), 24);
+    debug_assert_eq!(AuthoritySchemaV1::ALL.len(), 25);
     let role = view.role();
     let root = active_objects
         .iter()
@@ -4079,7 +4247,16 @@ fn build_successor_continuity(
         historical_spend_items: current.closure.historical_spend_items().to_vec(),
         unresolved_effects: current.state.unresolved_effects().to_vec(),
     };
-    let class_entries = continuity_class_entries(&current.manifest, &semantic_cut)?;
+    let governance_schema = AuthoritySchemaV1::RepositoryGovernanceFloorSnapshot.id()?;
+    let mut governance_records = active_objects
+        .iter()
+        .filter(|object| object.schema_id() == governance_schema)
+        .map(reference_from_object)
+        .collect::<Vec<_>>();
+    governance_records.sort_unstable();
+    governance_records.dedup();
+    let class_entries =
+        continuity_class_entries(&current.manifest, &semantic_cut, &governance_records)?;
     let closure = AuthorityContinuityClosureV1::prove(
         &current.manifest,
         AuthorityContinuityClosureInputV1 {
@@ -4205,6 +4382,7 @@ fn build_successor_continuity(
 fn continuity_class_entries(
     manifest: &AuthorityContinuityManifestV1,
     cut: &AuthorityContinuitySemanticCutV1,
+    governance_records: &[ContinuityReferenceV1],
 ) -> Result<Vec<AuthorityContinuityClassClosureV1>, AuthorityPublicationError> {
     let first_canonical = manifest
         .descriptors()
@@ -4221,10 +4399,27 @@ fn continuity_class_entries(
                 .map(|facet| {
                     let disposition = match descriptor.disposition {
                         ClassDispositionV1::CanonicalRecordClosure => {
-                            let items = if descriptor.class_id == first_canonical {
+                            let repository_governance_head = matches!(
+                                descriptor.class_id,
+                                super::ContinuityClassIdV1::Repository(
+                                    super::RepositoryAuthorityContinuityClassV1::RepositoryGovernanceHead
+                                )
+                            );
+                            let items = if repository_governance_head {
                                 match facet {
                                     ContinuityClosureFacetV1::CanonicalRecords => {
-                                        cut.canonical_records.clone()
+                                        governance_records.to_vec()
+                                    }
+                                    _ => Vec::new(),
+                                }
+                            } else if descriptor.class_id == first_canonical {
+                                match facet {
+                                    ContinuityClosureFacetV1::CanonicalRecords => {
+                                        cut.canonical_records
+                                            .iter()
+                                            .copied()
+                                            .filter(|item| !governance_records.contains(item))
+                                            .collect()
                                     }
                                     ContinuityClosureFacetV1::Graph => cut.graph_nodes.clone(),
                                     ContinuityClosureFacetV1::Replay => cut.replay_items.clone(),

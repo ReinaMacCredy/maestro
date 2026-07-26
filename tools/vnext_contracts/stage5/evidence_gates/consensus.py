@@ -22,10 +22,10 @@ EXPECTED_STAGE4_SOURCE_ARCHIVE_LENGTH = 16_486_231
 EXPECTED_STAGE4_SOURCE_ARCHIVE_SHA256 = (
     "347eaf928f81d9ce6e07e3767f0cdaf2cde23cd98d13bad41b745d5fbc359910"
 )
-EXPECTED_BEHAVIOR_TESTS = 86
+EXPECTED_BEHAVIOR_TESTS = 112
 EXPECTED_PROOF_HARNESS_TESTS = 66
 EXPECTED_BEHAVIOR_MANIFEST_IDENTITY = (
-    "sha256:fe5df73a47fb802b0ef87afafab04267c0b8a540931c8a6e667749f3a60131a5"
+    "sha256:bc8d5dd0b46c8dda55b02791abbec7c92122e55e30643e0aa5e87a36add40665"
 )
 EXPECTED_OBSERVATION_CONTRACT_TABLE_IDENTITY = (
     "sha256:a5f0e9137c091972802cb7084d86070a930091f0570cefcc7df445074478a676"
@@ -75,12 +75,12 @@ ARTIFACT_KEYS = {
 EXPECTED_NORMAL_RUNS = (
     ("assessment-kernel", "maestro", 15),
     ("submission-evidence-join", "maestro", 5),
-    ("authorized-evidence-store", "maestro", 47),
+    ("authorized-evidence-store", "maestro", 72),
     ("work-completion-boundary", "vnext_work_lifecycle", 1),
     ("claim-contracts", "vnext_evidence_claims", 5),
     ("submission-claim-carrier", "vnext_submission_claim_set", 4),
     ("evidence-gate-contracts", "vnext_stage5_evidence_gates", 8),
-    ("diagnostic-architecture", "architecture_imports", 1),
+    ("diagnostic-architecture", "architecture_imports", 2),
 )
 RESULTS = [[1, "Pass"], [2, "Fail"], [3, "Indeterminate"], [4, "Error"]]
 INPUT_CLASSES = [[1, "Evidence"], [2, "Authority"], [3, "Mixed"], [4, "Composite"]]
@@ -189,10 +189,12 @@ ARTIFACT_SOURCE_PATHS = (
     "src/domain/vnext/authority/facade/repository_leaf_authority.rs",
     "src/domain/vnext/authority/governance_attestation.rs",
     "src/domain/vnext/authority/governance_attestation_stage7_seed.rs",
+    "src/domain/vnext/authority/governance_floor.rs",
     "src/domain/vnext/authority/materialization.rs",
     "src/domain/vnext/authority/mod.rs",
     "src/domain/vnext/authority/protected_diagnostic_envelope.rs",
     "src/domain/vnext/authority/protected_diagnostic_envelope_stage8_seed.rs",
+    "src/domain/vnext/authority/publication.rs",
     "src/domain/vnext/authority/result.rs",
     "src/domain/vnext/contract/runtime.rs",
     "src/domain/vnext/evidence/assessment.rs",
