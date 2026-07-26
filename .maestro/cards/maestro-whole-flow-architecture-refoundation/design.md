@@ -12027,6 +12027,12 @@ or invalid records. It comprises the prior 209-card authoring closure, the four
 locked materialization Decisions `df3b`, `0939`, `a128`, `c1fe`, and the four
 successor Decisions above. Exact raw inventory, node/edge closure and every
 card byte are packet-bound inputs. They are not canonical vNext proof artifacts.
+In these current raw bytes, `dec-canonical-trusted-host-protected-1fbc` carries
+the unilateral `supersedes` source claim naming
+`dec-canonical-non-action-protected-90a9`; the external closure records that raw
+source orientation as `ignored_unilateral_claim`. This is the byte-level
+orientation of the earlier semantic notation `90a9 -> 1fbc`; neither locked
+head supersedes the other in the effective closure.
 
 The next authorized build must add negative and positive proof inputs for:
 
