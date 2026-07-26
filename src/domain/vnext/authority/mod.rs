@@ -13,6 +13,22 @@ mod continuity;
 mod downstream_action_basis;
 mod evaluator;
 mod facade;
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "Stage 5 freezes the Authority governance port before its Stage 7 production consumer"
+    )
+)]
+pub(in crate::domain::vnext) mod governance_attestation;
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "Stage 5 freezes the Authority-owned Stage 7 governance seed before Planning integrates it"
+    )
+)]
+pub(in crate::domain::vnext) mod governance_attestation_stage7_seed;
 mod grant;
 mod identity;
 mod mandate;

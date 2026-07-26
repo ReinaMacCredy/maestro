@@ -1,5 +1,35 @@
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "Stage 5 freezes aggregate census before its Stage 11 production consumer"
+    )
+)]
+pub(crate) mod aggregate_census;
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "Stage 5 freezes the aggregate census owner seed before Stage 11 integrates it"
+    )
+)]
+mod aggregate_census_stage11_seed;
 pub mod backup;
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "the retired singular census port remains only as migration-proof history"
+    )
+)]
 pub(crate) mod descriptor_census_platform;
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "the retired singular census seed remains only as migration-proof history"
+    )
+)]
 mod descriptor_census_platform_stage11_seed;
 pub mod deterministic_cbor;
 pub mod diff;

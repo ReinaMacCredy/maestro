@@ -3652,6 +3652,67 @@ fn stage5_protected_diagnostic_ports_are_sealed_test_only_and_non_bearer() {
     );
 }
 
+#[test]
+fn stage5_successor_seams_are_owner_private_and_production_replaceable() {
+    let authority = read_source_file(Path::new(
+        "src/domain/vnext/authority/governance_attestation.rs",
+    ));
+    let authority_seed = read_source_file(Path::new(
+        "src/domain/vnext/authority/governance_attestation_stage7_seed.rs",
+    ));
+    let persistence = read_source_file(Path::new(
+        "src/domain/vnext/persistence/protected_locator_lease.rs",
+    ));
+    let foundation = read_source_file(Path::new("src/foundation/core/aggregate_census.rs"));
+    let foundation_seed = read_source_file(Path::new(
+        "src/foundation/core/aggregate_census_stage11_seed.rs",
+    ));
+    let installation = read_source_file(Path::new(
+        "src/domain/vnext/installation/durable_finality.rs",
+    ));
+    let authority_mod = read_source_file(Path::new("src/domain/vnext/authority/mod.rs"));
+    let persistence_mod = read_source_file(Path::new("src/domain/vnext/persistence/mod.rs"));
+    let foundation_mod = read_source_file(Path::new("src/foundation/core/mod.rs"));
+    let installation_mod = read_source_file(Path::new("src/domain/vnext/installation/mod.rs"));
+    let singular = read_source_file(Path::new(
+        "src/foundation/core/descriptor_census_platform.rs",
+    ));
+
+    assert!(authority.contains("GovernanceAttestationV1<'tx"));
+    assert!(authority.contains("VerifiedSchedulingPolicyDowngradeMandateUseV1"));
+    assert!(authority.contains("AdmittedRepositoryActionBindingV1"));
+    assert!(!authority.contains("supplemental_mandate_present: bool"));
+    assert!(!authority.contains("pub struct GovernanceAttestationV1"));
+    assert!(authority_seed.contains("publish_scheduling_policy_from_stage7"));
+    assert!(authority_seed.contains("InvalidAuthorityView"));
+
+    assert!(persistence.contains("ProtectedLocatorLeaseV1<'locator>"));
+    assert!(persistence.contains("consume_pre_store_inert"));
+    assert!(!persistence.contains(
+        "#[derive(Clone, Copy)]\npub(in crate::domain::vnext) struct ProtectedLocatorLeaseV1"
+    ));
+    assert!(!persistence.contains("pub struct ProtectedLocatorLeaseV1"));
+
+    assert!(foundation.contains("AggregateCensusLeaseV1<'scan"));
+    assert!(foundation.contains("acquire_complete_root_set"));
+    assert!(foundation.contains("final_root_set_recheck"));
+    assert!(foundation_seed.contains("Stage11AggregateCensusBackendSeedV1"));
+    assert!(singular.contains("singular-root production route is intentionally retired"));
+    assert!(!foundation.contains("pub struct AggregateCensusLeaseV1"));
+
+    assert!(installation.contains("DurableInstallationFinalityBackendV1<'effect"));
+    assert!(installation.contains("ProtectedLocatorLeaseV1<'locator>"));
+    assert!(installation.contains("ActiveStoreDecisionTupleV1"));
+    assert!(installation.contains("PreStoreDecisionTupleV1"));
+    assert!(!installation.contains("impl FnOnce"));
+    assert!(!installation.contains("pub struct DurableInstallationFinalityBackendV1"));
+
+    assert!(!authority_mod.contains("pub mod governance_attestation"));
+    assert!(!persistence_mod.contains("pub mod protected_locator_lease"));
+    assert!(!foundation_mod.contains("pub mod aggregate_census"));
+    assert!(!installation_mod.contains("pub mod durable_finality"));
+}
+
 fn rust_files_under(root: &Path) -> Vec<PathBuf> {
     let mut files = Vec::new();
     collect_rust_files(root, &mut files);

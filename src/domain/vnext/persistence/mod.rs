@@ -20,6 +20,22 @@ mod object;
 mod protected_diagnostic;
 #[cfg(test)]
 mod protected_diagnostic_stage9_seed;
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "Stage 5 freezes the protected-locator lease before its Stage 9 and Stage 11 production consumers"
+    )
+)]
+pub(in crate::domain::vnext) mod protected_locator_lease;
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "Stage 5 freezes the protected-locator Stage 9 seed before the production provider integrates"
+    )
+)]
+mod protected_locator_stage9_seed;
 mod retention;
 mod snapshot;
 mod snapshot_blocks;

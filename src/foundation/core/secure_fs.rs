@@ -509,6 +509,10 @@ mod platform {
 
     impl super::descriptor_census_sealed::LeaseSealed for PlatformCensusLeaseV1 {}
 
+    #[expect(
+        dead_code,
+        reason = "the descriptor component carrier is retained for the Stage 11 aggregate-census seed"
+    )]
     pub struct AdmittedDescriptorCensusRootV1<'root> {
         root: &'root SecureRoot,
         initial_root: FileIdentity,
@@ -651,6 +655,10 @@ mod platform {
                 .map_err(|_| SecureFsError::CensusRefused)
         }
 
+        #[expect(
+            dead_code,
+            reason = "the descriptor component admission is retained for the Stage 11 aggregate-census seed"
+        )]
         pub(in crate::foundation::core) fn admit_descriptor_census_root(
             &self,
         ) -> SecureFsResult<AdmittedDescriptorCensusRootV1<'_>> {
@@ -680,6 +688,10 @@ mod platform {
             })
         }
 
+        #[expect(
+            dead_code,
+            reason = "the descriptor component traversal is retained for the Stage 11 aggregate-census seed"
+        )]
         pub(in crate::foundation::core) fn census_admitted_descriptor_root(
             admitted: AdmittedDescriptorCensusRootV1<'_>,
             limits: DescriptorCensusLimitsV1,

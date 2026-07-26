@@ -57,19 +57,13 @@ impl<'backend, B: NamespaceWideSnapshotBackendV1> NamespaceWideSnapshotLeaseV1<'
 }
 
 pub(crate) fn census(
-    root: &SecureRoot,
-    limits: DescriptorCensusLimitsV1,
+    _root: &SecureRoot,
+    _limits: DescriptorCensusLimitsV1,
 ) -> SecureFsResult<DescriptorAnchoredCensusV1> {
-    let mut backend =
-        super::descriptor_census_platform_stage11_seed::acquire_namespace_wide_snapshot(root)?;
-    let lease = NamespaceWideSnapshotLeaseV1::acquire(&mut backend)?;
-    let admitted = root
-        .admit_descriptor_census_root()
-        .map_err(|_| SecureFsError::CensusRefused)?;
-    let census = SecureRoot::census_admitted_descriptor_root(admitted, limits)
-        .map_err(|_| SecureFsError::CensusRefused)?;
-    lease.recheck()?;
-    Ok(census)
+    // The singular-root production route is intentionally retired. The
+    // descriptor traversal remains the component implementation behind the
+    // complete admitted-root-set operation in aggregate_census.
+    Err(SecureFsError::CensusRefused)
 }
 
 #[cfg(test)]
@@ -109,5 +103,29 @@ mod tests {
         assert!(!interface.contains("pub(crate) trait NamespaceWideSnapshotBackendV1"));
         assert!(!seed_interface.contains("pub(crate)"));
         assert!(!seed_interface.contains("pub fn acquire_namespace_wide_snapshot"));
+    }
+
+    #[test]
+    fn singular_root_production_route_is_retired() {
+        let root = tempfile_root();
+        let secure = SecureRoot::open_or_create(&root).unwrap();
+        assert!(matches!(
+            census(&secure, DescriptorCensusLimitsV1::bounded_default()),
+            Err(SecureFsError::CensusRefused)
+        ));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    fn tempfile_root() -> std::path::PathBuf {
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let temp_directory =
+            std::fs::canonicalize(std::env::temp_dir()).expect("resolve existing temp directory");
+        let path = temp_directory.join(format!(
+            "maestro-retired-singular-census-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
+        let _ = std::fs::remove_dir_all(&path);
+        path
     }
 }
