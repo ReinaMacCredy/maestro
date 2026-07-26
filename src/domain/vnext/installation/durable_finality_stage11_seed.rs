@@ -3,25 +3,24 @@ use super::durable_finality::{
     PreStoreFinalityRequestV1, PreStoreOwnerValidationV1, owner_sealed,
 };
 
-pub(super) struct Stage11PreStoreFinalitySeedV1 {
+pub(in crate::domain::vnext) struct Stage11PreStoreFinalitySeedV1 {
     _private: (),
 }
 
-pub(super) fn acquire() -> Stage11PreStoreFinalitySeedV1 {
-    Stage11PreStoreFinalitySeedV1 { _private: () }
+impl Stage11PreStoreFinalitySeedV1 {
+    #[cfg(test)]
+    pub(in crate::domain::vnext) fn test_unavailable() -> Self {
+        Self { _private: () }
+    }
 }
 
-impl Stage11PreStoreFinalitySeedV1 {
-    pub(super) fn prepare_request(
+impl PreStoreFinalityOwnerV1 for Stage11PreStoreFinalitySeedV1 {
+    fn prepare_request(
         &mut self,
     ) -> Result<PreStoreFinalityRequestV1, DurableInstallationFinalityErrorV1> {
         Err(DurableInstallationFinalityErrorV1::BackendUnavailable)
     }
-}
 
-impl owner_sealed::Sealed for Stage11PreStoreFinalitySeedV1 {}
-
-impl PreStoreFinalityOwnerV1 for Stage11PreStoreFinalitySeedV1 {
     fn validate_inactive_candidate(
         &mut self,
         _expected: InstallationFinalityCurrentnessV1,
@@ -48,13 +47,15 @@ impl PreStoreFinalityOwnerV1 for Stage11PreStoreFinalitySeedV1 {
     }
 }
 
+impl owner_sealed::Sealed for Stage11PreStoreFinalitySeedV1 {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn stage11_owner_seed_is_constructible_only_in_its_owner_module() {
-        let mut backend = acquire();
+    fn stage11_owner_test_provider_is_constructible_only_in_its_owner_module() {
+        let mut backend = Stage11PreStoreFinalitySeedV1::test_unavailable();
         assert!(matches!(
             super::super::durable_finality::prepare_pre_store_from_stage11_owner(&mut backend),
             Err(super::super::durable_finality::Stage11PreStoreFinalityErrorV1)

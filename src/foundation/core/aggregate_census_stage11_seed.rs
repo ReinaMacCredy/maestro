@@ -4,7 +4,7 @@ use super::aggregate_census::{
 };
 use super::secure_fs::{InventoryRowV1, SecureFsError, SecureFsResult};
 
-pub(super) struct Stage11AggregateCensusBackendSeedV1 {
+pub(crate) struct Stage11AggregateCensusBackendSeedV1 {
     _private: (),
 }
 
@@ -74,12 +74,15 @@ impl AggregateCensusBackendV1 for Stage11AggregateCensusBackendSeedV1 {
     }
 }
 
-pub(super) fn acquire() -> Stage11AggregateCensusBackendSeedV1 {
-    Stage11AggregateCensusBackendSeedV1 { _private: () }
+impl Stage11AggregateCensusBackendSeedV1 {
+    #[cfg(test)]
+    pub(crate) fn test_unavailable() -> Self {
+        Self { _private: () }
+    }
 }
 
 pub(super) fn census_from_stage11_owner<'scan>(
-    backend: &'scan mut Stage11AggregateCensusBackendSeedV1,
+    backend: &'scan mut dyn AggregateCensusBackendV1,
 ) -> SecureFsResult<Stage11AggregateCensusOutputV1<'scan>> {
     super::aggregate_census::census_from_stage11_owner(backend)
         .map(|result| Stage11AggregateCensusOutputV1 { result })
@@ -90,8 +93,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn production_seed_is_explicitly_replaceable_and_fail_closed() {
-        let mut backend = acquire();
+    fn test_provider_is_owner_local_and_fail_closed() {
+        let mut backend = Stage11AggregateCensusBackendSeedV1::test_unavailable();
         assert!(matches!(
             census_from_stage11_owner(&mut backend),
             Err(SecureFsError::CensusRefused)

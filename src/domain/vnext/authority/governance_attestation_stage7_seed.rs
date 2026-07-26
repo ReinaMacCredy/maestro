@@ -8,12 +8,6 @@ use super::facade::{
 use super::governance_attestation::PlanningSchedulingPolicyInputV1;
 use crate::domain::vnext::identity::StoreObjectIdV1;
 
-// TODO(Planning Stage 7): Remove these expectations when the Planning caller
-// integrates this frozen Authority operation.
-#[expect(
-    dead_code,
-    reason = "Stage 5 freezes the production-callable Stage 7 operation before Planning integrates"
-)]
 pub(in crate::domain::vnext) enum SchedulingPolicyPublicationKindV1 {
     EquivalentOrStrengthening,
     WeakeningOrIncomparableWithMandate,
@@ -22,13 +16,6 @@ pub(in crate::domain::vnext) enum SchedulingPolicyPublicationKindV1 {
 #[expect(
     clippy::too_many_arguments,
     reason = "Stage 5 freezes the production-callable Stage 7 operation before Planning integrates"
-)]
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "Stage 5 freezes the production-callable Stage 7 operation before Planning integrates"
-    )
 )]
 pub(in crate::domain::vnext) fn publish_scheduling_policy_from_stage7(
     facade: &mut AuthorityFacadeV1<'_>,
@@ -60,3 +47,12 @@ pub(in crate::domain::vnext) fn publish_scheduling_policy_from_stage7(
         }
     }
 }
+
+const _: fn() = || {
+    let _ = publish_scheduling_policy_from_stage7;
+};
+
+const _: [SchedulingPolicyPublicationKindV1; 2] = [
+    SchedulingPolicyPublicationKindV1::EquivalentOrStrengthening,
+    SchedulingPolicyPublicationKindV1::WeakeningOrIncomparableWithMandate,
+];

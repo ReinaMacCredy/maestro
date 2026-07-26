@@ -3,25 +3,24 @@ use super::durable_finality::{
     DurableInstallationFinalityErrorV1, InstallationFinalityCurrentnessV1, owner_sealed,
 };
 
-pub(super) struct Stage9ActiveStoreFinalitySeedV1 {
+pub(in crate::domain::vnext) struct Stage9ActiveStoreFinalitySeedV1 {
     _private: (),
 }
 
-pub(super) fn acquire() -> Stage9ActiveStoreFinalitySeedV1 {
-    Stage9ActiveStoreFinalitySeedV1 { _private: () }
+impl Stage9ActiveStoreFinalitySeedV1 {
+    #[cfg(test)]
+    pub(in crate::domain::vnext) fn test_unavailable() -> Self {
+        Self { _private: () }
+    }
 }
 
-impl Stage9ActiveStoreFinalitySeedV1 {
-    pub(super) fn prepare_request(
+impl ActiveStoreFinalityOwnerV1 for Stage9ActiveStoreFinalitySeedV1 {
+    fn prepare_request(
         &mut self,
     ) -> Result<ActiveStoreFinalityRequestV1, DurableInstallationFinalityErrorV1> {
         Err(DurableInstallationFinalityErrorV1::BackendUnavailable)
     }
-}
 
-impl owner_sealed::Sealed for Stage9ActiveStoreFinalitySeedV1 {}
-
-impl ActiveStoreFinalityOwnerV1 for Stage9ActiveStoreFinalitySeedV1 {
     fn commit_and_readback(
         &mut self,
         _expected: InstallationFinalityCurrentnessV1,
@@ -31,13 +30,15 @@ impl ActiveStoreFinalityOwnerV1 for Stage9ActiveStoreFinalitySeedV1 {
     }
 }
 
+impl owner_sealed::Sealed for Stage9ActiveStoreFinalitySeedV1 {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn stage9_owner_seed_is_constructible_only_in_its_owner_module() {
-        let mut backend = acquire();
+    fn stage9_owner_test_provider_is_constructible_only_in_its_owner_module() {
+        let mut backend = Stage9ActiveStoreFinalitySeedV1::test_unavailable();
         assert!(matches!(
             super::super::durable_finality::prepare_active_from_stage9_owner(&mut backend),
             Err(super::super::durable_finality::Stage9ActiveStoreFinalityErrorV1)

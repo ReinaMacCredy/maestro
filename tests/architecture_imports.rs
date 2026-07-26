@@ -3710,6 +3710,8 @@ fn stage5_successor_seams_are_owner_private_and_production_replaceable() {
     assert!(authority_seed.contains("SchedulingPolicyPublicationInputV1"));
     assert!(authority_seed.contains("PlanningSchedulingPolicyInputV1"));
     assert!(authority_seed.contains("SchedulingPolicyPublicationInputV1::new"));
+    assert!(authority_seed.contains("const _: fn() = ||"));
+    assert!(!authority_seed.contains("#[expect(\n    dead_code,"));
     assert!(authority_facade.contains("pub(super) struct SchedulingPolicyPublicationInputV1"));
     assert!(
         !authority_facade
@@ -3735,8 +3737,11 @@ fn stage5_successor_seams_are_owner_private_and_production_replaceable() {
     assert!(foundation.contains("final_root_set_recheck"));
     assert!(foundation_seed.contains("Stage11AggregateCensusBackendSeedV1"));
     assert!(foundation_seed.contains("Stage11AggregateCensusOutputV1<'scan>"));
+    assert!(foundation_seed.contains("pub(crate) struct Stage11AggregateCensusBackendSeedV1"));
+    assert!(foundation_seed.contains("pub(crate) fn test_unavailable()"));
     assert!(foundation_seed.contains("pub(super) fn census_from_stage11_owner"));
     assert!(foundation_seed.contains("pub(super) fn into_parts"));
+    assert!(!foundation_seed.contains("pub(super) fn acquire()"));
     assert!(!foundation_seed.contains("pub fn census_from_stage11_owner"));
     assert!(!foundation_seed.contains("#[derive(Clone"));
     assert!(singular.contains("singular-root production route is intentionally retired"));
@@ -3750,6 +3755,16 @@ fn stage5_successor_seams_are_owner_private_and_production_replaceable() {
     assert!(installation.contains("ProtectedLocatorCeremonyContinuationV1<'locator>"));
     assert!(installation_stage9.contains("impl ActiveStoreFinalityOwnerV1"));
     assert!(installation_stage11.contains("impl PreStoreFinalityOwnerV1"));
+    assert!(
+        installation_stage9
+            .contains("pub(in crate::domain::vnext) struct Stage9ActiveStoreFinalitySeedV1")
+    );
+    assert!(
+        installation_stage11
+            .contains("pub(in crate::domain::vnext) struct Stage11PreStoreFinalitySeedV1")
+    );
+    assert!(!installation_stage9.contains("pub(super) fn acquire()"));
+    assert!(!installation_stage11.contains("pub(super) fn acquire()"));
     assert!(installation.contains("Stage11PreStoreFinalityOperationV1<'effect>"));
     assert!(installation.contains("Stage9ActiveStoreFinalityOperationV1<'effect>"));
     assert!(installation.contains("prepare_active_from_stage9_owner"));
@@ -3762,9 +3777,14 @@ fn stage5_successor_seams_are_owner_private_and_production_replaceable() {
 
     assert!(!authority_mod.contains("pub mod governance_attestation"));
     assert!(!persistence_mod.contains("pub mod protected_locator_lease"));
+    assert!(foundation_mod.contains("\nmod aggregate_census;\n"));
     assert!(!foundation_mod.contains("pub mod aggregate_census"));
+    assert!(!foundation_mod.contains("pub(crate) mod aggregate_census"));
+    assert!(!foundation_mod.contains("pub(in "));
     assert!(!foundation_mod.contains("pub(crate) mod aggregate_census_stage11_seed"));
+    assert!(installation_mod.contains("\nmod durable_finality;\n"));
     assert!(!installation_mod.contains("pub mod durable_finality"));
+    assert!(!installation_mod.contains("pub(crate) mod durable_finality"));
     assert!(
         !installation_mod
             .contains("pub(in crate::domain::vnext) mod durable_finality_stage11_seed")
@@ -3773,24 +3793,128 @@ fn stage5_successor_seams_are_owner_private_and_production_replaceable() {
         !installation_mod.contains("pub(in crate::domain::vnext) mod durable_finality_stage9_seed")
     );
     assert!(foundation_mod.contains("pub(crate) mod stage11_aggregate_census"));
+    assert!(foundation_mod.contains("pub(crate) fn bind_owner_provider"));
+    assert!(foundation_mod.contains("Stage11AggregateCensusProviderSeedV1"));
     assert!(foundation_mod.contains("pub(crate) fn census_from_stage11_owner"));
     assert!(foundation_mod.contains("pub(crate) fn into_parts"));
+    assert!(!foundation_mod.contains("pub(crate) fn acquire_seed()"));
+    assert!(!foundation_mod.contains("fn test_census_provider()"));
+    assert!(!foundation_mod.contains("StoreV1"));
+    assert!(!foundation_mod.contains("impl FnOnce"));
+    assert!(!foundation_mod.contains("OnceLock"));
     assert!(installation_mod.contains("pub(in crate::domain::vnext) mod stage9_finality"));
     assert!(installation_mod.contains("pub(in crate::domain::vnext) mod stage11_finality"));
+    assert_eq!(
+        installation_mod
+            .matches("fn bind_finality_provider")
+            .count(),
+        2
+    );
+    assert!(!installation_mod.contains("fn acquire_finality_seed()"));
+    assert!(!installation_mod.contains("fn test_finality_provider()"));
+    assert!(installation_mod.contains("Stage9ActiveStoreFinalityProviderBindingV1<'effect>"));
+    assert!(installation_mod.contains("Stage11PreStoreFinalityProviderBindingV1<'effect>"));
+    assert!(installation_mod.contains("Stage9ActiveStoreFinalityProviderSeedV1"));
+    assert!(installation_mod.contains("Stage11PreStoreFinalityProviderSeedV1"));
+    assert!(!installation_mod.contains("StoreV1"));
+    assert!(!installation_mod.contains("AtomicGenerationPublicationV1"));
+    assert!(!installation_mod.contains("impl FnOnce"));
+    assert!(!installation_mod.contains("OnceLock"));
+    assert!(!installation_mod.contains(
+        "#[derive(Clone)]\n    pub(in crate::domain::vnext) struct Stage9ActiveStoreFinalityProviderBindingV1"
+    ));
+    assert!(!installation_mod.contains(
+        "#[derive(Clone)]\n    pub(in crate::domain::vnext) struct Stage11PreStoreFinalityProviderBindingV1"
+    ));
     assert!(
         installation_mod
             .contains("pub(in crate::domain::vnext) fn prepare_active_from_stage9_owner")
     );
     assert!(
+        installation_mod.contains("backend: Stage9ActiveStoreFinalityProviderBindingV1<'effect>,")
+    );
+    assert!(
+        !installation_mod
+            .contains("backend: &'borrow mut Stage9ActiveStoreFinalityProviderBindingV1")
+    );
+    assert!(
         installation_mod
             .contains("pub(in crate::domain::vnext) fn prepare_pre_store_from_stage11_owner")
     );
+    assert!(
+        installation_mod.contains("backend: Stage11PreStoreFinalityProviderBindingV1<'effect>,")
+    );
+    assert!(
+        !installation_mod
+            .contains("backend: &'borrow mut Stage11PreStoreFinalityProviderBindingV1")
+    );
     assert!(vnext_module.contains("stage11_frozen_owner_seed_compile_probe"));
+    assert!(vnext_module.contains("Stage11AggregateCensusProviderSeedV1::test_unavailable()"));
+    assert!(vnext_module.contains("Stage11PreStoreFinalityProviderSeedV1::test_unavailable()"));
     assert!(
         vnext_module.contains("stage11_sibling_can_name_and_call_only_the_frozen_owner_entries")
     );
     assert!(vnext_module.contains("stage9_frozen_owner_seed_compile_probe"));
+    assert!(vnext_module.contains("Stage9ActiveStoreFinalityProviderSeedV1::test_unavailable()"));
     assert!(vnext_module.contains("stage9_sibling_can_name_and_call_only_the_frozen_owner_entry"));
+
+    let all_production_source = rust_files_under(Path::new("src"))
+        .into_iter()
+        .map(|path| read_source_file(&path))
+        .collect::<Vec<_>>()
+        .join("\n");
+    for provider in [
+        "Stage9ActiveStoreFinalityProviderBindingV1",
+        "Stage11PreStoreFinalityProviderBindingV1",
+        "Stage11AggregateCensusProviderBindingV1",
+    ] {
+        for forbidden_trait in ["Clone", "Copy", "Debug", "Serialize"] {
+            assert!(
+                !all_production_source.contains(&format!("{forbidden_trait} for {provider}")),
+                "{provider} must not gain a manual {forbidden_trait} implementation"
+            );
+        }
+    }
+
+    let mut finality_owner_implementors = rust_files_under(Path::new("src"))
+        .into_iter()
+        .filter(|path| {
+            let source = read_source_file(path)
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ");
+            source.contains("ActiveStoreFinalityOwnerV1 for")
+                || source.contains("PreStoreFinalityOwnerV1 for")
+        })
+        .collect::<Vec<_>>();
+    finality_owner_implementors.sort();
+    assert_eq!(
+        finality_owner_implementors,
+        [
+            PathBuf::from("src/domain/vnext/installation/durable_finality.rs"),
+            PathBuf::from("src/domain/vnext/installation/durable_finality_stage11_seed.rs"),
+            PathBuf::from("src/domain/vnext/installation/durable_finality_stage9_seed.rs")
+        ]
+    );
+
+    let mut aggregate_owner_implementors = rust_files_under(Path::new("src"))
+        .into_iter()
+        .filter(|path| {
+            let source = read_source_file(path)
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ");
+            source.contains("AggregateCensusBackendV1 for")
+        })
+        .collect::<Vec<_>>();
+    aggregate_owner_implementors.sort();
+    assert_eq!(
+        aggregate_owner_implementors,
+        [
+            PathBuf::from("src/foundation/core/aggregate_census.rs"),
+            PathBuf::from("src/foundation/core/aggregate_census_stage11_seed.rs")
+        ]
+    );
 }
 
 fn rust_files_under(root: &Path) -> Vec<PathBuf> {

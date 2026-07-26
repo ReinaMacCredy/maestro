@@ -57,8 +57,21 @@ pub(in crate::domain::vnext) mod stage9_finality {
 
     use thiserror::Error;
 
-    pub(in crate::domain::vnext) struct Stage9ActiveStoreFinalitySeedV1 {
-        inner: super::durable_finality_stage9_seed::Stage9ActiveStoreFinalitySeedV1,
+    pub(in crate::domain::vnext) type Stage9ActiveStoreFinalityProviderSeedV1 =
+        super::durable_finality_stage9_seed::Stage9ActiveStoreFinalitySeedV1;
+
+    pub(in crate::domain::vnext) trait Stage9ActiveStoreFinalityProviderV1:
+        super::durable_finality::ActiveStoreFinalityOwnerV1
+    {
+    }
+
+    impl<T> Stage9ActiveStoreFinalityProviderV1 for T where
+        T: super::durable_finality::ActiveStoreFinalityOwnerV1 + ?Sized
+    {
+    }
+
+    pub(in crate::domain::vnext) struct Stage9ActiveStoreFinalityProviderBindingV1<'effect> {
+        inner: &'effect mut dyn super::durable_finality::ActiveStoreFinalityOwnerV1,
         _not_send_or_sync: PhantomData<Rc<()>>,
     }
 
@@ -84,17 +97,23 @@ pub(in crate::domain::vnext) mod stage9_finality {
     #[error("the Stage 9 ActiveStore finality operation was refused")]
     pub(in crate::domain::vnext) struct Stage9ActiveStoreFinalityErrorV1;
 
-    pub(in crate::domain::vnext) fn acquire_finality_seed() -> Stage9ActiveStoreFinalitySeedV1 {
-        Stage9ActiveStoreFinalitySeedV1 {
-            inner: super::durable_finality_stage9_seed::acquire(),
+    pub(in crate::domain::vnext) fn bind_finality_provider<'effect, P>(
+        provider: &'effect mut P,
+    ) -> Stage9ActiveStoreFinalityProviderBindingV1<'effect>
+    where
+        P: Stage9ActiveStoreFinalityProviderV1,
+    {
+        Stage9ActiveStoreFinalityProviderBindingV1 {
+            inner: provider,
             _not_send_or_sync: PhantomData,
         }
     }
 
-    pub(in crate::domain::vnext) fn prepare_active_from_stage9_owner(
-        backend: &mut Stage9ActiveStoreFinalitySeedV1,
-    ) -> Result<Stage9ActiveStoreFinalityOperationV1<'_>, Stage9ActiveStoreFinalityErrorV1> {
-        super::durable_finality::prepare_active_from_stage9_owner(&mut backend.inner)
+    pub(in crate::domain::vnext) fn prepare_active_from_stage9_owner<'effect>(
+        backend: Stage9ActiveStoreFinalityProviderBindingV1<'effect>,
+    ) -> Result<Stage9ActiveStoreFinalityOperationV1<'effect>, Stage9ActiveStoreFinalityErrorV1>
+    {
+        super::durable_finality::prepare_active_from_stage9_owner(backend.inner)
             .map(|inner| Stage9ActiveStoreFinalityOperationV1 {
                 inner,
                 _not_send_or_sync: PhantomData,
@@ -150,8 +169,21 @@ pub(in crate::domain::vnext) mod stage11_finality {
 
     use crate::domain::vnext::persistence::protected_locator_lease::ProtectedLocatorLeaseV1;
 
-    pub(in crate::domain::vnext) struct Stage11PreStoreFinalitySeedV1 {
-        inner: super::durable_finality_stage11_seed::Stage11PreStoreFinalitySeedV1,
+    pub(in crate::domain::vnext) type Stage11PreStoreFinalityProviderSeedV1 =
+        super::durable_finality_stage11_seed::Stage11PreStoreFinalitySeedV1;
+
+    pub(in crate::domain::vnext) trait Stage11PreStoreFinalityProviderV1:
+        super::durable_finality::PreStoreFinalityOwnerV1
+    {
+    }
+
+    impl<T> Stage11PreStoreFinalityProviderV1 for T where
+        T: super::durable_finality::PreStoreFinalityOwnerV1 + ?Sized
+    {
+    }
+
+    pub(in crate::domain::vnext) struct Stage11PreStoreFinalityProviderBindingV1<'effect> {
+        inner: &'effect mut dyn super::durable_finality::PreStoreFinalityOwnerV1,
         _not_send_or_sync: PhantomData<Rc<()>>,
     }
 
@@ -177,17 +209,22 @@ pub(in crate::domain::vnext) mod stage11_finality {
     #[error("the Stage 11 PreStore finality operation was refused")]
     pub(in crate::domain::vnext) struct Stage11PreStoreFinalityErrorV1;
 
-    pub(in crate::domain::vnext) fn acquire_finality_seed() -> Stage11PreStoreFinalitySeedV1 {
-        Stage11PreStoreFinalitySeedV1 {
-            inner: super::durable_finality_stage11_seed::acquire(),
+    pub(in crate::domain::vnext) fn bind_finality_provider<'effect, P>(
+        provider: &'effect mut P,
+    ) -> Stage11PreStoreFinalityProviderBindingV1<'effect>
+    where
+        P: Stage11PreStoreFinalityProviderV1,
+    {
+        Stage11PreStoreFinalityProviderBindingV1 {
+            inner: provider,
             _not_send_or_sync: PhantomData,
         }
     }
 
-    pub(in crate::domain::vnext) fn prepare_pre_store_from_stage11_owner(
-        backend: &mut Stage11PreStoreFinalitySeedV1,
-    ) -> Result<Stage11PreStoreFinalityOperationV1<'_>, Stage11PreStoreFinalityErrorV1> {
-        super::durable_finality::prepare_pre_store_from_stage11_owner(&mut backend.inner)
+    pub(in crate::domain::vnext) fn prepare_pre_store_from_stage11_owner<'effect>(
+        backend: Stage11PreStoreFinalityProviderBindingV1<'effect>,
+    ) -> Result<Stage11PreStoreFinalityOperationV1<'effect>, Stage11PreStoreFinalityErrorV1> {
+        super::durable_finality::prepare_pre_store_from_stage11_owner(backend.inner)
             .map(|inner| Stage11PreStoreFinalityOperationV1 {
                 inner,
                 _not_send_or_sync: PhantomData,

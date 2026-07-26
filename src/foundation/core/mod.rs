@@ -5,7 +5,7 @@
         reason = "Stage 5 freezes aggregate census before its Stage 11 production consumer"
     )
 )]
-pub(crate) mod aggregate_census;
+mod aggregate_census;
 #[cfg_attr(
     not(test),
     expect(
@@ -26,8 +26,21 @@ pub(crate) mod stage11_aggregate_census {
     use super::aggregate_census_stage11_seed;
     use super::secure_fs::{InventoryRowV1, SecureFsResult};
 
-    pub(crate) struct Stage11AggregateCensusBackendSeedV1 {
-        inner: aggregate_census_stage11_seed::Stage11AggregateCensusBackendSeedV1,
+    pub(crate) type Stage11AggregateCensusProviderSeedV1 =
+        super::aggregate_census_stage11_seed::Stage11AggregateCensusBackendSeedV1;
+
+    pub(crate) trait Stage11AggregateCensusProviderV1:
+        super::aggregate_census::AggregateCensusBackendV1
+    {
+    }
+
+    impl<T> Stage11AggregateCensusProviderV1 for T where
+        T: super::aggregate_census::AggregateCensusBackendV1 + ?Sized
+    {
+    }
+
+    pub(crate) struct Stage11AggregateCensusProviderBindingV1<'scan> {
+        inner: &'scan mut dyn super::aggregate_census::AggregateCensusBackendV1,
     }
 
     pub(crate) struct Stage11AggregateCensusOutputV1<'scan> {
@@ -38,16 +51,19 @@ pub(crate) mod stage11_aggregate_census {
         inner: aggregate_census_stage11_seed::Stage11AggregateCensusComponentV1,
     }
 
-    pub(crate) fn acquire_seed() -> Stage11AggregateCensusBackendSeedV1 {
-        Stage11AggregateCensusBackendSeedV1 {
-            inner: aggregate_census_stage11_seed::acquire(),
-        }
+    pub(crate) fn bind_owner_provider<'scan, P>(
+        provider: &'scan mut P,
+    ) -> Stage11AggregateCensusProviderBindingV1<'scan>
+    where
+        P: Stage11AggregateCensusProviderV1,
+    {
+        Stage11AggregateCensusProviderBindingV1 { inner: provider }
     }
 
     pub(crate) fn census_from_stage11_owner<'scan>(
-        backend: &'scan mut Stage11AggregateCensusBackendSeedV1,
+        backend: Stage11AggregateCensusProviderBindingV1<'scan>,
     ) -> SecureFsResult<Stage11AggregateCensusOutputV1<'scan>> {
-        aggregate_census_stage11_seed::census_from_stage11_owner(&mut backend.inner)
+        aggregate_census_stage11_seed::census_from_stage11_owner(backend.inner)
             .map(|inner| Stage11AggregateCensusOutputV1 { inner })
     }
 

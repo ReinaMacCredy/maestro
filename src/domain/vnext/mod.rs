@@ -79,42 +79,45 @@ mod stage7_governance_seed_compile_probe {
 #[cfg(test)]
 mod stage11_frozen_owner_seed_compile_probe {
     use super::installation::stage11_finality::{
-        Stage11PreStoreFinalityOutcomeClassV1, execute_pre_store_from_stage11_owner,
+        Stage11PreStoreFinalityOperationV1, Stage11PreStoreFinalityOutcomeClassV1,
+        Stage11PreStoreFinalityProviderBindingV1, Stage11PreStoreFinalityProviderSeedV1,
+        bind_finality_provider, execute_pre_store_from_stage11_owner,
         prepare_pre_store_from_stage11_owner,
-    };
-    use super::installation::stage11_finality::{
-        Stage11PreStoreFinalitySeedV1, acquire_finality_seed,
     };
     use super::persistence::protected_locator_lease::ProtectedLocatorLeaseV1;
     use crate::foundation::core::stage11_aggregate_census::{
-        Stage11AggregateCensusBackendSeedV1, acquire_seed as acquire_census_seed,
-        census_from_stage11_owner,
+        Stage11AggregateCensusOutputV1, Stage11AggregateCensusProviderBindingV1,
+        Stage11AggregateCensusProviderSeedV1, bind_owner_provider, census_from_stage11_owner,
     };
 
-    fn stage11_can_call_both_frozen_owner_entries<'locator>(
-        census_backend: &mut Stage11AggregateCensusBackendSeedV1,
-        finality_backend: &mut Stage11PreStoreFinalitySeedV1,
+    fn stage11_can_consume_the_frozen_census_output(census: Stage11AggregateCensusOutputV1<'_>) {
+        let (_, _, _, roots) = census.into_parts();
+        for root in roots {
+            let _ = root.into_parts();
+        }
+    }
+
+    fn stage11_can_execute_the_frozen_pre_store_operation<'effect, 'locator>(
+        operation: Stage11PreStoreFinalityOperationV1<'effect>,
         locator_lease: ProtectedLocatorLeaseV1<'locator>,
     ) {
-        if let Ok(census) = census_from_stage11_owner(census_backend) {
-            let (_, _, _, roots) = census.into_parts();
-            for root in roots {
-                let _ = root.into_parts();
-            }
-        }
-
-        if let Ok(operation) = prepare_pre_store_from_stage11_owner(finality_backend)
-            && let Ok(outcome) = execute_pre_store_from_stage11_owner(operation, locator_lease)
-        {
+        if let Ok(outcome) = execute_pre_store_from_stage11_owner(operation, locator_lease) {
             let _: Stage11PreStoreFinalityOutcomeClassV1 = outcome.into_class();
         }
     }
 
     #[test]
     fn stage11_sibling_can_name_and_call_only_the_frozen_owner_entries() {
-        let _ = acquire_census_seed;
-        let _ = acquire_finality_seed;
-        let _ = stage11_can_call_both_frozen_owner_entries;
+        let mut census_provider = Stage11AggregateCensusProviderSeedV1::test_unavailable();
+        let mut finality_provider = Stage11PreStoreFinalityProviderSeedV1::test_unavailable();
+        let census: Stage11AggregateCensusProviderBindingV1<'_> =
+            bind_owner_provider(&mut census_provider);
+        assert!(census_from_stage11_owner(census).is_err());
+        let finality: Stage11PreStoreFinalityProviderBindingV1<'_> =
+            bind_finality_provider(&mut finality_provider);
+        assert!(prepare_pre_store_from_stage11_owner(finality).is_err());
+        let _ = stage11_can_consume_the_frozen_census_output;
+        let _ = stage11_can_execute_the_frozen_pre_store_operation;
     }
 }
 
@@ -125,13 +128,16 @@ mod stage9_frozen_owner_seed_compile_probe {
         prepare_active_from_stage9_owner,
     };
     use super::installation::stage9_finality::{
-        Stage9ActiveStoreFinalitySeedV1, acquire_finality_seed,
+        Stage9ActiveStoreFinalityProviderBindingV1, Stage9ActiveStoreFinalityProviderSeedV1,
+        Stage9ActiveStoreFinalityProviderV1, bind_finality_provider,
     };
 
-    fn stage9_can_call_the_frozen_active_store_owner_entry(
-        backend: &mut Stage9ActiveStoreFinalitySeedV1,
-    ) {
-        if let Ok(operation) = prepare_active_from_stage9_owner(backend)
+    fn stage9_can_call_the_frozen_active_store_owner_entry<P>(provider: &mut P)
+    where
+        P: Stage9ActiveStoreFinalityProviderV1,
+    {
+        let binding = bind_finality_provider(provider);
+        if let Ok(operation) = prepare_active_from_stage9_owner(binding)
             && let Ok(outcome) = execute_active_from_stage9_owner(operation)
         {
             let _: Stage9ActiveStoreFinalityOutcomeClassV1 = outcome.into_class();
@@ -140,8 +146,11 @@ mod stage9_frozen_owner_seed_compile_probe {
 
     #[test]
     fn stage9_sibling_can_name_and_call_only_the_frozen_owner_entry() {
-        let _ = acquire_finality_seed;
-        let _ = stage9_can_call_the_frozen_active_store_owner_entry;
+        let mut provider = Stage9ActiveStoreFinalityProviderSeedV1::test_unavailable();
+        let binding: Stage9ActiveStoreFinalityProviderBindingV1<'_> =
+            bind_finality_provider(&mut provider);
+        assert!(prepare_active_from_stage9_owner(binding).is_err());
+        stage9_can_call_the_frozen_active_store_owner_entry(&mut provider);
     }
 }
 

@@ -10,7 +10,7 @@ use crate::domain::vnext::persistence::protected_locator_lease::{
     ProtectedLocatorPreStoreJoinV1,
 };
 
-pub(super) mod owner_sealed {
+pub(in crate::domain::vnext) mod owner_sealed {
     pub trait Sealed {}
 }
 
@@ -25,7 +25,7 @@ impl InstallationFinalityVariantV1 for ActiveStoreFinalityV1 {}
 impl InstallationFinalityVariantV1 for PreStoreFinalityV1 {}
 
 #[derive(Clone, Copy, Eq, PartialEq)]
-pub(super) struct InstallationFinalityCurrentnessV1 {
+pub(in crate::domain::vnext) struct InstallationFinalityCurrentnessV1 {
     pub(super) installation: [u8; 32],
     pub(super) tenant: [u8; 32],
     pub(super) principal: [u8; 32],
@@ -76,18 +76,18 @@ impl InstallationFinalityCurrentnessV1 {
     }
 }
 
-pub(super) struct ActiveStoreFinalityRequestV1 {
+pub(in crate::domain::vnext) struct ActiveStoreFinalityRequestV1 {
     pub(super) currentness: InstallationFinalityCurrentnessV1,
     pub(super) decision: ActiveStoreDecisionTupleV1,
 }
 
-pub(super) struct PreStoreFinalityRequestV1 {
+pub(in crate::domain::vnext) struct PreStoreFinalityRequestV1 {
     pub(super) currentness: InstallationFinalityCurrentnessV1,
     pub(super) decision: PreStoreDecisionTupleV1,
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
-pub(super) struct ActiveStoreDecisionTupleV1 {
+pub(in crate::domain::vnext) struct ActiveStoreDecisionTupleV1 {
     pub(super) operation: [u8; 32],
     pub(super) attempt: [u8; 32],
     pub(super) action: [u8; 32],
@@ -116,7 +116,7 @@ pub(super) struct ActiveStoreDecisionTupleV1 {
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
-pub(super) struct PreStoreDecisionTupleV1 {
+pub(in crate::domain::vnext) struct PreStoreDecisionTupleV1 {
     pub(super) operation: [u8; 32],
     pub(super) ceremony_spec: [u8; 32],
     pub(super) attempt: [u8; 32],
@@ -146,7 +146,7 @@ pub(super) struct PreStoreDecisionTupleV1 {
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
-pub(super) struct ActiveStoreCommittedReadbackV1 {
+pub(in crate::domain::vnext) struct ActiveStoreCommittedReadbackV1 {
     pub(super) currentness: InstallationFinalityCurrentnessV1,
     pub(super) decision: ActiveStoreDecisionTupleV1,
     pub(super) association: [u8; 32],
@@ -158,7 +158,7 @@ pub(super) struct ActiveStoreCommittedReadbackV1 {
     pub(super) idempotency_rows: [u8; 32],
 }
 
-pub(super) enum ActiveStoreOwnerOutcomeV1 {
+pub(in crate::domain::vnext) enum ActiveStoreOwnerOutcomeV1 {
     PreCommitRefused,
     Committed(ActiveStoreCommittedReadbackV1),
     AcknowledgementLost(Option<ActiveStoreCommittedReadbackV1>),
@@ -166,14 +166,22 @@ pub(super) enum ActiveStoreOwnerOutcomeV1 {
     IntegrityBlocked,
 }
 
-pub(super) struct PreStoreOwnerValidationV1 {
+pub(in crate::domain::vnext) struct PreStoreOwnerValidationV1 {
     pub(super) currentness: InstallationFinalityCurrentnessV1,
     pub(super) decision: PreStoreDecisionTupleV1,
     pub(super) write_count: u64,
     _not_send_or_sync: PhantomData<Rc<()>>,
 }
 
-pub(super) trait ActiveStoreFinalityOwnerV1: owner_sealed::Sealed {
+pub(in crate::domain::vnext) trait ActiveStoreFinalityOwnerV1:
+    owner_sealed::Sealed
+{
+    fn prepare_request(
+        &mut self,
+    ) -> Result<ActiveStoreFinalityRequestV1, DurableInstallationFinalityErrorV1> {
+        Err(DurableInstallationFinalityErrorV1::BackendUnavailable)
+    }
+
     fn commit_and_readback(
         &mut self,
         expected: InstallationFinalityCurrentnessV1,
@@ -181,7 +189,15 @@ pub(super) trait ActiveStoreFinalityOwnerV1: owner_sealed::Sealed {
     ) -> Result<ActiveStoreOwnerOutcomeV1, DurableInstallationFinalityErrorV1>;
 }
 
-pub(super) trait PreStoreFinalityOwnerV1: owner_sealed::Sealed {
+pub(in crate::domain::vnext) trait PreStoreFinalityOwnerV1:
+    owner_sealed::Sealed
+{
+    fn prepare_request(
+        &mut self,
+    ) -> Result<PreStoreFinalityRequestV1, DurableInstallationFinalityErrorV1> {
+        Err(DurableInstallationFinalityErrorV1::BackendUnavailable)
+    }
+
     fn validate_inactive_candidate(
         &mut self,
         expected: InstallationFinalityCurrentnessV1,
@@ -202,7 +218,7 @@ pub(super) trait PreStoreFinalityOwnerV1: owner_sealed::Sealed {
     ) -> Result<(), DurableInstallationFinalityErrorV1>;
 }
 
-struct DurableInstallationFinalityBackendV1<'effect, B, K>
+struct DurableInstallationFinalityBackendV1<'effect, B: ?Sized, K>
 where
     K: InstallationFinalityVariantV1,
 {
@@ -212,7 +228,7 @@ where
     _not_send_or_sync: PhantomData<Rc<()>>,
 }
 
-impl<'effect, B, K> DurableInstallationFinalityBackendV1<'effect, B, K>
+impl<'effect, B: ?Sized, K> DurableInstallationFinalityBackendV1<'effect, B, K>
 where
     K: InstallationFinalityVariantV1,
 {
@@ -226,7 +242,7 @@ where
     }
 }
 
-impl<'effect, B> DurableInstallationFinalityBackendV1<'effect, B, ActiveStoreFinalityV1>
+impl<'effect, B: ?Sized> DurableInstallationFinalityBackendV1<'effect, B, ActiveStoreFinalityV1>
 where
     B: ActiveStoreFinalityOwnerV1,
 {
@@ -264,7 +280,7 @@ where
     }
 }
 
-impl<'effect, B> DurableInstallationFinalityBackendV1<'effect, B, PreStoreFinalityV1>
+impl<'effect, B: ?Sized> DurableInstallationFinalityBackendV1<'effect, B, PreStoreFinalityV1>
 where
     B: PreStoreFinalityOwnerV1,
 {
@@ -320,7 +336,11 @@ where
     }
 }
 
-pub(super) struct PreStoreCeremonyContinuationV1<'effect, 'locator, B: PreStoreFinalityOwnerV1> {
+pub(super) struct PreStoreCeremonyContinuationV1<
+    'effect,
+    'locator,
+    B: PreStoreFinalityOwnerV1 + ?Sized,
+> {
     backend: &'effect mut B,
     request: PreStoreFinalityRequestV1,
     locator: ProtectedLocatorCeremonyContinuationV1<'locator>,
@@ -328,7 +348,7 @@ pub(super) struct PreStoreCeremonyContinuationV1<'effect, 'locator, B: PreStoreF
     _not_send_or_sync: PhantomData<Rc<()>>,
 }
 
-impl<B: PreStoreFinalityOwnerV1> PreStoreCeremonyContinuationV1<'_, '_, B> {
+impl<B: PreStoreFinalityOwnerV1 + ?Sized> PreStoreCeremonyContinuationV1<'_, '_, B> {
     fn dispatch(
         self,
     ) -> Result<DurableInstallationFinalityOutcomeV1, DurableInstallationFinalityErrorV1> {
@@ -393,7 +413,7 @@ fn active_readback_matches(
 }
 
 pub(super) struct Stage9ActiveStoreFinalityOperationV1<'effect> {
-    backend: &'effect mut super::durable_finality_stage9_seed::Stage9ActiveStoreFinalitySeedV1,
+    backend: &'effect mut dyn ActiveStoreFinalityOwnerV1,
     request: ActiveStoreFinalityRequestV1,
     _not_send_or_sync: PhantomData<Rc<()>>,
 }
@@ -422,7 +442,7 @@ impl Stage9ActiveStoreFinalityOutcomeV1 {
 }
 
 pub(super) fn prepare_active_from_stage9_owner(
-    backend: &mut super::durable_finality_stage9_seed::Stage9ActiveStoreFinalitySeedV1,
+    backend: &mut dyn ActiveStoreFinalityOwnerV1,
 ) -> Result<Stage9ActiveStoreFinalityOperationV1<'_>, Stage9ActiveStoreFinalityErrorV1> {
     let request = backend
         .prepare_request()
@@ -461,7 +481,7 @@ pub(super) fn execute_active_from_stage9_owner(
 }
 
 pub(super) struct Stage11PreStoreFinalityOperationV1<'effect> {
-    backend: &'effect mut super::durable_finality_stage11_seed::Stage11PreStoreFinalitySeedV1,
+    backend: &'effect mut dyn PreStoreFinalityOwnerV1,
     request: PreStoreFinalityRequestV1,
     _not_send_or_sync: PhantomData<Rc<()>>,
 }
@@ -490,7 +510,7 @@ impl Stage11PreStoreFinalityOutcomeV1 {
 }
 
 pub(super) fn prepare_pre_store_from_stage11_owner(
-    backend: &mut super::durable_finality_stage11_seed::Stage11PreStoreFinalitySeedV1,
+    backend: &mut dyn PreStoreFinalityOwnerV1,
 ) -> Result<Stage11PreStoreFinalityOperationV1<'_>, Stage11PreStoreFinalityErrorV1> {
     let request = backend
         .prepare_request()
@@ -614,7 +634,7 @@ fn validate_pre_store_request(
 }
 
 #[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
-pub(super) enum DurableInstallationFinalityErrorV1 {
+pub(in crate::domain::vnext) enum DurableInstallationFinalityErrorV1 {
     #[error("installation finality request is invalid")]
     InvalidRequest,
     #[error("installation finality currentness does not match")]

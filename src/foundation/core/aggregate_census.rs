@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use super::secure_fs::{InventoryRowV1, SecureFsError, SecureFsResult};
 
-pub(super) mod owner_sealed {
+pub(crate) mod owner_sealed {
     pub trait Sealed {}
 }
 
@@ -30,7 +30,7 @@ pub(super) struct AggregateRootFactsV1 {
 }
 
 #[derive(Eq, PartialEq)]
-pub(super) struct AggregateRootSetFactsV1 {
+pub(crate) struct AggregateRootSetFactsV1 {
     pub(super) admitted_set: [u8; 32],
     pub(super) namespace_epoch: u64,
     pub(super) roots: Vec<AggregateRootFactsV1>,
@@ -46,7 +46,7 @@ pub(super) struct AggregateRootSetFactsV1 {
 }
 
 #[derive(Eq, PartialEq)]
-pub(super) struct AggregateComponentCensusV1 {
+pub(crate) struct AggregateComponentCensusV1 {
     pub(super) resolved_identity: [u8; 32],
     pub(super) inventory: [u8; 32],
     pub(super) root_binding: [u8; 32],
@@ -55,7 +55,7 @@ pub(super) struct AggregateComponentCensusV1 {
     pub(super) byte_count: u64,
 }
 
-pub(super) trait AggregateCensusBackendV1: owner_sealed::Sealed {
+pub(crate) trait AggregateCensusBackendV1: owner_sealed::Sealed {
     fn acquire_complete_root_set(&mut self) -> SecureFsResult<AggregateRootSetFactsV1>;
 
     fn census_pass(
@@ -71,14 +71,14 @@ pub(super) trait AggregateCensusBackendV1: owner_sealed::Sealed {
     fn consume_final_aggregate_fence(&mut self, scan_invocation: [u8; 32]) -> SecureFsResult<()>;
 }
 
-struct AggregateCensusLeaseV1<'scan, B: AggregateCensusBackendV1> {
+struct AggregateCensusLeaseV1<'scan, B: AggregateCensusBackendV1 + ?Sized> {
     backend: &'scan mut B,
     roots: AggregateRootSetFactsV1,
     consumed: Cell<bool>,
     _not_send_or_sync: PhantomData<Rc<()>>,
 }
 
-impl<'scan, B: AggregateCensusBackendV1> AggregateCensusLeaseV1<'scan, B> {
+impl<'scan, B: AggregateCensusBackendV1 + ?Sized> AggregateCensusLeaseV1<'scan, B> {
     fn acquire(backend: &'scan mut B) -> SecureFsResult<Self> {
         let roots = backend.acquire_complete_root_set()?;
         validate_root_set(&roots)?;
@@ -304,7 +304,7 @@ fn totals(pass: &[AggregateComponentCensusV1]) -> SecureFsResult<(u64, u64)> {
 }
 
 pub(super) fn census_from_stage11_owner<'scan>(
-    backend: &'scan mut super::aggregate_census_stage11_seed::Stage11AggregateCensusBackendSeedV1,
+    backend: &'scan mut dyn AggregateCensusBackendV1,
 ) -> SecureFsResult<AggregateCensusResultV1<'scan>> {
     let result = AggregateCensusLeaseV1::acquire(backend)?.consume()?;
     Ok(result)
@@ -555,7 +555,8 @@ mod tests {
 
     #[test]
     fn production_stage11_seed_is_fail_closed_until_the_backend_integrates() {
-        let mut backend = super::super::aggregate_census_stage11_seed::acquire();
+        let mut backend =
+            super::super::aggregate_census_stage11_seed::Stage11AggregateCensusBackendSeedV1::test_unavailable();
         assert!(matches!(
             census_from_stage11_owner(&mut backend),
             Err(SecureFsError::CensusRefused)
