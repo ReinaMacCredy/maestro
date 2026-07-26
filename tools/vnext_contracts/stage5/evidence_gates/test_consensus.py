@@ -37,6 +37,10 @@ class Stage5ConsensusTests(unittest.TestCase):
         self.assertIn("src/foundation/core/mod.rs", expected)
         self.assertIn("src/domain/vnext/contract/mod.rs", expected)
         self.assertIn("src/domain/vnext/persistence/tests/mod.rs", expected)
+        self.assertIn(
+            "src/domain/vnext/installation/consumer_snapshot_stage11_seed.rs",
+            expected,
+        )
 
     def test_engine_local_binary_hashes_are_validated_before_semantic_consensus(self) -> None:
         runs = self.behavior_runs("a" * 64)

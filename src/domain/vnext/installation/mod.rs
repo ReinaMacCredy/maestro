@@ -8,3 +8,4 @@
     )
 )]
 pub(in crate::domain::vnext) mod consumer_snapshot;
+mod consumer_snapshot_stage11_seed;

@@ -42,10 +42,13 @@ mod tests {
     }
 
     fn tempfile_root() -> std::path::PathBuf {
-        let path = std::env::temp_dir().join(format!(
+        static NEXT_TEMP_ROOT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let temp_directory =
+            std::fs::canonicalize(std::env::temp_dir()).expect("resolve existing temp directory");
+        let path = temp_directory.join(format!(
             "maestro-stage11-census-seed-{}-{}",
             std::process::id(),
-            std::thread::current().name().unwrap_or("test")
+            NEXT_TEMP_ROOT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
         ));
         let _ = std::fs::remove_dir_all(&path);
         path

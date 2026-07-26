@@ -879,6 +879,8 @@ def source_paths() -> list[str]:
             + persistence_sources()
             + [
                 "src/domain/vnext/installation/consumer_snapshot.rs",
+                "src/domain/vnext/installation/consumer_snapshot_stage11_seed.rs",
+                "src/domain/vnext/installation/mod.rs",
                 "src/domain/vnext/integration/consumer_closure.rs",
             ]
             + TOOL_SOURCES

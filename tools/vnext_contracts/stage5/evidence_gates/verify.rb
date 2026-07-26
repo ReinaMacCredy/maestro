@@ -45,7 +45,9 @@ SOURCE_PATHS = %w[
   src/domain/vnext/execution/h3_withdrawal_publication.rs src/domain/vnext/execution/mod.rs
   src/domain/vnext/execution/runtime.rs
   src/domain/vnext/evidence/store.rs src/domain/vnext/gate/mod.rs
-  src/domain/vnext/installation/consumer_snapshot.rs src/domain/vnext/installation/mod.rs
+  src/domain/vnext/installation/consumer_snapshot.rs
+  src/domain/vnext/installation/consumer_snapshot_stage11_seed.rs
+  src/domain/vnext/installation/mod.rs
   src/domain/vnext/integration/consumer_closure.rs
   src/domain/vnext/integration/mod.rs
   src/domain/vnext/integration/trusted_host_diagnostic.rs

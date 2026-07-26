@@ -667,6 +667,8 @@ def source_paths
     FOCAL_STEP_EVIDENCE_SOURCES + contract_ownership_sources + execution_sources +
     persistence_sources + [
       "src/domain/vnext/installation/consumer_snapshot.rs",
+      "src/domain/vnext/installation/consumer_snapshot_stage11_seed.rs",
+      "src/domain/vnext/installation/mod.rs",
       "src/domain/vnext/integration/consumer_closure.rs"
     ] + TOOL_SOURCES
   ).uniq.sort

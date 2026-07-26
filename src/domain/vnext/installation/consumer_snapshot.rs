@@ -42,7 +42,6 @@ impl ConsumerClosureStageV1 for PhysicalPruningConsumerStageV1 {
 
 pub(in crate::domain::vnext) mod owner_operation_sealed {
     pub trait Sealed {}
-    pub trait DurableLinearizationSealed {}
 }
 
 pub(in crate::domain::vnext) trait ConsumerClosureOwnerOperationPortV1<K, S, H>:
@@ -66,15 +65,54 @@ where
 {
 }
 
-pub(in crate::domain::vnext) trait ConsumerClosureDurableLinearizationPortV1<K>:
-    owner_operation_sealed::DurableLinearizationSealed
-where
-    K: ConsumerClosureStageV1,
-{
+pub(in crate::domain::vnext) struct ConsumerClosureDurableLinearizationV1<K> {
+    owner_seed: super::consumer_snapshot_stage11_seed::Stage11ConsumerClosureDurableEffectSeedV1<K>,
+    _not_send_or_sync: PhantomData<Rc<()>>,
+}
+
+impl<K: ConsumerClosureStageV1> ConsumerClosureDurableLinearizationV1<K> {
+    pub(super) fn from_stage11_owner_seed(
+        owner_seed: super::consumer_snapshot_stage11_seed::Stage11ConsumerClosureDurableEffectSeedV1<
+            K,
+        >,
+    ) -> Self {
+        Self {
+            owner_seed,
+            _not_send_or_sync: PhantomData,
+        }
+    }
+
     fn commit(
         self,
         request: ConsumerClosureDurableLinearizationRequestV1<K>,
-    ) -> Result<ConsumerClosureDurableLinearizationReceiptV1<K>, InstallationConsumerSnapshotErrorV1>;
+    ) -> Result<ConsumerClosureDurableLinearizationReceiptV1<K>, InstallationConsumerSnapshotErrorV1>
+    {
+        let applied = self.owner_seed.commit(&request)?;
+        ConsumerClosureDurableLinearizationReceiptV1::from_applied_effect(request, applied)
+    }
+}
+
+pub(in crate::domain::vnext) fn acquire_stage11_durable_linearization<K: ConsumerClosureStageV1>()
+-> Result<ConsumerClosureDurableLinearizationV1<K>, InstallationConsumerSnapshotErrorV1> {
+    super::consumer_snapshot_stage11_seed::acquire()
+}
+
+#[cfg(test)]
+pub(in crate::domain::vnext) fn stage11_test_successful_durable_linearization<
+    K: ConsumerClosureStageV1,
+>(
+    effects: Rc<std::cell::Cell<u64>>,
+) -> ConsumerClosureDurableLinearizationV1<K> {
+    super::consumer_snapshot_stage11_seed::test_seed::successful(effects)
+}
+
+#[cfg(test)]
+pub(in crate::domain::vnext) fn stage11_test_no_effect_durable_linearization<
+    K: ConsumerClosureStageV1,
+>(
+    effects: Rc<std::cell::Cell<u64>>,
+) -> ConsumerClosureDurableLinearizationV1<K> {
+    super::consumer_snapshot_stage11_seed::test_seed::no_effect(effects)
 }
 
 pub(in crate::domain::vnext) struct ConsumerClosureDurableLinearizationRequestV1<K> {
@@ -103,16 +141,21 @@ pub(in crate::domain::vnext) struct ConsumerClosureDurableLinearizationReceiptV1
 }
 
 impl<K> ConsumerClosureDurableLinearizationReceiptV1<K> {
-    pub(in crate::domain::vnext::installation) fn mint_after_owner_effect(
+    fn from_applied_effect(
         request: ConsumerClosureDurableLinearizationRequestV1<K>,
-        durable_effect_commitment: [u8; 32],
+        applied: super::consumer_snapshot_stage11_seed::Stage11ConsumerClosureAppliedEffectV1<K>,
     ) -> Result<Self, InstallationConsumerSnapshotErrorV1> {
-        if durable_effect_commitment == [0; 32] {
+        let (expected_old_cas, consumer_set_id, durable_effect_commitment) =
+            applied.into_commitments();
+        if expected_old_cas != request.expected_old_cas
+            || consumer_set_id != request.consumer_set_id
+            || durable_effect_commitment == [0; 32]
+        {
             return Err(InstallationConsumerSnapshotErrorV1::FinalityMismatch);
         }
         Ok(Self {
-            expected_old_cas: request.expected_old_cas,
-            consumer_set_id: request.consumer_set_id,
+            expected_old_cas,
+            consumer_set_id,
             durable_effect_commitment,
             _stage: PhantomData,
             _not_send_or_sync: PhantomData,
@@ -292,15 +335,12 @@ impl<
         self.store.initial().expected_old_cas()
     }
 
-    fn linearize<D>(
+    fn linearize(
         mut self,
         stage_proof_commitment: [u8; 32],
         expected_old_cas: [u8; 32],
-        durable_effect: D,
-    ) -> Result<[u8; 32], InstallationConsumerSnapshotErrorV1>
-    where
-        D: ConsumerClosureDurableLinearizationPortV1<K>,
-    {
+        durable_effect: ConsumerClosureDurableLinearizationV1<K>,
+    ) -> Result<[u8; 32], InstallationConsumerSnapshotErrorV1> {
         if stage_proof_commitment == [0; 32] || expected_old_cas == [0; 32] {
             return Err(InstallationConsumerSnapshotErrorV1::FinalityMismatch);
         }
@@ -347,15 +387,12 @@ impl<
         }
     }
 
-    pub(in crate::domain::vnext) fn linearize_pre_currentness_association<D>(
+    pub(in crate::domain::vnext) fn linearize_pre_currentness_association(
         self,
         proof: PreCurrentnessClosureProofV1,
         expected_old_cas: [u8; 32],
-        durable_effect: D,
-    ) -> Result<ConsumerClosureFinalityFactsV1, InstallationConsumerSnapshotErrorV1>
-    where
-        D: ConsumerClosureDurableLinearizationPortV1<K>,
-    {
+        durable_effect: ConsumerClosureDurableLinearizationV1<K>,
+    ) -> Result<ConsumerClosureFinalityFactsV1, InstallationConsumerSnapshotErrorV1> {
         if K::TAG != PreCurrentnessConsumerStageV1::TAG {
             return Err(InstallationConsumerSnapshotErrorV1::FinalityMismatch);
         }
@@ -374,15 +411,12 @@ impl<
         Ok(finality)
     }
 
-    pub(in crate::domain::vnext) fn linearize_protected_retention<D>(
+    pub(in crate::domain::vnext) fn linearize_protected_retention(
         self,
         proof: ProtectedRetentionClosureProofV1,
         expected_old_cas: [u8; 32],
-        durable_effect: D,
-    ) -> Result<ConsumerClosureFinalityFactsV1, InstallationConsumerSnapshotErrorV1>
-    where
-        D: ConsumerClosureDurableLinearizationPortV1<K>,
-    {
+        durable_effect: ConsumerClosureDurableLinearizationV1<K>,
+    ) -> Result<ConsumerClosureFinalityFactsV1, InstallationConsumerSnapshotErrorV1> {
         if K::TAG != ProtectedRetentionConsumerStageV1::TAG {
             return Err(InstallationConsumerSnapshotErrorV1::FinalityMismatch);
         }
@@ -401,15 +435,12 @@ impl<
         Ok(finality)
     }
 
-    pub(in crate::domain::vnext) fn linearize_physical_pruning<D>(
+    pub(in crate::domain::vnext) fn linearize_physical_pruning(
         self,
         proof: PhysicalPruningClosureProofV1,
         expected_old_cas: [u8; 32],
-        durable_effect: D,
-    ) -> Result<ConsumerClosureFinalityFactsV1, InstallationConsumerSnapshotErrorV1>
-    where
-        D: ConsumerClosureDurableLinearizationPortV1<K>,
-    {
+        durable_effect: ConsumerClosureDurableLinearizationV1<K>,
+    ) -> Result<ConsumerClosureFinalityFactsV1, InstallationConsumerSnapshotErrorV1> {
         if K::TAG != PhysicalPruningConsumerStageV1::TAG {
             return Err(InstallationConsumerSnapshotErrorV1::FinalityMismatch);
         }
@@ -587,37 +618,6 @@ mod tests {
         _stage: PhantomData<K>,
     }
 
-    struct TestDurableLinearizationV1<K> {
-        effects: Option<Rc<Cell<u64>>>,
-        _stage: PhantomData<K>,
-    }
-
-    impl<K> owner_operation_sealed::DurableLinearizationSealed for TestDurableLinearizationV1<K> {}
-
-    impl<K: ConsumerClosureStageV1> ConsumerClosureDurableLinearizationPortV1<K>
-        for TestDurableLinearizationV1<K>
-    {
-        fn commit(
-            self,
-            request: ConsumerClosureDurableLinearizationRequestV1<K>,
-        ) -> Result<
-            ConsumerClosureDurableLinearizationReceiptV1<K>,
-            InstallationConsumerSnapshotErrorV1,
-        > {
-            if let Some(effects) = self.effects {
-                effects.set(effects.get() + 1);
-            }
-            let effect_commitment = canonical_stage_proof(
-                K::TAG,
-                &[request.expected_old_cas(), request.consumer_set_id()],
-            );
-            ConsumerClosureDurableLinearizationReceiptV1::mint_after_owner_effect(
-                request,
-                effect_commitment,
-            )
-        }
-    }
-
     impl<K> owner_operation_sealed::Sealed for TestOwnerOperationV1<K> {}
     impl<K> ConsumerClosureStageProofIssuerV1<PreCurrentnessConsumerStageV1>
         for TestOwnerOperationV1<K>
@@ -653,30 +653,21 @@ mod tests {
                         &self, [81; 32], [82; 32], [83; 32],
                     )?,
                     expected_old_cas,
-                    TestDurableLinearizationV1 {
-                        effects: None,
-                        _stage: PhantomData,
-                    },
+                    stage11_test_successful_durable_linearization(Rc::new(Cell::new(0))),
                 ),
                 2 => guard.linearize_protected_retention(
                     ProtectedRetentionClosureProofV1::from_owner_proof(
                         &self, [84; 32], [85; 32], [86; 32],
                     )?,
                     expected_old_cas,
-                    TestDurableLinearizationV1 {
-                        effects: None,
-                        _stage: PhantomData,
-                    },
+                    stage11_test_successful_durable_linearization(Rc::new(Cell::new(0))),
                 ),
                 3 => guard.linearize_physical_pruning(
                     PhysicalPruningClosureProofV1::from_owner_proof(
                         &self, [87; 32], [88; 32], [89; 32], [91; 32], [92; 32], [93; 32], [94; 32],
                     )?,
                     expected_old_cas,
-                    TestDurableLinearizationV1 {
-                        effects: None,
-                        _stage: PhantomData,
-                    },
+                    stage11_test_successful_durable_linearization(Rc::new(Cell::new(0))),
                 ),
                 _ => Err(InstallationConsumerSnapshotErrorV1::FinalityMismatch),
             }
@@ -687,25 +678,9 @@ mod tests {
         effects: Rc<Cell<u64>>,
     }
 
-    struct RefusingNoOpDurableLinearizationV1;
-
-    impl owner_operation_sealed::DurableLinearizationSealed for RefusingNoOpDurableLinearizationV1 {}
-
-    impl ConsumerClosureDurableLinearizationPortV1<PreCurrentnessConsumerStageV1>
-        for RefusingNoOpDurableLinearizationV1
-    {
-        fn commit(
-            self,
-            _request: ConsumerClosureDurableLinearizationRequestV1<PreCurrentnessConsumerStageV1>,
-        ) -> Result<
-            ConsumerClosureDurableLinearizationReceiptV1<PreCurrentnessConsumerStageV1>,
-            InstallationConsumerSnapshotErrorV1,
-        > {
-            Err(InstallationConsumerSnapshotErrorV1::FinalityMismatch)
-        }
+    struct NoOpOwnerOperationV1 {
+        effects: Rc<Cell<u64>>,
     }
-
-    struct NoOpOwnerOperationV1;
 
     impl owner_operation_sealed::Sealed for NoOpOwnerOperationV1 {}
     impl ConsumerClosureStageProofIssuerV1<PreCurrentnessConsumerStageV1> for NoOpOwnerOperationV1 {}
@@ -730,7 +705,7 @@ mod tests {
                     &self, [81; 32], [82; 32], [83; 32],
                 )?,
                 expected_old_cas,
-                RefusingNoOpDurableLinearizationV1,
+                stage11_test_no_effect_durable_linearization(self.effects),
             )
         }
     }
@@ -758,10 +733,7 @@ mod tests {
                     &self, [81; 32], [82; 32], [83; 32],
                 )?,
                 expected_old_cas,
-                TestDurableLinearizationV1 {
-                    effects: Some(self.effects),
-                    _stage: PhantomData,
-                },
+                stage11_test_successful_durable_linearization(self.effects),
             )
         }
     }
@@ -969,6 +941,7 @@ mod tests {
 
     #[test]
     fn no_op_owner_callback_cannot_mint_consumer_finality() {
+        let effects = Rc::new(Cell::new(0));
         let mut store = persistence_seed::TestProviderV1::new(active_store_facts(
             PreCurrentnessConsumerStageV1::TAG,
         ));
@@ -976,13 +949,16 @@ mod tests {
         let snapshot = InstallationConsumerSnapshotV1::issue(
             persistence_seed::bind(&mut store).unwrap(),
             integration_seed::bind(&mut host).unwrap(),
-            NoOpOwnerOperationV1,
+            NoOpOwnerOperationV1 {
+                effects: effects.clone(),
+            },
         )
         .unwrap();
         assert!(matches!(
             snapshot.consume_finality(),
             Err(InstallationConsumerSnapshotErrorV1::FinalityMismatch)
         ));
+        assert_eq!(effects.get(), 0);
     }
 
     #[test]

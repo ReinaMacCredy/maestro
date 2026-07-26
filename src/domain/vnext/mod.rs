@@ -29,3 +29,29 @@ pub(crate) mod search;
 pub mod step;
 pub(crate) mod transport;
 pub mod work;
+
+#[cfg(test)]
+mod stage11_consumer_closure_compile_probe {
+    use std::cell::Cell;
+    use std::rc::Rc;
+
+    use super::installation::consumer_snapshot::{
+        ConsumerClosureDurableLinearizationV1, PreCurrentnessConsumerStageV1,
+        acquire_stage11_durable_linearization, stage11_test_successful_durable_linearization,
+    };
+
+    fn accept_external_owner_operation(
+        _operation: ConsumerClosureDurableLinearizationV1<PreCurrentnessConsumerStageV1>,
+    ) {
+    }
+
+    #[test]
+    fn stage11_sibling_can_use_but_not_construct_the_frozen_operation() {
+        accept_external_owner_operation(
+            acquire_stage11_durable_linearization::<PreCurrentnessConsumerStageV1>().unwrap(),
+        );
+        accept_external_owner_operation(stage11_test_successful_durable_linearization(Rc::new(
+            Cell::new(0),
+        )));
+    }
+}

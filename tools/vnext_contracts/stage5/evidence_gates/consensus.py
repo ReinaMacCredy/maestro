@@ -207,6 +207,7 @@ ARTIFACT_SOURCE_PATHS = (
     "src/domain/vnext/execution/runtime.rs",
     "src/domain/vnext/gate/mod.rs",
     "src/domain/vnext/installation/consumer_snapshot.rs",
+    "src/domain/vnext/installation/consumer_snapshot_stage11_seed.rs",
     "src/domain/vnext/installation/mod.rs",
     "src/domain/vnext/integration/consumer_closure.rs",
     "src/domain/vnext/integration/mod.rs",
