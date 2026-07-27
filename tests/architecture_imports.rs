@@ -63,7 +63,26 @@ const RESOURCE_EMBED_ALLOWLIST: &[(&str, &[&str])] = &[
         "src/domain/schema_contracts/catalog.rs",
         &["embedded/schemas"],
     ),
+    (
+        "src/domain/vnext/orchestration/runtime/catalog.rs",
+        &[
+            "embedded/vnext/orchestration/recipe-catalog.v1.json",
+            "embedded/vnext/orchestration/profiles/bounded-continuation/",
+            "embedded/vnext/orchestration/recipes/",
+        ],
+    ),
     ("src/interfaces/shell/mod.rs", &["embedded/shell/"]),
+    (
+        "src/interfaces/vnext/connectors/mod.rs",
+        &[
+            "embedded/vnext/hosts/",
+            "embedded/vnext/bootstrap/wiring.v1.json",
+        ],
+    ),
+    (
+        "src/interfaces/vnext/mcp/mod.rs",
+        &["embedded/vnext/adapter/mcp-tools.v1.json"],
+    ),
 ];
 
 #[test]
@@ -3672,6 +3691,9 @@ fn stage5_successor_seams_are_owner_private_and_production_replaceable() {
     let persistence = read_source_file(Path::new(
         "src/domain/vnext/persistence/protected_locator_lease.rs",
     ));
+    let persistence_stage9 = read_source_file(Path::new(
+        "src/domain/vnext/persistence/protected_locator_stage9_seed.rs",
+    ));
     let foundation = read_source_file(Path::new("src/foundation/core/aggregate_census.rs"));
     let foundation_seed = read_source_file(Path::new(
         "src/foundation/core/aggregate_census_stage11_seed.rs",
@@ -3853,8 +3875,19 @@ fn stage5_successor_seams_are_owner_private_and_production_replaceable() {
     assert!(installation_mod.contains("Stage9ActiveStoreFinalityProviderSeedV2"));
     assert!(installation_mod.contains("Stage11PreStoreFinalityProviderSeedV2"));
     assert!(persistence_mod.contains("pub(in crate::domain::vnext) mod protected_locator_v2"));
-    assert!(persistence_mod.contains("bind_stage9_owner_provider"));
-    assert!(persistence_mod.contains("acquire_pre_candidate"));
+    assert!(persistence_mod.contains("pub(in crate::domain::vnext) fn capture_pre_candidate"));
+    assert!(persistence_mod.contains("pub(in crate::domain::vnext) fn acquire_pre_candidate"));
+    assert!(
+        persistence_mod
+            .contains("pub(in crate::domain::vnext) type Stage9ProtectedLocatorProviderSeedV2")
+    );
+    assert!(persistence.contains("pub(super) mod v2_owner_sealed"));
+    assert!(
+        persistence_stage9
+            .contains("impl v2_owner_sealed::Sealed for Stage9ProtectedLocatorBackendSeedV2")
+    );
+    assert!(persistence_mod.contains("\nmod protected_locator_stage9_seed;\n"));
+    assert!(!persistence_mod.contains("bind_stage9_owner_provider"));
     assert_eq!(
         installation_mod
             .matches("fn bind_finality_provider")
