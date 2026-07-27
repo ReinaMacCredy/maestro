@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "maestro.external.vnext-final-cumulative-seal-receipt.v1",
+  "type": "object",
+  "required": ["schema_version", "snapshot_identity", "ledger_identity", "engine_ledgers", "semantic_readback", "verdict"],
+  "properties": {
+    "schema_version": {"const": "maestro.external.vnext-final-cumulative-seal-receipt.v1"},
+    "snapshot_identity": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "ledger_identity": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "engine_ledgers": {"type": "array", "minItems": 3, "items": {"type": "object"}},
+    "semantic_readback": {"type": "object"},
+    "verdict": {"const": "pass"}
+  },
+  "additionalProperties": false
+}

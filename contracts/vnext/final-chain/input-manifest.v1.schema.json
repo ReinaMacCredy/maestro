@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "maestro.external.vnext-final-input-manifest.v1",
+  "type": "object",
+  "required": ["schema_version", "entries"],
+  "properties": {
+    "schema_version": {"const": "maestro.external.vnext-final-input-manifest.v1"},
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["kind", "path", "sha256"],
+        "properties": {
+          "kind": {"enum": ["source", "test", "validator", "fixture", "mutation", "crash_schedule", "migration", "rollback", "adapter", "removal", "consumer_manifest", "reader_manifest", "hold_manifest", "predecessor"]},
+          "path": {"type": "string", "pattern": "^(?!/)(?!.*\\\\)(?!.*\\.\\.).+$"},
+          "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

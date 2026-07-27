@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "maestro.external.vnext-final-cumulative-closure-snapshot.v1",
+  "type": "object",
+  "required": ["schema_version", "state", "final_integration", "first_parent_stages", "input_manifest", "proof_ledger", "stage12_readback", "toolchain", "environment_allowlist", "immutable_input_roots", "writable_roots", "cache_policy", "sandbox_profile", "pointer_preimage", "engines", "effect_denylist"],
+  "properties": {
+    "schema_version": {"const": "maestro.external.vnext-final-cumulative-closure-snapshot.v1"},
+    "state": {"const": "frozen"},
+    "final_integration": {"$ref": "#/$defs/identity"},
+    "first_parent_stages": {
+      "type": "array",
+      "minItems": 13,
+      "items": {
+        "type": "object",
+        "required": ["stage", "commit", "tree", "checkpoint"],
+        "properties": {
+          "stage": {"type": "integer", "minimum": 0, "maximum": 12},
+          "commit": {"$ref": "#/$defs/sha1"},
+          "tree": {"$ref": "#/$defs/sha1"},
+          "checkpoint": {"$ref": "#/$defs/bound_file"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "input_manifest": {"$ref": "#/$defs/bound_file"},
+    "proof_ledger": {"$ref": "#/$defs/bound_file"},
+    "stage12_readback": {"$ref": "#/$defs/bound_file"},
+    "toolchain": {"$ref": "#/$defs/bound_file"},
+    "environment_allowlist": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "immutable_input_roots": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "writable_roots": {"type": "array", "minItems": 4, "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "cache_policy": {"const": "immutable_compilation_and_dependency_bytes_only"},
+    "sandbox_profile": {"type": "string", "minLength": 1},
+    "pointer_preimage": {"type": "object"},
+    "engines": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "object",
+        "required": ["id", "language", "source"],
+        "properties": {
+          "id": {"enum": ["python", "rust", "ruby"]},
+          "language": {"enum": ["python", "rust", "ruby"]},
+          "source": {"$ref": "#/$defs/bound_file"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "effect_denylist": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+  },
+  "$defs": {
+    "sha1": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "identity": {
+      "type": "object",
+      "required": ["commit", "tree"],
+      "properties": {"commit": {"$ref": "#/$defs/sha1"}, "tree": {"$ref": "#/$defs/sha1"}},
+      "additionalProperties": false
+    },
+    "bound_file": {
+      "type": "object",
+      "required": ["path", "sha256"],
+        "properties": {"path": {"type": "string", "pattern": "^(?!/)(?!.*\\\\)(?!.*\\.\\.).+$"}, "sha256": {"$ref": "#/$defs/sha256"}},
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

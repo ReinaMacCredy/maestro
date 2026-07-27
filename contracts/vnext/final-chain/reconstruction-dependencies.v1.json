@@ -1,0 +1,19 @@
+{
+  "schema_version": "maestro.external.vnext-final-chain-reconstruction-dependencies.v1",
+  "design_baseline_commit": "ade7e38c2287f77f5de100402f4b9dbabc9316b2",
+  "historical_stage12_commit": "f83f4f51a30e00ed5b45ae440a6bb077b3c262ca",
+  "reconstructed_stage12_commit": "c3b112e98e4cdb170b9640eb26df1b10388433b4",
+  "stage12_paths": [
+    "tools/vnext_contracts/stage12",
+    "tests/fixtures/vnext/stage12",
+    "tests/vnext_stage12_contracts.rs"
+  ],
+  "final_chain_paths": [
+    "contracts/vnext/final-chain",
+    "tools/vnext_contracts/final_chain",
+    "tests/fixtures/vnext/final-chain",
+    "tests/vnext_final_chain_contracts.rs"
+  ],
+  "predecessor_status": "immutable_input_only_no_final_verdict_reuse",
+  "publication_status": "source_only_no_receipt_or_pointer_generated"
+}
