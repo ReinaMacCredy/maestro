@@ -2,6 +2,11 @@
 //!
 //! Production Stage 11 must consume `MigrationClassificationContinuationV2`.
 
+#![expect(
+    dead_code,
+    reason = "V1 census remains test-only historical negative proof for V4 removal guards"
+)]
+
 use std::io;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
