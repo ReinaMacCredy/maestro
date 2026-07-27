@@ -243,8 +243,8 @@ def validate_ledger(ledger, registry, source)
     harness = row.fetch("harness")
     raise "proof registry harness differs" unless harness["protocol"] == expected.fetch("harness")["protocol"] &&
                                                    harness["required_receipt"] == expected.fetch("harness")["required_receipt"]
-    verify_binding(source, harness["fault_schedule"]) if %w[race crash_replay].include?(row["kind"])
-    verify_binding(source, harness["cohort"]) if %w[migration rollback].include?(row["kind"])
+    verify_binding(source, harness["fault_schedule"]) if harness["protocol"] == "fault-observation-v1"
+    verify_binding(source, harness["cohort"]) if harness["protocol"] == "cohort-observation-v1"
   end
   raise "proof Stage or kind closure differs" unless stages.uniq.sort == (0..12).to_a && kinds.uniq.length == 14
   rows
@@ -302,7 +302,7 @@ def execute_proof(row, source, tools, snapshot, packet, output_root)
     "stdout" => stream_identity(stdout.b), "stderr" => stream_identity(stderr.b),
     "produced_artifacts" => produced_artifacts(source, row.fetch("produced_artifacts"))
   }
-  if %w[race crash_replay].include?(row["kind"])
+  if harness["protocol"] == "fault-observation-v1"
     schedule_path = verify_binding(source, harness.fetch("fault_schedule"))
     schedule = load_object(schedule_path)
     mode = row["kind"] == "race" ? "race" : "crash_replay"
@@ -331,7 +331,7 @@ def execute_proof(row, source, tools, snapshot, packet, output_root)
     receipt["fault_observation"] = observation
     receipt["harness_receipt_identity"] = identity(receipt_path)
   end
-  if %w[migration rollback].include?(row["kind"])
+  if harness["protocol"] == "cohort-observation-v1"
     cohort_path = verify_binding(source, harness.fetch("cohort"))
     observation = load_object(receipt_path)
     executables = observation["executables"]

@@ -881,7 +881,6 @@ fn main_result() -> Result<(), String> {
         if command_identity(command)? != command_identity(expected_command)? {
             return Err("proof registry command differs".to_string());
         }
-        let kind = string(field(proof, "kind")?)?;
         let harness = object(field(proof, "harness")?)?;
         let expected_harness = object(field(expected, "harness")?)?;
         if string(field(harness, "protocol")?)? != string(field(expected_harness, "protocol")?)?
@@ -890,10 +889,11 @@ fn main_result() -> Result<(), String> {
         {
             return Err("proof registry harness differs".to_string());
         }
-        if matches!(kind, "race" | "crash_replay") {
+        let protocol = string(field(harness, "protocol")?)?;
+        if protocol == "fault-observation-v1" {
             verify_binding(source_path, object(field(harness, "fault_schedule")?)?)?;
         }
-        if matches!(kind, "migration" | "rollback") {
+        if protocol == "cohort-observation-v1" {
             verify_binding(source_path, object(field(harness, "cohort")?)?)?;
         }
     }
@@ -948,7 +948,8 @@ fn main_result() -> Result<(), String> {
             ),
         ]);
         let kind = string(field(proof, "kind")?)?;
-        if matches!(kind, "race" | "crash_replay") {
+        let protocol = string(field(harness, "protocol")?)?;
+        if protocol == "fault-observation-v1" {
             let binding = object(field(harness, "fault_schedule")?)?;
             let path = safe_relative(source_path, string(field(binding, "path")?)?)?;
             environment.insert(
@@ -956,7 +957,7 @@ fn main_result() -> Result<(), String> {
                 path.to_string_lossy().to_string(),
             );
         }
-        if matches!(kind, "migration" | "rollback") {
+        if protocol == "cohort-observation-v1" {
             let binding = object(field(harness, "cohort")?)?;
             let path = safe_relative(source_path, string(field(binding, "path")?)?)?;
             environment.insert(
@@ -977,7 +978,7 @@ fn main_result() -> Result<(), String> {
             "error"
         };
         let mut exact_inputs = String::new();
-        if matches!(kind, "race" | "crash_replay") {
+        if protocol == "fault-observation-v1" {
             let schedule_binding = object(field(harness, "fault_schedule")?)?;
             let schedule_path =
                 safe_relative(source_path, string(field(schedule_binding, "path")?)?)?;
@@ -1066,7 +1067,7 @@ fn main_result() -> Result<(), String> {
                 reached?.join(",")
             ));
         }
-        if matches!(kind, "migration" | "rollback") {
+        if protocol == "cohort-observation-v1" {
             let cohort = object(field(harness, "cohort")?)?;
             let observation_value = load(&receipt_path)?;
             let observation = object(&observation_value)?;

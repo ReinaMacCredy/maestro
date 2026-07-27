@@ -366,9 +366,9 @@ def validate_ledger(
             "harness", {}
         ).get("protocol"):
             raise ValueError(f"proof harness differs: {row['proof_id']}")
-        if row.get("kind") in {"race", "crash_replay"}:
+        if harness.get("protocol") == "fault-observation-v1":
             verify_binding(source, harness.get("fault_schedule"))
-        if row.get("kind") in {"migration", "rollback"}:
+        if harness.get("protocol") == "cohort-observation-v1":
             verify_binding(source, harness.get("cohort"))
     if stages != set(range(13)) or len(kinds) != 14:
         raise ValueError("proof Stage or kind closure differs")
@@ -460,7 +460,7 @@ def execute_proof(
         "stderr": {"byte_length": len(result.stderr), "sha256": identity_bytes(result.stderr)},
         "produced_artifacts": produced_artifacts(source, row["produced_artifacts"]),
     }
-    if row["kind"] in {"race", "crash_replay"}:
+    if harness["protocol"] == "fault-observation-v1":
         schedule_path = verify_binding(source, harness["fault_schedule"])
         schedule = load(schedule_path)
         mode = "race" if row["kind"] == "race" else "crash_replay"
@@ -502,7 +502,7 @@ def execute_proof(
         receipt["injection_points_reached"] = observation["observed_reached_points"]
         receipt["fault_observation"] = observation
         receipt["harness_receipt_identity"] = identity(receipt_path)
-    if row["kind"] in {"migration", "rollback"}:
+    if harness["protocol"] == "cohort-observation-v1":
         cohort_path = verify_binding(source, harness["cohort"])
         observation = load(receipt_path)
         outcomes = observation.get("outcomes")

@@ -228,7 +228,7 @@ class FinalChainStaticTests(unittest.TestCase):
             if row["kind"] in by_kind:
                 by_kind[row["kind"]].append(row)
         for kind in ("race", "crash_replay"):
-            self.assertEqual(by_kind[kind][0]["harness"]["protocol"], "fault-observation-v1")
+            self.assertEqual(by_kind[kind][0]["harness"]["protocol"], "command-exit-v1")
         for kind in ("migration", "rollback"):
             self.assertEqual(by_kind[kind][0]["harness"]["protocol"], "cohort-observation-v1")
         self.assertEqual(by_kind["ancestry"][0]["harness"]["protocol"], "fanout-edge-sweep-v1")
@@ -237,6 +237,154 @@ class FinalChainStaticTests(unittest.TestCase):
         self.assertNotIn("def proof_kind", generator)
         self.assertNotIn('rows[index]["kind"]', generator)
         self.assertIn("registry_identity", generator)
+
+    def test_stage4_registry_rejects_zero_test_and_source_mutant_proxies(self) -> None:
+        registry = json.loads(
+            (CONTRACTS / "proof-registry.v1.json").read_text(encoding="utf-8")
+        )
+        rows = {
+            row["proof_id"]: row
+            for row in registry["proofs"]
+            if row["proof_id"]
+            in {
+                "s4-run-set-one-winner-race",
+                "s4-ceremony-crash-replay-cuts",
+            }
+        }
+        expected = {
+            "s4-run-set-one-winner-race": (
+                "src/domain/vnext/execution/store.rs",
+                "domain::vnext::execution::store::tests::"
+                "step_submission_and_renewal_race_has_one_atomic_winner",
+            ),
+            "s4-ceremony-crash-replay-cuts": (
+                "src/domain/vnext/execution/ceremony.rs",
+                "domain::vnext::execution::ceremony::tests::"
+                "protected_ceremony_has_one_winner_durable_full_history_replay_and_owner_refusal",
+            ),
+        }
+
+        def validate_owner_unit_routes(stage4_rows: dict[str, object]) -> None:
+            self.assertEqual(set(stage4_rows), set(expected))
+            for proof_id, (source, exact_filter) in expected.items():
+                row = stage4_rows[proof_id]
+                self.assertEqual(
+                    row["command"]["argv"],
+                    [
+                        "{tool:cargo}",
+                        "test",
+                        "--offline",
+                        "--frozen",
+                        "--lib",
+                        exact_filter,
+                        "--",
+                        "--exact",
+                        "--test-threads=1",
+                    ],
+                )
+                self.assertEqual(row["input_paths"], [source])
+                self.assertEqual(
+                    row["harness"],
+                    {"protocol": "command-exit-v1", "required_receipt": "none"},
+                )
+
+        validate_owner_unit_routes(rows)
+        old_zero_test = copy.deepcopy(rows)
+        old_zero_test["s4-run-set-one-winner-race"]["command"]["argv"] = [
+            "{tool:cargo}",
+            "test",
+            "--offline",
+            "--frozen",
+            "--test",
+            "vnext_stage4_contracts",
+            "stage4_callable_run_set_cas_and_submission_fence_are_atomic",
+            "--",
+            "--exact",
+            "--test-threads=1",
+        ]
+        with self.assertRaises(AssertionError):
+            validate_owner_unit_routes(old_zero_test)
+
+        old_source_mutant = copy.deepcopy(rows)
+        old_source_mutant["s4-ceremony-crash-replay-cuts"]["command"]["argv"] = [
+            "{tool:cargo}",
+            "test",
+            "--offline",
+            "--frozen",
+            "--test",
+            "vnext_stage4_contracts",
+            "stage4_regenerated_ceremony_replay_mutant_fails_compiled_contract",
+            "--",
+            "--exact",
+            "--test-threads=1",
+        ]
+        with self.assertRaises(AssertionError):
+            validate_owner_unit_routes(old_source_mutant)
+
+    def test_all_engines_route_optional_receipts_only_by_declared_protocol(self) -> None:
+        sources = {
+            "python": (ROOT / "engine_python.py").read_text(encoding="utf-8"),
+            "ruby": (ROOT / "engine_ruby.rb").read_text(encoding="utf-8"),
+            "rust": (ROOT / "engine_rust.rs").read_text(encoding="utf-8"),
+        }
+        self.assertEqual(
+            sources["python"].count(
+                'if harness["protocol"] == "fault-observation-v1":'
+            ),
+            2,
+        )
+        self.assertEqual(
+            sources["python"].count(
+                'if harness["protocol"] == "cohort-observation-v1":'
+            ),
+            2,
+        )
+        self.assertIn(
+            'if harness.get("protocol") == "fault-observation-v1":',
+            sources["python"],
+        )
+        self.assertIn(
+            'if harness.get("protocol") == "cohort-observation-v1":',
+            sources["python"],
+        )
+        self.assertNotIn(
+            'if row["kind"] in {"race", "crash_replay"}', sources["python"]
+        )
+        self.assertNotIn(
+            'if row["kind"] in {"migration", "rollback"}', sources["python"]
+        )
+
+        self.assertEqual(
+            sources["ruby"].count(
+                'if harness["protocol"] == "fault-observation-v1"'
+            ),
+            3,
+        )
+        self.assertEqual(
+            sources["ruby"].count(
+                'if harness["protocol"] == "cohort-observation-v1"'
+            ),
+            3,
+        )
+        self.assertNotIn(
+            '%w[race crash_replay].include?(row["kind"])', sources["ruby"]
+        )
+        self.assertNotIn(
+            '%w[migration rollback].include?(row["kind"])', sources["ruby"]
+        )
+
+        self.assertEqual(
+            sources["rust"].count('if protocol == "fault-observation-v1"'), 3
+        )
+        self.assertEqual(
+            sources["rust"].count('if protocol == "cohort-observation-v1"'), 3
+        )
+        self.assertNotIn(
+            'if matches!(kind, "race" | "crash_replay")', sources["rust"]
+        )
+        self.assertNotIn(
+            'if matches!(kind, "migration" | "rollback")', sources["rust"]
+        )
 
     def test_runtime_evidence_is_typed_and_semantic_not_substring_counted(self) -> None:
         sources = [
