@@ -7,8 +7,7 @@ fn workspace() -> &'static Path {
 
 #[test]
 fn production_adapter_requires_the_sealed_stage9_currentness_port() {
-    let source =
-        fs::read_to_string(workspace().join("src/operations/vnext/adapters/mod.rs")).unwrap();
+    let source = fs::read_to_string(workspace().join("src/operations/adapters/mod.rs")).unwrap();
     assert!(source.contains("TrustedHostDiagnosticConnectionPortV1"));
     assert!(source.contains("protected_continuity_diagnostic_with_ports"));
     assert!(source.contains("&mut dyn ProtectedDiagnosticCurrentViewProviderV1"));
@@ -20,14 +19,14 @@ fn production_adapter_requires_the_sealed_stage9_currentness_port() {
 #[test]
 fn protected_diagnostic_enters_through_the_authenticated_host_factory() {
     let integration =
-        fs::read_to_string(workspace().join("src/domain/vnext/integration/mod.rs")).unwrap();
+        fs::read_to_string(workspace().join("src/domain/integration/mod.rs")).unwrap();
     let seed = fs::read_to_string(
-        workspace().join("src/domain/vnext/integration/trusted_host_diagnostic_stage10_seed.rs"),
+        workspace().join("src/domain/integration/trusted_host_diagnostic_stage10_seed.rs"),
     )
     .unwrap();
     let connectors =
-        fs::read_to_string(workspace().join("src/interfaces/vnext/connectors/mod.rs")).unwrap();
-    let mcp = fs::read_to_string(workspace().join("src/interfaces/vnext/mcp/mod.rs")).unwrap();
+        fs::read_to_string(workspace().join("src/interfaces/connectors/mod.rs")).unwrap();
+    let mcp = fs::read_to_string(workspace().join("src/interfaces/mcp/mod.rs")).unwrap();
 
     assert!(integration.contains("mod trusted_host_diagnostic_stage10_seed;"));
     assert!(!integration.contains("#[cfg(test)]\nmod trusted_host_diagnostic_stage10_seed;"));

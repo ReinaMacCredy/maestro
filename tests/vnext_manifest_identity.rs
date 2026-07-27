@@ -1,17 +1,13 @@
-use maestro::domain::vnext::contract::component::{
-    CandidateContractComponentV1, ContractComponentError,
-};
-use maestro::domain::vnext::contract::component_kind::{
-    ComponentKindError, ContractComponentKindV1,
-};
-use maestro::domain::vnext::contract::finalization::{
+use maestro::domain::contract::component::{CandidateContractComponentV1, ContractComponentError};
+use maestro::domain::contract::component_kind::{ComponentKindError, ContractComponentKindV1};
+use maestro::domain::contract::finalization::{
     DesignBasisV1, DesignFinalizationError, DesignFinalizationManifestV1, FinalizationInputKindV1,
     PinnedFinalizationInputV1,
 };
-use maestro::domain::vnext::contract::handoff::{BuildHandoffError, CanonicalBuildHandoffV1};
-use maestro::domain::vnext::contract::provenance::{ComponentProvenanceV1, ProvenanceError};
-use maestro::domain::vnext::contract::root::{CandidateContractRootV1, ContractRootError};
-use maestro::domain::vnext::identity::{
+use maestro::domain::contract::handoff::{BuildHandoffError, CanonicalBuildHandoffV1};
+use maestro::domain::contract::provenance::{ComponentProvenanceV1, ProvenanceError};
+use maestro::domain::contract::root::{CandidateContractRootV1, ContractRootError};
+use maestro::domain::identity::{
     ConstraintExprV1, ContractComponentIdV1, ContractRootIdV1, DescriptorDomainV1,
     DesignFinalizationManifestIdV1, EnumVariantV1, FieldDescriptorV1, FieldPathV1,
     ManifestDomainV1, ManifestHeaderV1, ManifestIdentityError, ManifestRowV1, ManifestValueV1,

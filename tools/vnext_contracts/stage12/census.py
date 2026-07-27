@@ -325,7 +325,8 @@ def build_census(repo: Path, policy: Mapping[str, Any]) -> dict[str, object]:
         {json.dumps(row, sort_keys=True): row for row in warnings}.values(),
         key=lambda row: (row["kind"], row["path"]),
     )
-    rule_counts = Counter(str(row["rule_id"]) for row in rows)
+    rule_counts = Counter({str(rule["id"]): 0 for rule in rules})
+    rule_counts.update(str(row["rule_id"]) for row in rows)
     classification_counts = Counter(str(row["classification"]) for row in rows)
     census_core = {
         "rows": rows,

@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-use maestro::domain::vnext::execution::{
+use maestro::domain::execution::{
     CeremonyRequestModeV1, DispatchReservationModeV1, EffectIntentControlTransitionContenderV1,
     EffectIntentControlWriterTermKindV1, EffectIntentHomeKindV1, EffectIntentLiveDispatchV1,
     EffectOriginHomeCompatibilityV1, EffectOriginRouteRoleV1, RemoteClassificationV1,
@@ -342,7 +342,7 @@ fn bootstrap_census_is_eleven_rows_with_three_targets_and_eight_exclusions() {
             .iter()
             .filter(|row| matches!(
                 row.disposition,
-                maestro::domain::vnext::execution::BootstrapTargetDispositionV1::CandidateTarget
+                maestro::domain::execution::BootstrapTargetDispositionV1::CandidateTarget
             ))
             .count(),
         3,
@@ -352,7 +352,7 @@ fn bootstrap_census_is_eleven_rows_with_three_targets_and_eight_exclusions() {
             .iter()
             .filter(|row| matches!(
                 row.disposition,
-                maestro::domain::vnext::execution::BootstrapTargetDispositionV1::HardExclusion
+                maestro::domain::execution::BootstrapTargetDispositionV1::HardExclusion
             ))
             .count(),
         8,

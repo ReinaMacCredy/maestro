@@ -1,9 +1,9 @@
 use std::collections::BTreeSet;
 use std::fs;
 
-use maestro::domain::vnext::authority::{ExecutionProducerV1, PrincipalIdV1, SessionIdV1};
-use maestro::domain::vnext::contract::runtime::ContractGenerationIdV1;
-use maestro::domain::vnext::evidence::{
+use maestro::domain::authority::{ExecutionProducerV1, PrincipalIdV1, SessionIdV1};
+use maestro::domain::contract::runtime::ContractGenerationIdV1;
+use maestro::domain::evidence::{
     ClaimError, ClaimSubjectV1, ClaimV1, EvidenceClaimPublicationV1, EvidencePayloadManifestV1,
     EvidenceRedactionPolicyV1, EvidenceRetentionClassV1, EvidenceRetentionPolicyV1,
     EvidenceSecretScanReceiptV1, NominalObservationPayloadV1, ObservationAcquisitionV1,
@@ -12,15 +12,15 @@ use maestro::domain::vnext::evidence::{
     ObservationPayloadV1, ObservationPublicationRouteV1, ObservationRecordIdV1,
     ObservationSubjectKindV1, ObservationSubjectV1, ObservationV1, SubmissionRefV1,
 };
-use maestro::domain::vnext::gate::{
+use maestro::domain::gate::{
     GateError, GateEvaluationInputV1, GateEvaluationResultV1, GateEvaluatorContractV1,
     GateInputClassV1, GateLeafRuleV1, GateNodeIdV1, GateNodeV1, GateOperatorV1, GateScopeV1,
     GateSnapshotV1, PureGateEvaluatorV1,
 };
-use maestro::domain::vnext::identity::{
+use maestro::domain::identity::{
     ContractComponentIdV1, ContractRootIdV1, StoreDomainIdV1, StoreObjectIdV1,
 };
-use maestro::domain::vnext::work::{WorkIdV1, WorkSubmissionIdV1};
+use maestro::domain::work::{WorkIdV1, WorkSubmissionIdV1};
 use maestro::foundation::core::deterministic_cbor::{self, CborValue};
 use serde_json::Value;
 use sha2::{Digest, Sha256};

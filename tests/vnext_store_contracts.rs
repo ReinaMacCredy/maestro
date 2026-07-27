@@ -1,5 +1,5 @@
-use maestro::domain::vnext::identity::{ContractRootIdV1, SchemaIdV1, StoreObjectIdV1};
-use maestro::domain::vnext::persistence::{
+use maestro::domain::identity::{ContractRootIdV1, SchemaIdV1, StoreObjectIdV1};
+use maestro::domain::persistence::{
     CollectionPlanV1, ExportError, GenerationError, ReachabilitySnapshotV1, RetentionError,
     RetentionRootKindV1, RetentionRootV1, SealedExportEntryV1, SealedExportV1,
     StoreCompatibilityV1, StoreDomainV1, StoreGenerationV1, StoreHeadV1, StoreObjectError,
@@ -104,7 +104,7 @@ fn store_compatibility_binds_the_current_stage0_successor() {
     assert!(current.is_stage0_successor());
 
     let predecessor = StoreCompatibilityV1::new(
-        maestro::domain::vnext::identity::ManifestIdV1::parse(
+        maestro::domain::identity::ManifestIdV1::parse(
             "sha256:60e9a3a77104b74f044527232802841e230e192279881286c0a2a9d3618be2c6",
         )
         .expect("predecessor Manifest identity"),

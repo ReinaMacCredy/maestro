@@ -11,9 +11,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 FIXTURES = ROOT / "tests/fixtures/vnext/stage11"
 PUBLIC = ROOT / "contracts/vnext/public"
-RUNTIME = ROOT / "src/domain/vnext/migration/runtime"
-OPERATIONS = ROOT / "src/operations/vnext/migration"
-INSTALLATION = ROOT / "src/domain/vnext/installation"
+RUNTIME = ROOT / "src/domain/migration/runtime"
+OPERATIONS = ROOT / "src/operations/migration"
+INSTALLATION = ROOT / "src/domain/installation"
 FOUNDATION = ROOT / "src/foundation/core"
 EXPECTED_DISPOSITIONS = [
     "MappedNormative",
@@ -298,7 +298,7 @@ def main() -> None:
         "Installation durable consumer finality route drifted",
     )
     require(
-        "pub(in crate::domain::vnext) mod stage11_finality_v2" in installation_facade
+        "pub(in crate::domain) mod stage11_finality_v2" in installation_facade
         and "execute_pre_store" in installation_facade
         and "ProtectedLocatorLeaseV2" in installation_facade,
         "Installation V2 PreStore finality route drifted",

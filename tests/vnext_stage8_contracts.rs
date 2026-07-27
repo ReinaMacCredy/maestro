@@ -49,7 +49,7 @@ fn assert_test_only_function(source: &str, name: &str) {
 
 #[test]
 fn protected_diagnostic_builder_is_canonical_in_tests_and_facade_owned_in_production() {
-    let source = read("src/domain/vnext/authority/protected_diagnostic_envelope_stage8_seed.rs");
+    let source = read("src/domain/authority/protected_diagnostic_envelope_stage8_seed.rs");
     assert_contains_all(
         &source,
         &[
@@ -67,11 +67,10 @@ fn protected_diagnostic_builder_is_canonical_in_tests_and_facade_owned_in_produc
     );
     assert!(!source.contains("Box<dyn"));
     assert_hermetic_source(
-        &workspace()
-            .join("src/domain/vnext/authority/protected_diagnostic_envelope_stage8_seed.rs"),
+        &workspace().join("src/domain/authority/protected_diagnostic_envelope_stage8_seed.rs"),
     );
 
-    let diagnostics = read("src/domain/vnext/evidence/diagnostics/mod.rs");
+    let diagnostics = read("src/domain/evidence/diagnostics/mod.rs");
     let declaration = diagnostics
         .find("pub(crate) struct ProtectedDiagnosticEnvelopeV1")
         .unwrap();
@@ -97,12 +96,12 @@ fn protected_diagnostic_builder_is_canonical_in_tests_and_facade_owned_in_produc
     ] {
         assert!(!diagnostics.contains(forbidden));
     }
-    assert_hermetic_source(&workspace().join("src/domain/vnext/evidence/diagnostics/mod.rs"));
+    assert_hermetic_source(&workspace().join("src/domain/evidence/diagnostics/mod.rs"));
 }
 
 #[test]
 fn protected_diagnostic_acquisition_matches_the_stage5_test_adapter_shape() {
-    let observation = read("src/operations/vnext/observation/mod.rs");
+    let observation = read("src/operations/observation/mod.rs");
     assert_contains_all(
         &observation,
         &[
@@ -117,7 +116,7 @@ fn protected_diagnostic_acquisition_matches_the_stage5_test_adapter_shape() {
         ],
     );
 
-    let facade = read("src/domain/vnext/authority/facade.rs");
+    let facade = read("src/domain/authority/facade.rs");
     assert_contains_all(
         &facade,
         &[
@@ -127,7 +126,7 @@ fn protected_diagnostic_acquisition_matches_the_stage5_test_adapter_shape() {
             "Result<ProtectedContinuityDiagnosticReleasedEnvelopeV1, AuthorityPublicationError>",
         ],
     );
-    let integration = read("src/domain/vnext/integration/trusted_host_diagnostic.rs");
+    let integration = read("src/domain/integration/trusted_host_diagnostic.rs");
     assert_contains_all(
         &integration,
         &[
@@ -135,7 +134,7 @@ fn protected_diagnostic_acquisition_matches_the_stage5_test_adapter_shape() {
             "pub(crate) trait TrustedHostDiagnosticConnectionPortV1",
         ],
     );
-    let persistence = read("src/domain/vnext/persistence/protected_diagnostic.rs");
+    let persistence = read("src/domain/persistence/protected_diagnostic.rs");
     assert_contains_all(
         &persistence,
         &[
@@ -149,12 +148,12 @@ fn protected_diagnostic_acquisition_matches_the_stage5_test_adapter_shape() {
 fn raw_action_adapters_are_test_only_and_match_the_atomic_authority_shape() {
     let cases = [
         (
-            "src/domain/vnext/search/mod.rs",
+            "src/domain/search/mod.rs",
             &["130", "131"][..],
             &["authorized_rebuild", "authorized_purge"][..],
         ),
         (
-            "src/domain/vnext/memory/mod.rs",
+            "src/domain/memory/mod.rs",
             &["132", "133", "134", "135", "136", "137", "138"][..],
             &[
                 "record_candidate",
@@ -167,12 +166,12 @@ fn raw_action_adapters_are_test_only_and_match_the_atomic_authority_shape() {
             ][..],
         ),
         (
-            "src/domain/vnext/intake/mod.rs",
+            "src/domain/intake/mod.rs",
             &["139", "140", "141"][..],
             &["record_source", "publish_finding", "dispose_source"][..],
         ),
         (
-            "src/domain/vnext/research/mod.rs",
+            "src/domain/research/mod.rs",
             &["142", "143", "144", "145"][..],
             &[
                 "begin_question",
@@ -194,16 +193,18 @@ fn raw_action_adapters_are_test_only_and_match_the_atomic_authority_shape() {
             ],
         );
         assert_contains_all(&source, tags);
-        assert!(source.contains(
-            "#[cfg(test)]\nuse crate::domain::vnext::authority::AdmittedRepositoryActionV1;"
-        ));
+        assert!(
+            source.contains(
+                "#[cfg(test)]\nuse crate::domain::authority::AdmittedRepositoryActionV1;"
+            )
+        );
         for function in functions {
             assert_test_only_function(&source, function);
         }
         assert_hermetic_source(&workspace().join(path));
     }
 
-    let authority = read("src/domain/vnext/authority/materialization.rs");
+    let authority = read("src/domain/authority/materialization.rs");
     assert_contains_all(
         &authority,
         &[
@@ -214,12 +215,12 @@ fn raw_action_adapters_are_test_only_and_match_the_atomic_authority_shape() {
             "RepositoryActionBindingFactsV1",
         ],
     );
-    let facade = read("src/domain/vnext/authority/facade.rs");
+    let facade = read("src/domain/authority/facade.rs");
     assert_contains_all(
         &facade,
         &[
-            "pub(in crate::domain::vnext::authority) fn execute_owner_materialization",
-            "pub(in crate::domain::vnext::authority) fn publish_repository_materialization",
+            "pub(in crate::domain::authority) fn execute_owner_materialization",
+            "pub(in crate::domain::authority) fn publish_repository_materialization",
             "fn execute_scheduling_policy_materialization(",
             "fn derive_scheduling_policy_binding_facts(",
             "self.publish_repository_materialization(probe, move |port| {",
@@ -230,36 +231,35 @@ fn raw_action_adapters_are_test_only_and_match_the_atomic_authority_shape() {
         ],
     );
     for widened in [
-        "pub(in crate::domain::vnext) struct SchedulingPolicyPublicationInputV1",
-        "impl SchedulingPolicyPublicationInputV1 {\n    pub(in crate::domain::vnext) fn new(",
-        "pub(in crate::domain::vnext) fn publish_scheduling_policy(",
+        "pub(in crate::domain) struct SchedulingPolicyPublicationInputV1",
+        "impl SchedulingPolicyPublicationInputV1 {\n    pub(in crate::domain) fn new(",
+        "pub(in crate::domain) fn publish_scheduling_policy(",
     ] {
         assert!(
             !facade.contains(widened),
             "private scheduling publication facade widened to {widened}"
         );
     }
-    let stage7_seed = read("src/domain/vnext/authority/governance_attestation_stage7_seed.rs");
+    let stage7_seed = read("src/domain/authority/governance_attestation_stage7_seed.rs");
     assert_contains_all(
         &stage7_seed,
         &[
-            "pub(in crate::domain::vnext) fn publish_scheduling_policy_from_stage7(",
+            "pub(in crate::domain) fn publish_scheduling_policy_from_stage7(",
             "SchedulingPolicyPublicationInputV1::new(",
             "facade.publish_scheduling_policy(",
             "PlanningSchedulingPolicyInputV1::from_stage7_planning(",
         ],
     );
     assert!(
-        authority.contains(
-            "pub(in crate::domain::vnext::authority) struct RepositoryActionBindingFactsV1"
-        ),
+        authority
+            .contains("pub(in crate::domain::authority) struct RepositoryActionBindingFactsV1"),
         "Authority fact bag escaped its owner-private boundary"
     );
 }
 
 #[test]
 fn coherent_observation_join_covers_every_stage8_view() {
-    let source = read("src/operations/vnext/observation/mod.rs");
+    let source = read("src/operations/observation/mod.rs");
     assert_contains_all(
         &source,
         &[
@@ -278,14 +278,14 @@ fn coherent_observation_join_covers_every_stage8_view() {
             "recipe_application_ref",
         ],
     );
-    assert_hermetic_source(&workspace().join("src/operations/vnext/observation/mod.rs"));
+    assert_hermetic_source(&workspace().join("src/operations/observation/mod.rs"));
 }
 
 #[test]
 fn capability_and_maturity_have_no_passive_probe_or_permission_surface() {
     for path in [
-        "src/domain/vnext/capability/runtime/mod.rs",
-        "src/domain/vnext/maturity/mod.rs",
+        "src/domain/capability/runtime/mod.rs",
+        "src/domain/maturity/mod.rs",
     ] {
         let source = read(path);
         assert_hermetic_source(&workspace().join(path));

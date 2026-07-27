@@ -187,11 +187,11 @@ fn published_stage5_three_engine_receipts_bind_one_inactive_artifact() {
         .collect::<BTreeSet<_>>();
     for required in [
         "contracts/vnext/catalogs/generated/catalog-09-action-spec.json",
-        "src/domain/vnext/authority/downstream_action_basis.rs",
-        "src/domain/vnext/authority/facade_tests.rs",
-        "src/domain/vnext/integration/mod.rs",
-        "src/domain/vnext/integration/trusted_host_diagnostic.rs",
-        "src/domain/vnext/persistence/protected_diagnostic.rs",
+        "src/domain/authority/downstream_action_basis.rs",
+        "src/domain/authority/facade_tests.rs",
+        "src/domain/integration/mod.rs",
+        "src/domain/integration/trusted_host_diagnostic.rs",
+        "src/domain/persistence/protected_diagnostic.rs",
         "tests/architecture_imports.rs",
     ] {
         assert!(

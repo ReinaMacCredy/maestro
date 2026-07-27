@@ -1,14 +1,14 @@
 use std::path::Path;
 use std::process::{Command, Output};
 
-use maestro::domain::vnext::execution::dispatch_state::{
+use maestro::domain::execution::dispatch_state::{
     DispatchAttemptOutcomeV1, DispatchAttemptStateV1, DispatchAttemptTerminalV1,
     DispatchBindingPartsV1, DispatchBindingV1, DispatchCommitmentV1, DispatchCrossingSealV1,
     DispatchRaceDescriptorV1, DispatchRecoveryDescriptorV1, DispatchStateError,
     PreSealLocallyRejectedV1, ReservedUnsealedV1, SealedDispatchOutcomeV1,
     SealedDispatchTerminalV1, SealedInFlightV1,
 };
-use maestro::domain::vnext::migration::{
+use maestro::domain::migration::{
     ActiveStoreAtomicParticipantV1, ActiveStoreFinalityPartsV1, ActiveStoreFinalityV1,
     ActiveStoreOwningHeadV1, ActiveStorePreconditionV1, AssociationConsumptionSetV1,
     C868_RUNTIME_EDGE_COUNT, C868_SCHEMA_COUNT, C868_SUITE_COMPONENT_COUNT, CutoverCommitmentV1,

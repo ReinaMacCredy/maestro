@@ -1,5 +1,5 @@
 {
-  "closed_world": false,
+  "closed_world": true,
   "execution": {
     "exact_manifest_command": [
       "python3",
@@ -14,21 +14,26 @@
       "release-preflight"
     ]
   },
-  "identity_requirement": "every_source_sha256_equals_post_move_destination_sha256",
-  "mutation_authorized": false,
+  "expected_collision_count": 10,
+  "expected_entry_count": 210,
+  "expected_namespace_counts": {
+    "src/domain/vnext": 186,
+    "src/interfaces/vnext": 8,
+    "src/operations/vnext": 16
+  },
+  "identity_requirement": "base_and_final_sha256_bound_per_entry",
+  "legacy_pruning_authorized": false,
+  "mutation_authorized": true,
   "namespace_transform": {
     "src/domain/vnext/": "src/domain/",
     "src/interfaces/vnext/": "src/interfaces/",
     "src/operations/vnext/": "src/operations/"
   },
   "required_zero_receipts": [
-    "stage11_active_consumer_closure",
-    "stage11_retained_reader_manifest",
-    "stage11_retention_hold_manifest",
     "post_promotion_namespace_census",
     "stage12_frozen_interface_readback",
     "source_move_identity_parity"
   ],
   "schema_version": "maestro.test-only.stage12-namespace-promotion-plan.v1",
-  "state": "deferred_until_combined_stage6_through_stage11_closure"
+  "state": "canonical_namespace_promoted_legacy_pruning_blocked"
 }

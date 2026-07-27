@@ -17,7 +17,7 @@ Four layers; dependencies point one way: **interfaces -> operations -> domain ->
 | Layer | Path | Owns |
 |---|---|---|
 | foundation/core | `src/foundation/core/` | paths, schema-version consts, atomic + content-hash-CAS writes, descriptor-anchored Store filesystem access, id-reservation markers, hashing, slugs, time, managed blocks, deterministic bounded CBOR, `MaestroError` + `.hint()` |
-| domain | `src/domain/` | durable concepts: Card (core + `CardType` enum dispatch), Feature, Task, Harness, Decision, Proof, Run, Memory, Install, Skills, Extraction; vNext identity, Contract, canonical Store persistence, execution, distribution, migration, Integration, Orchestration, and capability contracts live under `domain::vnext` |
+| domain | `src/domain/` | durable concepts: Card (core + `CardType` enum dispatch), Feature, Task, Harness, Decision, Proof, Run, Memory, Install, Skills, Extraction; canonical identity, Contract, Store persistence, execution, distribution, migration, Integration, Orchestration, and capability contracts live directly under their `domain::*` owner facades |
 | operations | `src/operations/` | cross-domain workflows: init, sync, update, task_verify, harness apply/measure, feature_prepare, migrate, Memory suggestion/scorer/promotion/maintenance |
 | interfaces | `src/interfaces/` | adapters: cli, mcp, tui, hooks, shell — parse + render; domain rules stay behind owning facades |
 
@@ -31,9 +31,9 @@ Four layers; dependencies point one way: **interfaces -> operations -> domain ->
 - `deterministic_cbor` — bounded closed CBOR subset and canonical shortest-form validation for vNext content identities — `deterministic_cbor.rs`
 - `secure_fs` — descriptor-anchored, owner/mode/link-checked immutable Store object publication, exact-byte reads, and digest-addressed crash-recoverable removal that fail closed on root substitution or surviving hard-link aliases — `secure_fs.rs`
 
-### vNext foundation boundary
+### Canonical refoundation boundary
 
-`src/domain/vnext/` owns the typed deterministic vNext foundation. Stage 0
+`src/domain/` owns the typed deterministic refoundation. Stage 0
 contracts remain inert: importing them does not publish a Contract Root,
 activate runtime behavior, migrate state, or grant authority. `identity/` owns
 the one domain-separated `ManifestIdentityV1` protocol; `contract/` owns exact
@@ -43,7 +43,7 @@ semantics. The remaining Stage 0 children
 hold frozen literal contracts for later stages and contain no adapter-private
 state or write path.
 
-#### Temporary vNext fanout seam
+#### vNext fanout history and canonical promotion
 
 The certified Stage-5 commit is the immutable predecessor of one externally
 integrated fanout base. `tools/vnext_contracts/fanout/fanout-base.v1.json`
@@ -72,15 +72,14 @@ path remains frozen. Worker candidates cannot change other shared files,
 predecessor contracts, an existing non-seed file, object type, or executable
 policy.
 
-The temporary domain roots for coordination, installation, intake, maturity,
-memory, planning, projection, research, search, and transport, plus the
-later-owner children under capability, distribution, evidence, migration, and
-orchestration, are crate-internal. `interfaces::vnext` and
-`operations::vnext`, including all of their children, are also crate-internal.
-They predeclare ownership seams for parallel implementation but expose no new
-product API and contain no implementation child at the fanout base. Stage 12
-may promote only the reviewed final facade surface after Stages 6-11 have been
-integrated in canonical order and the consumer/import census passes.
+Stage 12 promoted the reviewed 210-file Rust surface into the direct
+`domain::*`, `interfaces::*`, and `operations::*` owner facades and removed the
+three temporary source roots. The exact promotion manifest binds 186 Domain,
+8 Interface, and 16 Operation source preimages, their canonical destinations,
+and the ten facade collisions. This source move does not authorize legacy
+Skill, `next`, or Harness pruning: those resources remain live until their
+byte-total replacement, consumer, sealed-reader, retention, and rollback
+closures are independently proven.
 
 The external validator authenticates the manifest blob from the fanout commit,
 requires the fanout base to be the sole direct child of the certified commit,

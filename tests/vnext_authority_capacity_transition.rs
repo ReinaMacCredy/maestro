@@ -1,4 +1,4 @@
-use maestro::domain::vnext::authority::{
+use maestro::domain::authority::{
     AuthorityContextIdV1, AuthorityContextKindV1, AuthorityTagError, CapacityError,
     CapacityRootIdV1, CapacityUseDispositionV1, CmaEffectWithdrawalSlotFamilyV1,
     CmaObservationPublicationPurposeV1, GovernedCapacityKindV1, GovernedCapacityRootV1,

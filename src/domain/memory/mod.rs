@@ -1,763 +1,683 @@
-use std::fs;
-use std::path::PathBuf;
+//! Memory implementation seam over frozen evidence and persistence contracts.
 
-use anyhow::{Context, Result, bail};
-use serde::{Deserialize, Serialize};
+#![expect(
+    dead_code,
+    reason = "Stage 8 freezes Memory before the Stage 6 Action adapter is integrated"
+)]
 
-use crate::domain::card::schema::{Card, CardType};
-use crate::foundation::core::paths::MaestroPaths;
+use std::collections::BTreeMap;
 
-pub const CANDIDATE_SCHEMA_VERSION: &str = "maestro.memory.candidate.v1";
-pub const MEMORY_DIR: &str = "memory";
-pub const CANDIDATE_FILE: &str = "candidate.yml";
-pub const LESSON_FILE: &str = "lesson.md";
-pub const SIGNALS_FILE: &str = "signals.jsonl";
-pub const RECEIPTS_DIR: &str = "receipts";
+use sha2::{Digest, Sha256};
+use thiserror::Error;
 
-pub fn memory_dir(paths: &MaestroPaths, id: &str) -> PathBuf {
-    paths.cards_dir().join(id).join(MEMORY_DIR)
+#[cfg(test)]
+use crate::domain::authority::AdmittedRepositoryActionV1;
+use crate::domain::evidence::ObservationRecordIdV1;
+
+const CANDIDATE_DOMAIN_V1: &[u8] = b"maestro.vnext.memory-candidate.v1";
+const ASSESSMENT_DOMAIN_V1: &[u8] = b"maestro.vnext.memory-admission-assessment.v1";
+const ENTRY_DOMAIN_V1: &[u8] = b"maestro.vnext.memory-entry.v1";
+const EVENT_DOMAIN_V1: &[u8] = b"maestro.vnext.memory-event.v1";
+const MAX_TAGS_V1: usize = 64;
+const MAX_CONFLICTS_V1: usize = 256;
+const CREATE_MEMORY_CANDIDATE_TAG_V1: u64 = 132;
+const PROMOTE_MEMORY_CANDIDATE_TAG_V1: u64 = 133;
+const REJECT_MEMORY_CANDIDATE_TAG_V1: u64 = 134;
+const QUARANTINE_MEMORY_CANDIDATE_TAG_V1: u64 = 135;
+const INVALIDATE_MEMORY_ENTRY_TAG_V1: u64 = 136;
+const SUPERSEDE_MEMORY_ENTRY_TAG_V1: u64 = 137;
+const SECURITY_ERASE_MEMORY_PAYLOAD_TAG_V1: u64 = 138;
+
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub(crate) struct MemoryCandidateIdV1([u8; 32]);
+
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub(crate) struct AdmissionAssessmentIdV1([u8; 32]);
+
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub(crate) struct MemoryEntryIdV1([u8; 32]);
+
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub(crate) struct MemoryEventIdV1([u8; 32]);
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct MemoryCandidateV1 {
+    id: MemoryCandidateIdV1,
+    observation_ref: ObservationRecordIdV1,
+    payload_commitment: [u8; 32],
+    consent_ref: [u8; 32],
+    retention_ref: [u8; 32],
+    tags: Vec<String>,
 }
 
-pub fn candidate_path(paths: &MaestroPaths, id: &str) -> PathBuf {
-    memory_dir(paths, id).join(CANDIDATE_FILE)
-}
-
-pub fn validate_card(paths: &MaestroPaths, card: &Card) -> Result<MemoryCandidate> {
-    let path = candidate_path(paths, &card.id);
-    let raw =
-        fs::read_to_string(&path).with_context(|| format!("failed to read {}", path.display()))?;
-    let candidate = parse_candidate(&raw, &path.display().to_string())?;
-    validate_candidate_for_card(card, &candidate)?;
-    Ok(candidate)
-}
-
-pub fn parse_candidate(raw: &str, source_name: &str) -> Result<MemoryCandidate> {
-    serde_yaml::from_str(raw)
-        .with_context(|| format!("failed to parse Memory candidate schema in {source_name}"))
-}
-
-pub fn validate_candidate_for_card(card: &Card, candidate: &MemoryCandidate) -> Result<()> {
-    if card.card_type != CardType::Memory {
-        bail!(
-            "card {} is a {}, not a memory card",
-            card.id,
-            card.card_type.as_str()
-        );
+impl MemoryCandidateV1 {
+    pub(crate) fn new(
+        observation_ref: ObservationRecordIdV1,
+        payload_commitment: [u8; 32],
+        consent_ref: [u8; 32],
+        retention_ref: [u8; 32],
+        tags: impl IntoIterator<Item = String>,
+    ) -> Result<Self, MemoryErrorV1> {
+        require_nonzero(payload_commitment)?;
+        require_nonzero(consent_ref)?;
+        require_nonzero(retention_ref)?;
+        let tags = normalize_tags(tags)?;
+        let id = MemoryCandidateIdV1(hash_fields(&[
+            CANDIDATE_DOMAIN_V1,
+            observation_ref.as_bytes(),
+            &payload_commitment,
+            &consent_ref,
+            &retention_ref,
+            &hash_strings(&tags),
+        ]));
+        Ok(Self {
+            id,
+            observation_ref,
+            payload_commitment,
+            consent_ref,
+            retention_ref,
+            tags,
+        })
     }
-    if candidate.schema_version != CANDIDATE_SCHEMA_VERSION {
-        bail!(
-            "memory candidate {} has schema_version {}, expected {CANDIDATE_SCHEMA_VERSION}",
-            candidate.id,
-            candidate.schema_version
-        );
+
+    pub(crate) const fn id(&self) -> MemoryCandidateIdV1 {
+        self.id
     }
-    if candidate.id != card.id {
-        bail!(
-            "memory candidate id {} does not match card {}",
-            candidate.id,
-            card.id
-        );
-    }
-    validate_lifecycle_status(card, candidate.memory.lifecycle)?;
-    validate_sources(candidate)?;
-    validate_links(candidate)?;
-    validate_risk_and_gate(candidate)?;
-    Ok(())
 }
 
-fn validate_lifecycle_status(card: &Card, lifecycle: MemoryLifecycle) -> Result<()> {
-    let allowed = match lifecycle {
-        MemoryLifecycle::Candidate | MemoryLifecycle::Proposed => {
-            matches!(card.status.as_str(), "proposed" | "in_progress")
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(u8)]
+pub(crate) enum MemoryAdmissionDecisionV1 {
+    Admit = 0,
+    Reject = 1,
+    Quarantine = 2,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct AdmissionAssessmentV1 {
+    id: AdmissionAssessmentIdV1,
+    candidate_id: MemoryCandidateIdV1,
+    snapshot_ref: [u8; 32],
+    assessor_basis_ref: [u8; 32],
+    decision: MemoryAdmissionDecisionV1,
+    conflicting_policy_refs: Vec<[u8; 32]>,
+}
+
+impl AdmissionAssessmentV1 {
+    pub(crate) fn new(
+        candidate_id: MemoryCandidateIdV1,
+        snapshot_ref: [u8; 32],
+        assessor_basis_ref: [u8; 32],
+        decision: MemoryAdmissionDecisionV1,
+        mut conflicting_policy_refs: Vec<[u8; 32]>,
+    ) -> Result<Self, MemoryErrorV1> {
+        require_nonzero(snapshot_ref)?;
+        require_nonzero(assessor_basis_ref)?;
+        if conflicting_policy_refs.len() > MAX_CONFLICTS_V1
+            || conflicting_policy_refs.contains(&[0; 32])
+        {
+            return Err(MemoryErrorV1::InvalidAssessment);
         }
-        MemoryLifecycle::Gated => matches!(card.status.as_str(), "ready" | "in_progress"),
-        MemoryLifecycle::Promoted => matches!(card.status.as_str(), "verified" | "closed"),
-        MemoryLifecycle::Rejected | MemoryLifecycle::Superseded => card.status == "closed",
-        MemoryLifecycle::Stale | MemoryLifecycle::Quarantined => {
-            matches!(card.status.as_str(), "verified" | "closed")
+        conflicting_policy_refs.sort();
+        conflicting_policy_refs.dedup();
+        let conflicts_hash = hash_digests(&conflicting_policy_refs);
+        let id = AdmissionAssessmentIdV1(hash_fields(&[
+            ASSESSMENT_DOMAIN_V1,
+            &candidate_id.0,
+            &snapshot_ref,
+            &assessor_basis_ref,
+            &[decision as u8],
+            &conflicts_hash,
+        ]));
+        Ok(Self {
+            id,
+            candidate_id,
+            snapshot_ref,
+            assessor_basis_ref,
+            decision,
+            conflicting_policy_refs,
+        })
+    }
+
+    pub(crate) const fn id(&self) -> AdmissionAssessmentIdV1 {
+        self.id
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct MemoryEntryV1 {
+    id: MemoryEntryIdV1,
+    candidate_id: MemoryCandidateIdV1,
+    assessment_id: AdmissionAssessmentIdV1,
+    payload_commitment: [u8; 32],
+    tags: Vec<String>,
+    authorization_receipt_ref: [u8; 32],
+}
+
+impl MemoryEntryV1 {
+    pub(crate) const fn id(&self) -> MemoryEntryIdV1 {
+        self.id
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(u8)]
+pub(crate) enum MemoryDispositionKindV1 {
+    Promoted = 0,
+    Rejected = 1,
+    Quarantined = 2,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct MemoryDispositionV1 {
+    event_id: MemoryEventIdV1,
+    candidate_id: MemoryCandidateIdV1,
+    assessment_id: AdmissionAssessmentIdV1,
+    kind: MemoryDispositionKindV1,
+    authorization_receipt_ref: [u8; 32],
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(u8)]
+pub(crate) enum MemoryInvalidationReasonV1 {
+    Superseded = 0,
+    PolicyConflict = 1,
+    SourceRevoked = 2,
+    RetentionExpired = 3,
+    SecurityErased = 4,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct MemoryInvalidationV1 {
+    event_id: MemoryEventIdV1,
+    entry_id: MemoryEntryIdV1,
+    reason: MemoryInvalidationReasonV1,
+    replacement: Option<MemoryEntryIdV1>,
+    authorization_receipt_ref: [u8; 32],
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct MemoryLedgerV1 {
+    snapshot_ref: [u8; 32],
+    candidates: BTreeMap<MemoryCandidateIdV1, MemoryCandidateV1>,
+    assessments: BTreeMap<AdmissionAssessmentIdV1, AdmissionAssessmentV1>,
+    dispositions: BTreeMap<MemoryCandidateIdV1, MemoryDispositionV1>,
+    entries: BTreeMap<MemoryEntryIdV1, MemoryEntryV1>,
+    invalidations: BTreeMap<MemoryEntryIdV1, MemoryInvalidationV1>,
+}
+
+impl MemoryLedgerV1 {
+    pub(crate) fn empty(snapshot_ref: [u8; 32]) -> Result<Self, MemoryErrorV1> {
+        require_nonzero(snapshot_ref)?;
+        Ok(Self {
+            snapshot_ref,
+            candidates: BTreeMap::new(),
+            assessments: BTreeMap::new(),
+            dispositions: BTreeMap::new(),
+            entries: BTreeMap::new(),
+            invalidations: BTreeMap::new(),
+        })
+    }
+
+    pub(crate) const fn snapshot_ref(&self) -> [u8; 32] {
+        self.snapshot_ref
+    }
+
+    #[cfg(test)]
+    pub(crate) fn record_candidate(
+        &mut self,
+        admitted: &AdmittedRepositoryActionV1,
+        candidate: MemoryCandidateV1,
+    ) -> Result<MemoryCandidateIdV1, MemoryErrorV1> {
+        self.require_action(admitted, CREATE_MEMORY_CANDIDATE_TAG_V1)?;
+        if self.candidates.contains_key(&candidate.id) {
+            return Err(MemoryErrorV1::DuplicateCandidate);
         }
-    };
-    if !allowed {
-        bail!(
-            "memory lifecycle {} is not allowed with card.status {}",
-            lifecycle.as_str(),
-            card.status
-        );
+        let id = candidate.id;
+        self.candidates.insert(id, candidate);
+        self.advance(admitted);
+        Ok(id)
     }
-    Ok(())
-}
 
-fn validate_sources(candidate: &MemoryCandidate) -> Result<()> {
-    let summary = &candidate.memory.signal_summary;
-    if summary.signal_types.is_empty() {
-        bail!("memory candidate {} has no signal_types", candidate.id);
-    }
-    if summary.source_refs.is_empty() {
-        bail!("memory candidate {} has no source_refs", candidate.id);
-    }
-    validate_source_refs(
-        &format!("memory candidate {}", candidate.id),
-        &summary.source_refs,
-    )
-}
-
-pub fn validate_source_refs(context: &str, source_refs: &[SourceRef]) -> Result<()> {
-    if source_refs.is_empty() {
-        bail!("{context} requires at least one source ref");
-    }
-    for source in source_refs {
-        if source.id.is_none() && source.path.is_none() {
-            bail!("{context} source_ref {} needs id or path", source.kind);
+    #[cfg(test)]
+    pub(crate) fn promote(
+        &mut self,
+        admitted: &AdmittedRepositoryActionV1,
+        candidate_id: MemoryCandidateIdV1,
+        assessment: AdmissionAssessmentV1,
+    ) -> Result<MemoryEntryIdV1, MemoryErrorV1> {
+        self.require_action(admitted, PROMOTE_MEMORY_CANDIDATE_TAG_V1)?;
+        if self.dispositions.contains_key(&candidate_id) {
+            return Err(MemoryErrorV1::CandidateAlreadyDisposed);
         }
-        if forbidden_source_kind(&source.kind) {
-            bail!("{context} uses forbidden source kind {}", source.kind);
+        let candidate = self
+            .candidates
+            .get(&candidate_id)
+            .ok_or(MemoryErrorV1::UnknownCandidate)?;
+        let assessment_id = assessment.id;
+        if assessment.candidate_id != candidate_id
+            || assessment.snapshot_ref != self.snapshot_ref
+            || assessment.decision != MemoryAdmissionDecisionV1::Admit
+            || !assessment.conflicting_policy_refs.is_empty()
+            || self.assessments.contains_key(&assessment_id)
+        {
+            return Err(MemoryErrorV1::PromotionRefused);
         }
-    }
-    Ok(())
-}
-
-pub fn forbidden_source_kind(kind: &str) -> bool {
-    matches!(
-        kind,
-        "raw_screen_recording"
-            | "screen_recording"
-            | "keystroke"
-            | "raw_keystroke"
-            | "click_stream"
-            | "raw_click_stream"
-            | "app_telemetry"
-            | "silence_inference"
-            | "unrecorded_chat"
-            | "chat_memory_extraction"
-            | "private_planner_state"
-    )
-}
-
-fn validate_links(candidate: &MemoryCandidate) -> Result<()> {
-    let links = &candidate.memory.links;
-    if links.lesson != format!("{MEMORY_DIR}/{LESSON_FILE}") {
-        bail!(
-            "memory candidate {} has non-canonical lesson link",
-            candidate.id
-        );
-    }
-    if links.signals != format!("{MEMORY_DIR}/{SIGNALS_FILE}") {
-        bail!(
-            "memory candidate {} has non-canonical signals link",
-            candidate.id
-        );
-    }
-    if links.receipts_dir != format!("{MEMORY_DIR}/{RECEIPTS_DIR}") {
-        bail!(
-            "memory candidate {} has non-canonical receipts_dir link",
-            candidate.id
-        );
-    }
-    if links.health_ledger != ".maestro/memory/health-ledger.jsonl" {
-        bail!(
-            "memory candidate {} has non-canonical health_ledger link",
-            candidate.id
-        );
-    }
-    Ok(())
-}
-
-fn validate_risk_and_gate(candidate: &MemoryCandidate) -> Result<()> {
-    let risk = candidate.memory.risk.overall;
-    let max_axis = candidate.memory.risk.axes.max_level();
-    if risk != max_axis {
-        bail!(
-            "memory candidate {} risk.overall {} must equal max axis risk {}",
-            candidate.id,
-            risk.as_str(),
-            max_axis.as_str()
-        );
+        let receipt_ref = *admitted.authorization_receipt().id().as_bytes();
+        let entry_id = MemoryEntryIdV1(hash_fields(&[
+            ENTRY_DOMAIN_V1,
+            &candidate_id.0,
+            &assessment_id.0,
+            &candidate.payload_commitment,
+            &receipt_ref,
+        ]));
+        let entry = MemoryEntryV1 {
+            id: entry_id,
+            candidate_id,
+            assessment_id,
+            payload_commitment: candidate.payload_commitment,
+            tags: candidate.tags.clone(),
+            authorization_receipt_ref: receipt_ref,
+        };
+        let disposition = MemoryDispositionV1 {
+            event_id: event_id(candidate_id.0, assessment_id.0, receipt_ref, 1),
+            candidate_id,
+            assessment_id,
+            kind: MemoryDispositionKindV1::Promoted,
+            authorization_receipt_ref: receipt_ref,
+        };
+        self.assessments.insert(assessment_id, assessment);
+        self.entries.insert(entry_id, entry);
+        self.dispositions.insert(candidate_id, disposition);
+        self.advance(admitted);
+        Ok(entry_id)
     }
 
-    let external_target = candidate.memory.target_tier == TargetTier::ExternalAction
-        || candidate.memory.target_surface == TargetSurface::ExternalAction;
-    if external_target
-        && (risk != RiskLevel::Forbidden
-            || candidate.memory.risk.axes.external_authority != RiskLevel::Forbidden
-            || candidate.memory.gate.required != GateRequired::Forbidden)
-    {
-        bail!(
-            "memory candidate {} targets external authority; risk and gate must be forbidden",
-            candidate.id
-        );
+    #[cfg(test)]
+    pub(crate) fn reject(
+        &mut self,
+        admitted: &AdmittedRepositoryActionV1,
+        candidate_id: MemoryCandidateIdV1,
+        assessment: AdmissionAssessmentV1,
+    ) -> Result<(), MemoryErrorV1> {
+        self.dispose_candidate(
+            admitted,
+            REJECT_MEMORY_CANDIDATE_TAG_V1,
+            candidate_id,
+            assessment,
+            MemoryAdmissionDecisionV1::Reject,
+            MemoryDispositionKindV1::Rejected,
+        )
     }
 
-    if risk == RiskLevel::Forbidden && candidate.memory.gate.required != GateRequired::Forbidden {
-        bail!(
-            "memory candidate {} has forbidden risk with non-forbidden gate",
-            candidate.id
-        );
+    #[cfg(test)]
+    pub(crate) fn quarantine(
+        &mut self,
+        admitted: &AdmittedRepositoryActionV1,
+        candidate_id: MemoryCandidateIdV1,
+        assessment: AdmissionAssessmentV1,
+    ) -> Result<(), MemoryErrorV1> {
+        self.dispose_candidate(
+            admitted,
+            QUARANTINE_MEMORY_CANDIDATE_TAG_V1,
+            candidate_id,
+            assessment,
+            MemoryAdmissionDecisionV1::Quarantine,
+            MemoryDispositionKindV1::Quarantined,
+        )
     }
 
-    if !gate_satisfies_risk(candidate.memory.gate.required, risk) {
-        bail!(
-            "memory candidate {} gate {} is too weak for {} risk",
-            candidate.id,
-            candidate.memory.gate.required.as_str(),
-            risk.as_str()
-        );
+    #[cfg(test)]
+    pub(crate) fn invalidate(
+        &mut self,
+        admitted: &AdmittedRepositoryActionV1,
+        entry_id: MemoryEntryIdV1,
+        reason: MemoryInvalidationReasonV1,
+    ) -> Result<(), MemoryErrorV1> {
+        self.require_action(admitted, INVALIDATE_MEMORY_ENTRY_TAG_V1)?;
+        self.append_invalidation(admitted, entry_id, reason, None)
     }
 
-    if candidate.memory.lifecycle == MemoryLifecycle::Promoted
-        && candidate
-            .memory
-            .risk
-            .registry_hash
-            .as_deref()
-            .unwrap_or("")
-            .is_empty()
-    {
-        bail!(
-            "promoted memory candidate {} is missing risk.registry_hash",
-            candidate.id
-        );
-    }
-    Ok(())
-}
-
-fn gate_satisfies_risk(gate: GateRequired, risk: RiskLevel) -> bool {
-    match risk {
-        RiskLevel::Low => matches!(
-            gate,
-            GateRequired::Review | GateRequired::Scorer | GateRequired::ScorerAndReview
-        ),
-        RiskLevel::Medium => matches!(
-            gate,
-            GateRequired::Review | GateRequired::Scorer | GateRequired::ScorerAndReview
-        ),
-        RiskLevel::High | RiskLevel::Critical => gate == GateRequired::ScorerAndReview,
-        RiskLevel::Forbidden => gate == GateRequired::Forbidden,
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct MemoryCandidate {
-    pub schema_version: String,
-    pub id: String,
-    pub memory: MemoryMetadata,
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct MemoryMetadata {
-    pub lifecycle: MemoryLifecycle,
-    pub target_tier: TargetTier,
-    pub target_surface: TargetSurface,
-    pub scope: MemoryScope,
-    pub signal_summary: SignalSummary,
-    pub risk: RiskClassification,
-    pub gate: Gate,
-    pub freshness: Freshness,
-    pub rollback: Rollback,
-    pub links: Links,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum MemoryLifecycle {
-    Candidate,
-    Proposed,
-    Gated,
-    Promoted,
-    Rejected,
-    Stale,
-    Superseded,
-    Quarantined,
-}
-
-impl MemoryLifecycle {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Candidate => "candidate",
-            Self::Proposed => "proposed",
-            Self::Gated => "gated",
-            Self::Promoted => "promoted",
-            Self::Rejected => "rejected",
-            Self::Stale => "stale",
-            Self::Superseded => "superseded",
-            Self::Quarantined => "quarantined",
+    #[cfg(test)]
+    pub(crate) fn supersede(
+        &mut self,
+        admitted: &AdmittedRepositoryActionV1,
+        entry_id: MemoryEntryIdV1,
+        replacement: MemoryEntryIdV1,
+    ) -> Result<(), MemoryErrorV1> {
+        self.require_action(admitted, SUPERSEDE_MEMORY_ENTRY_TAG_V1)?;
+        if entry_id == replacement || !self.entries.contains_key(&replacement) {
+            return Err(MemoryErrorV1::InvalidReplacement);
         }
+        self.append_invalidation(
+            admitted,
+            entry_id,
+            MemoryInvalidationReasonV1::Superseded,
+            Some(replacement),
+        )
     }
-}
 
-impl SignalType {
-    pub fn parse(word: &str) -> Option<Self> {
-        match word {
-            "failure" => Some(Self::Failure),
-            "user_correction" => Some(Self::UserCorrection),
-            "verified_success" => Some(Self::VerifiedSuccess),
-            "repeated_block" => Some(Self::RepeatedBlock),
-            "loop_hard_stop" => Some(Self::LoopHardStop),
-            "good_run" => Some(Self::GoodRun),
-            "manual_final_decision" => Some(Self::ManualFinalDecision),
-            "approval" => Some(Self::Approval),
-            "rejection" => Some(Self::Rejection),
-            "health_signal" => Some(Self::HealthSignal),
-            _ => None,
+    #[cfg(test)]
+    pub(crate) fn security_erase(
+        &mut self,
+        admitted: &AdmittedRepositoryActionV1,
+        entry_id: MemoryEntryIdV1,
+    ) -> Result<(), MemoryErrorV1> {
+        self.require_action(admitted, SECURITY_ERASE_MEMORY_PAYLOAD_TAG_V1)?;
+        self.append_invalidation(
+            admitted,
+            entry_id,
+            MemoryInvalidationReasonV1::SecurityErased,
+            None,
+        )?;
+        // Security erase scrubs the retained payload commitment; other
+        // invalidation reasons keep it for audit lineage.
+        let entry = self
+            .entries
+            .get_mut(&entry_id)
+            .expect("invariant: append_invalidation admitted the entry");
+        entry.payload_commitment = [0; 32];
+        Ok(())
+    }
+
+    pub(crate) fn advisory_projection(
+        &self,
+        requested_tags: impl IntoIterator<Item = String>,
+    ) -> Result<MemoryAdvisoryProjectionV1, MemoryErrorV1> {
+        let requested_tags = normalize_tags(requested_tags)?;
+        let entries = self
+            .entries
+            .values()
+            .filter(|entry| !self.invalidations.contains_key(&entry.id))
+            .filter(|entry| {
+                requested_tags.is_empty()
+                    || requested_tags
+                        .iter()
+                        .all(|tag| entry.tags.binary_search(tag).is_ok())
+            })
+            .map(|entry| MemoryAdvisoryEntryV1 {
+                entry_id: entry.id,
+                payload_commitment: entry.payload_commitment,
+                tags: entry.tags.clone(),
+            })
+            .collect();
+        Ok(MemoryAdvisoryProjectionV1 {
+            snapshot_ref: self.snapshot_ref,
+            entries,
+        })
+    }
+
+    #[cfg(test)]
+    fn dispose_candidate(
+        &mut self,
+        admitted: &AdmittedRepositoryActionV1,
+        action_tag: u64,
+        candidate_id: MemoryCandidateIdV1,
+        assessment: AdmissionAssessmentV1,
+        required_decision: MemoryAdmissionDecisionV1,
+        kind: MemoryDispositionKindV1,
+    ) -> Result<(), MemoryErrorV1> {
+        self.require_action(admitted, action_tag)?;
+        if self.dispositions.contains_key(&candidate_id) {
+            return Err(MemoryErrorV1::CandidateAlreadyDisposed);
         }
-    }
-
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Failure => "failure",
-            Self::UserCorrection => "user_correction",
-            Self::VerifiedSuccess => "verified_success",
-            Self::RepeatedBlock => "repeated_block",
-            Self::LoopHardStop => "loop_hard_stop",
-            Self::GoodRun => "good_run",
-            Self::ManualFinalDecision => "manual_final_decision",
-            Self::Approval => "approval",
-            Self::Rejection => "rejection",
-            Self::HealthSignal => "health_signal",
+        let assessment_id = assessment.id;
+        if assessment.candidate_id != candidate_id
+            || assessment.snapshot_ref != self.snapshot_ref
+            || assessment.decision != required_decision
+            || self.assessments.contains_key(&assessment_id)
+        {
+            return Err(MemoryErrorV1::InvalidAssessment);
         }
+        let receipt_ref = *admitted.authorization_receipt().id().as_bytes();
+        self.dispositions.insert(
+            candidate_id,
+            MemoryDispositionV1 {
+                event_id: event_id(candidate_id.0, assessment_id.0, receipt_ref, kind as u8),
+                candidate_id,
+                assessment_id,
+                kind,
+                authorization_receipt_ref: receipt_ref,
+            },
+        );
+        self.assessments.insert(assessment_id, assessment);
+        self.advance(admitted);
+        Ok(())
     }
-}
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum TargetTier {
-    MemoryNote,
-    SkillCandidate,
-    RecurrenceGuard,
-    ShippedSkill,
-    HarnessPolicy,
-    Hook,
-    CliBehavior,
-    ExternalAction,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum TargetSurface {
-    MemoryNote,
-    LocalSkill,
-    ShippedSkill,
-    RecurrenceGuard,
-    HarnessPolicy,
-    Hook,
-    CliBehavior,
-    ExternalAction,
-}
-
-impl TargetSurface {
-    pub fn parse(word: &str) -> Option<Self> {
-        match word {
-            "memory_note" => Some(Self::MemoryNote),
-            "local_skill" => Some(Self::LocalSkill),
-            "shipped_skill" => Some(Self::ShippedSkill),
-            "recurrence_guard" => Some(Self::RecurrenceGuard),
-            "harness_policy" => Some(Self::HarnessPolicy),
-            "hook" => Some(Self::Hook),
-            "cli_behavior" => Some(Self::CliBehavior),
-            "external_action" => Some(Self::ExternalAction),
-            _ => None,
+    #[cfg(test)]
+    fn append_invalidation(
+        &mut self,
+        admitted: &AdmittedRepositoryActionV1,
+        entry_id: MemoryEntryIdV1,
+        reason: MemoryInvalidationReasonV1,
+        replacement: Option<MemoryEntryIdV1>,
+    ) -> Result<(), MemoryErrorV1> {
+        if !self.entries.contains_key(&entry_id) {
+            return Err(MemoryErrorV1::UnknownEntry);
         }
-    }
-
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::MemoryNote => "memory_note",
-            Self::LocalSkill => "local_skill",
-            Self::ShippedSkill => "shipped_skill",
-            Self::RecurrenceGuard => "recurrence_guard",
-            Self::HarnessPolicy => "harness_policy",
-            Self::Hook => "hook",
-            Self::CliBehavior => "cli_behavior",
-            Self::ExternalAction => "external_action",
+        if self.invalidations.contains_key(&entry_id) {
+            return Err(MemoryErrorV1::EntryAlreadyInvalidated);
         }
+        let receipt_ref = *admitted.authorization_receipt().id().as_bytes();
+        let replacement_ref = replacement.map_or([0; 32], |entry| entry.0);
+        self.invalidations.insert(
+            entry_id,
+            MemoryInvalidationV1 {
+                event_id: event_id(entry_id.0, replacement_ref, receipt_ref, reason as u8),
+                entry_id,
+                reason,
+                replacement,
+                authorization_receipt_ref: receipt_ref,
+            },
+        );
+        self.advance(admitted);
+        Ok(())
     }
-}
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct MemoryScope {
-    pub kind: ScopeKind,
-    pub refs: Vec<String>,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ScopeKind {
-    Task,
-    Card,
-    Feature,
-    Project,
-    Repo,
-    Global,
-    Team,
-}
-
-impl ScopeKind {
-    pub fn parse(word: &str) -> Option<Self> {
-        match word {
-            "task" => Some(Self::Task),
-            "card" => Some(Self::Card),
-            "feature" => Some(Self::Feature),
-            "project" => Some(Self::Project),
-            "repo" => Some(Self::Repo),
-            "global" => Some(Self::Global),
-            "team" => Some(Self::Team),
-            _ => None,
+    #[cfg(test)]
+    fn require_action(
+        &self,
+        admitted: &AdmittedRepositoryActionV1,
+        expected_tag: u64,
+    ) -> Result<(), MemoryErrorV1> {
+        if admitted.action().global_tag() != expected_tag {
+            return Err(MemoryErrorV1::WrongAuthorityAction);
         }
-    }
-
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Task => "task",
-            Self::Card => "card",
-            Self::Feature => "feature",
-            Self::Project => "project",
-            Self::Repo => "repo",
-            Self::Global => "global",
-            Self::Team => "team",
+        if admitted.current_snapshot_id().as_bytes() != &self.snapshot_ref {
+            return Err(MemoryErrorV1::StaleSnapshot);
         }
+        Ok(())
+    }
+
+    #[cfg(test)]
+    fn advance(&mut self, admitted: &AdmittedRepositoryActionV1) {
+        self.snapshot_ref = *admitted.successor_snapshot().id().as_bytes();
     }
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct SignalSummary {
-    pub signal_types: Vec<SignalType>,
-    pub source_refs: Vec<SourceRef>,
-    pub confidence: Confidence,
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct MemoryAdvisoryEntryV1 {
+    entry_id: MemoryEntryIdV1,
+    payload_commitment: [u8; 32],
+    tags: Vec<String>,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum SignalType {
-    Failure,
-    UserCorrection,
-    VerifiedSuccess,
-    RepeatedBlock,
-    LoopHardStop,
-    GoodRun,
-    ManualFinalDecision,
-    Approval,
-    Rejection,
-    HealthSignal,
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct MemoryAdvisoryProjectionV1 {
+    snapshot_ref: [u8; 32],
+    entries: Vec<MemoryAdvisoryEntryV1>,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct SourceRef {
-    pub kind: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub path: Option<String>,
+impl MemoryAdvisoryProjectionV1 {
+    pub(crate) const fn snapshot_ref(&self) -> [u8; 32] {
+        self.snapshot_ref
+    }
+
+    pub(crate) fn entries(&self) -> &[MemoryAdvisoryEntryV1] {
+        &self.entries
+    }
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Confidence {
-    Low,
-    Medium,
-    High,
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct RiskClassification {
-    pub overall: RiskLevel,
-    pub axes: RiskAxes,
-    pub registry_hash: Option<String>,
-    pub registry_adjustments: Vec<String>,
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct RiskAxes {
-    pub target_tier: RiskLevel,
-    pub target_surface: RiskLevel,
-    pub scope_blast_radius: RiskLevel,
-    pub source_strength: RiskLevel,
-    pub reversibility: RiskLevel,
-    pub scorer_strength: RiskLevel,
-    pub external_authority: RiskLevel,
-}
-
-impl RiskAxes {
-    fn max_level(&self) -> RiskLevel {
-        [
-            self.target_tier,
-            self.target_surface,
-            self.scope_blast_radius,
-            self.source_strength,
-            self.reversibility,
-            self.scorer_strength,
-            self.external_authority,
-        ]
+fn normalize_tags(tags: impl IntoIterator<Item = String>) -> Result<Vec<String>, MemoryErrorV1> {
+    let mut tags = tags
         .into_iter()
-        .max()
-        .expect("invariant: risk axes array is non-empty")
+        .map(|tag| tag.trim().to_lowercase())
+        .collect::<Vec<_>>();
+    if tags.len() > MAX_TAGS_V1
+        || tags
+            .iter()
+            .any(|tag| tag.is_empty() || tag.len() > 128 || tag.contains('\0'))
+    {
+        return Err(MemoryErrorV1::InvalidTag);
     }
+    tags.sort();
+    tags.dedup();
+    Ok(tags)
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum RiskLevel {
-    Low,
-    Medium,
-    High,
-    Critical,
-    Forbidden,
+fn event_id(first: [u8; 32], second: [u8; 32], receipt: [u8; 32], tag: u8) -> MemoryEventIdV1 {
+    MemoryEventIdV1(hash_fields(&[
+        EVENT_DOMAIN_V1,
+        &first,
+        &second,
+        &receipt,
+        &[tag],
+    ]))
 }
 
-impl RiskLevel {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Low => "low",
-            Self::Medium => "medium",
-            Self::High => "high",
-            Self::Critical => "critical",
-            Self::Forbidden => "forbidden",
-        }
+fn hash_strings(values: &[String]) -> [u8; 32] {
+    let mut hash = Sha256::new();
+    hash.update((values.len() as u64).to_be_bytes());
+    for value in values {
+        hash.update((value.len() as u64).to_be_bytes());
+        hash.update(value.as_bytes());
     }
+    hash.finalize().into()
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct Gate {
-    pub required: GateRequired,
-    pub scorer_contract: Option<serde_yaml::Value>,
-    pub review_required: bool,
-    pub rollback_path: Option<String>,
-    pub expiry: Option<String>,
-    pub stale_conditions: Vec<String>,
-    pub allowed_targets: Vec<TargetSurface>,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum GateRequired {
-    Review,
-    Scorer,
-    ScorerAndReview,
-    Forbidden,
-}
-
-impl GateRequired {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Review => "review",
-            Self::Scorer => "scorer",
-            Self::ScorerAndReview => "scorer_and_review",
-            Self::Forbidden => "forbidden",
-        }
+fn hash_digests(values: &[[u8; 32]]) -> [u8; 32] {
+    let mut hash = Sha256::new();
+    hash.update((values.len() as u64).to_be_bytes());
+    for value in values {
+        hash.update(value);
     }
+    hash.finalize().into()
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct Freshness {
-    pub expires_at: Option<String>,
-    pub revalidate_after: Option<String>,
-    pub stale_conditions: Vec<String>,
+fn hash_fields(fields: &[&[u8]]) -> [u8; 32] {
+    let mut hash = Sha256::new();
+    for field in fields {
+        hash.update((field.len() as u64).to_be_bytes());
+        hash.update(field);
+    }
+    hash.finalize().into()
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct Rollback {
-    pub path: Option<String>,
-    pub backup_refs: Vec<String>,
-    pub supersedes: Vec<String>,
-    pub superseded_by: Option<String>,
+fn require_nonzero(value: [u8; 32]) -> Result<(), MemoryErrorV1> {
+    if value == [0; 32] {
+        return Err(MemoryErrorV1::InvalidReference);
+    }
+    Ok(())
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct Links {
-    pub lesson: String,
-    pub signals: String,
-    pub receipts_dir: String,
-    pub health_ledger: String,
+#[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
+pub(crate) enum MemoryErrorV1 {
+    #[error("Memory reference is invalid")]
+    InvalidReference,
+    #[error("Memory tag is invalid")]
+    InvalidTag,
+    #[error("Memory candidate already exists")]
+    DuplicateCandidate,
+    #[error("Memory candidate does not exist")]
+    UnknownCandidate,
+    #[error("Memory admission assessment is invalid")]
+    InvalidAssessment,
+    #[error("Memory candidate already has a disposition")]
+    CandidateAlreadyDisposed,
+    #[error("Memory promotion is refused")]
+    PromotionRefused,
+    #[error("Memory entry does not exist")]
+    UnknownEntry,
+    #[error("Memory entry is already invalidated")]
+    EntryAlreadyInvalidated,
+    #[error("Memory replacement is invalid")]
+    InvalidReplacement,
+    #[error("Authority admitted a different Memory action")]
+    WrongAuthorityAction,
+    #[error("Memory snapshot is stale")]
+    StaleSnapshot,
 }
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
     use super::*;
-    use crate::foundation::core::fs::ensure_dir;
 
-    const NOW: &str = "2026-06-27T00:00:00Z";
-
-    fn valid_yaml() -> String {
-        r#"schema_version: maestro.memory.candidate.v1
-id: mem-refund-policy-1234
-memory:
-  lifecycle: proposed
-  target_tier: memory_note
-  target_surface: memory_note
-  scope:
-    kind: repo
-    refs: []
-  signal_summary:
-    signal_types:
-      - user_correction
-    source_refs:
-      - kind: run_event
-        id: run-001
-        path: .maestro/runs/run-001/events.jsonl
-    confidence: high
-  risk:
-    overall: low
-    axes:
-      target_tier: low
-      target_surface: low
-      scope_blast_radius: low
-      source_strength: low
-      reversibility: low
-      scorer_strength: low
-      external_authority: low
-    registry_hash: null
-    registry_adjustments: []
-  gate:
-    required: review
-    scorer_contract: null
-    review_required: true
-    rollback_path: null
-    expiry: null
-    stale_conditions: []
-    allowed_targets:
-      - memory_note
-  freshness:
-    expires_at: null
-    revalidate_after: null
-    stale_conditions: []
-  rollback:
-    path: null
-    backup_refs: []
-    supersedes: []
-    superseded_by: null
-  links:
-    lesson: memory/lesson.md
-    signals: memory/signals.jsonl
-    receipts_dir: memory/receipts
-    health_ledger: .maestro/memory/health-ledger.jsonl
-"#
-        .to_string()
+    fn digest(byte: u8) -> [u8; 32] {
+        [byte; 32]
     }
 
-    fn memory_card(status: &str) -> Card {
-        Card::new(
-            "mem-refund-policy-1234",
-            CardType::Memory,
-            "Refund policy",
-            status,
-            NOW,
+    fn candidate() -> MemoryCandidateV1 {
+        MemoryCandidateV1::new(
+            ObservationRecordIdV1::from_bytes(digest(1)).unwrap(),
+            digest(2),
+            digest(3),
+            digest(4),
+            ["advisory".to_owned()],
         )
-    }
-
-    fn temp_paths(name: &str) -> MaestroPaths {
-        let stamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system clock after epoch")
-            .as_nanos();
-        let root = std::env::temp_dir().join(format!("maestro-memory-{name}-{stamp}"));
-        MaestroPaths::new(root)
-    }
-
-    fn write_candidate(paths: &MaestroPaths, id: &str, yaml: &str) {
-        let dir = memory_dir(paths, id);
-        ensure_dir(&dir).expect("create memory dir");
-        std::fs::write(dir.join(CANDIDATE_FILE), yaml).expect("write candidate");
-    }
-
-    fn cleanup(paths: &MaestroPaths) {
-        let _ = std::fs::remove_dir_all(paths.repo_root());
+        .unwrap()
     }
 
     #[test]
-    fn loads_and_validates_candidate_sidecar() {
-        let paths = temp_paths("valid");
-        let card = memory_card("proposed");
-        write_candidate(&paths, &card.id, &valid_yaml());
-
-        let candidate = validate_card(&paths, &card).expect("valid memory candidate");
-        assert_eq!(candidate.id, card.id);
-
-        cleanup(&paths);
+    fn identity_hashed_discriminants_are_pinned() {
+        assert_eq!(MemoryAdmissionDecisionV1::Admit as u8, 0);
+        assert_eq!(MemoryAdmissionDecisionV1::Quarantine as u8, 2);
+        assert_eq!(MemoryDispositionKindV1::Promoted as u8, 0);
+        assert_eq!(MemoryDispositionKindV1::Quarantined as u8, 2);
+        assert_eq!(MemoryInvalidationReasonV1::Superseded as u8, 0);
+        assert_eq!(MemoryInvalidationReasonV1::SecurityErased as u8, 4);
     }
 
     #[test]
-    fn rejects_non_memory_card() {
-        let candidate = parse_candidate(&valid_yaml(), "test").expect("parse candidate");
-        let card = Card::new(
-            "mem-refund-policy-1234",
-            CardType::Task,
-            "Task",
-            "ready",
-            NOW,
-        );
-
-        let error = validate_candidate_for_card(&card, &candidate).expect_err("reject type");
-        assert!(format!("{error:#}").contains("not a memory card"));
+    fn admission_assessment_is_pinned_and_distinct_from_evidence_assessment() {
+        let candidate = candidate();
+        let assessment = AdmissionAssessmentV1::new(
+            candidate.id(),
+            digest(5),
+            digest(6),
+            MemoryAdmissionDecisionV1::Admit,
+            vec![],
+        )
+        .unwrap();
+        assert_ne!(assessment.id().0, [0; 32]);
+        assert_eq!(assessment.snapshot_ref, digest(5));
     }
 
     #[test]
-    fn rejects_lifecycle_status_mismatch() {
-        let candidate = parse_candidate(&valid_yaml(), "test").expect("parse candidate");
-        let card = memory_card("open");
-
-        let error = validate_candidate_for_card(&card, &candidate).expect_err("reject status");
-        assert!(format!("{error:#}").contains("not allowed with card.status open"));
+    fn conflicting_assessment_cannot_be_an_admissible_promotion_basis() {
+        let candidate = candidate();
+        let assessment = AdmissionAssessmentV1::new(
+            candidate.id(),
+            digest(5),
+            digest(6),
+            MemoryAdmissionDecisionV1::Admit,
+            vec![digest(7)],
+        )
+        .unwrap();
+        assert!(!assessment.conflicting_policy_refs.is_empty());
+        assert_eq!(assessment.decision, MemoryAdmissionDecisionV1::Admit);
     }
 
     #[test]
-    fn rejects_forbidden_source_kind() {
-        let yaml = valid_yaml().replace("kind: run_event", "kind: raw_screen_recording");
-        let candidate = parse_candidate(&yaml, "test").expect("parse candidate");
-
-        let error =
-            validate_candidate_for_card(&memory_card("proposed"), &candidate).expect_err("reject");
-        assert!(format!("{error:#}").contains("forbidden source kind raw_screen_recording"));
-    }
-
-    #[test]
-    fn rejects_external_authority_without_forbidden_gate() {
-        let yaml = valid_yaml()
-            .replace("target_tier: memory_note", "target_tier: external_action")
-            .replace(
-                "target_surface: memory_note",
-                "target_surface: external_action",
-            );
-        let candidate = parse_candidate(&yaml, "test").expect("parse candidate");
-
-        let error =
-            validate_candidate_for_card(&memory_card("proposed"), &candidate).expect_err("reject");
-        assert!(format!("{error:#}").contains("targets external authority"));
-    }
-
-    #[test]
-    fn schema_rejects_unknown_candidate_fields() {
-        let yaml = valid_yaml().replace(
-            "id: mem-refund-policy-1234\n",
-            "id: mem-refund-policy-1234\nhidden_memory: true\n",
-        );
-
-        let error = parse_candidate(&yaml, "test").expect_err("reject unknown");
-        assert!(format!("{error:#}").contains("unknown field"));
-    }
-
-    #[test]
-    fn candidate_path_uses_memory_sidecar_dir() {
-        let paths = MaestroPaths::new(Path::new("/repo"));
-        assert_eq!(
-            candidate_path(&paths, "mem-abc"),
-            Path::new("/repo")
-                .join(".maestro")
-                .join("cards")
-                .join("mem-abc")
-                .join("memory")
-                .join("candidate.yml")
-        );
+    fn advisory_projection_has_no_action_priority_or_authority_surface() {
+        let ledger = MemoryLedgerV1::empty(digest(5)).unwrap();
+        let projection = ledger
+            .advisory_projection(std::iter::empty::<String>())
+            .unwrap();
+        assert_eq!(projection.snapshot_ref(), digest(5));
+        assert!(projection.entries().is_empty());
     }
 }
+mod legacy;
+
+pub use legacy::*;

@@ -35,10 +35,10 @@ class Stage5ConsensusTests(unittest.TestCase):
         self.assertEqual(expected, ruby_paths)
         self.assertIn("src/foundation/mod.rs", expected)
         self.assertIn("src/foundation/core/mod.rs", expected)
-        self.assertIn("src/domain/vnext/contract/mod.rs", expected)
-        self.assertIn("src/domain/vnext/persistence/tests/mod.rs", expected)
+        self.assertIn("src/domain/contract/mod.rs", expected)
+        self.assertIn("src/domain/persistence/tests/mod.rs", expected)
         self.assertIn(
-            "src/domain/vnext/installation/consumer_snapshot_stage11_seed.rs",
+            "src/domain/installation/consumer_snapshot_stage11_seed.rs",
             expected,
         )
 

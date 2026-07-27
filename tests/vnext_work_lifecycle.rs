@@ -1,12 +1,8 @@
-use maestro::domain::vnext::evidence::{
-    ClaimEntryV1, SubmissionClaimSetError, SubmissionClaimSetV1,
-};
-use maestro::domain::vnext::evidence::{
-    ClaimSubjectV1, ClaimV1, ObservationRecordIdV1, SubmissionRefV1,
-};
-use maestro::domain::vnext::identity::ContractRootIdV1;
-use maestro::domain::vnext::step::StepSubmissionIdV1;
-use maestro::domain::vnext::work::{
+use maestro::domain::evidence::{ClaimEntryV1, SubmissionClaimSetError, SubmissionClaimSetV1};
+use maestro::domain::evidence::{ClaimSubjectV1, ClaimV1, ObservationRecordIdV1, SubmissionRefV1};
+use maestro::domain::identity::ContractRootIdV1;
+use maestro::domain::step::StepSubmissionIdV1;
+use maestro::domain::work::{
     WorkIdV1, WorkLifecycleError, WorkLifecycleStateV1, WorkRecordV1, WorkRecordWriterV1,
     WorkRevisionV1, WorkSubmissionError, WorkSubmissionIdV1, WorkSubmissionV1,
     WorkTransitionKindV1, WorkTransitionReasonV1, WorkTransitionV1,

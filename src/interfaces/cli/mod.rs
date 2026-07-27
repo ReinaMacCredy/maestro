@@ -3726,3 +3726,10 @@ mod tests {
         );
     }
 }
+mod adapter;
+
+#[allow(
+    unused_imports,
+    reason = "the canonical operation adapter remains available to crate-owned entrypoints"
+)]
+pub(crate) use adapter::{Stage6CliOutputV1, run as run_operation_v1};

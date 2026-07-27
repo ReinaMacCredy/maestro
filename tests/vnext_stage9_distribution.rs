@@ -4,9 +4,9 @@ macro_rules! stage9_distribution_candidate_tests {
     () => {
         use std::collections::BTreeSet;
 
-        use $crate::domain::vnext::authority::ActionRequestIdV1;
-        use $crate::domain::vnext::distribution::CommitmentV1;
-        use $crate::domain::vnext::distribution::runtime::{
+        use $crate::domain::authority::ActionRequestIdV1;
+        use $crate::domain::distribution::CommitmentV1;
+        use $crate::domain::distribution::runtime::{
             CanonicalTargetIdentityV1, CatalogRotationV1, CustodyAssessmentV1, CustodyBasisV1,
             DistributionActionV1, DistributionDomainKindV1, DistributionDomainRefV1,
             DistributionMutationKindV1, DistributionPlanTargetV1, DistributionPlanV1,
@@ -14,7 +14,7 @@ macro_rules! stage9_distribution_candidate_tests {
             OrdinarySnapshotCatalogStateV1, TargetEffectKindV1, TargetIdentityPartsV1,
             UnmanagedReasonV1,
         };
-        use $crate::domain::vnext::identity::StoreObjectIdV1;
+        use $crate::domain::identity::StoreObjectIdV1;
 
         fn commitment(byte: u8) -> CommitmentV1 {
             CommitmentV1::from_bytes([byte; 32])

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Evaluate provisional Stage 12 architecture and release-preflight blockers."""
+"""Evaluate Stage 12 canonical-promotion and release-preflight blockers."""
 
 from __future__ import annotations
 
@@ -161,10 +161,17 @@ def _load_evidence_receipt(slot: str, path: Path) -> dict[str, Any]:
         )
     if slot == "source_move_identity_parity":
         if (
-            not isinstance(payload.get("entry_count"), int)
-            or payload["entry_count"] <= 0
+            payload.get("entry_count") != 210
+            or payload.get("collision_count") != 10
+            or payload.get("namespace_counts")
+            != {
+                "src/domain/vnext": 186,
+                "src/interfaces/vnext": 8,
+                "src/operations/vnext": 16,
+            }
             or payload.get("mismatched_paths") != []
             or not _is_sha256(payload.get("manifest_sha256"))
+            or not _is_sha256(payload.get("destination_set_sha256"))
         ):
             raise ArchitectureGuardError(
                 "source move identity parity evidence is incomplete or mismatched"
@@ -297,7 +304,7 @@ def evaluate(
         return (
             {
                 "authority_state": "none",
-                "candidate_state": "stage_12_candidate_read_only_wip_unverified",
+                "candidate_state": "canonical_namespace_promoted_legacy_pruning_blocked_unverified",
                 "census_row_count": census["row_count"],
                 "census_sha256": census["scan_sha256"],
                 "compile_lane_needed": True,
@@ -317,7 +324,7 @@ def evaluate(
         {
             "authority_state": "none",
             "blockers": blockers,
-            "candidate_state": "stage_12_candidate_read_only_wip_unverified",
+            "candidate_state": "canonical_namespace_promoted_legacy_pruning_blocked_unverified",
             "certification_claim": False,
             "census_row_count": census["row_count"],
             "census_sha256": census["scan_sha256"],

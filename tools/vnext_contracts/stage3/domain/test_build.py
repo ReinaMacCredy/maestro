@@ -14,12 +14,12 @@ import build
 
 
 CERTIFIED_TRANSITIVE_RUST_SOURCES = (
-    "src/domain/vnext/authority/downstream_action_basis.rs",
-    "src/domain/vnext/authority/protected_diagnostic_envelope.rs",
-    "src/domain/vnext/authority/protected_diagnostic_envelope_stage8_seed.rs",
-    "src/domain/vnext/evidence/diagnostics/mod.rs",
-    "src/domain/vnext/persistence/protected_diagnostic.rs",
-    "src/domain/vnext/persistence/protected_diagnostic_stage9_seed.rs",
+    "src/domain/authority/downstream_action_basis.rs",
+    "src/domain/authority/protected_diagnostic_envelope.rs",
+    "src/domain/authority/protected_diagnostic_envelope_stage8_seed.rs",
+    "src/domain/evidence/diagnostics/mod.rs",
+    "src/domain/persistence/protected_diagnostic.rs",
+    "src/domain/persistence/protected_diagnostic_stage9_seed.rs",
 )
 VALIDATE_PY = Path(__file__).with_name("validate.py")
 VERIFY_RB = Path(__file__).with_name("verify.rb")

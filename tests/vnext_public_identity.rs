@@ -1,12 +1,12 @@
-use maestro::domain::vnext::capability::literals::{
+use maestro::domain::capability::literals::{
     CapabilityInstructionLoadPlanV1, CapabilityMethodResolutionOutcomeV1,
     CapabilityMethodResolutionV1, ContextBudgetMeasurementV1, ContextBudgetProfileV1,
     INSTRUCTION_RESOURCE_PATHS_V1, InstructionResourceRefV1, JOB_METHOD_NEGATIVE_CELLS_V1,
     JOB_METHOD_POSITIVE_CELLS_V1, JobV1, METHOD_NAMES_V1, MethodV1, PUBLIC_SKILL_IDS_V1,
     SKILL_LEDGER_ROWS_V1, exact_review_subset_counts, job_method_is_admitted,
 };
-use maestro::domain::vnext::integration::public_literals::*;
-use maestro::domain::vnext::orchestration::literals::{
+use maestro::domain::integration::public_literals::*;
+use maestro::domain::orchestration::literals::{
     BOUNDED_CONTINUATION_PROFILE_IDS_V1, BoundedContinuationProfileV1, ExactRecipeSelectionV1,
     RECIPE_IDS_V1, RECIPE_MANIFEST_FIELD_NAMES_V1, RECIPE_RETURN_REASON_COUNT_V1, RecipeIdV1,
     RecipeLiteralError, RecipeReturnReasonV1, RecipeSelectionRequestV1,

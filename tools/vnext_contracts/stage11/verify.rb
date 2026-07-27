@@ -91,13 +91,15 @@ raise "physical historical rows were invented" unless physical_commitment.fetch(
   "literal_historical_rows_retained"
 ) == false
 
-runtime_sources = root.join("src/domain/vnext/migration/runtime").glob("*.rs").sort
+runtime_sources = root.join("src/domain/migration/runtime").glob("*.rs").sort
 owned = runtime_sources.map(&:read).join("\n")
-production_owned = runtime_sources.reject { |path| path.basename.to_s == "cohort_observation.rs" }
-  .map(&:read).join("\n")
-consumer = root.join("src/domain/vnext/migration/runtime/consumer.rs").read
-consumer_snapshot = root.join("src/domain/vnext/installation/consumer_snapshot.rs").read
-installation = root.join("src/domain/vnext/installation/mod.rs").read
+production_owned = runtime_sources.map(&:read).join("\n").sub(
+  /\n#\[cfg\(test\)\]\nmod cohort_observation_tests \{.*\z/m,
+  "",
+)
+consumer = root.join("src/domain/migration/runtime/consumer.rs").read
+consumer_snapshot = root.join("src/domain/installation/consumer_snapshot.rs").read
+installation = root.join("src/domain/installation/mod.rs").read
 foundation = root.join("src/foundation/core/mod.rs").read
 %w[OldProtocol MixedProtocol UnknownProtocol ReleaseMismatch].each do |reason|
   raise "missing refusal #{reason}" unless owned.include?(reason)
@@ -119,7 +121,7 @@ raise "Installation durable consumer finality route drifted" unless
   consumer_snapshot.include?("bind_migration_census") &&
   consumer_snapshot.include?("durable_effect.commit")
 raise "Installation V2 PreStore finality route drifted" unless
-  installation.include?("pub(in crate::domain::vnext) mod stage11_finality_v2") &&
+  installation.include?("pub(in crate::domain) mod stage11_finality_v2") &&
   installation.include?("execute_pre_store") &&
   installation.include?("ProtectedLocatorLeaseV2")
 raise "Foundation V2 aggregate-census owner route drifted" unless
@@ -157,10 +159,10 @@ raise "H3 member identity grammar drifted" unless owned.include?(
 raise "zero identity guard is absent" unless owned.include?("ZeroDigest") && owned.include?("ZeroIdentity")
 raise "rollback deletes production bytes" if
   production_owned.include?("remove_file") || production_owned.include?("remove_dir")
-operations_facade = root.join("src/operations/vnext/migration/mod.rs").read
+operations_facade = root.join("src/operations/migration/mod.rs").read
 raise "Foundation census is not production-wired" if
   operations_facade.include?("#[cfg(test)]\nmod census;")
-census_source = root.join("src/operations/vnext/migration/census.rs").read
+census_source = root.join("src/operations/migration/census.rs").read
 raise "Foundation V2 aggregate-census entry route drifted" unless census_source.include?(
   "census_admitted_owner_roots_v2"
 )

@@ -1,6 +1,6 @@
-use maestro::domain::vnext::identity::{ContractRootIdV1, StoreDomainIdV1};
-use maestro::domain::vnext::persistence::{StoreDomainV1, StoreRoleV1};
-use maestro::domain::vnext::work::{
+use maestro::domain::identity::{ContractRootIdV1, StoreDomainIdV1};
+use maestro::domain::persistence::{StoreDomainV1, StoreRoleV1};
+use maestro::domain::work::{
     ExactStepRevisionRefV1, WorkIdV1, WorkLifecycleStateV1, WorkRecordWriterV1,
     WorkRelationAdmissionV1, WorkRelationEndpointV1, WorkRelationError, WorkRelationGraphV1,
     WorkRelationIdV1, WorkRelationKindV1, WorkRelationRecordV1, WorkRequirementIdV1,

@@ -1,4 +1,4 @@
-use maestro::domain::vnext::execution::{WithdrawalDeniedProductV1, withdrawal_catalog_cells_v1};
+use maestro::domain::execution::{WithdrawalDeniedProductV1, withdrawal_catalog_cells_v1};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::fs;
@@ -601,8 +601,8 @@ mod superseded_callable_contracts {
 #[test]
 fn stage4_public_effect_facade_exports_are_complete() {
     assert_external_io_release_capabilities_are_non_clone_and_non_extractable();
-    use maestro::domain::vnext::evidence::SubmissionClaimSetV1;
-    use maestro::domain::vnext::execution::{
+    use maestro::domain::evidence::SubmissionClaimSetV1;
+    use maestro::domain::execution::{
         ActiveStoreEffectOriginationDraftV1, ActiveStoreEffectOriginationOutcomeV1,
         ActiveStoreEffectOriginationPublicationV1, ActiveStoreEffectReconciliationBeginDraftV1,
         ActiveStoreEffectReconciliationBeginPublicationV1,
@@ -736,7 +736,7 @@ fn stage4_public_effect_facade_exports_are_complete() {
 
 fn assert_external_io_release_capabilities_are_non_clone_and_non_extractable() {
     let repo = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let source = fs::read_to_string(repo.join("src/domain/vnext/execution/store.rs"))
+    let source = fs::read_to_string(repo.join("src/domain/execution/store.rs"))
         .expect("read Execution Store source");
     for start in [
         "pub struct SealedProviderOperationV1",
@@ -771,7 +771,7 @@ fn stage4_regenerated_same_name_behavior_mutant_fails_compiled_contract() {
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let (_temporary, workspace) = compiled_mutant_workspace("same-name-run-behavior");
-    let runtime_path = workspace.join("src/domain/vnext/execution/runtime.rs");
+    let runtime_path = workspace.join("src/domain/execution/runtime.rs");
     let source = fs::read_to_string(&runtime_path).expect("read copied Execution runtime");
     let legal_reserved_tail =
         "RunStateV1::DefinitelyNotStarted\n                    | RunStateV1::Cancelled";
@@ -812,7 +812,7 @@ fn stage4_regenerated_public_facade_mutant_fails_compiled_contract() {
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let (_temporary, workspace) = compiled_mutant_workspace("missing-public-effect-facade");
-    let facade_path = workspace.join("src/domain/vnext/execution/mod.rs");
+    let facade_path = workspace.join("src/domain/execution/mod.rs");
     let source = fs::read_to_string(&facade_path).expect("read copied Execution facade");
     let public_export = "    ActiveStoreEffectReconciliationOutcomeV1, ActiveStoreEffectReconciliationReadDraftV1,\n";
     assert_eq!(
@@ -855,8 +855,7 @@ fn stage4_regenerated_basis_donation_mutant_fails_compiled_contract() {
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let (_temporary, workspace) = compiled_mutant_workspace("execution-basis-donation");
-    let authority_path =
-        workspace.join("src/domain/vnext/authority/facade/repository_leaf_authority.rs");
+    let authority_path = workspace.join("src/domain/authority/facade/repository_leaf_authority.rs");
     let source = fs::read_to_string(&authority_path).expect("read copied authority facade");
     let exact_guard = "if action.execution_authority_basis()
             != Some(ActionAuthorityBasisKindV1::OrdinaryLiveRuntime)
@@ -894,7 +893,7 @@ fn stage4_regenerated_ceremony_replay_mutant_fails_compiled_contract() {
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let (_temporary, workspace) = compiled_mutant_workspace("ceremony-replay");
-    let ceremony_path = workspace.join("src/domain/vnext/execution/ceremony.rs");
+    let ceremony_path = workspace.join("src/domain/execution/ceremony.rs");
     let source = fs::read_to_string(&ceremony_path).expect("read copied Ceremony carrier");
     let exact_replay = r#"        if let Some(replay) = load_idempotency_outcome(
             &transaction,
@@ -943,7 +942,7 @@ fn stage4_regenerated_ceremony_descriptor_binding_mutant_fails_compiled_contract
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let (_temporary, workspace) = compiled_mutant_workspace("ceremony-descriptor-binding");
-    let ceremony_path = workspace.join("src/domain/vnext/execution/ceremony.rs");
+    let ceremony_path = workspace.join("src/domain/execution/ceremony.rs");
     let source = fs::read_to_string(&ceremony_path).expect("read copied Ceremony carrier");
     let binding_start = source
         .find("#[cfg(unix)]\nfn verify_connection_leaf")
@@ -984,7 +983,7 @@ fn stage4_regenerated_writer_health_mutant_fails_compiled_contract() {
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let (_temporary, workspace) = compiled_mutant_workspace("writer-health");
-    let control_path = workspace.join("src/domain/vnext/execution/control_head.rs");
+    let control_path = workspace.join("src/domain/execution/control_head.rs");
     let source = fs::read_to_string(&control_path).expect("read copied control Head");
     let exact_guard = "if current.health() == EffectIntentControlHealthV1::IntegrityBlocked =>";
     assert_eq!(source.matches(exact_guard).count(), 1);
@@ -1020,8 +1019,8 @@ fn stage4_regenerated_evidence_claim_set_owner_mutant_fails_compiled_contract() 
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let (_temporary, workspace) = compiled_mutant_workspace("claim-set-owner");
-    let evidence_path = workspace.join("src/domain/vnext/evidence/mod.rs");
-    let contract_path = workspace.join("src/domain/vnext/contract/mod.rs");
+    let evidence_path = workspace.join("src/domain/evidence/mod.rs");
+    let contract_path = workspace.join("src/domain/contract/mod.rs");
     let evidence_source = fs::read_to_string(&evidence_path).expect("read copied Evidence facade");
     assert_eq!(
         evidence_source.matches("pub mod submission_claim;").count(),
@@ -1031,7 +1030,7 @@ fn stage4_regenerated_evidence_claim_set_owner_mutant_fails_compiled_contract() 
         &evidence_path,
         evidence_source.replacen(
             "pub mod submission_claim;",
-            "pub use crate::domain::vnext::contract::submission_claim;",
+            "pub use crate::domain::contract::submission_claim;",
             1,
         ),
     )
@@ -1047,8 +1046,8 @@ fn stage4_regenerated_evidence_claim_set_owner_mutant_fails_compiled_contract() 
     )
     .expect("write Contract ClaimSet owner mutant");
     fs::rename(
-        workspace.join("src/domain/vnext/evidence/submission_claim.rs"),
-        workspace.join("src/domain/vnext/contract/submission_claim.rs"),
+        workspace.join("src/domain/evidence/submission_claim.rs"),
+        workspace.join("src/domain/contract/submission_claim.rs"),
     )
     .expect("relocate ClaimSet definition under Contract");
     for relative in [
@@ -1060,15 +1059,15 @@ fn stage4_regenerated_evidence_claim_set_owner_mutant_fails_compiled_contract() 
         let source = fs::read_to_string(&path).expect("read copied Stage 3 proof source");
         assert_eq!(
             source
-                .matches("src/domain/vnext/evidence/submission_claim.rs")
+                .matches("src/domain/evidence/submission_claim.rs")
                 .count(),
             1
         );
         fs::write(
             path,
             source.replacen(
-                "src/domain/vnext/evidence/submission_claim.rs",
-                "src/domain/vnext/contract/submission_claim.rs",
+                "src/domain/evidence/submission_claim.rs",
+                "src/domain/contract/submission_claim.rs",
                 1,
             ),
         )
@@ -1097,7 +1096,7 @@ fn stage4_regenerated_claim_set_digest_mutant_fails_compiled_contract() {
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let (_temporary, workspace) = compiled_mutant_workspace("claim-set-digest");
-    let submission_path = workspace.join("src/domain/vnext/step/submission.rs");
+    let submission_path = workspace.join("src/domain/step/submission.rs");
     let source = fs::read_to_string(&submission_path).expect("read copied Step Submission");
     let exact_digest = "            *claim_set.digest(),";
     assert_eq!(source.matches(exact_digest).count(), 1);
@@ -1129,7 +1128,7 @@ fn stage4_regenerated_non_atomic_claim_set_participant_mutant_fails_compiled_con
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let (_temporary, workspace) = compiled_mutant_workspace("non-atomic-claim-set");
-    let store_path = workspace.join("src/domain/vnext/execution/store.rs");
+    let store_path = workspace.join("src/domain/execution/store.rs");
     let source = fs::read_to_string(&store_path).expect("read copied Execution Store");
     let atomic_participants =
         "        submission_object,\n        claim_set_object,\n        next_index,";
@@ -1166,7 +1165,7 @@ fn stage4_regenerated_split_step_submission_generation_mutant_fails_compiled_con
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let (_temporary, workspace) = compiled_mutant_workspace("split-submission-generation");
-    let store_path = workspace.join("src/domain/vnext/execution/store.rs");
+    let store_path = workspace.join("src/domain/execution/store.rs");
     let source = fs::read_to_string(&store_path).expect("read copied Execution Store");
     let exact_successor = "current_generation\n            .ordinal()\n            .checked_add(1)";
     let function_start = source
@@ -1559,15 +1558,15 @@ fn stage4_source_closure_is_live_exact_and_excludes_stage5() {
         "build.rs",
         "src/lib.rs",
         "src/domain/mod.rs",
-        "src/domain/vnext/mod.rs",
-        "src/domain/vnext/authority/action_basis.rs",
-        "src/domain/vnext/authority/continuity/trusted_time.rs",
-        "src/domain/vnext/evidence/submission_claim.rs",
-        "src/domain/vnext/evidence/claim.rs",
-        "src/domain/vnext/execution/mod.rs",
-        "src/domain/vnext/persistence/mod.rs",
-        "src/domain/vnext/step/lifecycle.rs",
-        "src/domain/vnext/step/submission.rs",
+        "src/domain/mod.rs",
+        "src/domain/authority/action_basis.rs",
+        "src/domain/authority/continuity/trusted_time.rs",
+        "src/domain/evidence/submission_claim.rs",
+        "src/domain/evidence/claim.rs",
+        "src/domain/execution/mod.rs",
+        "src/domain/persistence/mod.rs",
+        "src/domain/step/lifecycle.rs",
+        "src/domain/step/submission.rs",
         "src/foundation/core/deterministic_cbor.rs",
     ] {
         assert!(
@@ -1578,37 +1577,37 @@ fn stage4_source_closure_is_live_exact_and_excludes_stage5() {
     assert!(
         paths
             .iter()
-            .any(|path| path.starts_with("src/domain/vnext/execution/"))
+            .any(|path| path.starts_with("src/domain/execution/"))
     );
     assert!(
         paths
             .iter()
-            .any(|path| path.starts_with("src/domain/vnext/persistence/"))
+            .any(|path| path.starts_with("src/domain/persistence/"))
     );
-    assert!(paths.contains(&"src/domain/vnext/evidence/claim.rs"));
-    assert!(paths.contains(&"src/domain/vnext/evidence/submission_claim.rs"));
+    assert!(paths.contains(&"src/domain/evidence/claim.rs"));
+    assert!(paths.contains(&"src/domain/evidence/submission_claim.rs"));
     assert!(!paths.iter().any(|path| {
-        path.starts_with("src/domain/vnext/evidence/")
+        path.starts_with("src/domain/evidence/")
             && !matches!(
                 *path,
-                "src/domain/vnext/evidence/mod.rs"
-                    | "src/domain/vnext/evidence/claim.rs"
-                    | "src/domain/vnext/evidence/submission_claim.rs"
+                "src/domain/evidence/mod.rs"
+                    | "src/domain/evidence/claim.rs"
+                    | "src/domain/evidence/submission_claim.rs"
             )
     }));
     assert!(
         !paths
             .iter()
-            .any(|path| path.starts_with("src/domain/vnext/gate/"))
+            .any(|path| path.starts_with("src/domain/gate/"))
     );
 
-    let actual_execution = fs::read_dir(repo.join("src/domain/vnext/execution"))
+    let actual_execution = fs::read_dir(repo.join("src/domain/execution"))
         .expect("read execution root")
         .filter_map(Result::ok)
         .filter(|entry| entry.path().extension().and_then(|value| value.to_str()) == Some("rs"))
         .map(|entry| {
             format!(
-                "src/domain/vnext/execution/{}",
+                "src/domain/execution/{}",
                 entry.file_name().to_string_lossy()
             )
         })
@@ -1810,7 +1809,7 @@ fn independent_execution_artifact_rejects_semantic_and_shape_mutants() {
                         !row[0]
                             .as_str()
                             .expect("source path")
-                            .starts_with("src/domain/vnext/persistence/")
+                            .starts_with("src/domain/persistence/")
                     })
             }),
         ),
@@ -1858,7 +1857,7 @@ fn independent_execution_artifact_rejects_semantic_and_shape_mutants() {
 fn stage4_proof_rejects_missing_runtime_owner_types() {
     let (_temporary, workspace) = mutant_workspace("missing-owner-types");
     let count = replace_in_tree(
-        &workspace.join("src/domain/vnext/execution"),
+        &workspace.join("src/domain/execution"),
         "ExecutionAttemptV1",
         "ExecutionAttemptMutantV1",
     );
@@ -1886,7 +1885,7 @@ fn stage4_proof_rejects_missing_runtime_owner_types() {
 fn stage4_proof_rejects_missing_atomic_store_publication() {
     let (_temporary, workspace) = mutant_workspace("missing-store-publication");
     let count = replace_in_tree(
-        &workspace.join("src/domain/vnext/persistence"),
+        &workspace.join("src/domain/persistence"),
         "publish",
         "publ1sh",
     );
@@ -1914,7 +1913,7 @@ fn stage4_proof_rejects_missing_atomic_store_publication() {
 fn stage4_proof_rejects_execution_store_disconnection() {
     let (_temporary, workspace) = mutant_workspace("store-disconnection");
     let count = replace_in_tree(
-        &workspace.join("src/domain/vnext/execution"),
+        &workspace.join("src/domain/execution"),
         "persistence",
         "detached_store",
     );
@@ -2066,7 +2065,7 @@ fn stage4_benign_source_byte_change_passes_after_regeneration() {
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let (_temporary, workspace) = compiled_mutant_workspace("benign-source-byte-change");
     let parent_certification_identity = stage4_certification_identity(&workspace);
-    let source_path = workspace.join("src/domain/vnext/execution/mod.rs");
+    let source_path = workspace.join("src/domain/execution/mod.rs");
     let mut source = fs::read_to_string(&source_path).expect("read Execution facade");
     source.push_str("\n// Stage 4 benign source-closure regeneration probe.\n");
     fs::write(&source_path, source).expect("write benign Execution source mutation");

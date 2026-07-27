@@ -85,32 +85,32 @@ COMPILATION_ANCESTORS = [
     "build.rs",
     "src/lib.rs",
     "src/domain/mod.rs",
-    "src/domain/vnext/mod.rs",
+    "src/domain/mod.rs",
     "src/foundation/mod.rs",
     "src/foundation/core/mod.rs",
     "src/foundation/core/deterministic_cbor.rs",
 ]
 AUTHORITY_EXTENSION_SOURCES = [
-    "src/domain/vnext/authority/action_basis.rs",
-    "src/domain/vnext/authority/continuity/trusted_time.rs",
-    "src/domain/vnext/authority/downstream_action_basis.rs",
-    "src/domain/vnext/authority/facade.rs",
-    "src/domain/vnext/authority/facade_tests.rs",
-    "src/domain/vnext/authority/facade/repository_admission.rs",
-    "src/domain/vnext/authority/facade/repository_leaf_authority.rs",
-    "src/domain/vnext/authority/governance_attestation.rs",
-    "src/domain/vnext/authority/governance_attestation_stage7_seed.rs",
-    "src/domain/vnext/authority/governance_floor.rs",
-    "src/domain/vnext/authority/materialization.rs",
-    "src/domain/vnext/authority/mod.rs",
-    "src/domain/vnext/authority/protected_diagnostic_envelope.rs",
-    "src/domain/vnext/authority/protected_diagnostic_envelope_stage8_seed.rs",
-    "src/domain/vnext/authority/publication.rs",
-    "src/domain/vnext/installation/durable_finality.rs",
-    "src/domain/vnext/installation/durable_finality_stage9_seed.rs",
-    "src/domain/vnext/installation/durable_finality_stage11_seed.rs",
-    "src/domain/vnext/persistence/protected_locator_lease.rs",
-    "src/domain/vnext/persistence/protected_locator_stage9_seed.rs",
+    "src/domain/authority/action_basis.rs",
+    "src/domain/authority/continuity/trusted_time.rs",
+    "src/domain/authority/downstream_action_basis.rs",
+    "src/domain/authority/facade.rs",
+    "src/domain/authority/facade_tests.rs",
+    "src/domain/authority/facade/repository_admission.rs",
+    "src/domain/authority/facade/repository_leaf_authority.rs",
+    "src/domain/authority/governance_attestation.rs",
+    "src/domain/authority/governance_attestation_stage7_seed.rs",
+    "src/domain/authority/governance_floor.rs",
+    "src/domain/authority/materialization.rs",
+    "src/domain/authority/mod.rs",
+    "src/domain/authority/protected_diagnostic_envelope.rs",
+    "src/domain/authority/protected_diagnostic_envelope_stage8_seed.rs",
+    "src/domain/authority/publication.rs",
+    "src/domain/installation/durable_finality.rs",
+    "src/domain/installation/durable_finality_stage9_seed.rs",
+    "src/domain/installation/durable_finality_stage11_seed.rs",
+    "src/domain/persistence/protected_locator_lease.rs",
+    "src/domain/persistence/protected_locator_stage9_seed.rs",
     "src/foundation/core/secure_fs.rs",
     "src/foundation/core/aggregate_census.rs",
     "src/foundation/core/aggregate_census_stage11_seed.rs",
@@ -118,11 +118,11 @@ AUTHORITY_EXTENSION_SOURCES = [
     "src/foundation/core/descriptor_census_platform_stage11_seed.rs",
 ]
 FOCAL_STEP_EVIDENCE_SOURCES = [
-    "src/domain/vnext/evidence/mod.rs",
-    "src/domain/vnext/evidence/submission_claim.rs",
-    "src/domain/vnext/evidence/claim.rs",
-    "src/domain/vnext/step/lifecycle.rs",
-    "src/domain/vnext/step/submission.rs",
+    "src/domain/evidence/mod.rs",
+    "src/domain/evidence/submission_claim.rs",
+    "src/domain/evidence/claim.rs",
+    "src/domain/step/lifecycle.rs",
+    "src/domain/step/submission.rs",
 ]
 TOOL_SOURCES = [
     "tests/vnext_stage4_contracts.rs",
@@ -855,25 +855,25 @@ def withdrawal_binding() -> list[object]:
 
 
 def execution_sources() -> list[str]:
-    root = WORKSPACE / "src/domain/vnext/execution"
+    root = WORKSPACE / "src/domain/execution"
     paths = sorted(path.relative_to(WORKSPACE).as_posix() for path in root.rglob("*.rs"))
-    if not paths or "src/domain/vnext/execution/mod.rs" not in paths:
+    if not paths or "src/domain/execution/mod.rs" not in paths:
         raise ValueError("Stage 4 Execution owner source closure is absent")
     return paths
 
 
 def persistence_sources() -> list[str]:
-    root = WORKSPACE / "src/domain/vnext/persistence"
+    root = WORKSPACE / "src/domain/persistence"
     paths = sorted(path.relative_to(WORKSPACE).as_posix() for path in root.rglob("*.rs"))
-    if not paths or "src/domain/vnext/persistence/mod.rs" not in paths:
+    if not paths or "src/domain/persistence/mod.rs" not in paths:
         raise ValueError("Stage 4 persistence owner source closure is absent")
     return paths
 
 
 def contract_ownership_sources() -> list[str]:
-    root = WORKSPACE / "src/domain/vnext/contract"
+    root = WORKSPACE / "src/domain/contract"
     paths = sorted(path.relative_to(WORKSPACE).as_posix() for path in root.rglob("*.rs"))
-    if not paths or "src/domain/vnext/contract/mod.rs" not in paths:
+    if not paths or "src/domain/contract/mod.rs" not in paths:
         raise ValueError("Stage 4 Contract ownership source closure is absent")
     return paths
 
@@ -892,18 +892,18 @@ def source_paths() -> list[str]:
             + execution_sources()
             + persistence_sources()
             + [
-                "src/domain/vnext/installation/consumer_snapshot.rs",
-                "src/domain/vnext/installation/consumer_snapshot_stage11_seed.rs",
-                "src/domain/vnext/installation/mod.rs",
-                "src/domain/vnext/integration/consumer_closure.rs",
+                "src/domain/installation/consumer_snapshot.rs",
+                "src/domain/installation/consumer_snapshot_stage11_seed.rs",
+                "src/domain/installation/mod.rs",
+                "src/domain/integration/consumer_closure.rs",
             ]
             + TOOL_SOURCES
         )
     )
     if any(
-        path.startswith("src/domain/vnext/gate/")
+        path.startswith("src/domain/gate/")
         or (
-            path.startswith("src/domain/vnext/evidence/")
+            path.startswith("src/domain/evidence/")
             and path not in FOCAL_STEP_EVIDENCE_SOURCES
         )
         for path in paths
@@ -921,10 +921,10 @@ def validate_runtime_source() -> None:
     definition = "pub struct SubmissionClaimSetV1"
     definition_owners = sorted(
         path.relative_to(WORKSPACE).as_posix()
-        for path in (WORKSPACE / "src/domain/vnext").rglob("*.rs")
+        for path in (WORKSPACE / "src/domain").rglob("*.rs")
         if definition in path.read_text(encoding="utf-8")
     )
-    if definition_owners != ["src/domain/vnext/evidence/submission_claim.rs"]:
+    if definition_owners != ["src/domain/evidence/submission_claim.rs"]:
         raise ValueError(
             "SubmissionClaimSetV1 must have exactly one Evidence-owned definition"
         )
@@ -958,7 +958,7 @@ def validate_runtime_source() -> None:
     persistence = "\n".join(
         (WORKSPACE / path).read_text(encoding="utf-8") for path in persistence_sources()
     )
-    if not any(marker in text for marker in ["crate::domain::vnext::persistence", "super::super::persistence"]):
+    if not any(marker in text for marker in ["crate::domain::persistence", "super::super::persistence"]):
         raise ValueError("Execution does not bind the canonical persistence owner")
     if not all(marker in persistence for marker in ["transaction", "publish"]):
         raise ValueError("persistence source does not expose atomic publication semantics")

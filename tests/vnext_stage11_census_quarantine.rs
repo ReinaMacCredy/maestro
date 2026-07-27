@@ -1,10 +1,9 @@
-const CENSUS_SOURCE: &str = include_str!("../src/operations/vnext/migration/census.rs");
-const QUARANTINE_OPERATION_SOURCE: &str =
-    include_str!("../src/operations/vnext/migration/quarantine.rs");
+const CENSUS_SOURCE: &str = include_str!("../src/operations/migration/census.rs");
+const QUARANTINE_OPERATION_SOURCE: &str = include_str!("../src/operations/migration/quarantine.rs");
 const QUARANTINE_DOMAIN_SOURCE: &str =
-    include_str!("../src/domain/vnext/migration/runtime/quarantine.rs");
-const UNIT_TEST_SOURCE: &str = include_str!("../src/operations/vnext/migration/tests.rs");
-const OPERATIONS_FACADE_SOURCE: &str = include_str!("../src/operations/vnext/migration/mod.rs");
+    include_str!("../src/domain/migration/runtime/quarantine.rs");
+const UNIT_TEST_SOURCE: &str = include_str!("../src/operations/migration/tests.rs");
+const OPERATIONS_FACADE_SOURCE: &str = include_str!("../src/operations/migration/mod.rs");
 
 #[test]
 fn census_consumes_only_the_foundation_owned_v2_continuation() {

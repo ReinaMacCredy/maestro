@@ -132,6 +132,10 @@ from census import (  # type: ignore[import-not-found]  # noqa: E402
     canonical_json,
     validate_policy as validate_census_policy,
 )
+from namespace_promotion import (  # type: ignore[import-not-found]  # noqa: E402
+    NamespacePromotionError,
+    build_manifest,
+)
 
 
 class ValidationError(RuntimeError):
@@ -334,14 +338,23 @@ def validate_promotion_plan(value: Mapping[str, Any]) -> None:
     if value.get("schema_version") != PROMOTION_PLAN_SCHEMA:
         raise ValidationError("namespace promotion plan schema differs")
     if (
-        value.get("closed_world") is not False
-        or value.get("mutation_authorized") is not False
+        value.get("closed_world") is not True
+        or value.get("mutation_authorized") is not True
+        or value.get("legacy_pruning_authorized") is not False
         or value.get("state")
-        != "deferred_until_combined_stage6_through_stage11_closure"
+        != "canonical_namespace_promoted_legacy_pruning_blocked"
         or value.get("identity_requirement")
-        != "every_source_sha256_equals_post_move_destination_sha256"
+        != "base_and_final_sha256_bound_per_entry"
+        or value.get("expected_entry_count") != 210
+        or value.get("expected_collision_count") != 10
+        or value.get("expected_namespace_counts")
+        != {
+            "src/domain/vnext": 186,
+            "src/interfaces/vnext": 8,
+            "src/operations/vnext": 16,
+        }
     ):
-        raise ValidationError("namespace promotion plan overstates authority or closure")
+        raise ValidationError("namespace promotion plan closure differs")
     if value.get("namespace_transform") != {
         "src/domain/vnext/": "src/domain/",
         "src/interfaces/vnext/": "src/interfaces/",
@@ -349,9 +362,6 @@ def validate_promotion_plan(value: Mapping[str, Any]) -> None:
     }:
         raise ValidationError("namespace promotion transform differs")
     if value.get("required_zero_receipts") != [
-        "stage11_active_consumer_closure",
-        "stage11_retained_reader_manifest",
-        "stage11_retention_hold_manifest",
         "post_promotion_namespace_census",
         "stage12_frozen_interface_readback",
         "source_move_identity_parity",
@@ -376,19 +386,35 @@ def validate_promotion_plan(value: Mapping[str, Any]) -> None:
 
 
 def require_census_sight(census: Mapping[str, Any]) -> None:
-    """Refuse a candidate census that lost sight of known-present consumers.
-
-    Candidate state is pre-promotion: every expected rule must still yield
-    rows. A rule with zero rows means the census went blind (for example a
-    mutated values list), not that consumers were removed; release-time zero
-    is judged by the release preflight with bound external inputs instead.
-    """
+    """Require namespace-zero and the exact observed legacy blocker closure."""
     rule_counts = cast(Mapping[str, int], census["rule_counts"])
-    blind = [rule_id for rule_id in EXPECTED_RULE_IDS if not rule_counts.get(rule_id)]
-    if blind:
+    temporary = (
+        "temporary_vnext_source_path",
+        "temporary_domain_namespace_reference",
+        "temporary_domain_module_export",
+    )
+    nonzero_temporary = {
+        rule_id: rule_counts.get(rule_id, 0)
+        for rule_id in temporary
+        if rule_counts.get(rule_id, 0) != 0
+    }
+    if nonzero_temporary:
         raise ValidationError(
-            "consumer census lost sight of known-present consumers: "
-            + ", ".join(blind)
+            f"temporary namespace census is nonzero: {nonzero_temporary}"
+        )
+    expected_legacy = {
+        "legacy_skill_surface": 239,
+        "legacy_next_surface": 108,
+        "legacy_harness_resource": 2,
+    }
+    observed_legacy = {
+        rule_id: rule_counts.get(rule_id, 0) for rule_id in expected_legacy
+    }
+    if observed_legacy != expected_legacy or census.get("row_count") != 349:
+        raise ValidationError(
+            "legacy migration blocker closure differs: "
+            f"expected {expected_legacy}/349, observed "
+            f"{observed_legacy}/{census.get('row_count')}"
         )
 
 
@@ -444,6 +470,7 @@ def candidate_validation(repo: Path) -> dict[str, object]:
     if canonical_json(first) != canonical_json(second):
         raise ValidationError("read-only consumer census is nondeterministic")
     require_census_sight(first)
+    promotion = build_manifest(repo)
     guard, exit_code = evaluate(
         repo,
         policy,
@@ -456,13 +483,25 @@ def candidate_validation(repo: Path) -> dict[str, object]:
     return {
         "authority_state": "none",
         "candidate_ready_claim": False,
-        "candidate_state": "stage_12_candidate_read_only_wip_unverified",
+        "candidate_state": "canonical_namespace_promoted_legacy_pruning_blocked_unverified",
         "census_row_count": first["row_count"],
         "census_sha256": first["scan_sha256"],
         "classification_counts": first["classification_counts"],
         "compile_lane_needed": True,
+        "legacy_pruning_authorized": False,
         "negative_case_count": len(cast(list[object], negative["cases"])),
+        "namespace_promotion": {
+            "collision_count": promotion["collision_count"],
+            "destination_set_sha256": promotion["destination_set_sha256"],
+            "entry_count": promotion["entry_count"],
+            "manifest_sha256": promotion["manifest_sha256"],
+            "namespace_counts": promotion["namespace_counts"],
+            "temporary_namespace_count": cast(
+                Mapping[str, object], promotion["postconditions"]
+            )["temporary_namespace_count"],
+        },
         "release_evaluated": False,
+        "rule_counts": first["rule_counts"],
         "scan_warnings": first["scan_warnings"],
         "status": "pass",
     }
@@ -500,7 +539,12 @@ def main() -> int:
                 parse_evidence(args.evidence),
                 release_preflight=True,
             )
-    except (ArchitectureGuardError, CensusError, ValidationError) as error:
+    except (
+        ArchitectureGuardError,
+        CensusError,
+        NamespacePromotionError,
+        ValidationError,
+    ) as error:
         print(json.dumps({"status": "error", "error": str(error)}, sort_keys=True))
         return 1
     print(json.dumps(payload, indent=2, sort_keys=True))

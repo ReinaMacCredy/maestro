@@ -71,32 +71,32 @@ COMPILATION_ANCESTORS = %w[
   build.rs
   src/lib.rs
   src/domain/mod.rs
-  src/domain/vnext/mod.rs
+  src/domain/mod.rs
   src/foundation/mod.rs
   src/foundation/core/mod.rs
   src/foundation/core/deterministic_cbor.rs
 ].freeze
 AUTHORITY_EXTENSION_SOURCES = %w[
-  src/domain/vnext/authority/action_basis.rs
-  src/domain/vnext/authority/continuity/trusted_time.rs
-  src/domain/vnext/authority/downstream_action_basis.rs
-  src/domain/vnext/authority/facade.rs
-  src/domain/vnext/authority/facade_tests.rs
-  src/domain/vnext/authority/facade/repository_admission.rs
-  src/domain/vnext/authority/facade/repository_leaf_authority.rs
-  src/domain/vnext/authority/governance_attestation.rs
-  src/domain/vnext/authority/governance_attestation_stage7_seed.rs
-  src/domain/vnext/authority/governance_floor.rs
-  src/domain/vnext/authority/materialization.rs
-  src/domain/vnext/authority/mod.rs
-  src/domain/vnext/authority/protected_diagnostic_envelope.rs
-  src/domain/vnext/authority/protected_diagnostic_envelope_stage8_seed.rs
-  src/domain/vnext/authority/publication.rs
-  src/domain/vnext/installation/durable_finality.rs
-  src/domain/vnext/installation/durable_finality_stage9_seed.rs
-  src/domain/vnext/installation/durable_finality_stage11_seed.rs
-  src/domain/vnext/persistence/protected_locator_lease.rs
-  src/domain/vnext/persistence/protected_locator_stage9_seed.rs
+  src/domain/authority/action_basis.rs
+  src/domain/authority/continuity/trusted_time.rs
+  src/domain/authority/downstream_action_basis.rs
+  src/domain/authority/facade.rs
+  src/domain/authority/facade_tests.rs
+  src/domain/authority/facade/repository_admission.rs
+  src/domain/authority/facade/repository_leaf_authority.rs
+  src/domain/authority/governance_attestation.rs
+  src/domain/authority/governance_attestation_stage7_seed.rs
+  src/domain/authority/governance_floor.rs
+  src/domain/authority/materialization.rs
+  src/domain/authority/mod.rs
+  src/domain/authority/protected_diagnostic_envelope.rs
+  src/domain/authority/protected_diagnostic_envelope_stage8_seed.rs
+  src/domain/authority/publication.rs
+  src/domain/installation/durable_finality.rs
+  src/domain/installation/durable_finality_stage9_seed.rs
+  src/domain/installation/durable_finality_stage11_seed.rs
+  src/domain/persistence/protected_locator_lease.rs
+  src/domain/persistence/protected_locator_stage9_seed.rs
   src/foundation/core/secure_fs.rs
   src/foundation/core/aggregate_census.rs
   src/foundation/core/aggregate_census_stage11_seed.rs
@@ -104,11 +104,11 @@ AUTHORITY_EXTENSION_SOURCES = %w[
   src/foundation/core/descriptor_census_platform_stage11_seed.rs
 ].freeze
 FOCAL_STEP_EVIDENCE_SOURCES = %w[
-  src/domain/vnext/evidence/mod.rs
-  src/domain/vnext/evidence/submission_claim.rs
-  src/domain/vnext/evidence/claim.rs
-  src/domain/vnext/step/lifecycle.rs
-  src/domain/vnext/step/submission.rs
+  src/domain/evidence/mod.rs
+  src/domain/evidence/submission_claim.rs
+  src/domain/evidence/claim.rs
+  src/domain/step/lifecycle.rs
+  src/domain/step/submission.rs
 ].freeze
 TOOL_SOURCES = %w[
   tests/vnext_stage4_contracts.rs
@@ -654,22 +654,22 @@ def rust_sources(root)
 end
 
 def execution_sources
-  paths = rust_sources("src/domain/vnext/execution")
-  raise "live Execution source root is absent" unless paths.include?("src/domain/vnext/execution/mod.rs")
+  paths = rust_sources("src/domain/execution")
+  raise "live Execution source root is absent" unless paths.include?("src/domain/execution/mod.rs")
 
   paths
 end
 
 def persistence_sources
-  paths = rust_sources("src/domain/vnext/persistence")
-  raise "persistence source root is absent" unless paths.include?("src/domain/vnext/persistence/mod.rs")
+  paths = rust_sources("src/domain/persistence")
+  raise "persistence source root is absent" unless paths.include?("src/domain/persistence/mod.rs")
 
   paths
 end
 
 def contract_ownership_sources
-  paths = rust_sources("src/domain/vnext/contract")
-  raise "Contract ownership source root is absent" unless paths.include?("src/domain/vnext/contract/mod.rs")
+  paths = rust_sources("src/domain/contract")
+  raise "Contract ownership source root is absent" unless paths.include?("src/domain/contract/mod.rs")
 
   paths
 end
@@ -680,15 +680,15 @@ def source_paths
     PREDECESSOR_RECEIPTS.values.flatten + COMPILATION_ANCESTORS + AUTHORITY_EXTENSION_SOURCES +
     FOCAL_STEP_EVIDENCE_SOURCES + contract_ownership_sources + execution_sources +
     persistence_sources + [
-      "src/domain/vnext/installation/consumer_snapshot.rs",
-      "src/domain/vnext/installation/consumer_snapshot_stage11_seed.rs",
-      "src/domain/vnext/installation/mod.rs",
-      "src/domain/vnext/integration/consumer_closure.rs"
+      "src/domain/installation/consumer_snapshot.rs",
+      "src/domain/installation/consumer_snapshot_stage11_seed.rs",
+      "src/domain/installation/mod.rs",
+      "src/domain/integration/consumer_closure.rs"
     ] + TOOL_SOURCES
   ).uniq.sort
   leaked = paths.any? do |path|
-    path.start_with?("src/domain/vnext/gate/") ||
-      (path.start_with?("src/domain/vnext/evidence/") && !FOCAL_STEP_EVIDENCE_SOURCES.include?(path))
+    path.start_with?("src/domain/gate/") ||
+      (path.start_with?("src/domain/evidence/") && !FOCAL_STEP_EVIDENCE_SOURCES.include?(path))
   end
   raise "Stage 5 Gate or non-submission Evidence source leaked into Stage 4 closure" if leaked
 
@@ -701,10 +701,10 @@ def verify_runtime_source
     raise "live Execution source lacks runtime semantics: #{group}" unless group.all? { |marker| text.include?(marker) }
   end
   definition = "pub struct SubmissionClaimSetV1"
-  definition_owners = rust_sources("src/domain/vnext").select do |path|
+  definition_owners = rust_sources("src/domain").select do |path|
     File.read(File.join(WORKSPACE, path), encoding: Encoding::UTF_8).include?(definition)
   end
-  unless definition_owners == ["src/domain/vnext/evidence/submission_claim.rs"]
+  unless definition_owners == ["src/domain/evidence/submission_claim.rs"]
     raise "SubmissionClaimSetV1 must have exactly one Evidence-owned definition"
   end
   contract_text = contract_ownership_sources.map do |path|
@@ -728,7 +728,7 @@ def verify_runtime_source
   end
 
   persistence = persistence_sources.map { |path| File.read(File.join(WORKSPACE, path), encoding: Encoding::UTF_8) }.join("\n")
-  bound = ["crate::domain::vnext::persistence", "super::super::persistence"].any? { |marker| text.include?(marker) }
+  bound = ["crate::domain::persistence", "super::super::persistence"].any? { |marker| text.include?(marker) }
   raise "Execution does not bind the canonical persistence owner" unless bound
   raise "persistence source lacks atomic publication semantics" unless %w[transaction publish].all? { |marker| persistence.include?(marker) }
 end

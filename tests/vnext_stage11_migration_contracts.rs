@@ -9,16 +9,15 @@ const SKILL_LEDGER: &str = include_str!("../contracts/vnext/public/v1_skill_ledg
 const PHYSICAL_CENSUS: &str =
     include_str!("../contracts/vnext/public/physical_census.commitment.v1.json");
 const CLASSIFICATION_SOURCE: &str =
-    include_str!("../src/domain/vnext/migration/runtime/classification.rs");
-const CONSUMER_SOURCE: &str = include_str!("../src/domain/vnext/migration/runtime/consumer.rs");
-const ASSOCIATION_SOURCE: &str =
-    include_str!("../src/domain/vnext/migration/runtime/association.rs");
-const CENSUS_SOURCE: &str = include_str!("../src/operations/vnext/migration/census.rs");
-const IMPORT_SOURCE: &str = include_str!("../src/domain/vnext/migration/runtime/import.rs");
-const ROLLBACK_SOURCE: &str = include_str!("../src/domain/vnext/migration/runtime/rollback.rs");
+    include_str!("../src/domain/migration/runtime/classification.rs");
+const CONSUMER_SOURCE: &str = include_str!("../src/domain/migration/runtime/consumer.rs");
+const ASSOCIATION_SOURCE: &str = include_str!("../src/domain/migration/runtime/association.rs");
+const CENSUS_SOURCE: &str = include_str!("../src/operations/migration/census.rs");
+const IMPORT_SOURCE: &str = include_str!("../src/domain/migration/runtime/import.rs");
+const ROLLBACK_SOURCE: &str = include_str!("../src/domain/migration/runtime/rollback.rs");
 const INSTALLATION_CONSUMER_SNAPSHOT_SOURCE: &str =
-    include_str!("../src/domain/vnext/installation/consumer_snapshot.rs");
-const INSTALLATION_FACADE_SOURCE: &str = include_str!("../src/domain/vnext/installation/mod.rs");
+    include_str!("../src/domain/installation/consumer_snapshot.rs");
+const INSTALLATION_FACADE_SOURCE: &str = include_str!("../src/domain/installation/mod.rs");
 const FOUNDATION_FACADE_SOURCE: &str = include_str!("../src/foundation/core/mod.rs");
 
 fn json(value: &str) -> Value {
@@ -163,7 +162,7 @@ fn production_consumer_snapshot_finality_and_census_routes_are_bound() {
         );
     }
     for required in [
-        "pub(in crate::domain::vnext) mod stage11_finality_v2",
+        "pub(in crate::domain) mod stage11_finality_v2",
         "ProtectedLocatorLeaseV2",
         "execute_pre_store",
     ] {
@@ -206,7 +205,9 @@ fn stage11_cannot_reconstruct_physical_census_or_generic_finality_success() {
             "Migration has regained physical census authority: {forbidden}"
         );
     }
-    assert!(ASSOCIATION_SOURCE.contains("#[cfg(test)]\n    pub(in crate::domain::vnext) fn from_verified_h3_native_cancelled_members"));
+    assert!(ASSOCIATION_SOURCE.contains(
+        "#[cfg(test)]\n    pub(in crate::domain) fn from_verified_h3_native_cancelled_members"
+    ));
 }
 
 #[test]

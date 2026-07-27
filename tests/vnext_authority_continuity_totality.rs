@@ -1,4 +1,4 @@
-use maestro::domain::vnext::authority::{
+use maestro::domain::authority::{
     AcceptedAuthorityTimeFloorV1, AuthorityContextKindV1, AuthorityContinuityCoverageDispositionV1,
     AuthorityContinuityCoverageObligationV1, AuthorityContinuityError,
     AuthorityContinuityManifestV1, ContinuityClassIdV1, ContinuityReferenceV1,

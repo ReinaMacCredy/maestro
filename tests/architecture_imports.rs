@@ -56,7 +56,7 @@ const RESOURCE_EMBED_ALLOWLIST: &[(&str, &[&str])] = &[
         &["embedded/hooks/record.sh"],
     ),
     ("src/domain/playbook.rs", &["embedded/playbook"]),
-    ("src/domain/design.rs", &["embedded/design"]),
+    ("src/domain/design/legacy.rs", &["embedded/design"]),
     ("src/domain/loop_recipes.rs", &["embedded/loop-recipes"]),
     ("src/domain/skills/catalog.rs", &["embedded/skills"]),
     (
@@ -64,7 +64,7 @@ const RESOURCE_EMBED_ALLOWLIST: &[(&str, &[&str])] = &[
         &["embedded/schemas"],
     ),
     (
-        "src/domain/vnext/orchestration/runtime/catalog.rs",
+        "src/domain/orchestration/runtime/catalog.rs",
         &[
             "embedded/vnext/orchestration/recipe-catalog.v1.json",
             "embedded/vnext/orchestration/profiles/bounded-continuation/",
@@ -73,14 +73,14 @@ const RESOURCE_EMBED_ALLOWLIST: &[(&str, &[&str])] = &[
     ),
     ("src/interfaces/shell/mod.rs", &["embedded/shell/"]),
     (
-        "src/interfaces/vnext/connectors/mod.rs",
+        "src/interfaces/connectors/mod.rs",
         &[
             "embedded/vnext/hosts/",
             "embedded/vnext/bootstrap/wiring.v1.json",
         ],
     ),
     (
-        "src/interfaces/vnext/mcp/mod.rs",
+        "src/interfaces/mcp/mod.rs",
         &["embedded/vnext/adapter/mcp-tools.v1.json"],
     ),
 ];
@@ -659,7 +659,7 @@ fn update_operation_owns_implementation() {
 
     let mut violations = Vec::new();
     for file in rust_files_under(Path::new("src")) {
-        let source = read_source_file(&file);
+        let source = source_without_test_modules(&read_source_file(&file));
         let code = code_for_path_scan(&source);
         if code.contains("crate::update::") {
             violations.push(format!("{} imports legacy crate::update", file.display()));
@@ -841,7 +841,7 @@ fn domain_does_not_depend_on_interfaces_or_operations() {
     let mut violations = Vec::new();
 
     for file in rust_files_under(Path::new("src/domain")) {
-        let source = read_source_file(&file);
+        let source = source_without_test_modules(&read_source_file(&file));
         let code = source_without_pub_mod_statements(&code_for_path_scan(&source));
         for upstream in ["interfaces", "operations"] {
             if code.contains(&format!("crate::{upstream}")) {
@@ -1398,31 +1398,44 @@ fn transitional_public_surfaces_match_phase_policy() {
         Path::new("src/domain/mod.rs"),
         &[
             "capability",
+            "authority",
             "card",
             "channel",
             "conflict",
+            "contract",
             "decisions",
             "design",
+            "distribution",
+            "evidence",
+            "execution",
             "extraction",
             "feature",
+            "gate",
             "gate_lock",
             "harness",
+            "identity",
             "install",
             "intake",
+            "integration",
             "lean",
             "loop_recipes",
             "maturity",
             "memory",
+            "migration",
+            "orchestration",
+            "persistence",
             "playbook",
             "proof",
+            "repository",
             "research",
             "resource_contracts",
             "run",
             "schema_contracts",
             "search",
             "skills",
+            "step",
             "task",
-            "vnext",
+            "work",
         ],
         &[],
     );
@@ -1451,44 +1464,62 @@ fn transitional_public_surfaces_match_phase_policy() {
 }
 
 #[test]
-fn vnext_fanout_facades_are_exactly_crate_internal() {
+fn canonical_refoundation_facades_have_exact_visibility() {
     assert_module_visibility(
-        Path::new("src/domain/vnext/mod.rs"),
+        Path::new("src/domain/mod.rs"),
         &[
             "authority",
             "capability",
+            "card",
+            "channel",
+            "conflict",
             "contract",
+            "decisions",
             "design",
             "distribution",
             "evidence",
             "execution",
+            "extraction",
+            "feature",
             "gate",
+            "gate_lock",
+            "harness",
             "identity",
+            "install",
+            "intake",
             "integration",
+            "lean",
+            "loop_recipes",
+            "maturity",
+            "memory",
             "migration",
             "orchestration",
             "persistence",
+            "playbook",
+            "proof",
             "repository",
+            "research",
+            "resource_contracts",
+            "run",
+            "schema_contracts",
+            "search",
+            "skills",
             "step",
+            "task",
             "work",
         ],
         &[
             "coordination",
             "installation",
-            "intake",
-            "maturity",
-            "memory",
             "planning",
             "projection",
-            "research",
-            "search",
             "transport",
         ],
     );
     assert_module_visibility(
         Path::new("src/interfaces/mod.rs"),
         &["cli", "hooks", "mcp", "shell", "tui"],
-        &["vnext"],
+        &["connectors"],
     );
     assert_module_visibility(
         Path::new("src/operations/mod.rs"),
@@ -1504,16 +1535,6 @@ fn vnext_fanout_facades_are_exactly_crate_internal() {
             "sync",
             "update",
         ],
-        &["vnext"],
-    );
-    assert_module_visibility(
-        Path::new("src/interfaces/vnext/mod.rs"),
-        &[],
-        &["cli", "connectors", "hooks", "mcp", "shell", "tui"],
-    );
-    assert_module_visibility(
-        Path::new("src/operations/vnext/mod.rs"),
-        &[],
         &[
             "action",
             "adapters",
@@ -1524,91 +1545,79 @@ fn vnext_fanout_facades_are_exactly_crate_internal() {
         ],
     );
     assert_module_visibility(
-        Path::new("src/domain/vnext/capability/mod.rs"),
+        Path::new("src/domain/capability/mod.rs"),
         &["literals"],
         &["generated_catalog", "runtime"],
     );
     assert_module_visibility(
-        Path::new("src/domain/vnext/distribution/mod.rs"),
+        Path::new("src/domain/distribution/mod.rs"),
         &[],
         &["runtime"],
     );
     assert_module_visibility(
-        Path::new("src/domain/vnext/evidence/mod.rs"),
+        Path::new("src/domain/evidence/mod.rs"),
         &["submission_claim"],
         &["diagnostics"],
     );
+    assert_module_visibility(Path::new("src/domain/migration/mod.rs"), &[], &["runtime"]);
     assert_module_visibility(
-        Path::new("src/domain/vnext/migration/mod.rs"),
-        &[],
-        &["runtime"],
-    );
-    assert_module_visibility(
-        Path::new("src/domain/vnext/orchestration/mod.rs"),
+        Path::new("src/domain/orchestration/mod.rs"),
         &["literals"],
         &["runtime"],
     );
 
     for path in [
-        "src/domain/vnext/capability/generated_catalog/mod.rs",
-        "src/domain/vnext/capability/runtime/mod.rs",
-        "src/domain/vnext/coordination/mod.rs",
-        "src/domain/vnext/distribution/runtime/mod.rs",
-        "src/domain/vnext/evidence/diagnostics/mod.rs",
-        "src/domain/vnext/installation/mod.rs",
-        "src/domain/vnext/intake/mod.rs",
-        "src/domain/vnext/maturity/mod.rs",
-        "src/domain/vnext/memory/mod.rs",
-        "src/domain/vnext/migration/runtime/mod.rs",
-        "src/domain/vnext/orchestration/runtime/mod.rs",
-        "src/domain/vnext/planning/mod.rs",
-        "src/domain/vnext/projection/mod.rs",
-        "src/domain/vnext/research/mod.rs",
-        "src/domain/vnext/search/mod.rs",
-        "src/domain/vnext/transport/mod.rs",
-        "src/interfaces/vnext/cli/mod.rs",
-        "src/interfaces/vnext/connectors/mod.rs",
-        "src/interfaces/vnext/hooks/mod.rs",
-        "src/interfaces/vnext/mcp/mod.rs",
-        "src/interfaces/vnext/shell/mod.rs",
-        "src/interfaces/vnext/tui/mod.rs",
-        "src/operations/vnext/action/mod.rs",
-        "src/operations/vnext/adapters/mod.rs",
-        "src/operations/vnext/installation/mod.rs",
-        "src/operations/vnext/migration/mod.rs",
-        "src/operations/vnext/observation/mod.rs",
-        "src/operations/vnext/orchestration/mod.rs",
+        "src/domain/capability/generated_catalog/mod.rs",
+        "src/domain/capability/runtime/mod.rs",
+        "src/domain/coordination/mod.rs",
+        "src/domain/distribution/runtime/mod.rs",
+        "src/domain/evidence/diagnostics/mod.rs",
+        "src/domain/installation/mod.rs",
+        "src/domain/intake/mod.rs",
+        "src/domain/maturity/mod.rs",
+        "src/domain/memory/mod.rs",
+        "src/domain/migration/runtime/mod.rs",
+        "src/domain/orchestration/runtime/mod.rs",
+        "src/domain/planning/mod.rs",
+        "src/domain/projection/mod.rs",
+        "src/domain/research/mod.rs",
+        "src/domain/transport/mod.rs",
+        "src/interfaces/connectors/mod.rs",
+        "src/operations/action/mod.rs",
+        "src/operations/adapters/mod.rs",
+        "src/operations/installation/mod.rs",
+        "src/operations/migration/mod.rs",
+        "src/operations/observation/mod.rs",
+        "src/operations/orchestration/mod.rs",
     ] {
         assert!(
             public_modules(&read_source_file(Path::new(path))).is_empty(),
-            "temporary fanout facade {path} must keep implementation children private"
+            "canonical facade {path} must keep implementation children private"
         );
     }
 
     let mut violations = Vec::new();
-    for file in rust_files_under(Path::new("src/domain/vnext")) {
+    for file in rust_files_under(Path::new("src/domain")) {
         let source = source_without_test_modules(&read_source_file(&file));
-        if source.contains("crate::interfaces::vnext")
-            || source.contains("crate::operations::vnext")
-        {
+        if source.contains("crate::interfaces") || source.contains("crate::operations") {
             violations.push(format!(
-                "{} imports a higher vNext layer from the domain layer",
+                "{} imports a higher canonical layer from the domain layer",
                 file.display()
             ));
         }
     }
-    for file in rust_files_under(Path::new("src/operations/vnext")) {
+    for file in rust_files_under(Path::new("src/operations")) {
         let source = source_without_test_modules(&read_source_file(&file));
-        if source.contains("crate::interfaces::vnext") {
+        if source.contains("crate::interfaces") {
             violations.push(format!(
-                "{} imports the vNext interface layer from operations",
+                "{} imports the canonical interface layer from operations",
                 file.display()
             ));
         }
     }
     assert!(
         violations.is_empty(),
-        "temporary vNext fanout imports must preserve interfaces -> operations -> domain:\n{}",
+        "canonical imports must preserve interfaces -> operations -> domain:\n{}",
         violations.join("\n")
     );
 }
@@ -3075,7 +3084,7 @@ fn module_reference_scanners_only_match_at_a_module_boundary() {
 fn vnext_authority_and_store_keep_one_directional_ownership() {
     let mut violations = Vec::new();
 
-    for file in rust_files_under(Path::new("src/domain/vnext/persistence")) {
+    for file in rust_files_under(Path::new("src/domain/persistence")) {
         let source = source_without_test_modules(&read_source_file(&file));
         if source.contains("domain::vnext::authority")
             || source.contains("super::super::authority")
@@ -3088,8 +3097,8 @@ fn vnext_authority_and_store_keep_one_directional_ownership() {
         }
     }
 
-    for file in rust_files_under(Path::new("src/domain/vnext/authority")) {
-        let relative = file.strip_prefix("src/domain/vnext/authority").unwrap();
+    for file in rust_files_under(Path::new("src/domain/authority")) {
+        let relative = file.strip_prefix("src/domain/authority").unwrap();
         if relative == Path::new("facade_tests.rs") {
             continue;
         }
@@ -3135,27 +3144,25 @@ fn vnext_authority_and_store_keep_one_directional_ownership() {
 #[test]
 fn stage5_protected_diagnostic_ports_are_sealed_test_only_and_non_bearer() {
     let integration = read_source_file(Path::new(
-        "src/domain/vnext/integration/trusted_host_diagnostic.rs",
+        "src/domain/integration/trusted_host_diagnostic.rs",
     ));
-    let persistence = read_source_file(Path::new(
-        "src/domain/vnext/persistence/protected_diagnostic.rs",
-    ));
+    let persistence = read_source_file(Path::new("src/domain/persistence/protected_diagnostic.rs"));
     let stage10_seed = read_source_file(Path::new(
-        "src/domain/vnext/integration/trusted_host_diagnostic_stage10_seed.rs",
+        "src/domain/integration/trusted_host_diagnostic_stage10_seed.rs",
     ));
     let stage9_seed = read_source_file(Path::new(
-        "src/domain/vnext/persistence/protected_diagnostic_stage9_seed.rs",
+        "src/domain/persistence/protected_diagnostic_stage9_seed.rs",
     ));
     let envelope = read_source_file(Path::new(
-        "src/domain/vnext/authority/protected_diagnostic_envelope.rs",
+        "src/domain/authority/protected_diagnostic_envelope.rs",
     ));
     let stage8_seed = read_source_file(Path::new(
-        "src/domain/vnext/authority/protected_diagnostic_envelope_stage8_seed.rs",
+        "src/domain/authority/protected_diagnostic_envelope_stage8_seed.rs",
     ));
-    let integration_module = read_source_file(Path::new("src/domain/vnext/integration/mod.rs"));
-    let persistence_module = read_source_file(Path::new("src/domain/vnext/persistence/mod.rs"));
-    let store = read_source_file(Path::new("src/domain/vnext/persistence/store.rs"));
-    let facade = read_source_file(Path::new("src/domain/vnext/authority/facade.rs"));
+    let integration_module = read_source_file(Path::new("src/domain/integration/mod.rs"));
+    let persistence_module = read_source_file(Path::new("src/domain/persistence/mod.rs"));
+    let store = read_source_file(Path::new("src/domain/persistence/store.rs"));
+    let facade = read_source_file(Path::new("src/domain/authority/facade.rs"));
     let diagnostic_entry = facade
         .split("pub(crate) fn protected_continuity_diagnostic_with_ports")
         .nth(1)
@@ -3193,7 +3200,7 @@ fn stage5_protected_diagnostic_ports_are_sealed_test_only_and_non_bearer() {
     assert!(integration.contains("pub(crate) trait TrustedHostDiagnosticConnectionPortV1"));
     assert!(integration.contains("pub(crate) trait TrustedHostDiagnosticAttestationPortV1"));
     assert!(integration.contains("pub(crate) trait TrustedHostDiagnosticPresentationPortV1"));
-    assert!(integration.contains("pub(in crate::domain::vnext::integration) mod sealed"));
+    assert!(integration.contains("pub(in crate::domain::integration) mod sealed"));
     assert!(!integration_module.contains("PortSealedV1"));
     assert!(stage10_seed.contains("impl sealed::Connection"));
     assert!(stage10_seed.contains("impl sealed::Attestation"));
@@ -3236,11 +3243,9 @@ fn stage5_protected_diagnostic_ports_are_sealed_test_only_and_non_bearer() {
         persistence
             .contains("pub(crate) trait ProtectedDiagnosticCurrentViewProviderV1: sealed::Sealed")
     );
-    assert!(persistence.contains("pub(in crate::domain::vnext::persistence) mod sealed"));
+    assert!(persistence.contains("pub(in crate::domain::persistence) mod sealed"));
     assert!(!persistence_module.contains("ProviderSealedV1"));
-    assert!(
-        persistence.contains("pub(in crate::domain::vnext::persistence) fn from_live_provider")
-    );
+    assert!(persistence.contains("pub(in crate::domain::persistence) fn from_live_provider"));
     assert!(stage9_seed.contains("impl sealed::Sealed"));
     assert!(stage9_seed.contains("ProtectedDiagnosticProviderCurrentnessV1::from_live_provider"));
     assert!(
@@ -3555,14 +3560,12 @@ fn stage5_protected_diagnostic_ports_are_sealed_test_only_and_non_bearer() {
     assert!(!store.contains(
         "#[cfg(test)]\n    pub(crate) fn consume_protected_diagnostic_current_view_anchor"
     ));
-    assert!(integration.contains("pub(in crate::domain::vnext::integration) mod sealed"));
+    assert!(integration.contains("pub(in crate::domain::integration) mod sealed"));
     assert!(!integration_module.contains("PortSealedV1"));
     assert!(!persistence_module.contains("ProviderSealedV1"));
     assert!(persistence_module.contains("ProtectedDiagnosticObservedCurrentViewV1"));
     assert!(persistence_module.contains("ProtectedDiagnosticProviderCurrentnessV1"));
-    assert!(
-        persistence.contains("pub(in crate::domain::vnext::persistence) fn from_live_provider")
-    );
+    assert!(persistence.contains("pub(in crate::domain::persistence) fn from_live_provider"));
     assert!(!persistence.contains("provider_currentness_commitment: [u8; 32]"));
 
     let mut challenge_constructors = Vec::new();
@@ -3613,45 +3616,45 @@ fn stage5_protected_diagnostic_ports_are_sealed_test_only_and_non_bearer() {
     released_envelope_constructors.sort();
     assert_eq!(
         challenge_constructors,
-        [PathBuf::from("src/domain/vnext/authority/facade.rs")]
+        [PathBuf::from("src/domain/authority/facade.rs")]
     );
     assert_eq!(
         presentation_consumers,
-        [PathBuf::from("src/domain/vnext/authority/facade.rs")]
+        [PathBuf::from("src/domain/authority/facade.rs")]
     );
     assert_eq!(
         connection_port_implementors,
         [
-            PathBuf::from("src/domain/vnext/integration/trusted_host_diagnostic.rs"),
-            PathBuf::from("src/domain/vnext/integration/trusted_host_diagnostic_stage10_seed.rs")
+            PathBuf::from("src/domain/integration/trusted_host_diagnostic.rs"),
+            PathBuf::from("src/domain/integration/trusted_host_diagnostic_stage10_seed.rs")
         ]
     );
     assert_eq!(
         current_view_provider_implementors,
         [
-            PathBuf::from("src/domain/vnext/persistence/protected_diagnostic.rs"),
-            PathBuf::from("src/domain/vnext/persistence/protected_diagnostic_stage9_seed.rs")
+            PathBuf::from("src/domain/persistence/protected_diagnostic.rs"),
+            PathBuf::from("src/domain/persistence/protected_diagnostic_stage9_seed.rs")
         ]
     );
     assert_eq!(
         integration_seal_implementors,
         [
-            PathBuf::from("src/domain/vnext/integration/trusted_host_diagnostic.rs"),
-            PathBuf::from("src/domain/vnext/integration/trusted_host_diagnostic_stage10_seed.rs")
+            PathBuf::from("src/domain/integration/trusted_host_diagnostic.rs"),
+            PathBuf::from("src/domain/integration/trusted_host_diagnostic_stage10_seed.rs")
         ]
     );
     assert_eq!(
         persistence_seal_implementors,
         [
-            PathBuf::from("src/domain/vnext/persistence/protected_diagnostic.rs"),
-            PathBuf::from("src/domain/vnext/persistence/protected_diagnostic_stage9_seed.rs")
+            PathBuf::from("src/domain/persistence/protected_diagnostic.rs"),
+            PathBuf::from("src/domain/persistence/protected_diagnostic_stage9_seed.rs")
         ]
     );
     assert!(obsolete_builder_contracts.is_empty());
     assert_eq!(
         released_envelope_constructors,
         [PathBuf::from(
-            "src/domain/vnext/authority/protected_diagnostic_envelope.rs"
+            "src/domain/authority/protected_diagnostic_envelope.rs"
         )]
     );
     assert!(integration.contains(
@@ -3660,7 +3663,7 @@ fn stage5_protected_diagnostic_ports_are_sealed_test_only_and_non_bearer() {
     assert!(persistence.contains(
         "#[cfg(test)]\nimpl ProtectedDiagnosticCurrentViewProviderV1 for ProtectedDiagnosticTestCurrentViewProviderV1"
     ));
-    let vnext_module = read_source_file(Path::new("src/domain/vnext/mod.rs"));
+    let vnext_module = read_source_file(Path::new("src/domain/mod.rs"));
     assert!(!vnext_module.contains("protected_diagnostic_sibling_port_compile_probe"));
     assert!(!vnext_module.contains("impl TrustedHostDiagnosticConnectionPortV1"));
     assert!(!vnext_module.contains("impl ProtectedDiagnosticCurrentViewProviderV1"));
@@ -3682,45 +3685,39 @@ fn stage5_protected_diagnostic_ports_are_sealed_test_only_and_non_bearer() {
 
 #[test]
 fn stage5_successor_seams_are_owner_private_and_production_replaceable() {
-    let authority_facade = read_source_file(Path::new("src/domain/vnext/authority/facade.rs"));
-    let authority = read_source_file(Path::new(
-        "src/domain/vnext/authority/governance_attestation.rs",
-    ));
-    let materialization =
-        read_source_file(Path::new("src/domain/vnext/authority/materialization.rs"));
-    let governance_floor =
-        read_source_file(Path::new("src/domain/vnext/authority/governance_floor.rs"));
-    let publication = read_source_file(Path::new("src/domain/vnext/authority/publication.rs"));
+    let authority_facade = read_source_file(Path::new("src/domain/authority/facade.rs"));
+    let authority = read_source_file(Path::new("src/domain/authority/governance_attestation.rs"));
+    let materialization = read_source_file(Path::new("src/domain/authority/materialization.rs"));
+    let governance_floor = read_source_file(Path::new("src/domain/authority/governance_floor.rs"));
+    let publication = read_source_file(Path::new("src/domain/authority/publication.rs"));
     let authority_seed = read_source_file(Path::new(
-        "src/domain/vnext/authority/governance_attestation_stage7_seed.rs",
+        "src/domain/authority/governance_attestation_stage7_seed.rs",
     ));
     let persistence = read_source_file(Path::new(
-        "src/domain/vnext/persistence/protected_locator_lease.rs",
+        "src/domain/persistence/protected_locator_lease.rs",
     ));
     let persistence_stage9 = read_source_file(Path::new(
-        "src/domain/vnext/persistence/protected_locator_stage9_seed.rs",
+        "src/domain/persistence/protected_locator_stage9_seed.rs",
     ));
     let foundation = read_source_file(Path::new("src/foundation/core/aggregate_census.rs"));
     let foundation_seed = read_source_file(Path::new(
         "src/foundation/core/aggregate_census_stage11_seed.rs",
     ));
-    let installation = read_source_file(Path::new(
-        "src/domain/vnext/installation/durable_finality.rs",
-    ));
+    let installation = read_source_file(Path::new("src/domain/installation/durable_finality.rs"));
     let installation_stage9 = read_source_file(Path::new(
-        "src/domain/vnext/installation/durable_finality_stage9_seed.rs",
+        "src/domain/installation/durable_finality_stage9_seed.rs",
     ));
     let installation_stage11 = read_source_file(Path::new(
-        "src/domain/vnext/installation/durable_finality_stage11_seed.rs",
+        "src/domain/installation/durable_finality_stage11_seed.rs",
     ));
-    let authority_mod = read_source_file(Path::new("src/domain/vnext/authority/mod.rs"));
-    let persistence_mod = read_source_file(Path::new("src/domain/vnext/persistence/mod.rs"));
+    let authority_mod = read_source_file(Path::new("src/domain/authority/mod.rs"));
+    let persistence_mod = read_source_file(Path::new("src/domain/persistence/mod.rs"));
     let foundation_mod = read_source_file(Path::new("src/foundation/core/mod.rs"));
-    let installation_mod = read_source_file(Path::new("src/domain/vnext/installation/mod.rs"));
+    let installation_mod = read_source_file(Path::new("src/domain/installation/mod.rs"));
     let singular = read_source_file(Path::new(
         "src/foundation/core/descriptor_census_platform.rs",
     ));
-    let vnext_module = read_source_file(Path::new("src/domain/vnext/mod.rs"));
+    let vnext_module = read_source_file(Path::new("src/domain/mod.rs"));
 
     assert!(authority.contains("GovernanceAttestationV1<'tx"));
     assert!(authority.contains("RepositoryGovernanceFloorCurrentViewV1<'tx>"));
@@ -3754,7 +3751,7 @@ fn stage5_successor_seams_are_owner_private_and_production_replaceable() {
     assert!(authority_facade.contains("pub(super) struct SchedulingPolicyPublicationInputV1"));
     assert!(
         !authority_facade
-            .contains("pub(in crate::domain::vnext) struct SchedulingPolicyPublicationInputV1")
+            .contains("pub(in crate::domain) struct SchedulingPolicyPublicationInputV1")
     );
     assert!(authority_facade.contains("pub(super) fn new("));
     assert!(authority_facade.contains("pub(super) fn publish_scheduling_policy("));
@@ -3772,17 +3769,19 @@ fn stage5_successor_seams_are_owner_private_and_production_replaceable() {
     assert!(persistence.contains("acquire_pre_candidate"));
     assert!(persistence.contains("bind_inert_candidate"));
     assert!(persistence.contains("dispatch_exact_transition"));
-    assert!(!persistence.contains("#[derive(Clone, Copy, Eq, PartialEq)]\npub(in crate::domain::vnext) struct ProtectedLocatorAcquisitionRequestV2"));
-    assert!(!persistence.contains("#[derive(Clone, Copy, Eq, PartialEq)]\npub(in crate::domain::vnext) struct ProtectedLocatorObservedStateV2"));
-    assert!(!persistence.contains("#[derive(Clone, Copy, Eq, PartialEq)]\npub(in crate::domain::vnext) struct ProtectedLocatorCandidateInputV2"));
+    assert!(!persistence.contains("#[derive(Clone, Copy, Eq, PartialEq)]\npub(in crate::domain) struct ProtectedLocatorAcquisitionRequestV2"));
+    assert!(!persistence.contains("#[derive(Clone, Copy, Eq, PartialEq)]\npub(in crate::domain) struct ProtectedLocatorObservedStateV2"));
+    assert!(!persistence.contains("#[derive(Clone, Copy, Eq, PartialEq)]\npub(in crate::domain) struct ProtectedLocatorCandidateInputV2"));
     assert!(!persistence.contains("impl Clone for ProtectedLocatorLeaseV2"));
     assert!(!persistence.contains("impl Copy for ProtectedLocatorLeaseV2"));
     assert!(persistence.contains("begin_pre_store"));
     assert!(persistence.contains("ProtectedLocatorCeremonyContinuationV1<'locator>"));
     assert!(persistence.contains("dispatch_expected_old"));
-    assert!(!persistence.contains(
-        "#[derive(Clone, Copy)]\npub(in crate::domain::vnext) struct ProtectedLocatorLeaseV1"
-    ));
+    assert!(
+        !persistence.contains(
+            "#[derive(Clone, Copy)]\npub(in crate::domain) struct ProtectedLocatorLeaseV1"
+        )
+    );
     assert!(!persistence.contains("pub struct ProtectedLocatorLeaseV1"));
 
     assert!(foundation.contains("AggregateCensusLeaseV1<'scan"));
@@ -3827,11 +3826,10 @@ fn stage5_successor_seams_are_owner_private_and_production_replaceable() {
     assert!(installation_stage11.contains("impl PreStoreFinalityOwnerV1"));
     assert!(
         installation_stage9
-            .contains("pub(in crate::domain::vnext) struct Stage9ActiveStoreFinalitySeedV1")
+            .contains("pub(in crate::domain) struct Stage9ActiveStoreFinalitySeedV1")
     );
     assert!(
-        installation_stage11
-            .contains("pub(in crate::domain::vnext) struct Stage11PreStoreFinalitySeedV1")
+        installation_stage11.contains("pub(in crate::domain) struct Stage11PreStoreFinalitySeedV1")
     );
     assert!(!installation_stage9.contains("pub(super) fn acquire()"));
     assert!(!installation_stage11.contains("pub(super) fn acquire()"));
@@ -3841,7 +3839,9 @@ fn stage5_successor_seams_are_owner_private_and_production_replaceable() {
     assert!(installation.contains("prepare_pre_store_from_stage11_owner"));
     assert!(installation.contains("execute_pre_store_from_stage11_owner"));
     assert!(!installation.contains("pub struct Stage11PreStoreFinalityOperationV1"));
-    assert!(!installation.contains("#[derive(Clone, Copy)]\npub(in crate::domain::vnext) struct Stage11PreStoreFinalityOperationV1"));
+    assert!(!installation.contains(
+        "#[derive(Clone, Copy)]\npub(in crate::domain) struct Stage11PreStoreFinalityOperationV1"
+    ));
     assert!(!installation.contains("impl FnOnce"));
     assert!(!installation.contains("pub struct DurableInstallationFinalityBackendV1"));
 
@@ -3855,13 +3855,8 @@ fn stage5_successor_seams_are_owner_private_and_production_replaceable() {
     assert!(installation_mod.contains("\nmod durable_finality;\n"));
     assert!(!installation_mod.contains("pub mod durable_finality"));
     assert!(!installation_mod.contains("pub(crate) mod durable_finality"));
-    assert!(
-        !installation_mod
-            .contains("pub(in crate::domain::vnext) mod durable_finality_stage11_seed")
-    );
-    assert!(
-        !installation_mod.contains("pub(in crate::domain::vnext) mod durable_finality_stage9_seed")
-    );
+    assert!(!installation_mod.contains("pub(in crate::domain) mod durable_finality_stage11_seed"));
+    assert!(!installation_mod.contains("pub(in crate::domain) mod durable_finality_stage9_seed"));
     assert!(foundation_mod.contains("pub(crate) mod stage11_aggregate_census"));
     assert!(foundation_mod.contains("Stage11AggregateCensusProviderSeedV2"));
     assert!(foundation_mod.contains("Stage11AggregateCensusComponentV2"));
@@ -3877,18 +3872,17 @@ fn stage5_successor_seams_are_owner_private_and_production_replaceable() {
     assert!(!foundation_mod.contains("StoreV1"));
     assert!(!foundation_mod.contains("impl FnOnce"));
     assert!(!foundation_mod.contains("OnceLock"));
-    assert!(installation_mod.contains("pub(in crate::domain::vnext) mod stage9_finality"));
-    assert!(installation_mod.contains("pub(in crate::domain::vnext) mod stage11_finality"));
-    assert!(installation_mod.contains("pub(in crate::domain::vnext) mod stage9_finality_v2"));
-    assert!(installation_mod.contains("pub(in crate::domain::vnext) mod stage11_finality_v2"));
+    assert!(installation_mod.contains("pub(in crate::domain) mod stage9_finality"));
+    assert!(installation_mod.contains("pub(in crate::domain) mod stage11_finality"));
+    assert!(installation_mod.contains("pub(in crate::domain) mod stage9_finality_v2"));
+    assert!(installation_mod.contains("pub(in crate::domain) mod stage11_finality_v2"));
     assert!(installation_mod.contains("Stage9ActiveStoreFinalityProviderSeedV2"));
     assert!(installation_mod.contains("Stage11PreStoreFinalityProviderSeedV2"));
-    assert!(persistence_mod.contains("pub(in crate::domain::vnext) mod protected_locator_v2"));
-    assert!(persistence_mod.contains("pub(in crate::domain::vnext) fn capture_pre_candidate"));
-    assert!(persistence_mod.contains("pub(in crate::domain::vnext) fn acquire_pre_candidate"));
+    assert!(persistence_mod.contains("pub(in crate::domain) mod protected_locator_v2"));
+    assert!(persistence_mod.contains("pub(in crate::domain) fn capture_pre_candidate"));
+    assert!(persistence_mod.contains("pub(in crate::domain) fn acquire_pre_candidate"));
     assert!(
-        persistence_mod
-            .contains("pub(in crate::domain::vnext) type Stage9ProtectedLocatorProviderSeedV2")
+        persistence_mod.contains("pub(in crate::domain) type Stage9ProtectedLocatorProviderSeedV2")
     );
     assert!(persistence.contains("pub(super) mod v2_owner_sealed"));
     assert!(
@@ -3914,15 +3908,12 @@ fn stage5_successor_seams_are_owner_private_and_production_replaceable() {
     assert!(!installation_mod.contains("impl FnOnce"));
     assert!(!installation_mod.contains("OnceLock"));
     assert!(!installation_mod.contains(
-        "#[derive(Clone)]\n    pub(in crate::domain::vnext) struct Stage9ActiveStoreFinalityProviderBindingV1"
+        "#[derive(Clone)]\n    pub(in crate::domain) struct Stage9ActiveStoreFinalityProviderBindingV1"
     ));
     assert!(!installation_mod.contains(
-        "#[derive(Clone)]\n    pub(in crate::domain::vnext) struct Stage11PreStoreFinalityProviderBindingV1"
+        "#[derive(Clone)]\n    pub(in crate::domain) struct Stage11PreStoreFinalityProviderBindingV1"
     ));
-    assert!(
-        installation_mod
-            .contains("pub(in crate::domain::vnext) fn prepare_active_from_stage9_owner")
-    );
+    assert!(installation_mod.contains("pub(in crate::domain) fn prepare_active_from_stage9_owner"));
     assert!(
         installation_mod.contains("backend: Stage9ActiveStoreFinalityProviderBindingV1<'effect>,")
     );
@@ -3931,8 +3922,7 @@ fn stage5_successor_seams_are_owner_private_and_production_replaceable() {
             .contains("backend: &'borrow mut Stage9ActiveStoreFinalityProviderBindingV1")
     );
     assert!(
-        installation_mod
-            .contains("pub(in crate::domain::vnext) fn prepare_pre_store_from_stage11_owner")
+        installation_mod.contains("pub(in crate::domain) fn prepare_pre_store_from_stage11_owner")
     );
     assert!(
         installation_mod.contains("backend: Stage11PreStoreFinalityProviderBindingV1<'effect>,")
@@ -3984,9 +3974,9 @@ fn stage5_successor_seams_are_owner_private_and_production_replaceable() {
     assert_eq!(
         finality_owner_implementors,
         [
-            PathBuf::from("src/domain/vnext/installation/durable_finality.rs"),
-            PathBuf::from("src/domain/vnext/installation/durable_finality_stage11_seed.rs"),
-            PathBuf::from("src/domain/vnext/installation/durable_finality_stage9_seed.rs")
+            PathBuf::from("src/domain/installation/durable_finality.rs"),
+            PathBuf::from("src/domain/installation/durable_finality_stage11_seed.rs"),
+            PathBuf::from("src/domain/installation/durable_finality_stage9_seed.rs")
         ]
     );
 

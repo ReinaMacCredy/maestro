@@ -174,8 +174,8 @@ class Stage4BehaviorCensusTest(unittest.TestCase):
 
     def test_shared_installation_source_sets_bind_the_stage11_seed_and_module_facade(self) -> None:
         expected = (
-            "src/domain/vnext/installation/consumer_snapshot_stage11_seed.rs",
-            "src/domain/vnext/installation/mod.rs",
+            "src/domain/installation/consumer_snapshot_stage11_seed.rs",
+            "src/domain/installation/mod.rs",
         )
         for path in (BUILD_PY, VALIDATE_PY, VERIFY_RB):
             source = path.read_text(encoding="ascii")

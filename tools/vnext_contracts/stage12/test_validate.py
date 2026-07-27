@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Focused tests for the Stage 12 read-only candidate tools."""
+"""Focused tests for the Stage 12 canonical-promotion checkpoint tools."""
 
 from __future__ import annotations
 
@@ -107,15 +107,25 @@ class Stage12CandidateTests(unittest.TestCase):
         self.assertFalse(first["closed_world"])
         self.assertFalse(first["release_claim"])
 
-    def test_namespace_promotion_manifest_is_exact_read_only_and_collision_explicit(
+    def test_namespace_promotion_manifest_is_exact_and_collision_explicit(
         self,
     ) -> None:
         first = promotion_module.build_manifest(WORKSPACE)
         second = promotion_module.build_manifest(WORKSPACE)
         self.assertEqual(first, second)
-        self.assertFalse(first["closed_world"])
-        self.assertFalse(first["mutation_authorized"])
-        self.assertGreater(first["entry_count"], 0)
+        self.assertTrue(first["closed_world"])
+        self.assertEqual(first["entry_count"], 210)
+        self.assertEqual(first["collision_count"], 10)
+        self.assertEqual(
+            first["namespace_counts"],
+            {
+                "src/domain/vnext": 186,
+                "src/interfaces/vnext": 8,
+                "src/operations/vnext": 16,
+            },
+        )
+        self.assertEqual(first["postconditions"]["temporary_namespace_count"], 0)
+        self.assertFalse(first["legacy_pruning_authorized"])
         entries = first["entries"]
         self.assertEqual(
             len({entry["source"] for entry in entries}),
@@ -126,13 +136,13 @@ class Stage12CandidateTests(unittest.TestCase):
             first["entry_count"],
         )
         self.assertTrue(
-            any(entry["requires_merge_or_removal_authority"] for entry in entries)
+            sum(bool(entry["collision"]) for entry in entries) == 10
         )
 
-    def test_census_weakening_mutant_is_rejected(self) -> None:
+    def test_census_requires_namespace_zero_and_exact_legacy_blocker(self) -> None:
         mutant = copy.deepcopy(self.policy)
         for rule in mutant["rules"]:
-            if rule["id"] == "temporary_domain_module_export":
+            if rule["id"] == "legacy_skill_surface":
                 rule["values"] = ["pub mod vnext_never_present;"]
         with self.assertRaises(ValidationError):
             require_census_sight(build_census(WORKSPACE, mutant))
@@ -237,9 +247,16 @@ class Stage12CandidateTests(unittest.TestCase):
                 root / "move.json",
                 "source_move_identity_parity",
                 {
+                    "collision_count": 10,
+                    "destination_set_sha256": "6" * 64,
                     "entry_count": 210,
                     "manifest_sha256": "4" * 64,
                     "mismatched_paths": ["src/domain/work/mod.rs"],
+                    "namespace_counts": {
+                        "src/domain/vnext": 186,
+                        "src/interfaces/vnext": 8,
+                        "src/operations/vnext": 16,
+                    },
                 },
             )
             facade = self._receipt(

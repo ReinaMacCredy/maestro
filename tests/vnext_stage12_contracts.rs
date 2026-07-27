@@ -21,7 +21,7 @@ fn parse_stdout(output: &Output) -> Value {
 }
 
 #[test]
-fn provisional_stage12_inputs_are_deterministic_and_non_authoritative() {
+fn canonical_promotion_checkpoint_is_deterministic_and_non_authoritative() {
     let repo = Path::new(env!("CARGO_MANIFEST_DIR"));
     let first = run(
         repo,
@@ -45,7 +45,16 @@ fn provisional_stage12_inputs_are_deterministic_and_non_authoritative() {
     let census = parse_stdout(&first);
     assert_eq!(census["closed_world"], false);
     assert_eq!(census["release_claim"], false);
-    assert!(census["row_count"].as_u64().unwrap() > 0);
+    assert_eq!(census["row_count"], 349);
+    assert_eq!(census["rule_counts"]["temporary_vnext_source_path"], 0);
+    assert_eq!(
+        census["rule_counts"]["temporary_domain_namespace_reference"],
+        0
+    );
+    assert_eq!(census["rule_counts"]["temporary_domain_module_export"], 0);
+    assert_eq!(census["rule_counts"]["legacy_skill_surface"], 239);
+    assert_eq!(census["rule_counts"]["legacy_next_surface"], 108);
+    assert_eq!(census["rule_counts"]["legacy_harness_resource"], 2);
 
     let validation = run(repo, &["tools/vnext_contracts/stage12/validate.py"]);
     assert!(
@@ -59,15 +68,22 @@ fn provisional_stage12_inputs_are_deterministic_and_non_authoritative() {
     assert_eq!(receipt["candidate_ready_claim"], false);
     assert_eq!(
         receipt["candidate_state"],
-        "stage_12_candidate_read_only_wip_unverified"
+        "canonical_namespace_promoted_legacy_pruning_blocked_unverified"
     );
+    assert_eq!(receipt["namespace_promotion"]["entry_count"], 210);
+    assert_eq!(receipt["namespace_promotion"]["collision_count"], 10);
+    assert_eq!(
+        receipt["namespace_promotion"]["temporary_namespace_count"],
+        0
+    );
+    assert_eq!(receipt["legacy_pruning_authorized"], false);
     assert_eq!(receipt["compile_lane_needed"], true);
     assert_eq!(receipt["release_evaluated"], false);
     assert_eq!(receipt["negative_case_count"], 16);
 }
 
 #[test]
-fn release_preflight_fails_closed_before_stage11_and_namespace_promotion() {
+fn release_preflight_fails_closed_on_legacy_consumers_and_missing_seal_inputs() {
     let repo = Path::new(env!("CARGO_MANIFEST_DIR"));
     let output = run(
         repo,
@@ -83,7 +99,7 @@ fn release_preflight_fails_closed_before_stage11_and_namespace_promotion() {
     assert_eq!(receipt["authority_state"], "none");
     assert_eq!(
         receipt["candidate_state"],
-        "stage_12_candidate_read_only_wip_unverified"
+        "canonical_namespace_promoted_legacy_pruning_blocked_unverified"
     );
     assert_eq!(receipt["certification_claim"], false);
     assert_eq!(receipt["compile_lane_needed"], true);
@@ -91,7 +107,18 @@ fn release_preflight_fails_closed_before_stage11_and_namespace_promotion() {
     let blockers = receipt["blockers"].as_array().unwrap();
     assert!(blockers.iter().any(|blocker| {
         blocker["id"] == "consumer_rows_nonzero"
-            && blocker["rule_id"] == "temporary_vnext_source_path"
+            && blocker["rule_id"] == "legacy_skill_surface"
+            && blocker["count"] == 239
+    }));
+    assert!(blockers.iter().any(|blocker| {
+        blocker["id"] == "consumer_rows_nonzero"
+            && blocker["rule_id"] == "legacy_next_surface"
+            && blocker["count"] == 108
+    }));
+    assert!(blockers.iter().any(|blocker| {
+        blocker["id"] == "consumer_rows_nonzero"
+            && blocker["rule_id"] == "legacy_harness_resource"
+            && blocker["count"] == 2
     }));
     assert!(blockers.iter().any(|blocker| {
         blocker["id"] == "missing_external_input"

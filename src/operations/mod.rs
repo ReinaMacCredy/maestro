@@ -13,7 +13,6 @@ pub mod memory;
 pub mod migrate;
 pub mod sync;
 pub mod update;
-pub(crate) mod vnext;
 
 mod task_verify;
 
@@ -59,3 +58,9 @@ pub(crate) fn verify_task(
 ) -> Result<task_verify::TaskVerifyResult> {
     task_verify::verify_task(paths, task_id, actor)
 }
+pub(crate) mod action;
+pub(crate) mod adapters;
+pub(crate) mod installation;
+pub(crate) mod migration;
+pub(crate) mod observation;
+pub(crate) mod orchestration;

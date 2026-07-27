@@ -1,4 +1,4 @@
-use maestro::domain::vnext::authority::{
+use maestro::domain::authority::{
     ActionRequestIdV1, AuthorityContextIdV1, AuthorityContextV1, AuthorityContinuityManifestV1,
     AuthorityEvaluationErrorV1, AuthorityEvaluatorV1, AuthorityRevocationSetV1,
     AuthoritySnapshotV1, AuthorityUseConstraintV1, BootstrapAuthoritySnapshotErrorV1,
@@ -288,7 +288,7 @@ fn absent_or_fabricated_interaction_observation_is_unavailable() {
     assert_unavailable(fixture(), |value| {
         let join = &mut array_mut(&mut array_mut(value)[9])[1];
         array_mut(join)[5] = CborValue::Bytes(
-            maestro::domain::vnext::authority::ObservationIdV1::derive("fabricated-presentation")
+            maestro::domain::authority::ObservationIdV1::derive("fabricated-presentation")
                 .unwrap()
                 .as_bytes()
                 .to_vec(),
@@ -386,7 +386,7 @@ fn consent_slot_is_derived_from_target_protocol_and_one_natural_member() {
         let consent = &mut array_mut(value)[13];
         let binding = &mut array_mut(consent)[1];
         array_mut(binding)[3] = CborValue::Bytes(
-            maestro::domain::vnext::authority::ConsentSlotCommitmentIdV1::derive(
+            maestro::domain::authority::ConsentSlotCommitmentIdV1::derive(
                 "caller-minted-alternative-slot",
             )
             .unwrap()
@@ -398,7 +398,7 @@ fn consent_slot_is_derived_from_target_protocol_and_one_natural_member() {
         let consent = &mut array_mut(value)[13];
         let binding = &mut array_mut(consent)[1];
         array_mut(binding)[3] = CborValue::Bytes(
-            maestro::domain::vnext::authority::ConsentSlotCommitmentIdV1::derive(
+            maestro::domain::authority::ConsentSlotCommitmentIdV1::derive(
                 "prospective-mandate-output-dependent-slot",
             )
             .unwrap()
@@ -410,7 +410,7 @@ fn consent_slot_is_derived_from_target_protocol_and_one_natural_member() {
         let consent = &mut array_mut(value)[13];
         let binding = &mut array_mut(consent)[1];
         array_mut(binding)[1] = CborValue::Bytes(
-            maestro::domain::vnext::authority::ConsentProtocolCommitmentIdV1::derive(
+            maestro::domain::authority::ConsentProtocolCommitmentIdV1::derive(
                 "wrong-slot-identity-protocol",
             )
             .unwrap()
@@ -477,7 +477,7 @@ fn authoritative_fact_codecs_round_trip_and_aggregate_decode_is_strict() {
     );
     let genesis = fixture.facts.g0_candidate_paths()[0].genesis_grant();
     assert_eq!(
-        maestro::domain::vnext::authority::BootstrapGenesisGrantV1::from_canonical_bytes(
+        maestro::domain::authority::BootstrapGenesisGrantV1::from_canonical_bytes(
             &genesis.canonical_bytes().unwrap(),
         )
         .unwrap(),
