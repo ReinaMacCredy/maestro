@@ -1,6 +1,7 @@
 use super::aggregate_census::{
-    AggregateCensusBackendV1, AggregateCensusResultV1, AggregateComponentCensusV1,
-    AggregateRootSetFactsV1, owner_sealed,
+    AggregateCensusBackendV1, AggregateCensusBackendV2, AggregateCensusResultV1,
+    AggregateComponentCensusV1, AggregateRootSetFactsV1, FoundationAdmittedRootSourceV2,
+    owner_sealed,
 };
 use super::secure_fs::{InventoryRowV1, SecureFsError, SecureFsResult};
 
@@ -47,6 +48,47 @@ impl Stage11AggregateCensusComponentV1 {
 }
 
 impl owner_sealed::Sealed for Stage11AggregateCensusBackendSeedV1 {}
+
+pub(crate) struct Stage11AggregateCensusBackendSeedV2 {
+    _private: (),
+}
+
+impl Stage11AggregateCensusBackendSeedV2 {
+    #[cfg(test)]
+    pub(crate) fn test_unavailable() -> Self {
+        Self { _private: () }
+    }
+}
+
+impl owner_sealed::Sealed for Stage11AggregateCensusBackendSeedV2 {}
+
+impl AggregateCensusBackendV2 for Stage11AggregateCensusBackendSeedV2 {
+    fn acquire_complete_admitted_root_source(
+        &mut self,
+    ) -> SecureFsResult<FoundationAdmittedRootSourceV2> {
+        Err(SecureFsError::CensusRefused)
+    }
+
+    fn census_pass(
+        &mut self,
+        _roots: &AggregateRootSetFactsV1,
+        _pass: u8,
+    ) -> SecureFsResult<Vec<AggregateComponentCensusV1>> {
+        Err(SecureFsError::CensusRefused)
+    }
+
+    fn final_root_set_recheck(&mut self) -> SecureFsResult<AggregateRootSetFactsV1> {
+        Err(SecureFsError::CensusRefused)
+    }
+
+    fn aggregate_fence_is_live(&self) -> bool {
+        false
+    }
+
+    fn consume_final_aggregate_fence(&mut self, _scan_invocation: [u8; 32]) -> SecureFsResult<()> {
+        Err(SecureFsError::CensusRefused)
+    }
+}
 
 impl AggregateCensusBackendV1 for Stage11AggregateCensusBackendSeedV1 {
     fn acquire_complete_root_set(&mut self) -> SecureFsResult<AggregateRootSetFactsV1> {

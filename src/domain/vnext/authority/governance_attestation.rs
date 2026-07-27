@@ -18,7 +18,6 @@ use super::materialization::{
 pub(in crate::domain::vnext) struct PlanningSchedulingPolicyInputV1 {
     current_policy: [u64; 4],
     candidate_policy: [u64; 4],
-    safety_floor: [u64; 4],
     expected_binding: [u8; 32],
     candidate_binding: [u8; 32],
     request: [u8; 32],
@@ -35,7 +34,6 @@ impl PlanningSchedulingPolicyInputV1 {
     pub(in crate::domain::vnext) fn from_stage7_planning(
         current_policy: [u64; 4],
         candidate_policy: [u64; 4],
-        safety_floor: [u64; 4],
         expected_binding: [u8; 32],
         candidate_binding: [u8; 32],
         request: [u8; 32],
@@ -52,16 +50,14 @@ impl PlanningSchedulingPolicyInputV1 {
             idempotency_meaning,
         ]
         .contains(&[0; 32])
-            || current_policy == [0; 4]
+            || (current_policy == [0; 4] && expected_binding != [0xA5; 32])
             || candidate_policy == [0; 4]
-            || safety_floor == [0; 4]
         {
             return Err(GovernanceAttestationErrorV1::InvalidPlanningInput);
         }
         Ok(Self {
             current_policy,
             candidate_policy,
-            safety_floor,
             expected_binding,
             candidate_binding,
             request,
@@ -79,8 +75,8 @@ impl PlanningSchedulingPolicyInputV1 {
         self.candidate_policy
     }
 
-    pub(super) const fn safety_floor(self) -> [u64; 4] {
-        self.safety_floor
+    pub(super) fn is_initial_policy(self) -> bool {
+        self.current_policy == [0; 4] && self.expected_binding == [0xA5; 32]
     }
 
     pub(super) const fn expected_binding(self) -> [u8; 32] {
@@ -164,7 +160,6 @@ impl<'tx> GovernanceAttestationV1<'tx> {
             .ok_or(GovernanceAttestationErrorV1::AuthorityMismatch)?;
         let requirement = current_view.snapshot().action_105_requirement()?;
         if !current_view.retained_tuple_is_current()
-            || planning.safety_floor() != current_view.scheduling_safety_floor()
             || planning.request() != *admission.request_id.as_bytes()
             || planning.payload() != admission.exact_payload_commitment.unwrap_or([0; 32])
             || *admission.authority_context_id.as_bytes()
@@ -178,10 +173,15 @@ impl<'tx> GovernanceAttestationV1<'tx> {
         {
             return Err(GovernanceAttestationErrorV1::AuthorityMismatch);
         }
+        let current_policy = if planning.is_initial_policy() {
+            current_view.scheduling_safety_floor()
+        } else {
+            planning.current_policy()
+        };
         let policy = SchedulingPolicyMeaningV1::new(
-            planning.current_policy(),
+            current_policy,
             planning.candidate_policy(),
-            planning.safety_floor(),
+            current_view.scheduling_safety_floor(),
             current_view.snapshot().semantic_hash(),
             current_view.scheduling_evaluator_revision(),
             current_view.scheduling_classifier_revision(),
@@ -260,11 +260,7 @@ impl<'tx> GovernanceAttestationV1<'tx> {
 fn planning_commitment(planning: PlanningSchedulingPolicyInputV1) -> [u8; 32] {
     let mut digest = Sha256::new();
     digest.update(b"maestro.authority.planning-scheduling-policy.v1\0");
-    for group in [
-        planning.current_policy,
-        planning.candidate_policy,
-        planning.safety_floor,
-    ] {
+    for group in [planning.current_policy, planning.candidate_policy] {
         for value in group {
             digest.update(value.to_be_bytes());
         }

@@ -3701,6 +3701,17 @@ fn stage5_successor_seams_are_owner_private_and_production_replaceable() {
     assert!(!authority.contains("supplemental_mandate_present: bool"));
     assert!(!authority.contains("governance_floor: [u64; 4]"));
     assert!(!authority.contains("classifier_result"));
+    assert!(!authority.contains("safety_floor: [u64; 4]"));
+    assert!(!governance_floor.contains("AUTHORITY_PINNED_SCHEDULING_SAFETY_FLOOR_V1"));
+    assert!(!governance_floor.contains("= [1; 4]"));
+    assert!(governance_floor.contains("AUTHORITY_SCHEDULING_SAFETY_MAXIMUMS_V1"));
+    assert!(governance_floor.contains("checked_sub(maximum)"));
+    assert!(governance_floor.contains("AuthoritySchedulingSafetyStateV1"));
+    assert!(governance_floor.contains("floor_identity"));
+    assert!(governance_floor.contains("floor_semantic_hash"));
+    assert!(governance_floor.contains("classifier_semantic_hash"));
+    assert!(governance_floor.contains("scheduling_safety.currentness"));
+    assert!(governance_floor.contains("resolve_authority_scheduling_safety_state"));
     assert!(governance_floor.contains("REPOSITORY_GOVERNANCE_FLOOR_SCHEMA_TAG_V1: usize = 25"));
     assert!(governance_floor.contains("\"maestro.vnext.repository-governance-floor-snapshot.v1\""));
     assert!(governance_floor.contains("restore_requires_exact_same_domain_chain"));
@@ -3724,6 +3735,17 @@ fn stage5_successor_seams_are_owner_private_and_production_replaceable() {
     assert!(vnext_module.contains("stage7_sibling_can_name_and_call_only_the_seed_owned_entry"));
 
     assert!(persistence.contains("ProtectedLocatorLeaseV1<'locator>"));
+    assert!(persistence.contains("ProtectedLocatorAcquisitionRequestV2"));
+    assert!(persistence.contains("ProtectedLocatorLeaseV2<'locator>"));
+    assert!(persistence.contains("ProtectedLocatorCandidateTransitionV2<'locator>"));
+    assert!(persistence.contains("acquire_pre_candidate"));
+    assert!(persistence.contains("bind_inert_candidate"));
+    assert!(persistence.contains("dispatch_exact_transition"));
+    assert!(!persistence.contains("#[derive(Clone, Copy, Eq, PartialEq)]\npub(in crate::domain::vnext) struct ProtectedLocatorAcquisitionRequestV2"));
+    assert!(!persistence.contains("#[derive(Clone, Copy, Eq, PartialEq)]\npub(in crate::domain::vnext) struct ProtectedLocatorObservedStateV2"));
+    assert!(!persistence.contains("#[derive(Clone, Copy, Eq, PartialEq)]\npub(in crate::domain::vnext) struct ProtectedLocatorCandidateInputV2"));
+    assert!(!persistence.contains("impl Clone for ProtectedLocatorLeaseV2"));
+    assert!(!persistence.contains("impl Copy for ProtectedLocatorLeaseV2"));
     assert!(persistence.contains("begin_pre_store"));
     assert!(persistence.contains("ProtectedLocatorCeremonyContinuationV1<'locator>"));
     assert!(persistence.contains("dispatch_expected_old"));
@@ -3733,6 +3755,16 @@ fn stage5_successor_seams_are_owner_private_and_production_replaceable() {
     assert!(!persistence.contains("pub struct ProtectedLocatorLeaseV1"));
 
     assert!(foundation.contains("AggregateCensusLeaseV1<'scan"));
+    assert!(foundation.contains("RepositoryRootAdmissionV2"));
+    assert!(foundation.contains("InstallationRootAdmissionV2"));
+    assert!(foundation.contains("CensusInvocationV2"));
+    assert!(foundation.contains("FoundationAdmittedRootSourceV2"));
+    assert!(foundation.contains("AggregateCensusLeaseV2<'scan>"));
+    assert!(foundation.contains("AggregateCensusResultV2<'scan>"));
+    assert!(foundation.contains("MigrationClassificationContinuationV2<'scan>"));
+    assert!(foundation.contains("acquire_complete_admitted_root_source"));
+    assert!(!foundation.contains("impl Clone for AggregateCensusLeaseV2"));
+    assert!(!foundation.contains("impl Copy for AggregateCensusLeaseV2"));
     assert!(foundation.contains("acquire_complete_root_set"));
     assert!(foundation.contains("final_root_set_recheck"));
     assert!(foundation_seed.contains("Stage11AggregateCensusBackendSeedV1"));
@@ -3748,6 +3780,13 @@ fn stage5_successor_seams_are_owner_private_and_production_replaceable() {
     assert!(!foundation.contains("pub struct AggregateCensusLeaseV1"));
 
     assert!(installation.contains("DurableInstallationFinalityBackendV1<'effect"));
+    assert!(installation.contains("DurableInstallationFinalityBackendV2<'effect"));
+    assert!(installation.contains("ActiveStoreFinalityRequestV2"));
+    assert!(installation.contains("PreStoreFinalityRequestV2"));
+    assert!(installation.contains("ProtectedLocatorLeaseV2<'_>"));
+    assert!(installation.contains("validate_inert_candidate"));
+    assert!(!installation.contains("impl Clone for DurableInstallationFinalityBackendV2"));
+    assert!(!installation.contains("impl Copy for DurableInstallationFinalityBackendV2"));
     assert!(installation.contains("ProtectedLocatorLeaseV1<'locator>"));
     assert!(installation.contains("ActiveStoreDecisionTupleV1"));
     assert!(installation.contains("PreStoreDecisionTupleV1"));
@@ -3793,6 +3832,11 @@ fn stage5_successor_seams_are_owner_private_and_production_replaceable() {
         !installation_mod.contains("pub(in crate::domain::vnext) mod durable_finality_stage9_seed")
     );
     assert!(foundation_mod.contains("pub(crate) mod stage11_aggregate_census"));
+    assert!(foundation_mod.contains("Stage11AggregateCensusProviderSeedV2"));
+    assert!(foundation_mod.contains("Stage11AggregateCensusComponentV2"));
+    assert!(foundation_mod.contains("bind_owner_provider_v2"));
+    assert!(foundation_mod.contains("census_from_stage11_owner_v2"));
+    assert!(foundation_mod.contains("Vec<InventoryRowV1>"));
     assert!(foundation_mod.contains("pub(crate) fn bind_owner_provider"));
     assert!(foundation_mod.contains("Stage11AggregateCensusProviderSeedV1"));
     assert!(foundation_mod.contains("pub(crate) fn census_from_stage11_owner"));
@@ -3804,6 +3848,13 @@ fn stage5_successor_seams_are_owner_private_and_production_replaceable() {
     assert!(!foundation_mod.contains("OnceLock"));
     assert!(installation_mod.contains("pub(in crate::domain::vnext) mod stage9_finality"));
     assert!(installation_mod.contains("pub(in crate::domain::vnext) mod stage11_finality"));
+    assert!(installation_mod.contains("pub(in crate::domain::vnext) mod stage9_finality_v2"));
+    assert!(installation_mod.contains("pub(in crate::domain::vnext) mod stage11_finality_v2"));
+    assert!(installation_mod.contains("Stage9ActiveStoreFinalityProviderSeedV2"));
+    assert!(installation_mod.contains("Stage11PreStoreFinalityProviderSeedV2"));
+    assert!(persistence_mod.contains("pub(in crate::domain::vnext) mod protected_locator_v2"));
+    assert!(persistence_mod.contains("bind_stage9_owner_provider"));
+    assert!(persistence_mod.contains("acquire_pre_candidate"));
     assert_eq!(
         installation_mod
             .matches("fn bind_finality_provider")

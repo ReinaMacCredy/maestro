@@ -44,13 +44,7 @@ pub(in crate::domain::vnext) fn consume_pre_store_with_test_owner<'locator>(
     durable_finality::consume_pre_store_with_test_owner(locator_lease, writes_before_dispatch)
 }
 
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "TODO(installation-stage9): Remove after Stage 9 integrates the frozen ActiveStore finality facade"
-    )
-)]
+#[cfg(test)]
 pub(in crate::domain::vnext) mod stage9_finality {
     use std::marker::PhantomData;
     use std::rc::Rc;
@@ -158,9 +152,93 @@ pub(in crate::domain::vnext) mod stage9_finality {
     not(test),
     expect(
         dead_code,
-        reason = "TODO(installation-stage11): Remove after Stage 11 integrates the frozen PreStore finality facade"
+        reason = "TODO(installation-stage9): Remove after Stage 9 consumes the frozen V2 ActiveStore finality facade"
     )
 )]
+pub(in crate::domain::vnext) mod stage9_finality_v2 {
+    use std::marker::PhantomData;
+    use std::rc::Rc;
+
+    pub(in crate::domain::vnext) type Stage9ActiveStoreFinalityProviderSeedV2 =
+        super::durable_finality_stage9_seed::Stage9ActiveStoreFinalitySeedV2;
+
+    pub(in crate::domain::vnext) trait Stage9ActiveStoreFinalityProviderV2:
+        super::durable_finality::ActiveStoreFinalityOwnerV2
+    {
+    }
+
+    impl<T> Stage9ActiveStoreFinalityProviderV2 for T where
+        T: super::durable_finality::ActiveStoreFinalityOwnerV2 + ?Sized
+    {
+    }
+
+    pub(in crate::domain::vnext) struct Stage9ActiveStoreFinalityProviderBindingV2<'effect> {
+        inner: &'effect mut dyn super::durable_finality::ActiveStoreFinalityOwnerV2,
+        _not_send_or_sync: PhantomData<Rc<()>>,
+    }
+
+    pub(in crate::domain::vnext) struct Stage9ActiveStoreFinalityOutcomeV2 {
+        class: Stage9ActiveStoreFinalityOutcomeClassV2,
+        _not_send_or_sync: PhantomData<Rc<()>>,
+    }
+
+    #[derive(Clone, Copy, Eq, PartialEq)]
+    pub(in crate::domain::vnext) enum Stage9ActiveStoreFinalityOutcomeClassV2 {
+        Committed,
+        RecoveryRequired,
+        InDoubt,
+        IntegrityBlocked,
+    }
+
+    pub(in crate::domain::vnext) fn bind_owner_provider<P>(
+        provider: &mut P,
+    ) -> Stage9ActiveStoreFinalityProviderBindingV2<'_>
+    where
+        P: Stage9ActiveStoreFinalityProviderV2,
+    {
+        Stage9ActiveStoreFinalityProviderBindingV2 {
+            inner: provider,
+            _not_send_or_sync: PhantomData,
+        }
+    }
+
+    pub(in crate::domain::vnext) fn execute_active(
+        provider: Stage9ActiveStoreFinalityProviderBindingV2<'_>,
+    ) -> Result<
+        Stage9ActiveStoreFinalityOutcomeV2,
+        super::durable_finality::DurableInstallationFinalityErrorV2,
+    > {
+        super::durable_finality::DurableInstallationFinalityBackendV2::capture(provider.inner)
+            .consume_active()
+            .map(|outcome| Stage9ActiveStoreFinalityOutcomeV2 {
+                class: match outcome {
+                    super::durable_finality::DurableInstallationFinalityOutcomeV2::Committed => {
+                        Stage9ActiveStoreFinalityOutcomeClassV2::Committed
+                    }
+                    super::durable_finality::DurableInstallationFinalityOutcomeV2::RecoveryRequired => {
+                        Stage9ActiveStoreFinalityOutcomeClassV2::RecoveryRequired
+                    }
+                    super::durable_finality::DurableInstallationFinalityOutcomeV2::InDoubt => {
+                        Stage9ActiveStoreFinalityOutcomeClassV2::InDoubt
+                    }
+                    super::durable_finality::DurableInstallationFinalityOutcomeV2::IntegrityBlocked => {
+                        Stage9ActiveStoreFinalityOutcomeClassV2::IntegrityBlocked
+                    }
+                },
+                _not_send_or_sync: PhantomData,
+            })
+    }
+
+    impl Stage9ActiveStoreFinalityOutcomeV2 {
+        pub(in crate::domain::vnext) fn into_class(
+            self,
+        ) -> Stage9ActiveStoreFinalityOutcomeClassV2 {
+            self.class
+        }
+    }
+}
+
+#[cfg(test)]
 pub(in crate::domain::vnext) mod stage11_finality {
     use std::marker::PhantomData;
     use std::rc::Rc;
@@ -264,5 +342,116 @@ pub(in crate::domain::vnext) mod stage11_finality {
         pub(in crate::domain::vnext) fn into_class(self) -> Stage11PreStoreFinalityOutcomeClassV1 {
             self.class
         }
+    }
+}
+
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "TODO(installation-stage11): Remove after Stage 11 consumes the frozen V2 PreStore finality facade"
+    )
+)]
+pub(in crate::domain::vnext) mod stage11_finality_v2 {
+    use std::marker::PhantomData;
+    use std::rc::Rc;
+
+    use crate::domain::vnext::persistence::protected_locator_v2::ProtectedLocatorLeaseV2;
+
+    pub(in crate::domain::vnext) type Stage11PreStoreFinalityProviderSeedV2 =
+        super::durable_finality_stage11_seed::Stage11PreStoreFinalitySeedV2;
+
+    pub(in crate::domain::vnext) trait Stage11PreStoreFinalityProviderV2:
+        super::durable_finality::PreStoreFinalityOwnerV2
+    {
+    }
+
+    impl<T> Stage11PreStoreFinalityProviderV2 for T where
+        T: super::durable_finality::PreStoreFinalityOwnerV2 + ?Sized
+    {
+    }
+
+    pub(in crate::domain::vnext) struct Stage11PreStoreFinalityProviderBindingV2<'effect> {
+        inner: &'effect mut dyn super::durable_finality::PreStoreFinalityOwnerV2,
+        _not_send_or_sync: PhantomData<Rc<()>>,
+    }
+
+    pub(in crate::domain::vnext) struct Stage11PreStoreFinalityOutcomeV2 {
+        class: Stage11PreStoreFinalityOutcomeClassV2,
+        _not_send_or_sync: PhantomData<Rc<()>>,
+    }
+
+    #[derive(Clone, Copy, Eq, PartialEq)]
+    pub(in crate::domain::vnext) enum Stage11PreStoreFinalityOutcomeClassV2 {
+        Committed,
+        RecoveryRequired,
+        InDoubt,
+        IntegrityBlocked,
+    }
+
+    pub(in crate::domain::vnext) fn bind_owner_provider<P>(
+        provider: &mut P,
+    ) -> Stage11PreStoreFinalityProviderBindingV2<'_>
+    where
+        P: Stage11PreStoreFinalityProviderV2,
+    {
+        Stage11PreStoreFinalityProviderBindingV2 {
+            inner: provider,
+            _not_send_or_sync: PhantomData,
+        }
+    }
+
+    pub(in crate::domain::vnext) fn execute_pre_store(
+        provider: Stage11PreStoreFinalityProviderBindingV2<'_>,
+        locator: ProtectedLocatorLeaseV2<'_>,
+    ) -> Result<
+        Stage11PreStoreFinalityOutcomeV2,
+        super::durable_finality::DurableInstallationFinalityErrorV2,
+    > {
+        super::durable_finality::DurableInstallationFinalityBackendV2::capture(provider.inner)
+            .consume_pre_store(locator)
+            .map(|outcome| Stage11PreStoreFinalityOutcomeV2 {
+                class: match outcome {
+                    super::durable_finality::DurableInstallationFinalityOutcomeV2::Committed => {
+                        Stage11PreStoreFinalityOutcomeClassV2::Committed
+                    }
+                    super::durable_finality::DurableInstallationFinalityOutcomeV2::RecoveryRequired => {
+                        Stage11PreStoreFinalityOutcomeClassV2::RecoveryRequired
+                    }
+                    super::durable_finality::DurableInstallationFinalityOutcomeV2::InDoubt => {
+                        Stage11PreStoreFinalityOutcomeClassV2::InDoubt
+                    }
+                    super::durable_finality::DurableInstallationFinalityOutcomeV2::IntegrityBlocked => {
+                        Stage11PreStoreFinalityOutcomeClassV2::IntegrityBlocked
+                    }
+                },
+                _not_send_or_sync: PhantomData,
+            })
+    }
+
+    impl Stage11PreStoreFinalityOutcomeV2 {
+        pub(in crate::domain::vnext) fn into_class(self) -> Stage11PreStoreFinalityOutcomeClassV2 {
+            self.class
+        }
+    }
+}
+
+#[cfg(test)]
+mod v2_finality_compile_tests {
+    use super::{stage9_finality_v2, stage11_finality_v2};
+
+    #[test]
+    fn stage9_and_stage11_seeds_reach_only_the_owner_bound_v2_facades() {
+        let mut active =
+            stage9_finality_v2::Stage9ActiveStoreFinalityProviderSeedV2::test_unavailable();
+        let active = stage9_finality_v2::bind_owner_provider(&mut active);
+        assert!(stage9_finality_v2::execute_active(active).is_err());
+        let _ = stage9_finality_v2::Stage9ActiveStoreFinalityOutcomeV2::into_class;
+
+        let mut pre_store =
+            stage11_finality_v2::Stage11PreStoreFinalityProviderSeedV2::test_unavailable();
+        let _pre_store = stage11_finality_v2::bind_owner_provider(&mut pre_store);
+        let _ = stage11_finality_v2::execute_pre_store;
+        let _ = stage11_finality_v2::Stage11PreStoreFinalityOutcomeV2::into_class;
     }
 }

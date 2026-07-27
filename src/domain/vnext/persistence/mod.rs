@@ -87,3 +87,69 @@ pub use store::{
     InstallationActivationIntentV1, RepositoryActivationIntentV1, StoreError, StoreStateV1, StoreV1,
 };
 pub use types::{StoreDomainError, StoreDomainV1, StoreRoleV1};
+
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "TODO(persistence-stage9): Remove after Stage 9 consumes the frozen pre-candidate locator facade"
+    )
+)]
+pub(in crate::domain::vnext) mod protected_locator_v2 {
+    use std::marker::PhantomData;
+    use std::rc::Rc;
+
+    pub(in crate::domain::vnext) use super::protected_locator_lease::{
+        ProtectedLocatorFinalityDispositionV2, ProtectedLocatorLeaseErrorV2,
+        ProtectedLocatorLeaseV2,
+    };
+    pub(in crate::domain::vnext) type Stage9ProtectedLocatorProviderSeedV2 =
+        super::protected_locator_stage9_seed::Stage9ProtectedLocatorBackendSeedV2;
+
+    pub(in crate::domain::vnext) trait Stage9ProtectedLocatorProviderV2:
+        super::protected_locator_lease::ProtectedLocatorBackendV2
+    {
+    }
+
+    impl<T> Stage9ProtectedLocatorProviderV2 for T where
+        T: super::protected_locator_lease::ProtectedLocatorBackendV2 + ?Sized
+    {
+    }
+
+    pub(in crate::domain::vnext) struct Stage9ProtectedLocatorProviderBindingV2<'locator> {
+        inner: &'locator mut dyn super::protected_locator_lease::ProtectedLocatorBackendV2,
+        _not_send_or_sync: PhantomData<Rc<()>>,
+    }
+
+    pub(in crate::domain::vnext) fn bind_stage9_owner_provider<P>(
+        provider: &mut P,
+    ) -> Stage9ProtectedLocatorProviderBindingV2<'_>
+    where
+        P: Stage9ProtectedLocatorProviderV2,
+    {
+        Stage9ProtectedLocatorProviderBindingV2 {
+            inner: provider,
+            _not_send_or_sync: PhantomData,
+        }
+    }
+
+    pub(in crate::domain::vnext) fn acquire_pre_candidate(
+        binding: Stage9ProtectedLocatorProviderBindingV2<'_>,
+    ) -> Result<ProtectedLocatorLeaseV2<'_>, ProtectedLocatorLeaseErrorV2> {
+        super::protected_locator_stage9_seed::acquire_protected_locator_lease_v2(binding.inner)
+    }
+}
+
+#[cfg(test)]
+mod protected_locator_v2_compile_tests {
+    use super::protected_locator_v2::{
+        Stage9ProtectedLocatorProviderSeedV2, acquire_pre_candidate, bind_stage9_owner_provider,
+    };
+
+    #[test]
+    fn stage9_seed_reaches_the_v2_facade_without_a_zero_input_success_path() {
+        let mut seed = Stage9ProtectedLocatorProviderSeedV2::test_unavailable();
+        let binding = bind_stage9_owner_provider(&mut seed);
+        assert!(acquire_pre_candidate(binding).is_err());
+    }
+}

@@ -53,10 +53,18 @@ fn scheduling_planning_input(
     request_id: ActionRequestIdV1,
     probe: &StoreIdempotencyProbeV1,
 ) -> PlanningSchedulingPolicyInputV1 {
+    let normalize = |policy: [u64; 4]| {
+        policy.map(|value| {
+            if value == 0 {
+                0
+            } else {
+                (u64::MAX - 1_000) + value
+            }
+        })
+    };
     PlanningSchedulingPolicyInputV1::from_stage7_planning(
-        current_policy,
-        candidate_policy,
-        [1; 4],
+        normalize(current_policy),
+        normalize(candidate_policy),
         current_binding_root.map_or([0xA5; 32], |root| *root.as_bytes()),
         *binding_object.id().as_bytes(),
         *request_id.as_bytes(),

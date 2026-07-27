@@ -2,10 +2,302 @@ use std::cell::Cell;
 use std::marker::PhantomData;
 use std::rc::Rc;
 
+use sha2::{Digest, Sha256};
+
 use super::secure_fs::{InventoryRowV1, SecureFsError, SecureFsResult};
 
 pub(crate) mod owner_sealed {
     pub trait Sealed {}
+}
+
+#[derive(Eq, PartialEq)]
+pub(super) struct RepositoryRootAdmissionV2 {
+    roots: Vec<AggregateRootFactsV1>,
+    owner_currentness: [u8; 32],
+    consumed: Cell<bool>,
+    _not_send_or_sync: PhantomData<Rc<()>>,
+}
+
+#[derive(Eq, PartialEq)]
+pub(super) struct InstallationRootAdmissionV2 {
+    roots: Vec<AggregateRootFactsV1>,
+    owner_currentness: [u8; 32],
+    consumed: Cell<bool>,
+    _not_send_or_sync: PhantomData<Rc<()>>,
+}
+
+#[derive(Eq, PartialEq)]
+pub(super) struct CensusInvocationV2 {
+    invocation: [u8; 32],
+    namespace_epoch: u64,
+    maximum_entries: u64,
+    maximum_bytes: u64,
+    maximum_roots: u64,
+    maximum_descriptors: u64,
+    maximum_depth: u64,
+    maximum_name_bytes: u64,
+    revocation_revision: u64,
+    consumed: Cell<bool>,
+    _not_send_or_sync: PhantomData<Rc<()>>,
+}
+
+pub(crate) struct FoundationAdmittedRootSourceV2 {
+    repository: RepositoryRootAdmissionV2,
+    installation: InstallationRootAdmissionV2,
+    invocation: CensusInvocationV2,
+    consumed: Cell<bool>,
+    _not_send_or_sync: PhantomData<Rc<()>>,
+}
+
+pub(crate) trait AggregateCensusBackendV2: owner_sealed::Sealed {
+    fn acquire_complete_admitted_root_source(
+        &mut self,
+    ) -> SecureFsResult<FoundationAdmittedRootSourceV2>;
+
+    fn census_pass(
+        &mut self,
+        roots: &AggregateRootSetFactsV1,
+        pass: u8,
+    ) -> SecureFsResult<Vec<AggregateComponentCensusV1>>;
+
+    fn final_root_set_recheck(&mut self) -> SecureFsResult<AggregateRootSetFactsV1>;
+
+    fn aggregate_fence_is_live(&self) -> bool;
+
+    fn consume_final_aggregate_fence(&mut self, scan_invocation: [u8; 32]) -> SecureFsResult<()>;
+}
+
+pub(super) struct AggregateCensusLeaseV2<'scan> {
+    backend: &'scan mut dyn AggregateCensusBackendV2,
+    roots: AggregateRootSetFactsV1,
+    consumed: Cell<bool>,
+    _not_send_or_sync: PhantomData<Rc<()>>,
+}
+
+pub(super) struct AggregateCensusResultV2<'scan> {
+    admitted_set: [u8; 32],
+    roots: Vec<AggregateComponentCensusV1>,
+    entries: u64,
+    bytes: u64,
+    consumed: Cell<bool>,
+    _scan: PhantomData<&'scan mut ()>,
+    _not_send_or_sync: PhantomData<Rc<()>>,
+}
+
+pub(super) struct MigrationClassificationContinuationV2<'scan> {
+    admitted_set: [u8; 32],
+    roots: Vec<AggregateComponentCensusV1>,
+    entries: u64,
+    bytes: u64,
+    _scan: PhantomData<&'scan mut ()>,
+    _not_send_or_sync: PhantomData<Rc<()>>,
+}
+
+impl MigrationClassificationContinuationV2<'_> {
+    pub(super) fn into_stage11_parts(
+        self,
+    ) -> ([u8; 32], u64, u64, Vec<AggregateComponentCensusV1>) {
+        (self.admitted_set, self.entries, self.bytes, self.roots)
+    }
+}
+
+impl RepositoryRootAdmissionV2 {
+    pub(super) fn from_persistence_owner(
+        roots: Vec<AggregateRootFactsV1>,
+        owner_currentness: [u8; 32],
+    ) -> SecureFsResult<Self> {
+        if roots.is_empty() || owner_currentness == [0; 32] {
+            return Err(SecureFsError::CensusRefused);
+        }
+        Ok(Self {
+            roots,
+            owner_currentness,
+            consumed: Cell::new(false),
+            _not_send_or_sync: PhantomData,
+        })
+    }
+}
+
+impl InstallationRootAdmissionV2 {
+    pub(super) fn from_installation_owner(
+        roots: Vec<AggregateRootFactsV1>,
+        owner_currentness: [u8; 32],
+    ) -> SecureFsResult<Self> {
+        if roots.is_empty() || owner_currentness == [0; 32] {
+            return Err(SecureFsError::CensusRefused);
+        }
+        Ok(Self {
+            roots,
+            owner_currentness,
+            consumed: Cell::new(false),
+            _not_send_or_sync: PhantomData,
+        })
+    }
+}
+
+impl CensusInvocationV2 {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the physical-scope-free aggregate limits and currentness tuple is exact"
+    )]
+    pub(super) fn from_foundation_owner(
+        invocation: [u8; 32],
+        namespace_epoch: u64,
+        maximum_entries: u64,
+        maximum_bytes: u64,
+        maximum_roots: u64,
+        maximum_descriptors: u64,
+        maximum_depth: u64,
+        maximum_name_bytes: u64,
+        revocation_revision: u64,
+    ) -> SecureFsResult<Self> {
+        if invocation == [0; 32]
+            || [
+                namespace_epoch,
+                maximum_entries,
+                maximum_bytes,
+                maximum_roots,
+                maximum_descriptors,
+                maximum_depth,
+                maximum_name_bytes,
+                revocation_revision,
+            ]
+            .contains(&0)
+        {
+            return Err(SecureFsError::CensusRefused);
+        }
+        Ok(Self {
+            invocation,
+            namespace_epoch,
+            maximum_entries,
+            maximum_bytes,
+            maximum_roots,
+            maximum_descriptors,
+            maximum_depth,
+            maximum_name_bytes,
+            revocation_revision,
+            consumed: Cell::new(false),
+            _not_send_or_sync: PhantomData,
+        })
+    }
+}
+
+impl FoundationAdmittedRootSourceV2 {
+    pub(super) fn join(
+        repository: RepositoryRootAdmissionV2,
+        installation: InstallationRootAdmissionV2,
+        invocation: CensusInvocationV2,
+    ) -> SecureFsResult<Self> {
+        if repository.owner_currentness == installation.owner_currentness
+            || repository.consumed.get()
+            || installation.consumed.get()
+            || invocation.consumed.get()
+        {
+            return Err(SecureFsError::CensusRefused);
+        }
+        Ok(Self {
+            repository,
+            installation,
+            invocation,
+            consumed: Cell::new(false),
+            _not_send_or_sync: PhantomData,
+        })
+    }
+
+    fn consume(self) -> SecureFsResult<AggregateRootSetFactsV1> {
+        if self.consumed.replace(true)
+            || self.repository.consumed.replace(true)
+            || self.installation.consumed.replace(true)
+            || self.invocation.consumed.replace(true)
+        {
+            return Err(SecureFsError::CensusRefused);
+        }
+        let mut roots = self.repository.roots;
+        roots.extend(self.installation.roots);
+        let mut digest = Sha256::new();
+        digest.update(b"maestro.foundation.admitted-root-set.v2\0");
+        digest.update(self.repository.owner_currentness);
+        digest.update(self.installation.owner_currentness);
+        digest.update(self.invocation.invocation);
+        let admitted_set = digest.finalize().into();
+        Ok(AggregateRootSetFactsV1 {
+            admitted_set,
+            namespace_epoch: self.invocation.namespace_epoch,
+            roots,
+            maximum_entries: self.invocation.maximum_entries,
+            maximum_bytes: self.invocation.maximum_bytes,
+            maximum_roots: self.invocation.maximum_roots,
+            maximum_descriptors: self.invocation.maximum_descriptors,
+            maximum_depth: self.invocation.maximum_depth,
+            maximum_name_bytes: self.invocation.maximum_name_bytes,
+            scan_invocation: self.invocation.invocation,
+            root_set_currentness: admitted_set,
+            revocation_revision: self.invocation.revocation_revision,
+        })
+    }
+}
+
+impl<'scan> AggregateCensusLeaseV2<'scan> {
+    pub(super) fn acquire(
+        backend: &'scan mut dyn AggregateCensusBackendV2,
+    ) -> SecureFsResult<Self> {
+        let roots = backend.acquire_complete_admitted_root_source()?.consume()?;
+        validate_root_set(&roots)?;
+        Ok(Self {
+            backend,
+            roots,
+            consumed: Cell::new(false),
+            _not_send_or_sync: PhantomData,
+        })
+    }
+
+    pub(super) fn consume(self) -> SecureFsResult<AggregateCensusResultV2<'scan>> {
+        if self.consumed.replace(true) {
+            return Err(SecureFsError::CensusRefused);
+        }
+        let first = self.backend.census_pass(&self.roots, 1)?;
+        validate_pass(&self.roots, &first)?;
+        let second = self.backend.census_pass(&self.roots, 2)?;
+        validate_pass(&self.roots, &second)?;
+        if first != second || !self.backend.aggregate_fence_is_live() {
+            return Err(SecureFsError::CensusRefused);
+        }
+        let final_roots = self.backend.final_root_set_recheck()?;
+        if final_roots != self.roots || !self.backend.aggregate_fence_is_live() {
+            return Err(SecureFsError::CensusRefused);
+        }
+        validate_cross_root_aliases(&first)?;
+        self.backend
+            .consume_final_aggregate_fence(self.roots.scan_invocation)?;
+        let (entries, bytes) = totals(&first)?;
+        Ok(AggregateCensusResultV2 {
+            admitted_set: self.roots.admitted_set,
+            roots: first,
+            entries,
+            bytes,
+            consumed: Cell::new(false),
+            _scan: PhantomData,
+            _not_send_or_sync: PhantomData,
+        })
+    }
+}
+
+impl<'scan> AggregateCensusResultV2<'scan> {
+    pub(super) fn into_migration_classification(
+        self,
+    ) -> SecureFsResult<MigrationClassificationContinuationV2<'scan>> {
+        if self.consumed.replace(true) {
+            return Err(SecureFsError::CensusRefused);
+        }
+        Ok(MigrationClassificationContinuationV2 {
+            admitted_set: self.admitted_set,
+            roots: self.roots,
+            entries: self.entries,
+            bytes: self.bytes,
+            _scan: PhantomData,
+            _not_send_or_sync: PhantomData,
+        })
+    }
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -310,6 +602,14 @@ pub(super) fn census_from_stage11_owner<'scan>(
     Ok(result)
 }
 
+pub(super) fn census_from_stage11_owner_v2<'scan>(
+    backend: &'scan mut dyn AggregateCensusBackendV2,
+) -> SecureFsResult<MigrationClassificationContinuationV2<'scan>> {
+    AggregateCensusLeaseV2::acquire(backend)?
+        .consume()?
+        .into_migration_classification()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -480,6 +780,8 @@ mod tests {
         assert_eq!(consumer.observed, Some(([1; 32], 0, 0, 2)));
         assert_eq!(backend.passes, [1, 2]);
         assert!(backend.fence_consumed);
+        v2_joins_both_owner_admissions_and_consumes_one_aggregate_fence();
+        v2_optional_root_drift_and_early_fence_release_refuse_the_whole_scan();
     }
 
     #[test]
@@ -559,6 +861,132 @@ mod tests {
             super::super::aggregate_census_stage11_seed::Stage11AggregateCensusBackendSeedV1::test_unavailable();
         assert!(matches!(
             census_from_stage11_owner(&mut backend),
+            Err(SecureFsError::CensusRefused)
+        ));
+    }
+
+    struct TestBackendV2 {
+        second: Vec<AggregateComponentCensusV1>,
+        fence_live: bool,
+        fence_consumed: bool,
+    }
+
+    impl owner_sealed::Sealed for TestBackendV2 {}
+
+    impl AggregateCensusBackendV2 for TestBackendV2 {
+        fn acquire_complete_admitted_root_source(
+            &mut self,
+        ) -> SecureFsResult<FoundationAdmittedRootSourceV2> {
+            let roots = root_set().roots;
+            FoundationAdmittedRootSourceV2::join(
+                RepositoryRootAdmissionV2::from_persistence_owner(
+                    vec![roots[0].clone_for_test()],
+                    [31; 32],
+                )?,
+                InstallationRootAdmissionV2::from_installation_owner(
+                    vec![roots[1].clone_for_test(), roots[2].clone_for_test()],
+                    [32; 32],
+                )?,
+                CensusInvocationV2::from_foundation_owner(
+                    [25; 32], 40, 50, 500, 3, 100, 4, 64, 27,
+                )?,
+            )
+        }
+
+        fn census_pass(
+            &mut self,
+            _roots: &AggregateRootSetFactsV1,
+            pass: u8,
+        ) -> SecureFsResult<Vec<AggregateComponentCensusV1>> {
+            Ok(if pass == 1 {
+                component_rows()
+            } else {
+                core::mem::take(&mut self.second)
+            })
+        }
+
+        fn final_root_set_recheck(&mut self) -> SecureFsResult<AggregateRootSetFactsV1> {
+            let mut roots = root_set();
+            let mut digest = Sha256::new();
+            digest.update(b"maestro.foundation.admitted-root-set.v2\0");
+            digest.update([31; 32]);
+            digest.update([32; 32]);
+            digest.update([25; 32]);
+            roots.admitted_set = digest.finalize().into();
+            roots.root_set_currentness = roots.admitted_set;
+            Ok(roots)
+        }
+
+        fn aggregate_fence_is_live(&self) -> bool {
+            self.fence_live && !self.fence_consumed
+        }
+
+        fn consume_final_aggregate_fence(
+            &mut self,
+            scan_invocation: [u8; 32],
+        ) -> SecureFsResult<()> {
+            if scan_invocation != [25; 32] || !self.aggregate_fence_is_live() {
+                return Err(SecureFsError::CensusRefused);
+            }
+            self.fence_consumed = true;
+            Ok(())
+        }
+    }
+
+    impl AggregateRootFactsV1 {
+        fn clone_for_test(&self) -> Self {
+            Self {
+                role: self.role,
+                declared_locator: self.declared_locator,
+                resolved_identity: self.resolved_identity,
+                mount_identity: self.mount_identity,
+                provider_identity: self.provider_identity,
+                anchor_identity: self.anchor_identity,
+                fence_identity: self.fence_identity,
+                journal_position: self.journal_position,
+                locator_components: self.locator_components.clone(),
+                absence_fence: self.absence_fence,
+            }
+        }
+    }
+
+    #[test]
+    fn v2_joins_both_owner_admissions_and_consumes_one_aggregate_fence() {
+        let mut backend = TestBackendV2 {
+            second: component_rows(),
+            fence_live: true,
+            fence_consumed: false,
+        };
+        let continuation = census_from_stage11_owner_v2(&mut backend).unwrap();
+        assert_ne!(continuation.admitted_set, [0; 32]);
+        assert_eq!(continuation.roots.len(), 2);
+        assert_eq!((continuation.entries, continuation.bytes), (0, 0));
+        assert!(backend.fence_consumed);
+    }
+
+    #[test]
+    fn v2_optional_root_drift_and_early_fence_release_refuse_the_whole_scan() {
+        let mut released = TestBackendV2 {
+            second: component_rows(),
+            fence_live: false,
+            fence_consumed: false,
+        };
+        assert!(matches!(
+            census_from_stage11_owner_v2(&mut released),
+            Err(SecureFsError::CensusRefused)
+        ));
+
+        let mut drifted = TestBackendV2 {
+            second: {
+                let mut rows = component_rows();
+                rows.pop();
+                rows
+            },
+            fence_live: true,
+            fence_consumed: false,
+        };
+        assert!(matches!(
+            census_from_stage11_owner_v2(&mut drifted),
             Err(SecureFsError::CensusRefused)
         ));
     }

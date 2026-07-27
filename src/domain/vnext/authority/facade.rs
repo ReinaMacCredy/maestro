@@ -399,7 +399,6 @@ impl<'tx> AuthorityMaterializationPortV1<'tx> {
             &current_generation,
             &active_objects,
             authority_currentness,
-            owner.planning.safety_floor(),
         )?;
         let attestation =
             GovernanceAttestationV1::derive(owner.planning, &governance_view, admission)?;

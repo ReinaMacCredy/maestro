@@ -33,6 +33,10 @@ const ACTION_PUBLISH_SCHEDULING_POLICY_BINDING_V1: u64 = 105;
 const ACTION_ROTATE_REPOSITORY_GOVERNANCE_FLOOR_V1: u64 = 68;
 const PLANNING_ACTION_OWNER_TAG_V1: u64 = 12;
 const ACTION_105_PARTICIPANTS_V1: [u64; 3] = [1, 7, 14];
+const AUTHORITY_SCHEDULING_SAFETY_MAXIMUMS_V1: [u64; 4] = [1_000; 4];
+const AUTHORITY_SCHEDULING_SAFETY_FLOOR_VERSION_V1: u64 = 1;
+const AUTHORITY_SCHEDULING_CLASSIFIER_REVISION_V1: u64 = 1;
+const AUTHORITY_SCHEDULING_EVALUATOR_REVISION_V1: u64 = 1;
 
 const SCHEMA_FIELDS_V1: [&str; 19] = [
     "repository_store_domain",
@@ -671,6 +675,21 @@ pub(super) struct RepositoryGovernanceAuthorityCurrentnessV1 {
     pub(super) trusted_time: u64,
 }
 
+#[derive(Clone, Copy)]
+struct AuthoritySchedulingSafetyStateV1 {
+    floor: [u64; 4],
+    floor_identity: [u8; 32],
+    floor_version: u64,
+    floor_semantic_hash: [u8; 32],
+    classifier_identity: [u8; 32],
+    classifier_revision: u64,
+    classifier_semantic_hash: [u8; 32],
+    evaluator_identity: [u8; 32],
+    evaluator_revision: u64,
+    compatibility: [u8; 32],
+    currentness: [u8; 32],
+}
+
 pub(super) struct RepositoryGovernanceFloorCurrentViewV1<'tx> {
     _view: &'tx StorePublicationViewV1<'tx>,
     snapshot: RepositoryGovernanceFloorSnapshotV1,
@@ -689,12 +708,7 @@ pub(super) struct RepositoryGovernanceFloorCurrentViewV1<'tx> {
     session: [u8; 32],
     assurance_revision: u64,
     trusted_time: u64,
-    scheduling_safety_floor: [u64; 4],
-    scheduling_classifier_identity: [u8; 32],
-    scheduling_classifier_revision: u64,
-    scheduling_evaluator_identity: [u8; 32],
-    scheduling_evaluator_revision: u64,
-    scheduling_compatibility: [u8; 32],
+    scheduling_safety: AuthoritySchedulingSafetyStateV1,
     commitment: [u8; 32],
     _not_send_or_sync: PhantomData<Rc<()>>,
 }
@@ -716,18 +730,23 @@ impl RepositoryGovernanceFloorCurrentViewV1<'_> {
                 self.principal,
                 self.binding,
                 self.session,
-                self.scheduling_classifier_identity,
-                self.scheduling_evaluator_identity,
-                self.scheduling_compatibility,
+                self.scheduling_safety.floor_identity,
+                self.scheduling_safety.floor_semantic_hash,
+                self.scheduling_safety.classifier_identity,
+                self.scheduling_safety.classifier_semantic_hash,
+                self.scheduling_safety.evaluator_identity,
+                self.scheduling_safety.compatibility,
+                self.scheduling_safety.currentness,
                 self.commitment,
             ]
             .contains(&[0; 32])
             && self.revocation_revision > 0
             && self.assurance_revision > 0
             && self.trusted_time > 0
-            && self.scheduling_safety_floor != [0; 4]
-            && self.scheduling_classifier_revision > 0
-            && self.scheduling_evaluator_revision > 0
+            && self.scheduling_safety.floor != [0; 4]
+            && self.scheduling_safety.floor_version > 0
+            && self.scheduling_safety.classifier_revision > 0
+            && self.scheduling_safety.evaluator_revision > 0
     }
 
     pub(super) const fn snapshot(&self) -> &RepositoryGovernanceFloorSnapshotV1 {
@@ -763,15 +782,15 @@ impl RepositoryGovernanceFloorCurrentViewV1<'_> {
     }
 
     pub(super) const fn scheduling_safety_floor(&self) -> [u64; 4] {
-        self.scheduling_safety_floor
+        self.scheduling_safety.floor
     }
 
     pub(super) const fn scheduling_classifier_revision(&self) -> u64 {
-        self.scheduling_classifier_revision
+        self.scheduling_safety.classifier_revision
     }
 
     pub(super) const fn scheduling_evaluator_revision(&self) -> u64 {
-        self.scheduling_evaluator_revision
+        self.scheduling_safety.evaluator_revision
     }
 
     pub(super) fn preserved_by_roots(&self, roots: &[StoreObjectIdV1]) -> bool {
@@ -789,13 +808,11 @@ pub(super) fn resolve_repository_governance_floor_current_view<'tx>(
     generation: &StoreGenerationV1,
     active_objects: &[StoreObjectV1],
     authority: RepositoryGovernanceAuthorityCurrentnessV1,
-    scheduling_safety_floor: [u64; 4],
 ) -> Result<RepositoryGovernanceFloorCurrentViewV1<'tx>, RepositoryGovernanceFloorErrorV1> {
     if view.role() != StoreRoleV1::Repository
         || head.generation_id() != generation.id()
         || head.generation_ordinal() != generation.ordinal()
         || generation.domain() != view.domain()
-        || scheduling_safety_floor == [0; 4]
     {
         return Err(RepositoryGovernanceFloorErrorV1::CurrentnessMismatch);
     }
@@ -851,24 +868,7 @@ pub(super) fn resolve_repository_governance_floor_current_view<'tx>(
                 .collect(),
         ),
     ]))?;
-    let scheduling_classifier_identity = hash_value(&CborValue::text(
-        "maestro.vnext.scheduling-policy-diff-classifier.v1",
-    )?)?;
-    let scheduling_evaluator_identity = hash_value(&CborValue::text(
-        "maestro.vnext.scheduling-safety-floor-evaluator.v1",
-    )?)?;
-    let scheduling_compatibility = hash_value(&CborValue::Array(vec![
-        CborValue::text("maestro.vnext.scheduling-safety-compatibility.v1")?,
-        bytes(&scheduling_classifier_identity),
-        bytes(&scheduling_evaluator_identity),
-        CborValue::Array(
-            scheduling_safety_floor
-                .iter()
-                .copied()
-                .map(CborValue::Unsigned)
-                .collect(),
-        ),
-    ]))?;
+    let scheduling_safety = resolve_authority_scheduling_safety_state(&snapshot, authority)?;
     let commitment = current_view_commitment(
         view,
         head,
@@ -877,10 +877,7 @@ pub(super) fn resolve_repository_governance_floor_current_view<'tx>(
         *direct_root,
         class_root,
         authority,
-        scheduling_safety_floor,
-        scheduling_classifier_identity,
-        scheduling_evaluator_identity,
-        scheduling_compatibility,
+        scheduling_safety,
     )?;
     Ok(RepositoryGovernanceFloorCurrentViewV1 {
         _view: view,
@@ -900,12 +897,7 @@ pub(super) fn resolve_repository_governance_floor_current_view<'tx>(
         session: authority.session,
         assurance_revision: authority.assurance_revision,
         trusted_time: authority.trusted_time,
-        scheduling_safety_floor,
-        scheduling_classifier_identity,
-        scheduling_classifier_revision: 1,
-        scheduling_evaluator_identity,
-        scheduling_evaluator_revision: 1,
-        scheduling_compatibility,
+        scheduling_safety,
         commitment,
         _not_send_or_sync: PhantomData,
     })
@@ -966,10 +958,7 @@ fn current_view_commitment(
     direct_root: StoreObjectIdV1,
     class_root: [u8; 32],
     authority: RepositoryGovernanceAuthorityCurrentnessV1,
-    scheduling_safety_floor: [u64; 4],
-    classifier_identity: [u8; 32],
-    evaluator_identity: [u8; 32],
-    compatibility: [u8; 32],
+    scheduling_safety: AuthoritySchedulingSafetyStateV1,
 ) -> Result<[u8; 32], RepositoryGovernanceFloorErrorV1> {
     hash_value(&CborValue::Array(vec![
         CborValue::text("maestro.vnext.repository-governance-floor-current-view.v1")?,
@@ -995,18 +984,87 @@ fn current_view_commitment(
         CborValue::Unsigned(authority.assurance_revision),
         CborValue::Unsigned(authority.trusted_time),
         CborValue::Array(
-            scheduling_safety_floor
+            scheduling_safety
+                .floor
                 .iter()
                 .copied()
                 .map(CborValue::Unsigned)
                 .collect(),
         ),
-        bytes(&classifier_identity),
-        CborValue::Unsigned(1),
-        bytes(&evaluator_identity),
-        CborValue::Unsigned(1),
-        bytes(&compatibility),
+        bytes(&scheduling_safety.floor_identity),
+        CborValue::Unsigned(scheduling_safety.floor_version),
+        bytes(&scheduling_safety.floor_semantic_hash),
+        bytes(&scheduling_safety.classifier_identity),
+        CborValue::Unsigned(scheduling_safety.classifier_revision),
+        bytes(&scheduling_safety.classifier_semantic_hash),
+        bytes(&scheduling_safety.evaluator_identity),
+        CborValue::Unsigned(scheduling_safety.evaluator_revision),
+        bytes(&scheduling_safety.compatibility),
+        bytes(&scheduling_safety.currentness),
     ]))
+}
+
+fn resolve_authority_scheduling_safety_state(
+    snapshot: &RepositoryGovernanceFloorSnapshotV1,
+    authority: RepositoryGovernanceAuthorityCurrentnessV1,
+) -> Result<AuthoritySchedulingSafetyStateV1, RepositoryGovernanceFloorErrorV1> {
+    let floor = AUTHORITY_SCHEDULING_SAFETY_MAXIMUMS_V1.map(|maximum| {
+        u64::MAX
+            .checked_sub(maximum)
+            .expect("invariant: the pinned Scheduling Safety maximum is below u64::MAX")
+    });
+    let floor_identity = hash_value(&CborValue::text(
+        "maestro.vnext.scheduling-safety-floor.v1",
+    )?)?;
+    let floor_semantic_hash = hash_value(&CborValue::Array(vec![
+        CborValue::text("maestro.vnext.scheduling-safety-floor-semantics.v1")?,
+        bytes(&floor_identity),
+        CborValue::Unsigned(AUTHORITY_SCHEDULING_SAFETY_FLOOR_VERSION_V1),
+        CborValue::Array(floor.iter().copied().map(CborValue::Unsigned).collect()),
+    ]))?;
+    let classifier_identity = hash_value(&CborValue::text(
+        "maestro.vnext.scheduling-policy-diff-classifier.v1",
+    )?)?;
+    let classifier_semantic_hash = hash_value(&CborValue::Array(vec![
+        CborValue::text("maestro.vnext.scheduling-policy-diff-classifier-semantics.v1")?,
+        bytes(&classifier_identity),
+        CborValue::Unsigned(AUTHORITY_SCHEDULING_CLASSIFIER_REVISION_V1),
+        bytes(&floor_semantic_hash),
+    ]))?;
+    let evaluator_identity = hash_value(&CborValue::text(
+        "maestro.vnext.scheduling-safety-floor-evaluator.v1",
+    )?)?;
+    let compatibility = hash_value(&CborValue::Array(vec![
+        CborValue::text("maestro.vnext.scheduling-safety-compatibility.v1")?,
+        bytes(&floor_semantic_hash),
+        bytes(&classifier_semantic_hash),
+        bytes(&evaluator_identity),
+        CborValue::Unsigned(AUTHORITY_SCHEDULING_EVALUATOR_REVISION_V1),
+    ]))?;
+    let currentness = hash_value(&CborValue::Array(vec![
+        CborValue::text("maestro.vnext.authority-scheduling-safety-currentness.v1")?,
+        bytes(&snapshot.semantic_hash),
+        CborValue::Unsigned(snapshot.floor_revision),
+        CborValue::Unsigned(snapshot.authority_epoch),
+        CborValue::Unsigned(snapshot.trust_root_revision),
+        bytes(&authority.authority_state_token),
+        bytes(&authority.authority_fence),
+        CborValue::Unsigned(authority.revocation_revision),
+        bytes(&compatibility),
+    ]))?;
+    Ok(AuthoritySchedulingSafetyStateV1 {
+        floor,
+        floor_identity,
+        floor_version: AUTHORITY_SCHEDULING_SAFETY_FLOOR_VERSION_V1,
+        floor_semantic_hash,
+        classifier_identity,
+        classifier_revision: AUTHORITY_SCHEDULING_CLASSIFIER_REVISION_V1,
+        classifier_semantic_hash,
+        evaluator_identity,
+        evaluator_revision: AUTHORITY_SCHEDULING_EVALUATOR_REVISION_V1,
+        compatibility,
+        currentness,
+    })
 }
 
 pub(super) fn repository_governance_floor_schema_id() -> Result<SchemaIdV1, IdentityError> {

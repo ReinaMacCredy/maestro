@@ -1,9 +1,81 @@
 use super::protected_locator_lease::{
-    ProtectedLocatorBackendV1, ProtectedLocatorCandidateTransitionV1,
-    ProtectedLocatorDispatchOccurrenceV1, ProtectedLocatorFinalReadbackV1,
-    ProtectedLocatorLeaseErrorV1, ProtectedLocatorLeaseV1, ProtectedLocatorObservedStateV1,
-    ProtectedLocatorOperationRequestV1, owner_sealed,
+    ProtectedLocatorAcquisitionRequestV2, ProtectedLocatorBackendV1, ProtectedLocatorBackendV2,
+    ProtectedLocatorCandidateInputV2, ProtectedLocatorCandidateStateV2,
+    ProtectedLocatorCandidateTransitionV1, ProtectedLocatorDispatchOccurrenceV1,
+    ProtectedLocatorDispatchOccurrenceV2, ProtectedLocatorFinalReadbackV1,
+    ProtectedLocatorFinalReadbackV2, ProtectedLocatorLeaseErrorV1, ProtectedLocatorLeaseErrorV2,
+    ProtectedLocatorLeaseV1, ProtectedLocatorLeaseV2, ProtectedLocatorObservedStateV1,
+    ProtectedLocatorObservedStateV2, ProtectedLocatorOperationRequestV1, owner_sealed,
+    v2_owner_sealed,
 };
+
+pub(in crate::domain::vnext) struct Stage9ProtectedLocatorBackendSeedV2 {
+    _private: (),
+}
+
+impl Stage9ProtectedLocatorBackendSeedV2 {
+    #[cfg(test)]
+    pub(in crate::domain::vnext) fn test_unavailable() -> Self {
+        Self { _private: () }
+    }
+}
+
+impl v2_owner_sealed::Sealed for Stage9ProtectedLocatorBackendSeedV2 {}
+
+impl ProtectedLocatorBackendV2 for Stage9ProtectedLocatorBackendSeedV2 {
+    fn acquire_pre_candidate(
+        &mut self,
+    ) -> Result<
+        (
+            ProtectedLocatorAcquisitionRequestV2,
+            ProtectedLocatorObservedStateV2,
+        ),
+        ProtectedLocatorLeaseErrorV2,
+    > {
+        Err(ProtectedLocatorLeaseErrorV2::BackendUnavailable)
+    }
+
+    fn acquisition_recheck(
+        &mut self,
+    ) -> Result<ProtectedLocatorObservedStateV2, ProtectedLocatorLeaseErrorV2> {
+        Err(ProtectedLocatorLeaseErrorV2::BackendUnavailable)
+    }
+
+    fn prepare_candidate(
+        &mut self,
+        _request: &ProtectedLocatorAcquisitionRequestV2,
+        _acquisition: &ProtectedLocatorObservedStateV2,
+        _candidate: ProtectedLocatorCandidateInputV2,
+    ) -> Result<ProtectedLocatorCandidateStateV2, ProtectedLocatorLeaseErrorV2> {
+        Err(ProtectedLocatorLeaseErrorV2::BackendUnavailable)
+    }
+
+    fn pre_dispatch_recheck(
+        &mut self,
+    ) -> Result<ProtectedLocatorObservedStateV2, ProtectedLocatorLeaseErrorV2> {
+        Err(ProtectedLocatorLeaseErrorV2::BackendUnavailable)
+    }
+
+    fn dispatch_exact_transition(
+        &mut self,
+        _expected_old: &ProtectedLocatorObservedStateV2,
+        _candidate: &ProtectedLocatorCandidateStateV2,
+    ) -> Result<ProtectedLocatorDispatchOccurrenceV2, ProtectedLocatorLeaseErrorV2> {
+        Err(ProtectedLocatorLeaseErrorV2::BackendUnavailable)
+    }
+
+    fn final_readback(
+        &mut self,
+    ) -> Result<ProtectedLocatorFinalReadbackV2, ProtectedLocatorLeaseErrorV2> {
+        Err(ProtectedLocatorLeaseErrorV2::BackendUnavailable)
+    }
+}
+
+pub(in crate::domain::vnext::persistence) fn acquire_protected_locator_lease_v2(
+    backend: &mut dyn ProtectedLocatorBackendV2,
+) -> Result<ProtectedLocatorLeaseV2<'_>, ProtectedLocatorLeaseErrorV2> {
+    ProtectedLocatorLeaseV2::acquire(backend)
+}
 
 pub(in crate::domain::vnext::persistence) struct Stage9ProtectedLocatorBackendSeedV1 {
     _private: (),
