@@ -1,0 +1,47 @@
+schema_version: maestro.card.v1
+id: dec-canonical-foundation-owned-admitted-d215
+type: decision
+title: Canonical Foundation-owned admitted-root source and aggregate census V2
+status: locked
+parent: maestro-whole-flow-architecture-refoundation
+created_at: 2026-07-27T02:01:39.890Z
+updated_at: 2026-07-27T02:01:39.923Z
+description: "Mandate ref: the user's exact APPROVE SUCCESSOR DESIGN PASS event in task 019f8416-e121-7703-8ab4-d3f9c3b374fa. Independent audit proved dec-canonical-foundation-owned-aggregate-f9e7 names an aggregate capability but does not name a legal authoritative producer; the current implementation lets Migration construct DeclaredRootScanV1 from raw PathBuf and optionality. This successor closes that frozen-interface contradiction without implementation, canonical artifact generation, or sealing."
+extra:
+  locked_at: 2026-07-27T02:01:39.923Z
+  decision: |-
+    This Decision supersedes dec-canonical-foundation-owned-aggregate-f9e7 as the effective production contract while incorporating its complete aggregate-lease, simultaneous-fence, no-follow, alias, overflow, zero-partial-result and fail-closed laws. It does not change the unaffected descriptor-relative laws of dec-canonical-foundation-descriptor-a128.
+
+    The exact authoritative sources are split by domain ownership. Persistence alone mints RepositoryRootAdmissionV2<'scan> from the current RepositoryDomain Store generation, protected repository/worktree identity, source-control binding, Store/head/incarnation and repository-root topology. Installation alone mints InstallationRootAdmissionV2<'scan> from the current InstallationDomain topology, protected-locator facility and provider, manager/host target topology, custody state and pre-store or active-store incarnation. Neither source accepts a path, root list, count, optionality, absence claim, locator, CAS, digest, row set, backend selector or parsed owner state from Migration, an adapter or a caller.
+
+    Foundation alone invokes those two exact owner ports from CensusInvocationV2, whose caller-visible input is limited to the authenticated operation, RepositoryDomain/InstallationDomain subjects, Ceremony or Action branch identity, unique invocation and current authority carrier. Foundation consumes both owner-minted admissions into one private FoundationAdmittedRootSourceV2<'scan>. The source binds the complete union membership, canonical domain and root order, retained physical handles or protected locators, optional status, semantic domain-association token, source/provider incarnation, mount and namespace identity, currentness, revocation and replacement/ABA fences. If either owner cannot prove complete membership for the supported platform and exact invocation, production census is unavailable; Foundation never discovers scope from environment variables, CLI paths, configuration files, global registries, historical census bytes, caller vectors or best-effort filesystem walks.
+
+    RepositoryRootAdmissionV2, InstallationRootAdmissionV2 and FoundationAdmittedRootSourceV2 are live-only process-local capabilities. They are owner-minted, move-only, non-cloneable, non-serializable, non-cacheable, non-replayable, non-Send, non-Sync and non-transferable; have private fields, private constructors and non-static lifetimes; expose no Path, locator, membership iterator, count, optionality, raw handle, digest-only proof, canonical bytes, wire form, persisted form, registry or hidden lookup. Crash or process loss destroys them. A new invocation reacquires both complete owner sources and proves currentness again. No new persisted schema, Resource, Bundle, Release, Action, owner tag, catalog row or public API is introduced.
+
+    Foundation acquires every root handle and component fence before the first pass and retains all of them simultaneously through pass A over the complete set, the recursive no-follow byte-total scan, pass B over the complete set, cross-root alias and overlap resolution, checked aggregate limits and one final cross-root recheck. Optional membership drift, missing source, duplicate or overlapping roots, cross-root physical alias, content or metadata mutation, rename, replacement, ABA, mount/provider change, permission blind spot, journal/fence loss, overflow, currentness loss or revocation invalidates the whole operation and returns zero rows and zero Migration effect.
+
+    Migration invokes only Foundation::census_and_classify_current_roots_v2 with no physical-scope input. Foundation consumes the aggregate result inside one sealed MigrationClassificationContinuationV2<'scan>. Migration receives only bounded owner-issued MigrationClassifiableRootViewV2 values keyed by opaque RootAssociationTokenV2; it cannot enumerate or select the root set and receives no Path, raw locator, handle, count, optionality or absence evidence. Migration returns nominal classification facts keyed to those tokens. Foundation, Persistence and Installation join the physical identities, locator commitments and classification facts into the existing InventoryRowV1 and ByteTotalInventoryV1 meaning behind an owner-private V2 builder. The old public ByteTotalInventoryV1 constructor from Vec<DeclaredRootV1> and the Migration-built DeclaredRootScanV1 production path become historical/test-only and cannot produce a current census.
+
+    Stage 5 freezes the two owner admission ports, CensusInvocationV2, FoundationAdmittedRootSourceV2, AggregateCensusLeaseV2, sealed AggregateCensusResultV2 and the classification continuation interface. Stage 11 supplies the real supported-platform Persistence, Installation and Foundation backends and must parity-prove them against test-only conformance adapters. The complete source capability and aggregate result are single-consumption and never become Migration authority or currentness.
+
+    Proof must statically prove that Migration and all adapters cannot construct or reach a production source with Path, root collection, optionality, count, absence claim or backend selection. Positive proof covers real owner-derived Repository and Installation sources on every supported platform. Mutants cut optional appearance/disappearance, alias/overlap, source replacement, provider/mount drift, ABA, permission and journal loss, aggregate overflow and concurrent mutation between every root/pass/final boundary; any failure yields no classification or partial inventory. Crash/restart proof reacquires fresh owner sources and proves no capability replay. Schema/catalog proof enforces zero persisted, public, Action, Resource and catalog delta.
+  supersedes:
+  - dec-canonical-foundation-owned-aggregate-f9e7
+  preview: |-
+    Persistence RepositoryRootAdmissionV2 + Installation InstallationRootAdmissionV2
+      -> Foundation-owned live FoundationAdmittedRootSourceV2
+      -> all handles/fences held simultaneously
+      -> aggregate scan + final cross-root recheck
+      -> sealed opaque classification continuation
+      -> complete inventory or zero-result refusal
+  rejected:
+  - |-
+    Wrap or opaque-newtype Migration's DeclaredRootScanV1 or Vec<DeclaredRootV1>: Migration would still choose the physical scope and optionality.
+  - |-
+    Let Foundation discover roots from environment, CLI input, config, a registry, historical physical census or compiled fallback paths: no such input owns current domain membership and hidden scope would be unauditable.
+  - |-
+    Persist one new global root list solely to make the capability restartable: the live domain owners already reacquire authoritative topology; a global artifact would create a second mutable scope authority and cross-domain head.
+  - |-
+    Let Migration consume paths after Foundation scans them and reconstruct ByteTotalInventoryV1 through its old constructor: scope authority would return through the consumer bridge.
+  - |-
+    Sequentially compose per-root or per-domain successful censuses: the roots would not share one simultaneously current namespace cut.

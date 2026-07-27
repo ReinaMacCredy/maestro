@@ -12225,3 +12225,179 @@ These side-handoff clauses are now canonical through effective efa0, which incor
 | FB-23 structural lazy loading plus measured context budgets | new candidate architecture | incorporated by 7138 through 831a as the root -> one job -> typed method/child/example -> separately admitted Recipe load law plus Release/host `ContextBudgetProfileV1`; universal numeric caps are rejected |
 | FB-28 closed Job-Method eligibility matrix | conflicting and requiring supersession | incorporated by 7138 through 831a, which superseded only 7305's TDD-in-Review sentence and a405's singular Review-method cardinality; exact 19/100 direct matrix, four/eleven auxiliary relation and thirteen/twenty-seven Review shapes remain effective |
 | FB-17 recovery routing map | consistent explanatory expansion with owner corrections | route guidance is non-authoritative: interrupted live StepLease-StepAttempt pairs belong to Execution; committed Work or Step Submission rejection/recovery belongs to the owning Work or Step Action under fresh nominal authority while Execution supplies only fixed preconditions; Execution owns effect state, Evidence owns remote Observations and Assessments, and only a permitted fresh Action-origin `ReconciliationAttempt` may refine an ActiveStore Intent; install/setup recovery routes to the exact Distribution, Installation or Migration phase owner because Setup is only a job/Recipe; Contract owns Binding definition/topology, Step owns generation-scoped Binding lifecycle/current applicability, and Projection is read-only |
+
+### Final closure successor amendment
+
+This section is the current external-build design head. It is authorized by the
+exact user-role event `APPROVE SUCCESSOR DESIGN PASS.` in recipient task
+`019f8416-e121-7703-8ab4-d3f9c3b374fa`. It opens no product implementation,
+generates no canonical contract artifact and runs no seal. Every unaffected
+prior Decision and semantic law remains normative. The following three
+Decisions were opened and locked in exact order after independent adversarial
+review:
+
+1. `dec-canonical-foundation-owned-admitted-d215`, **Canonical
+   Foundation-owned admitted-root source and aggregate census V2**, superseding
+   the production contract of
+   `dec-canonical-foundation-owned-aggregate-f9e7`.
+2. `dec-canonical-pre-candidate-protected-370d`, **Canonical pre-candidate
+   protected locator and durable finality V2**, superseding
+   `dec-canonical-persistence-owned-protected-ca82` and
+   `dec-canonical-installation-owned-durable-f439`.
+3. `dec-canonical-final-cumulative-stage-0-1652`, **Canonical final cumulative
+   Stage 0 through 12 seal contract**, additive and authoritative over prior
+   execution-only Stage-seal scheduling text.
+
+Every V2 capability obeys the common rule already locked for successor
+materialization: owner-minted, process-local, move-only, non-cloneable,
+non-serializable, non-cacheable, non-replayable, non-Send, non-Sync,
+non-transferable, private constructor, non-static lifetime, no public or
+crate-wide constructor, no raw scalar or physical-locator accessor, no
+canonical bytes, persistence, Resource identity, registry, wire
+representation, restart reconstruction or hidden global lookup. Exact
+committed-Result idempotency replay remains required and is checked before
+capability acquisition.
+
+#### Foundation admitted-root source V2
+
+Persistence is the sole source of then-live RepositoryDomain root admission and
+Installation is the sole source of then-live InstallationDomain root
+admission. Foundation invokes both private owner ports from one
+physical-scope-free `CensusInvocationV2` and consumes the two one-use admissions
+into `FoundationAdmittedRootSourceV2`. The source binds the complete union,
+canonical domain/root order, retained physical handles or protected locators,
+optionality, semantic association tokens,
+provider/incarnation/currentness/revocation and replacement/ABA fences.
+Migration supplies no path, root list, membership, optionality, count, absence
+claim, locator, digest, epoch, backend selector or parsed owner state.
+
+Foundation retains every root handle and fence simultaneously through both
+complete passes, the recursive byte-total scan, cross-root alias and overlap
+resolution, aggregate limits and one final cross-root recheck. Unsupported or
+incomplete owner providers make production success unavailable. Failure of any
+root, owner source or fence returns zero rows and zero Migration effect.
+
+Migration receives only a sealed classification continuation over bounded
+`MigrationClassifiableRootViewV2` values keyed by opaque
+`RootAssociationTokenV2`. It cannot select or enumerate physical scope.
+Foundation, Persistence and Installation later join physical commitments with
+Migration-owned nominal classifications behind an owner-private V2 inventory
+builder. The Migration-built `DeclaredRootScanV1` and
+`Vec<DeclaredRootV1>` production path becomes historical/test-only negative
+evidence. No new persisted schema, public schema, Action, Resource, Bundle,
+Release or catalog member is introduced; crash recovery reacquires fresh live
+owner sources.
+
+#### Protected locator and durable finality V2
+
+`ProtectedLocatorAcquisitionRequestV2` is created before association, candidate
+root/carrier/seal, CAS or finality backend. It contains only nominal
+authenticated operation identity and no caller-supplied locator observation or
+candidate evidence. Persistence acquires the real no-follow locator and mints
+`ProtectedLocatorLeaseV2` before all candidate derivation. Installation retains
+that lease through inert association and candidate construction, derives one
+private `ProtectedLocatorCandidateTransitionV2` and gives only that transition
+to the existing Ceremony owner for one protected expected-old CAS and exact
+same-locator resolution.
+
+PreStore remains effect-inert and owns no Store, network, locator or CAS
+mutation. ActiveStore separately captures a real `StoreV1` only inside the
+named Installation owner operation, performs the exact atomic
+rows/Head/Result/idempotency publication and owner-local postcondition
+readback. Production generic callbacks, caller-supplied trait objects, ambient
+Store/locator lookup and V1 compatibility adapters are forbidden. Final
+resolution remains exactly `committed`, `recovery_required`, `in_doubt` or
+`integrity_blocked` with no blind retry.
+
+`ProtectedLocatorOperationRequestV1`, `ProtectedLocatorLeaseV1` and the generic
+production provider realization are retained only as immutable historical and
+negative proof inputs. The persisted Migration association, Action/Ceremony
+algebra, owner tags, public API, Resource catalog and wire shapes remain
+unchanged.
+
+#### Frozen Stage-5 successor interface checkpoint
+
+Stage 5 now freezes the following private interface closure:
+
+| Seam | Owner | Later real provider |
+| --- | --- | --- |
+| `RepositoryRootAdmissionV2` and `InstallationRootAdmissionV2` | Persistence and Installation | Stage 11 supported-platform census providers |
+| `CensusInvocationV2`, `FoundationAdmittedRootSourceV2`, `AggregateCensusLeaseV2`, `AggregateCensusResultV2` and sealed `MigrationClassificationContinuationV2` | Foundation | Stage 11 aggregate census and Migration bridge |
+| `ProtectedLocatorAcquisitionRequestV2`, `ProtectedLocatorLeaseV2` and protected-locator acquisition port | Persistence | Stage 9 real provider |
+| Installation candidate-derivation continuation and `ProtectedLocatorCandidateTransitionV2` | Installation | Stage 9/11 exact PreStore path |
+| `DurableInstallationFinalityBackendV2` with named ActiveStore capture and inert PreStore continuation | Installation | Stage 9 ActiveStore and Stage 11 PreStore |
+| `FinalCumulativeClosureSnapshotV1` and `FinalCumulativeSealReceiptV1` proof grammar | external proof-control tooling only | final-chain runner after Stage 12 |
+
+Stage 5 may produce one content-addressed frozen interface-and-fanout checkpoint
+after compile, format, strict lint, focused
+authority/persistence/foundation/installation and path-ownership falsifiers. It
+publishes no canonical seal, certification receipt, certification pointer or
+currentness claim. Historical Stage-0/2/3/4/5 receipts and artifacts remain
+immutable predecessor evidence only.
+
+#### One cumulative final seal
+
+After strict first-parent reconstruction and integration of Stages 6 through
+12, the orchestrator freezes one `FinalCumulativeClosureSnapshotV1` binding the
+exact final commit/tree/ancestry, every
+source/test/validator/fixture/mutant/fault-schedule/adapter/removal/runner byte,
+toolchain and dependency identity, environment/sandbox/command DAG, cache
+policy and complete stable proof-ID ledger. The snapshot excludes every result,
+receipt, pointer and verdict.
+
+The dedicated final-chain runner independently materializes that snapshot for
+Python, Rust and Ruby under disjoint read-only snapshot copies and writable
+temp/target/dependency/output roots. Each engine independently parses and
+executes its required proof IDs against frozen expected outcomes; no parser,
+oracle, mutable output, result or verdict is shared. Content caches may supply
+only exact immutable dependency or compilation bytes and never a verdict,
+branch, mutant, race/crash, semantic readback or removal result.
+
+Exactly one `FinalCumulativeSealReceiptV1` and one derived final pointer may be
+durable. The pointer is written only after independent receipt reconstruction,
+semantic Stage-12 readback and final edge sweep. Semantic readback executes
+from a clean materialization and proves actual
+compiled/exported/runtime/Resource/persisted/migration surfaces,
+canonical-facade parity, byte-identical identities across namespace promotion,
+and consumer-zero/reader-zero/hold-zero against produced artifacts. Text
+search, historical receipts and cached outputs cannot satisfy it. The seal is
+effect-inert and cannot install, publish, activate, release, push, tag, contact
+external connectors or touch the protected primary checkout.
+
+#### Preserved implementation evidence and replacement plan
+
+The integrated Claude implementation chain remains preserved as noncurrent
+evidence at commit `f83f4f51a30e00ed5b45ae440a6bb077b3c262ca`, tree
+`976da5eea3f470e57dc4e2aa3b92b7b2f4431cd5`. The independently corrected
+Authority-owned Scheduling Safety implementation remains preserved at commit
+`8506a74e364dd9639abd4c4e19528dcde55bbc0a`, tree
+`10048e09f2838a1cb7c5721cc7130efbc0e4a7e4`, parent
+`f83f4f51a30e00ed5b45ae440a6bb077b3c262ca`. Neither commit is current or
+certified and neither is integrated by this design pass. The existing
+integration worktree's generated dispatch-receipt delta and four
+`__pycache__` directories remain untouched and do not enter the design
+closure.
+
+After exact replacement packet approval, the orchestrator creates the
+packet-bound absent successor workspace, reconstructs the Stage-5 boundary and
+the preserved f83 Stage 6-through-12 changes in strict first-parent order,
+applies the Authority correction and V2 owner implementations at their owning
+Stages, replaces every V1/generic test adapter with real upstream parity, and
+implements the dedicated final-chain runner. Each affected Stage receives only
+non-certifying cheap/focused gates during reconstruction. After Stage 12, one
+whole-chain review/fix loop, all
+compile/lint/test/broad/mutant/race/crash/migration/adapter/removal gates,
+canonical artifact regeneration, one freeze and exactly one cumulative
+three-engine seal run.
+
+The prior packet
+`sha256:a022b557b28174361ebf721a217fdbce7deb0ec1cf3a2ac6aacb59f241d058d4`
+is obsolete historical provenance for every future write. The replacement
+External Build Plan Handoff must bind this design commit/tree, the complete raw
+Decision closure, both preserved commits, exact f83 first-parent Stage map,
+rotated Stage-5 interface boundary, proof-input declaration, fanout/path
+ownership manifest, absent successor workspace and recipient task. Until the
+fresh exact packet is independently verified and explicitly approved,
+implementation, canonical artifact regeneration, integration, sealing,
+publication, installation, release and live external mutation remain
+forbidden.
