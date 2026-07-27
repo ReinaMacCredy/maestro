@@ -31,6 +31,57 @@ const SELECTION_VECTORS_JSON: &str =
     include_str!("../../../contracts/vnext/public/recipe_selection_application_vectors.v1.json");
 const SELECTION_VECTORS_SHA256: &str =
     "d286a98d5d6d7146652a5a114bef15ef15e30fe49bab29ed996100c6d2357635";
+const LEGACY_RECIPE_IDS_V1: [&str; 15] = [
+    "adversarial-review",
+    "audit",
+    "conflict-handoff",
+    "design-relay",
+    "design",
+    "feature-fanout",
+    "generate-filter",
+    "intake-triage",
+    "learning",
+    "loop-until-done",
+    "progress",
+    "ship",
+    "synthesize",
+    "unattended",
+    "work",
+];
+pub(crate) const UNSUPPORTED_LEGACY_SUCCESSOR_SURFACE_V1: &str =
+    "unsupported_legacy_successor_surface";
+pub(crate) const CANONICAL_PACKET_READ_REPLACEMENT_V1: &str = "maestro packet read";
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum LegacySuccessorSurfaceV1<'value> {
+    MaestroNext,
+    TaskNext,
+    LoopNext,
+    CardReady,
+    Recipe(&'value str),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct LegacySuccessorRefusalV1 {
+    pub code: &'static str,
+    pub canonical_replacement: &'static str,
+}
+
+pub(crate) fn refuse_legacy_successor_surface(
+    surface: LegacySuccessorSurfaceV1<'_>,
+) -> Option<LegacySuccessorRefusalV1> {
+    let is_legacy = match surface {
+        LegacySuccessorSurfaceV1::MaestroNext
+        | LegacySuccessorSurfaceV1::TaskNext
+        | LegacySuccessorSurfaceV1::LoopNext
+        | LegacySuccessorSurfaceV1::CardReady => true,
+        LegacySuccessorSurfaceV1::Recipe(recipe) => LEGACY_RECIPE_IDS_V1.contains(&recipe),
+    };
+    is_legacy.then_some(LegacySuccessorRefusalV1 {
+        code: UNSUPPORTED_LEGACY_SUCCESSOR_SURFACE_V1,
+        canonical_replacement: CANONICAL_PACKET_READ_REPLACEMENT_V1,
+    })
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ProjectionReadStateV1 {
@@ -794,5 +845,38 @@ mod tests {
             McpPacketReadEnvelopeV1::NoActiveStore { .. }
         ));
         assert_eq!(port.reads.get(), 1);
+    }
+
+    #[test]
+    fn every_legacy_next_and_recipe_identity_refuses_without_projection() {
+        let port = PureNoStorePort {
+            reads: Cell::new(0),
+        };
+        for surface in [
+            LegacySuccessorSurfaceV1::MaestroNext,
+            LegacySuccessorSurfaceV1::TaskNext,
+            LegacySuccessorSurfaceV1::LoopNext,
+            LegacySuccessorSurfaceV1::CardReady,
+        ] {
+            assert_eq!(
+                refuse_legacy_successor_surface(surface),
+                Some(LegacySuccessorRefusalV1 {
+                    code: UNSUPPORTED_LEGACY_SUCCESSOR_SURFACE_V1,
+                    canonical_replacement: CANONICAL_PACKET_READ_REPLACEMENT_V1,
+                })
+            );
+        }
+        for recipe in LEGACY_RECIPE_IDS_V1 {
+            assert!(
+                refuse_legacy_successor_surface(LegacySuccessorSurfaceV1::Recipe(recipe)).is_some()
+            );
+        }
+        assert!(
+            refuse_legacy_successor_surface(LegacySuccessorSurfaceV1::Recipe(
+                "bounded-continuation"
+            ))
+            .is_none()
+        );
+        assert_eq!(port.reads.get(), 0);
     }
 }

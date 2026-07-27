@@ -49,6 +49,7 @@ mod durable_finality_stage11_seed;
     )
 )]
 mod durable_finality_stage9_seed;
+mod resource_cutover;
 
 pub use census::{
     InstallationCensusClassV1, InstallationCensusEntryV1, InstallationCensusErrorV1,
@@ -61,6 +62,7 @@ pub use closure::{
 pub(in crate::domain) use consumer_materialization::{
     InstallationConsumerMaterializationErrorV1, Stage9ActiveConsumerMaterializationV1,
 };
+pub(crate) use consumer_snapshot::AgentResourceReleaseConsumerSealV1;
 pub use currentness::{
     DomainCurrentnessV1, ObservedHostActivationV1, ObservedInstallationClosureV1,
     assess_user_agent_currentness,
@@ -68,6 +70,12 @@ pub use currentness::{
 pub use cutover::{
     ActiveStoreCutoverCandidateV1, CutoverDomainBindingV1, InstallationCutoverErrorV1,
     InstallationLocatorCandidateV1, PreStoreCutoverCandidateV1,
+};
+pub(crate) use resource_cutover::{
+    AgentResourceCutoverErrorV1, AgentResourceJournalBindingV1, AgentResourceReleaseAdmissionV1,
+    AgentResourceTargetKindV1, CommittedAgentResourceReleaseV1, RepositoryBootstrapAdmissionV1,
+    RepositoryBootstrapAuthorizationV1, RepositoryBootstrapBindingV1,
+    RepositoryBootstrapTargetKindV1,
 };
 
 pub(crate) fn admit_installation_census_roots_v2(

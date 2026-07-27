@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 use crate::domain::orchestration::literals::{
@@ -77,6 +78,441 @@ pub const SKILL_LEDGER_REWRITE_ROWS_V1: usize = 19;
 pub const SKILL_LEDGER_REPLACE_ROWS_V1: usize = 9;
 pub const SKILL_LEDGER_MIGRATION_ONLY_ROWS_V1: usize = 7;
 pub const SKILL_LEDGER_SEMANTIC_DESTINATIONS_V1: usize = 21;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum LegacySkillDispositionV1 {
+    Rewrite,
+    Replace,
+    MigrationOnly,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct LegacySkillLedgerRowV1 {
+    pub source_path: &'static str,
+    pub disposition: LegacySkillDispositionV1,
+    pub active_destination: Option<&'static str>,
+}
+
+pub(crate) const LEGACY_SKILL_LEDGER_V1: [LegacySkillLedgerRowV1; 35] = [
+    legacy_skill(
+        "ask-maestro/SKILL.md",
+        LegacySkillDispositionV1::Rewrite,
+        Some("skills/maestro/SKILL.md"),
+    ),
+    legacy_skill(
+        "ask-maestro/reference/cli.md",
+        LegacySkillDispositionV1::MigrationOnly,
+        None,
+    ),
+    legacy_skill(
+        "maestro-audit/SKILL.md",
+        LegacySkillDispositionV1::Replace,
+        Some("skills/maestro/jobs/review.md+skills/maestro/methods/audit.md"),
+    ),
+    legacy_skill(
+        "maestro-audit/reference/architecture-review.md",
+        LegacySkillDispositionV1::Rewrite,
+        Some("skills/maestro/methods/architecture-review.md"),
+    ),
+    legacy_skill(
+        "maestro-audit/reference/cli.md",
+        LegacySkillDispositionV1::MigrationOnly,
+        None,
+    ),
+    legacy_skill(
+        "maestro-card/SKILL.md",
+        LegacySkillDispositionV1::Replace,
+        Some("skills/maestro/jobs/execute.md"),
+    ),
+    legacy_skill(
+        "maestro-card/reference/cli.md",
+        LegacySkillDispositionV1::MigrationOnly,
+        None,
+    ),
+    legacy_skill(
+        "maestro-card/reference/feature.md",
+        LegacySkillDispositionV1::Replace,
+        Some("skills/maestro/jobs/design.md+skills/maestro/jobs/execute.md"),
+    ),
+    legacy_skill(
+        "maestro-card/reference/intake.md",
+        LegacySkillDispositionV1::Rewrite,
+        Some("recipe:intake-triage"),
+    ),
+    legacy_skill(
+        "maestro-card/reference/loop.md",
+        LegacySkillDispositionV1::Replace,
+        Some("profiles:bounded-continuation"),
+    ),
+    legacy_skill(
+        "maestro-card/reference/qa-baseline.md",
+        LegacySkillDispositionV1::Rewrite,
+        Some("skills/maestro/methods/qa-baseline.md"),
+    ),
+    legacy_skill(
+        "maestro-card/reference/qa-slice.md",
+        LegacySkillDispositionV1::Replace,
+        Some("skills/maestro/methods/qa-replay.md"),
+    ),
+    legacy_skill(
+        "maestro-card/reference/simplify.md",
+        LegacySkillDispositionV1::Rewrite,
+        Some("skills/maestro/methods/simplify.md"),
+    ),
+    legacy_skill(
+        "maestro-card/reference/tdd.md",
+        LegacySkillDispositionV1::Rewrite,
+        Some("skills/maestro/methods/tdd.md"),
+    ),
+    legacy_skill(
+        "maestro-card/reference/tdd/deep-modules.md",
+        LegacySkillDispositionV1::Rewrite,
+        Some("skills/maestro/methods/tdd/deep-modules.md"),
+    ),
+    legacy_skill(
+        "maestro-card/reference/tdd/interface-design.md",
+        LegacySkillDispositionV1::Rewrite,
+        Some("skills/maestro/methods/tdd/interface-design.md"),
+    ),
+    legacy_skill(
+        "maestro-card/reference/tdd/mocking.md",
+        LegacySkillDispositionV1::Rewrite,
+        Some("skills/maestro/methods/tdd/mocking.md"),
+    ),
+    legacy_skill(
+        "maestro-card/reference/tdd/refactoring.md",
+        LegacySkillDispositionV1::Rewrite,
+        Some("skills/maestro/methods/tdd/refactoring.md"),
+    ),
+    legacy_skill(
+        "maestro-card/reference/tdd/tests.md",
+        LegacySkillDispositionV1::Replace,
+        Some("skills/maestro/methods/tdd/test-design.md"),
+    ),
+    legacy_skill(
+        "maestro-card/reference/verify.md",
+        LegacySkillDispositionV1::Rewrite,
+        Some("skills/maestro/methods/verification.md+skills/maestro/methods/adversarial-review.md"),
+    ),
+    legacy_skill(
+        "maestro-card/reference/work.md",
+        LegacySkillDispositionV1::Rewrite,
+        Some("skills/maestro/jobs/execute.md"),
+    ),
+    legacy_skill(
+        "maestro-design/SKILL.md",
+        LegacySkillDispositionV1::Rewrite,
+        Some("skills/maestro/jobs/design.md"),
+    ),
+    legacy_skill(
+        "maestro-design/reference/cli.md",
+        LegacySkillDispositionV1::MigrationOnly,
+        None,
+    ),
+    legacy_skill(
+        "maestro-design/reference/ddd.md",
+        LegacySkillDispositionV1::Rewrite,
+        Some("skills/maestro/methods/ddd.md"),
+    ),
+    legacy_skill(
+        "maestro-design/reference/deepening-candidate.md",
+        LegacySkillDispositionV1::Replace,
+        Some("skills/maestro/methods/architecture-deepening.md"),
+    ),
+    legacy_skill(
+        "maestro-design/reference/domain-model.md",
+        LegacySkillDispositionV1::Rewrite,
+        Some("skills/maestro/methods/domain-model.md"),
+    ),
+    legacy_skill(
+        "maestro-design/reference/grilling.md",
+        LegacySkillDispositionV1::Rewrite,
+        Some("skills/maestro/methods/grilling.md"),
+    ),
+    legacy_skill(
+        "maestro-design/reference/prd.md",
+        LegacySkillDispositionV1::Rewrite,
+        Some("skills/maestro/methods/prd.md"),
+    ),
+    legacy_skill(
+        "maestro-research/SKILL.md",
+        LegacySkillDispositionV1::Rewrite,
+        Some("skills/maestro/jobs/research.md"),
+    ),
+    legacy_skill(
+        "maestro-research/reference/cli.md",
+        LegacySkillDispositionV1::MigrationOnly,
+        None,
+    ),
+    legacy_skill(
+        "maestro-research/reference/examples.md",
+        LegacySkillDispositionV1::Rewrite,
+        Some("skills/maestro/examples/research.md"),
+    ),
+    legacy_skill(
+        "maestro-setup/SKILL.md",
+        LegacySkillDispositionV1::Replace,
+        Some("skills/maestro/jobs/setup.md+recipe:setup"),
+    ),
+    legacy_skill(
+        "maestro-setup/reference/cli.md",
+        LegacySkillDispositionV1::MigrationOnly,
+        None,
+    ),
+    legacy_skill(
+        "maestro-witness/SKILL.md",
+        LegacySkillDispositionV1::Replace,
+        Some("skills/maestro/jobs/review.md+skills/maestro/methods/close-review.md"),
+    ),
+    legacy_skill(
+        "maestro-witness/reference/cli.md",
+        LegacySkillDispositionV1::MigrationOnly,
+        None,
+    ),
+];
+
+const fn legacy_skill(
+    source_path: &'static str,
+    disposition: LegacySkillDispositionV1,
+    active_destination: Option<&'static str>,
+) -> LegacySkillLedgerRowV1 {
+    LegacySkillLedgerRowV1 {
+        source_path,
+        disposition,
+        active_destination,
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct CanonicalInstructionResourceV1 {
+    pub logical_path: &'static str,
+    pub embedded_source_path: &'static str,
+    pub content_sha256: [u8; 32],
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct CanonicalAgentResourceInventoryV1 {
+    resources: [CanonicalInstructionResourceV1; 31],
+    legacy_ledger: [LegacySkillLedgerRowV1; 35],
+    resource_closure: [u8; 32],
+    legacy_ledger_closure: [u8; 32],
+}
+
+impl CanonicalAgentResourceInventoryV1 {
+    pub(crate) fn load_embedded() -> Result<Self, CapabilityLiteralError> {
+        let resources = std::array::from_fn(|index| CanonicalInstructionResourceV1 {
+            logical_path: INSTRUCTION_RESOURCE_PATHS_V1[index],
+            embedded_source_path: CANONICAL_INSTRUCTION_EMBEDDED_PATHS_V1[index],
+            content_sha256: Sha256::digest(CANONICAL_INSTRUCTION_BYTES_V1[index]).into(),
+        });
+        let inventory = Self {
+            resource_closure: inventory_closure(
+                b"maestro.vnext.canonical-agent-instruction-resources.v1",
+                resources
+                    .iter()
+                    .map(|row| (row.logical_path, row.content_sha256)),
+            ),
+            legacy_ledger_closure: legacy_ledger_closure(&LEGACY_SKILL_LEDGER_V1),
+            resources,
+            legacy_ledger: LEGACY_SKILL_LEDGER_V1,
+        };
+        inventory.validate()?;
+        Ok(inventory)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn resources(&self) -> &[CanonicalInstructionResourceV1; 31] {
+        &self.resources
+    }
+
+    #[cfg(test)]
+    pub(crate) fn legacy_ledger(&self) -> &[LegacySkillLedgerRowV1; 35] {
+        &self.legacy_ledger
+    }
+
+    pub(crate) const fn resource_closure(&self) -> [u8; 32] {
+        self.resource_closure
+    }
+
+    pub(crate) const fn legacy_ledger_closure(&self) -> [u8; 32] {
+        self.legacy_ledger_closure
+    }
+
+    fn validate(&self) -> Result<(), CapabilityLiteralError> {
+        if self.resources.map(|row| row.logical_path) != INSTRUCTION_RESOURCE_PATHS_V1
+            || self.resources.iter().any(|row| {
+                !row.embedded_source_path
+                    .starts_with("embedded/vnext/capability/")
+                    || row.content_sha256 == [0; 32]
+            })
+            || self
+                .resources
+                .iter()
+                .map(|row| row.logical_path)
+                .collect::<BTreeSet<_>>()
+                .len()
+                != INSTRUCTION_RESOURCE_PATHS_V1.len()
+            || self
+                .legacy_ledger
+                .iter()
+                .map(|row| row.source_path)
+                .collect::<BTreeSet<_>>()
+                .len()
+                != SKILL_LEDGER_ROWS_V1
+        {
+            return Err(CapabilityLiteralError::InvalidAgentResourceInventory);
+        }
+        let dispositions = self
+            .legacy_ledger
+            .iter()
+            .fold([0_usize; 3], |mut counts, row| {
+                match row.disposition {
+                    LegacySkillDispositionV1::Rewrite => counts[0] += 1,
+                    LegacySkillDispositionV1::Replace => counts[1] += 1,
+                    LegacySkillDispositionV1::MigrationOnly => counts[2] += 1,
+                }
+                counts
+            });
+        let semantic_references = self
+            .legacy_ledger
+            .iter()
+            .filter(|row| {
+                row.source_path.contains("/reference/")
+                    && !row.source_path.ends_with("/reference/cli.md")
+                    && row.active_destination.is_some()
+            })
+            .count();
+        if dispositions
+            != [
+                SKILL_LEDGER_REWRITE_ROWS_V1,
+                SKILL_LEDGER_REPLACE_ROWS_V1,
+                SKILL_LEDGER_MIGRATION_ONLY_ROWS_V1,
+            ]
+            || semantic_references != SKILL_LEDGER_SEMANTIC_DESTINATIONS_V1
+            || self.legacy_ledger.iter().any(|row| {
+                matches!(row.disposition, LegacySkillDispositionV1::MigrationOnly)
+                    != row.active_destination.is_none()
+            })
+            || self.resource_closure == [0; 32]
+            || self.legacy_ledger_closure == [0; 32]
+        {
+            return Err(CapabilityLiteralError::InvalidAgentResourceInventory);
+        }
+        Ok(())
+    }
+}
+
+fn inventory_closure<'a>(
+    domain: &[u8],
+    rows: impl IntoIterator<Item = (&'a str, [u8; 32])>,
+) -> [u8; 32] {
+    let mut digest = Sha256::new();
+    digest.update((domain.len() as u64).to_be_bytes());
+    digest.update(domain);
+    for (path, content_sha256) in rows {
+        digest.update((path.len() as u64).to_be_bytes());
+        digest.update(path.as_bytes());
+        digest.update(content_sha256);
+    }
+    digest.finalize().into()
+}
+
+fn legacy_ledger_closure(rows: &[LegacySkillLedgerRowV1; 35]) -> [u8; 32] {
+    let mut digest = Sha256::new();
+    digest.update(b"maestro.vnext.legacy-skill-ledger.v1\0");
+    for row in rows {
+        digest.update((row.source_path.len() as u64).to_be_bytes());
+        digest.update(row.source_path.as_bytes());
+        digest.update([match row.disposition {
+            LegacySkillDispositionV1::Rewrite => 1,
+            LegacySkillDispositionV1::Replace => 2,
+            LegacySkillDispositionV1::MigrationOnly => 3,
+        }]);
+        if let Some(destination) = row.active_destination {
+            digest.update((destination.len() as u64).to_be_bytes());
+            digest.update(destination.as_bytes());
+        } else {
+            digest.update(0_u64.to_be_bytes());
+        }
+    }
+    digest.finalize().into()
+}
+
+const CANONICAL_INSTRUCTION_EMBEDDED_PATHS_V1: [&str; 31] = [
+    "embedded/vnext/capability/skills/maestro/SKILL.md",
+    "embedded/vnext/capability/skills/maestro/jobs/setup.md",
+    "embedded/vnext/capability/skills/maestro/jobs/research.md",
+    "embedded/vnext/capability/skills/maestro/jobs/design.md",
+    "embedded/vnext/capability/skills/maestro/jobs/review.md",
+    "embedded/vnext/capability/skills/maestro/jobs/execute.md",
+    "embedded/vnext/capability/skills/maestro/jobs/recover.md",
+    "embedded/vnext/capability/skills/maestro/jobs/adapt.md",
+    "embedded/vnext/capability/skills/maestro/methods/ddd.md",
+    "embedded/vnext/capability/skills/maestro/methods/domain-model.md",
+    "embedded/vnext/capability/skills/maestro/methods/grilling.md",
+    "embedded/vnext/capability/skills/maestro/methods/prd.md",
+    "embedded/vnext/capability/skills/maestro/methods/architecture-deepening.md",
+    "embedded/vnext/capability/skills/maestro/methods/probe.md",
+    "embedded/vnext/capability/skills/maestro/methods/generate-filter.md",
+    "embedded/vnext/capability/skills/maestro/methods/qa-baseline.md",
+    "embedded/vnext/capability/skills/maestro/methods/audit.md",
+    "embedded/vnext/capability/skills/maestro/methods/architecture-review.md",
+    "embedded/vnext/capability/skills/maestro/methods/adversarial-review.md",
+    "embedded/vnext/capability/skills/maestro/methods/qa-replay.md",
+    "embedded/vnext/capability/skills/maestro/methods/close-review.md",
+    "embedded/vnext/capability/skills/maestro/methods/verification.md",
+    "embedded/vnext/capability/skills/maestro/methods/tdd.md",
+    "embedded/vnext/capability/skills/maestro/methods/simplify.md",
+    "embedded/vnext/capability/skills/maestro/methods/extension-law.md",
+    "embedded/vnext/capability/skills/maestro/methods/tdd/test-design.md",
+    "embedded/vnext/capability/skills/maestro/methods/tdd/interface-design.md",
+    "embedded/vnext/capability/skills/maestro/methods/tdd/mocking.md",
+    "embedded/vnext/capability/skills/maestro/methods/tdd/refactoring.md",
+    "embedded/vnext/capability/skills/maestro/methods/tdd/deep-modules.md",
+    "embedded/vnext/capability/skills/maestro/examples/research.md",
+];
+
+const CANONICAL_INSTRUCTION_BYTES_V1: [&[u8]; 31] = [
+    include_bytes!("../../../embedded/vnext/capability/skills/maestro/SKILL.md"),
+    include_bytes!("../../../embedded/vnext/capability/skills/maestro/jobs/setup.md"),
+    include_bytes!("../../../embedded/vnext/capability/skills/maestro/jobs/research.md"),
+    include_bytes!("../../../embedded/vnext/capability/skills/maestro/jobs/design.md"),
+    include_bytes!("../../../embedded/vnext/capability/skills/maestro/jobs/review.md"),
+    include_bytes!("../../../embedded/vnext/capability/skills/maestro/jobs/execute.md"),
+    include_bytes!("../../../embedded/vnext/capability/skills/maestro/jobs/recover.md"),
+    include_bytes!("../../../embedded/vnext/capability/skills/maestro/jobs/adapt.md"),
+    include_bytes!("../../../embedded/vnext/capability/skills/maestro/methods/ddd.md"),
+    include_bytes!("../../../embedded/vnext/capability/skills/maestro/methods/domain-model.md"),
+    include_bytes!("../../../embedded/vnext/capability/skills/maestro/methods/grilling.md"),
+    include_bytes!("../../../embedded/vnext/capability/skills/maestro/methods/prd.md"),
+    include_bytes!(
+        "../../../embedded/vnext/capability/skills/maestro/methods/architecture-deepening.md"
+    ),
+    include_bytes!("../../../embedded/vnext/capability/skills/maestro/methods/probe.md"),
+    include_bytes!("../../../embedded/vnext/capability/skills/maestro/methods/generate-filter.md"),
+    include_bytes!("../../../embedded/vnext/capability/skills/maestro/methods/qa-baseline.md"),
+    include_bytes!("../../../embedded/vnext/capability/skills/maestro/methods/audit.md"),
+    include_bytes!(
+        "../../../embedded/vnext/capability/skills/maestro/methods/architecture-review.md"
+    ),
+    include_bytes!(
+        "../../../embedded/vnext/capability/skills/maestro/methods/adversarial-review.md"
+    ),
+    include_bytes!("../../../embedded/vnext/capability/skills/maestro/methods/qa-replay.md"),
+    include_bytes!("../../../embedded/vnext/capability/skills/maestro/methods/close-review.md"),
+    include_bytes!("../../../embedded/vnext/capability/skills/maestro/methods/verification.md"),
+    include_bytes!("../../../embedded/vnext/capability/skills/maestro/methods/tdd.md"),
+    include_bytes!("../../../embedded/vnext/capability/skills/maestro/methods/simplify.md"),
+    include_bytes!("../../../embedded/vnext/capability/skills/maestro/methods/extension-law.md"),
+    include_bytes!("../../../embedded/vnext/capability/skills/maestro/methods/tdd/test-design.md"),
+    include_bytes!(
+        "../../../embedded/vnext/capability/skills/maestro/methods/tdd/interface-design.md"
+    ),
+    include_bytes!("../../../embedded/vnext/capability/skills/maestro/methods/tdd/mocking.md"),
+    include_bytes!("../../../embedded/vnext/capability/skills/maestro/methods/tdd/refactoring.md"),
+    include_bytes!("../../../embedded/vnext/capability/skills/maestro/methods/tdd/deep-modules.md"),
+    include_bytes!("../../../embedded/vnext/capability/skills/maestro/examples/research.md"),
+];
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[repr(u8)]
@@ -1581,4 +2017,50 @@ pub enum CapabilityLiteralError {
     InvalidJobRecipeEligibility,
     #[error("SelectedJobRecipeAdmissionV1 must be an exact all-or-nothing post-route admission")]
     InvalidJobRecipeAdmission,
+    #[error("canonical Agent instruction Resources or the legacy Skill ledger are incomplete")]
+    InvalidAgentResourceInventory,
+}
+
+#[cfg(test)]
+mod successor_cutover_tests {
+    use super::*;
+
+    #[test]
+    fn canonical_agent_resource_inventory_is_exact_and_separate_from_legacy_ledger() {
+        let inventory = CanonicalAgentResourceInventoryV1::load_embedded().unwrap();
+        assert_eq!(inventory.resources().len(), 31);
+        assert_eq!(inventory.legacy_ledger().len(), 35);
+        assert_ne!(
+            inventory.resource_closure(),
+            inventory.legacy_ledger_closure()
+        );
+        assert_eq!(
+            inventory
+                .legacy_ledger()
+                .iter()
+                .filter(|row| row.disposition == LegacySkillDispositionV1::Rewrite)
+                .count(),
+            19
+        );
+        assert_eq!(
+            inventory
+                .legacy_ledger()
+                .iter()
+                .filter(|row| row.disposition == LegacySkillDispositionV1::Replace)
+                .count(),
+            9
+        );
+        assert_eq!(
+            inventory
+                .legacy_ledger()
+                .iter()
+                .filter(|row| row.disposition == LegacySkillDispositionV1::MigrationOnly)
+                .count(),
+            7
+        );
+        assert!(inventory.legacy_ledger().iter().all(|row| {
+            row.disposition != LegacySkillDispositionV1::MigrationOnly
+                || row.active_destination.is_none()
+        }));
+    }
 }

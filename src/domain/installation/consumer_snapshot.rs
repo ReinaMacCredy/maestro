@@ -615,6 +615,51 @@ pub(in crate::domain) struct ConsumerClosureReceiptV1<'view, 'connection, K> {
     _not_send_or_sync: PhantomData<Rc<()>>,
 }
 
+pub(crate) struct AgentResourceReleaseConsumerSealV1 {
+    closure: [u8; 32],
+    _not_send_or_sync: PhantomData<Rc<()>>,
+}
+
+impl ConsumerClosureReceiptV1<'_, '_, PreCurrentnessConsumerStageV1> {
+    pub(crate) fn into_agent_resource_release_seal(
+        self,
+    ) -> Result<AgentResourceReleaseConsumerSealV1, InstallationConsumerSnapshotErrorV1> {
+        if self.census_rows.is_empty()
+            || self.finality_commitment == [0; 32]
+            || self.consumer_set_id == [0; 32]
+        {
+            return Err(InstallationConsumerSnapshotErrorV1::FinalityMismatch);
+        }
+        let mut hasher = Sha256::new();
+        hasher.update(b"maestro.vnext.agent-resource-release-consumer-seal.v1\0");
+        hasher.update(self.owner_operation);
+        hasher.update(self.consumer_set_id);
+        hasher.update(self.finality_commitment);
+        for row in self.census_rows {
+            hasher.update(row);
+        }
+        Ok(AgentResourceReleaseConsumerSealV1 {
+            closure: hasher.finalize().into(),
+            _not_send_or_sync: PhantomData,
+        })
+    }
+}
+
+impl AgentResourceReleaseConsumerSealV1 {
+    pub(crate) const fn closure(&self) -> [u8; 32] {
+        self.closure
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_seal(closure: [u8; 32]) -> Self {
+        assert_ne!(closure, [0; 32]);
+        Self {
+            closure,
+            _not_send_or_sync: PhantomData,
+        }
+    }
+}
+
 impl<K> ConsumerClosureReceiptV1<'_, '_, K> {
     pub(in crate::domain) const fn finality_commitment(&self) -> [u8; 32] {
         self.finality_commitment
@@ -968,6 +1013,21 @@ mod tests {
         assert_eq!(receipt.owner_operation, [1; 32]);
         assert_eq!(receipt.consumer_set_id, expected);
         assert_ne!(receipt.finality_commitment(), [0; 32]);
+    }
+
+    #[test]
+    fn pre_currentness_receipt_is_the_only_agent_resource_release_consumer_seal() {
+        let mut store = persistence_seed::TestProviderV1::new(active_store_facts(
+            PreCurrentnessConsumerStageV1::TAG,
+        ));
+        let mut host = integration_seed::TestProviderV1::new(integration_seed::standard_facts());
+        let seal = issue::<PreCurrentnessConsumerStageV1>(&mut store, &mut host)
+            .unwrap()
+            .consume_finality()
+            .unwrap()
+            .into_agent_resource_release_seal()
+            .unwrap();
+        assert_ne!(seal.closure(), [0; 32]);
     }
 
     #[test]
