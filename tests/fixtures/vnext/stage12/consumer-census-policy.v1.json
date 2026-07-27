@@ -1,0 +1,139 @@
+{
+  "authority_state": "noncanonical_read_only_test_input",
+  "coverage": {
+    "closed_world": false,
+    "kind": "provisional_stage12_seed",
+    "requires_ordered_stage6_through_stage11_integration": true,
+    "requires_stage11_consumer_closure": true,
+    "semantics": "literal_and_path_evidence_only"
+  },
+  "design_sha256": "3832e005dd165cf47366d4df048f12e5ce633f61c95f5893778c4c57a7029dac",
+  "fanout_commit": "7080fb6cd1e286998ff47fb6205e90dca990ba40",
+  "fanout_manifest_preservation_only": true,
+  "fanout_manifest_schema": "maestro.external.vnext-successor-fanout.v3",
+  "fanout_manifest_sha256": "22160433bbf9784317b76fbe2784cd8f155fc7ee83f43e23f47453d564c64cb8",
+  "fanout_manifest_state": "design_locked_not_dispatch_ready",
+  "fanout_tree": "926f6f0f6a169716a8815105adc8609ac289c717",
+  "materialization_decisions": {
+    "dec-canonical-authority-materialization-df3b": "0d7c406f68f04fdf47ce00d56e8189b54159f164323c9511504790b941f715d0",
+    "dec-canonical-execution-h3-verified-0939": "b5935c389182a7f3ec6447fb2a13dcb70e912108b399d0b1d25fee5f132186a7",
+    "dec-canonical-foundation-descriptor-a128": "17fb79ef9bc74cf3838d869bf5fb3b0ae0e9ae017670ca7cb207aeb8105c234e",
+    "dec-canonical-installation-consumer-c1fe": "aaba56a8f34fb293a68f26743fbf4ef879d9f5a399a4eb45da74eed70a509e53"
+  },
+  "rules": [
+    {
+      "id": "temporary_vnext_source_path",
+      "matcher": "path_prefix",
+      "release_requirement": "zero",
+      "roots": [
+        "src"
+      ],
+      "suffixes": [
+        ".rs"
+      ],
+      "values": [
+        "src/domain/vnext/",
+        "src/interfaces/vnext/",
+        "src/operations/vnext/"
+      ]
+    },
+    {
+      "id": "temporary_domain_namespace_reference",
+      "matcher": "literal",
+      "release_requirement": "zero",
+      "roots": [
+        "src"
+      ],
+      "suffixes": [
+        ".rs"
+      ],
+      "values": [
+        "crate::domain::vnext",
+        "maestro::domain::vnext"
+      ]
+    },
+    {
+      "id": "temporary_domain_module_export",
+      "matcher": "literal",
+      "release_requirement": "zero",
+      "roots": [
+        "src"
+      ],
+      "suffixes": [
+        ".rs"
+      ],
+      "values": [
+        "pub mod vnext;",
+        "pub(crate) mod vnext;"
+      ]
+    },
+    {
+      "id": "legacy_skill_surface",
+      "matcher": "literal_or_path_contains",
+      "release_requirement": "zero_or_stage11_sealed_reader",
+      "roots": [
+        "embedded",
+        "scripts",
+        "src"
+      ],
+      "suffixes": [
+        ".json",
+        ".md",
+        ".rs",
+        ".sh",
+        ".toml",
+        ".yaml",
+        ".yml"
+      ],
+      "values": [
+        "ask-maestro",
+        "maestro-audit",
+        "maestro-card",
+        "maestro-design",
+        "maestro-research",
+        "maestro-setup",
+        "maestro-witness",
+        "maestro-work"
+      ]
+    },
+    {
+      "id": "legacy_next_surface",
+      "matcher": "literal",
+      "release_requirement": "zero_or_stage11_sealed_reader",
+      "roots": [
+        "embedded",
+        "scripts",
+        "src"
+      ],
+      "suffixes": [
+        ".json",
+        ".md",
+        ".rs",
+        ".sh",
+        ".toml",
+        ".yaml",
+        ".yml"
+      ],
+      "values": [
+        "card ready",
+        "loop next",
+        "task next"
+      ]
+    },
+    {
+      "id": "legacy_harness_resource",
+      "matcher": "path_prefix",
+      "release_requirement": "zero_or_stage11_sealed_reader",
+      "roots": [
+        "embedded"
+      ],
+      "suffixes": [
+        ".md"
+      ],
+      "values": [
+        "embedded/harness/"
+      ]
+    }
+  ],
+  "schema_version": "maestro.test-only.vnext-stage12-consumer-census-policy.v1"
+}
