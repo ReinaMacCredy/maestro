@@ -1,14 +1,17 @@
-use std::collections::BTreeSet;
 use std::marker::PhantomData;
 use std::rc::Rc;
 
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
-use crate::domain::capability::literals::CanonicalAgentResourceInventoryV1;
+use crate::domain::capability::literals::{
+    CanonicalAgentResourceInventoryV1, LegacySkillDispositionV1,
+};
 use crate::domain::distribution::runtime::{
-    DistributionDomainKindV1, DistributionMutationKindV1, DistributionPlanV1,
-    DistributionTransactionPhaseV1, DistributionTransactionV1,
+    CustodyAssessmentV1, CutoverPlanOwnerFactsV1, DistributionDomainKindV1,
+    DistributionDomainRefV1, DistributionMutationKindV1, DistributionPlanTargetV1,
+    DistributionPlanV1, DistributionScopedObjectRefV1, DistributionTransactionPhaseV1,
+    DistributionTransactionV1, TargetCustodyClassV1, TargetEffectKindV1,
 };
 use crate::domain::distribution::{CommitmentV1, ReleaseIdV1};
 
@@ -42,20 +45,84 @@ impl AgentResourceTargetKindV1 {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct AgentResourceJournalBindingV1 {
-    pub kind: AgentResourceTargetKindV1,
-    pub target_tag: u64,
+pub(crate) struct AgentResourceTargetOwnerFactsV1 {
+    pub target_identity: CommitmentV1,
     pub expected_preimage: CommitmentV1,
-    pub candidate: Option<CommitmentV1>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct AgentResourceReleaseOwnerFactsV1 {
+    plan: CutoverPlanOwnerFactsV1<7>,
+    targets: [AgentResourceTargetOwnerFactsV1; 7],
+}
+
+impl AgentResourceReleaseOwnerFactsV1 {
+    pub(crate) fn new(
+        plan: CutoverPlanOwnerFactsV1<7>,
+        targets: [AgentResourceTargetOwnerFactsV1; 7],
+    ) -> Result<Self, AgentResourceCutoverErrorV1> {
+        if plan.domain.kind() != DistributionDomainKindV1::InstallationDomain
+            || plan
+                .target_custodies
+                .iter()
+                .any(|custody| custody.class() != TargetCustodyClassV1::MaestroOwnedTarget)
+            || targets.iter().any(|facts| {
+                facts.target_identity.as_bytes() == &[0; 32]
+                    || facts.expected_preimage.as_bytes() == &[0; 32]
+            })
+        {
+            return Err(AgentResourceCutoverErrorV1::InvalidOwnerFacts);
+        }
+        if targets
+            .iter()
+            .map(|facts| facts.target_identity)
+            .collect::<std::collections::BTreeSet<_>>()
+            .len()
+            != targets.len()
+        {
+            return Err(AgentResourceCutoverErrorV1::InvalidOwnerFacts);
+        }
+        Ok(Self { plan, targets })
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct AgentResourceJournalBindingV1 {
+    kind: AgentResourceTargetKindV1,
+    target_tag: u64,
+    target_identity: CommitmentV1,
+    expected_preimage: CommitmentV1,
+    candidate: Option<CommitmentV1>,
+    effect_kind: TargetEffectKindV1,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct AgentResourceJournalRowV1 {
+    ordinal: u64,
+    logical_path: &'static str,
+    embedded_source_path: &'static str,
+    content_sha256: [u8; 32],
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct LegacyDispositionJournalRowV1 {
+    ordinal: u64,
+    source_path: &'static str,
+    disposition: LegacySkillDispositionV1,
+    active_destination: Option<&'static str>,
+}
+
+#[derive(Debug)]
 pub(crate) struct AgentResourceReleaseAdmissionV1 {
     release_id: ReleaseIdV1,
     resource_inventory_closure: [u8; 32],
     legacy_ledger_closure: [u8; 32],
     consumer_closure: [u8; 32],
     journal_closure: [u8; 32],
-    journal: [AgentResourceJournalBindingV1; 7],
+    resources: [AgentResourceJournalRowV1; 31],
+    dispositions: [LegacyDispositionJournalRowV1; 35],
+    targets: [AgentResourceJournalBindingV1; 7],
+    plan: DistributionPlanV1,
     _not_send_or_sync: PhantomData<Rc<()>>,
 }
 
@@ -63,22 +130,50 @@ impl AgentResourceReleaseAdmissionV1 {
     pub(crate) fn new(
         release_id: ReleaseIdV1,
         consumer_seal: AgentResourceReleaseConsumerSealV1,
-        journal: [AgentResourceJournalBindingV1; 7],
+        owner_facts: AgentResourceReleaseOwnerFactsV1,
     ) -> Result<Self, AgentResourceCutoverErrorV1> {
         if release_id.as_bytes() == &[0; 32] {
             return Err(AgentResourceCutoverErrorV1::InvalidAdmission);
         }
         let inventory = CanonicalAgentResourceInventoryV1::load_embedded()
             .map_err(|_| AgentResourceCutoverErrorV1::InvalidCanonicalInventory)?;
-        validate_agent_resource_journal(&journal)?;
-        let journal_closure = agent_resource_journal_closure(&journal);
+        let resources = std::array::from_fn(|index| {
+            let row = inventory.resources()[index];
+            AgentResourceJournalRowV1 {
+                ordinal: index as u64 + 1,
+                logical_path: row.logical_path,
+                embedded_source_path: row.embedded_source_path,
+                content_sha256: row.content_sha256,
+            }
+        });
+        let dispositions = std::array::from_fn(|index| {
+            let row = inventory.legacy_ledger()[index];
+            LegacyDispositionJournalRowV1 {
+                ordinal: index as u64 + 1,
+                source_path: row.source_path,
+                disposition: row.disposition,
+                active_destination: row.active_destination,
+            }
+        });
+        let journal = owner_derived_agent_resource_journal(
+            release_id,
+            consumer_seal.closure(),
+            inventory.resource_closure(),
+            inventory.legacy_ledger_closure(),
+            &owner_facts,
+        );
+        let plan = build_agent_resource_plan(release_id, &owner_facts.plan, &journal)?;
+        let journal_closure = agent_resource_journal_closure(&resources, &dispositions, &journal);
         Ok(Self {
             release_id,
             resource_inventory_closure: inventory.resource_closure(),
             legacy_ledger_closure: inventory.legacy_ledger_closure(),
             consumer_closure: consumer_seal.closure(),
             journal_closure,
-            journal,
+            resources,
+            dispositions,
+            targets: journal,
+            plan,
             _not_send_or_sync: PhantomData,
         })
     }
@@ -87,22 +182,22 @@ impl AgentResourceReleaseAdmissionV1 {
         &self,
         plan: &DistributionPlanV1,
     ) -> Result<(), AgentResourceCutoverErrorV1> {
-        if plan.domain().kind() != DistributionDomainKindV1::InstallationDomain
-            || plan.mutation_kind() != DistributionMutationKindV1::Migrate
-            || plan.release_id() != Some(self.release_id)
-            || plan.targets().len() != self.journal.len()
+        if plan != &self.plan
+            || !self.has_exact_embedded_journal()?
+            || self.journal_closure
+                != agent_resource_journal_closure(
+                    &self.resources,
+                    &self.dispositions,
+                    &self.targets,
+                )
         {
             return Err(AgentResourceCutoverErrorV1::PlanMismatch);
         }
-        for (target, binding) in plan.targets().iter().zip(&self.journal) {
-            if target.target_tag != binding.target_tag
-                || target.expected_preimage_commitment != binding.expected_preimage
-                || target.candidate_commitment != binding.candidate
-            {
-                return Err(AgentResourceCutoverErrorV1::PlanMismatch);
-            }
-        }
         Ok(())
+    }
+
+    pub(crate) fn plan(&self) -> &DistributionPlanV1 {
+        &self.plan
     }
 
     pub(crate) const fn release_id(&self) -> ReleaseIdV1 {
@@ -120,8 +215,34 @@ impl AgentResourceReleaseAdmissionV1 {
     pub(crate) const fn finality_closure(&self) -> [u8; 32] {
         self.journal_closure
     }
+
+    fn has_exact_embedded_journal(&self) -> Result<bool, AgentResourceCutoverErrorV1> {
+        let inventory = CanonicalAgentResourceInventoryV1::load_embedded()
+            .map_err(|_| AgentResourceCutoverErrorV1::InvalidCanonicalInventory)?;
+        Ok(self.resources
+            == std::array::from_fn(|index| {
+                let row = inventory.resources()[index];
+                AgentResourceJournalRowV1 {
+                    ordinal: index as u64 + 1,
+                    logical_path: row.logical_path,
+                    embedded_source_path: row.embedded_source_path,
+                    content_sha256: row.content_sha256,
+                }
+            })
+            && self.dispositions
+                == std::array::from_fn(|index| {
+                    let row = inventory.legacy_ledger()[index];
+                    LegacyDispositionJournalRowV1 {
+                        ordinal: index as u64 + 1,
+                        source_path: row.source_path,
+                        disposition: row.disposition,
+                        active_destination: row.active_destination,
+                    }
+                }))
+    }
 }
 
+#[derive(Debug)]
 pub(crate) struct CommittedAgentResourceReleaseV1 {
     release_id: ReleaseIdV1,
     installation_result_closure: [u8; 32],
@@ -178,168 +299,150 @@ impl CommittedAgentResourceReleaseV1 {
     pub(crate) const fn installation_result_closure(&self) -> [u8; 32] {
         self.installation_result_closure
     }
-}
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum RepositoryBootstrapTargetKindV1 {
-    MaestroBootstrapFile,
-    AgentsManagedPointer,
-}
+    pub(crate) const fn reconnect_closure(&self) -> [u8; 32] {
+        self.reconnect_closure
+    }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum RepositoryBootstrapAuthorizationV1 {
-    Apply,
-    Force,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct RepositoryBootstrapBindingV1 {
-    pub kind: RepositoryBootstrapTargetKindV1,
-    pub target_tag: u64,
-    pub expected_preimage: CommitmentV1,
-    pub candidate: CommitmentV1,
-    pub shown_diff: CommitmentV1,
-    pub backup: CommitmentV1,
-    pub authorization: RepositoryBootstrapAuthorizationV1,
-}
-
-pub(crate) struct RepositoryBootstrapAdmissionV1 {
-    installation_release_id: ReleaseIdV1,
-    installation_result_closure: [u8; 32],
-    reconnect_closure: [u8; 32],
-    bootstrap_closure: [u8; 32],
-    bindings: [RepositoryBootstrapBindingV1; 2],
-    _not_send_or_sync: PhantomData<Rc<()>>,
-}
-
-impl RepositoryBootstrapAdmissionV1 {
-    pub(crate) fn after_agent_resource_release(
-        release: &CommittedAgentResourceReleaseV1,
-        bindings: [RepositoryBootstrapBindingV1; 2],
-    ) -> Result<Self, AgentResourceCutoverErrorV1> {
-        let kinds = bindings.map(|binding| binding.kind);
-        if kinds
-            != [
-                RepositoryBootstrapTargetKindV1::MaestroBootstrapFile,
-                RepositoryBootstrapTargetKindV1::AgentsManagedPointer,
-            ]
-            || bindings.iter().any(|binding| {
-                binding.target_tag == 0
-                    || [
-                        binding.expected_preimage,
-                        binding.candidate,
-                        binding.shown_diff,
-                        binding.backup,
-                    ]
-                    .iter()
-                    .any(|value| value.as_bytes() == &[0; 32])
-            })
-        {
-            return Err(AgentResourceCutoverErrorV1::InvalidRepositoryBootstrap);
-        }
-        let bootstrap_closure = commitment(
-            b"maestro.vnext.repository-bootstrap.v1",
-            &bindings
-                .iter()
-                .flat_map(repository_binding_parts)
-                .collect::<Vec<_>>(),
-        );
-        Ok(Self {
-            installation_release_id: release.release_id,
-            installation_result_closure: release.installation_result_closure,
-            reconnect_closure: release.reconnect_closure,
-            bootstrap_closure,
-            bindings,
+    #[cfg(test)]
+    pub(in crate::domain) fn test_committed(
+        release_id: ReleaseIdV1,
+        installation_result_closure: [u8; 32],
+        reconnect_closure: [u8; 32],
+    ) -> Self {
+        Self {
+            release_id,
+            installation_result_closure,
+            reconnect_closure,
             _not_send_or_sync: PhantomData,
-        })
-    }
-
-    pub(crate) fn validate_plan(
-        &self,
-        plan: &DistributionPlanV1,
-    ) -> Result<(), AgentResourceCutoverErrorV1> {
-        if plan.domain().kind() != DistributionDomainKindV1::RepositoryDomain
-            || plan.mutation_kind() != DistributionMutationKindV1::Migrate
-            || plan.release_id().is_some()
-            || plan.targets().len() != self.bindings.len()
-        {
-            return Err(AgentResourceCutoverErrorV1::PlanMismatch);
         }
-        for (target, binding) in plan.targets().iter().zip(&self.bindings) {
-            if target.target_tag != binding.target_tag
-                || target.expected_preimage_commitment != binding.expected_preimage
-                || target.candidate_commitment != Some(binding.candidate)
-            {
-                return Err(AgentResourceCutoverErrorV1::PlanMismatch);
-            }
-        }
-        Ok(())
-    }
-
-    pub(crate) const fn installation_release_id(&self) -> ReleaseIdV1 {
-        self.installation_release_id
-    }
-
-    pub(crate) const fn bootstrap_closure(&self) -> [u8; 32] {
-        self.bootstrap_closure
     }
 }
 
-fn validate_agent_resource_journal(
+fn owner_derived_agent_resource_journal(
+    release_id: ReleaseIdV1,
+    consumer_closure: [u8; 32],
+    resource_inventory_closure: [u8; 32],
+    legacy_ledger_closure: [u8; 32],
+    owner_facts: &AgentResourceReleaseOwnerFactsV1,
+) -> [AgentResourceJournalBindingV1; 7] {
+    std::array::from_fn(|index| {
+        let kind = AgentResourceTargetKindV1::ALL[index];
+        let target_tag = index as u64 + 1;
+        let target_identity = owner_facts.targets[index].target_identity;
+        let effect_kind = if kind == AgentResourceTargetKindV1::LegacyDiscoveryDeactivation {
+            TargetEffectKindV1::RemoveOwnedTarget
+        } else {
+            TargetEffectKindV1::RewriteOwnedTarget
+        };
+        let candidate =
+            (kind != AgentResourceTargetKindV1::LegacyDiscoveryDeactivation).then(|| {
+                CommitmentV1::from_bytes(commitment(
+                    b"maestro.vnext.agent-resource-target-candidate.v1",
+                    &[
+                        u64_commitment(kind as u64 + 1),
+                        *release_id.as_bytes(),
+                        resource_inventory_closure,
+                        legacy_ledger_closure,
+                        consumer_closure,
+                    ],
+                ))
+            });
+        AgentResourceJournalBindingV1 {
+            kind,
+            target_tag,
+            target_identity,
+            expected_preimage: owner_facts.targets[index].expected_preimage,
+            candidate,
+            effect_kind,
+        }
+    })
+}
+
+fn build_agent_resource_plan(
+    release_id: ReleaseIdV1,
+    plan: &CutoverPlanOwnerFactsV1<7>,
     journal: &[AgentResourceJournalBindingV1; 7],
-) -> Result<(), AgentResourceCutoverErrorV1> {
-    let kinds = journal
+) -> Result<DistributionPlanV1, AgentResourceCutoverErrorV1> {
+    let targets = journal
         .iter()
-        .map(|binding| binding.kind)
-        .collect::<BTreeSet<_>>();
-    let tags = journal
-        .iter()
-        .map(|binding| binding.target_tag)
-        .collect::<BTreeSet<_>>();
-    if journal.map(|binding| binding.kind) != AgentResourceTargetKindV1::ALL
-        || kinds != AgentResourceTargetKindV1::ALL.into_iter().collect()
-        || tags.len() != journal.len()
-        || journal.iter().any(|binding| {
-            binding.target_tag == 0
-                || binding.expected_preimage.as_bytes() == &[0; 32]
-                || (binding.kind == AgentResourceTargetKindV1::LegacyDiscoveryDeactivation)
-                    != binding.candidate.is_none()
+        .enumerate()
+        .map(|(index, binding)| DistributionPlanTargetV1 {
+            target_tag: binding.target_tag,
+            target_identity_ref: plan.target_identity_refs[index].clone(),
+            target_identity: binding.target_identity,
+            custody: plan.target_custodies[index].clone(),
+            expected_preimage_commitment: binding.expected_preimage,
+            candidate_commitment: binding.candidate,
+            effect_kind: binding.effect_kind,
+            outside_prefix_commitment: None,
+            outside_suffix_commitment: None,
         })
-    {
-        return Err(AgentResourceCutoverErrorV1::InvalidJournal);
-    }
-    Ok(())
+        .collect();
+    DistributionPlanV1::new(
+        plan.domain.clone(),
+        DistributionMutationKindV1::Migrate,
+        plan.request_id,
+        plan.request_or_ceremony_ref.clone(),
+        plan.plan_ref.clone(),
+        plan.idempotency_key_ref.clone(),
+        Some(release_id),
+        plan.prior_commit_ref.clone(),
+        plan.prior_receipt_ref.clone(),
+        None,
+        targets,
+    )
+    .map_err(|_| AgentResourceCutoverErrorV1::InvalidOwnerFacts)
 }
 
-fn agent_resource_journal_closure(journal: &[AgentResourceJournalBindingV1; 7]) -> [u8; 32] {
-    let parts = journal
-        .iter()
-        .flat_map(|binding| {
-            [
-                u64_commitment(binding.kind as u64 + 1),
-                u64_commitment(binding.target_tag),
-                *binding.expected_preimage.as_bytes(),
-                binding.candidate.map_or([0; 32], |value| *value.as_bytes()),
-            ]
-        })
+fn agent_resource_journal_closure(
+    resources: &[AgentResourceJournalRowV1; 31],
+    dispositions: &[LegacyDispositionJournalRowV1; 35],
+    targets: &[AgentResourceJournalBindingV1; 7],
+) -> [u8; 32] {
+    let resource_parts = resources.iter().flat_map(|row| {
+        [
+            u64_commitment(row.ordinal),
+            string_commitment(row.logical_path),
+            string_commitment(row.embedded_source_path),
+            row.content_sha256,
+        ]
+    });
+    let disposition_parts = dispositions.iter().flat_map(|row| {
+        [
+            u64_commitment(row.ordinal),
+            string_commitment(row.source_path),
+            u64_commitment(match row.disposition {
+                LegacySkillDispositionV1::Rewrite => 1,
+                LegacySkillDispositionV1::Replace => 2,
+                LegacySkillDispositionV1::MigrationOnly => 3,
+            }),
+            row.active_destination.map_or([0; 32], string_commitment),
+        ]
+    });
+    let target_parts = targets.iter().flat_map(|binding| {
+        [
+            u64_commitment(binding.kind as u64 + 1),
+            u64_commitment(binding.target_tag),
+            *binding.target_identity.as_bytes(),
+            *binding.expected_preimage.as_bytes(),
+            binding.candidate.map_or([0; 32], |value| *value.as_bytes()),
+            u64_commitment(binding.effect_kind.numeric_tag()),
+        ]
+    });
+    let parts = resource_parts
+        .chain(disposition_parts)
+        .chain(target_parts)
         .collect::<Vec<_>>();
     commitment(b"maestro.vnext.agent-resource-journal.v1", &parts)
 }
 
-fn repository_binding_parts(binding: &RepositoryBootstrapBindingV1) -> [[u8; 32]; 7] {
-    [
-        u64_commitment(binding.kind as u64 + 1),
-        u64_commitment(binding.target_tag),
-        *binding.expected_preimage.as_bytes(),
-        *binding.candidate.as_bytes(),
-        *binding.shown_diff.as_bytes(),
-        *binding.backup.as_bytes(),
-        u64_commitment(binding.authorization as u64 + 1),
-    ]
-}
-
 fn u64_commitment(value: u64) -> [u8; 32] {
     Sha256::digest(value.to_be_bytes()).into()
+}
+
+fn string_commitment(value: &str) -> [u8; 32] {
+    Sha256::digest(value.as_bytes()).into()
 }
 
 fn commitment(domain: &[u8], parts: &[[u8; 32]]) -> [u8; 32] {
@@ -358,104 +461,236 @@ pub(crate) enum AgentResourceCutoverErrorV1 {
     InvalidCanonicalInventory,
     #[error("the Agent Resource release admission is invalid")]
     InvalidAdmission,
-    #[error("the Agent Resource journal is incomplete or inconsistent")]
-    InvalidJournal,
+    #[error("the Installation owner facts are incomplete or invalid")]
+    InvalidOwnerFacts,
     #[error("the Distribution plan does not match the exact domain-local cutover")]
     PlanMismatch,
     #[error("the Agent Resource release is not committed and coherently reconnected")]
     ReconnectNotCurrent,
-    #[error("the Repository bootstrap lacks exact targets, diff, backup, or authorization")]
-    InvalidRepositoryBootstrap,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::authority::ActionRequestIdV1;
+    use crate::domain::distribution::runtime::{
+        CustodyBasisV1, DistributionDomainRefV1, DistributionRuntimeObjectKindV1,
+        DistributionScopedObjectRefV1, ManagedBlockBoundaryV1,
+    };
+    use crate::domain::identity::StoreObjectIdV1;
 
     fn commitment_value(value: u8) -> CommitmentV1 {
         CommitmentV1::from_bytes([value; 32])
     }
 
-    fn journal() -> [AgentResourceJournalBindingV1; 7] {
-        AgentResourceTargetKindV1::ALL.map(|kind| {
-            let target_tag = kind as u64 + 1;
-            AgentResourceJournalBindingV1 {
-                kind,
-                target_tag,
-                expected_preimage: commitment_value(target_tag as u8),
-                candidate: (kind != AgentResourceTargetKindV1::LegacyDiscoveryDeactivation)
-                    .then(|| commitment_value(target_tag as u8 + 10)),
-            }
+    fn object_id(value: u8) -> StoreObjectIdV1 {
+        StoreObjectIdV1::parse(&format!("sha256:{}", format!("{value:02x}").repeat(32))).unwrap()
+    }
+
+    fn domain(kind: DistributionDomainKindV1) -> DistributionDomainRefV1 {
+        DistributionDomainRefV1::new(
+            kind,
+            commitment_value(1),
+            commitment_value(2),
+            commitment_value(3),
+        )
+        .unwrap()
+    }
+
+    fn scoped(
+        domain: &DistributionDomainRefV1,
+        kind: DistributionRuntimeObjectKindV1,
+        value: u8,
+    ) -> DistributionScopedObjectRefV1 {
+        DistributionScopedObjectRefV1::new(domain.clone(), kind, object_id(value)).unwrap()
+    }
+
+    fn custody(
+        domain: &DistributionDomainRefV1,
+        target_identity: CommitmentV1,
+        value: u8,
+        shared_block: bool,
+    ) -> CustodyAssessmentV1 {
+        CustodyAssessmentV1::assess(&CustodyBasisV1 {
+            domain: domain.clone(),
+            target_identity,
+            alias_closure_id: commitment_value(value.wrapping_add(1)),
+            receipt_ref: Some(scoped(
+                domain,
+                DistributionRuntimeObjectKindV1::DistributionReceipt,
+                value.wrapping_add(2),
+            )),
+            claim_ref: Some(scoped(
+                domain,
+                DistributionRuntimeObjectKindV1::InstalledResourceClaim,
+                value.wrapping_add(3),
+            )),
+            claimed_target_identity: Some(target_identity),
+            resource_id: Some(commitment_value(value.wrapping_add(4))),
+            bundle_id: Some(commitment_value(value.wrapping_add(5))),
+            release_id: Some(commitment_value(value.wrapping_add(6))),
+            claimed_content_sha256: Some(commitment_value(value.wrapping_add(7))),
+            observed_content_sha256: Some(commitment_value(value.wrapping_add(7))),
+            managed_block: shared_block.then(|| ManagedBlockBoundaryV1 {
+                start_marker: b"<!-- maestro:start -->".to_vec(),
+                end_marker: b"<!-- maestro:end -->".to_vec(),
+                block_sha256: commitment_value(value.wrapping_add(8)),
+                outside_prefix_sha256: commitment_value(value.wrapping_add(9)),
+                outside_suffix_sha256: commitment_value(value.wrapping_add(10)),
+            }),
+            foreign_owner_observed: false,
+            external_manager_observed: false,
+            alias_ambiguous: false,
+            unsafe_path_state: false,
         })
+        .unwrap()
+    }
+
+    fn plan_facts<const TARGETS: usize>(
+        kind: DistributionDomainKindV1,
+        identities: [CommitmentV1; TARGETS],
+        shared_target: Option<usize>,
+    ) -> CutoverPlanOwnerFactsV1<TARGETS> {
+        let domain = domain(kind);
+        let target_identity_refs = std::array::from_fn(|index| {
+            scoped(
+                &domain,
+                DistributionRuntimeObjectKindV1::CanonicalTargetIdentity,
+                30 + index as u8,
+            )
+        });
+        let target_custodies = std::array::from_fn(|index| {
+            custody(
+                &domain,
+                identities[index],
+                100 + index as u8 * 12,
+                shared_target == Some(index),
+            )
+        });
+        CutoverPlanOwnerFactsV1::new(
+            domain.clone(),
+            ActionRequestIdV1::derive("stage9-resource-cutover").unwrap(),
+            scoped(
+                &domain,
+                DistributionRuntimeObjectKindV1::ActionRequestOrCeremony,
+                10,
+            ),
+            scoped(
+                &domain,
+                DistributionRuntimeObjectKindV1::DistributionPlan,
+                11,
+            ),
+            scoped(&domain, DistributionRuntimeObjectKindV1::IdempotencyKey, 12),
+            None,
+            None,
+            target_identity_refs,
+            target_custodies,
+        )
+    }
+
+    fn agent_owner_facts(seed: u8) -> AgentResourceReleaseOwnerFactsV1 {
+        let targets = std::array::from_fn(|index| AgentResourceTargetOwnerFactsV1 {
+            target_identity: commitment_value(seed + index as u8),
+            expected_preimage: commitment_value(seed + 20 + index as u8),
+        });
+        AgentResourceReleaseOwnerFactsV1::new(
+            plan_facts(
+                DistributionDomainKindV1::InstallationDomain,
+                targets.map(|facts| facts.target_identity),
+                None,
+            ),
+            targets,
+        )
+        .unwrap()
     }
 
     #[test]
-    fn installation_release_admission_binds_exact_inventory_ledger_and_journal() {
+    fn installation_owner_derives_exact_inventory_ledger_plan_and_refuses_tampering() {
+        let inventory = CanonicalAgentResourceInventoryV1::load_embedded().unwrap();
+        assert_eq!(inventory.resources().len(), 31);
+        assert_eq!(inventory.legacy_ledger().len(), 35);
+
         let admission = AgentResourceReleaseAdmissionV1::new(
             commitment_value(90),
             AgentResourceReleaseConsumerSealV1::test_seal([91; 32]),
-            journal(),
+            agent_owner_facts(20),
         )
         .unwrap();
 
         assert_ne!(admission.resource_inventory_closure(), [0; 32]);
         assert_ne!(admission.legacy_ledger_closure(), [0; 32]);
         assert_ne!(admission.finality_closure(), [0; 32]);
-
-        let mut reordered = journal();
-        reordered.swap(0, 1);
+        assert_eq!(admission.resources.len(), 31);
+        assert_eq!(admission.dispositions.len(), 35);
         assert_eq!(
-            AgentResourceReleaseAdmissionV1::new(
-                commitment_value(90),
-                AgentResourceReleaseConsumerSealV1::test_seal([91; 32]),
-                reordered,
-            )
-            .err(),
-            Some(AgentResourceCutoverErrorV1::InvalidJournal)
+            admission
+                .resources
+                .map(|row| (row.logical_path, row.content_sha256)),
+            inventory
+                .resources()
+                .map(|row| (row.logical_path, row.content_sha256))
         );
-    }
-
-    #[test]
-    fn repository_bootstrap_requires_prior_reconnected_installation_result() {
-        let committed = CommittedAgentResourceReleaseV1 {
-            release_id: commitment_value(80),
-            installation_result_closure: [81; 32],
-            reconnect_closure: [82; 32],
-            _not_send_or_sync: PhantomData,
-        };
-        let bindings = [
-            RepositoryBootstrapBindingV1 {
-                kind: RepositoryBootstrapTargetKindV1::MaestroBootstrapFile,
-                target_tag: 1,
-                expected_preimage: commitment_value(1),
-                candidate: commitment_value(2),
-                shown_diff: commitment_value(3),
-                backup: commitment_value(4),
-                authorization: RepositoryBootstrapAuthorizationV1::Apply,
-            },
-            RepositoryBootstrapBindingV1 {
-                kind: RepositoryBootstrapTargetKindV1::AgentsManagedPointer,
-                target_tag: 2,
-                expected_preimage: commitment_value(5),
-                candidate: commitment_value(6),
-                shown_diff: commitment_value(7),
-                backup: commitment_value(8),
-                authorization: RepositoryBootstrapAuthorizationV1::Force,
-            },
-        ];
-        let admission =
-            RepositoryBootstrapAdmissionV1::after_agent_resource_release(&committed, bindings)
-                .unwrap();
-
-        assert_eq!(admission.installation_release_id(), committed.release_id());
-        assert_ne!(admission.bootstrap_closure(), [0; 32]);
-
-        let mut missing_diff = bindings;
-        missing_diff[1].shown_diff = CommitmentV1::from_bytes([0; 32]);
         assert_eq!(
-            RepositoryBootstrapAdmissionV1::after_agent_resource_release(&committed, missing_diff)
-                .err(),
-            Some(AgentResourceCutoverErrorV1::InvalidRepositoryBootstrap)
+            admission.dispositions.map(|row| (
+                row.source_path,
+                row.disposition,
+                row.active_destination
+            )),
+            inventory.legacy_ledger().map(|row| (
+                row.source_path,
+                row.disposition,
+                row.active_destination
+            ))
+        );
+        assert_eq!(admission.plan().targets().len(), 7);
+        assert_eq!(admission.plan().targets()[6].candidate_commitment, None);
+
+        let candidate_tamper = AgentResourceReleaseAdmissionV1::new(
+            commitment_value(90),
+            AgentResourceReleaseConsumerSealV1::test_seal([92; 32]),
+            agent_owner_facts(20),
+        )
+        .unwrap();
+        assert_eq!(
+            admission.validate_plan(candidate_tamper.plan()),
+            Err(AgentResourceCutoverErrorV1::PlanMismatch)
+        );
+
+        let mut preimage_tamper = agent_owner_facts(20);
+        preimage_tamper.targets[0].expected_preimage = commitment_value(99);
+        let preimage_tamper = AgentResourceReleaseAdmissionV1::new(
+            commitment_value(90),
+            AgentResourceReleaseConsumerSealV1::test_seal([91; 32]),
+            preimage_tamper,
+        )
+        .unwrap();
+        assert_eq!(
+            admission.validate_plan(preimage_tamper.plan()),
+            Err(AgentResourceCutoverErrorV1::PlanMismatch)
+        );
+
+        let mut row_tamper = AgentResourceReleaseAdmissionV1::new(
+            commitment_value(90),
+            AgentResourceReleaseConsumerSealV1::test_seal([91; 32]),
+            agent_owner_facts(20),
+        )
+        .unwrap();
+        row_tamper.resources[0].content_sha256 = [0; 32];
+        assert_eq!(
+            row_tamper.validate_plan(row_tamper.plan()),
+            Err(AgentResourceCutoverErrorV1::PlanMismatch)
+        );
+
+        let mut closure_tamper = AgentResourceReleaseAdmissionV1::new(
+            commitment_value(90),
+            AgentResourceReleaseConsumerSealV1::test_seal([91; 32]),
+            agent_owner_facts(20),
+        )
+        .unwrap();
+        closure_tamper.journal_closure = [0; 32];
+        assert_eq!(
+            closure_tamper.validate_plan(closure_tamper.plan()),
+            Err(AgentResourceCutoverErrorV1::PlanMismatch)
         );
     }
 }

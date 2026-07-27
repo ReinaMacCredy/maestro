@@ -72,10 +72,8 @@ pub use cutover::{
     InstallationLocatorCandidateV1, PreStoreCutoverCandidateV1,
 };
 pub(crate) use resource_cutover::{
-    AgentResourceCutoverErrorV1, AgentResourceJournalBindingV1, AgentResourceReleaseAdmissionV1,
-    AgentResourceTargetKindV1, CommittedAgentResourceReleaseV1, RepositoryBootstrapAdmissionV1,
-    RepositoryBootstrapAuthorizationV1, RepositoryBootstrapBindingV1,
-    RepositoryBootstrapTargetKindV1,
+    AgentResourceCutoverErrorV1, AgentResourceReleaseAdmissionV1, AgentResourceReleaseOwnerFactsV1,
+    AgentResourceTargetOwnerFactsV1, CommittedAgentResourceReleaseV1,
 };
 
 pub(crate) fn admit_installation_census_roots_v2(

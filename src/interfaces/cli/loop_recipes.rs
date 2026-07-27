@@ -6,6 +6,7 @@ use anyhow::{Result, bail, ensure};
 use serde::Serialize;
 use serde_json::{Value, json};
 
+use crate::domain::projection::LegacySuccessorSurfaceV1;
 use crate::domain::{card, feature, loop_recipes, run, task};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::session::agent_runtime_from_env;
@@ -137,6 +138,10 @@ pub(crate) struct LoopReadinessEvidence {
 /// default and `list`), or one recipe verbatim. Served from the binary, so it
 /// needs no `.maestro` repo.
 pub fn run(args: LoopArgs) -> Result<()> {
+    if matches!(&args.command, Some(LoopCommand::Next(_))) {
+        return super::adapter::refuse_legacy_successor_route(LegacySuccessorSurfaceV1::LoopNext);
+    }
+
     let custom_dir = custom_recipe_dir();
     match args.command {
         None | Some(LoopCommand::List) => {

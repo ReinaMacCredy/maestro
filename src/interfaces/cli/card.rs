@@ -4,6 +4,7 @@ use anyhow::{Result, anyhow};
 use serde::Serialize;
 use serde_yaml::Value;
 
+use crate::domain::projection::LegacySuccessorSurfaceV1;
 use crate::domain::{card, feature, search, task};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::safe_write::write_string_atomic;
@@ -46,6 +47,8 @@ pub fn ready(args: ReadyArgs) -> Result<()> {
 
 /// Execute `maestro card ready`: legacy workable cards with no open blockers.
 pub fn card_ready(args: CardReadyArgs) -> Result<()> {
+    super::adapter::refuse_legacy_successor_route(LegacySuccessorSurfaceV1::CardReady)?;
+
     let paths = if args.json {
         card_paths_json()?
     } else {

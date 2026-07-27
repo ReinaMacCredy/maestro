@@ -5,6 +5,7 @@ use anyhow::{Context, Result, bail};
 
 use crate::domain::card;
 use crate::domain::feature;
+use crate::domain::projection::LegacySuccessorSurfaceV1;
 use crate::domain::proof;
 use crate::domain::task;
 use crate::domain::task::{BlockerKind, BlockerTarget, TaskRecord, TaskState, TransitionDetails};
@@ -21,6 +22,10 @@ use crate::operations::harness;
 
 /// Execute `maestro task`.
 pub fn run(args: TaskArgs) -> Result<()> {
+    if matches!(&args.command, TaskCommand::Next { .. }) {
+        return super::adapter::refuse_legacy_successor_route(LegacySuccessorSurfaceV1::TaskNext);
+    }
+
     let repo_root = discover_repo_root()?;
     let paths = MaestroPaths::new(repo_root);
     // Read verbs (list/show/doctor) must not scaffold: a pure inspect should leave

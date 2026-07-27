@@ -8,7 +8,7 @@ use crate::domain::capability::generated_catalog::{
     GeneratedCapabilityCatalogV1, OperationCatalogKindV1,
 };
 use crate::domain::integration::public_literals::{OperationResultV1, OperationSemanticOutcomeV1};
-use crate::domain::projection::{ProjectionReadPortV1, read_packet};
+use crate::domain::projection::{LegacySuccessorSurfaceV1, ProjectionReadPortV1, read_packet};
 use crate::domain::transport::{
     decode_operation_request, decode_packet_read_request, encode_operation_result,
     encode_packet_read_envelope,
@@ -17,6 +17,15 @@ use crate::operations::action::{
     ActionSubmissionServiceV1, GovernedOperationPortV1, OperationKindV1, OperationResultReadPortV1,
     PreparedOperationV1,
 };
+use crate::operations::adapters::legacy_successor_refusal;
+
+pub(super) fn refuse_legacy_successor_route(
+    surface: LegacySuccessorSurfaceV1<'_>,
+) -> anyhow::Result<()> {
+    let refusal = legacy_successor_refusal(surface)
+        .ok_or_else(|| anyhow::anyhow!("the requested route is not a frozen legacy surface"))?;
+    anyhow::bail!("{}; use {}", refusal.code, refusal.canonical_replacement)
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct Stage6CliOutputV1 {

@@ -1,5 +1,19 @@
 //! Authoritative Repository-Store publication for implemented Stage 3 owner actions.
 
+mod bootstrap;
+
+#[allow(
+    unused_imports,
+    reason = "the Repository facade exports the complete bootstrap owner contract"
+)]
+pub(crate) use bootstrap::{
+    CommittedRepositoryBootstrapV1, RepositoryBootstrapAdmissionV1,
+    RepositoryBootstrapAuthorizationV1, RepositoryBootstrapEffectObservationV1,
+    RepositoryBootstrapEffectPermitV1, RepositoryBootstrapErrorV1, RepositoryBootstrapOwnerFactsV1,
+    RepositoryBootstrapReadbackV1, RepositoryBootstrapTargetFactsV1,
+    RepositoryBootstrapTargetReadbackV1,
+};
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use sha2::{Digest, Sha256};

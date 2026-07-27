@@ -320,13 +320,11 @@ impl CanonicalAgentResourceInventoryV1 {
         Ok(inventory)
     }
 
-    #[cfg(test)]
-    pub(crate) fn resources(&self) -> &[CanonicalInstructionResourceV1; 31] {
+    pub(in crate::domain) fn resources(&self) -> &[CanonicalInstructionResourceV1; 31] {
         &self.resources
     }
 
-    #[cfg(test)]
-    pub(crate) fn legacy_ledger(&self) -> &[LegacySkillLedgerRowV1; 35] {
+    pub(in crate::domain) fn legacy_ledger(&self) -> &[LegacySkillLedgerRowV1; 35] {
         &self.legacy_ledger
     }
 

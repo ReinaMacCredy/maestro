@@ -1,9 +1,9 @@
 use crate::domain::distribution::runtime::{
-    DistributionPhaseAuthorizationV1, DistributionPlanV1, TargetPlanObservationV1,
+    DistributionPhaseAuthorizationV1, TargetPlanObservationV1,
 };
 use crate::domain::installation::{
     AgentResourceCutoverErrorV1, AgentResourceReleaseAdmissionV1, CommittedAgentResourceReleaseV1,
-    ObservedInstallationClosureV1, RepositoryBootstrapAdmissionV1, UserAgentInstallationClosureV1,
+    ObservedInstallationClosureV1, UserAgentInstallationClosureV1,
 };
 use crate::domain::persistence::StorePublicationOutcomeV1;
 
@@ -12,6 +12,7 @@ use super::{
     DistributionEffectPortV1, InstallationOperationErrorV1,
 };
 
+#[derive(Debug)]
 pub(crate) struct ActiveAgentResourceReleaseV1 {
     admission: AgentResourceReleaseAdmissionV1,
     transaction: ActiveDistributionTransactionV1,
@@ -27,11 +28,10 @@ impl ActiveInstallationFacadeV1<'_> {
     pub(crate) fn begin_agent_resource_release(
         &mut self,
         admission: AgentResourceReleaseAdmissionV1,
-        plan: DistributionPlanV1,
         phase_authorizations: Vec<DistributionPhaseAuthorizationV1>,
         observations: Vec<TargetPlanObservationV1>,
     ) -> Result<ActiveAgentResourceReleaseV1, AgentResourceReleaseOperationErrorV1> {
-        admission.validate_plan(&plan)?;
+        let plan = admission.plan().clone();
         let transaction = self.begin(plan, phase_authorizations, observations)?;
         Ok(ActiveAgentResourceReleaseV1 {
             admission,
@@ -77,17 +77,6 @@ impl ActiveInstallationFacadeV1<'_> {
             closure,
             observed,
         )?)
-    }
-
-    pub(crate) fn begin_repository_bootstrap(
-        &mut self,
-        admission: &RepositoryBootstrapAdmissionV1,
-        plan: DistributionPlanV1,
-        phase_authorizations: Vec<DistributionPhaseAuthorizationV1>,
-        observations: Vec<TargetPlanObservationV1>,
-    ) -> Result<ActiveDistributionTransactionV1, AgentResourceReleaseOperationErrorV1> {
-        admission.validate_plan(&plan)?;
-        Ok(self.begin(plan, phase_authorizations, observations)?)
     }
 }
 

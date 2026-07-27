@@ -223,7 +223,16 @@ impl<'store> ActiveInstallationFacadeV1<'store> {
     pub fn drive_to_verification(
         &mut self,
         active: &mut ActiveDistributionTransactionV1,
-        effects: &mut impl DistributionEffectPortV1,
+        effects: &mut (impl DistributionEffectPortV1 + ?Sized),
+    ) -> Result<(), InstallationOperationErrorV1> {
+        self.capture_preimages(active, effects)?;
+        self.drive_captured_to_verification(active, effects)
+    }
+
+    pub(crate) fn capture_preimages(
+        &mut self,
+        active: &mut ActiveDistributionTransactionV1,
+        effects: &mut (impl DistributionEffectPortV1 + ?Sized),
     ) -> Result<(), InstallationOperationErrorV1> {
         self.revalidate_effect_authority(active)?;
         let captures = active
@@ -234,8 +243,14 @@ impl<'store> ActiveInstallationFacadeV1<'store> {
             .map(|target| effects.compare_and_capture(target))
             .collect::<Result<Vec<_>, _>>()?;
         active.transaction.record_atomic_captures(captures)?;
-        effects.persist_checkpoint(&active.transaction)?;
+        effects.persist_checkpoint(&active.transaction)
+    }
 
+    pub(crate) fn drive_captured_to_verification(
+        &mut self,
+        active: &mut ActiveDistributionTransactionV1,
+        effects: &mut (impl DistributionEffectPortV1 + ?Sized),
+    ) -> Result<(), InstallationOperationErrorV1> {
         let staged_digest = effects.stage_candidate(active.transaction.plan())?;
         active.transaction.record_candidate_staged(staged_digest)?;
         effects.persist_checkpoint(&active.transaction)?;
@@ -282,10 +297,21 @@ impl<'store> ActiveInstallationFacadeV1<'store> {
         effects.persist_checkpoint(&active.transaction)
     }
 
+    pub(crate) fn coherent_repository_closure_is_current(
+        &self,
+        closure: &RepositoryInstallationClosureV1,
+    ) -> Result<bool, InstallationOperationErrorV1> {
+        let (state, _, _, objects) = self.store.coherent_publication_snapshot()?;
+        let closure_object = closure.to_store_object()?;
+        Ok(state == StoreStateV1::Active
+            && self.store.role() == crate::domain::persistence::StoreRoleV1::Repository
+            && objects.iter().any(|object| object == &closure_object))
+    }
+
     pub fn restore_from_captures(
         &mut self,
         active: &mut ActiveDistributionTransactionV1,
-        effects: &mut impl DistributionEffectPortV1,
+        effects: &mut (impl DistributionEffectPortV1 + ?Sized),
     ) -> Result<(), InstallationOperationErrorV1> {
         self.revalidate_effect_authority(active)?;
         active.transaction.begin_rollback()?;

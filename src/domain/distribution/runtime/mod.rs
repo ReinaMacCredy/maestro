@@ -13,6 +13,7 @@
 mod catalog;
 mod custody;
 mod model;
+mod owner_facts;
 mod records;
 mod transaction;
 
@@ -29,6 +30,7 @@ pub use model::{
     DistributionDomainKindV1, DistributionDomainRefV1, DistributionModelErrorV1,
     DistributionRuntimeObjectKindV1, DistributionScopedObjectRefV1,
 };
+pub(crate) use owner_facts::CutoverPlanOwnerFactsV1;
 pub use records::{
     DistributionCommitRecordV1, DistributionReceiptV1, DistributionRecordErrorV1,
     DistributionSnapshotTargetV1, DistributionSnapshotV1, InstalledResourceClaimSetV1,

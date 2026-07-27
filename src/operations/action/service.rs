@@ -87,9 +87,15 @@ pub(crate) struct ActionSubmissionServiceV1 {
 
 impl ActionSubmissionServiceV1 {
     pub(crate) fn load() -> Result<Self, ActionSubmissionErrorV1> {
-        Ok(Self {
-            catalog: GeneratedCapabilityCatalogV1::load_frozen()?,
-        })
+        let repository_bootstrap_owner = crate::operations::repository_bootstrap_owner_surface();
+        let catalog = GeneratedCapabilityCatalogV1::load_frozen()?;
+        if catalog
+            .ceremony_named(repository_bootstrap_owner.operation_name)
+            .is_none()
+        {
+            return Err(ActionSubmissionErrorV1::UnknownOperation);
+        }
+        Ok(Self { catalog })
     }
 
     pub(crate) fn prepare_named(
