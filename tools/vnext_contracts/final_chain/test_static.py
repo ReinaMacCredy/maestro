@@ -27,8 +27,13 @@ import runner  # type: ignore[import-not-found]  # noqa: E402
 class FinalChainStaticTests(unittest.TestCase):
     def test_contract_schemas_are_strict_and_parseable(self) -> None:
         expected = {
+            "cohort-observation.v1.schema.json",
+            "fanout-edge-sweep.v1.schema.json",
+            "fault-observation.v1.schema.json",
             "final-cumulative-closure-snapshot.v1.schema.json",
             "proof-ledger.v1.schema.json",
+            "proof-registry.v1.schema.json",
+            "semantic-artifact-readback.v1.schema.json",
             "stage12-semantic-readback.v1.schema.json",
             "toolchain.v1.schema.json",
             "final-cumulative-seal-receipt.v1.schema.json",
@@ -45,14 +50,24 @@ class FinalChainStaticTests(unittest.TestCase):
 
     def test_hostile_fixtures_live_only_in_the_owned_namespace(self) -> None:
         expected = {
+            "ancestry-constant-pass.v1.json",
+            "cohort-metadata-echo.v1.json",
+            "control-root-write.v1.json",
             "duplicate-proof-id.v1.json",
             "engine-coverage-gap.v1.json",
             "fault-schedules.v1.json",
             "foreign-receipt.v1.json",
+            "incomplete-cargo-closure.v1.json",
+            "inferred-proof-kind.v1.json",
+            "migration-cohorts.v1.json",
             "network-sandbox-unavailable.v1.json",
             "omitted-input-row.v1.json",
             "packet-byte-substitution.v1.json",
             "protected-primary-write.v1.json",
+            "publication-custody-swap.v1.json",
+            "publication-generation-skip.v1.json",
+            "readback-substring-proxy.v1.json",
+            "schedule-metadata-echo.v1.json",
             "semantic-readback-false-success.v1.json",
             "shared-writable-root.v1.json",
             "stale-pointer.v1.json",
@@ -142,6 +157,10 @@ class FinalChainStaticTests(unittest.TestCase):
                 "command": command,
                 "input_bindings": [source_binding],
                 "produced_artifacts": [],
+                "harness": {
+                    "protocol": "command-exit-v1",
+                    "required_receipt": "none",
+                },
             }
             ledger = {
                 "schema_version": "maestro.external.vnext-final-proof-ledger.v1",
@@ -180,10 +199,133 @@ class FinalChainStaticTests(unittest.TestCase):
                 "vnext-final-input-manifest.v1",
                 "vnext-final-packet-manifest.v1",
                 "vnext-final-proof-ledger.v1",
+                "vnext-final-proof-registry.v1",
+                "vnext-final-fault-observation.v1",
+                "vnext-final-cohort-observation.v1",
+                "vnext-final-fanout-edge-sweep.v1",
+                "vnext-final-semantic-artifact-readback.v1",
                 "vnext-stage12-semantic-readback-plan.v1",
                 "vnext-final-toolchain.v1",
             ):
                 self.assertIn(schema, source)
+
+    def test_registry_is_explicit_complete_and_bound_without_inference(self) -> None:
+        registry = json.loads(
+            (CONTRACTS / "proof-registry.v1.json").read_text(encoding="utf-8")
+        )
+        proofs = registry["proofs"]
+        self.assertEqual({row["stage"] for row in proofs}, set(range(13)))
+        self.assertEqual(len({row["kind"] for row in proofs}), 14)
+        self.assertEqual(len({row["proof_id"] for row in proofs}), len(proofs))
+        for row in proofs:
+            self.assertEqual(row["engines"], ["python", "rust", "ruby"])
+            self.assertIn("protocol", row["harness"])
+            if row["command"]["argv"][0] == "{tool:cargo}":
+                self.assertIn("--offline", row["command"]["argv"])
+                self.assertIn("--frozen", row["command"]["argv"])
+        by_kind = {kind: [] for kind in {"race", "crash_replay", "migration", "rollback", "ancestry"}}
+        for row in proofs:
+            if row["kind"] in by_kind:
+                by_kind[row["kind"]].append(row)
+        for kind in ("race", "crash_replay"):
+            self.assertEqual(by_kind[kind][0]["harness"]["protocol"], "fault-observation-v1")
+        for kind in ("migration", "rollback"):
+            self.assertEqual(by_kind[kind][0]["harness"]["protocol"], "cohort-observation-v1")
+        self.assertEqual(by_kind["ancestry"][0]["harness"]["protocol"], "fanout-edge-sweep-v1")
+        generator = (ROOT / "generate.py").read_text(encoding="utf-8")
+        self.assertNotIn("def stage_for", generator)
+        self.assertNotIn("def proof_kind", generator)
+        self.assertNotIn('rows[index]["kind"]', generator)
+        self.assertIn("registry_identity", generator)
+
+    def test_runtime_evidence_is_typed_and_semantic_not_substring_counted(self) -> None:
+        sources = [
+            (ROOT / name).read_text(encoding="utf-8")
+            for name in ("engine_python.py", "engine_ruby.rb", "engine_rust.rs")
+        ]
+        for source in sources:
+            for schema in (
+                "vnext-final-fault-observation.v1",
+                "vnext-final-cohort-observation.v1",
+                "vnext-final-fanout-edge-sweep.v1",
+                "vnext-final-semantic-artifact-readback.v1",
+                "vnext-final-fault-point-observation.v1",
+                "vnext-final-cohort-route-observation.v1",
+                "vnext-final-canonical-read-observation.v1",
+                "vnext-final-negative-route-observation.v1",
+            ):
+                self.assertIn(schema, source)
+            for proxy in ("count_literals", "scan_counts", "byte_contains"):
+                self.assertNotIn(proxy, source)
+        plan_schema = json.loads(
+            (CONTRACTS / "stage12-semantic-readback.v1.schema.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        properties = plan_schema["properties"]["checks"]["items"]["properties"]
+        self.assertIn("required_artifact_kinds", properties)
+        self.assertIn("minimum_canonical_reads", properties)
+        self.assertIn("minimum_negative_routes", properties)
+        fault_schema = json.loads(
+            (CONTRACTS / "fault-observation.v1.schema.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertIn("point_receipts", fault_schema["required"])
+        cohort_schema = json.loads(
+            (CONTRACTS / "cohort-observation.v1.schema.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertIn("executables", cohort_schema["required"])
+        self.assertIn(
+            "observation", cohort_schema["$defs"]["outcome"]["required"]
+        )
+        artifact_schema = json.loads(
+            (CONTRACTS / "semantic-artifact-readback.v1.schema.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        for field in ("canonical_reads", "negative_routes"):
+            self.assertIn(
+                "observation",
+                artifact_schema["properties"][field]["items"]["required"],
+            )
+        self.assertIn(
+            "semantic readback consensus differs",
+            (ROOT / "runner.py").read_text(encoding="utf-8"),
+        )
+
+    def test_cargo_closure_sandbox_and_publication_custody_are_fail_closed(self) -> None:
+        generator = (ROOT / "generate.py").read_text(encoding="utf-8")
+        for closure in ("registry/index", "registry/cache", "registry/src"):
+            self.assertIn(closure, generator)
+        self.assertIn('for engine in ENGINE_IDS:', generator)
+        self.assertIn('-complete-cargo-native-closure"', generator)
+        runner_source = (ROOT / "runner.py").read_text(encoding="utf-8")
+        self.assertNotIn("(allow file-read*)", runner_source)
+        self.assertIn("sandbox protected-primary read denial probe failed", runner_source)
+        self.assertIn("sandbox immutable-root write probe failed", runner_source)
+        for token in (
+            "os.O_NOFOLLOW",
+            "dir_fd=",
+            "expected_generation",
+            "publication root identity or mount custody changed",
+            "os.fsync",
+        ):
+            self.assertIn(token, runner_source)
+
+    def test_v4_fanout_authenticates_thirteen_checkpoints_and_stage5_only_seams(self) -> None:
+        source = (REPOSITORY / "tools/vnext_contracts/fanout/validate.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("len(rows) != 13", source)
+        self.assertIn("direct first-parent successor", source)
+        self.assertIn("Stage5 post-fanout correction", source)
+        self.assertIn("reused a Stage5 inherited seam exception", source)
+        self.assertIn('os.environ["MAESTRO_FINAL_PROOF_RECEIPT"]', source)
+        self.assertIn("write_new_receipt", source)
+        self.assertNotIn('"merge-base"', source)
 
     def test_rust_engine_compiles_without_shared_dependencies(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

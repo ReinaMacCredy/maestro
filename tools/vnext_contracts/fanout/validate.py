@@ -10,6 +10,7 @@ import os
 import re
 import stat
 import subprocess
+import sys
 import unicodedata
 import zlib
 from dataclasses import dataclass
@@ -19,6 +20,15 @@ from typing import Any, Iterable, Mapping, Sequence, cast
 
 SCHEMA_VERSION = "maestro.external.vnext-fanout-base.v1"
 MANIFEST_PATH = Path(__file__).with_name("fanout-base.v1.json")
+V4_MANIFEST_SHA256 = "e299556c31c6a788285d984f9cd3040cfde200ba24e7ed5a5d90caff96ee5954"
+V4_SCHEMA = "maestro.external.vnext-successor-fanout.v4"
+HISTORICAL_STAGE_CHECKPOINTS = {
+    0: "66a34db6a28ff3f3ee178f644b645bb6ea60681e",
+    1: "bebc2e35314741c3b053901fd5040b323ee2c924",
+    2: "602302c69df22e96f319b1451c14d341fdde14cd",
+    3: "ad8f3d88bf647031d415aa3aed0998ca7a9097d7",
+    4: "9f3cc73b2199c5b2be78dcea8852cbdcafaaafc2",
+}
 MANIFEST_REPOSITORY_PATH = "tools/vnext_contracts/fanout/fanout-base.v1.json"
 STAGES = (6, 7, 8, 9, 10, 11, 12)
 GIT_OBJECT_ID = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})")
@@ -1472,6 +1482,23 @@ def linear_commits_between(
     return newest_first
 
 
+def require_first_parent_ancestor(
+    repository: Path, ancestor: str, descendant: str
+) -> None:
+    current = descendant
+    visited: set[str] = set()
+    while current != ancestor:
+        if current in visited:
+            raise FanoutValidationError("first-parent ancestry contains a cycle")
+        visited.add(current)
+        commit_object = raw_commit_object(repository, current)
+        if not commit_object.parents:
+            raise FanoutValidationError(
+                "provisional Stage5 source is not on the Stage5 first-parent ancestry"
+            )
+        current = commit_object.parents[0]
+
+
 def validate_comparison_range(
     manifest: Mapping[str, Any],
     repository: Path,
@@ -1642,7 +1669,233 @@ def validate_candidate(
     }
 
 
+def edge_changes(repository: Path, parent: str, child: str) -> list[dict[str, str]]:
+    return [
+        {
+            "status": status,
+            "path": normalized_path(path, prefix=False),
+        }
+        for status, path, _, _ in raw_changes_between(repository, parent, child)
+    ]
+
+
+def validate_v4_final_chain(
+    repository: Path,
+    manifest_path: Path,
+    snapshot_path: Path,
+) -> dict[str, Any]:
+    validate_repository_object_store(repository)
+    manifest_bytes = manifest_path.read_bytes()
+    if hashlib.sha256(manifest_bytes).hexdigest() != V4_MANIFEST_SHA256:
+        raise FanoutValidationError("V4 fanout manifest bytes differ")
+    manifest = load_manifest(manifest_path)
+    if (
+        manifest.get("schema") != V4_SCHEMA
+        or manifest.get("canonical_integration_order") != list(range(6, 13))
+    ):
+        raise FanoutValidationError("V4 fanout manifest contract differs")
+    snapshot = load_manifest(snapshot_path)
+    rows = snapshot.get("first_parent_stages")
+    if (
+        not isinstance(rows, list)
+        or len(rows) != 13
+        or [row.get("stage") for row in rows] != list(range(13))
+    ):
+        raise FanoutValidationError("final chain requires exactly 13 ordered checkpoints")
+    commits = [str(row.get("commit")) for row in rows]
+    if len(set(commits)) != 13 or any(
+        re.fullmatch(r"[0-9a-f]{40}", commit) is None for commit in commits
+    ):
+        raise FanoutValidationError("final-chain checkpoints are not 13 distinct commit identities")
+    for stage, expected in HISTORICAL_STAGE_CHECKPOINTS.items():
+        if commits[stage] != expected:
+            raise FanoutValidationError(
+                f"historical Stage {stage} checkpoint differs"
+            )
+    commit_objects: dict[int, CommitObject] = {}
+    checkpoint_entries: dict[int, dict[str, TreeEntry]] = {}
+    for row in rows:
+        stage = int(row["stage"])
+        commit = str(row["commit"])
+        commit_object, entries = authenticated_tree(
+            repository, commit, f"final-chain Stage {stage} tree"
+        )
+        if commit_object.tree != row.get("tree"):
+            raise FanoutValidationError(
+                f"Stage {stage} checkpoint tree differs"
+            )
+        commit_objects[stage] = commit_object
+        checkpoint_entries[stage] = entries
+    for stage, (parent, child) in enumerate(zip(commits, commits[1:]), start=1):
+        child_object = commit_objects[stage]
+        if not child_object.parents or child_object.parents[0] != parent:
+            raise FanoutValidationError(
+                "each Stage checkpoint must be the direct first-parent successor"
+            )
+    owners = {
+        int(row["stage"]): row
+        for row in manifest.get("stage_owners", [])
+        if isinstance(row, Mapping)
+    }
+    if set(owners) != set(range(6, 13)):
+        raise FanoutValidationError("V4 Stage owner closure differs")
+    denylist = manifest.get("shared_denylist")
+    if not isinstance(denylist, Mapping):
+        raise FanoutValidationError("V4 shared denylist is absent")
+    denied_files = {
+        normalized_path(value, prefix=False)
+        for value in strings(denylist.get("exact_files"), "shared denylist exact files")
+    }
+    denied_prefixes = tuple(
+        normalized_path(value, prefix=True)
+        for value in strings(
+            denylist.get("path_prefixes"), "shared denylist path prefixes"
+        )
+    )
+    provisional = str(manifest.get("provisional_stage5_source_commit"))
+    required_stage5_seeds = {
+        normalized_path(value, prefix=False)
+        for value in strings(
+            manifest.get("required_stage5_seeds"), "required Stage5 seeds"
+        )
+    }
+    require_first_parent_ancestor(repository, provisional, commits[5])
+    stage5_delta = edge_changes(repository, provisional, commits[5])
+    stage5_paths = {
+        row["path"] for row in stage5_delta
+    } | {
+        row["old_path"] for row in stage5_delta if "old_path" in row
+    }
+    if not required_stage5_seeds.issubset(stage5_paths):
+        raise FanoutValidationError("Stage5 did not materialize every required seam seed")
+    if stage5_paths - required_stage5_seeds:
+        raise FanoutValidationError(
+            "Stage5 post-fanout correction changed paths outside the exact seam seed set"
+        )
+    edges: list[dict[str, object]] = []
+    for stage in range(1, 13):
+        parent = commits[stage - 1]
+        child = commits[stage]
+        changes = edge_changes(repository, parent, child)
+        paths = {
+            row["path"] for row in changes
+        } | {
+            row["old_path"] for row in changes if "old_path" in row
+        }
+        if stage >= 6:
+            owner = owners[stage]
+            prefixes = tuple(
+                normalized_path(value, prefix=True)
+                for value in strings(
+                    owner.get("write_prefixes"), f"Stage {stage} write prefixes"
+                )
+            )
+            mutable_seeds = {
+                normalized_path(value, prefix=False)
+                for value in strings(
+                    owner.get("mutable_seed_files"), f"Stage {stage} mutable seeds"
+                )
+            }
+            inherited_seeds = {
+                normalized_path(value, prefix=False)
+                for value in strings(
+                    owner.get("inherited_mutable_seed_files"),
+                    f"Stage {stage} inherited seeds",
+                )
+            }
+            for path in paths:
+                if path in denied_files or any(
+                    path == prefix.rstrip("/") or path.startswith(prefix)
+                    for prefix in denied_prefixes
+                ):
+                    raise FanoutValidationError(
+                        f"Stage {stage} changed shared-denied path: {path}"
+                    )
+                if path not in mutable_seeds and not any(
+                    path.startswith(prefix) for prefix in prefixes
+                ):
+                    raise FanoutValidationError(
+                        f"Stage {stage} changed path outside its exact owner: {path}"
+                    )
+            missing = mutable_seeds - paths
+            if missing:
+                raise FanoutValidationError(
+                    f"Stage {stage} omitted declared mutable seeds: {sorted(missing)}"
+                )
+            if paths.intersection(inherited_seeds):
+                raise FanoutValidationError(
+                    f"Stage {stage} reused a Stage5 inherited seam exception"
+                )
+            for seed in inherited_seeds:
+                stage5_entry = checkpoint_entries[5].get(seed)
+                current_entry = checkpoint_entries[stage].get(seed)
+                if (
+                    stage5_entry is None
+                    or current_entry is None
+                    or stage5_entry != current_entry
+                ):
+                    raise FanoutValidationError(
+                        f"Stage {stage} inherited seam seed drifted after Stage5: {seed}"
+                    )
+        edges.append(
+            {
+                "from_stage": stage - 1,
+                "to_stage": stage,
+                "parent": parent,
+                "child": child,
+                "changed_path_count": len(paths),
+                "changed_paths_identity": hashlib.sha256(
+                    canonical_json(sorted(paths))
+                ).hexdigest(),
+            }
+        )
+    return {
+        "schema_version": "maestro.external.vnext-final-fanout-edge-sweep.v1",
+        "status": "pass",
+        "manifest_identity": f"sha256:{V4_MANIFEST_SHA256}",
+        "checkpoint_count": 13,
+        "edges": edges,
+    }
+
+
+def write_new_receipt(path: Path, raw: bytes) -> None:
+    descriptor = os.open(
+        path,
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+        0o440,
+    )
+    try:
+        view = memoryview(raw)
+        while view:
+            written = os.write(descriptor, view)
+            view = view[written:]
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
 def main() -> int:
+    if "--final-chain-from-snapshot" in sys.argv:
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--final-chain-from-snapshot", type=Path, required=True)
+        parser.add_argument("--repository", type=Path, required=True)
+        parser.add_argument("--manifest", type=Path, required=True)
+        parser.add_argument("--output", type=Path)
+        args = parser.parse_args()
+        result = validate_v4_final_chain(
+            args.repository.resolve(strict=True),
+            args.manifest.resolve(strict=True),
+            args.final_chain_from_snapshot.resolve(strict=True),
+        )
+        raw = canonical_json(result)
+        receipt_path = args.output
+        if receipt_path is None and os.environ.get("MAESTRO_FINAL_PROOF_RECEIPT"):
+            receipt_path = Path(os.environ["MAESTRO_FINAL_PROOF_RECEIPT"])
+        if receipt_path is None:
+            print(raw.decode("utf-8"), end="")
+        else:
+            write_new_receipt(receipt_path, raw)
+        return 0
     parser = argparse.ArgumentParser()
     parser.add_argument("--repository", type=Path, required=True)
     parser.add_argument("--manifest", type=Path, default=MANIFEST_PATH)

@@ -9,36 +9,24 @@
     "checks": {
       "type": "array",
       "minItems": 8,
+      "maxItems": 8,
       "items": {
         "type": "object",
-        "required": ["id", "kind", "argv", "expected_exit_code", "command_identity", "scan_roots", "count_literals", "expected_counts"],
+        "required": ["id", "kind", "argv", "expected_exit_code", "command_identity", "required_artifact_kinds", "minimum_canonical_reads", "minimum_negative_routes"],
         "properties": {
           "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
           "kind": {"enum": ["compiled_namespace_absence", "generated_resource_absence", "persisted_identity_parity", "canonical_facade_behavior", "migration_route_absence", "retained_reader_absence", "consumer_reader_hold_zero", "negative_fixture"]},
           "argv": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
           "expected_exit_code": {"type": "integer"},
           "command_identity": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-          "scan_roots": {"type": "array", "items": {"enum": ["source:src", "source:embedded", "target:release"]}, "uniqueItems": true},
-          "count_literals": {
-            "type": "object",
-            "required": ["consumers", "readers", "holds"],
-            "properties": {
-              "consumers": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
-              "readers": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
-              "holds": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}
-            },
-            "additionalProperties": false
+          "required_artifact_kinds": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"enum": ["compiled", "exported", "schema", "resource", "persisted", "consumer", "reader", "hold"]},
+            "uniqueItems": true
           },
-          "expected_counts": {
-            "type": "object",
-            "required": ["consumers", "readers", "holds"],
-            "properties": {
-              "consumers": {"const": 0},
-              "readers": {"const": 0},
-              "holds": {"const": 0}
-            },
-            "additionalProperties": false
-          }
+          "minimum_canonical_reads": {"type": "integer", "minimum": 1},
+          "minimum_negative_routes": {"type": "integer", "minimum": 1}
         },
         "additionalProperties": false
       }

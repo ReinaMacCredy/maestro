@@ -73,6 +73,7 @@ PROOF_KINDS = (
     "adapter",
     "identity",
     "removal",
+    "ancestry",
     "closure",
 )
 
@@ -378,7 +379,43 @@ def stream_identity(data: bytes) -> dict[str, object]:
     return {"byte_length": len(data), "sha256": digest(data)}
 
 
-def toolchain(source: Path, target: str, profile: str) -> dict[str, object]:
+def materialize_dependency_tree(source: Path, destination: Path) -> None:
+    if source.is_symlink() or not source.is_dir():
+        raise GenerationError(f"dependency source root is absent or unsafe: {source}")
+    for path in source.rglob("*"):
+        if path.is_symlink():
+            raise GenerationError(f"dependency source contains a symlink: {path}")
+    shutil.copytree(source, destination)
+
+
+def dependency_output(root: Path, name: str) -> dict[str, object]:
+    rows = []
+    for path in sorted(item for item in root.rglob("*") if item.is_file()):
+        if path.is_symlink():
+            raise GenerationError(f"materialized dependency is a symlink: {path}")
+        raw = path.read_bytes()
+        rows.append(
+            {
+                "path": path.relative_to(root).as_posix(),
+                "byte_length": len(raw),
+                "sha256": digest(raw),
+            }
+        )
+    if not rows:
+        raise GenerationError(f"materialized dependency closure is empty: {name}")
+    return {
+        "name": name,
+        "resolved_path": str(root.resolve()),
+        "file_count": len(rows),
+        "byte_length": sum(int(row["byte_length"]) for row in rows),
+        "identity": digest(canonical_bytes(rows)),
+        "files": rows,
+    }
+
+
+def toolchain(
+    source: Path, target: str, profile: str, dependency_root: Path
+) -> dict[str, object]:
     tools: dict[str, object] = {}
     for name, (executable, probe) in TOOL_NAMES.items():
         resolved = shutil.which(executable)
@@ -414,30 +451,41 @@ def toolchain(source: Path, target: str, profile: str) -> dict[str, object]:
     ).resolve()
     if target_libdir.is_symlink() or not target_libdir.is_dir():
         raise GenerationError("rust target dependency root is absent or unsafe")
-    dependency_files = []
-    for path in sorted(item for item in target_libdir.rglob("*") if item.is_file()):
-        if path.is_symlink():
-            raise GenerationError(f"rust target dependency is a symlink: {path}")
-        raw = path.read_bytes()
-        dependency_files.append(
-            {
-                "path": path.relative_to(target_libdir).as_posix(),
-                "byte_length": len(raw),
-                "sha256": digest(raw),
-            }
-        )
-    if not dependency_files:
-        raise GenerationError("rust target dependency closure is empty")
-    dependency_outputs = [
-        {
-            "name": "rust-target-libdir",
-            "resolved_path": str(target_libdir),
-            "file_count": len(dependency_files),
-            "byte_length": sum(row["byte_length"] for row in dependency_files),
-            "identity": digest(canonical_bytes(dependency_files)),
-            "files": dependency_files,
-        }
+    cargo_home = Path(
+        os.environ.get("CARGO_HOME", str(Path.home() / ".cargo"))
+    ).resolve()
+    required_cargo_roots = [
+        cargo_home / "registry/index",
+        cargo_home / "registry/cache",
+        cargo_home / "registry/src",
     ]
+    if not all(path.is_dir() and not path.is_symlink() for path in required_cargo_roots):
+        raise GenerationError(
+            "complete Cargo registry index/cache/source closure is unavailable"
+        )
+    dependency_outputs = []
+    for engine in ENGINE_IDS:
+        engine_root = dependency_root / engine
+        cargo_destination = engine_root / "cargo-home"
+        cargo_destination.mkdir(parents=True)
+        for relative in ("registry/index", "registry/cache", "registry/src"):
+            materialize_dependency_tree(
+                cargo_home / relative, cargo_destination / relative
+            )
+        for optional in ("git/db", "git/checkouts"):
+            candidate = cargo_home / optional
+            if candidate.is_dir() and not candidate.is_symlink():
+                materialize_dependency_tree(candidate, cargo_destination / optional)
+        (cargo_destination / "config.toml").write_text(
+            "[net]\noffline = true\nretry = 0\n",
+            encoding="utf-8",
+        )
+        materialize_dependency_tree(
+            target_libdir, engine_root / "rust-target-libdir"
+        )
+        dependency_outputs.append(
+            dependency_output(engine_root, f"{engine}-complete-cargo-native-closure")
+        )
     return {
         "schema_version": "maestro.external.vnext-final-toolchain.v1",
         "target": target,
@@ -455,43 +503,6 @@ def command_identity(argv: list[str], expected_exit_code: int) -> str:
     )
 
 
-def stage_for(path: str) -> int:
-    match = re.search(r"stage(1[0-2]|[0-9])", path)
-    if match is not None:
-        return int(match.group(1))
-    if any(token in path for token in ("candidate_root", "public_identity", "resource_")):
-        return 0
-    if "store" in path:
-        return 1
-    if "authority" in path:
-        return 2
-    if any(token in path for token in ("work_", "step_", "decision_", "design_", "submission_")):
-        return 3
-    if any(token in path for token in ("execution", "effect_", "dispatch_")):
-        return 4
-    return 5
-
-
-def proof_kind(path: str) -> str:
-    for token, kind in (
-        ("race", "race"),
-        ("crash", "crash_replay"),
-        ("migration", "migration"),
-        ("rollback", "rollback"),
-        ("adapter", "adapter"),
-        ("authority", "authority"),
-        ("identity", "identity"),
-        ("removal", "removal"),
-        ("negative", "negative"),
-        ("mutant", "mutant"),
-        ("replay", "idempotency"),
-        ("closure", "closure"),
-    ):
-        if token in path:
-            return kind
-    return "behavior"
-
-
 def binding_index(manifest: Mapping[str, Any]) -> dict[str, dict[str, object]]:
     return {
         str(row["path"]): {
@@ -503,140 +514,99 @@ def binding_index(manifest: Mapping[str, Any]) -> dict[str, dict[str, object]]:
     }
 
 
-def build_ledger(manifest: Mapping[str, Any], commit: str) -> dict[str, object]:
+def build_ledger(
+    manifest: Mapping[str, Any],
+    registry: Mapping[str, Any],
+    registry_binding: Mapping[str, object],
+    commit: str,
+) -> dict[str, object]:
     bindings = binding_index(manifest)
-    proof_paths = sorted(
-        path
-        for path in bindings
+    if (
+        registry.get("schema_version")
+        != "maestro.external.vnext-final-proof-registry.v1"
+        or registry.get("registry_identity_policy")
+        != "canonical-bytes-bound-no-inference-no-reassignment"
+    ):
+        raise GenerationError("normative proof registry identity policy differs")
+    registry_rows = registry.get("proofs")
+    if not isinstance(registry_rows, list) or not registry_rows:
+        raise GenerationError("normative proof registry is empty")
+    rows: list[dict[str, object]] = []
+    identifiers: set[str] = set()
+    for registry_row in registry_rows:
+        if not isinstance(registry_row, Mapping):
+            raise GenerationError("normative proof registry row is invalid")
+        proof_id = str(registry_row.get("proof_id"))
+        if proof_id in identifiers:
+            raise GenerationError(f"duplicate normative proof id: {proof_id}")
+        identifiers.add(proof_id)
+        stage = registry_row.get("stage")
+        kind = registry_row.get("kind")
+        if stage not in range(13) or kind not in PROOF_KINDS:
+            raise GenerationError(f"normative proof row classification differs: {proof_id}")
+        if registry_row.get("engines") != list(ENGINE_IDS):
+            raise GenerationError(f"normative proof engine coverage differs: {proof_id}")
+        specification = registry_row.get("command")
+        if not isinstance(specification, Mapping):
+            raise GenerationError(f"normative proof command is absent: {proof_id}")
+        argv = specification.get("argv")
+        expected_exit_code = specification.get("expected_exit_code")
         if (
-            re.fullmatch(r"tests/vnext[^/]*\.rs", path)
-            or path == "tests/architecture_imports.rs"
-            or re.fullmatch(r"tools/vnext_contracts/.+/test_[^/]+\.py", path)
-            or re.fullmatch(r"tools/vnext_contracts/.+/test_[^/]+\.rb", path)
-        )
-        and not path.startswith("tools/vnext_contracts/final_chain/")
-    )
-    rows = []
-    counts = {stage: 0 for stage in range(13)}
-    for path in proof_paths:
-        stage = stage_for(path)
-        counts[stage] += 1
-        suffix = re.sub(r"[^a-z0-9]+", "-", Path(path).stem.lower()).strip("-")
-        path_identity = hashlib.sha256(path.encode("utf-8")).hexdigest()[:8]
-        proof_id = f"s{stage}-{suffix}-{path_identity}"
-        if path.endswith(".rs"):
-            argv = ["{tool:cargo}", "test", "--test", Path(path).stem, "--", "--test-threads=1"]
-        elif path.endswith(".rb"):
-            argv = ["{tool:ruby}", path]
-        else:
-            argv = ["{tool:python}", path]
-        kind = proof_kind(path)
+            not isinstance(argv, list)
+            or not argv
+            or not all(isinstance(value, str) and value for value in argv)
+            or not isinstance(expected_exit_code, int)
+        ):
+            raise GenerationError(f"normative proof command differs: {proof_id}")
         command: dict[str, object] = {
-            "argv": argv,
-            "expected_exit_code": 0,
-            "identity": command_identity(argv, 0),
+            "argv": list(argv),
+            "expected_exit_code": expected_exit_code,
+            "identity": command_identity(list(argv), expected_exit_code),
         }
-        input_bindings = [bindings[path]]
-        if kind in {"race", "crash_replay"}:
-            schedule = bindings.get(
-                "tools/vnext_contracts/final_chain/fixtures/fault-schedules.v1.json"
-            )
-            if schedule is None:
-                raise GenerationError("fault schedule fixture is absent")
-            command["fault_schedule"] = schedule
-            input_bindings.append(schedule)
-        if kind in {"migration", "rollback"}:
-            fixture_path = next(
-                (
-                    candidate
-                    for candidate in sorted(bindings)
-                    if candidate.startswith("tests/fixtures/vnext/stage11/")
-                    and "migration" in candidate
-                ),
-                None,
-            )
-            if fixture_path is None:
-                raise GenerationError("migration cohort fixture is absent")
-            fixture = bindings[fixture_path]
-            command["cohort"] = {
-                "old_reader": "v1-frozen-reader",
-                "new_reader": "vnext-final-reader",
-                "writer": "vnext-final-writer",
-                "fixture": fixture,
-            }
-            input_bindings.append(fixture)
+        input_paths = registry_row.get("input_paths")
+        if not isinstance(input_paths, list) or not input_paths:
+            raise GenerationError(f"normative proof inputs are absent: {proof_id}")
+        try:
+            input_bindings = [bindings[str(path)] for path in input_paths]
+        except KeyError as error:
+            raise GenerationError(
+                f"normative proof input is absent from final tree: {error.args[0]}"
+            ) from error
+        harness = registry_row.get("harness")
+        if not isinstance(harness, Mapping):
+            raise GenerationError(f"normative proof harness is absent: {proof_id}")
+        harness_value: dict[str, object] = {
+            "protocol": harness.get("protocol"),
+            "required_receipt": harness.get("required_receipt"),
+        }
+        if harness.get("fault_schedule_path") is not None:
+            fault_path = str(harness["fault_schedule_path"])
+            harness_value["fault_schedule"] = bindings[fault_path]
+        if harness.get("cohort_path") is not None:
+            cohort_path = str(harness["cohort_path"])
+            harness_value["cohort"] = bindings[cohort_path]
         rows.append(
             {
                 "proof_id": proof_id,
                 "stage": stage,
                 "kind": kind,
-                "expected_outcome": "pass",
+                "expected_outcome": registry_row.get("expected_outcome"),
                 "engines": list(ENGINE_IDS),
                 "command": command,
                 "input_bindings": input_bindings,
+                "harness": harness_value,
                 "produced_artifacts": [],
             }
         )
-    missing = [stage for stage, count in counts.items() if count == 0]
-    architecture = "tests/architecture_imports.rs"
-    if architecture not in bindings:
-        raise GenerationError("cross-Stage architecture proof target is absent")
-    for stage in missing:
-        argv = [
-            "{tool:cargo}",
-            "test",
-            "--test",
-            "architecture_imports",
-            "--",
-            "--test-threads=1",
-        ]
-        rows.append(
-            {
-                "proof_id": f"s{stage}-cross-stage-architecture-closure-01",
-                "stage": stage,
-                "kind": "closure",
-                "expected_outcome": "pass",
-                "engines": list(ENGINE_IDS),
-                "command": {
-                    "argv": argv,
-                    "expected_exit_code": 0,
-                    "identity": command_identity(argv, 0),
-                },
-                "input_bindings": [bindings[architecture]],
-                "produced_artifacts": [],
-            }
-        )
+    if {int(row["stage"]) for row in rows} != set(range(13)):
+        raise GenerationError("normative proof registry does not cover every Stage")
+    if {str(row["kind"]) for row in rows} != set(PROOF_KINDS):
+        raise GenerationError("normative proof registry does not cover every proof kind")
     rows.sort(key=lambda row: (int(row["stage"]), str(row["proof_id"])))
-    kinds = {row["kind"] for row in rows}
-    for index, required_kind in enumerate(PROOF_KINDS):
-        rows[index]["kind"] = required_kind
-        command = rows[index]["command"]
-        if required_kind in {"race", "crash_replay"} and "fault_schedule" not in command:
-            schedule = bindings[
-                "tools/vnext_contracts/final_chain/fixtures/fault-schedules.v1.json"
-            ]
-            command["fault_schedule"] = schedule
-            rows[index]["input_bindings"].append(schedule)
-        if required_kind in {"migration", "rollback"} and "cohort" not in command:
-            fixture_path = next(
-                path
-                for path in sorted(bindings)
-                if path.startswith("tests/fixtures/vnext/stage11/")
-                and "migration" in path
-            )
-            fixture = bindings[fixture_path]
-            command["cohort"] = {
-                "old_reader": "v1-frozen-reader",
-                "new_reader": "vnext-final-reader",
-                "writer": "vnext-final-writer",
-                "fixture": fixture,
-            }
-            rows[index]["input_bindings"].append(fixture)
-    if {row["kind"] for row in rows} != set(PROOF_KINDS):
-        raise GenerationError("proof-kind closure generation failed")
     return {
         "schema_version": "maestro.external.vnext-final-proof-ledger.v1",
         "snapshot_commit": commit,
+        "registry_identity": dict(registry_binding),
         "proof_count": len(rows),
         "proofs": rows,
     }
@@ -647,57 +617,37 @@ def readback_plan(manifest: Mapping[str, Any], commit: str) -> dict[str, object]
     target = "tests/vnext_stage12_contracts.rs"
     if target not in bindings:
         raise GenerationError("Stage 12 semantic readback test target is absent")
+    requirements = {
+        "compiled_namespace_absence": ["compiled"],
+        "generated_resource_absence": ["resource"],
+        "persisted_identity_parity": ["schema", "persisted"],
+        "canonical_facade_behavior": ["compiled", "exported"],
+        "migration_route_absence": ["persisted", "reader"],
+        "retained_reader_absence": ["reader"],
+        "consumer_reader_hold_zero": ["consumer", "reader", "hold"],
+        "negative_fixture": ["compiled", "resource"],
+    }
     rows = []
     for kind in READBACK_KINDS:
         if kind in {"canonical_facade_behavior", "negative_fixture"}:
             argv = [
                 "{tool:cargo}",
                 "test",
+                "--offline",
+                "--frozen",
                 "--test",
                 "vnext_stage12_contracts",
                 "--",
                 "--test-threads=1",
             ]
         else:
-            argv = ["{tool:cargo}", "build", "--release", "--locked"]
-        count_literals = {
-            "consumers": [],
-            "readers": [],
-            "holds": [],
-        }
-        if kind == "compiled_namespace_absence":
-            count_literals["consumers"] = [
-                "crate::domain::vnext",
-                "maestro::domain::vnext",
-                "src/domain/vnext/",
+            argv = [
+                "{tool:cargo}",
+                "build",
+                "--offline",
+                "--frozen",
+                "--release",
             ]
-        elif kind == "generated_resource_absence":
-            count_literals["consumers"] = [
-                "embedded/vnext/",
-                "maestro-work",
-            ]
-        elif kind == "migration_route_absence":
-            count_literals["consumers"] = [
-                "src/domain/vnext/migration/",
-                "domain::vnext::migration",
-            ]
-        elif kind == "retained_reader_absence":
-            count_literals["readers"] = [
-                "ask-maestro",
-                "maestro-audit",
-                "maestro-card",
-                "maestro-design",
-                "maestro-research",
-                "maestro-setup",
-                "maestro-witness",
-                "maestro-work",
-            ]
-        elif kind == "consumer_reader_hold_zero":
-            count_literals = {
-                "consumers": ["crate::domain::vnext", "maestro::domain::vnext"],
-                "readers": ["v1-frozen-reader", "legacy-reader-route"],
-                "holds": ["vnext-retention-hold", "legacy-retention-hold"],
-            }
         rows.append(
             {
                 "id": kind.replace("_", "-"),
@@ -705,13 +655,9 @@ def readback_plan(manifest: Mapping[str, Any], commit: str) -> dict[str, object]
                 "argv": argv,
                 "expected_exit_code": 0,
                 "command_identity": command_identity(argv, 0),
-                "scan_roots": [
-                    "source:src",
-                    "source:embedded",
-                    "target:release",
-                ],
-                "count_literals": count_literals,
-                "expected_counts": {"consumers": 0, "readers": 0, "holds": 0},
+                "required_artifact_kinds": requirements[kind],
+                "minimum_canonical_reads": 1,
+                "minimum_negative_routes": 16 if kind == "negative_fixture" else 1,
             }
         )
     return {
@@ -748,7 +694,10 @@ def main() -> int:
     repository = args.repository.resolve()
     packet_root = args.packet_root.resolve()
     output = args.output_root.resolve()
-    publication = args.publication_root.resolve()
+    publication_argument = args.publication_root.absolute()
+    if publication_argument.is_symlink():
+        raise GenerationError("publication root may not be a symlink")
+    publication = publication_argument.resolve(strict=True)
     protected_primary = args.protected_primary.resolve()
     require_empty_destination(output)
     if repository == protected_primary:
@@ -763,27 +712,55 @@ def main() -> int:
         raise GenerationError("final ref did not resolve to one commit")
     final_tree = git(repository, "show", "-s", "--format=%T", final_commit)
     rows = verify_stage_chain(repository, final_commit, args.stage_checkpoint)
+    if publication.is_symlink() or not publication.is_dir():
+        raise GenerationError(
+            "publication root must pre-exist as a non-symlink directory"
+        )
+    publication_stat = publication.stat(follow_symlinks=False)
+    publication_identity = {
+        "path": str(publication),
+        "device": publication_stat.st_dev,
+        "inode": publication_stat.st_ino,
+        "mount_device": publication_stat.st_dev,
+    }
     pointer_path = publication / "current.json"
     pointer_preimage: dict[str, object]
     if pointer_path.exists():
         if pointer_path.is_symlink() or not pointer_path.is_file():
             raise GenerationError("final pointer is unsafe")
-        pointer_preimage = {"state": "present", "sha256": digest(pointer_path.read_bytes())}
+        pointer_value = load_json(pointer_path)
+        generation = pointer_value.get("generation")
+        if not isinstance(generation, int) or generation < 1:
+            raise GenerationError("final pointer generation is invalid")
+        pointer_preimage = {
+            "state": "present",
+            "generation": generation,
+            "sha256": digest(pointer_path.read_bytes()),
+        }
     else:
-        pointer_preimage = {"state": "absent"}
+        pointer_preimage = {"state": "absent", "generation": 0}
 
     temporary = Path(tempfile.mkdtemp(prefix=".final-chain-generate-", dir=output.parent))
     try:
         source = temporary / "source"
         packet = temporary / "packet"
         control = temporary / "control"
+        dependencies = temporary / "dependencies"
         control.mkdir()
+        dependencies.mkdir()
         archive_commit(repository, final_commit, source)
         packet_binding = verify_packet(packet_root, packet)
         manifest = input_manifest(source, final_commit, final_tree)
-        ledger = build_ledger(manifest, final_commit)
+        registry_path = source / "contracts/vnext/final-chain/proof-registry.v1.json"
+        registry = load_json(registry_path)
+        registry_binding = bound_file(
+            registry_path, "contracts/vnext/final-chain/proof-registry.v1.json"
+        )
+        ledger = build_ledger(manifest, registry, registry_binding, final_commit)
         readback = readback_plan(manifest, final_commit)
-        toolchain_value = toolchain(source, args.target, args.profile)
+        toolchain_value = toolchain(
+            source, args.target, args.profile, dependencies
+        )
         for name, value in (
             ("input-manifest.v1.json", manifest),
             ("proof-ledger.v1.json", ledger),
@@ -837,6 +814,7 @@ def main() -> int:
             "proof_ledger": bound_file(
                 control / "proof-ledger.v1.json", "control/proof-ledger.v1.json"
             ),
+            "proof_registry": registry_binding,
             "stage12_readback": bound_file(
                 control / "stage12-semantic-readback.v1.json",
                 "control/stage12-semantic-readback.v1.json",
@@ -845,13 +823,15 @@ def main() -> int:
                 control / "toolchain.v1.json", "control/toolchain.v1.json"
             ),
             "environment_allowlist": ["HOME", "LANG", "LC_ALL", "PATH", "TMPDIR", "TZ"],
-            "immutable_input_roots": ["source", "packet", "control"],
+            "immutable_input_roots": ["source", "packet", "control", "dependencies"],
             "writable_root_roles": [
                 f"{engine}-{role}"
                 for engine in ENGINE_IDS
                 for role in ("temp", "target", "deps", "output")
             ],
             "protected_primary_checkout": str(protected_primary),
+            "publication_root_identity": publication_identity,
+            "expected_generation": pointer_preimage["generation"],
             "cache_policy": "immutable_compilation_and_dependency_bytes_only",
             "sandbox_profile": "macos-sandbox-exec-no-network-v1",
             "pointer_preimage": pointer_preimage,
@@ -864,6 +844,7 @@ def main() -> int:
         chmod_readonly(source)
         chmod_readonly(packet)
         chmod_readonly(control)
+        chmod_readonly(dependencies)
         os.rename(temporary, output)
     finally:
         if temporary.exists():

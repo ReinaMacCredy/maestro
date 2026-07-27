@@ -8,6 +8,7 @@ import fcntl
 import hashlib
 import json
 import os
+import secrets
 import shutil
 import stat
 import subprocess
@@ -221,7 +222,19 @@ def validate_toolchain(path: Path, source: Path | None = None) -> dict[str, Any]
         for lockfile in lockfiles:
             bound_file(source, lockfile, "toolchain lockfile")
     dependencies = value.get("dependency_outputs")
-    if not isinstance(dependencies, list) or not dependencies:
+    expected_dependency_names = {
+        f"{engine}-complete-cargo-native-closure" for engine in ENGINE_IDS
+    }
+    if (
+        not isinstance(dependencies, list)
+        or len(dependencies) != 3
+        or {
+            row.get("name")
+            for row in dependencies
+            if isinstance(row, Mapping)
+        }
+        != expected_dependency_names
+    ):
         raise FinalChainError("dependency-output closure is absent")
     for dependency in dependencies:
         if not isinstance(dependency, Mapping):
@@ -229,6 +242,12 @@ def validate_toolchain(path: Path, source: Path | None = None) -> dict[str, Any]
         root = Path(str(dependency.get("resolved_path")))
         if root.is_symlink() or not root.is_dir():
             raise FinalChainError("dependency-output root is absent or unsafe")
+        if source is not None and not root.is_relative_to(
+            source.parent / "dependencies"
+        ):
+            raise FinalChainError(
+                "dependency-output root is outside the frozen dependency closure"
+            )
         expected = dependency.get("files")
         if not isinstance(expected, list) or not expected:
             raise FinalChainError("dependency-output file closure is empty")
@@ -299,14 +318,14 @@ def validate_ledger(path: Path, source: Path, commit: str) -> list[dict[str, Any
         )
         if command.get("identity") != identity:
             raise FinalChainError("proof command identity differs")
+        harness = row.get("harness")
+        if not isinstance(harness, Mapping):
+            raise FinalChainError("proof harness is absent")
         if row.get("kind") in {"race", "crash_replay"}:
-            bound_file(source, command.get("fault_schedule"), "fault schedule")
+            bound_file(source, harness.get("fault_schedule"), "fault schedule")
         if row.get("kind") in {"migration", "rollback"}:
-            cohort = command.get("cohort")
-            if not isinstance(cohort, Mapping):
-                raise FinalChainError("migration cohort is absent")
-            bound_file(source, cohort.get("fixture"), "migration cohort fixture")
-    if stages != set(range(13)) or len(kinds) != 13:
+            bound_file(source, harness.get("cohort"), "migration cohort")
+    if stages != set(range(13)) or len(kinds) != 14:
         raise FinalChainError("proof Stage or kind closure differs")
     return rows
 
@@ -331,8 +350,18 @@ def validate_readback(path: Path, commit: str) -> dict[str, Any]:
     if not isinstance(checks, list) or {row.get("kind") for row in checks} != required:
         raise FinalChainError("semantic readback closure differs")
     for check in checks:
-        if check.get("expected_counts") != {"consumers": 0, "readers": 0, "holds": 0}:
-            raise FinalChainError("semantic readback does not require exact zero counts")
+        kinds = check.get("required_artifact_kinds")
+        if not isinstance(kinds, list) or not kinds:
+            raise FinalChainError("semantic produced-artifact closure is absent")
+        if (
+            not isinstance(check.get("minimum_canonical_reads"), int)
+            or check["minimum_canonical_reads"] < 1
+            or not isinstance(check.get("minimum_negative_routes"), int)
+            or check["minimum_negative_routes"] < 1
+        ):
+            raise FinalChainError(
+                "semantic canonical-read or negative-route proof is absent"
+            )
         identity = digest(
             canonical_bytes(
                 {
@@ -343,20 +372,6 @@ def validate_readback(path: Path, commit: str) -> dict[str, Any]:
         )
         if check.get("command_identity") != identity:
             raise FinalChainError("readback command identity differs")
-        roots = check.get("scan_roots")
-        if not isinstance(roots, list) or set(roots) != {
-            "source:src",
-            "source:embedded",
-            "target:release",
-        }:
-            raise FinalChainError("readback scan-root closure differs")
-        literals = check.get("count_literals")
-        if not isinstance(literals, Mapping) or set(literals) != {
-            "consumers",
-            "readers",
-            "holds",
-        }:
-            raise FinalChainError("readback count-literal closure differs")
     return value
 
 
@@ -386,7 +401,12 @@ def validate_snapshot(closure: Path) -> tuple[dict[str, Any], dict[str, Path]]:
         value = read_json(checkpoint)
         if value.get("stage") != row.get("stage") or value.get("commit") != row.get("commit") or value.get("tree") != row.get("tree"):
             raise FinalChainError("Stage checkpoint bytes differ from snapshot")
-    if snapshot.get("immutable_input_roots") != ["source", "packet", "control"]:
+    if snapshot.get("immutable_input_roots") != [
+        "source",
+        "packet",
+        "control",
+        "dependencies",
+    ]:
         raise FinalChainError("immutable root roles differ")
     if snapshot.get("environment_allowlist") != [
         "HOME",
@@ -411,6 +431,16 @@ def validate_snapshot(closure: Path) -> tuple[dict[str, Any], dict[str, Path]]:
         raise FinalChainError("protected primary identity is absent")
     if not isinstance(snapshot.get("pointer_preimage"), Mapping):
         raise FinalChainError("pointer preimage is absent")
+    publication_identity = snapshot.get("publication_root_identity")
+    expected_generation = snapshot.get("expected_generation")
+    if (
+        not isinstance(publication_identity, Mapping)
+        or set(publication_identity) != {"path", "device", "inode", "mount_device"}
+        or not isinstance(expected_generation, int)
+        or expected_generation < 0
+        or snapshot["pointer_preimage"].get("generation") != expected_generation
+    ):
+        raise FinalChainError("publication custody or expected generation differs")
     engines = snapshot.get("engines")
     if not isinstance(engines, list) or [row.get("id") for row in engines] != list(ENGINE_IDS):
         raise FinalChainError("engine closure differs")
@@ -423,6 +453,9 @@ def validate_snapshot(closure: Path) -> tuple[dict[str, Any], dict[str, Path]]:
             closure, snapshot.get("packet_manifest"), "packet manifest"
         ),
         "manifest": bound_file(closure, snapshot.get("input_manifest"), "input manifest"),
+        "registry": bound_file(
+            closure / "source", snapshot.get("proof_registry"), "proof registry"
+        ),
         "ledger": bound_file(closure, snapshot.get("proof_ledger"), "proof ledger"),
         "readback": bound_file(closure, snapshot.get("stage12_readback"), "readback plan"),
         "toolchain": bound_file(closure, snapshot.get("toolchain"), "toolchain"),
@@ -431,7 +464,7 @@ def validate_snapshot(closure: Path) -> tuple[dict[str, Any], dict[str, Path]]:
     validate_toolchain(paths["toolchain"], closure / "source")
     validate_ledger(paths["ledger"], closure / "source", commit)
     validate_readback(paths["readback"], commit)
-    for root_name in ("source", "packet", "control"):
+    for root_name in ("source", "packet", "control", "dependencies"):
         ensure_readonly_tree(closure / root_name)
     return snapshot, paths
 
@@ -448,16 +481,29 @@ def copy_source(source: Path, destination: Path) -> None:
     destination.chmod(stat.S_IRUSR | stat.S_IXUSR)
 
 
-def sandbox_profile(writable_root: Path) -> str:
-    escaped = str(writable_root).replace("\\", "\\\\").replace('"', '\\"')
+def sandbox_literal(path: Path) -> str:
+    return str(path).replace("\\", "\\\\").replace('"', '\\"')
+
+
+def sandbox_profile(
+    read_roots: list[Path], writable_roots: list[Path]
+) -> str:
+    reads = "\n".join(
+        f'(allow file-read* (subpath "{sandbox_literal(path)}"))'
+        for path in sorted(set(read_roots))
+    )
+    writes = "\n".join(
+        f'(allow file-write* (subpath "{sandbox_literal(path)}"))'
+        for path in sorted(set(writable_roots))
+    )
     return (
-        '(version 1)\n'
-        '(deny default)\n'
-        '(allow process*)\n'
-        '(allow sysctl-read)\n'
-        '(allow file-read*)\n'
-        f'(allow file-write* (subpath "{escaped}"))\n'
-        '(deny network*)\n'
+        "(version 1)\n"
+        "(deny default)\n"
+        "(allow process*)\n"
+        "(allow sysctl-read)\n"
+        f"{reads}\n"
+        f"{writes}\n"
+        "(deny network*)\n"
     )
 
 
@@ -467,7 +513,25 @@ def verify_sandbox(sandbox_exec: Path, run_root: Path, protected_primary: Path) 
     probe_root = run_root / "sandbox-probe"
     probe_root.mkdir()
     profile = probe_root / "profile.sb"
-    profile.write_text(sandbox_profile(probe_root), encoding="utf-8")
+    system_reads = [
+        Path("/System"),
+        Path("/usr"),
+        Path("/Library"),
+        Path("/dev"),
+        probe_root,
+    ]
+    profile.write_text(
+        sandbox_profile(system_reads, [probe_root]), encoding="utf-8"
+    )
+    allowed = probe_root / "allowed-write"
+    allowed_write = subprocess.run(
+        [str(sandbox_exec), "-f", str(profile), "/usr/bin/touch", str(allowed)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if allowed_write.returncode != 0 or not allowed.is_file():
+        raise FinalChainError("sandbox exact writable-root probe failed")
+    allowed.unlink()
     network = subprocess.run(
         [
             str(sandbox_exec),
@@ -497,6 +561,48 @@ def verify_sandbox(sandbox_exec: Path, run_root: Path, protected_primary: Path) 
     )
     if write.returncode == 0 or outside.exists():
         raise FinalChainError("sandbox protected-primary write denial probe failed")
+    protected_read = subprocess.run(
+        [
+            str(sandbox_exec),
+            "-f",
+            str(profile),
+            "/bin/cat",
+            str(protected_primary / "Cargo.toml"),
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if protected_read.returncode == 0:
+        raise FinalChainError(
+            "sandbox protected-primary read denial probe failed"
+        )
+
+
+def verify_engine_sandbox(
+    sandbox_exec: Path,
+    profile: Path,
+    immutable_roots: list[Path],
+    writable_roots: list[Path],
+) -> None:
+    for root in immutable_roots:
+        probe = root / ".final-chain-write-probe"
+        result = subprocess.run(
+            [str(sandbox_exec), "-f", str(profile), "/usr/bin/touch", str(probe)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        if result.returncode == 0 or probe.exists():
+            raise FinalChainError(f"sandbox immutable-root write probe failed: {root}")
+    for root in writable_roots:
+        probe = root / ".final-chain-write-probe"
+        result = subprocess.run(
+            [str(sandbox_exec), "-f", str(profile), "/usr/bin/touch", str(probe)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        if result.returncode != 0 or not probe.is_file():
+            raise FinalChainError(f"sandbox writable-role probe failed: {root}")
+        probe.unlink()
 
 
 def engine_environment(root: Path, toolchain: Mapping[str, Any]) -> dict[str, str]:
@@ -527,6 +633,17 @@ def run_engine(
     root = run_root / engine
     for role in ("temp", "target", "deps", "output"):
         (root / role).mkdir(parents=True, exist_ok=False)
+    dependency_row = next(
+        row
+        for row in toolchain["dependency_outputs"]
+        if row["name"] == f"{engine}-complete-cargo-native-closure"
+    )
+    shutil.copytree(
+        Path(dependency_row["resolved_path"]),
+        root / "deps",
+        dirs_exist_ok=True,
+        symlinks=False,
+    )
     source = root / "source"
     copy_source(closure / "source", source)
     packet = root / "packet"
@@ -540,8 +657,35 @@ def run_engine(
         target.chmod(stat.S_IRUSR)
         copied[name] = target
     profile = root / "sandbox.sb"
-    profile.write_text(sandbox_profile(root), encoding="utf-8")
+    writable_roots = [root / role for role in ("temp", "target", "deps", "output")]
+    immutable_roots = [
+        source,
+        packet,
+        controls,
+        *[
+            Path(row["resolved_path"])
+            for row in toolchain["dependency_outputs"]
+        ],
+    ]
+    tool_read_roots = [
+        Path("/System"),
+        Path("/usr"),
+        Path("/Library"),
+        Path("/dev"),
+        *{
+            Path(row["resolved_path"]).parent
+            for row in toolchain["tools"].values()
+        },
+        *immutable_roots,
+        root,
+    ]
+    profile.write_text(
+        sandbox_profile(tool_read_roots, writable_roots), encoding="utf-8"
+    )
     profile.chmod(stat.S_IRUSR)
+    verify_engine_sandbox(
+        sandbox_exec, profile, immutable_roots, writable_roots
+    )
     engine_rows = {
         row["id"]: row for row in read_json(paths["snapshot"])["engines"]
     }
@@ -659,6 +803,11 @@ def consensus(
     consensus_rows = []
     engine_ledgers = []
     produced = []
+    semantic_consensus = [
+        by_engine[engine].get("semantic_readback") for engine in ENGINE_IDS
+    ]
+    if semantic_consensus[1:] != semantic_consensus[:-1]:
+        raise FinalChainError("semantic readback consensus differs")
     for engine in ENGINE_IDS:
         receipt = by_engine[engine]
         ledger_file = receipt.pop("_engine_ledger_file", None)
@@ -705,7 +854,12 @@ def consensus(
                     "produced_artifacts",
                     "fault_schedule_identity",
                     "injection_points_reached",
+                    "fault_observation",
                     "cohort_identity",
+                    "cohort_observation",
+                    "harness_receipt_identity",
+                    "edge_sweep_identity",
+                    "edge_sweep",
                 )
             }
             for row in rows
@@ -726,6 +880,27 @@ def consensus(
             raise FinalChainError(f"cohort identity is absent: {proof['proof_id']}")
         consensus_rows.append(typed[0])
         produced.extend(typed[0]["produced_artifacts"])
+    ancestry_rows = [
+        row for row in consensus_rows if row.get("kind") == "ancestry"
+    ]
+    if len(ancestry_rows) != 1:
+        raise FinalChainError(
+            "exactly one independently executed ancestry row is required"
+        )
+    edge_sweep = ancestry_rows[0].get("edge_sweep")
+    edge_identity = ancestry_rows[0].get("edge_sweep_identity")
+    if (
+        not isinstance(edge_sweep, Mapping)
+        or edge_sweep.get("status") != "pass"
+        or edge_sweep.get("checkpoint_count") != 13
+        or not isinstance(edge_sweep.get("edges"), list)
+        or len(edge_sweep["edges"]) != 12
+        or not isinstance(edge_identity, str)
+        or not edge_identity.startswith("sha256:")
+    ):
+        raise FinalChainError(
+            "ancestry and edge sweep did not derive from engine proof rows"
+        )
     return {
         "schema_version": SCHEMA,
         **identities,
@@ -734,24 +909,111 @@ def consensus(
         "consensus_rows": consensus_rows,
         "engine_ledgers": engine_ledgers,
         "produced_artifacts": produced,
-        "semantic_readback": {
-            "status": "pass",
-            "consumer_count": 0,
-            "reader_count": 0,
-            "hold_count": 0,
+        "semantic_readback": semantic_consensus[0],
+        "ancestry_closure": {
+            "checkpoint_count": 13,
+            "edges": edge_sweep["edges"],
+            "identity": edge_identity,
         },
-        "ancestry_closure": "pass",
-        "final_edge_sweep": "pass",
+        "final_edge_sweep": {
+            "status": "pass",
+            "edge_count": 12,
+            "identity": edge_identity,
+        },
         "verdict": "pass",
     }
 
 
-def pointer_state(path: Path) -> dict[str, object]:
-    if not path.exists():
-        return {"state": "absent"}
-    if path.is_symlink() or not path.is_file():
-        raise FinalChainError("final pointer is unsafe")
-    return {"state": "present", "sha256": digest(path.read_bytes())}
+def read_descriptor(descriptor: int) -> bytes:
+    chunks = []
+    while True:
+        chunk = os.read(descriptor, 1024 * 1024)
+        if not chunk:
+            return b"".join(chunks)
+        chunks.append(chunk)
+
+
+def open_directory_at(parent: int, name: str) -> int:
+    return os.open(
+        name,
+        os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+        dir_fd=parent,
+    )
+
+
+def ensure_directory_at(parent: int, name: str) -> int:
+    try:
+        os.mkdir(name, 0o550, dir_fd=parent)
+        os.fsync(parent)
+    except FileExistsError:
+        pass
+    return open_directory_at(parent, name)
+
+
+def pointer_state_at(root_descriptor: int) -> dict[str, object]:
+    try:
+        descriptor = os.open(
+            "current.json",
+            os.O_RDONLY | os.O_NOFOLLOW,
+            dir_fd=root_descriptor,
+        )
+    except FileNotFoundError:
+        return {"state": "absent", "generation": 0}
+    try:
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+            raise FinalChainError("final pointer custody is unsafe")
+        raw = read_descriptor(descriptor)
+    finally:
+        os.close(descriptor)
+    value = json.loads(raw, object_pairs_hook=reject_duplicates)
+    generation = value.get("generation") if isinstance(value, Mapping) else None
+    if not isinstance(generation, int) or generation < 1:
+        raise FinalChainError("final pointer generation is invalid")
+    return {
+        "state": "present",
+        "generation": generation,
+        "sha256": digest(raw),
+    }
+
+
+def write_file_at(directory: int, name: str, raw: bytes, mode: int = 0o440) -> None:
+    descriptor = os.open(
+        name,
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+        mode,
+        dir_fd=directory,
+    )
+    try:
+        view = memoryview(raw)
+        while view:
+            written = os.write(descriptor, view)
+            view = view[written:]
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def read_object_at(objects: int, name: str) -> dict[str, bytes]:
+    descriptor = open_directory_at(objects, name)
+    try:
+        result: dict[str, bytes] = {}
+        for child in os.listdir(descriptor):
+            child_descriptor = os.open(
+                child,
+                os.O_RDONLY | os.O_NOFOLLOW,
+                dir_fd=descriptor,
+            )
+            try:
+                metadata = os.fstat(child_descriptor)
+                if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+                    raise FinalChainError("release object has an unsafe entry")
+                result[child] = read_descriptor(child_descriptor)
+            finally:
+                os.close(child_descriptor)
+        return result
+    finally:
+        os.close(descriptor)
 
 
 def immutable_payload(
@@ -780,6 +1042,8 @@ def publish(
     paths: Mapping[str, Path],
     publication_root: Path,
     pointer_preimage: Mapping[str, Any],
+    publication_identity: Mapping[str, Any],
+    expected_generation: int,
 ) -> str:
     payload = immutable_payload(receipt, paths)
     release_identity = digest(
@@ -792,72 +1056,115 @@ def publish(
             }
         )
     )
-    objects = publication_root / "objects"
-    objects.mkdir(parents=True, exist_ok=True)
-    object_root = objects / release_identity.removeprefix("sha256:")
-    if object_root.exists():
-        if object_root.is_symlink() or not object_root.is_dir():
-            raise FinalChainError("pre-existing release object is unsafe")
-        if any(path.is_symlink() or not path.is_file() for path in object_root.iterdir()):
-            raise FinalChainError("pre-existing release object has an unsafe entry")
-        actual = {
-            path.name: path.read_bytes()
-            for path in object_root.iterdir()
-            if path.is_file() and not path.is_symlink()
+    root_descriptor = os.open(
+        publication_root,
+        os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+    )
+    try:
+        custody = os.fstat(root_descriptor)
+        actual_identity = {
+            "path": str(publication_root),
+            "device": custody.st_dev,
+            "inode": custody.st_ino,
+            "mount_device": custody.st_dev,
         }
-        if actual != payload:
-            raise FinalChainError("pre-existing release object bytes differ")
-    else:
-        temporary = Path(tempfile.mkdtemp(prefix=".final-chain-object-", dir=objects))
+        if actual_identity != dict(publication_identity):
+            raise FinalChainError("publication root identity or mount custody changed")
+        objects_descriptor = ensure_directory_at(root_descriptor, "objects")
         try:
-            for name, raw in payload.items():
-                path = temporary / name
-                path.write_bytes(raw)
-                path.chmod(stat.S_IRUSR | stat.S_IRGRP)
-            temporary.chmod(stat.S_IRUSR | stat.S_IXUSR | stat.S_IRGRP | stat.S_IXGRP)
-            os.rename(temporary, object_root)
+            object_name = release_identity.removeprefix("sha256:")
+            object_preexisted = True
+            try:
+                actual = read_object_at(objects_descriptor, object_name)
+            except FileNotFoundError:
+                object_preexisted = False
+                temporary_name = f".object-{secrets.token_hex(16)}"
+                os.mkdir(temporary_name, 0o550, dir_fd=objects_descriptor)
+                temporary_descriptor = open_directory_at(
+                    objects_descriptor, temporary_name
+                )
+                try:
+                    for name, raw in payload.items():
+                        write_file_at(temporary_descriptor, name, raw)
+                    os.fsync(temporary_descriptor)
+                finally:
+                    os.close(temporary_descriptor)
+                os.rename(
+                    temporary_name,
+                    object_name,
+                    src_dir_fd=objects_descriptor,
+                    dst_dir_fd=objects_descriptor,
+                )
+                os.fsync(objects_descriptor)
+                actual = read_object_at(objects_descriptor, object_name)
+            if object_preexisted and actual != payload:
+                raise FinalChainError("pre-existing release object bytes differ")
+            if read_object_at(objects_descriptor, object_name) != payload:
+                raise FinalChainError("release-object semantic readback differs")
         finally:
-            if temporary.exists():
-                shutil.rmtree(temporary)
-    if any(path.is_symlink() or not path.is_file() for path in object_root.iterdir()):
-        raise FinalChainError("release object has an unsafe entry")
-    actual = {
-        path.name: path.read_bytes()
-        for path in object_root.iterdir()
-        if path.is_file() and not path.is_symlink()
-    }
-    if actual != payload:
-        raise FinalChainError("release-object semantic readback differs")
-    pointer = {
-        "schema_version": POINTER_SCHEMA,
-        "object": f"objects/{release_identity.removeprefix('sha256:')}",
-        "release_identity": release_identity,
-    }
-    pointer_path = publication_root / "current.json"
-    lock_path = publication_root / ".current.lock"
-    with lock_path.open("a+") as handle:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
-        desired = canonical_bytes(pointer)
-        current = pointer_state(pointer_path)
-        if current == {"state": "present", "sha256": digest(desired)}:
-            return release_identity
-        if current != dict(pointer_preimage):
-            raise FinalChainError("final pointer advanced after snapshot freeze")
-        descriptor, temporary_name = tempfile.mkstemp(
-            prefix=".current-", dir=publication_root
+            os.close(objects_descriptor)
+        lock_descriptor = os.open(
+            ".current.lock",
+            os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW,
+            0o600,
+            dir_fd=root_descriptor,
         )
-        temporary = Path(temporary_name)
         try:
-            with os.fdopen(descriptor, "wb") as output:
-                output.write(desired)
-                output.flush()
-                os.fsync(output.fileno())
-            os.replace(temporary, pointer_path)
+            fcntl.flock(lock_descriptor, fcntl.LOCK_EX)
+            current = pointer_state_at(root_descriptor)
+            if current != dict(pointer_preimage):
+                raise FinalChainError("final pointer advanced after snapshot freeze")
+            if current["generation"] != expected_generation:
+                raise FinalChainError("final pointer generation differs")
+            next_generation = expected_generation + 1
+            generations_descriptor = ensure_directory_at(
+                root_descriptor, "generations"
+            )
+            try:
+                marker = canonical_bytes(
+                    {
+                        "expected_generation": expected_generation,
+                        "generation": next_generation,
+                        "pointer_preimage": pointer_preimage,
+                        "release_identity": release_identity,
+                    }
+                )
+                write_file_at(
+                    generations_descriptor,
+                    f"{next_generation:020d}.json",
+                    marker,
+                )
+                os.fsync(generations_descriptor)
+            finally:
+                os.close(generations_descriptor)
+            pointer = {
+                "schema_version": POINTER_SCHEMA,
+                "generation": next_generation,
+                "object": f"objects/{release_identity.removeprefix('sha256:')}",
+                "release_identity": release_identity,
+            }
+            desired = canonical_bytes(pointer)
+            temporary_name = f".current-{secrets.token_hex(16)}"
+            write_file_at(root_descriptor, temporary_name, desired)
+            os.rename(
+                temporary_name,
+                "current.json",
+                src_dir_fd=root_descriptor,
+                dst_dir_fd=root_descriptor,
+            )
+            os.fsync(root_descriptor)
+            if pointer_state_at(root_descriptor) != {
+                "state": "present",
+                "generation": next_generation,
+                "sha256": digest(desired),
+            }:
+                raise FinalChainError("final pointer descriptor readback differs")
         finally:
-            if temporary.exists():
-                temporary.unlink()
-        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-    return release_identity
+            fcntl.flock(lock_descriptor, fcntl.LOCK_UN)
+            os.close(lock_descriptor)
+        return release_identity
+    finally:
+        os.close(root_descriptor)
 
 
 def main() -> int:
@@ -869,7 +1176,10 @@ def main() -> int:
     args = parser.parse_args()
     closure = args.closure_root.resolve()
     run_root = args.run_root.resolve()
-    publication = args.publication_root.resolve()
+    publication_argument = args.publication_root.absolute()
+    if publication_argument.is_symlink():
+        raise FinalChainError("publication root may not be a symlink")
+    publication = publication_argument.resolve(strict=True)
     if run_root.exists():
         raise FinalChainError(f"run root already exists: {run_root}")
     snapshot, paths = validate_snapshot(closure)
@@ -907,7 +1217,12 @@ def main() -> int:
     ]
     receipt = consensus(snapshot, paths, proofs, receipts)
     release_identity = publish(
-        receipt, paths, publication, snapshot["pointer_preimage"]
+        receipt,
+        paths,
+        publication,
+        snapshot["pointer_preimage"],
+        snapshot["publication_root_identity"],
+        snapshot["expected_generation"],
     )
     print(release_identity)
     return 0

@@ -10,7 +10,7 @@ enum Value {
     Array(Vec<Value>),
     String(String),
     Number(i64),
-    Bool,
+    Bool(bool),
     Null,
 }
 
@@ -47,11 +47,11 @@ impl<'a> Parser<'a> {
             Some(b'-' | b'0'..=b'9') => Ok(Value::Number(self.number()?)),
             Some(b't') => {
                 self.literal(b"true")?;
-                Ok(Value::Bool)
+                Ok(Value::Bool(true))
             }
             Some(b'f') => {
                 self.literal(b"false")?;
-                Ok(Value::Bool)
+                Ok(Value::Bool(false))
             }
             Some(b'n') => {
                 self.literal(b"null")?;
@@ -300,11 +300,25 @@ fn sha256(data: &[u8]) -> String {
 fn quote(value: &str) -> String {
     format!("{:?}", value)
 }
-fn run(argv: &Vec<Value>, cwd: &str, tools: &BTreeMap<String, String>) -> Result<Output, String> {
+fn run(
+    argv: &Vec<Value>,
+    cwd: &str,
+    tools: &BTreeMap<String, String>,
+    snapshot: &str,
+    packet: &str,
+    environment: &BTreeMap<String, String>,
+) -> Result<Output, String> {
     let program = string(argv.first().ok_or("empty argv")?)?;
     let expand = |value: &str| -> Result<String, String> {
         if value == "{source}" {
             Ok(cwd.to_string())
+        } else if value == "{control:snapshot}" {
+            Ok(snapshot.to_string())
+        } else if value == "{packet:fanout-manifest.v4.json}" {
+            Ok(Path::new(packet)
+                .join("fanout-manifest.v4.json")
+                .to_string_lossy()
+                .to_string())
         } else if value.starts_with("{tool:") && value.ends_with('}') {
             tools
                 .get(&value[6..value.len() - 1])
@@ -325,6 +339,7 @@ fn run(argv: &Vec<Value>, cwd: &str, tools: &BTreeMap<String, String>) -> Result
     Command::new(executable)
         .args(args?)
         .current_dir(cwd)
+        .envs(environment)
         .output()
         .map_err(|error| error.to_string())
 }
@@ -401,76 +416,6 @@ fn command_identity(command: &BTreeMap<String, Value>) -> Result<String, String>
     Ok(sha256(canonical.as_bytes()))
 }
 
-fn byte_contains(haystack: &[u8], needle: &[u8]) -> bool {
-    !needle.is_empty()
-        && haystack
-            .windows(needle.len())
-            .any(|window| window == needle)
-}
-
-fn semantic_counts(
-    check: &BTreeMap<String, Value>,
-    source: &Path,
-) -> Result<(i64, i64, i64), String> {
-    let target = PathBuf::from(
-        env::var("CARGO_TARGET_DIR").map_err(|_| "CARGO_TARGET_DIR is absent".to_string())?,
-    )
-    .join("release");
-    let mut files = BTreeSet::new();
-    for root in array(field(check, "scan_roots")?)? {
-        match string(root)? {
-            "source:src" | "source:embedded" => {
-                let relative = string(root)?.strip_prefix("source:").unwrap();
-                let root = source.join(relative);
-                let mut relative_files = Vec::new();
-                collect_files(&root, &root, &mut relative_files)?;
-                files.extend(relative_files.into_iter().map(|path| root.join(path)));
-            }
-            "target:release" => {
-                if !target.is_dir() {
-                    return Err("semantic target root is unavailable".to_string());
-                }
-                for entry in fs::read_dir(&target).map_err(|error| error.to_string())? {
-                    let path = entry.map_err(|error| error.to_string())?.path();
-                    if path.is_file()
-                        && path
-                            .file_name()
-                            .and_then(|name| name.to_str())
-                            .is_some_and(|name| name.starts_with("maestro"))
-                    {
-                        files.insert(path);
-                    }
-                }
-            }
-            value => return Err(format!("unknown semantic scan root: {}", value)),
-        }
-    }
-    let literals = object(field(check, "count_literals")?)?;
-    let count = |label: &str| -> Result<i64, String> {
-        let values: Result<Vec<Vec<u8>>, String> = array(field(literals, label)?)?
-            .iter()
-            .map(|value| string(value).map(|text| text.as_bytes().to_vec()))
-            .collect();
-        let values = values?;
-        let mut count = 0;
-        for path in &files {
-            let raw = fs::read(path).map_err(|error| error.to_string())?;
-            let relative = path
-                .strip_prefix(source)
-                .unwrap_or(path)
-                .to_string_lossy()
-                .as_bytes()
-                .to_vec();
-            count += values
-                .iter()
-                .filter(|value| byte_contains(&raw, value) || byte_contains(&relative, value))
-                .count() as i64;
-        }
-        Ok(count)
-    };
-    Ok((count("consumers")?, count("readers")?, count("holds")?))
-}
-
 fn main_result() -> Result<(), String> {
     let args: Vec<String> = env::args().skip(1).collect();
     if args.len() != 8 {
@@ -502,6 +447,18 @@ fn main_result() -> Result<(), String> {
     let readback = object(&readback_value)?;
     let toolchain = object(&toolchain_value)?;
     let packet_manifest = object(&packet_manifest_value)?;
+    let registry_binding = object(field(snapshot, "proof_registry")?)?;
+    verify_binding(source_path, registry_binding)?;
+    let registry_path = safe_relative(source_path, string(field(registry_binding, "path")?)?)?;
+    let registry_value = load(&registry_path)?;
+    let registry = object(&registry_value)?;
+    if string(field(registry, "schema_version")?)?
+        != "maestro.external.vnext-final-proof-registry.v1"
+        || string(field(registry, "registry_identity_policy")?)?
+            != "canonical-bytes-bound-no-inference-no-reassignment"
+    {
+        return Err("normative proof registry differs".to_string());
+    }
     if string(field(snapshot, "schema_version")?)?
         != "maestro.external.vnext-final-cumulative-closure-snapshot.v1"
     {
@@ -521,11 +478,34 @@ fn main_result() -> Result<(), String> {
     if environment_allowlist? != ["HOME", "LANG", "LC_ALL", "PATH", "TMPDIR", "TZ"] {
         return Err("environment allowlist differs".to_string());
     }
+    let immutable_roots: Result<Vec<String>, String> =
+        array(field(snapshot, "immutable_input_roots")?)?
+            .iter()
+            .map(|value| string(value).map(str::to_string))
+            .collect();
+    if immutable_roots? != ["source", "packet", "control", "dependencies"] {
+        return Err("immutable roots differ".to_string());
+    }
     if string(field(snapshot, "cache_policy")?)?
         != "immutable_compilation_and_dependency_bytes_only"
         || object(field(snapshot, "pointer_preimage")?).is_err()
     {
         return Err("cache policy or pointer preimage differs".to_string());
+    }
+    let publication = object(field(snapshot, "publication_root_identity")?)?;
+    let expected_generation = number(field(snapshot, "expected_generation")?)?;
+    if publication.keys().cloned().collect::<BTreeSet<_>>()
+        != ["path", "device", "inode", "mount_device"]
+            .into_iter()
+            .map(str::to_string)
+            .collect()
+        || expected_generation < 0
+        || number(field(
+            object(field(snapshot, "pointer_preimage")?)?,
+            "generation",
+        )?)? != expected_generation
+    {
+        return Err("publication custody or generation differs".to_string());
     }
     let denials: Result<BTreeSet<String>, String> = array(field(snapshot, "effect_denylist")?)?
         .iter()
@@ -771,7 +751,24 @@ fn main_result() -> Result<(), String> {
         tools.insert(name.clone(), path);
     }
     let dependencies = array(field(toolchain, "dependency_outputs")?)?;
-    if dependencies.is_empty() {
+    let dependency_names: Result<BTreeSet<String>, String> = dependencies
+        .iter()
+        .map(|value| {
+            object(value)
+                .and_then(|row| field(row, "name"))
+                .and_then(string)
+                .map(str::to_string)
+        })
+        .collect();
+    let expected_dependency_names: BTreeSet<String> = [
+        "python-complete-cargo-native-closure",
+        "rust-complete-cargo-native-closure",
+        "ruby-complete-cargo-native-closure",
+    ]
+    .into_iter()
+    .map(str::to_string)
+    .collect();
+    if dependencies.len() != 3 || dependency_names? != expected_dependency_names {
         return Err("dependency-output closure is absent".to_string());
     }
     for dependency in dependencies {
@@ -822,6 +819,25 @@ fn main_result() -> Result<(), String> {
     if number(field(ledger, "proof_count")?)? != ledger_proofs.len() as i64 {
         return Err("ledger count differs".to_string());
     }
+    let ledger_registry = object(field(ledger, "registry_identity")?)?;
+    for name in ["path", "sha256"] {
+        if string(field(ledger_registry, name)?)? != string(field(registry_binding, name)?)? {
+            return Err("ledger binds another proof registry".to_string());
+        }
+    }
+    if number(field(ledger_registry, "byte_length")?)?
+        != number(field(registry_binding, "byte_length")?)?
+    {
+        return Err("ledger binds another proof registry".to_string());
+    }
+    let mut normative = BTreeMap::new();
+    for row in array(field(registry, "proofs")?)? {
+        let row = object(row)?;
+        let id = string(field(row, "proof_id")?)?;
+        if normative.insert(id.to_string(), row).is_some() {
+            return Err("registry duplicates a proof id".to_string());
+        }
+    }
     let mut proof_ids = BTreeSet::new();
     let mut stages = BTreeSet::new();
     let mut kinds = BTreeSet::new();
@@ -832,6 +848,17 @@ fn main_result() -> Result<(), String> {
         }
         stages.insert(number(field(proof, "stage")?)?);
         kinds.insert(string(field(proof, "kind")?)?.to_string());
+        let expected = normative
+            .get(string(field(proof, "proof_id")?)?)
+            .ok_or("ledger proof is absent from normative registry")?;
+        for name in ["kind", "expected_outcome"] {
+            if string(field(proof, name)?)? != string(field(expected, name)?)? {
+                return Err("proof registry classification differs".to_string());
+            }
+        }
+        if number(field(proof, "stage")?)? != number(field(expected, "stage")?)? {
+            return Err("proof registry Stage differs".to_string());
+        }
         let engines: Result<BTreeSet<String>, String> = array(field(proof, "engines")?)?
             .iter()
             .map(|value| string(value).map(str::to_string))
@@ -850,19 +877,27 @@ fn main_result() -> Result<(), String> {
         if string(field(command, "identity")?)? != command_identity(command)? {
             return Err("proof command identity differs".to_string());
         }
+        let expected_command = object(field(expected, "command")?)?;
+        if command_identity(command)? != command_identity(expected_command)? {
+            return Err("proof registry command differs".to_string());
+        }
         let kind = string(field(proof, "kind")?)?;
+        let harness = object(field(proof, "harness")?)?;
+        let expected_harness = object(field(expected, "harness")?)?;
+        if string(field(harness, "protocol")?)? != string(field(expected_harness, "protocol")?)?
+            || string(field(harness, "required_receipt")?)?
+                != string(field(expected_harness, "required_receipt")?)?
+        {
+            return Err("proof registry harness differs".to_string());
+        }
         if matches!(kind, "race" | "crash_replay") {
-            verify_binding(source_path, object(field(command, "fault_schedule")?)?)?;
+            verify_binding(source_path, object(field(harness, "fault_schedule")?)?)?;
         }
         if matches!(kind, "migration" | "rollback") {
-            let cohort = object(field(command, "cohort")?)?;
-            for name in ["old_reader", "new_reader", "writer"] {
-                string(field(cohort, name)?)?;
-            }
-            verify_binding(source_path, object(field(cohort, "fixture")?)?)?;
+            verify_binding(source_path, object(field(harness, "cohort")?)?)?;
         }
     }
-    if stages != (0..13).collect() || kinds.len() != 13 {
+    if proof_ids.len() != normative.len() || stages != (0..13).collect() || kinds.len() != 14 {
         return Err("ledger Stage or kind closure differs".to_string());
     }
     let required_readback: BTreeSet<String> = [
@@ -896,54 +931,238 @@ fn main_result() -> Result<(), String> {
         let id = string(field(proof, "proof_id")?)?;
         let expected = string(field(proof, "expected_outcome")?)?;
         let command = object(field(proof, "command")?)?;
-        let output = run(array(field(command, "argv")?)?, &args[6], &tools)?;
+        let harness = object(field(proof, "harness")?)?;
+        let receipt_path = Path::new(&args[7])
+            .parent()
+            .ok_or("engine output has no parent")?
+            .join(format!(
+                "{}-{}",
+                id,
+                string(field(harness, "required_receipt")?)?
+            ));
+        let mut environment = BTreeMap::from([
+            ("MAESTRO_FINAL_PROOF_ID".to_string(), id.to_string()),
+            (
+                "MAESTRO_FINAL_PROOF_RECEIPT".to_string(),
+                receipt_path.to_string_lossy().to_string(),
+            ),
+        ]);
+        let kind = string(field(proof, "kind")?)?;
+        if matches!(kind, "race" | "crash_replay") {
+            let binding = object(field(harness, "fault_schedule")?)?;
+            let path = safe_relative(source_path, string(field(binding, "path")?)?)?;
+            environment.insert(
+                "MAESTRO_FAULT_SCHEDULE_PATH".to_string(),
+                path.to_string_lossy().to_string(),
+            );
+        }
+        if matches!(kind, "migration" | "rollback") {
+            let binding = object(field(harness, "cohort")?)?;
+            let path = safe_relative(source_path, string(field(binding, "path")?)?)?;
+            environment.insert(
+                "MAESTRO_MIGRATION_COHORT_PATH".to_string(),
+                path.to_string_lossy().to_string(),
+            );
+        }
+        let mut argv = array(field(command, "argv")?)?.clone();
+        if kind == "ancestry" {
+            argv.push(Value::String("--output".to_string()));
+            argv.push(Value::String(receipt_path.to_string_lossy().to_string()));
+        }
+        let output = run(&argv, &args[6], &tools, &args[0], &args[5], &environment)?;
         let exit = output.status.code().unwrap_or(-1) as i64;
         let actual = if exit == number(field(command, "expected_exit_code")?)? {
             expected
         } else {
             "error"
         };
-        let kind = string(field(proof, "kind")?)?;
         let mut exact_inputs = String::new();
         if matches!(kind, "race" | "crash_replay") {
-            let schedule_binding = object(field(command, "fault_schedule")?)?;
+            let schedule_binding = object(field(harness, "fault_schedule")?)?;
             let schedule_path =
                 safe_relative(source_path, string(field(schedule_binding, "path")?)?)?;
             let schedule_value = load(&schedule_path)?;
             let schedules = array(field(object(&schedule_value)?, "schedules")?)?;
-            if schedules.is_empty() {
-                return Err("fault schedule is empty".to_string());
-            }
-            let reached: Result<Vec<String>, String> = schedules
+            let mode = if kind == "race" {
+                "race"
+            } else {
+                "crash_replay"
+            };
+            let matching: Vec<&Value> = schedules
                 .iter()
-                .map(|value| {
+                .filter(|value| {
                     object(value)
-                        .and_then(|row| field(row, "id"))
+                        .and_then(|row| field(row, "mode"))
                         .and_then(string)
-                        .map(quote)
+                        .is_ok_and(|value| value == mode)
                 })
                 .collect();
+            if matching.len() != 1 {
+                return Err("fault schedule differs".to_string());
+            }
+            let observation_value = load(&receipt_path)?;
+            let observation = object(&observation_value)?;
+            let expected_points: Result<Vec<&str>, String> =
+                array(field(object(matching[0])?, "points")?)?
+                    .iter()
+                    .map(string)
+                    .collect();
+            let observed_points: Result<Vec<&str>, String> =
+                array(field(observation, "observed_reached_points")?)?
+                    .iter()
+                    .map(string)
+                    .collect();
+            let point_receipts = array(field(observation, "point_receipts")?)?;
+            if string(field(observation, "schema_version")?)?
+                != "maestro.external.vnext-final-fault-observation.v1"
+                || string(field(observation, "proof_id")?)? != id
+                || string(field(observation, "schedule_identity")?)?
+                    != string(field(schedule_binding, "sha256")?)?
+                || observed_points? != expected_points?
+                || point_receipts.len() != array(field(object(matching[0])?, "points")?)?.len()
+            {
+                return Err("fault harness did not emit exact observed reached points".to_string());
+            }
+            let proof_output = Path::new(&args[7])
+                .parent()
+                .ok_or("engine output has no parent")?;
+            for (sequence, point_receipt) in point_receipts.iter().enumerate() {
+                let point_receipt = object(point_receipt)?;
+                let point = string(field(point_receipt, "point")?)?;
+                let expected_point =
+                    string(&array(field(object(matching[0])?, "points")?)?[sequence])?;
+                if point != expected_point {
+                    return Err("fault point receipt order differs".to_string());
+                }
+                verify_binding(proof_output, point_receipt)?;
+                let event_path =
+                    safe_relative(proof_output, string(field(point_receipt, "path")?)?)?;
+                let event_value = load(&event_path)?;
+                let event = object(&event_value)?;
+                if event.len() != 5
+                    || string(field(event, "schema_version")?)?
+                        != "maestro.external.vnext-final-fault-point-observation.v1"
+                    || string(field(event, "proof_id")?)? != id
+                    || string(field(event, "point")?)? != point
+                    || number(field(event, "sequence")?)? != sequence as i64
+                    || string(field(event, "status")?)? != "observed"
+                {
+                    return Err("fault point was not independently observed".to_string());
+                }
+            }
+            let observation_raw = fs::read(&receipt_path).map_err(|error| error.to_string())?;
+            let reached: Result<Vec<String>, String> =
+                array(field(observation, "observed_reached_points")?)?
+                    .iter()
+                    .map(|value| string(value).map(quote))
+                    .collect();
             exact_inputs.push_str(&format!(
-                ",\"fault_schedule_identity\":{},\"injection_points_reached\":[{}]",
+                ",\"fault_observation\":{},\"fault_schedule_identity\":{},\"harness_receipt_identity\":{},\"injection_points_reached\":[{}]",
+                String::from_utf8(observation_raw.clone())
+                    .map_err(|error| error.to_string())?
+                    .trim_end(),
                 quote(string(field(schedule_binding, "sha256")?)?),
+                quote(&sha256(&observation_raw)),
                 reached?.join(",")
             ));
         }
         if matches!(kind, "migration" | "rollback") {
-            let cohort = object(field(command, "cohort")?)?;
-            let fixture = object(field(cohort, "fixture")?)?;
-            let canonical = format!(
-                "{{\"fixture\":{{\"byte_length\":{},\"path\":{},\"sha256\":{}}},\"new_reader\":{},\"old_reader\":{},\"writer\":{}}}\n",
-                number(field(fixture, "byte_length")?)?,
-                quote(string(field(fixture, "path")?)?),
-                quote(string(field(fixture, "sha256")?)?),
-                quote(string(field(cohort, "new_reader")?)?),
-                quote(string(field(cohort, "old_reader")?)?),
-                quote(string(field(cohort, "writer")?)?)
-            );
+            let cohort = object(field(harness, "cohort")?)?;
+            let observation_value = load(&receipt_path)?;
+            let observation = object(&observation_value)?;
+            let executables = object(field(observation, "executables")?)?;
+            let outcomes = object(field(observation, "outcomes")?)?;
+            let expected_identity_keys: BTreeSet<String> = ["old_reader", "new_reader", "writer"]
+                .into_iter()
+                .map(str::to_string)
+                .collect();
+            let expected_outcome_keys: BTreeSet<String> =
+                ["old_reader", "new_reader", "writer", "rollback"]
+                    .into_iter()
+                    .map(str::to_string)
+                    .collect();
+            if string(field(observation, "schema_version")?)?
+                != "maestro.external.vnext-final-cohort-observation.v1"
+                || string(field(observation, "proof_id")?)? != id
+                || string(field(observation, "cohort_identity")?)?
+                    != string(field(cohort, "sha256")?)?
+                || executables.keys().cloned().collect::<BTreeSet<_>>() != expected_identity_keys
+                || outcomes.keys().cloned().collect::<BTreeSet<_>>() != expected_outcome_keys
+                || outcomes.values().any(|value| {
+                    object(value).map_or(true, |row| {
+                        field(row, "typed_result").is_err()
+                            || field(row, "observation").and_then(object).is_err()
+                    })
+                })
+            {
+                return Err(
+                    "migration harness did not emit typed cohort identities and outcomes"
+                        .to_string(),
+                );
+            }
+            let proof_output = Path::new(&args[7])
+                .parent()
+                .ok_or("engine output has no parent")?;
+            for executable in executables.values() {
+                let executable = object(executable)?;
+                let root = match string(field(executable, "root")?)? {
+                    "source" => source_path.to_path_buf(),
+                    "target" => PathBuf::from(
+                        env::var("CARGO_TARGET_DIR")
+                            .map_err(|_| "CARGO_TARGET_DIR is absent".to_string())?,
+                    ),
+                    "output" => proof_output.to_path_buf(),
+                    value => return Err(format!("unknown cohort executable root: {}", value)),
+                };
+                verify_binding(&root, executable)?;
+            }
+            for (route, outcome) in outcomes {
+                let outcome = object(outcome)?;
+                let observation_binding = object(field(outcome, "observation")?)?;
+                verify_binding(proof_output, observation_binding)?;
+                let route_path =
+                    safe_relative(proof_output, string(field(observation_binding, "path")?)?)?;
+                let route_value = load(&route_path)?;
+                let route_observation = object(&route_value)?;
+                if route_observation.len() != 5
+                    || string(field(route_observation, "schema_version")?)?
+                        != "maestro.external.vnext-final-cohort-route-observation.v1"
+                    || string(field(route_observation, "proof_id")?)? != id
+                    || string(field(route_observation, "route")?)? != route
+                    || string(field(route_observation, "typed_result")?)?
+                        != string(field(outcome, "typed_result")?)?
+                    || string(field(route_observation, "status")?)? != "observed"
+                {
+                    return Err("cohort route was not independently observed".to_string());
+                }
+            }
+            let observation_raw = fs::read(&receipt_path).map_err(|error| error.to_string())?;
             exact_inputs.push_str(&format!(
-                ",\"cohort_identity\":{}",
-                quote(&sha256(canonical.as_bytes()))
+                ",\"cohort_identity\":{},\"cohort_observation\":{},\"harness_receipt_identity\":{}",
+                quote(string(field(cohort, "sha256")?)?),
+                String::from_utf8(observation_raw.clone())
+                    .map_err(|error| error.to_string())?
+                    .trim_end(),
+                quote(&sha256(&observation_raw))
+            ));
+        }
+        if kind == "ancestry" {
+            let observation_value = load(&receipt_path)?;
+            let observation = object(&observation_value)?;
+            if string(field(observation, "schema_version")?)?
+                != "maestro.external.vnext-final-fanout-edge-sweep.v1"
+                || string(field(observation, "status")?)? != "pass"
+                || array(field(observation, "edges")?)?.len() != 12
+            {
+                return Err("fanout edge sweep receipt differs".to_string());
+            }
+            let observation_raw = fs::read(&receipt_path).map_err(|error| error.to_string())?;
+            exact_inputs.push_str(&format!(
+                ",\"edge_sweep\":{},\"edge_sweep_identity\":{}",
+                String::from_utf8(observation_raw.clone())
+                    .map_err(|error| error.to_string())?
+                    .trim_end(),
+                quote(&sha256(&observation_raw))
             ));
         }
         proof_rows.push(format!(
@@ -962,15 +1181,11 @@ fn main_result() -> Result<(), String> {
     }
     let mut checks = Vec::new();
     let mut all_pass = true;
+    let mut consumer_count = 0i64;
+    let mut reader_count = 0i64;
+    let mut hold_count = 0i64;
     for check in array(field(readback, "checks")?)? {
         let check = object(check)?;
-        let expected_counts = object(field(check, "expected_counts")?)?;
-        if number(field(expected_counts, "consumers")?)? != 0
-            || number(field(expected_counts, "readers")?)? != 0
-            || number(field(expected_counts, "holds")?)? != 0
-        {
-            return Err("semantic readback zero-count contract differs".to_string());
-        }
         let check_command = {
             let mut command = BTreeMap::new();
             command.insert("argv".to_string(), field(check, "argv")?.clone());
@@ -983,23 +1198,168 @@ fn main_result() -> Result<(), String> {
         if string(field(check, "command_identity")?)? != command_identity(&check_command)? {
             return Err("semantic readback command identity differs".to_string());
         }
-        let output = run(array(field(check, "argv")?)?, &args[6], &tools)?;
+        let receipt_path = Path::new(&args[7])
+            .parent()
+            .ok_or("engine output has no parent")?
+            .join(format!("semantic-{}.v1.json", string(field(check, "id")?)?));
+        let environment = BTreeMap::from([
+            (
+                "MAESTRO_SEMANTIC_READBACK_CHECK_ID".to_string(),
+                string(field(check, "id")?)?.to_string(),
+            ),
+            (
+                "MAESTRO_SEMANTIC_READBACK_RECEIPT".to_string(),
+                receipt_path.to_string_lossy().to_string(),
+            ),
+        ]);
+        let output = run(
+            array(field(check, "argv")?)?,
+            &args[6],
+            &tools,
+            &args[0],
+            &args[5],
+            &environment,
+        )?;
         let exit = output.status.code().unwrap_or(-1) as i64;
-        let (consumer_count, reader_count, hold_count) = semantic_counts(check, source_path)?;
-        let passed = exit == number(field(check, "expected_exit_code")?)?
-            && consumer_count == number(field(expected_counts, "consumers")?)?
-            && reader_count == number(field(expected_counts, "readers")?)?
-            && hold_count == number(field(expected_counts, "holds")?)?;
+        let artifact_value = load(&receipt_path)?;
+        let artifact_receipt = object(&artifact_value)?;
+        if string(field(artifact_receipt, "schema_version")?)?
+            != "maestro.external.vnext-final-semantic-artifact-readback.v1"
+            || string(field(artifact_receipt, "check_id")?)? != string(field(check, "id")?)?
+        {
+            return Err("semantic artifact receipt differs".to_string());
+        }
+        let mut artifact_kinds = BTreeSet::new();
+        for artifact in array(field(artifact_receipt, "artifacts")?)? {
+            let artifact = object(artifact)?;
+            let root = match string(field(artifact, "root")?)? {
+                "source" => source_path.to_path_buf(),
+                "target" => PathBuf::from(
+                    env::var("CARGO_TARGET_DIR")
+                        .map_err(|_| "CARGO_TARGET_DIR is absent".to_string())?,
+                ),
+                "output" => Path::new(&args[7])
+                    .parent()
+                    .ok_or("engine output has no parent")?
+                    .to_path_buf(),
+                value => return Err(format!("unknown semantic artifact root: {}", value)),
+            };
+            verify_binding(&root, artifact)?;
+            artifact_kinds.insert(string(field(artifact, "kind")?)?.to_string());
+        }
+        let required_kinds: Result<BTreeSet<String>, String> =
+            array(field(check, "required_artifact_kinds")?)?
+                .iter()
+                .map(|value| string(value).map(str::to_string))
+                .collect();
+        if !required_kinds?.is_subset(&artifact_kinds) {
+            return Err("semantic readback omitted required produced artifacts".to_string());
+        }
+        let reads = array(field(artifact_receipt, "canonical_reads")?)?;
+        if reads.len() < number(field(check, "minimum_canonical_reads")?)? as usize
+            || reads.iter().any(|value| {
+                object(value)
+                    .and_then(|row| {
+                        if string(field(row, "status")?)? != "pass"
+                            || !string(field(row, "command_identity")?)?.starts_with("sha256:")
+                        {
+                            return Err("canonical read differs".to_string());
+                        }
+                        Ok(())
+                    })
+                    .is_err()
+            })
+        {
+            return Err("representative canonical reads are absent".to_string());
+        }
+        let proof_output = Path::new(&args[7])
+            .parent()
+            .ok_or("engine output has no parent")?;
+        for read in reads {
+            let read = object(read)?;
+            let observation_binding = object(field(read, "observation")?)?;
+            verify_binding(proof_output, observation_binding)?;
+            let observation_path =
+                safe_relative(proof_output, string(field(observation_binding, "path")?)?)?;
+            let observation_value = load(&observation_path)?;
+            let observation = object(&observation_value)?;
+            if observation.len() != 5
+                || string(field(observation, "schema_version")?)?
+                    != "maestro.external.vnext-final-canonical-read-observation.v1"
+                || string(field(observation, "check_id")?)? != string(field(check, "id")?)?
+                || string(field(observation, "route")?)? != string(field(read, "route")?)?
+                || string(field(observation, "command_identity")?)?
+                    != string(field(read, "command_identity")?)?
+                || string(field(observation, "status")?)? != "pass"
+            {
+                return Err("canonical read observation differs".to_string());
+            }
+        }
+        let routes = array(field(artifact_receipt, "negative_routes")?)?;
+        if routes.len() < number(field(check, "minimum_negative_routes")?)? as usize
+            || routes.iter().any(|value| {
+                object(value)
+                    .and_then(|row| {
+                        if !matches!(field(row, "injected")?, Value::Bool(true))
+                            || string(field(row, "outcome")?)? != "refuse"
+                            || !string(field(row, "receipt_identity")?)?.starts_with("sha256:")
+                        {
+                            return Err("negative route differs".to_string());
+                        }
+                        Ok(())
+                    })
+                    .is_err()
+            })
+        {
+            return Err("negative route injections are absent".to_string());
+        }
+        for route in routes {
+            let route = object(route)?;
+            let observation_binding = object(field(route, "observation")?)?;
+            verify_binding(proof_output, observation_binding)?;
+            let observation_path =
+                safe_relative(proof_output, string(field(observation_binding, "path")?)?)?;
+            let observation_value = load(&observation_path)?;
+            let observation = object(&observation_value)?;
+            if observation.len() != 6
+                || string(field(observation, "schema_version")?)?
+                    != "maestro.external.vnext-final-negative-route-observation.v1"
+                || string(field(observation, "check_id")?)? != string(field(check, "id")?)?
+                || string(field(observation, "route")?)? != string(field(route, "route")?)?
+                || !matches!(field(observation, "injected")?, Value::Bool(true))
+                || string(field(observation, "outcome")?)? != "refuse"
+                || string(field(observation, "receipt_identity")?)?
+                    != string(field(route, "receipt_identity")?)?
+            {
+                return Err("negative route observation differs".to_string());
+            }
+        }
+        let closures = object(field(artifact_receipt, "closures")?)?;
+        let counts = (
+            number(field(closures, "consumer_count")?)?,
+            number(field(closures, "reader_count")?)?,
+            number(field(closures, "hold_count")?)?,
+        );
+        if counts != (0, 0, 0) {
+            return Err("semantic consumer, reader, or hold closure differs".to_string());
+        }
+        consumer_count = consumer_count.max(counts.0);
+        reader_count = reader_count.max(counts.1);
+        hold_count = hold_count.max(counts.2);
+        let passed = exit == number(field(check, "expected_exit_code")?)?;
         all_pass &= passed;
         checks.push(format!(
-            "{{\"command_identity\":{},\"consumer_count\":{},\"exit_code\":{},\"hold_count\":{},\"id\":{},\"kind\":{},\"reader_count\":{},\"status\":{}}}",
+            "{{\"artifact_receipt_identity\":{},\"command_identity\":{},\"consumer_count\":{},\"exit_code\":{},\"hold_count\":{},\"id\":{},\"kind\":{},\"reader_count\":{},\"status\":{}}}",
+            quote(&sha256(
+                &fs::read(&receipt_path).map_err(|error| error.to_string())?
+            )),
             quote(string(field(check, "command_identity")?)?),
-            consumer_count,
+            counts.0,
             exit,
-            hold_count,
+            counts.2,
             quote(string(field(check, "id")?)?),
             quote(string(field(check, "kind")?)?),
-            reader_count,
+            counts.1,
             quote(if passed { "pass" } else { "fail" })
         ));
     }
@@ -1009,13 +1369,6 @@ fn main_result() -> Result<(), String> {
     let ledger_identity = sha256(&fs::read(ledger_path).map_err(|error| error.to_string())?);
     let readback_identity = sha256(&fs::read(readback_path).map_err(|error| error.to_string())?);
     let toolchain_identity = sha256(&fs::read(toolchain_path).map_err(|error| error.to_string())?);
-    let max_counts = array(field(readback, "checks")?)?
-        .iter()
-        .map(|value| object(value).and_then(|check| semantic_counts(check, source_path)))
-        .collect::<Result<Vec<_>, _>>()?;
-    let consumer_count = max_counts.iter().map(|counts| counts.0).max().unwrap_or(0);
-    let reader_count = max_counts.iter().map(|counts| counts.1).max().unwrap_or(0);
-    let hold_count = max_counts.iter().map(|counts| counts.2).max().unwrap_or(0);
     let receipt = format!("{{\"engine\":\"rust\",\"input_manifest_identity\":{},\"ledger_identity\":{},\"proofs\":[{}],\"readback_plan_identity\":{},\"schema_version\":\"maestro.external.vnext-final-engine-ledger.v1\",\"semantic_readback\":{{\"checks\":[{}],\"consumer_count\":{},\"hold_count\":{},\"reader_count\":{},\"status\":{}}},\"snapshot_identity\":{},\"toolchain_identity\":{}}}\n", quote(&input_manifest_identity), quote(&ledger_identity), proof_rows.join(","), quote(&readback_identity), checks.join(","), consumer_count, hold_count, reader_count, quote(if all_pass {"pass"} else {"fail"}), quote(&snapshot_identity), quote(&toolchain_identity));
     fs::write(&args[7], receipt).map_err(|error| error.to_string())
 }

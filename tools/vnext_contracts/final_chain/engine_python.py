@@ -90,7 +90,12 @@ def validate_snapshot(snapshot: dict[str, Any], frozen_root: Path, source: Path)
         checkpoint = load(checkpoint_path)
         if any(checkpoint.get(field) != row.get(field) for field in ("stage", "commit", "tree")):
             raise ValueError("Stage checkpoint bytes differ")
-    if snapshot.get("immutable_input_roots") != ["source", "packet", "control"]:
+    if snapshot.get("immutable_input_roots") != [
+        "source",
+        "packet",
+        "control",
+        "dependencies",
+    ]:
         raise ValueError("immutable roots differ")
     roles = snapshot.get("writable_root_roles")
     if not isinstance(roles, list) or len(roles) != 12 or len(set(roles)) != 12:
@@ -103,6 +108,16 @@ def validate_snapshot(snapshot: dict[str, Any], frozen_root: Path, source: Path)
         raise ValueError("cache policy differs")
     if not isinstance(snapshot.get("pointer_preimage"), Mapping):
         raise ValueError("pointer preimage is absent")
+    publication = snapshot.get("publication_root_identity")
+    generation = snapshot.get("expected_generation")
+    if (
+        not isinstance(publication, Mapping)
+        or set(publication) != {"path", "device", "inode", "mount_device"}
+        or not isinstance(generation, int)
+        or generation < 0
+        or snapshot["pointer_preimage"].get("generation") != generation
+    ):
+        raise ValueError("publication custody or generation differs")
     denied = snapshot.get("effect_denylist")
     if not isinstance(denied, list) or {"network", "protected_primary_checkout_write", "outside_packet_bound_roots_write"} - set(denied):
         raise ValueError("effect denylist differs")
@@ -111,6 +126,7 @@ def validate_snapshot(snapshot: dict[str, Any], frozen_root: Path, source: Path)
         raise ValueError("engine closure differs")
     for row in engines:
         verify_binding(source, row.get("source"))
+    verify_binding(source, snapshot.get("proof_registry"))
     for field in ("input_manifest", "proof_ledger", "stage12_readback", "toolchain"):
         verify_binding(frozen_root, snapshot.get(field))
 
@@ -215,7 +231,20 @@ def validate_toolchain(toolchain: dict[str, Any], source: Path) -> dict[str, str
             raise ValueError(f"tool probe differs: {name}")
         resolved[str(name)] = str(path)
     dependencies = toolchain.get("dependency_outputs")
-    if not isinstance(dependencies, list) or not dependencies:
+    if (
+        not isinstance(dependencies, list)
+        or len(dependencies) != 3
+        or {
+            row.get("name")
+            for row in dependencies
+            if isinstance(row, Mapping)
+        }
+        != {
+            "python-complete-cargo-native-closure",
+            "rust-complete-cargo-native-closure",
+            "ruby-complete-cargo-native-closure",
+        }
+    ):
         raise ValueError("dependency-output closure is absent")
     for dependency in dependencies:
         if not isinstance(dependency, Mapping):
@@ -257,15 +286,39 @@ def validate_toolchain(toolchain: dict[str, Any], source: Path) -> dict[str, str
     return resolved
 
 
-def validate_ledger(ledger: dict[str, Any], source: Path) -> list[dict[str, Any]]:
+def validate_ledger(
+    ledger: dict[str, Any], registry: dict[str, Any], source: Path
+) -> list[dict[str, Any]]:
     if ledger.get("schema_version") != "maestro.external.vnext-final-proof-ledger.v1":
         raise ValueError("ledger schema differs")
+    registry_rows = registry.get("proofs")
+    if (
+        registry.get("schema_version")
+        != "maestro.external.vnext-final-proof-registry.v1"
+        or registry.get("registry_identity_policy")
+        != "canonical-bytes-bound-no-inference-no-reassignment"
+        or not isinstance(registry_rows, list)
+    ):
+        raise ValueError("normative proof registry differs")
+    if ledger.get("registry_identity") != {
+        "path": "contracts/vnext/final-chain/proof-registry.v1.json",
+        "byte_length": len(
+            (source / "contracts/vnext/final-chain/proof-registry.v1.json").read_bytes()
+        ),
+        "sha256": identity(
+            source / "contracts/vnext/final-chain/proof-registry.v1.json"
+        ),
+    }:
+        raise ValueError("ledger binds another proof registry")
     rows = ledger.get("proofs")
     if not isinstance(rows, list) or ledger.get("proof_count") != len(rows):
         raise ValueError("ledger count differs")
     identifiers = set()
     stages = set()
     kinds = set()
+    by_id = {row.get("proof_id"): row for row in registry_rows if isinstance(row, Mapping)}
+    if len(by_id) != len(registry_rows) or set(by_id) != {row.get("proof_id") for row in rows}:
+        raise ValueError("ledger and normative registry rows differ")
     for row in rows:
         if not isinstance(row, dict) or row.get("proof_id") in identifiers:
             raise ValueError("proof row or identifier differs")
@@ -274,6 +327,20 @@ def validate_ledger(ledger: dict[str, Any], source: Path) -> list[dict[str, Any]
         kinds.add(row.get("kind"))
         if row.get("engines") != ENGINES:
             raise ValueError("proof engine coverage differs")
+        normative = by_id[row["proof_id"]]
+        for field in ("stage", "kind", "expected_outcome", "engines"):
+            if row.get(field) != normative.get(field):
+                raise ValueError(f"proof registry classification differs: {row['proof_id']}")
+        if row.get("command", {}).get("argv") != normative.get("command", {}).get(
+            "argv"
+        ) or row.get("command", {}).get(
+            "expected_exit_code"
+        ) != normative.get(
+            "command", {}
+        ).get(
+            "expected_exit_code"
+        ):
+            raise ValueError(f"proof registry command differs: {row['proof_id']}")
         command = row.get("command")
         if not isinstance(command, Mapping):
             raise ValueError("proof command absent")
@@ -294,23 +361,35 @@ def validate_ledger(ledger: dict[str, Any], source: Path) -> list[dict[str, Any]
             raise ValueError("proof command identity differs")
         for binding in row.get("input_bindings", []):
             verify_binding(source, binding)
+        harness = row.get("harness")
+        if not isinstance(harness, Mapping) or harness.get("protocol") != normative.get(
+            "harness", {}
+        ).get("protocol"):
+            raise ValueError(f"proof harness differs: {row['proof_id']}")
         if row.get("kind") in {"race", "crash_replay"}:
-            verify_binding(source, command.get("fault_schedule"))
+            verify_binding(source, harness.get("fault_schedule"))
         if row.get("kind") in {"migration", "rollback"}:
-            cohort = command.get("cohort")
-            if not isinstance(cohort, Mapping):
-                raise ValueError("migration cohort absent")
-            verify_binding(source, cohort.get("fixture"))
-    if stages != set(range(13)) or len(kinds) != 13:
+            verify_binding(source, harness.get("cohort"))
+    if stages != set(range(13)) or len(kinds) != 14:
         raise ValueError("proof Stage or kind closure differs")
     return rows
 
 
-def expand(argv: list[str], tools: Mapping[str, str], source: Path) -> list[str]:
+def expand(
+    argv: list[str],
+    tools: Mapping[str, str],
+    source: Path,
+    snapshot: Path,
+    packet: Path,
+) -> list[str]:
     result = []
     for value in argv:
         if value == "{source}":
             result.append(str(source))
+        elif value == "{control:snapshot}":
+            result.append(str(snapshot))
+        elif value == "{packet:fanout-manifest.v4.json}":
+            result.append(str(packet / "fanout-manifest.v4.json"))
         elif value.startswith("{tool:") and value.endswith("}"):
             name = value[6:-1]
             if name not in tools:
@@ -336,10 +415,37 @@ def produced_artifacts(source: Path, paths: object) -> list[dict[str, object]]:
     return rows
 
 
-def execute_proof(row: dict[str, Any], source: Path, tools: Mapping[str, str]) -> dict[str, Any]:
+def execute_proof(
+    row: dict[str, Any],
+    source: Path,
+    tools: Mapping[str, str],
+    snapshot: Path,
+    packet: Path,
+    output_root: Path,
+) -> dict[str, Any]:
     spec = row["command"]
-    argv = expand(spec["argv"], tools, source)
-    result = subprocess.run(argv, cwd=source, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    argv = expand(spec["argv"], tools, source, snapshot, packet)
+    harness = row["harness"]
+    receipt_name = harness["required_receipt"]
+    receipt_path = output_root / f"{row['proof_id']}-{receipt_name}"
+    environment = dict(os.environ)
+    environment["MAESTRO_FINAL_PROOF_ID"] = row["proof_id"]
+    environment["MAESTRO_FINAL_PROOF_RECEIPT"] = str(receipt_path)
+    if harness["protocol"] == "fault-observation-v1":
+        schedule_path = verify_binding(source, harness["fault_schedule"])
+        environment["MAESTRO_FAULT_SCHEDULE_PATH"] = str(schedule_path)
+    elif harness["protocol"] == "cohort-observation-v1":
+        cohort_path = verify_binding(source, harness["cohort"])
+        environment["MAESTRO_MIGRATION_COHORT_PATH"] = str(cohort_path)
+    elif harness["protocol"] == "fanout-edge-sweep-v1":
+        argv.extend(["--output", str(receipt_path)])
+    result = subprocess.run(
+        argv,
+        cwd=source,
+        env=environment,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
     passed = result.returncode == spec["expected_exit_code"]
     expected = row["expected_outcome"]
     receipt = {
@@ -355,65 +461,113 @@ def execute_proof(row: dict[str, Any], source: Path, tools: Mapping[str, str]) -
         "produced_artifacts": produced_artifacts(source, row["produced_artifacts"]),
     }
     if row["kind"] in {"race", "crash_replay"}:
-        schedule_path = verify_binding(source, spec["fault_schedule"])
+        schedule_path = verify_binding(source, harness["fault_schedule"])
         schedule = load(schedule_path)
-        schedules = schedule.get("schedules")
-        if not isinstance(schedules, list) or not schedules:
-            raise ValueError("fault schedule is empty")
-        receipt["fault_schedule_identity"] = identity(schedule_path)
-        receipt["injection_points_reached"] = [
-            schedule["id"] for schedule in schedules
+        mode = "race" if row["kind"] == "race" else "crash_replay"
+        schedules = [
+            value
+            for value in schedule.get("schedules", [])
+            if isinstance(value, Mapping) and value.get("mode") == mode
         ]
+        if len(schedules) != 1:
+            raise ValueError("fault schedule is empty")
+        observation = load(receipt_path)
+        expected_points = schedules[0].get("points")
+        point_receipts = observation.get("point_receipts")
+        if (
+            observation.get("schema_version")
+            != "maestro.external.vnext-final-fault-observation.v1"
+            or observation.get("proof_id") != row["proof_id"]
+            or observation.get("schedule_identity") != identity(schedule_path)
+            or observation.get("observed_reached_points") != expected_points
+            or not isinstance(point_receipts, list)
+            or [item.get("point") for item in point_receipts if isinstance(item, Mapping)]
+            != expected_points
+        ):
+            raise ValueError("fault harness did not emit exact observed reached points")
+        for sequence, point_receipt in enumerate(point_receipts):
+            if not isinstance(point_receipt, Mapping):
+                raise ValueError("fault point receipt differs")
+            point = point_receipt["point"]
+            event = load(verify_binding(output_root, point_receipt))
+            if event != {
+                "schema_version": "maestro.external.vnext-final-fault-point-observation.v1",
+                "proof_id": row["proof_id"],
+                "point": point,
+                "sequence": sequence,
+                "status": "observed",
+            }:
+                raise ValueError("fault point was not independently observed")
+        receipt["fault_schedule_identity"] = identity(schedule_path)
+        receipt["injection_points_reached"] = observation["observed_reached_points"]
+        receipt["fault_observation"] = observation
+        receipt["harness_receipt_identity"] = identity(receipt_path)
     if row["kind"] in {"migration", "rollback"}:
-        cohort = spec["cohort"]
-        receipt["cohort_identity"] = identity_bytes(
-            (
-                json.dumps(cohort, sort_keys=True, separators=(",", ":")) + "\n"
-            ).encode("ascii")
-        )
+        cohort_path = verify_binding(source, harness["cohort"])
+        observation = load(receipt_path)
+        outcomes = observation.get("outcomes")
+        executables = observation.get("executables")
+        if (
+            observation.get("schema_version")
+            != "maestro.external.vnext-final-cohort-observation.v1"
+            or observation.get("proof_id") != row["proof_id"]
+            or observation.get("cohort_identity") != identity(cohort_path)
+            or not isinstance(executables, Mapping)
+            or set(executables) != {"old_reader", "new_reader", "writer"}
+            or not isinstance(outcomes, Mapping)
+            or set(outcomes)
+            != {"old_reader", "new_reader", "writer", "rollback"}
+            or not all(isinstance(value, Mapping) and "typed_result" in value for value in outcomes.values())
+        ):
+            raise ValueError("migration harness did not emit typed cohort identities and outcomes")
+        roots = {
+            "source": source,
+            "target": Path(os.environ["CARGO_TARGET_DIR"]),
+            "output": output_root,
+        }
+        identities = {}
+        for role, executable in executables.items():
+            if not isinstance(executable, Mapping) or executable.get("root") not in roots:
+                raise ValueError("cohort executable binding differs")
+            verify_binding(roots[str(executable["root"])], executable)
+            identities[role] = executable["sha256"]
+        for route, outcome in outcomes.items():
+            if not isinstance(outcome, Mapping):
+                raise ValueError("cohort outcome differs")
+            route_receipt = load(verify_binding(output_root, outcome["observation"]))
+            if route_receipt != {
+                "schema_version": "maestro.external.vnext-final-cohort-route-observation.v1",
+                "proof_id": row["proof_id"],
+                "route": route,
+                "typed_result": outcome["typed_result"],
+                "status": "observed",
+            }:
+                raise ValueError("cohort route was not independently observed")
+        receipt["cohort_identity"] = identity(cohort_path)
+        receipt["cohort_executable_identities"] = identities
+        receipt["cohort_outcomes"] = outcomes
+        receipt["cohort_observation"] = observation
+        receipt["harness_receipt_identity"] = identity(receipt_path)
+    if row["kind"] == "ancestry":
+        observation = load(receipt_path)
+        if (
+            observation.get("schema_version")
+            != "maestro.external.vnext-final-fanout-edge-sweep.v1"
+            or observation.get("status") != "pass"
+            or len(observation.get("edges", [])) != 12
+        ):
+            raise ValueError("fanout edge sweep receipt differs")
+        receipt["edge_sweep_identity"] = identity(receipt_path)
+        receipt["edge_sweep"] = observation
     return receipt
 
 
-def scan_counts(check: Mapping[str, Any], source: Path) -> dict[str, int]:
-    target = Path(os.environ.get("CARGO_TARGET_DIR", "")) / "release"
-    files: set[Path] = set()
-    for root in check.get("scan_roots", []):
-        if root == "source:src":
-            files.update(path for path in (source / "src").rglob("*") if path.is_file())
-        elif root == "source:embedded":
-            files.update(
-                path for path in (source / "embedded").rglob("*") if path.is_file()
-            )
-        elif root == "target:release" and target.is_dir():
-            files.update(path for path in target.glob("maestro*") if path.is_file())
-        else:
-            raise ValueError(f"unknown or unavailable semantic scan root: {root}")
-    counts = {}
-    literals = check.get("count_literals")
-    if not isinstance(literals, Mapping):
-        raise ValueError("semantic count literals are absent")
-    for label in ("consumers", "readers", "holds"):
-        values = literals.get(label)
-        if not isinstance(values, list):
-            raise ValueError("semantic count literal class differs")
-        count = 0
-        for path in files:
-            raw = path.read_bytes()
-            relative = (
-                path.relative_to(source).as_posix()
-                if path.is_relative_to(source)
-                else path.name
-            ).encode("utf-8")
-            count += sum(
-                1
-                for value in values
-                if value.encode("utf-8") in raw or value.encode("utf-8") in relative
-            )
-        counts[label] = count
-    return counts
-
-
-def semantic_readback(plan: dict[str, Any], source: Path, tools: Mapping[str, str]) -> dict[str, Any]:
+def semantic_readback(
+    plan: dict[str, Any],
+    source: Path,
+    tools: Mapping[str, str],
+    output_root: Path,
+) -> dict[str, Any]:
     if plan.get("schema_version") != "maestro.external.vnext-stage12-semantic-readback-plan.v1":
         raise ValueError("readback schema differs")
     checks = plan.get("checks")
@@ -436,20 +590,101 @@ def semantic_readback(plan: dict[str, Any], source: Path, tools: Mapping[str, st
         )
         if check.get("command_identity") != expected_identity:
             raise ValueError("readback command identity differs")
+        receipt_path = output_root / f"semantic-{check['id']}.v1.json"
+        environment = dict(os.environ)
+        environment["MAESTRO_SEMANTIC_READBACK_CHECK_ID"] = check["id"]
+        environment["MAESTRO_SEMANTIC_READBACK_RECEIPT"] = str(receipt_path)
         result = subprocess.run(
-            expand(check["argv"], tools, source),
+            expand(
+                check["argv"],
+                tools,
+                source,
+                source / "control-unavailable",
+                source / "packet-unavailable",
+            ),
             cwd=source,
+            env=environment,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
-        expected_counts = check.get("expected_counts")
-        if expected_counts != {"consumers": 0, "readers": 0, "holds": 0}:
-            raise ValueError("readback zero-count contract differs")
-        counts = scan_counts(check, source)
-        passed = (
-            result.returncode == check["expected_exit_code"]
-            and counts == expected_counts
-        )
+        receipt = load(receipt_path)
+        artifacts = receipt.get("artifacts")
+        reads = receipt.get("canonical_reads")
+        routes = receipt.get("negative_routes")
+        closures = receipt.get("closures")
+        if (
+            receipt.get("schema_version")
+            != "maestro.external.vnext-final-semantic-artifact-readback.v1"
+            or receipt.get("check_id") != check["id"]
+            or not isinstance(artifacts, list)
+            or not isinstance(reads, list)
+            or not isinstance(routes, list)
+            or not isinstance(closures, Mapping)
+        ):
+            raise ValueError("semantic artifact receipt differs")
+        roots = {
+            "source": source,
+            "target": Path(os.environ["CARGO_TARGET_DIR"]),
+            "output": output_root,
+        }
+        artifact_kinds = set()
+        for artifact in artifacts:
+            if not isinstance(artifact, Mapping) or artifact.get("root") not in roots:
+                raise ValueError("semantic artifact row differs")
+            root = roots[str(artifact["root"])]
+            binding = {
+                "path": artifact.get("path"),
+                "byte_length": artifact.get("byte_length"),
+                "sha256": artifact.get("sha256"),
+            }
+            verify_binding(root, binding)
+            artifact_kinds.add(artifact.get("kind"))
+        if not set(check["required_artifact_kinds"]).issubset(artifact_kinds):
+            raise ValueError("semantic readback omitted required produced artifacts")
+        if len(reads) < check["minimum_canonical_reads"] or any(
+            not isinstance(row, Mapping)
+            or row.get("status") != "pass"
+            or not str(row.get("command_identity", "")).startswith("sha256:")
+            for row in reads
+        ):
+            raise ValueError("representative canonical reads are absent")
+        for read in reads:
+            observation = load(verify_binding(output_root, read["observation"]))
+            if observation != {
+                "schema_version": "maestro.external.vnext-final-canonical-read-observation.v1",
+                "check_id": check["id"],
+                "route": read["route"],
+                "command_identity": read["command_identity"],
+                "status": "pass",
+            }:
+                raise ValueError("canonical read observation differs")
+        if len(routes) < check["minimum_negative_routes"] or any(
+            not isinstance(row, Mapping)
+            or row.get("injected") is not True
+            or row.get("outcome") != "refuse"
+            or not str(row.get("receipt_identity", "")).startswith("sha256:")
+            for row in routes
+        ):
+            raise ValueError("negative route injections are absent")
+        for route in routes:
+            observation = load(verify_binding(output_root, route["observation"]))
+            if observation != {
+                "schema_version": "maestro.external.vnext-final-negative-route-observation.v1",
+                "check_id": check["id"],
+                "route": route["route"],
+                "injected": True,
+                "outcome": "refuse",
+                "receipt_identity": route["receipt_identity"],
+            }:
+                raise ValueError("negative route observation differs")
+        counts = {
+            "consumers": closures.get("consumer_count"),
+            "readers": closures.get("reader_count"),
+            "holds": closures.get("hold_count"),
+        }
+        if counts != {"consumers": 0, "readers": 0, "holds": 0}:
+            raise ValueError("semantic consumer, reader, or hold closure differs")
+        passed = result.returncode == check["expected_exit_code"]
         rows.append(
             {
                 "id": check["id"],
@@ -460,6 +695,7 @@ def semantic_readback(plan: dict[str, Any], source: Path, tools: Mapping[str, st
                 "consumer_count": counts["consumers"],
                 "reader_count": counts["readers"],
                 "hold_count": counts["holds"],
+                "artifact_receipt_identity": identity(receipt_path),
             }
         )
     return {
@@ -484,7 +720,20 @@ def main() -> int:
     validate_packet(snapshot, packet_path)
     validate_manifest(manifest, source_path)
     tools = validate_toolchain(toolchain, source_path)
-    proofs = [execute_proof(row, source_path, tools) for row in validate_ledger(ledger, source_path)]
+    registry = load(
+        verify_binding(source_path, snapshot["proof_registry"])
+    )
+    proofs = [
+        execute_proof(
+            row,
+            source_path,
+            tools,
+            snapshot_path,
+            packet_path,
+            output_path.parent,
+        )
+        for row in validate_ledger(ledger, registry, source_path)
+    ]
     value = {
         "schema_version": "maestro.external.vnext-final-engine-ledger.v1",
         "engine": "python",
@@ -494,7 +743,9 @@ def main() -> int:
         "readback_plan_identity": identity(readback_path),
         "toolchain_identity": identity(toolchain_path),
         "proofs": proofs,
-        "semantic_readback": semantic_readback(readback, source_path, tools),
+        "semantic_readback": semantic_readback(
+            readback, source_path, tools, output_path.parent
+        ),
     }
     output_path.write_bytes(
         (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode("ascii")

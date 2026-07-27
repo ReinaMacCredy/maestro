@@ -14,5 +14,13 @@
   ],
   "hostile_fixture_root": "tools/vnext_contracts/final_chain/fixtures",
   "historical_predecessor_status": "immutable_input_only_no_final_verdict_reuse",
+  "final_integration_inputs": [
+    "final Stage 5 through Stage 12 first-parent commit and tree identities after all candidate fixes",
+    "fault and crash-replay commands that emit exact reached-point observation receipts",
+    "frozen old and new reader and writer executable identities with typed migration and rollback cohort outcomes",
+    "Stage 12 commands that emit byte-bound semantic artifact, canonical-read, and negative-route receipts",
+    "complete local Cargo registry index cache source and Rust target native closure for each engine",
+    "pre-created stable publication root with current pointer generation preimage"
+  ],
   "publication_status": "source_only_no_receipt_or_pointer_generated"
 }

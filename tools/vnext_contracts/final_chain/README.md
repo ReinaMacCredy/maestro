@@ -10,9 +10,11 @@ binds the exact clean `--final-ref` commit and tree as the current V4 Stage 12
 checkpoint, verifies all thirteen supplied checkpoints occur in Stage order on
 that commit's first-parent chain, archives that commit without reading mutable
 working-tree bytes, and copies/content-binds the approved V4 packet. It then
-emits a byte-total input manifest, typed proof ledger, semantic readback plan,
-toolchain/dependency manifest, checkpoint records, and the immutable snapshot.
-It does not execute proof, write a receipt, update a pointer, or publish.
+emits a byte-total input manifest, a ledger derived without classification
+inference from `proof-registry.v1.json`, semantic artifact-readback requirements,
+three complete per-engine Cargo/native dependency closures, checkpoint records,
+and the immutable snapshot. It does not execute proof, write a receipt, update a
+pointer, or publish.
 
 The Orchestrator supplies exactly one `--stage-checkpoint N=<40-hex-commit>` for
 every `N` from 0 through 12. Stage 12 must equal the commit resolved from
@@ -46,12 +48,13 @@ python3 tools/vnext_contracts/final_chain/generate.py \
 `runner.py` is the one later seal. It refuses unless closure, run, publication,
 and protected-primary roots are disjoint; every frozen byte and exact tool probe
 still matches; `/usr/bin/sandbox-exec` is available; and active probes prove
-network and protected-primary writes are denied. Each engine receives a separate
-read-only source copy and separate temp, target, dependency, and output roots.
-There is no sandbox fallback. Because Codex itself runs inside a sandbox, the
-Orchestrator must launch this one command through the approved unsandboxed
-execution boundary; nested sandbox application failure is a refusal, not a
-reason to weaken the profile.
+network, protected-primary reads and writes, and immutable-root writes are
+denied. Each engine receives a separate read-only source copy and separate temp,
+target, dependency, and output roots. Cargo proof commands are frozen and
+offline. There is no sandbox fallback. Because Codex itself runs inside a
+sandbox, the Orchestrator must launch this one command through the approved
+unsandboxed execution boundary; nested sandbox application failure is a refusal,
+not a reason to weaken the profile.
 
 ```text
 python3 tools/vnext_contracts/final_chain/runner.py \
@@ -61,8 +64,21 @@ python3 tools/vnext_contracts/final_chain/runner.py \
   --sandbox-exec /usr/bin/sandbox-exec
 ```
 
+Fault, crash-replay, migration, rollback, ancestry, and Stage 12 checks must
+write their typed receipts to the paths supplied in
+`MAESTRO_FINAL_PROOF_RECEIPT` or
+`MAESTRO_SEMANTIC_READBACK_RECEIPT`. Scheduling metadata, source substring
+counts, and constant pass markers are not observations. Fault points and
+migration routes each bind a separately emitted observation file; cohort
+executable identities bind actual source, target, or output bytes. The semantic
+receipts bind actual compiled/exported/schema/resource/persisted/consumer/
+reader/hold artifact bytes plus separately emitted canonical-read and
+negative-route observations, and zero consumer/reader/hold closure.
+
 The runner publishes one immutable release object only after typed row-for-row
-three-engine consensus and semantic zero-count readback. A pre-existing object
-must match every byte. The single `current.json` pointer advances by the
-snapshot's exact preimage CAS. No source generation or seal has been run by this
-candidate commit.
+three-engine consensus and the independently executed 12-edge ancestry sweep.
+The pre-created publication root is bound by path, device, inode, and mount
+custody. A pre-existing object must match every byte. The single `current.json`
+pointer advances by the snapshot's exact preimage and monotonic generation CAS,
+with descriptor-relative no-follow writes and durable file/directory syncs. No
+source generation or seal has been run by this candidate commit.

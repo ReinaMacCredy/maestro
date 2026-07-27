@@ -17,17 +17,36 @@
     "produced_artifacts": {"type": "array"},
     "semantic_readback": {
       "type": "object",
-      "required": ["status", "consumer_count", "reader_count", "hold_count"],
+      "required": ["status", "consumer_count", "reader_count", "hold_count", "checks"],
       "properties": {
         "status": {"const": "pass"},
         "consumer_count": {"const": 0},
         "reader_count": {"const": 0},
-        "hold_count": {"const": 0}
+        "hold_count": {"const": 0},
+        "checks": {"type": "array", "minItems": 8, "maxItems": 8}
       },
       "additionalProperties": false
     },
-    "ancestry_closure": {"const": "pass"},
-    "final_edge_sweep": {"const": "pass"},
+    "ancestry_closure": {
+      "type": "object",
+      "required": ["checkpoint_count", "edges", "identity"],
+      "properties": {
+        "checkpoint_count": {"const": 13},
+        "edges": {"type": "array", "minItems": 12, "maxItems": 12},
+        "identity": {"$ref": "#/$defs/sha256"}
+      },
+      "additionalProperties": false
+    },
+    "final_edge_sweep": {
+      "type": "object",
+      "required": ["status", "edge_count", "identity"],
+      "properties": {
+        "status": {"const": "pass"},
+        "edge_count": {"const": 12},
+        "identity": {"$ref": "#/$defs/sha256"}
+      },
+      "additionalProperties": false
+    },
     "verdict": {"const": "pass"}
   },
   "$defs": {"sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}},

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "maestro.external.vnext-final-cumulative-closure-snapshot.v1",
   "type": "object",
-  "required": ["schema_version", "state", "approved_packet_identity", "packet_manifest", "final_integration", "first_parent_stages", "input_manifest", "proof_ledger", "stage12_readback", "toolchain", "environment_allowlist", "immutable_input_roots", "writable_root_roles", "protected_primary_checkout", "cache_policy", "sandbox_profile", "pointer_preimage", "engines", "effect_denylist"],
+  "required": ["schema_version", "state", "approved_packet_identity", "packet_manifest", "final_integration", "first_parent_stages", "input_manifest", "proof_registry", "proof_ledger", "stage12_readback", "toolchain", "environment_allowlist", "immutable_input_roots", "writable_root_roles", "protected_primary_checkout", "publication_root_identity", "expected_generation", "cache_policy", "sandbox_profile", "pointer_preimage", "engines", "effect_denylist"],
   "properties": {
     "schema_version": {"const": "maestro.external.vnext-final-cumulative-closure-snapshot.v1"},
     "state": {"const": "frozen"},
@@ -26,16 +26,38 @@
       }
     },
     "input_manifest": {"$ref": "#/$defs/bound_file"},
+    "proof_registry": {"$ref": "#/$defs/bound_file"},
     "proof_ledger": {"$ref": "#/$defs/bound_file"},
     "stage12_readback": {"$ref": "#/$defs/bound_file"},
     "toolchain": {"$ref": "#/$defs/bound_file"},
     "environment_allowlist": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
-    "immutable_input_roots": {"const": ["source", "packet", "control"]},
+    "immutable_input_roots": {"const": ["source", "packet", "control", "dependencies"]},
     "writable_root_roles": {"const": ["python-temp", "python-target", "python-deps", "python-output", "rust-temp", "rust-target", "rust-deps", "rust-output", "ruby-temp", "ruby-target", "ruby-deps", "ruby-output"]},
     "protected_primary_checkout": {"type": "string", "pattern": "^/"},
+    "publication_root_identity": {
+      "type": "object",
+      "required": ["path", "device", "inode", "mount_device"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^/"},
+        "device": {"type": "integer", "minimum": 0},
+        "inode": {"type": "integer", "minimum": 1},
+        "mount_device": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "expected_generation": {"type": "integer", "minimum": 0},
     "cache_policy": {"const": "immutable_compilation_and_dependency_bytes_only"},
     "sandbox_profile": {"const": "macos-sandbox-exec-no-network-v1"},
-    "pointer_preimage": {"type": "object"},
+    "pointer_preimage": {
+      "type": "object",
+      "required": ["state", "generation"],
+      "properties": {
+        "state": {"enum": ["absent", "present"]},
+        "generation": {"type": "integer", "minimum": 0},
+        "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      },
+      "additionalProperties": false
+    },
     "engines": {
       "type": "array",
       "minItems": 3,

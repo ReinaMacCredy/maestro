@@ -5,6 +5,7 @@ require "digest"
 require "json"
 require "open3"
 require "pathname"
+require "set"
 
 ENGINES = %w[python rust ruby].freeze
 READBACK_KINDS = %w[
@@ -75,18 +76,25 @@ def validate_snapshot(snapshot, frozen_root, source)
     checkpoint = load_object(verify_binding(frozen_root, row["checkpoint"]))
     raise "Stage checkpoint bytes differ" unless %w[stage commit tree].all? { |field| checkpoint[field] == row[field] }
   end
-  raise "immutable roots differ" unless snapshot["immutable_input_roots"] == %w[source packet control]
+  raise "immutable roots differ" unless snapshot["immutable_input_roots"] == %w[source packet control dependencies]
   roles = snapshot.fetch("writable_root_roles")
   raise "disjoint writable roots differ" unless roles.length == 12 && roles.uniq.length == 12
   raise "sandbox profile differs" unless snapshot["sandbox_profile"] == "macos-sandbox-exec-no-network-v1"
   raise "environment allowlist differs" unless snapshot["environment_allowlist"] == %w[HOME LANG LC_ALL PATH TMPDIR TZ]
   raise "cache policy differs" unless snapshot["cache_policy"] == "immutable_compilation_and_dependency_bytes_only"
   raise "pointer preimage is absent" unless snapshot["pointer_preimage"].is_a?(Hash)
+  publication = snapshot["publication_root_identity"]
+  generation = snapshot["expected_generation"]
+  raise "publication custody or generation differs" unless publication.is_a?(Hash) &&
+                                                          publication.keys.sort == %w[device inode mount_device path] &&
+                                                          generation.is_a?(Integer) && generation >= 0 &&
+                                                          snapshot["pointer_preimage"]["generation"] == generation
   required_denials = %w[network protected_primary_checkout_write outside_packet_bound_roots_write]
   raise "effect denylist differs" unless (required_denials - snapshot.fetch("effect_denylist")).empty?
   engines = snapshot.fetch("engines")
   raise "engine closure differs" unless engines.map { |row| row["id"] } == ENGINES
   engines.each { |row| verify_binding(source, row["source"]) }
+  verify_binding(source, snapshot["proof_registry"])
   %w[input_manifest proof_ledger stage12_readback toolchain].each do |field|
     verify_binding(frozen_root, snapshot[field])
   end
@@ -162,7 +170,14 @@ def validate_toolchain(toolchain, source)
     [name, path]
   end
   dependencies = toolchain["dependency_outputs"]
-  raise "dependency-output closure is absent" unless dependencies.is_a?(Array) && !dependencies.empty?
+  expected_dependencies = %w[
+    python-complete-cargo-native-closure
+    rust-complete-cargo-native-closure
+    ruby-complete-cargo-native-closure
+  ].sort
+  raise "dependency-output closure is absent" unless dependencies.is_a?(Array) &&
+                                                       dependencies.length == 3 &&
+                                                       dependencies.map { |row| row["name"] }.sort == expected_dependencies
   dependencies.each do |dependency|
     root = dependency.fetch("resolved_path")
     raise "dependency-output root is absent or unsafe" unless File.directory?(root) && !File.symlink?(root)
@@ -191,10 +206,22 @@ def command_identity(argv, expected_exit_code)
   sha_bytes(JSON.generate({"argv" => argv, "expected_exit_code" => expected_exit_code}.sort.to_h) + "\n")
 end
 
-def validate_ledger(ledger, source)
+def validate_ledger(ledger, registry, source)
   raise "ledger schema differs" unless ledger["schema_version"] == "maestro.external.vnext-final-proof-ledger.v1"
+  raise "normative proof registry differs" unless registry["schema_version"] == "maestro.external.vnext-final-proof-registry.v1" &&
+                                                  registry["registry_identity_policy"] == "canonical-bytes-bound-no-inference-no-reassignment"
+  registry_path = File.join(source, "contracts/vnext/final-chain/proof-registry.v1.json")
+  registry_binding = {
+    "path" => "contracts/vnext/final-chain/proof-registry.v1.json",
+    "byte_length" => File.size(registry_path),
+    "sha256" => identity(registry_path)
+  }
+  raise "ledger binds another proof registry" unless ledger["registry_identity"] == registry_binding
   rows = ledger.fetch("proofs")
   raise "ledger count differs" unless ledger["proof_count"] == rows.length
+  normative = registry.fetch("proofs").to_h { |row| [row.fetch("proof_id"), row] }
+  raise "registry duplicates a proof id" unless normative.length == registry.fetch("proofs").length
+  raise "ledger and registry rows differ" unless normative.keys.sort == rows.map { |row| row["proof_id"] }.sort
   ids = {}
   stages = []
   kinds = []
@@ -204,24 +231,33 @@ def validate_ledger(ledger, source)
     stages << row["stage"]
     kinds << row["kind"]
     raise "proof engine coverage differs" unless row["engines"] == ENGINES
+    expected = normative.fetch(row["proof_id"])
+    %w[stage kind expected_outcome engines].each do |field|
+      raise "proof registry classification differs" unless row[field] == expected[field]
+    end
     command = row.fetch("command")
+    raise "proof registry command differs" unless command["argv"] == expected.fetch("command")["argv"] &&
+                                                  command["expected_exit_code"] == expected.fetch("command")["expected_exit_code"]
     raise "proof command identity differs" unless command["identity"] == command_identity(command["argv"], command["expected_exit_code"])
     row.fetch("input_bindings").each { |binding| verify_binding(source, binding) }
-    verify_binding(source, command["fault_schedule"]) if %w[race crash_replay].include?(row["kind"])
-    if %w[migration rollback].include?(row["kind"])
-      cohort = command.fetch("cohort")
-      raise "migration cohort absent" unless %w[old_reader new_reader writer fixture].all? { |key| cohort.key?(key) }
-      verify_binding(source, cohort["fixture"])
-    end
+    harness = row.fetch("harness")
+    raise "proof registry harness differs" unless harness["protocol"] == expected.fetch("harness")["protocol"] &&
+                                                   harness["required_receipt"] == expected.fetch("harness")["required_receipt"]
+    verify_binding(source, harness["fault_schedule"]) if %w[race crash_replay].include?(row["kind"])
+    verify_binding(source, harness["cohort"]) if %w[migration rollback].include?(row["kind"])
   end
-  raise "proof Stage or kind closure differs" unless stages.uniq.sort == (0..12).to_a && kinds.uniq.length == 13
+  raise "proof Stage or kind closure differs" unless stages.uniq.sort == (0..12).to_a && kinds.uniq.length == 14
   rows
 end
 
-def expand(argv, tools, source)
+def expand(argv, tools, source, snapshot, packet)
   argv.map do |value|
     if value == "{source}"
       source
+    elsif value == "{control:snapshot}"
+      snapshot
+    elsif value == "{packet:fanout-manifest.v4.json}"
+      File.join(packet, "fanout-manifest.v4.json")
     elsif value.start_with?("{tool:") && value.end_with?("}")
       tools.fetch(value[6...-1])
     elsif value.include?("{") || value.include?("}")
@@ -241,9 +277,23 @@ def produced_artifacts(source, paths)
   end
 end
 
-def execute_proof(row, source, tools)
+def execute_proof(row, source, tools, snapshot, packet, output_root)
   command = row.fetch("command")
-  stdout, stderr, status = Open3.capture3(*expand(command.fetch("argv"), tools, source), chdir: source)
+  harness = row.fetch("harness")
+  receipt_path = File.join(output_root, "#{row.fetch("proof_id")}-#{harness.fetch("required_receipt")}")
+  environment = {
+    "MAESTRO_FINAL_PROOF_ID" => row.fetch("proof_id"),
+    "MAESTRO_FINAL_PROOF_RECEIPT" => receipt_path
+  }
+  argv = expand(command.fetch("argv"), tools, source, snapshot, packet)
+  if harness["protocol"] == "fault-observation-v1"
+    environment["MAESTRO_FAULT_SCHEDULE_PATH"] = verify_binding(source, harness.fetch("fault_schedule"))
+  elsif harness["protocol"] == "cohort-observation-v1"
+    environment["MAESTRO_MIGRATION_COHORT_PATH"] = verify_binding(source, harness.fetch("cohort"))
+  elsif harness["protocol"] == "fanout-edge-sweep-v1"
+    argv += ["--output", receipt_path]
+  end
+  stdout, stderr, status = Open3.capture3(environment, *argv, chdir: source)
   passed = status.exitstatus == command["expected_exit_code"]
   receipt = {
     "proof_id" => row["proof_id"], "stage" => row["stage"], "kind" => row["kind"],
@@ -253,60 +303,138 @@ def execute_proof(row, source, tools)
     "produced_artifacts" => produced_artifacts(source, row.fetch("produced_artifacts"))
   }
   if %w[race crash_replay].include?(row["kind"])
-    schedule_path = verify_binding(source, command.fetch("fault_schedule"))
+    schedule_path = verify_binding(source, harness.fetch("fault_schedule"))
     schedule = load_object(schedule_path)
-    schedules = schedule["schedules"]
-    raise "fault schedule is empty" unless schedules.is_a?(Array) && !schedules.empty?
+    mode = row["kind"] == "race" ? "race" : "crash_replay"
+    schedules = schedule.fetch("schedules").select { |item| item["mode"] == mode }
+    raise "fault schedule differs" unless schedules.length == 1
+    observation = load_object(receipt_path)
+    point_receipts = observation["point_receipts"]
+    raise "fault harness did not emit exact observed reached points" unless observation["schema_version"] == "maestro.external.vnext-final-fault-observation.v1" &&
+                                                                            observation["proof_id"] == row["proof_id"] &&
+                                                                            observation["schedule_identity"] == identity(schedule_path) &&
+                                                                            observation["observed_reached_points"] == schedules.first["points"] &&
+                                                                            point_receipts.is_a?(Array) &&
+                                                                            point_receipts.map { |item| item["point"] } == schedules.first["points"]
+    point_receipts.each_with_index do |point_receipt, sequence|
+      point = point_receipt.fetch("point")
+      event = load_object(verify_binding(output_root, point_receipt))
+      expected = {
+        "schema_version" => "maestro.external.vnext-final-fault-point-observation.v1",
+        "proof_id" => row["proof_id"], "point" => point, "sequence" => sequence,
+        "status" => "observed"
+      }
+      raise "fault point was not independently observed" unless event == expected
+    end
     receipt["fault_schedule_identity"] = identity(schedule_path)
-    receipt["injection_points_reached"] = schedules.map { |item| item.fetch("id") }
+    receipt["injection_points_reached"] = observation["observed_reached_points"]
+    receipt["fault_observation"] = observation
+    receipt["harness_receipt_identity"] = identity(receipt_path)
   end
   if %w[migration rollback].include?(row["kind"])
-    receipt["cohort_identity"] = sha_bytes(canonical(command.fetch("cohort")))
+    cohort_path = verify_binding(source, harness.fetch("cohort"))
+    observation = load_object(receipt_path)
+    executables = observation["executables"]
+    outcomes = observation["outcomes"]
+    raise "migration harness did not emit typed cohort identities and outcomes" unless observation["schema_version"] == "maestro.external.vnext-final-cohort-observation.v1" &&
+                                                                                         observation["proof_id"] == row["proof_id"] &&
+                                                                                         observation["cohort_identity"] == identity(cohort_path) &&
+                                                                                         executables.is_a?(Hash) && executables.keys.sort == %w[new_reader old_reader writer] &&
+                                                                                         outcomes.is_a?(Hash) && outcomes.keys.sort == %w[new_reader old_reader rollback writer] &&
+                                                                                         outcomes.values.all? { |value| value.is_a?(Hash) && value.key?("typed_result") && value["observation"].is_a?(Hash) }
+    roots = {"source" => source, "target" => ENV.fetch("CARGO_TARGET_DIR"), "output" => output_root}
+    identities = executables.to_h do |role, executable|
+      root = roots.fetch(executable.fetch("root"))
+      verify_binding(root, executable)
+      [role, executable.fetch("sha256")]
+    end
+    outcomes.each do |route, outcome|
+      route_receipt = load_object(verify_binding(output_root, outcome.fetch("observation")))
+      expected = {
+        "schema_version" => "maestro.external.vnext-final-cohort-route-observation.v1",
+        "proof_id" => row["proof_id"], "route" => route,
+        "typed_result" => outcome.fetch("typed_result"), "status" => "observed"
+      }
+      raise "cohort route was not independently observed" unless route_receipt == expected
+    end
+    receipt["cohort_identity"] = identity(cohort_path)
+    receipt["cohort_executable_identities"] = identities
+    receipt["cohort_outcomes"] = outcomes
+    receipt["cohort_observation"] = observation
+    receipt["harness_receipt_identity"] = identity(receipt_path)
+  end
+  if row["kind"] == "ancestry"
+    observation = load_object(receipt_path)
+    raise "fanout edge sweep receipt differs" unless observation["schema_version"] == "maestro.external.vnext-final-fanout-edge-sweep.v1" &&
+                                                     observation["status"] == "pass" &&
+                                                     observation.fetch("edges").length == 12
+    receipt["edge_sweep_identity"] = identity(receipt_path)
+    receipt["edge_sweep"] = observation
   end
   receipt
 end
 
-def scan_counts(check, source)
-  target = File.join(ENV.fetch("CARGO_TARGET_DIR"), "release")
-  files = check.fetch("scan_roots").flat_map do |root|
-    case root
-    when "source:src"
-      Dir.glob(File.join(source, "src", "**", "*")).select { |path| File.file?(path) }
-    when "source:embedded"
-      Dir.glob(File.join(source, "embedded", "**", "*")).select { |path| File.file?(path) }
-    when "target:release"
-      raise "semantic target root is unavailable" unless File.directory?(target)
-      Dir.glob(File.join(target, "maestro*")).select { |path| File.file?(path) }
-    else
-      raise "unknown semantic scan root: #{root}"
-    end
-  end.uniq
-  literals = check.fetch("count_literals")
-  %w[consumers readers holds].to_h do |label|
-    values = literals.fetch(label)
-    count = files.sum do |path|
-      raw = File.binread(path)
-      relative = path.start_with?(source) ? Pathname.new(path).relative_path_from(Pathname.new(source)).to_s : File.basename(path)
-      values.count { |value| raw.include?(value.b) || relative.include?(value) }
-    end
-    [label, count]
-  end
-end
-
-def semantic_readback(plan, source, tools)
+def semantic_readback(plan, source, tools, snapshot_path, packet, output_root)
   raise "readback schema differs" unless plan["schema_version"] == "maestro.external.vnext-stage12-semantic-readback-plan.v1"
   checks = plan.fetch("checks")
   raise "readback closure differs" unless checks.map { |row| row["kind"] }.sort == READBACK_KINDS
   rows = checks.map do |check|
     raise "readback command identity differs" unless check["command_identity"] == command_identity(check["argv"], check["expected_exit_code"])
-    raise "readback zero-count contract differs" unless check["expected_counts"] == {"consumers" => 0, "readers" => 0, "holds" => 0}
-    _stdout, _stderr, status = Open3.capture3(*expand(check["argv"], tools, source), chdir: source)
-    counts = scan_counts(check, source)
-    passed = status.exitstatus == check["expected_exit_code"] && counts == check["expected_counts"]
+    receipt_path = File.join(output_root, "semantic-#{check.fetch("id")}.v1.json")
+    environment = {
+      "MAESTRO_SEMANTIC_READBACK_CHECK_ID" => check.fetch("id"),
+      "MAESTRO_SEMANTIC_READBACK_RECEIPT" => receipt_path
+    }
+    _stdout, _stderr, status = Open3.capture3(environment, *expand(check["argv"], tools, source, snapshot_path, packet), chdir: source)
+    artifact_receipt = load_object(receipt_path)
+    raise "semantic artifact receipt differs" unless artifact_receipt["schema_version"] == "maestro.external.vnext-final-semantic-artifact-readback.v1" &&
+                                                     artifact_receipt["check_id"] == check["id"]
+    roots = {"source" => source, "target" => ENV.fetch("CARGO_TARGET_DIR"), "output" => output_root}
+    artifacts = artifact_receipt.fetch("artifacts")
+    artifact_kinds = artifacts.map do |artifact|
+      root = roots.fetch(artifact.fetch("root"))
+      verify_binding(root, artifact.slice("path", "byte_length", "sha256"))
+      artifact.fetch("kind")
+    end.to_set
+    raise "semantic readback omitted required produced artifacts" unless check.fetch("required_artifact_kinds").to_set.subset?(artifact_kinds)
+    reads = artifact_receipt.fetch("canonical_reads")
+    raise "representative canonical reads are absent" unless reads.length >= check.fetch("minimum_canonical_reads") &&
+                                                             reads.all? { |row| row["status"] == "pass" && row["command_identity"].start_with?("sha256:") }
+    reads.each do |read|
+      observation = load_object(verify_binding(output_root, read.fetch("observation")))
+      expected = {
+        "schema_version" => "maestro.external.vnext-final-canonical-read-observation.v1",
+        "check_id" => check["id"], "route" => read.fetch("route"),
+        "command_identity" => read.fetch("command_identity"), "status" => "pass"
+      }
+      raise "canonical read observation differs" unless observation == expected
+    end
+    routes = artifact_receipt.fetch("negative_routes")
+    raise "negative route injections are absent" unless routes.length >= check.fetch("minimum_negative_routes") &&
+                                                        routes.all? { |row| row["injected"] == true && row["outcome"] == "refuse" && row["receipt_identity"].start_with?("sha256:") }
+    routes.each do |route|
+      observation = load_object(verify_binding(output_root, route.fetch("observation")))
+      expected = {
+        "schema_version" => "maestro.external.vnext-final-negative-route-observation.v1",
+        "check_id" => check["id"], "route" => route.fetch("route"),
+        "injected" => true, "outcome" => "refuse",
+        "receipt_identity" => route.fetch("receipt_identity")
+      }
+      raise "negative route observation differs" unless observation == expected
+    end
+    closures = artifact_receipt.fetch("closures")
+    counts = {
+      "consumers" => closures["consumer_count"],
+      "readers" => closures["reader_count"],
+      "holds" => closures["hold_count"]
+    }
+    raise "semantic consumer, reader, or hold closure differs" unless counts == {"consumers" => 0, "readers" => 0, "holds" => 0}
+    passed = status.exitstatus == check["expected_exit_code"]
     {
       "id" => check["id"], "kind" => check["kind"], "command_identity" => check["command_identity"],
       "exit_code" => status.exitstatus, "status" => passed ? "pass" : "fail",
-      "consumer_count" => counts["consumers"], "reader_count" => counts["readers"], "hold_count" => counts["holds"]
+      "consumer_count" => counts["consumers"], "reader_count" => counts["readers"], "hold_count" => counts["holds"],
+      "artifact_receipt_identity" => identity(receipt_path)
     }
   end
   {
@@ -329,7 +457,10 @@ validate_snapshot(snapshot, File.dirname(File.dirname(snapshot_path)), source)
 validate_packet(snapshot, packet)
 validate_manifest(manifest, source)
 tools = validate_toolchain(toolchain, source)
-proofs = validate_ledger(ledger, source).map { |row| execute_proof(row, source, tools) }
+registry = load_object(verify_binding(source, snapshot.fetch("proof_registry")))
+proofs = validate_ledger(ledger, registry, source).map do |row|
+  execute_proof(row, source, tools, snapshot_path, packet, File.dirname(output))
+end
 receipt = {
   "schema_version" => "maestro.external.vnext-final-engine-ledger.v1",
   "engine" => "ruby",
@@ -339,6 +470,6 @@ receipt = {
   "readback_plan_identity" => identity(readback_path),
   "toolchain_identity" => identity(toolchain_path),
   "proofs" => proofs,
-  "semantic_readback" => semantic_readback(readback, source, tools)
+  "semantic_readback" => semantic_readback(readback, source, tools, snapshot_path, packet, File.dirname(output))
 }
 File.binwrite(output, JSON.generate(receipt.sort.to_h) + "\n")
