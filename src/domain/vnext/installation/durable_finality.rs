@@ -16,10 +16,40 @@ pub(in crate::domain::vnext) mod owner_sealed {
 }
 
 pub(in crate::domain::vnext) struct ActiveStoreFinalityRequestV2 {
-    pub(super) currentness: InstallationFinalityCurrentnessV1,
-    pub(super) decision: ActiveStoreDecisionTupleV1,
-    pub(super) consumed: Cell<bool>,
-    pub(super) _not_send_or_sync: PhantomData<Rc<()>>,
+    currentness: InstallationFinalityCurrentnessV1,
+    decision: ActiveStoreDecisionTupleV1,
+    consumed: Cell<bool>,
+    readback_projection_consumed: Cell<bool>,
+    _not_send_or_sync: PhantomData<Rc<()>>,
+}
+
+impl ActiveStoreFinalityRequestV2 {
+    pub(in crate::domain::vnext::installation) fn from_stage9_owner(
+        currentness: InstallationFinalityCurrentnessV1,
+        decision: ActiveStoreDecisionTupleV1,
+    ) -> Result<Self, DurableInstallationFinalityErrorV2> {
+        let request = Self {
+            currentness,
+            decision,
+            consumed: Cell::new(false),
+            readback_projection_consumed: Cell::new(false),
+            _not_send_or_sync: PhantomData,
+        };
+        validate_active_request_v2(&request)?;
+        Ok(request)
+    }
+
+    pub(in crate::domain::vnext::installation) fn consume_stage9_owner_view(
+        &self,
+    ) -> Result<ActiveStoreFinalityOwnerViewV2<'_>, DurableInstallationFinalityErrorV2> {
+        if self.readback_projection_consumed.replace(true) {
+            return Err(DurableInstallationFinalityErrorV2::Replay);
+        }
+        Ok(ActiveStoreFinalityOwnerViewV2 {
+            request: self,
+            _not_send_or_sync: PhantomData,
+        })
+    }
 }
 
 pub(in crate::domain::vnext) struct PreStoreFinalityRequestV2 {
@@ -30,17 +60,57 @@ pub(in crate::domain::vnext) struct PreStoreFinalityRequestV2 {
     pub(super) _not_send_or_sync: PhantomData<Rc<()>>,
 }
 
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Eq, PartialEq)]
 pub(in crate::domain::vnext) struct ActiveStoreCommittedReadbackV2 {
-    pub(super) currentness: InstallationFinalityCurrentnessV1,
-    pub(super) decision: ActiveStoreDecisionTupleV1,
-    pub(super) association: [u8; 32],
-    pub(super) consumer_gate_result: [u8; 32],
-    pub(super) receipt: [u8; 32],
-    pub(super) distribution_commit: [u8; 32],
-    pub(super) committed_head: [u8; 32],
-    pub(super) result: [u8; 32],
-    pub(super) idempotency_rows: [u8; 32],
+    currentness: InstallationFinalityCurrentnessV1,
+    decision: ActiveStoreDecisionTupleV1,
+    association: [u8; 32],
+    consumer_gate_result: [u8; 32],
+    receipt: [u8; 32],
+    distribution_commit: [u8; 32],
+    committed_head: [u8; 32],
+    result: [u8; 32],
+    idempotency_rows: [u8; 32],
+}
+
+pub(in crate::domain::vnext::installation) struct ActiveStoreFinalityOwnerViewV2<'request> {
+    request: &'request ActiveStoreFinalityRequestV2,
+    _not_send_or_sync: PhantomData<Rc<()>>,
+}
+
+impl ActiveStoreFinalityOwnerViewV2<'_> {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the Installation owner must equality-bind the complete durable Store postcondition"
+    )]
+    pub(in crate::domain::vnext::installation) fn validate_committed_readback(
+        self,
+        currentness: InstallationFinalityCurrentnessV1,
+        decision: ActiveStoreDecisionTupleV1,
+        association: [u8; 32],
+        consumer_gate_result: [u8; 32],
+        receipt: [u8; 32],
+        distribution_commit: [u8; 32],
+        committed_head: [u8; 32],
+        result: [u8; 32],
+        idempotency_rows: [u8; 32],
+    ) -> Result<ActiveStoreCommittedReadbackV2, DurableInstallationFinalityErrorV2> {
+        let readback = ActiveStoreCommittedReadbackV2 {
+            currentness,
+            decision,
+            association,
+            consumer_gate_result,
+            receipt,
+            distribution_commit,
+            committed_head,
+            result,
+            idempotency_rows,
+        };
+        if !active_readback_matches_v2(self.request, &readback) {
+            return Err(DurableInstallationFinalityErrorV2::CurrentnessMismatch);
+        }
+        Ok(readback)
+    }
 }
 
 pub(in crate::domain::vnext) enum ActiveStoreOwnerOutcomeV2 {
@@ -123,14 +193,14 @@ impl<B: ActiveStoreFinalityOwnerV2 + ?Sized> DurableInstallationFinalityBackendV
                 Err(DurableInstallationFinalityErrorV2::PreCommitRefused)
             }
             ActiveStoreOwnerOutcomeV2::Committed(readback) => {
-                if active_readback_matches_v2(&request, readback) {
+                if active_readback_matches_v2(&request, &readback) {
                     Ok(DurableInstallationFinalityOutcomeV2::Committed)
                 } else {
                     Ok(DurableInstallationFinalityOutcomeV2::IntegrityBlocked)
                 }
             }
             ActiveStoreOwnerOutcomeV2::AcknowledgementLost(Some(readback))
-                if active_readback_matches_v2(&request, readback) =>
+                if active_readback_matches_v2(&request, &readback) =>
             {
                 Ok(DurableInstallationFinalityOutcomeV2::Committed)
             }
@@ -240,7 +310,7 @@ fn validate_pre_store_request_v2(
 
 fn active_readback_matches_v2(
     request: &ActiveStoreFinalityRequestV2,
-    readback: ActiveStoreCommittedReadbackV2,
+    readback: &ActiveStoreCommittedReadbackV2,
 ) -> bool {
     readback.currentness == request.currentness
         && readback.decision == request.decision
@@ -1264,6 +1334,7 @@ mod tests {
             currentness: currentness(),
             decision: active_decision(),
             consumed: Cell::new(false),
+            readback_projection_consumed: Cell::new(false),
             _not_send_or_sync: PhantomData,
         }
     }
@@ -1334,6 +1405,62 @@ mod tests {
                 Ok(expected)
             );
         }
+    }
+
+    #[test]
+    fn v2_stage9_owner_factories_reject_replay_and_mismatched_store_readback() {
+        let request =
+            ActiveStoreFinalityRequestV2::from_stage9_owner(currentness(), active_decision())
+                .unwrap();
+        let view = request.consume_stage9_owner_view().unwrap();
+        let decision = active_decision();
+        let readback = view
+            .validate_committed_readback(
+                currentness(),
+                decision,
+                decision.association_identity,
+                decision.consumer_gate_result,
+                decision.receipt,
+                decision.distribution_commit,
+                decision.successor_head,
+                decision.result,
+                decision.idempotency_meaning,
+            )
+            .unwrap();
+        assert!(active_readback_matches_v2(&request, &readback));
+        assert!(matches!(
+            request.consume_stage9_owner_view(),
+            Err(DurableInstallationFinalityErrorV2::Replay)
+        ));
+
+        let request =
+            ActiveStoreFinalityRequestV2::from_stage9_owner(currentness(), active_decision())
+                .unwrap();
+        let decision = active_decision();
+        assert!(matches!(
+            request
+                .consume_stage9_owner_view()
+                .unwrap()
+                .validate_committed_readback(
+                    currentness(),
+                    decision,
+                    [0; 32],
+                    decision.consumer_gate_result,
+                    decision.receipt,
+                    decision.distribution_commit,
+                    decision.successor_head,
+                    decision.result,
+                    decision.idempotency_meaning,
+                ),
+            Err(DurableInstallationFinalityErrorV2::CurrentnessMismatch)
+        ));
+
+        let mut stale = currentness();
+        stale.store_cas = [0; 32];
+        assert!(matches!(
+            ActiveStoreFinalityRequestV2::from_stage9_owner(stale, active_decision()),
+            Err(DurableInstallationFinalityErrorV2::CurrentnessMismatch)
+        ));
     }
 
     struct PreStoreBackendV2 {

@@ -102,6 +102,33 @@ mod v2_owner_factory_compile_probe {
         let prepared =
             ProtectedLocatorCandidateStateV2::from_stage9_owner(&request, &observed, candidate)
                 .unwrap();
+        let dispatch = prepared.consume_stage9_dispatch_projection().unwrap();
+        assert!(dispatch.matches_exact_owner_effect(
+            &[26; 32],
+            &[27; 32],
+            &[28; 32],
+            &[29; 32],
+            &[30; 32],
+            dispatch.transition_commitment(),
+        ));
+        assert!(!dispatch.matches_exact_owner_effect(
+            &[26; 32],
+            &[31; 32],
+            &[28; 32],
+            &[29; 32],
+            &[30; 32],
+            dispatch.transition_commitment(),
+        ));
+        assert_eq!(dispatch.candidate_association(), &[26; 32]);
+        assert_eq!(dispatch.candidate_root(), &[27; 32]);
+        assert_eq!(dispatch.candidate_carrier(), &[28; 32]);
+        assert_eq!(dispatch.candidate_seal(), &[29; 32]);
+        assert_eq!(dispatch.candidate_postcondition(), &[30; 32]);
+        drop(dispatch);
+        assert!(matches!(
+            prepared.consume_stage9_dispatch_projection(),
+            Err(ProtectedLocatorLeaseErrorV2::Replay)
+        ));
         let _readback = ProtectedLocatorFinalReadbackV2::exact_candidate_from_stage9_owner(
             &request, observed, &prepared,
         )

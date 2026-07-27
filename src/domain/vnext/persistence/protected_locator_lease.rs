@@ -209,6 +209,7 @@ impl ProtectedLocatorCandidateInputV2 {
 pub(in crate::domain::vnext) struct ProtectedLocatorCandidateStateV2 {
     candidate: ProtectedLocatorCandidateInputV2,
     transition_commitment: [u8; 32],
+    dispatch_projection_consumed: Cell<bool>,
 }
 
 impl ProtectedLocatorCandidateStateV2 {
@@ -233,9 +234,82 @@ impl ProtectedLocatorCandidateStateV2 {
         let prepared = Self {
             candidate,
             transition_commitment,
+            dispatch_projection_consumed: Cell::new(false),
         };
         validate_candidate(request, acquisition, &prepared)?;
         Ok(prepared)
+    }
+
+    pub(in crate::domain::vnext::persistence) fn consume_stage9_dispatch_projection(
+        &self,
+    ) -> Result<ProtectedLocatorStage9DispatchProjectionV2<'_>, ProtectedLocatorLeaseErrorV2> {
+        if self.dispatch_projection_consumed.replace(true) {
+            return Err(ProtectedLocatorLeaseErrorV2::Replay);
+        }
+        Ok(ProtectedLocatorStage9DispatchProjectionV2 {
+            candidate_association: &self.candidate.candidate_association,
+            candidate_root: &self.candidate.candidate_root,
+            candidate_carrier: &self.candidate.candidate_carrier,
+            candidate_seal: &self.candidate.candidate_seal,
+            candidate_postcondition: &self.candidate.candidate_postcondition,
+            transition_commitment: &self.transition_commitment,
+            _not_send_or_sync: PhantomData,
+        })
+    }
+}
+
+pub(in crate::domain::vnext::persistence) struct ProtectedLocatorStage9DispatchProjectionV2<
+    'candidate,
+> {
+    candidate_association: &'candidate [u8; 32],
+    candidate_root: &'candidate [u8; 32],
+    candidate_carrier: &'candidate [u8; 32],
+    candidate_seal: &'candidate [u8; 32],
+    candidate_postcondition: &'candidate [u8; 32],
+    transition_commitment: &'candidate [u8; 32],
+    _not_send_or_sync: PhantomData<Rc<()>>,
+}
+
+impl ProtectedLocatorStage9DispatchProjectionV2<'_> {
+    pub(in crate::domain::vnext::persistence) fn candidate_association(&self) -> &[u8; 32] {
+        self.candidate_association
+    }
+
+    pub(in crate::domain::vnext::persistence) fn candidate_root(&self) -> &[u8; 32] {
+        self.candidate_root
+    }
+
+    pub(in crate::domain::vnext::persistence) fn candidate_carrier(&self) -> &[u8; 32] {
+        self.candidate_carrier
+    }
+
+    pub(in crate::domain::vnext::persistence) fn candidate_seal(&self) -> &[u8; 32] {
+        self.candidate_seal
+    }
+
+    pub(in crate::domain::vnext::persistence) fn candidate_postcondition(&self) -> &[u8; 32] {
+        self.candidate_postcondition
+    }
+
+    pub(in crate::domain::vnext::persistence) fn transition_commitment(&self) -> &[u8; 32] {
+        self.transition_commitment
+    }
+
+    pub(in crate::domain::vnext::persistence) fn matches_exact_owner_effect(
+        &self,
+        candidate_association: &[u8; 32],
+        candidate_root: &[u8; 32],
+        candidate_carrier: &[u8; 32],
+        candidate_seal: &[u8; 32],
+        candidate_postcondition: &[u8; 32],
+        transition_commitment: &[u8; 32],
+    ) -> bool {
+        self.candidate_association == candidate_association
+            && self.candidate_root == candidate_root
+            && self.candidate_carrier == candidate_carrier
+            && self.candidate_seal == candidate_seal
+            && self.candidate_postcondition == candidate_postcondition
+            && self.transition_commitment == transition_commitment
     }
 }
 
@@ -588,6 +662,7 @@ pub(in crate::domain::vnext) mod v2_tests {
             Ok(ProtectedLocatorCandidateStateV2 {
                 candidate,
                 transition_commitment,
+                dispatch_projection_consumed: Cell::new(false),
             })
         }
 

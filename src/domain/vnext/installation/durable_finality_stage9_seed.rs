@@ -1,9 +1,15 @@
 use super::durable_finality::{
-    ActiveStoreFinalityOwnerV1, ActiveStoreFinalityOwnerV2, ActiveStoreFinalityRequestV1,
-    ActiveStoreFinalityRequestV2, ActiveStoreOwnerOutcomeV1, ActiveStoreOwnerOutcomeV2,
-    DurableInstallationFinalityErrorV1, DurableInstallationFinalityErrorV2,
-    InstallationFinalityCurrentnessV1, owner_sealed,
+    ActiveStoreDecisionTupleV1, ActiveStoreFinalityOwnerV1, ActiveStoreFinalityOwnerV2,
+    ActiveStoreFinalityRequestV1, ActiveStoreFinalityRequestV2, ActiveStoreOwnerOutcomeV1,
+    ActiveStoreOwnerOutcomeV2, DurableInstallationFinalityErrorV1,
+    DurableInstallationFinalityErrorV2, InstallationFinalityCurrentnessV1, owner_sealed,
 };
+
+const _: fn(
+    InstallationFinalityCurrentnessV1,
+    ActiveStoreDecisionTupleV1,
+) -> Result<ActiveStoreFinalityRequestV2, DurableInstallationFinalityErrorV2> =
+    ActiveStoreFinalityRequestV2::from_stage9_owner;
 
 pub(in crate::domain::vnext) struct Stage9ActiveStoreFinalitySeedV1 {
     _private: (),
