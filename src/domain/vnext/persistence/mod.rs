@@ -18,7 +18,6 @@ mod idempotency;
 mod metadata;
 mod object;
 mod protected_diagnostic;
-#[cfg(test)]
 mod protected_diagnostic_stage9_seed;
 #[cfg_attr(
     not(test),
@@ -96,60 +95,49 @@ pub use types::{StoreDomainError, StoreDomainV1, StoreRoleV1};
     )
 )]
 pub(in crate::domain::vnext) mod protected_locator_v2 {
-    use std::marker::PhantomData;
-    use std::rc::Rc;
+    use crate::domain::vnext::distribution::runtime::{
+        CanonicalTargetIdentityV1, DistributionTransactionV1,
+    };
+    use crate::domain::vnext::execution::{
+        ProtectedCeremonyCarrierAnchorV1, ProtectedCeremonyEffectStoreV1,
+        ProtectedCeremonyOwnerAuthorityV1,
+    };
 
     pub(in crate::domain::vnext) use super::protected_locator_lease::{
         ProtectedLocatorFinalityDispositionV2, ProtectedLocatorLeaseErrorV2,
         ProtectedLocatorLeaseV2,
     };
-    pub(in crate::domain::vnext) type Stage9ProtectedLocatorProviderSeedV2 =
-        super::protected_locator_stage9_seed::Stage9ProtectedLocatorBackendSeedV2;
+    pub(in crate::domain::vnext) type Stage9ProtectedLocatorProviderSeedV2<'locator> =
+        super::protected_locator_stage9_seed::Stage9ProtectedLocatorBackendSeedV2<'locator>;
 
-    pub(in crate::domain::vnext) trait Stage9ProtectedLocatorProviderV2:
-        super::protected_locator_lease::ProtectedLocatorBackendV2
-    {
+    pub(in crate::domain::vnext) fn capture_pre_candidate<'locator>(
+        store: &'locator ProtectedCeremonyEffectStoreV1,
+        anchor: &'locator ProtectedCeremonyCarrierAnchorV1,
+        owner_authority: &'locator ProtectedCeremonyOwnerAuthorityV1,
+        transaction: &DistributionTransactionV1,
+        target: &CanonicalTargetIdentityV1,
+    ) -> Result<Stage9ProtectedLocatorProviderSeedV2<'locator>, ProtectedLocatorLeaseErrorV2> {
+        super::protected_locator_stage9_seed::acquire_stage9_backend_v2(
+            store,
+            anchor,
+            owner_authority,
+            transaction,
+            target,
+        )
     }
 
-    impl<T> Stage9ProtectedLocatorProviderV2 for T where
-        T: super::protected_locator_lease::ProtectedLocatorBackendV2 + ?Sized
-    {
-    }
-
-    pub(in crate::domain::vnext) struct Stage9ProtectedLocatorProviderBindingV2<'locator> {
-        inner: &'locator mut dyn super::protected_locator_lease::ProtectedLocatorBackendV2,
-        _not_send_or_sync: PhantomData<Rc<()>>,
-    }
-
-    pub(in crate::domain::vnext) fn bind_stage9_owner_provider<P>(
-        provider: &mut P,
-    ) -> Stage9ProtectedLocatorProviderBindingV2<'_>
-    where
-        P: Stage9ProtectedLocatorProviderV2,
-    {
-        Stage9ProtectedLocatorProviderBindingV2 {
-            inner: provider,
-            _not_send_or_sync: PhantomData,
-        }
-    }
-
-    pub(in crate::domain::vnext) fn acquire_pre_candidate(
-        binding: Stage9ProtectedLocatorProviderBindingV2<'_>,
-    ) -> Result<ProtectedLocatorLeaseV2<'_>, ProtectedLocatorLeaseErrorV2> {
-        super::protected_locator_stage9_seed::acquire_protected_locator_lease_v2(binding.inner)
+    pub(in crate::domain::vnext) fn acquire_pre_candidate<'lease, 'provider>(
+        provider: &'lease mut Stage9ProtectedLocatorProviderSeedV2<'provider>,
+    ) -> Result<ProtectedLocatorLeaseV2<'lease>, ProtectedLocatorLeaseErrorV2> {
+        super::protected_locator_stage9_seed::acquire_protected_locator_lease_v2(provider)
     }
 }
 
 #[cfg(test)]
 mod protected_locator_v2_compile_tests {
-    use super::protected_locator_v2::{
-        Stage9ProtectedLocatorProviderSeedV2, acquire_pre_candidate, bind_stage9_owner_provider,
-    };
-
     #[test]
-    fn stage9_seed_reaches_the_v2_facade_without_a_zero_input_success_path() {
-        let mut seed = Stage9ProtectedLocatorProviderSeedV2::test_unavailable();
-        let binding = bind_stage9_owner_provider(&mut seed);
-        assert!(acquire_pre_candidate(binding).is_err());
+    fn stage9_owner_facade_exposes_only_captured_pre_candidate_acquisition() {
+        let _ = super::protected_locator_v2::capture_pre_candidate;
+        let _ = super::protected_locator_v2::acquire_pre_candidate;
     }
 }
