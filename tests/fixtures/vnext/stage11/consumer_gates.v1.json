@@ -1,0 +1,41 @@
+{
+  "schema": "maestro.vnext.stage11.consumer-gates.v1",
+  "gates": [
+    {
+      "stage": "BeforeSemanticCurrentness",
+      "pass_condition": "zero active legacy, old, mixed, unknown, or wrong-Release consumers"
+    },
+    {
+      "stage": "ProtectedRetention",
+      "pass_condition": "legacy access is sealed non-bearer or a noninterpreting retention hold"
+    },
+    {
+      "stage": "PhysicalPruning",
+      "pass_condition": "zero legacy consumers and all five external prune prerequisites"
+    }
+  ],
+  "sealed_reader": {
+    "autoloading": false,
+    "bearer": false,
+    "admission": "OpaqueSealedOnly"
+  },
+  "authoritative_census": {
+    "source_manifest_required": true,
+    "owner_snapshot_required": true,
+    "closure_attestation_required": true,
+    "declared_members_must_be_nonzero": true,
+    "every_member_resolution": [
+      "Observed",
+      "Removed"
+    ],
+    "empty_observation_vector_is_not_consumer_zero": true
+  },
+  "candidate_adapters": {
+    "stage9_association": "test_only_until_real_distribution_finality_adapter_rebind",
+    "stage9_stage10_cutover_host": "test_only_until_real_host_acceptance_effect_adapter_rebind",
+    "stage9_stage10_consumer_census": "test_only_until_real_owner_census_adapter_rebind",
+    "integration_requirement": "replace_or_parity_prove_before_stage11_integration"
+  },
+  "currentness_owner": "Stage9/domain owners",
+  "migration_owner": "Stage11 classification, association meaning, quarantine and inactive import"
+}
