@@ -1,21 +1,31 @@
-{
-  "schema_version": "maestro.card.v1",
-  "id": "dec-canonical-typed-successor-route-and-b049",
-  "type": "decision",
-  "title": "Canonical typed successor route and legacy next refusal",
-  "status": "locked",
-  "parent": "maestro-whole-flow-architecture-refoundation",
-  "created_at": "2026-07-27T10:16:39.152Z",
-  "updated_at": "2026-07-27T10:16:39.185Z",
-  "description": "Mandate ref: the user-role next event in task 019f8416-e121-7703-8ab4-d3f9c3b374fa authorizes successor legacy-cutover design only. Current Stage-12 observation counts 108 legacy next rows and blocks pruning. Fresh API adversarial review selected one Release-bound Projection/Packet/Recipe route and strict no-alias refusal. Its suggested new tool names and projection-read catalog are rejected because the frozen 7138 contract already fixes CLI packet read, the two MCP names maestro_packet and maestro_cli_search, three request modes, six outcomes and the public schemas.",
-  "extra": {
-    "locked_at": "2026-07-27T10:16:39.185Z",
-    "decision": "Projection remains the sole next-action authority. The only executable successor control-plane read is the already frozen PacketReadRequestV1 through CLI maestro packet read and MCP maestro_packet, with exact expected Release, public catalog, subject, binding, selected Recipe and currentness commitments; maestro_cli_search remains the second and only other global read-only MCP Tool and provides literal CLI or capability discovery without computing a next action. The existing three request modes, six outcomes, AgentPacketV1, PacketRecipeBindingV1, exact 10 vNext Recipe manifests and two Bounded Continuation profiles remain unchanged. TUI, Skill, hooks, JSON and human rendering consume or render these same contracts and cannot call an adapter-private route.\n\nmaestro next, maestro task next, maestro loop next, maestro card ready and every legacy Recipe identifier become stable negative-compatibility inputs only. When parsed, they return unsupported_legacy_successor_surface with the exact canonical replacement identifier and zero legacy state read, Projection call, Recipe translation, Action preparation, mutation, cache, network or fallback. They never alias, delegate, silently rewrite names or reconstruct output from legacy Task, Card, Loop or readiness stores. An old Recipe spelling never selects a vNext manifest even when prose or purpose appears equivalent; only exact Release-bound typed identity is accepted.\n\nBefore any active legacy next or Loop Recipe source is replaced or pruned, the Stage-12 census must enumerate all 108 current rows and join every executable, JSON, MCP, TUI, Skill, hook, shell, documentation, generated reference, test, script and retained-binary consumer to exactly one disposition: current typed successor, admitted sealed audit reader or removal. The exact 15-source v1 Recipe disposition and 10 active vNext Recipe catalog remain authoritative. Every protected or dirty Recipe byte, including each primary-overlap source, must first be represented by the current LegacyQuarantineEpochV2 with exact byte and metadata reconstruction outside discovery. A mismatch, symlink, missing row, stale primary boundary, incomplete quarantine, stale Release or mixed public catalog aborts before active replacement.\n\nRollback is a separately authorized domain-local operation. It revokes the successor Release binding, restores only the exact journaled or quarantined preimage and returns the realm to recovery-required; it never revives legacy names as an automatic runtime fallback. Success requires zero active legacy-next rows, zero non-admitted legacy runtime readers, exact two-MCP equality, exact CLI/MCP/TUI/Skill/hook Packet parity, exact 10 Recipe identity equality, stale and foreign Release/catalog refusal and negative reintroduction proof. This Decision introduces no Action, Ceremony, Action catalog member, public schema, MCP Tool, Recipe or Resource count delta; it only materializes and removes consumers against the frozen 7138 public contract.",
-    "preview": "legacy next or Recipe spelling -> typed unsupported_legacy_successor_surface refusal\ncanonical CLI maestro packet read / MCP maestro_packet\n  -> frozen Release-bound selection + PacketRecipeBindingV1\n  -> AgentPacketV1 or typed refusal\nmaestro_cli_search -> literal discovery only\nall adapters render the same bytes; no alias or third Tool",
-    "rejected": [
-      "Add maestro_projection_selection_context and maestro_projection_packet as new MCP Tools: this contradicts the frozen exact names and two-Tool contract.",
-      "Alias old next commands or Recipe names to packet read: the alias would remain an active legacy consumer and could hide mixed Release or stale semantics.",
-      "Delete the old routes without typed replacement parity: agent UX, JSON and host consumers would lose the Projection contract and rollback evidence."
-    ]
-  }
-}
+schema_version: maestro.card.v1
+id: dec-canonical-typed-successor-route-and-b049
+type: decision
+title: Canonical typed successor route and legacy next refusal
+status: superseded
+parent: maestro-whole-flow-architecture-refoundation
+created_at: 2026-07-27T10:16:39.152Z
+updated_at: 2026-07-27T10:16:39.185Z
+description: 'Mandate ref: the user-role next event in task 019f8416-e121-7703-8ab4-d3f9c3b374fa authorizes successor legacy-cutover design only. Current Stage-12 observation counts 108 legacy next rows and blocks pruning. Fresh API adversarial review selected one Release-bound Projection/Packet/Recipe route and strict no-alias refusal. Its suggested new tool names and projection-read catalog are rejected because the frozen 7138 contract already fixes CLI packet read, the two MCP names maestro_packet and maestro_cli_search, three request modes, six outcomes and the public schemas.'
+extra:
+  locked_at: 2026-07-27T10:16:39.185Z
+  decision: |-
+    Projection remains the sole next-action authority. The only executable successor control-plane read is the already frozen PacketReadRequestV1 through CLI maestro packet read and MCP maestro_packet, with exact expected Release, public catalog, subject, binding, selected Recipe and currentness commitments; maestro_cli_search remains the second and only other global read-only MCP Tool and provides literal CLI or capability discovery without computing a next action. The existing three request modes, six outcomes, AgentPacketV1, PacketRecipeBindingV1, exact 10 vNext Recipe manifests and two Bounded Continuation profiles remain unchanged. TUI, Skill, hooks, JSON and human rendering consume or render these same contracts and cannot call an adapter-private route.
+
+    maestro next, maestro task next, maestro loop next, maestro card ready and every legacy Recipe identifier become stable negative-compatibility inputs only. When parsed, they return unsupported_legacy_successor_surface with the exact canonical replacement identifier and zero legacy state read, Projection call, Recipe translation, Action preparation, mutation, cache, network or fallback. They never alias, delegate, silently rewrite names or reconstruct output from legacy Task, Card, Loop or readiness stores. An old Recipe spelling never selects a vNext manifest even when prose or purpose appears equivalent; only exact Release-bound typed identity is accepted.
+
+    Before any active legacy next or Loop Recipe source is replaced or pruned, the Stage-12 census must enumerate all 108 current rows and join every executable, JSON, MCP, TUI, Skill, hook, shell, documentation, generated reference, test, script and retained-binary consumer to exactly one disposition: current typed successor, admitted sealed audit reader or removal. The exact 15-source v1 Recipe disposition and 10 active vNext Recipe catalog remain authoritative. Every protected or dirty Recipe byte, including each primary-overlap source, must first be represented by the current LegacyQuarantineEpochV2 with exact byte and metadata reconstruction outside discovery. A mismatch, symlink, missing row, stale primary boundary, incomplete quarantine, stale Release or mixed public catalog aborts before active replacement.
+
+    Rollback is a separately authorized domain-local operation. It revokes the successor Release binding, restores only the exact journaled or quarantined preimage and returns the realm to recovery-required; it never revives legacy names as an automatic runtime fallback. Success requires zero active legacy-next rows, zero non-admitted legacy runtime readers, exact two-MCP equality, exact CLI/MCP/TUI/Skill/hook Packet parity, exact 10 Recipe identity equality, stale and foreign Release/catalog refusal and negative reintroduction proof. This Decision introduces no Action, Ceremony, Action catalog member, public schema, MCP Tool, Recipe or Resource count delta; it only materializes and removes consumers against the frozen 7138 public contract.
+  superseded_by: dec-canonical-current-manifest-typed-c80f
+  preview: |-
+    legacy next or Recipe spelling -> typed unsupported_legacy_successor_surface refusal
+    canonical CLI maestro packet read / MCP maestro_packet
+      -> frozen Release-bound selection + PacketRecipeBindingV1
+      -> AgentPacketV1 or typed refusal
+    maestro_cli_search -> literal discovery only
+    all adapters render the same bytes; no alias or third Tool
+  rejected:
+  - 'Add maestro_projection_selection_context and maestro_projection_packet as new MCP Tools: this contradicts the frozen exact names and two-Tool contract.'
+  - 'Alias old next commands or Recipe names to packet read: the alias would remain an active legacy consumer and could hide mixed Release or stale semantics.'
+  - 'Delete the old routes without typed replacement parity: agent UX, JSON and host consumers would lose the Projection contract and rollback evidence.'

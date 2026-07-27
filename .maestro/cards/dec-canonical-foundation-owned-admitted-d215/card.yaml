@@ -2,10 +2,10 @@ schema_version: maestro.card.v1
 id: dec-canonical-foundation-owned-admitted-d215
 type: decision
 title: Canonical Foundation-owned admitted-root source and aggregate census V2
-status: locked
+status: superseded
 parent: maestro-whole-flow-architecture-refoundation
 created_at: 2026-07-27T02:01:39.890Z
-updated_at: 2026-07-27T02:01:39.923Z
+updated_at: 2026-07-27T15:10:21.000Z
 description: "Mandate ref: the user's exact APPROVE SUCCESSOR DESIGN PASS event in task 019f8416-e121-7703-8ab4-d3f9c3b374fa. Independent audit proved dec-canonical-foundation-owned-aggregate-f9e7 names an aggregate capability but does not name a legal authoritative producer; the current implementation lets Migration construct DeclaredRootScanV1 from raw PathBuf and optionality. This successor closes that frozen-interface contradiction without implementation, canonical artifact generation, or sealing."
 extra:
   locked_at: 2026-07-27T02:01:39.923Z
@@ -25,6 +25,7 @@ extra:
     Stage 5 freezes the two owner admission ports, CensusInvocationV2, FoundationAdmittedRootSourceV2, AggregateCensusLeaseV2, sealed AggregateCensusResultV2 and the classification continuation interface. Stage 11 supplies the real supported-platform Persistence, Installation and Foundation backends and must parity-prove them against test-only conformance adapters. The complete source capability and aggregate result are single-consumption and never become Migration authority or currentness.
 
     Proof must statically prove that Migration and all adapters cannot construct or reach a production source with Path, root collection, optionality, count, absence claim or backend selection. Positive proof covers real owner-derived Repository and Installation sources on every supported platform. Mutants cut optional appearance/disappearance, alias/overlap, source replacement, provider/mount drift, ABA, permission and journal loss, aggregate overflow and concurrent mutation between every root/pass/final boundary; any failure yields no classification or partial inventory. Crash/restart proof reacquires fresh owner sources and proves no capability replay. Schema/catalog proof enforces zero persisted, public, Action, Resource and catalog delta.
+  superseded_by: dec-canonical-foundation-and-persistence-b79c
   supersedes:
   - dec-canonical-foundation-owned-aggregate-f9e7
   preview: |-

@@ -12530,3 +12530,199 @@ path ownership and denylist, absent successor workspace
 `/Users/reinamaccredy/Code/maestro-vnext-legacy-cutover-successor-build`,
 current recipient task, zero interim seals and one final cumulative seal.
 Until exact approval, all build writes and proof publication remain forbidden.
+
+## Successor live-set quarantine closure and V6 build boundary
+
+The user-role event `APPROVE SUCCESSOR DESIGN PASS.` in recipient task
+`019f8416-e121-7703-8ab4-d3f9c3b374fa` authorizes this design correction only.
+It does not authorize implementation, canonical artifact regeneration,
+integration, pruning, seal execution, publication, installation, release or
+live external mutation. Three fresh read-only adversarial reviews separately
+covered Migration/data-loss semantics, Foundation/Persistence physical
+authority and packet/proof closure.
+
+The exact clean successor checkpoint is
+`1f65f98b7fe10e0bd16bb394ff344b8dae4eff58`, tree
+`e5424dc551708d28f2d9ca1e4f144f44c62f69df`, on
+`codex/maestro-vnext-legacy-cutover-successor-build`. Stage 9 and Stage 10 are
+preserved there as candidate-only `integrated_unverified` work. They are not
+certified, current or sealed. Stage 10 production activation remains a Stage
+12 obligation; an adapter-private or candidate-only path is not production
+reachability.
+
+The V5 Stage-12 policy is explicitly open-world and observes literal or path
+sightings, not byte-total physical source cases. At historical checkpoint
+`5cbd7b8a` it deterministically observed 349 sightings across 68 matched files:
+239 Skill, 108 next and two Harness, with scan identity
+`4b2ca07e462d37e1e25877c85c7010b14c604122a14d49e3fac9dd39d7276fe2`.
+At the clean successor checkpoint it observes 385 sightings across 70 matched
+files: 274 Skill, 109 next and two Harness, with scan identity
+`e62a438d5ab20f7ad4633801e8c2b5d9e6d65dd4ff0033a2f102cbb852c98b6e`
+and zero warnings. The additive diagnostic delta is 35 Skill sightings in
+`src/domain/capability/literals.rs` and one next sighting in
+`src/operations/adapters/mod.rs`. The policy itself remains historical until
+the replacement packet binds a rotated V6 policy.
+
+The following four successor Decisions were superseded and locked in exact
+order:
+
+1. `dec-canonical-live-set-migration-census-and-8e6a`, **Canonical live-set
+   Migration census and quarantine epoch**, superseding
+   `dec-canonical-byte-total-legacy-quarantine-33c9`.
+2. `dec-canonical-foundation-and-persistence-b79c`, **Canonical Foundation and
+   Persistence legacy quarantine physical closure**, superseding the effective
+   V2 production head `dec-canonical-foundation-owned-admitted-d215` and
+   incorporating its already-superseded predecessor
+   `dec-canonical-foundation-owned-aggregate-f9e7`.
+3. `dec-canonical-current-manifest-typed-c80f`, **Canonical current-manifest
+   typed successor closure**, superseding
+   `dec-canonical-typed-successor-route-and-b049`.
+4. `dec-canonical-manifest-bound-one-use-legacy-d5db`, **Canonical
+   manifest-bound one-use legacy removal guard and final cut**, superseding
+   `dec-canonical-one-use-legacy-removal-guard-7bf0`.
+
+`LegacyQuarantineEpochV3` separates three identities. `MembershipKeyV3` binds
+the owner domain, owner-minted root binding, lossless display locator, resolved
+locator commitment, object identity, node kind and metadata commitment.
+`SourceCaseV3` additionally binds the Foundation census invocation,
+payload-state tag, exact length and digest. `Stage12SightingV2` binds one
+source case to the rotated policy, rule, matcher, matched bytes and byte
+offset. Multiple sightings may associate with one physical source case and
+never multiply preserved bytes. The same physical object admitted through two
+owner roots remains two distinct memberships. Manifests sort by raw identity,
+not display path or platform collation.
+
+The historical 349/68 observation and the provisional 14/10 counts become
+`HistoricalLegacyObservationV1` comparison provenance only. They are never a
+current count, completeness invariant, quarantine cardinality, currentness
+claim or removal authority. The replacement packet must bind the exact
+historical row manifest, current preimage row manifest and their deterministic
+delta. Any later pre-cut change requires a new exact current manifest under the
+same locked case grammar; it does not silently inherit either 349 or 385.
+
+For V6 comparison evidence, one provisional relation case means a unique
+`(historical observation path, rule identity)` whose historical source file is
+absent or byte-different in the protected primary. That grammar yields exactly
+14 relations across 12 paths and must be bound by an ordered manifest and
+digest. The ten protected-primary overlap paths are the six dirty legacy Recipe
+files `conflict-handoff.yml`, `feature-fanout.yml`, `learning.yml`,
+`loop-until-done.yml`, `synthesize.yml` and `unattended.yml`, plus
+`src/domain/loop_recipes.rs`, `src/interfaces/cli/loop_recipes.rs`,
+`src/interfaces/cli/mod.rs` and `src/interfaces/cli/status.rs`. The last two
+match both Skill and next rules, producing 12 stale relations across ten
+physical overlap paths. The two remaining relations are Skill sightings in
+`src/domain/integration/public_literals.rs` and
+`src/domain/research/legacy.rs`; they are absent only from the protected
+primary and present in the clean successor. They therefore prove a
+primary-absence relation, not unavailable current-source loss.
+
+Actual unavailable-preexisting-loss is defined only after the owner-admitted
+live physical census. Each unavailable `SourceCaseV3` must bind historical
+expected length, digest, metadata commitment, source provenance and an
+independently issued loss-evidence identity. Missing or ambiguous evidence,
+Git-object existence alone, caller assertions and fabricated or zero
+placeholders refuse the entire epoch. If every owner-admitted current source is
+present, `UnavailablePreexistingLossManifestV3` is canonically empty and no
+loss receipt may be invented.
+
+Repository and Installation alone mint their live root admissions. Persistence
+alone mints the read-only protected-primary boundary lease and the move-only
+quarantine custody lease. Foundation alone consumes these inputs, derives the
+canonical complete admitted set, acquires all root descriptors, retained leaf
+capabilities and component fences simultaneously, performs complete pass A and
+pass B, services one-use descriptor-relative copies and performs the final
+post-copy recheck. Migration receives opaque tokens and owns classification,
+disposition, rollback assessment and the semantic epoch only; it receives no
+path, root, descriptor, reader, scanner configuration, count, locator or reopen
+authority.
+
+The V3 admissions and `FoundationLegacyQuarantineLeaseV1` replace the exact V2
+production seams named by `dec-canonical-foundation-owned-admitted-d215`; V2
+remains immutable historical design evidence and cannot mint, validate or
+adapt a current Stage-11 capability. This leaves one production head for the
+owner-admitted physical census and prevents V2-to-V3 conversion, fallback or
+parallel authority.
+
+Cross-root aliases refuse except one bijective
+`ProtectedPrimaryOverlapPairV1` minted by Foundation after both owners nominate
+the memberships and Foundation proves the same object. The pair binds both
+membership identities, owner attestations, locators, root bindings, object,
+mount/provider facts, content and metadata commitments and owner currentness.
+It grants no deduplication, deletion, relinking, ownership transfer or primary
+mutation.
+
+Persistence selects quarantine custody from its real non-active backend.
+Custody binds its retained handle, canonical locator, descriptor chain, object,
+mount/provider incarnation, anchor, manager/security realm, expected-old
+state, fence, currentness and revocation. It must be disjoint from every active
+display and resolved root and the protected primary by locator containment,
+descriptor/object identity, mount/provider identity, anchor and manager realm.
+It is absent from discovery, runtime, compatibility, Release, installation and
+ordinary Persistence readers. Only a separately authorized identity-bound
+offline recovery export may reacquire a reader, and it can never become
+fallback behavior. Unsupported platforms refuse production success.
+
+`LegacyRemovalGuardV2` preserves the full one-use private capability law and
+binds exact V3 source-case, sighting, classification, overlap, loss,
+quarantine, activation, consumer, reader, hold, rollback and deletion-plan
+identities. Scalar counts, historical observations and caller-built digests
+grant nothing. Installation alone consumes the guard in the product pruning
+continuation, but live product pruning remains forbidden in this build.
+`Stage12LegacyCutCoordinatorV2` separately owns the isolated repository cut
+under the exact replacement packet. Its sole write authority is one
+expected-preimage compare-and-swap from the clean successor candidate ref to
+the declared post-cut commit/tree. Primary is never a target. The final runner
+is effect-inert and cannot prune, activate or reconstruct an Authority guard.
+
+The protected primary remains at
+`13b9a5e9b5ec67e7086b0b21992a207d2e4cde94`, tree
+`97e08a00f8a721318cda13241129a3b06651accc`, with exactly 27 dirty paths,
+path-manifest SHA-256
+`d14f08afcffa4ce259882897fb470ca23a85540e2f6a88ad4e53d37ab3b51498`
+and tracked binary-diff SHA-256
+`d110099bd78896c4700188737477cd8024d39d3741b4f50a97035d2b1f35d6cc`.
+Any drift stops before mutation. No design or packet operation repairs,
+normalizes, stages, stashes, resets or overwrites those bytes.
+
+The frozen public Packet, MCP, Recipe, Action, Ceremony, Resource, Bundle,
+Release, catalog and wire semantics remain unchanged. The internal persisted
+schema rotation is limited to V3 census, quarantine, loss, overlap,
+currentness and removal-proof records. The frozen Stage-5 product interface is
+semantically unchanged; its dependency identity rotates to this successor
+design. The Installation-owned agent-resource Release cutover Decision remains
+current and unchanged.
+
+After one independently verified V6 packet is explicitly approved in this
+recipient task, the orchestrator applies only this design commit to the
+existing clean successor preimage, then completes Stage 11 and Stage 12 in
+order. Stage 11 owns the owner-derived physical census, retained-copy
+continuation, V3 semantic manifests, quarantine custody, exact comparison
+manifests and rollback/currentness closure. Stage 12 owns real public adapter
+activation, `LegacyRemovalGuardV2`, the effect-inert external cut coordinator,
+consumer/reader/hold-zero, 210-entry promotion parity and the isolated
+candidate-ref cut. Exact Foundation and Stage-12 production files must be
+granted by the rotated ownership manifest; they cannot remain on a broad
+shared denylist.
+
+Integration uses cheap format, compile, strict lint, focused authority,
+migration, frozen-interface and ownership falsifiers. The exact final candidate
+then receives one concurrent whole-chain Authority/security,
+migration/data-loss and architecture/proof review, one consolidated fix loop,
+one complete compile/lint/test/broad/mutant/race/crash/replay/migration/
+rollback/adapter/removal pass, one affected canonical regeneration epoch, one
+freeze and exactly one cumulative independent Python/Rust/Ruby Stage 0 through
+12 seal. There are zero interim seals, exactly one final receipt and one
+pointer. Historical receipts remain immutable predecessor evidence only.
+
+The V5 packet
+`sha256:04b7c54af00973521cdb1ec46048c9632c5b5af30b94918208e58bde0fdc5b93`
+and its absent-workspace transition are obsolete historical provenance for
+every future write. The replacement External Build Plan Handoff must bind this
+design commit/tree, complete Decision closure, the clean `1f65f98b` successor
+preimage and existing linked-worktree identity, the historical and current
+sighting manifests and delta, the exact 14-relation and ten-overlap manifests,
+the empty-or-independently-proved loss manifest rule, rotated Stage-5
+dependency and Stage 11/12 ownership, primary boundary, candidate-ref CAS,
+zero interim seals and one final cumulative seal. Until that exact packet is
+independently verified and approved, no further implementation, canonical
+regeneration, integration or seal is authorized.
