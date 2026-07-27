@@ -1,0 +1,1 @@
+{"case":"toolchain-substitution","expected":"refuse","mutation":{"tool":"rust","sha256":"sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"}}

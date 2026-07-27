@@ -1,0 +1,17 @@
+{
+  "schema_version": "maestro.external.vnext-final-fault-schedules.v1",
+  "schedules": [
+    {
+      "id": "every-declared-write-boundary",
+      "injection_order": "lexicographic-proof-id-then-declared-boundary",
+      "required_reached_count": "exact_declared_count",
+      "unreached_policy": "refuse"
+    },
+    {
+      "id": "one-winner-race",
+      "participants": 2,
+      "required_winners": 1,
+      "loser_policy": "typed_refusal"
+    }
+  ]
+}

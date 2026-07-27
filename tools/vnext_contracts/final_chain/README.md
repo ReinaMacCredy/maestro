@@ -1,17 +1,68 @@
-# Final cumulative proof runner
+# V4 final cumulative chain
 
-This namespace is the V4 source-only candidate for the single Stage 0 through
-12 final seal. It accepts explicit frozen inputs and has no default input,
-output, receipt, or pointer path.
+This Orchestrator-owned namespace implements the external proof-control contract
+locked by `dec-canonical-final-cumulative-stage-0-1652`. It does not change a
+Maestro product contract and it does not treat the historical V3 Stage 12 chain
+or any Stage 0/2/3/4/5 verdict as current proof.
 
-The runner makes a separate read-only materialization for Python, Rust, and
-Ruby. Each interpreter parses the snapshot, proof ledger, and Stage 12 semantic
-readback plan itself, executes all assigned commands, and writes only an
-ephemeral engine receipt. The runner accepts the three complete receipts only
-when every proof ID and expected outcome matches, then writes one
-content-addressed release object and one pointer in the caller-provided proof
-root.
+`generate.py` is the only generation entry point. It refuses a dirty candidate,
+binds the exact clean `--final-ref` commit and tree as the current V4 Stage 12
+checkpoint, verifies all thirteen supplied checkpoints occur in Stage order on
+that commit's first-parent chain, archives that commit without reading mutable
+working-tree bytes, and copies/content-binds the approved V4 packet. It then
+emits a byte-total input manifest, typed proof ledger, semantic readback plan,
+toolchain/dependency manifest, checkpoint records, and the immutable snapshot.
+It does not execute proof, write a receipt, update a pointer, or publish.
 
-The current checkout contains schemas, hostile fixtures, and static checks only.
-No frozen final snapshot, proof ledger, engine receipt, release object, or
-pointer is supplied or generated here.
+The Orchestrator supplies exactly one `--stage-checkpoint N=<40-hex-commit>` for
+every `N` from 0 through 12. Stage 12 must equal the commit resolved from
+`--final-ref`; no historical V3 commit is accepted in that slot.
+
+```text
+python3 tools/vnext_contracts/final_chain/generate.py \
+  --repository <clean-isolated-final-V4-worktree> \
+  --packet-root /private/tmp/maestro-vnext-final-closure-successor-packet-v4 \
+  --final-ref <exact-final-V4-commit> \
+  --stage-checkpoint 0=<stage-0-first-parent-checkpoint> \
+  --stage-checkpoint 1=<stage-1-first-parent-checkpoint> \
+  --stage-checkpoint 2=<stage-2-first-parent-checkpoint> \
+  --stage-checkpoint 3=<stage-3-first-parent-checkpoint> \
+  --stage-checkpoint 4=<stage-4-first-parent-checkpoint> \
+  --stage-checkpoint 5=<stage-5-noncertifying-checkpoint> \
+  --stage-checkpoint 6=<stage-6-integrated-checkpoint> \
+  --stage-checkpoint 7=<stage-7-integrated-checkpoint> \
+  --stage-checkpoint 8=<stage-8-integrated-checkpoint> \
+  --stage-checkpoint 9=<stage-9-integrated-checkpoint> \
+  --stage-checkpoint 10=<stage-10-integrated-checkpoint> \
+  --stage-checkpoint 11=<stage-11-integrated-checkpoint> \
+  --stage-checkpoint 12=<exact-final-V4-commit> \
+  --output-root <new-disjoint-frozen-closure-root> \
+  --publication-root <dedicated-final-publication-root> \
+  --protected-primary /Users/reinamaccredy/Code/maestro \
+  --target aarch64-apple-darwin \
+  --profile test-unoptimized
+```
+
+`runner.py` is the one later seal. It refuses unless closure, run, publication,
+and protected-primary roots are disjoint; every frozen byte and exact tool probe
+still matches; `/usr/bin/sandbox-exec` is available; and active probes prove
+network and protected-primary writes are denied. Each engine receives a separate
+read-only source copy and separate temp, target, dependency, and output roots.
+There is no sandbox fallback. Because Codex itself runs inside a sandbox, the
+Orchestrator must launch this one command through the approved unsandboxed
+execution boundary; nested sandbox application failure is a refusal, not a
+reason to weaken the profile.
+
+```text
+python3 tools/vnext_contracts/final_chain/runner.py \
+  --closure-root <frozen-closure-root> \
+  --run-root <new-disjoint-run-root> \
+  --publication-root <same-dedicated-final-publication-root> \
+  --sandbox-exec /usr/bin/sandbox-exec
+```
+
+The runner publishes one immutable release object only after typed row-for-row
+three-engine consensus and semantic zero-count readback. A pre-existing object
+must match every byte. The single `current.json` pointer advances by the
+snapshot's exact preimage CAS. No source generation or seal has been run by this
+candidate commit.

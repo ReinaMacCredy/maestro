@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::fs;
-use std::path::Path;
-use std::process::Command;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Output};
 
 #[derive(Clone)]
 enum Value {
@@ -10,7 +10,7 @@ enum Value {
     Array(Vec<Value>),
     String(String),
     Number(i64),
-    Bool(bool),
+    Bool,
     Null,
 }
 
@@ -47,11 +47,11 @@ impl<'a> Parser<'a> {
             Some(b'-' | b'0'..=b'9') => Ok(Value::Number(self.number()?)),
             Some(b't') => {
                 self.literal(b"true")?;
-                Ok(Value::Bool(true))
+                Ok(Value::Bool)
             }
             Some(b'f') => {
                 self.literal(b"false")?;
-                Ok(Value::Bool(false))
+                Ok(Value::Bool)
             }
             Some(b'n') => {
                 self.literal(b"null")?;
@@ -300,32 +300,247 @@ fn sha256(data: &[u8]) -> String {
 fn quote(value: &str) -> String {
     format!("{:?}", value)
 }
-fn run(argv: &Vec<Value>, cwd: &str) -> Result<i64, String> {
+fn run(argv: &Vec<Value>, cwd: &str, tools: &BTreeMap<String, String>) -> Result<Output, String> {
     let program = string(argv.first().ok_or("empty argv")?)?;
-    let args: Result<Vec<&str>, String> = argv.iter().skip(1).map(string).collect();
-    let status = Command::new(program)
+    let expand = |value: &str| -> Result<String, String> {
+        if value == "{source}" {
+            Ok(cwd.to_string())
+        } else if value.starts_with("{tool:") && value.ends_with('}') {
+            tools
+                .get(&value[6..value.len() - 1])
+                .cloned()
+                .ok_or_else(|| format!("unknown frozen tool: {}", value))
+        } else if value.contains('{') || value.contains('}') {
+            Err(format!("unknown command placeholder: {}", value))
+        } else {
+            Ok(value.to_string())
+        }
+    };
+    let executable = expand(program)?;
+    let args: Result<Vec<String>, String> = argv
+        .iter()
+        .skip(1)
+        .map(|value| string(value).and_then(expand))
+        .collect();
+    Command::new(executable)
         .args(args?)
         .current_dir(cwd)
-        .status()
-        .map_err(|error| error.to_string())?;
-    Ok(status.code().unwrap_or(-1) as i64)
+        .output()
+        .map_err(|error| error.to_string())
+}
+
+fn safe_relative(root: &Path, value: &str) -> Result<PathBuf, String> {
+    let relative = Path::new(value);
+    if value.is_empty()
+        || value.contains('\\')
+        || relative.is_absolute()
+        || relative
+            .components()
+            .any(|part| !matches!(part, std::path::Component::Normal(_)))
+    {
+        return Err(format!("unsafe relative path: {}", value));
+    }
+    Ok(root.join(relative))
+}
+
+fn verify_binding(root: &Path, binding: &BTreeMap<String, Value>) -> Result<(), String> {
+    let path = safe_relative(root, string(field(binding, "path")?)?)?;
+    let metadata = fs::symlink_metadata(&path).map_err(|error| error.to_string())?;
+    if metadata.file_type().is_symlink() || !metadata.is_file() {
+        return Err(format!("bound file absent or unsafe: {}", path.display()));
+    }
+    let raw = fs::read(&path).map_err(|error| error.to_string())?;
+    if number(field(binding, "byte_length")?)? != raw.len() as i64
+        || string(field(binding, "sha256")?)? != sha256(&raw)
+    {
+        return Err(format!("bound file differs: {}", path.display()));
+    }
+    Ok(())
+}
+
+fn collect_files(root: &Path, directory: &Path, output: &mut Vec<String>) -> Result<(), String> {
+    for entry in fs::read_dir(directory).map_err(|error| error.to_string())? {
+        let entry = entry.map_err(|error| error.to_string())?;
+        let path = entry.path();
+        let metadata = fs::symlink_metadata(&path).map_err(|error| error.to_string())?;
+        if metadata.file_type().is_symlink() {
+            return Err(format!("source symlink is forbidden: {}", path.display()));
+        }
+        if metadata.is_dir() {
+            collect_files(root, &path, output)?;
+        } else if metadata.is_file() {
+            output.push(
+                path.strip_prefix(root)
+                    .map_err(|error| error.to_string())?
+                    .to_string_lossy()
+                    .replace('\\', "/"),
+            );
+        }
+    }
+    Ok(())
+}
+
+fn stream_json(raw: &[u8]) -> String {
+    format!(
+        "{{\"byte_length\":{},\"sha256\":{}}}",
+        raw.len(),
+        quote(&sha256(raw))
+    )
+}
+
+fn command_identity(command: &BTreeMap<String, Value>) -> Result<String, String> {
+    let argv: Result<Vec<String>, String> = array(field(command, "argv")?)?
+        .iter()
+        .map(|value| string(value).map(quote))
+        .collect();
+    let canonical = format!(
+        "{{\"argv\":[{}],\"expected_exit_code\":{}}}\n",
+        argv?.join(","),
+        number(field(command, "expected_exit_code")?)?
+    );
+    Ok(sha256(canonical.as_bytes()))
+}
+
+fn byte_contains(haystack: &[u8], needle: &[u8]) -> bool {
+    !needle.is_empty()
+        && haystack
+            .windows(needle.len())
+            .any(|window| window == needle)
+}
+
+fn semantic_counts(
+    check: &BTreeMap<String, Value>,
+    source: &Path,
+) -> Result<(i64, i64, i64), String> {
+    let target = PathBuf::from(
+        env::var("CARGO_TARGET_DIR").map_err(|_| "CARGO_TARGET_DIR is absent".to_string())?,
+    )
+    .join("release");
+    let mut files = BTreeSet::new();
+    for root in array(field(check, "scan_roots")?)? {
+        match string(root)? {
+            "source:src" | "source:embedded" => {
+                let relative = string(root)?.strip_prefix("source:").unwrap();
+                let root = source.join(relative);
+                let mut relative_files = Vec::new();
+                collect_files(&root, &root, &mut relative_files)?;
+                files.extend(relative_files.into_iter().map(|path| root.join(path)));
+            }
+            "target:release" => {
+                if !target.is_dir() {
+                    return Err("semantic target root is unavailable".to_string());
+                }
+                for entry in fs::read_dir(&target).map_err(|error| error.to_string())? {
+                    let path = entry.map_err(|error| error.to_string())?.path();
+                    if path.is_file()
+                        && path
+                            .file_name()
+                            .and_then(|name| name.to_str())
+                            .is_some_and(|name| name.starts_with("maestro"))
+                    {
+                        files.insert(path);
+                    }
+                }
+            }
+            value => return Err(format!("unknown semantic scan root: {}", value)),
+        }
+    }
+    let literals = object(field(check, "count_literals")?)?;
+    let count = |label: &str| -> Result<i64, String> {
+        let values: Result<Vec<Vec<u8>>, String> = array(field(literals, label)?)?
+            .iter()
+            .map(|value| string(value).map(|text| text.as_bytes().to_vec()))
+            .collect();
+        let values = values?;
+        let mut count = 0;
+        for path in &files {
+            let raw = fs::read(path).map_err(|error| error.to_string())?;
+            let relative = path
+                .strip_prefix(source)
+                .unwrap_or(path)
+                .to_string_lossy()
+                .as_bytes()
+                .to_vec();
+            count += values
+                .iter()
+                .filter(|value| byte_contains(&raw, value) || byte_contains(&relative, value))
+                .count() as i64;
+        }
+        Ok(count)
+    };
+    Ok((count("consumers")?, count("readers")?, count("holds")?))
 }
 
 fn main_result() -> Result<(), String> {
     let args: Vec<String> = env::args().skip(1).collect();
-    if args.len() != 5 {
-        return Err("expected snapshot ledger readback source output".to_string());
+    if args.len() != 8 {
+        return Err(
+            "expected snapshot manifest ledger readback toolchain packet source output".to_string(),
+        );
     }
     let snapshot_path = Path::new(&args[0]);
-    let ledger_path = Path::new(&args[1]);
-    let readback_path = Path::new(&args[2]);
-    let snapshot = object(&load(snapshot_path)?)?;
-    let ledger = object(&load(ledger_path)?)?;
-    let readback = object(&load(readback_path)?)?;
+    let manifest_path = Path::new(&args[1]);
+    let ledger_path = Path::new(&args[2]);
+    let readback_path = Path::new(&args[3]);
+    let toolchain_path = Path::new(&args[4]);
+    let packet_path = Path::new(&args[5]);
+    let source_path = Path::new(&args[6]);
+    let frozen_root = snapshot_path
+        .parent()
+        .and_then(Path::parent)
+        .ok_or("snapshot has no frozen root")?;
+    let snapshot_value = load(snapshot_path)?;
+    let manifest_value = load(manifest_path)?;
+    let ledger_value = load(ledger_path)?;
+    let readback_value = load(readback_path)?;
+    let toolchain_value = load(toolchain_path)?;
+    let packet_manifest_path = packet_path.join("packet-manifest.v1.json");
+    let packet_manifest_value = load(&packet_manifest_path)?;
+    let snapshot = object(&snapshot_value)?;
+    let manifest = object(&manifest_value)?;
+    let ledger = object(&ledger_value)?;
+    let readback = object(&readback_value)?;
+    let toolchain = object(&toolchain_value)?;
+    let packet_manifest = object(&packet_manifest_value)?;
     if string(field(snapshot, "schema_version")?)?
         != "maestro.external.vnext-final-cumulative-closure-snapshot.v1"
     {
         return Err("snapshot schema differs".to_string());
+    }
+    if string(field(snapshot, "state")?)? != "frozen"
+        || string(field(snapshot, "approved_packet_identity")?)?
+            != "sha256:2026513c84b1993f020f7d0430154ec0bc4e821438ccefd7dd6b91834a3d6283"
+    {
+        return Err("snapshot state or packet identity differs".to_string());
+    }
+    let environment_allowlist: Result<Vec<String>, String> =
+        array(field(snapshot, "environment_allowlist")?)?
+            .iter()
+            .map(|value| string(value).map(str::to_string))
+            .collect();
+    if environment_allowlist? != ["HOME", "LANG", "LC_ALL", "PATH", "TMPDIR", "TZ"] {
+        return Err("environment allowlist differs".to_string());
+    }
+    if string(field(snapshot, "cache_policy")?)?
+        != "immutable_compilation_and_dependency_bytes_only"
+        || object(field(snapshot, "pointer_preimage")?).is_err()
+    {
+        return Err("cache policy or pointer preimage differs".to_string());
+    }
+    let denials: Result<BTreeSet<String>, String> = array(field(snapshot, "effect_denylist")?)?
+        .iter()
+        .map(|value| string(value).map(str::to_string))
+        .collect();
+    let denials = denials?;
+    if [
+        "network",
+        "protected_primary_checkout_write",
+        "outside_packet_bound_roots_write",
+    ]
+    .iter()
+    .any(|value| !denials.contains(*value))
+    {
+        return Err("effect denylist differs".to_string());
     }
     if string(field(ledger, "schema_version")?)? != "maestro.external.vnext-final-proof-ledger.v1" {
         return Err("ledger schema differs".to_string());
@@ -335,15 +550,288 @@ fn main_result() -> Result<(), String> {
     {
         return Err("readback schema differs".to_string());
     }
+    if string(field(manifest, "schema_version")?)?
+        != "maestro.external.vnext-final-input-manifest.v1"
+    {
+        return Err("input manifest schema differs".to_string());
+    }
+    if string(field(toolchain, "schema_version")?)? != "maestro.external.vnext-final-toolchain.v1" {
+        return Err("toolchain schema differs".to_string());
+    }
+    let packet_binding = object(field(snapshot, "packet_manifest")?)?;
+    if string(field(packet_binding, "path")?)? != "packet/packet-manifest.v1.json" {
+        return Err("packet-manifest binding differs".to_string());
+    }
+    verify_binding(
+        packet_path.parent().ok_or("packet root has no parent")?,
+        packet_binding,
+    )?;
+    if string(field(packet_manifest, "schema_version")?)?
+        != "maestro.external.vnext-final-packet-manifest.v1"
+    {
+        return Err("packet manifest schema differs".to_string());
+    }
+    if string(field(packet_manifest, "approved_packet_identity")?)?
+        != string(field(snapshot, "approved_packet_identity")?)?
+    {
+        return Err("packet identity differs".to_string());
+    }
+    let packet_files = array(field(packet_manifest, "files")?)?;
+    let mut expected_packet_paths = BTreeSet::new();
+    let mut packet_bytes = 0i64;
+    for row in packet_files {
+        let row = object(row)?;
+        let relative = string(field(row, "path")?)?
+            .strip_prefix("packet/")
+            .ok_or("packet path prefix differs")?;
+        if !expected_packet_paths.insert(relative.to_string()) {
+            return Err("packet manifest duplicates a path".to_string());
+        }
+        let adjusted = BTreeMap::from([
+            ("path".to_string(), Value::String(relative.to_string())),
+            (
+                "byte_length".to_string(),
+                field(row, "byte_length")?.clone(),
+            ),
+            ("sha256".to_string(), field(row, "sha256")?.clone()),
+        ]);
+        verify_binding(packet_path, &adjusted)?;
+        packet_bytes += number(field(row, "byte_length")?)?;
+    }
+    let mut actual_packet_paths = Vec::new();
+    collect_files(packet_path, packet_path, &mut actual_packet_paths)?;
+    actual_packet_paths.retain(|path| path != "packet-manifest.v1.json");
+    actual_packet_paths.sort();
+    if actual_packet_paths != expected_packet_paths.iter().cloned().collect::<Vec<_>>() {
+        return Err("packet manifest has an omission".to_string());
+    }
+    if number(field(packet_manifest, "file_count")?)? != packet_files.len() as i64
+        || number(field(packet_manifest, "byte_length")?)? != packet_bytes
+    {
+        return Err("packet manifest totals differ".to_string());
+    }
+    if string(field(toolchain, "target")?)?.is_empty()
+        || string(field(toolchain, "profile")?)?.is_empty()
+    {
+        return Err("toolchain target or profile is absent".to_string());
+    }
+    let environment = object(field(toolchain, "environment")?)?;
+    let expected_environment: BTreeMap<String, String> = [
+        ("LANG".to_string(), "C".to_string()),
+        ("LC_ALL".to_string(), "C".to_string()),
+        ("TZ".to_string(), "UTC".to_string()),
+    ]
+    .into_iter()
+    .collect();
+    let actual_environment: Result<BTreeMap<String, String>, String> = environment
+        .iter()
+        .map(|(key, value)| Ok((key.clone(), string(value)?.to_string())))
+        .collect();
+    if actual_environment? != expected_environment {
+        return Err("toolchain environment differs".to_string());
+    }
+    let lockfiles = array(field(toolchain, "lockfiles")?)?;
+    if lockfiles.is_empty() {
+        return Err("lockfile closure is absent".to_string());
+    }
+    for lockfile in lockfiles {
+        verify_binding(source_path, object(lockfile)?)?;
+    }
+    let stages = array(field(snapshot, "first_parent_stages")?)?;
+    if stages.len() != 13 {
+        return Err("Stage checkpoint closure differs".to_string());
+    }
+    for (expected, row) in stages.iter().enumerate() {
+        let row = object(row)?;
+        if number(field(row, "stage")?)? != expected as i64 {
+            return Err("Stage checkpoint order differs".to_string());
+        }
+        let checkpoint_binding = object(field(row, "checkpoint")?)?;
+        verify_binding(frozen_root, checkpoint_binding)?;
+        let checkpoint_path =
+            safe_relative(frozen_root, string(field(checkpoint_binding, "path")?)?)?;
+        let checkpoint_value = load(&checkpoint_path)?;
+        let checkpoint = object(&checkpoint_value)?;
+        for field_name in ["stage", "commit", "tree"] {
+            let matches = match field_name {
+                "stage" => {
+                    number(field(checkpoint, field_name)?)? == number(field(row, field_name)?)?
+                }
+                _ => string(field(checkpoint, field_name)?)? == string(field(row, field_name)?)?,
+            };
+            if !matches {
+                return Err("Stage checkpoint bytes differ".to_string());
+            }
+        }
+    }
+    let final_integration = object(field(snapshot, "final_integration")?)?;
+    if string(field(
+        object(stages.last().ok_or("Stage 12 absent")?)?,
+        "commit",
+    )?)? != string(field(final_integration, "commit")?)?
+    {
+        return Err("current V4 Stage 12 checkpoint differs".to_string());
+    }
+    let roles = array(field(snapshot, "writable_root_roles")?)?;
+    let unique_roles: Result<BTreeSet<String>, String> = roles
+        .iter()
+        .map(|value| string(value).map(str::to_string))
+        .collect();
+    if roles.len() != 12 || unique_roles?.len() != 12 {
+        return Err("disjoint writable roots differ".to_string());
+    }
+    if string(field(snapshot, "sandbox_profile")?)? != "macos-sandbox-exec-no-network-v1" {
+        return Err("sandbox profile differs".to_string());
+    }
+    let engines: Result<Vec<String>, String> = array(field(snapshot, "engines")?)?
+        .iter()
+        .map(|value| {
+            object(value)
+                .and_then(|row| field(row, "id"))
+                .and_then(string)
+                .map(str::to_string)
+        })
+        .collect();
+    if engines? != ["python", "rust", "ruby"] {
+        return Err("engine closure differs".to_string());
+    }
+    for row in array(field(snapshot, "engines")?)? {
+        verify_binding(source_path, object(field(object(row)?, "source")?)?)?;
+    }
+    for field_name in [
+        "input_manifest",
+        "proof_ledger",
+        "stage12_readback",
+        "toolchain",
+    ] {
+        verify_binding(frozen_root, object(field(snapshot, field_name)?)?)?;
+    }
+    let manifest_rows = array(field(manifest, "entries")?)?;
+    let mut manifest_paths = BTreeSet::new();
+    let mut manifest_bytes = 0i64;
+    for row in manifest_rows {
+        let row = object(row)?;
+        let path = string(field(row, "path")?)?.to_string();
+        if !manifest_paths.insert(path) {
+            return Err("input manifest duplicates a path".to_string());
+        }
+        manifest_bytes += number(field(row, "byte_length")?)?;
+        verify_binding(source_path, row)?;
+    }
+    let mut actual_paths = Vec::new();
+    collect_files(source_path, source_path, &mut actual_paths)?;
+    actual_paths.sort();
+    if actual_paths != manifest_paths.iter().cloned().collect::<Vec<_>>() {
+        return Err("input manifest has an omission or extra path".to_string());
+    }
+    if number(field(manifest, "entry_count")?)? != manifest_rows.len() as i64
+        || number(field(manifest, "byte_length")?)? != manifest_bytes
+    {
+        return Err("input manifest totals differ".to_string());
+    }
+    let tool_rows = object(field(toolchain, "tools")?)?;
+    let expected_tools: BTreeSet<String> = ["python", "rust", "ruby", "cargo", "git"]
+        .into_iter()
+        .map(str::to_string)
+        .collect();
+    if tool_rows.keys().cloned().collect::<BTreeSet<_>>() != expected_tools {
+        return Err("toolchain closure differs".to_string());
+    }
+    let mut tools = BTreeMap::new();
+    for (name, value) in tool_rows {
+        let row = object(value)?;
+        let path = string(field(row, "resolved_path")?)?.to_string();
+        let raw = fs::read(&path).map_err(|error| error.to_string())?;
+        if number(field(row, "byte_length")?)? != raw.len() as i64
+            || string(field(row, "sha256")?)? != sha256(&raw)
+        {
+            return Err(format!("tool bytes differ: {}", name));
+        }
+        let probe = array(field(row, "probe_argv")?)?;
+        let program = string(probe.first().ok_or("tool probe is empty")?)?;
+        let probe_args: Result<Vec<&str>, String> = probe.iter().skip(1).map(string).collect();
+        let output = Command::new(program)
+            .args(probe_args?)
+            .output()
+            .map_err(|error| error.to_string())?;
+        if output.status.code().unwrap_or(-1) as i64 != number(field(row, "probe_exit_code")?)? {
+            return Err(format!("tool probe exit differs: {}", name));
+        }
+        for (label, raw) in [
+            ("probe_stdout", output.stdout.as_slice()),
+            ("probe_stderr", output.stderr.as_slice()),
+        ] {
+            let expected = object(field(row, label)?)?;
+            if number(field(expected, "byte_length")?)? != raw.len() as i64
+                || string(field(expected, "sha256")?)? != sha256(raw)
+            {
+                return Err(format!("tool probe bytes differ: {}", name));
+            }
+        }
+        tools.insert(name.clone(), path);
+    }
+    let dependencies = array(field(toolchain, "dependency_outputs")?)?;
+    if dependencies.is_empty() {
+        return Err("dependency-output closure is absent".to_string());
+    }
+    for dependency in dependencies {
+        let dependency = object(dependency)?;
+        let root = Path::new(string(field(dependency, "resolved_path")?)?);
+        let metadata = fs::symlink_metadata(root).map_err(|error| error.to_string())?;
+        if metadata.file_type().is_symlink() || !metadata.is_dir() {
+            return Err("dependency-output root is absent or unsafe".to_string());
+        }
+        let files = array(field(dependency, "files")?)?;
+        if files.is_empty() {
+            return Err("dependency-output file closure is empty".to_string());
+        }
+        let mut expected_paths = BTreeSet::new();
+        let mut canonical_rows = Vec::new();
+        let mut total = 0i64;
+        for row in files {
+            let row = object(row)?;
+            let relative = string(field(row, "path")?)?;
+            if !expected_paths.insert(relative.to_string()) {
+                return Err("dependency-output manifest duplicates a path".to_string());
+            }
+            verify_binding(root, row)?;
+            let bytes = number(field(row, "byte_length")?)?;
+            total += bytes;
+            canonical_rows.push(format!(
+                "{{\"byte_length\":{},\"path\":{},\"sha256\":{}}}",
+                bytes,
+                quote(relative),
+                quote(string(field(row, "sha256")?)?)
+            ));
+        }
+        let mut actual_paths = Vec::new();
+        collect_files(root, root, &mut actual_paths)?;
+        actual_paths.sort();
+        if actual_paths != expected_paths.iter().cloned().collect::<Vec<_>>() {
+            return Err("dependency-output manifest has an omission".to_string());
+        }
+        let canonical = format!("[{}]\n", canonical_rows.join(","));
+        if number(field(dependency, "file_count")?)? != files.len() as i64
+            || number(field(dependency, "byte_length")?)? != total
+            || string(field(dependency, "identity")?)? != sha256(canonical.as_bytes())
+        {
+            return Err("dependency-output identity differs".to_string());
+        }
+    }
     let ledger_proofs = array(field(ledger, "proofs")?)?;
+    if number(field(ledger, "proof_count")?)? != ledger_proofs.len() as i64 {
+        return Err("ledger count differs".to_string());
+    }
     let mut proof_ids = BTreeSet::new();
     let mut stages = BTreeSet::new();
+    let mut kinds = BTreeSet::new();
     for proof in ledger_proofs {
         let proof = object(proof)?;
         if !proof_ids.insert(string(field(proof, "proof_id")?)?.to_string()) {
             return Err("duplicate proof id".to_string());
         }
         stages.insert(number(field(proof, "stage")?)?);
+        kinds.insert(string(field(proof, "kind")?)?.to_string());
         let engines: Result<BTreeSet<String>, String> = array(field(proof, "engines")?)?
             .iter()
             .map(|value| string(value).map(str::to_string))
@@ -355,9 +843,27 @@ fn main_result() -> Result<(), String> {
         {
             return Err("ledger engine coverage differs".to_string());
         }
+        for binding in array(field(proof, "input_bindings")?)? {
+            verify_binding(source_path, object(binding)?)?;
+        }
+        let command = object(field(proof, "command")?)?;
+        if string(field(command, "identity")?)? != command_identity(command)? {
+            return Err("proof command identity differs".to_string());
+        }
+        let kind = string(field(proof, "kind")?)?;
+        if matches!(kind, "race" | "crash_replay") {
+            verify_binding(source_path, object(field(command, "fault_schedule")?)?)?;
+        }
+        if matches!(kind, "migration" | "rollback") {
+            let cohort = object(field(command, "cohort")?)?;
+            for name in ["old_reader", "new_reader", "writer"] {
+                string(field(cohort, name)?)?;
+            }
+            verify_binding(source_path, object(field(cohort, "fixture")?)?)?;
+        }
     }
-    if stages != (0..13).collect() {
-        return Err("ledger stage closure differs".to_string());
+    if stages != (0..13).collect() || kinds.len() != 13 {
+        return Err("ledger Stage or kind closure differs".to_string());
     }
     let required_readback: BTreeSet<String> = [
         "compiled_namespace_absence",
@@ -390,39 +896,128 @@ fn main_result() -> Result<(), String> {
         let id = string(field(proof, "proof_id")?)?;
         let expected = string(field(proof, "expected_outcome")?)?;
         let command = object(field(proof, "command")?)?;
-        let exit = run(array(field(command, "argv")?)?, &args[3])?;
+        let output = run(array(field(command, "argv")?)?, &args[6], &tools)?;
+        let exit = output.status.code().unwrap_or(-1) as i64;
         let actual = if exit == number(field(command, "expected_exit_code")?)? {
             expected
         } else {
             "error"
         };
+        let kind = string(field(proof, "kind")?)?;
+        let mut exact_inputs = String::new();
+        if matches!(kind, "race" | "crash_replay") {
+            let schedule_binding = object(field(command, "fault_schedule")?)?;
+            let schedule_path =
+                safe_relative(source_path, string(field(schedule_binding, "path")?)?)?;
+            let schedule_value = load(&schedule_path)?;
+            let schedules = array(field(object(&schedule_value)?, "schedules")?)?;
+            if schedules.is_empty() {
+                return Err("fault schedule is empty".to_string());
+            }
+            let reached: Result<Vec<String>, String> = schedules
+                .iter()
+                .map(|value| {
+                    object(value)
+                        .and_then(|row| field(row, "id"))
+                        .and_then(string)
+                        .map(quote)
+                })
+                .collect();
+            exact_inputs.push_str(&format!(
+                ",\"fault_schedule_identity\":{},\"injection_points_reached\":[{}]",
+                quote(string(field(schedule_binding, "sha256")?)?),
+                reached?.join(",")
+            ));
+        }
+        if matches!(kind, "migration" | "rollback") {
+            let cohort = object(field(command, "cohort")?)?;
+            let fixture = object(field(cohort, "fixture")?)?;
+            let canonical = format!(
+                "{{\"fixture\":{{\"byte_length\":{},\"path\":{},\"sha256\":{}}},\"new_reader\":{},\"old_reader\":{},\"writer\":{}}}\n",
+                number(field(fixture, "byte_length")?)?,
+                quote(string(field(fixture, "path")?)?),
+                quote(string(field(fixture, "sha256")?)?),
+                quote(string(field(cohort, "new_reader")?)?),
+                quote(string(field(cohort, "old_reader")?)?),
+                quote(string(field(cohort, "writer")?)?)
+            );
+            exact_inputs.push_str(&format!(
+                ",\"cohort_identity\":{}",
+                quote(&sha256(canonical.as_bytes()))
+            ));
+        }
         proof_rows.push(format!(
-            "{{\"actual_outcome\":{},\"expected_outcome\":{},\"exit_code\":{},\"proof_id\":{}}}",
+            "{{\"actual_outcome\":{},\"command_identity\":{}{},\"expected_outcome\":{},\"exit_code\":{},\"kind\":{},\"produced_artifacts\":[],\"proof_id\":{},\"stage\":{},\"stderr\":{},\"stdout\":{}}}",
             quote(actual),
+            quote(string(field(command, "identity")?)?),
+            exact_inputs,
             quote(expected),
             exit,
-            quote(id)
+            quote(string(field(proof, "kind")?)?),
+            quote(id),
+            number(field(proof, "stage")?)?,
+            stream_json(&output.stderr),
+            stream_json(&output.stdout)
         ));
     }
     let mut checks = Vec::new();
     let mut all_pass = true;
     for check in array(field(readback, "checks")?)? {
         let check = object(check)?;
-        let exit = run(array(field(check, "argv")?)?, &args[3])?;
-        let passed = exit == number(field(check, "expected_exit_code")?)?;
+        let expected_counts = object(field(check, "expected_counts")?)?;
+        if number(field(expected_counts, "consumers")?)? != 0
+            || number(field(expected_counts, "readers")?)? != 0
+            || number(field(expected_counts, "holds")?)? != 0
+        {
+            return Err("semantic readback zero-count contract differs".to_string());
+        }
+        let check_command = {
+            let mut command = BTreeMap::new();
+            command.insert("argv".to_string(), field(check, "argv")?.clone());
+            command.insert(
+                "expected_exit_code".to_string(),
+                field(check, "expected_exit_code")?.clone(),
+            );
+            command
+        };
+        if string(field(check, "command_identity")?)? != command_identity(&check_command)? {
+            return Err("semantic readback command identity differs".to_string());
+        }
+        let output = run(array(field(check, "argv")?)?, &args[6], &tools)?;
+        let exit = output.status.code().unwrap_or(-1) as i64;
+        let (consumer_count, reader_count, hold_count) = semantic_counts(check, source_path)?;
+        let passed = exit == number(field(check, "expected_exit_code")?)?
+            && consumer_count == number(field(expected_counts, "consumers")?)?
+            && reader_count == number(field(expected_counts, "readers")?)?
+            && hold_count == number(field(expected_counts, "holds")?)?;
         all_pass &= passed;
         checks.push(format!(
-            "{{\"exit_code\":{},\"id\":{},\"kind\":{},\"status\":{}}}",
+            "{{\"command_identity\":{},\"consumer_count\":{},\"exit_code\":{},\"hold_count\":{},\"id\":{},\"kind\":{},\"reader_count\":{},\"status\":{}}}",
+            quote(string(field(check, "command_identity")?)?),
+            consumer_count,
             exit,
+            hold_count,
             quote(string(field(check, "id")?)?),
             quote(string(field(check, "kind")?)?),
+            reader_count,
             quote(if passed { "pass" } else { "fail" })
         ));
     }
     let snapshot_identity = sha256(&fs::read(snapshot_path).map_err(|error| error.to_string())?);
+    let input_manifest_identity =
+        sha256(&fs::read(manifest_path).map_err(|error| error.to_string())?);
     let ledger_identity = sha256(&fs::read(ledger_path).map_err(|error| error.to_string())?);
-    let receipt = format!("{{\"engine\":\"rust\",\"ledger_identity\":{},\"proofs\":[{}],\"schema_version\":\"maestro.external.vnext-final-engine-receipt.v1\",\"semantic_readback\":{{\"checks\":[{}],\"status\":{}}},\"snapshot_identity\":{}}}\n", quote(&ledger_identity), proof_rows.join(","), checks.join(","), quote(if all_pass {"pass"} else {"fail"}), quote(&snapshot_identity));
-    fs::write(&args[4], receipt).map_err(|error| error.to_string())
+    let readback_identity = sha256(&fs::read(readback_path).map_err(|error| error.to_string())?);
+    let toolchain_identity = sha256(&fs::read(toolchain_path).map_err(|error| error.to_string())?);
+    let max_counts = array(field(readback, "checks")?)?
+        .iter()
+        .map(|value| object(value).and_then(|check| semantic_counts(check, source_path)))
+        .collect::<Result<Vec<_>, _>>()?;
+    let consumer_count = max_counts.iter().map(|counts| counts.0).max().unwrap_or(0);
+    let reader_count = max_counts.iter().map(|counts| counts.1).max().unwrap_or(0);
+    let hold_count = max_counts.iter().map(|counts| counts.2).max().unwrap_or(0);
+    let receipt = format!("{{\"engine\":\"rust\",\"input_manifest_identity\":{},\"ledger_identity\":{},\"proofs\":[{}],\"readback_plan_identity\":{},\"schema_version\":\"maestro.external.vnext-final-engine-ledger.v1\",\"semantic_readback\":{{\"checks\":[{}],\"consumer_count\":{},\"hold_count\":{},\"reader_count\":{},\"status\":{}}},\"snapshot_identity\":{},\"toolchain_identity\":{}}}\n", quote(&input_manifest_identity), quote(&ledger_identity), proof_rows.join(","), quote(&readback_identity), checks.join(","), consumer_count, hold_count, reader_count, quote(if all_pass {"pass"} else {"fail"}), quote(&snapshot_identity), quote(&toolchain_identity));
+    fs::write(&args[7], receipt).map_err(|error| error.to_string())
 }
 
 fn main() {

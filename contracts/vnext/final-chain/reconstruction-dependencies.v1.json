@@ -1,19 +1,18 @@
 {
   "schema_version": "maestro.external.vnext-final-chain-reconstruction-dependencies.v1",
-  "design_baseline_commit": "ade7e38c2287f77f5de100402f4b9dbabc9316b2",
-  "historical_stage12_commit": "f83f4f51a30e00ed5b45ae440a6bb077b3c262ca",
-  "reconstructed_stage12_commit": "c3b112e98e4cdb170b9640eb26df1b10388433b4",
-  "stage12_paths": [
-    "tools/vnext_contracts/stage12",
-    "tests/fixtures/vnext/stage12",
-    "tests/vnext_stage12_contracts.rs"
+  "approved_packet_identity": "sha256:2026513c84b1993f020f7d0430154ec0bc4e821438ccefd7dd6b91834a3d6283",
+  "approved_fanout_manifest_identity": "sha256:e299556c31c6a788285d984f9cd3040cfde200ba24e7ed5a5d90caff96ee5954",
+  "design_baseline_commit": "f6b4af285b0b24b1192e636f34c2b0c7b6bc1b6d",
+  "historical_v3_stage12_evidence": [
+    "f83f4f51a30e00ed5b45ae440a6bb077b3c262ca",
+    "c3b112e98e4cdb170b9640eb26df1b10388433b4"
   ],
+  "current_v4_checkpoint_binding": "generated_from_exact_clean_final_ref_commit_and_tree",
   "final_chain_paths": [
     "contracts/vnext/final-chain",
-    "tools/vnext_contracts/final_chain",
-    "tests/fixtures/vnext/final-chain",
-    "tests/vnext_final_chain_contracts.rs"
+    "tools/vnext_contracts/final_chain"
   ],
-  "predecessor_status": "immutable_input_only_no_final_verdict_reuse",
+  "hostile_fixture_root": "tools/vnext_contracts/final_chain/fixtures",
+  "historical_predecessor_status": "immutable_input_only_no_final_verdict_reuse",
   "publication_status": "source_only_no_receipt_or_pointer_generated"
 }

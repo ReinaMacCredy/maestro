@@ -2,14 +2,34 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "maestro.external.vnext-final-cumulative-seal-receipt.v1",
   "type": "object",
-  "required": ["schema_version", "snapshot_identity", "ledger_identity", "engine_ledgers", "semantic_readback", "verdict"],
+  "required": ["schema_version", "snapshot_identity", "input_manifest_identity", "ledger_identity", "readback_plan_identity", "toolchain_identity", "final_integration", "proof_count", "consensus_rows", "engine_ledgers", "produced_artifacts", "semantic_readback", "ancestry_closure", "final_edge_sweep", "verdict"],
   "properties": {
     "schema_version": {"const": "maestro.external.vnext-final-cumulative-seal-receipt.v1"},
-    "snapshot_identity": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-    "ledger_identity": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-    "engine_ledgers": {"type": "array", "minItems": 3, "items": {"type": "object"}},
-    "semantic_readback": {"type": "object"},
+    "snapshot_identity": {"$ref": "#/$defs/sha256"},
+    "input_manifest_identity": {"$ref": "#/$defs/sha256"},
+    "ledger_identity": {"$ref": "#/$defs/sha256"},
+    "readback_plan_identity": {"$ref": "#/$defs/sha256"},
+    "toolchain_identity": {"$ref": "#/$defs/sha256"},
+    "final_integration": {"type": "object"},
+    "proof_count": {"type": "integer", "minimum": 13},
+    "consensus_rows": {"type": "array", "minItems": 13},
+    "engine_ledgers": {"type": "array", "minItems": 3, "maxItems": 3},
+    "produced_artifacts": {"type": "array"},
+    "semantic_readback": {
+      "type": "object",
+      "required": ["status", "consumer_count", "reader_count", "hold_count"],
+      "properties": {
+        "status": {"const": "pass"},
+        "consumer_count": {"const": 0},
+        "reader_count": {"const": 0},
+        "hold_count": {"const": 0}
+      },
+      "additionalProperties": false
+    },
+    "ancestry_closure": {"const": "pass"},
+    "final_edge_sweep": {"const": "pass"},
     "verdict": {"const": "pass"}
   },
+  "$defs": {"sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}},
   "additionalProperties": false
 }
