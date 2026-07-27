@@ -46,6 +46,9 @@ mod quarantine;
 )]
 mod rollback;
 
+#[cfg(test)]
+mod cohort_observation;
+
 #[allow(
     unused_imports,
     reason = "the move-only H3 member binding awaits the Stage-4/9 finality transaction"
@@ -121,4 +124,8 @@ pub use rollback::Stage9Stage10CutoverHostAdapterV1;
 pub use rollback::{
     CutoverAcceptanceV1, EffectCrossingV1, RollbackAssessmentErrorV1, RollbackAssessmentV1,
     RollbackDispositionV1,
+};
+#[cfg(test)]
+pub(in crate::domain::vnext::migration) use rollback::{
+    ProtectedV1RollbackOutcomeV1, RollbackRestoreErrorV1, restore_protected_exact_v1,
 };

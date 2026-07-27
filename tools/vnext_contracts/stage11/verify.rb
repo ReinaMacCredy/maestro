@@ -16,8 +16,12 @@ instance_header = instance_records.shift
 raise "wrong Stage-11 fixture schema" unless fixture.fetch("schema") == "maestro.vnext.stage11.migration-cases.v1"
 raise "wrong consumer fixture schema" unless gates.fetch("schema") == "maestro.vnext.stage11.consumer-gates.v1"
 raise "classification is not total" unless fixture.fetch("closed_dispositions").length == 5
-raise "upstream interface-gap ledger drifted" unless fixture.fetch("known_upstream_interface_gaps") == %w[
-  stage9_stage10_owner_consumer_snapshot_and_closure_receipt
+raise "closed owner route was reopened" unless fixture.fetch("known_upstream_interface_gaps") == []
+raise "production owner-route closure drifted" unless fixture.fetch("production_owner_routes") == %w[
+  installation_consumer_snapshot_to_migration_closure
+  durable_consumer_finality_receipt
+  foundation_v2_aggregate_census_continuation
+  installation_v2_pre_store_finality
 ]
 raise "owner-bound adversarial cases drifted" unless %w[
   arbitrary_h3_digest_vector_is_unconstructible
@@ -34,11 +38,11 @@ raise "sealed reader became a bearer" unless gates.fetch("sealed_reader") == {
   "bearer" => false,
   "admission" => "OpaqueSealedOnly"
 }
-raise "candidate adapter rebind contract drifted" unless gates.fetch("candidate_adapters") == {
-  "stage9_association" => "test_only_until_real_distribution_finality_adapter_rebind",
-  "stage9_stage10_cutover_host" => "test_only_until_real_host_acceptance_effect_adapter_rebind",
-  "stage9_stage10_consumer_census" => "test_only_until_real_owner_census_adapter_rebind",
-  "integration_requirement" => "replace_or_parity_prove_before_stage11_integration"
+raise "production owner-route contract drifted" unless gates.fetch("production_owner_routes") == {
+  "consumer_snapshot" => "ConsumerClosureV1::evaluate_installation_snapshot",
+  "durable_consumer_finality" => "ConsumerClosureDurableLinearizationV1",
+  "aggregate_census" => "census_admitted_owner_roots_v2",
+  "pre_store_finality" => "stage11_finality_v2::execute_pre_store"
 }
 expected_counts = {
   "e204" => 204,
@@ -87,33 +91,45 @@ raise "physical historical rows were invented" unless physical_commitment.fetch(
   "literal_historical_rows_retained"
 ) == false
 
-owned = root.join("src/domain/vnext/migration/runtime").glob("*.rs").sort.map(&:read).join("\n")
+runtime_sources = root.join("src/domain/vnext/migration/runtime").glob("*.rs").sort
+owned = runtime_sources.map(&:read).join("\n")
+production_owned = runtime_sources.reject { |path| path.basename.to_s == "cohort_observation.rs" }
+  .map(&:read).join("\n")
+consumer = root.join("src/domain/vnext/migration/runtime/consumer.rs").read
+consumer_snapshot = root.join("src/domain/vnext/installation/consumer_snapshot.rs").read
+installation = root.join("src/domain/vnext/installation/mod.rs").read
+foundation = root.join("src/foundation/core/mod.rs").read
 %w[OldProtocol MixedProtocol UnknownProtocol ReleaseMismatch].each do |reason|
   raise "missing refusal #{reason}" unless owned.include?(reason)
 end
 %w[
   AuthoritativeConsumerCensusV1
   test_only_from_stage4_publication
-  Stage9CutoverAssociationAdapterV1
-  TestOnlyStage9CutoverFinalityV1
   ActiveStoreFinalityV1
   PreStoreFinalityV1
-  Stage9Stage10CutoverHostAdapterV1
-  Stage9Stage10ConsumerCensusAdapterV1
 ].each do |token|
   raise "missing owner binding #{token}" unless owned.include?(token)
 end
+raise "Migration does not consume the Installation-owned consumer snapshot" unless
+  consumer.include?("evaluate_installation_snapshot") &&
+  consumer.include?("InstallationMigrationConsumerSnapshotV1") &&
+  consumer.include?("snapshot.into_parts()")
+raise "Installation durable consumer finality route drifted" unless
+  consumer_snapshot.include?("ConsumerClosureDurableLinearizationV1") &&
+  consumer_snapshot.include?("bind_migration_census") &&
+  consumer_snapshot.include?("durable_effect.commit")
+raise "Installation V2 PreStore finality route drifted" unless
+  installation.include?("pub(in crate::domain::vnext) mod stage11_finality_v2") &&
+  installation.include?("execute_pre_store") &&
+  installation.include?("ProtectedLocatorLeaseV2")
+raise "Foundation V2 aggregate-census owner route drifted" unless
+  foundation.include?("pub(crate) mod stage11_aggregate_census") &&
+  foundation.include?("census_from_stage11_owner_v2") &&
+  foundation.include?("consume_for_stage11")
 raise "arbitrary-digest H3 constructor remains" if owned.include?("NativeCancellationCausalJoinV1::new")
 raise "incomplete H3 adapter escaped test-only scope" unless owned.include?(
   "#[cfg(test)]\n    pub fn test_only_from_stage4_publication"
 )
-%w[
-  Stage9CutoverAssociationAdapterV1
-  Stage9Stage10CutoverHostAdapterV1
-  Stage9Stage10ConsumerCensusAdapterV1
-].each do |seam|
-  raise "raw owner seam is not test-only: #{seam}" unless owned.include?("#[cfg(test)]\npub trait #{seam}")
-end
 raise "H3 publication is reusable" unless owned.include?("Stage4PublicationReused")
 raise "H3 row binding is absent" unless owned.include?("CancellationJoinRowMismatch")
 raise "frozen H3 native-cancelled member is not consumed exactly" unless %w[
@@ -138,15 +154,16 @@ raise "obsolete H3 carrier-only consumption remains" if
 raise "H3 member identity grammar drifted" unless owned.include?(
   "maestro.execution.h3-native-cancelled-member.v1\\0"
 )
-raise "association finality identity is unbound" unless owned.include?(
-  "material.association_id.as_bytes() != meaning.id().as_bytes()"
-)
 raise "zero identity guard is absent" unless owned.include?("ZeroDigest") && owned.include?("ZeroIdentity")
-raise "rollback deletes production bytes" if owned.include?("remove_file") || owned.include?("remove_dir")
+raise "rollback deletes production bytes" if
+  production_owned.include?("remove_file") || production_owned.include?("remove_dir")
 operations_facade = root.join("src/operations/vnext/migration/mod.rs").read
 raise "Foundation census is not production-wired" if
   operations_facade.include?("#[cfg(test)]\nmod census;")
 census_source = root.join("src/operations/vnext/migration/census.rs").read
+raise "Foundation V2 aggregate-census entry route drifted" unless census_source.include?(
+  "census_admitted_owner_roots_v2"
+)
 raise "Stage 11 does not consume only the V2 Foundation continuation" unless %w[
   MigrationClassificationContinuationV2
   continuation.consume_for_stage11()

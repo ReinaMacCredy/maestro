@@ -30,11 +30,11 @@
     ],
     "empty_observation_vector_is_not_consumer_zero": true
   },
-  "candidate_adapters": {
-    "stage9_association": "test_only_until_real_distribution_finality_adapter_rebind",
-    "stage9_stage10_cutover_host": "test_only_until_real_host_acceptance_effect_adapter_rebind",
-    "stage9_stage10_consumer_census": "test_only_until_real_owner_census_adapter_rebind",
-    "integration_requirement": "replace_or_parity_prove_before_stage11_integration"
+  "production_owner_routes": {
+    "consumer_snapshot": "ConsumerClosureV1::evaluate_installation_snapshot",
+    "durable_consumer_finality": "ConsumerClosureDurableLinearizationV1",
+    "aggregate_census": "census_admitted_owner_roots_v2",
+    "pre_store_finality": "stage11_finality_v2::execute_pre_store"
   },
   "currentness_owner": "Stage9/domain owners",
   "migration_owner": "Stage11 classification, association meaning, quarantine and inactive import"

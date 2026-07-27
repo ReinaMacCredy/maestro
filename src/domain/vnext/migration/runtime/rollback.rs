@@ -1,10 +1,9 @@
 use thiserror::Error;
 
 use crate::foundation::core::deterministic_cbor::CborError;
-#[cfg(test)]
 use crate::foundation::core::deterministic_cbor::CborValue;
 
-use super::{MigrationDigestV1, MigrationIdentityErrorV1};
+use super::{MigrationDigestV1, MigrationIdentityErrorV1, QuarantineEntryV1};
 
 const ROLLBACK_ASSESSMENT_DOMAIN_V1: &[u8] = b"maestro.vnext.migration.rollback-assessment.v1\0";
 
@@ -85,13 +84,12 @@ pub trait Stage9Stage10CutoverHostAdapterV1 {
 }
 
 impl RollbackAssessmentV1 {
-    #[cfg(test)]
-    pub fn from_cutover_host_adapter<A: Stage9Stage10CutoverHostAdapterV1>(
+    pub(in crate::domain::vnext::migration) fn assess_cutover_observation(
         cutover_attempt_id: MigrationDigestV1,
-        adapter: &A,
+        observed_host_attempt_id: Option<MigrationDigestV1>,
+        acceptance: CutoverAcceptanceV1,
+        effect_crossing: EffectCrossingV1,
     ) -> Result<Self, RollbackAssessmentErrorV1> {
-        let (observed_host_attempt_id, acceptance, effect_crossing) =
-            adapter.cutover_host_facts(cutover_attempt_id)?;
         if cutover_attempt_id.as_bytes() == &[0; 32]
             || observed_host_attempt_id.is_some_and(|id| id.as_bytes() == &[0; 32])
         {
@@ -135,6 +133,21 @@ impl RollbackAssessmentV1 {
         })
     }
 
+    #[cfg(test)]
+    pub fn from_cutover_host_adapter<A: Stage9Stage10CutoverHostAdapterV1>(
+        cutover_attempt_id: MigrationDigestV1,
+        adapter: &A,
+    ) -> Result<Self, RollbackAssessmentErrorV1> {
+        let (observed_host_attempt_id, acceptance, effect_crossing) =
+            adapter.cutover_host_facts(cutover_attempt_id)?;
+        Self::assess_cutover_observation(
+            cutover_attempt_id,
+            observed_host_attempt_id,
+            acceptance,
+            effect_crossing,
+        )
+    }
+
     pub const fn cutover_attempt_id(&self) -> MigrationDigestV1 {
         self.cutover_attempt_id
     }
@@ -160,6 +173,42 @@ impl RollbackAssessmentV1 {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(in crate::domain::vnext::migration) enum ProtectedV1RollbackOutcomeV1 {
+    Restored {
+        source_id: MigrationDigestV1,
+        source_sha256: MigrationDigestV1,
+        bytes: Vec<u8>,
+    },
+    Refused {
+        disposition: RollbackDispositionV1,
+    },
+}
+
+pub(in crate::domain::vnext::migration) fn restore_protected_exact_v1(
+    assessment: &RollbackAssessmentV1,
+    entry: &QuarantineEntryV1,
+    protected_bytes: &[u8],
+) -> Result<ProtectedV1RollbackOutcomeV1, RollbackRestoreErrorV1> {
+    if assessment.disposition() != RollbackDispositionV1::ProtectedExactV1RollbackEligible {
+        return Ok(ProtectedV1RollbackOutcomeV1::Refused {
+            disposition: assessment.disposition(),
+        });
+    }
+    if u64::try_from(protected_bytes.len())
+        .map_err(|_| RollbackRestoreErrorV1::ProtectedBytesMismatch)?
+        != entry.source_byte_length()
+        || MigrationDigestV1::digest_bytes(protected_bytes)? != entry.source_sha256()
+    {
+        return Err(RollbackRestoreErrorV1::ProtectedBytesMismatch);
+    }
+    Ok(ProtectedV1RollbackOutcomeV1::Restored {
+        source_id: entry.source_id(),
+        source_sha256: entry.source_sha256(),
+        bytes: protected_bytes.to_vec(),
+    })
+}
+
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
 pub enum RollbackAssessmentErrorV1 {
     #[error(transparent)]
@@ -168,4 +217,12 @@ pub enum RollbackAssessmentErrorV1 {
     Identity(#[from] MigrationIdentityErrorV1),
     #[error("cutover host binding contains a zero attempt identity")]
     InvalidHostBinding,
+}
+
+#[derive(Clone, Debug, Eq, Error, PartialEq)]
+pub(in crate::domain::vnext::migration) enum RollbackRestoreErrorV1 {
+    #[error(transparent)]
+    Identity(#[from] MigrationIdentityErrorV1),
+    #[error("protected exact-v1 bytes differ from the sealed quarantine entry")]
+    ProtectedBytesMismatch,
 }

@@ -13,6 +13,8 @@ FIXTURES = ROOT / "tests/fixtures/vnext/stage11"
 PUBLIC = ROOT / "contracts/vnext/public"
 RUNTIME = ROOT / "src/domain/vnext/migration/runtime"
 OPERATIONS = ROOT / "src/operations/vnext/migration"
+INSTALLATION = ROOT / "src/domain/vnext/installation"
+FOUNDATION = ROOT / "src/foundation/core"
 EXPECTED_DISPOSITIONS = [
     "MappedNormative",
     "MappedHistoricalNonBearer",
@@ -71,12 +73,16 @@ def main() -> None:
     physical_commitment = load_public("physical_census.commitment.v1.json")
     historical = cases["historical_non_promoting_inputs"]
     require(cases["closed_dispositions"] == EXPECTED_DISPOSITIONS, "disposition set drifted")
+    require(cases["known_upstream_interface_gaps"] == [], "closed owner route was reopened")
     require(
-        cases["known_upstream_interface_gaps"]
+        cases["production_owner_routes"]
         == [
-            "stage9_stage10_owner_consumer_snapshot_and_closure_receipt",
+            "installation_consumer_snapshot_to_migration_closure",
+            "durable_consumer_finality_receipt",
+            "foundation_v2_aggregate_census_continuation",
+            "installation_v2_pre_store_finality",
         ],
-        "upstream interface-gap ledger drifted",
+        "production owner-route closure drifted",
     )
     require(
         {
@@ -204,18 +210,14 @@ def main() -> None:
         "authoritative census gate drifted",
     )
     require(
-        gates["candidate_adapters"]
+        gates["production_owner_routes"]
         == {
-            "stage9_association": "test_only_until_real_distribution_finality_adapter_rebind",
-            "stage9_stage10_cutover_host": (
-                "test_only_until_real_host_acceptance_effect_adapter_rebind"
-            ),
-            "stage9_stage10_consumer_census": (
-                "test_only_until_real_owner_census_adapter_rebind"
-            ),
-            "integration_requirement": "replace_or_parity_prove_before_stage11_integration",
+            "consumer_snapshot": "ConsumerClosureV1::evaluate_installation_snapshot",
+            "durable_consumer_finality": "ConsumerClosureDurableLinearizationV1",
+            "aggregate_census": "census_admitted_owner_roots_v2",
+            "pre_store_finality": "stage11_finality_v2::execute_pre_store",
         },
-        "candidate adapter rebind contract drifted",
+        "production owner-route contract drifted",
     )
     require([gate["stage"] for gate in gates["gates"]] == [
         "BeforeSemanticCurrentness",
@@ -231,6 +233,10 @@ def main() -> None:
     )
     inventory_source = (RUNTIME / "inventory.rs").read_text(encoding="utf-8")
     census_source = (OPERATIONS / "census.rs").read_text(encoding="utf-8")
+    consumer_source = (RUNTIME / "consumer.rs").read_text(encoding="utf-8")
+    consumer_snapshot_source = (INSTALLATION / "consumer_snapshot.rs").read_text(encoding="utf-8")
+    installation_facade = (INSTALLATION / "mod.rs").read_text(encoding="utf-8")
+    foundation_facade = (FOUNDATION / "mod.rs").read_text(encoding="utf-8")
     require(
         all(
             token in inventory_source
@@ -279,6 +285,31 @@ def main() -> None:
     )
     for token in EXPECTED_DISPOSITIONS:
         require(token in runtime, f"missing disposition {token}")
+    require(
+        "evaluate_installation_snapshot" in consumer_source
+        and "InstallationMigrationConsumerSnapshotV1" in consumer_source
+        and "snapshot.into_parts()" in consumer_source,
+        "Migration no longer consumes the Installation-owned consumer snapshot",
+    )
+    require(
+        "ConsumerClosureDurableLinearizationV1" in consumer_snapshot_source
+        and "bind_migration_census" in consumer_snapshot_source
+        and "durable_effect.commit" in consumer_snapshot_source,
+        "Installation durable consumer finality route drifted",
+    )
+    require(
+        "pub(in crate::domain::vnext) mod stage11_finality_v2" in installation_facade
+        and "execute_pre_store" in installation_facade
+        and "ProtectedLocatorLeaseV2" in installation_facade,
+        "Installation V2 PreStore finality route drifted",
+    )
+    require(
+        "pub(crate) mod stage11_aggregate_census" in foundation_facade
+        and "census_from_stage11_owner_v2" in foundation_facade
+        and "consume_for_stage11" in foundation_facade
+        and "census_admitted_owner_roots_v2" in census_source,
+        "Foundation V2 aggregate-census owner route drifted",
+    )
     for token in (
         "AuthoritativeConsumerCensusV1",
         "NativeCancellationCausalJoinV1",
@@ -287,12 +318,8 @@ def main() -> None:
         "MigrationCutoverAssociationV1",
         "RefusedBeforeCurrentness",
         "RefusedStaleHost",
-        "Stage9CutoverAssociationAdapterV1",
-        "TestOnlyStage9CutoverFinalityV1",
         "ActiveStoreFinalityV1",
         "PreStoreFinalityV1",
-        "Stage9Stage10CutoverHostAdapterV1",
-        "Stage9Stage10ConsumerCensusAdapterV1",
     ):
         require(token in runtime, f"missing runtime proof {token}")
     require(
@@ -303,12 +330,6 @@ def main() -> None:
         "#[cfg(test)]\n    pub fn test_only_from_stage4_publication" in runtime,
         "incomplete Stage-4 H3 adapter escaped test-only scope",
     )
-    for test_only_seam in (
-        "#[cfg(test)]\npub trait Stage9CutoverAssociationAdapterV1",
-        "#[cfg(test)]\npub trait Stage9Stage10CutoverHostAdapterV1",
-        "#[cfg(test)]\npub trait Stage9Stage10ConsumerCensusAdapterV1",
-    ):
-        require(test_only_seam in runtime, f"raw owner seam is not test-only: {test_only_seam}")
     require(
         "CancellationJoinRowMismatch" in runtime
         and "Stage4PublicationReused" in runtime,
@@ -333,10 +354,6 @@ def main() -> None:
         and ".consume_for_migration(" not in runtime
         and "ConsumedH3WithdrawalPublicationV1" not in runtime,
         "frozen H3 native-cancelled member is not consumed exactly by migration",
-    )
-    require(
-        "material.association_id.as_bytes() != meaning.id().as_bytes()" in runtime,
-        "test-only Stage-9 finality does not consume the exact Stage-11 association",
     )
     require(
         "ZeroDigest" in runtime and "ZeroIdentity" in runtime,

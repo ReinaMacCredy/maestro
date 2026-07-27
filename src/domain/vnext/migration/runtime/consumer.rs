@@ -852,6 +852,29 @@ pub struct ConsumerClosureV1 {
 }
 
 impl ConsumerClosureV1 {
+    pub(in crate::domain::vnext::migration) fn evaluate_owner_snapshot_parts(
+        stage: ConsumerGateStageV1,
+        protocol: MigrationProtocolClosureV1,
+        expected_member_count: usize,
+        authority_ids: [MigrationDigestV1; 3],
+        entries: Vec<ConsumerCensusEntryV1>,
+        prune_prerequisites: PrunePrerequisitesV1,
+    ) -> Result<Self, ConsumerClosureErrorV1> {
+        let [
+            source_manifest_id,
+            owner_snapshot_id,
+            closure_attestation_id,
+        ] = authority_ids;
+        let census = AuthoritativeConsumerCensusV1::from_owner_snapshot(
+            expected_member_count,
+            source_manifest_id,
+            owner_snapshot_id,
+            closure_attestation_id,
+            entries,
+        )?;
+        Self::evaluate(stage, protocol, census, prune_prerequisites)
+    }
+
     pub(in crate::domain::vnext) fn evaluate_installation_snapshot(
         stage: ConsumerGateStageV1,
         protocol: MigrationProtocolClosureV1,
@@ -865,14 +888,18 @@ impl ConsumerClosureV1 {
             closure_attestation_id,
             entries,
         ) = snapshot.into_parts();
-        let census = AuthoritativeConsumerCensusV1::from_owner_snapshot(
+        Self::evaluate_owner_snapshot_parts(
+            stage,
+            protocol,
             expected_member_count,
-            source_manifest_id,
-            owner_snapshot_id,
-            closure_attestation_id,
+            [
+                source_manifest_id,
+                owner_snapshot_id,
+                closure_attestation_id,
+            ],
             entries,
-        )?;
-        Self::evaluate(stage, protocol, census, prune_prerequisites)
+            prune_prerequisites,
+        )
     }
 
     #[cfg(test)]

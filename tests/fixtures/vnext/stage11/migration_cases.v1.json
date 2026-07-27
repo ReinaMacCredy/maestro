@@ -41,8 +41,12 @@
     "Quarantined",
     "UnavailablePreexistingLoss"
   ],
-  "known_upstream_interface_gaps": [
-    "stage9_stage10_owner_consumer_snapshot_and_closure_receipt"
+  "known_upstream_interface_gaps": [],
+  "production_owner_routes": [
+    "installation_consumer_snapshot_to_migration_closure",
+    "durable_consumer_finality_receipt",
+    "foundation_v2_aggregate_census_continuation",
+    "installation_v2_pre_store_finality"
   ],
   "required_nominal_cases": [
     "byte_total_identity_is_order_independent",
