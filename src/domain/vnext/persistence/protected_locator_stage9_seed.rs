@@ -71,6 +71,63 @@ impl ProtectedLocatorBackendV2 for Stage9ProtectedLocatorBackendSeedV2 {
     }
 }
 
+#[cfg(test)]
+mod v2_owner_factory_compile_probe {
+    use super::*;
+
+    fn request() -> ProtectedLocatorAcquisitionRequestV2 {
+        ProtectedLocatorAcquisitionRequestV2::from_stage9_owner(
+            [1; 32], [2; 32], [3; 32], [4; 32], [5; 32], [6; 32], [7; 32], [8; 32], [9; 32],
+        )
+        .unwrap()
+    }
+
+    fn observed(request: &ProtectedLocatorAcquisitionRequestV2) -> ProtectedLocatorObservedStateV2 {
+        ProtectedLocatorObservedStateV2::from_stage9_owner(
+            request, [10; 32], [11; 32], [12; 32], [13; 32], [14; 32], [15; 32], [16; 32],
+            [17; 32], 18, [19; 32], [20; 32], [21; 32], [22; 32], [23; 32], [24; 32], 25,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn stage9_owner_seed_can_construct_only_validated_v2_backend_outputs() {
+        let request = request();
+        let observed = observed(&request);
+        let candidate = ProtectedLocatorCandidateInputV2::from_installation_owner(
+            [1; 32], [2; 32], [5; 32], [6; 32], [26; 32], [27; 32], [28; 32], [29; 32], [30; 32],
+            [9; 32],
+        )
+        .unwrap();
+        let prepared =
+            ProtectedLocatorCandidateStateV2::from_stage9_owner(&request, &observed, candidate)
+                .unwrap();
+        let _readback = ProtectedLocatorFinalReadbackV2::exact_candidate_from_stage9_owner(
+            &request, observed, &prepared,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn stage9_owner_factories_reject_zero_or_unbound_currentness() {
+        assert!(matches!(
+            ProtectedLocatorAcquisitionRequestV2::from_stage9_owner(
+                [0; 32], [2; 32], [3; 32], [4; 32], [5; 32], [6; 32], [7; 32], [8; 32], [9; 32],
+            ),
+            Err(ProtectedLocatorLeaseErrorV2::InvalidAcquisition)
+        ));
+
+        let request = request();
+        assert!(matches!(
+            ProtectedLocatorObservedStateV2::from_stage9_owner(
+                &request, [10; 32], [11; 32], [12; 32], [13; 32], [14; 32], [15; 32], [16; 32],
+                [0; 32], 18, [19; 32], [20; 32], [21; 32], [22; 32], [23; 32], [24; 32], 25,
+            ),
+            Err(ProtectedLocatorLeaseErrorV2::InvalidAcquisition)
+        ));
+    }
+}
+
 pub(in crate::domain::vnext::persistence) fn acquire_protected_locator_lease_v2(
     backend: &mut dyn ProtectedLocatorBackendV2,
 ) -> Result<ProtectedLocatorLeaseV2<'_>, ProtectedLocatorLeaseErrorV2> {

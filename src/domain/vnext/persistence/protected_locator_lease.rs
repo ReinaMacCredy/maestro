@@ -22,6 +22,52 @@ pub(in crate::domain::vnext) struct ProtectedLocatorAcquisitionRequestV2 {
     invocation: [u8; 32],
 }
 
+impl ProtectedLocatorAcquisitionRequestV2 {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the Persistence owner must bind the complete pre-candidate acquisition tuple"
+    )]
+    pub(in crate::domain::vnext::persistence) fn from_stage9_owner(
+        installation: [u8; 32],
+        realm: [u8; 32],
+        installation_domain: [u8; 32],
+        operation: [u8; 32],
+        ceremony_spec: [u8; 32],
+        attempt: [u8; 32],
+        source_carrier: [u8; 32],
+        target: [u8; 32],
+        invocation: [u8; 32],
+    ) -> Result<Self, ProtectedLocatorLeaseErrorV2> {
+        let request = Self {
+            installation,
+            realm,
+            installation_domain,
+            operation,
+            ceremony_spec,
+            attempt,
+            source_carrier,
+            target,
+            invocation,
+        };
+        if [
+            request.installation,
+            request.realm,
+            request.installation_domain,
+            request.operation,
+            request.ceremony_spec,
+            request.attempt,
+            request.source_carrier,
+            request.target,
+            request.invocation,
+        ]
+        .contains(&[0; 32])
+        {
+            return Err(ProtectedLocatorLeaseErrorV2::InvalidAcquisition);
+        }
+        Ok(request)
+    }
+}
+
 #[derive(Eq, PartialEq)]
 pub(in crate::domain::vnext) struct ProtectedLocatorObservedStateV2 {
     facility: [u8; 32],
@@ -44,6 +90,57 @@ pub(in crate::domain::vnext) struct ProtectedLocatorObservedStateV2 {
     state_token: [u8; 32],
     fence: [u8; 32],
     revocation_revision: u64,
+}
+
+impl ProtectedLocatorObservedStateV2 {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the Persistence owner observation binds the complete locator currentness tuple"
+    )]
+    pub(in crate::domain::vnext::persistence) fn from_stage9_owner(
+        request: &ProtectedLocatorAcquisitionRequestV2,
+        facility: [u8; 32],
+        provider_incarnation: [u8; 32],
+        external_anchor: [u8; 32],
+        backend_capability: [u8; 32],
+        locator_identity: [u8; 32],
+        locator_root: [u8; 32],
+        custody_class: [u8; 32],
+        observed_cas: [u8; 32],
+        cas_version: u64,
+        cas_incarnation: [u8; 32],
+        publication_incarnation: [u8; 32],
+        restore_incarnation: [u8; 32],
+        currentness: [u8; 32],
+        state_token: [u8; 32],
+        fence: [u8; 32],
+        revocation_revision: u64,
+    ) -> Result<Self, ProtectedLocatorLeaseErrorV2> {
+        let observed = Self {
+            facility,
+            provider_incarnation,
+            external_anchor,
+            backend_capability,
+            installation: request.installation,
+            realm: request.realm,
+            installation_domain: request.installation_domain,
+            locator_identity,
+            locator_root,
+            custody_class,
+            observed_carrier: request.source_carrier,
+            observed_cas,
+            cas_version,
+            cas_incarnation,
+            publication_incarnation,
+            restore_incarnation,
+            currentness,
+            state_token,
+            fence,
+            revocation_revision,
+        };
+        validate_acquisition(request, &observed)?;
+        Ok(observed)
+    }
 }
 
 #[derive(Eq, PartialEq)]
@@ -114,6 +211,34 @@ pub(in crate::domain::vnext) struct ProtectedLocatorCandidateStateV2 {
     transition_commitment: [u8; 32],
 }
 
+impl ProtectedLocatorCandidateStateV2 {
+    pub(in crate::domain::vnext::persistence) fn from_stage9_owner(
+        request: &ProtectedLocatorAcquisitionRequestV2,
+        acquisition: &ProtectedLocatorObservedStateV2,
+        candidate: ProtectedLocatorCandidateInputV2,
+    ) -> Result<Self, ProtectedLocatorLeaseErrorV2> {
+        validate_acquisition(request, acquisition)?;
+        let transition_commitment = protected_locator_commitment(
+            b"maestro.persistence.protected-locator-candidate-transition.v2\0",
+            &[
+                &request.invocation,
+                &acquisition.observed_cas,
+                &candidate.candidate_association,
+                &candidate.candidate_root,
+                &candidate.candidate_carrier,
+                &candidate.candidate_seal,
+                &candidate.candidate_postcondition,
+            ],
+        );
+        let prepared = Self {
+            candidate,
+            transition_commitment,
+        };
+        validate_candidate(request, acquisition, &prepared)?;
+        Ok(prepared)
+    }
+}
+
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub(in crate::domain::vnext) enum ProtectedLocatorDispatchOccurrenceV2 {
     Definite,
@@ -127,6 +252,23 @@ pub(in crate::domain::vnext) struct ProtectedLocatorFinalReadbackV2 {
     candidate_carrier: [u8; 32],
     candidate_seal: [u8; 32],
     candidate_postcondition: [u8; 32],
+}
+
+impl ProtectedLocatorFinalReadbackV2 {
+    pub(in crate::domain::vnext::persistence) fn exact_candidate_from_stage9_owner(
+        request: &ProtectedLocatorAcquisitionRequestV2,
+        observed: ProtectedLocatorObservedStateV2,
+        prepared: &ProtectedLocatorCandidateStateV2,
+    ) -> Result<Self, ProtectedLocatorLeaseErrorV2> {
+        validate_acquisition(request, &observed)?;
+        Ok(Self {
+            observed,
+            candidate_root: prepared.candidate.candidate_root,
+            candidate_carrier: prepared.candidate.candidate_carrier,
+            candidate_seal: prepared.candidate.candidate_seal,
+            candidate_postcondition: prepared.candidate.candidate_postcondition,
+        })
+    }
 }
 
 pub(in crate::domain::vnext) trait ProtectedLocatorBackendV2:
