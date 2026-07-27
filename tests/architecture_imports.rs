@@ -3199,7 +3199,8 @@ fn stage5_protected_diagnostic_ports_are_sealed_test_only_and_non_bearer() {
     assert!(stage10_seed.contains("impl sealed::Attestation"));
     assert!(stage10_seed.contains("impl sealed::Presentation"));
     assert!(
-        stage10_seed.contains("connection: &'connection mut Stage10OwnerLocalConnectionSeedV1")
+        stage10_seed
+            .contains("connection: &'connection mut Stage10OwnerLocalConnectionSeedV1<'host>")
     );
     assert!(stage10_seed.contains("challenge: TrustedHostDiagnosticChallengeV1"));
     assert!(integration.contains(
@@ -3318,7 +3319,7 @@ fn stage5_protected_diagnostic_ports_are_sealed_test_only_and_non_bearer() {
     }
     assert!(diagnostic_kernel.contains("ProtectedContinuityDiagnosticEnvelopeInputV1::new("));
     assert!(diagnostic_kernel.contains("prepare_current_protected_snapshot("));
-    assert!(stage8_seed.contains("#[cfg(not(test))]"));
+    assert!(stage8_seed.contains("encode_canonical_envelope(input)?"));
     assert!(
         stage8_seed.contains("ProtectedContinuityDiagnosticAssemblerModeV1::SubstituteAdmission")
     );
@@ -3668,6 +3669,11 @@ fn stage5_protected_diagnostic_ports_are_sealed_test_only_and_non_bearer() {
         stage10_seed
             .contains("fn stage10_owner_local_descendant_can_implement_the_sealed_host_ports")
     );
+    assert!(stage10_seed.contains("claim_authenticated_invocation_no_io"));
+    assert!(stage10_seed.contains("recheck_authenticated_invocation_no_io"));
+    assert!(stage10_seed.contains("acquire_from_authenticated_host"));
+    assert!(!stage10_seed.contains("fixed_digest_getters"));
+    assert!(!stage10_seed.contains("fixed_revision_getters"));
     assert!(
         stage9_seed
             .contains("fn stage9_owner_local_descendant_can_mint_only_structured_live_currentness")
@@ -3751,8 +3757,11 @@ fn stage5_successor_seams_are_owner_private_and_production_replaceable() {
             .contains("pub(in crate::domain::vnext) struct SchedulingPolicyPublicationInputV1")
     );
     assert!(authority_facade.contains("pub(super) fn new("));
-    assert!(authority_facade.contains("pub(super) fn publish_scheduling_policy_without_downgrade"));
-    assert!(authority_facade.contains("pub(super) fn publish_scheduling_policy_with_downgrade"));
+    assert!(authority_facade.contains("pub(super) fn publish_scheduling_policy("));
+    assert!(
+        !authority_facade.contains("pub(super) fn publish_scheduling_policy_without_downgrade")
+    );
+    assert!(!authority_facade.contains("pub(super) fn publish_scheduling_policy_with_downgrade"));
     assert!(vnext_module.contains("stage7_governance_seed_compile_probe"));
     assert!(vnext_module.contains("stage7_sibling_can_name_and_call_only_the_seed_owned_entry"));
 

@@ -6,12 +6,7 @@ use super::facade::{
     StorePublicationOutcomeV1,
 };
 use super::governance_attestation::PlanningSchedulingPolicyInputV1;
-use crate::domain::vnext::identity::StoreObjectIdV1;
-
-pub(in crate::domain::vnext) enum SchedulingPolicyPublicationKindV1 {
-    EquivalentOrStrengthening,
-    WeakeningOrIncomparableWithMandate,
-}
+use crate::domain::vnext::planning::{SchedulingPolicySnapshotV1, SchedulingSafetyFloorV1};
 
 #[expect(
     clippy::too_many_arguments,
@@ -24,35 +19,27 @@ pub(in crate::domain::vnext) fn publish_scheduling_policy_from_stage7(
     request_id: ActionRequestIdV1,
     request_object: StoreObjectV1,
     binding_object: StoreObjectV1,
-    current_binding_root: Option<StoreObjectIdV1>,
-    planning: PlanningSchedulingPolicyInputV1,
-    kind: SchedulingPolicyPublicationKindV1,
+    requested_policy: &SchedulingPolicySnapshotV1,
+    scheduling_safety_floor: &SchedulingSafetyFloorV1,
 ) -> Result<
     StorePublicationOutcomeV1,
     AuthorityMaterializationPublicationErrorV1<SchedulingPolicyMaterializationErrorV1>,
 > {
+    let planning = PlanningSchedulingPolicyInputV1::from_stage7_planning(
+        requested_policy,
+        scheduling_safety_floor,
+    )
+    .map_err(SchedulingPolicyMaterializationErrorV1::from)
+    .map_err(AuthorityMaterializationPublicationErrorV1::Prepare)?;
     let input = SchedulingPolicyPublicationInputV1::new(
         request_id,
         request_object,
         binding_object,
-        current_binding_root,
         planning,
     );
-    match kind {
-        SchedulingPolicyPublicationKindV1::EquivalentOrStrengthening => {
-            facade.publish_scheduling_policy_without_downgrade(probe, authority, input)
-        }
-        SchedulingPolicyPublicationKindV1::WeakeningOrIncomparableWithMandate => {
-            facade.publish_scheduling_policy_with_downgrade(probe, authority, input)
-        }
-    }
+    facade.publish_scheduling_policy(probe, authority, input)
 }
 
 const _: fn() = || {
     let _ = publish_scheduling_policy_from_stage7;
 };
-
-const _: [SchedulingPolicyPublicationKindV1; 2] = [
-    SchedulingPolicyPublicationKindV1::EquivalentOrStrengthening,
-    SchedulingPolicyPublicationKindV1::WeakeningOrIncomparableWithMandate,
-];

@@ -119,6 +119,10 @@ impl SchedulingSafetyFloorV1 {
             u64::MAX - self.maximum_overload_opportunity_limit,
         ]
     }
+
+    pub(crate) const fn semantic_hash(&self) -> [u8; 32] {
+        self.semantic_hash
+    }
 }
 
 pub(crate) fn classify_policy_diff(

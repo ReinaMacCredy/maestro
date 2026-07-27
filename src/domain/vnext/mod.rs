@@ -32,47 +32,11 @@ pub mod work;
 
 #[cfg(test)]
 mod stage7_governance_seed_compile_probe {
-    use super::authority::governance_attestation::PlanningSchedulingPolicyInputV1;
-    use super::authority::governance_attestation_stage7_seed::{
-        SchedulingPolicyPublicationKindV1, publish_scheduling_policy_from_stage7,
-    };
-    use super::authority::{
-        ActionRequestIdV1, AuthorityFacadeV1, PlanningRepositoryActionAuthorityV1,
-    };
-    use super::identity::StoreObjectIdV1;
-    use super::persistence::{StoreIdempotencyProbeV1, StoreObjectV1};
-
-    struct Stage7SchedulingPolicyCallerV1<'caller, 'store> {
-        facade: &'caller mut AuthorityFacadeV1<'store>,
-        probe: &'caller StoreIdempotencyProbeV1,
-        authority: PlanningRepositoryActionAuthorityV1,
-        request_id: ActionRequestIdV1,
-        request_object: StoreObjectV1,
-        binding_object: StoreObjectV1,
-        current_binding_root: Option<StoreObjectIdV1>,
-        planning: PlanningSchedulingPolicyInputV1,
-        kind: SchedulingPolicyPublicationKindV1,
-    }
-
-    fn stage7_can_call_the_complete_frozen_authority_operation(
-        caller: Stage7SchedulingPolicyCallerV1<'_, '_>,
-    ) {
-        let _ = publish_scheduling_policy_from_stage7(
-            caller.facade,
-            caller.probe,
-            caller.authority,
-            caller.request_id,
-            caller.request_object,
-            caller.binding_object,
-            caller.current_binding_root,
-            caller.planning,
-            caller.kind,
-        );
-    }
+    use super::authority::governance_attestation_stage7_seed::publish_scheduling_policy_from_stage7;
 
     #[test]
     fn stage7_sibling_can_name_and_call_only_the_seed_owned_entry() {
-        let _ = stage7_can_call_the_complete_frozen_authority_operation;
+        let _ = publish_scheduling_policy_from_stage7;
     }
 }
 

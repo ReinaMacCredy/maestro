@@ -9,7 +9,6 @@ pub(in crate::domain::vnext) mod consumer_closure;
 pub mod public_literals;
 
 mod trusted_host_diagnostic;
-#[cfg(test)]
 mod trusted_host_diagnostic_stage10_seed;
 
 #[allow(
@@ -24,4 +23,12 @@ pub(crate) use trusted_host_diagnostic::{
 pub(crate) use trusted_host_diagnostic::{
     TrustedHostDiagnosticTestClaimsV1, TrustedHostDiagnosticTestConnectionV1,
     TrustedHostDiagnosticTestControlV1, TrustedHostDiagnosticTestOperatorIdentityV1,
+};
+#[allow(
+    unused_imports,
+    reason = "host adapters need to name the authenticated snapshot callback contract"
+)]
+pub(crate) use trusted_host_diagnostic_stage10_seed::{
+    AuthenticatedHostConnectionSnapshotV1, LiveAuthenticatedHostConnectionV1,
+    Stage10OwnerLocalConnectionSeedV1,
 };

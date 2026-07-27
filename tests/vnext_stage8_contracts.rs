@@ -61,11 +61,8 @@ fn protected_diagnostic_builder_is_canonical_in_tests_and_facade_owned_in_produc
             ".map(|released| released.into_bytes())",
             "encode_canonical_envelope(input)?",
             "ProtectedContinuityDiagnosticAssemblerModeV1::Canonical",
-            "#[cfg(not(test))]",
             "#[cfg(test)]",
             "Some(candidate)",
-            "let _ = (input, mode);",
-            "None",
         ],
     );
     assert!(!source.contains("Box<dyn"));
@@ -226,18 +223,16 @@ fn raw_action_adapters_are_test_only_and_match_the_atomic_authority_shape() {
             "fn execute_scheduling_policy_materialization(",
             "fn derive_scheduling_policy_binding_facts(",
             "self.publish_repository_materialization(probe, move |port| {",
-            "port.execute_scheduling_policy_materialization(probe, owner, requires_downgrade_mandate)",
+            "port.execute_scheduling_policy_materialization(probe, owner)",
             "pub(super) struct SchedulingPolicyPublicationInputV1",
             "impl SchedulingPolicyPublicationInputV1 {\n    pub(super) fn new(",
-            "pub(super) fn publish_scheduling_policy_without_downgrade(",
-            "pub(super) fn publish_scheduling_policy_with_downgrade(",
+            "pub(super) fn publish_scheduling_policy(",
         ],
     );
     for widened in [
         "pub(in crate::domain::vnext) struct SchedulingPolicyPublicationInputV1",
         "impl SchedulingPolicyPublicationInputV1 {\n    pub(in crate::domain::vnext) fn new(",
-        "pub(in crate::domain::vnext) fn publish_scheduling_policy_without_downgrade(",
-        "pub(in crate::domain::vnext) fn publish_scheduling_policy_with_downgrade(",
+        "pub(in crate::domain::vnext) fn publish_scheduling_policy(",
     ] {
         assert!(
             !facade.contains(widened),
@@ -250,8 +245,8 @@ fn raw_action_adapters_are_test_only_and_match_the_atomic_authority_shape() {
         &[
             "pub(in crate::domain::vnext) fn publish_scheduling_policy_from_stage7(",
             "SchedulingPolicyPublicationInputV1::new(",
-            "facade.publish_scheduling_policy_without_downgrade(",
-            "facade.publish_scheduling_policy_with_downgrade(",
+            "facade.publish_scheduling_policy(",
+            "PlanningSchedulingPolicyInputV1::from_stage7_planning(",
         ],
     );
     assert!(

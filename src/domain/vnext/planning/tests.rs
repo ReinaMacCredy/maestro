@@ -773,7 +773,6 @@ fn scheduling_publication_uses_live_authority_facts_in_one_store_transaction() {
             ),
             request_object: request_object.clone(),
             binding_object: forged_binding_object,
-            current_binding: None,
         },
     )
     .unwrap_err();
@@ -804,7 +803,6 @@ fn scheduling_publication_uses_live_authority_facts_in_one_store_transaction() {
             ),
             request_object: request_object.clone(),
             binding_object: binding_object.clone(),
-            current_binding: None,
         },
     )
     .expect("stage7 planning test invariant");

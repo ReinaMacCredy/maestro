@@ -40,8 +40,8 @@ pub(crate) use model::{
     reason = "Stage-7 atomic Scheduling publication is frozen before its downstream adapters"
 )]
 pub(crate) use publication::{
-    PublishedSchedulingPolicyBindingV1, SchedulingPolicyPublicationErrorV1,
-    SchedulingPolicyPublicationInputV1, publish_scheduling_policy_binding,
+    SchedulingPolicyPublicationErrorV1, SchedulingPolicyPublicationInputV1,
+    publish_scheduling_policy_binding,
 };
 #[allow(
     unused_imports,

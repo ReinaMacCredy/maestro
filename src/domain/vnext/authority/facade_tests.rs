@@ -9,18 +9,17 @@ use sha2::{Digest, Sha256};
 
 use super::*;
 use crate::domain::vnext::authority::{
-    AuthorityMandateV1, AuthorityRevocationSetV1, AuthoritySnapshotV1, AuthorityUseConstraintV1,
+    AuthorityRevocationSetV1, AuthoritySnapshotV1, AuthorityUseConstraintV1,
     BootstrapContinuityTransitionProofV1, BootstrapG0PathV1, BootstrapInteractionSubjectV1,
-    BootstrapMandateInteractionObservationJoinV1, BootstrapMandateIssuanceBindingV1,
-    BootstrapMandatePresentationObservationV1, BootstrapMandateResponseObservationV1,
-    BootstrapMandateTargetV1, BootstrapResponseDispositionV1, CapacityRootIdV1,
-    ConsentSlotEvaluationFactsV1, DelegationIdV1, DelegationV1, GenesisGrantIdV1,
-    GovernedCapacityKindV1, GovernedCapacityRootV1, GrantActionIdentityV1,
-    GrantAdministrationAuthorityV1, GrantDefinitionV1, GrantIdV1, GrantScopeV1, HalfOpenValidityV1,
-    IdempotencyKeyIdV1, IssueBootstrapMandateInputV1, IssueBootstrapMandateRequestV1,
-    IssueRootAttachedBoundedGrantPublicationV1, OrdinaryBoundedGrantV1, OrdinaryGrantDelegationV1,
-    PrincipalBindingIdV1, PrincipalBindingV1, PrincipalIdV1,
-    ReissueRootAttachedGrantOneToOnePublicationV1, RepositoryDownstreamActionLeafV1,
+    BootstrapMandateInteractionObservationJoinV1, BootstrapMandatePresentationObservationV1,
+    BootstrapMandateResponseObservationV1, BootstrapMandateTargetV1,
+    BootstrapResponseDispositionV1, CapacityRootIdV1, ConsentSlotEvaluationFactsV1, DelegationIdV1,
+    DelegationV1, GenesisGrantIdV1, GovernedCapacityKindV1, GovernedCapacityRootV1,
+    GrantActionIdentityV1, GrantAdministrationAuthorityV1, GrantDefinitionV1, GrantIdV1,
+    GrantScopeV1, HalfOpenValidityV1, IdempotencyKeyIdV1, IssueBootstrapMandateInputV1,
+    IssueBootstrapMandateRequestV1, IssueRootAttachedBoundedGrantPublicationV1,
+    OrdinaryBoundedGrantV1, OrdinaryGrantDelegationV1, PrincipalBindingIdV1, PrincipalBindingV1,
+    PrincipalIdV1, ReissueRootAttachedGrantOneToOnePublicationV1, RepositoryDownstreamActionLeafV1,
     RepositoryGovernedCapacitySlotKindV1, RevocationSetV1, RevocationTargetV1,
     RevokeGrantPublicationV1, ScopeAtomV1, SessionIdV1, SessionV1, TargetActionEffectKindV1,
     TargetActionOwnerV1, TargetActionProjectionV1, TargetActionProtocolV1, TargetExpectedHeadsV1,
@@ -35,6 +34,10 @@ use crate::domain::vnext::persistence::{
     ProtectedDiagnosticTestAnchorMutationV1, ProtectedDiagnosticTestCurrentViewProviderV1,
 };
 use crate::domain::vnext::persistence::{StoreDomainV1, StoreRoleV1};
+use crate::domain::vnext::planning::{
+    SchedulingPolicyBindingV1, SchedulingPolicySnapshotV1, SchedulingSafetyFloorV1,
+    SemanticPolicyDiffKindV1, SemanticPolicyDiffV1,
+};
 use crate::domain::vnext::repository::RepositoryStoreSchemaV1;
 
 fn reference(seed: &str) -> ContinuityReferenceV1 {
@@ -43,36 +46,6 @@ fn reference(seed: &str) -> ContinuityReferenceV1 {
 
 fn digest(seed: &str) -> [u8; 32] {
     Sha256::digest(seed.as_bytes()).into()
-}
-
-fn scheduling_planning_input(
-    current_policy: [u64; 4],
-    candidate_policy: [u64; 4],
-    current_binding_root: Option<StoreObjectIdV1>,
-    binding_object: &StoreObjectV1,
-    request_id: ActionRequestIdV1,
-    probe: &StoreIdempotencyProbeV1,
-) -> PlanningSchedulingPolicyInputV1 {
-    let normalize = |policy: [u64; 4]| {
-        policy.map(|value| {
-            if value == 0 {
-                0
-            } else {
-                (u64::MAX - 1_000) + value
-            }
-        })
-    };
-    PlanningSchedulingPolicyInputV1::from_stage7_planning(
-        normalize(current_policy),
-        normalize(candidate_policy),
-        current_binding_root.map_or([0xA5; 32], |root| *root.as_bytes()),
-        *binding_object.id().as_bytes(),
-        *request_id.as_bytes(),
-        *binding_object.id().as_bytes(),
-        *probe.key_digest(),
-        *probe.meaning_digest(),
-    )
-    .unwrap()
 }
 
 fn repository_governance_floor_for_fixture(
@@ -111,6 +84,56 @@ fn repository_governance_floor_for_fixture(
     )
     .unwrap()
     .to_store_object()
+    .unwrap()
+}
+
+fn scheduling_policy(maximum: u64, label: &str) -> SchedulingPolicySnapshotV1 {
+    SchedulingPolicySnapshotV1::new(
+        format!("policy:{label}"),
+        "evaluator:scheduling-v1".to_owned(),
+        1,
+        "core:scheduling-v1".to_owned(),
+        maximum,
+        maximum,
+        maximum,
+        maximum,
+    )
+    .unwrap()
+}
+
+fn scheduling_safety_floor(maximum: u64) -> SchedulingSafetyFloorV1 {
+    SchedulingSafetyFloorV1::new(
+        "floor:scheduling-v1".to_owned(),
+        "core:scheduling-v1".to_owned(),
+        digest("classifier:scheduling-v1"),
+        1,
+        maximum,
+        maximum,
+        maximum,
+        maximum,
+    )
+    .unwrap()
+}
+
+fn scheduling_binding(
+    revision: u64,
+    expected_old: Option<&SchedulingPolicyBindingV1>,
+    policy: SchedulingPolicySnapshotV1,
+    kind: SemanticPolicyDiffKindV1,
+) -> SchedulingPolicyBindingV1 {
+    SchedulingPolicyBindingV1::new(
+        "repository:test".to_owned(),
+        format!("generation:{revision}"),
+        revision,
+        expected_old.map(|binding| binding.semantic_hash),
+        policy.clone(),
+        SemanticPolicyDiffV1 {
+            old_policy_hash: expected_old.map(|binding| binding.policy.semantic_hash),
+            candidate_policy_hash: policy.semantic_hash,
+            classifier_hash: digest("authority-scheduling-classifier"),
+            kind,
+        },
+    )
     .unwrap()
 }
 
@@ -1218,22 +1241,22 @@ fn put_objects_in_reference_order(store: &mut StoreV1, objects: Vec<StoreObjectV
 }
 
 #[test]
-fn scheduling_materialization_is_one_atomic_authority_operation() {
+fn scheduling_publication_derives_the_unique_active_root_inside_authority() {
     use super::test_support::{AuthorityFixtureModeV1, repository_owner_family_authority_fixture};
 
     let action = RepositoryDownstreamActionLeafV1::PUBLISH_SCHEDULING_POLICY_BINDING;
-    let subject = digest("scheduling-materialization-subject");
-    let owner_basis = digest("scheduling-materialization-owner-basis");
+    let subject = digest("authority-owned-scheduling-root-subject");
+    let owner_basis = digest("authority-owned-scheduling-root-basis");
     let mut fixture = repository_owner_family_authority_fixture(
         vec![(action.literal(), subject)],
         AuthorityFixtureModeV1::Valid,
     );
     let root = test_root();
     let domain =
-        StoreDomainV1::derive(StoreRoleV1::Repository, b"scheduling-materialization").unwrap();
-    let mut store = StoreV1::create(&root, domain.clone()).unwrap();
+        StoreDomainV1::derive(StoreRoleV1::Repository, b"authority-scheduling-root").unwrap();
     let governance_floor = repository_governance_floor_for_fixture(&domain, &fixture);
     fixture.objects.push(governance_floor.clone());
+    let mut store = StoreV1::create(&root, domain.clone()).unwrap();
     put_objects_in_reference_order(&mut store, fixture.objects);
     let mut roots = vec![fixture.authority_root_id, governance_floor.id()];
     roots.sort_unstable();
@@ -1241,321 +1264,14 @@ fn scheduling_materialization_is_one_atomic_authority_operation() {
         domain,
         1,
         None,
-        ContractRootIdV1::from_digest(digest("scheduling-materialization-contract")),
-        StoreCompatibilityV1::stage0_successor().unwrap(),
-        roots,
-    )
-    .unwrap();
-    let initial_head = store.publish_generation(&generation, None).unwrap();
-    let connection = Connection::open(root.join("store.sqlite3")).unwrap();
-    assert_eq!(
-        connection
-            .execute(
-                "UPDATE store_state SET state = 'active', state_revision = state_revision + 1
-                 WHERE singleton = 1",
-                [],
-            )
-            .unwrap(),
-        1
-    );
-
-    let request_object = StoreObjectV1::new(
-        RepositoryStoreSchemaV1::WorkRecord.schema_id().unwrap(),
-        CborValue::text("scheduling-materialization-request").unwrap(),
-        vec![],
-    )
-    .unwrap();
-    let binding_object = StoreObjectV1::new(
-        RepositoryStoreSchemaV1::WorkRecord.schema_id().unwrap(),
-        CborValue::text("scheduling-materialization-binding").unwrap(),
-        vec![],
-    )
-    .unwrap();
-    let request_id = ActionRequestIdV1::derive("scheduling-materialization-request").unwrap();
-    let authority = PlanningRepositoryActionAuthorityV1::new(
-        fixture.selection,
-        action,
-        subject,
-        owner_basis,
-        *binding_object.id().as_bytes(),
-    )
-    .unwrap();
-    let probe = StoreIdempotencyProbeV1::new(
-        "maestro.test.scheduling-materialization.v1",
-        digest("scheduling-materialization-idempotency-key"),
-        digest("scheduling-materialization-idempotency-meaning"),
-    )
-    .unwrap();
-
-    let forged_authority = PlanningRepositoryActionAuthorityV1::new(
-        fixture.selection,
-        action,
-        subject,
-        owner_basis,
-        digest("forged-scheduling-materialization-payload"),
-    )
-    .unwrap();
-    let rejected_head = store.active_head().unwrap().unwrap();
-    assert!(matches!(
-        AuthorityFacadeV1::new(&mut store).publish_scheduling_policy_without_downgrade(
-            &probe,
-            forged_authority,
-            SchedulingPolicyPublicationInputV1::new(
-                request_id,
-                request_object.clone(),
-                binding_object.clone(),
-                None,
-                scheduling_planning_input(
-                    [4; 4],
-                    [5; 4],
-                    None,
-                    &binding_object,
-                    request_id,
-                    &probe,
-                ),
-            ),
-        ),
-        Err(AuthorityMaterializationPublicationErrorV1::Prepare(
-            SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput
-        ))
-    ));
-    assert_eq!(store.active_head().unwrap().unwrap(), rejected_head);
-
-    let weakening_without_mandate = AuthorityFacadeV1::new(&mut store)
-        .publish_scheduling_policy_without_downgrade(
-            &probe,
-            authority,
-            SchedulingPolicyPublicationInputV1::new(
-                request_id,
-                request_object.clone(),
-                binding_object.clone(),
-                None,
-                scheduling_planning_input(
-                    [4; 4],
-                    [3; 4],
-                    None,
-                    &binding_object,
-                    request_id,
-                    &probe,
-                ),
-            ),
-        );
-    assert!(
-        matches!(
-            weakening_without_mandate,
-            Err(AuthorityMaterializationPublicationErrorV1::Prepare(
-                SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput
-            ))
-        ),
-        "unexpected weakening result: {weakening_without_mandate:?}"
-    );
-    assert_eq!(store.active_head().unwrap().unwrap(), rejected_head);
-
-    assert!(matches!(
-        AuthorityFacadeV1::new(&mut store).publish_scheduling_policy_with_downgrade(
-            &probe,
-            authority,
-            SchedulingPolicyPublicationInputV1::new(
-                request_id,
-                request_object.clone(),
-                binding_object.clone(),
-                None,
-                scheduling_planning_input(
-                    [4; 4],
-                    [5; 4],
-                    None,
-                    &binding_object,
-                    request_id,
-                    &probe,
-                ),
-            ),
-        ),
-        Err(AuthorityMaterializationPublicationErrorV1::Prepare(
-            SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput
-        ))
-    ));
-    assert_eq!(store.active_head().unwrap().unwrap(), rejected_head);
-
-    let committed = AuthorityFacadeV1::new(&mut store)
-        .publish_scheduling_policy_without_downgrade(
-            &probe,
-            authority,
-            SchedulingPolicyPublicationInputV1::new(
-                request_id,
-                request_object.clone(),
-                binding_object.clone(),
-                None,
-                scheduling_planning_input(
-                    [4; 4],
-                    [5; 4],
-                    None,
-                    &binding_object,
-                    request_id,
-                    &probe,
-                ),
-            ),
-        )
-        .unwrap();
-    assert!(matches!(
-        committed,
-        StorePublicationOutcomeV1::Committed { .. }
-    ));
-    assert_ne!(committed.head().id(), initial_head.id());
-    assert!(
-        store
-            .generation(committed.head().generation_id())
-            .unwrap()
-            .roots()
-            .contains(&governance_floor.id())
-    );
-
-    let replay_planning =
-        scheduling_planning_input([4; 4], [5; 4], None, &binding_object, request_id, &probe);
-    let replayed = AuthorityFacadeV1::new(&mut store)
-        .publish_scheduling_policy_without_downgrade(
-            &probe,
-            authority,
-            SchedulingPolicyPublicationInputV1::new(
-                request_id,
-                request_object,
-                binding_object,
-                None,
-                replay_planning,
-            ),
-        )
-        .unwrap();
-    assert!(matches!(
-        replayed,
-        StorePublicationOutcomeV1::Replayed { .. }
-    ));
-    assert_eq!(replayed.head().id(), committed.head().id());
-
-    let facade_source = include_str!("facade.rs");
-    assert!(!facade_source.contains("pub(crate) fn publish_repository_materialization"));
-    assert!(!facade_source.contains("pub(crate) fn publish_scheduling_policy_materialization"));
-    let materialization_source = include_str!("materialization.rs");
-    assert!(!materialization_source.contains("pub(crate) struct RepositoryActionBindingFactsV1"));
-    assert!(
-        !materialization_source
-            .contains("pub(crate) struct SchedulingPolicyDowngradeMandateFactsV1")
-    );
-
-    drop(store);
-    fs::remove_dir_all(root).unwrap();
-}
-
-#[test]
-fn scheduling_downgrade_resolves_and_consumes_one_live_stored_mandate() {
-    use super::test_support::{AuthorityFixtureModeV1, repository_owner_family_authority_fixture};
-
-    let action = RepositoryDownstreamActionLeafV1::PUBLISH_SCHEDULING_POLICY_BINDING;
-    let subject = digest("scheduling-downgrade-subject");
-    let owner_basis = digest("scheduling-downgrade-owner-basis");
-    let mut fixture = repository_owner_family_authority_fixture(
-        vec![(action.literal(), subject)],
-        AuthorityFixtureModeV1::Valid,
-    );
-    let request_object = StoreObjectV1::new(
-        RepositoryStoreSchemaV1::WorkRecord.schema_id().unwrap(),
-        CborValue::text("scheduling-downgrade-request").unwrap(),
-        vec![],
-    )
-    .unwrap();
-    let binding_object = StoreObjectV1::new(
-        RepositoryStoreSchemaV1::WorkRecord.schema_id().unwrap(),
-        CborValue::text("scheduling-downgrade-binding").unwrap(),
-        vec![],
-    )
-    .unwrap();
-    let authority_root = fixture.authority_root_id;
-    let snapshot_object = one_schema_object(
-        &fixture.objects,
-        AuthoritySchemaV1::BootstrapAuthoritySnapshot,
-    )
-    .unwrap();
-    let snapshot = BootstrapAuthoritySnapshotV1::from_canonical_bytes(
-        &object_value_bytes(&snapshot_object).unwrap(),
-    )
-    .unwrap();
-    let consent_object = one_schema_object(
-        &fixture.objects,
-        AuthoritySchemaV1::ConsentSlotBindingParameter,
-    )
-    .unwrap();
-    let interaction_closure = digest("scheduling-downgrade-interaction-closure");
-    let mandate_value = CborValue::Array(vec![
-        CborValue::text(AuthorityMandateV1::SCHEMA_DOMAIN).unwrap(),
-        CborValue::Bytes(snapshot.context().context_id().as_bytes().to_vec()),
-        CborValue::text(action.literal()).unwrap(),
-        CborValue::text(scheduling_policy_mandate_subject(binding_object.id())).unwrap(),
-        CborValue::Unsigned(1),
-        consent_object.value().clone(),
-        CborValue::Bytes(snapshot.responder_binding().id().as_bytes().to_vec()),
-        CborValue::Unsigned(snapshot.responder_binding().assurance_revision()),
-        CborValue::Bytes(interaction_closure.to_vec()),
-        CborValue::Bytes(owner_basis.to_vec()),
-        CborValue::Unsigned(110),
-        CborValue::Unsigned(190),
-        CborValue::Unsigned(1),
-        CborValue::Unsigned(0),
-    ]);
-    let mandate_object = authority_object(
-        AuthoritySchemaV1::AuthorityMandate,
-        mandate_value,
-        vec![consent_object.id(), authority_root],
-    )
-    .unwrap();
-    let mandate_id = MandateIdV1::from_digest(
-        Sha256::digest(object_value_bytes(&mandate_object).unwrap()).into(),
-    );
-    let carrier_object = authority_object(
-        AuthoritySchemaV1::BootstrapMandateIssuanceBinding,
-        CborValue::Array(vec![
-            CborValue::text(BootstrapMandateIssuanceBindingV1::SCHEMA_DOMAIN).unwrap(),
-            CborValue::Bytes(mandate_id.as_bytes().to_vec()),
-            CborValue::Bytes(
-                materialization_commitment(
-                    b"maestro.authority.scheduling-action-spec.v1\0",
-                    &[action.literal().as_bytes()],
-                )
-                .to_vec(),
-            ),
-            CborValue::Bytes(digest_value(consent_object.value()).unwrap().to_vec()),
-            CborValue::Bytes(interaction_closure.to_vec()),
-        ]),
-        vec![
-            mandate_object.id(),
-            request_object.id(),
-            consent_object.id(),
-        ],
-    )
-    .unwrap();
-    fixture.objects.extend([
-        request_object.clone(),
-        mandate_object,
-        carrier_object.clone(),
-    ]);
-
-    let root = test_root();
-    let domain = StoreDomainV1::derive(StoreRoleV1::Repository, b"scheduling-downgrade").unwrap();
-    let governance_floor = repository_governance_floor_for_fixture(&domain, &fixture);
-    fixture.objects.push(governance_floor.clone());
-    let mut store = StoreV1::create(&root, domain.clone()).unwrap();
-    put_objects_in_reference_order(&mut store, fixture.objects);
-    let mut roots = vec![authority_root, carrier_object.id(), governance_floor.id()];
-    roots.sort_unstable();
-    let generation = StoreGenerationV1::new(
-        domain,
-        1,
-        None,
-        ContractRootIdV1::from_digest(digest("scheduling-downgrade-contract")),
+        ContractRootIdV1::from_digest(digest("authority-scheduling-root-contract")),
         StoreCompatibilityV1::stage0_successor().unwrap(),
         roots,
     )
     .unwrap();
     store.publish_generation(&generation, None).unwrap();
-    let connection = Connection::open(root.join("store.sqlite3")).unwrap();
-    connection
+    Connection::open(root.join("store.sqlite3"))
+        .unwrap()
         .execute(
             "UPDATE store_state SET state = 'active', state_revision = state_revision + 1
              WHERE singleton = 1",
@@ -1563,7 +1279,65 @@ fn scheduling_downgrade_resolves_and_consumes_one_live_stored_mandate() {
         )
         .unwrap();
 
-    let request_id = ActionRequestIdV1::derive("scheduling-downgrade-request").unwrap();
+    let policy = scheduling_policy(900, "initial");
+    let binding = scheduling_binding(
+        1,
+        None,
+        policy.clone(),
+        SemanticPolicyDiffKindV1::Strengthening,
+    );
+    let schema = RepositoryStoreSchemaV1::WorkRecord.schema_id().unwrap();
+    let request_object = StoreObjectV1::new(
+        schema,
+        CborValue::text("authority-scheduling-root-request").unwrap(),
+        vec![],
+    )
+    .unwrap();
+    let binding_object = StoreObjectV1::new(schema, binding.canonical_value(), vec![]).unwrap();
+    let request_id = ActionRequestIdV1::derive("authority-scheduling-root-request").unwrap();
+    let probe = StoreIdempotencyProbeV1::new(
+        "maestro.test.authority-scheduling-root.v1",
+        digest("authority-scheduling-root-key"),
+        digest("authority-scheduling-root-meaning"),
+    )
+    .unwrap();
+    let planning = PlanningSchedulingPolicyInputV1::from_stage7_planning(
+        &policy,
+        &scheduling_safety_floor(1_000),
+    )
+    .unwrap();
+
+    let unchanged = store.active_head().unwrap().unwrap();
+    let mismatched_object = StoreObjectV1::new(
+        schema,
+        binding.canonical_value(),
+        vec![governance_floor.id()],
+    )
+    .unwrap();
+    let mismatched_authority = PlanningRepositoryActionAuthorityV1::new(
+        fixture.selection,
+        action,
+        subject,
+        owner_basis,
+        *mismatched_object.id().as_bytes(),
+    )
+    .unwrap();
+    assert!(
+        AuthorityFacadeV1::new(&mut store)
+            .publish_scheduling_policy(
+                &probe,
+                mismatched_authority,
+                SchedulingPolicyPublicationInputV1::new(
+                    request_id,
+                    request_object.clone(),
+                    mismatched_object,
+                    planning.clone(),
+                ),
+            )
+            .is_err()
+    );
+    assert_eq!(store.active_head().unwrap().unwrap(), unchanged);
+
     let authority = PlanningRepositoryActionAuthorityV1::new(
         fixture.selection,
         action,
@@ -1572,29 +1346,15 @@ fn scheduling_downgrade_resolves_and_consumes_one_live_stored_mandate() {
         *binding_object.id().as_bytes(),
     )
     .unwrap();
-    let probe = StoreIdempotencyProbeV1::new(
-        "maestro.test.scheduling-downgrade.v1",
-        digest("scheduling-downgrade-key"),
-        digest("scheduling-downgrade-meaning"),
-    )
-    .unwrap();
     let committed = AuthorityFacadeV1::new(&mut store)
-        .publish_scheduling_policy_with_downgrade(
+        .publish_scheduling_policy(
             &probe,
             authority,
             SchedulingPolicyPublicationInputV1::new(
                 request_id,
-                request_object.clone(),
+                request_object,
                 binding_object.clone(),
-                None,
-                scheduling_planning_input(
-                    [4; 4],
-                    [3; 4],
-                    None,
-                    &binding_object,
-                    request_id,
-                    &probe,
-                ),
+                planning,
             ),
         )
         .unwrap();
@@ -1602,41 +1362,158 @@ fn scheduling_downgrade_resolves_and_consumes_one_live_stored_mandate() {
         committed,
         StorePublicationOutcomeV1::Committed { .. }
     ));
-    let active_head = store.active_head().unwrap().unwrap();
-    let active_generation = store.generation(active_head.generation_id()).unwrap();
-    assert!(!active_generation.roots().contains(&carrier_object.id()));
+    assert!(
+        store
+            .generation(committed.head().generation_id())
+            .unwrap()
+            .roots()
+            .contains(&binding_object.id())
+    );
 
-    let replay_probe = StoreIdempotencyProbeV1::new(
-        "maestro.test.scheduling-downgrade.v1",
-        digest("scheduling-downgrade-second-key"),
-        digest("scheduling-downgrade-second-meaning"),
+    drop(store);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn actual_scheduling_weakening_requires_a_live_mandate_and_writes_nothing_without_it() {
+    use super::test_support::{AuthorityFixtureModeV1, repository_owner_family_authority_fixture};
+
+    let action = RepositoryDownstreamActionLeafV1::PUBLISH_SCHEDULING_POLICY_BINDING;
+    let subject = digest("authority-scheduling-weakening-subject");
+    let owner_basis = digest("authority-scheduling-weakening-basis");
+    let current_policy = scheduling_policy(800, "current-strong");
+    let current_binding = scheduling_binding(
+        1,
+        None,
+        current_policy,
+        SemanticPolicyDiffKindV1::Strengthening,
+    );
+    let schema = RepositoryStoreSchemaV1::WorkRecord.schema_id().unwrap();
+    let current_binding_object =
+        StoreObjectV1::new(schema, current_binding.canonical_value(), vec![]).unwrap();
+    let candidate_policy = scheduling_policy(900, "candidate-weaker");
+    let candidate_binding = scheduling_binding(
+        2,
+        Some(&current_binding),
+        candidate_policy.clone(),
+        SemanticPolicyDiffKindV1::Weakening,
+    );
+    let candidate_binding_object = StoreObjectV1::new(
+        schema,
+        candidate_binding.canonical_value(),
+        vec![current_binding_object.id()],
     )
     .unwrap();
-    let committed_head = store.active_head().unwrap().unwrap();
-    let replay_planning = scheduling_planning_input(
-        [4; 4],
-        [3; 4],
-        None,
-        &binding_object,
-        request_id,
-        &replay_probe,
+    let request_object = StoreObjectV1::new(
+        schema,
+        CborValue::text("authority-scheduling-weakening-request").unwrap(),
+        vec![],
+    )
+    .unwrap();
+    let mut fixture = repository_owner_family_authority_fixture(
+        vec![(action.literal(), subject)],
+        AuthorityFixtureModeV1::Valid,
     );
+    let root = test_root();
+    let domain =
+        StoreDomainV1::derive(StoreRoleV1::Repository, b"authority-scheduling-weakening").unwrap();
+    let governance_floor = repository_governance_floor_for_fixture(&domain, &fixture);
+    fixture
+        .objects
+        .extend([governance_floor.clone(), current_binding_object.clone()]);
+    let mut store = StoreV1::create(&root, domain.clone()).unwrap();
+    put_objects_in_reference_order(&mut store, fixture.objects);
+    let mut roots = vec![
+        fixture.authority_root_id,
+        governance_floor.id(),
+        current_binding_object.id(),
+    ];
+    roots.sort_unstable();
+    let generation = StoreGenerationV1::new(
+        domain,
+        1,
+        None,
+        ContractRootIdV1::from_digest(digest("authority-scheduling-weakening-contract")),
+        StoreCompatibilityV1::stage0_successor().unwrap(),
+        roots,
+    )
+    .unwrap();
+    store.publish_generation(&generation, None).unwrap();
+    Connection::open(root.join("store.sqlite3"))
+        .unwrap()
+        .execute(
+            "UPDATE store_state SET state = 'active', state_revision = state_revision + 1
+             WHERE singleton = 1",
+            [],
+        )
+        .unwrap();
+
+    let request_id = ActionRequestIdV1::derive("authority-scheduling-weakening-request").unwrap();
+    let probe = StoreIdempotencyProbeV1::new(
+        "maestro.test.authority-scheduling-weakening.v1",
+        digest("authority-scheduling-weakening-key"),
+        digest("authority-scheduling-weakening-meaning"),
+    )
+    .unwrap();
+    let authority = PlanningRepositoryActionAuthorityV1::new(
+        fixture.selection,
+        action,
+        subject,
+        owner_basis,
+        *candidate_binding_object.id().as_bytes(),
+    )
+    .unwrap();
+    let planning = PlanningSchedulingPolicyInputV1::from_stage7_planning(
+        &candidate_policy,
+        &scheduling_safety_floor(1_000),
+    )
+    .unwrap();
+    let unchanged = store.active_head().unwrap().unwrap();
+    let wrong_root_object = StoreObjectV1::new(
+        schema,
+        candidate_binding.canonical_value(),
+        vec![governance_floor.id()],
+    )
+    .unwrap();
+    let wrong_root_authority = PlanningRepositoryActionAuthorityV1::new(
+        fixture.selection,
+        action,
+        subject,
+        owner_basis,
+        *wrong_root_object.id().as_bytes(),
+    )
+    .unwrap();
     assert!(
         AuthorityFacadeV1::new(&mut store)
-            .publish_scheduling_policy_with_downgrade(
-                &replay_probe,
-                authority,
+            .publish_scheduling_policy(
+                &probe,
+                wrong_root_authority,
                 SchedulingPolicyPublicationInputV1::new(
                     request_id,
-                    request_object,
-                    binding_object,
-                    None,
-                    replay_planning,
+                    request_object.clone(),
+                    wrong_root_object,
+                    planning.clone(),
                 ),
             )
             .is_err()
     );
-    assert_eq!(store.active_head().unwrap().unwrap(), committed_head);
+    assert_eq!(store.active_head().unwrap().unwrap(), unchanged);
+
+    assert!(
+        AuthorityFacadeV1::new(&mut store)
+            .publish_scheduling_policy(
+                &probe,
+                authority,
+                SchedulingPolicyPublicationInputV1::new(
+                    request_id,
+                    request_object,
+                    candidate_binding_object,
+                    planning,
+                ),
+            )
+            .is_err()
+    );
+    assert_eq!(store.active_head().unwrap().unwrap(), unchanged);
 
     drop(store);
     fs::remove_dir_all(root).unwrap();

@@ -32,7 +32,9 @@ use crate::foundation::core::deterministic_cbor::{self, CborError, CborValue};
 mod repository_admission;
 mod repository_leaf_authority;
 
-use super::governance_attestation::{GovernanceAttestationV1, PlanningSchedulingPolicyInputV1};
+use super::governance_attestation::{
+    GovernanceAttestationV1, PlanningSchedulingPolicyInputV1, resolve_scheduling_policy_binding,
+};
 use super::governance_floor::{
     RepositoryGovernanceAuthorityCurrentnessV1, resolve_repository_governance_floor_current_view,
 };
@@ -162,7 +164,6 @@ struct SchedulingPolicyOwnerPublicationV1 {
     admission_input: RepositoryActionAdmissionInputV1,
     request_object: StoreObjectV1,
     binding_object: StoreObjectV1,
-    current_binding_root: Option<StoreObjectIdV1>,
     current_owner_basis_commitment: [u8; 32],
     planning: PlanningSchedulingPolicyInputV1,
 }
@@ -171,7 +172,6 @@ pub(super) struct SchedulingPolicyPublicationInputV1 {
     request_id: ActionRequestIdV1,
     request_object: StoreObjectV1,
     binding_object: StoreObjectV1,
-    current_binding_root: Option<StoreObjectIdV1>,
     planning: PlanningSchedulingPolicyInputV1,
 }
 
@@ -180,14 +180,12 @@ impl SchedulingPolicyPublicationInputV1 {
         request_id: ActionRequestIdV1,
         request_object: StoreObjectV1,
         binding_object: StoreObjectV1,
-        current_binding_root: Option<StoreObjectIdV1>,
         planning: PlanningSchedulingPolicyInputV1,
     ) -> Self {
         Self {
             request_id,
             request_object,
             binding_object,
-            current_binding_root,
             planning,
         }
     }
@@ -353,7 +351,6 @@ impl<'tx> AuthorityMaterializationPortV1<'tx> {
         &'tx self,
         probe: &StoreIdempotencyProbeV1,
         owner: SchedulingPolicyOwnerPublicationV1,
-        requires_downgrade_mandate: bool,
     ) -> Result<AtomicGenerationPublicationV1, SchedulingPolicyMaterializationErrorV1> {
         let current_head = self
             .view
@@ -364,12 +361,12 @@ impl<'tx> AuthorityMaterializationPortV1<'tx> {
             .active_generation()?
             .ok_or(SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput)?;
         let active_objects = self.view.active_generation_objects()?;
-        if owner
-            .current_binding_root
-            .is_some_and(|root| !current_generation.roots().contains(&root))
-        {
-            return Err(SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput);
-        }
+        let scheduling_binding = resolve_scheduling_policy_binding(
+            &current_generation,
+            &active_objects,
+            &owner.binding_object,
+            &owner.planning,
+        )?;
         let admitted = admit_repository_action(
             self.view,
             &current_generation,
@@ -400,15 +397,23 @@ impl<'tx> AuthorityMaterializationPortV1<'tx> {
             &active_objects,
             authority_currentness,
         )?;
-        let attestation =
-            GovernanceAttestationV1::derive(owner.planning, &governance_view, admission)?;
-        let attested = attestation.consume(&governance_view, admission)?;
+        let current_policy = scheduling_binding
+            .current_policy()
+            .unwrap_or_else(|| governance_view.scheduling_safety_floor());
+        let attestation = GovernanceAttestationV1::derive(
+            owner.planning.clone(),
+            current_policy,
+            &governance_view,
+            admission,
+        )?;
+        let attested = attestation.consume(current_policy, &governance_view, admission)?;
         let policy = attested.policy();
         let relation = attested.relation();
-        if relation.requires_downgrade_mandate() != requires_downgrade_mandate {
+        if relation != scheduling_binding.candidate_relation() {
             return Err(SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput);
         }
-        let downgrade = requires_downgrade_mandate
+        let downgrade = relation
+            .requires_downgrade_mandate()
             .then(|| {
                 resolve_scheduling_policy_downgrade_mandate(
                     self.view,
@@ -426,7 +431,7 @@ impl<'tx> AuthorityMaterializationPortV1<'tx> {
             admitted.issue_committed_artifacts(&owner.request_object, &produced_objects)?;
 
         let mut roots = current_generation.roots().to_vec();
-        if let Some(current) = owner.current_binding_root {
+        if let Some(current) = scheduling_binding.current_root() {
             replace_materialization_root(&mut roots, current, owner.binding_object.id())?;
         } else {
             roots.push(owner.binding_object.id());
@@ -1231,8 +1236,7 @@ fn materialization_commitment(domain: &[u8], fields: &[&[u8]]) -> [u8; 32] {
 
 impl<'store> AuthorityFacadeV1<'store> {
     pub fn new(store: &'store mut StoreV1) -> Self {
-        let _ = Self::publish_scheduling_policy_without_downgrade;
-        let _ = Self::publish_scheduling_policy_with_downgrade;
+        let _ = Self::publish_scheduling_policy;
         Self { store }
     }
 
@@ -1278,7 +1282,7 @@ impl<'store> AuthorityFacadeV1<'store> {
             })
     }
 
-    pub(super) fn publish_scheduling_policy_without_downgrade(
+    pub(super) fn publish_scheduling_policy(
         &mut self,
         probe: &StoreIdempotencyProbeV1,
         authority: PlanningRepositoryActionAuthorityV1,
@@ -1291,7 +1295,6 @@ impl<'store> AuthorityFacadeV1<'store> {
             request_id,
             request_object,
             binding_object,
-            current_binding_root,
             planning,
         } = input;
         let current_owner_basis_commitment = authority.current_semantic_owner_basis_commitment();
@@ -1301,13 +1304,6 @@ impl<'store> AuthorityFacadeV1<'store> {
                 _ => unreachable!("Scheduling owner is one exact downstream Action"),
             }
             || authority.exact_payload_commitment() != *binding_object.id().as_bytes()
-            || planning.request() != *request_id.as_bytes()
-            || planning.payload() != *binding_object.id().as_bytes()
-            || planning.candidate_binding() != *binding_object.id().as_bytes()
-            || planning.expected_binding()
-                != current_binding_root.map_or([0xA5; 32], |root| *root.as_bytes())
-            || planning.idempotency_key() != *probe.key_digest()
-            || planning.idempotency_meaning() != *probe.meaning_digest()
         {
             return Err(AuthorityMaterializationPublicationErrorV1::Prepare(
                 SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput,
@@ -1319,60 +1315,9 @@ impl<'store> AuthorityFacadeV1<'store> {
                 admission_input: RepositoryActionAdmissionInputV1::new(request_id, authority),
                 request_object,
                 binding_object,
-                current_binding_root,
                 current_owner_basis_commitment,
                 planning,
             },
-            false,
-        )
-    }
-
-    pub(super) fn publish_scheduling_policy_with_downgrade(
-        &mut self,
-        probe: &StoreIdempotencyProbeV1,
-        authority: PlanningRepositoryActionAuthorityV1,
-        input: SchedulingPolicyPublicationInputV1,
-    ) -> Result<
-        StorePublicationOutcomeV1,
-        AuthorityMaterializationPublicationErrorV1<SchedulingPolicyMaterializationErrorV1>,
-    > {
-        let SchedulingPolicyPublicationInputV1 {
-            request_id,
-            request_object,
-            binding_object,
-            current_binding_root,
-            planning,
-        } = input;
-        let current_owner_basis_commitment = authority.current_semantic_owner_basis_commitment();
-        if authority.action()
-            != match SchedulingPolicyBindingOwnerV1::ACTION {
-                RepositoryActionLeafV1::Downstream(action) => action,
-                _ => unreachable!("Scheduling owner is one exact downstream Action"),
-            }
-            || authority.exact_payload_commitment() != *binding_object.id().as_bytes()
-            || planning.request() != *request_id.as_bytes()
-            || planning.payload() != *binding_object.id().as_bytes()
-            || planning.candidate_binding() != *binding_object.id().as_bytes()
-            || planning.expected_binding()
-                != current_binding_root.map_or([0xA5; 32], |root| *root.as_bytes())
-            || planning.idempotency_key() != *probe.key_digest()
-            || planning.idempotency_meaning() != *probe.meaning_digest()
-        {
-            return Err(AuthorityMaterializationPublicationErrorV1::Prepare(
-                SchedulingPolicyMaterializationErrorV1::InvalidPlanningInput,
-            ));
-        }
-        self.publish_scheduling_policy_materialization(
-            probe,
-            SchedulingPolicyOwnerPublicationV1 {
-                admission_input: RepositoryActionAdmissionInputV1::new(request_id, authority),
-                request_object,
-                binding_object,
-                current_binding_root,
-                current_owner_basis_commitment,
-                planning,
-            },
-            true,
         )
     }
 
@@ -1380,13 +1325,12 @@ impl<'store> AuthorityFacadeV1<'store> {
         &mut self,
         probe: &StoreIdempotencyProbeV1,
         owner: SchedulingPolicyOwnerPublicationV1,
-        requires_downgrade_mandate: bool,
     ) -> Result<
         StorePublicationOutcomeV1,
         AuthorityMaterializationPublicationErrorV1<SchedulingPolicyMaterializationErrorV1>,
     > {
         self.publish_repository_materialization(probe, move |port| {
-            port.execute_scheduling_policy_materialization(probe, owner, requires_downgrade_mandate)
+            port.execute_scheduling_policy_materialization(probe, owner)
         })
     }
 

@@ -29,28 +29,25 @@ pub(super) fn assemble(
     input: &ProtectedContinuityDiagnosticEnvelopeInputV1<'_>,
     mode: ProtectedContinuityDiagnosticAssemblerModeV1,
 ) -> Option<ProtectedContinuityDiagnosticCandidateEnvelopeV1> {
-    #[cfg(not(test))]
-    {
-        let _ = (input, mode);
-        None
+    let candidate = super::protected_diagnostic_envelope::encode_canonical_envelope(input)?;
+    #[cfg(test)]
+    let mut candidate = candidate;
+    match mode {
+        ProtectedContinuityDiagnosticAssemblerModeV1::Canonical => {}
+        #[cfg(test)]
+        ProtectedContinuityDiagnosticAssemblerModeV1::SubstituteAdmission => {
+            let admission_offset =
+                2 + super::protected_diagnostic_envelope::ENVELOPE_DOMAIN_V1.len() + 2;
+            candidate.bytes[admission_offset] ^= 0xff;
+        }
+        #[cfg(test)]
+        ProtectedContinuityDiagnosticAssemblerModeV1::IgnoreInput => {
+            candidate.bytes.fill(0);
+        }
     }
     #[cfg(test)]
-    {
-        let mut candidate = super::protected_diagnostic_envelope::encode_canonical_envelope(input)?;
-        match mode {
-            ProtectedContinuityDiagnosticAssemblerModeV1::Canonical => {}
-            ProtectedContinuityDiagnosticAssemblerModeV1::SubstituteAdmission => {
-                let admission_offset =
-                    2 + super::protected_diagnostic_envelope::ENVELOPE_DOMAIN_V1.len() + 2;
-                candidate.bytes[admission_offset] ^= 0xff;
-            }
-            ProtectedContinuityDiagnosticAssemblerModeV1::IgnoreInput => {
-                candidate.bytes.fill(0);
-            }
-        }
-        super::protected_diagnostic_envelope::observe_test_assembly();
-        Some(candidate)
-    }
+    super::protected_diagnostic_envelope::observe_test_assembly();
+    Some(candidate)
 }
 
 #[cfg(test)]

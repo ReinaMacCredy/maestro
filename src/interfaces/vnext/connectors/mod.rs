@@ -5,6 +5,10 @@
 
 //! Stage-10 host and external-connector declarations.
 
+use crate::domain::vnext::integration::{
+    LiveAuthenticatedHostConnectionV1, Stage10OwnerLocalConnectionSeedV1,
+};
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct HostDescriptorV1 {
     pub profile_id: &'static str,
@@ -34,6 +38,17 @@ pub fn host_descriptor(profile_id: &str) -> Option<&'static HostDescriptorV1> {
     HOST_DESCRIPTORS_V1
         .iter()
         .find(|descriptor| descriptor.profile_id == profile_id)
+}
+
+pub(crate) fn acquire_trusted_host_diagnostic_connection<'host>(
+    profile_id: &str,
+    live_connection: &'host mut dyn LiveAuthenticatedHostConnectionV1,
+) -> Option<Stage10OwnerLocalConnectionSeedV1<'host>> {
+    host_descriptor(profile_id)?;
+    if live_connection.profile_id() != profile_id {
+        return None;
+    }
+    Stage10OwnerLocalConnectionSeedV1::acquire_from_authenticated_host(live_connection)
 }
 
 pub const BOOTSTRAP_WIRING_JSON: &str =

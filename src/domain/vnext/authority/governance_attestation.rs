@@ -6,6 +6,7 @@ use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 use super::facade::MaterializationAuthorityAdmissionV1;
+use super::facade::{StoreGenerationV1, StoreObjectV1};
 use super::governance_floor::{
     RepositoryGovernanceFloorCurrentViewV1, RepositoryGovernanceFloorErrorV1,
 };
@@ -13,95 +14,255 @@ use super::materialization::{
     AuthorityMaterializationErrorV1, SchedulingPolicyDiffClassV1, SchedulingPolicyMeaningV1,
     derive_policy_relation,
 };
+use crate::domain::vnext::identity::StoreObjectIdV1;
+use crate::domain::vnext::planning::{SchedulingPolicySnapshotV1, SchedulingSafetyFloorV1};
+use crate::foundation::core::deterministic_cbor::{self, CborValue};
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(in crate::domain::vnext) struct PlanningSchedulingPolicyInputV1 {
-    current_policy: [u64; 4],
-    candidate_policy: [u64; 4],
-    expected_binding: [u8; 32],
-    candidate_binding: [u8; 32],
-    request: [u8; 32],
-    payload: [u8; 32],
-    idempotency_key: [u8; 32],
-    idempotency_meaning: [u8; 32],
+    candidate_policy: SchedulingPolicySnapshotV1,
+    scheduling_safety_floor: SchedulingSafetyFloorV1,
 }
 
 impl PlanningSchedulingPolicyInputV1 {
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "the Stage 7 Planning input is one closed Scheduling namespace and contains no Authority-owned governance value"
-    )]
-    pub(in crate::domain::vnext) fn from_stage7_planning(
-        current_policy: [u64; 4],
-        candidate_policy: [u64; 4],
-        expected_binding: [u8; 32],
-        candidate_binding: [u8; 32],
-        request: [u8; 32],
-        payload: [u8; 32],
-        idempotency_key: [u8; 32],
-        idempotency_meaning: [u8; 32],
+    pub(super) fn from_stage7_planning(
+        candidate_policy: &SchedulingPolicySnapshotV1,
+        scheduling_safety_floor: &SchedulingSafetyFloorV1,
     ) -> Result<Self, GovernanceAttestationErrorV1> {
-        if [
-            expected_binding,
-            candidate_binding,
-            request,
-            payload,
-            idempotency_key,
-            idempotency_meaning,
-        ]
-        .contains(&[0; 32])
-            || (current_policy == [0; 4] && expected_binding != [0xA5; 32])
-            || candidate_policy == [0; 4]
-        {
+        if candidate_policy.strength() == [0; 4] || scheduling_safety_floor.strength() == [0; 4] {
             return Err(GovernanceAttestationErrorV1::InvalidPlanningInput);
         }
         Ok(Self {
-            current_policy,
-            candidate_policy,
-            expected_binding,
-            candidate_binding,
-            request,
-            payload,
-            idempotency_key,
-            idempotency_meaning,
+            candidate_policy: candidate_policy.clone(),
+            scheduling_safety_floor: scheduling_safety_floor.clone(),
         })
     }
 
-    pub(super) const fn current_policy(self) -> [u64; 4] {
+    pub(super) const fn candidate_policy(&self) -> &SchedulingPolicySnapshotV1 {
+        &self.candidate_policy
+    }
+
+    pub(super) const fn scheduling_safety_floor(&self) -> &SchedulingSafetyFloorV1 {
+        &self.scheduling_safety_floor
+    }
+}
+
+pub(super) struct SchedulingPolicyBindingResolutionV1 {
+    current_root: Option<StoreObjectIdV1>,
+    current_policy: Option<[u64; 4]>,
+    candidate_relation: SchedulingPolicyDiffClassV1,
+}
+
+impl SchedulingPolicyBindingResolutionV1 {
+    pub(super) const fn current_root(&self) -> Option<StoreObjectIdV1> {
+        self.current_root
+    }
+
+    pub(super) const fn current_policy(&self) -> Option<[u64; 4]> {
         self.current_policy
     }
 
-    pub(super) const fn candidate_policy(self) -> [u64; 4] {
-        self.candidate_policy
+    pub(super) const fn candidate_relation(&self) -> SchedulingPolicyDiffClassV1 {
+        self.candidate_relation
     }
+}
 
-    pub(super) fn is_initial_policy(self) -> bool {
-        self.current_policy == [0; 4] && self.expected_binding == [0xA5; 32]
-    }
+struct ParsedSchedulingPolicyBindingV1 {
+    revision: u64,
+    expected_old_binding_hash: Option<[u8; 32]>,
+    policy_rules: [u64; 4],
+    policy_hash: [u8; 32],
+    old_policy_hash: Option<[u8; 32]>,
+    relation: SchedulingPolicyDiffClassV1,
+    semantic_hash: [u8; 32],
+}
 
-    pub(super) const fn expected_binding(self) -> [u8; 32] {
-        self.expected_binding
+pub(super) fn resolve_scheduling_policy_binding(
+    generation: &StoreGenerationV1,
+    active_objects: &[StoreObjectV1],
+    candidate_object: &StoreObjectV1,
+    planning: &PlanningSchedulingPolicyInputV1,
+) -> Result<SchedulingPolicyBindingResolutionV1, GovernanceAttestationErrorV1> {
+    let candidate = parse_scheduling_policy_binding(candidate_object)?;
+    if candidate.policy_rules != planning.candidate_policy().strength()
+        || candidate.policy_hash != planning.candidate_policy().semantic_hash()
+    {
+        return Err(GovernanceAttestationErrorV1::InvalidPlanningInput);
     }
+    let parseable_roots = generation
+        .roots()
+        .iter()
+        .filter_map(|root| {
+            active_objects
+                .iter()
+                .find(|object| object.id() == *root)
+                .filter(|object| object.schema_id() == candidate_object.schema_id())
+                .and_then(|object| {
+                    parse_scheduling_policy_binding(object)
+                        .ok()
+                        .map(|binding| (*root, binding))
+                })
+        })
+        .collect::<Vec<_>>();
+    let (current_root, current_policy) = match parseable_roots.as_slice() {
+        [] if candidate.revision == 1
+            && candidate.expected_old_binding_hash.is_none()
+            && candidate.old_policy_hash.is_none()
+            && candidate_object.references().is_empty() =>
+        {
+            (None, None)
+        }
+        [(root, current)]
+            if candidate.revision == current.revision.saturating_add(1)
+                && candidate.expected_old_binding_hash == Some(current.semantic_hash)
+                && candidate.old_policy_hash == Some(current.policy_hash)
+                && candidate_object.references() == [*root] =>
+        {
+            (Some(*root), Some(current.policy_rules))
+        }
+        _ => return Err(GovernanceAttestationErrorV1::CurrentSchedulingBindingMismatch),
+    };
+    Ok(SchedulingPolicyBindingResolutionV1 {
+        current_root,
+        current_policy,
+        candidate_relation: candidate.relation,
+    })
+}
 
-    pub(super) const fn candidate_binding(self) -> [u8; 32] {
-        self.candidate_binding
+fn parse_scheduling_policy_binding(
+    object: &StoreObjectV1,
+) -> Result<ParsedSchedulingPolicyBindingV1, GovernanceAttestationErrorV1> {
+    let CborValue::Array(fields) = object.value() else {
+        return Err(GovernanceAttestationErrorV1::InvalidSchedulingBinding);
+    };
+    let [
+        CborValue::Text(repository_installation_ref),
+        CborValue::Text(store_generation_ref),
+        CborValue::Unsigned(revision),
+        expected_old_binding_hash,
+        CborValue::Array(policy_fields),
+        CborValue::Array(diff_fields),
+        CborValue::Bytes(semantic_hash),
+    ] = fields.as_slice()
+    else {
+        return Err(GovernanceAttestationErrorV1::InvalidSchedulingBinding);
+    };
+    let [
+        CborValue::Text(policy_ref),
+        CborValue::Text(evaluator_ref),
+        CborValue::Unsigned(evaluator_revision),
+        CborValue::Text(core_compatibility_ref),
+        CborValue::Bool(true),
+        CborValue::Bool(true),
+        CborValue::Unsigned(foundation_maximum_total_time),
+        CborValue::Unsigned(fairness_maximum_deferral),
+        CborValue::Unsigned(hysteresis_window),
+        CborValue::Unsigned(overload_opportunity_limit),
+        CborValue::Bytes(policy_hash),
+    ] = policy_fields.as_slice()
+    else {
+        return Err(GovernanceAttestationErrorV1::InvalidSchedulingBinding);
+    };
+    let [
+        old_policy_hash,
+        CborValue::Bytes(candidate_policy_hash),
+        CborValue::Bytes(classifier_hash),
+        CborValue::Unsigned(relation_tag),
+    ] = diff_fields.as_slice()
+    else {
+        return Err(GovernanceAttestationErrorV1::InvalidSchedulingBinding);
+    };
+    if repository_installation_ref.is_empty()
+        || store_generation_ref.is_empty()
+        || policy_ref.is_empty()
+        || evaluator_ref.is_empty()
+        || core_compatibility_ref.is_empty()
+        || *revision == 0
+        || *evaluator_revision == 0
+        || [
+            *foundation_maximum_total_time,
+            *fairness_maximum_deferral,
+            *overload_opportunity_limit,
+        ]
+        .contains(&0)
+    {
+        return Err(GovernanceAttestationErrorV1::InvalidSchedulingBinding);
     }
+    let policy_hash = exact_digest(policy_hash)?;
+    let candidate_policy_hash = exact_digest(candidate_policy_hash)?;
+    let classifier_hash = exact_digest(classifier_hash)?;
+    let semantic_hash = exact_digest(semantic_hash)?;
+    let expected_old_binding_hash = optional_digest(expected_old_binding_hash)?;
+    let old_policy_hash = optional_digest(old_policy_hash)?;
+    if candidate_policy_hash != policy_hash
+        || classifier_hash == [0; 32]
+        || old_policy_hash.is_some() != expected_old_binding_hash.is_some()
+        || policy_hash
+            != scheduling_domain_hash(
+                "maestro.vnext.scheduling-policy-snapshot.v1",
+                &CborValue::Array(policy_fields[..10].to_vec()),
+            )?
+        || semantic_hash
+            != scheduling_domain_hash(
+                "maestro.vnext.scheduling-policy-binding.v1",
+                &CborValue::Array(fields[..6].to_vec()),
+            )?
+    {
+        return Err(GovernanceAttestationErrorV1::InvalidSchedulingBinding);
+    }
+    let relation = match relation_tag {
+        1 => SchedulingPolicyDiffClassV1::Equivalent,
+        2 => SchedulingPolicyDiffClassV1::Strengthening,
+        3 => SchedulingPolicyDiffClassV1::Weakening,
+        4 => SchedulingPolicyDiffClassV1::Incomparable,
+        _ => return Err(GovernanceAttestationErrorV1::InvalidSchedulingBinding),
+    };
+    Ok(ParsedSchedulingPolicyBindingV1 {
+        revision: *revision,
+        expected_old_binding_hash,
+        policy_rules: [
+            u64::MAX - foundation_maximum_total_time,
+            u64::MAX - fairness_maximum_deferral,
+            u64::MAX - hysteresis_window,
+            u64::MAX - overload_opportunity_limit,
+        ],
+        policy_hash,
+        old_policy_hash,
+        relation,
+        semantic_hash,
+    })
+}
 
-    pub(super) const fn request(self) -> [u8; 32] {
-        self.request
+fn optional_digest(value: &CborValue) -> Result<Option<[u8; 32]>, GovernanceAttestationErrorV1> {
+    match value {
+        CborValue::Array(fields) if fields == &[CborValue::Unsigned(0)] => Ok(None),
+        CborValue::Array(fields) => match fields.as_slice() {
+            [CborValue::Unsigned(1), CborValue::Bytes(bytes)] => Ok(Some(exact_digest(bytes)?)),
+            _ => Err(GovernanceAttestationErrorV1::InvalidSchedulingBinding),
+        },
+        _ => Err(GovernanceAttestationErrorV1::InvalidSchedulingBinding),
     }
+}
 
-    pub(super) const fn payload(self) -> [u8; 32] {
-        self.payload
+fn exact_digest(bytes: &[u8]) -> Result<[u8; 32], GovernanceAttestationErrorV1> {
+    let digest: [u8; 32] = bytes
+        .try_into()
+        .map_err(|_| GovernanceAttestationErrorV1::InvalidSchedulingBinding)?;
+    if digest == [0; 32] {
+        return Err(GovernanceAttestationErrorV1::InvalidSchedulingBinding);
     }
+    Ok(digest)
+}
 
-    pub(super) const fn idempotency_key(self) -> [u8; 32] {
-        self.idempotency_key
-    }
-
-    pub(super) const fn idempotency_meaning(self) -> [u8; 32] {
-        self.idempotency_meaning
-    }
+fn scheduling_domain_hash(
+    domain: &str,
+    value: &CborValue,
+) -> Result<[u8; 32], GovernanceAttestationErrorV1> {
+    let domain = CborValue::text(domain)
+        .map_err(|_| GovernanceAttestationErrorV1::InvalidSchedulingBinding)?;
+    let bytes = deterministic_cbor::encode(&CborValue::Array(vec![domain, value.clone()]))
+        .map_err(|_| GovernanceAttestationErrorV1::InvalidSchedulingBinding)?;
+    Ok(Sha256::digest(bytes).into())
 }
 
 pub(super) struct GovernanceAttestationV1<'tx> {
@@ -152,6 +313,7 @@ impl GovernanceAttestedPolicyV1<'_> {
 impl<'tx> GovernanceAttestationV1<'tx> {
     pub(super) fn derive(
         planning: PlanningSchedulingPolicyInputV1,
+        current_policy: [u64; 4],
         current_view: &'tx RepositoryGovernanceFloorCurrentViewV1<'tx>,
         admission: MaterializationAuthorityAdmissionV1,
     ) -> Result<Self, GovernanceAttestationErrorV1> {
@@ -160,8 +322,8 @@ impl<'tx> GovernanceAttestationV1<'tx> {
             .ok_or(GovernanceAttestationErrorV1::AuthorityMismatch)?;
         let requirement = current_view.snapshot().action_105_requirement()?;
         if !current_view.retained_tuple_is_current()
-            || planning.request() != *admission.request_id.as_bytes()
-            || planning.payload() != admission.exact_payload_commitment.unwrap_or([0; 32])
+            || planning.scheduling_safety_floor().strength()
+                != current_view.scheduling_safety_floor()
             || *admission.authority_context_id.as_bytes()
                 != current_view.snapshot().authority_context()
             || admission.authority_epoch != current_view.snapshot().authority_epoch()
@@ -173,14 +335,9 @@ impl<'tx> GovernanceAttestationV1<'tx> {
         {
             return Err(GovernanceAttestationErrorV1::AuthorityMismatch);
         }
-        let current_policy = if planning.is_initial_policy() {
-            current_view.scheduling_safety_floor()
-        } else {
-            planning.current_policy()
-        };
         let policy = SchedulingPolicyMeaningV1::new(
             current_policy,
-            planning.candidate_policy(),
+            planning.candidate_policy().strength(),
             current_view.scheduling_safety_floor(),
             current_view.snapshot().semantic_hash(),
             current_view.scheduling_evaluator_revision(),
@@ -212,7 +369,7 @@ impl<'tx> GovernanceAttestationV1<'tx> {
             &[
                 &current_view.commitment(),
                 &current_view.snapshot().semantic_hash(),
-                &planning_commitment(planning),
+                &planning_commitment(&planning),
                 &admission_commitment,
                 &policy_commitment(policy),
                 &[relation as u8],
@@ -232,10 +389,16 @@ impl<'tx> GovernanceAttestationV1<'tx> {
 
     pub(super) fn consume(
         self,
+        current_policy: [u64; 4],
         current_view: &'tx RepositoryGovernanceFloorCurrentViewV1<'tx>,
         admission: MaterializationAuthorityAdmissionV1,
     ) -> Result<GovernanceAttestedPolicyV1<'tx>, GovernanceAttestationErrorV1> {
-        let rederived = Self::derive(self.planning, current_view, admission)?;
+        let rederived = Self::derive(
+            self.planning.clone(),
+            current_policy,
+            current_view,
+            admission,
+        )?;
         if self.consumed.replace(true)
             || current_view.commitment() != self.current_view.commitment()
             || rederived.admission_commitment != self.admission_commitment
@@ -257,23 +420,18 @@ impl<'tx> GovernanceAttestationV1<'tx> {
     }
 }
 
-fn planning_commitment(planning: PlanningSchedulingPolicyInputV1) -> [u8; 32] {
+fn planning_commitment(planning: &PlanningSchedulingPolicyInputV1) -> [u8; 32] {
     let mut digest = Sha256::new();
     digest.update(b"maestro.authority.planning-scheduling-policy.v1\0");
-    for group in [planning.current_policy, planning.candidate_policy] {
+    digest.update(planning.candidate_policy().semantic_hash());
+    digest.update(planning.scheduling_safety_floor().semantic_hash());
+    for group in [
+        planning.candidate_policy().strength(),
+        planning.scheduling_safety_floor().strength(),
+    ] {
         for value in group {
             digest.update(value.to_be_bytes());
         }
-    }
-    for field in [
-        planning.expected_binding,
-        planning.candidate_binding,
-        planning.request,
-        planning.payload,
-        planning.idempotency_key,
-        planning.idempotency_meaning,
-    ] {
-        digest.update(field);
     }
     digest.finalize().into()
 }
@@ -311,6 +469,10 @@ fn hash_fields(domain: &[u8], fields: &[&[u8]]) -> [u8; 32] {
 pub(in crate::domain::vnext) enum GovernanceAttestationErrorV1 {
     #[error("the Planning scheduling input is invalid")]
     InvalidPlanningInput,
+    #[error("the Scheduling Binding object is not the exact canonical Planning value")]
+    InvalidSchedulingBinding,
+    #[error("the unique current Scheduling Binding root or expected-old lineage does not match")]
+    CurrentSchedulingBindingMismatch,
     #[error("the live Authority governance view does not match the admitted Action")]
     AuthorityMismatch,
     #[error("the governance capability is stale, replayed, or substituted")]

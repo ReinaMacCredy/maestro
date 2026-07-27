@@ -499,6 +499,19 @@ impl SchedulingPolicySnapshotV1 {
         fields.push(bytes(&self.semantic_hash));
         CborValue::Array(fields)
     }
+
+    pub(crate) const fn strength(&self) -> [u64; 4] {
+        [
+            u64::MAX - self.foundation_maximum_total_time,
+            u64::MAX - self.fairness_maximum_deferral,
+            u64::MAX - self.hysteresis_window,
+            u64::MAX - self.overload_opportunity_limit,
+        ]
+    }
+
+    pub(crate) const fn semantic_hash(&self) -> [u8; 32] {
+        self.semantic_hash
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
