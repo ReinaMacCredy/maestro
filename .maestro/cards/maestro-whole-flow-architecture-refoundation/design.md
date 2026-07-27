@@ -12401,3 +12401,132 @@ fresh exact packet is independently verified and explicitly approved,
 implementation, canonical artifact regeneration, integration, sealing,
 publication, installation, release and live external mutation remain
 forbidden.
+
+### Legacy cutover successor amendment
+
+This section is the current design head for the legacy-cutover successor. It is
+authorized only by the user-role `next` event in task
+`019f8416-e121-7703-8ab4-d3f9c3b374fa` after the implementation checkpoint
+stopped at the migration-data-loss boundary. It performs no product
+implementation, canonical artifact regeneration, pruning, integration,
+publication, installation, release or seal.
+
+The exact clean implementation evidence boundary is commit
+`5cbd7b8abacf548b5fa098138a1c6c5ba434a987`, tree
+`8fec8a46aa7467234250387ead8f9e140aa50d06`, on
+`codex/v4-corrected-ancestry`. It contains the safe 210-entry canonical Rust
+namespace promotion and fail-closed final-chain controls. It is provisional
+and uncertified. Its Stage-12 read-only census observes 349 blocking legacy
+rows: 239 Skill-surface rows, 108 next-surface rows and two Harness resources,
+across 68 files. The successor design requires fresh exact manifests to
+account for the provisionally identified 14 absent or stale exact-byte cases
+and 10 protected-primary overlaps; any count or membership drift reopens this
+boundary. The primary remains at `13b9a5e9` with exactly 27 protected dirty
+paths and tracked binary-diff SHA-256
+`d110099bd78896c4700188737477cd8024d39d3741b4f50a97035d2b1f35d6cc`.
+
+The following four Decisions were opened and locked in exact order after
+separate fresh adversarial reviews:
+
+1. `dec-canonical-byte-total-legacy-quarantine-33c9`, **Canonical byte-total
+   legacy quarantine epoch**.
+2. `dec-canonical-agent-resource-release-cutover-e11d`, **Canonical agent
+   resource Release cutover**.
+3. `dec-canonical-typed-successor-route-and-b049`, **Canonical typed successor
+   route and legacy next refusal**.
+4. `dec-canonical-one-use-legacy-removal-guard-7bf0`, **Canonical one-use
+   legacy removal guard and Stage-12 cut**.
+
+`LegacyQuarantineEpochV2` is Migration-owned semantic evidence over a
+Foundation-owned physical census and retained descriptor copy continuation. It
+binds the exact live inventory, canonical metadata objects, bytes or explicit
+unavailable-preexisting-loss evidence, classifications, non-active quarantine
+chunks, Release, Store Generation/head, rollback, protected-primary boundary
+and final currentness. Migration receives no physical scope. Quarantine remains
+outside all active discovery roots and cannot become a runtime or
+compatibility reader. Present bytes must replay exactly; unavailable bytes
+require independently bound loss evidence and never a fabricated placeholder.
+Finalization performs descriptor and Release/Store/currentness rechecks and
+refuses on any alias, ABA, mount, namespace, provider, path-chain, content,
+metadata, classification, root-set or primary-boundary drift.
+
+`AgentResourceReleaseCutoverV1` uses two ordered domain-local commits, never one
+cross-domain transaction. The InstallationDomain Release journal separately
+binds the 31 canonical `maestro` Skill instruction Resources and the 35-row
+legacy ledger with exact Rewrite 19, Replace 9 and MigrationOnly 7
+dispositions; it uses backup-first expected-preimage CAS for
+`global-skills-lock`, caches, links, host registrations and discovery, then
+requires exact host reconnect. Only after that committed Result may a fresh
+RepositoryDomain operation materialize `embedded/bootstrap/MAESTRO.md` to
+user-owned `.maestro/MAESTRO.md` and update the one root `AGENTS.md` managed
+pointer with explicit diff, backup and apply/force semantics.
+`embedded/harness/HARNESS.md` and `embedded/harness/RECOVERY.md` are
+migration-only bytes, not active bootstrap inputs or fallbacks. No old name,
+`cli.md`, project MCP or compatibility alias survives current activation.
+
+Projection remains the sole next-action authority. The existing frozen public
+contract is unchanged: CLI `maestro packet read`, MCP `maestro_packet`,
+literal-discovery MCP `maestro_cli_search`, three Packet-read modes, six
+outcomes, `AgentPacketV1`, `PacketRecipeBindingV1`, the exact ten vNext Recipe
+manifests and two Bounded Continuation profiles. `maestro next`, `maestro task
+next`, `maestro loop next`, `maestro card ready` and every v1 Recipe name
+become negative-compatibility refusals only; they never alias or translate.
+All 108 active next rows and every adapter, script, test, retained binary,
+reference and protected Recipe byte must reach current typed successor,
+admitted sealed reader or removal disposition before replacement or pruning.
+Dirty bytes enter the quarantine epoch first. There is no Action, Ceremony,
+public schema, MCP Tool or catalog delta.
+
+Authority mints `LegacyRemovalGuardV1` only from complete owner-issued product
+facts and fresh Authority currentness. It is process-local, private, move-only,
+one-use, non-cloneable, non-Debug, non-serializable, non-persistent,
+non-cacheable, non-replayable, non-Send, non-Sync, non-wire, non-Resource,
+non-Action and non-ScopeAtom, with no constructor, accessor, conversion,
+registry or scalar representation. Installation consumes it only in its exact
+product physical-pruning continuation. The current digest-shaped authorization
+input is forbidden production evidence. Product pruning is implemented and
+parity-proved but is not executed against live installations during this
+build.
+
+ExternalProofControl separately owns `Stage12LegacyCutCoordinatorV1` for
+repository source pruning under the exact replacement Build Packet. It retains
+the protected-primary descriptor, source Git binding, isolated candidate
+preimage, quarantine/loss evidence, replacement activation and parity, exact
+consumer/reader/hold-zero manifests, rollback rehearsal, exact 210-entry
+source-to-canonical path/type/mode/byte map, Release/proof-registry currentness
+and declared post-prune tree in fixed order. Its sole linearization is one
+expected-preimage compare-and-swap from the isolated candidate ref to the exact
+post-prune commit/tree. Primary is never a CAS target. Counts without sorted
+provenance never suffice. Crash resolution recognizes only the declared
+preimage or postimage and cannot reconstruct an Authority guard.
+
+The frozen Stage-5 product interface remains semantically unchanged. Its
+dependency identity rotates to this design closure, while all new production
+materialization belongs to Stages 9 through 12 and the external final-chain
+control. No standalone Stage-5 seal or historical receipt is made current.
+
+After an exact replacement packet is independently verified and explicitly
+approved in this task, the orchestrator materializes a new absent successor
+workspace from exact `5cbd7b8a`, applies this design closure, and implements
+only the affected suffix. Cheap focused compile, format, strict lint,
+ownership, frozen-contract and migration falsifiers run during integration.
+The exact final candidate then receives one concurrent whole-chain
+Authority/security, migration/data-loss and architecture/proof review, one
+consolidated fix loop, one complete
+compile/lint/test/broad/mutant/race/crash/replay/migration/rollback/adapter/removal
+pass, one affected canonical regeneration epoch, one freeze and exactly one
+cumulative independent Python/Rust/Ruby Stage 0-through-12 seal. The seal is
+effect-inert and verifies the already committed cut from clean disjoint roots;
+it never prunes, activates, installs, publishes, releases, pushes, tags or
+touches primary.
+
+The previous packet
+`sha256:2026513c84b1993f020f7d0430154ec0bc4e821438ccefd7dd6b91834a3d6283`
+is obsolete historical provenance for every future write. The replacement
+External Build Plan Handoff must bind this design commit/tree, Decision closure
+`225 total / 126 locked / 99 superseded / 0 open / 0 invalid`, implementation
+checkpoint `5cbd7b8a`, exact Stage-12 blocker manifests, rotated proof inputs,
+path ownership and denylist, absent successor workspace
+`/Users/reinamaccredy/Code/maestro-vnext-legacy-cutover-successor-build`,
+current recipient task, zero interim seals and one final cumulative seal.
+Until exact approval, all build writes and proof publication remain forbidden.
