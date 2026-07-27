@@ -1,1 +1,12 @@
-//! Projection-owned Packet, frontier, recommendation, and replay implementation seam.
+//! Projection-owned Packet, frontier, recommendation, and replay facade.
+
+mod engine;
+
+#[allow(
+    unused_imports,
+    reason = "Stage 6 preserves its frozen candidate facade before root integration"
+)]
+pub(crate) use engine::{
+    ProjectionErrorV1, ProjectionReadPortV1, ProjectionReadStateV1, ProjectionSnapshotV1,
+    RecipeComponentProjectionV1, packet_semantic_hash, read_packet,
+};

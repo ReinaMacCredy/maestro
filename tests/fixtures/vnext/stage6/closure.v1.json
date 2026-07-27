@@ -1,0 +1,45 @@
+{
+  "schema": "maestro.vnext.stage6-closure.v1",
+  "action_tag_range": [1, 145],
+  "ceremony_tag_range": [1, 11],
+  "operation_count": 156,
+  "action_owner_boundary": {
+    "recognized_action_count": 145,
+    "materialized_owner_delegation_count": 95,
+    "materialized_downstream_tag_range": [94, 145],
+    "materialized_downstream_count": 52,
+    "pre_port_owner_unavailable_count": 50
+  },
+  "action_outcomes": [
+    "committed",
+    "no_op",
+    "rejected",
+    "stale",
+    "conflict",
+    "unavailable",
+    "in_doubt"
+  ],
+  "ceremony_request_modes": [1, 2, 3, 4],
+  "selection_option_count": 30,
+  "owner_relation_cardinalities": [43, 23, 6, 6, 11, 145, 35, 30, 145],
+  "owner_relation_total_rows": 444,
+  "component_provenance_cardinality": {
+    "0": 1,
+    "1": 11,
+    "2": 18
+  },
+  "packet_read_outcomes": [
+    "Packet",
+    "SelectionContext",
+    "NoActiveStore",
+    "Unavailable",
+    "Stale",
+    "Incompatible"
+  ],
+  "adapter_gate": {
+    "candidate_adapters": "test_only",
+    "production_adapter": "absent",
+    "replacement_requirement": "real_upstream_materialized_owner_and_result_store",
+    "parity_gate": "same_request_admission_result_and_replay_vectors_before_activation"
+  }
+}
