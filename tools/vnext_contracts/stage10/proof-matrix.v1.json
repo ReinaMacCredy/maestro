@@ -1,0 +1,13 @@
+{
+  "schema": "maestro.vnext.stage10.proof-matrix.v1",
+  "base": "89b29639c75d1d83f58b33489320ec690af6b845",
+  "candidate_scope": "stage10-owned-only",
+  "required": [
+    "two-read-only-mcp-declarations",
+    "host-descriptors-require-stage5-v2",
+    "no-production-trusted-host-acquisition",
+    "stage9-production-currentness-provider-parity",
+    "real-upstream-adapter-compile-probes",
+    "rendering-parity"
+  ]
+}

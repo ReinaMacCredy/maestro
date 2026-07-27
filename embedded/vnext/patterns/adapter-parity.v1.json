@@ -1,0 +1,5 @@
+{
+  "schema": "maestro.vnext.external-pattern.v1",
+  "pattern_id": "adapter-parity",
+  "rule": "MCP, shell, hook, and TUI render one immutable frame without changing semantic outcome."
+}

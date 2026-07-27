@@ -1,0 +1,49 @@
+{
+  "schema": "maestro.vnext.stage10.path-manifest.v1",
+  "base": "89b29639c75d1d83f58b33489320ec690af6b845",
+  "modified": [
+    "src/interfaces/vnext/connectors/mod.rs",
+    "src/interfaces/vnext/hooks/mod.rs",
+    "src/interfaces/vnext/mcp/mod.rs",
+    "src/interfaces/vnext/shell/mod.rs",
+    "src/interfaces/vnext/tui/mod.rs",
+    "src/operations/vnext/adapters/mod.rs"
+  ],
+  "added": [
+    "embedded/vnext/bootstrap/wiring.v1.json",
+    "embedded/vnext/connectors/installation-bound-cli.v1.json",
+    "embedded/vnext/connectors/read-only-global-mcp.v1.json",
+    "embedded/vnext/hosts/agents-compatible-cli.v1.json",
+    "embedded/vnext/hosts/claude-code.v1.json",
+    "embedded/vnext/patterns/adapter-parity.v1.json",
+    "embedded/vnext/patterns/offline-tui.v1.json",
+    "embedded/vnext/patterns/read-only-global-mcp.v1.json",
+    "embedded/vnext/patterns/trusted-host-diagnostic.v1.json",
+    "embedded/vnext/schemas/adapter-rendering.v1.json",
+    "embedded/vnext/schemas/bootstrap-wiring.v1.json",
+    "embedded/vnext/schemas/connector-descriptor.v1.json",
+    "embedded/vnext/schemas/external-pattern.v1.json",
+    "embedded/vnext/schemas/host-descriptor.v1.json",
+    "tests/fixtures/vnext/stage10/adapter-parity.v1.json",
+    "tests/fixtures/vnext/stage10/host-skew.v1.json",
+    "tests/fixtures/vnext/stage10/trusted-host-parity.v1.json",
+    "tests/vnext_stage10_adapters.rs",
+    "tests/vnext_stage10_resources.rs",
+    "tools/vnext_contracts/stage10/interface-gap.v2.json",
+    "tools/vnext_contracts/stage10/path-manifest.v1.json",
+    "tools/vnext_contracts/stage10/proof-matrix.v1.json",
+    "tools/vnext_contracts/stage10/validate.py"
+  ],
+  "denylist": [
+    "src/domain/vnext/integration/mod.rs",
+    "src/domain/vnext/integration/trusted_host_diagnostic_stage10_seed.rs",
+    "src/interfaces/vnext/cli/",
+    "src/domain/vnext/installation/",
+    "src/domain/vnext/authority/",
+    "src/domain/vnext/persistence/",
+    "tests/vnext_stage11_",
+    "tests/vnext_stage12_",
+    "tools/vnext_contracts/stage11/",
+    "tools/vnext_contracts/stage12/"
+  ]
+}

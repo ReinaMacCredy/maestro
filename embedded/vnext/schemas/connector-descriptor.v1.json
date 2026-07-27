@@ -1,0 +1,5 @@
+{
+  "$id": "maestro.vnext.connector-descriptor.v1",
+  "type": "object",
+  "required": ["connector_id", "read_only"]
+}

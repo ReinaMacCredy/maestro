@@ -1,0 +1,32 @@
+{
+  "schema": "maestro.vnext.stage10.trusted-host-parity.v2",
+  "required_ports": [
+    "TrustedHostDiagnosticConnectionPortV1",
+    "AuthorityFacadeV1::protected_continuity_diagnostic_with_ports",
+    "Stage9OwnerLocalCurrentViewProviderV1: ProtectedDiagnosticCurrentViewProviderV1"
+  ],
+  "upstream_references": [
+    {
+      "owner": "Stage5 Integration",
+      "path": "src/domain/vnext/integration/trusted_host_diagnostic.rs",
+      "sha256": "d372280711e2b0b03fdae318c16a2b894525724e67b08aaa203e40a9ff3221eb"
+    },
+    {
+      "owner": "Stage5 Authority",
+      "path": "src/domain/vnext/authority/facade.rs",
+      "sha256": "2204b8c23cfb272e5beff129612e8712df7208ada3d028db376a8d92c159547c"
+    },
+    {
+      "owner": "Stage8 Authority consumer",
+      "path": "src/domain/vnext/authority/protected_diagnostic_envelope_stage8_seed.rs",
+      "sha256": "7cb91a1d1c0adb7ef8250495be4868d634a1639ca8c3c13d9f4442b1afece7a8"
+    },
+    {
+      "owner": "Stage9 Persistence provider",
+      "path": "src/domain/vnext/persistence/protected_diagnostic_stage9_seed.rs",
+      "sha256": "ef681071a4da1de138460144b604f696ec16ae3967d056ba3df52dac33d99c4d"
+    }
+  ],
+  "forbidden": ["trusted_host_diagnostic_stage10_seed", "LiveAuthenticatedHostConnectionV1"],
+  "runtime_activation": false
+}

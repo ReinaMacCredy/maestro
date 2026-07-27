@@ -1,0 +1,19 @@
+{
+  "schema": "maestro.vnext.stage10.interface-gap.v2",
+  "status": "stage9-currentness-provider-bound",
+  "stage5_checkpoint": "8434c33837d59abb00fb0e4a3e987fb9fe0843d6",
+  "stage9_checkpoint": "89b29639c75d1d83f58b33489320ec690af6b845",
+  "satisfied_by_upstream": [
+    "TrustedHostDiagnosticConnectionPortV1",
+    "AuthorityFacadeV1::protected_continuity_diagnostic_with_ports",
+    "Stage9OwnerLocalCurrentViewProviderV1: ProtectedDiagnosticCurrentViewProviderV1"
+  ],
+  "required_before_runtime_activation": [],
+  "runtime_activation": false,
+  "prohibited": [
+    "trusted_host_diagnostic_stage10_seed",
+    "LiveAuthenticatedHostConnectionV1",
+    "caller_supplied_safety_floor"
+  ],
+  "owner": "Stage10-adapter-integration"
+}
