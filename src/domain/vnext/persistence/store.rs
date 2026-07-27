@@ -697,6 +697,38 @@ impl StoreV1 {
         self.domain.role()
     }
 
+    pub(crate) fn admit_repository_census_root_v2(
+        &self,
+        owner_currentness: [u8; 32],
+    ) -> Result<
+        crate::foundation::core::stage11_aggregate_census::PersistenceAdmittedRootSourceV2,
+        StoreError,
+    > {
+        if self.role() != StoreRoleV1::Repository || owner_currentness == [0; 32] {
+            return Err(StoreError::DomainMismatch);
+        }
+        crate::foundation::core::stage11_aggregate_census::admit_persistence_roots_v2(
+            &[self.root.path()],
+            owner_currentness,
+        )
+        .map_err(StoreError::from)
+    }
+
+    pub(in crate::domain::vnext) fn admit_consumer_closure_durable_root_v1(
+        &self,
+    ) -> Result<
+        crate::foundation::core::installation_consumer_closure_durability::DurableReceiptBackendV1,
+        StoreError,
+    > {
+        if self.role() != StoreRoleV1::Repository {
+            return Err(StoreError::DomainMismatch);
+        }
+        crate::foundation::core::installation_consumer_closure_durability::DurableReceiptBackendV1::open_or_create(
+            self.root.path(),
+        )
+        .map_err(StoreError::from)
+    }
+
     pub fn state(&self) -> Result<(StoreStateV1, u64), StoreError> {
         self.with_verified_read(|transaction| state(transaction))
     }

@@ -125,7 +125,8 @@ mod stage11_consumer_closure_compile_probe {
 
     use super::installation::consumer_snapshot::{
         ConsumerClosureDurableLinearizationV1, PreCurrentnessConsumerStageV1,
-        acquire_stage11_durable_linearization, stage11_test_successful_durable_linearization,
+        acquire_stage11_durable_linearization, stage11_test_durable_root,
+        stage11_test_successful_durable_linearization,
     };
 
     fn accept_external_owner_operation(
@@ -135,11 +136,22 @@ mod stage11_consumer_closure_compile_probe {
 
     #[test]
     fn stage11_sibling_can_use_but_not_construct_the_frozen_operation() {
+        let durable_root = std::fs::canonicalize(std::env::temp_dir())
+            .unwrap()
+            .join(format!(
+                "maestro-stage11-consumer-probe-{}",
+                std::process::id()
+            ));
+        let _ = std::fs::remove_dir_all(&durable_root);
         accept_external_owner_operation(
-            acquire_stage11_durable_linearization::<PreCurrentnessConsumerStageV1>().unwrap(),
+            acquire_stage11_durable_linearization::<PreCurrentnessConsumerStageV1>(
+                stage11_test_durable_root(&durable_root).unwrap(),
+            )
+            .unwrap(),
         );
         accept_external_owner_operation(stage11_test_successful_durable_linearization(Rc::new(
             Cell::new(0),
         )));
+        std::fs::remove_dir_all(durable_root).unwrap();
     }
 }

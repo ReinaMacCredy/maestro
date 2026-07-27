@@ -16,7 +16,9 @@ use super::consumer_snapshot::{
 // Stage 11 owns the backend replacement in this inherited seed. The frozen
 // Installation facade and opaque operation remain unchanged.
 enum Stage11ConsumerClosureDurableEffectBackendV1 {
-    Unavailable,
+    Durable(
+        crate::foundation::core::installation_consumer_closure_durability::DurableReceiptBackendV1,
+    ),
     #[cfg(test)]
     Conformance {
         effects: Rc<Cell<u64>>,
@@ -55,8 +57,20 @@ impl<K: ConsumerClosureStageV1> Stage11ConsumerClosureDurableEffectSeedV1<K> {
         #[cfg(not(test))]
         let _ = request;
         match self.backend {
-            Stage11ConsumerClosureDurableEffectBackendV1::Unavailable => {
-                Err(InstallationConsumerSnapshotErrorV1::FinalityMismatch)
+            Stage11ConsumerClosureDurableEffectBackendV1::Durable(store) => {
+                let durable_effect_commitment = store
+                    .commit(
+                        K::TAG,
+                        request.expected_old_cas(),
+                        request.consumer_set_id(),
+                    )
+                    .map_err(|_| InstallationConsumerSnapshotErrorV1::FinalityMismatch)?;
+                Ok(Stage11ConsumerClosureAppliedEffectV1 {
+                    expected_old_cas: request.expected_old_cas(),
+                    consumer_set_id: request.consumer_set_id(),
+                    durable_effect_commitment,
+                    _stage: PhantomData,
+                })
             }
             #[cfg(test)]
             Stage11ConsumerClosureDurableEffectBackendV1::Conformance {
@@ -101,15 +115,14 @@ fn durable_effect_commitment(
     hasher.finalize().into()
 }
 
-pub(super) fn acquire<K: ConsumerClosureStageV1>()
--> Result<ConsumerClosureDurableLinearizationV1<K>, InstallationConsumerSnapshotErrorV1> {
-    Ok(
-        ConsumerClosureDurableLinearizationV1::from_stage11_owner_seed(
-            Stage11ConsumerClosureDurableEffectSeedV1 {
-                backend: Stage11ConsumerClosureDurableEffectBackendV1::Unavailable,
-                _stage: PhantomData,
-            },
-        ),
+pub(super) fn acquire<K: ConsumerClosureStageV1>(
+    backend: crate::foundation::core::installation_consumer_closure_durability::DurableReceiptBackendV1,
+) -> ConsumerClosureDurableLinearizationV1<K> {
+    ConsumerClosureDurableLinearizationV1::from_stage11_owner_seed(
+        Stage11ConsumerClosureDurableEffectSeedV1 {
+            backend: Stage11ConsumerClosureDurableEffectBackendV1::Durable(backend),
+            _stage: PhantomData,
+        },
     )
 }
 

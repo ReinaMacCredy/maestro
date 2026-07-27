@@ -245,6 +245,17 @@ pub struct DescriptorAnchoredCensusV1 {
     identity: [u8; 32],
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(in crate::foundation::core) struct DescriptorCensusAdmissionFactsV2 {
+    pub(in crate::foundation::core) resolved_identity: [u8; 32],
+    pub(in crate::foundation::core) mount_identity: [u8; 32],
+    pub(in crate::foundation::core) provider_identity: [u8; 32],
+    pub(in crate::foundation::core) anchor_identity: [u8; 32],
+    pub(in crate::foundation::core) fence_identity: [u8; 32],
+    pub(in crate::foundation::core) journal_position: [u8; 32],
+    pub(in crate::foundation::core) locator_components: Vec<Vec<u8>>,
+}
+
 impl DescriptorAnchoredCensusV1 {
     pub fn rows(&self) -> &[InventoryRowV1] {
         &self.rows
@@ -279,12 +290,12 @@ mod platform {
     #[cfg(test)]
     use super::DescriptorCensusMutationFenceV1;
     use super::{
-        CreateIfAbsent, DescriptorAnchoredCensusV1, DescriptorCensusLimitsV1,
-        DescriptorCensusMutationFenceFactsV1, DescriptorCensusMutationLeasePortV1,
-        DescriptorCensusObjectKindV1, DescriptorCensusRootBindingV1, InventoryRowV1,
-        MAX_COMPONENT_BYTES, MAX_COMPONENTS, MAX_PATH_BYTES, RegularFileBinding,
-        SecureDirectoryEntry, SecureDirectoryEntryKind, SecureFsError, SecureFsResult,
-        VerifiedRelativeLocatorV1,
+        CreateIfAbsent, DescriptorAnchoredCensusV1, DescriptorCensusAdmissionFactsV2,
+        DescriptorCensusLimitsV1, DescriptorCensusMutationFenceFactsV1,
+        DescriptorCensusMutationLeasePortV1, DescriptorCensusObjectKindV1,
+        DescriptorCensusRootBindingV1, InventoryRowV1, MAX_COMPONENT_BYTES, MAX_COMPONENTS,
+        MAX_PATH_BYTES, RegularFileBinding, SecureDirectoryEntry, SecureDirectoryEntryKind,
+        SecureFsError, SecureFsResult, VerifiedRelativeLocatorV1,
     };
 
     #[cfg(target_os = "linux")]
@@ -509,10 +520,6 @@ mod platform {
 
     impl super::descriptor_census_sealed::LeaseSealed for PlatformCensusLeaseV1 {}
 
-    #[expect(
-        dead_code,
-        reason = "the descriptor component carrier is retained for the Stage 11 aggregate-census seed"
-    )]
     pub struct AdmittedDescriptorCensusRootV1<'root> {
         root: &'root SecureRoot,
         initial_root: FileIdentity,
@@ -574,6 +581,50 @@ mod platform {
                 }
             }
             Ok(())
+        }
+
+        pub(in crate::foundation::core) fn descriptor_census_admission_facts_v2(
+            &self,
+        ) -> SecureFsResult<DescriptorCensusAdmissionFactsV2> {
+            self.verify_path_binding()?;
+            let root_identity = FileIdentity::from(&metadata(&self.directory, &self.path)?);
+            let anchor_identity =
+                FileIdentity::from(&metadata(&self.namespace_anchor, &self.path)?);
+            let root_mount = mount_identity(&self.directory, &self.path)?;
+            let root_binding = self.descriptor_chain_binding(root_mount)?;
+            let mut provider = Sha256::new();
+            provider.update(b"maestro.foundation.descriptor-provider.v2\0");
+            provider.update(root_mount);
+            provider.update(root_identity.device.to_be_bytes());
+            let mut fence = Sha256::new();
+            fence.update(b"maestro.foundation.descriptor-fence.v2\0");
+            fence.update(root_binding.identity);
+            fence.update(census_object_identity(root_identity));
+            let mut journal = Sha256::new();
+            journal.update(b"maestro.foundation.descriptor-journal-position.v2\0");
+            journal.update(census_object_identity(root_identity));
+            journal.update(census_object_identity(anchor_identity));
+            let locator_components = self
+                .path
+                .components()
+                .filter_map(|component| match component {
+                    Component::RootDir => Some(vec![b'/']),
+                    Component::Normal(component) => Some(component.as_bytes().to_vec()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            if locator_components.is_empty() {
+                return Err(SecureFsError::CensusRefused);
+            }
+            Ok(DescriptorCensusAdmissionFactsV2 {
+                resolved_identity: census_object_identity(root_identity),
+                mount_identity: root_mount,
+                provider_identity: provider.finalize().into(),
+                anchor_identity: census_object_identity(anchor_identity),
+                fence_identity: fence.finalize().into(),
+                journal_position: journal.finalize().into(),
+                locator_components,
+            })
         }
 
         #[cfg(test)]
@@ -655,10 +706,6 @@ mod platform {
                 .map_err(|_| SecureFsError::CensusRefused)
         }
 
-        #[expect(
-            dead_code,
-            reason = "the descriptor component admission is retained for the Stage 11 aggregate-census seed"
-        )]
         pub(in crate::foundation::core) fn admit_descriptor_census_root(
             &self,
         ) -> SecureFsResult<AdmittedDescriptorCensusRootV1<'_>> {
@@ -688,10 +735,6 @@ mod platform {
             })
         }
 
-        #[expect(
-            dead_code,
-            reason = "the descriptor component traversal is retained for the Stage 11 aggregate-census seed"
-        )]
         pub(in crate::foundation::core) fn census_admitted_descriptor_root(
             admitted: AdmittedDescriptorCensusRootV1<'_>,
             limits: DescriptorCensusLimitsV1,

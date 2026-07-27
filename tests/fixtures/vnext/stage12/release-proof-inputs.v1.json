@@ -61,8 +61,10 @@
   "local_inputs": [
     "tests/fixtures/vnext/stage12/consumer-census-policy.v1.json",
     "tests/fixtures/vnext/stage12/negative-compatibility.v1.json",
+    "tests/fixtures/vnext/stage12/namespace-promotion-plan.v1.json",
     "tools/vnext_contracts/stage12/census.py",
     "tools/vnext_contracts/stage12/architecture_guard.py",
+    "tools/vnext_contracts/stage12/namespace_promotion.py",
     "tools/vnext_contracts/stage12/validate.py"
   ],
   "materialization_decisions": {

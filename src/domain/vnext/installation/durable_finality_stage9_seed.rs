@@ -97,6 +97,20 @@ pub(super) fn capture_owner_publication_v2(
     })
 }
 
+pub(super) fn commit_owner_publication_v2(
+    store: StoreV1,
+    expected: InstallationFinalityCurrentnessV1,
+    decision: ActiveStoreDecisionTupleV1,
+    publication: AtomicGenerationPublicationV1,
+) -> Result<
+    super::durable_finality::DurableInstallationFinalityOutcomeV2,
+    DurableInstallationFinalityErrorV2,
+> {
+    let mut provider = capture_owner_publication_v2(store, expected, decision, publication)?;
+    super::durable_finality::DurableInstallationFinalityBackendV2::capture(&mut provider)
+        .consume_active()
+}
+
 impl ActiveStoreFinalityOwnerV2 for Stage9ActiveStoreFinalitySeedV2 {
     fn capture_active_request(
         &mut self,
@@ -161,12 +175,22 @@ impl ActiveStoreFinalityOwnerV2 for Stage9ActiveStoreFinalitySeedV2 {
             )) => return Ok(ActiveStoreOwnerOutcomeV2::PreCommitRefused),
             Err(PreparedPublicationError::Prepare(error)) => return Err(error),
             Err(PreparedPublicationError::Store(_)) => {
-                return Ok(ActiveStoreOwnerOutcomeV2::UnknownOccurrence);
+                return match provider.store.replay_idempotency(&provider.probe) {
+                    Ok(Some(readback)) => match committed_readback(provider, request, &readback) {
+                        Ok(readback) => Ok(ActiveStoreOwnerOutcomeV2::Committed(readback)),
+                        Err(_) => Ok(ActiveStoreOwnerOutcomeV2::IntegrityBlocked),
+                    },
+                    Ok(None) if current_store_matches(&provider.store, provider.expected)? => {
+                        Ok(ActiveStoreOwnerOutcomeV2::UnknownOccurrence)
+                    }
+                    Ok(None) => Ok(ActiveStoreOwnerOutcomeV2::IntegrityBlocked),
+                    Err(_) => Ok(ActiveStoreOwnerOutcomeV2::UnknownOccurrence),
+                };
             }
         };
         match committed_readback(provider, request, &outcome) {
             Ok(readback) => Ok(ActiveStoreOwnerOutcomeV2::Committed(readback)),
-            Err(_) => Ok(ActiveStoreOwnerOutcomeV2::AcknowledgementLost(None)),
+            Err(_) => Ok(ActiveStoreOwnerOutcomeV2::IntegrityBlocked),
         }
     }
 }

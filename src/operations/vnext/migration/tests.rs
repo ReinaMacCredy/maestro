@@ -15,15 +15,17 @@ use crate::domain::vnext::migration::runtime::{
     ByteTotalInventoryV1, CancellationClassificationV1, ClassificationErrorV1, ClassificationSetV1,
     ClientAdmissionV1, ClientRefusalReasonV1, ConsumerAccessV1, ConsumerCensusEntryV1,
     ConsumerClosureErrorV1, ConsumerClosureV1, ConsumerGateStageV1, ConsumerGenerationV1,
-    ConsumerRecordV1, ConsumerSubjectV1, CutoverAcceptanceV1, DeclaredRootV1,
-    DeterministicIdentityMapV1, EffectCrossingV1, IdentityMapEntryV1, IdentityMappingBasisV1,
-    InactiveImportErrorV1, InactiveStoreImportReceiptV1, InactiveStoreImportRequestV1,
-    InventoryDomainV1, InventoryNodeKindV1, InventoryPayloadV1, InventoryRowV1,
+    ConsumerRecordV1, ConsumerSubjectV1, CustodyProofReceiptV1, CutoverAcceptanceV1,
+    DeclaredRootV1, DeterministicIdentityMapV1, EffectCrossingV1, ErasureSafetyReceiptV1,
+    IdentityMapEntryV1, IdentityMappingBasisV1, InactiveImportErrorV1,
+    InactiveStoreImportReceiptV1, InactiveStoreImportRequestV1, InventoryDomainV1,
+    InventoryNodeKindV1, InventoryPayloadV1, InventoryRowV1, LegacyRemovalAuthorizationReceiptV1,
     MigrationAssociationErrorV1, MigrationAssociationMeaningV1, MigrationAssociationV1,
     MigrationDigestV1, MigrationDispositionV1, MigrationIdentityErrorV1,
     MigrationProtocolClosureV1, NativeCancellationCausalJoinV1, NormalizedLocatorV1,
-    PrunePrerequisitesV1, QuarantineEntryV1, QuarantineErrorV1, RollbackAssessmentErrorV1,
-    RollbackAssessmentV1, RollbackDispositionV1, SealedQuarantineManifestV1,
+    PruneCurrentnessV1, PrunePrerequisitesV1, PruneSubjectV1, QuarantineEntryV1, QuarantineErrorV1,
+    RemovalAuthorityReceiptV1, RollbackAssessmentErrorV1, RollbackAssessmentV1,
+    RollbackDispositionV1, RollbackSafetyReceiptV1, SealedQuarantineManifestV1,
     SourceClassificationV1, Stage9CutoverAssociationAdapterV1,
     Stage9Stage10ConsumerCensusAdapterV1, Stage9Stage10CutoverHostAdapterV1,
     TestOnlyStage9CutoverFinalityV1,
@@ -490,12 +492,37 @@ fn physical_pruning_requires_removed_members_and_all_external_proofs() {
     )
     .expect("blocked pruning closure");
     assert!(!blocked.gate_passed());
-    let complete = PrunePrerequisitesV1::new(
-        Some(digest(40)),
-        Some(digest(41)),
-        Some(digest(42)),
-        Some(digest(43)),
-        Some(digest(44)),
+    let subject =
+        PruneSubjectV1::new(digest(40), digest(41), digest(42), digest(43)).expect("subject");
+    let currentness =
+        PruneCurrentnessV1::new(digest(44), digest(45), digest(46), 47).expect("currentness");
+    let complete = PrunePrerequisitesV1::from_owner_receipts(
+        CustodyProofReceiptV1::from_installation_owner(
+            subject.clone(),
+            currentness.clone(),
+            digest(48),
+        )
+        .expect("custody"),
+        RemovalAuthorityReceiptV1::from_authority_owner(
+            subject.clone(),
+            currentness.clone(),
+            digest(49),
+        )
+        .expect("authority"),
+        RollbackSafetyReceiptV1::from_persistence_owner(
+            subject.clone(),
+            currentness.clone(),
+            digest(50),
+        )
+        .expect("rollback safety"),
+        ErasureSafetyReceiptV1::from_persistence_owner(
+            subject.clone(),
+            currentness.clone(),
+            digest(51),
+        )
+        .expect("erasure safety"),
+        LegacyRemovalAuthorizationReceiptV1::from_migration_owner(subject, currentness, digest(52))
+            .expect("removal authorization"),
     )
     .expect("complete prune proofs");
     let passed = ConsumerClosureV1::evaluate_from_adapter(
@@ -506,6 +533,50 @@ fn physical_pruning_requires_removed_members_and_all_external_proofs() {
     )
     .expect("complete pruning closure");
     assert!(passed.gate_passed());
+}
+
+#[test]
+fn physical_pruning_rejects_receipts_from_another_subject_or_currentness() {
+    let subject =
+        PruneSubjectV1::new(digest(60), digest(61), digest(62), digest(63)).expect("subject");
+    let other_subject =
+        PruneSubjectV1::new(digest(64), digest(65), digest(66), digest(67)).expect("other subject");
+    let currentness =
+        PruneCurrentnessV1::new(digest(68), digest(69), digest(70), 71).expect("currentness");
+    let other_currentness =
+        PruneCurrentnessV1::new(digest(72), digest(73), digest(74), 75).expect("other currentness");
+    let result = PrunePrerequisitesV1::from_owner_receipts(
+        CustodyProofReceiptV1::from_installation_owner(
+            subject.clone(),
+            currentness.clone(),
+            digest(76),
+        )
+        .expect("custody"),
+        RemovalAuthorityReceiptV1::from_authority_owner(
+            other_subject,
+            currentness.clone(),
+            digest(77),
+        )
+        .expect("authority"),
+        RollbackSafetyReceiptV1::from_persistence_owner(
+            subject.clone(),
+            currentness.clone(),
+            digest(78),
+        )
+        .expect("rollback"),
+        ErasureSafetyReceiptV1::from_persistence_owner(
+            subject.clone(),
+            other_currentness,
+            digest(79),
+        )
+        .expect("erasure"),
+        LegacyRemovalAuthorizationReceiptV1::from_migration_owner(subject, currentness, digest(80))
+            .expect("removal"),
+    );
+    assert!(matches!(
+        result,
+        Err(ConsumerClosureErrorV1::InvalidPrunePrerequisites)
+    ));
 }
 
 #[test]
@@ -1198,8 +1269,8 @@ impl Stage9Stage10ConsumerCensusAdapterV1 for ParityConsumerCensusAdapterV1 {
 
 #[test]
 fn stage9_stage10_consumer_census_adapter_only_narrows_the_production_closure_core() {
-    // `evaluate` is the ungated production closure core; the test-only adapter
-    // reaches it only through `from_owner_snapshot`, which is pure additional
+    // `evaluate` and the owner snapshot path are ungated production closure
+    // cores; the test-only adapter reaches them only through pure additional
     // validation. Anything the adapter can inject is therefore a subset of what
     // a real owner snapshot could present to `evaluate`.
     assert!(
@@ -1212,7 +1283,12 @@ fn stage9_stage10_consumer_census_adapter_only_narrows_the_production_closure_co
     assert!(CONSUMER_RUNTIME_SOURCE.contains(
         "    #[cfg(test)]\n    pub fn evaluate_from_adapter<A: Stage9Stage10ConsumerCensusAdapterV1>("
     ));
-    assert!(CONSUMER_RUNTIME_SOURCE.contains("    #[cfg(test)]\n    fn from_owner_snapshot("));
+    assert!(CONSUMER_RUNTIME_SOURCE.contains("    fn from_owner_snapshot("));
+    assert!(
+        CONSUMER_RUNTIME_SOURCE
+            .contains("    pub(in crate::domain::vnext) fn evaluate_installation_snapshot(")
+    );
+    assert!(!CONSUMER_RUNTIME_SOURCE.contains("#[cfg(test)]\n    fn from_owner_snapshot("));
     assert!(!CONSUMER_RUNTIME_SOURCE.contains("#[cfg(test)]\n    fn evaluate(\n"));
 
     let record = ConsumerRecordV1::new(

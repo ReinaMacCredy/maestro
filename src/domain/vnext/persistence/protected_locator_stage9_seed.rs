@@ -367,27 +367,29 @@ impl ProtectedLocatorBackendV2 for Stage9ProtectedLocatorBackendSeedV2<'_> {
         let committed = matches!(
             current.phase(),
             ProtectedCeremonyEffectPhaseV1::Resolved { result, .. }
-                if result.as_bytes() == &candidate.seal
+                  if result.as_bytes() == &candidate.seal
         ) && self.dispatch_outcome.is_none_or(|outcome| {
             outcome.current_token() == current.current_token()
                 && outcome.revision() == current.revision()
                 && outcome.phase() == current.phase()
         });
-        if !committed {
-            return Err(ProtectedLocatorLeaseErrorV2::CurrentnessMismatch);
-        }
         let request = self.request()?;
         let acquisition = self.state_for(self.acquisition_carrier)?;
-        let prepared = ProtectedLocatorCandidateStateV2::from_stage9_owner(
-            &request,
-            &acquisition,
-            self.candidate_input(candidate)?,
-        )?;
-        ProtectedLocatorFinalReadbackV2::exact_candidate_from_stage9_owner(
-            &request,
-            self.state_for(current)?,
-            &prepared,
-        )
+        let observed = self.state_for(current)?;
+        if committed {
+            let prepared = ProtectedLocatorCandidateStateV2::from_stage9_owner(
+                &request,
+                &acquisition,
+                self.candidate_input(candidate)?,
+            )?;
+            ProtectedLocatorFinalReadbackV2::exact_candidate_from_stage9_owner(
+                &request, observed, &prepared,
+            )
+        } else {
+            ProtectedLocatorFinalReadbackV2::observed_non_candidate_from_stage9_owner(
+                &request, observed,
+            )
+        }
     }
 }
 

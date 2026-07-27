@@ -102,6 +102,13 @@ EXPECTED_FORBIDDEN_OPERATIONS = {
     "removal_execution",
     "stage6_through_stage11_product_mutation",
 }
+EVIDENCE_RECEIPT_SCHEMA = "maestro.external.stage12-evidence-receipt.v1"
+ZERO_COUNT_FIELDS = {
+    "stage11_active_consumer_closure": "active_consumer_count",
+    "stage11_retained_reader_manifest": "sealed_reader_count",
+    "stage11_retention_hold_manifest": "retention_hold_count",
+    "post_promotion_namespace_census": "temporary_namespace_count",
+}
 
 
 class ArchitectureGuardError(RuntimeError):
@@ -118,6 +125,62 @@ def parse_evidence(values: list[str]) -> dict[str, Path]:
             )
         evidence[slot] = Path(path)
     return evidence
+
+
+def _is_sha256(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in "0123456789abcdef" for character in value)
+    )
+
+
+def _load_evidence_receipt(slot: str, path: Path) -> dict[str, Any]:
+    try:
+        value = json.loads(path.read_bytes())
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ArchitectureGuardError(
+            f"invalid evidence receipt for {slot}: {error}"
+        ) from error
+    if (
+        not isinstance(value, dict)
+        or value.get("schema_version") != EVIDENCE_RECEIPT_SCHEMA
+        or value.get("slot") != slot
+        or value.get("status") != "satisfied"
+        or not _is_sha256(value.get("subject_id"))
+        or not _is_sha256(value.get("currentness_id"))
+        or not _is_sha256(value.get("proof_id"))
+        or not isinstance(value.get("payload"), dict)
+    ):
+        raise ArchitectureGuardError(f"evidence receipt contract differs for {slot}")
+    payload = value["payload"]
+    zero_field = ZERO_COUNT_FIELDS.get(slot)
+    if zero_field is not None and payload.get(zero_field) != 0:
+        raise ArchitectureGuardError(
+            f"evidence receipt {slot} does not prove {zero_field}=0"
+        )
+    if slot == "source_move_identity_parity":
+        if (
+            not isinstance(payload.get("entry_count"), int)
+            or payload["entry_count"] <= 0
+            or payload.get("mismatched_paths") != []
+            or not _is_sha256(payload.get("manifest_sha256"))
+        ):
+            raise ArchitectureGuardError(
+                "source move identity parity evidence is incomplete or mismatched"
+            )
+    if slot == "stage12_frozen_interface_readback" and (
+        payload.get("facade_mismatch_count") != 0
+        or not _is_sha256(payload.get("interface_manifest_sha256"))
+    ):
+        raise ArchitectureGuardError("canonical facade parity evidence differs")
+    if slot == "fresh_removal_authority_receipt" and (
+        payload.get("authority_fresh") is not True
+        or not _is_sha256(payload.get("consumer_closure_id"))
+        or not _is_sha256(payload.get("rollback_closure_id"))
+    ):
+        raise ArchitectureGuardError("removal authority is not fresh and closure-bound")
+    return value
 
 
 def _external_bindings(
@@ -141,11 +204,26 @@ def _external_bindings(
             )
             continue
         data = path.read_bytes()
+        try:
+            receipt = _load_evidence_receipt(slot, path)
+        except ArchitectureGuardError as error:
+            blockers.append(
+                {
+                    "id": "invalid_external_evidence_receipt",
+                    "slot": slot,
+                    "path": str(path),
+                    "reason": str(error),
+                }
+            )
+            continue
         bindings.append(
             {
+                "currentness_id": str(receipt["currentness_id"]),
                 "path": str(path),
+                "proof_id": str(receipt["proof_id"]),
                 "sha256": hashlib.sha256(data).hexdigest(),
                 "slot": slot,
+                "subject_id": str(receipt["subject_id"]),
             }
         )
     return bindings, blockers

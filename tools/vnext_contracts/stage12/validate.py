@@ -17,9 +17,11 @@ FIXTURES = WORKSPACE / "tests/fixtures/vnext/stage12"
 POLICY_PATH = FIXTURES / "consumer-census-policy.v1.json"
 NEGATIVE_PATH = FIXTURES / "negative-compatibility.v1.json"
 RELEASE_PATH = FIXTURES / "release-proof-inputs.v1.json"
+PROMOTION_PLAN_PATH = FIXTURES / "namespace-promotion-plan.v1.json"
 POLICY_SCHEMA = "maestro.test-only.vnext-stage12-consumer-census-policy.v1"
 NEGATIVE_SCHEMA = "maestro.test-only.vnext-stage12-negative-compatibility.v1"
 RELEASE_SCHEMA = "maestro.test-only.vnext-stage12-release-proof-inputs.v1"
+PROMOTION_PLAN_SCHEMA = "maestro.test-only.stage12-namespace-promotion-plan.v1"
 FANOUT_COMMIT = "7080fb6cd1e286998ff47fb6205e90dca990ba40"
 FANOUT_TREE = "926f6f0f6a169716a8815105adc8609ac289c717"
 DESIGN_SHA256 = "5092ff84ac3bca050802ea81858375d328e1d0ffe678a71ef2f8dae65ed00a18"
@@ -328,6 +330,51 @@ def validate_release_inputs(value: Mapping[str, Any]) -> None:
         raise ValidationError("release-proof forbidden operation closure differs")
 
 
+def validate_promotion_plan(value: Mapping[str, Any]) -> None:
+    if value.get("schema_version") != PROMOTION_PLAN_SCHEMA:
+        raise ValidationError("namespace promotion plan schema differs")
+    if (
+        value.get("closed_world") is not False
+        or value.get("mutation_authorized") is not False
+        or value.get("state")
+        != "deferred_until_combined_stage6_through_stage11_closure"
+        or value.get("identity_requirement")
+        != "every_source_sha256_equals_post_move_destination_sha256"
+    ):
+        raise ValidationError("namespace promotion plan overstates authority or closure")
+    if value.get("namespace_transform") != {
+        "src/domain/vnext/": "src/domain/",
+        "src/interfaces/vnext/": "src/interfaces/",
+        "src/operations/vnext/": "src/operations/",
+    }:
+        raise ValidationError("namespace promotion transform differs")
+    if value.get("required_zero_receipts") != [
+        "stage11_active_consumer_closure",
+        "stage11_retained_reader_manifest",
+        "stage11_retention_hold_manifest",
+        "post_promotion_namespace_census",
+        "stage12_frozen_interface_readback",
+        "source_move_identity_parity",
+    ]:
+        raise ValidationError("namespace promotion receipt closure differs")
+    execution = value.get("execution")
+    if not isinstance(execution, dict) or execution != {
+        "exact_manifest_command": [
+            "python3",
+            "tools/vnext_contracts/stage12/namespace_promotion.py",
+            "--repo",
+            ".",
+        ],
+        "release_preflight_command": [
+            "python3",
+            "tools/vnext_contracts/stage12/validate.py",
+            "--mode",
+            "release-preflight",
+        ],
+    }:
+        raise ValidationError("namespace promotion commands differ")
+
+
 def require_census_sight(census: Mapping[str, Any]) -> None:
     """Refuse a candidate census that lost sight of known-present consumers.
 
@@ -387,9 +434,11 @@ def candidate_validation(repo: Path) -> dict[str, object]:
     policy = load_fixture(POLICY_PATH)
     negative = load_fixture(NEGATIVE_PATH)
     release = load_fixture(RELEASE_PATH)
+    promotion_plan = load_fixture(PROMOTION_PLAN_PATH)
     validate_policy(policy)
     validate_negative_fixture(negative)
     validate_release_inputs(release)
+    validate_promotion_plan(promotion_plan)
     first = build_census(repo, policy)
     second = build_census(repo, policy)
     if canonical_json(first) != canonical_json(second):
@@ -432,9 +481,11 @@ def main() -> int:
         policy = load_fixture(POLICY_PATH)
         negative = load_fixture(NEGATIVE_PATH)
         release = load_fixture(RELEASE_PATH)
+        promotion_plan = load_fixture(PROMOTION_PLAN_PATH)
         validate_policy(policy)
         validate_negative_fixture(negative)
         validate_release_inputs(release)
+        validate_promotion_plan(promotion_plan)
         if args.mutant_suite:
             payload = mutant_suite(policy, negative, release)
             exit_code = 0

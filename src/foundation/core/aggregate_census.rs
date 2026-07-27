@@ -12,39 +12,39 @@ pub(crate) mod owner_sealed {
 
 #[derive(Eq, PartialEq)]
 pub(super) struct RepositoryRootAdmissionV2 {
-    roots: Vec<AggregateRootFactsV1>,
-    owner_currentness: [u8; 32],
+    pub(super) roots: Vec<AggregateRootFactsV1>,
+    pub(super) owner_currentness: [u8; 32],
     consumed: Cell<bool>,
     _not_send_or_sync: PhantomData<Rc<()>>,
 }
 
 #[derive(Eq, PartialEq)]
 pub(super) struct InstallationRootAdmissionV2 {
-    roots: Vec<AggregateRootFactsV1>,
-    owner_currentness: [u8; 32],
+    pub(super) roots: Vec<AggregateRootFactsV1>,
+    pub(super) owner_currentness: [u8; 32],
     consumed: Cell<bool>,
     _not_send_or_sync: PhantomData<Rc<()>>,
 }
 
 #[derive(Eq, PartialEq)]
 pub(super) struct CensusInvocationV2 {
-    invocation: [u8; 32],
-    namespace_epoch: u64,
-    maximum_entries: u64,
-    maximum_bytes: u64,
-    maximum_roots: u64,
-    maximum_descriptors: u64,
-    maximum_depth: u64,
-    maximum_name_bytes: u64,
-    revocation_revision: u64,
+    pub(super) invocation: [u8; 32],
+    pub(super) namespace_epoch: u64,
+    pub(super) maximum_entries: u64,
+    pub(super) maximum_bytes: u64,
+    pub(super) maximum_roots: u64,
+    pub(super) maximum_descriptors: u64,
+    pub(super) maximum_depth: u64,
+    pub(super) maximum_name_bytes: u64,
+    pub(super) revocation_revision: u64,
     consumed: Cell<bool>,
     _not_send_or_sync: PhantomData<Rc<()>>,
 }
 
 pub(crate) struct FoundationAdmittedRootSourceV2 {
-    repository: RepositoryRootAdmissionV2,
-    installation: InstallationRootAdmissionV2,
-    invocation: CensusInvocationV2,
+    pub(super) repository: RepositoryRootAdmissionV2,
+    pub(super) installation: InstallationRootAdmissionV2,
+    pub(super) invocation: CensusInvocationV2,
     consumed: Cell<bool>,
     _not_send_or_sync: PhantomData<Rc<()>>,
 }
@@ -307,7 +307,7 @@ pub(super) enum AggregateRootRoleV1 {
     OptionalAbsent,
 }
 
-#[derive(Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub(super) struct AggregateRootFactsV1 {
     pub(super) role: AggregateRootRoleV1,
     pub(super) declared_locator: [u8; 32],
@@ -321,7 +321,7 @@ pub(super) struct AggregateRootFactsV1 {
     pub(super) absence_fence: Option<[u8; 32]>,
 }
 
-#[derive(Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub(crate) struct AggregateRootSetFactsV1 {
     pub(super) admitted_set: [u8; 32],
     pub(super) namespace_epoch: u64,

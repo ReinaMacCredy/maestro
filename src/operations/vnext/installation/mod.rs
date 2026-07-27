@@ -8,6 +8,7 @@
 
 mod active;
 mod effects;
+#[cfg(test)]
 mod prestore;
 
 pub use active::{
@@ -15,6 +16,7 @@ pub use active::{
     ActivePublicationObjectsV1, InstallationOperationErrorV1,
 };
 pub use effects::{DistributionEffectPortV1, Stage4EffectReservationBatchV1};
+#[cfg(test)]
 pub use prestore::{
     ProtectedLocatorCommitOutcomeV1, ProtectedLocatorCutoverPortV1, commit_prestore_cutover,
 };

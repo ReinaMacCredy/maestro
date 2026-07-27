@@ -29,6 +29,7 @@ pub(crate) mod stage11_aggregate_census {
     #[cfg(test)]
     use super::aggregate_census_stage11_seed;
     use super::secure_fs::InventoryRowV1;
+    pub(crate) use super::secure_fs::SecureFsError;
     use super::secure_fs::SecureFsResult;
 
     #[cfg(test)]
@@ -36,6 +37,10 @@ pub(crate) mod stage11_aggregate_census {
         super::aggregate_census_stage11_seed::Stage11AggregateCensusBackendSeedV1;
     pub(crate) type Stage11AggregateCensusProviderSeedV2 =
         super::aggregate_census_stage11_seed::Stage11AggregateCensusBackendSeedV2;
+    pub(crate) use super::aggregate_census_stage11_seed::{
+        InstallationAdmittedRootSourceV2, PersistenceAdmittedRootSourceV2,
+        admit_installation_roots_v2, admit_persistence_roots_v2,
+    };
 
     #[cfg(test)]
     pub(crate) trait Stage11AggregateCensusProviderV1:
@@ -111,6 +116,38 @@ pub(crate) mod stage11_aggregate_census {
         }
     }
 
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the public Foundation owner seam binds the complete finite aggregate-census limit tuple"
+    )]
+    pub(crate) fn descriptor_backed_provider_v2(
+        repository: PersistenceAdmittedRootSourceV2,
+        installation: InstallationAdmittedRootSourceV2,
+        invocation: [u8; 32],
+        namespace_epoch: u64,
+        maximum_entries: u64,
+        maximum_bytes: u64,
+        maximum_roots: u64,
+        maximum_descriptors: u64,
+        maximum_depth: u64,
+        maximum_name_bytes: u64,
+        revocation_revision: u64,
+    ) -> SecureFsResult<Stage11AggregateCensusProviderSeedV2> {
+        Stage11AggregateCensusProviderSeedV2::from_owner_sources(
+            repository,
+            installation,
+            invocation,
+            namespace_epoch,
+            maximum_entries,
+            maximum_bytes,
+            maximum_roots,
+            maximum_descriptors,
+            maximum_depth,
+            maximum_name_bytes,
+            revocation_revision,
+        )
+    }
+
     pub(crate) fn census_from_stage11_owner_v2(
         backend: Stage11AggregateCensusProviderBindingV2<'_>,
     ) -> SecureFsResult<MigrationClassificationContinuationV2<'_>> {
@@ -180,6 +217,62 @@ pub(crate) mod stage11_aggregate_census {
         }
     }
 }
+
+pub(crate) mod installation_consumer_closure_durability {
+    use std::path::Path;
+
+    use sha2::{Digest, Sha256};
+
+    use super::secure_fs::{SecureFsResult, SecureRoot};
+
+    pub(crate) struct DurableReceiptBackendV1 {
+        root: SecureRoot,
+    }
+
+    impl DurableReceiptBackendV1 {
+        pub(crate) fn open_or_create(path: impl AsRef<Path>) -> SecureFsResult<Self> {
+            let root = SecureRoot::open_or_create(path)?;
+            root.create_dir_all("consumer-closure")?;
+            Ok(Self { root })
+        }
+
+        pub(crate) fn commit(
+            &self,
+            stage: u8,
+            expected_old_cas: [u8; 32],
+            consumer_set_id: [u8; 32],
+        ) -> SecureFsResult<[u8; 32]> {
+            let mut hasher = Sha256::new();
+            hasher.update(b"maestro.vnext.consumer-closure-durable-effect.v1\0");
+            hasher.update([stage]);
+            hasher.update(expected_old_cas);
+            hasher.update(consumer_set_id);
+            let commitment: [u8; 32] = hasher.finalize().into();
+            let mut bytes = Vec::with_capacity(105);
+            bytes.extend_from_slice(b"maestro.consumer-closure-receipt.v1\0");
+            bytes.push(stage);
+            bytes.extend_from_slice(&expected_old_cas);
+            bytes.extend_from_slice(&consumer_set_id);
+            bytes.extend_from_slice(&commitment);
+            let locator = format!("consumer-closure/{}.receipt", hex(&commitment));
+            self.root.create_file_if_absent(&locator, &bytes)?;
+            self.root.read_exact(&locator, &bytes)?;
+            self.root.verify_path_binding()?;
+            Ok(commitment)
+        }
+    }
+
+    fn hex(bytes: &[u8]) -> String {
+        const TABLE: &[u8; 16] = b"0123456789abcdef";
+        let mut rendered = String::with_capacity(bytes.len() * 2);
+        for byte in bytes {
+            rendered.push(TABLE[(byte >> 4) as usize] as char);
+            rendered.push(TABLE[(byte & 0x0f) as usize] as char);
+        }
+        rendered
+    }
+}
+
 pub mod backup;
 #[cfg(test)]
 pub(crate) mod descriptor_census_platform;

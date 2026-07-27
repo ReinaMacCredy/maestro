@@ -7,6 +7,7 @@ use thiserror::Error;
 use crate::domain::vnext::integration::consumer_closure::{
     ConsumerClosureErrorV1, ConsumerClosureLeasePortV1, HostConsumerAdmissionGuardV1,
 };
+use crate::domain::vnext::migration::runtime::{ConsumerCensusEntryV1, MigrationDigestV1};
 use crate::domain::vnext::persistence::consumer_snapshot::{
     ConsumerSnapshotCurrentFactsV1, ConsumerSnapshotCurrentViewLeasePortV1,
     ConsumerSnapshotCurrentViewLeaseV1, ConsumerSnapshotCurrentnessErrorV1,
@@ -92,9 +93,70 @@ impl<K: ConsumerClosureStageV1> ConsumerClosureDurableLinearizationV1<K> {
     }
 }
 
-pub(in crate::domain::vnext) fn acquire_stage11_durable_linearization<K: ConsumerClosureStageV1>()
--> Result<ConsumerClosureDurableLinearizationV1<K>, InstallationConsumerSnapshotErrorV1> {
-    super::consumer_snapshot_stage11_seed::acquire()
+pub(in crate::domain::vnext) struct InstallationConsumerClosureDurableRootV1 {
+    backend:
+        crate::foundation::core::installation_consumer_closure_durability::DurableReceiptBackendV1,
+    _not_send_or_sync: PhantomData<Rc<()>>,
+}
+
+impl InstallationConsumerClosureDurableRootV1 {
+    fn from_persistence_owner(
+        backend: crate::foundation::core::installation_consumer_closure_durability::DurableReceiptBackendV1,
+    ) -> Self {
+        Self {
+            backend,
+            _not_send_or_sync: PhantomData,
+        }
+    }
+
+    pub(super) fn open_from_installation_owner(
+        path: impl AsRef<std::path::Path>,
+    ) -> Result<Self, InstallationConsumerSnapshotErrorV1> {
+        let backend =
+            crate::foundation::core::installation_consumer_closure_durability::DurableReceiptBackendV1::open_or_create(
+                path,
+            )
+            .map_err(|_| InstallationConsumerSnapshotErrorV1::FinalityMismatch)?;
+        Ok(Self {
+            backend,
+            _not_send_or_sync: PhantomData,
+        })
+    }
+
+    fn into_backend(
+        self,
+    ) -> crate::foundation::core::installation_consumer_closure_durability::DurableReceiptBackendV1
+    {
+        self.backend
+    }
+}
+
+pub(in crate::domain::vnext) fn acquire_stage11_durable_linearization_from_store<
+    K: ConsumerClosureStageV1,
+>(
+    store: &crate::domain::vnext::persistence::StoreV1,
+) -> Result<ConsumerClosureDurableLinearizationV1<K>, InstallationConsumerSnapshotErrorV1> {
+    let root = InstallationConsumerClosureDurableRootV1::from_persistence_owner(
+        store
+            .admit_consumer_closure_durable_root_v1()
+            .map_err(|_| InstallationConsumerSnapshotErrorV1::FinalityMismatch)?,
+    );
+    acquire_stage11_durable_linearization(root)
+}
+
+pub(in crate::domain::vnext) fn acquire_stage11_durable_linearization<K: ConsumerClosureStageV1>(
+    durable_root: InstallationConsumerClosureDurableRootV1,
+) -> Result<ConsumerClosureDurableLinearizationV1<K>, InstallationConsumerSnapshotErrorV1> {
+    Ok(super::consumer_snapshot_stage11_seed::acquire(
+        durable_root.into_backend(),
+    ))
+}
+
+#[cfg(test)]
+pub(in crate::domain::vnext) fn stage11_test_durable_root(
+    path: impl AsRef<std::path::Path>,
+) -> Result<InstallationConsumerClosureDurableRootV1, InstallationConsumerSnapshotErrorV1> {
+    InstallationConsumerClosureDurableRootV1::open_from_installation_owner(path)
 }
 
 #[cfg(test)]
@@ -465,6 +527,7 @@ pub(in crate::domain::vnext) struct InstallationConsumerSnapshotV1<'view, 'conne
     host: HostConsumerAdmissionGuardV1<'connection, H>,
     owner_operation: O,
     consumer_set_id: [u8; 32],
+    census_rows: Vec<[u8; 32]>,
     _stage: PhantomData<K>,
     _not_send_or_sync: PhantomData<Rc<()>>,
 }
@@ -505,11 +568,13 @@ impl<
             hasher.update(commitment);
         }
         let consumer_set_id = hasher.finalize().into();
+        let census_rows = current.census_rows().to_vec();
         Ok(Self {
             store,
             host,
             owner_operation,
             consumer_set_id,
+            census_rows,
             _stage: PhantomData,
             _not_send_or_sync: PhantomData,
         })
@@ -534,6 +599,7 @@ impl<
             owner_operation: initial_owner_operation,
             consumer_set_id: self.consumer_set_id,
             finality_commitment: finality_commitment::<K>(&finality),
+            census_rows: self.census_rows,
             _view: PhantomData,
             _connection: PhantomData,
             _stage: PhantomData,
@@ -546,6 +612,7 @@ pub(in crate::domain::vnext) struct ConsumerClosureReceiptV1<'view, 'connection,
     owner_operation: [u8; 32],
     consumer_set_id: [u8; 32],
     finality_commitment: [u8; 32],
+    census_rows: Vec<[u8; 32]>,
     _view: PhantomData<&'view mut ()>,
     _connection: PhantomData<&'connection mut ()>,
     _stage: PhantomData<K>,
@@ -555,6 +622,69 @@ pub(in crate::domain::vnext) struct ConsumerClosureReceiptV1<'view, 'connection,
 impl<K> ConsumerClosureReceiptV1<'_, '_, K> {
     pub(in crate::domain::vnext) const fn finality_commitment(&self) -> [u8; 32] {
         self.finality_commitment
+    }
+
+    pub(in crate::domain::vnext) fn bind_migration_census(
+        self,
+        source_manifest_id: MigrationDigestV1,
+        closure_attestation_id: MigrationDigestV1,
+        entries: Vec<ConsumerCensusEntryV1>,
+    ) -> Result<InstallationMigrationConsumerSnapshotV1, InstallationConsumerSnapshotErrorV1> {
+        let expected_rows = self
+            .census_rows
+            .into_iter()
+            .collect::<std::collections::BTreeSet<_>>();
+        let observed_rows = entries
+            .iter()
+            .map(|entry| *entry.source_row_id().as_bytes())
+            .collect::<std::collections::BTreeSet<_>>();
+        if expected_rows.is_empty()
+            || expected_rows.len() != entries.len()
+            || expected_rows != observed_rows
+            || source_manifest_id.as_bytes() == &[0; 32]
+            || closure_attestation_id.as_bytes() == &[0; 32]
+        {
+            return Err(InstallationConsumerSnapshotErrorV1::FinalityMismatch);
+        }
+        let owner_snapshot_id = MigrationDigestV1::from_digest(self.finality_commitment)
+            .map_err(|_| InstallationConsumerSnapshotErrorV1::FinalityMismatch)?;
+        Ok(InstallationMigrationConsumerSnapshotV1 {
+            expected_member_count: entries.len(),
+            source_manifest_id,
+            owner_snapshot_id,
+            closure_attestation_id,
+            entries,
+            _not_send_or_sync: PhantomData,
+        })
+    }
+}
+
+pub(in crate::domain::vnext) struct InstallationMigrationConsumerSnapshotV1 {
+    expected_member_count: usize,
+    source_manifest_id: MigrationDigestV1,
+    owner_snapshot_id: MigrationDigestV1,
+    closure_attestation_id: MigrationDigestV1,
+    entries: Vec<ConsumerCensusEntryV1>,
+    _not_send_or_sync: PhantomData<Rc<()>>,
+}
+
+impl InstallationMigrationConsumerSnapshotV1 {
+    pub(in crate::domain::vnext) fn into_parts(
+        self,
+    ) -> (
+        usize,
+        MigrationDigestV1,
+        MigrationDigestV1,
+        MigrationDigestV1,
+        Vec<ConsumerCensusEntryV1>,
+    ) {
+        (
+            self.expected_member_count,
+            self.source_manifest_id,
+            self.owner_snapshot_id,
+            self.closure_attestation_id,
+            self.entries,
+        )
     }
 }
 
@@ -609,6 +739,10 @@ mod tests {
     use std::cell::Cell;
 
     use crate::domain::vnext::integration::consumer_closure::test_seed as integration_seed;
+    use crate::domain::vnext::migration::runtime::{
+        ConsumerAccessV1, ConsumerCensusEntryV1, ConsumerGenerationV1, ConsumerRecordV1,
+        ConsumerSubjectV1, MigrationDigestV1, NormalizedLocatorV1,
+    };
     use crate::domain::vnext::persistence::consumer_snapshot::{
         ConsumerSnapshotCurrentFactsV1, test_seed as persistence_seed,
     };
@@ -971,5 +1105,128 @@ mod tests {
         let source = include_str!("../persistence/consumer_snapshot.rs");
         assert!(!source.contains("final_candidate_root"));
         assert!(!source.contains("candidate_seal"));
+    }
+
+    #[test]
+    fn final_consumer_snapshot_binds_active_reader_and_hold_rows_for_migration() {
+        let mut facts = active_store_facts(PreCurrentnessConsumerStageV1::TAG);
+        if let ConsumerSnapshotCurrentFactsV1::ActiveStore { census_rows, .. } = &mut facts {
+            *census_rows = vec![[16; 32], [17; 32], [18; 32]];
+        }
+        let mut store = persistence_seed::TestProviderV1::new(facts);
+        let mut host = integration_seed::TestProviderV1::new(integration_seed::standard_facts());
+        let receipt = issue::<PreCurrentnessConsumerStageV1>(&mut store, &mut host)
+            .expect("snapshot")
+            .consume_finality()
+            .expect("finality");
+        let entries = vec![
+            ConsumerCensusEntryV1::observed(
+                MigrationDigestV1::from_digest([16; 32]).expect("source"),
+                ConsumerRecordV1::new(
+                    NormalizedLocatorV1::new(b"/active".to_vec()).expect("locator"),
+                    ConsumerSubjectV1::CurrentTarget,
+                    ConsumerGenerationV1::CurrentVNext,
+                    ConsumerAccessV1::ActiveRuntime,
+                    false,
+                    false,
+                    None,
+                )
+                .expect("active consumer"),
+            ),
+            ConsumerCensusEntryV1::observed(
+                MigrationDigestV1::from_digest([17; 32]).expect("source"),
+                ConsumerRecordV1::new(
+                    NormalizedLocatorV1::new(b"/reader".to_vec()).expect("locator"),
+                    ConsumerSubjectV1::LegacySource,
+                    ConsumerGenerationV1::LegacyV1,
+                    ConsumerAccessV1::SealedAuditReader,
+                    false,
+                    false,
+                    None,
+                )
+                .expect("sealed reader"),
+            ),
+            ConsumerCensusEntryV1::observed(
+                MigrationDigestV1::from_digest([18; 32]).expect("source"),
+                ConsumerRecordV1::new(
+                    NormalizedLocatorV1::new(b"/hold".to_vec()).expect("locator"),
+                    ConsumerSubjectV1::LegacySource,
+                    ConsumerGenerationV1::LegacyV1,
+                    ConsumerAccessV1::ProtectedRetentionHold,
+                    false,
+                    false,
+                    None,
+                )
+                .expect("retention hold"),
+            ),
+        ];
+        let migration = receipt
+            .bind_migration_census(
+                MigrationDigestV1::from_digest([31; 32]).expect("source manifest"),
+                MigrationDigestV1::from_digest([32; 32]).expect("closure"),
+                entries,
+            )
+            .expect("authoritative migration snapshot");
+        let (count, _, _, _, rows) = migration.into_parts();
+        assert_eq!(count, 3);
+        assert_eq!(rows.len(), 3);
+    }
+
+    #[test]
+    fn production_consumer_closure_backend_persists_and_rereads_exact_receipt() {
+        let root = std::fs::canonicalize(std::env::temp_dir())
+            .expect("canonical temp root")
+            .join(format!(
+                "maestro-consumer-closure-durable-{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .expect("clock")
+                    .as_nanos()
+            ));
+        let durable = acquire_stage11_durable_linearization::<PreCurrentnessConsumerStageV1>(
+            stage11_test_durable_root(&root).expect("durable root"),
+        )
+        .expect("durable backend");
+        let receipt = durable
+            .commit(ConsumerClosureDurableLinearizationRequestV1 {
+                expected_old_cas: [41; 32],
+                consumer_set_id: [42; 32],
+                _stage: PhantomData,
+                _not_send_or_sync: PhantomData,
+            })
+            .expect("durable receipt");
+        assert_eq!(receipt.expected_old_cas, [41; 32]);
+        assert_eq!(receipt.consumer_set_id, [42; 32]);
+        assert_ne!(receipt.durable_effect_commitment, [0; 32]);
+        let receipt_directory = root.join("consumer-closure");
+        assert_eq!(
+            std::fs::read_dir(&receipt_directory)
+                .expect("receipt directory")
+                .count(),
+            1
+        );
+        let replay = acquire_stage11_durable_linearization::<PreCurrentnessConsumerStageV1>(
+            stage11_test_durable_root(&root).expect("durable root"),
+        )
+        .expect("replay backend")
+        .commit(ConsumerClosureDurableLinearizationRequestV1 {
+            expected_old_cas: [41; 32],
+            consumer_set_id: [42; 32],
+            _stage: PhantomData,
+            _not_send_or_sync: PhantomData,
+        })
+        .expect("exact replay");
+        assert_eq!(
+            replay.durable_effect_commitment,
+            receipt.durable_effect_commitment
+        );
+        assert_eq!(
+            std::fs::read_dir(&receipt_directory)
+                .expect("receipt directory")
+                .count(),
+            1
+        );
+        std::fs::remove_dir_all(root).expect("remove durable test root");
     }
 }

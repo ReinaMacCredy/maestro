@@ -70,6 +70,18 @@ pub use cutover::{
     InstallationLocatorCandidateV1, PreStoreCutoverCandidateV1,
 };
 
+pub(crate) fn admit_installation_census_roots_v2(
+    roots: &[impl AsRef<std::path::Path>],
+    owner_currentness: [u8; 32],
+) -> crate::foundation::core::secure_fs::SecureFsResult<
+    crate::foundation::core::stage11_aggregate_census::InstallationAdmittedRootSourceV2,
+> {
+    crate::foundation::core::stage11_aggregate_census::admit_installation_roots_v2(
+        roots,
+        owner_currentness,
+    )
+}
+
 #[cfg(test)]
 pub(in crate::domain::vnext) fn consume_pre_store_with_test_owner<'locator>(
     locator_lease: crate::domain::vnext::persistence::protected_locator_lease::ProtectedLocatorLeaseV1<
@@ -369,10 +381,23 @@ pub(in crate::domain::vnext) mod stage11_finality_v2 {
     use std::marker::PhantomData;
     use std::rc::Rc;
 
+    use crate::domain::vnext::persistence::protected_locator_lease::ProtectedLocatorCandidateInputV2;
     use crate::domain::vnext::persistence::protected_locator_v2::ProtectedLocatorLeaseV2;
 
     pub(in crate::domain::vnext) type Stage11PreStoreFinalityProviderSeedV2 =
         super::durable_finality_stage11_seed::Stage11PreStoreFinalitySeedV2;
+
+    pub(in crate::domain::vnext) fn capture_inert_candidate(
+        currentness: super::durable_finality::InstallationFinalityCurrentnessV1,
+        decision: super::durable_finality::PreStoreDecisionTupleV1,
+        candidate: ProtectedLocatorCandidateInputV2,
+    ) -> Stage11PreStoreFinalityProviderSeedV2 {
+        Stage11PreStoreFinalityProviderSeedV2::from_installation_owner(
+            currentness,
+            decision,
+            candidate,
+        )
+    }
 
     pub(in crate::domain::vnext) trait Stage11PreStoreFinalityProviderV2:
         super::durable_finality::PreStoreFinalityOwnerV2

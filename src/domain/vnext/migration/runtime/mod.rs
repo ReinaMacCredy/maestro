@@ -91,7 +91,9 @@ pub use consumer::{AuthoritativeConsumerCensusV1, ConsumerCensusResolutionV1};
 pub use consumer::{
     ClientAdmissionV1, ClientRefusalReasonV1, ConsumerAccessV1, ConsumerCensusEntryV1,
     ConsumerClosureErrorV1, ConsumerClosureV1, ConsumerGateStageV1, ConsumerGenerationV1,
-    ConsumerRecordV1, ConsumerSubjectV1, MigrationProtocolClosureV1, PrunePrerequisitesV1,
+    ConsumerRecordV1, ConsumerSubjectV1, CustodyProofReceiptV1, ErasureSafetyReceiptV1,
+    LegacyRemovalAuthorizationReceiptV1, MigrationProtocolClosureV1, PruneCurrentnessV1,
+    PrunePrerequisitesV1, PruneSubjectV1, RemovalAuthorityReceiptV1, RollbackSafetyReceiptV1,
 };
 pub use identity::{MigrationDigestV1, MigrationIdentityErrorV1};
 pub use import::{

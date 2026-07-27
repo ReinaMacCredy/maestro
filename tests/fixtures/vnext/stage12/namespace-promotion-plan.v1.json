@@ -1,0 +1,34 @@
+{
+  "closed_world": false,
+  "execution": {
+    "exact_manifest_command": [
+      "python3",
+      "tools/vnext_contracts/stage12/namespace_promotion.py",
+      "--repo",
+      "."
+    ],
+    "release_preflight_command": [
+      "python3",
+      "tools/vnext_contracts/stage12/validate.py",
+      "--mode",
+      "release-preflight"
+    ]
+  },
+  "identity_requirement": "every_source_sha256_equals_post_move_destination_sha256",
+  "mutation_authorized": false,
+  "namespace_transform": {
+    "src/domain/vnext/": "src/domain/",
+    "src/interfaces/vnext/": "src/interfaces/",
+    "src/operations/vnext/": "src/operations/"
+  },
+  "required_zero_receipts": [
+    "stage11_active_consumer_closure",
+    "stage11_retained_reader_manifest",
+    "stage11_retention_hold_manifest",
+    "post_promotion_namespace_census",
+    "stage12_frozen_interface_readback",
+    "source_move_identity_parity"
+  ],
+  "schema_version": "maestro.test-only.stage12-namespace-promotion-plan.v1",
+  "state": "deferred_until_combined_stage6_through_stage11_closure"
+}

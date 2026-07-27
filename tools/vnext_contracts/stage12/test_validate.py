@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import sys
 import tempfile
 import unittest
@@ -16,6 +17,7 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, str(TOOLS))
 
 import census as census_module  # type: ignore[import-not-found]  # noqa: E402
+import namespace_promotion as promotion_module  # type: ignore[import-not-found]  # noqa: E402
 import validate as validate_module  # type: ignore[import-not-found]  # noqa: E402
 
 from architecture_guard import (  # type: ignore[import-not-found]  # noqa: E402
@@ -31,6 +33,7 @@ from census import (  # type: ignore[import-not-found]  # noqa: E402
 from validate import (  # type: ignore[import-not-found]  # noqa: E402
     NEGATIVE_PATH,
     POLICY_PATH,
+    PROMOTION_PLAN_PATH,
     RELEASE_PATH,
     ValidationError,
     load_fixture,
@@ -38,6 +41,7 @@ from validate import (  # type: ignore[import-not-found]  # noqa: E402
     require_census_sight,
     validate_negative_fixture,
     validate_policy,
+    validate_promotion_plan,
     validate_release_inputs,
 )
 
@@ -47,6 +51,7 @@ class Stage12CandidateTests(unittest.TestCase):
         self.policy = load_fixture(POLICY_PATH)
         self.negative = load_fixture(NEGATIVE_PATH)
         self.release = load_fixture(RELEASE_PATH)
+        self.promotion_plan = load_fixture(PROMOTION_PLAN_PATH)
 
     def test_inputs_bind_the_exact_v4_design_and_fanout_manifest(self) -> None:
         expected_design = (
@@ -101,6 +106,28 @@ class Stage12CandidateTests(unittest.TestCase):
         self.assertEqual(canonical_json(first), canonical_json(second))
         self.assertFalse(first["closed_world"])
         self.assertFalse(first["release_claim"])
+
+    def test_namespace_promotion_manifest_is_exact_read_only_and_collision_explicit(
+        self,
+    ) -> None:
+        first = promotion_module.build_manifest(WORKSPACE)
+        second = promotion_module.build_manifest(WORKSPACE)
+        self.assertEqual(first, second)
+        self.assertFalse(first["closed_world"])
+        self.assertFalse(first["mutation_authorized"])
+        self.assertGreater(first["entry_count"], 0)
+        entries = first["entries"]
+        self.assertEqual(
+            len({entry["source"] for entry in entries}),
+            first["entry_count"],
+        )
+        self.assertEqual(
+            len({entry["destination"] for entry in entries}),
+            first["entry_count"],
+        )
+        self.assertTrue(
+            any(entry["requires_merge_or_removal_authority"] for entry in entries)
+        )
 
     def test_census_weakening_mutant_is_rejected(self) -> None:
         mutant = copy.deepcopy(self.policy)
@@ -158,6 +185,112 @@ class Stage12CandidateTests(unittest.TestCase):
 
         validate_policy(self.policy)
         validate_negative_fixture(self.negative)
+        validate_promotion_plan(self.promotion_plan)
+
+    def _receipt(
+        self,
+        path: Path,
+        slot: str,
+        payload: dict[str, object],
+    ) -> Path:
+        value = {
+            "currentness_id": "2" * 64,
+            "payload": payload,
+            "proof_id": "3" * 64,
+            "schema_version": "maestro.external.stage12-evidence-receipt.v1",
+            "slot": slot,
+            "status": "satisfied",
+            "subject_id": "1" * 64,
+        }
+        path.write_text(json.dumps(value, sort_keys=True) + "\n", encoding="utf-8")
+        return path
+
+    def test_release_preflight_rejects_false_consumer_reader_and_hold_zero(self) -> None:
+        zero_slots = {
+            "stage11_active_consumer_closure": "active_consumer_count",
+            "stage11_retained_reader_manifest": "sealed_reader_count",
+            "stage11_retention_hold_manifest": "retention_hold_count",
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for slot, field in zero_slots.items():
+                receipt = self._receipt(root / f"{slot}.json", slot, {field: 1})
+                payload, _ = evaluate(
+                    WORKSPACE,
+                    self.policy,
+                    self.release,
+                    {slot: receipt},
+                    release_preflight=True,
+                )
+                invalid = [
+                    blocker
+                    for blocker in payload["blockers"]
+                    if blocker["id"] == "invalid_external_evidence_receipt"
+                    and blocker["slot"] == slot
+                ]
+                self.assertEqual(len(invalid), 1)
+
+    def test_release_preflight_rejects_false_move_and_facade_parity(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            move = self._receipt(
+                root / "move.json",
+                "source_move_identity_parity",
+                {
+                    "entry_count": 210,
+                    "manifest_sha256": "4" * 64,
+                    "mismatched_paths": ["src/domain/work/mod.rs"],
+                },
+            )
+            facade = self._receipt(
+                root / "facade.json",
+                "stage12_frozen_interface_readback",
+                {
+                    "facade_mismatch_count": 1,
+                    "interface_manifest_sha256": "5" * 64,
+                },
+            )
+            payload, _ = evaluate(
+                WORKSPACE,
+                self.policy,
+                self.release,
+                {
+                    "source_move_identity_parity": move,
+                    "stage12_frozen_interface_readback": facade,
+                },
+                release_preflight=True,
+            )
+            invalid_slots = {
+                blocker["slot"]
+                for blocker in payload["blockers"]
+                if blocker["id"] == "invalid_external_evidence_receipt"
+            }
+            self.assertEqual(
+                invalid_slots,
+                {
+                    "source_move_identity_parity",
+                    "stage12_frozen_interface_readback",
+                },
+            )
+
+    def test_release_preflight_rejects_untyped_file_as_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "opaque.txt"
+            path.write_text("not a receipt\n", encoding="utf-8")
+            payload, _ = evaluate(
+                WORKSPACE,
+                self.policy,
+                self.release,
+                {"stage11_active_consumer_closure": path},
+                release_preflight=True,
+            )
+            self.assertTrue(
+                any(
+                    blocker["id"] == "invalid_external_evidence_receipt"
+                    and blocker["slot"] == "stage11_active_consumer_closure"
+                    for blocker in payload["blockers"]
+                )
+            )
 
 
 if __name__ == "__main__":

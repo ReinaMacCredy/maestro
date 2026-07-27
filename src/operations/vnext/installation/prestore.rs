@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 use crate::domain::vnext::distribution::CommitmentV1;
 use crate::domain::vnext::installation::PreStoreCutoverCandidateV1;
 

@@ -427,7 +427,6 @@ pub struct AuthoritativeConsumerCensusV1 {
 }
 
 impl AuthoritativeConsumerCensusV1 {
-    #[cfg(test)]
     fn from_owner_snapshot(
         expected_member_count: usize,
         source_manifest_id: MigrationDigestV1,
@@ -548,86 +547,293 @@ impl ConsumerGateStageV1 {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PrunePrerequisitesV1 {
-    custody_proof_id: Option<MigrationDigestV1>,
-    authority_proof_id: Option<MigrationDigestV1>,
-    rollback_safety_proof_id: Option<MigrationDigestV1>,
-    erasure_safety_proof_id: Option<MigrationDigestV1>,
-    legacy_removal_authorization_id: Option<MigrationDigestV1>,
+pub struct PruneSubjectV1 {
+    installation_domain_id: MigrationDigestV1,
+    inventory_id: MigrationDigestV1,
+    consumer_census_id: MigrationDigestV1,
+    protocol_closure_id: MigrationDigestV1,
+    id: MigrationDigestV1,
 }
 
-impl PrunePrerequisitesV1 {
+impl PruneSubjectV1 {
     pub fn new(
-        custody_proof_id: Option<MigrationDigestV1>,
-        authority_proof_id: Option<MigrationDigestV1>,
-        rollback_safety_proof_id: Option<MigrationDigestV1>,
-        erasure_safety_proof_id: Option<MigrationDigestV1>,
-        legacy_removal_authorization_id: Option<MigrationDigestV1>,
+        installation_domain_id: MigrationDigestV1,
+        inventory_id: MigrationDigestV1,
+        consumer_census_id: MigrationDigestV1,
+        protocol_closure_id: MigrationDigestV1,
     ) -> Result<Self, ConsumerClosureErrorV1> {
-        let candidate = Self {
-            custody_proof_id,
-            authority_proof_id,
-            rollback_safety_proof_id,
-            erasure_safety_proof_id,
-            legacy_removal_authorization_id,
-        };
-        let present = [
-            candidate.custody_proof_id,
-            candidate.authority_proof_id,
-            candidate.rollback_safety_proof_id,
-            candidate.erasure_safety_proof_id,
-            candidate.legacy_removal_authorization_id,
-        ]
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>();
-        if present.iter().any(|id| id.as_bytes() == &[0; 32])
-            || present.iter().copied().collect::<BTreeSet<_>>().len() != present.len()
+        let fields = [
+            installation_domain_id,
+            inventory_id,
+            consumer_census_id,
+            protocol_closure_id,
+        ];
+        if fields.iter().any(|id| id.as_bytes() == &[0; 32])
+            || fields.into_iter().collect::<BTreeSet<_>>().len() != fields.len()
         {
             return Err(ConsumerClosureErrorV1::InvalidPrunePrerequisites);
         }
-        Ok(candidate)
+        let id = MigrationDigestV1::identify(
+            b"maestro.vnext.migration.prune-subject.v1\0",
+            &CborValue::Array(
+                fields
+                    .into_iter()
+                    .map(MigrationDigestV1::canonical_value)
+                    .collect(),
+            ),
+        )?;
+        Ok(Self {
+            installation_domain_id,
+            inventory_id,
+            consumer_census_id,
+            protocol_closure_id,
+            id,
+        })
+    }
+
+    fn canonical_value(&self) -> CborValue {
+        CborValue::Array(vec![
+            self.installation_domain_id.canonical_value(),
+            self.inventory_id.canonical_value(),
+            self.consumer_census_id.canonical_value(),
+            self.protocol_closure_id.canonical_value(),
+            self.id.canonical_value(),
+        ])
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PruneCurrentnessV1 {
+    store_generation_id: MigrationDigestV1,
+    authority_epoch_id: MigrationDigestV1,
+    consumer_snapshot_id: MigrationDigestV1,
+    retention_revision: u64,
+    id: MigrationDigestV1,
+}
+
+impl PruneCurrentnessV1 {
+    pub fn new(
+        store_generation_id: MigrationDigestV1,
+        authority_epoch_id: MigrationDigestV1,
+        consumer_snapshot_id: MigrationDigestV1,
+        retention_revision: u64,
+    ) -> Result<Self, ConsumerClosureErrorV1> {
+        let fields = [
+            store_generation_id,
+            authority_epoch_id,
+            consumer_snapshot_id,
+        ];
+        if retention_revision == 0
+            || fields.iter().any(|id| id.as_bytes() == &[0; 32])
+            || fields.into_iter().collect::<BTreeSet<_>>().len() != fields.len()
+        {
+            return Err(ConsumerClosureErrorV1::InvalidPrunePrerequisites);
+        }
+        let id = MigrationDigestV1::identify(
+            b"maestro.vnext.migration.prune-currentness.v1\0",
+            &CborValue::Array(vec![
+                store_generation_id.canonical_value(),
+                authority_epoch_id.canonical_value(),
+                consumer_snapshot_id.canonical_value(),
+                CborValue::Unsigned(retention_revision),
+            ]),
+        )?;
+        Ok(Self {
+            store_generation_id,
+            authority_epoch_id,
+            consumer_snapshot_id,
+            retention_revision,
+            id,
+        })
+    }
+
+    fn canonical_value(&self) -> CborValue {
+        CborValue::Array(vec![
+            self.store_generation_id.canonical_value(),
+            self.authority_epoch_id.canonical_value(),
+            self.consumer_snapshot_id.canonical_value(),
+            CborValue::Unsigned(self.retention_revision),
+            self.id.canonical_value(),
+        ])
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct OwnerMintedPruneReceiptV1 {
+    subject: PruneSubjectV1,
+    currentness: PruneCurrentnessV1,
+    proof_id: MigrationDigestV1,
+    id: MigrationDigestV1,
+}
+
+impl OwnerMintedPruneReceiptV1 {
+    fn mint(
+        domain: &'static [u8],
+        subject: PruneSubjectV1,
+        currentness: PruneCurrentnessV1,
+        proof_id: MigrationDigestV1,
+    ) -> Result<Self, ConsumerClosureErrorV1> {
+        if proof_id.as_bytes() == &[0; 32] || proof_id == subject.id || proof_id == currentness.id {
+            return Err(ConsumerClosureErrorV1::InvalidPrunePrerequisites);
+        }
+        let id = MigrationDigestV1::identify(
+            domain,
+            &CborValue::Array(vec![
+                subject.canonical_value(),
+                currentness.canonical_value(),
+                proof_id.canonical_value(),
+            ]),
+        )?;
+        Ok(Self {
+            subject,
+            currentness,
+            proof_id,
+            id,
+        })
+    }
+
+    fn canonical_value(&self) -> CborValue {
+        CborValue::Array(vec![
+            self.subject.canonical_value(),
+            self.currentness.canonical_value(),
+            self.proof_id.canonical_value(),
+            self.id.canonical_value(),
+        ])
+    }
+}
+
+macro_rules! owner_prune_receipt {
+    ($name:ident, $constructor:ident, $domain:literal) => {
+        #[derive(Clone, Debug, Eq, PartialEq)]
+        pub struct $name(OwnerMintedPruneReceiptV1);
+
+        impl $name {
+            pub(crate) fn $constructor(
+                subject: PruneSubjectV1,
+                currentness: PruneCurrentnessV1,
+                proof_id: MigrationDigestV1,
+            ) -> Result<Self, ConsumerClosureErrorV1> {
+                OwnerMintedPruneReceiptV1::mint($domain, subject, currentness, proof_id).map(Self)
+            }
+        }
+    };
+}
+
+owner_prune_receipt!(
+    CustodyProofReceiptV1,
+    from_installation_owner,
+    b"maestro.vnext.migration.prune-custody-receipt.v1\0"
+);
+owner_prune_receipt!(
+    RemovalAuthorityReceiptV1,
+    from_authority_owner,
+    b"maestro.vnext.migration.prune-authority-receipt.v1\0"
+);
+owner_prune_receipt!(
+    RollbackSafetyReceiptV1,
+    from_persistence_owner,
+    b"maestro.vnext.migration.prune-rollback-safety-receipt.v1\0"
+);
+owner_prune_receipt!(
+    ErasureSafetyReceiptV1,
+    from_persistence_owner,
+    b"maestro.vnext.migration.prune-erasure-safety-receipt.v1\0"
+);
+owner_prune_receipt!(
+    LegacyRemovalAuthorizationReceiptV1,
+    from_migration_owner,
+    b"maestro.vnext.migration.legacy-removal-authorization-receipt.v1\0"
+);
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PrunePrerequisitesV1 {
+    custody: Option<CustodyProofReceiptV1>,
+    authority: Option<RemovalAuthorityReceiptV1>,
+    rollback_safety: Option<RollbackSafetyReceiptV1>,
+    erasure_safety: Option<ErasureSafetyReceiptV1>,
+    removal_authorization: Option<LegacyRemovalAuthorizationReceiptV1>,
+}
+
+impl PrunePrerequisitesV1 {
+    pub(crate) fn from_owner_receipts(
+        custody: CustodyProofReceiptV1,
+        authority: RemovalAuthorityReceiptV1,
+        rollback_safety: RollbackSafetyReceiptV1,
+        erasure_safety: ErasureSafetyReceiptV1,
+        removal_authorization: LegacyRemovalAuthorizationReceiptV1,
+    ) -> Result<Self, ConsumerClosureErrorV1> {
+        let bindings = [
+            &custody.0,
+            &authority.0,
+            &rollback_safety.0,
+            &erasure_safety.0,
+            &removal_authorization.0,
+        ];
+        let first = bindings[0];
+        if bindings.iter().any(|binding| {
+            binding.subject != first.subject || binding.currentness != first.currentness
+        }) || bindings
+            .iter()
+            .map(|binding| binding.id)
+            .collect::<BTreeSet<_>>()
+            .len()
+            != bindings.len()
+        {
+            return Err(ConsumerClosureErrorV1::InvalidPrunePrerequisites);
+        }
+        Ok(Self {
+            custody: Some(custody),
+            authority: Some(authority),
+            rollback_safety: Some(rollback_safety),
+            erasure_safety: Some(erasure_safety),
+            removal_authorization: Some(removal_authorization),
+        })
     }
 
     pub const fn blocked() -> Self {
         Self {
-            custody_proof_id: None,
-            authority_proof_id: None,
-            rollback_safety_proof_id: None,
-            erasure_safety_proof_id: None,
-            legacy_removal_authorization_id: None,
+            custody: None,
+            authority: None,
+            rollback_safety: None,
+            erasure_safety: None,
+            removal_authorization: None,
         }
     }
 
     pub const fn complete(&self) -> bool {
-        self.custody_proof_id.is_some()
-            && self.authority_proof_id.is_some()
-            && self.rollback_safety_proof_id.is_some()
-            && self.erasure_safety_proof_id.is_some()
-            && self.legacy_removal_authorization_id.is_some()
+        self.custody.is_some()
+            && self.authority.is_some()
+            && self.rollback_safety.is_some()
+            && self.erasure_safety.is_some()
+            && self.removal_authorization.is_some()
     }
 
     fn canonical_value(&self) -> CborValue {
         CborValue::Array(vec![
             CborValue::optional(
-                self.custody_proof_id
-                    .map(MigrationDigestV1::canonical_value),
+                self.custody
+                    .as_ref()
+                    .map(|receipt| receipt.0.canonical_value()),
             ),
             CborValue::optional(
-                self.authority_proof_id
-                    .map(MigrationDigestV1::canonical_value),
+                self.authority
+                    .as_ref()
+                    .map(|receipt| receipt.0.canonical_value()),
             ),
             CborValue::optional(
-                self.rollback_safety_proof_id
-                    .map(MigrationDigestV1::canonical_value),
+                self.rollback_safety
+                    .as_ref()
+                    .map(|receipt| receipt.0.canonical_value()),
             ),
             CborValue::optional(
-                self.erasure_safety_proof_id
-                    .map(MigrationDigestV1::canonical_value),
+                self.erasure_safety
+                    .as_ref()
+                    .map(|receipt| receipt.0.canonical_value()),
             ),
             CborValue::optional(
-                self.legacy_removal_authorization_id
-                    .map(MigrationDigestV1::canonical_value),
+                self.removal_authorization
+                    .as_ref()
+                    .map(|receipt| receipt.0.canonical_value()),
             ),
         ])
     }
@@ -646,6 +852,29 @@ pub struct ConsumerClosureV1 {
 }
 
 impl ConsumerClosureV1 {
+    pub(in crate::domain::vnext) fn evaluate_installation_snapshot(
+        stage: ConsumerGateStageV1,
+        protocol: MigrationProtocolClosureV1,
+        snapshot: crate::domain::vnext::installation::consumer_snapshot::InstallationMigrationConsumerSnapshotV1,
+        prune_prerequisites: PrunePrerequisitesV1,
+    ) -> Result<Self, ConsumerClosureErrorV1> {
+        let (
+            expected_member_count,
+            source_manifest_id,
+            owner_snapshot_id,
+            closure_attestation_id,
+            entries,
+        ) = snapshot.into_parts();
+        let census = AuthoritativeConsumerCensusV1::from_owner_snapshot(
+            expected_member_count,
+            source_manifest_id,
+            owner_snapshot_id,
+            closure_attestation_id,
+            entries,
+        )?;
+        Self::evaluate(stage, protocol, census, prune_prerequisites)
+    }
+
     #[cfg(test)]
     pub fn evaluate_from_adapter<A: Stage9Stage10ConsumerCensusAdapterV1>(
         stage: ConsumerGateStageV1,

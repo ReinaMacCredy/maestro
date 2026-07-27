@@ -317,6 +317,7 @@ impl ProtectedLocatorStage9DispatchProjectionV2<'_> {
 pub(in crate::domain::vnext) enum ProtectedLocatorDispatchOccurrenceV2 {
     Definite,
     Unknown,
+    DefinitelyDidNotOccur,
 }
 
 #[derive(Eq, PartialEq)]
@@ -341,6 +342,20 @@ impl ProtectedLocatorFinalReadbackV2 {
             candidate_carrier: prepared.candidate.candidate_carrier,
             candidate_seal: prepared.candidate.candidate_seal,
             candidate_postcondition: prepared.candidate.candidate_postcondition,
+        })
+    }
+
+    pub(in crate::domain::vnext::persistence) fn observed_non_candidate_from_stage9_owner(
+        request: &ProtectedLocatorAcquisitionRequestV2,
+        observed: ProtectedLocatorObservedStateV2,
+    ) -> Result<Self, ProtectedLocatorLeaseErrorV2> {
+        validate_acquisition(request, &observed)?;
+        Ok(Self {
+            observed,
+            candidate_root: [0; 32],
+            candidate_carrier: [0; 32],
+            candidate_seal: [0; 32],
+            candidate_postcondition: [0; 32],
         })
     }
 }
@@ -560,19 +575,20 @@ fn classify_finality(
         && readback.candidate_seal == prepared.candidate.candidate_seal
         && readback.candidate_postcondition == prepared.candidate.candidate_postcondition;
     if exact_candidate {
+        return Ok(ProtectedLocatorFinalityDispositionV2::Committed);
+    }
+    if readback.observed == *acquisition {
         return Ok(match occurrence {
-            ProtectedLocatorDispatchOccurrenceV2::Definite => {
-                ProtectedLocatorFinalityDispositionV2::Committed
-            }
-            ProtectedLocatorDispatchOccurrenceV2::Unknown => {
+            ProtectedLocatorDispatchOccurrenceV2::DefinitelyDidNotOccur => {
                 ProtectedLocatorFinalityDispositionV2::RecoveryRequired
             }
+            ProtectedLocatorDispatchOccurrenceV2::Unknown => {
+                ProtectedLocatorFinalityDispositionV2::InDoubt
+            }
+            ProtectedLocatorDispatchOccurrenceV2::Definite => {
+                ProtectedLocatorFinalityDispositionV2::IntegrityBlocked
+            }
         });
-    }
-    if readback.observed == *acquisition
-        && matches!(occurrence, ProtectedLocatorDispatchOccurrenceV2::Definite)
-    {
-        return Err(ProtectedLocatorLeaseErrorV2::CurrentnessMismatch);
     }
     Ok(ProtectedLocatorFinalityDispositionV2::InDoubt)
 }
@@ -759,6 +775,22 @@ pub(in crate::domain::vnext) mod v2_tests {
         }
     }
 
+    fn old_root_backend_v2(occurrence: ProtectedLocatorDispatchOccurrenceV2) -> BackendV2 {
+        BackendV2 {
+            substitute_observed_carrier: false,
+            prepared_commitment: None,
+            occurrence,
+            readback: Some(ProtectedLocatorFinalReadbackV2 {
+                observed: observed_v2(),
+                candidate_root: [0; 32],
+                candidate_carrier: [0; 32],
+                candidate_seal: [0; 32],
+                candidate_postcondition: [0; 32],
+            }),
+            writes: 0,
+        }
+    }
+
     pub(in crate::domain::vnext) fn with_test_lease_v2<R>(
         callback: impl for<'locator> FnOnce(ProtectedLocatorLeaseV2<'locator>) -> R,
     ) -> (R, u64) {
@@ -791,6 +823,26 @@ pub(in crate::domain::vnext) mod v2_tests {
         let mut unknown = backend_v2(ProtectedLocatorDispatchOccurrenceV2::Unknown);
         assert_eq!(
             ProtectedLocatorLeaseV2::acquire(&mut unknown)
+                .and_then(|lease| lease.bind_inert_candidate(candidate_v2()))
+                .and_then(ProtectedLocatorCandidateTransitionV2::dispatch),
+            Ok(ProtectedLocatorFinalityDispositionV2::Committed)
+        );
+    }
+
+    #[test]
+    fn v2_requires_definite_nonoccurrence_before_old_root_allows_recovery() {
+        let mut unknown = old_root_backend_v2(ProtectedLocatorDispatchOccurrenceV2::Unknown);
+        assert_eq!(
+            ProtectedLocatorLeaseV2::acquire(&mut unknown)
+                .and_then(|lease| lease.bind_inert_candidate(candidate_v2()))
+                .and_then(ProtectedLocatorCandidateTransitionV2::dispatch),
+            Ok(ProtectedLocatorFinalityDispositionV2::InDoubt)
+        );
+
+        let mut absent =
+            old_root_backend_v2(ProtectedLocatorDispatchOccurrenceV2::DefinitelyDidNotOccur);
+        assert_eq!(
+            ProtectedLocatorLeaseV2::acquire(&mut absent)
                 .and_then(|lease| lease.bind_inert_candidate(candidate_v2()))
                 .and_then(ProtectedLocatorCandidateTransitionV2::dispatch),
             Ok(ProtectedLocatorFinalityDispositionV2::RecoveryRequired)
