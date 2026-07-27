@@ -13,6 +13,7 @@ use crate::domain::distribution::{CommitmentV1, ReleaseIdV1};
 use crate::domain::installation::{
     CommittedAgentResourceReleaseV1, RepositoryInstallationClosureV1,
 };
+use crate::domain::persistence::{StoreRoleV1, StoreStateV1, StoreV1};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum RepositoryBootstrapTargetKindV1 {
@@ -21,6 +22,13 @@ pub(crate) enum RepositoryBootstrapTargetKindV1 {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "the filesystem descriptor provider supplies one frozen explicit authorization"
+    )
+)]
 pub(crate) enum RepositoryBootstrapAuthorizationV1 {
     Apply,
     Force,
@@ -37,6 +45,13 @@ pub(crate) struct RepositoryBootstrapTargetFactsV1 {
 }
 
 impl RepositoryBootstrapTargetFactsV1 {
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "the filesystem descriptor provider constructs owner facts at the cutover assembly boundary"
+        )
+    )]
     pub(crate) fn new(
         target_identity: CommitmentV1,
         expected_preimage: CommitmentV1,
@@ -73,6 +88,13 @@ pub(crate) struct RepositoryBootstrapOwnerFactsV1 {
 }
 
 impl RepositoryBootstrapOwnerFactsV1 {
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "the Repository owner provider constructs admitted bootstrap facts"
+        )
+    )]
     pub(crate) fn new(
         plan: CutoverPlanOwnerFactsV1<2>,
         maestro_file: RepositoryBootstrapTargetFactsV1,
@@ -167,14 +189,6 @@ impl RepositoryBootstrapAdmissionV1 {
         &self.plan
     }
 
-    pub(crate) const fn installation_release_id(&self) -> ReleaseIdV1 {
-        self.installation_release_id
-    }
-
-    pub(crate) const fn bootstrap_closure(&self) -> [u8; 32] {
-        self.bootstrap_closure
-    }
-
     pub(crate) fn authorize_effects(
         &self,
         observations: [RepositoryBootstrapEffectObservationV1; 2],
@@ -208,6 +222,37 @@ impl RepositoryBootstrapAdmissionV1 {
             return Err(RepositoryBootstrapErrorV1::NotAuthorized);
         }
         Ok(())
+    }
+
+    pub(crate) fn acquire_coherent_readback(
+        &self,
+        store: &StoreV1,
+        closure: &RepositoryInstallationClosureV1,
+        reader: &mut dyn RepositoryBootstrapDescriptorReadPortV1,
+    ) -> Result<RepositoryBootstrapReadbackV1, RepositoryBootstrapErrorV1> {
+        self.validate_plan(&self.plan)?;
+        let before = repository_snapshot_binding(store, closure)?;
+        let observations = reader.read_exact_targets(&self.plan)?;
+        let after = repository_snapshot_binding(store, closure)?;
+        if before != after {
+            return Err(RepositoryBootstrapErrorV1::NotCurrent);
+        }
+        self.validated_readback(observations)
+    }
+
+    fn validated_readback(
+        &self,
+        observations: [RepositoryBootstrapDescriptorObservationV1; 2],
+    ) -> Result<RepositoryBootstrapReadbackV1, RepositoryBootstrapErrorV1> {
+        let targets = observations.map(|observed| RepositoryBootstrapTargetReadbackV1 {
+            target_identity: observed.target_identity,
+            candidate: observed.content_sha256,
+            outside_prefix: observed.outside_prefix,
+            outside_suffix: observed.outside_suffix,
+        });
+        let readback = RepositoryBootstrapReadbackV1 { targets };
+        self.validate_readback(&readback)?;
+        Ok(readback)
     }
 
     fn validate_readback(
@@ -246,11 +291,26 @@ pub(crate) struct RepositoryBootstrapEffectPermitV1 {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct RepositoryBootstrapTargetReadbackV1 {
+pub(crate) struct RepositoryBootstrapDescriptorObservationV1 {
     pub target_identity: CommitmentV1,
-    pub candidate: CommitmentV1,
+    pub content_sha256: CommitmentV1,
     pub outside_prefix: Option<CommitmentV1>,
     pub outside_suffix: Option<CommitmentV1>,
+}
+
+pub(crate) trait RepositoryBootstrapDescriptorReadPortV1 {
+    fn read_exact_targets(
+        &mut self,
+        plan: &DistributionPlanV1,
+    ) -> Result<[RepositoryBootstrapDescriptorObservationV1; 2], RepositoryBootstrapErrorV1>;
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct RepositoryBootstrapTargetReadbackV1 {
+    target_identity: CommitmentV1,
+    candidate: CommitmentV1,
+    outside_prefix: Option<CommitmentV1>,
+    outside_suffix: Option<CommitmentV1>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -258,16 +318,8 @@ pub(crate) struct RepositoryBootstrapReadbackV1 {
     targets: [RepositoryBootstrapTargetReadbackV1; 2],
 }
 
-impl RepositoryBootstrapReadbackV1 {
-    pub(crate) fn new(targets: [RepositoryBootstrapTargetReadbackV1; 2]) -> Self {
-        Self { targets }
-    }
-}
-
 #[derive(Debug)]
 pub(crate) struct CommittedRepositoryBootstrapV1 {
-    installation_release_id: ReleaseIdV1,
-    installation_result_closure: [u8; 32],
     repository_result_closure: [u8; 32],
     _not_send_or_sync: PhantomData<Rc<()>>,
 }
@@ -306,19 +358,9 @@ impl CommittedRepositoryBootstrapV1 {
             ],
         );
         Ok(Self {
-            installation_release_id: admission.installation_release_id,
-            installation_result_closure: admission.installation_result_closure,
             repository_result_closure,
             _not_send_or_sync: PhantomData,
         })
-    }
-
-    pub(crate) const fn installation_release_id(&self) -> ReleaseIdV1 {
-        self.installation_release_id
-    }
-
-    pub(crate) const fn installation_result_closure(&self) -> [u8; 32] {
-        self.installation_result_closure
     }
 
     pub(crate) const fn repository_result_closure(&self) -> [u8; 32] {
@@ -464,6 +506,36 @@ fn readback_closure(readback: &RepositoryBootstrapReadbackV1) -> [u8; 32] {
     commitment(b"maestro.vnext.repository-bootstrap-readback.v1", &parts)
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct RepositorySnapshotBindingV1 {
+    head_id: crate::domain::identity::StoreHeadIdV1,
+    generation_id: crate::domain::identity::StoreGenerationIdV1,
+    closure_object_id: crate::domain::identity::StoreObjectIdV1,
+}
+
+fn repository_snapshot_binding(
+    store: &StoreV1,
+    closure: &RepositoryInstallationClosureV1,
+) -> Result<RepositorySnapshotBindingV1, RepositoryBootstrapErrorV1> {
+    let (state, head, generation, objects) = store
+        .coherent_publication_snapshot()
+        .map_err(|_| RepositoryBootstrapErrorV1::NotCurrent)?;
+    let closure_object = closure
+        .to_store_object()
+        .map_err(|_| RepositoryBootstrapErrorV1::NotCurrent)?;
+    if state != StoreStateV1::Active
+        || store.role() != StoreRoleV1::Repository
+        || !objects.iter().any(|object| object == &closure_object)
+    {
+        return Err(RepositoryBootstrapErrorV1::NotCurrent);
+    }
+    Ok(RepositorySnapshotBindingV1 {
+        head_id: head.id(),
+        generation_id: generation.id(),
+        closure_object_id: closure_object.id(),
+    })
+}
+
 fn digest_u64(value: u64) -> [u8; 32] {
     Sha256::digest(value.to_be_bytes()).into()
 }
@@ -486,6 +558,8 @@ pub(crate) enum RepositoryBootstrapErrorV1 {
     PlanMismatch,
     #[error("the Repository bootstrap diff or explicit authorization is missing")]
     NotAuthorized,
+    #[error("the Repository bootstrap descriptor read failed: {0}")]
+    DescriptorRead(String),
     #[error("the Repository bootstrap is not committed under exact Repository currentness")]
     NotCurrent,
 }
@@ -643,21 +717,23 @@ mod tests {
             Err(RepositoryBootstrapErrorV1::NotAuthorized)
         ));
 
-        let readback =
-            RepositoryBootstrapReadbackV1::new(repository_admission.bindings.map(|binding| {
-                RepositoryBootstrapTargetReadbackV1 {
+        let readback = repository_admission
+            .validated_readback(repository_admission.bindings.map(|binding| {
+                RepositoryBootstrapDescriptorObservationV1 {
                     target_identity: binding.target_identity,
-                    candidate: binding.candidate,
+                    content_sha256: binding.candidate,
                     outside_prefix: binding.outside_prefix,
                     outside_suffix: binding.outside_suffix,
                 }
-            }));
+            }))
+            .unwrap();
         assert_eq!(repository_admission.validate_readback(&readback), Ok(()));
         let mut wrong_targets = readback.targets;
         wrong_targets[1].outside_suffix = Some(value(124));
         assert_eq!(
-            repository_admission
-                .validate_readback(&RepositoryBootstrapReadbackV1::new(wrong_targets)),
+            repository_admission.validate_readback(&RepositoryBootstrapReadbackV1 {
+                targets: wrong_targets
+            }),
             Err(RepositoryBootstrapErrorV1::NotCurrent)
         );
 

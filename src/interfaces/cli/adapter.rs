@@ -1,7 +1,5 @@
 //! Stage-6 CLI and JSON transport adapter.
 
-#![allow(dead_code, reason = "the canonical CLI adapter remains crate-internal")]
-
 use serde_json::json;
 
 use crate::domain::capability::generated_catalog::{
@@ -13,6 +11,7 @@ use crate::domain::transport::{
     decode_operation_request, decode_packet_read_request, encode_operation_result,
     encode_packet_read_envelope,
 };
+use crate::operations::CutoverGovernedOperationAssemblyV1;
 use crate::operations::action::{
     ActionSubmissionServiceV1, GovernedOperationPortV1, OperationKindV1, OperationResultReadPortV1,
     PreparedOperationV1,
@@ -25,6 +24,14 @@ pub(super) fn refuse_legacy_successor_route(
     let refusal = legacy_successor_refusal(surface)
         .ok_or_else(|| anyhow::anyhow!("the requested route is not a frozen legacy surface"))?;
     anyhow::bail!("{}; use {}", refusal.code, refusal.canonical_replacement)
+}
+
+pub(super) fn refuse_legacy_recipe_route(recipe: &str) -> anyhow::Result<()> {
+    let surface = LegacySuccessorSurfaceV1::Recipe(recipe);
+    if legacy_successor_refusal(surface).is_some() {
+        refuse_legacy_successor_route(surface)?;
+    }
+    Ok(())
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -74,7 +81,31 @@ enum Stage6CliCommandV1 {
     },
 }
 
+#[expect(
+    dead_code,
+    reason = "the canonical Stage-6 adapter entry remains crate-internal until the frozen transport replaces legacy CLI parsing"
+)]
 pub(crate) fn run(
+    args: &[String],
+    input_json: Option<&str>,
+    projection_port: &dyn ProjectionReadPortV1,
+    operation_assembly: CutoverGovernedOperationAssemblyV1<'_>,
+    result_port: &dyn OperationResultReadPortV1,
+) -> Stage6CliOutputV1 {
+    let operation_port = match operation_assembly.into_port() {
+        Ok(port) => port,
+        Err(error) => return Stage6CliOutputV1::failure(1, error.to_string()),
+    };
+    run_with_operation_port(
+        args,
+        input_json,
+        projection_port,
+        &operation_port,
+        result_port,
+    )
+}
+
+fn run_with_operation_port(
     args: &[String],
     input_json: Option<&str>,
     projection_port: &dyn ProjectionReadPortV1,
@@ -392,7 +423,7 @@ mod tests {
 
     #[test]
     fn operation_result_route_executes_through_the_read_port() {
-        let output = run(
+        let output = run_with_operation_port(
             &["operation".into(), "result".into(), "request-1".into()],
             None,
             &RefusingProjectionPort,

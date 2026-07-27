@@ -13,6 +13,13 @@ pub struct Stage4EffectReservationBatchV1 {
 }
 
 impl Stage4EffectReservationBatchV1 {
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "a concrete effect provider constructs the atomic reservation batch"
+        )
+    )]
     pub fn new(
         plan: &DistributionPlanV1,
         captures: &[CapturedTargetPreimageV1],

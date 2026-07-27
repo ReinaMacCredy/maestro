@@ -1,4 +1,8 @@
 #![cfg(test)]
+#![expect(
+    dead_code,
+    reason = "this frozen adapter exists only for Stage 9 through 11 parity probes"
+)]
 
 use crate::domain::distribution::CommitmentV1;
 use crate::domain::installation::PreStoreCutoverCandidateV1;

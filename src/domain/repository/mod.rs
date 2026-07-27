@@ -2,16 +2,11 @@
 
 mod bootstrap;
 
-#[allow(
-    unused_imports,
-    reason = "the Repository facade exports the complete bootstrap owner contract"
-)]
 pub(crate) use bootstrap::{
     CommittedRepositoryBootstrapV1, RepositoryBootstrapAdmissionV1,
-    RepositoryBootstrapAuthorizationV1, RepositoryBootstrapEffectObservationV1,
-    RepositoryBootstrapEffectPermitV1, RepositoryBootstrapErrorV1, RepositoryBootstrapOwnerFactsV1,
-    RepositoryBootstrapReadbackV1, RepositoryBootstrapTargetFactsV1,
-    RepositoryBootstrapTargetReadbackV1,
+    RepositoryBootstrapDescriptorObservationV1, RepositoryBootstrapDescriptorReadPortV1,
+    RepositoryBootstrapEffectObservationV1, RepositoryBootstrapEffectPermitV1,
+    RepositoryBootstrapErrorV1, RepositoryBootstrapOwnerFactsV1,
 };
 
 use std::collections::{BTreeMap, BTreeSet};

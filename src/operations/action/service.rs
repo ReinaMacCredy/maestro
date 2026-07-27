@@ -1,10 +1,5 @@
 //! Stage-6 Action submission and replay service.
 
-#![allow(
-    dead_code,
-    reason = "the canonical action service remains crate-internal"
-)]
-
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
@@ -23,6 +18,7 @@ use crate::domain::integration::public_literals::{
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct OwnerAdmissionV1 {
     pub catalog_ordinal: u16,
+    pub operation_name: String,
     pub owner: CatalogOwnerV1,
     pub operation_spec_ref: String,
     pub semantic_request_hash: [u8; 32],
@@ -87,15 +83,9 @@ pub(crate) struct ActionSubmissionServiceV1 {
 
 impl ActionSubmissionServiceV1 {
     pub(crate) fn load() -> Result<Self, ActionSubmissionErrorV1> {
-        let repository_bootstrap_owner = crate::operations::repository_bootstrap_owner_surface();
-        let catalog = GeneratedCapabilityCatalogV1::load_frozen()?;
-        if catalog
-            .ceremony_named(repository_bootstrap_owner.operation_name)
-            .is_none()
-        {
-            return Err(ActionSubmissionErrorV1::UnknownOperation);
-        }
-        Ok(Self { catalog })
+        Ok(Self {
+            catalog: GeneratedCapabilityCatalogV1::load_frozen()?,
+        })
     }
 
     pub(crate) fn prepare_named(
@@ -222,6 +212,7 @@ impl ActionSubmissionServiceV1 {
         };
         OwnerAdmissionV1 {
             catalog_ordinal: entry.ordinal(),
+            operation_name: entry.name().to_owned(),
             owner: entry.owner(),
             operation_spec_ref: descriptor_ref.to_owned(),
             semantic_request_hash,

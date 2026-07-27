@@ -138,8 +138,19 @@ pub(crate) struct LoopReadinessEvidence {
 /// default and `list`), or one recipe verbatim. Served from the binary, so it
 /// needs no `.maestro` repo.
 pub fn run(args: LoopArgs) -> Result<()> {
-    if matches!(&args.command, Some(LoopCommand::Next(_))) {
-        return super::adapter::refuse_legacy_successor_route(LegacySuccessorSurfaceV1::LoopNext);
+    match &args.command {
+        Some(LoopCommand::Next(_)) => {
+            return super::adapter::refuse_legacy_successor_route(
+                LegacySuccessorSurfaceV1::LoopNext,
+            );
+        }
+        Some(LoopCommand::Show { name, .. }) | Some(LoopCommand::Validate { name }) => {
+            super::adapter::refuse_legacy_recipe_route(name)?;
+        }
+        Some(LoopCommand::Outcome(args)) => {
+            super::adapter::refuse_legacy_recipe_route(&args.recipe)?;
+        }
+        _ => {}
     }
 
     let custom_dir = custom_recipe_dir();

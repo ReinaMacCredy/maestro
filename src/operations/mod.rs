@@ -68,12 +68,10 @@ mod repository;
 
 #[allow(
     unused_imports,
-    reason = "the Repository operation root exports its complete owner facade and ports"
+    reason = "crate-owned governed Operation entrypoints consume the concrete cutover facade"
 )]
 pub(crate) use repository::{
-    ActiveRepositoryBootstrapV1, ActiveRepositoryFacadeV1, RepositoryBootstrapBackupPortV1,
-    RepositoryBootstrapBackupReceiptV1, RepositoryBootstrapEffectAdapterV1,
-    RepositoryBootstrapEffectPortV1, RepositoryBootstrapOperationErrorV1,
-    RepositoryBootstrapOwnerSurfaceV1, RepositoryBootstrapReadbackPortV1,
-    repository_bootstrap_owner_surface,
+    CutoverGovernedOperationAssemblyV1, CutoverGovernedOperationPortV1,
+    RepositoryBootstrapBackupPortV1, RepositoryBootstrapCeremonyV1,
+    RepositoryBootstrapDescriptorPortV1,
 };

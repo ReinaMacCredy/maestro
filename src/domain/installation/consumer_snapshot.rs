@@ -615,6 +615,7 @@ pub(in crate::domain) struct ConsumerClosureReceiptV1<'view, 'connection, K> {
     _not_send_or_sync: PhantomData<Rc<()>>,
 }
 
+#[derive(Debug)]
 pub(crate) struct AgentResourceReleaseConsumerSealV1 {
     closure: [u8; 32],
     _not_send_or_sync: PhantomData<Rc<()>>,

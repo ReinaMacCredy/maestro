@@ -31,20 +31,8 @@ pub struct ActiveDistributionTransactionV1 {
 }
 
 impl ActiveDistributionTransactionV1 {
-    pub const fn expected_head_id(&self) -> StoreHeadIdV1 {
-        self.expected_head_id
-    }
-
-    pub const fn expected_generation_id(&self) -> StoreGenerationIdV1 {
-        self.expected_generation_id
-    }
-
     pub const fn transaction(&self) -> &DistributionTransactionV1 {
         &self.transaction
-    }
-
-    pub fn transaction_mut(&mut self) -> &mut DistributionTransactionV1 {
-        &mut self.transaction
     }
 }
 
@@ -52,6 +40,10 @@ impl ActiveDistributionTransactionV1 {
 #[allow(
     clippy::large_enum_variant,
     reason = "the frozen domain closure contract keeps both exact closure values by value"
+)]
+#[expect(
+    dead_code,
+    reason = "the admitted ceremony provider constructs one exact domain closure variant"
 )]
 pub enum ActiveDomainInstallationClosureV1 {
     Repository(RepositoryInstallationClosureV1),
@@ -125,6 +117,10 @@ pub struct ActivePublicationObjectsV1 {
 }
 
 impl ActivePublicationObjectsV1 {
+    #[expect(
+        dead_code,
+        reason = "the admitted ceremony provider constructs the exact publication closure"
+    )]
     pub fn new(
         mut supporting_objects: Vec<StoreObjectV1>,
         receipt: DistributionReceiptV1,
@@ -297,17 +293,10 @@ impl<'store> ActiveInstallationFacadeV1<'store> {
         effects.persist_checkpoint(&active.transaction)
     }
 
-    pub(crate) fn coherent_repository_closure_is_current(
-        &self,
-        closure: &RepositoryInstallationClosureV1,
-    ) -> Result<bool, InstallationOperationErrorV1> {
-        let (state, _, _, objects) = self.store.coherent_publication_snapshot()?;
-        let closure_object = closure.to_store_object()?;
-        Ok(state == StoreStateV1::Active
-            && self.store.role() == crate::domain::persistence::StoreRoleV1::Repository
-            && objects.iter().any(|object| object == &closure_object))
-    }
-
+    #[expect(
+        dead_code,
+        reason = "the frozen recovery entrypoint remains available to a recovery-mode owner"
+    )]
     pub fn restore_from_captures(
         &mut self,
         active: &mut ActiveDistributionTransactionV1,
@@ -613,9 +602,14 @@ pub enum InstallationOperationErrorV1 {
     StaleDomain,
     #[error("current persisted Authority no longer authorizes the exact Distribution request")]
     AuthorityUnavailable,
-    #[error("target effect provider failed: {0}")]
-    EffectProvider(String),
     #[error("Stage-4 effect reservation batch does not cover every target exactly once")]
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "only a malformed provider reservation batch constructs this refusal"
+        )
+    )]
     IncompleteEffectReservationBatch,
     #[error("effect reconciliation requires recovery before verification or commit")]
     RecoveryRequired,
