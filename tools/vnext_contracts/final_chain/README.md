@@ -5,26 +5,47 @@ locked by `dec-canonical-final-cumulative-stage-0-1652`. It does not change a
 Maestro product contract and it does not treat the historical V3 Stage 12 chain
 or any Stage 0/2/3/4/5 verdict as current proof.
 
+`materialize_chain.py` is the deterministic, no-ref-update helper the external
+Orchestrator runs only after promotion. It writes Git commit objects for one
+synthetic chain: the fixed historical Stage 0-4 checkpoints, a Stage 5 merge,
+single-parent Stage 6-11 checkpoints, and a Stage 12 merge whose second parent
+is the exact reviewed promotion candidate and whose tree is identical. It also
+writes the exact byte-total Stage 12 overlay manifest. It never updates a ref,
+generates a closure, seals, or publishes.
+
 `generate.py` is the only generation entry point. It refuses a dirty candidate,
 binds the exact clean `--final-ref` commit and tree as the current V4 Stage 12
-checkpoint, verifies all thirteen supplied checkpoints occur in Stage order on
-that commit's first-parent chain, archives that commit without reading mutable
+checkpoint, verifies the exact merge/direct-parent topology and all thirteen
+supplied checkpoint trees, archives that commit without reading mutable
 working-tree bytes, and copies/content-binds the approved V4 packet. It then
 emits a byte-total input manifest, a ledger derived without classification
 inference from `proof-registry.v1.json`, semantic artifact-readback requirements,
 three complete per-engine Cargo/native dependency closures, checkpoint records,
-and the immutable snapshot. It does not execute proof, write a receipt, update a
+an exact reachable Git-object pack for ancestry proof, and the immutable
+snapshot. The runner indexes that bound pack into a separate read-only bare
+repository for each engine; ancestry proof never points at the archive-only
+source tree. Generation does not execute proof, write a receipt, update a
 pointer, or publish.
 
 The Orchestrator supplies exactly one `--stage-checkpoint N=<40-hex-commit>` for
 every `N` from 0 through 12. Stage 12 must equal the commit resolved from
 `--final-ref`; no historical V3 commit is accepted in that slot.
+Generation additionally requires the exact reviewed Stage 12 candidate, the
+helper-produced overlay manifest, and a byte-bound promotion-prerequisites
+receipt. The receipt must prove the legacy prune gate is zero, consumer/reader/
+hold counts are zero, promotion parity is exactly 210/210 with zero mismatches,
+and the four resolved Stage 11/12 exact lib filters match the rotated registry.
+The current promotion observation is 349 legacy rows, so generation and sealing
+remain correctly blocked.
 
 ```text
 python3 tools/vnext_contracts/final_chain/generate.py \
   --repository <clean-isolated-final-V4-worktree> \
   --packet-root /private/tmp/maestro-vnext-final-closure-successor-packet-v4 \
   --final-ref <exact-final-V4-commit> \
+  --stage12-reviewed-candidate <exact-reviewed-promotion-candidate> \
+  --stage12-overlay-manifest <helper-produced-overlay-manifest> \
+  --promotion-prerequisites <zero-gate-byte-bound-prerequisites-receipt> \
   --stage-checkpoint 0=<stage-0-first-parent-checkpoint> \
   --stage-checkpoint 1=<stage-1-first-parent-checkpoint> \
   --stage-checkpoint 2=<stage-2-first-parent-checkpoint> \

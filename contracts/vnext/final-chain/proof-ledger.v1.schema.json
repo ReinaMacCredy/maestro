@@ -35,8 +35,8 @@
             "type": "object",
             "required": ["protocol", "required_receipt"],
             "properties": {
-              "protocol": {"enum": ["command-exit-v1", "fault-observation-v1", "cohort-observation-v1", "fanout-edge-sweep-v1"]},
-              "required_receipt": {"enum": ["none", "fault-observation.v1.json", "cohort-observation.v1.json", "fanout-edge-sweep.v1.json"]},
+              "protocol": {"enum": ["command-exit-v1", "fault-observation-v1", "cohort-observation-v1", "fanout-edge-sweep-v1", "semantic-receipt-v1"]},
+              "required_receipt": {"enum": ["none", "fault-observation.v1.json", "cohort-observation.v1.json", "fanout-edge-sweep.v1.json", "semantic-artifact-readback.v1.json"]},
               "fault_schedule": {"$ref": "#/$defs/bound_file"},
               "cohort": {"$ref": "#/$defs/bound_file"}
             },

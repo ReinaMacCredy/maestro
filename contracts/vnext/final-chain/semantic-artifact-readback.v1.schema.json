@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "maestro.external.vnext-final-semantic-artifact-readback.v1",
   "type": "object",
-  "required": ["schema_version", "check_id", "artifacts", "canonical_reads", "negative_routes", "closures"],
+  "required": ["schema_version", "check_id", "artifacts", "canonical_reads", "negative_routes", "closures", "promotion_parity"],
   "properties": {
     "schema_version": {"const": "maestro.external.vnext-final-semantic-artifact-readback.v1"},
     "check_id": {"type": "string", "pattern": "^[a-z0-9-]+$"},
@@ -60,6 +60,16 @@
         "consumer_count": {"const": 0},
         "reader_count": {"const": 0},
         "hold_count": {"const": 0}
+      },
+      "additionalProperties": false
+    },
+    "promotion_parity": {
+      "type": "object",
+      "required": ["source_file_count", "promoted_file_count", "mismatch_count"],
+      "properties": {
+        "source_file_count": {"const": 210},
+        "promoted_file_count": {"const": 210},
+        "mismatch_count": {"const": 0}
       },
       "additionalProperties": false
     }

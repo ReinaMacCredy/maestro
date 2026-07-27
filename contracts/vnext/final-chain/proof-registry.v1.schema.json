@@ -21,8 +21,6 @@
           "kind",
           "expected_outcome",
           "engines",
-          "command",
-          "input_paths",
           "harness"
         ],
         "properties": {
@@ -72,6 +70,46 @@
             },
             "additionalProperties": false
           },
+          "rotation_slot": {
+            "type": "object",
+            "required": [
+              "state",
+              "slot_id",
+              "command_shape",
+              "source_namespace",
+              "required_semantics"
+            ],
+            "properties": {
+              "state": {
+                "const": "awaiting-promotion"
+              },
+              "slot_id": {
+                "type": "string",
+                "pattern": "^stage(11|12)-[a-z0-9-]+-lib-filter$"
+              },
+              "command_shape": {
+                "const": "cargo-lib-exact-test"
+              },
+              "source_namespace": {
+                "type": "string",
+                "minLength": 1
+              },
+              "provisional_8edd591b_filter": {
+                "type": "string",
+                "pattern": "^domain::vnext::migration::runtime::cohort_observation::tests::[a-z0-9_]+$"
+              },
+              "required_semantics": {
+                "type": "array",
+                "minItems": 3,
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9_]+$"
+                },
+                "uniqueItems": true
+              }
+            },
+            "additionalProperties": false
+          },
           "input_paths": {
             "type": "array",
             "minItems": 1,
@@ -90,12 +128,13 @@
                   "command-exit-v1",
                   "fault-observation-v1",
                   "cohort-observation-v1",
-                  "fanout-edge-sweep-v1"
+                  "fanout-edge-sweep-v1",
+                  "semantic-receipt-v1"
                 ]
               },
               "required_receipt": {
                 "type": "string",
-                "pattern": "^(none|fault-observation\\.v1\\.json|cohort-observation\\.v1\\.json|fanout-edge-sweep\\.v1\\.json)$"
+                "pattern": "^(none|fault-observation\\.v1\\.json|cohort-observation\\.v1\\.json|fanout-edge-sweep\\.v1\\.json|semantic-artifact-readback\\.v1\\.json)$"
               },
               "fault_schedule_path": {
                 "type": "string",
@@ -109,6 +148,38 @@
             "additionalProperties": false
           }
         },
+        "oneOf": [
+          {
+            "required": [
+              "command",
+              "input_paths"
+            ],
+            "not": {
+              "required": [
+                "rotation_slot"
+              ]
+            }
+          },
+          {
+            "required": [
+              "rotation_slot"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "command"
+                  ]
+                },
+                {
+                  "required": [
+                    "input_paths"
+                  ]
+                }
+              ]
+            }
+          }
+        ],
         "additionalProperties": false
       }
     }

@@ -13,6 +13,13 @@ from typing import Any, Mapping
 
 
 ENGINES = ["python", "rust", "ruby"]
+HISTORICAL_STAGES = [
+    "66a34db6a28ff3f3ee178f644b645bb6ea60681e",
+    "bebc2e35314741c3b053901fd5040b323ee2c924",
+    "602302c69df22e96f319b1451c14d341fdde14cd",
+    "ad8f3d88bf647031d415aa3aed0998ca7a9097d7",
+    "9f3cc73b2199c5b2be78dcea8852cbdcafaaafc2",
+]
 READBACK_KINDS = {
     "compiled_namespace_absence",
     "generated_resource_absence",
@@ -85,11 +92,77 @@ def validate_snapshot(snapshot: dict[str, Any], frozen_root: Path, source: Path)
         raise ValueError("Stage checkpoint closure differs")
     if stages[-1].get("commit") != snapshot.get("final_integration", {}).get("commit"):
         raise ValueError("current V4 Stage 12 checkpoint differs")
+    if [row.get("commit") for row in stages[:5]] != HISTORICAL_STAGES:
+        raise ValueError("historical Stage 0-4 checkpoints differ")
     for row in stages:
         checkpoint_path = verify_binding(frozen_root, row.get("checkpoint"))
         checkpoint = load(checkpoint_path)
-        if any(checkpoint.get(field) != row.get(field) for field in ("stage", "commit", "tree")):
+        if any(
+            checkpoint.get(field) != row.get(field)
+            for field in ("stage", "commit", "tree", "parents")
+        ):
             raise ValueError("Stage checkpoint bytes differ")
+    if stages[5].get("parents", [None])[0] != stages[4]["commit"] or len(stages[5].get("parents", [])) != 2:
+        raise ValueError("Stage 5 merge parent topology differs")
+    for stage in range(6, 12):
+        if stages[stage].get("parents") != [stages[stage - 1]["commit"]]:
+            raise ValueError("Stage 6-11 direct-parent topology differs")
+    candidate = snapshot.get("stage12_reviewed_candidate")
+    if not isinstance(candidate, Mapping) or stages[12].get("parents") != [
+        stages[11]["commit"],
+        candidate.get("commit"),
+    ] or stages[12].get("tree") != candidate.get("tree"):
+        raise ValueError("Stage 12 reviewed-candidate merge topology differs")
+    ancestry = snapshot.get("stage5_second_parent_ancestry")
+    if (
+        not isinstance(ancestry, list)
+        or not ancestry
+        or ancestry[0].get("commit") != stages[5]["parents"][1]
+        or ancestry[-1].get("commit")
+        != snapshot.get("provisional_stage5_source_commit")
+    ):
+        raise ValueError("Stage 5 second-parent ancestry differs")
+    for current, successor in zip(ancestry, ancestry[1:]):
+        if not current.get("parents") or current["parents"][0] != successor.get("commit"):
+            raise ValueError("Stage 5 second-parent ancestry is discontinuous")
+    overlay = load(verify_binding(frozen_root, snapshot.get("stage12_overlay")))
+    if (
+        overlay.get("schema_version")
+        != "maestro.external.vnext-final-stage12-overlay.v1"
+        or overlay.get("stage11_commit") != stages[11]["commit"]
+        or overlay.get("reviewed_candidate_commit") != candidate.get("commit")
+        or overlay.get("reviewed_candidate_tree") != candidate.get("tree")
+        or overlay.get("stage12_commit") != stages[12]["commit"]
+        or overlay.get("stage12_tree") != stages[12]["tree"]
+        or overlay.get("entry_count") != len(overlay.get("entries", []))
+        or overlay.get("byte_length")
+        != sum(int(row.get("byte_length", 0)) for row in overlay.get("entries", []))
+    ):
+        raise ValueError("Stage 12 overlay binding differs")
+    promotion_path = verify_binding(
+        frozen_root, snapshot.get("promotion_prerequisites")
+    )
+    promotion = load(promotion_path)
+    if (
+        promotion.get("schema_version")
+        != "maestro.external.vnext-final-promotion-prerequisites.v1"
+        or promotion.get("stage11_commit") != stages[11]["commit"]
+        or promotion.get("stage12_reviewed_candidate") != candidate.get("commit")
+        or promotion.get("legacy_prune_gate", {}).get(
+            "observed_legacy_row_count"
+        )
+        != 0
+        or promotion.get("consumer_reader_hold", {}).get("consumer_count") != 0
+        or promotion.get("consumer_reader_hold", {}).get("reader_count") != 0
+        or promotion.get("consumer_reader_hold", {}).get("hold_count") != 0
+        or promotion.get("promotion_parity", {}).get("source_file_count") != 210
+        or promotion.get("promotion_parity", {}).get("promoted_file_count")
+        != 210
+        or promotion.get("promotion_parity", {}).get("mismatch_count") != 0
+    ):
+        raise ValueError("promotion prerequisites are absent or nonzero")
+    for section in ("legacy_prune_gate", "consumer_reader_hold", "promotion_parity"):
+        verify_binding(promotion_path.parent, promotion[section].get("receipt"))
     if snapshot.get("immutable_input_roots") != [
         "source",
         "packet",
@@ -112,7 +185,8 @@ def validate_snapshot(snapshot: dict[str, Any], frozen_root: Path, source: Path)
     generation = snapshot.get("expected_generation")
     if (
         not isinstance(publication, Mapping)
-        or set(publication) != {"path", "device", "inode", "mount_device"}
+        or set(publication)
+        != {"path", "device", "inode", "mount_device", "mode", "link_count", "ctime_ns"}
         or not isinstance(generation, int)
         or generation < 0
         or snapshot["pointer_preimage"].get("generation") != generation
@@ -127,7 +201,13 @@ def validate_snapshot(snapshot: dict[str, Any], frozen_root: Path, source: Path)
     for row in engines:
         verify_binding(source, row.get("source"))
     verify_binding(source, snapshot.get("proof_registry"))
-    for field in ("input_manifest", "proof_ledger", "stage12_readback", "toolchain"):
+    for field in (
+        "input_manifest",
+        "proof_ledger",
+        "stage12_readback",
+        "toolchain",
+        "ancestry_pack",
+    ):
         verify_binding(frozen_root, snapshot.get(field))
 
 def validate_packet(snapshot: dict[str, Any], packet_root: Path) -> None:
@@ -283,6 +363,15 @@ def validate_toolchain(toolchain: dict[str, Any], source: Path) -> dict[str, str
             or dependency.get("identity") != identity_bytes(canonical)
         ):
             raise ValueError("dependency-output identity differs")
+        probe = dependency.get("completeness_probe")
+        if (
+            not isinstance(probe, Mapping)
+            or probe.get("exit_code") != 0
+            or not {"fetch", "--offline", "--frozen", "--locked", "--target"}.issubset(
+                set(probe.get("argv", []))
+            )
+        ):
+            raise ValueError("dependency closure completeness probe is absent")
     return resolved
 
 
@@ -386,6 +475,8 @@ def expand(
     for value in argv:
         if value == "{source}":
             result.append(str(source))
+        elif value == "{control:ancestry-repository}":
+            result.append(str(snapshot.parent / "ancestry-repository"))
         elif value == "{control:snapshot}":
             result.append(str(snapshot))
         elif value == "{packet:fanout-manifest.v4.json}":
@@ -548,6 +639,27 @@ def execute_proof(
         receipt["cohort_outcomes"] = outcomes
         receipt["cohort_observation"] = observation
         receipt["harness_receipt_identity"] = identity(receipt_path)
+    if harness["protocol"] == "semantic-receipt-v1":
+        observation = load(receipt_path)
+        if (
+            observation.get("schema_version")
+            != "maestro.external.vnext-final-semantic-artifact-readback.v1"
+            or observation.get("check_id") != row["proof_id"]
+            or not observation.get("artifacts")
+            or not observation.get("canonical_reads")
+            or not observation.get("negative_routes")
+            or observation.get("closures")
+            != {"consumer_count": 0, "reader_count": 0, "hold_count": 0}
+            or observation.get("promotion_parity")
+            != {
+                "source_file_count": 210,
+                "promoted_file_count": 210,
+                "mismatch_count": 0,
+            }
+        ):
+            raise ValueError("promoted semantic receipt is absent or non-positive")
+        receipt["semantic_observation"] = observation
+        receipt["harness_receipt_identity"] = identity(receipt_path)
     if row["kind"] == "ancestry":
         observation = load(receipt_path)
         if (
@@ -612,6 +724,7 @@ def semantic_readback(
         reads = receipt.get("canonical_reads")
         routes = receipt.get("negative_routes")
         closures = receipt.get("closures")
+        promotion_parity = receipt.get("promotion_parity")
         if (
             receipt.get("schema_version")
             != "maestro.external.vnext-final-semantic-artifact-readback.v1"
@@ -620,6 +733,12 @@ def semantic_readback(
             or not isinstance(reads, list)
             or not isinstance(routes, list)
             or not isinstance(closures, Mapping)
+            or promotion_parity
+            != {
+                "source_file_count": 210,
+                "promoted_file_count": 210,
+                "mismatch_count": 0,
+            }
         ):
             raise ValueError("semantic artifact receipt differs")
         roots = {

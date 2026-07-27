@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "maestro.external.vnext-final-cumulative-closure-snapshot.v1",
   "type": "object",
-  "required": ["schema_version", "state", "approved_packet_identity", "packet_manifest", "final_integration", "first_parent_stages", "input_manifest", "proof_registry", "proof_ledger", "stage12_readback", "toolchain", "environment_allowlist", "immutable_input_roots", "writable_root_roles", "protected_primary_checkout", "publication_root_identity", "expected_generation", "cache_policy", "sandbox_profile", "pointer_preimage", "engines", "effect_denylist"],
+  "required": ["schema_version", "state", "approved_packet_identity", "packet_manifest", "final_integration", "first_parent_stages", "provisional_stage5_source_commit", "stage5_second_parent_ancestry", "stage12_reviewed_candidate", "stage12_overlay", "ancestry_pack", "promotion_prerequisites", "input_manifest", "proof_registry", "proof_ledger", "stage12_readback", "toolchain", "environment_allowlist", "immutable_input_roots", "writable_root_roles", "protected_primary_checkout", "publication_root_identity", "expected_generation", "cache_policy", "sandbox_profile", "pointer_preimage", "engines", "effect_denylist"],
   "properties": {
     "schema_version": {"const": "maestro.external.vnext-final-cumulative-closure-snapshot.v1"},
     "state": {"const": "frozen"},
@@ -15,16 +15,36 @@
       "maxItems": 13,
       "items": {
         "type": "object",
-        "required": ["stage", "commit", "tree", "checkpoint"],
+        "required": ["stage", "commit", "tree", "parents", "checkpoint"],
         "properties": {
           "stage": {"type": "integer", "minimum": 0, "maximum": 12},
           "commit": {"$ref": "#/$defs/sha1"},
           "tree": {"$ref": "#/$defs/sha1"},
+          "parents": {"type": "array", "minItems": 1, "maxItems": 2, "items": {"$ref": "#/$defs/sha1"}},
           "checkpoint": {"$ref": "#/$defs/bound_file"}
         },
         "additionalProperties": false
       }
     },
+    "provisional_stage5_source_commit": {"const": "7080fb6cd1e286998ff47fb6205e90dca990ba40"},
+    "stage5_second_parent_ancestry": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["commit", "tree", "parents"],
+        "properties": {
+          "commit": {"$ref": "#/$defs/sha1"},
+          "tree": {"$ref": "#/$defs/sha1"},
+          "parents": {"type": "array", "maxItems": 2, "items": {"$ref": "#/$defs/sha1"}}
+        },
+        "additionalProperties": false
+      }
+    },
+    "stage12_reviewed_candidate": {"$ref": "#/$defs/identity"},
+    "stage12_overlay": {"$ref": "#/$defs/bound_file"},
+    "ancestry_pack": {"$ref": "#/$defs/bound_file"},
+    "promotion_prerequisites": {"$ref": "#/$defs/bound_file"},
     "input_manifest": {"$ref": "#/$defs/bound_file"},
     "proof_registry": {"$ref": "#/$defs/bound_file"},
     "proof_ledger": {"$ref": "#/$defs/bound_file"},
@@ -36,12 +56,15 @@
     "protected_primary_checkout": {"type": "string", "pattern": "^/"},
     "publication_root_identity": {
       "type": "object",
-      "required": ["path", "device", "inode", "mount_device"],
+      "required": ["path", "device", "inode", "mount_device", "mode", "link_count", "ctime_ns"],
       "properties": {
         "path": {"type": "string", "pattern": "^/"},
         "device": {"type": "integer", "minimum": 0},
         "inode": {"type": "integer", "minimum": 1},
-        "mount_device": {"type": "integer", "minimum": 0}
+        "mount_device": {"type": "integer", "minimum": 0},
+        "mode": {"type": "integer", "minimum": 0},
+        "link_count": {"type": "integer", "minimum": 1},
+        "ctime_ns": {"type": "integer", "minimum": 1}
       },
       "additionalProperties": false
     },

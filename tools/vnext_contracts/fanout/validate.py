@@ -33,6 +33,18 @@ MANIFEST_REPOSITORY_PATH = "tools/vnext_contracts/fanout/fanout-base.v1.json"
 STAGES = (6, 7, 8, 9, 10, 11, 12)
 GIT_OBJECT_ID = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})")
 REGULAR_BLOB_MODES = {"100644", "100755"}
+OVERLAY_DISALLOWED_EXACT = {
+    "AGENTS.md", "Cargo.lock", "Cargo.toml", "build.rs", "src/lib.rs", "src/main.rs"
+}
+OVERLAY_DISALLOWED_PREFIXES = (
+    ".git/", ".maestro/", "contracts/vnext/catalogs/", "contracts/vnext/public/",
+    "contracts/vnext/stage0/", "contracts/vnext/stage2/", "contracts/vnext/stage3/",
+    "contracts/vnext/stage4/", "contracts/vnext/stage5/", "src/domain/vnext/authority/",
+    "src/domain/vnext/contract/", "src/domain/vnext/design/", "src/domain/vnext/execution/",
+    "src/domain/vnext/gate/", "src/domain/vnext/identity/", "src/domain/vnext/integration/",
+    "src/domain/vnext/persistence/", "src/domain/vnext/repository/", "src/domain/vnext/step/",
+    "src/domain/vnext/work/", "src/foundation/",
+)
 EXECUTABLE_SCRIPT_SUFFIXES = {".py", ".rb", ".sh"}
 FORBIDDEN_OBJECT_INFO_NAMES = {"alternates", "http-alternates"}
 PROMISOR_CONFIG_KEYS = {"extensions.partialclone"}
@@ -1726,12 +1738,29 @@ def validate_v4_final_chain(
             )
         commit_objects[stage] = commit_object
         checkpoint_entries[stage] = entries
-    for stage, (parent, child) in enumerate(zip(commits, commits[1:]), start=1):
-        child_object = commit_objects[stage]
-        if not child_object.parents or child_object.parents[0] != parent:
+    if commit_objects[5].parents[:1] != (commits[4],) or len(commit_objects[5].parents) != 2:
+        raise FanoutValidationError("Stage 5 must be an exact two-parent merge with Stage 4 first")
+    for stage in range(6, 12):
+        if commit_objects[stage].parents != (commits[stage - 1],):
             raise FanoutValidationError(
-                "each Stage checkpoint must be the direct first-parent successor"
+                "Stage 6-11 checkpoints must be sole direct first-parent successors"
             )
+    reviewed = snapshot.get("stage12_reviewed_candidate")
+    if not isinstance(reviewed, Mapping):
+        raise FanoutValidationError("Stage 12 reviewed candidate identity is absent")
+    reviewed_commit = str(reviewed.get("commit"))
+    reviewed_object, reviewed_entries = authenticated_tree(
+        repository, reviewed_commit, "Stage 12 reviewed candidate tree"
+    )
+    if (
+        commit_objects[12].parents != (commits[11], reviewed_commit)
+        or reviewed_object.tree != reviewed.get("tree")
+        or reviewed_object.tree != commit_objects[12].tree
+        or reviewed_entries != checkpoint_entries[12]
+    ):
+        raise FanoutValidationError(
+            "Stage 12 must merge the exact reviewed candidate with an identical tree"
+        )
     owners = {
         int(row["stage"]): row
         for row in manifest.get("stage_owners", [])
@@ -1759,8 +1788,8 @@ def validate_v4_final_chain(
             manifest.get("required_stage5_seeds"), "required Stage5 seeds"
         )
     }
-    require_first_parent_ancestor(repository, provisional, commits[5])
-    stage5_delta = edge_changes(repository, provisional, commits[5])
+    require_first_parent_ancestor(repository, provisional, commit_objects[5].parents[1])
+    stage5_delta = edge_changes(repository, commits[4], commits[5])
     stage5_paths = {
         row["path"] for row in stage5_delta
     } | {
@@ -1782,7 +1811,7 @@ def validate_v4_final_chain(
         } | {
             row["old_path"] for row in changes if "old_path" in row
         }
-        if stage >= 6:
+        if 6 <= stage <= 11:
             owner = owners[stage]
             prefixes = tuple(
                 normalized_path(value, prefix=True)
@@ -1847,8 +1876,64 @@ def validate_v4_final_chain(
                 "changed_paths_identity": hashlib.sha256(
                     canonical_json(sorted(paths))
                 ).hexdigest(),
+              }
+          )
+    overlay_binding = snapshot.get("stage12_overlay")
+    if not isinstance(overlay_binding, Mapping):
+        raise FanoutValidationError("Stage 12 overlay binding is absent")
+    overlay_path = snapshot_path.parent.parent.joinpath(
+        *PurePosixPath(str(overlay_binding.get("path"))).parts
+    )
+    overlay_bytes = overlay_path.read_bytes()
+    if (
+        overlay_binding.get("byte_length") != len(overlay_bytes)
+        or overlay_binding.get("sha256")
+        != f"sha256:{hashlib.sha256(overlay_bytes).hexdigest()}"
+    ):
+        raise FanoutValidationError("Stage 12 overlay binding differs")
+    overlay = load_manifest(overlay_path)
+    raw_overlay = raw_changes_between(repository, commits[11], commits[12])
+    overlay_rows = []
+    for status, path, _old_path, _old_mode in raw_overlay:
+        entry = checkpoint_entries[12].get(path)
+        if (
+            status not in {"A", "M"}
+            or entry is None
+            or entry.object_type != "blob"
+            or entry.mode not in REGULAR_BLOB_MODES
+        ):
+            raise FanoutValidationError("Stage 12 overlay contains a delete, rename, or unsafe mode")
+        normalized_path(path, prefix=False)
+        if any(part.startswith(".") for part in PurePosixPath(path).parts):
+            raise FanoutValidationError("Stage 12 overlay contains a hidden path")
+        if path in OVERLAY_DISALLOWED_EXACT or any(
+            path.startswith(prefix) for prefix in OVERLAY_DISALLOWED_PREFIXES
+        ):
+            raise FanoutValidationError(f"Stage 12 overlay enters a protected root: {path}")
+        contents = blob_bytes(repository, entry, f"Stage 12 overlay {path}")
+        overlay_rows.append(
+            {
+                "status": status,
+                "path": path,
+                "mode": entry.mode,
+                "byte_length": len(contents),
+                "sha256": f"sha256:{hashlib.sha256(contents).hexdigest()}",
             }
         )
+    overlay_rows.sort(key=lambda row: row["path"])
+    expected_overlay = {
+        "schema_version": "maestro.external.vnext-final-stage12-overlay.v1",
+        "stage11_commit": commits[11],
+        "reviewed_candidate_commit": reviewed_commit,
+        "reviewed_candidate_tree": reviewed_object.tree,
+        "stage12_commit": commits[12],
+        "stage12_tree": commit_objects[12].tree,
+        "entry_count": len(overlay_rows),
+        "byte_length": sum(int(row["byte_length"]) for row in overlay_rows),
+        "entries": overlay_rows,
+    }
+    if overlay != expected_overlay:
+        raise FanoutValidationError("Stage 12 overlay manifest differs from exact Git facts")
     return {
         "schema_version": "maestro.external.vnext-final-fanout-edge-sweep.v1",
         "status": "pass",

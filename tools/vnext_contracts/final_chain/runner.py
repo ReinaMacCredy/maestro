@@ -280,6 +280,17 @@ def validate_toolchain(path: Path, source: Path | None = None) -> dict[str, Any]
             or dependency.get("identity") != digest(canonical_bytes(rows))
         ):
             raise FinalChainError("dependency-output identity differs")
+        probe = dependency.get("completeness_probe")
+        if (
+            not isinstance(probe, Mapping)
+            or probe.get("exit_code") != 0
+            or not {"fetch", "--offline", "--frozen", "--locked", "--target"}.issubset(
+                set(probe.get("argv", []))
+            )
+            or not isinstance(probe.get("stdout"), Mapping)
+            or not isinstance(probe.get("stderr"), Mapping)
+        ):
+            raise FinalChainError("dependency closure completeness probe is absent")
     return value
 
 
@@ -399,8 +410,76 @@ def validate_snapshot(closure: Path) -> tuple[dict[str, Any], dict[str, Path]]:
     for row in stages:
         checkpoint = bound_file(closure, row.get("checkpoint"), "Stage checkpoint")
         value = read_json(checkpoint)
-        if value.get("stage") != row.get("stage") or value.get("commit") != row.get("commit") or value.get("tree") != row.get("tree"):
+        if any(
+            value.get(field) != row.get(field)
+            for field in ("stage", "commit", "tree", "parents")
+        ):
             raise FinalChainError("Stage checkpoint bytes differ from snapshot")
+    if (
+        len(stages[5].get("parents", [])) != 2
+        or stages[5]["parents"][0] != stages[4]["commit"]
+    ):
+        raise FinalChainError("Stage 5 merge parent topology differs")
+    for stage in range(6, 12):
+        if stages[stage].get("parents") != [stages[stage - 1]["commit"]]:
+            raise FinalChainError("Stage 6-11 direct-parent topology differs")
+    reviewed = snapshot.get("stage12_reviewed_candidate")
+    if (
+        not isinstance(reviewed, Mapping)
+        or stages[12].get("parents")
+        != [stages[11]["commit"], reviewed.get("commit")]
+        or stages[12].get("tree") != reviewed.get("tree")
+    ):
+        raise FinalChainError("Stage 12 reviewed-candidate merge topology differs")
+    ancestry = snapshot.get("stage5_second_parent_ancestry")
+    if (
+        not isinstance(ancestry, list)
+        or not ancestry
+        or ancestry[0].get("commit") != stages[5]["parents"][1]
+        or ancestry[-1].get("commit")
+        != snapshot.get("provisional_stage5_source_commit")
+    ):
+        raise FinalChainError("Stage 5 second-parent ancestry differs")
+    overlay_path = bound_file(
+        closure, snapshot.get("stage12_overlay"), "Stage 12 overlay manifest"
+    )
+    overlay = read_json(overlay_path)
+    if (
+        overlay.get("stage11_commit") != stages[11]["commit"]
+        or overlay.get("reviewed_candidate_commit") != reviewed.get("commit")
+        or overlay.get("reviewed_candidate_tree") != reviewed.get("tree")
+        or overlay.get("stage12_commit") != stages[12]["commit"]
+        or overlay.get("stage12_tree") != stages[12]["tree"]
+    ):
+        raise FinalChainError("Stage 12 overlay identity differs")
+    promotion_path = bound_file(
+        closure,
+        snapshot.get("promotion_prerequisites"),
+        "promotion prerequisites",
+    )
+    promotion = read_json(promotion_path)
+    if (
+        promotion.get("schema_version")
+        != "maestro.external.vnext-final-promotion-prerequisites.v1"
+        or promotion.get("stage11_commit") != stages[11]["commit"]
+        or promotion.get("stage12_reviewed_candidate") != reviewed.get("commit")
+        or promotion.get("legacy_prune_gate", {}).get("observed_legacy_row_count")
+        != 0
+        or promotion.get("consumer_reader_hold", {}).get("consumer_count") != 0
+        or promotion.get("consumer_reader_hold", {}).get("reader_count") != 0
+        or promotion.get("consumer_reader_hold", {}).get("hold_count") != 0
+        or promotion.get("promotion_parity", {}).get("source_file_count") != 210
+        or promotion.get("promotion_parity", {}).get("promoted_file_count") != 210
+        or promotion.get("promotion_parity", {}).get("mismatch_count") != 0
+    ):
+        raise FinalChainError("promotion prerequisites are absent or nonzero")
+    promotion_receipts = {}
+    for section in ("legacy_prune_gate", "consumer_reader_hold", "promotion_parity"):
+        promotion_receipts[f"promotion_{section}_receipt"] = bound_file(
+            promotion_path.parent,
+            promotion[section].get("receipt"),
+            f"{section} receipt",
+        )
     if snapshot.get("immutable_input_roots") != [
         "source",
         "packet",
@@ -435,7 +514,8 @@ def validate_snapshot(closure: Path) -> tuple[dict[str, Any], dict[str, Path]]:
     expected_generation = snapshot.get("expected_generation")
     if (
         not isinstance(publication_identity, Mapping)
-        or set(publication_identity) != {"path", "device", "inode", "mount_device"}
+        or set(publication_identity)
+        != {"path", "device", "inode", "mount_device", "mode", "link_count", "ctime_ns"}
         or not isinstance(expected_generation, int)
         or expected_generation < 0
         or snapshot["pointer_preimage"].get("generation") != expected_generation
@@ -459,7 +539,15 @@ def validate_snapshot(closure: Path) -> tuple[dict[str, Any], dict[str, Path]]:
         "ledger": bound_file(closure, snapshot.get("proof_ledger"), "proof ledger"),
         "readback": bound_file(closure, snapshot.get("stage12_readback"), "readback plan"),
         "toolchain": bound_file(closure, snapshot.get("toolchain"), "toolchain"),
+        "overlay": overlay_path,
+        "ancestry_pack": bound_file(
+            closure, snapshot.get("ancestry_pack"), "ancestry object pack"
+        ),
+        "promotion": promotion_path,
+        **promotion_receipts,
     }
+    if len({path.name for path in paths.values()}) != len(paths):
+        raise FinalChainError("published control filenames are not unique")
     validate_manifest(paths["manifest"], closure / "source", commit, tree)
     validate_toolchain(paths["toolchain"], closure / "source")
     validate_ledger(paths["ledger"], closure / "source", commit)
@@ -652,10 +740,62 @@ def run_engine(
     controls.mkdir()
     copied = {}
     for name, path in paths.items():
+        if name == "promotion":
+            continue
         target = controls / path.name
         shutil.copyfile(path, target)
         target.chmod(stat.S_IRUSR)
         copied[name] = target
+    ancestry_repository = controls / "ancestry-repository"
+    git_tool = str(toolchain["tools"]["git"]["resolved_path"])
+    environment = {
+        "HOME": str(root / "temp"),
+        "LC_ALL": "C",
+        "LANG": "C",
+        "PATH": str(Path(git_tool).parent),
+        "TZ": "UTC",
+    }
+    initialized = subprocess.run(
+        [
+            git_tool,
+            "-c",
+            "init.defaultBranch=master",
+            "init",
+            str(ancestry_repository),
+        ],
+        env=environment,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if initialized.returncode != 0:
+        raise FinalChainError("ancestry proof repository initialization failed")
+    indexed = subprocess.run(
+        [git_tool, "-C", str(ancestry_repository), "index-pack", "--stdin", "--fix-thin"],
+        env=environment,
+        input=copied["ancestry_pack"].read_bytes(),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if indexed.returncode != 0:
+        raise FinalChainError("ancestry proof object-pack indexing failed")
+    for path in ancestry_repository.rglob("*"):
+        if path.is_symlink():
+            raise FinalChainError(f"ancestry proof repository contains a symlink: {path}")
+        path.chmod(stat.S_IRUSR | (stat.S_IXUSR if path.is_dir() else 0))
+    ancestry_repository.chmod(stat.S_IRUSR | stat.S_IXUSR)
+    promotion_controls = controls / "promotion"
+    shutil.copytree(
+        paths["promotion"].parent,
+        promotion_controls,
+        symlinks=False,
+        copy_function=shutil.copyfile,
+    )
+    for path in promotion_controls.rglob("*"):
+        if path.is_symlink():
+            raise FinalChainError(f"promotion control contains a symlink: {path}")
+        path.chmod(stat.S_IRUSR | (stat.S_IXUSR if path.is_dir() else 0))
+    promotion_controls.chmod(stat.S_IRUSR | stat.S_IXUSR)
+    copied["promotion"] = promotion_controls / paths["promotion"].name
     profile = root / "sandbox.sb"
     writable_roots = [root / role for role in ("temp", "target", "deps", "output")]
     immutable_roots = [
@@ -860,6 +1000,7 @@ def consensus(
                     "harness_receipt_identity",
                     "edge_sweep_identity",
                     "edge_sweep",
+                    "semantic_observation",
                 )
             }
             for row in rows
@@ -1067,6 +1208,9 @@ def publish(
             "device": custody.st_dev,
             "inode": custody.st_ino,
             "mount_device": custody.st_dev,
+            "mode": stat.S_IMODE(custody.st_mode),
+            "link_count": custody.st_nlink,
+            "ctime_ns": custody.st_ctime_ns,
         }
         if actual_identity != dict(publication_identity):
             raise FinalChainError("publication root identity or mount custody changed")

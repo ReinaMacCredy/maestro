@@ -312,6 +312,13 @@ fn run(
     let expand = |value: &str| -> Result<String, String> {
         if value == "{source}" {
             Ok(cwd.to_string())
+        } else if value == "{control:ancestry-repository}" {
+            Ok(Path::new(snapshot)
+                .parent()
+                .ok_or("snapshot has no control root")?
+                .join("ancestry-repository")
+                .to_string_lossy()
+                .to_string())
         } else if value == "{control:snapshot}" {
             Ok(snapshot.to_string())
         } else if value == "{packet:fanout-manifest.v4.json}" {
@@ -643,6 +650,99 @@ fn main_result() -> Result<(), String> {
                 return Err("Stage checkpoint bytes differ".to_string());
             }
         }
+        let checkpoint_parents: Result<Vec<String>, String> = array(field(checkpoint, "parents")?)?
+            .iter()
+            .map(|value| string(value).map(str::to_string))
+            .collect();
+        let row_parents: Result<Vec<String>, String> = array(field(row, "parents")?)?
+            .iter()
+            .map(|value| string(value).map(str::to_string))
+            .collect();
+        if checkpoint_parents? != row_parents? {
+            return Err("Stage checkpoint parent bytes differ".to_string());
+        }
+    }
+    let historical = [
+        "66a34db6a28ff3f3ee178f644b645bb6ea60681e",
+        "bebc2e35314741c3b053901fd5040b323ee2c924",
+        "602302c69df22e96f319b1451c14d341fdde14cd",
+        "ad8f3d88bf647031d415aa3aed0998ca7a9097d7",
+        "9f3cc73b2199c5b2be78dcea8852cbdcafaaafc2",
+    ];
+    for (stage, expected) in historical.iter().enumerate() {
+        if string(field(object(&stages[stage])?, "commit")?)? != *expected {
+            return Err("historical Stage 0-4 checkpoints differ".to_string());
+        }
+    }
+    let stage5 = object(&stages[5])?;
+    let stage5_parents = array(field(stage5, "parents")?)?;
+    if stage5_parents.len() != 2
+        || string(&stage5_parents[0])? != string(field(object(&stages[4])?, "commit")?)?
+    {
+        return Err("Stage 5 merge parent topology differs".to_string());
+    }
+    for stage in 6..12 {
+        let parents = array(field(object(&stages[stage])?, "parents")?)?;
+        if parents.len() != 1
+            || string(&parents[0])? != string(field(object(&stages[stage - 1])?, "commit")?)?
+        {
+            return Err("Stage 6-11 direct-parent topology differs".to_string());
+        }
+    }
+    let reviewed = object(field(snapshot, "stage12_reviewed_candidate")?)?;
+    let stage12 = object(&stages[12])?;
+    let stage12_parents = array(field(stage12, "parents")?)?;
+    if stage12_parents.len() != 2
+        || string(&stage12_parents[0])? != string(field(object(&stages[11])?, "commit")?)?
+        || string(&stage12_parents[1])? != string(field(reviewed, "commit")?)?
+        || string(field(stage12, "tree")?)? != string(field(reviewed, "tree")?)?
+    {
+        return Err("Stage 12 reviewed-candidate merge topology differs".to_string());
+    }
+    let overlay_binding = object(field(snapshot, "stage12_overlay")?)?;
+    verify_binding(frozen_root, overlay_binding)?;
+    let overlay_path = safe_relative(frozen_root, string(field(overlay_binding, "path")?)?)?;
+    let overlay_value = load(&overlay_path)?;
+    let overlay = object(&overlay_value)?;
+    if string(field(overlay, "schema_version")?)?
+        != "maestro.external.vnext-final-stage12-overlay.v1"
+        || string(field(overlay, "stage11_commit")?)?
+            != string(field(object(&stages[11])?, "commit")?)?
+        || string(field(overlay, "reviewed_candidate_commit")?)?
+            != string(field(reviewed, "commit")?)?
+        || string(field(overlay, "stage12_commit")?)? != string(field(stage12, "commit")?)?
+    {
+        return Err("Stage 12 overlay binding differs".to_string());
+    }
+    let promotion_binding = object(field(snapshot, "promotion_prerequisites")?)?;
+    verify_binding(frozen_root, promotion_binding)?;
+    let promotion_path = safe_relative(frozen_root, string(field(promotion_binding, "path")?)?)?;
+    let promotion_value = load(&promotion_path)?;
+    let promotion = object(&promotion_value)?;
+    let legacy_gate = object(field(promotion, "legacy_prune_gate")?)?;
+    let consumer_hold = object(field(promotion, "consumer_reader_hold")?)?;
+    let parity = object(field(promotion, "promotion_parity")?)?;
+    if string(field(promotion, "schema_version")?)?
+        != "maestro.external.vnext-final-promotion-prerequisites.v1"
+        || string(field(promotion, "stage11_commit")?)?
+            != string(field(object(&stages[11])?, "commit")?)?
+        || string(field(promotion, "stage12_reviewed_candidate")?)?
+            != string(field(reviewed, "commit")?)?
+        || number(field(legacy_gate, "observed_legacy_row_count")?)? != 0
+        || number(field(consumer_hold, "consumer_count")?)? != 0
+        || number(field(consumer_hold, "reader_count")?)? != 0
+        || number(field(consumer_hold, "hold_count")?)? != 0
+        || number(field(parity, "source_file_count")?)? != 210
+        || number(field(parity, "promoted_file_count")?)? != 210
+        || number(field(parity, "mismatch_count")?)? != 0
+    {
+        return Err("promotion prerequisites are absent or nonzero".to_string());
+    }
+    let promotion_root = promotion_path
+        .parent()
+        .ok_or("promotion prerequisite has no parent")?;
+    for section in [legacy_gate, consumer_hold, parity] {
+        verify_binding(promotion_root, object(field(section, "receipt")?)?)?;
     }
     let final_integration = object(field(snapshot, "final_integration")?)?;
     if string(field(
@@ -683,6 +783,9 @@ fn main_result() -> Result<(), String> {
         "proof_ledger",
         "stage12_readback",
         "toolchain",
+        "stage12_overlay",
+        "ancestry_pack",
+        "promotion_prerequisites",
     ] {
         verify_binding(frozen_root, object(field(snapshot, field_name)?)?)?;
     }
@@ -813,6 +916,19 @@ fn main_result() -> Result<(), String> {
             || string(field(dependency, "identity")?)? != sha256(canonical.as_bytes())
         {
             return Err("dependency-output identity differs".to_string());
+        }
+        let probe = object(field(dependency, "completeness_probe")?)?;
+        let probe_argv: Result<BTreeSet<String>, String> = array(field(probe, "argv")?)?
+            .iter()
+            .map(|value| string(value).map(str::to_string))
+            .collect();
+        let required_probe: BTreeSet<String> =
+            ["fetch", "--offline", "--frozen", "--locked", "--target"]
+                .into_iter()
+                .map(str::to_string)
+                .collect();
+        if number(field(probe, "exit_code")?)? != 0 || !required_probe.is_subset(&probe_argv?) {
+            return Err("dependency closure completeness probe is absent".to_string());
         }
     }
     let ledger_proofs = array(field(ledger, "proofs")?)?;
@@ -1065,6 +1181,35 @@ fn main_result() -> Result<(), String> {
                 quote(string(field(schedule_binding, "sha256")?)?),
                 quote(&sha256(&observation_raw)),
                 reached?.join(",")
+            ));
+        }
+        if protocol == "semantic-receipt-v1" {
+            let observation_value = load(&receipt_path)?;
+            let observation = object(&observation_value)?;
+            let closures = object(field(observation, "closures")?)?;
+            let parity = object(field(observation, "promotion_parity")?)?;
+            if string(field(observation, "schema_version")?)?
+                != "maestro.external.vnext-final-semantic-artifact-readback.v1"
+                || string(field(observation, "check_id")?)? != id
+                || array(field(observation, "artifacts")?)?.is_empty()
+                || array(field(observation, "canonical_reads")?)?.is_empty()
+                || array(field(observation, "negative_routes")?)?.is_empty()
+                || number(field(closures, "consumer_count")?)? != 0
+                || number(field(closures, "reader_count")?)? != 0
+                || number(field(closures, "hold_count")?)? != 0
+                || number(field(parity, "source_file_count")?)? != 210
+                || number(field(parity, "promoted_file_count")?)? != 210
+                || number(field(parity, "mismatch_count")?)? != 0
+            {
+                return Err("promoted semantic receipt is absent or non-positive".to_string());
+            }
+            let observation_raw = fs::read(&receipt_path).map_err(|error| error.to_string())?;
+            exact_inputs.push_str(&format!(
+                ",\"harness_receipt_identity\":{},\"semantic_observation\":{}",
+                quote(&sha256(&observation_raw)),
+                String::from_utf8(observation_raw)
+                    .map_err(|error| error.to_string())?
+                    .trim_end()
             ));
         }
         if protocol == "cohort-observation-v1" {
@@ -1336,6 +1481,13 @@ fn main_result() -> Result<(), String> {
             }
         }
         let closures = object(field(artifact_receipt, "closures")?)?;
+        let parity = object(field(artifact_receipt, "promotion_parity")?)?;
+        if number(field(parity, "source_file_count")?)? != 210
+            || number(field(parity, "promoted_file_count")?)? != 210
+            || number(field(parity, "mismatch_count")?)? != 0
+        {
+            return Err("promotion parity differs".to_string());
+        }
         let counts = (
             number(field(closures, "consumer_count")?)?,
             number(field(closures, "reader_count")?)?,

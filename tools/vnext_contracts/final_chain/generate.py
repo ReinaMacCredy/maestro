@@ -30,6 +30,45 @@ REQUIRED_PACKET_FILES = (
     "independent-verification.v4.json",
 )
 ENGINE_IDS = ("python", "rust", "ruby")
+HISTORICAL_STAGE_CHECKPOINTS = {
+    0: "66a34db6a28ff3f3ee178f644b645bb6ea60681e",
+    1: "bebc2e35314741c3b053901fd5040b323ee2c924",
+    2: "602302c69df22e96f319b1451c14d341fdde14cd",
+    3: "ad8f3d88bf647031d415aa3aed0998ca7a9097d7",
+    4: "9f3cc73b2199c5b2be78dcea8852cbdcafaaafc2",
+}
+PROVISIONAL_STAGE5_SOURCE = "7080fb6cd1e286998ff47fb6205e90dca990ba40"
+OVERLAY_DISALLOWED_EXACT = {
+    "AGENTS.md",
+    "Cargo.lock",
+    "Cargo.toml",
+    "build.rs",
+    "src/lib.rs",
+    "src/main.rs",
+}
+OVERLAY_DISALLOWED_PREFIXES = (
+    ".git/",
+    ".maestro/",
+    "contracts/vnext/catalogs/",
+    "contracts/vnext/public/",
+    "contracts/vnext/stage0/",
+    "contracts/vnext/stage2/",
+    "contracts/vnext/stage3/",
+    "contracts/vnext/stage4/",
+    "contracts/vnext/stage5/",
+    "src/domain/vnext/authority/",
+    "src/domain/vnext/contract/",
+    "src/domain/vnext/design/",
+    "src/domain/vnext/execution/",
+    "src/domain/vnext/gate/",
+    "src/domain/vnext/identity/",
+    "src/domain/vnext/integration/",
+    "src/domain/vnext/persistence/",
+    "src/domain/vnext/repository/",
+    "src/domain/vnext/step/",
+    "src/domain/vnext/work/",
+    "src/foundation/",
+)
 TOOL_NAMES = {
     "python": ("python3", ("--version",)),
     "rust": ("rustc", ("-vV",)),
@@ -254,33 +293,209 @@ def parse_stage(value: str) -> tuple[int, str]:
     return int(match.group(1)), match.group(2)
 
 
-def verify_stage_chain(
-    repository: Path, final_commit: str, values: Iterable[tuple[int, str]]
+def commit_row(repository: Path, commit: str) -> dict[str, object]:
+    return {
+        "commit": commit,
+        "tree": git(repository, "show", "-s", "--format=%T", commit),
+        "parents": git(repository, "show", "-s", "--format=%P", commit).split(),
+    }
+
+
+def first_parent_path(
+    repository: Path, descendant: str, ancestor: str
 ) -> list[dict[str, object]]:
+    rows = []
+    current = descendant
+    while True:
+        row = commit_row(repository, current)
+        rows.append(row)
+        if current == ancestor:
+            return rows
+        parents = row["parents"]
+        if not parents:
+            raise GenerationError(
+                "Stage 5 second-parent ancestry does not reach the V4 provisional source"
+            )
+        current = str(parents[0])
+
+
+def changed_paths(repository: Path, parent: str, child: str) -> set[str]:
+    raw = run(
+        repository,
+        "git",
+        "diff",
+        "--name-only",
+        "-z",
+        "--no-renames",
+        parent,
+        child,
+    )
+    return {value.decode("utf-8") for value in raw.split(b"\0") if value}
+
+
+def verify_stage_chain(
+    repository: Path,
+    final_commit: str,
+    reviewed_candidate: str,
+    required_stage5_seeds: set[str],
+    values: Iterable[tuple[int, str]],
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
     stages = dict(values)
     if set(stages) != set(range(13)):
         raise GenerationError("exactly one checkpoint for every Stage 0 through 12 is required")
-    first_parent = git(repository, "rev-list", "--first-parent", "--reverse", final_commit).splitlines()
-    positions = {commit: index for index, commit in enumerate(first_parent)}
     ordered = [stages[stage] for stage in range(13)]
-    if any(commit not in positions for commit in ordered):
-        raise GenerationError("a Stage checkpoint is not on the final first-parent chain")
-    if [positions[commit] for commit in ordered] != sorted(
-        positions[commit] for commit in ordered
-    ):
-        raise GenerationError("Stage checkpoints are not in Stage 0 through 12 order")
+    if len(set(ordered)) != 13:
+        raise GenerationError("Stage checkpoints must be thirteen distinct commits")
+    for stage, expected in HISTORICAL_STAGE_CHECKPOINTS.items():
+        if ordered[stage] != expected:
+            raise GenerationError(f"historical Stage {stage} checkpoint differs")
     if ordered[-1] != final_commit:
         raise GenerationError("Stage 12 checkpoint must be the current exact final V4 commit")
+    rows = [{"stage": stage, **commit_row(repository, commit)} for stage, commit in enumerate(ordered)]
+    stage5_parents = rows[5]["parents"]
+    if len(stage5_parents) != 2 or stage5_parents[0] != ordered[4]:
+        raise GenerationError("Stage 5 must be an exact two-parent merge with Stage 4 first")
+    stage5_ancestry = first_parent_path(
+        repository, str(stage5_parents[1]), PROVISIONAL_STAGE5_SOURCE
+    )
+    if changed_paths(repository, ordered[4], ordered[5]) != required_stage5_seeds:
+        raise GenerationError("Stage 5 merge tree delta is not the exact required seed set")
+    for stage in range(6, 12):
+        if rows[stage]["parents"] != [ordered[stage - 1]]:
+            raise GenerationError(
+                f"Stage {stage} must be the sole direct first-parent successor"
+            )
+    if rows[12]["parents"] != [ordered[11], reviewed_candidate]:
+        raise GenerationError(
+            "Stage 12 must merge Stage 11 with the exact reviewed candidate second"
+        )
+    reviewed_tree = git(repository, "show", "-s", "--format=%T", reviewed_candidate)
+    if rows[12]["tree"] != reviewed_tree:
+        raise GenerationError("Stage 12 and reviewed candidate trees differ")
+    return rows, stage5_ancestry
+
+
+def overlay_entries(repository: Path, stage11: str, stage12: str) -> list[dict[str, object]]:
+    raw = run(
+        repository,
+        "git",
+        "diff",
+        "--raw",
+        "--abbrev=40",
+        "-z",
+        "--no-renames",
+        stage11,
+        stage12,
+    )
+    parts = raw.split(b"\0")
     rows = []
-    for stage, commit in enumerate(ordered):
+    index = 0
+    while index < len(parts) and parts[index]:
+        header = parts[index].decode("ascii").split()
+        path = parts[index + 1].decode("utf-8")
+        index += 2
+        if len(header) != 5 or not header[0].startswith(":"):
+            raise GenerationError("Stage 12 overlay raw diff is malformed")
+        old_mode = header[0][1:]
+        new_mode, _old_oid, new_oid, status = header[1:]
+        safe_relative(path)
+        if (
+            status not in {"A", "M"}
+            or new_mode not in {"100644", "100755"}
+            or (status == "M" and old_mode not in {"100644", "100755"})
+        ):
+            raise GenerationError("Stage 12 overlay contains a delete, rename, or unsafe mode")
+        if any(part.startswith(".") for part in PurePosixPath(path).parts):
+            raise GenerationError("Stage 12 overlay contains a hidden path")
+        if path in OVERLAY_DISALLOWED_EXACT or any(
+            path.startswith(prefix) for prefix in OVERLAY_DISALLOWED_PREFIXES
+        ):
+            raise GenerationError(f"Stage 12 overlay enters a protected root: {path}")
+        blob = run(repository, "git", "cat-file", "blob", new_oid)
+        if not blob:
+            raise GenerationError("Stage 12 overlay contains an empty or missing blob")
         rows.append(
             {
-                "stage": stage,
-                "commit": commit,
-                "tree": git(repository, "show", "-s", "--format=%T", commit),
+                "status": status,
+                "path": path,
+                "mode": new_mode,
+                "byte_length": len(blob),
+                "sha256": digest(blob),
             }
         )
-    return rows
+    if not rows:
+        raise GenerationError("Stage 12 overlay is empty")
+    return sorted(rows, key=lambda row: str(row["path"]))
+
+
+def verify_overlay_manifest(
+    repository: Path,
+    path: Path,
+    stage11: str,
+    reviewed_candidate: str,
+    stage12: str,
+) -> dict[str, Any]:
+    value = load_json(path)
+    reviewed_tree = git(repository, "show", "-s", "--format=%T", reviewed_candidate)
+    stage12_tree = git(repository, "show", "-s", "--format=%T", stage12)
+    expected_entries = overlay_entries(repository, stage11, stage12)
+    expected = {
+        "schema_version": "maestro.external.vnext-final-stage12-overlay.v1",
+        "stage11_commit": stage11,
+        "reviewed_candidate_commit": reviewed_candidate,
+        "reviewed_candidate_tree": reviewed_tree,
+        "stage12_commit": stage12,
+        "stage12_tree": stage12_tree,
+        "entry_count": len(expected_entries),
+        "byte_length": sum(int(row["byte_length"]) for row in expected_entries),
+        "entries": expected_entries,
+    }
+    if value != expected:
+        raise GenerationError(
+            "Stage 12 overlay manifest differs from exact path, mode, byte, parent, or tree facts"
+        )
+    return value
+
+
+def verify_promotion_prerequisites(
+    path: Path, stage11: str, reviewed_candidate: str
+) -> dict[str, Any]:
+    value = load_json(path)
+    if (
+        value.get("schema_version")
+        != "maestro.external.vnext-final-promotion-prerequisites.v1"
+        or value.get("stage11_commit") != stage11
+        or value.get("stage12_reviewed_candidate") != reviewed_candidate
+        or value.get("legacy_prune_gate", {}).get("status") != "pass"
+        or value.get("legacy_prune_gate", {}).get("observed_legacy_row_count") != 0
+        or {
+            key: value.get("consumer_reader_hold", {}).get(key)
+            for key in ("consumer_count", "reader_count", "hold_count")
+        }
+        != {"consumer_count": 0, "reader_count": 0, "hold_count": 0}
+        or {
+            key: value.get("promotion_parity", {}).get(key)
+            for key in ("source_file_count", "promoted_file_count", "mismatch_count")
+        }
+        != {"source_file_count": 210, "promoted_file_count": 210, "mismatch_count": 0}
+    ):
+        raise GenerationError(
+            "promotion prerequisites are absent, nonzero, stale, or noncanonical"
+        )
+    for section in ("legacy_prune_gate", "consumer_reader_hold", "promotion_parity"):
+        binding = value[section].get("receipt")
+        if (
+            not isinstance(binding, Mapping)
+            or not isinstance(binding.get("path"), str)
+            or not isinstance(binding.get("byte_length"), int)
+            or not isinstance(binding.get("sha256"), str)
+        ):
+            raise GenerationError(f"{section} receipt binding is absent")
+        receipt = path.parent.joinpath(*safe_relative(str(binding.get("path"))).parts)
+        actual = bound_file(receipt, str(binding["path"]))
+        if actual != binding:
+            raise GenerationError(f"{section} receipt bytes differ")
+    return value
 
 
 def archive_commit(repository: Path, commit: str, destination: Path) -> None:
@@ -302,6 +517,22 @@ def archive_commit(repository: Path, commit: str, destination: Path) -> None:
                 raise GenerationError(f"cannot extract Git archive entry: {member.name}")
             target.write_bytes(extracted.read())
             target.chmod(stat.S_IRUSR | (stat.S_IXUSR if member.mode & 0o111 else 0))
+
+
+def ancestry_pack(repository: Path, commit: str) -> bytes:
+    result = subprocess.run(
+        ["git", "--no-replace-objects", "pack-objects", "--stdout", "--revs"],
+        cwd=repository,
+        input=f"{commit}\n".encode("ascii"),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode != 0 or not result.stdout.startswith(b"PACK"):
+        raise GenerationError(
+            "exact ancestry object-pack construction failed: "
+            + result.stderr.decode("utf-8", "replace").strip()
+        )
+    return result.stdout
 
 
 def classify(path: str) -> str:
@@ -483,9 +714,54 @@ def toolchain(
         materialize_dependency_tree(
             target_libdir, engine_root / "rust-target-libdir"
         )
-        dependency_outputs.append(
-            dependency_output(engine_root, f"{engine}-complete-cargo-native-closure")
+        probe_argv = [
+            str(tools["cargo"]["resolved_path"]),
+            "fetch",
+            "--offline",
+            "--frozen",
+            "--locked",
+            "--target",
+            target,
+            "--manifest-path",
+            str(source / "Cargo.toml"),
+        ]
+        probe = subprocess.run(
+            probe_argv,
+            env={
+                **os.environ,
+                "CARGO_HOME": str(cargo_destination),
+                "CARGO_TARGET_DIR": str(engine_root / "probe-target"),
+                "LC_ALL": "C",
+                "LANG": "C",
+                "TZ": "UTC",
+            },
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
         )
+        if probe.returncode != 0:
+            raise GenerationError(
+                f"{engine} Cargo dependency closure completeness probe failed"
+            )
+        output = dependency_output(
+            engine_root, f"{engine}-complete-cargo-native-closure"
+        )
+        output["completeness_probe"] = {
+            "argv": [
+                "{tool:cargo}",
+                "fetch",
+                "--offline",
+                "--frozen",
+                "--locked",
+                "--target",
+                target,
+                "--manifest-path",
+                "{source}/Cargo.toml",
+            ],
+            "exit_code": probe.returncode,
+            "stdout": stream_identity(probe.stdout),
+            "stderr": stream_identity(probe.stderr),
+        }
+        dependency_outputs.append(output)
     return {
         "schema_version": "maestro.external.vnext-final-toolchain.v1",
         "target": target,
@@ -544,6 +820,14 @@ def build_ledger(
         kind = registry_row.get("kind")
         if stage not in range(13) or kind not in PROOF_KINDS:
             raise GenerationError(f"normative proof row classification differs: {proof_id}")
+        rotation_slot = registry_row.get("rotation_slot")
+        if rotation_slot is not None:
+            slot_id = (
+                rotation_slot.get("slot_id")
+                if isinstance(rotation_slot, Mapping)
+                else proof_id
+            )
+            raise GenerationError(f"promotion rotation slot is unresolved: {slot_id}")
         if registry_row.get("engines") != list(ENGINE_IDS):
             raise GenerationError(f"normative proof engine coverage differs: {proof_id}")
         specification = registry_row.get("command")
@@ -612,11 +896,39 @@ def build_ledger(
     }
 
 
-def readback_plan(manifest: Mapping[str, Any], commit: str) -> dict[str, object]:
-    bindings = binding_index(manifest)
-    target = "tests/vnext_stage12_contracts.rs"
-    if target not in bindings:
-        raise GenerationError("Stage 12 semantic readback test target is absent")
+def readback_plan(
+    registry: Mapping[str, Any], commit: str
+) -> dict[str, object]:
+    registry_rows = {
+        str(row.get("proof_id")): row
+        for row in registry.get("proofs", [])
+        if isinstance(row, Mapping)
+    }
+    command_rows = {}
+    for proof_id in (
+        "s12-post-promotion-readback",
+        "s12-post-promotion-removal",
+    ):
+        row = registry_rows.get(proof_id)
+        command = row.get("command") if isinstance(row, Mapping) else None
+        argv = command.get("argv") if isinstance(command, Mapping) else None
+        expected_exit_code = (
+            command.get("expected_exit_code")
+            if isinstance(command, Mapping)
+            else None
+        )
+        if (
+            not isinstance(argv, list)
+            or not all(isinstance(value, str) and value for value in argv)
+            or argv[:4] != ["{tool:cargo}", "test", "--offline", "--frozen"]
+            or "--lib" not in argv
+            or "--exact" not in argv
+            or expected_exit_code != 0
+        ):
+            raise GenerationError(
+                f"Stage 12 semantic readback command is unresolved or inexact: {proof_id}"
+            )
+        command_rows[proof_id] = (list(argv), expected_exit_code)
     requirements = {
         "compiled_namespace_absence": ["compiled"],
         "generated_resource_absence": ["resource"],
@@ -629,32 +941,19 @@ def readback_plan(manifest: Mapping[str, Any], commit: str) -> dict[str, object]
     }
     rows = []
     for kind in READBACK_KINDS:
-        if kind in {"canonical_facade_behavior", "negative_fixture"}:
-            argv = [
-                "{tool:cargo}",
-                "test",
-                "--offline",
-                "--frozen",
-                "--test",
-                "vnext_stage12_contracts",
-                "--",
-                "--test-threads=1",
-            ]
-        else:
-            argv = [
-                "{tool:cargo}",
-                "build",
-                "--offline",
-                "--frozen",
-                "--release",
-            ]
+        proof_id = (
+            "s12-post-promotion-readback"
+            if kind in {"canonical_facade_behavior", "negative_fixture"}
+            else "s12-post-promotion-removal"
+        )
+        argv, expected_exit_code = command_rows[proof_id]
         rows.append(
             {
                 "id": kind.replace("_", "-"),
                 "kind": kind,
                 "argv": argv,
-                "expected_exit_code": 0,
-                "command_identity": command_identity(argv, 0),
+                "expected_exit_code": expected_exit_code,
+                "command_identity": command_identity(argv, expected_exit_code),
                 "required_artifact_kinds": requirements[kind],
                 "minimum_canonical_reads": 1,
                 "minimum_negative_routes": 16 if kind == "negative_fixture" else 1,
@@ -683,6 +982,9 @@ def main() -> int:
     parser.add_argument("--repository", type=Path, required=True)
     parser.add_argument("--packet-root", type=Path, required=True)
     parser.add_argument("--final-ref", required=True)
+    parser.add_argument("--stage12-reviewed-candidate", required=True)
+    parser.add_argument("--stage12-overlay-manifest", type=Path, required=True)
+    parser.add_argument("--promotion-prerequisites", type=Path, required=True)
     parser.add_argument("--stage-checkpoint", action="append", type=parse_stage, required=True)
     parser.add_argument("--output-root", type=Path, required=True)
     parser.add_argument("--publication-root", type=Path, required=True)
@@ -711,7 +1013,38 @@ def main() -> int:
     if not re.fullmatch(r"[0-9a-f]{40}", final_commit):
         raise GenerationError("final ref did not resolve to one commit")
     final_tree = git(repository, "show", "-s", "--format=%T", final_commit)
-    rows = verify_stage_chain(repository, final_commit, args.stage_checkpoint)
+    reviewed_candidate = git(
+        repository,
+        "rev-parse",
+        "--verify",
+        f"{args.stage12_reviewed_candidate}^{{commit}}",
+    )
+    fanout = load_json(packet_root / "fanout-manifest.v4.json")
+    required_stage5_seeds = {
+        str(value) for value in fanout.get("required_stage5_seeds", [])
+    }
+    if not required_stage5_seeds:
+        raise GenerationError("V4 required Stage 5 seed set is absent")
+    rows, stage5_ancestry = verify_stage_chain(
+        repository,
+        final_commit,
+        reviewed_candidate,
+        required_stage5_seeds,
+        args.stage_checkpoint,
+    )
+    overlay = verify_overlay_manifest(
+        repository,
+        args.stage12_overlay_manifest.resolve(strict=True),
+        str(rows[11]["commit"]),
+        reviewed_candidate,
+        final_commit,
+    )
+    promotion_prerequisites_path = args.promotion_prerequisites.resolve(strict=True)
+    promotion_prerequisites = verify_promotion_prerequisites(
+        promotion_prerequisites_path,
+        str(rows[11]["commit"]),
+        reviewed_candidate,
+    )
     if publication.is_symlink() or not publication.is_dir():
         raise GenerationError(
             "publication root must pre-exist as a non-symlink directory"
@@ -722,6 +1055,9 @@ def main() -> int:
         "device": publication_stat.st_dev,
         "inode": publication_stat.st_ino,
         "mount_device": publication_stat.st_dev,
+        "mode": stat.S_IMODE(publication_stat.st_mode),
+        "link_count": publication_stat.st_nlink,
+        "ctime_ns": publication_stat.st_ctime_ns,
     }
     pointer_path = publication / "current.json"
     pointer_preimage: dict[str, object]
@@ -753,14 +1089,53 @@ def main() -> int:
         manifest = input_manifest(source, final_commit, final_tree)
         registry_path = source / "contracts/vnext/final-chain/proof-registry.v1.json"
         registry = load_json(registry_path)
+        registry_by_id = {
+            str(row.get("proof_id")): row for row in registry.get("proofs", [])
+        }
+        expected_filters = {
+            "stage11_migration_filter": "s11-frozen-cohort-migration",
+            "stage11_rollback_filter": "s11-frozen-cohort-rollback",
+            "stage12_readback_filter": "s12-post-promotion-readback",
+            "stage12_removal_filter": "s12-post-promotion-removal",
+        }
+        for field, proof_id in expected_filters.items():
+            command = registry_by_id.get(proof_id, {}).get("command", {})
+            argv = command.get("argv", [])
+            if (
+                not isinstance(argv, list)
+                or "--lib" not in argv
+                or promotion_prerequisites[field] not in argv
+                or "--exact" not in argv
+            ):
+                raise GenerationError(
+                    f"promotion prerequisite filter is not the exact resolved registry command: {field}"
+                )
         registry_binding = bound_file(
             registry_path, "contracts/vnext/final-chain/proof-registry.v1.json"
         )
         ledger = build_ledger(manifest, registry, registry_binding, final_commit)
-        readback = readback_plan(manifest, final_commit)
-        toolchain_value = toolchain(
-            source, args.target, args.profile, dependencies
-        )
+        readback = readback_plan(registry, final_commit)
+        toolchain_value = toolchain(source, args.target, args.profile, dependencies)
+        for dependency in toolchain_value["dependency_outputs"]:
+            engine = str(dependency["name"]).split("-", 1)[0]
+            dependency["resolved_path"] = str(output / "dependencies" / engine)
+        overlay_path = control / "stage12-overlay.v1.json"
+        overlay_path.write_bytes(canonical_bytes(overlay))
+        ancestry_pack_path = control / "ancestry-objects.pack"
+        ancestry_pack_path.write_bytes(ancestry_pack(repository, final_commit))
+        promotion_root = control / "promotion"
+        promotion_root.mkdir()
+        promotion_path = promotion_root / "promotion-prerequisites.v1.json"
+        promotion_path.write_bytes(canonical_bytes(promotion_prerequisites))
+        for section in ("legacy_prune_gate", "consumer_reader_hold", "promotion_parity"):
+            binding = promotion_prerequisites[section]["receipt"]
+            relative = safe_relative(str(binding["path"]))
+            target = promotion_root.joinpath(*relative.parts)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(
+                promotion_prerequisites_path.parent.joinpath(*relative.parts),
+                target,
+            )
         for name, value in (
             ("input-manifest.v1.json", manifest),
             ("proof-ledger.v1.json", ledger),
@@ -807,6 +1182,22 @@ def main() -> int:
             "packet_manifest": packet_binding,
             "final_integration": {"commit": final_commit, "tree": final_tree},
             "first_parent_stages": rows,
+            "provisional_stage5_source_commit": PROVISIONAL_STAGE5_SOURCE,
+            "stage5_second_parent_ancestry": stage5_ancestry,
+            "stage12_reviewed_candidate": {
+                "commit": reviewed_candidate,
+                "tree": overlay["reviewed_candidate_tree"],
+            },
+            "stage12_overlay": bound_file(
+                overlay_path, "control/stage12-overlay.v1.json"
+            ),
+            "ancestry_pack": bound_file(
+                ancestry_pack_path, "control/ancestry-objects.pack"
+            ),
+            "promotion_prerequisites": bound_file(
+                promotion_path,
+                "control/promotion/promotion-prerequisites.v1.json",
+            ),
             "input_manifest": bound_file(
                 control / "input-manifest.v1.json",
                 "control/input-manifest.v1.json",

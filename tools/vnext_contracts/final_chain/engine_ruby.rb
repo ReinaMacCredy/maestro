@@ -8,6 +8,13 @@ require "pathname"
 require "set"
 
 ENGINES = %w[python rust ruby].freeze
+HISTORICAL_STAGES = %w[
+  66a34db6a28ff3f3ee178f644b645bb6ea60681e
+  bebc2e35314741c3b053901fd5040b323ee2c924
+  602302c69df22e96f319b1451c14d341fdde14cd
+  ad8f3d88bf647031d415aa3aed0998ca7a9097d7
+  9f3cc73b2199c5b2be78dcea8852cbdcafaaafc2
+].freeze
 READBACK_KINDS = %w[
   compiled_namespace_absence generated_resource_absence persisted_identity_parity
   canonical_facade_behavior migration_route_absence retained_reader_absence
@@ -74,7 +81,42 @@ def validate_snapshot(snapshot, frozen_root, source)
   raise "current V4 Stage 12 checkpoint differs" unless stages.last["commit"] == snapshot.fetch("final_integration")["commit"]
   stages.each do |row|
     checkpoint = load_object(verify_binding(frozen_root, row["checkpoint"]))
-    raise "Stage checkpoint bytes differ" unless %w[stage commit tree].all? { |field| checkpoint[field] == row[field] }
+    raise "Stage checkpoint bytes differ" unless %w[stage commit tree parents].all? { |field| checkpoint[field] == row[field] }
+  end
+  raise "historical Stage 0-4 checkpoints differ" unless stages.first(5).map { |row| row["commit"] } == HISTORICAL_STAGES
+  raise "Stage 5 merge parent topology differs" unless stages[5]["parents"]&.length == 2 &&
+                                                        stages[5]["parents"][0] == stages[4]["commit"]
+  (6..11).each do |stage|
+    raise "Stage 6-11 direct-parent topology differs" unless stages[stage]["parents"] == [stages[stage - 1]["commit"]]
+  end
+  reviewed = snapshot.fetch("stage12_reviewed_candidate")
+  raise "Stage 12 reviewed-candidate merge topology differs" unless stages[12]["parents"] == [stages[11]["commit"], reviewed["commit"]] &&
+                                                                    stages[12]["tree"] == reviewed["tree"]
+  ancestry = snapshot.fetch("stage5_second_parent_ancestry")
+  raise "Stage 5 second-parent ancestry differs" unless !ancestry.empty? &&
+                                                         ancestry.first["commit"] == stages[5]["parents"][1] &&
+                                                         ancestry.last["commit"] == snapshot["provisional_stage5_source_commit"]
+  overlay = load_object(verify_binding(frozen_root, snapshot["stage12_overlay"]))
+  raise "Stage 12 overlay binding differs" unless overlay["schema_version"] == "maestro.external.vnext-final-stage12-overlay.v1" &&
+                                                  overlay["stage11_commit"] == stages[11]["commit"] &&
+                                                  overlay["reviewed_candidate_commit"] == reviewed["commit"] &&
+                                                  overlay["reviewed_candidate_tree"] == reviewed["tree"] &&
+                                                  overlay["stage12_commit"] == stages[12]["commit"] &&
+                                                  overlay["stage12_tree"] == stages[12]["tree"]
+  promotion_path = verify_binding(frozen_root, snapshot["promotion_prerequisites"])
+  promotion = load_object(promotion_path)
+  raise "promotion prerequisites are absent or nonzero" unless promotion["schema_version"] == "maestro.external.vnext-final-promotion-prerequisites.v1" &&
+                                                                 promotion["stage11_commit"] == stages[11]["commit"] &&
+                                                                 promotion["stage12_reviewed_candidate"] == reviewed["commit"] &&
+                                                                 promotion.dig("legacy_prune_gate", "observed_legacy_row_count") == 0 &&
+                                                                 promotion.dig("consumer_reader_hold", "consumer_count") == 0 &&
+                                                                 promotion.dig("consumer_reader_hold", "reader_count") == 0 &&
+                                                                 promotion.dig("consumer_reader_hold", "hold_count") == 0 &&
+                                                                 promotion.dig("promotion_parity", "source_file_count") == 210 &&
+                                                                 promotion.dig("promotion_parity", "promoted_file_count") == 210 &&
+                                                                 promotion.dig("promotion_parity", "mismatch_count") == 0
+  %w[legacy_prune_gate consumer_reader_hold promotion_parity].each do |section|
+    verify_binding(File.dirname(promotion_path), promotion.fetch(section).fetch("receipt"))
   end
   raise "immutable roots differ" unless snapshot["immutable_input_roots"] == %w[source packet control dependencies]
   roles = snapshot.fetch("writable_root_roles")
@@ -86,7 +128,7 @@ def validate_snapshot(snapshot, frozen_root, source)
   publication = snapshot["publication_root_identity"]
   generation = snapshot["expected_generation"]
   raise "publication custody or generation differs" unless publication.is_a?(Hash) &&
-                                                          publication.keys.sort == %w[device inode mount_device path] &&
+                                                          publication.keys.sort == %w[ctime_ns device inode link_count mode mount_device path] &&
                                                           generation.is_a?(Integer) && generation >= 0 &&
                                                           snapshot["pointer_preimage"]["generation"] == generation
   required_denials = %w[network protected_primary_checkout_write outside_packet_bound_roots_write]
@@ -95,7 +137,7 @@ def validate_snapshot(snapshot, frozen_root, source)
   raise "engine closure differs" unless engines.map { |row| row["id"] } == ENGINES
   engines.each { |row| verify_binding(source, row["source"]) }
   verify_binding(source, snapshot["proof_registry"])
-  %w[input_manifest proof_ledger stage12_readback toolchain].each do |field|
+  %w[input_manifest proof_ledger stage12_readback toolchain stage12_overlay ancestry_pack promotion_prerequisites].each do |field|
     verify_binding(frozen_root, snapshot[field])
   end
 end
@@ -198,6 +240,10 @@ def validate_toolchain(toolchain, source)
     raise "dependency-output identity differs" unless dependency["file_count"] == rows.length &&
                                                      dependency["byte_length"] == rows.sum { |row| row["byte_length"] } &&
                                                      dependency["identity"] == sha_bytes(closure)
+    probe = dependency["completeness_probe"]
+    raise "dependency closure completeness probe is absent" unless probe.is_a?(Hash) &&
+                                                                  probe["exit_code"] == 0 &&
+                                                                  (%w[fetch --offline --frozen --locked --target] - probe.fetch("argv", [])).empty?
   end
   resolved
 end
@@ -254,6 +300,8 @@ def expand(argv, tools, source, snapshot, packet)
   argv.map do |value|
     if value == "{source}"
       source
+    elsif value == "{control:ancestry-repository}"
+      File.join(File.dirname(snapshot), "ancestry-repository")
     elsif value == "{control:snapshot}"
       snapshot
     elsif value == "{packet:fanout-manifest.v4.json}"
@@ -363,6 +411,18 @@ def execute_proof(row, source, tools, snapshot, packet, output_root)
     receipt["cohort_observation"] = observation
     receipt["harness_receipt_identity"] = identity(receipt_path)
   end
+  if harness["protocol"] == "semantic-receipt-v1"
+    observation = load_object(receipt_path)
+    raise "promoted semantic receipt is absent or non-positive" unless observation["schema_version"] == "maestro.external.vnext-final-semantic-artifact-readback.v1" &&
+                                                                      observation["check_id"] == row["proof_id"] &&
+                                                                      !observation.fetch("artifacts", []).empty? &&
+                                                                      !observation.fetch("canonical_reads", []).empty? &&
+                                                                      !observation.fetch("negative_routes", []).empty? &&
+                                                                      observation["closures"] == {"consumer_count" => 0, "reader_count" => 0, "hold_count" => 0} &&
+                                                                      observation["promotion_parity"] == {"source_file_count" => 210, "promoted_file_count" => 210, "mismatch_count" => 0}
+    receipt["semantic_observation"] = observation
+    receipt["harness_receipt_identity"] = identity(receipt_path)
+  end
   if row["kind"] == "ancestry"
     observation = load_object(receipt_path)
     raise "fanout edge sweep receipt differs" unless observation["schema_version"] == "maestro.external.vnext-final-fanout-edge-sweep.v1" &&
@@ -423,6 +483,7 @@ def semantic_readback(plan, source, tools, snapshot_path, packet, output_root)
       raise "negative route observation differs" unless observation == expected
     end
     closures = artifact_receipt.fetch("closures")
+    raise "promotion parity differs" unless artifact_receipt["promotion_parity"] == {"source_file_count" => 210, "promoted_file_count" => 210, "mismatch_count" => 0}
     counts = {
       "consumers" => closures["consumer_count"],
       "readers" => closures["reader_count"],

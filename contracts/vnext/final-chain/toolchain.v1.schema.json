@@ -50,7 +50,7 @@
     },
     "dependency_output": {
       "type": "object",
-      "required": ["name", "resolved_path", "file_count", "byte_length", "identity", "files"],
+      "required": ["name", "resolved_path", "file_count", "byte_length", "identity", "files", "completeness_probe"],
       "properties": {
         "name": {"type": "string", "pattern": "^(python|rust|ruby)-complete-cargo-native-closure$"},
         "resolved_path": {"type": "string", "pattern": "^/"},
@@ -70,7 +70,27 @@
             },
             "additionalProperties": false
           }
+        },
+        "completeness_probe": {
+          "type": "object",
+          "required": ["argv", "exit_code", "stdout", "stderr"],
+          "properties": {
+            "argv": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+            "exit_code": {"const": 0},
+            "stdout": {"$ref": "#/$defs/stream"},
+            "stderr": {"$ref": "#/$defs/stream"}
+          },
+          "additionalProperties": false
         }
+      },
+      "additionalProperties": false
+    },
+    "stream": {
+      "type": "object",
+      "required": ["byte_length", "sha256"],
+      "properties": {
+        "byte_length": {"type": "integer", "minimum": 0},
+        "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
       },
       "additionalProperties": false
     }

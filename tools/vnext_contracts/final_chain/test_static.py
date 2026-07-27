@@ -10,6 +10,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 sys.dont_write_bytecode = True
@@ -38,7 +39,9 @@ class FinalChainStaticTests(unittest.TestCase):
             "toolchain.v1.schema.json",
             "final-cumulative-seal-receipt.v1.schema.json",
             "final-pointer.v1.schema.json",
-            "input-manifest.v1.schema.json",
+              "input-manifest.v1.schema.json",
+              "promotion-prerequisites.v1.schema.json",
+              "stage12-overlay.v1.schema.json",
         }
         self.assertEqual(
             {path.name for path in CONTRACTS.glob("*.schema.json")}, expected
@@ -220,7 +223,10 @@ class FinalChainStaticTests(unittest.TestCase):
         for row in proofs:
             self.assertEqual(row["engines"], ["python", "rust", "ruby"])
             self.assertIn("protocol", row["harness"])
-            if row["command"]["argv"][0] == "{tool:cargo}":
+            if "rotation_slot" in row:
+                self.assertNotIn("command", row)
+                self.assertNotIn("input_paths", row)
+            elif row["command"]["argv"][0] == "{tool:cargo}":
                 self.assertIn("--offline", row["command"]["argv"])
                 self.assertIn("--frozen", row["command"]["argv"])
         by_kind = {kind: [] for kind in {"race", "crash_replay", "migration", "rollback", "ancestry"}}
@@ -237,6 +243,206 @@ class FinalChainStaticTests(unittest.TestCase):
         self.assertNotIn("def proof_kind", generator)
         self.assertNotIn('rows[index]["kind"]', generator)
         self.assertIn("registry_identity", generator)
+        ancestry = next(row for row in proofs if row["kind"] == "ancestry")
+        self.assertIn(
+            "{control:ancestry-repository}", ancestry["command"]["argv"]
+        )
+        self.assertNotIn("{source}", ancestry["command"]["argv"])
+
+    def test_stage11_and_stage12_rotation_slots_refuse_stale_wip_rows(self) -> None:
+        registry = json.loads(
+            (CONTRACTS / "proof-registry.v1.json").read_text(encoding="utf-8")
+        )
+        rows = {row["proof_id"]: row for row in registry["proofs"]}
+        for proof_id in (
+            "s11-frozen-cohort-migration",
+            "s11-frozen-cohort-rollback",
+            "s12-post-promotion-readback",
+            "s12-post-promotion-removal",
+        ):
+            row = rows[proof_id]
+            self.assertEqual(row["rotation_slot"]["state"], "awaiting-promotion")
+            self.assertEqual(
+                row["rotation_slot"]["command_shape"], "cargo-lib-exact-test"
+            )
+            self.assertNotIn("command", row)
+        for proof_id in ("s11-frozen-cohort-migration", "s11-frozen-cohort-rollback"):
+            self.assertIn(
+                "domain::vnext::migration::runtime::cohort_observation::tests::",
+                rows[proof_id]["rotation_slot"]["provisional_8edd591b_filter"],
+            )
+            self.assertEqual(
+                rows[proof_id]["harness"]["protocol"], "cohort-observation-v1"
+            )
+        for proof_id in ("s12-post-promotion-readback", "s12-post-promotion-removal"):
+            self.assertEqual(
+                rows[proof_id]["harness"],
+                {
+                    "protocol": "semantic-receipt-v1",
+                    "required_receipt": "semantic-artifact-readback.v1.json",
+                },
+            )
+        with self.assertRaisesRegex(generate.GenerationError, "rotation slot"):
+            registry["proofs"].sort(
+                key=lambda row: 0 if "rotation_slot" in row else 1
+            )
+            generate.build_ledger(
+                {"entries": []},
+                registry,
+                {"path": "registry", "byte_length": 1, "sha256": "sha256:" + "0" * 64},
+                "a" * 40,
+            )
+        generator = (ROOT / "generate.py").read_text(encoding="utf-8")
+        self.assertNotIn("vnext_stage12_contracts", generator)
+        self.assertNotIn('"{tool:cargo}",\n                "build"', generator)
+        self.assertIn("Stage 12 semantic readback command is unresolved or inexact", generator)
+
+    def test_synthetic_topology_mutants_refuse_extra_parents_and_wrong_merges(self) -> None:
+        commits = {
+            **generate.HISTORICAL_STAGE_CHECKPOINTS,
+            **{stage: f"{stage:040x}" for stage in range(5, 13)},
+        }
+        reviewed = "e" * 40
+        rows = {
+            commit: {
+                "commit": commit,
+                "tree": f"{stage + 20:040x}",
+                "parents": (
+                    [commits[4], "d" * 40]
+                    if stage == 5
+                    else [commits[11], reviewed]
+                    if stage == 12
+                    else []
+                    if stage == 0
+                    else [commits[stage - 1]]
+                ),
+            }
+            for stage, commit in commits.items()
+        }
+        rows[reviewed] = {
+            "commit": reviewed,
+            "tree": rows[commits[12]]["tree"],
+            "parents": [],
+        }
+        values = list(commits.items())
+        required = {"seed"}
+
+        def validate() -> None:
+            with (
+                mock.patch.object(generate, "commit_row", side_effect=lambda _r, c: copy.deepcopy(rows[c])),
+                mock.patch.object(generate, "changed_paths", return_value=required),
+                mock.patch.object(
+                    generate,
+                    "first_parent_path",
+                    return_value=[
+                        {"commit": "d" * 40, "tree": "1" * 40, "parents": [generate.PROVISIONAL_STAGE5_SOURCE]},
+                        {"commit": generate.PROVISIONAL_STAGE5_SOURCE, "tree": "2" * 40, "parents": []},
+                    ],
+                ),
+                mock.patch.object(generate, "git", return_value=rows[reviewed]["tree"]),
+            ):
+                generate.verify_stage_chain(
+                    Path("."), commits[12], reviewed, required, values
+                )
+
+        validate()
+        rows[commits[6]]["parents"].append("f" * 40)
+        with self.assertRaisesRegex(generate.GenerationError, "Stage 6"):
+            validate()
+        rows[commits[6]]["parents"] = [commits[5]]
+        rows[commits[5]]["parents"][0] = "f" * 40
+        with self.assertRaisesRegex(generate.GenerationError, "Stage 5"):
+            validate()
+        rows[commits[5]]["parents"][0] = commits[4]
+        rows[commits[12]]["parents"][1] = "f" * 40
+        with self.assertRaisesRegex(generate.GenerationError, "reviewed candidate"):
+            validate()
+        rows[commits[12]]["parents"][1] = reviewed
+        rows[commits[12]]["tree"] = "f" * 40
+        with self.assertRaisesRegex(generate.GenerationError, "trees differ"):
+            validate()
+        with mock.patch.object(
+            generate,
+            "commit_row",
+            return_value={"commit": "f" * 40, "tree": "1" * 40, "parents": []},
+        ), self.assertRaisesRegex(generate.GenerationError, "does not reach"):
+            generate.first_parent_path(
+                Path("."), "f" * 40, generate.PROVISIONAL_STAGE5_SOURCE
+            )
+
+    def test_promotion_prerequisites_refuse_legacy_349_and_missing_receipt(self) -> None:
+        base = {
+            "schema_version": "maestro.external.vnext-final-promotion-prerequisites.v1",
+            "stage11_commit": "a" * 40,
+            "stage12_reviewed_candidate": "b" * 40,
+            "stage11_migration_filter": "migration",
+            "stage11_rollback_filter": "rollback",
+            "stage12_readback_filter": "readback",
+            "stage12_removal_filter": "removal",
+            "legacy_prune_gate": {
+                "status": "pass",
+                "observed_legacy_row_count": 0,
+                "receipt": {},
+            },
+            "consumer_reader_hold": {
+                "consumer_count": 0,
+                "reader_count": 0,
+                "hold_count": 0,
+                "receipt": {},
+            },
+            "promotion_parity": {
+                "source_file_count": 210,
+                "promoted_file_count": 210,
+                "mismatch_count": 0,
+                "receipt": {},
+            },
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "promotion-prerequisites.v1.json"
+            blocked = copy.deepcopy(base)
+            blocked["legacy_prune_gate"]["observed_legacy_row_count"] = 349
+            path.write_bytes(generate.canonical_bytes(blocked))
+            with self.assertRaisesRegex(
+                generate.GenerationError, "absent, nonzero, stale, or noncanonical"
+            ):
+                generate.verify_promotion_prerequisites(
+                    path, "a" * 40, "b" * 40
+                )
+            path.write_bytes(generate.canonical_bytes(base))
+            with self.assertRaisesRegex(
+                generate.GenerationError, "receipt binding is absent"
+            ):
+                generate.verify_promotion_prerequisites(
+                    path, "a" * 40, "b" * 40
+                )
+
+    def test_overlay_refuses_delete_hidden_protected_and_unsafe_mode_mutants(self) -> None:
+        cases = [
+            (":100644 000000 " + "1" * 40 + " " + "0" * 40 + " D", "src/x.rs", "delete"),
+            (":000000 100644 " + "0" * 40 + " " + "1" * 40 + " A", ".hidden", "hidden"),
+            (":100644 100644 " + "1" * 40 + " " + "2" * 40 + " M", "Cargo.toml", "protected"),
+            (":100644 120000 " + "1" * 40 + " " + "2" * 40 + " M", "src/x.rs", "unsafe mode"),
+        ]
+        for header, path, label in cases:
+            raw = header.encode("ascii") + b"\0" + path.encode() + b"\0"
+            with self.subTest(label=label), mock.patch.object(
+                generate, "run", return_value=raw
+            ), self.assertRaises(generate.GenerationError):
+                generate.overlay_entries(Path("."), "a" * 40, "b" * 40)
+
+    def test_materializer_is_first_parent_exact_and_never_updates_refs(self) -> None:
+        source = (ROOT / "materialize_chain.py").read_text(encoding="utf-8")
+        self.assertIn('"--no-replace-objects"', source)
+        self.assertIn("require_first_parent_ancestor", source)
+        self.assertNotIn('"merge-base"', source)
+        self.assertNotIn("update-ref", source)
+        self.assertNotIn("checkout", source)
+        self.assertIn('"refs_updated": False', source)
+        generator = (ROOT / "generate.py").read_text(encoding="utf-8")
+        runner_source = (ROOT / "runner.py").read_text(encoding="utf-8")
+        self.assertIn('"pack-objects", "--stdout", "--revs"', generator)
+        self.assertIn('"index-pack", "--stdin", "--fix-thin"', runner_source)
+        self.assertIn("ancestry proof repository", runner_source)
 
     def test_stage4_registry_rejects_zero_test_and_source_mutant_proxies(self) -> None:
         registry = json.loads(
@@ -468,9 +674,13 @@ class FinalChainStaticTests(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn("len(rows) != 13", source)
-        self.assertIn("direct first-parent successor", source)
+        self.assertIn("Stage 5 must be an exact two-parent merge", source)
+        self.assertIn("sole direct first-parent successors", source)
         self.assertIn("Stage5 post-fanout correction", source)
         self.assertIn("reused a Stage5 inherited seam exception", source)
+        self.assertIn("exact reviewed candidate with an identical tree", source)
+        self.assertIn("Stage 12 overlay contains a delete, rename, or unsafe mode", source)
+        self.assertIn("Stage 12 overlay enters a protected root", source)
         self.assertIn('os.environ["MAESTRO_FINAL_PROOF_RECEIPT"]', source)
         self.assertIn("write_new_receipt", source)
         self.assertNotIn('"merge-base"', source)
