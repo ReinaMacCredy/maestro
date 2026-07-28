@@ -4399,6 +4399,83 @@ fn stage11_v8_owner_wiring_is_private_complete_and_not_interface_reachable() {
 }
 
 #[test]
+fn stage11_v8_foundation_v4_wiring_is_private_current_and_not_interface_reachable() {
+    let foundation_mod = read_source_file(Path::new("src/foundation/core/mod.rs"));
+    let migration_runtime_mod = read_source_file(Path::new("src/domain/migration/runtime/mod.rs"));
+    let migration_operation_mod = read_source_file(Path::new("src/operations/migration/mod.rs"));
+
+    assert!(foundation_mod.contains("\npub(crate) mod legacy_loss_evidence;\n"));
+    assert!(foundation_mod.contains("\npub(crate) mod root_universe;\n"));
+    assert!(!foundation_mod.contains("\npub mod legacy_loss_evidence;\n"));
+    assert!(!foundation_mod.contains("\npub mod root_universe;\n"));
+    assert!(!foundation_mod.contains("pub use legacy_loss_evidence"));
+    assert!(!foundation_mod.contains("pub use root_universe"));
+
+    let runtime_facade = migration_runtime_mod
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    for required in [
+        "pub(crate) use live_set_v3::{FoundationMaterializedSourceCaseV3, LegacyQuarantineEpochBasisV4};",
+        "LegacyQuarantineEpochV4",
+        "LegacyRollbackAssessmentV4",
+        "UnavailablePreexistingLossManifestV4",
+        "UnavailablePreexistingLossV4",
+    ] {
+        assert!(
+            runtime_facade.contains(required),
+            "Migration runtime facade is missing current V4 export {required}"
+        );
+    }
+    assert!(
+        migration_runtime_mod.contains(
+            "the V3 live-set facade remains exported only for historical contract coverage"
+        )
+    );
+
+    let operation_facade = migration_operation_mod
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    for required in [
+        "Stage11ClosedPhysicalClosureV4",
+        "Stage11LiveSetContinuationV4",
+        "Stage11LiveSetOperationErrorV4",
+        "Stage11PhysicalClosureV4",
+        "Stage11SealedCopyContinuationV4",
+        "execute_offline_live_set_v4",
+    ] {
+        assert!(
+            operation_facade.contains(required),
+            "Migration operation facade is missing current V4 export {required}"
+        );
+    }
+    assert!(migration_operation_mod.contains(
+        "the V3 continuation facade remains exported only for historical contract coverage"
+    ));
+
+    for interface in rust_files_under(Path::new("src/interfaces")) {
+        let source = code_for_path_scan(&read_source_file(&interface));
+        for forbidden in [
+            "FoundationMaterializedSourceCaseV3",
+            "LegacyQuarantineEpochBasisV4",
+            "Stage11ClosedPhysicalClosureV4",
+            "Stage11LiveSetContinuationV4",
+            "Stage11LiveSetOperationErrorV4",
+            "Stage11PhysicalClosureV4",
+            "Stage11SealedCopyContinuationV4",
+            "execute_offline_live_set_v4",
+        ] {
+            assert!(
+                !source_mentions_identifier(&source, forbidden),
+                "{} must not import or name private V4 migration symbol {forbidden}",
+                interface.display()
+            );
+        }
+    }
+}
+
+#[test]
 fn stage11_private_route_guard_rejects_generic_capability_trait_impls() {
     let mutation = r#"
         impl<P, Q> std::clone::Clone for FoundationLegacyQuarantineLeaseV1<P, Q> {

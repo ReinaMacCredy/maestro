@@ -114,12 +114,12 @@ pub use inventory::{
 };
 #[allow(
     unused_imports,
-    reason = "the V3 epoch basis is reserved for MainIntegration owner wiring"
+    reason = "the V3 epoch basis remains exported only for historical contract coverage"
 )]
 pub(in crate::domain) use live_set_v3::LegacyQuarantineEpochBasisV3;
 #[allow(
     unused_imports,
-    reason = "the V3 live-set facade is reserved for MainIntegration and Stage-12 owner wiring"
+    reason = "the V3 live-set facade remains exported only for historical contract coverage"
 )]
 pub use live_set_v3::{
     DeclaredOverlapManifestV2, LegacyNodeKindV3, LegacyOwnerDomainV3, LegacyPayloadStateV3,
@@ -128,6 +128,19 @@ pub use live_set_v3::{
     MigrationDispositionV3, ProtectedPrimaryOverlapPairV1, SealedQuarantineEntryV3,
     SealedQuarantineManifestV3, SourceCaseV3, Stage12SightingManifestV2, Stage12SightingV2,
     UnavailablePreexistingLossManifestV3, UnavailablePreexistingLossV3,
+};
+#[allow(
+    unused_imports,
+    reason = "the V4 Foundation materialization seam awaits Stage-12 owner wiring"
+)]
+pub(crate) use live_set_v3::{FoundationMaterializedSourceCaseV3, LegacyQuarantineEpochBasisV4};
+#[allow(
+    unused_imports,
+    reason = "the current V4 loss and finality facade awaits Stage-12 owner wiring"
+)]
+pub use live_set_v3::{
+    LegacyQuarantineEpochV4, LegacyRollbackAssessmentV4, UnavailablePreexistingLossManifestV4,
+    UnavailablePreexistingLossV4,
 };
 #[allow(
     unused_imports,

@@ -14,7 +14,9 @@ mod aggregate_census;
     )
 )]
 mod aggregate_census_stage11_seed;
+pub(crate) mod legacy_loss_evidence;
 pub(crate) mod legacy_quarantine;
+pub(crate) mod root_universe;
 
 #[cfg_attr(
     not(test),

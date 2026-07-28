@@ -54,7 +54,15 @@ pub(crate) use legacy_census_v1::{
 };
 #[allow(
     unused_imports,
-    reason = "the V3 continuation facade awaits MainIntegration owner wiring"
+    reason = "the current V4 continuation facade awaits Stage-12 owner wiring"
+)]
+pub(crate) use live_set_v3::{
+    Stage11ClosedPhysicalClosureV4, Stage11LiveSetContinuationV4, Stage11LiveSetOperationErrorV4,
+    Stage11PhysicalClosureV4, Stage11SealedCopyContinuationV4, execute_offline_live_set_v4,
+};
+#[allow(
+    unused_imports,
+    reason = "the V3 continuation facade remains exported only for historical contract coverage"
 )]
 pub(crate) use live_set_v3::{
     Stage11LiveSetContinuationV3, Stage11LiveSetOperationErrorV3, Stage11PhysicalClosureV3,

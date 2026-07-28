@@ -26,6 +26,11 @@ pub(crate) use root_universe::{
     RepositoryDeclaredRootUniverseLeaseV1, RepositoryRootUniverseErrorV1,
 };
 
+// TODO(MainIntegration): Remove this dormant-facade expectation on or after 2026-07-28 once Stage12 wires execute_offline_live_set_v4 to Repository universe acquisition.
+#[expect(
+    dead_code,
+    reason = "the crate-private Repository universe acquisition has no production caller before Stage-12 wiring"
+)]
 pub(crate) fn acquire_repository_declared_root_universe_v1(
     store: &crate::domain::persistence::StoreV1,
     operation_attempt: [u8; 32],
