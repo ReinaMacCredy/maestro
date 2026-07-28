@@ -12726,3 +12726,224 @@ dependency and Stage 11/12 ownership, primary boundary, candidate-ref CAS,
 zero interim seals and one final cumulative seal. Until that exact packet is
 independently verified and approved, no further implementation, canonical
 regeneration, integration or seal is authorized.
+
+## Host-native trusted acquisition and exact-two MCP V7 boundary
+
+The user-role event `APPROVE SUCCESSOR DESIGN PASS.` in recipient task
+`019f8416-e121-7703-8ab4-d3f9c3b374fa` authorizes this successor design pass
+only. It does not authorize product implementation, candidate reconstruction,
+canonical artifact regeneration, integration, pruning, seal execution,
+publication, installation, release or live external mutation.
+
+The clean existing successor preimage is design commit
+`e69295329c29c1c75901315a56e947b85b7a69cf`, tree
+`cd36cbb2963a264cb67a834bb38c709c0ea144ae`, on
+`codex/maestro-vnext-legacy-cutover-successor-build`. It already contains the
+V6 design bytes and no V6 product lane commit. The four clean direct-child
+candidate commits remain preserved as candidate-only patch inputs:
+
+| Lane | Commit | Tree | Status |
+| --- | --- | --- | --- |
+| Stage11 | `7471483629704ffd2ab0208b3aec2875e7182181` | `accde881c5aa067b1e794fe0b6bae25d773f3020` | provisional, incomplete, unintegrated, unverified |
+| AuthorityOwner | `7ea464ecc976ca8ce83f118b49d53fcb3e8e54e2` | `5e84c8716edd48711a774f97392f513df37aa77e` | provisional, unintegrated, unverified |
+| Stage12Product | `dbc4d4a39b7f0ad00a5870caf1024c1e5c554f5c` | `e93f912523e57e6efac0b18ad6d01d6dc3252f79` | provisional, incomplete, unintegrated, unverified |
+| ExternalProofControl | `cb3decdd00cf9c60189fc6bb9c2f933d5810be2f` | `f167523e4f4034b2e0ffd5af5115d0745fa83f1d` | provisional, incomplete, unintegrated, unverified |
+
+No candidate receipt, test result, historical receipt or clean worktree makes
+those commits current or certified. After a replacement packet is approved,
+each lane must reconstruct its exact task-owned bytes on the new design commit
+and preserve or replace the candidate only through an explicit path-checked
+delta. No candidate may be merged directly from its `e6929532` parent.
+
+### Locked successor Decisions
+
+The following two locked successors supersede their predecessors in exact
+order:
+
+1. `dec-canonical-host-native-injected-trusted-2ba1`, **Canonical host-native
+   injected trusted-host acquisition and truthful activation**, superseding
+   `dec-canonical-trusted-host-protected-1fbc`.
+2. `dec-canonical-exact-two-mcp-legacy-retirement-f3fd`, **Canonical exact-two
+   MCP legacy retirement and full-suite parity**, superseding
+   `dec-canonical-current-manifest-typed-c80f`.
+
+The first successor preserves the complete trusted-host security law and
+closes only the missing positive acquisition mechanism. Integration remains
+the sole authentication-acquisition owner. The only production-positive path
+is a supported same-process host adapter that already owns one real
+authenticated `LiveAuthenticatedHostConnectionV1` and injects its exclusive
+mutable borrow into a crate-private MCP runtime entry before Store view
+acquisition. The identical borrow remains live through the Authority
+challenge, no-I/O attestation, Stage-8 allowlisted envelope and final
+host-currentness, revocation and connection-incarnation recheck.
+
+Stdio remains transport only. Input frames, context references, repository
+locators, CLI arguments, cwd, environment, UID, process ancestry, TTY, file
+descriptors, sockets, cached state, prior Sessions, descriptor text and test
+fixtures grant no host capability. No ambient registry, global lookup, public
+constructor, bearer, credential parser, serialization, persistence, caching,
+cloning, replay or fallback is admitted. An unsupported or uninjected host
+returns the ordinary coarse unavailable class before protected subject
+resolution or protected Store access.
+
+The internal adapter descriptor rotates to `HostDescriptorV2` with one closed
+`ProtectedRuntimeActivationBindingV2`. `Inactive` binds a stable reason code
+and no provider fields. `Active` binds a real compiled provider implementation
+identity and revision, exact host-owned injection entry, production
+conformance/negative proof identity, binary identity and Release. V1 descriptor
+bytes remain migration evidence and cannot activate or adapt into V2. This is
+an internal descriptor-schema rotation, not a public Packet, API, Tool, Action
+or catalog delta. The current `agents-compatible-cli` and `claude-code`
+profiles have no packet-proven provider factory or injection contract and
+therefore publish V2 `Inactive`. Ordinary exact-two MCP transport may run
+without that provider, but it cannot claim protected authentication.
+
+The second successor makes the already frozen public MCP catalog real:
+`maestro_packet` and `maestro_cli_search`, in that order, with no third Tool,
+legacy alias, hidden registry, deprecated dispatch or adapter-private list.
+Every list, dispatch, descriptor, generated catalog, host profile, schema,
+test and final census derives or parity-proves that exact pair.
+`maestro_packet` requires one explicit alias-closed `repository_locator` and
+never discovers a repository from cwd. `maestro_cli_search` searches only the
+catalog embedded in the running installed binary and opens no repository,
+Store, legacy catalog or ambient filesystem root.
+
+Every legacy MCP name fails as unknown before repository discovery, Store
+access, Projection invocation, mutation, cache, network, translation or
+fallback. The existing broad tests that assert 42 MCP Tools or
+`maestro_status` do not become compatibility exceptions. Their underlying
+product cases move to owning CLI, domain or operation suites, while MCP tests
+rotate to exact-two enumeration, explicit-locator/no-cwd behavior,
+coarse-unavailable protected access without injection, supported-provider
+parity when one exists, legacy-name pre-effect refusal, protocol errors,
+batching and zero hidden registry. A replacement test mapping is mandatory;
+removing a legacy MCP assertion cannot remove the behavior proof it formerly
+carried.
+
+These Decisions add no Action, ScopeAtom, Ceremony, Grant, Mandate, Receipt,
+Result, Observation, Evidence, public successor member, Resource, Recipe,
+Bundle, Release, public schema member or wire field. They preserve every V6
+Migration, quarantine, rollback, removal, primary-protection and final-seal
+law not explicitly superseded above.
+
+### Rotated Stage-5 dependency and five-lane ownership
+
+The frozen Stage-5 public product interface remains semantically unchanged.
+Its dependency closure rotates to this V7 design commit and the two successor
+Decision bodies. Stage 5 remains historical predecessor evidence only; no
+standalone Stage-5 regeneration or seal is authorized. The final cumulative
+proof must bind the Stage-5 test-adapter-only statement and must not infer
+production host authenticity from it.
+
+The replacement ownership manifest retains exactly five pairwise-disjoint
+default-deny lanes. `MainIntegration` is the sole shared-file authority:
+
+| Lane | Rotated obligation |
+| --- | --- |
+| Stage11 | Preserve and repair the existing V3 live-set candidate; wire real Installation admission; copy and retain actual bytes through owner-held custody; close protected-primary alias, physical-loss, rollback and final currentness proof. |
+| AuthorityOwner | Preserve and repair `LegacyRemovalGuardV2` definition, private minting admission and Authority tests only. |
+| Stage12Product | Preserve the exact-two Packet/search candidate; implement the Stage-10 host-native owner adapter seam, truthful inactive descriptors, dedicated conformance fixtures and exact product parity without editing shared runtime files. |
+| ExternalProofControl | Preserve and repair the effect-inert coordinator and final-chain tooling only; own no `src/` product path and perform no live cut or seal during implementation. |
+| MainIntegration | Reconstruct all shared exports and runtime wiring; receive the exclusive host borrow, close exact-two server/list/dispatch, migrate broad tests, integrate Stage11 then Stage12 and own every shared-file decision. |
+
+The rotated exact grants must include, in addition to all still-required V6
+paths:
+
+- `Stage12Product`:
+  `src/domain/integration/trusted_host_diagnostic_stage10_seed.rs`,
+  `src/interfaces/connectors/mod.rs`,
+  new `embedded/vnext/hosts/agents-compatible-cli.v2.json`,
+  new `embedded/vnext/hosts/claude-code.v2.json`,
+  new `embedded/vnext/patterns/trusted-host-diagnostic.v2.json`,
+  new `embedded/vnext/schemas/host-descriptor.v2.json`,
+  the exact Stage-10 host fixtures, validator, proof matrix, interface-gap and
+  path-manifest inputs, and the dedicated Stage-10/12 parity tests.
+- `MainIntegration`: `src/domain/integration/mod.rs`,
+  `src/interfaces/cli/mcp.rs`, `src/interfaces/mcp/server.rs`,
+  `tests/harness_integration.rs` and `tests/v1_demo.rs`, in addition to the
+  eight V6 shared integration files.
+
+The complete `MainIntegration` exact-file set is
+`src/domain/authority/mod.rs`, `src/domain/installation/mod.rs`,
+`src/domain/integration/mod.rs`, `src/interfaces/cli/mod.rs`,
+`src/interfaces/cli/mcp.rs`, `src/interfaces/mcp/mod.rs`,
+`src/interfaces/mcp/server.rs`, `src/interfaces/mcp/tools.rs`, `src/main.rs`,
+`src/operations/installation/mod.rs`, `tests/architecture_imports.rs`,
+`tests/harness_integration.rs` and `tests/v1_demo.rs`.
+`src/interfaces/mcp/server.rs` is removed from the V6 explicit deny set.
+The V1 host descriptors, V1 trusted-host pattern and V1 host-descriptor schema
+remain immutable migration evidence and are explicitly denied to every write
+lane; V2 readers have no conversion or fallback path.
+Every other unowned path remains denied by default. The rotated manifest must
+prove exact-file and prefix nonoverlap, regular-blob preimages or declared
+regular-blob creations, no deletion, rename, mode change, symlink, gitlink,
+hidden Git configuration or alias, and a complete route table for:
+host-native injection; retained exclusive borrow; no-I/O challenge and
+recheck; explicit locator/no-cwd Packet read; running-binary catalog search;
+exact-two list and dispatch; legacy pre-effect refusal; broad-test replacement
+mapping; Stage11 physical closure; guard consumption; candidate-ref-only cut;
+and effect-inert final proof.
+
+### Integration, proof and protected-primary boundary
+
+The protected primary remains at
+`13b9a5e9b5ec67e7086b0b21992a207d2e4cde94`, tree
+`97e08a00f8a721318cda13241129a3b06651accc`, with exactly 34 dirty paths,
+path-manifest SHA-256
+`a25912f9899851cc72b39254d62e1c71e289f43b775b7b0d236b7315129d0e83`,
+tracked binary-diff SHA-256
+`d110099bd78896c4700188737477cd8024d39d3741b4f50a97035d2b1f35d6cc`
+and exactly ten untracked regular files bound by manifest identity
+`b9e865f6f51cfabe1a92c8a7b4c629590a5c2065384ebf441bf00f2e2abfd047`.
+The V6 design sentence naming 27 paths is historical pre-packet prose and not
+the current boundary. Every V7 check uses the exact 34-path identity. Primary
+is never staged, stashed, reset, cleaned, normalized, overwritten or used as a
+write or candidate-ref CAS target.
+
+After one independently verified V7 packet is approved in this exact recipient
+task, every lane owner may prepare its own candidate-only delta from this
+design commit in parallel, but the canonical first-parent reconstruction is
+exact and linear. Stage11 alone reconstructs and repairs its owned bytes on the
+V7 design commit. MainIntegration accepts that lane result without changing
+Stage11-owned bytes and adds only its Stage11 shared wiring on that exact
+parent. AuthorityOwner then reconstructs only its three owned files on the
+integrated Stage11 commit. Stage12Product reconstructs and repairs only its
+owned product/host bytes on the AuthorityOwner commit. ExternalProofControl
+reconstructs and repairs only its proof-control bytes on the Stage12Product
+commit. MainIntegration finally adds only the shared Stage12 runtime, exports
+and test integration on the ExternalProofControl commit. No lane may repair,
+rewrite or commit another lane's bytes; MainIntegration may accept/reject lane
+results and edit only its exact shared-file set. This is the sole canonical
+order: V7 design -> Stage11 -> MainIntegration Stage11 wiring ->
+AuthorityOwner -> Stage12Product -> ExternalProofControl -> MainIntegration
+Stage12 wiring.
+
+Cheap format/check/strict-lint/focused/frozen-interface/authority/ownership
+falsifiers run during reconstruction. No interim broad gate, canonical
+regeneration or seal is performed.
+
+The exact final candidate receives one concurrent read-only
+Authority/security, migration/data-loss and architecture/proof review, one
+consolidated fix loop, one full compile/lint/test/broad/mutant/race/crash/
+replay/migration/rollback/adapter/removal pass, one affected canonical
+regeneration epoch, one freeze and exactly one cumulative independent
+Python/Rust/Ruby Stage 0 through 12 seal. After that seal, only receipt-bound
+independent receipt reconstruction, semantic readback and final edge sweep are
+permitted, followed by exactly one derived durable pointer write from the
+verified receipt. The closure has exactly one final receipt and one pointer.
+Historical receipts remain immutable predecessor evidence and cannot certify
+changed bytes.
+
+The approved V6 packet
+`sha256:9e54288bfda32607bd3d8e147f4cf219d4fccb935ed8f4d2e5bd303cfd9d9f90`
+is obsolete historical provenance for every future write. The replacement
+External Build Plan Handoff must bind this V7 design commit/tree and direct
+`e6929532` parent, the complete Decision closure, the clean existing successor
+workspace, all four candidate-only commits and trees, the exact 34-path
+primary boundary and ten-file untracked manifest, the rotated Stage-5
+dependency, five-lane grants and denylist, host descriptor truthfulness,
+legacy-test replacement map, Stage11 incomplete obligations, zero interim
+seals, one final cumulative seal, one final receipt and one derived pointer.
+Until that exact packet is independently verified and explicitly approved, no
+implementation, candidate
+reconstruction, canonical regeneration, integration or seal is authorized.
