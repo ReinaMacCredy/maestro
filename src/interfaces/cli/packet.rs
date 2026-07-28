@@ -7,7 +7,7 @@ use clap::{Args, Subcommand};
 use crate::domain::projection::{ProjectionReadPortV1, read_packet};
 use crate::domain::transport::{decode_packet_read_request, encode_packet_read_envelope};
 use crate::foundation::core::paths::MaestroPaths;
-use crate::operations::adapters::live_projection::LiveProjectionReadProviderV1;
+use crate::operations::adapters::LiveProjectionReadProviderV1;
 
 const MAXIMUM_REQUEST_BYTES_V1: u64 = 262_144;
 

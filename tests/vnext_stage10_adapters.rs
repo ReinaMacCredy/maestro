@@ -17,6 +17,59 @@ fn production_adapter_requires_the_sealed_stage9_currentness_port() {
 }
 
 #[test]
+fn operations_adapter_facade_keeps_live_projection_private_and_narrow() {
+    let adapters = fs::read_to_string(workspace().join("src/operations/adapters/mod.rs")).unwrap();
+    assert!(adapters.lines().any(|line| line == "mod live_projection;"));
+    assert!(!adapters.contains("pub(crate) mod live_projection;"));
+    assert!(adapters.contains("pub(crate) use live_projection::{"));
+    for exported in [
+        "LiveProjectionReadProviderV1",
+        "RunningBinaryIdentityV1",
+        "cli_search",
+        "decode_cli_search_request",
+        "encode_cli_search_envelope",
+    ] {
+        assert!(
+            adapters.contains(exported),
+            "missing narrow adapter facade export {exported}"
+        );
+    }
+    for moved in [
+        "fn cli_search(",
+        "fn decode_cli_search_request(",
+        "fn encode_cli_search_envelope(",
+        "fn cli_search_is_literal_and_does_not_compute_a_next_action(",
+        "fn cli_search_transport_is_exact_and_canonical(",
+        "fn cli_search_transport_rejects_duplicate_and_unknown_fields(",
+    ] {
+        assert!(
+            !adapters.contains(moved),
+            "adapter facade still owns live projection implementation {moved}"
+        );
+    }
+
+    let projection =
+        fs::read_to_string(workspace().join("src/operations/adapters/live_projection.rs")).unwrap();
+    for moved in [
+        "fn cli_search(",
+        "fn decode_cli_search_request(",
+        "fn encode_cli_search_envelope(",
+        "fn cli_search_is_literal_and_does_not_compute_a_next_action(",
+        "fn cli_search_transport_is_exact_and_canonical(",
+        "fn cli_search_transport_rejects_duplicate_and_unknown_fields(",
+    ] {
+        assert!(
+            projection.contains(moved),
+            "private live projection leaf is missing {moved}"
+        );
+    }
+
+    let packet = fs::read_to_string(workspace().join("src/interfaces/cli/packet.rs")).unwrap();
+    assert!(packet.contains("use crate::operations::adapters::LiveProjectionReadProviderV1;"));
+    assert!(!packet.contains("adapters::live_projection"));
+}
+
+#[test]
 fn protected_diagnostic_enters_through_the_authenticated_host_factory() {
     let integration =
         fs::read_to_string(workspace().join("src/domain/integration/mod.rs")).unwrap();

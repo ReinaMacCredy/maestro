@@ -228,7 +228,19 @@ def validate_product_sources() -> None:
             fail(f"Packet adapter does not enforce explicit alias-closed locator: {required}")
     if "discover_repo_root" in packet or "current_dir()" in packet.split("#[cfg(test)]", 1)[0]:
         fail("Packet production adapter discovers repository identity from cwd")
-    search = (ROOT / "src/operations/adapters/mod.rs").read_text()
+    adapter_facade = (ROOT / "src/operations/adapters/mod.rs").read_text()
+    for required in (
+        "mod live_projection;",
+        "pub(crate) use live_projection::{",
+        "decode_cli_search_request",
+        "encode_cli_search_envelope",
+        "RunningBinaryIdentityV1",
+    ):
+        if required not in adapter_facade:
+            fail(f"binary-local CLI search facade is missing {required}")
+    if "pub(crate) mod live_projection;" in adapter_facade:
+        fail("binary-local CLI search exposes its implementation leaf")
+    search = (ROOT / "src/operations/adapters/live_projection.rs").read_text()
     for required in (
         "decode_cli_search_request",
         "encode_cli_search_envelope",
