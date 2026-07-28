@@ -14,7 +14,7 @@ from typing import Any, cast
 
 SNAPSHOT_SCHEMA = "maestro.external.vnext-final-cumulative-closure-snapshot.v1"
 STAGE12_PRODUCT_CORRECTION_COMMIT = (
-    "673605c630db2112b5ff66ded919a6cd2d4a3558"
+    "11dca539193e9a6c3e3346786c69d8d4bad386e8"
 )
 FULL_COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 

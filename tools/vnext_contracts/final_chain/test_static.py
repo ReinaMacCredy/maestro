@@ -331,7 +331,7 @@ class FinalChainStaticTests(unittest.TestCase):
             ROOT / "stage12_product_proof.py"
         ).read_text(encoding="utf-8")
         self.assertIn(
-            "673605c630db2112b5ff66ded919a6cd2d4a3558",
+            "11dca539193e9a6c3e3346786c69d8d4bad386e8",
             stage12_product_proof,
         )
         self.assertIn("merge-base", stage12_product_proof)
