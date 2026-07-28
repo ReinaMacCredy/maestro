@@ -978,51 +978,48 @@ fn admitted_set_identity(
 fn derive_overlap_pairs(
     source_cases: &[FoundationSourceCaseV1],
 ) -> Result<Vec<FoundationProtectedPrimaryOverlapPairV1>, FoundationLegacyQuarantineErrorV1> {
-    let mut primary_by_object = std::collections::BTreeMap::new();
-    for source in source_cases.iter().filter(|source| {
-        source.owner == LegacyQuarantineOwnerDomainV3::ProtectedPrimary
-            && source.payload_state == FoundationLegacyPayloadStateV3::Present
-    }) {
+    let mut sources_by_object = std::collections::BTreeMap::new();
+    for source in source_cases
+        .iter()
+        .filter(|source| source.payload_state == FoundationLegacyPayloadStateV3::Present)
+    {
         let key = (
             source.object_identity,
             source.mount_identity,
             source.provider_identity,
         );
-        if primary_by_object.insert(key, source).is_some() {
+        sources_by_object
+            .entry(key)
+            .or_insert_with(Vec::new)
+            .push(source);
+    }
+
+    let mut overlap_pairs = Vec::new();
+    for sources in sources_by_object.values() {
+        let [left, right] = sources.as_slice() else {
+            if sources.len() == 1 {
+                continue;
+            }
+            return Err(FoundationLegacyQuarantineErrorV1::RootAlias);
+        };
+        let (owner, primary) = match (left.owner, right.owner) {
+            (LegacyQuarantineOwnerDomainV3::ProtectedPrimary, _) => (right, left),
+            (_, LegacyQuarantineOwnerDomainV3::ProtectedPrimary) => (left, right),
+            _ => return Err(FoundationLegacyQuarantineErrorV1::RootAlias),
+        };
+        if owner.owner == LegacyQuarantineOwnerDomainV3::ProtectedPrimary
+            || owner.kind != primary.kind
+            || owner.logical_byte_length != primary.logical_byte_length
+            || owner.content_identity != primary.content_identity
+        {
             return Err(FoundationLegacyQuarantineErrorV1::RootAlias);
         }
+        overlap_pairs.push(FoundationProtectedPrimaryOverlapPairV1 {
+            owner_source_token: owner.source_token,
+            primary_source_token: primary.source_token,
+        });
     }
-    let mut overlap_pairs = source_cases
-        .iter()
-        .filter(|source| {
-            source.owner != LegacyQuarantineOwnerDomainV3::ProtectedPrimary
-                && source.payload_state == FoundationLegacyPayloadStateV3::Present
-        })
-        .filter_map(|source| {
-            primary_by_object
-                .get(&(
-                    source.object_identity,
-                    source.mount_identity,
-                    source.provider_identity,
-                ))
-                .filter(|primary| {
-                    primary.kind == source.kind
-                        && primary.logical_byte_length == source.logical_byte_length
-                        && primary.content_identity == source.content_identity
-                })
-                .map(|primary| FoundationProtectedPrimaryOverlapPairV1 {
-                    owner_source_token: source.source_token,
-                    primary_source_token: primary.source_token,
-                })
-        })
-        .collect::<Vec<_>>();
     overlap_pairs.sort_by_key(|pair| (pair.owner_source_token, pair.primary_source_token));
-    if overlap_pairs.windows(2).any(|pair| {
-        pair[0].owner_source_token == pair[1].owner_source_token
-            || pair[0].primary_source_token == pair[1].primary_source_token
-    }) {
-        return Err(FoundationLegacyQuarantineErrorV1::RootAlias);
-    }
     Ok(overlap_pairs)
 }
 
@@ -1576,6 +1573,31 @@ mod tests {
         }
     }
 
+    fn assert_descriptor_census_refuses_cross_root_hardlink(include_protected_primary: bool) {
+        let repository = TempRoot::new("hardlink-repository");
+        let installation = TempRoot::new("hardlink-installation");
+        let primary = TempRoot::new("hardlink-primary");
+        let repository_source = repository.0.join("legacy.txt");
+        fs::write(&repository_source, b"shared legacy bytes").expect("write repository source");
+        fs::hard_link(&repository_source, installation.0.join("installation.txt"))
+            .expect("hardlink installation source");
+        if include_protected_primary {
+            fs::hard_link(&repository_source, primary.0.join("primary.txt"))
+                .expect("hardlink protected-primary source");
+        }
+        let result = SecureRoot::open(&repository.0)
+            .expect("open repository root")
+            .retain_descriptor_census_root_v3(DescriptorCensusLimitsV1::bounded_default());
+
+        assert!(matches!(
+            result,
+            Err(SecureFsError::UnsafeObject {
+                reason: "census leaf must have exactly one filesystem link",
+                ..
+            })
+        ));
+    }
+
     fn expected_source_set(
         owner: LegacyQuarantineOwnerDomainV3,
         root: &Path,
@@ -1678,6 +1700,77 @@ mod tests {
             .expect("primary source");
         assert_eq!(owner.object_identity(), primary.object_identity());
         assert_eq!(owner.content_identity(), primary.content_identity());
+    }
+
+    #[test]
+    fn same_physical_object_across_repository_and_installation_refuses_the_epoch() {
+        let object_identity = [63; 32];
+        let content_identity = [64; 32];
+        let source_cases = vec![
+            overlap_source(
+                LegacyQuarantineOwnerDomainV3::Repository,
+                [65; 32],
+                b"repository.txt",
+                object_identity,
+                content_identity,
+            ),
+            overlap_source(
+                LegacyQuarantineOwnerDomainV3::Installation,
+                [66; 32],
+                b"installation.txt",
+                object_identity,
+                content_identity,
+            ),
+        ];
+
+        assert!(matches!(
+            derive_overlap_pairs(&source_cases),
+            Err(FoundationLegacyQuarantineErrorV1::RootAlias)
+        ));
+    }
+
+    #[test]
+    fn three_memberships_for_one_physical_object_refuse_the_epoch() {
+        let object_identity = [69; 32];
+        let content_identity = [70; 32];
+        let source_cases = vec![
+            overlap_source(
+                LegacyQuarantineOwnerDomainV3::Repository,
+                [71; 32],
+                b"repository.txt",
+                object_identity,
+                content_identity,
+            ),
+            overlap_source(
+                LegacyQuarantineOwnerDomainV3::Installation,
+                [72; 32],
+                b"installation.txt",
+                object_identity,
+                content_identity,
+            ),
+            overlap_source(
+                LegacyQuarantineOwnerDomainV3::ProtectedPrimary,
+                [73; 32],
+                b"primary.txt",
+                object_identity,
+                content_identity,
+            ),
+        ];
+
+        assert!(matches!(
+            derive_overlap_pairs(&source_cases),
+            Err(FoundationLegacyQuarantineErrorV1::RootAlias)
+        ));
+    }
+
+    #[test]
+    fn descriptor_census_refuses_repository_installation_hardlink() {
+        assert_descriptor_census_refuses_cross_root_hardlink(false);
+    }
+
+    #[test]
+    fn descriptor_census_refuses_repository_installation_primary_hardlink() {
+        assert_descriptor_census_refuses_cross_root_hardlink(true);
     }
 
     #[test]
